@@ -21,7 +21,7 @@ use crate::api::rpc::exchange::exchange_params::ExchangeParams;
 use crate::api::rpc::exchange::exchange_params::MergeExchangeParams;
 use crate::api::rpc::exchange::exchange_sink_merge::ExchangeMergeSink;
 use crate::api::rpc::exchange::exchange_sink_shuffle::ExchangePublisherSink;
-use crate::pipelines::processors::port::InputPort;
+use crate::pipelines::processors::port::{InputPort, OutputPort};
 use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::Pipeline;
 use crate::pipelines::SinkPipeBuilder;
@@ -74,15 +74,24 @@ impl ExchangeSink {
                 Ok(())
             }
             ExchangeParams::ShuffleExchange(params) => {
-                pipeline.add_transform(|transform_input_port, transform_output_port| {
-                    ExchangePublisherSink::<false>::try_create(
-                        ctx.clone(),
-                        params.fragment_id,
-                        transform_input_port,
-                        transform_output_port,
-                        params.clone(),
-                    )
-                })
+                let mut sink_builder = SinkPipeBuilder::create();
+
+                for _index in 0..pipeline.output_len() {
+                    let input = InputPort::create();
+                    sink_builder.add_sink(
+                        input.clone(),
+                        ExchangePublisherSink::<false>::try_create(
+                            ctx.clone(),
+                            params.fragment_id,
+                            input,
+                            OutputPort::create(),
+                            params.clone(),
+                        )?,
+                    );
+                }
+
+                pipeline.add_pipe(sink_builder.finalize());
+                Ok(())
             }
         }
     }

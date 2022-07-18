@@ -50,6 +50,7 @@ use crate::api::DataExchange;
 use crate::api::FragmentPlanPacket;
 use crate::api::InitNodesChannelPacket;
 use crate::api::QueryFragmentsPlanPacket;
+use crate::api::rpc::flight_scatter_broadcast::BroadcastFlightScatter;
 use crate::interpreters::QueryFragmentActions;
 use crate::interpreters::QueryFragmentsActions;
 use crate::pipelines::executor::PipelineCompleteExecutor;
@@ -705,6 +706,18 @@ impl FragmentCoordinator {
                     destination_id: exchange.destination_id.clone(),
                 }))
             }
+            Some(DataExchange::Broadcast(exchange)) => {
+                Ok(ExchangeParams::ShuffleExchange(ShuffleExchangeParams {
+                    schema: self.node.schema(),
+                    fragment_id: self.fragment_id,
+                    query_id: query.query_id.to_string(),
+                    executor_id: query.executor_id.to_string(),
+                    destination_ids: exchange.destination_ids.to_owned(),
+                    shuffle_scatter: Arc::new(Box::new(BroadcastFlightScatter::try_create(
+                        exchange.destination_ids.len(),
+                    )?)),
+                }))
+            }
             Some(DataExchange::ShuffleDataExchange(exchange)) => {
                 Ok(ExchangeParams::ShuffleExchange(ShuffleExchangeParams {
                     schema: self.node.schema(),
@@ -720,7 +733,6 @@ impl FragmentCoordinator {
                     )?)),
                 }))
             }
-            Some(DataExchange::Broadcast(_)) => Err(ErrorCode::LogicalError("Cannot found data exchange.")),
         }
     }
 

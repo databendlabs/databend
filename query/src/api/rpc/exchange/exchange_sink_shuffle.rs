@@ -61,9 +61,7 @@ impl<const HAS_OUTPUT: bool> ExchangePublisherSink<HAS_OUTPUT> {
         shuffle_exchange_params: ShuffleExchangeParams,
     ) -> Result<ProcessorPtr> {
         let serialize_params = shuffle_exchange_params.create_serialize_params()?;
-        Ok(ProcessorPtr::create(Box::new(ExchangePublisherSink::<
-            HAS_OUTPUT,
-        > {
+        Ok(ProcessorPtr::create(Box::new(ExchangePublisherSink::<HAS_OUTPUT> {
             ctx,
             input,
             output,
@@ -108,11 +106,11 @@ impl<const HAS_OUTPUT: bool> ExchangePublisherSink<HAS_OUTPUT> {
                     destination_id,
                 )?));
             } else {
-                if !HAS_OUTPUT {
-                    return Err(ErrorCode::LogicalError(
-                        "Has local output, but not found output port. It's a bug.",
-                    ));
-                }
+                // if !HAS_OUTPUT {
+                //     return Err(ErrorCode::LogicalError(
+                //         "Has local output, but not found output port. It's a bug.",
+                //     ));
+                // }
 
                 res.push(None);
             }

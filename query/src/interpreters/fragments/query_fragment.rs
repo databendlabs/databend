@@ -61,11 +61,15 @@ impl QueryFragmentsBuilder {
     }
 }
 
-struct BuilderVisitor {
+pub struct BuilderVisitor {
     ctx: Arc<QueryContext>,
 }
 
 impl BuilderVisitor {
+    pub fn create(ctx: Arc<QueryContext>) -> BuilderVisitor {
+        BuilderVisitor { ctx }
+    }
+
     pub fn visit(&self, plan: &PlanNode) -> Result<Box<dyn QueryFragment>> {
         match plan {
             PlanNode::Stage(node) => self.visit_stage(node),

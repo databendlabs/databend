@@ -37,6 +37,7 @@ use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::Event;
 use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::Processor;
+use crate::pipelines::QueryPipelineBuilder;
 use crate::sessions::QueryContext;
 
 pub struct TransformCreateSets {
@@ -191,14 +192,14 @@ impl SubQueriesPuller {
         })
     }
 
-    async fn receive_subquery(&self, plan: SelectPlan) -> Result<DataValue> {
-        let schema = plan.schema();
+    async fn receive_subquery(&self, node: &PlanNode) -> Result<DataValue> {
+        let schema = node.schema();
         let subquery_ctx = QueryContext::create_from(self.ctx.clone());
         let async_runtime = subquery_ctx.get_storage_runtime();
         let query_need_abort = subquery_ctx.query_need_abort();
 
-        let interpreter = SelectInterpreter::try_create(subquery_ctx, plan)?;
-        let query_pipeline = interpreter.create_new_pipeline().await?;
+        let pipeline_builder = QueryPipelineBuilder::create(subquery_ctx);
+        let query_pipeline = pipeline_builder.finalize(node)?;
         let mut query_executor =
             PipelinePullingExecutor::try_create(async_runtime, query_need_abort, query_pipeline)?;
 
@@ -230,14 +231,14 @@ impl SubQueriesPuller {
         }
     }
 
-    async fn receive_scalar_subquery(&self, plan: SelectPlan) -> Result<DataValue> {
-        let schema = plan.schema();
+    async fn receive_scalar_subquery(&self, node: &PlanNode) -> Result<DataValue> {
+        let schema = node.schema();
         let subquery_ctx = QueryContext::create_from(self.ctx.clone());
         let async_runtime = subquery_ctx.get_storage_runtime();
         let query_need_abort = subquery_ctx.query_need_abort();
 
-        let interpreter = SelectInterpreter::try_create(subquery_ctx, plan)?;
-        let query_pipeline = interpreter.create_new_pipeline().await?;
+        let pipeline_builder = QueryPipelineBuilder::create(subquery_ctx);
+        let query_pipeline = pipeline_builder.finalize(node)?;
 
         let mut query_executor =
             PipelinePullingExecutor::try_create(async_runtime, query_need_abort, query_pipeline)?;
@@ -272,32 +273,16 @@ impl SubQueriesPuller {
     pub async fn execute_sub_queries(&self) -> Result<Vec<DataValue>> {
         for sub_query_expr in &self.expressions {
             match sub_query_expr {
-                Expression::Subquery { query_plan, .. } => match query_plan.as_ref() {
-                    PlanNode::Select(select_plan) => {
-                        let select_plan = select_plan.clone();
-                        let subquery_res = self.receive_subquery(select_plan).await?;
-                        let mut sub_queries_result = self.sub_queries_result.lock();
-                        sub_queries_result.push(subquery_res);
-                    }
-                    _ => {
-                        return Err(ErrorCode::LogicalError(
-                            "Subquery must be select plan. It's a bug.",
-                        ));
-                    }
-                },
-                Expression::ScalarSubquery { query_plan, .. } => match query_plan.as_ref() {
-                    PlanNode::Select(select_plan) => {
-                        let select_plan = select_plan.clone();
-                        let query_result = self.receive_scalar_subquery(select_plan).await?;
-                        let mut sub_queries_result = self.sub_queries_result.lock();
-                        sub_queries_result.push(query_result);
-                    }
-                    _ => {
-                        return Err(ErrorCode::LogicalError(
-                            "Subquery must be select plan. It's a bug.",
-                        ));
-                    }
-                },
+                Expression::Subquery { query_plan, .. } => {
+                    let subquery_res = self.receive_subquery(query_plan).await?;
+                    let mut sub_queries_result = self.sub_queries_result.lock();
+                    sub_queries_result.push(subquery_res);
+                }
+                Expression::ScalarSubquery { query_plan, .. } => {
+                    let query_result = self.receive_scalar_subquery(query_plan).await?;
+                    let mut sub_queries_result = self.sub_queries_result.lock();
+                    sub_queries_result.push(query_result);
+                }
                 _ => {
                     return Err(ErrorCode::LogicalError(
                         "Expression must be Subquery or ScalarSubquery",

@@ -243,7 +243,7 @@ impl QueryContext {
     }
 
     pub fn get_fragment_id(&self) -> usize {
-        self.fragment_id.load(Ordering::Release)
+        self.fragment_id.load(Ordering::Relaxed)
     }
 
     pub fn get_and_inc_fragment_id(&self) -> usize {
