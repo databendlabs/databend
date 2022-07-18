@@ -37,7 +37,6 @@ use crate::pipelines::new::processors::TransformLimit;
 use crate::pipelines::new::NewPipeline;
 use crate::pipelines::new::SourcePipeBuilder;
 use crate::sessions::query_ctx::QryCtx;
-use crate::sessions::QueryContext;
 use crate::storages::Table;
 
 pub struct StageTable {
@@ -71,7 +70,7 @@ impl Table for StageTable {
 
     async fn read_partitions(
         &self,
-        _ctx: Arc<QueryContext>,
+        _ctx: Arc<dyn QryCtx>,
         _push_downs: Option<Extras>,
     ) -> Result<(Statistics, Partitions)> {
         Ok((Statistics::default(), vec![]))
@@ -79,7 +78,7 @@ impl Table for StageTable {
 
     fn read2(
         &self,
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn QryCtx>,
         _plan: &ReadDataSourcePlan,
         pipeline: &mut NewPipeline,
     ) -> Result<()> {
@@ -128,7 +127,7 @@ impl Table for StageTable {
     // TODO: support append2
     async fn append_data(
         &self,
-        _ctx: Arc<QueryContext>,
+        _ctx: Arc<dyn QryCtx>,
         stream: SendableDataBlockStream,
     ) -> Result<SendableDataBlockStream> {
         Ok(Box::pin(stream))
@@ -136,7 +135,7 @@ impl Table for StageTable {
 
     async fn commit_insertion(
         &self,
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn QryCtx>,
         _catalog_name: &str,
         operations: Vec<DataBlock>,
         _overwrite: bool,
@@ -195,7 +194,7 @@ impl Table for StageTable {
     // Truncate the stage file.
     async fn truncate(
         &self,
-        _ctx: Arc<QueryContext>,
+        _ctx: Arc<dyn QryCtx>,
         _truncate_plan: TruncateTablePlan,
     ) -> Result<()> {
         Err(ErrorCode::UnImplement(

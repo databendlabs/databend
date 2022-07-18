@@ -42,10 +42,9 @@ use crate::pipelines::new::processors::processor::ProcessorPtr;
 use crate::pipelines::new::processors::AsyncSource;
 use crate::pipelines::new::processors::AsyncSourcer;
 use crate::sessions::query_ctx::QryCtx;
-use crate::sessions::QueryContext;
 
 pub struct StageSource {
-    ctx: Arc<QueryContext>,
+    ctx: Arc<dyn QryCtx>,
     schema: DataSchemaRef,
     table_info: StageTableInfo,
     initialized: bool,
@@ -56,7 +55,7 @@ pub struct StageSource {
 
 impl StageSource {
     pub fn try_create(
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn QryCtx>,
         output: Arc<OutputPort>,
         schema: DataSchemaRef,
         table_info: StageTableInfo,
@@ -75,7 +74,7 @@ impl StageSource {
 
     // Get csv source stream.
     async fn csv_source(
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn QryCtx>,
         schema: DataSchemaRef,
         stage_info: &UserStageInfo,
         reader: BytesReader,
@@ -119,7 +118,7 @@ impl StageSource {
 
     // Get json source stream.
     async fn json_source(
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn QryCtx>,
         schema: DataSchemaRef,
         stage_info: &UserStageInfo,
         reader: BytesReader,
@@ -145,7 +144,7 @@ impl StageSource {
 
     // Get parquet source stream.
     async fn parquet_source(
-        _ctx: Arc<QueryContext>,
+        _ctx: Arc<dyn QryCtx>,
         schema: DataSchemaRef,
         _stage_info: &UserStageInfo,
         reader: SeekableReader,
@@ -161,7 +160,7 @@ impl StageSource {
         Ok(Box::new(builder.build(reader)?))
     }
 
-    pub async fn get_op(ctx: &Arc<QueryContext>, stage: &UserStageInfo) -> Result<Operator> {
+    pub async fn get_op(ctx: &Arc<dyn QryCtx>, stage: &UserStageInfo) -> Result<Operator> {
         if stage.stage_type == StageType::Internal {
             ctx.get_storage_operator()
         } else {
@@ -174,7 +173,8 @@ impl StageSource {
         let stage = &self.table_info.stage_info;
         let file_format = stage.file_format_options.format.clone();
 
-        let op = Self::get_op(&self.ctx, &self.table_info.stage_info).await?;
+        let qry_ctx: &Arc<dyn QryCtx> = &ctx;
+        let op = Self::get_op(qry_ctx, &self.table_info.stage_info).await?;
         let path = file_name;
         let object = op.object(&path);
 

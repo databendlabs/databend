@@ -27,7 +27,6 @@ use crate::pipelines::new::processors::processor::Event;
 use crate::pipelines::new::processors::processor::ProcessorPtr;
 use crate::pipelines::new::processors::Processor;
 use crate::sessions::query_ctx::QryCtx;
-use crate::sessions::QueryContext;
 use crate::storages::fuse::io::BlockReader;
 use crate::storages::result::result_table_source::State::Generated;
 
@@ -40,7 +39,7 @@ enum State {
 
 pub struct ResultTableSource {
     state: State,
-    ctx: Arc<QueryContext>,
+    ctx: Arc<dyn QryCtx>,
     scan_progress: Arc<Progress>,
     block_reader: Arc<BlockReader>,
     output: Arc<OutputPort>,
@@ -48,7 +47,7 @@ pub struct ResultTableSource {
 
 impl ResultTableSource {
     pub fn create(
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn QryCtx>,
         output: Arc<OutputPort>,
         block_reader: Arc<BlockReader>,
     ) -> Result<ProcessorPtr> {

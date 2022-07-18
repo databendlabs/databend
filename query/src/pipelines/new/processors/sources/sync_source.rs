@@ -25,7 +25,6 @@ use crate::pipelines::new::processors::processor::Event;
 use crate::pipelines::new::processors::processor::ProcessorPtr;
 use crate::pipelines::new::processors::Processor;
 use crate::sessions::query_ctx::QryCtx;
-use crate::sessions::QueryContext;
 
 /// Synchronized source. such as:
 ///     - Memory storage engine.
@@ -47,11 +46,7 @@ pub struct SyncSourcer<T: 'static + SyncSource> {
 }
 
 impl<T: 'static + SyncSource> SyncSourcer<T> {
-    pub fn create(
-        ctx: Arc<QueryContext>,
-        output: Arc<OutputPort>,
-        inner: T,
-    ) -> Result<ProcessorPtr> {
+    pub fn create(ctx: Arc<dyn QryCtx>, output: Arc<OutputPort>, inner: T) -> Result<ProcessorPtr> {
         let scan_progress = ctx.get_scan_progress();
         Ok(ProcessorPtr::create(Box::new(Self {
             inner,

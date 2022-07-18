@@ -30,9 +30,8 @@ use futures::StreamExt;
 use futures::TryStreamExt;
 
 use crate::sessions::query_ctx::QryCtx;
-use crate::sessions::QueryContext;
 use crate::storages::fuse::io::MetaReaders;
-use crate::storages::index::RangeFilter;
+use crate::storages::index1::RangeFilter;
 
 pub struct BlockPruner {
     table_snapshot: Arc<TableSnapshot>,
@@ -47,7 +46,7 @@ impl BlockPruner {
     #[tracing::instrument(level = "debug", name="block_pruner_apply", skip(self, schema, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     pub async fn apply(
         &self,
-        ctx: &QueryContext,
+        ctx: &Arc<dyn QryCtx>,
         schema: DataSchemaRef,
         push_down: &Option<Extras>,
     ) -> Result<Vec<(usize, BlockMeta)>> {

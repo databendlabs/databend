@@ -24,12 +24,12 @@ use parking_lot::RwLock;
 
 use crate::catalogs::SYS_TBL_FUC_ID_END;
 use crate::catalogs::SYS_TBL_FUNC_ID_BEGIN;
-use crate::storages::fuse::table_functions::ClusteringInformationTable;
-use crate::storages::fuse::table_functions::FuseSegmentTable;
-use crate::storages::fuse::table_functions::FuseSnapshotTable;
-use crate::table_functions::async_crash_me::AsyncCrashMeTable;
-use crate::table_functions::sync_crash_me::SyncCrashMeTable;
-use crate::table_functions::NumbersTable;
+//use crate::storages::fuse::table_functions::ClusteringInformationTable;
+//use crate::storages::fuse::table_functions::FuseSegmentTable;
+//use crate::storages::fuse::table_functions::FuseSnapshotTable;
+//use crate::table_functions::async_crash_me::AsyncCrashMeTable;
+//use crate::table_functions::sync_crash_me::SyncCrashMeTable;
+//use crate::table_functions::NumbersTable;
 use crate::table_functions::TableFunction;
 
 pub type TableArgs = Option<Vec<Expression>>;
@@ -81,46 +81,46 @@ impl TableFunctionFactory {
 
         let mut creators: HashMap<String, (MetaId, Arc<dyn TableFunctionCreator>)> =
             Default::default();
-
-        let number_table_func_creator: Arc<dyn TableFunctionCreator> =
-            Arc::new(NumbersTable::create);
-
-        creators.insert(
-            "numbers".to_string(),
-            (next_id(), number_table_func_creator.clone()),
-        );
-        creators.insert(
-            "numbers_mt".to_string(),
-            (next_id(), number_table_func_creator.clone()),
-        );
-        creators.insert(
-            "numbers_local".to_string(),
-            (next_id(), number_table_func_creator),
-        );
-
-        creators.insert(
-            "fuse_snapshot".to_string(),
-            (next_id(), Arc::new(FuseSnapshotTable::create)),
-        );
-        creators.insert(
-            "fuse_segment".to_string(),
-            (next_id(), Arc::new(FuseSegmentTable::create)),
-        );
-
-        creators.insert(
-            "clustering_information".to_string(),
-            (next_id(), Arc::new(ClusteringInformationTable::create)),
-        );
-
-        creators.insert(
-            "sync_crash_me".to_string(),
-            (next_id(), Arc::new(SyncCrashMeTable::create)),
-        );
-
-        creators.insert(
-            "async_crash_me".to_string(),
-            (next_id(), Arc::new(AsyncCrashMeTable::create)),
-        );
+        //
+        //        let number_table_func_creator: Arc<dyn TableFunctionCreator> =
+        //            Arc::new(NumbersTable::create);
+        //
+        //        creators.insert(
+        //            "numbers".to_string(),
+        //            (next_id(), number_table_func_creator.clone()),
+        //        );
+        //        creators.insert(
+        //            "numbers_mt".to_string(),
+        //            (next_id(), number_table_func_creator.clone()),
+        //        );
+        //        creators.insert(
+        //            "numbers_local".to_string(),
+        //            (next_id(), number_table_func_creator),
+        //        );
+        //
+        //        creators.insert(
+        //            "fuse_snapshot".to_string(),
+        //            (next_id(), Arc::new(FuseSnapshotTable::create)),
+        //        );
+        //        creators.insert(
+        //            "fuse_segment".to_string(),
+        //            (next_id(), Arc::new(FuseSegmentTable::create)),
+        //        );
+        //
+        //        creators.insert(
+        //            "clustering_information".to_string(),
+        //            (next_id(), Arc::new(ClusteringInformationTable::create)),
+        //        );
+        //
+        //        creators.insert(
+        //            "sync_crash_me".to_string(),
+        //            (next_id(), Arc::new(SyncCrashMeTable::create)),
+        //        );
+        //
+        //        creators.insert(
+        //            "async_crash_me".to_string(),
+        //            (next_id(), Arc::new(AsyncCrashMeTable::create)),
+        //        );
 
         TableFunctionFactory {
             creators: RwLock::new(creators),

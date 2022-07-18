@@ -23,7 +23,7 @@ use common_meta_app::schema::TableStatistics;
 use common_storage_cache::meta::TableSnapshot;
 use futures::TryStreamExt;
 
-use crate::sessions::QueryContext;
+use crate::sessions::query_ctx::QryCtx;
 use crate::sql::OPT_KEY_SNAPSHOT_LOCATION;
 use crate::storages::fuse::io::MetaReaders;
 use crate::storages::fuse::FuseTable;
@@ -31,7 +31,7 @@ use crate::storages::fuse::FuseTable;
 impl FuseTable {
     pub async fn navigate_to_time_point(
         &self,
-        ctx: &Arc<QueryContext>,
+        ctx: &Arc<dyn QryCtx>,
         time_point: DateTime<Utc>,
     ) -> Result<Arc<FuseTable>> {
         self.find(ctx.as_ref(), |snapshot| {
@@ -45,7 +45,7 @@ impl FuseTable {
     }
     pub async fn navigate_to_snapshot(
         &self,
-        ctx: &QueryContext,
+        ctx: &dyn QryCtx,
         snapshot_id: &str,
     ) -> Result<Arc<FuseTable>> {
         self.find(ctx, |snapshot| {
@@ -59,7 +59,7 @@ impl FuseTable {
         .await
     }
 
-    pub async fn find<P>(&self, ctx: &QueryContext, mut pred: P) -> Result<Arc<FuseTable>>
+    pub async fn find<P>(&self, ctx: &dyn QryCtx, mut pred: P) -> Result<Arc<FuseTable>>
     where P: FnMut(&TableSnapshot) -> bool {
         let snapshot_location = if let Some(loc) = self.snapshot_loc() {
             loc

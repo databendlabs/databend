@@ -32,11 +32,10 @@ use crate::pipelines::new::processors::processor::Event;
 use crate::pipelines::new::processors::processor::ProcessorPtr;
 use crate::pipelines::new::processors::Processor;
 use crate::sessions::query_ctx::QryCtx;
-use crate::sessions::QueryContext;
 use crate::storages::fuse::io::TableMetaLocationGenerator;
 use crate::storages::fuse::statistics::accumulator::BlockStatistics;
 use crate::storages::fuse::statistics::StatisticsAccumulator;
-use crate::storages::index::ClusterKeyInfo;
+use crate::storages::index1::ClusterKeyInfo;
 
 enum State {
     None,
@@ -59,7 +58,7 @@ enum State {
 pub struct FuseTableSink {
     state: State,
     input: Arc<InputPort>,
-    ctx: Arc<QueryContext>,
+    ctx: Arc<dyn QryCtx>,
     data_accessor: Operator,
     num_block_threshold: u64,
     meta_locations: TableMetaLocationGenerator,
@@ -70,7 +69,7 @@ pub struct FuseTableSink {
 impl FuseTableSink {
     pub fn create(
         input: Arc<InputPort>,
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn QryCtx>,
         num_block_threshold: usize,
         data_accessor: Operator,
         meta_locations: TableMetaLocationGenerator,

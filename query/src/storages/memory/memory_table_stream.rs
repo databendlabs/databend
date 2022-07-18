@@ -22,7 +22,6 @@ use common_exception::Result;
 use futures::stream::Stream;
 
 use crate::sessions::query_ctx::QryCtx;
-use crate::sessions::QueryContext;
 use crate::storages::memory::memory_part::MemoryPartInfo;
 
 #[derive(Debug, Clone)]
@@ -32,14 +31,14 @@ struct BlockRange {
 }
 
 pub struct MemoryTableStream {
-    ctx: Arc<QueryContext>,
+    ctx: Arc<dyn QryCtx>,
     block_index: usize,
     block_ranges: Vec<usize>,
     blocks: Vec<DataBlock>,
 }
 
 impl MemoryTableStream {
-    pub fn try_create(ctx: Arc<QueryContext>, blocks: Vec<DataBlock>) -> Result<Self> {
+    pub fn try_create(ctx: Arc<dyn QryCtx>, blocks: Vec<DataBlock>) -> Result<Self> {
         Ok(Self {
             ctx,
             block_index: 0,

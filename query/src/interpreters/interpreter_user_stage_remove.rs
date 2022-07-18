@@ -56,7 +56,8 @@ impl Interpreter for RemoveUserStageInterpreter {
 
         let files = list_files(&self.ctx, &plan.stage, &plan.path, &plan.pattern).await?;
         let files = files.iter().map(|f| f.path.clone()).collect::<Vec<_>>();
-        let op = StageSource::get_op(&self.ctx, &self.plan.stage).await?;
+        let test_qry_ctx: Arc<dyn QryCtx> = self.ctx.clone();
+        let op = StageSource::get_op(&test_qry_ctx, &self.plan.stage).await?;
         if plan.stage.stage_type == StageType::Internal {
             user_mgr
                 .remove_files(&tenant, &plan.stage.stage_name, files.clone())

@@ -75,14 +75,19 @@ impl CopyInterpreterV2 {
                     }
                     files_with_path
                 } else if !path.ends_with('/') {
-                    let op = StageSource::get_op(&self.ctx, &table_info.stage_info).await?;
+                    let rename_me_qry_ctx: Arc<dyn QryCtx> = self.ctx.clone();
+                    let op =
+                        StageSource::get_op(&rename_me_qry_ctx, &table_info.stage_info).await?;
                     if op.object(path).is_exist().await? {
                         vec![path.to_string()]
                     } else {
                         vec![]
                     }
                 } else {
-                    let op = StageSource::get_op(&self.ctx, &table_info.stage_info).await?;
+                    // TODO can we avoid this clone?
+                    let rename_me_qry_ctx: Arc<dyn QryCtx> = self.ctx.clone();
+                    let op =
+                        StageSource::get_op(&rename_me_qry_ctx, &table_info.stage_info).await?;
                     let mut list = vec![];
 
                     // TODO: we could rewrite into try_collect.

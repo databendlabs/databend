@@ -19,18 +19,18 @@ use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_storage_cache::meta::TableSnapshot;
 
-use crate::sessions::QueryContext;
+use crate::sessions::query_ctx::QryCtx;
 use crate::storages::fuse::io::MetaReaders;
 use crate::storages::fuse::FuseTable;
 
 pub struct FuseSegment<'a> {
-    pub ctx: Arc<QueryContext>,
+    pub ctx: Arc<dyn QryCtx>,
     pub table: &'a FuseTable,
     pub snapshot_id: String,
 }
 
 impl<'a> FuseSegment<'a> {
-    pub fn new(ctx: Arc<QueryContext>, table: &'a FuseTable, snapshot_id: String) -> Self {
+    pub fn new(ctx: Arc<dyn QryCtx>, table: &'a FuseTable, snapshot_id: String) -> Self {
         Self {
             ctx,
             table,

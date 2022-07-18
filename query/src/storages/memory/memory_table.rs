@@ -41,7 +41,6 @@ use crate::pipelines::new::NewPipeline;
 use crate::pipelines::new::SinkPipeBuilder;
 use crate::pipelines::new::SourcePipeBuilder;
 use crate::sessions::query_ctx::QryCtx;
-use crate::sessions::QueryContext;
 use crate::storages::memory::memory_part::MemoryPartInfo;
 use crate::storages::StorageContext;
 use crate::storages::StorageDescription;
@@ -133,7 +132,7 @@ impl Table for MemoryTable {
 
     async fn read_partitions(
         &self,
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn QryCtx>,
         push_downs: Option<Extras>,
     ) -> Result<(Statistics, Partitions)> {
         let blocks = self.blocks.read();
@@ -181,7 +180,7 @@ impl Table for MemoryTable {
 
     fn read2(
         &self,
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn QryCtx>,
         plan: &ReadDataSourcePlan,
         pipeline: &mut NewPipeline,
     ) -> Result<()> {
@@ -206,7 +205,7 @@ impl Table for MemoryTable {
         Ok(())
     }
 
-    fn append2(&self, ctx: Arc<QueryContext>, pipeline: &mut NewPipeline) -> Result<()> {
+    fn append2(&self, ctx: Arc<dyn QryCtx>, pipeline: &mut NewPipeline) -> Result<()> {
         let mut sink_pipeline_builder = SinkPipeBuilder::create();
         for _ in 0..pipeline.output_len() {
             let input_port = InputPort::create();
@@ -222,7 +221,7 @@ impl Table for MemoryTable {
 
     async fn append_data(
         &self,
-        _ctx: Arc<QueryContext>,
+        _ctx: Arc<dyn QryCtx>,
         stream: SendableDataBlockStream,
     ) -> Result<SendableDataBlockStream> {
         Ok(Box::pin(stream))
@@ -230,7 +229,7 @@ impl Table for MemoryTable {
 
     async fn commit_insertion(
         &self,
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn QryCtx>,
         _catalog_name: &str,
         operations: Vec<DataBlock>,
         overwrite: bool,
@@ -254,7 +253,7 @@ impl Table for MemoryTable {
 
     async fn truncate(
         &self,
-        _ctx: Arc<QueryContext>,
+        _ctx: Arc<dyn QryCtx>,
         _truncate_plan: TruncateTablePlan,
     ) -> Result<()> {
         let mut blocks = self.blocks.write();
@@ -270,7 +269,7 @@ struct MemoryTableSource {
 
 impl MemoryTableSource {
     pub fn create(
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn QryCtx>,
         output: Arc<OutputPort>,
         data_blocks: Arc<Mutex<VecDeque<DataBlock>>>,
         extras: Option<Extras>,
@@ -312,11 +311,11 @@ impl SyncSource for MemoryTableSource {
 }
 
 pub struct MemoryTableSink {
-    ctx: Arc<QueryContext>,
+    ctx: Arc<dyn QryCtx>,
 }
 
 impl MemoryTableSink {
-    pub fn create(input: Arc<InputPort>, ctx: Arc<QueryContext>) -> ProcessorPtr {
+    pub fn create(input: Arc<InputPort>, ctx: Arc<dyn QryCtx>) -> ProcessorPtr {
         Sinker::create(input, MemoryTableSink { ctx })
     }
 }

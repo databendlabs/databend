@@ -30,12 +30,12 @@ use opendal::Operator;
 use super::block_writer;
 use crate::pipelines::transforms::ExpressionExecutor;
 use crate::sessions::query_ctx::QryCtx;
-use crate::sessions::QueryContext;
 use crate::storages::fuse::io::TableMetaLocationGenerator;
 use crate::storages::fuse::operations::column_metas;
 use crate::storages::fuse::statistics::accumulator::BlockStatistics;
 use crate::storages::fuse::statistics::StatisticsAccumulator;
-use crate::storages::index::ClusterKeyInfo;
+//use crate::storages::index::ClusterKeyInfo;
+use crate::storages::index1::ClusterKeyInfo;
 
 pub type SegmentInfoStream =
     std::pin::Pin<Box<dyn futures::stream::Stream<Item = Result<SegmentInfo>> + Send>>;
@@ -47,12 +47,12 @@ pub struct BlockStreamWriter {
     statistics_accumulator: Option<StatisticsAccumulator>,
     meta_locations: TableMetaLocationGenerator,
     cluster_key_info: Option<ClusterKeyInfo>,
-    ctx: Arc<QueryContext>,
+    ctx: Arc<dyn QryCtx>,
 }
 
 impl BlockStreamWriter {
     pub async fn write_block_stream(
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn QryCtx>,
         block_stream: SendableDataBlockStream,
         row_per_block: usize,
         block_per_segment: usize,
@@ -87,7 +87,7 @@ impl BlockStreamWriter {
     pub fn try_create(
         num_block_threshold: usize,
         meta_locations: TableMetaLocationGenerator,
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn QryCtx>,
         cluster_key_info: Option<ClusterKeyInfo>,
     ) -> Result<Self> {
         let data_accessor = ctx.get_storage_operator()?;

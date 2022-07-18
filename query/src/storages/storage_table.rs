@@ -35,7 +35,7 @@ use common_planners::TruncateTablePlan;
 use common_streams::SendableDataBlockStream;
 
 use crate::pipelines::new::NewPipeline;
-use crate::sessions::QueryContext;
+use crate::sessions::query_ctx::QryCtx;
 
 #[async_trait::async_trait]
 pub trait Table: Sync + Send {
@@ -87,7 +87,7 @@ pub trait Table: Sync + Send {
 
     async fn alter_table_cluster_keys(
         &self,
-        _ctx: Arc<QueryContext>,
+        _ctx: Arc<dyn QryCtx>,
         _catalog_name: &str,
         _cluster_key_str: String,
     ) -> Result<()> {
@@ -99,7 +99,7 @@ pub trait Table: Sync + Send {
 
     async fn drop_table_cluster_keys(
         &self,
-        _ctx: Arc<QueryContext>,
+        _ctx: Arc<dyn QryCtx>,
         _catalog_name: &str,
     ) -> Result<()> {
         Err(ErrorCode::UnsupportedEngineParams(format!(
@@ -111,7 +111,7 @@ pub trait Table: Sync + Send {
     // defaults to generate one single part and empty statistics
     async fn read_partitions(
         &self,
-        _ctx: Arc<QueryContext>,
+        _ctx: Arc<dyn QryCtx>,
         _push_downs: Option<Extras>,
     ) -> Result<(Statistics, Partitions)> {
         unimplemented!()
@@ -130,22 +130,17 @@ pub trait Table: Sync + Send {
     //     unimplemented!()
     // }
 
-    fn read2(
-        &self,
-        _: Arc<QueryContext>,
-        _: &ReadDataSourcePlan,
-        _: &mut NewPipeline,
-    ) -> Result<()> {
+    fn read2(&self, _: Arc<dyn QryCtx>, _: &ReadDataSourcePlan, _: &mut NewPipeline) -> Result<()> {
         unimplemented!()
     }
 
-    fn append2(&self, _: Arc<QueryContext>, _: &mut NewPipeline) -> Result<()> {
+    fn append2(&self, _: Arc<dyn QryCtx>, _: &mut NewPipeline) -> Result<()> {
         unimplemented!()
     }
 
     async fn append_data(
         &self,
-        _ctx: Arc<QueryContext>,
+        _ctx: Arc<dyn QryCtx>,
         _stream: SendableDataBlockStream,
     ) -> Result<SendableDataBlockStream> {
         Err(ErrorCode::UnImplement(format!(
@@ -157,7 +152,7 @@ pub trait Table: Sync + Send {
 
     async fn commit_insertion(
         &self,
-        _ctx: Arc<QueryContext>,
+        _ctx: Arc<dyn QryCtx>,
         _catalog_name: &str,
         _operations: Vec<DataBlock>,
         _overwrite: bool,
@@ -167,7 +162,7 @@ pub trait Table: Sync + Send {
 
     async fn truncate(
         &self,
-        _ctx: Arc<QueryContext>,
+        _ctx: Arc<dyn QryCtx>,
         _truncate_plan: TruncateTablePlan,
     ) -> Result<()> {
         Err(ErrorCode::UnImplement(format!(
@@ -176,17 +171,17 @@ pub trait Table: Sync + Send {
         )))
     }
 
-    async fn optimize(&self, _ctx: Arc<QueryContext>, _keep_last_snapshot: bool) -> Result<()> {
+    async fn optimize(&self, _ctx: Arc<dyn QryCtx>, _keep_last_snapshot: bool) -> Result<()> {
         Ok(())
     }
 
-    async fn statistics(&self, _ctx: Arc<QueryContext>) -> Result<Option<TableStatistics>> {
+    async fn statistics(&self, _ctx: Arc<dyn QryCtx>) -> Result<Option<TableStatistics>> {
         Ok(None)
     }
 
     async fn navigate_to(
         &self,
-        _ctx: Arc<QueryContext>,
+        _ctx: Arc<dyn QryCtx>,
         _instant: &NavigationPoint,
     ) -> Result<Arc<dyn Table>> {
         Err(ErrorCode::UnImplement(format!(
@@ -196,7 +191,7 @@ pub trait Table: Sync + Send {
         )))
     }
 
-    async fn delete(&self, _ctx: Arc<QueryContext>, _delete_plan: DeletePlan) -> Result<()> {
+    async fn delete(&self, _ctx: Arc<dyn QryCtx>, _delete_plan: DeletePlan) -> Result<()> {
         Err(ErrorCode::UnImplement(format!(
             "table {},  of engine type {}, does not support DELETE FROM",
             self.name(),
@@ -204,7 +199,7 @@ pub trait Table: Sync + Send {
         )))
     }
 
-    async fn compact(&self, _ctx: Arc<QueryContext>, _plan: OptimizeTablePlan) -> Result<()> {
+    async fn compact(&self, _ctx: Arc<dyn QryCtx>, _plan: OptimizeTablePlan) -> Result<()> {
         Err(ErrorCode::UnImplement(format!(
             "table {},  of engine type {}, does not support compact",
             self.name(),

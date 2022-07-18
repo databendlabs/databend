@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use chrono::DateTime;
 use chrono::TimeZone;
 use common_datavalues::chrono::Utc;
@@ -68,7 +70,8 @@ pub async fn upload_to_stage(
         .await
         .map_err(InternalServerError)?;
 
-    let op = StageSource::get_op(&context, &stage)
+    let rename_me_qry_ctx: Arc<dyn QryCtx> = context.clone();
+    let op = StageSource::get_op(&rename_me_qry_ctx, &stage)
         .await
         .map_err(InternalServerError)?;
 

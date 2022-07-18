@@ -31,7 +31,7 @@ use crate::sql::plans::PresignPlan;
 use crate::storages::stage::StageSource;
 
 pub struct PresignInterpreter {
-    ctx: Arc<QueryContext>,
+    ctx: Arc<dyn QryCtx>,
     plan: PresignPlan,
 }
 

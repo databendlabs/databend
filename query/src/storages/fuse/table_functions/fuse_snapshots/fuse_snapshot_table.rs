@@ -37,7 +37,6 @@ use crate::pipelines::new::processors::AsyncSourcer;
 use crate::pipelines::new::NewPipe;
 use crate::pipelines::new::NewPipeline;
 use crate::sessions::query_ctx::QryCtx;
-use crate::sessions::QueryContext;
 use crate::storages::fuse::table_functions::string_literal;
 use crate::storages::fuse::FuseTable;
 use crate::storages::Table;
@@ -98,7 +97,7 @@ impl Table for FuseSnapshotTable {
 
     async fn read_partitions(
         &self,
-        _ctx: Arc<QueryContext>,
+        _ctx: Arc<dyn QryCtx>,
         _push_downs: Option<Extras>,
     ) -> Result<(Statistics, Partitions)> {
         Ok((Statistics::default(), vec![]))
@@ -113,7 +112,7 @@ impl Table for FuseSnapshotTable {
 
     fn read2(
         &self,
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn QryCtx>,
         plan: &ReadDataSourcePlan,
         pipeline: &mut NewPipeline,
     ) -> Result<()> {
@@ -138,7 +137,7 @@ impl Table for FuseSnapshotTable {
 
 struct FuseHistorySource {
     finish: bool,
-    ctx: Arc<QueryContext>,
+    ctx: Arc<dyn QryCtx>,
     arg_database_name: String,
     arg_table_name: String,
     catalog_name: String,
@@ -147,7 +146,7 @@ struct FuseHistorySource {
 
 impl FuseHistorySource {
     pub fn create(
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn QryCtx>,
         output: Arc<OutputPort>,
         arg_database_name: String,
         arg_table_name: String,

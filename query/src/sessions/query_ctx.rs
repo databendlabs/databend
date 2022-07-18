@@ -240,10 +240,6 @@ impl QueryContext {
         self.shared.query_need_abort()
     }
 
-    pub fn get_settings(&self) -> Arc<Settings> {
-        self.shared.get_settings()
-    }
-
     pub fn get_query_logger(&self) -> Option<Arc<dyn tracing::Subscriber + Send + Sync>> {
         self.shared.session.session_mgr.get_query_logger()
     }
@@ -341,7 +337,7 @@ impl QryCtx for QueryContext {
     fn get_catalogs(&self) -> Arc<CatalogManager> {
         self.shared.get_catalogs()
     }
-    fn get_catalog(&self, catalog_name: impl AsRef<str>) -> Result<Arc<dyn Catalog>> {
+    fn get_catalog(&self, catalog_name: &str) -> Result<Arc<dyn Catalog>> {
         self.shared
             .get_catalogs()
             .get_catalog(catalog_name.as_ref())
@@ -436,9 +432,13 @@ impl QryCtx for QueryContext {
     fn get_connection_id(&self) -> String {
         self.shared.get_connection_id()
     }
+
+    fn get_settings(&self) -> Arc<Settings> {
+        self.shared.get_settings()
+    }
 }
 
-pub trait QryCtx {
+pub trait QryCtx: Send + Sync {
     /// Build a table instance the plan wants to operate on.
     ///
     /// A plan just contains raw information about a table or table function.
@@ -465,7 +465,7 @@ pub trait QryCtx {
     fn get_cluster(&self) -> Arc<Cluster>;
     fn get_fragment_id(&self) -> usize;
     fn get_catalogs(&self) -> Arc<CatalogManager>;
-    fn get_catalog(&self, catalog_name: impl AsRef<str>) -> Result<Arc<dyn Catalog>>;
+    fn get_catalog(&self, catalog_name: &str) -> Result<Arc<dyn Catalog>>;
     fn get_id(&self) -> String;
     fn get_current_catalog(&self) -> String;
     fn get_current_database(&self) -> String;
@@ -494,6 +494,159 @@ pub trait QryCtx {
     fn consume_precommit_blocks(&self) -> Vec<DataBlock>;
     fn try_get_function_context(&self) -> Result<FunctionContext>;
     fn get_connection_id(&self) -> String;
+    fn get_settings(&self) -> Arc<Settings>;
+}
+
+impl<T> QryCtx for T
+where T: AsRef<dyn QryCtx> + 'static + Send + Sync
+{
+    /// Build a table instance the plan wants to operate on.
+    ///
+    /// A plan just contains raw information about a table or table function.
+    /// This method builds a `dyn Table`, which provides table specific io methods the plan needs.
+    fn build_table_from_source_plan(&self, plan: &ReadDataSourcePlan) -> Result<Arc<dyn Table>> {
+        self.as_ref().build_table_from_source_plan(plan)
+    }
+    fn get_scan_progress(&self) -> Arc<Progress> {
+        self.as_ref().get_scan_progress()
+    }
+    fn get_scan_progress_value(&self) -> ProgressValues {
+        self.as_ref().get_scan_progress_value()
+    }
+    fn get_write_progress(&self) -> Arc<Progress> {
+        self.as_ref().get_write_progress()
+    }
+    fn get_write_progress_value(&self) -> ProgressValues {
+        self.as_ref().get_write_progress_value()
+    }
+    fn get_result_progress(&self) -> Arc<Progress> {
+        self.as_ref().get_result_progress()
+    }
+    fn get_result_progress_value(&self) -> ProgressValues {
+        self.as_ref().get_result_progress_value()
+    }
+    fn get_error(&self) -> Arc<Mutex<Option<ErrorCode>>> {
+        self.as_ref().get_error()
+    }
+    fn get_error_value(&self) -> Option<ErrorCode> {
+        self.as_ref().get_error_value()
+    }
+    fn set_error(&self, err: ErrorCode) {
+        self.as_ref().set_error(err);
+    }
+    // Steal n partitions from the partition pool by the pipeline worker.
+    // This also can steal the partitions from distributed node.
+    fn try_get_partitions(&self, num: u64) -> Result<Partitions> {
+        self.as_ref().try_get_partitions(num)
+    }
+    // Update the context partition pool from the pipeline builder.
+    fn try_set_partitions(&self, partitions: Partitions) -> Result<()> {
+        self.as_ref().try_set_partitions(partitions)
+    }
+    fn try_get_statistics(&self) -> Result<Statistics> {
+        self.as_ref().try_get_statistics()
+    }
+    fn try_set_statistics(&self, val: &Statistics) -> Result<()> {
+        self.as_ref().try_set_statistics(val)
+    }
+    fn attach_query_str(&self, query: &str) {
+        self.as_ref().attach_query_str(query)
+    }
+    fn attach_query_plan(&self, query_plan: &PlanNode) {
+        self.as_ref().attach_query_plan(query_plan)
+    }
+    fn get_cluster(&self) -> Arc<Cluster> {
+        self.as_ref().get_cluster()
+    }
+    fn get_fragment_id(&self) -> usize {
+        self.as_ref().get_fragment_id()
+    }
+    fn get_catalogs(&self) -> Arc<CatalogManager> {
+        self.as_ref().get_catalogs()
+    }
+    fn get_catalog(&self, catalog_name: &str) -> Result<Arc<dyn Catalog>> {
+        self.as_ref().get_catalog(catalog_name)
+    }
+    fn get_id(&self) -> String {
+        self.as_ref().get_id()
+    }
+    fn get_current_catalog(&self) -> String {
+        self.as_ref().get_current_catalog()
+    }
+    fn get_current_database(&self) -> String {
+        self.as_ref().get_current_database()
+    }
+    fn get_current_user(&self) -> Result<UserInfo> {
+        self.as_ref().get_current_user()
+    }
+    fn set_current_user(&self, user: UserInfo) {
+        self.as_ref().set_current_user(user)
+    }
+    fn get_fuse_version(&self) -> String {
+        self.as_ref().get_fuse_version()
+    }
+    fn get_changed_settings(&self) -> Arc<Settings> {
+        self.as_ref().get_changed_settings()
+    }
+    fn apply_changed_settings(&self, changed_settings: Arc<Settings>) -> Result<()> {
+        self.as_ref().apply_changed_settings(changed_settings)
+    }
+    fn get_format_settings(&self) -> Result<FormatSettings> {
+        self.as_ref().get_format_settings()
+    }
+    fn get_config(&self) -> Config {
+        self.as_ref().get_config()
+    }
+    fn get_tenant(&self) -> String {
+        self.as_ref().get_tenant()
+    }
+    fn set_current_tenant(&self, tenant: String) {
+        self.as_ref().set_current_tenant(tenant)
+    }
+    fn get_subquery_name(&self, query: &PlanNode) -> String {
+        self.as_ref().get_subquery_name(query)
+    }
+    fn get_role_cache_manager(&self) -> Arc<RoleCacheMgr> {
+        self.as_ref().get_role_cache_manager()
+    }
+    /// Get the data accessor metrics.
+    fn get_dal_metrics(&self) -> DalMetrics {
+        self.as_ref().get_dal_metrics()
+    }
+    /// Get the session running query.
+    fn get_query_str(&self) -> String {
+        self.as_ref().get_query_str()
+    }
+    /// Get the storage cache manager
+    fn get_storage_cache_manager(&self) -> Arc<CacheManager> {
+        self.as_ref().get_storage_cache_manager()
+    }
+    // Get the storage data accessor operator from the session manager.
+    fn get_storage_operator(&self) -> Result<Operator> {
+        self.as_ref().get_storage_operator()
+    }
+    fn get_dal_context(&self) -> &DalContext {
+        self.as_ref().get_dal_context()
+    }
+    fn get_storage_runtime(&self) -> Arc<Runtime> {
+        self.as_ref().get_storage_runtime()
+    }
+    fn push_precommit_block(&self, block: DataBlock) {
+        self.as_ref().push_precommit_block(block)
+    }
+    fn consume_precommit_blocks(&self) -> Vec<DataBlock> {
+        self.as_ref().consume_precommit_blocks()
+    }
+    fn try_get_function_context(&self) -> Result<FunctionContext> {
+        self.as_ref().try_get_function_context()
+    }
+    fn get_connection_id(&self) -> String {
+        self.as_ref().get_connection_id()
+    }
+
+    fn get_settings(&self) -> Arc<Settings> {
+        self.as_ref().get_settings()
+    }
 }
 
 impl TrySpawn for QueryContext {

@@ -24,7 +24,6 @@ use common_storage_cache::meta::Versioned;
 use uuid::Uuid;
 
 use crate::sessions::query_ctx::QryCtx;
-use crate::sessions::QueryContext;
 use crate::sql::OPT_KEY_SNAPSHOT_LOCATION;
 use crate::storages::fuse::FuseTable;
 
@@ -32,7 +31,7 @@ impl FuseTable {
     #[inline]
     pub async fn do_truncate(
         &self,
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn QryCtx>,
         purge: bool,
         catalog_name: &str,
     ) -> Result<()> {

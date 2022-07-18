@@ -25,7 +25,6 @@ use common_storage_cache::meta::BlockMeta;
 use common_storage_cache::meta::TableSnapshot;
 
 use crate::sessions::query_ctx::QryCtx;
-use crate::sessions::QueryContext;
 use crate::storages::fuse::fuse_part::ColumnMeta;
 use crate::storages::fuse::fuse_part::FusePartInfo;
 use crate::storages::fuse::pruning::BlockPruner;
@@ -35,7 +34,7 @@ impl FuseTable {
     #[inline]
     pub async fn do_read_partitions(
         &self,
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn QryCtx>,
         push_downs: Option<Extras>,
     ) -> Result<(Statistics, Partitions)> {
         let snapshot = self.read_table_snapshot(ctx.as_ref()).await?;
@@ -46,7 +45,7 @@ impl FuseTable {
                 }
                 let schema = self.table_info.schema();
                 let block_metas = BlockPruner::new(snapshot.clone())
-                    .apply(ctx.as_ref(), schema, &push_downs)
+                    .apply(&ctx, schema, &push_downs)
                     .await?
                     .into_iter()
                     .map(|(_, v)| v)

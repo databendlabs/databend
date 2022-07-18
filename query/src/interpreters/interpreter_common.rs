@@ -91,7 +91,8 @@ pub async fn list_files_from_dal(
     path: &str,
     pattern: &str,
 ) -> Result<Vec<StageFile>> {
-    let op = StageSource::get_op(ctx, stage).await?;
+    let rename_me_qry_ctx: Arc<dyn QryCtx> = ctx.clone();
+    let op = StageSource::get_op(&rename_me_qry_ctx, stage).await?;
     let mut files = Vec::new();
 
     // - If the path itself is a dir, return directly.
