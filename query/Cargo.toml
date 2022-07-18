@@ -54,11 +54,13 @@ common-meta-sled-store = { path = "../common/meta/sled-store" }
 common-meta-store = { path = "../common/meta/store" }
 common-meta-types = { path = "../common/meta/types" }
 common-metrics = { path = "../common/metrics" }
+common-pipeline= { path = "../common/pipeline" }
 common-planners = { path = "../common/planners" }
+common-settings = { path = "../common/settings" }
 common-storage = { path = "../common/storage" }
 common-storage-cache = { path = "../common/storage-cache" }
 common-streams = { path = "../common/streams" }
-#common-table-context= { path = "../common/table-context" }
+common-table-context= { path = "../common/table-context" }
 common-tracing = { path = "../common/tracing" }
 common-users = { path = "../common/users" }
 

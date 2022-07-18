@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
@@ -42,11 +43,21 @@ use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_types::MetaId;
 use dyn_clone::DynClone;
 
-use crate::databases::Database;
-use crate::storages::StorageDescription;
-use crate::storages::Table;
-use crate::table_functions::TableArgs;
-use crate::table_functions::TableFunction;
+use crate::database::Database;
+use crate::table::Table;
+use crate::table_args::TableArgs;
+use crate::table_function::TableFunction;
+
+pub struct CatalogManager {
+    catalogs: HashMap<String, Arc<dyn Catalog>>,
+}
+
+#[derive(Default, Clone)]
+pub struct StorageDescription {
+    pub engine_name: String,
+    pub comment: String,
+    pub support_cluster_key: bool,
+}
 
 #[async_trait::async_trait]
 pub trait Catalog: DynClone + Send + Sync {

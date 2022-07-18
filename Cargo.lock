@@ -1538,6 +1538,38 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-pipeline"
+version = "0.1.0"
+dependencies = [
+ "async-trait 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)",
+ "bumpalo",
+ "clap 3.2.6",
+ "common-base",
+ "common-config",
+ "common-datablocks",
+ "common-datavalues",
+ "common-exception",
+ "common-grpc",
+ "common-hashtable",
+ "common-meta-types",
+ "common-storage",
+ "common-tracing",
+ "common-users",
+ "futures",
+ "futures-util",
+ "itertools",
+ "num_cpus",
+ "once_cell",
+ "opendal",
+ "parking_lot 0.12.1",
+ "petgraph",
+ "semver",
+ "serde",
+ "serfig",
+ "time 0.3.11",
+]
+
+[[package]]
 name = "common-planners"
 version = "0.1.0"
 dependencies = [
@@ -1582,6 +1614,34 @@ dependencies = [
  "prost-build",
  "tonic",
  "tonic-build",
+]
+
+[[package]]
+name = "common-settings"
+version = "0.1.0"
+dependencies = [
+ "async-trait 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)",
+ "clap 3.2.6",
+ "common-base",
+ "common-config",
+ "common-datavalues",
+ "common-exception",
+ "common-grpc",
+ "common-meta-types",
+ "common-storage",
+ "common-tracing",
+ "common-users",
+ "futures",
+ "futures-util",
+ "itertools",
+ "num_cpus",
+ "once_cell",
+ "opendal",
+ "parking_lot 0.12.1",
+ "semver",
+ "serde",
+ "serfig",
+ "time 0.3.11",
 ]
 
 [[package]]
@@ -1639,14 +1699,19 @@ dependencies = [
  "common-config",
  "common-contexts",
  "common-datablocks",
+ "common-datavalues",
  "common-exception",
  "common-functions",
  "common-io",
+ "common-meta-app",
  "common-meta-types",
+ "common-pipeline",
  "common-planners",
+ "common-settings",
  "common-storage-cache",
  "common-streams",
  "common-users",
+ "dyn-clone",
  "opendal",
  "parking_lot 0.12.1",
  "time 0.3.11",
@@ -2239,10 +2304,13 @@ dependencies = [
  "common-meta-store",
  "common-meta-types",
  "common-metrics",
+ "common-pipeline",
  "common-planners",
+ "common-settings",
  "common-storage",
  "common-storage-cache",
  "common-streams",
+ "common-table-context",
  "common-tracing",
  "common-users",
  "criterion",

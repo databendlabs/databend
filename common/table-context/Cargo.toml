@@ -10,19 +10,25 @@ test = false
 
 [dependencies]
 common-base = { path = "../base" }
-common-exception = { path = "../exception"}
-common-planners = { path = "../planners"}
-common-streams = { path = "../streams"}
 common-config = { path = "../config"}
-common-meta-types= { path = "../meta/types"}
-common-users= { path = "../users"}
-common-functions= { path = "../functions"}
-common-datablocks = { path = "../datablocks"}
 common-contexts = { path = "../contexts"}
-common-storage-cache = { path = "../storage-cache"}
+common-datablocks = { path = "../datablocks"}
+common-datavalues= { path = "../datavalues"}
+common-exception = { path = "../exception"}
+common-functions= { path = "../functions"}
 common-io = { path = "../io"}
+common-meta-types= { path = "../meta/types"}
+common-meta-app= { path = "../meta/app"}
+common-pipeline= { path = "../pipeline"}
+common-planners = { path = "../planners"}
+common-storage-cache = { path = "../storage-cache"}
+common-settings = { path = "../settings"}
+common-streams = { path = "../streams"}
+common-users= { path = "../users"}
+
 
 async-trait = "0.1.56"
+dyn-clone = "1.0.6"
 opendal = { version = "0.11.0", features = ["retry"] }
 parking_lot = "0.12.1"
 time = "0.3.10"

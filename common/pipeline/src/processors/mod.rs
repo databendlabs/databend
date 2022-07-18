@@ -12,9 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod catalog;
-mod database;
-mod qry_ctx;
-mod table;
-mod table_args;
-mod table_function;
+pub mod port;
+pub mod processor;
+
+mod port_trigger;
+mod resize_processor;
+
+pub use port::connect;
+pub use port_trigger::DirectedEdge;
+pub use port_trigger::UpdateList;
+pub use port_trigger::UpdateTrigger;
+pub use processor::Processor;
+pub use processor::Processors;
+pub use resize_processor::ResizeProcessor;

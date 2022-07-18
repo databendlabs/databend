@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,9 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod catalog;
-mod database;
-mod qry_ctx;
-mod table;
-mod table_args;
-mod table_function;
+use std::sync::Arc;
+
+use crate::table::Table;
+
+pub trait TableFunction: Sync + Send + Table {
+    fn function_name(&self) -> &str;
+
+    fn as_table<'a>(self: Arc<Self>) -> Arc<dyn Table + 'a>
+    where Self: 'a;
+}
