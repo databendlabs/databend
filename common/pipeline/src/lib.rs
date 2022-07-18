@@ -14,10 +14,10 @@
 
 pub mod processors;
 
-mod pipe;
-mod pipeline;
-mod pipeline_display;
-mod unsafe_cell_wrap;
+pub mod pipe;
+pub mod pipeline;
+pub mod pipeline_display;
+pub mod unsafe_cell_wrap;
 
 pub use pipe::Pipe;
 pub use pipe::SinkPipeBuilder;
