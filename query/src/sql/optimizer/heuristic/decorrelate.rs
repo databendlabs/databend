@@ -430,21 +430,12 @@ impl SubqueryRewriter {
                 });
                 let child_expr = *subquery.child_expr.as_ref().unwrap().clone();
                 let op = subquery.compare_op.as_ref().unwrap().clone();
-                let (right_condition, is_other_condition) =
-                    check_child_expr_in_subquery(&child_expr, &op)?;
-                let (left_conditions, right_conditions, other_conditions) = if !is_other_condition {
-                    left_conditions.push(left_condition.clone());
-                    right_conditions.push(right_condition);
-                    (left_conditions, right_conditions, vec![])
-                } else {
-                    let other_condition = Scalar::ComparisonExpr(ComparisonExpr {
-                        op: op.clone(),
-                        left: Box::new(right_condition),
-                        right: Box::new(left_condition),
-                        return_type: Box::new(NullableType::new_impl(BooleanType::new_impl())),
-                    });
-                    (left_conditions, right_conditions, vec![other_condition])
-                };
+                let other_conditions = vec![Scalar::ComparisonExpr(ComparisonExpr {
+                    op: op.clone(),
+                    left: Box::new(child_expr),
+                    right: Box::new(left_condition),
+                    return_type: Box::new(NullableType::new_impl(BooleanType::new_impl())),
+                })];
                 // Add a marker column to save comparison result.
                 // The column is Nullable(Boolean), the data value is TRUE, FALSE, or NULL.
                 // If subquery contains NULL, the comparison result is TRUE or NULL.

@@ -162,4 +162,30 @@ WHERE
 ----
 1  CA
 
+statement query IT
+SELECT * FROM c WHERE bill NOT IN (SELECT ship FROM o WHERE o.c_id=c.c_id);
+----
+3  MA
+5  NULL
+6  FL
+
+statement query IT
+SELECT * FROM c WHERE bill NOT IN (SELECT ship FROM o WHERE o.c_id=c.c_id AND ship IS NOT NULL);
+----
+3  MA
+4  TX
+5  NULL
+6  FL
+
+statement query IT
+SELECT * FROM c WHERE bill NOT IN (SELECT ship FROM o WHERE o.c_id=c.c_id AND ship IS NULL);
+----
+1  CA
+3  MA
+5  NULL
+6  FL
+
+statement query IT
+SELECT * FROM c WHERE (SELECT count(*) FROM o WHERE o.c_id=c.c_id) > 1;
+
 

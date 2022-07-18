@@ -24,6 +24,7 @@ use common_datablocks::HashMethodFixedKeys;
 use common_datablocks::HashMethodKind;
 use common_datablocks::HashMethodSerializer;
 use common_datavalues::combine_validities_2;
+use common_datavalues::combine_validities_3;
 use common_datavalues::BooleanColumn;
 use common_datavalues::BooleanType;
 use common_datavalues::Column;
@@ -513,25 +514,34 @@ impl HashJoinState for JoinHashTable {
         for chunk_index in 0..chunks.len() {
             let chunk = &mut chunks[chunk_index];
             let mut columns = Vec::with_capacity(chunk.cols.len());
-            let mut markers = if self.hash_join_desc.join_type == Mark
-                && self.hash_join_desc.other_predicate.is_some()
-            {
+            let mut markers = if self.hash_join_desc.join_type == Mark {
                 vec![Some(MarkerKind::False); chunk.num_rows()]
             } else {
                 vec![None; chunk.num_rows()]
             };
             for col in chunk.cols.iter() {
-                if self.hash_join_desc.join_type == Mark {
-                    assert_eq!(col.len(), markers.len());
-                    for (row_index, marker) in markers.iter_mut().enumerate() {
-                        if col.get(row_index) == DataValue::Null {
-                            *marker = Some(MarkerKind::Null);
-                        } else {
-                            *marker = Some(MarkerKind::False);
+                columns.push(col);
+            }
+            if chunk.cols.iter().any(|c| c.is_nullable() || c.is_null()) {
+                let mut valids = None;
+                for col in chunk.cols.iter() {
+                    let (is_all_null, tmp_valids) = col.validity();
+                    if is_all_null {
+                        let mut m = MutableBitmap::with_capacity(chunk.num_rows());
+                        m.extend_constant(chunk.num_rows(), false);
+                        valids = Some(m.into());
+                        break;
+                    } else {
+                        valids = combine_validities_3(valids, tmp_valids.cloned());
+                    }
+                }
+                if let Some(v) = valids {
+                    for idx in 0..chunk.num_rows() {
+                        if !v.get_bit(idx) {
+                            markers[idx] = Some(MarkerKind::Null);
                         }
                     }
                 }
-                columns.push(col);
             }
             match (*self.hash_table.write()).borrow_mut() {
                 HashTable::SerializerHashTable(table) => {
@@ -629,6 +639,7 @@ impl HashJoinState for JoinHashTable {
 
     fn mark_join_blocks(&self) -> Result<Vec<DataBlock>> {
         let mut row_ptrs = self.row_ptrs.write();
+        dbg!(&*row_ptrs);
         let has_null = self.hash_join_desc.marker_join_desc.has_null.read();
         let mut validity = MutableBitmap::with_capacity(row_ptrs.len());
         let mut boolean_bit_map = MutableBitmap::with_capacity(row_ptrs.len());
@@ -663,6 +674,7 @@ impl HashJoinState for JoinHashTable {
         let marker_block =
             DataBlock::create(DataSchemaRef::from(marker_schema), vec![marker_column]);
         let build_block = self.row_space.gather(&row_ptrs)?;
+        dbg!(&*row_ptrs);
         Ok(vec![self.merge_eq_block(&marker_block, &build_block)?])
     }
 }

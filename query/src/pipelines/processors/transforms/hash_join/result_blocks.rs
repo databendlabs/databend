@@ -209,6 +209,10 @@ impl JoinHashTable {
         if self.hash_join_desc.other_predicate.is_none() {
             return Ok(());
         }
+        if self.hash_join_desc.from_correlated_subquery {
+            let mut has_null = self.hash_join_desc.marker_join_desc.has_null.write();
+            *has_null = false;
+        }
         let probe_block = DataBlock::block_take_by_indices(input, probe_indexs)?;
         let build_block = self.row_space.gather(build_indexs)?;
         let merged_block = self.merge_eq_block(&build_block, &probe_block)?;
