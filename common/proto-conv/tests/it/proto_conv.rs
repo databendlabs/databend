@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::fmt::Debug;
 use std::sync::Arc;
 
@@ -63,10 +64,19 @@ fn new_share_meta() -> share::ShareMeta {
     share::ShareMeta {
         database: Some(db_entry),
         entries,
-        accounts: vec![s("a"), s("b")],
+        accounts: BTreeSet::from_iter(vec![s("a"), s("b")].into_iter()),
         comment: Some(s("comment")),
         share_on: Utc.ymd(2014, 11, 28).and_hms(12, 0, 9),
         update_on: Some(Utc.ymd(2014, 11, 29).and_hms(12, 0, 9)),
+    }
+}
+
+fn new_share_account_meta() -> share::ShareAccountMeta {
+    share::ShareAccountMeta {
+        account: s("account"),
+        share_id: 4,
+        share_on: Utc.ymd(2014, 11, 28).and_hms(12, 0, 9),
+        accept_on: Some(Utc.ymd(2014, 11, 29).and_hms(12, 0, 9)),
     }
 }
 
@@ -146,6 +156,15 @@ fn test_pb_from_to() -> anyhow::Result<()> {
     let got = mt::TableMeta::from_pb(p)?;
     assert_eq!(tbl, got);
 
+    let share = new_share_meta();
+    let p = share.to_pb()?;
+    let got = share::ShareMeta::from_pb(p)?;
+    assert_eq!(share, got);
+
+    let share_account_meta = new_share_account_meta();
+    let p = share_account_meta.to_pb()?;
+    let got = share::ShareAccountMeta::from_pb(p)?;
+    assert_eq!(share_account_meta, got);
     Ok(())
 }
 
@@ -214,6 +233,17 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
         let mut buf = vec![];
         common_protos::prost::Message::encode(&p, &mut buf)?;
         println!("share:{:?}", buf);
+    }
+
+    // ShareAccountMeta
+    {
+        let share_account_meta = new_share_account_meta();
+
+        let p = share_account_meta.to_pb()?;
+
+        let mut buf = vec![];
+        common_protos::prost::Message::encode(&p, &mut buf)?;
+        println!("share account:{:?}", buf);
     }
 
     Ok(())
@@ -311,6 +341,23 @@ fn test_load_old() -> anyhow::Result<()> {
 
         let got = share::ShareMeta::from_pb(p).map_err(print_err)?;
         let want = new_share_meta();
+        assert_eq!(want, got);
+    }
+
+    // ShareAccountMeta is loadable
+    {
+        let share_account_meta_v2: Vec<u8> = vec![
+            10, 7, 97, 99, 99, 111, 117, 110, 116, 16, 4, 26, 23, 50, 48, 49, 52, 45, 49, 49, 45,
+            50, 56, 32, 49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 34, 23, 50, 48, 49, 52, 45,
+            49, 49, 45, 50, 57, 32, 49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 160, 6, 2, 168,
+            6, 1,
+        ];
+        let p: pb::ShareAccountMeta =
+            common_protos::prost::Message::decode(share_account_meta_v2.as_slice())
+                .map_err(print_err)?;
+
+        let got = share::ShareAccountMeta::from_pb(p).map_err(print_err)?;
+        let want = new_share_account_meta();
         assert_eq!(want, got);
     }
 

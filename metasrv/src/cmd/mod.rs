@@ -12,12 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-/// Partition status of data
-#[derive(PartialEq, Eq)]
-pub enum PartitionState {
-    Random,
-    // Broadcast,
-    NotPartition,
-    HashPartition,
-    // RangePartition,
-}
+mod kvapi;
+
+pub use kvapi::KvApiCommand;

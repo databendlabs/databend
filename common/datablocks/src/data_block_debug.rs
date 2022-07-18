@@ -19,7 +19,7 @@ use regex::bytes::Regex;
 
 use crate::DataBlock;
 
-///! Create a visual representation of record batches
+/// ! Create a visual representation of record batches
 pub fn pretty_format_blocks(results: &[DataBlock]) -> Result<String> {
     Ok(create_table(results)?.trim_fmt())
 }
@@ -74,7 +74,7 @@ pub fn assert_blocks_sorted_eq_with_name(test_name: &str, expect: Vec<&str>, blo
     );
 }
 
-///! Convert a column of record batches into a table
+/// ! Convert a column of record batches into a table
 fn create_table(results: &[DataBlock]) -> Result<Table> {
     let mut table = Table::new();
     table.load_preset("||--+-++|    ++++++");

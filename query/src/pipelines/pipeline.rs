@@ -43,7 +43,6 @@ use crate::pipelines::processors::ResizeProcessor;
 ///                                           |pipeN|                       |    +---------+
 ///                                           +-----+                       +--->|Processor|
 ///                                                                              +---------+
-///
 pub struct Pipeline {
     max_threads: usize,
     pub pipes: Vec<Pipe>,

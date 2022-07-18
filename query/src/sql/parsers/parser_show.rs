@@ -44,7 +44,7 @@ impl<'a> DfParser<'a> {
         )))
     }
 
-    //parse show table status
+    // parse show table status
     pub(crate) fn parse_show_tab_stat(&mut self) -> Result<DfStatement<'a>, ParserError> {
         let mut fromdb = None;
         if self.consume_token("FROM") | self.consume_token("IN") {

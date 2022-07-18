@@ -115,7 +115,7 @@ impl DateFunction {
 
         factory.register("toStartOfWeek", ToStartOfWeekFunction::desc());
 
-        //interval functions
+        // interval functions
         factory.register("addYears", AddYearsFunction::desc(1));
         factory.register("addMonths", AddMonthsFunction::desc(1));
         factory.register("addDays", AddDaysFunction::desc(1));
