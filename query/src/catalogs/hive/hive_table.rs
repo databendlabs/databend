@@ -39,7 +39,6 @@ use crate::pipelines::processors::SyncSourcer;
 use crate::pipelines::Pipeline;
 use crate::pipelines::SourcePipeBuilder;
 use crate::sessions::query_ctx::TableContext;
-use crate::sessions::QueryContext;
 use crate::storages::hive::HiveParquetBlockReader;
 use crate::storages::Table;
 use crate::storages::TableStatistics;
@@ -65,7 +64,7 @@ impl HiveTable {
     #[inline]
     pub fn do_read2(
         &self,
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn TableContext>,
         plan: &ReadDataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
@@ -92,7 +91,7 @@ impl HiveTable {
 
     fn create_block_reader(
         &self,
-        ctx: &Arc<QueryContext>,
+        ctx: &Arc<dyn TableContext>,
         push_downs: &Option<Extras>,
     ) -> Result<Arc<HiveParquetBlockReader>> {
         let projection = if let Some(Extras {
@@ -115,7 +114,7 @@ impl HiveTable {
 
     async fn do_read_partitions(
         &self,
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn TableContext>,
         _push_downs: Option<Extras>,
     ) -> Result<(Statistics, Partitions)> {
         if let Some(partition_keys) = &self.table_options.partition_keys {
@@ -196,7 +195,7 @@ impl Table for HiveTable {
 
     async fn read_partitions(
         &self,
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn TableContext>,
         push_downs: Option<Extras>,
     ) -> Result<(Statistics, Partitions)> {
         self.do_read_partitions(ctx, push_downs).await
@@ -208,7 +207,7 @@ impl Table for HiveTable {
 
     fn read2(
         &self,
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn TableContext>,
         plan: &ReadDataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
@@ -217,7 +216,7 @@ impl Table for HiveTable {
 
     async fn append_data(
         &self,
-        _ctx: Arc<QueryContext>,
+        _ctx: Arc<dyn TableContext>,
         _stream: SendableDataBlockStream,
     ) -> Result<SendableDataBlockStream> {
         Err(ErrorCode::UnImplement(format!(
@@ -229,7 +228,7 @@ impl Table for HiveTable {
 
     async fn commit_insertion(
         &self,
-        _ctx: Arc<QueryContext>,
+        _ctx: Arc<dyn TableContext>,
         _catalog_name: &str,
         _operations: Vec<DataBlock>,
         _overwrite: bool,
@@ -243,7 +242,7 @@ impl Table for HiveTable {
 
     async fn truncate(
         &self,
-        _ctx: Arc<QueryContext>,
+        _ctx: Arc<dyn TableContext>,
         _truncate_plan: TruncateTablePlan,
     ) -> Result<()> {
         Err(ErrorCode::UnImplement(format!(
@@ -252,11 +251,11 @@ impl Table for HiveTable {
         )))
     }
 
-    async fn optimize(&self, _ctx: Arc<QueryContext>, _keep_last_snapshot: bool) -> Result<()> {
+    async fn optimize(&self, _ctx: Arc<dyn TableContext>, _keep_last_snapshot: bool) -> Result<()> {
         Ok(())
     }
 
-    async fn statistics(&self, _ctx: Arc<QueryContext>) -> Result<Option<TableStatistics>> {
+    async fn statistics(&self, _ctx: Arc<dyn TableContext>) -> Result<Option<TableStatistics>> {
         Ok(None)
     }
 }
@@ -270,7 +269,7 @@ struct HiveSource {
 impl HiveSource {
     #[allow(dead_code)]
     pub fn create(
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
         schema: DataSchemaRef,
     ) -> Result<ProcessorPtr> {
