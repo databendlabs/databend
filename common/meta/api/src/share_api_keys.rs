@@ -14,6 +14,7 @@
 
 //! Defines structured keys used by ShareApi
 
+use common_meta_app::share::ShareAccountNameIdent;
 use common_meta_app::share::ShareId;
 use common_meta_app::share::ShareNameIdent;
 use kv_api_key::check_segment;
@@ -30,6 +31,7 @@ use crate::PREFIX_ID_GEN;
 
 const PREFIX_SHARE: &str = "__fd_share";
 const PREFIX_SHARE_ID: &str = "__fd_share_id";
+const PREFIX_SHARE_ACCOUNT_ID: &str = "__fd_share_account_id";
 
 /// Key for share id generator
 #[derive(Debug)]
@@ -98,5 +100,36 @@ impl KVApiKey for ShareId {
         check_segment_absent(elts.next(), 2, s)?;
 
         Ok(ShareId { share_id })
+    }
+}
+
+// __fd_share_account/tenant/id -> ShareAccountMeta
+impl KVApiKey for ShareAccountNameIdent {
+    const PREFIX: &'static str = PREFIX_SHARE_ACCOUNT_ID;
+
+    fn to_key(&self) -> String {
+        format!(
+            "{}/{}/{}",
+            Self::PREFIX,
+            escape(&self.account),
+            self.share_id,
+        )
+    }
+
+    fn from_key(s: &str) -> Result<Self, KVApiKeyError> {
+        let mut elts = s.split('/');
+
+        let prefix = check_segment_present(elts.next(), 0, s)?;
+        check_segment(prefix, 0, Self::PREFIX)?;
+
+        let account = check_segment_present(elts.next(), 1, s)?;
+
+        let share_id = decode_id(check_segment_present(elts.next(), 2, s)?)?;
+
+        check_segment_absent(elts.next(), 3, s)?;
+
+        let account = unescape(account)?;
+
+        Ok(ShareAccountNameIdent { account, share_id })
     }
 }

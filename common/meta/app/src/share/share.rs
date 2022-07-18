@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
@@ -31,6 +32,18 @@ pub struct ShareNameIdent {
 impl Display for ShareNameIdent {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "'{}'/'{}'", self.tenant, self.share_name)
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
+pub struct ShareAccountNameIdent {
+    pub account: String,
+    pub share_id: u64,
+}
+
+impl Display for ShareAccountNameIdent {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "'{}'/'{}'", self.account, self.share_id)
     }
 }
 
@@ -54,6 +67,46 @@ pub struct DropShareReq {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct DropShareReply {}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct AddShareAccountReq {
+    pub share_name: ShareNameIdent,
+    pub account: String,
+    pub share_on: DateTime<Utc>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct AddShareAccountReply {
+    pub share_id: u64,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct RemoveShareAccountReq {
+    pub account: String,
+    pub share_id: u64,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct RemoveShareAccountReply {}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct ShareAccountMeta {
+    pub account: String,
+    pub share_id: u64,
+    pub share_on: DateTime<Utc>,
+    pub accept_on: Option<DateTime<Utc>>,
+}
+
+impl ShareAccountMeta {
+    pub fn new(account: String, share_id: u64, share_on: DateTime<Utc>) -> Self {
+        Self {
+            account,
+            share_id,
+            share_on,
+            accept_on: None,
+        }
+    }
+}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
 pub struct ShareId {
@@ -131,7 +184,7 @@ impl Display for ShareGrantEntry {
 pub struct ShareMeta {
     pub database: Option<ShareGrantEntry>,
     pub entries: BTreeMap<String, ShareGrantEntry>,
-    pub accounts: Vec<String>,
+    pub accounts: BTreeSet<String>,
     pub comment: Option<String>,
     pub share_on: DateTime<Utc>,
     pub update_on: Option<DateTime<Utc>>,
@@ -144,6 +197,18 @@ impl ShareMeta {
             comment,
             ..Default::default()
         }
+    }
+
+    pub fn has_account(&self, account: &String) -> bool {
+        self.accounts.contains(account)
+    }
+
+    pub fn add_account(&mut self, account: String) {
+        self.accounts.insert(account);
+    }
+
+    pub fn del_account(&mut self, account: &String) {
+        self.accounts.remove(account);
     }
 }
 
