@@ -19,6 +19,7 @@ use chrono::DateTime;
 use chrono::TimeZone;
 use chrono::Utc;
 use common_arrow::arrow::datatypes::DataType as ArrowType;
+use common_arrow::arrow::datatypes::TimeUnit;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use rand::prelude::*;
@@ -141,7 +142,7 @@ impl DataType for TimestampType {
     }
 
     fn arrow_type(&self) -> ArrowType {
-        ArrowType::Int64
+        ArrowType::Timestamp(TimeUnit::Microsecond, None)
     }
 
     fn custom_arrow_meta(&self) -> Option<BTreeMap<String, String>> {
@@ -154,6 +155,7 @@ impl DataType for TimestampType {
     fn create_serializer_inner<'a>(&self, col: &'a ColumnRef) -> Result<TypeSerializerImpl<'a>> {
         Ok(TimestampSerializer::<'a>::try_create(self.precision, col)?.into())
     }
+    
     fn create_deserializer(&self, capacity: usize) -> TypeDeserializerImpl {
         TimestampDeserializer {
             builder: MutablePrimitiveColumn::<i64>::with_capacity(capacity),

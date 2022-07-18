@@ -185,7 +185,7 @@ pub fn from_arrow_type(dt: &ArrowType) -> DataTypeImpl {
             DataTypeImpl::String(StringType::default())
         }
 
-        ArrowType::Timestamp(_, _) => DataTypeImpl::Timestamp(TimestampType::create(0)),
+        ArrowType::Timestamp(_, _) => DataTypeImpl::Timestamp(TimestampType::create(3)),
         ArrowType::Date32 | ArrowType::Date64 => DataTypeImpl::Date(DateType::default()),
 
         ArrowType::Struct(fields) => {
@@ -213,6 +213,8 @@ pub fn from_arrow_field(f: &ArrowField) -> DataTypeImpl {
         let metadata = f.metadata.get(ARROW_EXTENSION_META).cloned();
         match custom_name.as_str() {
             "Date" => return DateType::new_impl(),
+            
+            // OLD COMPATIBLE Behavior
             "Timestamp" => match metadata {
                 Some(meta) => {
                     let mut chars = meta.chars();
