@@ -19,11 +19,11 @@ use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::StageType;
+use common_table_context::table_context::TableContext;
 
 use crate::interpreters::list_files_from_dal;
 use crate::procedures::Procedure;
 use crate::procedures::ProcedureFeatures;
-use crate::sessions::query_ctx::QryCtx;
 use crate::sessions::QueryContext;
 
 pub struct SyncStageFileProcedure;

@@ -15,13 +15,13 @@
 mod clustering_information;
 mod fuse_segment;
 mod fuse_snapshot;
-// mod search_tables;
-// mod sync_stage;
-// mod system;
+mod search_tables;
+mod sync_stage;
+mod system;
 
 pub use clustering_information::ClusteringInformationProcedure;
 pub use fuse_segment::FuseSegmentProcedure;
 pub use fuse_snapshot::FuseSnapshotProcedure;
-// pub use search_tables::SearchTablesProcedure;
-// pub use sync_stage::SyncStageFileProcedure;
-// pub use system::SystemProcedure;
+pub use search_tables::SearchTablesProcedure;
+pub use sync_stage::SyncStageFileProcedure;
+pub use system::SystemProcedure;
