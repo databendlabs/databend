@@ -69,8 +69,7 @@ fn test_rewrite_projection_alias_plan() -> Result<()> {
                 .alias("x"),
             ],
             expect_str: "",
-            error_msg:
-                "Code: 1005, displayText = Planner Error: Different expressions with the same alias x.",
+            error_msg: "Code: 1005, displayText = Planner Error: Different expressions with the same alias x.",
         },
         RewriteTest {
             name: "normal",
@@ -107,8 +106,7 @@ fn test_rewrite_projection_alias_plan() -> Result<()> {
                     args: vec![col("x"), col("y")],
                 },
             ],
-            expect_str:
-                "[add(1, 1) as x, add(1, add(1, 1)) as y, multiply(add(1, 1), add(1, add(1, 1)))]",
+            expect_str: "[add(1, 1) as x, add(1, add(1, 1)) as y, multiply(add(1, 1), add(1, add(1, 1)))]",
             error_msg: "",
         },
         RewriteTest {
@@ -129,8 +127,7 @@ fn test_rewrite_projection_alias_plan() -> Result<()> {
                     args: vec![col("x"), col("y")],
                 },
             ],
-            expect_str:
-                "[add(x, 1) as x, add(1, add(x, 1)) as y, multiply(add(x, 1), add(1, add(x, 1)))]",
+            expect_str: "[add(x, 1) as x, add(1, add(x, 1)) as y, multiply(add(x, 1), add(1, add(x, 1)))]",
             error_msg: "",
         },
     ];

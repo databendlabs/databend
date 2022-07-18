@@ -123,7 +123,7 @@ impl MutableColumn for MutableStructColumn {
                 return Err(ErrorCode::BadDataValueType(format!(
                     "DataValue Error: Cannot convert {:?} to Struct",
                     value,
-                )))
+                )));
             }
         }
         Ok(())

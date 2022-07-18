@@ -32,13 +32,13 @@ use parking_lot::Mutex;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreter;
-use crate::pipelines::new::executor::PipelineCompleteExecutor;
-use crate::pipelines::new::processors::port::OutputPort;
-use crate::pipelines::new::processors::BlocksSource;
-use crate::pipelines::new::processors::TransformAddOn;
-use crate::pipelines::new::processors::TransformCastSchema;
-use crate::pipelines::new::NewPipeline;
-use crate::pipelines::new::SourcePipeBuilder;
+use crate::pipelines::executor::PipelineCompleteExecutor;
+use crate::pipelines::processors::port::OutputPort;
+use crate::pipelines::processors::BlocksSource;
+use crate::pipelines::processors::TransformAddOn;
+use crate::pipelines::processors::TransformCastSchema;
+use crate::pipelines::Pipeline;
+use crate::pipelines::SourcePipeBuilder;
 use crate::sessions::query_ctx::QryCtx;
 use crate::sessions::QueryContext;
 
@@ -219,8 +219,8 @@ impl Interpreter for InsertInterpreter {
         )))
     }
 
-    async fn create_new_pipeline(&self) -> Result<NewPipeline> {
-        let insert_pipeline = NewPipeline::create();
+    async fn create_new_pipeline(&self) -> Result<Pipeline> {
+        let insert_pipeline = Pipeline::create();
         Ok(insert_pipeline)
     }
 

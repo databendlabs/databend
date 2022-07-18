@@ -42,8 +42,9 @@ use common_tracing::tracing;
 use futures::StreamExt;
 use uuid::Uuid;
 
-use crate::pipelines::new::NewPipeline;
+use crate::pipelines::Pipeline;
 use crate::sessions::query_ctx::QryCtx;
+use crate::sessions::QueryContext;
 use crate::sql::PlanParser;
 use crate::sql::OPT_KEY_DATABASE_ID;
 use crate::sql::OPT_KEY_LEGACY_SNAPSHOT_LOC;
@@ -350,12 +351,12 @@ impl Table for FuseTable {
         &self,
         ctx: Arc<dyn QryCtx>,
         plan: &ReadDataSourcePlan,
-        pipeline: &mut NewPipeline,
+        pipeline: &mut Pipeline,
     ) -> Result<()> {
         self.do_read2(ctx, plan, pipeline)
     }
 
-    fn append2(&self, ctx: Arc<dyn QryCtx>, pipeline: &mut NewPipeline) -> Result<()> {
+    fn append2(&self, ctx: Arc<dyn QryCtx>, pipeline: &mut Pipeline) -> Result<()> {
         self.check_mutable()?;
         self.do_append2(ctx, pipeline)
     }

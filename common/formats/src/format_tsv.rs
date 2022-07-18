@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
@@ -97,12 +98,12 @@ impl TsvInputFormat {
         skip_rows: usize,
         min_accepted_rows: usize,
         min_accepted_bytes: usize,
-    ) -> Result<Box<dyn InputFormat>> {
+    ) -> Result<Arc<dyn InputFormat>> {
         settings.field_delimiter = vec![b'\t'];
         settings.record_delimiter = vec![b'\n'];
         settings.null_bytes = settings.tsv_null_bytes.clone();
 
-        Ok(Box::new(TsvInputFormat {
+        Ok(Arc::new(TsvInputFormat {
             schema,
             settings,
             skip_rows,
@@ -296,8 +297,24 @@ impl InputFormat for TsvInputFormat {
         Ok(index)
     }
 
-    fn skip_header(&self, buf: &[u8], state: &mut Box<dyn InputState>) -> Result<usize> {
-        if self.skip_rows > 0 {
+    fn set_buf(&self, buf: Vec<u8>, state: &mut Box<dyn InputState>) {
+        let state = state.as_any().downcast_mut::<TsvInputState>().unwrap();
+        state.memory = buf;
+    }
+
+    fn take_buf(&self, state: &mut Box<dyn InputState>) -> Vec<u8> {
+        let state = state.as_any().downcast_mut::<TsvInputState>().unwrap();
+        std::mem::take(&mut state.memory)
+    }
+
+    fn skip_header(
+        &self,
+        buf: &[u8],
+        state: &mut Box<dyn InputState>,
+        force: usize,
+    ) -> Result<usize> {
+        let rows_to_skip = if force > 0 { force } else { self.skip_rows };
+        if rows_to_skip > 0 {
             let mut index = 0;
             let state = state.as_any().downcast_mut::<TsvInputState>().unwrap();
 
@@ -307,7 +324,7 @@ impl InputFormat for TsvInputFormat {
                     false => self.find_delimiter(buf, index, state),
                 };
 
-                if state.accepted_rows == self.skip_rows {
+                if state.accepted_rows == rows_to_skip {
                     return Ok(index);
                 }
             }

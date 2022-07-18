@@ -45,9 +45,9 @@ use serde::Serialize;
 
 use crate::interpreters::InterpreterFactory;
 use crate::interpreters::InterpreterFactoryV2;
-use crate::pipelines::new::processors::port::OutputPort;
-use crate::pipelines::new::processors::StreamSource;
-use crate::pipelines::new::SourcePipeBuilder;
+use crate::pipelines::processors::port::OutputPort;
+use crate::pipelines::processors::StreamSource;
+use crate::pipelines::SourcePipeBuilder;
 use crate::servers::clickhouse::CLickHouseFederated;
 use crate::servers::http::v1::HttpQueryContext;
 use crate::sessions::query_ctx::QryCtx;
@@ -438,9 +438,10 @@ fn get_default_format(
     let name = match &params.default_format {
         None => match headers.get("X-CLICKHOUSE-FORMAT") {
             None => "TSV",
-            Some(v) => v.to_str().map_err_to_code(ErrorCode::BadBytes, || {
-                "value of X-CLICKHOUSE-FORMAT is not string"
-            })?,
+            Some(v) => v.to_str().map_err_to_code(
+                ErrorCode::BadBytes,
+                || "value of X-CLICKHOUSE-FORMAT is not string",
+            )?,
         },
         Some(s) => s,
     };

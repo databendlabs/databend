@@ -30,17 +30,18 @@ use common_streams::SendableDataBlockStream;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 
-use crate::pipelines::new::processors::port::InputPort;
-use crate::pipelines::new::processors::port::OutputPort;
-use crate::pipelines::new::processors::processor::ProcessorPtr;
-use crate::pipelines::new::processors::Sink;
-use crate::pipelines::new::processors::Sinker;
-use crate::pipelines::new::processors::SyncSource;
-use crate::pipelines::new::processors::SyncSourcer;
-use crate::pipelines::new::NewPipeline;
-use crate::pipelines::new::SinkPipeBuilder;
-use crate::pipelines::new::SourcePipeBuilder;
+use crate::pipelines::processors::port::InputPort;
+use crate::pipelines::processors::port::OutputPort;
+use crate::pipelines::processors::processor::ProcessorPtr;
+use crate::pipelines::processors::Sink;
+use crate::pipelines::processors::Sinker;
+use crate::pipelines::processors::SyncSource;
+use crate::pipelines::processors::SyncSourcer;
+use crate::pipelines::Pipeline;
+use crate::pipelines::SinkPipeBuilder;
+use crate::pipelines::SourcePipeBuilder;
 use crate::sessions::query_ctx::QryCtx;
+use crate::sessions::QueryContext;
 use crate::storages::memory::memory_part::MemoryPartInfo;
 use crate::storages::StorageContext;
 use crate::storages::StorageDescription;
@@ -182,7 +183,7 @@ impl Table for MemoryTable {
         &self,
         ctx: Arc<dyn QryCtx>,
         plan: &ReadDataSourcePlan,
-        pipeline: &mut NewPipeline,
+        pipeline: &mut Pipeline,
     ) -> Result<()> {
         let settings = ctx.get_settings();
         let mut builder = SourcePipeBuilder::create();
@@ -205,7 +206,7 @@ impl Table for MemoryTable {
         Ok(())
     }
 
-    fn append2(&self, ctx: Arc<dyn QryCtx>, pipeline: &mut NewPipeline) -> Result<()> {
+    fn append2(&self, ctx: Arc<dyn QryCtx>, pipeline: &mut Pipeline) -> Result<()> {
         let mut sink_pipeline_builder = SinkPipeBuilder::create();
         for _ in 0..pipeline.output_len() {
             let input_port = InputPort::create();

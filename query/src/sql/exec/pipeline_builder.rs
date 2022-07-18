@@ -29,29 +29,29 @@ use common_planners::ReadDataSourcePlan;
 
 use crate::common::EvalNode;
 use crate::common::Evaluator;
-use crate::pipelines::new::processors::port::InputPort;
-use crate::pipelines::new::processors::transforms::ExpressionTransformV2;
-use crate::pipelines::new::processors::transforms::TransformFilterV2;
-use crate::pipelines::new::processors::transforms::TransformMarkJoin;
-use crate::pipelines::new::processors::transforms::TransformProject;
-use crate::pipelines::new::processors::transforms::TransformRename;
-use crate::pipelines::new::processors::AggregatorParams;
-use crate::pipelines::new::processors::AggregatorTransformParams;
-use crate::pipelines::new::processors::HashJoinState;
-use crate::pipelines::new::processors::JoinHashTable;
-use crate::pipelines::new::processors::MarkJoinCompactor;
-use crate::pipelines::new::processors::SinkBuildHashTable;
-use crate::pipelines::new::processors::Sinker;
-use crate::pipelines::new::processors::SortMergeCompactor;
-use crate::pipelines::new::processors::TransformAggregator;
-use crate::pipelines::new::processors::TransformApply;
-use crate::pipelines::new::processors::TransformHashJoinProbe;
-use crate::pipelines::new::processors::TransformLimit;
-use crate::pipelines::new::processors::TransformMax1Row;
-use crate::pipelines::new::processors::TransformSortMerge;
-use crate::pipelines::new::processors::TransformSortPartial;
-use crate::pipelines::new::NewPipeline;
-use crate::pipelines::new::SinkPipeBuilder;
+use crate::pipelines::processors::port::InputPort;
+use crate::pipelines::processors::transforms::ExpressionTransformV2;
+use crate::pipelines::processors::transforms::TransformFilterV2;
+use crate::pipelines::processors::transforms::TransformMarkJoin;
+use crate::pipelines::processors::transforms::TransformProject;
+use crate::pipelines::processors::transforms::TransformRename;
+use crate::pipelines::processors::AggregatorParams;
+use crate::pipelines::processors::AggregatorTransformParams;
+use crate::pipelines::processors::HashJoinState;
+use crate::pipelines::processors::JoinHashTable;
+use crate::pipelines::processors::MarkJoinCompactor;
+use crate::pipelines::processors::SinkBuildHashTable;
+use crate::pipelines::processors::Sinker;
+use crate::pipelines::processors::SortMergeCompactor;
+use crate::pipelines::processors::TransformAggregator;
+use crate::pipelines::processors::TransformApply;
+use crate::pipelines::processors::TransformHashJoinProbe;
+use crate::pipelines::processors::TransformLimit;
+use crate::pipelines::processors::TransformMax1Row;
+use crate::pipelines::processors::TransformSortMerge;
+use crate::pipelines::processors::TransformSortPartial;
+use crate::pipelines::Pipeline;
+use crate::pipelines::SinkPipeBuilder;
 use crate::sessions::query_ctx::QryCtx;
 use crate::sessions::QueryContext;
 use crate::sql::exec::physical_plan::ColumnID;
@@ -65,7 +65,7 @@ use crate::sql::IndexType;
 
 #[derive(Default)]
 pub struct PipelineBuilder {
-    pub pipelines: Vec<NewPipeline>,
+    pub pipelines: Vec<Pipeline>,
 }
 
 impl PipelineBuilder {
@@ -77,7 +77,7 @@ impl PipelineBuilder {
         &mut self,
         context: Arc<QueryContext>,
         plan: &PhysicalPlan,
-        pipeline: &mut NewPipeline,
+        pipeline: &mut Pipeline,
     ) -> Result<()> {
         match plan {
             PhysicalPlan::TableScan {
@@ -155,7 +155,7 @@ impl PipelineBuilder {
                 join_type,
                 marker_index,
             } => {
-                let mut build_side_pipeline = NewPipeline::create();
+                let mut build_side_pipeline = Pipeline::create();
                 let build_side_context = QueryContext::create_from(context.clone());
                 self.build_pipeline(build_side_context, build, &mut build_side_pipeline)?;
                 self.build_pipeline(context.clone(), probe, pipeline)?;
@@ -198,7 +198,7 @@ impl PipelineBuilder {
         &mut self,
         input_schema: DataSchemaRef,
         result_columns: &[ColumnBinding],
-        pipeline: &mut NewPipeline,
+        pipeline: &mut Pipeline,
     ) -> Result<()> {
         let mut projections = Vec::with_capacity(result_columns.len());
         let mut result_fields = Vec::with_capacity(result_columns.len());
@@ -233,7 +233,7 @@ impl PipelineBuilder {
         output_schema: DataSchemaRef,
         name_mapping: &BTreeMap<String, ColumnID>,
         source: &ReadDataSourcePlan,
-        pipeline: &mut NewPipeline,
+        pipeline: &mut Pipeline,
     ) -> Result<()> {
         let table = context.build_table_from_source_plan(source)?;
         context.try_set_partitions(source.parts.clone())?;
@@ -263,7 +263,7 @@ impl PipelineBuilder {
         &mut self,
         context: Arc<QueryContext>,
         predicates: &[PhysicalScalar],
-        pipeline: &mut NewPipeline,
+        pipeline: &mut Pipeline,
     ) -> Result<()> {
         if predicates.is_empty() {
             return Err(ErrorCode::LogicalError(
@@ -299,11 +299,7 @@ impl PipelineBuilder {
         Ok(())
     }
 
-    pub fn build_project(
-        &mut self,
-        projections: &[usize],
-        pipeline: &mut NewPipeline,
-    ) -> Result<()> {
+    pub fn build_project(&mut self, projections: &[usize], pipeline: &mut Pipeline) -> Result<()> {
         pipeline.add_transform(|input, output| {
             Ok(TransformProject::create(
                 input,
@@ -317,7 +313,7 @@ impl PipelineBuilder {
         &mut self,
         context: Arc<QueryContext>,
         scalars: &[(PhysicalScalar, ColumnID)],
-        pipeline: &mut NewPipeline,
+        pipeline: &mut Pipeline,
     ) -> Result<()> {
         let eval_nodes: Vec<(EvalNode<ColumnID>, String)> = scalars
             .iter()
@@ -344,7 +340,7 @@ impl PipelineBuilder {
         output_schema: DataSchemaRef,
         group_by: &[ColumnID],
         agg_funcs: &[AggregateFunctionDesc],
-        pipeline: &mut NewPipeline,
+        pipeline: &mut Pipeline,
     ) -> Result<()> {
         let params =
             Self::build_aggregator_params(input_schema, output_schema, group_by, agg_funcs)?;
@@ -368,7 +364,7 @@ impl PipelineBuilder {
         output_schema: DataSchemaRef,
         group_by: &[ColumnID],
         agg_funcs: &[AggregateFunctionDesc],
-        pipeline: &mut NewPipeline,
+        pipeline: &mut Pipeline,
     ) -> Result<()> {
         let params =
             Self::build_aggregator_params(input_schema, output_schema, group_by, agg_funcs)?;
@@ -435,7 +431,7 @@ impl PipelineBuilder {
         &mut self,
         _context: Arc<QueryContext>,
         order_by: &[SortDesc],
-        pipeline: &mut NewPipeline,
+        pipeline: &mut Pipeline,
     ) -> Result<()> {
         let sort_desc: Vec<SortColumnDescription> = order_by
             .iter()
@@ -478,7 +474,7 @@ impl PipelineBuilder {
         &mut self,
         limit: Option<usize>,
         offset: usize,
-        pipeline: &mut NewPipeline,
+        pipeline: &mut Pipeline,
     ) -> Result<()> {
         pipeline.resize(1)?;
         pipeline.add_transform(|input, output| {
@@ -498,8 +494,8 @@ impl PipelineBuilder {
         other_conditions: &[PhysicalScalar],
         join_type: JoinType,
         marker_index: Option<IndexType>,
-        mut child_pipeline: NewPipeline,
-        pipeline: &mut NewPipeline,
+        mut child_pipeline: Pipeline,
+        pipeline: &mut Pipeline,
     ) -> Result<()> {
         let predicate = other_conditions.iter().cloned().fold(
             Result::<Option<PhysicalScalar>>::Ok(None),
@@ -567,7 +563,7 @@ impl PipelineBuilder {
     fn build_sink_hash_table(
         &mut self,
         state: Arc<dyn HashJoinState>,
-        pipeline: &mut NewPipeline,
+        pipeline: &mut Pipeline,
     ) -> Result<()> {
         let mut sink_pipeline_builder = SinkPipeBuilder::create();
         for _ in 0..pipeline.output_len() {
@@ -591,7 +587,7 @@ impl PipelineBuilder {
         subquery: &PhysicalPlan,
         outer_columns: &BTreeSet<ColumnID>,
         output_schema: DataSchemaRef,
-        pipeline: &mut NewPipeline,
+        pipeline: &mut Pipeline,
     ) -> Result<()> {
         pipeline.add_transform(|input, output| {
             Ok(TransformApply::create(
@@ -607,7 +603,7 @@ impl PipelineBuilder {
         Ok(())
     }
 
-    pub fn build_max_one_row(&mut self, pipeline: &mut NewPipeline) -> Result<()> {
+    pub fn build_max_one_row(&mut self, pipeline: &mut Pipeline) -> Result<()> {
         pipeline.add_transform(|input, output| Ok(TransformMax1Row::create(input, output)))?;
 
         Ok(())

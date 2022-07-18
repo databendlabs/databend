@@ -31,7 +31,7 @@ use futures::TryStreamExt;
 
 use crate::sessions::query_ctx::QryCtx;
 use crate::storages::fuse::io::MetaReaders;
-use crate::storages::index1::RangeFilter;
+use crate::storages::index::RangeFilter;
 
 pub struct BlockPruner {
     table_snapshot: Arc<TableSnapshot>,

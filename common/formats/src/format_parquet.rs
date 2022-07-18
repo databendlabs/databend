@@ -14,6 +14,7 @@
 
 use std::any::Any;
 use std::io::Cursor;
+use std::sync::Arc;
 
 use common_arrow::arrow::array::Array;
 use common_arrow::arrow::chunk::Chunk;
@@ -62,9 +63,9 @@ impl ParquetInputFormat {
         )
     }
 
-    pub fn try_create(_name: &str, schema: DataSchemaRef) -> Result<Box<dyn InputFormat>> {
+    pub fn try_create(_name: &str, schema: DataSchemaRef) -> Result<Arc<dyn InputFormat>> {
         let arrow_table_schema = schema.to_arrow();
-        Ok(Box::new(ParquetInputFormat {
+        Ok(Arc::new(ParquetInputFormat {
             schema,
             arrow_table_schema,
         }))
@@ -134,7 +135,17 @@ impl InputFormat for ParquetInputFormat {
         Ok(buf.len())
     }
 
-    fn skip_header(&self, _: &[u8], _: &mut Box<dyn InputState>) -> Result<usize> {
+    fn set_buf(&self, buf: Vec<u8>, state: &mut Box<dyn InputState>) {
+        let state = state.as_any().downcast_mut::<ParquetInputState>().unwrap();
+        state.memory = buf;
+    }
+
+    fn take_buf(&self, state: &mut Box<dyn InputState>) -> Vec<u8> {
+        let state = state.as_any().downcast_mut::<ParquetInputState>().unwrap();
+        std::mem::take(&mut state.memory)
+    }
+
+    fn skip_header(&self, _: &[u8], _: &mut Box<dyn InputState>, _: usize) -> Result<usize> {
         Ok(0)
     }
 }

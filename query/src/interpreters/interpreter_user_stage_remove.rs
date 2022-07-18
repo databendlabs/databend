@@ -25,7 +25,7 @@ use crate::interpreters::interpreter_common::list_files;
 use crate::interpreters::Interpreter;
 use crate::sessions::query_ctx::QryCtx;
 use crate::sessions::QueryContext;
-use crate::storages::stage::StageSource;
+use crate::storages::stage::StageSourceHelper;
 
 #[derive(Debug)]
 pub struct RemoveUserStageInterpreter {
@@ -56,8 +56,8 @@ impl Interpreter for RemoveUserStageInterpreter {
 
         let files = list_files(&self.ctx, &plan.stage, &plan.path, &plan.pattern).await?;
         let files = files.iter().map(|f| f.path.clone()).collect::<Vec<_>>();
-        let test_qry_ctx: Arc<dyn QryCtx> = self.ctx.clone();
-        let op = StageSource::get_op(&test_qry_ctx, &self.plan.stage).await?;
+        let rename_me: Arc<dyn QryCtx> = self.ctx.clone();
+        let op = StageSourceHelper::get_op(&rename_me, &self.plan.stage).await?;
         if plan.stage.stage_type == StageType::Internal {
             user_mgr
                 .remove_files(&tenant, &plan.stage.stage_name, files.clone())

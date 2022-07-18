@@ -188,9 +188,10 @@ impl DfCreateTable {
                             ColumnOption::NotNull => {}
 
                             other => {
-                                return Err(ErrorCode::BadOption(format!("{} column option is not supported, please do not specify them in the CREATE TABLE statement",
-                        other
-                            )));
+                                return Err(ErrorCode::BadOption(format!(
+                                    "{} column option is not supported, please do not specify them in the CREATE TABLE statement",
+                                    other
+                                )));
                             }
                         }
                     }
@@ -250,9 +251,10 @@ impl DfCreateTable {
             })
             .collect::<Vec<_>>();
         if !reserved.is_empty() {
-            Err(ErrorCode::BadOption(format!("the following table options are reserved, please do not specify them in the CREATE TABLE statement: {}",
-                        reserved.join(",")
-                        )))
+            Err(ErrorCode::BadOption(format!(
+                "the following table options are reserved, please do not specify them in the CREATE TABLE statement: {}",
+                reserved.join(",")
+            )))
         } else {
             Ok(())
         }

@@ -26,10 +26,10 @@ use common_storage_cache::meta::SegmentInfo;
 use common_storage_cache::meta::Statistics as FuseMetaStatistics;
 use opendal::Operator;
 
-use crate::pipelines::new::processors::port::InputPort;
-use crate::pipelines::new::processors::processor::Event;
-use crate::pipelines::new::processors::processor::ProcessorPtr;
-use crate::pipelines::new::processors::Processor;
+use crate::pipelines::processors::port::InputPort;
+use crate::pipelines::processors::processor::Event;
+use crate::pipelines::processors::processor::ProcessorPtr;
+use crate::pipelines::processors::Processor;
 use crate::sessions::query_ctx::QryCtx;
 use crate::sessions::QueryContext;
 use crate::storages::fuse::io::BlockReader;

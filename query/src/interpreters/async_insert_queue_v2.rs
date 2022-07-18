@@ -32,12 +32,12 @@ use parking_lot::RwLock;
 
 use super::InsertInterpreterV2;
 use super::SelectInterpreterV2;
-use crate::pipelines::new::executor::PipelineCompleteExecutor;
-use crate::pipelines::new::processors::port::InputPort;
-use crate::pipelines::new::processors::port::OutputPort;
-use crate::pipelines::new::processors::BlocksSource;
-use crate::pipelines::new::SinkPipeBuilder;
-use crate::pipelines::new::SourcePipeBuilder;
+use crate::pipelines::executor::PipelineCompleteExecutor;
+use crate::pipelines::processors::port::InputPort;
+use crate::pipelines::processors::port::OutputPort;
+use crate::pipelines::processors::BlocksSource;
+use crate::pipelines::SinkPipeBuilder;
+use crate::pipelines::SourcePipeBuilder;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionManager;
 use crate::sessions::SessionType;

@@ -58,7 +58,7 @@ pub fn column_metas<'a>(
                 return Err(ErrorCode::ParquetError(format!(
                     "invalid parquet file, meta data of column idx {} is empty",
                     idx
-                )))
+                )));
             }
         }
     }

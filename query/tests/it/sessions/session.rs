@@ -95,15 +95,19 @@ async fn test_session_in_management_mode() -> Result<()> {
     {
         let leak_session = session_manager.create_session(SessionType::Dummy).await?;
         leak_id = leak_session.get_id();
-        assert!(session_manager
+        assert!(
+            session_manager
+                .get_session_by_id(leak_id.as_str())
+                .await
+                .is_some()
+        );
+    }
+    assert!(
+        session_manager
             .get_session_by_id(leak_id.as_str())
             .await
-            .is_some());
-    }
-    assert!(session_manager
-        .get_session_by_id(leak_id.as_str())
-        .await
-        .is_none());
+            .is_none()
+    );
 
     Ok(())
 }

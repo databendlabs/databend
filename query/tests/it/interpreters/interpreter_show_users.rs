@@ -38,12 +38,12 @@ async fn test_show_users_interpreter() -> Result<()> {
         let stream = executor.execute(None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
-                "+------+-----------+----------------------+------------------------------------------+",
-                "| name | hostname  | auth_type            | auth_string                              |",
-                "+------+-----------+----------------------+------------------------------------------+",
-                "| test | localhost | double_sha1_password | 2470c0c06dee42fd1618bb99005adca2ec9d1e19 |",
-                "+------+-----------+----------------------+------------------------------------------+",
-            ];
+            "+------+-----------+----------------------+------------------------------------------+",
+            "| name | hostname  | auth_type            | auth_string                              |",
+            "+------+-----------+----------------------+------------------------------------------+",
+            "| test | localhost | double_sha1_password | 2470c0c06dee42fd1618bb99005adca2ec9d1e19 |",
+            "+------+-----------+----------------------+------------------------------------------+",
+        ];
         common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
     }
 

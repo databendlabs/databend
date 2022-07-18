@@ -320,9 +320,12 @@ impl SchemaApiTestSuite {
         let tenant = "tenant1";
         let db_name = "db1";
         let db2_name = "db2";
+        let db3_name = "db3";
         let table_name = "table";
         let table2_name = "table2";
+        let table3_name = "table3";
         let db_id;
+        let db3_id;
         let table_id;
 
         let db_name_ident = DatabaseNameIdent {
@@ -333,6 +336,7 @@ impl SchemaApiTestSuite {
             tenant: tenant.to_string(),
             db_name: db2_name.to_string(),
         };
+
         let db_table_name_ident = TableNameIdent {
             tenant: tenant.to_string(),
             db_name: db_name.to_string(),
@@ -366,11 +370,14 @@ impl SchemaApiTestSuite {
         };
 
         {
-            tracing::info!("--- prepare db1 and table");
+            tracing::info!("--- prepare db1,db3 and table");
             // prepare db1
             let res = self.create_database(mt, tenant, "db1", "eng1").await?;
             assert_eq!(1, res.db_id);
             db_id = res.db_id;
+
+            let res = self.create_database(mt, tenant, "db3", "eng1").await?;
+            db3_id = res.db_id;
 
             let res = mt.create_table(req).await?;
             table_id = res.table_id;
@@ -436,6 +443,31 @@ impl SchemaApiTestSuite {
             assert_eq!(ret_table_name_ident, DBIdTableName {
                 db_id,
                 table_name: table2_name.to_string()
+            });
+        }
+
+        {
+            tracing::info!("--- rename exists table1 to not exists mutable db3.table3");
+            let got = mt
+                .rename_table(RenameTableReq {
+                    if_exists: true,
+                    name_ident: TableNameIdent {
+                        tenant: tenant.to_string(),
+                        db_name: db2_name.to_string(),
+                        table_name: table2_name.to_string(),
+                    },
+                    new_db_name: db3_name.to_string(),
+                    new_table_name: table3_name.to_string(),
+                })
+                .await;
+            tracing::debug!("--- rename table on unknown database got: {:?}", got);
+
+            let table_id_name_key = TableIdToName { table_id };
+            let ret_table_name_ident: DBIdTableName =
+                get_test_data(mt.as_kv_api(), &table_id_name_key).await?;
+            assert_eq!(ret_table_name_ident, DBIdTableName {
+                db_id: db3_id,
+                table_name: table3_name.to_string()
             });
         }
 
@@ -2015,7 +2047,7 @@ impl SchemaApiTestSuite {
                 name_ident: db_name_ident.clone(),
                 meta: DatabaseMeta {
                     engine: "github".to_string(),
-                    //drop_on,
+                    // drop_on,
                     ..Default::default()
                 },
             };
@@ -2068,7 +2100,7 @@ impl SchemaApiTestSuite {
             name_ident: db_name.clone(),
             meta: DatabaseMeta {
                 engine: "github".to_string(),
-                //drop_on,
+                // drop_on,
                 ..Default::default()
             },
         };
@@ -2353,7 +2385,7 @@ impl SchemaApiTestSuite {
             schema: schema(),
             engine: "JSON".to_string(),
             created_on,
-            //drop_on: Some(created_on - Duration::days(1)),
+            // drop_on: Some(created_on - Duration::days(1)),
             ..TableMeta::default()
         };
         tracing::info!("--- create and get table");

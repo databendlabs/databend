@@ -70,7 +70,6 @@ pub trait HashMethod {
     /// 0, [2]
     /// 1, [0, 3]
     /// 2, [1, 4]
-    ///
 
     fn group_by_get_indices<'a>(
         &self,

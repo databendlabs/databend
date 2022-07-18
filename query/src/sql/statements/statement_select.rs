@@ -223,7 +223,7 @@ impl DfQueryStatement {
                                 return Err(ErrorCode::LogicalError(format!(
                                     "Found non-sort expression {:?} while analyzing order by expressions of window expressions",
                                     order_by_expr
-                                )))
+                                )));
                             }
                         }
                     }
@@ -232,7 +232,7 @@ impl DfQueryStatement {
                     return Err(ErrorCode::LogicalError(format!(
                         "Found non-window expression {:?} while analyzing window expressions!",
                         expr
-                    )))
+                    )));
                 }
             }
         }

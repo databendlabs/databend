@@ -29,7 +29,7 @@ use regex::Regex;
 
 use crate::sessions::query_ctx::QryCtx;
 use crate::sessions::QueryContext;
-use crate::storages::stage::StageSource;
+use crate::storages::stage::StageSourceHelper;
 
 pub async fn validate_grant_object_exists(
     ctx: &Arc<QueryContext>,
@@ -92,7 +92,7 @@ pub async fn list_files_from_dal(
     pattern: &str,
 ) -> Result<Vec<StageFile>> {
     let rename_me_qry_ctx: Arc<dyn QryCtx> = ctx.clone();
-    let op = StageSource::get_op(&rename_me_qry_ctx, stage).await?;
+    let op = StageSourceHelper::get_op(&rename_me_qry_ctx, stage).await?;
     let mut files = Vec::new();
 
     // - If the path itself is a dir, return directly.

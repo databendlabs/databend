@@ -91,7 +91,9 @@ pub fn validate_grant_privileges(object: &GrantObject, privileges: UserPrivilege
         .iter()
         .all(|p| available_privileges.has_privilege(p));
     if !ok {
-        return Err(common_exception::ErrorCode::IllegalGrant("Illegal GRANT/REVOKE command; please consult the manual to see which privileges can be used"));
+        return Err(common_exception::ErrorCode::IllegalGrant(
+            "Illegal GRANT/REVOKE command; please consult the manual to see which privileges can be used",
+        ));
     }
     Ok(())
 }

@@ -20,7 +20,7 @@ use common_io::prelude::*;
 
 #[test]
 fn test_write_and_read_cp() -> Result<()> {
-    //impl Write for Cursor<&mut [u8]>
+    // impl Write for Cursor<&mut [u8]>
     let mut buffer = vec![0u8; 1024];
     let mut buff: Cursor<&mut [u8]> = Cursor::new(buffer.as_mut());
 
@@ -83,7 +83,7 @@ fn test_write_and_read_cp() -> Result<()> {
 
 #[test]
 fn test_nested_cp() -> Result<()> {
-    //impl Write for Cursor<&mut [u8]>
+    // impl Write for Cursor<&mut [u8]>
     let buffer = "123456789".to_string();
     let reader: Box<dyn BufferRead> = Box::new(BufferReader::new(Cursor::new(buffer.as_bytes())));
     let mut reader = NestedCheckpointReader::new(reader);

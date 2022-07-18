@@ -23,7 +23,7 @@ use common_exception::Result;
 use common_planners::Expression;
 use common_storage_cache::meta::BlockMeta;
 
-use crate::pipelines::transforms::ExpressionExecutor;
+use crate::pipelines::processors::transforms::ExpressionExecutor;
 use crate::sessions::query_ctx::QryCtx;
 use crate::storages::fuse::operations::mutation::deletion_mutator::Deletion;
 use crate::storages::fuse::FuseTable;

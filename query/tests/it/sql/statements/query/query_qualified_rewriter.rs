@@ -113,39 +113,37 @@ async fn test_query_qualified_rewriter() -> Result<()> {
             query: "SELECT COUNT(alias.name) AS name FROM default.system.databases AS alias WHERE name = 'xxx'",
             expect: "NormalQuery { filter: (name = xxx), aggregate: [COUNT(name)], projection: [COUNT(name) as name] }",
         },
-
-    // The following cases are not supported (using fully-qualified column names, which is un-usually supported be vendors)
-    //    TestCase {
-    //        name: "Database and table query",
-    //        query: "SELECT system.databases.name FROM system.databases",
-    //        expect: "NormalQuery { projection: [name] }",
-    //    },
-    //    TestCase {
-    //        name: "Database and table query with aggregate",
-    //        query: "SELECT COUNT(system.databases.name) AS name FROM system.databases WHERE system.databases.name = 'xxx'",
-    //        expect: "NormalQuery { filter: (name = xxx), aggregate: [COUNT(name)], projection: [COUNT(name) as name] }",
-    //    },
-    //    TestCase {
-    //        name: "Database and table query with filter",
-    //        query: "SELECT name FROM system.databases WHERE system.databases.name = 'XXX'",
-    //        expect: "NormalQuery { filter: (name = XXX), projection: [name] }",
-    //    },
-    //    TestCase {
-    //        name: "Database and table query with group",
-    //        query: "SELECT name FROM system.databases GROUP BY system.databases.name",
-    //        expect: "NormalQuery { group by: [name], projection: [name] }",
-    //    },
-    //    TestCase {
-    //        name: "Database and table query with having",
-    //        query: "SELECT name FROM system.databases HAVING system.databases.name = 'xxx'",
-    //        expect: "NormalQuery { having: (name = xxx), projection: [name] }",
-    //    },
-    //    TestCase {
-    //        name: "Database and table query with order",
-    //        query: "SELECT name FROM system.databases ORDER BY system.databases.name",
-    //        expect: "NormalQuery { order by: [name], projection: [name] }",
-    //    },
-
+        // The following cases are not supported (using fully-qualified column names, which is un-usually supported be vendors)
+        //    TestCase {
+        //        name: "Database and table query",
+        //        query: "SELECT system.databases.name FROM system.databases",
+        //        expect: "NormalQuery { projection: [name] }",
+        //    },
+        //    TestCase {
+        //        name: "Database and table query with aggregate",
+        //        query: "SELECT COUNT(system.databases.name) AS name FROM system.databases WHERE system.databases.name = 'xxx'",
+        //        expect: "NormalQuery { filter: (name = xxx), aggregate: [COUNT(name)], projection: [COUNT(name) as name] }",
+        //    },
+        //    TestCase {
+        //        name: "Database and table query with filter",
+        //        query: "SELECT name FROM system.databases WHERE system.databases.name = 'XXX'",
+        //        expect: "NormalQuery { filter: (name = XXX), projection: [name] }",
+        //    },
+        //    TestCase {
+        //        name: "Database and table query with group",
+        //        query: "SELECT name FROM system.databases GROUP BY system.databases.name",
+        //        expect: "NormalQuery { group by: [name], projection: [name] }",
+        //    },
+        //    TestCase {
+        //        name: "Database and table query with having",
+        //        query: "SELECT name FROM system.databases HAVING system.databases.name = 'xxx'",
+        //        expect: "NormalQuery { having: (name = xxx), projection: [name] }",
+        //    },
+        //    TestCase {
+        //        name: "Database and table query with order",
+        //        query: "SELECT name FROM system.databases ORDER BY system.databases.name",
+        //        expect: "NormalQuery { order by: [name], projection: [name] }",
+        //    },
     ];
 
     for test_case in &tests {

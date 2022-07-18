@@ -88,7 +88,7 @@ impl ValueExprAnalyzer {
     }
 
     fn unsupported_interval(interval: &Value) -> Result<Expression> {
-        //TODO: support parsing literal interval like '1 hour'
+        // TODO: support parsing literal interval like '1 hour'
         Err(ErrorCode::SyntaxException(format!(
             "Unsupported interval expression: {}.",
             interval
@@ -99,7 +99,7 @@ impl ValueExprAnalyzer {
         // We only accept i32 for number in "interval [num] [year|month|day|hour|minute|second]"
         let num = value.parse::<i32>()?;
 
-        //TODO: support default unit for interval
+        // TODO: support default unit for interval
         match unit {
             None => Err(ErrorCode::SyntaxException(
                 "Interval must have unit, e.g: '1 HOUR'",

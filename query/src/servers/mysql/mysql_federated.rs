@@ -152,16 +152,23 @@ impl MySQLFederated {
             // sqlalchemy < 1.4.30
             (
                 "(?i)^(SHOW VARIABLES LIKE 'sql_mode'(.*))",
-                Self::show_variables_block("sql_mode",
-                                           "ONLY_FULL_GROUP_BY STRICT_TRANS_TABLES NO_ZERO_IN_DATE NO_ZERO_DATE ERROR_FOR_DIVISION_BY_ZERO NO_ENGINE_SUBSTITUTION"),
+                Self::show_variables_block(
+                    "sql_mode",
+                    "ONLY_FULL_GROUP_BY STRICT_TRANS_TABLES NO_ZERO_IN_DATE NO_ZERO_DATE ERROR_FOR_DIVISION_BY_ZERO NO_ENGINE_SUBSTITUTION",
+                ),
             ),
             (
                 "(?i)^(SHOW VARIABLES LIKE 'lower_case_table_names'(.*))",
-                Self::show_variables_block("lower_case_table_names",
-                                           "0"),
+                Self::show_variables_block("lower_case_table_names", "0"),
             ),
-            ("(?i)^(show collation where(.*))", Self::show_variables_block("", "")),
-            ("(?i)^(SHOW VARIABLES(.*))", Self::show_variables_block("", "")),
+            (
+                "(?i)^(show collation where(.*))",
+                Self::show_variables_block("", ""),
+            ),
+            (
+                "(?i)^(SHOW VARIABLES(.*))",
+                Self::show_variables_block("", ""),
+            ),
         ];
         FederatedHelper::block_match_rule(query, rules)
     }
@@ -203,7 +210,10 @@ impl MySQLFederated {
             ("(?i)^(SET SQL_QUOTE_SHOW_CREATE(.*))", None),
             ("(?i)^(LOCK TABLES(.*))", None),
             ("(?i)^(UNLOCK TABLES(.*))", None),
-            ("(?i)^(SELECT LOGFILE_GROUP_NAME, FILE_NAME, TOTAL_EXTENTS, INITIAL_SIZE, ENGINE, EXTRA FROM INFORMATION_SCHEMA.FILES(.*))", None),
+            (
+                "(?i)^(SELECT LOGFILE_GROUP_NAME, FILE_NAME, TOTAL_EXTENTS, INITIAL_SIZE, ENGINE, EXTRA FROM INFORMATION_SCHEMA.FILES(.*))",
+                None,
+            ),
             // mydumper.
             ("(?i)^(SHOW MASTER STATUS)", None),
             ("(?i)^(SHOW ALL SLAVES STATUS)", None),
@@ -225,7 +235,6 @@ impl MySQLFederated {
                 None,
             ),
             ("(?i)^(/\\* ApplicationName=(.*)SHOW VARIABLES(.*))", None),
-
         ];
 
         FederatedHelper::block_match_rule(query, rules)

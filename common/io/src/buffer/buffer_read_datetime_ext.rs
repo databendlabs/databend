@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use chrono::DateTime;
+use chrono::Datelike;
 use chrono::Duration;
 use chrono::NaiveDate;
 use chrono::TimeZone;
@@ -43,10 +44,20 @@ where R: BufferRead
         let v = std::str::from_utf8(buf.as_slice()).map_err_to_code(ErrorCode::BadBytes, || {
             format!("Cannot convert value:{:?} to utf8", buf)
         })?;
-        v.parse::<NaiveDate>()
+        // convert zero date to `1970-01-01`
+        if v == "0000-00-00" {
+            return Ok(NaiveDate::from_ymd(1970, 1, 1));
+        }
+        let d = v
+            .parse::<NaiveDate>()
             .map_err_to_code(ErrorCode::BadBytes, || {
                 format!("Cannot parse value:{} to Date type", v)
-            })
+            })?;
+        // convert date less than `1000-01-01` to `1000-01-01`
+        if d.year() < 1000 {
+            return Ok(NaiveDate::from_ymd(1000, 1, 1));
+        }
+        Ok(d)
     }
 
     fn read_timestamp_text(&mut self, tz: &Tz) -> Result<DateTime<Tz>> {
@@ -55,31 +66,43 @@ where R: BufferRead
 
         let v = std::str::from_utf8(buf.as_slice())
             .map_err_to_code(ErrorCode::BadBytes, || "Cannot convert value to utf8")?;
-        let res = tz
-            .datetime_from_str(v, "%Y-%m-%d %H:%M:%S%.f")
-            .or_else(|_| tz.datetime_from_str(v, "%Y-%m-%dT%H:%M:%S"))
-            .map_err_to_code(ErrorCode::BadBytes, || {
-                format!("Cannot parse value:{:?} to DateTime type", v)
-            })?;
+        // convert zero timestamp to `1970-01-01 00:00:00`
+        let res = if v == "0000-00-00 00:00:00" {
+            tz.from_utc_datetime(&NaiveDate::from_ymd(1970, 1, 1).and_hms(0, 0, 0))
+        } else {
+            tz.datetime_from_str(v, "%Y-%m-%d %H:%M:%S")
+                .or_else(|_| tz.datetime_from_str(v, "%Y-%m-%dT%H:%M:%S"))
+                .map_err_to_code(ErrorCode::BadBytes, || {
+                    format!("Cannot parse value:{:?} to DateTime type", v)
+                })?
+        };
 
         self.ignore(|b| b == b'z' || b == b'Z')?;
-        if self.ignore_byte(b'.')? {
+        let dt = if self.ignore_byte(b'.')? {
             buf.clear();
             let size = self.keep_read(&mut buf, |f| (b'0'..=b'9').contains(&f))?;
             let scales: i64 = lexical_core::FromLexical::from_lexical(buf.as_slice()).unwrap();
 
-            let res = if size >= 9 {
+            if size >= 9 {
                 res.checked_add_signed(Duration::nanoseconds(scales))
+                    .unwrap()
             } else if size >= 6 {
                 res.checked_add_signed(Duration::microseconds(scales))
+                    .unwrap()
             } else if size >= 3 {
                 res.checked_add_signed(Duration::milliseconds(scales))
+                    .unwrap()
             } else {
-                Some(res)
-            };
-            Ok(res.unwrap())
+                res
+            }
         } else {
-            Ok(res)
+            res
+        };
+        // convert timestamp less than `1000-01-01 00:00:00` to `1000-01-01 00:00:00`
+        if dt.year() < 1000 {
+            Ok(tz.from_utc_datetime(&NaiveDate::from_ymd(1000, 1, 1).and_hms(0, 0, 0)))
+        } else {
+            Ok(dt)
         }
     }
 }

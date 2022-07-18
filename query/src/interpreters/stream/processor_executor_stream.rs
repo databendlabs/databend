@@ -20,7 +20,7 @@ use common_datablocks::DataBlock;
 use common_exception::Result;
 use futures::Stream;
 
-use crate::pipelines::new::executor::PipelinePullingExecutor;
+use crate::pipelines::executor::PipelinePullingExecutor;
 
 pub struct ProcessorExecutorStream {
     executor: PipelinePullingExecutor,

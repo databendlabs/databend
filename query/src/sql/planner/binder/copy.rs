@@ -334,7 +334,7 @@ impl<'a> Binder {
             _ => {
                 return Err(ErrorCode::SyntaxException(
                     "COPY INTO <location> FROM <non-query> is invalid",
-                ))
+                ));
             }
         };
 
@@ -379,7 +379,7 @@ impl<'a> Binder {
             _ => {
                 return Err(ErrorCode::SyntaxException(
                     "COPY INTO <location> FROM <non-query> is invalid",
-                ))
+                ));
             }
         };
 

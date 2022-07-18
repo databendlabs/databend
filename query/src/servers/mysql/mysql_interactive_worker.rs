@@ -75,7 +75,7 @@ impl<W: std::io::Write + Send + Sync> AsyncMysqlShim<W> for InteractiveWorker<W>
         match self.session.get_mysql_conn_id() {
             Some(conn_id) => conn_id,
             None => {
-                //default conn id
+                // default conn id
                 u32::from_le_bytes([0x08, 0x00, 0x00, 0x00])
             }
         }
@@ -337,14 +337,15 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
                         let res = Self::exec_query(interpreter, &context).await;
                         match res {
                             Ok(_) => Err(ErrorCode::UnexpectedError(format!(
-                                "Expected server error code: {} but got: Ok.",
+                                "Expected server error code: {} but got: Ok",
                                 code
                             ))),
                             Err(e) => {
                                 if code != e.code() {
                                     return Err(ErrorCode::UnexpectedError(format!(
-                                        "Expected server error code: {} but got: Ok.",
-                                        code
+                                        "Expected server error code: {} but got: {}",
+                                        code,
+                                        e.code()
                                     )));
                                 }
                                 Ok((vec![DataBlock::empty()], String::from("")))
@@ -359,8 +360,9 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
                         if code != e.code() {
                             InterpreterQueryLog::fail_to_start(context, e.clone()).await;
                             return Err(ErrorCode::UnexpectedError(format!(
-                                "Expected server error code: {} but got: Ok.",
-                                code
+                                "Expected server error code: {} but got: {}",
+                                code,
+                                e.code()
                             )));
                         }
                         Ok((vec![DataBlock::empty()], String::from("")))
@@ -403,11 +405,10 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
             .in_current_span(),
         )?;
 
-        let query_result = query_result
-            .await
-            .map_err_to_code(ErrorCode::TokioError, || {
-                "Cannot join handle from context's runtime"
-            })?;
+        let query_result = query_result.await.map_err_to_code(
+            ErrorCode::TokioError,
+            || "Cannot join handle from context's runtime",
+        )?;
         query_result.map(|data| {
             if data.is_empty() {
                 (data, "".to_string())

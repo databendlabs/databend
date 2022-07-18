@@ -319,7 +319,7 @@ impl SessionManager {
             sessions.remove(session_id);
         }
 
-        //also need remove mysql_conn_map
+        // also need remove mysql_conn_map
         let mut mysql_conns_map = self.mysql_conn_map.write();
         for (k, v) in mysql_conns_map.deref_mut().clone() {
             if &v == session_id {
@@ -337,7 +337,8 @@ impl SessionManager {
         async move {
             tracing::info!(
                 "Waiting {} secs for connections to close. You can press Ctrl + C again to force shutdown.",
-                timeout_secs);
+                timeout_secs
+            );
             let mut signal = Box::pin(signal.next());
 
             for _index in 0..timeout_secs {

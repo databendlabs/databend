@@ -50,9 +50,7 @@ use crate::table_functions::TableFunction;
 
 #[async_trait::async_trait]
 pub trait Catalog: DynClone + Send + Sync {
-    ///
     /// Database.
-    ///
 
     // Get the database by name.
     async fn get_database(&self, tenant: &str, db_name: &str) -> Result<Arc<dyn Database>>;
@@ -82,9 +80,7 @@ pub trait Catalog: DynClone + Send + Sync {
 
     async fn rename_database(&self, req: RenameDatabaseReq) -> Result<RenameDatabaseReply>;
 
-    ///
     /// Table.
-    ///
 
     // Build a `Arc<dyn Table>` from `TableInfo`.
     fn get_table_by_info(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>>;
@@ -102,7 +98,7 @@ pub trait Catalog: DynClone + Send + Sync {
 
     async fn list_tables(&self, tenant: &str, db_name: &str) -> Result<Vec<Arc<dyn Table>>>;
     async fn list_tables_history(&self, tenant: &str, db_name: &str)
-        -> Result<Vec<Arc<dyn Table>>>;
+    -> Result<Vec<Arc<dyn Table>>>;
 
     async fn create_table(&self, req: CreateTableReq) -> Result<()>;
 
@@ -134,9 +130,7 @@ pub trait Catalog: DynClone + Send + Sync {
 
     async fn count_tables(&self, req: CountTablesReq) -> Result<CountTablesReply>;
 
-    ///
     /// Table function
-    ///
 
     // Get function by name.
     fn get_table_function(

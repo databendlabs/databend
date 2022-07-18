@@ -15,14 +15,20 @@
 use std::sync::Arc;
 
 use common_datavalues::chrono::Utc;
+use common_datavalues::type_primitive::Float32Type;
+use common_datavalues::type_primitive::Float64Type;
 use common_datavalues::type_primitive::Int16Type;
 use common_datavalues::type_primitive::Int32Type;
 use common_datavalues::type_primitive::Int64Type;
 use common_datavalues::type_primitive::Int8Type;
 use common_datavalues::type_string::StringType;
+use common_datavalues::ArrayType;
+use common_datavalues::BooleanType;
 use common_datavalues::DataField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataTypeImpl;
+use common_datavalues::DateType;
+use common_datavalues::NullableType;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_hive_meta_store as hms;
@@ -39,7 +45,7 @@ use super::hive_database::HIVE_DATABASE_ENGIE;
 use super::hive_table::HIVE_TABLE_ENGIE;
 use super::hive_table_options::HiveTableOptions;
 
-///! Skeleton of mappers
+/// ! Skeleton of mappers
 impl From<hms::Database> for HiveDatabase {
     fn from(hms_database: hms::Database) -> Self {
         HiveDatabase {
@@ -114,7 +120,8 @@ fn try_into_schema(hive_fields: Vec<hms::FieldSchema>) -> Result<DataSchema> {
     for field in hive_fields {
         let name = field.name.unwrap_or_default();
         let type_name = field.type_.unwrap_or_default();
-        let field = DataField::new(&name, try_from_filed_type_name(type_name)?);
+        let null_field = NullableType::new_impl(try_from_filed_type_name(type_name)?);
+        let field = DataField::new(&name, null_field);
         fields.push(field);
     }
     Ok(DataSchema::new(fields))
@@ -128,13 +135,32 @@ fn try_from_filed_type_name(type_name: impl AsRef<str>) -> Result<DataTypeImpl> 
     // Hive string data type could be varchar(n), where n is the maximum number of characters
     if name.starts_with("VARCHAR") {
         Ok(DataTypeImpl::String(StringType::default()))
+    } else if name.starts_with("ARRAY<") {
+        let sub_type = &name["ARRAY<".len()..name.len() - 1];
+        let sub_type = try_from_filed_type_name(sub_type)?;
+        Ok(DataTypeImpl::Array(ArrayType::create(
+            NullableType::new_impl(sub_type),
+        )))
     } else {
         match name.as_str() {
             "TINYINT" => Ok(DataTypeImpl::Int8(Int8Type::default())),
             "SMALLINT" => Ok(DataTypeImpl::Int16(Int16Type::default())),
             "INT" => Ok(DataTypeImpl::Int32(Int32Type::default())),
             "BIGINT" => Ok(DataTypeImpl::Int64(Int64Type::default())),
+
             "BINARY" | "STRING" => Ok(DataTypeImpl::String(StringType::default())),
+            // boolean
+            "BOOLEAN" => Ok(DataTypeImpl::Boolean(BooleanType::default())),
+
+            //"DECIMAL", "NUMERIC" type not supported
+            "FLOAT" => Ok(DataTypeImpl::Float32(Float32Type::default())),
+            "DOUBLE" => Ok(DataTypeImpl::Float64(Float64Type::default())),
+            "DOUBLE PRECISION" => Ok(DataTypeImpl::Float64(Float64Type::default())),
+
+            // timestamp
+            // "TIMESTAMP" => Ok(DataTypeImpl::Timestamp(TimestampType::create(3))),
+            "DATE" => Ok(DataTypeImpl::Date(DateType::default())),
+
             _ => Err(ErrorCode::IllegalDataType(format!(
                 "unknown hive data type [{}]",
                 name

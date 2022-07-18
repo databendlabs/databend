@@ -43,7 +43,6 @@ async fn test_statement_copy() -> Result<()> {
             expect: r#"Copy into system.configs, ReadDataSourcePlan { catalog: "default", source_info: StageSource(UserStageInfo { stage_name: "s3://mybucket/data/files", stage_type: External, stage_params: StageParams { storage: S3(StorageS3Config { endpoint_url: "https://s3.amazonaws.com", region: "", bucket: "mybucket", root: "/", disable_credential_loader: true, enable_virtual_host_style: false, access_key_id: "******_id", secret_access_key: "******key", master_key: "******key" }) }, file_format_options: FileFormatOptions { format: Csv, skip_header: 1, field_delimiter: "|", record_delimiter: "", compression: None }, copy_options: CopyOptions { on_error: None, size_limit: 0 }, comment: "", number_of_files: 0, creator: None }), scan_fields: None, parts: [], statistics: Statistics { read_rows: 0, read_bytes: 0, partitions_scanned: 0, partitions_total: 0, is_exact: false }, description: "", tbl_args: None, push_downs: None } ,validation_mode:None"#,
             err: "",
         },
-
         TestCase {
             name: "copy-external-validation-mode-ok",
             query: "copy into system.configs
@@ -56,7 +55,6 @@ async fn test_statement_copy() -> Result<()> {
             expect: r#"Copy into system.configs, ReadDataSourcePlan { catalog: "default", source_info: StageSource(UserStageInfo { stage_name: "s3://mybucket/data/files", stage_type: External, stage_params: StageParams { storage: S3(StorageS3Config { endpoint_url: "https://s3.amazonaws.com", region: "", bucket: "mybucket", root: "/", disable_credential_loader: true, enable_virtual_host_style: false, access_key_id: "******_id", secret_access_key: "******key", master_key: "******key" }) }, file_format_options: FileFormatOptions { format: Csv, skip_header: 1, field_delimiter: "|", record_delimiter: "", compression: None }, copy_options: CopyOptions { on_error: None, size_limit: 0 }, comment: "", number_of_files: 0, creator: None }), scan_fields: None, parts: [], statistics: Statistics { read_rows: 0, read_bytes: 0, partitions_scanned: 0, partitions_total: 0, is_exact: false }, description: "", tbl_args: None, push_downs: None } ,validation_mode:ReturnNRows(13)"#,
             err: "",
         },
-
         TestCase {
             name: "copy-external-files-and-validation-mode-ok",
             query: "copy into system.configs
@@ -70,7 +68,6 @@ async fn test_statement_copy() -> Result<()> {
             expect: r#"Copy into system.configs, ReadDataSourcePlan { catalog: "default", source_info: StageSource(UserStageInfo { stage_name: "s3://mybucket/data/files", stage_type: External, stage_params: StageParams { storage: S3(StorageS3Config { endpoint_url: "https://s3.amazonaws.com", region: "", bucket: "mybucket", root: "/", disable_credential_loader: true, enable_virtual_host_style: false, access_key_id: "******_id", secret_access_key: "******key", master_key: "******key" }) }, file_format_options: FileFormatOptions { format: Csv, skip_header: 1, field_delimiter: "|", record_delimiter: "", compression: None }, copy_options: CopyOptions { on_error: None, size_limit: 0 }, comment: "", number_of_files: 0, creator: None }), scan_fields: None, parts: [], statistics: Statistics { read_rows: 0, read_bytes: 0, partitions_scanned: 0, partitions_total: 0, is_exact: false }, description: "", tbl_args: None, push_downs: None } ,files:["file1.csv", "file2.csv"] ,validation_mode:ReturnNRows(13)"#,
             err: "",
         },
-
         TestCase {
             name: "copy-external-copy-options-ok",
             query: "copy into system.configs
@@ -85,7 +82,6 @@ async fn test_statement_copy() -> Result<()> {
             expect: r#"Copy into system.configs, ReadDataSourcePlan { catalog: "default", source_info: StageSource(UserStageInfo { stage_name: "s3://mybucket/data/files", stage_type: External, stage_params: StageParams { storage: S3(StorageS3Config { endpoint_url: "https://s3.amazonaws.com", region: "", bucket: "mybucket", root: "/", disable_credential_loader: true, enable_virtual_host_style: false, access_key_id: "******_id", secret_access_key: "******key", master_key: "******key" }) }, file_format_options: FileFormatOptions { format: Csv, skip_header: 1, field_delimiter: "|", record_delimiter: "", compression: None }, copy_options: CopyOptions { on_error: Continue, size_limit: 10 }, comment: "", number_of_files: 0, creator: None }), scan_fields: None, parts: [], statistics: Statistics { read_rows: 0, read_bytes: 0, partitions_scanned: 0, partitions_total: 0, is_exact: false }, description: "", tbl_args: None, push_downs: None } ,files:["file1.csv", "file2.csv"] ,validation_mode:ReturnNRows(13)"#,
             err: "",
         },
-
         TestCase {
             name: "copy-external-size-limit-error",
             query: "copy into system.configs
@@ -100,7 +96,6 @@ async fn test_statement_copy() -> Result<()> {
             expect: "",
             err: "Code: 1005, displayText = size_limit must be number, got: x0.",
         },
-
         TestCase {
             name: "copy-external-validation-mode-error",
             query: "copy into system.configs
@@ -115,7 +110,6 @@ async fn test_statement_copy() -> Result<()> {
             expect: "",
             err: r#"Code: 1005, displayText = Unknown validation mode:"RETURN_1X_ROWS", must one of { RETURN_<n>_ROWS | RETURN_ERRORS | RETURN_ALL_ERRORS}."#,
         },
-
         TestCase {
             name: "copy-external-table-not-found-error",
             query: "copy into mytable

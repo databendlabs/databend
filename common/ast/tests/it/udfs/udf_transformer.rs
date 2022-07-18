@@ -82,25 +82,27 @@ fn test_udf_transformer() -> Result<()> {
         }))))
     });
 
-    assert!(UDFTransformer::transform_function(
-        &Function {
-            name: ObjectName(vec![Ident {
-                value: "test_transformer_not_exist".to_string(),
-                quote_style: None,
-            }]),
-            params: vec![],
-            args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
-                Expr::Identifier(Ident {
-                    value: "test".to_string(),
+    assert!(
+        UDFTransformer::transform_function(
+            &Function {
+                name: ObjectName(vec![Ident {
+                    value: "test_transformer_not_exist".to_string(),
                     quote_style: None,
-                })
-            ))],
-            over: None,
-            distinct: false,
-        },
-        fetcher
-    )
-    .is_err());
+                }]),
+                params: vec![],
+                args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                    Expr::Identifier(Ident {
+                        value: "test".to_string(),
+                        quote_style: None,
+                    })
+                ))],
+                over: None,
+                distinct: false,
+            },
+            fetcher
+        )
+        .is_err()
+    );
 
     Ok(())
 }

@@ -152,9 +152,7 @@ impl FuseTable {
                     // concurrent gc: someone else has already collected this segment, ignore it
                     warn!(
                         "concurrent gc: segment of location {} already collected. table: {}, ident {}",
-                        segment_location,
-                        self.table_info.desc,
-                        self.table_info.ident,
+                        segment_location, self.table_info.desc, self.table_info.ident,
                     );
                     continue;
                 }

@@ -21,6 +21,11 @@ use super::outer_v0::Config as OuterV0Config;
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct Config {
     pub cmd: String,
+    pub key: Vec<String>,
+    pub value: String,
+    pub prefix: String,
+    pub username: String,
+    pub password: String,
     pub config_file: String,
     pub log_level: String,
     pub log_dir: String,
@@ -38,6 +43,11 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             cmd: "".to_string(),
+            key: vec![],
+            value: "".to_string(),
+            prefix: "".to_string(),
+            username: "".to_string(),
+            password: "".to_string(),
             config_file: "".to_string(),
             log_level: "INFO".to_string(),
             log_dir: "./.databend/logs".to_string(),

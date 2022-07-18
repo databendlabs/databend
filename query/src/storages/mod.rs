@@ -14,18 +14,17 @@
 
 pub mod cache;
 pub mod fuse;
-//pub mod github;
-#[cfg(feature = "hive")]
-//pub mod hive;
+// pub mod github;
+//#[cfg(feature = "hive")]
+// pub mod hive;
 pub mod index;
-pub mod index1;
-//pub mod information_schema;
+// pub mod information_schema;
 pub mod memory;
-//pub mod null;
-//pub mod random;
+// pub mod null;
+// pub mod random;
 pub mod result;
 pub mod stage;
-//pub mod system;
+// pub mod system;
 mod storage_context;
 mod storage_factory;
 mod storage_table;

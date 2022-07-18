@@ -37,6 +37,7 @@ pub use self::null::NullType;
 pub use self::nullable::NullableType;
 pub use self::number::NumberType;
 pub use self::string::StringType;
+use crate::property::Domain;
 use crate::values::Column;
 use crate::values::Scalar;
 
@@ -71,6 +72,7 @@ pub trait ValueType: Sized + 'static {
     type Scalar: Debug + Clone;
     type ScalarRef<'a>: Debug + Clone;
     type Column: Debug + Clone;
+    type Domain: Debug + Clone;
 
     fn to_owned_scalar<'a>(scalar: Self::ScalarRef<'a>) -> Self::Scalar;
     fn to_scalar_ref<'a>(scalar: &'a Self::Scalar) -> Self::ScalarRef<'a>;
@@ -81,13 +83,18 @@ pub trait ArgType: ValueType {
     type ColumnBuilder;
 
     fn data_type() -> DataType;
+
     fn try_downcast_scalar<'a>(scalar: &'a Scalar) -> Option<Self::ScalarRef<'a>>;
     fn try_downcast_column<'a>(col: &'a Column) -> Option<Self::Column>;
+    fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain>;
     fn upcast_scalar(scalar: Self::Scalar) -> Scalar;
     fn upcast_column(col: Self::Column) -> Column;
+    fn upcast_domain(domain: Self::Domain) -> Domain;
+
+    fn full_domain(generics: &GenericMap) -> Self::Domain;
 
     fn column_len<'a>(col: &'a Self::Column) -> usize;
-    fn index_column<'a>(col: &'a Self::Column, index: usize) -> Self::ScalarRef<'a>;
+    fn index_column<'a>(col: &'a Self::Column, index: usize) -> Option<Self::ScalarRef<'a>>;
     fn slice_column<'a>(col: &'a Self::Column, range: Range<usize>) -> Self::Column;
     fn iter_column<'a>(col: &'a Self::Column) -> Self::ColumnIterator<'a>;
     fn column_from_iter(

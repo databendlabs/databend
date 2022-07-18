@@ -20,8 +20,8 @@ use serde_json::Value;
 // , please also see [issue#6556](https://github.com/datafuselabs/databend/issues/6556)
 // therefore, we alias `null_count` with `unset_bits`, to make subsequent versions backward compatible again
 #[test]
-fn test_issue_6556_column_statistics_ser_de_compatability_null_count_alias(
-) -> common_exception::Result<()> {
+fn test_issue_6556_column_statistics_ser_de_compatability_null_count_alias()
+-> common_exception::Result<()> {
     let col_stats = ColumnStatistics {
         min: DataValue::Null,
         max: DataValue::Null,

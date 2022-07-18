@@ -72,8 +72,11 @@ statement error 1010
 select  to_date('10000-12-31'); 
 
 skipif clickhouse
-statement error 1068
+statement query T 
 select  to_date('0999-12-31'); 
+
+----  
+1000-01-01
 
 skipif clickhouse
 statement query T 
@@ -94,8 +97,11 @@ statement error 1010
 select  to_datetime('10000-01-01 00:00:00'); 
 
 skipif clickhouse
-statement error 1069
+statement query T 
 select  to_datetime('0999-12-31 23:59:59'); 
+
+----  
+1000-01-01 00:00:00.000000
 
 skipif clickhouse
 statement query B label(http)
@@ -1417,16 +1423,16 @@ statement ok
 insert into t values('2022-04-02 15:10:28.221', '2022-04-02 15:10:28.221', '9999-12-31');
 
 skipif clickhouse
-statement error 1069
-insert into t values('0999-04-02 15:10:28.221', '2022-04-02 15:10:28.221', '2020-10-10'); 
+statement ok
+insert into t values('0999-04-02 15:10:28.221', '2022-04-02 15:10:28.222', '2020-10-10');
 
 skipif clickhouse
 statement error 1010
 insert into t values('10000-01-01 00:00:00', '2022-04-02 15:10:28.221', '2020-10-10'); 
 
 skipif clickhouse
-statement error 1068
-insert into t values('2022-04-02 15:10:28.221', '2022-04-02 15:10:28.221', '0999-10-10'); 
+statement ok
+insert into t values('2022-04-02 15:10:28.221', '2022-04-02 15:10:28.223', '0999-10-10');
 
 skipif clickhouse
 statement error 1010
@@ -1439,6 +1445,8 @@ select * from t order by b;
 ----
 2022-04-02 15:10:28.000000 2022-04-02 15:10:28.000 1000-01-01
 2022-04-02 15:10:28.221000 2022-04-02 15:10:28.221 9999-12-31
+1000-01-01 00:00:00.000000 2022-04-02 15:10:28.222 2020-10-10
+2022-04-02 15:10:28.221000 2022-04-02 15:10:28.223 1000-01-01
 
 skipif clickhouse
 statement ok

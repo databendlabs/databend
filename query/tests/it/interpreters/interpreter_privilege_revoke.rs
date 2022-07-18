@@ -70,9 +70,11 @@ async fn test_revoke_privilege_interpreter_on_role() -> Result<()> {
         .grants
         .grant_privileges(&GrantObject::Global, UserPrivilegeSet::all_privileges());
     let user_mgr = ctx.get_user_manager();
-    assert!(role_info
-        .grants
-        .verify_privilege(&GrantObject::Global, UserPrivilegeType::Create));
+    assert!(
+        role_info
+            .grants
+            .verify_privilege(&GrantObject::Global, UserPrivilegeType::Create)
+    );
     user_mgr.add_role(&tenant, role_info, false).await?;
 
     let query = "REVOKE ALL ON *.* FROM ROLE 'role1'";
@@ -83,9 +85,11 @@ async fn test_revoke_privilege_interpreter_on_role() -> Result<()> {
     while let Some(_block) = stream.next().await {}
 
     let role = user_mgr.get_role(&tenant, "role1".to_string()).await?;
-    assert!(!role
-        .grants
-        .verify_privilege(&GrantObject::Global, UserPrivilegeType::Create));
+    assert!(
+        !role
+            .grants
+            .verify_privilege(&GrantObject::Global, UserPrivilegeType::Create)
+    );
 
     Ok(())
 }

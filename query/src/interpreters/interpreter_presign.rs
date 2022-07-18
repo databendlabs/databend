@@ -28,7 +28,7 @@ use crate::sessions::query_ctx::QryCtx;
 use crate::sessions::QueryContext;
 use crate::sql::plans::PresignAction;
 use crate::sql::plans::PresignPlan;
-use crate::storages::stage::StageSource;
+use crate::storages::stage::StageSourceHelper;
 
 pub struct PresignInterpreter {
     ctx: Arc<dyn QryCtx>,
@@ -53,7 +53,7 @@ impl Interpreter for PresignInterpreter {
         &self,
         _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
-        let op = StageSource::get_op(&self.ctx, &self.plan.stage).await?;
+        let op = StageSourceHelper::get_op(&self.ctx, &self.plan.stage).await?;
         if !op.metadata().can_presign() {
             return Err(ErrorCode::StorageUnsupported(
                 "storage doesn't support presign operation",

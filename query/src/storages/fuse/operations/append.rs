@@ -25,15 +25,16 @@ use common_planners::Expression;
 use common_streams::SendableDataBlockStream;
 use futures::StreamExt;
 
-use crate::pipelines::new::processors::port::InputPort;
-use crate::pipelines::new::processors::BlockCompactor;
-use crate::pipelines::new::processors::ExpressionTransform;
-use crate::pipelines::new::processors::TransformCompact;
-use crate::pipelines::new::processors::TransformSortPartial;
-use crate::pipelines::new::NewPipeline;
-use crate::pipelines::new::SinkPipeBuilder;
-use crate::pipelines::transforms::ExpressionExecutor;
+use crate::pipelines::processors::port::InputPort;
+use crate::pipelines::processors::transforms::ExpressionExecutor;
+use crate::pipelines::processors::BlockCompactor;
+use crate::pipelines::processors::ExpressionTransform;
+use crate::pipelines::processors::TransformCompact;
+use crate::pipelines::processors::TransformSortPartial;
+use crate::pipelines::Pipeline;
+use crate::pipelines::SinkPipeBuilder;
 use crate::sessions::query_ctx::QryCtx;
+use crate::sessions::QueryContext;
 use crate::storages::fuse::io::write_meta;
 use crate::storages::fuse::io::BlockStreamWriter;
 use crate::storages::fuse::operations::AppendOperationLogEntry;
@@ -43,7 +44,7 @@ use crate::storages::fuse::DEFAULT_BLOCK_PER_SEGMENT;
 use crate::storages::fuse::DEFAULT_ROW_PER_BLOCK;
 use crate::storages::fuse::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 use crate::storages::fuse::FUSE_OPT_KEY_ROW_PER_BLOCK;
-use crate::storages::index1::ClusterKeyInfo;
+use crate::storages::index::ClusterKeyInfo;
 
 pub type AppendOperationLogEntryStream =
     std::pin::Pin<Box<dyn futures::stream::Stream<Item = Result<AppendOperationLogEntry>> + Send>>;
@@ -107,7 +108,7 @@ impl FuseTable {
         Ok(Box::pin(log_entries))
     }
 
-    pub fn do_append2(&self, ctx: Arc<dyn QryCtx>, pipeline: &mut NewPipeline) -> Result<()> {
+    pub fn do_append2(&self, ctx: Arc<dyn QryCtx>, pipeline: &mut Pipeline) -> Result<()> {
         let max_row_per_block = self.get_option(FUSE_OPT_KEY_ROW_PER_BLOCK, DEFAULT_ROW_PER_BLOCK);
         let min_rows_per_block = (max_row_per_block as f64 * 0.8) as usize;
         let block_per_seg =

@@ -26,7 +26,7 @@ use crate::interpreters::access::ManagementModeAccess;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::interpreters::InterpreterQueryLog;
-use crate::pipelines::new::SourcePipeBuilder;
+use crate::pipelines::SourcePipeBuilder;
 use crate::sessions::query_ctx::QryCtx;
 use crate::sessions::QueryContext;
 

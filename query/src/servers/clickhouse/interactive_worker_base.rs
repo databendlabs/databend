@@ -44,9 +44,9 @@ use tokio_stream::wrappers::ReceiverStream;
 use super::writers::from_clickhouse_block;
 use crate::interpreters::InterpreterFactory;
 use crate::interpreters::InterpreterQueryLog;
-use crate::pipelines::new::processors::port::OutputPort;
-use crate::pipelines::new::processors::SyncReceiverCkSource;
-use crate::pipelines::new::SourcePipeBuilder;
+use crate::pipelines::processors::port::OutputPort;
+use crate::pipelines::processors::SyncReceiverCkSource;
+use crate::pipelines::SourcePipeBuilder;
 use crate::sessions::query_ctx::QryCtx;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionRef;
@@ -238,11 +238,10 @@ impl InteractiveWorkerBase {
                 }
             }
         })?;
-        let query_result = query_result
-            .await
-            .map_err_to_code(ErrorCode::TokioError, || {
-                "Cannot join handle from context's runtime"
-            })?;
+        let query_result = query_result.await.map_err_to_code(
+            ErrorCode::TokioError,
+            || "Cannot join handle from context's runtime",
+        )?;
         query_result.map(|_| rx)
     }
 }

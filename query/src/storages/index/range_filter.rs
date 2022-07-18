@@ -31,8 +31,8 @@ use common_planners::Expressions;
 use common_planners::RequireColumnsVisitor;
 use common_storage_cache::meta::StatisticsOfColumns;
 
-use crate::pipelines::transforms::ExpressionExecutor;
-use crate::sessions::QueryContext;
+use crate::pipelines::processors::transforms::ExpressionExecutor;
+use crate::sessions::query_ctx::QryCtx;
 
 #[derive(Clone)]
 pub struct ClusterKeyInfo {
@@ -43,7 +43,7 @@ pub struct ClusterKeyInfo {
     pub data_schema: DataSchemaRef,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct RangeFilter {
     origin: DataSchemaRef,
     schema: DataSchemaRef,
@@ -53,7 +53,7 @@ pub struct RangeFilter {
 
 impl RangeFilter {
     pub fn try_create(
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn QryCtx>,
         expr: &Expression,
         schema: DataSchemaRef,
     ) -> Result<Self> {
@@ -307,7 +307,7 @@ impl<'a> VerifiableExprBuilder<'a> {
                     (0, 0) => {
                         return Err(ErrorCode::UnknownException(
                             "Constant expression donot need to be handled",
-                        ))
+                        ));
                     }
                     (_, 0) => (vec![exprs[0].clone(), exprs[1].clone()], vec![lhs_cols], op),
                     (0, _) => {

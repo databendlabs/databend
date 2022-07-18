@@ -28,14 +28,13 @@ use futures::TryStreamExt;
 use opendal::Operator;
 
 use super::block_writer;
-use crate::pipelines::transforms::ExpressionExecutor;
+use crate::pipelines::processors::transforms::ExpressionExecutor;
 use crate::sessions::query_ctx::QryCtx;
 use crate::storages::fuse::io::TableMetaLocationGenerator;
 use crate::storages::fuse::operations::column_metas;
 use crate::storages::fuse::statistics::accumulator::BlockStatistics;
 use crate::storages::fuse::statistics::StatisticsAccumulator;
-//use crate::storages::index::ClusterKeyInfo;
-use crate::storages::index1::ClusterKeyInfo;
+use crate::storages::index::ClusterKeyInfo;
 
 pub type SegmentInfoStream =
     std::pin::Pin<Box<dyn futures::stream::Stream<Item = Result<SegmentInfo>> + Send>>;

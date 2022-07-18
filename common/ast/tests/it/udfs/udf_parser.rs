@@ -48,25 +48,35 @@ async fn test_udf_parser() -> Result<()> {
         }))))
     });
 
-    assert!(parser
-        .parse("test", &["p".to_string()], "not(is_null(p, d))")
-        .is_err());
-    assert!(parser
-        .parse("test", &["d".to_string()], "not(is_null(p))")
-        .is_err());
-    assert!(parser
-        .parse("test", &["d".to_string()], "not(unknown_udf(p))")
-        .is_err());
-    assert!(parser
-        .parse("test", &["d".to_string()], "not(recursive(p))")
-        .is_err());
-    assert!(parser
-        .parse(
-            "test",
-            &["d".to_string(), "p".to_string()],
-            "not(is_null(p, d))"
-        )
-        .is_ok());
+    assert!(
+        parser
+            .parse("test", &["p".to_string()], "not(is_null(p, d))")
+            .is_err()
+    );
+    assert!(
+        parser
+            .parse("test", &["d".to_string()], "not(is_null(p))")
+            .is_err()
+    );
+    assert!(
+        parser
+            .parse("test", &["d".to_string()], "not(unknown_udf(p))")
+            .is_err()
+    );
+    assert!(
+        parser
+            .parse("test", &["d".to_string()], "not(recursive(p))")
+            .is_err()
+    );
+    assert!(
+        parser
+            .parse(
+                "test",
+                &["d".to_string(), "p".to_string()],
+                "not(is_null(p, d))"
+            )
+            .is_ok()
+    );
 
     Ok(())
 }

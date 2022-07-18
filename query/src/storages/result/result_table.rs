@@ -29,11 +29,12 @@ use common_storage_cache::meta::SegmentInfo;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::pipelines::new::processors::port::OutputPort;
-use crate::pipelines::new::processors::TransformLimit;
-use crate::pipelines::new::NewPipeline;
-use crate::pipelines::new::SourcePipeBuilder;
+use crate::pipelines::processors::port::OutputPort;
+use crate::pipelines::processors::TransformLimit;
+use crate::pipelines::Pipeline;
+use crate::pipelines::SourcePipeBuilder;
 use crate::sessions::query_ctx::QryCtx;
+use crate::sessions::QueryContext;
 use crate::storages::fuse::io::BlockReader;
 use crate::storages::fuse::FuseTable;
 use crate::storages::result::result_locations::ResultLocations;
@@ -162,7 +163,7 @@ impl Table for ResultTable {
         &self,
         ctx: Arc<dyn QryCtx>,
         plan: &ReadDataSourcePlan,
-        pipeline: &mut NewPipeline,
+        pipeline: &mut Pipeline,
     ) -> Result<()> {
         let block_reader = self.create_block_reader(&ctx, &None)?;
 
