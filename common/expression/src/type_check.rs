@@ -83,8 +83,12 @@ pub fn check_literal(literal: &Literal) -> DataType {
         Literal::Null => DataType::Null,
         Literal::Int8(_) => DataType::Int8,
         Literal::Int16(_) => DataType::Int16,
+        Literal::Int32(_) => DataType::Int32,
+        Literal::Int64(_) => DataType::Int64,
         Literal::UInt8(_) => DataType::UInt8,
         Literal::UInt16(_) => DataType::UInt16,
+        Literal::UInt32(_) => DataType::UInt32,
+        Literal::UInt64(_) => DataType::UInt64,
         Literal::Boolean(_) => DataType::Boolean,
         Literal::String(_) => DataType::String,
     }
@@ -299,10 +303,14 @@ pub fn can_cast_to(src_ty: &DataType, dest_ty: &DataType) -> bool {
         (DataType::Nullable(src_ty), DataType::Nullable(dest_ty)) => can_cast_to(src_ty, dest_ty),
         (src_ty, DataType::Nullable(dest_ty)) => can_cast_to(src_ty, dest_ty),
         (DataType::Array(src_ty), DataType::Array(dest_ty)) => can_cast_to(src_ty, dest_ty),
-        (DataType::UInt8, DataType::UInt16)
-        | (DataType::Int8, DataType::Int16)
-        | (DataType::UInt8, DataType::Int16) => true,
-        _ => false,
+        (src_ty, dest_ty) => {
+            let (info1, info2) = (number_type_info(src_ty), number_type_info(dest_ty));
+            match (info1, info2) {
+                (Some((size1, b1)), Some((size2, b2))) if b1 == b2 => size1 <= size2,
+                (Some((size1, true)), Some((size2, false))) if size2 > size1 => true,
+                _ => false,
+            }
+        }
     }
 }
 
@@ -322,15 +330,33 @@ pub fn common_super_type(ty1: DataType, ty2: DataType) -> Option<DataType> {
         (DataType::Array(box ty1), DataType::Array(box ty2)) => {
             Some(DataType::Array(Box::new(common_super_type(ty1, ty2)?)))
         }
-        (DataType::UInt8, DataType::UInt16) | (DataType::UInt16, DataType::UInt8) => {
-            Some(DataType::UInt16)
+        (ty1, ty2) => {
+            let (info1, info2) = (number_type_info(&ty1), number_type_info(&ty2));
+            match (info1, info2) {
+                (Some((size1, b1)), Some((size2, b2))) if b1 == b2 => {
+                    (size1 >= size2).then(|| Some(ty1)).unwrap_or(Some(ty2))
+                }
+                (Some((size1, true)), Some((size2, false))) if size2 > size1 => Some(ty2),
+                (Some((size1, false)), Some((size2, true))) if size1 > size2 => Some(ty1),
+                (Some((1, _)), Some((1, _))) => Some(DataType::Int16),
+                (Some((2, _)), Some((2, _))) => Some(DataType::Int32),
+                (Some((4, _)), Some((4, _))) => Some(DataType::Int64),
+                _ => None,
+            }
         }
-        (DataType::Int8, DataType::Int16) | (DataType::Int16, DataType::Int8) => {
-            Some(DataType::Int16)
-        }
-        (DataType::Int16, DataType::UInt8) | (DataType::UInt8, DataType::Int16) => {
-            Some(DataType::Int16)
-        }
+    }
+}
+
+fn number_type_info(ty: &DataType) -> Option<(i8, bool)> {
+    match ty {
+        DataType::UInt8 => Some((1, true)),
+        DataType::UInt16 => Some((2, true)),
+        DataType::UInt32 => Some((4, true)),
+        DataType::UInt64 => Some((8, true)),
+        DataType::Int8 => Some((1, false)),
+        DataType::Int16 => Some((2, false)),
+        DataType::Int32 => Some((4, false)),
+        DataType::Int64 => Some((8, false)),
         _ => None,
     }
 }

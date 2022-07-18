@@ -63,7 +63,6 @@ use crate::clusters::Cluster;
 use crate::servers::http::v1::HttpQueryHandle;
 use crate::sessions::ProcessInfo;
 use crate::sessions::QueryContextShared;
-use crate::sessions::Session;
 use crate::sessions::SessionRef;
 use crate::sessions::Settings;
 use crate::storages::cache::CacheManager;
@@ -165,27 +164,6 @@ impl QueryContext {
         Ok(())
     }
 
-    // Get one session by session id.
-    pub async fn get_session_by_id(self: &Arc<Self>, id: &str) -> Option<SessionRef> {
-        self.shared
-            .session
-            .get_session_manager()
-            .get_session_by_id(id)
-            .await
-    }
-
-    // Get session id by mysql connection id.
-    pub async fn get_id_by_mysql_conn_id(
-        self: &Arc<Self>,
-        conn_id: &Option<u32>,
-    ) -> Option<String> {
-        self.shared
-            .session
-            .get_session_manager()
-            .get_id_by_mysql_conn_id(conn_id)
-            .await
-    }
-
     pub async fn reload_config(&self) -> Result<()> {
         self.shared.reload_config().await
     }
@@ -207,6 +185,7 @@ impl QueryContext {
     pub fn attach_http_query(&self, handle: HttpQueryHandle) {
         self.shared.attach_http_query_handle(handle);
     }
+
     pub fn get_http_query(&self) -> Option<HttpQueryHandle> {
         self.shared.get_http_query()
     }
@@ -214,9 +193,40 @@ impl QueryContext {
     pub fn get_auth_manager(&self) -> Arc<AuthMgr> {
         self.shared.get_auth_manager()
     }
+
     // Get the current session.
-    pub fn get_current_session(self: &Arc<Self>) -> Arc<Session> {
-        self.shared.session.clone()
+    pub fn get_current_session(self: &Arc<Self>) -> SessionRef {
+        SessionRef::create(self.shared.session.clone())
+    }
+
+    // Get one session by session id.
+    pub async fn get_session_by_id(self: &Arc<Self>, id: &str) -> Option<SessionRef> {
+        self.shared
+            .session
+            .get_session_manager()
+            .get_session_by_id(id)
+            .await
+    }
+
+    // Get session id by mysql connection id.
+    pub async fn get_id_by_mysql_conn_id(
+        self: &Arc<Self>,
+        conn_id: &Option<u32>,
+    ) -> Option<String> {
+        self.shared
+            .session
+            .get_session_manager()
+            .get_id_by_mysql_conn_id(conn_id)
+            .await
+    }
+
+    // Get all the processes list info.
+    pub async fn get_processes_info(self: &Arc<Self>) -> Vec<ProcessInfo> {
+        self.shared
+            .session
+            .get_session_manager()
+            .processes_info()
+            .await
     }
 
     /// Get the client socket address.
@@ -355,8 +365,9 @@ impl TableContext for QueryContext {
     fn apply_changed_settings(&self, changed_settings: Arc<Settings>) -> Result<()> {
         self.shared.apply_changed_settings(changed_settings)
     }
+
     fn get_format_settings(&self) -> Result<FormatSettings> {
-        self.shared.get_format_settings()
+        self.shared.session.get_format_settings()
     }
     fn get_tenant(&self) -> String {
         self.shared.get_tenant()
