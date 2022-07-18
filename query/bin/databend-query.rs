@@ -39,6 +39,7 @@ use common_tracing::tracing;
 use databend_query::api::HttpService;
 use databend_query::api::RpcService;
 use databend_query::catalogs::CATALOG_DEFAULT;
+use databend_query::cmd::watch;
 use databend_query::metrics::MetricService;
 use databend_query::servers::ClickHouseHandler;
 use databend_query::servers::HttpHandler;
@@ -299,58 +300,7 @@ async fn run_compaction_cmd(conf: &Config) -> common_exception::Result<()> {
     }
     .await?;
 
-    let rpc_conf = conf.meta.to_meta_grpc_client_conf();
-    if rpc_conf.local_mode() {
-        todo!();
-    }
-    let (key, key_end) = get_start_and_end_of_prefix(PREFIX_TABLE_BY_ID)?;
-    let watch = WatchRequest {
-        key,
-        key_end: Some(key_end),
-        filter_type: FilterType::Update.into(),
-    };
-    let client = MetaGrpcClient::try_new(&rpc_conf)?;
-
-    let mut client_stream = client.request(watch).await?;
-
-    async {
-        loop {
-            if let Ok(Some(resp)) = client_stream.message().await {
-                if let Some(event) = resp.event {
-                    if event.prev.is_none() || event.current.is_none() {
-                        continue;
-                    }
-
-                    let key = event.key;
-                    let id = mt::TableId::from_key(&key).unwrap();
-
-                    let current_seqv = event.current.unwrap();
-                    let seq = current_seqv.seq;
-                    let current = current_seqv.data;
-                    let p: pb::TableMeta =
-                        common_protos::prost::Message::decode(current.as_slice()).unwrap();
-
-                    let meta = mt::TableMeta::from_pb(p).unwrap();
-                    if meta.drop_on.is_some() || meta.default_cluster_key.is_some() {
-                        continue;
-                    }
-
-                    let ident = mt::TableIdent::new(id.table_id, seq);
-                    let table_info = mt::TableInfo {
-                        ident,
-                        desc: "".to_owned(),
-                        name: "".to_owned(),
-                        meta,
-                    };
-                    let table = cl.get_table_by_info(&table_info).unwrap();
-                    do_compaction(qc.clone(), table, "".to_owned())
-                        .await
-                        .unwrap();
-                }
-            }
-        }
-    }
-    .await;
+    watch(qc.clone(), conf).await?;
 
     shutdown_handle.wait_for_termination_request().await;
     Ok(())

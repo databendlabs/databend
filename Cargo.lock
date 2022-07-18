@@ -2378,6 +2378,7 @@ dependencies = [
  "tokio-cron-scheduler",
  "tokio-rustls",
  "tokio-stream",
+ "tokio-util",
  "toml",
  "tonic",
  "twox-hash",
@@ -7255,6 +7256,7 @@ dependencies = [
  "futures-core",
  "futures-sink",
  "pin-project-lite",
+ "slab",
  "tokio",
  "tracing",
 ]

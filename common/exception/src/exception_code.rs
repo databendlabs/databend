@@ -147,6 +147,7 @@ build_exceptions! {
 
     // Auto compaction error.
     JobSchedulerError(1082),
+    CompactionError(1083),
 
     // Tenant error codes.
     TenantIsEmpty(1101),

@@ -26,6 +26,7 @@ pub mod auth;
 pub mod catalogs;
 pub mod clusters;
 pub mod context_function;
+pub mod cmd;
 pub mod databases;
 pub mod evaluator;
 pub mod interpreters;
