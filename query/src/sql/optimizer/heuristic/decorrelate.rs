@@ -277,7 +277,7 @@ impl SubqueryRewriter {
                 let metadata = self.metadata.read();
                 for correlated_column in correlated_columns.iter() {
                     let column_entry = metadata.column(correlated_column.clone());
-                    let left_column = Scalar::BoundColumnRef(BoundColumnRef {
+                    let right_column = Scalar::BoundColumnRef(BoundColumnRef {
                         column: ColumnBinding {
                             database_name: None,
                             table_name: None,
@@ -288,7 +288,7 @@ impl SubqueryRewriter {
                         },
                     });
                     let derive_column = self.derived_columns.get(&correlated_column).unwrap();
-                    let right_column = Scalar::BoundColumnRef(BoundColumnRef {
+                    let left_column = Scalar::BoundColumnRef(BoundColumnRef {
                         column: ColumnBinding {
                             database_name: None,
                             table_name: None,
@@ -298,8 +298,8 @@ impl SubqueryRewriter {
                             visible_in_unqualified_wildcard: false,
                         },
                     });
-                    left_conditions.push(left_column.clone());
-                    right_conditions.push(right_column);
+                    left_conditions.push(left_column);
+                    right_conditions.push(right_column.clone());
                 }
                 let join_plan = LogicalInnerJoin {
                     left_conditions,
@@ -309,7 +309,7 @@ impl SubqueryRewriter {
                     marker_index: None,
                     from_correlated_subquery: true,
                 };
-                let s_expr = SExpr::create_binary(join_plan.into(), left.clone(), flatten_plan);
+                let s_expr = SExpr::create_binary(join_plan.into(), flatten_plan, left.clone());
                 Ok((s_expr, UnnestResult::SingleJoin))
             }
             SubqueryType::Exists => {
@@ -654,8 +654,7 @@ impl SubqueryRewriter {
                     flatten_plan,
                 ));
             }
-            RelOperator::Sort(_) => {}
-            RelOperator::Limit(_) => {
+            RelOperator::Sort(_) | RelOperator::Limit(_) => {
                 let flatten_plan = self.flatten(plan.child(0)?, correlated_columns)?.clone();
                 return Ok(SExpr::create_unary(plan.plan().clone(), flatten_plan));
             }
@@ -669,7 +668,6 @@ impl SubqueryRewriter {
                 ));
             }
         }
-        Ok(plan.clone())
     }
 
     fn flatten_scalar(

@@ -236,6 +236,7 @@ impl SubqueryRewriter {
                 // If it is not, we'll just rewrite it to join
                 let rel_expr = RelExpr::with_s_expr(&subquery.subquery);
                 let prop = rel_expr.derive_relational_prop()?;
+                let subquery_output_columns = prop.output_columns;
                 let (s_expr, result) = if prop.outer_columns.is_empty() {
                     self.try_rewrite_uncorrelated_subquery(s_expr, &subquery)?
                 } else {
@@ -253,10 +254,29 @@ impl SubqueryRewriter {
                         s_expr,
                     ));
                 }
+                let prop = if matches!(result, UnnestResult::SingleJoin { .. }) {
+                    RelExpr::with_s_expr(s_expr.child(0)?).derive_relational_prop()?
+                } else {
+                    RelExpr::with_s_expr(s_expr.child(1)?).derive_relational_prop()?
+                };
                 let (index, name) = if let UnnestResult::MarkJoin { marker_index } = result {
                     (marker_index, "marker".to_string())
+                } else if let UnnestResult::SingleJoin = result {
+                    assert_eq!(subquery_output_columns.len(), 1);
+                    let mut output_column = subquery_output_columns
+                        .iter()
+                        .take(1)
+                        .next()
+                        .unwrap()
+                        .clone();
+                    if let Some(index) = self.derived_columns.get(&output_column) {
+                        output_column = *index;
+                    }
+                    (
+                        output_column,
+                        format!("scalar_subquery_{}", output_column).to_string(),
+                    )
                 } else {
-                    let prop = RelExpr::with_s_expr(s_expr.child(1)?).derive_relational_prop()?;
                     let index = *prop
                         .output_columns
                         .iter()

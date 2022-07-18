@@ -187,5 +187,112 @@ SELECT * FROM c WHERE bill NOT IN (SELECT ship FROM o WHERE o.c_id=c.c_id AND sh
 
 statement query IT
 SELECT * FROM c WHERE (SELECT count(*) FROM o WHERE o.c_id=c.c_id) > 1;
+----
+1  CA
+2  TX
+4  TX
 
+statement query IT
+SELECT * FROM c WHERE (SELECT count(ship) FROM o WHERE o.c_id=c.c_id) > 1;
+----
+1  CA
+2  TX
+
+statement query IT
+SELECT *
+FROM c
+WHERE
+    (SELECT count(*) FROM o WHERE o.c_id=c.c_id) > 1
+    AND (SELECT max(ship) FROM o WHERE o.c_id=c.c_id) = 'CA';
+----
+1  CA
+
+statement query IT
+SELECT *
+FROM c
+WHERE
+    (SELECT count(*) FROM o WHERE o.c_id=c.c_id) > 1
+    OR EXISTS(SELECT ship FROM o WHERE o.c_id=c.c_id AND ship IS NULL);
+----
+1  CA
+2  TX
+4  TX
+
+statement query IT
+SELECT c_id, bill
+FROM c AS c2
+WHERE EXISTS
+(
+    SELECT *
+    FROM (SELECT c_id, coalesce(ship, bill) AS state FROM o WHERE c_id=c2.c_id) AS o
+    WHERE state=bill
+)
+----
+1  CA
+2  TX
+4  TX
+
+statement query IT
+SELECT *
+FROM c
+WHERE (SELECT o_id FROM o WHERE o.c_id=c.c_id AND ship='WY')=4;
+----
+
+statement query IT
+SELECT * FROM c WHERE c_id=(SELECT c_id FROM o WHERE ship='WA' AND bill='FL')
+----
+6  FL
+
+
+# Subquery in SELECT clause
+
+statement query IT
+SELECT c_id, NOT EXISTS(SELECT * FROM o WHERE o.c_id=c.c_id) FROM c ORDER BY c_id;
+----
+1  0
+2  0
+3  1
+4  0
+5  1
+6  0
+
+statement query IT
+SELECT
+    c_id,
+    EXISTS(SELECT * FROM o WHERE o.c_id=c.c_id)
+    OR NOT EXISTS(SELECT * FROM o WHERE o.c_id=c.c_id)
+FROM c
+ORDER BY c_id;
+----
+1  1
+2  1
+3  1
+4  1
+5  1
+6  1
+
+statement query IT
+SELECT
+    c_id,
+    'CA' IN (SELECT ship FROM o WHERE o.c_id=c.c_id)
+    AND 'TX' NOT IN (SELECT ship FROM o WHERE o.c_id=c.c_id)
+FROM c
+ORDER BY c_id;
+----
+1  1
+2  0
+3  0
+4  NULL
+5  0
+6  0
+
+statement query IT
+SELECT c_id, bill = ALL(SELECT ship FROM o WHERE o.c_id=c.c_id) FROM c ORDER BY c_id;
+----
+1  1
+2  0
+3  1
+4  0
+5  1
+6  0
 
