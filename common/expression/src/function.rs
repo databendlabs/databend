@@ -203,7 +203,7 @@ impl FunctionRegistry {
             property,
             move |arg1| {
                 let value = match &arg1.value {
-                    Some(value) => calc_domain(value),
+                    Some(value) => Some(calc_domain(value)?),
                     None => None,
                 };
                 Some(NullableDomain {
@@ -257,7 +257,7 @@ impl FunctionRegistry {
             property,
             move |arg1| {
                 let value = match &arg1.value {
-                    Some(value) => calc_domain(value),
+                    Some(value) => Some(calc_domain(value)?),
                     None => None,
                 };
                 Some(NullableDomain {
@@ -345,7 +345,7 @@ impl FunctionRegistry {
             property,
             move |arg1, arg2| {
                 let value = match (&arg1.value, &arg2.value) {
-                    (Some(value1), Some(value2)) => calc_domain(value1, value2),
+                    (Some(value1), Some(value2)) => Some(calc_domain(value1, value2)?),
                     _ => None,
                 };
                 Some(NullableDomain {
@@ -411,7 +411,7 @@ impl FunctionRegistry {
             property,
             move |arg1, arg2| {
                 let value = match (&arg1.value, &arg2.value) {
-                    (Some(value1), Some(value2)) => calc_domain(value1, value2),
+                    (Some(value1), Some(value2)) => Some(calc_domain(value1, value2)?),
                     _ => None,
                 };
                 Some(NullableDomain {
