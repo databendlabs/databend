@@ -62,7 +62,6 @@ use crate::clusters::Cluster;
 use crate::servers::http::v1::HttpQueryHandle;
 use crate::sessions::ProcessInfo;
 use crate::sessions::QueryContextShared;
-use crate::sessions::Session;
 use crate::sessions::SessionRef;
 use crate::sessions::Settings;
 use crate::storages::cache::CacheManager;
@@ -338,7 +337,7 @@ impl QueryContext {
     }
 
     pub fn get_format_settings(&self) -> Result<FormatSettings> {
-        self.shared.get_format_settings()
+        self.shared.session.get_format_settings()
     }
 
     pub fn get_config(&self) -> Config {
@@ -372,8 +371,8 @@ impl QueryContext {
     }
 
     // Get the current session.
-    pub fn get_current_session(self: &Arc<Self>) -> Arc<Session> {
-        self.shared.session.clone()
+    pub fn get_current_session(self: &Arc<Self>) -> SessionRef {
+        SessionRef::create(self.shared.session.clone())
     }
 
     // Get one session by session id.
