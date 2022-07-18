@@ -16,11 +16,11 @@ queue_rules:
       - check-success=test_sqllogic_standalone_linux
 
   - name: docs_queue
-      conditions:
-        - "#approved-reviews-by>=1"
+    conditions:
+      - "#approved-reviews-by>=1"
 
-        # Docs queue only requires Vercel passing.
-        - check-success=Vercel
+      # Docs queue only requires Vercel passing.
+      - check-success=Vercel
 
 pull_request_rules:
   # Push PR into queue when it passes all checks
