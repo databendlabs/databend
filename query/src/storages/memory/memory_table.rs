@@ -41,7 +41,6 @@ use crate::pipelines::Pipeline;
 use crate::pipelines::SinkPipeBuilder;
 use crate::pipelines::SourcePipeBuilder;
 use crate::sessions::query_ctx::QryCtx;
-use crate::sessions::QueryContext;
 use crate::storages::memory::memory_part::MemoryPartInfo;
 use crate::storages::StorageContext;
 use crate::storages::StorageDescription;

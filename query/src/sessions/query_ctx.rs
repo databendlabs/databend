@@ -185,15 +185,6 @@ impl QueryContext {
             .await
     }
 
-    // Get all the processes list info.
-    pub async fn get_processes_info(self: &Arc<Self>) -> Vec<ProcessInfo> {
-        self.shared
-            .session
-            .get_session_manager()
-            .processes_info()
-            .await
-    }
-
     pub async fn reload_config(&self) -> Result<()> {
         self.shared.reload_config().await
     }
@@ -219,10 +210,6 @@ impl QueryContext {
         self.shared.get_http_query()
     }
 
-    // Get user manager api.
-    pub fn get_user_manager(&self) -> Arc<UserApiProvider> {
-        self.shared.get_user_manager()
-    }
     pub fn get_auth_manager(&self) -> Arc<AuthMgr> {
         self.shared.get_auth_manager()
     }
@@ -245,6 +232,7 @@ impl QueryContext {
     }
 }
 
+#[async_trait::async_trait]
 impl QryCtx for QueryContext {
     /// Build a table instance the plan wants to operate on.
     ///
@@ -436,8 +424,22 @@ impl QryCtx for QueryContext {
     fn get_settings(&self) -> Arc<Settings> {
         self.shared.get_settings()
     }
+
+    fn get_user_manager(&self) -> Arc<UserApiProvider> {
+        self.shared.get_user_manager()
+    }
+
+    // Get all the processes list info.
+    async fn get_processes_info(&self) -> Vec<ProcessInfo> {
+        self.shared
+            .session
+            .get_session_manager()
+            .processes_info()
+            .await
+    }
 }
 
+#[async_trait::async_trait]
 pub trait QryCtx: Send + Sync {
     /// Build a table instance the plan wants to operate on.
     ///
@@ -495,8 +497,14 @@ pub trait QryCtx: Send + Sync {
     fn try_get_function_context(&self) -> Result<FunctionContext>;
     fn get_connection_id(&self) -> String;
     fn get_settings(&self) -> Arc<Settings>;
+
+    // Get user manager api.
+    fn get_user_manager(&self) -> Arc<UserApiProvider>;
+
+    async fn get_processes_info(&self) -> Vec<ProcessInfo>;
 }
 
+#[async_trait::async_trait]
 impl<T> QryCtx for T
 where T: AsRef<dyn QryCtx> + 'static + Send + Sync
 {
@@ -646,6 +654,13 @@ where T: AsRef<dyn QryCtx> + 'static + Send + Sync
 
     fn get_settings(&self) -> Arc<Settings> {
         self.as_ref().get_settings()
+    }
+
+    fn get_user_manager(&self) -> Arc<UserApiProvider> {
+        self.as_ref().get_user_manager()
+    }
+    async fn get_processes_info(&self) -> Vec<ProcessInfo> {
+        self.as_ref().get_processes_info().await
     }
 }
 

@@ -25,7 +25,7 @@ use common_meta_app::schema::TableMeta;
 use common_metrics::MetricValue;
 use serde_json;
 
-use crate::sessions::QueryContext;
+use crate::sessions::query_ctx::QryCtx;
 use crate::storages::system::table::SyncOneBlockSystemTable;
 use crate::storages::system::table::SyncSystemTable;
 use crate::storages::Table;
@@ -41,7 +41,7 @@ impl SyncSystemTable for MetricsTable {
         &self.table_info
     }
 
-    fn get_full_data(&self, _: Arc<QueryContext>) -> Result<DataBlock> {
+    fn get_full_data(&self, _: Arc<dyn QryCtx>) -> Result<DataBlock> {
         let prometheus_handle = common_metrics::try_handle().ok_or_else(|| {
             ErrorCode::InitPrometheusFailure("Prometheus recorder is not initialized yet.")
         })?;

@@ -25,7 +25,7 @@ use common_tracing::tracing;
 
 use crate::procedures::Procedure;
 use crate::procedures::ProcedureFeatures;
-
+use crate::sessions::query_ctx::QryCtx;
 use crate::sessions::QueryContext;
 
 pub struct BootstrapTenantProcedure {}

@@ -27,7 +27,6 @@ use common_meta_types::StageType;
 use super::table::AsyncOneBlockSystemTable;
 use super::table::AsyncSystemTable;
 use crate::sessions::query_ctx::QryCtx;
-use crate::sessions::QueryContext;
 use crate::storages::Table;
 
 pub struct StagesTable {
@@ -42,7 +41,7 @@ impl AsyncSystemTable for StagesTable {
         &self.table_info
     }
 
-    async fn get_full_data(&self, ctx: Arc<QueryContext>) -> Result<DataBlock> {
+    async fn get_full_data(&self, ctx: Arc<dyn QryCtx>) -> Result<DataBlock> {
         let tenant = ctx.get_tenant();
         let stages = ctx.get_user_manager().get_stages(&tenant).await?;
         let mut name: Vec<Vec<u8>> = Vec::with_capacity(stages.len());

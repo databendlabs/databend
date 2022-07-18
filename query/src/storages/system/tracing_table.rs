@@ -39,7 +39,6 @@ use crate::pipelines::processors::SyncSourcer;
 use crate::pipelines::Pipe;
 use crate::pipelines::Pipeline;
 use crate::sessions::query_ctx::QryCtx;
-use crate::sessions::QueryContext;
 use crate::storages::system::tracing_table_stream::LogEntry;
 use crate::storages::Table;
 
@@ -75,7 +74,7 @@ impl TracingTable {
         TracingTable { table_info }
     }
 
-    fn log_files(ctx: Arc<QueryContext>) -> Result<VecDeque<String>> {
+    fn log_files(ctx: Arc<dyn QryCtx>) -> Result<VecDeque<String>> {
         WalkDir::new(ctx.get_config().log.dir.as_str())
             .sort_by_key(|file| file.file_name().to_owned())
             .into_iter()
@@ -100,7 +99,7 @@ impl Table for TracingTable {
 
     async fn read_partitions(
         &self,
-        _ctx: Arc<QueryContext>,
+        _ctx: Arc<dyn QryCtx>,
         _push_downs: Option<Extras>,
     ) -> Result<(Statistics, Partitions)> {
         Ok((Statistics::default(), vec![]))
@@ -108,7 +107,7 @@ impl Table for TracingTable {
 
     fn read2(
         &self,
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn QryCtx>,
         _: &ReadDataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
@@ -144,7 +143,7 @@ struct TracingSource {
 
 impl TracingSource {
     pub fn create(
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn QryCtx>,
         output: Arc<OutputPort>,
         rows: usize,
         log_files: VecDeque<String>,

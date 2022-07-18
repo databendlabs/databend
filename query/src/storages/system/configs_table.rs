@@ -25,7 +25,6 @@ use itertools::Itertools;
 use serde_json::Value;
 
 use crate::sessions::query_ctx::QryCtx;
-use crate::sessions::QueryContext;
 use crate::storages::system::table::SyncOneBlockSystemTable;
 use crate::storages::system::table::SyncSystemTable;
 use crate::storages::Table;
@@ -41,7 +40,7 @@ impl SyncSystemTable for ConfigsTable {
         &self.table_info
     }
 
-    fn get_full_data(&self, ctx: Arc<QueryContext>) -> Result<DataBlock> {
+    fn get_full_data(&self, ctx: Arc<dyn QryCtx>) -> Result<DataBlock> {
         let config = ctx.get_config().into_outer();
 
         let mut names: Vec<String> = vec![];

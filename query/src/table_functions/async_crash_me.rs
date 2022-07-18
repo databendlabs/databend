@@ -41,7 +41,7 @@ use crate::pipelines::processors::AsyncSource;
 use crate::pipelines::processors::AsyncSourcer;
 use crate::pipelines::Pipe;
 use crate::pipelines::Pipeline;
-use crate::sessions::QueryContext;
+use crate::sessions::query_ctx::QryCtx;
 use crate::storages::Table;
 use crate::table_functions::table_function_factory::TableArgs;
 use crate::table_functions::TableFunction;
@@ -106,7 +106,7 @@ impl Table for AsyncCrashMeTable {
 
     async fn read_partitions(
         &self,
-        _: Arc<QueryContext>,
+        _: Arc<dyn QryCtx>,
         _: Option<Extras>,
     ) -> Result<(Statistics, Partitions)> {
         // dummy statistics
@@ -119,7 +119,7 @@ impl Table for AsyncCrashMeTable {
 
     fn read2(
         &self,
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn QryCtx>,
         _plan: &ReadDataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
@@ -144,7 +144,7 @@ struct AsyncCrashMeSource {
 
 impl AsyncCrashMeSource {
     pub fn create(
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn QryCtx>,
         output: Arc<OutputPort>,
         message: Option<String>,
     ) -> Result<ProcessorPtr> {

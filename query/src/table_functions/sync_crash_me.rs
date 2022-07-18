@@ -42,7 +42,6 @@ use crate::pipelines::processors::SyncSourcer;
 use crate::pipelines::Pipe;
 use crate::pipelines::Pipeline;
 use crate::sessions::query_ctx::QryCtx;
-use crate::sessions::QueryContext;
 use crate::storages::Table;
 use crate::table_functions::table_function_factory::TableArgs;
 use crate::table_functions::TableFunction;
@@ -145,7 +144,7 @@ struct SyncCrashMeSource {
 
 impl SyncCrashMeSource {
     pub fn create(
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn QryCtx>,
         output: Arc<OutputPort>,
         message: Option<String>,
     ) -> Result<ProcessorPtr> {

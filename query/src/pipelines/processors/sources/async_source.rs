@@ -25,7 +25,6 @@ use crate::pipelines::processors::processor::Event;
 use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::Processor;
 use crate::sessions::query_ctx::QryCtx;
-use crate::sessions::QueryContext;
 
 #[async_trait::async_trait]
 pub trait AsyncSource: Send {

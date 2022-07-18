@@ -32,7 +32,7 @@ use crate::pipelines::processors::AsyncSource;
 use crate::pipelines::processors::AsyncSourcer;
 use crate::pipelines::Pipe;
 use crate::pipelines::Pipeline;
-use crate::sessions::QueryContext;
+use crate::sessions::query_ctx::QryCtx;
 use crate::storages::github::RepoCommentsTable;
 use crate::storages::github::RepoInfoTable;
 use crate::storages::github::RepoIssuesTable;
@@ -95,7 +95,7 @@ impl Table for GithubTable {
 
     async fn read_partitions(
         &self,
-        _ctx: Arc<QueryContext>,
+        _ctx: Arc<dyn QryCtx>,
         _push_downs: Option<Extras>,
     ) -> Result<(Statistics, Partitions)> {
         Ok((Statistics::default(), vec![]))
@@ -103,7 +103,7 @@ impl Table for GithubTable {
 
     fn read2(
         &self,
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn QryCtx>,
         _: &ReadDataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
@@ -156,7 +156,7 @@ struct GithubSource {
 
 impl GithubSource {
     pub fn create(
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn QryCtx>,
         output: Arc<OutputPort>,
         schema: DataSchemaRef,
         options: RepoTableOptions,

@@ -13,17 +13,17 @@
 //  limitations under the License.
 //
 
-//mod async_crash_me;
-//mod memory_block_part;
-//mod numbers_part;
-//mod numbers_table;
-//mod sync_crash_me;
+mod async_crash_me;
+mod memory_block_part;
+mod numbers_part;
+mod numbers_table;
+mod sync_crash_me;
 mod table_function;
 mod table_function_factory;
 
-//pub use memory_block_part::generate_numbers_parts;
-//pub use numbers_part::NumbersPartInfo;
-//pub use numbers_table::NumbersTable;
+pub use memory_block_part::generate_numbers_parts;
+pub use numbers_part::NumbersPartInfo;
+pub use numbers_table::NumbersTable;
 pub use table_function::TableFunction;
 pub use table_function_factory::TableArgs;
 pub use table_function_factory::TableFunctionFactory;

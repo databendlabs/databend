@@ -87,7 +87,8 @@ async fn test_deletion_mutator_multiple_empty_segments() -> Result<()> {
         None,
     );
 
-    let mut mutator = DeletionMutator::try_create(&ctx, &location_generator, &base_snapshot)?;
+    let mut mutator =
+        DeletionMutator::try_create(ctx.as_ref(), &location_generator, &base_snapshot)?;
 
     // clear half of the segments
     for (i, _) in test_segment_locations.iter().enumerate().take(100) {

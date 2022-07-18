@@ -34,7 +34,6 @@ use crate::pipelines::processors::TransformLimit;
 use crate::pipelines::Pipeline;
 use crate::pipelines::SourcePipeBuilder;
 use crate::sessions::query_ctx::QryCtx;
-use crate::sessions::QueryContext;
 use crate::storages::fuse::io::BlockReader;
 use crate::storages::fuse::FuseTable;
 use crate::storages::result::result_locations::ResultLocations;

@@ -31,10 +31,10 @@ use crate::storages::fuse::FuseTable;
 impl FuseTable {
     pub async fn navigate_to_time_point(
         &self,
-        ctx: &Arc<dyn QryCtx>,
+        ctx: &dyn QryCtx,
         time_point: DateTime<Utc>,
     ) -> Result<Arc<FuseTable>> {
-        self.find(ctx.as_ref(), |snapshot| {
+        self.find(ctx, |snapshot| {
             if let Some(ts) = snapshot.timestamp {
                 ts <= time_point
             } else {

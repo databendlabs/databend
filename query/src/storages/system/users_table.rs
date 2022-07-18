@@ -22,7 +22,6 @@ use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 
 use crate::sessions::query_ctx::QryCtx;
-use crate::sessions::QueryContext;
 use crate::storages::system::table::AsyncOneBlockSystemTable;
 use crate::storages::system::table::AsyncSystemTable;
 use crate::storages::Table;
@@ -39,7 +38,7 @@ impl AsyncSystemTable for UsersTable {
         &self.table_info
     }
 
-    async fn get_full_data(&self, ctx: Arc<QueryContext>) -> Result<DataBlock> {
+    async fn get_full_data(&self, ctx: Arc<dyn QryCtx>) -> Result<DataBlock> {
         let tenant = ctx.get_tenant();
         let users = ctx.get_user_manager().get_users(&tenant).await?;
 

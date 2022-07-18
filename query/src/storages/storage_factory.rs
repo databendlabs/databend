@@ -20,12 +20,12 @@ use common_exception::Result;
 use common_meta_app::schema::TableInfo;
 use parking_lot::RwLock;
 
-//use super::random::RandomTable;
+use super::random::RandomTable;
 use crate::storages::fuse::FuseTable;
-//use crate::storages::github::GithubTable;
-//use crate::storages::memory::MemoryTable;
-//use crate::storages::null::NullTable;
-//use crate::storages::view::ViewTable;
+use crate::storages::github::GithubTable;
+use crate::storages::memory::MemoryTable;
+use crate::storages::null::NullTable;
+use crate::storages::view::ViewTable;
 use crate::storages::StorageContext;
 use crate::storages::Table;
 use crate::Config;
@@ -79,27 +79,27 @@ impl StorageFactory {
     pub fn create(conf: Config) -> Self {
         let mut creators: HashMap<String, Storage> = Default::default();
 
-        //        // Register memory table engine.
-        //        if conf.query.table_engine_memory_enabled {
-        //            creators.insert("MEMORY".to_string(), Storage {
-        //                creator: Arc::new(MemoryTable::try_create),
-        //                descriptor: Arc::new(MemoryTable::description),
-        //            });
-        //        }
-        //
-        //        // Register github table engine;
-        //        if conf.query.database_engine_github_enabled {
-        //            creators.insert("GITHUB".to_string(), Storage {
-        //                creator: Arc::new(GithubTable::try_create),
-        //                descriptor: Arc::new(GithubTable::description),
-        //            });
-        //        }
-        //
-        //        // Register NULL table engine.
-        //        creators.insert("NULL".to_string(), Storage {
-        //            creator: Arc::new(NullTable::try_create),
-        //            descriptor: Arc::new(NullTable::description),
-        //        });
+        // Register memory table engine.
+        if conf.query.table_engine_memory_enabled {
+            creators.insert("MEMORY".to_string(), Storage {
+                creator: Arc::new(MemoryTable::try_create),
+                descriptor: Arc::new(MemoryTable::description),
+            });
+        }
+
+        // Register github table engine;
+        if conf.query.database_engine_github_enabled {
+            creators.insert("GITHUB".to_string(), Storage {
+                creator: Arc::new(GithubTable::try_create),
+                descriptor: Arc::new(GithubTable::description),
+            });
+        }
+
+        // Register NULL table engine.
+        creators.insert("NULL".to_string(), Storage {
+            creator: Arc::new(NullTable::try_create),
+            descriptor: Arc::new(NullTable::description),
+        });
 
         // Register FUSE table engine.
         creators.insert("FUSE".to_string(), Storage {
@@ -108,16 +108,16 @@ impl StorageFactory {
         });
 
         // Register View table engine
-        //        creators.insert("VIEW".to_string(), Storage {
-        //            creator: Arc::new(ViewTable::try_create),
-        //            descriptor: Arc::new(ViewTable::description),
-        //        });
-        //
-        //        // Register RANDOM table engine
-        //        creators.insert("RANDOM".to_string(), Storage {
-        //            creator: Arc::new(RandomTable::try_create),
-        //            descriptor: Arc::new(RandomTable::description),
-        //        });
+        creators.insert("VIEW".to_string(), Storage {
+            creator: Arc::new(ViewTable::try_create),
+            descriptor: Arc::new(ViewTable::description),
+        });
+
+        // Register RANDOM table engine
+        creators.insert("RANDOM".to_string(), Storage {
+            creator: Arc::new(RandomTable::try_create),
+            descriptor: Arc::new(RandomTable::description),
+        });
 
         StorageFactory {
             storages: RwLock::new(creators),

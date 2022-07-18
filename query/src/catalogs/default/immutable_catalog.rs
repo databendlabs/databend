@@ -46,8 +46,8 @@ use crate::catalogs::InMemoryMetas;
 use crate::catalogs::SYS_DB_ID_BEGIN;
 use crate::catalogs::SYS_TBL_ID_BEGIN;
 use crate::databases::Database;
-//use crate::databases::InformationSchemaDatabase;
-//use crate::databases::SystemDatabase;
+use crate::databases::InformationSchemaDatabase;
+use crate::databases::SystemDatabase;
 use crate::storages::Table;
 use crate::Config;
 
@@ -57,25 +57,24 @@ use crate::Config;
 #[derive(Clone)]
 pub struct ImmutableCatalog {
     // it's case sensitive, so we will need two same database only with the name's case
-    //info_schema_db: Arc<InformationSchemaDatabase>,
-    //sys_db: Arc<SystemDatabase>,
+    info_schema_db: Arc<InformationSchemaDatabase>,
+    sys_db: Arc<SystemDatabase>,
     sys_db_meta: Arc<InMemoryMetas>,
 }
 
 impl ImmutableCatalog {
     pub async fn try_create_with_config(conf: &Config) -> Result<Self> {
         // The global db meta.
-        //let mut sys_db_meta = InMemoryMetas::create(SYS_DB_ID_BEGIN, SYS_TBL_ID_BEGIN);
-        let sys_db_meta = InMemoryMetas::create(SYS_DB_ID_BEGIN, SYS_TBL_ID_BEGIN);
+        let mut sys_db_meta = InMemoryMetas::create(SYS_DB_ID_BEGIN, SYS_TBL_ID_BEGIN);
         sys_db_meta.init_db("system");
         sys_db_meta.init_db("INFORMATION_SCHEMA");
 
-        //let sys_db = SystemDatabase::create(&mut sys_db_meta, conf);
-        //let info_schema_db = InformationSchemaDatabase::create(&mut sys_db_meta);
+        let sys_db = SystemDatabase::create(&mut sys_db_meta, conf);
+        let info_schema_db = InformationSchemaDatabase::create(&mut sys_db_meta);
 
         Ok(Self {
-            //info_schema_db: Arc::new(info_schema_db),
-            //sys_db: Arc::new(sys_db),
+            info_schema_db: Arc::new(info_schema_db),
+            sys_db: Arc::new(sys_db),
             sys_db_meta: Arc::new(sys_db_meta),
         })
     }
@@ -84,20 +83,18 @@ impl ImmutableCatalog {
 #[async_trait::async_trait]
 impl Catalog for ImmutableCatalog {
     async fn get_database(&self, _tenant: &str, db_name: &str) -> Result<Arc<dyn Database>> {
-        // match db_name {
-        //     "system" => Ok(self.sys_db.clone()),
-        //     "INFORMATION_SCHEMA" => Ok(self.info_schema_db.clone()),
-        //     _ => Err(ErrorCode::UnknownDatabase(format!(
-        //         "Unknown database {}",
-        //         db_name
-        //     ))),
-        // }
-        todo!()
+        match db_name {
+            "system" => Ok(self.sys_db.clone()),
+            "INFORMATION_SCHEMA" => Ok(self.info_schema_db.clone()),
+            _ => Err(ErrorCode::UnknownDatabase(format!(
+                "Unknown database {}",
+                db_name
+            ))),
+        }
     }
 
     async fn list_databases(&self, _tenant: &str) -> Result<Vec<Arc<dyn Database>>> {
-        //  Ok(vec![self.sys_db.clone(), self.info_schema_db.clone()])
-        todo!()
+        Ok(vec![self.sys_db.clone(), self.info_schema_db.clone()])
     }
 
     async fn create_database(&self, _req: CreateDatabaseReq) -> Result<CreateDatabaseReply> {

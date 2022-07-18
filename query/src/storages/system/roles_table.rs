@@ -30,7 +30,6 @@ use common_meta_app::schema::TableMeta;
 use super::table::AsyncOneBlockSystemTable;
 use super::table::AsyncSystemTable;
 use crate::sessions::query_ctx::QryCtx;
-use crate::sessions::QueryContext;
 use crate::storages::Table;
 
 pub struct RolesTable {
@@ -45,7 +44,7 @@ impl AsyncSystemTable for RolesTable {
         &self.table_info
     }
 
-    async fn get_full_data(&self, ctx: Arc<QueryContext>) -> Result<DataBlock> {
+    async fn get_full_data(&self, ctx: Arc<dyn QryCtx>) -> Result<DataBlock> {
         let tenant = ctx.get_tenant();
         let roles = ctx.get_user_manager().get_roles(&tenant).await?;
 

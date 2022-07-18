@@ -23,7 +23,6 @@ use common_meta_app::schema::TableMeta;
 use snailquote::escape;
 
 use crate::sessions::query_ctx::QryCtx;
-use crate::sessions::QueryContext;
 use crate::storages::system::table::SyncOneBlockSystemTable;
 use crate::storages::system::table::SyncSystemTable;
 use crate::storages::Table;
@@ -39,7 +38,7 @@ impl SyncSystemTable for SettingsTable {
         &self.table_info
     }
 
-    fn get_full_data(&self, ctx: Arc<QueryContext>) -> Result<DataBlock> {
+    fn get_full_data(&self, ctx: Arc<dyn QryCtx>) -> Result<DataBlock> {
         let settings = ctx.get_settings().get_setting_values();
 
         let mut names: Vec<String> = vec![];

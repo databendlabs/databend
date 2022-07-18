@@ -24,7 +24,6 @@ use common_meta_app::schema::TableMeta;
 use crate::catalogs::Catalog;
 use crate::catalogs::CATALOG_DEFAULT;
 use crate::sessions::query_ctx::QryCtx;
-use crate::sessions::QueryContext;
 use crate::storages::system::table::AsyncOneBlockSystemTable;
 use crate::storages::system::table::AsyncSystemTable;
 use crate::storages::Table;
@@ -80,7 +79,7 @@ where TablesTable<T>: HistoryAware
         &self.table_info
     }
 
-    async fn get_full_data(&self, ctx: Arc<QueryContext>) -> Result<DataBlock> {
+    async fn get_full_data(&self, ctx: Arc<dyn QryCtx>) -> Result<DataBlock> {
         let tenant = ctx.get_tenant();
         let catalog = ctx.get_catalog(CATALOG_DEFAULT)?;
         let databases = catalog.list_databases(tenant.as_str()).await?;
