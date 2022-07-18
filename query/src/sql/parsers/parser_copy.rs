@@ -111,11 +111,9 @@ impl<'a> DfParser<'a> {
             self.expect_token(")")?;
         }
 
-        /*
-         copyOptions ::=
-         ON_ERROR = { CONTINUE | SKIP_FILE | SKIP_FILE_<num> | SKIP_FILE_<num>% | ABORT_STATEMENT }
-         SIZE_LIMIT = <num>
-        */
+        // copyOptions ::=
+        // ON_ERROR = { CONTINUE | SKIP_FILE | SKIP_FILE_<num> | SKIP_FILE_<num>% | ABORT_STATEMENT }
+        // SIZE_LIMIT = <num>
         let mut on_error = "".to_string();
         if self.consume_token("ON_ERROR") {
             self.expect_token("=")?;

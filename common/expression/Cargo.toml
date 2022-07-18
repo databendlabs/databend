@@ -22,4 +22,5 @@ enum-as-inner = "0.4"
 itertools = "0.10"
 
 [dev-dependencies]
+common-ast = { path = "../ast" }
 goldenfile = "1.4"

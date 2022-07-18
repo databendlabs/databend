@@ -48,14 +48,14 @@ pub enum BloomFilterExprEvalResult {
 /// That is to say, it is legal to have a BloomFilterBlock with zero columns.
 ///
 /// For example, for the source data block as follows:
-///```
+/// ```
 ///         +---name--+--age--+
 ///         | "Alice" |  20   |
 ///         | "Bob"   |  30   |
 ///         +---------+-------+
 /// ```
 /// We will create bloom filter table as follows:
-///```
+/// ```
 ///         +---Bloom(name)--+--Bloom(age)--+
 ///         |  123456789abcd |  ac2345bcd   |
 ///         +----------------+--------------+
@@ -209,7 +209,7 @@ impl BloomFilterIndexer {
     ///
     /// Otherwise return either Unknown or NotApplicable.
     pub fn eval(&self, expr: &Expression) -> Result<BloomFilterExprEvalResult> {
-        //TODO: support multiple columns and other ops like 'in' ...
+        // TODO: support multiple columns and other ops like 'in' ...
         match expr {
             Expression::BinaryExpression { left, op, right } => match op.to_lowercase().as_str() {
                 "=" => self.eval_equivalent_expression(left, right),
@@ -627,8 +627,8 @@ impl BloomFilter {
     ///
     /// Example:
     /// ```
-    ///     let not_exist = BloomFilter::is_supported_type(data_type) && !bloom.find(data_value, data_type)?;
-    ///
+    /// let not_exist =
+    ///     BloomFilter::is_supported_type(data_type) && !bloom.find(data_value, data_type)?;
     /// ```
     pub fn find(&self, val: DataValue, typ: DataTypeImpl, ctx: Arc<QueryContext>) -> Result<bool> {
         if !Self::is_supported_type(&typ) {

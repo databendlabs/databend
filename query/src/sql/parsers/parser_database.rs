@@ -88,7 +88,7 @@ impl<'a> DfParser<'a> {
         Ok((engine, options))
     }
 
-    //ALTER DATABASE [ IF EXISTS ] <name> RENAME TO <new_db_name>
+    // ALTER DATABASE [ IF EXISTS ] <name> RENAME TO <new_db_name>
     pub(crate) fn parse_alter_database(&mut self) -> Result<DfStatement<'a>, ParserError> {
         let if_exists = self.parser.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
         let database_name = self.parser.parse_object_name()?;

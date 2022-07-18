@@ -186,16 +186,10 @@ impl JoinHashTable {
                 let probe_result_ptrs = v.get_value();
                 for ptr in probe_result_ptrs {
                     // If find join partner, set the marker to true.
-                    let offset = {
-                        let chunks = self.row_space.chunks.read().unwrap();
-                        chunks
-                            .iter()
-                            .by_ref()
-                            .take(ptr.chunk_index as usize)
-                            .fold(0, |acc, c| acc + c.num_rows())
-                    };
-                    let mut marker = self.hash_join_desc.marker_join_desc.marker.write();
-                    marker[offset + ptr.row_index as usize] = MarkerKind::True;
+                    let mut self_row_ptrs = self.row_ptrs.write();
+                    if let Some(p) = self_row_ptrs.iter_mut().find(|p| (*p).eq(&ptr)) {
+                        p.marker = Some(MarkerKind::True);
+                    }
                 }
             }
         }
@@ -209,7 +203,6 @@ impl JoinHashTable {
     ) -> Result<()> {
         let cross_join_blocks = self.probe_cross_join(input, probe_state)?;
         let func_ctx = self.ctx.try_get_function_context()?;
-        let mut marker = self.hash_join_desc.marker_join_desc.marker.write();
         for block in cross_join_blocks.iter() {
             let type_vector = self
                 .hash_join_desc
@@ -219,16 +212,17 @@ impl JoinHashTable {
                 .eval(&func_ctx, block)?;
             let filter_column = type_vector.vector();
             assert_eq!(filter_column.len(), block.num_rows());
+            let mut row_ptrs = self.row_ptrs.write();
             for idx in 0..filter_column.len() {
                 match filter_column.get(idx) {
                     DataValue::Null => {
-                        if (*marker)[idx] == MarkerKind::False {
-                            (*marker)[idx] = MarkerKind::Null;
+                        if row_ptrs[idx].marker == Some(MarkerKind::False) {
+                            row_ptrs[idx].marker = Some(MarkerKind::Null);
                         }
                     }
                     DataValue::Boolean(value) => {
                         if value {
-                            (*marker)[idx] = MarkerKind::True;
+                            row_ptrs[idx].marker = Some(MarkerKind::True);
                         }
                     }
                     _ => unreachable!(),
@@ -301,10 +295,11 @@ impl JoinHashTable {
                 }
 
                 (None, false) => {
-                    //dummy row ptr
+                    // dummy row ptr
                     build_indexs.push(RowPtr {
                         chunk_index: 0,
                         row_index: 0,
+                        marker: None,
                     });
                     probe_indexs.push(i as u32);
 
@@ -384,10 +379,11 @@ impl JoinHashTable {
                     validity.extend_constant(probe_result_ptrs.len(), true);
                 }
                 None => {
-                    //dummy row ptr
+                    // dummy row ptr
                     build_indexs.push(RowPtr {
                         chunk_index: 0,
                         row_index: 0,
+                        marker: None,
                     });
                     probe_indexs.push(i as u32);
                     validity.push(false);

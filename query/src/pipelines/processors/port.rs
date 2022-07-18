@@ -30,7 +30,10 @@ const FLAGS_MASK: usize = 0b111;
 const UNSET_FLAGS_MASK: usize = !FLAGS_MASK;
 
 #[repr(align(8))]
-pub struct SharedData(pub Result<DataBlock>);
+pub enum SharedData {
+    Data(Result<DataBlock>),
+    Buf(Result<Vec<u8>>),
+}
 
 pub struct SharedStatus {
     data: AtomicPtr<SharedData>,
@@ -168,7 +171,31 @@ impl InputPort {
             let unset_flags = HAS_DATA | NEED_DATA;
             match self.shared.swap(std::ptr::null_mut(), 0, unset_flags) {
                 address if address.is_null() => None,
-                address => Some((*Box::from_raw(address)).0),
+                address => {
+                    if let SharedData::Data(block) = *Box::from_raw(address) {
+                        Some(block)
+                    } else {
+                        unreachable!()
+                    }
+                }
+            }
+        }
+    }
+
+    #[inline(always)]
+    pub fn pull_buffer(&self) -> Option<Result<Vec<u8>>> {
+        unsafe {
+            UpdateTrigger::update_input(&self.update_trigger);
+            let unset_flags = HAS_DATA | NEED_DATA;
+            match self.shared.swap(std::ptr::null_mut(), 0, unset_flags) {
+                address if address.is_null() => None,
+                address => {
+                    if let SharedData::Buf(buf) = *Box::from_raw(address) {
+                        Some(buf)
+                    } else {
+                        unreachable!()
+                    }
+                }
             }
         }
     }
@@ -206,7 +233,17 @@ impl OutputPort {
         unsafe {
             UpdateTrigger::update_output(&self.update_trigger);
 
-            let data = Box::into_raw(Box::new(SharedData(data)));
+            let data = Box::into_raw(Box::new(SharedData::Data(data)));
+            self.shared.swap(data, HAS_DATA, HAS_DATA);
+        }
+    }
+
+    #[inline(always)]
+    pub fn push_buf(&self, data: Result<Vec<u8>>) {
+        unsafe {
+            UpdateTrigger::update_output(&self.update_trigger);
+
+            let data = Box::into_raw(Box::new(SharedData::Buf(data)));
             self.shared.swap(data, HAS_DATA, HAS_DATA);
         }
     }

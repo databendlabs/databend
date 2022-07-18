@@ -470,8 +470,8 @@ where T: MallocSizeOf
 // trait bounds are ever allowed, this code should be uncommented.
 // (We do have a compile-fail test for this:
 // rc_arc_must_not_derive_malloc_size_of.rs)
-//impl<T> !MallocSizeOf for Arc<T> { }
-//impl<T> !MallocShallowSizeOf for Arc<T> { }
+// impl<T> !MallocSizeOf for Arc<T> { }
+// impl<T> !MallocShallowSizeOf for Arc<T> { }
 
 fn arc_ptr<T>(s: &Arc<T>) -> *const T {
     &(**s) as *const T

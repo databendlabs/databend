@@ -1004,8 +1004,14 @@ select to_varchar(3 + 4) = '7';
 ----  http
 true
 
-statement error 1010
+statement query B label(http)
 select '123 ab' = 123; 
+
+----  
+0
+
+----  http
+false
 
 statement query B label(http)
 select '123' = 123;

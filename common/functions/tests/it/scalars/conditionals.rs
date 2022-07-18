@@ -59,7 +59,7 @@ fn test_if_function() -> Result<()> {
                 Series::from_data([Some(1u8), Some(2u8), Some(3u8), None]),
                 Series::from_data([2i32, 3, 2, 2]),
             ],
-            expect: Series::from_data(vec![Some(1i32), Some(3i32), Some(2i32), None]), // nullable becase predicate is nullable
+            expect: Series::from_data(vec![Some(1i32), Some(3i32), Some(2i32), None]), /* nullable becase predicate is nullable */
             error: "",
         },
         ScalarFunctionTest {
@@ -69,7 +69,7 @@ fn test_if_function() -> Result<()> {
                 Series::from_data([Some(2u8), Some(2), Some(2), Some(2)]),
                 Series::from_data([Some(3i32), Some(3i32), None, None]),
             ],
-            expect: Series::from_data(vec![Some(2i32), Some(3i32), None, Some(2i32)]), // nullable becase predicate and rhs are nullable
+            expect: Series::from_data(vec![Some(2i32), Some(3i32), None, Some(2i32)]), /* nullable becase predicate and rhs are nullable */
             error: "",
         },
         ScalarFunctionTest {
@@ -79,7 +79,7 @@ fn test_if_function() -> Result<()> {
                 Series::from_data([Some(1u8), Some(2), Some(3), Some(4)]),
                 Series::from_data([Some(2i32), Some(3), None, Some(2)]),
             ],
-            expect: Series::from_data(vec![Some(1i32), Some(3i32), None, Some(2i32)]), // nullable becase all column are nullable
+            expect: Series::from_data(vec![Some(1i32), Some(3i32), None, Some(2i32)]), /* nullable becase all column are nullable */
             error: "",
         },
         ScalarFunctionTest {

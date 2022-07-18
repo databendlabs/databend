@@ -20,11 +20,13 @@ use common_datavalues::ColumnRef;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 
+use crate::pipelines::processors::transforms::hash_join::join_hash_table::MarkerKind;
+
 pub type ColumnVector = Vec<ColumnRef>;
 
 pub struct Chunk {
     pub data_block: DataBlock,
-    pub cols: Option<ColumnVector>,
+    pub cols: ColumnVector,
     pub keys_state: Option<KeysState>,
 }
 
@@ -34,10 +36,11 @@ impl Chunk {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct RowPtr {
     pub chunk_index: u32,
     pub row_index: u32,
+    pub marker: Option<MarkerKind>,
 }
 
 pub struct RowSpace {
@@ -56,7 +59,7 @@ impl RowSpace {
     pub fn push_cols(&self, data_block: DataBlock, cols: ColumnVector) -> Result<()> {
         let chunk = Chunk {
             data_block,
-            cols: Some(cols),
+            cols,
             keys_state: None,
         };
 
@@ -66,21 +69,6 @@ impl RowSpace {
             chunks.push(chunk);
         }
 
-        Ok(())
-    }
-
-    pub fn push_keys_state(&self, data_block: DataBlock, keys_state: KeysState) -> Result<()> {
-        let chunk = Chunk {
-            data_block,
-            cols: None,
-            keys_state: Some(keys_state),
-        };
-
-        {
-            // Acquire write lock in current scope
-            let mut chunks = self.chunks.write().unwrap();
-            chunks.push(chunk);
-        }
         Ok(())
     }
 
@@ -108,5 +96,11 @@ impl RowSpace {
         } else {
             Ok(DataBlock::empty_with_schema(self.data_schema.clone()))
         }
+    }
+}
+
+impl PartialEq for RowPtr {
+    fn eq(&self, other: &Self) -> bool {
+        self.chunk_index == other.chunk_index && self.row_index == other.row_index
     }
 }

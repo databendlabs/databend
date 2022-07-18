@@ -137,7 +137,7 @@ async fn test_monotonic_function() -> Result<()> {
             \n      Expression: (number * number):UInt64, ((number + number) + 3):UInt64 (Before OrderBy)\
             \n        ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 100, read_bytes: 800, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0], limit: 10, order_by: [((number + number) + 3)]]",
         },
-        //TODO: add more function tests
+        // TODO: add more function tests
     ];
 
     for test in tests {
