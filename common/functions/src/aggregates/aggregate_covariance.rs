@@ -41,12 +41,10 @@ pub struct AggregateCovarianceState {
     pub right_mean: f64,
 }
 
-/*
- * Source: "Numerically Stable, Single-Pass, Parallel Statistics Algorithms"
- * (J. Bennett et al., Sandia National Laboratories,
- * 2009 IEEE International Conference on Cluster Computing)
- * Paper link: https://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.214.8508&rep=rep1&type=pdf
- */
+// Source: "Numerically Stable, Single-Pass, Parallel Statistics Algorithms"
+// (J. Bennett et al., Sandia National Laboratories,
+// 2009 IEEE International Conference on Cluster Computing)
+// Paper link: https://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.214.8508&rep=rep1&type=pdf
 impl AggregateCovarianceState {
     // The idea is from the formula III.9 in the paper. The original formula is:
     //     co-moments = co-moments + (n-1)/n * (s-left_mean)  * (t-right_mean)
@@ -357,5 +355,5 @@ pub fn aggregate_covariance_population_desc() -> AggregateFunctionDescription {
 
 ///////////////////////////////////////////////////////////////////////////////
 // TODO: correlation function
-//struct AggregateCorrelationImpl;
+// struct AggregateCorrelationImpl;
 ///////////////////////////////////////////////////////////////////////////////

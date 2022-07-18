@@ -198,7 +198,7 @@ impl<'a> DfInsertStatement<'a> {
 
                 let data_slice = stream_str.as_bytes();
                 let mut input_state = input_format.create_state();
-                let skip_size = input_format.skip_header(data_slice, &mut input_state)?;
+                let skip_size = input_format.skip_header(data_slice, &mut input_state, 0)?;
 
                 let _ = input_format.read_buf(&data_slice[skip_size..], &mut input_state)?;
                 let blocks = input_format.deserialize_data(&mut input_state)?;

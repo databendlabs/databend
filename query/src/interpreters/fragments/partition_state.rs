@@ -19,5 +19,5 @@ pub enum PartitionState {
     Broadcast,
     NotPartition,
     HashPartition,
-    /*RangePartition,*/
+    // RangePartition,
 }

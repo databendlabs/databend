@@ -1152,6 +1152,7 @@ dependencies = [
  "chrono-tz",
  "comfy-table",
  "common-arrow",
+ "common-ast",
  "enum-as-inner",
  "goldenfile",
  "itertools",
@@ -2066,6 +2067,7 @@ dependencies = [
  "common-meta-grpc",
  "common-meta-raft-store",
  "common-meta-sled-store",
+ "common-meta-store",
  "common-meta-types",
  "common-tracing",
  "env_logger",
@@ -6629,7 +6631,7 @@ dependencies = [
 [[package]]
 name = "sqlparser"
 version = "0.13.1-alpha.0"
-source = "git+https://github.com/datafuse-extras/sqlparser-rs?rev=269dffd#269dffd338e59605b82662405676cccb3b107e6c"
+source = "git+https://github.com/datafuse-extras/sqlparser-rs?rev=7f246e3#7f246e348770f6fdf83979453e65309fa9ae4893"
 dependencies = [
  "hashbrown 0.12.1",
  "log",

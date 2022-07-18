@@ -17,6 +17,8 @@ use std::ops::Range;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
 
+use crate::property::BooleanDomain;
+use crate::property::Domain;
 use crate::types::ArgType;
 use crate::types::DataType;
 use crate::types::GenericMap;
@@ -31,6 +33,7 @@ impl ValueType for BooleanType {
     type Scalar = bool;
     type ScalarRef<'a> = bool;
     type Column = Bitmap;
+    type Domain = BooleanDomain;
 
     fn to_owned_scalar<'a>(scalar: Self::ScalarRef<'a>) -> Self::Scalar {
         scalar
@@ -63,6 +66,10 @@ impl ArgType for BooleanType {
         }
     }
 
+    fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
+        domain.as_boolean().map(BooleanDomain::clone)
+    }
+
     fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
         Scalar::Boolean(scalar)
     }
@@ -71,12 +78,23 @@ impl ArgType for BooleanType {
         Column::Boolean(col)
     }
 
+    fn upcast_domain(domain: Self::Domain) -> Domain {
+        Domain::Boolean(domain)
+    }
+
+    fn full_domain(_: &GenericMap) -> Self::Domain {
+        BooleanDomain {
+            has_false: true,
+            has_true: true,
+        }
+    }
+
     fn column_len<'a>(col: &'a Self::Column) -> usize {
         col.len()
     }
 
-    fn index_column<'a>(col: &'a Self::Column, index: usize) -> Self::ScalarRef<'a> {
-        col.get(index).unwrap()
+    fn index_column<'a>(col: &'a Self::Column, index: usize) -> Option<Self::ScalarRef<'a>> {
+        col.get(index)
     }
 
     fn slice_column<'a>(col: &'a Self::Column, range: Range<usize>) -> Self::Column {

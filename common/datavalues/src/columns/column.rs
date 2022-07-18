@@ -156,20 +156,18 @@ pub trait Column: Send + Sync {
     /// Apply binary mode function to each element of the column.
     /// WARN: Can't use `&mut [Vec<u8>]` because it has performance drawback.
     /// Refer: https://github.com/rust-lang/rust-clippy/issues/8334
-    /*
-     * not nullable col1                 nullable col2 (first byte to indicate null or not)
-     * │                                 │
-     * │                                 │
-     * ▼                                 ▼
-     * ┌──────────┬──────────┬───────────┬───────────┬───────────┬───────────┬─────────┬─────────┐
-     * │   1byte  │   1byte  │    1byte  │    1byte  │   1byte   │    1byte  │   1byte │   1byte │ ....
-     * └──────────┴──────────┴───────────┴───────────┴───────────┴───────────┴─────────┴─────────┘
-     *  ▲                                ▲           ▲                                           ▲
-     *  │                                │           │                                           │
-     *  │        Binary Datas            │ null sign │              Binary Datas                 │
-     *  │                                │           │                                           │
-     *  └────────────────────────────────┘           └──────────────────────────────────────────►┘
-     */
+    // not nullable col1                 nullable col2 (first byte to indicate null or not)
+    // │                                 │
+    // │                                 │
+    // ▼                                 ▼
+    // ┌──────────┬──────────┬───────────┬───────────┬───────────┬───────────┬─────────┬─────────┐
+    // │   1byte  │   1byte  │    1byte  │    1byte  │   1byte   │    1byte  │   1byte │   1byte │ ....
+    // └──────────┴──────────┴───────────┴───────────┴───────────┴───────────┴─────────┴─────────┘
+    //  ▲                                ▲           ▲                                           ▲
+    //  │                                │           │                                           │
+    //  │        Binary Datas            │ null sign │              Binary Datas                 │
+    //  │                                │           │                                           │
+    //  └────────────────────────────────┘           └──────────────────────────────────────────►┘
     fn serialize(&self, vec: &mut Vec<u8>, row: usize);
 }
 

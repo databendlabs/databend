@@ -2047,7 +2047,7 @@ impl SchemaApiTestSuite {
                 name_ident: db_name_ident.clone(),
                 meta: DatabaseMeta {
                     engine: "github".to_string(),
-                    //drop_on,
+                    // drop_on,
                     ..Default::default()
                 },
             };
@@ -2100,7 +2100,7 @@ impl SchemaApiTestSuite {
             name_ident: db_name.clone(),
             meta: DatabaseMeta {
                 engine: "github".to_string(),
-                //drop_on,
+                // drop_on,
                 ..Default::default()
             },
         };
@@ -2385,7 +2385,7 @@ impl SchemaApiTestSuite {
             schema: schema(),
             engine: "JSON".to_string(),
             created_on,
-            //drop_on: Some(created_on - Duration::days(1)),
+            // drop_on: Some(created_on - Duration::days(1)),
             ..TableMeta::default()
         };
         tracing::info!("--- create and get table");

@@ -18,6 +18,7 @@ use std::ops::Range;
 use common_arrow::arrow::buffer::Buffer;
 use common_arrow::arrow::trusted_len::TrustedLen;
 
+use crate::property::Domain;
 use crate::types::ArgType;
 use crate::types::DataType;
 use crate::types::GenericMap;
@@ -31,6 +32,7 @@ impl<T: ArgType> ValueType for ArrayType<T> {
     type Scalar = T::Column;
     type ScalarRef<'a> = T::Column;
     type Column = (T::Column, Buffer<u64>);
+    type Domain = T::Domain;
 
     fn to_owned_scalar<'a>(scalar: Self::ScalarRef<'a>) -> Self::Scalar {
         scalar
@@ -65,6 +67,13 @@ impl<T: ArgType> ArgType for ArrayType<T> {
         }
     }
 
+    fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
+        match domain {
+            Domain::Array(Some(domain)) => Some(T::try_downcast_domain(domain)?),
+            _ => None,
+        }
+    }
+
     fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
         Scalar::Array(T::upcast_column(scalar))
     }
@@ -76,15 +85,26 @@ impl<T: ArgType> ArgType for ArrayType<T> {
         }
     }
 
+    fn upcast_domain(domain: Self::Domain) -> Domain {
+        Domain::Array(Some(Box::new(T::upcast_domain(domain))))
+    }
+
+    fn full_domain(generics: &GenericMap) -> Self::Domain {
+        T::full_domain(generics)
+    }
+
     fn column_len<'a>((_, offsets): &'a Self::Column) -> usize {
         offsets.len()
     }
 
-    fn index_column<'a>((col, offsets): &'a Self::Column, index: usize) -> Self::ScalarRef<'a> {
-        T::slice_column(
+    fn index_column<'a>(
+        (col, offsets): &'a Self::Column,
+        index: usize,
+    ) -> Option<Self::ScalarRef<'a>> {
+        Some(T::slice_column(
             col,
             (offsets[index] as usize)..(offsets[index + 1] as usize),
-        )
+        ))
     }
 
     fn slice_column<'a>((col, offsets): &'a Self::Column, range: Range<usize>) -> Self::Column {

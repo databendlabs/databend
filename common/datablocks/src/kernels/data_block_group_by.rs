@@ -58,7 +58,7 @@ impl DataBlock {
             {
                 group_key_len += not_null_type.data_type_id().numeric_byte_size()?;
 
-                //extra one byte for null flag
+                // extra one byte for null flag
                 if typ.is_nullable() {
                     group_key_len += 1;
                 }

@@ -220,13 +220,57 @@ statement error 1010
 INSERT INTO t5 SELECT 1, parse_json('["a","b","c"]');  
 
 statement ok
-INSERT INTO t5 SELECT 1, parse_json('{"a":1,"b":{"k":2},"c":[10,11,12]}');
+INSERT INTO t5 SELECT 1, parse_json('{"a":2,"b":{"k":2},"c":[10,11,12]}');
+
+statement ok
+INSERT INTO t5 SELECT 2, parse_json('{"a":true,"b":{"k":false},"c":[1,2,3]}');
+
+statement ok
+INSERT INTO t5 SELECT 3, parse_json('{"a":"v","b":{"k":"vv"},"c":[]}');
 
 statement query IT
-select * from t5;
+select * from t5 order by id asc;
 
 ----
-1 {"a":1,"b":{"k":2},"c":[10,11,12]} 
+1 {"a":2,"b":{"k":2},"c":[10,11,12]}    
+2 {"a":true,"b":{"k":false},"c":[1,2,3]}
+3 {"a":"v","b":{"k":"vv"},"c":[]}       
+
+statement query IT
+select * from t5 where id >= 1 and m:a = 2;
+
+----
+1 {"a":2,"b":{"k":2},"c":[10,11,12]}
+
+statement query IT
+select * from t5 where id >= 1 and m:a = true;
+
+----
+2 {"a":true,"b":{"k":false},"c":[1,2,3]}
+
+statement query IT
+select * from t5 where id >= 1 and m:a = 'v';
+
+----
+3 {"a":"v","b":{"k":"vv"},"c":[]}
+
+statement query IT
+select * from t5 where id >= 1 and 2 = m:b:k;
+
+----
+1 {"a":2,"b":{"k":2},"c":[10,11,12]}
+
+statement query IT
+select * from t5 where id >= 1 and false = m:b:k;
+
+----
+2 {"a":true,"b":{"k":false},"c":[1,2,3]}
+
+statement query IT
+select * from t5 where id >= 1 and 'vv' = m:b:k;
+
+----
+3 {"a":"v","b":{"k":"vv"},"c":[]}
 
 statement ok
 DROP DATABASE db1;

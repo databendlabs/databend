@@ -24,7 +24,7 @@ use common_tracing::tracing::info;
 
 use crate::interpreters::Interpreter;
 use crate::sessions::QueryContext;
-use crate::storages::stage::StageSource;
+use crate::storages::stage::StageSourceHelper;
 
 #[derive(Debug)]
 pub struct DropUserStageInterpreter {
@@ -60,7 +60,7 @@ impl Interpreter for DropUserStageInterpreter {
 
         if let Ok(stage) = stage {
             if matches!(&stage.stage_type, StageType::Internal) {
-                let op = StageSource::get_op(&self.ctx, &stage).await?;
+                let op = StageSourceHelper::get_op(&self.ctx, &stage).await?;
                 let absolute_path = format!("/stage/{}/", stage.stage_name);
                 op.batch().remove_all(&absolute_path).await?;
                 info!(

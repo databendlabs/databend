@@ -580,7 +580,6 @@ fn grant_role_test() -> Result<()> {
             role: String::from("test"),
         }),
     )?;
-    //
     // grant role to user
     expect_parse_ok(
         "GRANT ROLE 'test' TO USER 'test'@'localhost'",

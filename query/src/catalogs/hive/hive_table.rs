@@ -43,7 +43,7 @@ use crate::storages::hive::HiveParquetBlockReader;
 use crate::storages::Table;
 use crate::storages::TableStatistics;
 
-///! Dummy implementation for HIVE TABLE
+/// ! Dummy implementation for HIVE TABLE
 
 pub const HIVE_TABLE_ENGIE: &str = "hive";
 

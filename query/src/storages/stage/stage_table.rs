@@ -29,9 +29,10 @@ use common_planners::StageTableInfo;
 use common_planners::Statistics;
 use common_planners::TruncateTablePlan;
 use common_streams::SendableDataBlockStream;
+use common_tracing::tracing::info;
 use parking_lot::Mutex;
 
-use super::StageSource;
+use super::StageSourceHelper;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::TransformLimit;
 use crate::pipelines::Pipeline;
@@ -92,21 +93,17 @@ impl Table for StageTable {
         }
         let files = Arc::new(Mutex::new(files_deque));
 
+        let stage_source = StageSourceHelper::try_create(ctx, schema, table_info.clone(), files)?;
+
         for _index in 0..settings.get_max_threads()? {
             let output = OutputPort::create();
-            builder.add_source(
-                output.clone(),
-                StageSource::try_create(
-                    ctx.clone(),
-                    output,
-                    schema.clone(),
-                    table_info.clone(),
-                    files.clone(),
-                )?,
-            );
+            builder.add_source(output.clone(), stage_source.get_splitter(output)?);
         }
-
         pipeline.add_pipe(builder.finalize());
+
+        pipeline.add_transform(|transform_input_port, transform_output_port| {
+            stage_source.get_deserializer(transform_input_port, transform_output_port)
+        })?;
 
         let limit = self.table_info.stage_info.copy_options.size_limit;
         if limit > 0 {
@@ -145,13 +142,17 @@ impl Table for StageTable {
             self.table_info.stage_info.file_format_options.format
         );
         let path = format!(
-            "{}/{}.{}",
+            "{}{}.{}",
             self.table_info.path,
             uuid::Uuid::new_v4(),
             format_name.to_ascii_lowercase()
         );
+        info!(
+            "try commit stage table {} to file {path}",
+            self.table_info.stage_info.stage_name
+        );
 
-        let op = StageSource::get_op(&ctx, &self.table_info.stage_info).await?;
+        let op = StageSourceHelper::get_op(&ctx, &self.table_info.stage_info).await?;
 
         let fmt = OutputFormatType::from_str(format_name.as_str())?;
         let mut format_settings = ctx.get_format_settings()?;
