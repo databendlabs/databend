@@ -15,18 +15,37 @@ queue_rules:
       - check-success=test_stateful_standalone_linux
       - check-success=test_sqllogic_standalone_linux
 
+  - name: docs_queue
+      conditions:
+        - "#approved-reviews-by>=1"
+
+        # Docs queue only requires Vercel passing.
+        - check-success=Vercel
+
 pull_request_rules:
   # Push PR into queue when it passes all checks
-  - name: put approved pr to queue
+  - name: Put into shared queue
     conditions:
       - "#approved-reviews-by>=2"
       - -draft
+      - label!=pr-doc
     actions:
       queue:
         name: shared_queue
 
+  # Push docs PR into docs queue
+  - name: Put into docs queue
+    conditions:
+      - "#approved-reviews-by>=1"
+      - -draft
+      - label=pr-doc
+      - check-success=Vercel
+    actions:
+      queue:
+        name: docs_queue
+
   # If there is a conflict in an approved PR, ping the author.
-  - name: ping author on conflicts
+  - name: Ping author on conflicts
     conditions:
       - conflict
       - -draft
