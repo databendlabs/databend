@@ -313,6 +313,14 @@ pub fn arrow_cast_compute(
         return cast_to_variant(column, from_type, data_type, func_ctx);
     } else if data_type.data_type_id() == TypeID::Timestamp {
         return cast_to_timestamp(column, from_type);
+    } else if data_type.data_type_id() == TypeID::Date {
+        return arrow_cast_compute(
+            column,
+            from_type,
+            &i32::to_data_type(),
+            cast_options,
+            func_ctx,
+        );
     }
 
     let arrow_array = column.as_arrow_array(from_type.clone());
