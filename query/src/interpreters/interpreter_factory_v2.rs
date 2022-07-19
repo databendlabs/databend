@@ -188,7 +188,6 @@ impl InterpreterFactoryV2 {
             Plan::ShowSettings => Ok(Arc::new(ShowSettingsInterpreter::try_create(ctx)?)),
 
             // Databases
-         
             Plan::ShowCreateDatabase(show_create_database) => Ok(Arc::new(
                 ShowCreateDatabaseInterpreter::try_create(ctx, *show_create_database.clone())?,
             )),

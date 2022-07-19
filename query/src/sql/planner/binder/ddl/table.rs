@@ -204,7 +204,7 @@ impl<'a> Binder {
             .map(|ident| ident.name.to_lowercase())
             .unwrap_or_else(|| self.ctx.get_current_database());
         let table = table.name.to_lowercase();
-        
+
         let schema = DataSchemaRefExt::create(vec![
             DataField::new("Table", Vu8::to_data_type()),
             DataField::new("Create Table", Vu8::to_data_type()),

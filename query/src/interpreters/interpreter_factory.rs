@@ -103,7 +103,7 @@ impl InterpreterFactory {
             PlanNode::Delete(v) => Ok(Arc::new(DeleteInterpreter::try_create(ctx, v)?)),
             PlanNode::Copy(v) => Ok(Arc::new(CopyInterpreter::try_create(ctx, v)?)),
             PlanNode::Call(v) => Ok(Arc::new(CallInterpreter::try_create(ctx, v)?)),
-          
+
             PlanNode::Show(ShowPlan::ShowTables(v)) => {
                 Ok(Arc::new(ShowTablesInterpreter::try_create(ctx, v)?))
             }
