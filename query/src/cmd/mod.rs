@@ -14,4 +14,5 @@
 
 mod compaction;
 
-pub use compaction::watch;
+pub use compaction::compaction;
+pub use compaction::do_compaction;

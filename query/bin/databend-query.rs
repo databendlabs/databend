@@ -19,27 +19,17 @@ use std::sync::Arc;
 use common_base::base::RuntimeTracker;
 use common_exception::ErrorCode;
 use common_macros::databend_main;
-use common_meta_api::get_start_and_end_of_prefix;
-use common_meta_api::KVApiKey;
-use common_meta_api::PREFIX_TABLE_BY_ID;
-use common_meta_app::schema as mt;
 use common_meta_embedded::MetaEmbedded;
-use common_meta_grpc::MetaGrpcClient;
 use common_meta_grpc::MIN_METASRV_SEMVER;
-use common_meta_types::protobuf::watch_request::FilterType;
-use common_meta_types::protobuf::WatchRequest;
 use common_metrics::init_default_metrics_recorder;
-use common_planners::OptimizeTableAction;
-use common_planners::OptimizeTablePlan;
-use common_proto_conv::FromToProto;
-use common_protos::pb;
 use common_tracing::init_global_tracing;
 use common_tracing::set_panic_hook;
 use common_tracing::tracing;
 use databend_query::api::HttpService;
 use databend_query::api::RpcService;
 use databend_query::catalogs::CATALOG_DEFAULT;
-use databend_query::cmd::watch;
+use databend_query::cmd::compaction;
+use databend_query::cmd::do_compaction;
 use databend_query::metrics::MetricService;
 use databend_query::servers::ClickHouseHandler;
 use databend_query::servers::HttpHandler;
@@ -47,10 +37,8 @@ use databend_query::servers::HttpHandlerKind;
 use databend_query::servers::MySQLHandler;
 use databend_query::servers::Server;
 use databend_query::servers::ShutdownHandle;
-use databend_query::sessions::QueryContext;
 use databend_query::sessions::SessionManager;
 use databend_query::sessions::SessionType;
-use databend_query::storages::Table;
 use databend_query::Config;
 use databend_query::QUERY_SEMVER;
 use tokio_cron_scheduler::Job;
@@ -264,7 +252,7 @@ async fn run_compaction_cmd(conf: &Config) -> common_exception::Result<()> {
     let ctx = qc.clone();
     let catalog = cl.clone();
     let sched = JobScheduler::new().expect("Failed to new JobScheduler");
-    let cron_job = Job::new_async("@daily", move |_, _| {
+    let cron_job = Job::new_async("1/10 * * * * *", move |_, _| {
         let catalog = Arc::clone(&catalog);
         let tenant = tenant.clone();
         let ctx = Arc::clone(&ctx);
@@ -300,7 +288,7 @@ async fn run_compaction_cmd(conf: &Config) -> common_exception::Result<()> {
     }
     .await?;
 
-    watch(qc.clone(), conf).await?;
+    compaction(qc.clone(), conf).await?;
 
     shutdown_handle.wait_for_termination_request().await;
     Ok(())
@@ -308,22 +296,4 @@ async fn run_compaction_cmd(conf: &Config) -> common_exception::Result<()> {
 
 fn is_system_database(name: &str) -> bool {
     name == "INFORMATION_SCHEMA" || name == "system"
-}
-
-async fn do_compaction(
-    ctx: Arc<QueryContext>,
-    table: Arc<dyn Table>,
-    database: String,
-) -> common_exception::Result<()> {
-    if !table.auto_compaction() {
-        return Ok(());
-    }
-    let plan = OptimizeTablePlan {
-        catalog: ctx.get_current_catalog(),
-        database,
-        table: table.name().to_string(),
-        action: OptimizeTableAction::Compact,
-    };
-
-    table.compact(ctx.clone(), plan).await
 }

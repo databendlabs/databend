@@ -14,14 +14,15 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::task::Context;
+use std::task::Poll;
 use std::time::Duration;
 
+use common_base::base::tokio;
 use common_base::base::tokio::sync::mpsc::channel;
 use common_base::base::tokio::sync::mpsc::error::SendError;
 use common_base::base::tokio::sync::mpsc::Receiver;
 use common_base::base::tokio::sync::mpsc::Sender;
-use tokio_stream::StreamExt;
-use common_base::base::tokio;
 use common_base::base::TrySpawn;
 use common_exception::ErrorCode;
 use common_meta_api::deserialize_struct;
@@ -37,6 +38,9 @@ use common_meta_types::protobuf::watch_request::FilterType;
 use common_meta_types::protobuf::WatchRequest;
 use common_planners::OptimizeTableAction;
 use common_planners::OptimizeTablePlan;
+use futures::ready;
+use futures::Stream;
+use tokio_stream::StreamExt;
 use tokio_util::time::delay_queue;
 use tokio_util::time::DelayQueue;
 
@@ -45,7 +49,7 @@ use crate::sessions::QueryContext;
 use crate::storages::Table;
 use crate::Config;
 
-pub async fn watch(ctx: Arc<QueryContext>, conf: &Config) -> common_exception::Result<()> {
+pub async fn compaction(ctx: Arc<QueryContext>, conf: &Config) -> common_exception::Result<()> {
     let rpc_conf = conf.meta.to_meta_grpc_client_conf();
     if rpc_conf.local_mode() {
         return Err(ErrorCode::CompactionError(
@@ -59,21 +63,19 @@ pub async fn watch(ctx: Arc<QueryContext>, conf: &Config) -> common_exception::R
         key_end: Some(key_end),
         filter_type: FilterType::Update.into(),
     };
+    // Create a new client of metasrv.
     let client = MetaGrpcClient::try_new(&rpc_conf)?;
 
+    // Watch the table meta update.
     let mut client_stream = client.request(watch).await?;
-    let task = Task::new(Duration::from_secs(3600));
-    let (mut delay_queue_insert, mut delay_queue_read) = task.create_channel();
-
-    async {
-        println!("test0");
+    let task = CompactionQueue::new(Duration::from_secs(3600));
+    let (mut delay_queue_insert, mut delay_queue_read) = task.create_channel(ctx.clone());
+    ctx.get_storage_runtime().spawn(async move {
         while let Ok(Some(resp)) = client_stream.message().await {
-            println!("test1");
             if let Some(event) = resp.event {
                 if event.prev.is_none() || event.current.is_none() {
                     continue;
                 }
-                println!("{:?}", event);
 
                 let key = event.key;
                 let id = TableId::from_key(&key).unwrap();
@@ -98,8 +100,7 @@ pub async fn watch(ctx: Arc<QueryContext>, conf: &Config) -> common_exception::R
                     .unwrap();
             }
         }
-    }
-    .await;
+    });
 
     let catalog = ctx.get_catalog(CATALOG_DEFAULT)?;
     while let Some(info) = delay_queue_read.next().await {
@@ -120,6 +121,7 @@ pub async fn do_compaction(
     if !table.auto_compaction() {
         return Ok(());
     }
+
     let plan = OptimizeTablePlan {
         catalog: ctx.get_current_catalog(),
         database,
@@ -129,19 +131,15 @@ pub async fn do_compaction(
 
     table.compact(ctx.clone(), plan).await
 }
-use std::task::Context;
-use std::task::Poll;
 
-use futures::ready;
-use futures::Stream;
-struct Task {
+struct CompactionQueue {
     timeout: Duration,
 
     entries: HashMap<u64, (TableInfo, delay_queue::Key)>,
     expirations: DelayQueue<u64>,
 }
 
-impl Task {
+impl CompactionQueue {
     fn new(timeout: Duration) -> Self {
         Self {
             timeout,
@@ -166,15 +164,15 @@ impl Task {
                 let table_info = self.entries.remove(key.get_ref()).unwrap().0;
                 Poll::Ready(Some(table_info))
             }
-            None => Poll::Ready(None),
+            None => Poll::Pending,
         }
     }
 
-    fn create_channel(self) -> (DelayQueueInsert, DelayQueueRead) {
+    fn create_channel(self, ctx: Arc<QueryContext>) -> (DelayQueueInsert, DelayQueueRead) {
         let (queue_add, mut queue_add_rx) = channel::<(u64, TableInfo)>(1);
         let (queue_read_tx, queue_read) = channel::<Option<TableInfo>>(1);
 
-        tokio::spawn(async move{
+        ctx.get_storage_runtime().spawn(async move {
             let mut task = self;
             let mut queue_add_eof = false;
             loop {
@@ -184,7 +182,6 @@ impl Task {
                         match delayed_item {
                             Some(item) => {
                                 // forward it to the queue_read channel.
-                                println!("{:?}", item.clone());
                                 if queue_read_tx.send(Some(item)).await.is_err() {
                                     // queue_read channel receiver side was dropped.
                                     break;
@@ -195,11 +192,6 @@ impl Task {
                                 if queue_add_eof {
                                     break;
                                 }
-                                // otherwise, send a 'None' to indicate the queue is empty.
-                                if queue_read_tx.send(None).await.is_err() {
-                                    // queue_read channel receiver side was dropped.
-                                    break;
-                                }
                             },
                         }
                     }
@@ -207,7 +199,6 @@ impl Task {
                     new_item = queue_add_rx.recv(), if !queue_add_eof => {
                         match new_item {
                             Some(item) => {
-                                println!("{:?}", item.clone());
                                 // insert it into the DelayQueue.
                                 task.insert(item.0, item.1);
                             },
@@ -218,13 +209,13 @@ impl Task {
                         }
                     }
                 }
-            }});
-            (DelayQueueInsert(queue_add), DelayQueueRead(queue_read))
-        
+            }
+        });
+        (DelayQueueInsert(queue_add), DelayQueueRead(queue_read))
     }
 }
 
-impl Stream for Task {
+impl Stream for CompactionQueue {
     type Item = TableInfo;
 
     fn poll_next(
@@ -236,35 +227,26 @@ impl Stream for Task {
     }
 }
 
-
 pub struct DelayQueueInsert(Sender<(u64, TableInfo)>);
 
 impl DelayQueueInsert {
     /// Insert an item into the DelayQueue.
-    ///
-    /// Other than `DelayQueue`'s normal `insert`, this function can return
-    /// an error if the `Read` half was dropped.
     pub async fn insert(
         &mut self,
         table_id: u64,
         table_info: TableInfo,
     ) -> Result<(), SendError<(u64, TableInfo)>> {
-        println!("insert {}", table_id);
         self.0.send((table_id, table_info)).await
     }
 }
 
-/// "read" half of a DelayQueue.
 pub struct DelayQueueRead(Receiver<Option<TableInfo>>);
 
 impl DelayQueueRead {
     /// Read the next item from the DelayQueue.
     pub async fn next(&mut self) -> Option<TableInfo> {
         match self.0.recv().await {
-            Some(Some(item)) => {
-                println!("next {}", item.clone());
-                Some(item)
-            }
+            Some(Some(item)) => Some(item),
             Some(None) => None,
             None => None,
         }
