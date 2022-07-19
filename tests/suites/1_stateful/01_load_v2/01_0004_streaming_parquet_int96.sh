@@ -7,7 +7,7 @@ echo "drop table if exists mytime;" | $MYSQL_CLIENT_CONNECT
 ## create mytime table
 echo "create table mytime(id string null, t_bool boolean null,
 t_float float null, t_double double null,
-t_timestamp timestamp null, t_data date null, t_array array(int) null);" | $MYSQL_CLIENT_CONNECT
+t_timestamp timestamp null, t_data date null, t_array array(int null));" | $MYSQL_CLIENT_CONNECT
 
 aws --endpoint-url http://127.0.0.1:9900/ s3 cp s3://testbucket/admin/data/mytime.parquet /tmp/mytime.parquet > /dev/null 2>&1
 
