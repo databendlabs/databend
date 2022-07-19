@@ -28,7 +28,7 @@ use common_arrow::parquet::metadata::FileMetaData;
 use common_arrow::parquet::metadata::RowGroupMetaData;
 use common_arrow::parquet::read::read_metadata;
 use common_datablocks::DataBlock;
-use common_datavalues::wrap_nullable;
+use common_datavalues::remove_nullable;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataTypeImpl;
@@ -136,12 +136,13 @@ impl InputFormat for ParquetInputFormat {
             .schema
             .fields()
             .iter()
-            .map(|f| (f.name(), wrap_nullable(f.data_type())))
+            .map(|f| (f.name(), remove_nullable(f.data_type())))
             .collect();
+
         let fb: Vec<(&String, DataTypeImpl)> = actually_schema
             .fields()
             .iter()
-            .map(|f| (f.name(), wrap_nullable(f.data_type())))
+            .map(|f| (f.name(), remove_nullable(f.data_type())))
             .collect();
 
         if fa != fb {
