@@ -19,8 +19,8 @@ use std::sync::Arc;
 use common_datablocks::DataBlock;
 use common_exception::Result;
 
-use crate::pipelines::processors::UpdateTrigger;
-use crate::pipelines::unsafe_cell_wrap::UnSafeCellWrap;
+use crate::processors::UpdateTrigger;
+use crate::unsafe_cell_wrap::UnSafeCellWrap;
 
 const HAS_DATA: usize = 0b1;
 const NEED_DATA: usize = 0b10;

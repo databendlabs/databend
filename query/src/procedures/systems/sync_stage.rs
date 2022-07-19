@@ -24,6 +24,7 @@ use crate::interpreters::list_files_from_dal;
 use crate::procedures::Procedure;
 use crate::procedures::ProcedureFeatures;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 
 pub struct SyncStageFileProcedure;
 

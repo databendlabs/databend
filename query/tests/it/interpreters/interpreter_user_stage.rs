@@ -16,6 +16,7 @@ use common_base::base::tokio;
 use common_exception::Result;
 use common_meta_types::TenantQuota;
 use databend_query::interpreters::InterpreterFactory;
+use databend_query::sessions::TableContext;
 use databend_query::sql::*;
 use futures::StreamExt;
 use pretty_assertions::assert_eq;

@@ -33,6 +33,7 @@ use crate::pipelines::processors::transforms::transform::Transform;
 use crate::pipelines::processors::transforms::transform::Transformer;
 use crate::pipelines::Pipeline;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::sql::exec::ColumnID;
 use crate::sql::exec::PhysicalPlan;
 use crate::sql::exec::PhysicalScalar;

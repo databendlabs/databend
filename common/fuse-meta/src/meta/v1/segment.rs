@@ -19,15 +19,15 @@ use common_datablocks::DataBlock;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::storages::fuse::meta::common::ColumnId;
-use crate::storages::fuse::meta::common::Compression;
-use crate::storages::fuse::meta::common::FormatVersion;
-use crate::storages::fuse::meta::common::Location;
-use crate::storages::fuse::meta::common::Statistics;
-use crate::storages::fuse::meta::common::Versioned;
-use crate::storages::fuse::meta::v0::ColumnMeta;
-use crate::storages::index::ClusterStatistics;
-use crate::storages::index::ColumnStatistics;
+use crate::meta::common::ClusterStatistics;
+use crate::meta::common::ColumnStatistics;
+use crate::meta::common::FormatVersion;
+use crate::meta::ColumnId;
+use crate::meta::ColumnMeta;
+use crate::meta::Compression;
+use crate::meta::Location;
+use crate::meta::Statistics;
+use crate::meta::Versioned;
 
 /// A segment comprises one or more blocks
 #[derive(Serialize, Deserialize, Debug)]

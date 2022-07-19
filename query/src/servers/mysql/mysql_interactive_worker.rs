@@ -35,6 +35,7 @@ use opensrv_mysql::StatementMetaWriter;
 use rand::RngCore;
 use tokio_stream::StreamExt;
 
+use crate::clusters::ClusterHelper;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
 use crate::interpreters::InterpreterFactoryV2;
@@ -45,6 +46,7 @@ use crate::servers::mysql::MySQLFederated;
 use crate::servers::mysql::MYSQL_VERSION;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionRef;
+use crate::sessions::TableContext;
 use crate::sql::DfParser;
 use crate::sql::PlanParser;
 use crate::sql::Planner;

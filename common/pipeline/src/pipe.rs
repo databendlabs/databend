@@ -14,9 +14,9 @@
 
 use std::sync::Arc;
 
-use crate::pipelines::processors::port::InputPort;
-use crate::pipelines::processors::port::OutputPort;
-use crate::pipelines::processors::processor::ProcessorPtr;
+use crate::processors::port::InputPort;
+use crate::processors::port::OutputPort;
+use crate::processors::processor::ProcessorPtr;
 
 #[derive(Clone)]
 pub enum Pipe {

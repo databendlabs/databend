@@ -40,6 +40,7 @@ use parking_lot::RwLock;
 
 use crate::api::DataExchangeManager;
 use crate::catalogs::CatalogManager;
+use crate::catalogs::CatalogManagerHelper;
 use crate::clusters::ClusterDiscovery;
 use crate::interpreters::AsyncInsertQueue;
 use crate::servers::http::v1::HttpQueryManager;
@@ -78,7 +79,7 @@ pub struct SessionManager {
 
 impl SessionManager {
     pub async fn from_conf(conf: Config) -> Result<Arc<SessionManager>> {
-        let catalogs = Arc::new(CatalogManager::new(&conf).await?);
+        let catalogs = Arc::new(CatalogManager::try_new(&conf).await?);
         let storage_cache_manager = Arc::new(CacheManager::init(&conf.query));
 
         // Cluster discovery.
@@ -417,7 +418,7 @@ impl SessionManager {
         };
 
         {
-            let catalogs = CatalogManager::new(&config).await?;
+            let catalogs = CatalogManager::try_new(&config).await?;
             *self.catalogs.write() = Arc::new(catalogs);
         }
 

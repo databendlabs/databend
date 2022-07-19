@@ -14,19 +14,9 @@
 
 use std::sync::Arc;
 
-use common_base::base::tokio::sync::RwLock;
-use common_cache::Count;
-use common_cache::DefaultHashBuilder;
-use common_cache::LruCache;
+use common_meta_types::NodeInfo;
 
-use crate::storages::fuse::meta::SegmentInfo;
-use crate::storages::fuse::meta::TableSnapshot;
-
-pub type MemoryCache<V> = Arc<RwLock<LruCache<String, Arc<V>, DefaultHashBuilder, Count>>>;
-
-pub fn new_memory_cache<V>(capacity: u64) -> MemoryCache<V> {
-    Arc::new(RwLock::new(LruCache::new(capacity)))
+pub struct Cluster {
+    pub local_id: String,
+    pub nodes: Vec<Arc<NodeInfo>>,
 }
-
-pub type SegmentInfoCache = MemoryCache<SegmentInfo>;
-pub type TableSnapshotCache = MemoryCache<TableSnapshot>;

@@ -16,8 +16,8 @@ use common_datavalues::DataSchema;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::storages::fuse::meta::common::SnapshotId;
-use crate::storages::fuse::meta::common::Statistics;
+use crate::meta::SnapshotId;
+use crate::meta::Statistics;
 
 pub type Location = String;
 

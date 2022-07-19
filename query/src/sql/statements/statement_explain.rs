@@ -20,6 +20,7 @@ use common_planners::ExplainType;
 use common_tracing::tracing;
 
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
 use crate::sql::statements::DfQueryStatement;

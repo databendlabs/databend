@@ -24,6 +24,7 @@ use common_datavalues::StringType;
 use common_exception::Result;
 use common_planners::Expression;
 use databend_query::common::ExpressionEvaluator;
+use databend_query::sessions::TableContext;
 
 use crate::tests::create_query_context;
 

@@ -25,6 +25,7 @@ use crate::pipelines::executor::PipelineExecutor;
 use crate::pipelines::executor::PipelinePullingExecutor;
 use crate::pipelines::Pipeline;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::sql::exec::PhysicalPlanBuilder;
 use crate::sql::exec::PipelineBuilder;
 use crate::sql::optimizer::SExpr;

@@ -23,6 +23,7 @@ use common_tracing::tracing;
 use super::Interpreter;
 use crate::procedures::ProcedureFactory;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 
 pub struct CallInterpreter {
     ctx: Arc<QueryContext>,

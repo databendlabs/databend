@@ -17,10 +17,10 @@ use std::sync::Arc;
 
 use common_exception::Result;
 
-use crate::pipelines::processors::port::InputPort;
-use crate::pipelines::processors::port::OutputPort;
-use crate::pipelines::processors::processor::Event;
-use crate::pipelines::processors::Processor;
+use crate::processors::port::InputPort;
+use crate::processors::port::OutputPort;
+use crate::processors::processor::Event;
+use crate::processors::Processor;
 
 pub struct ResizeProcessor {
     inputs: Vec<Arc<InputPort>>,

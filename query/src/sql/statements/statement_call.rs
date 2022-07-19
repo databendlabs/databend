@@ -21,6 +21,7 @@ use common_tracing::tracing;
 
 use super::AnalyzableStatement;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::sql::statements::AnalyzedResult;
 
 #[derive(Debug, Clone, PartialEq, Eq)]

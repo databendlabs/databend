@@ -25,6 +25,7 @@ use super::SelectInterpreter;
 use crate::interpreters::Interpreter;
 use crate::optimizers::Optimizers;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::sql::PlanParser;
 
 #[derive(Debug)]

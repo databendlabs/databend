@@ -25,6 +25,7 @@ use common_ast::Backtrace;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use databend_query::sessions::QueryContext;
+use databend_query::sessions::TableContext;
 use databend_query::sql::optimizer::HeuristicOptimizer;
 use databend_query::sql::optimizer::RuleID;
 use databend_query::sql::optimizer::RuleList;

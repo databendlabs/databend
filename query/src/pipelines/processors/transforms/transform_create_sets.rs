@@ -38,6 +38,7 @@ use crate::pipelines::processors::processor::Event;
 use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::Processor;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 
 pub struct TransformCreateSets {
     initialized: bool,

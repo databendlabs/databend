@@ -15,8 +15,8 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use crate::pipelines::Pipe;
-use crate::pipelines::Pipeline;
+use crate::Pipe;
+use crate::Pipeline;
 
 impl Pipeline {
     pub fn display_indent(&self) -> impl std::fmt::Display + '_ {

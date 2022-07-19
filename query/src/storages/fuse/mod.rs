@@ -12,12 +12,10 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-pub mod cache;
 mod constants;
 mod fuse_part;
 mod fuse_table;
 pub mod io;
-pub mod meta;
 pub mod operations;
 pub mod pruning;
 pub mod statistics;

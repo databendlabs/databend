@@ -1,0 +1,27 @@
+[package]
+name = "common-pipeline"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+doctest = false
+test = false
+
+[dependencies]
+common-base = { path = "../base" }
+common-datablocks = { path = "../datablocks" }
+common-datavalues = { path = "../datavalues" }
+common-exception = { path = "../exception" }
+common-tracing = { path = "../tracing" }
+
+async-trait = "0.1.56"
+futures = "0.3.21"
+futures-util = "0.3.21"
+itertools = "0.10.3"
+num_cpus = "1.13.1"
+once_cell = "1.12.0"
+parking_lot = "0.12.1"
+petgraph = "0.6.2"
+serde = { version = "1.0.137", features = ["derive"] }
+time = "0.3.10"

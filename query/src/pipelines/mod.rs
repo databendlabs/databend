@@ -15,11 +15,10 @@
 pub mod executor;
 pub mod processors;
 
-mod pipe;
-mod pipeline;
+use common_pipeline::pipe;
+use common_pipeline::pipeline;
+
 mod pipeline_builder;
-mod pipeline_display;
-mod unsafe_cell_wrap;
 
 pub use pipe::Pipe;
 pub use pipe::SinkPipeBuilder;

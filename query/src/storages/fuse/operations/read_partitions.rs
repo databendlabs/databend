@@ -17,16 +17,16 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_fuse_meta::meta::BlockMeta;
+use common_fuse_meta::meta::TableSnapshot;
 use common_planners::Extras;
 use common_planners::PartInfoPtr;
 use common_planners::Partitions;
 use common_planners::Statistics;
 
-use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::storages::fuse::fuse_part::ColumnMeta;
 use crate::storages::fuse::fuse_part::FusePartInfo;
-use crate::storages::fuse::meta::BlockMeta;
-use crate::storages::fuse::meta::TableSnapshot;
 use crate::storages::fuse::pruning::BlockPruner;
 use crate::storages::fuse::FuseTable;
 
@@ -34,7 +34,7 @@ impl FuseTable {
     #[inline]
     pub async fn do_read_partitions(
         &self,
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn TableContext>,
         push_downs: Option<Extras>,
     ) -> Result<(Statistics, Partitions)> {
         let snapshot = self.read_table_snapshot(ctx.as_ref()).await?;
@@ -45,7 +45,7 @@ impl FuseTable {
                 }
                 let schema = self.table_info.schema();
                 let block_metas = BlockPruner::new(snapshot.clone())
-                    .apply(ctx.as_ref(), schema, &push_downs)
+                    .apply(&ctx, schema, &push_downs)
                     .await?
                     .into_iter()
                     .map(|(_, v)| v)

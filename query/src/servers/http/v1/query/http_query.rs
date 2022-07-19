@@ -36,6 +36,7 @@ use crate::servers::http::v1::query::PageManager;
 use crate::servers::http::v1::query::ResponseData;
 use crate::servers::http::v1::query::Wait;
 use crate::sessions::SessionType;
+use crate::sessions::TableContext;
 use crate::storages::result::block_buffer::BlockBuffer;
 
 #[derive(Deserialize, Debug)]

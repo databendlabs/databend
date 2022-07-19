@@ -33,7 +33,7 @@ use crate::pipelines::processors::TransformCompact;
 use crate::pipelines::processors::TransformSortPartial;
 use crate::pipelines::Pipeline;
 use crate::pipelines::SinkPipeBuilder;
-use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::storages::fuse::io::write_meta;
 use crate::storages::fuse::io::BlockStreamWriter;
 use crate::storages::fuse::operations::AppendOperationLogEntry;
@@ -52,7 +52,7 @@ impl FuseTable {
     #[inline]
     pub async fn append_chunks(
         &self,
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn TableContext>,
         stream: SendableDataBlockStream,
     ) -> Result<AppendOperationLogEntryStream> {
         let rows_per_block = self.get_option(FUSE_OPT_KEY_ROW_PER_BLOCK, DEFAULT_ROW_PER_BLOCK);
@@ -107,7 +107,7 @@ impl FuseTable {
         Ok(Box::pin(log_entries))
     }
 
-    pub fn do_append2(&self, ctx: Arc<QueryContext>, pipeline: &mut Pipeline) -> Result<()> {
+    pub fn do_append2(&self, ctx: Arc<dyn TableContext>, pipeline: &mut Pipeline) -> Result<()> {
         let max_row_per_block = self.get_option(FUSE_OPT_KEY_ROW_PER_BLOCK, DEFAULT_ROW_PER_BLOCK);
         let min_rows_per_block = (max_row_per_block as f64 * 0.8) as usize;
         let block_per_seg =
