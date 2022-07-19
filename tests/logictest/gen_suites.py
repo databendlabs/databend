@@ -126,8 +126,7 @@ def parse_cases(sql_file):
                 ret = ret + row_string + "\n"
         except Exception as err:
             log.warning(
-                "SQL: {}  fetch no results, msg:{} ,check it manual.".format(
-                    sql, str(err)))
+                f"SQL: {sql}  fetch no results, msg:{str(err)} ,check it manual.")
         return ret
 
     target_dir = os.path.dirname(
@@ -136,11 +135,10 @@ def parse_cases(sql_file):
     target_file = os.path.join(target_dir, case_name)
 
     if skip_exist and os.path.exists(target_file):
-        log.warning("skip case file {}, already exist.".format(target_file))
+        log.warning(f"skip case file {target_file}, already exist.")
         return
 
-    log.info("Write test case to path: {}, case name is {}".format(
-        target_dir, case_name))
+    log.info(f"Write test case to path: {target_dir}, case name is {case_name}")
 
     content_output = ""
     f = open(sql_file, encoding='UTF-8')
@@ -176,13 +174,11 @@ def parse_cases(sql_file):
                 query_options = http_client.get_query_option()
             except Exception as err:
                 exception_sqls.append(statement)
-                log.error("Exception SQL: {}".format(statement))
+                log.error(f"Exception SQL: {statement}")
                 continue
 
             if query_options == "":
-                log.warning(
-                    "statement: {} type query could not get query_option change to ok statement"
-                    .format(statement))
+                log.warning(f"statement: {statement} type query could not get query_option change to ok statement")
                 content_output = content_output + STATEMENT_OK.format(
                     statement=statement)
                 continue
@@ -217,7 +213,7 @@ def parse_cases(sql_file):
                 if str.lower(statement).startswith("use"):
                     # use for sql session, ignore results
                     database = get_database(statement).group("database")
-                    log.debug("use database {}".format(database))
+                    log.debug(f"use database {database}")
                     http_client.set_database(database)
                 # mysql excute for data
                 if str.lower(statement).startswith("drop"):
@@ -226,8 +222,7 @@ def parse_cases(sql_file):
                     http_client.query_with_session(statement)
                 mysql_client.execute(statement)
             except Exception as err:
-                log.warning("statement {} excute error,msg {}".format(
-                    statement, str(err)))
+                log.warning(f"statement {statement} excute error,msg {str(err)}")
                 pass
 
             content_output = content_output + STATEMENT_OK.format(
@@ -255,15 +250,14 @@ def output():
 
 
 def main(pattern=".*"):
-    log.debug("Case filter regex pattern is {}".format(pattern))
+    log.debug(f"Case filter regex pattern is {pattern}")
     all_cases = get_all_cases()
 
     for file in all_cases:
         if not re.match(pattern, file):
-            log.debug("Test file {}  does not match pattern {}".format(
-                file, pattern))
+            log.debug(f"Test file {file}  does not match pattern {pattern}")
             continue
-        log.info("Test file {} match pattern {}".format(file, pattern))
+        log.info(f"Test file {file} match pattern {pattern}")
 
         # .result will be ignore
         if '.result' in file or '.result_filter' in file:
@@ -272,7 +266,7 @@ def main(pattern=".*"):
         # .py .sh will be ignore, need log
         if ".py" in file or ".sh" in file:
             manual_cases.append(file)
-            log.warning("test file {} will be ignore".format(file))
+            log.warning(f"test file {file} will be ignore")
             continue
 
         parse_cases(file)
@@ -282,7 +276,5 @@ def main(pattern=".*"):
 
 
 if __name__ == '__main__':
-    log.info(
-        "Start generate sqllogictest suites from path: {} to path: {}".format(
-            suite_path, logictest_path))
+    log.info(f"Start generate sqllogictest suites from path: {suite_path} to path: {logictest_path}")
     fire.Fire(main)

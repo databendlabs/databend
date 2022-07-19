@@ -69,29 +69,19 @@ class TestMySQL(logictest.SuiteRunner, ABC):
 
                 if query_type[i] == 'I':
                     if not isinstance(v, int):
-                        log.error(
-                            "Expected int, got type {} in query {} row {} col {} value {}"
-                            .format(type(v), statement.text, ri, i, v))
+                        log.debug(f"Expected int, got type {type(v)} in query {statement.text} row {ri} col {i} value {v}")
                 elif query_type[i] == 'F' or query_type[i] == 'R':
                     if not isinstance(v, float):
-                        log.error(
-                            "Expected float, got type {} in query {} row {} col {} value {}"
-                            .format(type(v), statement.text, ri, i, v))
+                        log.debug(f"Expected float, got type {type(v)} in query {statement.text} row {ri} col {i} value {v}")
                 elif query_type[i] == 'T':
                     if not (isinstance(v, str) or isinstance(v, datetime) or
                             isinstance(v, date)):
-                        log.error(
-                            "Expected string, got type {} in query {} row {} col {} value {}"
-                            .format(type(v), statement.text, ri, i, v))
+                        log.debug(f"Expected string, got type {type(v)} in query { statement.text} row {ri} col {i} value {v}")
                 elif query_type[i] == 'B':
                     # bool return int in mysql
                     if not isinstance(v, int):
-                        log.error(
-                            "Expected Bool, got type {} in query {} row {} col {} value {}"
-                            .format(type(v), statement.text, ri, i, v))
+                        log.debug(f"Expected Bool, got type {type(v)} in query {statement.text} row {ri} col {i} value {v}")
                 else:
-                    log.error(
-                        "Unknown type {} in query {} row {} col {} value {}".
-                        format(query_type[i], statement.text, ri, i, v))
+                    log.debug(f"Unknown type {query_type[i]} in query {statement.text} row {ri} col {i} value {v}")
                 vals.append(str(v))
         return vals

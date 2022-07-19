@@ -118,8 +118,8 @@ impl Column for NullableColumn {
         self.column.memory_size()
     }
 
-    fn as_arrow_array(&self) -> ArrayRef {
-        let result = self.column.as_arrow_array();
+    fn as_arrow_array(&self, logical_type: DataTypeImpl) -> ArrayRef {
+        let result = self.column.as_arrow_array(logical_type);
         result.with_validity(Some(self.validity.clone()))
     }
 
