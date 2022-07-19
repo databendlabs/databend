@@ -21,7 +21,7 @@ use common_datablocks::DataBlock;
 use common_exception::Result;
 use futures::stream::Stream;
 
-use crate::sessions::query_ctx::TableContext;
+use crate::sessions::TableContext;
 use crate::storages::memory::memory_part::MemoryPartInfo;
 
 #[derive(Debug, Clone)]

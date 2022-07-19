@@ -32,7 +32,7 @@ use crate::pipelines::processors::AsyncSource;
 use crate::pipelines::processors::AsyncSourcer;
 use crate::pipelines::Pipe;
 use crate::pipelines::Pipeline;
-use crate::sessions::query_ctx::TableContext;
+use crate::sessions::TableContext;
 use crate::storages::github::RepoCommentsTable;
 use crate::storages::github::RepoInfoTable;
 use crate::storages::github::RepoIssuesTable;

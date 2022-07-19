@@ -24,7 +24,7 @@ use common_planners::PartInfoPtr;
 use common_planners::Partitions;
 use common_planners::Statistics;
 
-use crate::sessions::query_ctx::TableContext;
+use crate::sessions::TableContext;
 use crate::storages::fuse::fuse_part::ColumnMeta;
 use crate::storages::fuse::fuse_part::FusePartInfo;
 use crate::storages::fuse::pruning::BlockPruner;

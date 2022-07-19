@@ -25,7 +25,7 @@ use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 use common_meta_types::UserInfo;
 
-use crate::sessions::query_ctx::TableContext;
+use crate::sessions::TableContext;
 use crate::storages::system::table::AsyncOneBlockSystemTable;
 use crate::storages::system::table::AsyncSystemTable;
 use crate::storages::Table;

@@ -35,8 +35,8 @@ use super::SelectInterpreter;
 use crate::interpreters::Interpreter;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::Pipeline;
-use crate::sessions::query_ctx::TableContext;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::storages::stage::StageSourceHelper;
 use crate::storages::stage::StageTable;
 

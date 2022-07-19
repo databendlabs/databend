@@ -23,8 +23,8 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
-use crate::sessions::query_ctx::TableContext;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 
 pub struct ShowGrantsInterpreter {
     ctx: Arc<QueryContext>,

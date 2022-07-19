@@ -32,7 +32,7 @@ use common_planners::Expressions;
 use common_planners::RequireColumnsVisitor;
 
 use crate::pipelines::processors::transforms::ExpressionExecutor;
-use crate::sessions::query_ctx::TableContext;
+use crate::sessions::TableContext;
 
 #[derive(Clone)]
 pub struct ClusterKeyInfo {

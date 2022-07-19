@@ -25,7 +25,7 @@ use common_fuse_meta::meta::BlockMeta;
 use common_planners::Expression;
 use serde_json::json;
 
-use crate::sessions::query_ctx::TableContext;
+use crate::sessions::TableContext;
 use crate::storages::fuse::io::MetaReaders;
 use crate::storages::fuse::FuseTable;
 use crate::storages::Table;

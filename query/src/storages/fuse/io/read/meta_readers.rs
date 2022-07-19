@@ -30,7 +30,7 @@ use super::cached_reader::CachedReader;
 use super::cached_reader::HasTenantLabel;
 use super::cached_reader::Loader;
 use super::versioned_reader::VersionedReader;
-use crate::sessions::query_ctx::TableContext;
+use crate::sessions::TableContext;
 use crate::storages::fuse::io::TableMetaLocationGenerator;
 
 /// Provider of [BufReader]

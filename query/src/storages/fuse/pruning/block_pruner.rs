@@ -29,7 +29,7 @@ use common_tracing::tracing;
 use futures::StreamExt;
 use futures::TryStreamExt;
 
-use crate::sessions::query_ctx::TableContext;
+use crate::sessions::TableContext;
 use crate::storages::fuse::io::MetaReaders;
 use crate::storages::index::RangeFilter;
 

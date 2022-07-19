@@ -27,8 +27,8 @@ use sqlparser::ast::Expr;
 use sqlparser::ast::OffsetRows;
 use sqlparser::ast::SelectItem;
 
-use crate::sessions::query_ctx::TableContext;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::sql::statements::analyzer_expr::ExpressionAnalyzer;
 use crate::sql::statements::query::QueryASTIR;
 use crate::sql::statements::DfQueryStatement;

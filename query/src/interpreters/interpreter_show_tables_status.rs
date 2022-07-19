@@ -25,8 +25,8 @@ use crate::catalogs::DatabaseCatalog;
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreter;
 use crate::optimizers::Optimizers;
-use crate::sessions::query_ctx::TableContext;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::sql::PlanParser;
 
 pub struct ShowTablesStatusInterpreter {

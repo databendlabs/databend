@@ -38,8 +38,8 @@ use common_exception::Result;
 use futures::Stream;
 use futures::StreamExt;
 
-use crate::sessions::query_ctx::TableContext;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 
 pub enum FragmentData {
     End(usize),

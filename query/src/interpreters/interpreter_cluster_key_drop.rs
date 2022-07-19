@@ -22,8 +22,8 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
 use super::Interpreter;
-use crate::sessions::query_ctx::TableContext;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 
 pub struct DropTableClusterKeyInterpreter {
     ctx: Arc<QueryContext>,

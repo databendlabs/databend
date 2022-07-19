@@ -22,8 +22,8 @@ use common_planners::ReadDataSourcePlan;
 use common_planners::SourceInfo;
 use futures::StreamExt;
 
-use crate::sessions::query_ctx::TableContext;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::storages::result::ResultTable;
 use crate::storages::Table;
 use crate::storages::TableStreamReadWrap;

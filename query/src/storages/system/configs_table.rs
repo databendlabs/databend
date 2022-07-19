@@ -24,7 +24,7 @@ use common_meta_app::schema::TableMeta;
 use itertools::Itertools;
 use serde_json::Value;
 
-use crate::sessions::query_ctx::TableContext;
+use crate::sessions::TableContext;
 use crate::storages::system::table::SyncOneBlockSystemTable;
 use crate::storages::system::table::SyncSystemTable;
 use crate::storages::Table;

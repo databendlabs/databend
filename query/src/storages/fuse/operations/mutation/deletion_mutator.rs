@@ -24,7 +24,7 @@ use common_fuse_meta::meta::SegmentInfo;
 use common_fuse_meta::meta::TableSnapshot;
 use opendal::Operator;
 
-use crate::sessions::query_ctx::TableContext;
+use crate::sessions::TableContext;
 use crate::storages::fuse::io::write_meta;
 use crate::storages::fuse::io::BlockWriter;
 use crate::storages::fuse::io::MetaReaders;

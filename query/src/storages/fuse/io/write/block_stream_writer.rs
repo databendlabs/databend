@@ -29,7 +29,7 @@ use opendal::Operator;
 
 use super::block_writer;
 use crate::pipelines::processors::transforms::ExpressionExecutor;
-use crate::sessions::query_ctx::TableContext;
+use crate::sessions::TableContext;
 use crate::storages::fuse::io::TableMetaLocationGenerator;
 use crate::storages::fuse::operations::column_metas;
 use crate::storages::fuse::statistics::accumulator::BlockStatistics;

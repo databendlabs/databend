@@ -15,7 +15,7 @@
 use common_base::base::tokio;
 use common_exception::Result;
 use databend_query::interpreters::*;
-use databend_query::sessions::query_ctx::TableContext;
+use databend_query::sessions::TableContext;
 use databend_query::sql::*;
 use futures::TryStreamExt;
 use pretty_assertions::assert_eq;

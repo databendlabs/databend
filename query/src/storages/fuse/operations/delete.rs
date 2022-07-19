@@ -21,7 +21,7 @@ use common_planners::Expression;
 use common_planners::Extras;
 use common_tracing::tracing::debug;
 
-use crate::sessions::query_ctx::TableContext;
+use crate::sessions::TableContext;
 use crate::storages::fuse::operations::mutation::delete_from_block;
 use crate::storages::fuse::operations::mutation::deletion_mutator::Deletion;
 use crate::storages::fuse::operations::mutation::deletion_mutator::DeletionMutator;

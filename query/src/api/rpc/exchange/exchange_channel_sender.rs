@@ -37,8 +37,8 @@ use crate::api::rpc::packets::PrecommitBlock;
 use crate::api::rpc::packets::ProgressInfo;
 use crate::api::FlightClient;
 use crate::api::InitNodesChannelPacket;
-use crate::sessions::query_ctx::TableContext;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::Config;
 
 pub struct ExchangeSender {

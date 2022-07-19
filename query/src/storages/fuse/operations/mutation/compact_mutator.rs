@@ -22,7 +22,7 @@ use common_fuse_meta::meta::TableSnapshot;
 use opendal::Operator;
 
 use super::block_filter::all_the_columns_ids;
-use crate::sessions::query_ctx::TableContext;
+use crate::sessions::TableContext;
 use crate::storages::fuse::io::BlockCompactor;
 use crate::storages::fuse::io::BlockWriter;
 use crate::storages::fuse::io::MetaReaders;

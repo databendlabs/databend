@@ -37,8 +37,8 @@ use sqlparser::ast::OnInsert;
 use sqlparser::ast::Query;
 use sqlparser::ast::SqliteOnConflict;
 
-use crate::sessions::query_ctx::TableContext;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
 use crate::sql::statements::DfQueryStatement;

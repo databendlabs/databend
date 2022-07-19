@@ -157,7 +157,9 @@ pub trait Catalog: DynClone + Send + Sync {
         _func_name: &str,
         _tbl_args: TableArgs,
     ) -> Result<Arc<dyn TableFunction>> {
-        unimplemented!()
+        Err(ErrorCode::UnImplement(
+            "'get_table_function' not implemented",
+        ))
     }
 
     // Get table engines

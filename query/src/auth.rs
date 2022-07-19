@@ -21,8 +21,8 @@ use common_meta_types::UserInfo;
 use common_users::JwtAuthenticator;
 use common_users::UserApiProvider;
 
-use crate::sessions::query_ctx::TableContext;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 pub use crate::Config;
 
 pub struct AuthMgr {

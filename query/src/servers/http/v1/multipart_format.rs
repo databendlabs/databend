@@ -30,8 +30,8 @@ use crate::servers::http::v1::parallel_format_source::ParallelInputFormatSource;
 use crate::servers::http::v1::parallel_format_source::ParallelMultipartWorker;
 use crate::servers::http::v1::sequential_format_source::SequentialInputFormatSource;
 use crate::servers::http::v1::sequential_format_source::SequentialMultipartWorker;
-use crate::sessions::query_ctx::TableContext;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 
 #[async_trait::async_trait]
 pub trait MultipartWorker: Send {

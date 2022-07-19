@@ -27,8 +27,8 @@ use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::interpreters::InterpreterQueryLog;
 use crate::pipelines::SourcePipeBuilder;
-use crate::sessions::query_ctx::TableContext;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 
 pub struct InterceptorInterpreter {
     ctx: Arc<QueryContext>,

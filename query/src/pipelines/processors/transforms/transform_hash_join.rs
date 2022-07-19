@@ -27,8 +27,8 @@ use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::transforms::hash_join::HashJoinState;
 use crate::pipelines::processors::Processor;
 use crate::pipelines::processors::Sink;
-use crate::sessions::query_ctx::TableContext;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 
 pub struct SinkBuildHashTable {
     join_state: Arc<dyn HashJoinState>,

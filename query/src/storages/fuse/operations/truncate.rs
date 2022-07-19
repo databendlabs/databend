@@ -23,7 +23,7 @@ use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_types::MatchSeq;
 use uuid::Uuid;
 
-use crate::sessions::query_ctx::TableContext;
+use crate::sessions::TableContext;
 use crate::sql::OPT_KEY_SNAPSHOT_LOCATION;
 use crate::storages::fuse::FuseTable;
 

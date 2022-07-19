@@ -27,8 +27,8 @@ use common_tracing::tracing::warn;
 use futures::TryStreamExt;
 use regex::Regex;
 
-use crate::sessions::query_ctx::TableContext;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::storages::stage::StageSourceHelper;
 
 pub async fn validate_grant_object_exists(

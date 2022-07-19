@@ -26,7 +26,7 @@ use common_fuse_meta::meta::SegmentInfo;
 use common_fuse_meta::meta::Statistics;
 use common_fuse_meta::meta::TableSnapshot;
 use common_fuse_meta::meta::Versioned;
-use databend_query::sessions::query_ctx::TableContext;
+use databend_query::sessions::TableContext;
 use databend_query::storages::fuse::io::SegmentWriter;
 use databend_query::storages::fuse::io::TableMetaLocationGenerator;
 use databend_query::storages::fuse::operations::DeletionMutator;

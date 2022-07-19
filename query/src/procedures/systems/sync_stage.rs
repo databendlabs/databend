@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
@@ -25,6 +24,7 @@ use crate::interpreters::list_files_from_dal;
 use crate::procedures::Procedure;
 use crate::procedures::ProcedureFeatures;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 
 pub struct SyncStageFileProcedure;
 

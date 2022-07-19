@@ -20,8 +20,8 @@ use common_exception::Result;
 use common_functions::is_builtin_function;
 use common_planners::Expression;
 
-use crate::sessions::query_ctx::TableContext;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 
 pub struct ContextFunction;
 

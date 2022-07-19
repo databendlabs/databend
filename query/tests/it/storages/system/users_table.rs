@@ -20,7 +20,7 @@ use common_meta_types::UserGrantSet;
 use common_meta_types::UserInfo;
 use common_meta_types::UserOption;
 use common_meta_types::UserQuota;
-use databend_query::sessions::query_ctx::TableContext;
+use databend_query::sessions::TableContext;
 use databend_query::storages::system::UsersTable;
 use databend_query::storages::TableStreamReadWrap;
 use databend_query::storages::ToReadDataSourcePlan;

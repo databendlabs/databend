@@ -20,7 +20,7 @@ use common_meta_app::schema::TableStatistics;
 use common_planners::OptimizeTablePlan;
 
 use super::mutation::CompactMutator;
-use crate::sessions::query_ctx::TableContext;
+use crate::sessions::TableContext;
 use crate::storages::fuse::FuseTable;
 use crate::storages::fuse::DEFAULT_BLOCK_PER_SEGMENT;
 use crate::storages::fuse::DEFAULT_ROW_PER_BLOCK;

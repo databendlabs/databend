@@ -28,8 +28,8 @@ use sqlparser::ast::Expr;
 use sqlparser::ast::ObjectName;
 
 use super::analyzer_expr::ExpressionAnalyzer;
-use crate::sessions::query_ctx::TableContext;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
 

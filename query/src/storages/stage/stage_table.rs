@@ -37,7 +37,7 @@ use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::TransformLimit;
 use crate::pipelines::Pipeline;
 use crate::pipelines::SourcePipeBuilder;
-use crate::sessions::query_ctx::TableContext;
+use crate::sessions::TableContext;
 use crate::storages::Table;
 
 pub struct StageTable {

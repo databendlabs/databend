@@ -26,8 +26,8 @@ use common_meta_types::UserOptionFlag;
 
 use crate::procedures::Procedure;
 use crate::procedures::ProcedureFeatures;
-use crate::sessions::query_ctx::TableContext;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 
 pub struct TenantQuotaProcedure;
 

@@ -22,7 +22,7 @@ use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 
 use crate::clusters::ClusterHelper;
-use crate::sessions::query_ctx::TableContext;
+use crate::sessions::TableContext;
 use crate::storages::system::table::SyncOneBlockSystemTable;
 use crate::storages::system::table::SyncSystemTable;
 use crate::storages::Table;

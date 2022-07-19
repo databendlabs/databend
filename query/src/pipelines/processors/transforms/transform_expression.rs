@@ -25,7 +25,7 @@ use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::transforms::transform::Transform;
 use crate::pipelines::processors::transforms::transform::Transformer;
 use crate::pipelines::processors::transforms::ExpressionExecutor;
-use crate::sessions::query_ctx::TableContext;
+use crate::sessions::TableContext;
 
 pub type ProjectionTransform = ExpressionTransformImpl<true>;
 pub type ExpressionTransform = ExpressionTransformImpl<false>;

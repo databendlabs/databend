@@ -19,8 +19,8 @@ use common_planners::PlanNode;
 use common_planners::ShowPlan;
 use common_tracing::tracing;
 
-use crate::sessions::query_ctx::TableContext;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
 use crate::sql::statements::DfShowKind;

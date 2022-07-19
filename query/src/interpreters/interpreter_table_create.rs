@@ -29,8 +29,8 @@ use common_streams::SendableDataBlockStream;
 
 use super::InsertInterpreter;
 use crate::interpreters::Interpreter;
-use crate::sessions::query_ctx::TableContext;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::storages::StorageDescription;
 
 pub struct CreateTableInterpreter {

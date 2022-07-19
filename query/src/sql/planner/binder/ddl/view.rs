@@ -20,7 +20,7 @@ use common_planners::AlterViewPlan;
 use common_planners::CreateViewPlan;
 use common_planners::DropViewPlan;
 
-use crate::sessions::query_ctx::TableContext;
+use crate::sessions::TableContext;
 use crate::sql::binder::Binder;
 use crate::sql::plans::Plan;
 

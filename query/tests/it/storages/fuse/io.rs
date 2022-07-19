@@ -23,7 +23,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_fuse_meta::meta::TableSnapshot;
 use common_fuse_meta::meta::Versioned;
-use databend_query::sessions::query_ctx::TableContext;
+use databend_query::sessions::TableContext;
 use databend_query::storages::fuse::io::write_block;
 use databend_query::storages::fuse::io::BlockCompactor;
 use databend_query::storages::fuse::io::BlockReader;

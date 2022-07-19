@@ -26,7 +26,7 @@ use common_exception::Result;
 use common_meta_types::UserIdentity;
 use common_planners::ReadDataSourcePlan;
 use common_planners::SourceInfo;
-use databend_query::sessions::query_ctx::TableContext;
+use databend_query::sessions::TableContext;
 use databend_query::storages::result::ResultQueryInfo;
 use databend_query::storages::result::ResultTable;
 use databend_query::storages::result::ResultTableWriter;

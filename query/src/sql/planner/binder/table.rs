@@ -30,7 +30,7 @@ use common_exception::Result;
 use common_planners::Expression;
 
 use crate::catalogs::CATALOG_DEFAULT;
-use crate::sessions::query_ctx::TableContext;
+use crate::sessions::TableContext;
 use crate::sql::binder::scalar::ScalarBinder;
 use crate::sql::binder::Binder;
 use crate::sql::binder::ColumnBinding;

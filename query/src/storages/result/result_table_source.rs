@@ -26,7 +26,7 @@ use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::Event;
 use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::Processor;
-use crate::sessions::query_ctx::TableContext;
+use crate::sessions::TableContext;
 use crate::storages::fuse::io::BlockReader;
 use crate::storages::result::result_table_source::State::Generated;
 

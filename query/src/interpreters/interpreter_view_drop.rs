@@ -25,8 +25,8 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
-use crate::sessions::query_ctx::TableContext;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::storages::view::view_table::VIEW_ENGINE;
 
 pub struct DropViewInterpreter {

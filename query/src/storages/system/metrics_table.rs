@@ -25,7 +25,7 @@ use common_meta_app::schema::TableMeta;
 use common_metrics::MetricValue;
 use serde_json;
 
-use crate::sessions::query_ctx::TableContext;
+use crate::sessions::TableContext;
 use crate::storages::system::table::SyncOneBlockSystemTable;
 use crate::storages::system::table::SyncSystemTable;
 use crate::storages::Table;

@@ -39,7 +39,7 @@ use common_tracing::tracing::info;
 use common_tracing::tracing::warn;
 use uuid::Uuid;
 
-use crate::sessions::query_ctx::TableContext;
+use crate::sessions::TableContext;
 use crate::sql::OPT_KEY_LEGACY_SNAPSHOT_LOC;
 use crate::sql::OPT_KEY_SNAPSHOT_LOCATION;
 use crate::storages::fuse::operations::AppendOperationLogEntry;
@@ -337,7 +337,7 @@ mod utils {
     use std::collections::BTreeMap;
 
     use super::*;
-    use crate::sessions::query_ctx::TableContext;
+    use crate::sessions::TableContext;
     #[inline]
     pub async fn abort_operations(
         ctx: &dyn TableContext,

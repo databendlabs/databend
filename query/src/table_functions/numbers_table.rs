@@ -43,7 +43,7 @@ use crate::pipelines::processors::SyncSourcer;
 use crate::pipelines::Pipe;
 use crate::pipelines::Pipeline;
 use crate::pipelines::SourcePipeBuilder;
-use crate::sessions::query_ctx::TableContext;
+use crate::sessions::TableContext;
 use crate::storages::Table;
 use crate::table_functions::generate_numbers_parts;
 use crate::table_functions::numbers_part::NumbersPartInfo;

@@ -19,8 +19,8 @@ use common_exception::Result;
 use common_planners::PlanNode;
 use common_planners::ShowPlan;
 
-use crate::sessions::query_ctx::TableContext;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 
 pub struct ManagementModeAccess {
     ctx: Arc<QueryContext>,

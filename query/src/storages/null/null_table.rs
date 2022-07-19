@@ -39,7 +39,7 @@ use crate::pipelines::processors::SyncSourcer;
 use crate::pipelines::Pipe;
 use crate::pipelines::Pipeline;
 use crate::pipelines::SinkPipeBuilder;
-use crate::sessions::query_ctx::TableContext;
+use crate::sessions::TableContext;
 use crate::storages::StorageContext;
 use crate::storages::StorageDescription;
 use crate::storages::Table;

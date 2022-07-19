@@ -41,7 +41,7 @@ use crate::pipelines::processors::AsyncSource;
 use crate::pipelines::processors::AsyncSourcer;
 use crate::pipelines::Pipe;
 use crate::pipelines::Pipeline;
-use crate::sessions::query_ctx::TableContext;
+use crate::sessions::TableContext;
 use crate::storages::Table;
 use crate::table_functions::table_function_factory::TableArgs;
 use crate::table_functions::TableFunction;

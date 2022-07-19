@@ -23,7 +23,7 @@ use common_meta_types::UserGrantSet;
 use common_meta_types::UserInfo;
 use common_meta_types::UserPrivilegeType;
 use databend_query::interpreters::*;
-use databend_query::sessions::query_ctx::TableContext;
+use databend_query::sessions::TableContext;
 use databend_query::sql::PlanParser;
 use futures::stream::StreamExt;
 use pretty_assertions::assert_eq;

@@ -21,7 +21,7 @@ use common_meta_types::StageType;
 use common_meta_types::UserStageInfo;
 use common_storage::StorageParams;
 use common_storage::StorageS3Config;
-use databend_query::sessions::query_ctx::TableContext;
+use databend_query::sessions::TableContext;
 use databend_query::sql::statements::parse_stage_location;
 use databend_query::sql::statements::parse_uri_location;
 use pretty_assertions::assert_eq;

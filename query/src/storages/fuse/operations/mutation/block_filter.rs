@@ -24,7 +24,7 @@ use common_fuse_meta::meta::BlockMeta;
 use common_planners::Expression;
 
 use crate::pipelines::processors::transforms::ExpressionExecutor;
-use crate::sessions::query_ctx::TableContext;
+use crate::sessions::TableContext;
 use crate::storages::fuse::operations::mutation::deletion_mutator::Deletion;
 use crate::storages::fuse::FuseTable;
 

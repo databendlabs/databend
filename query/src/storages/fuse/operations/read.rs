@@ -31,7 +31,7 @@ use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::Processor;
 use crate::pipelines::Pipeline;
 use crate::pipelines::SourcePipeBuilder;
-use crate::sessions::query_ctx::TableContext;
+use crate::sessions::TableContext;
 use crate::storages::fuse::io::BlockReader;
 use crate::storages::fuse::operations::read::State::Generated;
 use crate::storages::fuse::FuseTable;

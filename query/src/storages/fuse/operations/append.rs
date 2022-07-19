@@ -33,7 +33,7 @@ use crate::pipelines::processors::TransformCompact;
 use crate::pipelines::processors::TransformSortPartial;
 use crate::pipelines::Pipeline;
 use crate::pipelines::SinkPipeBuilder;
-use crate::sessions::query_ctx::TableContext;
+use crate::sessions::TableContext;
 use crate::storages::fuse::io::write_meta;
 use crate::storages::fuse::io::BlockStreamWriter;
 use crate::storages::fuse::operations::AppendOperationLogEntry;

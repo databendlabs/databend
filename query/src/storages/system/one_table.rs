@@ -24,7 +24,7 @@ use common_planners::Extras;
 use common_planners::Partitions;
 use common_planners::Statistics;
 
-use crate::sessions::query_ctx::TableContext;
+use crate::sessions::TableContext;
 use crate::storages::system::table::SyncOneBlockSystemTable;
 use crate::storages::system::table::SyncSystemTable;
 use crate::storages::Table;

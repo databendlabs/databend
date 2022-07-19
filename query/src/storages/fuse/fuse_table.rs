@@ -43,7 +43,7 @@ use futures::StreamExt;
 use uuid::Uuid;
 
 use crate::pipelines::Pipeline;
-use crate::sessions::query_ctx::TableContext;
+use crate::sessions::TableContext;
 use crate::sql::PlanParser;
 use crate::sql::OPT_KEY_DATABASE_ID;
 use crate::sql::OPT_KEY_LEGACY_SNAPSHOT_LOC;

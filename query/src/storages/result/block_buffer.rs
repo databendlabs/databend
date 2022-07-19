@@ -21,8 +21,8 @@ use common_datablocks::DataBlock;
 use common_exception::Result;
 use common_planners::PartInfoPtr;
 
-use crate::sessions::query_ctx::TableContext;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::storages::fuse::io::BlockReader;
 use crate::storages::result::ResultQueryInfo;
 use crate::storages::result::ResultTableWriter;

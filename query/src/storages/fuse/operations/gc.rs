@@ -25,7 +25,7 @@ use common_tracing::tracing::warn;
 use futures::TryStreamExt;
 use opendal::Operator;
 
-use crate::sessions::query_ctx::TableContext;
+use crate::sessions::TableContext;
 use crate::storages::fuse::io::MetaReaders;
 use crate::storages::fuse::FuseTable;
 

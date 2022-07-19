@@ -26,7 +26,7 @@ use common_meta_types::StageType;
 
 use super::table::AsyncOneBlockSystemTable;
 use super::table::AsyncSystemTable;
-use crate::sessions::query_ctx::TableContext;
+use crate::sessions::TableContext;
 use crate::storages::Table;
 
 pub struct StagesTable {

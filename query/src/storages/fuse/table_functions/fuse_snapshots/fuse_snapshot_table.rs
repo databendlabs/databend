@@ -36,7 +36,7 @@ use crate::pipelines::processors::AsyncSource;
 use crate::pipelines::processors::AsyncSourcer;
 use crate::pipelines::Pipe;
 use crate::pipelines::Pipeline;
-use crate::sessions::query_ctx::TableContext;
+use crate::sessions::TableContext;
 use crate::storages::fuse::table_functions::string_literal;
 use crate::storages::fuse::FuseTable;
 use crate::storages::Table;

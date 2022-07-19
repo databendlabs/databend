@@ -20,8 +20,8 @@ use common_planners::PlanNode;
 use common_tracing::tracing;
 
 use super::AnalyzableStatement;
-use crate::sessions::query_ctx::TableContext;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::sql::statements::AnalyzedResult;
 
 #[derive(Debug, Clone, PartialEq, Eq)]

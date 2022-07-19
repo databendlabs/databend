@@ -15,7 +15,7 @@
 use common_base::base::tokio;
 use common_exception::Result;
 use common_meta_types::UserStageInfo;
-use databend_query::sessions::query_ctx::TableContext;
+use databend_query::sessions::TableContext;
 use databend_query::storages::system::StagesTable;
 use databend_query::storages::TableStreamReadWrap;
 use databend_query::storages::ToReadDataSourcePlan;

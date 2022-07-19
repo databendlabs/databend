@@ -35,7 +35,7 @@ use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::Deserializer;
 use crate::pipelines::processors::MultiFileSplitter;
 use crate::pipelines::processors::OperatorInfo;
-use crate::sessions::query_ctx::TableContext;
+use crate::sessions::TableContext;
 
 pub struct StageSourceHelper {
     ctx: Arc<dyn TableContext>,
