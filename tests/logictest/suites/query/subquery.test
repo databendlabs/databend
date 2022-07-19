@@ -1,6 +1,13 @@
 statement ok
+set enable_planner_v2 = 1;
+
+statement ok
 CREATE TABLE c (c_id INT NULL, bill VARCHAR NULL);
+
+statement ok
 CREATE TABLE o (o_id INT NULL, c_id INT NULL, ship VARCHAR NULL);
+
+statement ok
 INSERT INTO c VALUES
     (1, 'CA'),
     (2, 'TX'),
@@ -8,6 +15,8 @@ INSERT INTO c VALUES
     (4, 'TX'),
     (5, NULL),
     (6, 'FL');
+
+statement ok
 INSERT INTO o VALUES
     (10, 1, 'CA'), (20, 1, 'CA'), (30, 1, 'CA'),
     (40, 2, 'CA'), (50, 2, 'TX'), (60, 2, NULL),
@@ -287,4 +296,9 @@ SELECT c_id, bill = ALL(SELECT ship FROM o WHERE o.c_id=c.c_id) FROM c ORDER BY 
 
 statement ok
 drop table o;
+
+statement ok
 drop table c;
+
+statement ok
+set enable_planner_v2 = 0;
