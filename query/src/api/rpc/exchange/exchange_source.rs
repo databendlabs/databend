@@ -20,9 +20,9 @@ use common_exception::Result;
 use crate::api::rpc::exchange::exchange_params::ExchangeParams;
 use crate::api::rpc::exchange::exchange_source_merge::ExchangeMergeSource;
 use crate::api::rpc::exchange::exchange_source_shuffle::ExchangeShuffleSource;
-use crate::pipelines::new::processors::port::OutputPort;
-use crate::pipelines::new::NewPipeline;
-use crate::pipelines::new::SourcePipeBuilder;
+use crate::pipelines::processors::port::OutputPort;
+use crate::pipelines::Pipeline;
+use crate::pipelines::SourcePipeBuilder;
 
 pub struct ExchangeSource {}
 
@@ -30,7 +30,7 @@ impl ExchangeSource {
     pub fn via_exchange(
         rx: Receiver<Result<FlightData>>,
         params: &ExchangeParams,
-        pipeline: &mut NewPipeline,
+        pipeline: &mut Pipeline,
     ) -> Result<()> {
         pipeline.add_transform(|transform_input_port, transform_output_port| {
             ExchangeShuffleSource::try_create(
@@ -45,7 +45,7 @@ impl ExchangeSource {
     pub fn create_source(
         rx: Receiver<Result<FlightData>>,
         schema: DataSchemaRef,
-        pipeline: &mut NewPipeline,
+        pipeline: &mut Pipeline,
         parallel_size: usize,
     ) -> Result<()> {
         let mut source_builder = SourcePipeBuilder::create();

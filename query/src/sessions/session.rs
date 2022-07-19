@@ -16,9 +16,11 @@ use std::net::SocketAddr;
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 
+use chrono_tz::Tz;
 use common_base::mem_allocator::malloc_size;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_io::prelude::FormatSettings;
 use common_macros::MallocSizeOf;
 use common_meta_types::GrantObject;
 use common_meta_types::UserInfo;
@@ -64,7 +66,8 @@ impl Session {
     ) -> Result<Arc<Session>> {
         let session_ctx = Arc::new(SessionContext::try_create(conf.clone())?);
         let user_api = session_mgr.get_user_api_provider();
-        let session_settings = Settings::try_create(&conf, user_api, session_ctx.clone())?;
+        let session_settings =
+            Settings::try_create(&conf, user_api, session_ctx.get_current_tenant()).await?;
         let ref_count = Arc::new(AtomicUsize::new(0));
         let status = Arc::new(Default::default());
         Ok(Arc::new(Session {
@@ -151,6 +154,34 @@ impl Session {
         self.session_ctx
             .set_query_context_shared(Some(shared.clone()));
         Ok(shared)
+    }
+
+    pub fn get_format_settings(&self) -> Result<FormatSettings> {
+        let settings = &self.session_settings;
+        let mut format = FormatSettings::default();
+        if let SessionType::HTTPQuery = self.get_type() {
+            format.false_bytes = vec![b'f', b'a', b'l', b's', b'e'];
+            format.true_bytes = vec![b't', b'r', b'u', b'e'];
+        }
+        {
+            format.record_delimiter = settings.get_record_delimiter()?;
+            format.field_delimiter = settings.get_field_delimiter()?;
+            format.empty_as_default = settings.get_empty_as_default()? > 0;
+            format.skip_header = settings.get_skip_header()? > 0;
+
+            let tz = String::from_utf8(settings.get_timezone()?).map_err(|_| {
+                ErrorCode::LogicalError("Timezone has been checked and should be valid.")
+            })?;
+            format.timezone = tz.parse::<Tz>().map_err(|_| {
+                ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
+            })?;
+
+            let compress = String::from_utf8(settings.get_compression()?).map_err(|_| {
+                ErrorCode::UnknownCompressionType("Compress type must be valid utf-8")
+            })?;
+            format.compression = compress.parse()?
+        }
+        Ok(format)
     }
 
     pub fn get_current_query_id(&self) -> Option<String> {

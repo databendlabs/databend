@@ -270,7 +270,7 @@ impl<'a> Binder {
             _ => {
                 return Err(ErrorCode::UnImplement(format!(
                     "UnImplemented stmt {stmt} in binder"
-                )))
+                )));
             }
         };
         Ok(plan)

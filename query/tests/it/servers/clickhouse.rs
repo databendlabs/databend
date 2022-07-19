@@ -242,7 +242,7 @@ async fn execute(client: &mut Connection, query: &str) -> Result<()> {
     }
 }
 
-//block contains table name
+// block contains table name
 async fn insert<'a>(client: &mut Connection, block: &Block<'a>) -> Result<()> {
     match client.insert(block).await {
         Ok(mut isrt) => isrt
@@ -257,7 +257,10 @@ async fn insert<'a>(client: &mut Connection, block: &Block<'a>) -> Result<()> {
 }
 
 async fn create_conn(port: u16) -> Result<Connection> {
-    let url = format!("tcp://default:@127.0.0.1:{}/default?compression=lz4&ping_timeout=10s&connection_timeout=20s", port);
+    let url = format!(
+        "tcp://default:@127.0.0.1:{}/default?compression=lz4&ping_timeout=10s&connection_timeout=20s",
+        port
+    );
     let pool = Pool::create(url).map_err(|err| ErrorCode::UnknownException(err.to_string()))?;
     let c = pool.connection().await;
 

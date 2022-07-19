@@ -24,10 +24,7 @@ pub use index_min_max::MinMaxIndex;
 pub use index_sparse::SparseIndex;
 pub use index_sparse::SparseIndexValue;
 pub use range_filter::ClusterKeyInfo;
-pub use range_filter::ClusterStatistics;
-pub use range_filter::ColumnStatistics;
 pub use range_filter::RangeFilter;
-pub use range_filter::StatisticsOfColumns;
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum IndexSchemaVersion {

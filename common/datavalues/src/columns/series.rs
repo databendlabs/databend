@@ -99,7 +99,7 @@ impl Series {
 
     pub fn remove_nullable(column: &ColumnRef) -> ColumnRef {
         if column.is_nullable() {
-            //constant nullable ?
+            // constant nullable ?
             if column.is_const() {
                 let col: &ConstColumn = unsafe { Self::static_cast(column) };
                 let inner = Self::remove_nullable(col.inner());
@@ -118,7 +118,7 @@ impl Series {
         let is_nullable = columns[0].is_nullable();
         let arrays = columns
             .iter()
-            .map(|c| c.as_arrow_array())
+            .map(|c| c.as_arrow_array(c.data_type()))
             .collect::<Vec<_>>();
 
         let arrays = arrays.iter().map(|a| a.as_ref()).collect::<Vec<_>>();

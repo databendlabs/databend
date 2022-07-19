@@ -337,7 +337,7 @@ impl<T: ExpressionRewriter> ExpressionVisitor for ExpressionRewriteVisitor<T> {
                                 "WindowFunction expects {} partition by arguments, actual {}",
                                 partition_by.len(),
                                 i
-                            )))
+                            )));
                         }
                     }
                 }
@@ -358,7 +358,7 @@ impl<T: ExpressionRewriter> ExpressionVisitor for ExpressionRewriteVisitor<T> {
                                 "WindowFunction expects {} partition by arguments, actual {}",
                                 partition_by.len(),
                                 i
-                            )))
+                            )));
                         }
                     }
                 }

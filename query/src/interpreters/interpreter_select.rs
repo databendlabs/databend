@@ -21,14 +21,16 @@ use common_planners::SelectPlan;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 
+use crate::clusters::ClusterHelper;
 use crate::interpreters::plan_schedulers;
 use crate::interpreters::stream::ProcessorExecutorStream;
 use crate::interpreters::Interpreter;
 use crate::optimizers::Optimizers;
-use crate::pipelines::new::executor::PipelinePullingExecutor;
-use crate::pipelines::new::NewPipeline;
-use crate::pipelines::new::QueryPipelineBuilder;
+use crate::pipelines::executor::PipelinePullingExecutor;
+use crate::pipelines::Pipeline;
+use crate::pipelines::QueryPipelineBuilder;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 
 /// SelectInterpreter struct which interprets SelectPlan
 pub struct SelectInterpreter {
@@ -81,8 +83,8 @@ impl Interpreter for SelectInterpreter {
     }
 
     /// This method will create a new pipeline
-    /// The QueryPipelineBuilder will use the optimized plan to generate a NewPipeline
-    async fn create_new_pipeline(&self) -> Result<NewPipeline> {
+    /// The QueryPipelineBuilder will use the optimized plan to generate a Pipeline
+    async fn create_new_pipeline(&self) -> Result<Pipeline> {
         match self.ctx.get_cluster().is_empty() {
             true => {
                 let settings = self.ctx.get_settings();

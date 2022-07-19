@@ -21,6 +21,10 @@ use std::sync::Arc;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_fuse_meta::meta::BlockMeta;
+use common_fuse_meta::meta::SegmentInfo;
+use common_fuse_meta::meta::StatisticsOfColumns;
+use common_fuse_meta::meta::TableSnapshot;
 use common_planners::Extras;
 use common_streams::ParquetSourceBuilder;
 use common_streams::Source;
@@ -28,16 +32,12 @@ use common_tracing::tracing;
 use futures::StreamExt;
 use futures::TryStreamExt;
 
-use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::storages::fuse::io::MetaReaders;
 use crate::storages::fuse::io::TableMetaLocationGenerator;
-use crate::storages::fuse::meta::BlockMeta;
-use crate::storages::fuse::meta::SegmentInfo;
-use crate::storages::fuse::meta::TableSnapshot;
 use crate::storages::index::BloomFilterExprEvalResult;
 use crate::storages::index::BloomFilterIndexer;
 use crate::storages::index::RangeFilter;
-use crate::storages::index::StatisticsOfColumns;
 
 pub struct BlockPruner {
     table_snapshot: Arc<TableSnapshot>,
@@ -52,21 +52,17 @@ impl BlockPruner {
     #[tracing::instrument(level = "debug", name="block_pruner_apply", skip(self, schema, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     pub async fn apply(
         &self,
-        ctx: &Arc<QueryContext>,
+        ctx: &Arc<dyn TableContext>,
         schema: DataSchemaRef,
         push_down: &Option<Extras>,
     ) -> Result<Vec<(usize, BlockMeta)>> {
         let block_pred: Pred = match push_down {
             Some(exprs) if !exprs.filters.is_empty() => {
-                // TODO `exprs`.filters should be typed as Option<Expression>
-                let range_filter =
-                    RangeFilter::try_create(ctx.clone(), &exprs.filters[0], schema.clone())?;
+                // for the time being, we only handle the first expr
+                let range_filter = RangeFilter::try_create(ctx.clone(), &exprs.filters[0], schema)?;
                 Box::new(move |v: &StatisticsOfColumns| range_filter.eval(v))
             }
-            _ => {
-                // TODO arrange a shortcut for this?
-                Box::new(|_: &StatisticsOfColumns| Ok(true))
-            }
+            _ => Box::new(|_: &StatisticsOfColumns| Ok(true)),
         };
 
         let segment_locs = self.table_snapshot.segments.clone();
@@ -115,7 +111,7 @@ impl BlockPruner {
                 let version = { u }.0; // use block expression to force moving
                 let idx = { idx }.0;
                 if accumulated_rows.load(Ordering::Acquire) < limit {
-                    let segment_reader = MetaReaders::segment_info_reader(ctx);
+                    let segment_reader = MetaReaders::segment_info_reader(ctx.as_ref());
                     let segment_info = segment_reader.read(seg_loc, None, version).await?;
                     let blocks = Self::filter_segment(
                         segment_info.as_ref(),

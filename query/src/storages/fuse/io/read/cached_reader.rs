@@ -18,11 +18,11 @@ use std::sync::Arc;
 use common_cache::Cache;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_fuse_meta::caches::CacheDeferMetrics;
+use common_fuse_meta::caches::MemoryCache;
+use common_fuse_meta::caches::TenantLabel;
 use common_tracing::tracing::log::warn;
 
-use crate::storages::fuse::cache::CacheDeferMetrics;
-use crate::storages::fuse::cache::MemoryCache;
-use crate::storages::fuse::cache::TenantLabel;
 use crate::storages::fuse::io::retry;
 use crate::storages::fuse::io::retry::Retryable;
 

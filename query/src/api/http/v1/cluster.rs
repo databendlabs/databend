@@ -21,8 +21,10 @@ use poem::web::Data;
 use poem::web::IntoResponse;
 use poem::web::Json;
 
+use crate::clusters::ClusterHelper;
 use crate::sessions::SessionManager;
 use crate::sessions::SessionType;
+use crate::sessions::TableContext;
 
 // GET /v1/cluster/list
 // list all nodes in current databend-query cluster

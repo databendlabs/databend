@@ -64,22 +64,22 @@ async fn test_plan_parser() -> Result<()> {
             error: "",
         },
         Test {
-            name:  "rename-database-passed",
+            name: "rename-database-passed",
             sql: "ALTER DATABASE IF EXISTS db1 RENAME TO db2",
             expect: "Rename database, [db1 to db2]",
-            error: ""
+            error: "",
         },
         Test {
-            name:  "rename-database-if-exists-passed",
+            name: "rename-database-if-exists-passed",
             sql: "ALTER DATABASE IF EXISTS db1 RENAME TO db2",
             expect: "Rename database, [db1 to db2]",
-            error: ""
+            error: "",
         },
         Test {
-            name:  "rename-database-to-immutable-passed",
+            name: "rename-database-to-immutable-passed",
             sql: "ALTER DATABASE IF EXISTS db1 RENAME TO system",
             expect: "Rename database, [db1 to system]",
-            error: ""
+            error: "",
         },
         Test {
             name: "create-table-passed",
@@ -289,8 +289,8 @@ async fn test_plan_parser() -> Result<()> {
             name: "select-without-table",
             sql: "SELECT *",
             expect: "",
-            error: "Code: 1065, displayText = SELECT * with no tables specified is not valid (while in analyze select projection)."
-        }
+            error: "Code: 1065, displayText = SELECT * with no tables specified is not valid (while in analyze select projection).",
+        },
     ];
 
     let ctx = crate::tests::create_query_context().await?;

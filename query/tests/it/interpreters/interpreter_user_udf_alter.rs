@@ -15,6 +15,7 @@
 use common_base::base::tokio;
 use common_exception::Result;
 use databend_query::interpreters::*;
+use databend_query::sessions::TableContext;
 use databend_query::sql::*;
 use futures::stream::StreamExt;
 use pretty_assertions::assert_eq;
@@ -27,8 +28,7 @@ async fn test_alter_udf_interpreter() -> Result<()> {
     let tenant = ctx.get_tenant();
 
     {
-        let query =
-            "CREATE FUNCTION IF NOT EXISTS isnotempty AS (p) -> not(is_null(p)) DESC = 'This is a description'";
+        let query = "CREATE FUNCTION IF NOT EXISTS isnotempty AS (p) -> not(is_null(p)) DESC = 'This is a description'";
         let plan = PlanParser::parse(ctx.clone(), query).await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "CreateUserUDFInterpreter");
@@ -46,8 +46,7 @@ async fn test_alter_udf_interpreter() -> Result<()> {
     }
 
     {
-        let query =
-        "ALTER FUNCTION isnotempty AS (d) -> not(is_not_null(d)) DESC = 'This is a new description'";
+        let query = "ALTER FUNCTION isnotempty AS (d) -> not(is_not_null(d)) DESC = 'This is a new description'";
         let plan = PlanParser::parse(ctx.clone(), query).await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "AlterUserUDFInterpreter");

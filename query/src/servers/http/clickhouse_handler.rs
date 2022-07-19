@@ -43,15 +43,17 @@ use poem::Route;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::clusters::ClusterHelper;
 use crate::interpreters::InterpreterFactory;
 use crate::interpreters::InterpreterFactoryV2;
-use crate::pipelines::new::processors::port::OutputPort;
-use crate::pipelines::new::processors::StreamSource;
-use crate::pipelines::new::SourcePipeBuilder;
+use crate::pipelines::processors::port::OutputPort;
+use crate::pipelines::processors::StreamSource;
+use crate::pipelines::SourcePipeBuilder;
 use crate::servers::clickhouse::CLickHouseFederated;
 use crate::servers::http::v1::HttpQueryContext;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionType;
+use crate::sessions::TableContext;
 use crate::sql::plans::Plan;
 use crate::sql::DfParser;
 use crate::sql::PlanParser;
@@ -437,9 +439,10 @@ fn get_default_format(
     let name = match &params.default_format {
         None => match headers.get("X-CLICKHOUSE-FORMAT") {
             None => "TSV",
-            Some(v) => v.to_str().map_err_to_code(ErrorCode::BadBytes, || {
-                "value of X-CLICKHOUSE-FORMAT is not string"
-            })?,
+            Some(v) => v.to_str().map_err_to_code(
+                ErrorCode::BadBytes,
+                || "value of X-CLICKHOUSE-FORMAT is not string",
+            )?,
         },
         Some(s) => s,
     };

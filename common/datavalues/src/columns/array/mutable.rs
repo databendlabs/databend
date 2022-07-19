@@ -127,7 +127,7 @@ impl MutableColumn for MutableArrayColumn {
                 return Err(ErrorCode::BadDataValueType(format!(
                     "DataValue Error: Cannot convert {:?} to Array",
                     value,
-                )))
+                )));
             }
         }
         self.add_offset(offset);

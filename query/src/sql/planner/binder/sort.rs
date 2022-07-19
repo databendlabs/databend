@@ -22,6 +22,7 @@ use common_ast::DisplayError;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+use crate::sessions::TableContext;
 use crate::sql::binder::scalar::ScalarBinder;
 use crate::sql::binder::select::SelectList;
 use crate::sql::binder::Binder;
@@ -178,7 +179,7 @@ impl<'a> Binder {
             {
                 if let (Some(table_name), Some(database_name)) = (table_name, database_name) {
                     let catalog_name = self.ctx.get_current_catalog();
-                    let catalog = self.ctx.get_catalog(catalog_name)?;
+                    let catalog = self.ctx.get_catalog(catalog_name.as_str())?;
                     catalog
                         .get_table(
                             &self.ctx.get_tenant(),

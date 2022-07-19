@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use chrono::DateTime;
 use chrono::TimeZone;
 use common_datavalues::chrono::Utc;
@@ -28,7 +30,8 @@ use serde::Serialize;
 
 use super::HttpQueryContext;
 use crate::sessions::SessionType;
-use crate::storages::stage::StageSource;
+use crate::sessions::TableContext;
+use crate::storages::stage::StageSourceHelper;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct UploadToStageResponse {
@@ -67,7 +70,8 @@ pub async fn upload_to_stage(
         .await
         .map_err(InternalServerError)?;
 
-    let op = StageSource::get_op(&context, &stage)
+    let rename_me_qry_ctx: Arc<dyn TableContext> = context.clone();
+    let op = StageSourceHelper::get_op(&rename_me_qry_ctx, &stage)
         .await
         .map_err(InternalServerError)?;
 

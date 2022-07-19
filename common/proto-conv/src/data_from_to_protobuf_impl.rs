@@ -93,7 +93,7 @@ impl FromToProto<pb::DataType> for dv::DataTypeImpl {
             None => {
                 return Err(Incompatible {
                     reason: "DataType is None".to_string(),
-                })
+                });
             }
             Some(x) => x,
         };

@@ -19,18 +19,18 @@ use std::sync::Arc;
 use common_cache::Cache;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_fuse_meta::meta::Location;
+use common_fuse_meta::meta::SnapshotId;
 use common_tracing::tracing::warn;
 use futures::TryStreamExt;
 use opendal::Operator;
 
-use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::storages::fuse::io::MetaReaders;
-use crate::storages::fuse::meta::Location;
-use crate::storages::fuse::meta::SnapshotId;
 use crate::storages::fuse::FuseTable;
 
 impl FuseTable {
-    pub async fn do_gc(&self, ctx: &Arc<QueryContext>, keep_last_snapshot: bool) -> Result<()> {
+    pub async fn do_gc(&self, ctx: &Arc<dyn TableContext>, keep_last_snapshot: bool) -> Result<()> {
         let r = self.read_table_snapshot(ctx.as_ref()).await;
         let snapshot_opt = match r {
             Err(e) if e.code() == ErrorCode::storage_not_found_code() => {
@@ -70,7 +70,7 @@ impl FuseTable {
                 // just drop the whole snapshot,
                 let snapshots = vec![(last_snapshot.snapshot_id, self.snapshot_format_version())];
                 let segments = HashSet::from_iter(last_snapshot.segments.clone());
-                self.purge_blocks(ctx, segments.iter(), &HashSet::new())
+                self.purge_blocks(ctx.as_ref(), segments.iter(), &HashSet::new())
                     .await?;
                 self.collect(ctx.as_ref(), segments, snapshots).await
             };
@@ -118,12 +118,12 @@ impl FuseTable {
         }
 
         let blocks_referenced_by_gc_root: HashSet<String> = self
-            .blocks_of(ctx, segments_referenced_by_gc_root.iter())
+            .blocks_of(ctx.as_ref(), segments_referenced_by_gc_root.iter())
             .await?;
 
         // removed un-referenced blocks
         self.purge_blocks(
-            ctx,
+            ctx.as_ref(),
             segments_to_be_deleted.iter(),
             &blocks_referenced_by_gc_root,
         )
@@ -139,7 +139,7 @@ impl FuseTable {
 
     async fn blocks_of(
         &self,
-        ctx: &QueryContext,
+        ctx: &dyn TableContext,
         segments: impl Iterator<Item = &Location>,
     ) -> Result<HashSet<String>> {
         let mut result = HashSet::new();
@@ -152,9 +152,7 @@ impl FuseTable {
                     // concurrent gc: someone else has already collected this segment, ignore it
                     warn!(
                         "concurrent gc: segment of location {} already collected. table: {}, ident {}",
-                        segment_location,
-                        self.table_info.desc,
-                        self.table_info.ident,
+                        segment_location, self.table_info.desc, self.table_info.ident,
                     );
                     continue;
                 }
@@ -173,7 +171,7 @@ impl FuseTable {
     /// - but NOT referenced by `root`
     async fn purge_blocks(
         &self,
-        ctx: &QueryContext,
+        ctx: &dyn TableContext,
         segments: impl Iterator<Item = &Location>,
         root: &HashSet<String>,
     ) -> Result<()> {
@@ -224,7 +222,7 @@ impl FuseTable {
     // collect in the sense of GC
     async fn collect(
         &self,
-        ctx: &QueryContext,
+        ctx: &dyn TableContext,
         segments_to_be_deleted: HashSet<Location>,
         snapshots_to_be_deleted: Vec<(SnapshotId, u64)>,
     ) -> Result<()> {

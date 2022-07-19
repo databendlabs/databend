@@ -18,18 +18,18 @@ use std::collections::HashMap;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_fuse_meta::meta::BlockMeta;
+use common_fuse_meta::meta::Location;
+use common_fuse_meta::meta::SegmentInfo;
+use common_fuse_meta::meta::TableSnapshot;
 use opendal::Operator;
 
-use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::storages::fuse::io::write_meta;
 use crate::storages::fuse::io::BlockWriter;
 use crate::storages::fuse::io::MetaReaders;
 use crate::storages::fuse::io::SegmentWriter;
 use crate::storages::fuse::io::TableMetaLocationGenerator;
-use crate::storages::fuse::meta::BlockMeta;
-use crate::storages::fuse::meta::Location;
-use crate::storages::fuse::meta::SegmentInfo;
-use crate::storages::fuse::meta::TableSnapshot;
 use crate::storages::fuse::statistics::reducers::reduce_block_metas;
 use crate::storages::fuse::statistics::reducers::reduce_statistics;
 
@@ -47,7 +47,7 @@ pub type SegmentIndex = usize;
 
 pub struct DeletionMutator<'a> {
     mutations: HashMap<SegmentIndex, Vec<Replacement>>,
-    ctx: &'a QueryContext,
+    ctx: &'a dyn TableContext,
     location_generator: &'a TableMetaLocationGenerator,
     base_snapshot: &'a TableSnapshot,
     data_accessor: Operator,
@@ -55,7 +55,7 @@ pub struct DeletionMutator<'a> {
 
 impl<'a> DeletionMutator<'a> {
     pub fn try_create(
-        ctx: &'a QueryContext,
+        ctx: &'a dyn TableContext,
         location_generator: &'a TableMetaLocationGenerator,
         base_snapshot: &'a TableSnapshot,
     ) -> Result<Self> {

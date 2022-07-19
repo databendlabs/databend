@@ -19,6 +19,7 @@ use common_meta_types::GrantObject;
 use common_meta_types::UserGrantSet;
 use common_meta_types::UserOptionFlag;
 use databend_query::interpreters::*;
+use databend_query::sessions::TableContext;
 use databend_query::sql::PlanParser;
 use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
@@ -437,8 +438,7 @@ async fn test_call_stats_tenant_tables_interpreter() -> Result<()> {
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         let res = executor.execute(None).await;
         assert_eq!(res.is_err(), true);
-        let expect =
-            "Code: 1062, displayText = Access denied: 'TENANT_TABLES' only used in management-mode.";
+        let expect = "Code: 1062, displayText = Access denied: 'TENANT_TABLES' only used in management-mode.";
         assert_eq!(expect, res.err().unwrap().to_string());
     }
 

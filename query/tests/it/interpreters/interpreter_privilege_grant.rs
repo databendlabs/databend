@@ -23,6 +23,7 @@ use common_meta_types::UserGrantSet;
 use common_meta_types::UserInfo;
 use common_meta_types::UserPrivilegeType;
 use databend_query::interpreters::*;
+use databend_query::sessions::TableContext;
 use databend_query::sql::PlanParser;
 use futures::stream::StreamExt;
 use pretty_assertions::assert_eq;
@@ -63,7 +64,10 @@ async fn test_grant_privilege_interpreter() -> Result<()> {
         Test {
             name: "grant create user to global",
             query: format!("GRANT CREATE USER ON *.* TO '{}'@'{}'", name, hostname),
-            principal_identity: Some(PrincipalIdentity::user(name.to_string(), hostname.to_string())),
+            principal_identity: Some(PrincipalIdentity::user(
+                name.to_string(),
+                hostname.to_string(),
+            )),
             expected_grants: Some({
                 let mut grants = UserGrantSet::empty();
                 grants.grant_privileges(
@@ -93,12 +97,17 @@ async fn test_grant_privilege_interpreter() -> Result<()> {
             query: format!("GRANT CREATE USER ON * TO '{}'@'{}'", name, hostname),
             principal_identity: None,
             expected_grants: None,
-            expected_err: Some("Code: 1061, displayText = Illegal GRANT/REVOKE command; please consult the manual to see which privileges can be used."),
+            expected_err: Some(
+                "Code: 1061, displayText = Illegal GRANT/REVOKE command; please consult the manual to see which privileges can be used.",
+            ),
         },
         Test {
             name: "grant all on global",
             query: format!("GRANT ALL ON *.* TO '{}'@'{}'", name, hostname),
-            principal_identity: Some(PrincipalIdentity::user(name.to_string(), hostname.to_string())),
+            principal_identity: Some(PrincipalIdentity::user(
+                name.to_string(),
+                hostname.to_string(),
+            )),
             expected_grants: Some({
                 let mut grants = UserGrantSet::empty();
                 grants.grant_privileges(

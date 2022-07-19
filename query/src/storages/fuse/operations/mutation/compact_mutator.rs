@@ -16,24 +16,24 @@ use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_exception::Result;
+use common_fuse_meta::meta::BlockMeta;
+use common_fuse_meta::meta::SegmentInfo;
+use common_fuse_meta::meta::TableSnapshot;
 use opendal::Operator;
 
 use super::block_filter::all_the_columns_ids;
-use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::storages::fuse::io::BlockCompactor;
 use crate::storages::fuse::io::BlockWriter;
 use crate::storages::fuse::io::MetaReaders;
 use crate::storages::fuse::io::SegmentWriter;
 use crate::storages::fuse::io::TableMetaLocationGenerator;
-use crate::storages::fuse::meta::BlockMeta;
-use crate::storages::fuse::meta::SegmentInfo;
-use crate::storages::fuse::meta::TableSnapshot;
 use crate::storages::fuse::statistics::reducers::reduce_block_metas;
 use crate::storages::fuse::statistics::reducers::reduce_statistics;
 use crate::storages::fuse::FuseTable;
 
 pub struct CompactMutator<'a> {
-    ctx: &'a Arc<QueryContext>,
+    ctx: &'a Arc<dyn TableContext>,
     location_generator: &'a TableMetaLocationGenerator,
     base_snapshot: &'a TableSnapshot,
     data_accessor: Operator,
@@ -43,7 +43,7 @@ pub struct CompactMutator<'a> {
 
 impl<'a> CompactMutator<'a> {
     pub fn try_create(
-        ctx: &'a Arc<QueryContext>,
+        ctx: &'a Arc<dyn TableContext>,
         location_generator: &'a TableMetaLocationGenerator,
         base_snapshot: &'a TableSnapshot,
         row_per_block: usize,
@@ -69,7 +69,7 @@ impl<'a> CompactMutator<'a> {
         // The new segments.
         let mut segments = Vec::new();
         let mut summarys = Vec::new();
-        let reader = MetaReaders::segment_info_reader(self.ctx);
+        let reader = MetaReaders::segment_info_reader(self.ctx.as_ref());
         for segment_location in &snapshot.segments {
             let (x, ver) = (segment_location.0.clone(), segment_location.1);
             let mut need_merge = false;

@@ -25,7 +25,7 @@ use common_streams::SendableDataBlockStream;
 use crate::interpreters::plan_schedulers;
 use crate::interpreters::Interpreter;
 use crate::optimizers::Optimizers;
-use crate::pipelines::new::QueryPipelineBuilder;
+use crate::pipelines::QueryPipelineBuilder;
 use crate::sessions::QueryContext;
 
 pub struct ExplainInterpreter {

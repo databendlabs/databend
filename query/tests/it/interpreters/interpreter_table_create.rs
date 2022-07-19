@@ -46,7 +46,7 @@ async fn test_create_table_interpreter() -> Result<()> {
         let field_b = schema.field_with_name("b").unwrap();
         assert_eq!(
             format!("{:?}", field_b),
-           "DataField { name: \"b\", data_type: Int32, nullable: false, default_expr: \"(a + 666)\" }"
+            "DataField { name: \"b\", data_type: Int32, nullable: false, default_expr: \"(a + 666)\" }"
         );
     }
 

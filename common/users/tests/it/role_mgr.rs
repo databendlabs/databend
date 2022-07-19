@@ -78,9 +78,10 @@ async fn test_role_manager() -> Result<()> {
             )
             .await?;
         let role = role_mgr.get_role(tenant, role_name.clone()).await?;
-        assert!(role
-            .grants
-            .verify_privilege(&GrantObject::Global, UserPrivilegeType::Alter));
+        assert!(
+            role.grants
+                .verify_privilege(&GrantObject::Global, UserPrivilegeType::Alter)
+        );
     }
 
     // revoke privilege from role

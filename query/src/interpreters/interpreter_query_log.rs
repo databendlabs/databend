@@ -31,6 +31,7 @@ use serde_repr::Serialize_repr;
 
 use crate::catalogs::CATALOG_DEFAULT;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 
 #[derive(Clone, Copy, Serialize_repr)]
 #[repr(u8)]

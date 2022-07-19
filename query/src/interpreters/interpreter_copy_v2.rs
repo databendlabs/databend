@@ -30,12 +30,13 @@ use regex::Regex;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreterV2;
-use crate::pipelines::new::executor::PipelineCompleteExecutor;
-use crate::pipelines::new::NewPipeline;
+use crate::pipelines::executor::PipelineCompleteExecutor;
+use crate::pipelines::Pipeline;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::sql::plans::CopyPlanV2;
 use crate::sql::plans::Plan;
-use crate::storages::stage::StageSource;
+use crate::storages::stage::StageSourceHelper;
 use crate::storages::stage::StageTable;
 
 pub struct CopyInterpreterV2 {
@@ -74,14 +75,16 @@ impl CopyInterpreterV2 {
                     }
                     files_with_path
                 } else if !path.ends_with('/') {
-                    let op = StageSource::get_op(&self.ctx, &table_info.stage_info).await?;
+                    let rename_me: Arc<dyn TableContext> = self.ctx.clone();
+                    let op = StageSourceHelper::get_op(&rename_me, &table_info.stage_info).await?;
                     if op.object(path).is_exist().await? {
                         vec![path.to_string()]
                     } else {
                         vec![]
                     }
                 } else {
-                    let op = StageSource::get_op(&self.ctx, &table_info.stage_info).await?;
+                    let rename_me: Arc<dyn TableContext> = self.ctx.clone();
+                    let op = StageSourceHelper::get_op(&rename_me, &table_info.stage_info).await?;
                     let mut list = vec![];
 
                     // TODO: we could rewrite into try_collect.
@@ -132,7 +135,7 @@ impl CopyInterpreterV2 {
         let ctx = self.ctx.clone();
         let settings = self.ctx.get_settings();
 
-        let mut pipeline = NewPipeline::create();
+        let mut pipeline = Pipeline::create();
         let read_source_plan = from.clone();
         let read_source_plan = Self::rewrite_read_plan_file_name(read_source_plan, files);
         tracing::info!("copy_files_to_table: source plan:{:?}", read_source_plan);
@@ -159,6 +162,7 @@ impl CopyInterpreterV2 {
     async fn execute_copy_into_stage(
         &self,
         stage: &UserStageInfo,
+        path: &str,
         query: &Plan,
     ) -> Result<SendableDataBlockStream> {
         let (s_expr, metadata, bind_context) = match query {
@@ -191,9 +195,9 @@ impl CopyInterpreterV2 {
             .collect();
         let data_schema = DataSchemaRefExt::create(fields);
         let stage_table_info = StageTableInfo {
-            schema: data_schema,
+            schema: data_schema.clone(),
             stage_info: stage.clone(),
-            path: "".to_string(),
+            path: path.to_string(),
             files: vec![],
         };
 
@@ -211,12 +215,7 @@ impl CopyInterpreterV2 {
             )
             .await?;
 
-        Ok(Box::pin(DataBlockStream::create(
-            // TODO(xuanwo): Is this correct?
-            Arc::new(DataSchema::new(vec![])),
-            None,
-            vec![],
-        )))
+        Ok(Box::pin(DataBlockStream::create(data_schema, None, vec![])))
     }
 }
 
@@ -285,9 +284,9 @@ impl Interpreter for CopyInterpreterV2 {
                     vec![],
                 )))
             }
-            CopyPlanV2::IntoStage { stage, from, .. } => {
-                self.execute_copy_into_stage(stage, from).await
-            }
+            CopyPlanV2::IntoStage {
+                stage, from, path, ..
+            } => self.execute_copy_into_stage(stage, path, from).await,
         }
     }
 }

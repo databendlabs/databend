@@ -30,6 +30,7 @@ use common_planners::StageTableInfo;
 use common_storage::parse_uri_location;
 use common_storage::UriLocation;
 
+use crate::sessions::TableContext;
 use crate::sql::binder::Binder;
 use crate::sql::plans::CopyPlanV2;
 use crate::sql::plans::Plan;
@@ -333,7 +334,7 @@ impl<'a> Binder {
             _ => {
                 return Err(ErrorCode::SyntaxException(
                     "COPY INTO <location> FROM <non-query> is invalid",
-                ))
+                ));
             }
         };
 
@@ -378,7 +379,7 @@ impl<'a> Binder {
             _ => {
                 return Err(ErrorCode::SyntaxException(
                     "COPY INTO <location> FROM <non-query> is invalid",
-                ))
+                ));
             }
         };
 

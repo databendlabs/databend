@@ -22,4 +22,4 @@ pub use procedure::Procedure;
 pub use procedure_factory::ProcedureFactory;
 pub use procedure_factory::ProcedureFeatures;
 
-pub use crate::common::context_function::ContextFunction;
+pub use crate::context_function::ContextFunction;

@@ -155,7 +155,7 @@ select to_varchar(111) = '111';
 select to_varchar(3 + 4) = '7';
 
 -- TODO remove explicit cast
-select '123 ab' = 123; -- {ErrorCode 1010}
+select '123 ab' = 123;
 select '123' = 123;
 select '7.4' = 7.4;
 select '7.4' > 7;

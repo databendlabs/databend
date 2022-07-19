@@ -20,6 +20,7 @@ use common_planners::PlanNode;
 use common_planners::ShowPlan;
 
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 
 pub struct ManagementModeAccess {
     ctx: Arc<QueryContext>,

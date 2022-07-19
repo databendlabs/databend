@@ -52,11 +52,12 @@ use crate::api::InitNodesChannelPacket;
 use crate::api::QueryFragmentsPlanPacket;
 use crate::interpreters::QueryFragmentActions;
 use crate::interpreters::QueryFragmentsActions;
-use crate::pipelines::new::executor::PipelineCompleteExecutor;
-use crate::pipelines::new::NewPipe;
-use crate::pipelines::new::NewPipeline;
-use crate::pipelines::new::QueryPipelineBuilder;
+use crate::pipelines::executor::PipelineCompleteExecutor;
+use crate::pipelines::Pipe;
+use crate::pipelines::Pipeline;
+use crate::pipelines::QueryPipelineBuilder;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::Config;
 
 pub struct DataExchangeManager {
@@ -183,7 +184,7 @@ impl DataExchangeManager {
         &self,
         ctx: Arc<QueryContext>,
         actions: QueryFragmentsActions,
-    ) -> Result<NewPipeline> {
+    ) -> Result<Pipeline> {
         let settings = ctx.get_settings();
         let timeout = settings.get_flight_client_timeout()?;
         let root_actions = actions.get_root_actions()?;
@@ -217,10 +218,10 @@ impl DataExchangeManager {
         &self,
         query_id: String,
         root_actions: &QueryFragmentActions,
-    ) -> Result<NewPipeline> {
+    ) -> Result<Pipeline> {
         let schema = root_actions.get_schema()?;
         let fragment_id = root_actions.fragment_id;
-        let mut pipeline = NewPipeline::create();
+        let mut pipeline = Pipeline::create();
         self.get_fragment_source(query_id, fragment_id, schema, &mut pipeline)?;
         Ok(pipeline)
     }
@@ -270,7 +271,7 @@ impl DataExchangeManager {
         query_id: String,
         fragment_id: usize,
         schema: DataSchemaRef,
-        pipeline: &mut NewPipeline,
+        pipeline: &mut Pipeline,
     ) -> Result<()> {
         let queries_coordinator_lock = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_lock.as_ptr() };
@@ -547,9 +548,9 @@ impl QueryCoordinator {
         Ok(())
     }
 
-    pub fn init_pipeline(pipeline: &mut NewPipeline) -> Result<()> {
+    pub fn init_pipeline(pipeline: &mut Pipeline) -> Result<()> {
         for pipe in &mut pipeline.pipes {
-            if let NewPipe::SimplePipe { processors, .. } = pipe {
+            if let Pipe::SimplePipe { processors, .. } = pipe {
                 for processor in processors {
                     ExchangeSink::init(processor)?;
                 }
@@ -632,7 +633,7 @@ impl QueryCoordinator {
         &mut self,
         fragment_id: usize,
         schema: DataSchemaRef,
-        pipeline: &mut NewPipeline,
+        pipeline: &mut Pipeline,
     ) -> Result<()> {
         let (tx, rx) = async_channel::bounded(1);
 
@@ -680,7 +681,7 @@ struct FragmentCoordinator {
     initialized: bool,
     fragment_id: usize,
     data_exchange: Option<DataExchange>,
-    pipeline: Option<NewPipeline>,
+    pipeline: Option<Pipeline>,
 }
 
 impl FragmentCoordinator {

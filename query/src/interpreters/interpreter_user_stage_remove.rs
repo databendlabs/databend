@@ -24,7 +24,8 @@ use common_tracing::tracing;
 use crate::interpreters::interpreter_common::list_files;
 use crate::interpreters::Interpreter;
 use crate::sessions::QueryContext;
-use crate::storages::stage::StageSource;
+use crate::sessions::TableContext;
+use crate::storages::stage::StageSourceHelper;
 
 #[derive(Debug)]
 pub struct RemoveUserStageInterpreter {
@@ -55,7 +56,8 @@ impl Interpreter for RemoveUserStageInterpreter {
 
         let files = list_files(&self.ctx, &plan.stage, &plan.path, &plan.pattern).await?;
         let files = files.iter().map(|f| f.path.clone()).collect::<Vec<_>>();
-        let op = StageSource::get_op(&self.ctx, &self.plan.stage).await?;
+        let rename_me: Arc<dyn TableContext> = self.ctx.clone();
+        let op = StageSourceHelper::get_op(&rename_me, &self.plan.stage).await?;
         if plan.stage.stage_type == StageType::Internal {
             user_mgr
                 .remove_files(&tenant, &plan.stage.stage_name, files.clone())

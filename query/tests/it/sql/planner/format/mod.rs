@@ -107,41 +107,45 @@ fn test_format() {
 
     let s_expr = SExpr::create_binary(
         PhysicalHashJoin {
-            build_keys: vec![FunctionCall {
-                func_name: "plus".to_string(),
-                arg_types: vec![],
-                arguments: vec![
-                    BoundColumnRef {
-                        column: ColumnBinding {
-                            database_name: None,
-                            table_name: None,
-                            column_name: "col1".to_string(),
-                            index: col1,
+            build_keys: vec![
+                FunctionCall {
+                    func_name: "plus".to_string(),
+                    arg_types: vec![],
+                    arguments: vec![
+                        BoundColumnRef {
+                            column: ColumnBinding {
+                                database_name: None,
+                                table_name: None,
+                                column_name: "col1".to_string(),
+                                index: col1,
+                                data_type: Box::new(BooleanType::new_impl()),
+                                visible_in_unqualified_wildcard: false,
+                            },
+                        }
+                        .into(),
+                        ConstantExpr {
+                            value: DataValue::UInt64(123),
                             data_type: Box::new(BooleanType::new_impl()),
-                            visible_in_unqualified_wildcard: false,
-                        },
-                    }
-                    .into(),
-                    ConstantExpr {
-                        value: DataValue::UInt64(123),
+                        }
+                        .into(),
+                    ],
+                    return_type: Box::new(BooleanType::new_impl()),
+                }
+                .into(),
+            ],
+            probe_keys: vec![
+                BoundColumnRef {
+                    column: ColumnBinding {
+                        database_name: None,
+                        table_name: None,
+                        column_name: "col2".to_string(),
+                        index: col2,
                         data_type: Box::new(BooleanType::new_impl()),
-                    }
-                    .into(),
-                ],
-                return_type: Box::new(BooleanType::new_impl()),
-            }
-            .into()],
-            probe_keys: vec![BoundColumnRef {
-                column: ColumnBinding {
-                    database_name: None,
-                    table_name: None,
-                    column_name: "col2".to_string(),
-                    index: col2,
-                    data_type: Box::new(BooleanType::new_impl()),
-                    visible_in_unqualified_wildcard: false,
-                },
-            }
-            .into()],
+                        visible_in_unqualified_wildcard: false,
+                    },
+                }
+                .into(),
+            ],
             other_conditions: vec![],
             join_type: JoinType::Inner,
             marker_index: None,
@@ -149,11 +153,13 @@ fn test_format() {
         .into(),
         SExpr::create_unary(
             Filter {
-                predicates: vec![ConstantExpr {
-                    value: DataValue::Boolean(true),
-                    data_type: Box::new(BooleanType::new_impl()),
-                }
-                .into()],
+                predicates: vec![
+                    ConstantExpr {
+                        value: DataValue::Boolean(true),
+                        data_type: Box::new(BooleanType::new_impl()),
+                    }
+                    .into(),
+                ],
                 is_having: false,
             }
             .into(),

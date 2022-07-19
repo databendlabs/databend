@@ -110,7 +110,7 @@ pub fn cast_with_type(
     }
 
     if from_type.data_type_id() == TypeID::Null {
-        //all is null
+        // all is null
         if target_type.is_nullable() {
             return target_type.create_constant_column(&DataValue::Null, column.len());
         }
@@ -313,9 +313,17 @@ pub fn arrow_cast_compute(
         return cast_to_variant(column, from_type, data_type, func_ctx);
     } else if data_type.data_type_id() == TypeID::Timestamp {
         return cast_to_timestamp(column, from_type);
+    } else if data_type.data_type_id() == TypeID::Date {
+        return arrow_cast_compute(
+            column,
+            from_type,
+            &i32::to_data_type(),
+            cast_options,
+            func_ctx,
+        );
     }
 
-    let arrow_array = column.as_arrow_array();
+    let arrow_array = column.as_arrow_array(from_type.clone());
     let arrow_options = cast_options.as_arrow();
     let result: ArrayRef =
         cast::cast(arrow_array.as_ref(), &data_type.arrow_type(), arrow_options)?;

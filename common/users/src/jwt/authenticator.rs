@@ -22,7 +22,7 @@ use serde::Deserialize;
 use serde::Serialize;
 
 pub struct JwtAuthenticator {
-    //Todo(youngsofun): verify settings, like issuer
+    // Todo(youngsofun): verify settings, like issuer
     verifier: RemoteJwksVerifier,
 }
 

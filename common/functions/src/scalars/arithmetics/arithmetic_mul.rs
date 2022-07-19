@@ -114,7 +114,7 @@ pub fn arithmetic_mul_div_monotonicity(
         // both f(x) and g(x) are constant
         (true, true) => Ok(Monotonicity::create_constant()),
 
-        //f(x) is constant
+        // f(x) is constant
         (true, false) => {
             match f_x.compare_with_zero()? {
                 1 => {

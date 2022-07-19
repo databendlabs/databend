@@ -33,10 +33,11 @@ use regex::Regex;
 
 use super::SelectInterpreter;
 use crate::interpreters::Interpreter;
-use crate::pipelines::new::executor::PipelineCompleteExecutor;
-use crate::pipelines::new::NewPipeline;
+use crate::pipelines::executor::PipelineCompleteExecutor;
+use crate::pipelines::Pipeline;
 use crate::sessions::QueryContext;
-use crate::storages::stage::StageSource;
+use crate::sessions::TableContext;
+use crate::storages::stage::StageSourceHelper;
 use crate::storages::stage::StageTable;
 
 pub struct CopyInterpreter {
@@ -72,14 +73,17 @@ impl CopyInterpreter {
                     }
                     files_with_path
                 } else if !path.ends_with('/') {
-                    let op = StageSource::get_op(&self.ctx, &table_info.stage_info).await?;
+                    let rename_me: Arc<dyn TableContext> = self.ctx.clone();
+                    let op = StageSourceHelper::get_op(&rename_me, &table_info.stage_info).await?;
                     if op.object(path).is_exist().await? {
                         vec![path.to_string()]
                     } else {
                         vec![]
                     }
                 } else {
-                    let op = StageSource::get_op(&self.ctx, &table_info.stage_info).await?;
+                    // TODO rm this clone
+                    let rename_me: Arc<dyn TableContext> = self.ctx.clone();
+                    let op = StageSourceHelper::get_op(&rename_me, &table_info.stage_info).await?;
                     let mut list = vec![];
 
                     // TODO: we could rewrite into try_collect.
@@ -130,7 +134,7 @@ impl CopyInterpreter {
         let ctx = self.ctx.clone();
         let settings = self.ctx.get_settings();
 
-        let mut pipeline = NewPipeline::create();
+        let mut pipeline = Pipeline::create();
         let read_source_plan = from.clone();
         let read_source_plan = Self::rewrite_read_plan_file_name(read_source_plan, files);
         tracing::info!("copy_files_to_table: source plan:{:?}", read_source_plan);

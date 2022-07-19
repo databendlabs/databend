@@ -188,6 +188,7 @@ select count_if(a = '1'), count_if(a = '2'), count_if(a = '3'), count_if(a is nu
 );
 select case when number >= 2 then 'ge2' WHEN number >= 1 then 'ge1' ELSE null end from numbers(3);
 select case when 1 = 3 then null when 1 = 2 then 20.0 when 1 = 1 then 1 ELSE null END;
+select case when number > 1 then 1 when number < 1 then 2 else 1 end from numbers(2) where false;
 
 select COALESCE(NULL, NULL, 1, 2);
 -- subquery in from
@@ -376,9 +377,20 @@ create table t3 as select *  from numbers(10000);
 insert into t3 values(1);
 set enable_planner_v2 = 1;
 select count(*) from numbers(10000) as t4 where t4.number in (select t3.number from t3);
+select * from numbers(10) where number in (select * from numbers(5)) order by number;
+
+create table t1_null(a int null , b int null);
+create table t2_null(a int null , b int null);
+insert into t1_null values(1, 2), (2, 3), (null, 1);
+insert into t2_null values(3, 4), (2, 3), (null, 2);
+select * from t1_null inner join t2_null on t1_null.a = t2_null.a;
+
 drop table t1;
 drop table t2;
 drop table t3;
+
+drop table t1_null;
+drop table t2_null;
 
 select '====Database====';
 select database(), currentDatabase(), current_database();

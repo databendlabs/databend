@@ -22,18 +22,18 @@ use common_datablocks::serialize_data_blocks;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_fuse_meta::meta::SegmentInfo;
+use common_fuse_meta::meta::Statistics;
 use opendal::Operator;
 
 use super::AppendOperationLogEntry;
-use crate::pipelines::new::processors::port::InputPort;
-use crate::pipelines::new::processors::processor::Event;
-use crate::pipelines::new::processors::processor::ProcessorPtr;
-use crate::pipelines::new::processors::Processor;
-use crate::sessions::QueryContext;
+use crate::pipelines::processors::port::InputPort;
+use crate::pipelines::processors::processor::Event;
+use crate::pipelines::processors::processor::ProcessorPtr;
+use crate::pipelines::processors::Processor;
+use crate::sessions::TableContext;
 use crate::storages::fuse::io;
 use crate::storages::fuse::io::TableMetaLocationGenerator;
-use crate::storages::fuse::meta::SegmentInfo;
-use crate::storages::fuse::meta::Statistics;
 use crate::storages::fuse::statistics::accumulator::BlockStatistics;
 use crate::storages::fuse::statistics::StatisticsAccumulator;
 use crate::storages::index::BloomFilterIndexer;
@@ -68,7 +68,7 @@ enum State {
 pub struct FuseTableSink {
     state: State,
     input: Arc<InputPort>,
-    ctx: Arc<QueryContext>,
+    ctx: Arc<dyn TableContext>,
     data_accessor: Operator,
     num_block_threshold: u64,
     meta_locations: TableMetaLocationGenerator,
@@ -79,7 +79,7 @@ pub struct FuseTableSink {
 impl FuseTableSink {
     pub fn create(
         input: Arc<InputPort>,
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn TableContext>,
         num_block_threshold: usize,
         data_accessor: Operator,
         meta_locations: TableMetaLocationGenerator,

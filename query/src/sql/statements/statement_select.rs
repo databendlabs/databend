@@ -32,6 +32,7 @@ use sqlparser::ast::SelectItem;
 use sqlparser::ast::TableWithJoins;
 
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::sql::statements::analyzer_statement::QueryAnalyzeState;
 use crate::sql::statements::query::JoinedSchema;
 use crate::sql::statements::query::JoinedSchemaAnalyzer;
@@ -222,7 +223,7 @@ impl DfQueryStatement {
                                 return Err(ErrorCode::LogicalError(format!(
                                     "Found non-sort expression {:?} while analyzing order by expressions of window expressions",
                                     order_by_expr
-                                )))
+                                )));
                             }
                         }
                     }
@@ -231,7 +232,7 @@ impl DfQueryStatement {
                     return Err(ErrorCode::LogicalError(format!(
                         "Found non-window expression {:?} while analyzing window expressions!",
                         expr
-                    )))
+                    )));
                 }
             }
         }

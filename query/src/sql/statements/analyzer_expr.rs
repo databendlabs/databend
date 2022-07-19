@@ -39,9 +39,10 @@ use sqlparser::ast::UnaryOperator;
 use sqlparser::ast::Value;
 use sqlparser::ast::WindowSpec;
 
-use crate::procedures::ContextFunction;
+use crate::context_function::ContextFunction;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionType;
+use crate::sessions::TableContext;
 use crate::sql::statements::analyzer_value_expr::ValueExprAnalyzer;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
@@ -95,7 +96,7 @@ impl ExpressionAnalyzer {
                     return Err(ErrorCode::LogicalError(format!(
                         "Logical error: can't analyze {:?} in sync mode, it's a bug",
                         expr
-                    )))
+                    )));
                 }
             }
         }

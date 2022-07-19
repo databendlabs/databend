@@ -13,15 +13,15 @@
 //  limitations under the License.
 
 use common_datavalues::DataValue;
-use databend_query::storages::index::ColumnStatistics;
+use common_fuse_meta::meta::ColumnStatistics;
 use serde_json::Value;
 
 // A non-backward compatible change has been introduced by [PR#6067](https://github.com/datafuselabs/databend/pull/6067/files#diff-20030750809780d6492d2fe215a8eb80294aa6a8a5af2cf1bebe17eb740cae35)
 // , please also see [issue#6556](https://github.com/datafuselabs/databend/issues/6556)
 // therefore, we alias `null_count` with `unset_bits`, to make subsequent versions backward compatible again
 #[test]
-fn test_issue_6556_column_statistics_ser_de_compatability_null_count_alias(
-) -> common_exception::Result<()> {
+fn test_issue_6556_column_statistics_ser_de_compatability_null_count_alias()
+-> common_exception::Result<()> {
     let col_stats = ColumnStatistics {
         min: DataValue::Null,
         max: DataValue::Null,

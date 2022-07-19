@@ -2,7 +2,7 @@
 title: CREATE STAGE
 ---
 
-Create a user stage.
+Creates a user stage.
 
 ## Syntax
 
@@ -23,17 +23,49 @@ CREATE STAGE [ IF NOT EXISTS ] <external_stage_name>
 
 Where:
 
-### externalStageParams (for Amazon S3)
-```
-externalLocation (for Amazon S3) ::=
-  URL = 's3://<bucket>[/<path>]'
-  [ { CREDENTIALS = ( {  { AWS_KEY_ID = '<string>' AWS_SECRET_KEY = '<string>' } } ) } ]
+### externalStageParams
+
+AWS S3 compatible object storage services:
+
+```sql
+externalStageParams ::=
+  URL = 's3://<bucket>[<path>]'
+  CONNECTION = (
+        ENDPOINT_URL = 'https://<endpoint-URL>'
+        ACCESS_KEY_ID = '<your-access-key-ID>'
+        SECRET_ACCESS_KEY = '<your-secret-access-key>'
+        REGION = '<region-name>'
+        ENABLE_VIRTUAL_HOST_STYLE = true|false
+  )
 ```
 
-| Parameters  | Description | Required |
-| ----------- | ----------- | --- |
-| URL | Files are in the specified external location (S3-like bucket) | YES |
-| `[ { CREDENTIALS = ( {  { AWS_KEY_ID = '<string>' AWS_SECRET_KEY = '<string>' } } ) } ]' ]`  | The credentials for connecting to AWS and accessing the private/protected S3 bucket where the files to load are staged. |  Optional |
+| Parameter                 	| Description                                                                 	| Required 	|
+|---------------------------	|-----------------------------------------------------------------------------	|----------	|
+| URL    	| External files located at the AWS S3 compatible object storage.             	| Optional 	|
+| ENDPOINT_URL              	| The bucket endpoint URL starting with "https://". To use a URL starting with "http://", set `allow_insecure` to `true` in the [storage] block of the file `databend-query-node.toml`.                                  	| Optional 	|
+| ACCESS_KEY_ID             	| Your access key ID for connecting the AWS S3 compatible object storage. If not provided, Databend will access the bucket anonymously.    	| Optional 	|
+| SECRET_ACCESS_KEY         	| Your secret access key for connecting the AWS S3 compatible object storage. 	| Optional 	|
+| REGION                    	| AWS region name. For example, us-east-1.                                    	| Optional 	|
+| ENABLE_VIRTUAL_HOST_STYLE 	| If you use virtual hosting to address the bucket, set it to "true".                               	| Optional 	|
+
+Azure Blob storage：
+
+```sql
+externalStageParams ::=
+  URL = 'azblob://<container>[<path>]'
+  CONNECTION = (
+        ENDPOINT_URL = 'https://<endpoint-URL>'
+        ACCOUT_NAME = '<your-account-name>'
+        ACCOUNT_KEY = '<your-account-key>'
+  )
+```
+
+| Parameter                  	| Description                                              	| Required 	|
+|----------------------------	|----------------------------------------------------------	|----------	|
+| URL 	| External files located at the Azure Blob storage.        	| Required 	|
+| ENDPOINT_URL               	| The container endpoint URL starting with "https://". To use a URL starting with "http://", set `allow_insecure` to `true` in the [storage] block of the file `databend-query-node.toml`.    	| Optional 	|
+| ACCOUNT_NAME               	| Your account name for connecting the Azure Blob storage. If not provided, Databend will access the container anonymously.	| Optional 	|
+| ACCOUNT_KEY                	| Your account key for connecting the Azure Blob storage.  	| Optional 	|
 
 ### formatTypeOptions
 ```
@@ -71,7 +103,7 @@ CREATE STAGE my_internal_stage;
 
 ### External Stages
 ```sql
-CREATE STAGE my_s3_stage url='s3://load/files/' credentials=(aws_key_id='1a2b3c' aws_secret_key='4x5y6z');
+CREATE STAGE my_s3_stage url='s3://load/files/' connection=(aws_key_id='1a2b3c' aws_secret_key='4x5y6z');
 ```
 
 ```sql

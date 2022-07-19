@@ -136,12 +136,16 @@ async fn test_user_manager() -> Result<()> {
             .grant_privileges_to_user(tenant, user_info.identity(), GrantObject::Global, add_priv)
             .await?;
         let new_user = user_mgr.get_user(tenant, user_info.identity()).await?;
-        assert!(new_user
-            .grants
-            .verify_privilege(&GrantObject::Global, UserPrivilegeType::Set));
-        assert!(!new_user
-            .grants
-            .verify_privilege(&GrantObject::Global, UserPrivilegeType::Create));
+        assert!(
+            new_user
+                .grants
+                .verify_privilege(&GrantObject::Global, UserPrivilegeType::Set)
+        );
+        assert!(
+            !new_user
+                .grants
+                .verify_privilege(&GrantObject::Global, UserPrivilegeType::Create)
+        );
         user_mgr
             .drop_user(tenant, new_user.identity(), true)
             .await?;
@@ -261,18 +265,22 @@ async fn test_user_manager_with_root_user() -> Result<()> {
             .await?;
         assert_eq!(user.name, username1);
         assert_eq!(user.hostname, hostname1);
-        assert!(user
-            .grants
-            .verify_privilege(&GrantObject::Global, UserPrivilegeType::Create));
-        assert!(user
-            .grants
-            .verify_privilege(&GrantObject::Global, UserPrivilegeType::Select));
-        assert!(user
-            .grants
-            .verify_privilege(&GrantObject::Global, UserPrivilegeType::Insert));
-        assert!(user
-            .grants
-            .verify_privilege(&GrantObject::Global, UserPrivilegeType::Super));
+        assert!(
+            user.grants
+                .verify_privilege(&GrantObject::Global, UserPrivilegeType::Create)
+        );
+        assert!(
+            user.grants
+                .verify_privilege(&GrantObject::Global, UserPrivilegeType::Select)
+        );
+        assert!(
+            user.grants
+                .verify_privilege(&GrantObject::Global, UserPrivilegeType::Insert)
+        );
+        assert!(
+            user.grants
+                .verify_privilege(&GrantObject::Global, UserPrivilegeType::Super)
+        );
     }
 
     // Get user via username `default` and hostname `localhost`.
@@ -282,18 +290,22 @@ async fn test_user_manager_with_root_user() -> Result<()> {
             .await?;
         assert_eq!(user.name, username1);
         assert_eq!(user.hostname, hostname2);
-        assert!(user
-            .grants
-            .verify_privilege(&GrantObject::Global, UserPrivilegeType::Create));
-        assert!(user
-            .grants
-            .verify_privilege(&GrantObject::Global, UserPrivilegeType::Select));
-        assert!(user
-            .grants
-            .verify_privilege(&GrantObject::Global, UserPrivilegeType::Insert));
-        assert!(user
-            .grants
-            .verify_privilege(&GrantObject::Global, UserPrivilegeType::Super));
+        assert!(
+            user.grants
+                .verify_privilege(&GrantObject::Global, UserPrivilegeType::Create)
+        );
+        assert!(
+            user.grants
+                .verify_privilege(&GrantObject::Global, UserPrivilegeType::Select)
+        );
+        assert!(
+            user.grants
+                .verify_privilege(&GrantObject::Global, UserPrivilegeType::Insert)
+        );
+        assert!(
+            user.grants
+                .verify_privilege(&GrantObject::Global, UserPrivilegeType::Super)
+        );
     }
 
     // Get user via username `default` and hostname `otherhost` will be denied.
@@ -315,18 +327,22 @@ async fn test_user_manager_with_root_user() -> Result<()> {
             .await?;
         assert_eq!(user.name, username2);
         assert_eq!(user.hostname, hostname1);
-        assert!(user
-            .grants
-            .verify_privilege(&GrantObject::Global, UserPrivilegeType::Create));
-        assert!(user
-            .grants
-            .verify_privilege(&GrantObject::Global, UserPrivilegeType::Select));
-        assert!(user
-            .grants
-            .verify_privilege(&GrantObject::Global, UserPrivilegeType::Insert));
-        assert!(user
-            .grants
-            .verify_privilege(&GrantObject::Global, UserPrivilegeType::Super));
+        assert!(
+            user.grants
+                .verify_privilege(&GrantObject::Global, UserPrivilegeType::Create)
+        );
+        assert!(
+            user.grants
+                .verify_privilege(&GrantObject::Global, UserPrivilegeType::Select)
+        );
+        assert!(
+            user.grants
+                .verify_privilege(&GrantObject::Global, UserPrivilegeType::Insert)
+        );
+        assert!(
+            user.grants
+                .verify_privilege(&GrantObject::Global, UserPrivilegeType::Super)
+        );
     }
 
     // Get user via username `root` and hostname `localhost`.
@@ -336,18 +352,22 @@ async fn test_user_manager_with_root_user() -> Result<()> {
             .await?;
         assert_eq!(user.name, username2);
         assert_eq!(user.hostname, hostname2);
-        assert!(user
-            .grants
-            .verify_privilege(&GrantObject::Global, UserPrivilegeType::Create));
-        assert!(user
-            .grants
-            .verify_privilege(&GrantObject::Global, UserPrivilegeType::Select));
-        assert!(user
-            .grants
-            .verify_privilege(&GrantObject::Global, UserPrivilegeType::Insert));
-        assert!(user
-            .grants
-            .verify_privilege(&GrantObject::Global, UserPrivilegeType::Super));
+        assert!(
+            user.grants
+                .verify_privilege(&GrantObject::Global, UserPrivilegeType::Create)
+        );
+        assert!(
+            user.grants
+                .verify_privilege(&GrantObject::Global, UserPrivilegeType::Select)
+        );
+        assert!(
+            user.grants
+                .verify_privilege(&GrantObject::Global, UserPrivilegeType::Insert)
+        );
+        assert!(
+            user.grants
+                .verify_privilege(&GrantObject::Global, UserPrivilegeType::Super)
+        );
     }
 
     // Get user via username `root` and hostname `otherhost` will be denied.

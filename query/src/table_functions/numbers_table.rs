@@ -34,16 +34,16 @@ use common_planners::Partitions;
 use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
 
-use crate::pipelines::new::processors::port::OutputPort;
-use crate::pipelines::new::processors::processor::ProcessorPtr;
-use crate::pipelines::new::processors::EmptySource;
-use crate::pipelines::new::processors::SyncSource;
-use crate::pipelines::new::processors::SyncSourcer;
-use crate::pipelines::new::NewPipe;
-use crate::pipelines::new::NewPipeline;
-use crate::pipelines::new::SourcePipeBuilder;
-use crate::pipelines::transforms::get_sort_descriptions;
-use crate::sessions::QueryContext;
+use crate::pipelines::processors::port::OutputPort;
+use crate::pipelines::processors::processor::ProcessorPtr;
+use crate::pipelines::processors::transforms::get_sort_descriptions;
+use crate::pipelines::processors::EmptySource;
+use crate::pipelines::processors::SyncSource;
+use crate::pipelines::processors::SyncSourcer;
+use crate::pipelines::Pipe;
+use crate::pipelines::Pipeline;
+use crate::pipelines::SourcePipeBuilder;
+use crate::sessions::TableContext;
 use crate::storages::Table;
 use crate::table_functions::generate_numbers_parts;
 use crate::table_functions::numbers_part::NumbersPartInfo;
@@ -124,7 +124,7 @@ impl Table for NumbersTable {
 
     async fn read_partitions(
         &self,
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn TableContext>,
         push_downs: Option<Extras>,
     ) -> Result<(Statistics, Partitions)> {
         let max_block_size = ctx.get_settings().get_max_block_size()?;
@@ -179,13 +179,13 @@ impl Table for NumbersTable {
 
     fn read2(
         &self,
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn TableContext>,
         plan: &ReadDataSourcePlan,
-        pipeline: &mut NewPipeline,
+        pipeline: &mut Pipeline,
     ) -> Result<()> {
         if plan.parts.is_empty() {
             let output = OutputPort::create();
-            pipeline.add_pipe(NewPipe::SimplePipe {
+            pipeline.add_pipe(Pipe::SimplePipe {
                 inputs_port: vec![],
                 outputs_port: vec![output.clone()],
                 processors: vec![EmptySource::create(output)?],
@@ -226,7 +226,7 @@ struct NumbersSource {
 impl NumbersSource {
     pub fn create(
         output: Arc<OutputPort>,
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn TableContext>,
         numbers_part: &PartInfoPtr,
         schema: DataSchemaRef,
     ) -> Result<ProcessorPtr> {

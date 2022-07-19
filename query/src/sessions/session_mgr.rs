@@ -40,6 +40,7 @@ use parking_lot::RwLock;
 
 use crate::api::DataExchangeManager;
 use crate::catalogs::CatalogManager;
+use crate::catalogs::CatalogManagerHelper;
 use crate::clusters::ClusterDiscovery;
 use crate::interpreters::AsyncInsertQueue;
 use crate::servers::http::v1::HttpQueryManager;
@@ -78,7 +79,7 @@ pub struct SessionManager {
 
 impl SessionManager {
     pub async fn from_conf(conf: Config) -> Result<Arc<SessionManager>> {
-        let catalogs = Arc::new(CatalogManager::new(&conf).await?);
+        let catalogs = Arc::new(CatalogManager::try_new(&conf).await?);
         let storage_cache_manager = Arc::new(CacheManager::init(&conf.query));
 
         // Cluster discovery.
@@ -319,7 +320,7 @@ impl SessionManager {
             sessions.remove(session_id);
         }
 
-        //also need remove mysql_conn_map
+        // also need remove mysql_conn_map
         let mut mysql_conns_map = self.mysql_conn_map.write();
         for (k, v) in mysql_conns_map.deref_mut().clone() {
             if &v == session_id {
@@ -337,7 +338,8 @@ impl SessionManager {
         async move {
             tracing::info!(
                 "Waiting {} secs for connections to close. You can press Ctrl + C again to force shutdown.",
-                timeout_secs);
+                timeout_secs
+            );
             let mut signal = Box::pin(signal.next());
 
             for _index in 0..timeout_secs {
@@ -416,7 +418,7 @@ impl SessionManager {
         };
 
         {
-            let catalogs = CatalogManager::new(&config).await?;
+            let catalogs = CatalogManager::try_new(&config).await?;
             *self.catalogs.write() = Arc::new(catalogs);
         }
 
