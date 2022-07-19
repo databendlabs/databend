@@ -12,12 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cell::SyncUnsafeCell;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
+use std::ops::Deref;
 use std::sync::Arc;
 
 use async_channel::Sender;
-use atomic_refcell::AtomicRefCell;
 use common_arrow::arrow_format::flight::data::FlightData;
 use common_base::base::tokio::sync::Notify;
 use common_base::base::tokio::task::JoinHandle;
@@ -62,14 +63,14 @@ use crate::Config;
 
 pub struct DataExchangeManager {
     config: Config,
-    queries_coordinator: ReentrantMutex<AtomicRefCell<HashMap<String, QueryCoordinator>>>,
+    queries_coordinator: ReentrantMutex<SyncUnsafeCell<HashMap<String, QueryCoordinator>>>,
 }
 
 impl DataExchangeManager {
     pub fn create(config: Config) -> Arc<DataExchangeManager> {
         Arc::new(DataExchangeManager {
             config,
-            queries_coordinator: ReentrantMutex::new(AtomicRefCell::new(HashMap::new())),
+            queries_coordinator: ReentrantMutex::new(SyncUnsafeCell::new(HashMap::new())),
         })
     }
 
@@ -84,8 +85,8 @@ impl DataExchangeManager {
             }
         }
 
-        let queries_coordinator_lock = self.queries_coordinator.lock();
-        let queries_coordinator = unsafe { &mut *queries_coordinator_lock.as_ptr() };
+        let queries_coordinator_guard = self.queries_coordinator.lock();
+        let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 
         match queries_coordinator.get_mut(&packet.query_id) {
             None => Err(ErrorCode::LogicalError(format!(
@@ -98,8 +99,8 @@ impl DataExchangeManager {
 
     // Execute query in background
     pub fn execute_partial_query(&self, query_id: &str) -> Result<()> {
-        let queries_coordinator_lock = self.queries_coordinator.lock();
-        let queries_coordinator = unsafe { &mut *queries_coordinator_lock.as_ptr() };
+        let queries_coordinator_guard = self.queries_coordinator.lock();
+        let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 
         match queries_coordinator.get_mut(query_id) {
             None => Err(ErrorCode::LogicalError(format!(
@@ -116,8 +117,8 @@ impl DataExchangeManager {
         ctx: &Arc<QueryContext>,
         packet: &QueryFragmentsPlanPacket,
     ) -> Result<()> {
-        let queries_coordinator_lock = self.queries_coordinator.lock();
-        let queries_coordinator = unsafe { &mut *queries_coordinator_lock.as_ptr() };
+        let queries_coordinator_guard = self.queries_coordinator.lock();
+        let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 
         // TODO: When the query is not executed for a long time after submission, we need to remove it
         match queries_coordinator.entry(packet.query_id.to_owned()) {
@@ -147,8 +148,8 @@ impl DataExchangeManager {
         source: &str,
         stream: Streaming<FlightData>,
     ) -> Result<JoinHandle<()>> {
-        let queries_coordinator_lock = self.queries_coordinator.lock();
-        let queries_coordinator = unsafe { &mut *queries_coordinator_lock.as_ptr() };
+        let queries_coordinator_guard = self.queries_coordinator.lock();
+        let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 
         match queries_coordinator.get_mut(id) {
             None => Err(ErrorCode::LogicalError(format!(
@@ -160,16 +161,16 @@ impl DataExchangeManager {
     }
 
     pub fn on_finished_query(&self, query_id: &str, may_error: &Option<ErrorCode>) {
-        let queries_coordinator_lock = self.queries_coordinator.lock();
-        let queries_coordinator = unsafe { &mut *queries_coordinator_lock.as_ptr() };
+        let queries_coordinator_guard = self.queries_coordinator.lock();
+        let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
         if let Some(mut query_coordinator) = queries_coordinator.remove(query_id) {
             query_coordinator.on_finished(may_error);
         }
     }
 
     pub fn shutdown_query(&self, query_id: &str, cause: Option<ErrorCode>) -> Result<()> {
-        let queries_coordinator_lock = self.queries_coordinator.lock();
-        let queries_coordinator = unsafe { &mut *queries_coordinator_lock.as_ptr() };
+        let queries_coordinator_guard = self.queries_coordinator.lock();
+        let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 
         match queries_coordinator.get_mut(query_id) {
             None => Err(ErrorCode::LogicalError(format!(
@@ -233,8 +234,8 @@ impl DataExchangeManager {
     ) -> Result<()> {
         for executor_packet in executor_packet {
             if executor_packet.executor == executor_packet.request_executor {
-                let queries_coordinator_lock = self.queries_coordinator.lock();
-                let queries_coordinator = unsafe { &mut *queries_coordinator_lock.as_ptr() };
+                let queries_coordinator_guard = self.queries_coordinator.lock();
+                let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 
                 match queries_coordinator.entry(executor_packet.query_id.to_owned()) {
                     Entry::Vacant(_) => Err(ErrorCode::LogicalError(format!(
@@ -257,8 +258,8 @@ impl DataExchangeManager {
         id: usize,
         endpoint: &str,
     ) -> Result<FragmentSender> {
-        let queries_coordinator_lock = self.queries_coordinator.lock();
-        let queries_coordinator = unsafe { &*queries_coordinator_lock.as_ptr() };
+        let queries_coordinator_guard = self.queries_coordinator.lock();
+        let queries_coordinator = unsafe { &*queries_coordinator_guard.deref().get() };
 
         match queries_coordinator.get(query_id) {
             None => Err(ErrorCode::LogicalError("Query not exists.")),
@@ -273,8 +274,8 @@ impl DataExchangeManager {
         schema: DataSchemaRef,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
-        let queries_coordinator_lock = self.queries_coordinator.lock();
-        let queries_coordinator = unsafe { &mut *queries_coordinator_lock.as_ptr() };
+        let queries_coordinator_guard = self.queries_coordinator.lock();
+        let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 
         match queries_coordinator.get_mut(&query_id) {
             None => Err(ErrorCode::LogicalError("Query not exists.")),
