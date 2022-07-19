@@ -21,7 +21,6 @@ use std::sync::Arc;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::find_column_exprs;
 use common_planners::Extras;
 use common_streams::ParquetSourceBuilder;
 use common_streams::Source;

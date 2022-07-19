@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use async_trait::async_trait;
 use common_arrow::arrow::datatypes::Field;
 use common_arrow::arrow::datatypes::Schema as ArrowSchema;
