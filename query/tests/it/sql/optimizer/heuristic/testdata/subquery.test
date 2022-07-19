@@ -2,18 +2,31 @@
 select t.number from numbers(1) as t, numbers(1) as t1 where t.number = (select count(*) from numbers(1) as t2, numbers(1) as t3 where t.number = t2.number)
 ----
 Project: [number]
-    HashJoin: SINGLE, build keys: [subquery_6, subquery_6], probe keys: [subquery_0, CAST(t.number AS BIGINT UNSIGNED NULL)], join filters: []
-        CrossJoin
-            Scan: default.system.numbers
-            Scan: default.system.numbers
-        Project: [COUNT(*),number]
-            EvalScalar: [COUNT(*)]
-                Aggregate: group items: [subquery_0], aggregate functions: [COUNT(*)]
-                    HashJoin: INNER, build keys: [t2.number], probe keys: [subquery_6], join filters: []
-                        Scan: default.system.numbers
-                        CrossJoin
+    Filter: [t.number = scalar_subquery_4]
+        HashJoin: SINGLE, build keys: [subquery_6], probe keys: [subquery_0], join filters: []
+            CrossJoin
+                Scan: default.system.numbers
+                Scan: default.system.numbers
+            Project: [COUNT(*),number]
+                EvalScalar: [COUNT(*)]
+                    Aggregate: group items: [subquery_6], aggregate functions: [COUNT(*)]
+                        HashJoin: INNER, build keys: [t2.number], probe keys: [subquery_6], join filters: []
                             Scan: default.system.numbers
-                            Scan: default.system.numbers
+                            CrossJoin
+                                Scan: default.system.numbers
+                                Scan: default.system.numbers
+
+
+# Exists correlated subquery with joins
+select t.number from numbers(1) as t where exists (select t1.number from numbers(1) as t1 where t.number = t1.number) or t.number > 1
+----
+Project: [number]
+    Filter: [(marker) OR (t.number > 1)]
+        HashJoin: MARK, build keys: [subquery_0], probe keys: [subquery_2], join filters: []
+            HashJoin: INNER, build keys: [t1.number], probe keys: [subquery_2], join filters: []
+                Scan: default.system.numbers
+                Scan: default.system.numbers
+            Scan: default.system.numbers
 
 
 # Uncorrelated subquery
@@ -55,9 +68,12 @@ Project: [number]
 select t.number from numbers(1) as t where not exists (select * from numbers(1) where number = t.number)
 ----
 Project: [number]
-    HashJoin: ANTI, build keys: [numbers.number], probe keys: [t.number], join filters: []
-        Scan: default.system.numbers
-        Scan: default.system.numbers
+    Filter: [not(marker)]
+        HashJoin: MARK, build keys: [subquery_0], probe keys: [subquery_2], join filters: []
+            HashJoin: INNER, build keys: [numbers.number], probe keys: [subquery_2], join filters: []
+                Scan: default.system.numbers
+                Scan: default.system.numbers
+            Scan: default.system.numbers
 
 
 select * from numbers(1) as t where exists (select number as a from numbers(1) where number = t.number)
@@ -106,9 +122,9 @@ Project: [number]
             Scan: default.system.numbers
             Scan: default.system.numbers
         Project: [COUNT(*) = 1,number]
-            Filter: [subquery_3]
+            Filter: [scalar_subquery_3]
                 EvalScalar: [COUNT(*) = 1]
-                    Aggregate: group items: [subquery_0], aggregate functions: [COUNT(*)]
+                    Aggregate: group items: [subquery_5], aggregate functions: [COUNT(*)]
                         HashJoin: INNER, build keys: [numbers.number], probe keys: [subquery_5], join filters: []
                             Scan: default.system.numbers
                             Scan: default.system.numbers
@@ -118,10 +134,14 @@ Project: [number]
 select t.number from numbers(1) as t where exists(select * from numbers(1) as t1 where t.number > t1.number) and not exists(select * from numbers(1) as t1 where t.number < t1.number)
 ----
 Project: [number]
-    HashJoin: ANTI, build keys: [], probe keys: [], join filters: [t.number < t1.number]
-        HashJoin: SEMI, build keys: [], probe keys: [], join filters: [t.number > t1.number]
-            Scan: default.system.numbers
-            Scan: default.system.numbers
-        Scan: default.system.numbers
+    Filter: [not(marker)]
+        HashJoin: MARK, build keys: [subquery_0], probe keys: [subquery_3], join filters: []
+            Filter: [subquery_3 < t1.number]
+                CrossJoin
+                    Scan: default.system.numbers
+                    Scan: default.system.numbers
+            HashJoin: SEMI, build keys: [], probe keys: [], join filters: [t.number > t1.number]
+                Scan: default.system.numbers
+                Scan: default.system.numbers
 
 

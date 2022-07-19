@@ -85,15 +85,9 @@ pub fn format_scalar(metadata: &MetadataRef, scalar: &Scalar) -> String {
     match scalar {
         Scalar::BoundColumnRef(column_ref) => {
             if let Some(table_name) = &column_ref.column.table_name {
-                format!(
-                    "{}.{} (#{})",
-                    table_name, column_ref.column.column_name, column_ref.column.index
-                )
+                format!("{}.{}", table_name, column_ref.column.column_name)
             } else {
-                format!(
-                    "{} (#{})",
-                    column_ref.column.column_name, column_ref.column.index
-                )
+                column_ref.column.column_name.to_string()
             }
         }
         Scalar::ConstantExpr(constant) => constant.value.to_string(),
