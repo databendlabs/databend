@@ -234,7 +234,7 @@ Some(
 ---------- Input ----------
 create table if not exists a.b (c integer not null default 1, b varchar);
 ---------- Output ---------
-CREATE TABLE IF NOT EXISTS a.b (c Int32 DEFAULT 1, b STRING)
+CREATE TABLE IF NOT EXISTS a.b (c Int32 NOT NULL DEFAULT 1, b STRING NOT NULL)
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
@@ -299,7 +299,7 @@ CreateTable(
 ---------- Input ----------
 create table if not exists a.b (c integer default 1 not null, b varchar) as select * from t;
 ---------- Output ---------
-CREATE TABLE IF NOT EXISTS a.b (c Int32 DEFAULT 1, b STRING) AS SELECT * FROM t
+CREATE TABLE IF NOT EXISTS a.b (c Int32 NOT NULL DEFAULT 1, b STRING NOT NULL) AS SELECT * FROM t
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
@@ -744,7 +744,7 @@ DropDatabase(
 ---------- Input ----------
 create table c(a DateTime null, b DateTime(3));
 ---------- Output ---------
-CREATE TABLE c (a DATETIME NULL, b DATETIME(3))
+CREATE TABLE c (a DATETIME NULL, b DATETIME(3) NOT NULL)
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
@@ -1252,7 +1252,7 @@ CreateTable(
 ---------- Input ----------
 CREATE TABLE t(c1 int not null, c2 bigint not null, c3 varchar not null);
 ---------- Output ---------
-CREATE TABLE t (c1 Int32, c2 Int64, c3 STRING)
+CREATE TABLE t (c1 Int32 NOT NULL, c2 Int64 NOT NULL, c3 STRING NOT NULL)
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
@@ -1312,7 +1312,7 @@ CreateTable(
 ---------- Input ----------
 CREATE TABLE t(c1 int default 1);
 ---------- Output ---------
-CREATE TABLE t (c1 Int32 DEFAULT 1)
+CREATE TABLE t (c1 Int32 NOT NULL DEFAULT 1)
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
@@ -4693,7 +4693,7 @@ AlterDatabase(
 ---------- Input ----------
 CREATE TABLE t (a INT COMMENT 'col comment') COMMENT='table comment';
 ---------- Output ---------
-CREATE TABLE t (a Int32 COMMENT 'col comment')comment='table comment'
+CREATE TABLE t (a Int32 NOT NULL COMMENT 'col comment')comment='table comment'
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {

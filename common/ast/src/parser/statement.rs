@@ -1200,19 +1200,9 @@ pub fn show_limit(i: Input) -> IResult<ShowLimit> {
 }
 
 pub fn table_option(i: Input) -> IResult<BTreeMap<String, String>> {
-    let opt_key = map_res(ident, |ident| {
-        if ident.quote.is_none() && ident.name != "AS" {
-            Ok(ident.to_string())
-        } else {
-            Err(ErrorKind::Other(
-                "unexpected identifier, must not eq AS or quoted",
-            ))
-        }
-    });
-
     map(
         rule! {
-           ( #opt_key ~ "=" ~ #parameter_to_string )*
+           ( #ident_to_string ~ "=" ~ #parameter_to_string )*
         },
         |opts| BTreeMap::from_iter(opts.iter().map(|(k, _, v)| (k.to_lowercase(), v.clone()))),
     )(i)
