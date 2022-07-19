@@ -45,6 +45,7 @@ use crate::sessions::QueryContext;
 use crate::sessions::SessionManager;
 use crate::sessions::SessionType;
 use crate::sessions::Settings;
+use crate::sessions::TableContext;
 use crate::storages::memory::MemoryTableSink;
 
 #[derive(Clone)]

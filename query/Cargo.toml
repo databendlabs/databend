@@ -23,7 +23,7 @@ simd = ["common-arrow/simd"]
 tokio-console = ["common-tracing/console", "common-base/tracing"]
 memory-profiling = ["common-base/memory-profiling", "common-http/memory-profiling", "tempfile"]
 storage-hdfs = ["opendal/services-hdfs", "common-storage/storage-hdfs"]
-hive = ["common-hive-meta-store", "thrift", "storage-hdfs"]
+hive = ["common-hive-meta-store", "thrift", "storage-hdfs", "common-config/hive"]
 
 [dependencies]
 # Workspace dependencies
@@ -31,12 +31,15 @@ common-arrow = { path = "../common/arrow" }
 common-ast = { path = "../common/ast" }
 common-base = { path = "../common/base" }
 common-cache = { path = "../common/cache" }
+common-catalog = { path = "../common/catalog" }
+common-config = { path = "../common/config" }
 common-contexts = { path = "../common/contexts" }
 common-datablocks = { path = "../common/datablocks" }
 common-datavalues = { path = "../common/datavalues" }
 common-exception = { path = "../common/exception" }
 common-formats = { path = "../common/formats" }
 common-functions = { path = "../common/functions" }
+common-fuse-meta = { path = "../common/fuse-meta" }
 common-grpc = { path = "../common/grpc" }
 common-hashtable = { path = "../common/hashtable" }
 common-hive-meta-store = { path = "../common/hive-meta-store", optional = true }
@@ -53,7 +56,9 @@ common-meta-sled-store = { path = "../common/meta/sled-store" }
 common-meta-store = { path = "../common/meta/store" }
 common-meta-types = { path = "../common/meta/types" }
 common-metrics = { path = "../common/metrics" }
+common-pipeline = { path = "../common/pipeline" }
 common-planners = { path = "../common/planners" }
+common-settings = { path = "../common/settings" }
 common-storage = { path = "../common/storage" }
 common-streams = { path = "../common/streams" }
 common-tracing = { path = "../common/tracing" }

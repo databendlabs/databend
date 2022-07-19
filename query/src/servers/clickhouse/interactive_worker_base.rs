@@ -49,6 +49,7 @@ use crate::pipelines::processors::SyncReceiverCkSource;
 use crate::pipelines::SourcePipeBuilder;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionRef;
+use crate::sessions::TableContext;
 use crate::sql::PlanParser;
 
 pub struct InteractiveWorkerBase;

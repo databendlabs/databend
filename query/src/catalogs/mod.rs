@@ -21,6 +21,7 @@ pub mod hive;
 
 pub use catalog::Catalog;
 pub use catalog_manager::CatalogManager;
+pub use catalog_manager::CatalogManagerHelper;
 pub use catalog_manager::CATALOG_DEFAULT;
 pub use default::table_id_ranges::*;
 pub use default::table_memory_meta::InMemoryMetas;

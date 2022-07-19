@@ -34,7 +34,7 @@ use common_planners::OptimizeTableAction;
 use common_planners::*;
 use common_tracing::tracing;
 
-use crate::catalogs::DatabaseCatalog;
+use crate::sessions::TableContext;
 use crate::sql::binder::scalar::ScalarBinder;
 use crate::sql::binder::Binder;
 use crate::sql::is_reserved_opt_key;

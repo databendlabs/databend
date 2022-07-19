@@ -26,6 +26,7 @@ use common_meta_types::UserOptionFlag;
 use crate::procedures::Procedure;
 use crate::procedures::ProcedureFeatures;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 
 pub struct TenantTablesProcedure {}
 
@@ -53,7 +54,7 @@ impl Procedure for TenantTablesProcedure {
     async fn inner_eval(&self, ctx: Arc<QueryContext>, args: Vec<String>) -> Result<DataBlock> {
         let mut table_counts: Vec<u64> = Vec::with_capacity(args.len());
         for tenant in args.iter() {
-            let catalog = ctx.get_catalog(ctx.get_current_catalog())?;
+            let catalog = ctx.get_catalog(&ctx.get_current_catalog())?;
             let table_count = catalog
                 .count_tables(CountTablesReq {
                     tenant: tenant.to_string(),

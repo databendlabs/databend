@@ -23,6 +23,7 @@ use common_streams::SendableDataBlockStream;
 
 use super::Interpreter;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 
 pub struct AlterTableClusterKeyInterpreter {
     ctx: Arc<QueryContext>,

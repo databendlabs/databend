@@ -21,6 +21,7 @@ use common_functions::is_builtin_function;
 use common_planners::Expression;
 
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 
 pub struct ContextFunction;
 

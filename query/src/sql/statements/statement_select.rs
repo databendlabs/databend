@@ -32,6 +32,7 @@ use sqlparser::ast::SelectItem;
 use sqlparser::ast::TableWithJoins;
 
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::sql::statements::analyzer_statement::QueryAnalyzeState;
 use crate::sql::statements::query::JoinedSchema;
 use crate::sql::statements::query::JoinedSchemaAnalyzer;

@@ -57,6 +57,7 @@ use crate::pipelines::Pipe;
 use crate::pipelines::Pipeline;
 use crate::pipelines::QueryPipelineBuilder;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::Config;
 
 pub struct DataExchangeManager {

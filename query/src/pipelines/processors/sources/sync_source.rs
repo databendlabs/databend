@@ -24,7 +24,7 @@ use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::Event;
 use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::Processor;
-use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 
 /// Synchronized source. such as:
 ///     - Memory storage engine.
@@ -47,7 +47,7 @@ pub struct SyncSourcer<T: 'static + SyncSource> {
 
 impl<T: 'static + SyncSource> SyncSourcer<T> {
     pub fn create(
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
         inner: T,
     ) -> Result<ProcessorPtr> {

@@ -26,6 +26,7 @@ use common_planners::RemoveUserStagePlan;
 use common_storage::parse_uri_location;
 use common_storage::UriLocation;
 
+use crate::sessions::TableContext;
 use crate::sql::binder::Binder;
 use crate::sql::plans::Plan;
 use crate::sql::statements::parse_copy_file_format_options;

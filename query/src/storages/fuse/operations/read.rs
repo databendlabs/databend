@@ -31,7 +31,7 @@ use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::Processor;
 use crate::pipelines::Pipeline;
 use crate::pipelines::SourcePipeBuilder;
-use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::storages::fuse::io::BlockReader;
 use crate::storages::fuse::operations::read::State::Generated;
 use crate::storages::fuse::FuseTable;
@@ -39,7 +39,7 @@ use crate::storages::fuse::FuseTable;
 impl FuseTable {
     pub fn create_block_reader(
         &self,
-        ctx: &Arc<QueryContext>,
+        ctx: &Arc<dyn TableContext>,
         projection: Vec<usize>,
     ) -> Result<Arc<BlockReader>> {
         let operator = ctx.get_storage_operator()?;
@@ -64,7 +64,7 @@ impl FuseTable {
     #[inline]
     pub fn do_read2(
         &self,
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn TableContext>,
         plan: &ReadDataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
@@ -99,7 +99,7 @@ enum State {
 
 struct FuseTableSource {
     state: State,
-    ctx: Arc<QueryContext>,
+    ctx: Arc<dyn TableContext>,
     scan_progress: Arc<Progress>,
     block_reader: Arc<BlockReader>,
     output: Arc<OutputPort>,
@@ -107,7 +107,7 @@ struct FuseTableSource {
 
 impl FuseTableSource {
     pub fn create(
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
         block_reader: Arc<BlockReader>,
     ) -> Result<ProcessorPtr> {

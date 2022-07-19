@@ -29,7 +29,9 @@ use crate::api::ExecutePartialQueryPacket;
 use crate::api::FragmentPlanPacket;
 use crate::api::InitNodesChannelPacket;
 use crate::api::QueryFragmentsPlanPacket;
+use crate::clusters::ClusterHelper;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 
 // Query plan fragment with executor name
 pub struct QueryFragmentAction {

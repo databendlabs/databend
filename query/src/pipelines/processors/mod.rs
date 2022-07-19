@@ -12,22 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod port;
-pub mod processor;
-
-mod port_trigger;
-mod resize_processor;
+pub use common_pipeline::processors::*;
 mod sinks;
 mod sources;
 pub(crate) mod transforms;
 
-pub use port::connect;
-pub use port_trigger::DirectedEdge;
-pub use port_trigger::UpdateList;
-pub use port_trigger::UpdateTrigger;
-pub use processor::Processor;
-pub use processor::Processors;
-pub use resize_processor::ResizeProcessor;
 pub use sinks::AsyncSink;
 pub use sinks::AsyncSinker;
 pub use sinks::EmptySink;

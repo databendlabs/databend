@@ -38,6 +38,7 @@ use crate::pipelines::processors::TransformCastSchema;
 use crate::pipelines::Pipeline;
 use crate::pipelines::SourcePipeBuilder;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 
 pub struct InsertInterpreter {
     ctx: Arc<QueryContext>,

@@ -19,6 +19,8 @@ use common_base::base::tokio;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_fuse_meta::meta::BlockMeta;
+use common_fuse_meta::meta::TableSnapshot;
 use common_meta_app::schema::TableMeta;
 use common_planners::add;
 use common_planners::col;
@@ -30,11 +32,10 @@ use databend_query::catalogs::CATALOG_DEFAULT;
 use databend_query::interpreters::CreateTableInterpreter;
 use databend_query::interpreters::Interpreter;
 use databend_query::sessions::QueryContext;
+use databend_query::sessions::TableContext;
 use databend_query::sql::OPT_KEY_DATABASE_ID;
 use databend_query::sql::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_query::storages::fuse::io::MetaReaders;
-use databend_query::storages::fuse::meta::BlockMeta;
-use databend_query::storages::fuse::meta::TableSnapshot;
 use databend_query::storages::fuse::pruning::BlockPruner;
 use databend_query::storages::fuse::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 use databend_query::storages::fuse::FUSE_OPT_KEY_ROW_PER_BLOCK;
@@ -48,8 +49,9 @@ async fn apply_block_pruning(
     push_down: &Option<Extras>,
     ctx: Arc<QueryContext>,
 ) -> Result<Vec<BlockMeta>> {
+    let ctx: Arc<dyn TableContext> = ctx;
     BlockPruner::new(table_snapshot)
-        .apply(ctx.as_ref(), schema, push_down)
+        .apply(&ctx, schema, push_down)
         .await
         .map(|v| v.into_iter().map(|(_, v)| v).collect())
 }

@@ -21,6 +21,7 @@ use common_exception::Result;
 use crate::procedures::Procedure;
 use crate::procedures::ProcedureFeatures;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::storages::fuse::table_functions::FuseSnapshot;
 use crate::storages::fuse::FuseTable;
 

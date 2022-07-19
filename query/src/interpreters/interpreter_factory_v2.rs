@@ -96,9 +96,9 @@ impl InterpreterFactoryV2 {
         matches!(
             stmt,
             // DfStatement::Query(_)
-            //     | DfStatement::Copy(_)
+            DfStatement::Copy(_)
             //     | DfStatement::Explain(_)
-            DfStatement::CreateStage(_)
+            | DfStatement::CreateStage(_)
                 | DfStatement::ShowStages(_)
                 | DfStatement::DescribeStage(_)
                 | DfStatement::List(_)

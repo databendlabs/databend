@@ -20,7 +20,7 @@ use common_meta_app::schema::TableStatistics;
 use common_planners::OptimizeTablePlan;
 
 use super::mutation::CompactMutator;
-use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::storages::fuse::FuseTable;
 use crate::storages::fuse::DEFAULT_BLOCK_PER_SEGMENT;
 use crate::storages::fuse::DEFAULT_ROW_PER_BLOCK;
@@ -29,7 +29,11 @@ use crate::storages::fuse::FUSE_OPT_KEY_ROW_PER_BLOCK;
 use crate::storages::storage_table::Table;
 
 impl FuseTable {
-    pub async fn do_compact(&self, ctx: Arc<QueryContext>, plan: &OptimizeTablePlan) -> Result<()> {
+    pub async fn do_compact(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        plan: &OptimizeTablePlan,
+    ) -> Result<()> {
         let snapshot_opt = self.read_table_snapshot(ctx.as_ref()).await?;
         let snapshot = if let Some(val) = snapshot_opt {
             val
@@ -62,12 +66,8 @@ impl FuseTable {
             compressed_data_bytes: new_snapshot.summary.compressed_byte_size,
             index_data_bytes: 0, // TODO we do not have it yet
         };
-        self.update_table_meta(
-            ctx.as_ref(),
-            &plan.catalog,
-            &new_snapshot,
-            &mut new_table_meta,
-        )
-        .await
+        let ctx: &dyn TableContext = ctx.as_ref();
+        self.update_table_meta(ctx, &plan.catalog, &new_snapshot, &mut new_table_meta)
+            .await
     }
 }

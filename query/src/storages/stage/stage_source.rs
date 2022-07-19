@@ -35,10 +35,10 @@ use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::Deserializer;
 use crate::pipelines::processors::MultiFileSplitter;
 use crate::pipelines::processors::OperatorInfo;
-use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 
 pub struct StageSourceHelper {
-    ctx: Arc<QueryContext>,
+    ctx: Arc<dyn TableContext>,
     operator_info: OperatorInfo,
     file_format: Arc<dyn InputFormat>,
     files: Arc<Mutex<VecDeque<String>>>,
@@ -47,7 +47,7 @@ pub struct StageSourceHelper {
 
 impl StageSourceHelper {
     pub fn try_create(
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn TableContext>,
         schema: DataSchemaRef,
         table_info: StageTableInfo,
         files: Arc<Mutex<VecDeque<String>>>,
@@ -112,7 +112,7 @@ impl StageSourceHelper {
         ))
     }
 
-    pub async fn get_op(ctx: &Arc<QueryContext>, stage: &UserStageInfo) -> Result<Operator> {
+    pub async fn get_op(ctx: &Arc<dyn TableContext>, stage: &UserStageInfo) -> Result<Operator> {
         if stage.stage_type == StageType::Internal {
             ctx.get_storage_operator()
         } else {

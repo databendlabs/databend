@@ -21,6 +21,7 @@ use common_exception::Result;
 use common_planners::DeletePlan;
 use common_planners::Expression;
 
+use crate::sessions::TableContext;
 use crate::sql::binder::Binder;
 use crate::sql::binder::ScalarBinder;
 use crate::sql::exec::ExpressionBuilder;
