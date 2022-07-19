@@ -66,7 +66,6 @@ use crate::interpreters::SelectInterpreter;
 use crate::interpreters::SettingInterpreter;
 use crate::interpreters::ShowCreateDatabaseInterpreter;
 use crate::interpreters::ShowCreateTableInterpreter;
-use crate::interpreters::ShowDatabasesInterpreter;
 use crate::interpreters::ShowFunctionsInterpreter;
 use crate::interpreters::ShowGrantsInterpreter;
 use crate::interpreters::ShowMetricsInterpreter;
@@ -104,9 +103,7 @@ impl InterpreterFactory {
             PlanNode::Delete(v) => Ok(Arc::new(DeleteInterpreter::try_create(ctx, v)?)),
             PlanNode::Copy(v) => Ok(Arc::new(CopyInterpreter::try_create(ctx, v)?)),
             PlanNode::Call(v) => Ok(Arc::new(CallInterpreter::try_create(ctx, v)?)),
-            PlanNode::Show(ShowPlan::ShowDatabases(v)) => {
-                Ok(Arc::new(ShowDatabasesInterpreter::try_create(ctx, v)?))
-            }
+          
             PlanNode::Show(ShowPlan::ShowTables(v)) => {
                 Ok(Arc::new(ShowTablesInterpreter::try_create(ctx, v)?))
             }

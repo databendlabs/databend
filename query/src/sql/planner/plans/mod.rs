@@ -79,10 +79,7 @@ use common_planners::RevokeRolePlan;
 use common_planners::SettingPlan;
 use common_planners::ShowCreateDatabasePlan;
 use common_planners::ShowCreateTablePlan;
-use common_planners::ShowDatabasesPlan;
 use common_planners::ShowGrantsPlan;
-use common_planners::ShowTablesPlan;
-use common_planners::ShowTablesStatusPlan;
 use common_planners::TruncateTablePlan;
 use common_planners::UndropTablePlan;
 pub use copy_v2::CopyPlanV2;
@@ -140,17 +137,16 @@ pub enum Plan {
     ShowSettings,
 
     // Databases
-    ShowDatabases(Box<ShowDatabasesPlan>),
+    // ShowDatabases(_) -> Rewrite to Query,
     ShowCreateDatabase(Box<ShowCreateDatabasePlan>),
     CreateDatabase(Box<CreateDatabasePlan>),
     DropDatabase(Box<DropDatabasePlan>),
     RenameDatabase(Box<RenameDatabasePlan>),
 
     // Tables
-    ShowTables(Box<ShowTablesPlan>),
+    // ShowTables/ShowTablesStatus -> Rewrite to Query,
     ShowCreateTable(Box<ShowCreateTablePlan>),
     DescribeTable(Box<DescribeTablePlan>),
-    ShowTablesStatus(Box<ShowTablesStatusPlan>),
     CreateTable(Box<CreateTablePlanV2>),
     DropTable(Box<DropTablePlan>),
     UndropTable(Box<UndropTablePlan>),
@@ -214,15 +210,12 @@ impl Display for Plan {
             Plan::ShowMetrics => write!(f, "ShowMetrics"),
             Plan::ShowProcessList => write!(f, "ShowProcessList"),
             Plan::ShowSettings => write!(f, "ShowSettings"),
-            Plan::ShowDatabases(_) => write!(f, "ShowDatabases"),
             Plan::ShowCreateDatabase(_) => write!(f, "ShowCreateDatabase"),
             Plan::CreateDatabase(_) => write!(f, "CreateDatabase"),
             Plan::DropDatabase(_) => write!(f, "DropDatabase"),
             Plan::RenameDatabase(_) => write!(f, "RenameDatabase"),
-            Plan::ShowTables(_) => write!(f, "ShowTables"),
             Plan::ShowCreateTable(_) => write!(f, "ShowCreateTable"),
             Plan::DescribeTable(_) => write!(f, "DescribeTable"),
-            Plan::ShowTablesStatus(_) => write!(f, "ShowTablesStatus"),
             Plan::CreateTable(_) => write!(f, "CreateTable"),
             Plan::DropTable(_) => write!(f, "DropTable"),
             Plan::UndropTable(_) => write!(f, "UndropTable"),
@@ -281,15 +274,12 @@ impl Plan {
             Plan::ShowMetrics => Arc::new(DataSchema::empty()),
             Plan::ShowProcessList => Arc::new(DataSchema::empty()),
             Plan::ShowSettings => Arc::new(DataSchema::empty()),
-            Plan::ShowDatabases(_) => Arc::new(DataSchema::empty()),
             Plan::ShowCreateDatabase(plan) => plan.schema(),
             Plan::CreateDatabase(plan) => plan.schema(),
             Plan::DropDatabase(plan) => plan.schema(),
             Plan::RenameDatabase(plan) => plan.schema(),
-            Plan::ShowTables(_) => Arc::new(DataSchema::empty()),
             Plan::ShowCreateTable(plan) => plan.schema(),
             Plan::DescribeTable(plan) => plan.schema(),
-            Plan::ShowTablesStatus(_) => Arc::new(DataSchema::empty()),
             Plan::CreateTable(plan) => plan.schema(),
             Plan::DropTable(plan) => plan.schema(),
             Plan::UndropTable(plan) => plan.schema(),

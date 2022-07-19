@@ -188,9 +188,7 @@ impl InterpreterFactoryV2 {
             Plan::ShowSettings => Ok(Arc::new(ShowSettingsInterpreter::try_create(ctx)?)),
 
             // Databases
-            Plan::ShowDatabases(show_databases) => Ok(Arc::new(
-                ShowDatabasesInterpreter::try_create(ctx, *show_databases.clone())?,
-            )),
+         
             Plan::ShowCreateDatabase(show_create_database) => Ok(Arc::new(
                 ShowCreateDatabaseInterpreter::try_create(ctx, *show_create_database.clone())?,
             )),
@@ -206,18 +204,11 @@ impl InterpreterFactoryV2 {
             )),
 
             // Tables
-            Plan::ShowTables(show_tables) => Ok(Arc::new(ShowTablesInterpreter::try_create(
-                ctx,
-                *show_tables.clone(),
-            )?)),
             Plan::ShowCreateTable(show_create_table) => Ok(Arc::new(
                 ShowCreateTableInterpreter::try_create(ctx, *show_create_table.clone())?,
             )),
             Plan::DescribeTable(describe_table) => Ok(Arc::new(
                 DescribeTableInterpreter::try_create(ctx, *describe_table.clone())?,
-            )),
-            Plan::ShowTablesStatus(show_tables_status) => Ok(Arc::new(
-                ShowTablesStatusInterpreter::try_create(ctx, *show_tables_status.clone())?,
             )),
             Plan::CreateTable(create_table) => Ok(Arc::new(CreateTableInterpreterV2::try_create(
                 ctx,
