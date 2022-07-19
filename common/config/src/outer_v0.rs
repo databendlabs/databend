@@ -511,9 +511,11 @@ impl TryInto<InnerStorageHdfsConfig> for HdfsConfig {
 #[serde(default)]
 pub struct HttpConfig {
     #[clap(long = "storage-http-endpoint-url", default_value_t)]
-    pub endpoint_url: String,
+    #[serde(rename = "endpoint_url")]
+    pub http_endpoint_url: String,
     #[clap(long = "storage-http-paths")]
-    pub paths: Vec<String>,
+    #[serde(rename = "paths")]
+    pub http_paths: Vec<String>,
 }
 
 impl Default for HttpConfig {
@@ -525,8 +527,8 @@ impl Default for HttpConfig {
 impl From<InnerStorageHttpConfig> for HttpConfig {
     fn from(inner: InnerStorageHttpConfig) -> Self {
         Self {
-            endpoint_url: inner.endpoint_url,
-            paths: inner.paths,
+            http_endpoint_url: inner.endpoint_url,
+            http_paths: inner.paths,
         }
     }
 }
@@ -536,8 +538,8 @@ impl TryInto<InnerStorageHttpConfig> for HttpConfig {
 
     fn try_into(self) -> Result<InnerStorageHttpConfig> {
         Ok(InnerStorageHttpConfig {
-            endpoint_url: self.endpoint_url,
-            paths: self.paths,
+            endpoint_url: self.http_endpoint_url,
+            paths: self.http_paths,
         })
     }
 }
