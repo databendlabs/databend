@@ -523,7 +523,7 @@ impl SubqueryRewriter {
             }
             RelOperator::LogicalInnerJoin(join) => {
                 // Currently, we don't support join conditions contain subquery
-                let left_flatten_plan = self.flatten(plan.child(0)?, correlated_columns)?.clone();
+                let left_flatten_plan = self.flatten(plan.child(0)?, correlated_columns)?;
                 let right_flatten_plan = self.flatten(plan.child(1)?, correlated_columns)?;
                 Ok(SExpr::create_binary(
                     LogicalInnerJoin {
