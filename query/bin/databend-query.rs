@@ -39,6 +39,7 @@ use databend_query::servers::Server;
 use databend_query::servers::ShutdownHandle;
 use databend_query::sessions::SessionManager;
 use databend_query::sessions::SessionType;
+use databend_query::sessions::TableContext;
 use databend_query::Config;
 use databend_query::QUERY_SEMVER;
 use tokio_cron_scheduler::Job;
@@ -252,7 +253,7 @@ async fn run_compaction_cmd(conf: &Config) -> common_exception::Result<()> {
     let ctx = qc.clone();
     let catalog = cl.clone();
     let sched = JobScheduler::new().expect("Failed to new JobScheduler");
-    let cron_job = Job::new_async("1/10 * * * * *", move |_, _| {
+    let cron_job = Job::new_async("@daily", move |_, _| {
         let catalog = Arc::clone(&catalog);
         let tenant = tenant.clone();
         let ctx = Arc::clone(&ctx);

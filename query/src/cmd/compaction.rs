@@ -46,6 +46,7 @@ use tokio_util::time::DelayQueue;
 
 use crate::catalogs::CATALOG_DEFAULT;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::storages::Table;
 use crate::Config;
 
