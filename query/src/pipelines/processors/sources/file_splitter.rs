@@ -99,7 +99,7 @@ impl FileSplitter {
         rows_to_skip: &mut u64,
     ) -> Result<()> {
         if data.is_empty() {
-            return Ok(())
+            return Ok(());
         }
         let mut data_slice = data;
 
