@@ -37,6 +37,7 @@ pub enum StorageParams {
     Fs(StorageFsConfig),
     #[cfg(feature = "storage-hdfs")]
     Hdfs(StorageHdfsConfig),
+    Http(StorageHttpConfig),
     Memory,
     S3(StorageS3Config),
 }
@@ -56,10 +57,13 @@ impl Display for StorageParams {
                 "azblob://container={},root={},endpoint={}",
                 v.container, v.root, v.endpoint_url
             ),
-            StorageParams::Fs(v) => write!(f, "fs://root={}", v.root,),
+            StorageParams::Fs(v) => write!(f, "fs://root={}", v.root),
             #[cfg(feature = "storage-hdfs")]
             StorageParams::Hdfs(v) => {
-                write!(f, "hdfs://root={},name_node={}", v.root, v.name_node,)
+                write!(f, "hdfs://root={},name_node={}", v.root, v.name_node)
+            }
+            StorageParams::Http(v) => {
+                write!(f, "http://endpoint={}, files={:?}", v.endpoint_url, v.paths)
             }
             StorageParams::Memory => write!(f, "memory://"),
             StorageParams::S3(v) => {
@@ -83,6 +87,7 @@ impl StorageParams {
             StorageParams::Fs(_) => false,
             #[cfg(feature = "storage-hdfs")]
             StorageParams::Hdfs(_) => false,
+            StorageParams::Http(v) => v.endpoint_url.starts_with("https://"),
             StorageParams::Memory => false,
             StorageParams::S3(v) => v.endpoint_url.starts_with("https://"),
         }
@@ -193,4 +198,11 @@ impl Debug for StorageS3Config {
             .field("master_key", &mask_string(&self.master_key, 3))
             .finish()
     }
+}
+
+/// Config for storage backend http.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StorageHttpConfig {
+    pub endpoint_url: String,
+    pub paths: Vec<String>,
 }

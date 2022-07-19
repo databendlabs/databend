@@ -20,6 +20,7 @@ use std::io::Result;
 use anyhow::anyhow;
 use opendal::Scheme;
 
+use crate::config::StorageHttpConfig;
 use crate::config::STORAGE_S3_DEFAULT_ENDPOINT;
 use crate::StorageAzblobConfig;
 use crate::StorageParams;
@@ -118,6 +119,23 @@ pub fn parse_uri_location(l: &UriLocation) -> Result<(StorageParams, String)> {
                     )
                 })?,
         }),
+        Scheme::Http => {
+            let cfg = StorageHttpConfig {
+                endpoint_url: format!("{}://{}", l.protocol, l.name),
+                paths: globiter::Pattern::parse(&l.path)
+                    .map_err(|err| {
+                        Error::new(
+                            ErrorKind::InvalidInput,
+                            anyhow!("input path is not a valid glob: {err:?}"),
+                        )
+                    })?
+                    .iter()
+                    .collect(),
+            };
+
+            // HTTP is special that we don't support dir, always return / instead.
+            return Ok((StorageParams::Http(cfg), "/".to_string()));
+        }
         v => {
             return Err(Error::new(
                 ErrorKind::InvalidInput,
