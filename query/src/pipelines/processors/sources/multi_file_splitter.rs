@@ -21,6 +21,7 @@ use common_base::base::ProgressValues;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_formats::InputFormat;
+use common_io::prelude::FormatSettings;
 use common_meta_types::StageFileCompression;
 use common_storage::init_operator;
 use common_storage::StorageParams;
@@ -43,6 +44,7 @@ pub struct MultiFileSplitter {
     scan_progress: Arc<Progress>,
     output_splits: VecDeque<Vec<u8>>,
     input_format: Arc<dyn InputFormat>,
+    format_settings: FormatSettings,
     files: Arc<Mutex<VecDeque<String>>>,
     compress_option: StageFileCompression,
 }
@@ -60,6 +62,7 @@ impl MultiFileSplitter {
         output: Arc<OutputPort>,
         input_format: Arc<dyn InputFormat>,
         compress_option: StageFileCompression,
+        format_settings: FormatSettings,
         files: Arc<Mutex<VecDeque<String>>>,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(MultiFileSplitter {
@@ -70,6 +73,7 @@ impl MultiFileSplitter {
             output_splits: Default::default(),
             compress_option,
             input_format,
+            format_settings,
             finished: false,
             files,
         })))
@@ -94,6 +98,7 @@ impl MultiFileSplitter {
         self.current_file = Some(FileSplitter::create(
             reader,
             self.input_format.clone(),
+            self.format_settings.clone(),
             self.get_compression_algo(path)?,
         ));
         Ok(())
