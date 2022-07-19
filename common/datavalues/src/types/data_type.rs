@@ -17,6 +17,7 @@ use std::collections::BTreeMap;
 
 use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_arrow::arrow::datatypes::Field as ArrowField;
+use common_arrow::arrow::datatypes::TimeUnit;
 use common_exception::Result;
 use dyn_clone::DynClone;
 use enum_dispatch::enum_dispatch;
@@ -185,7 +186,20 @@ pub fn from_arrow_type(dt: &ArrowType) -> DataTypeImpl {
             DataTypeImpl::String(StringType::default())
         }
 
-        ArrowType::Timestamp(_, _) => DataTypeImpl::Timestamp(TimestampType::create(3)),
+        ArrowType::Timestamp(TimeUnit::Second, _) => {
+            DataTypeImpl::Timestamp(TimestampType::create(0))
+        }
+        ArrowType::Timestamp(TimeUnit::Millisecond, _) => {
+            DataTypeImpl::Timestamp(TimestampType::create(3))
+        }
+        ArrowType::Timestamp(TimeUnit::Microsecond, _) => {
+            DataTypeImpl::Timestamp(TimestampType::create(6))
+        }
+        // At most precision is 6
+        ArrowType::Timestamp(TimeUnit::Nanosecond, _) => {
+            DataTypeImpl::Timestamp(TimestampType::create(6))
+        }
+
         ArrowType::Date32 | ArrowType::Date64 => DataTypeImpl::Date(DateType::default()),
 
         ArrowType::Struct(fields) => {

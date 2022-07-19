@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use chrono::DateTime;
@@ -25,8 +24,6 @@ use common_exception::Result;
 use rand::prelude::*;
 
 use super::data_type::DataType;
-use super::data_type::ARROW_EXTENSION_META;
-use super::data_type::ARROW_EXTENSION_NAME;
 use super::type_id::TypeID;
 use crate::prelude::*;
 use crate::serializations::TimestampSerializer;
@@ -141,15 +138,9 @@ impl DataType for TimestampType {
         Ok(Series::from_data(&value))
     }
 
+    // To avoid the overhead of precision conversion, we store Microsecond for all precisions.
     fn arrow_type(&self) -> ArrowType {
         ArrowType::Timestamp(TimeUnit::Microsecond, None)
-    }
-
-    fn custom_arrow_meta(&self) -> Option<BTreeMap<String, String>> {
-        let mut mp = BTreeMap::new();
-        mp.insert(ARROW_EXTENSION_NAME.to_string(), "Timestamp".to_string());
-        mp.insert(ARROW_EXTENSION_META.to_string(), self.precision.to_string());
-        Some(mp)
     }
 
     fn create_serializer_inner<'a>(&self, col: &'a ColumnRef) -> Result<TypeSerializerImpl<'a>> {

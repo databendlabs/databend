@@ -315,7 +315,7 @@ pub fn arrow_cast_compute(
         return cast_to_timestamp(column, from_type);
     }
 
-    let arrow_array = column.as_arrow_array();
+    let arrow_array = column.as_arrow_array(from_type.clone());
     let arrow_options = cast_options.as_arrow();
     let result: ArrayRef =
         cast::cast(arrow_array.as_ref(), &data_type.arrow_type(), arrow_options)?;
