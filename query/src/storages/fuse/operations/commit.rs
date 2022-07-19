@@ -76,9 +76,6 @@ impl FuseTable {
         // By default, it is 2 minutes
         let max_elapsed = OCC_DEFAULT_BACKOFF_MAX_ELAPSED_MS;
 
-        // see https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/ for more
-        // informations. (The strategy that crate backoff implements is “Equal Jitter”)
-
         // To simplify the settings, using fixed common values for randomization_factor and multiplier
         let mut backoff = ExponentialBackoffBuilder::new()
             .with_initial_interval(init_delay)

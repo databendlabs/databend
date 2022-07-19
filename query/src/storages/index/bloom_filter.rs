@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use bincode;
 use bit_vec::BitVec;
+use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
@@ -25,7 +26,6 @@ use common_planners::Expression;
 use common_tracing::tracing;
 
 use crate::pipelines::processors::transforms::ExpressionExecutor;
-use crate::sessions::QueryContext;
 use crate::storages::index::IndexSchemaVersion;
 
 /// BloomFilterExprEvalResult represents the evaluation result of an expression by bloom filter.
@@ -70,7 +70,7 @@ pub struct BloomFilterIndexer {
     // The bloom block contains bloom filters;
     pub bloom_block: DataBlock,
 
-    pub ctx: Arc<QueryContext>,
+    pub ctx: Arc<dyn TableContext>,
 }
 
 // TODO teaks the default max_num_bits value according to default value of block size?
@@ -110,7 +110,7 @@ impl BloomFilterIndexer {
     pub fn from_bloom_block(
         source_table_schema: DataSchemaRef,
         bloom_block: DataBlock,
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn TableContext>,
     ) -> Result<Self> {
         Ok(Self {
             source_schema: source_table_schema,
@@ -124,7 +124,10 @@ impl BloomFilterIndexer {
     ///
     /// All input blocks should be belong to a Parquet file, e.g. the block array represents the parquet file in memory.
 
-    pub fn try_create(ctx: Arc<QueryContext>, source_data_blocks: &[&DataBlock]) -> Result<Self> {
+    pub fn try_create(
+        ctx: Arc<dyn TableContext>,
+        source_data_blocks: &[&DataBlock],
+    ) -> Result<Self> {
         let seed = Self::create_seed();
         Self::try_create_with_seed(source_data_blocks, seed, ctx)
     }
@@ -135,7 +138,7 @@ impl BloomFilterIndexer {
     pub fn try_create_with_seed(
         blocks: &[&DataBlock],
         seed: u64,
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn TableContext>,
     ) -> Result<Self> {
         if blocks.is_empty() {
             return Err(ErrorCode::BadArguments("data blocks is empty"));
@@ -186,7 +189,7 @@ impl BloomFilterIndexer {
         column_name: &str,
         target: DataValue,
         typ: DataTypeImpl,
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn TableContext>,
     ) -> Result<BloomFilterExprEvalResult> {
         let bloom_column = Self::to_bloom_column_name(column_name);
         if !self.bloom_block.schema().has_field(&bloom_column)
@@ -506,7 +509,7 @@ impl BloomFilter {
     fn compute_column_city_hash(
         seed: u64,
         column: &ColumnRef,
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn TableContext>,
     ) -> Result<ColumnRef> {
         let input_column = "input"; // create a dummy column name
         let input_field = DataField::new(input_column, column.data_type());
@@ -547,7 +550,7 @@ impl BloomFilter {
     fn compute_column_double_hashes(
         &self,
         column: &ColumnRef,
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn TableContext>,
     ) -> Result<(ColumnRef, ColumnRef)> {
         let hash1_column: ColumnRef =
             Self::compute_column_city_hash(self.seed, column, ctx.clone())?;
@@ -561,7 +564,7 @@ impl BloomFilter {
     ///
     /// The design of skipping Nulls is arguably correct. For now we do the same as databricks.
     /// See the design of databricks https://docs.databricks.com/delta/optimizations/bloom-filters.html
-    pub fn add(&mut self, column: &ColumnRef, ctx: Arc<QueryContext>) -> Result<()> {
+    pub fn add(&mut self, column: &ColumnRef, ctx: Arc<dyn TableContext>) -> Result<()> {
         if !Self::is_supported_type(&column.data_type()) {
             return Err(ErrorCode::BadArguments(format!(
                 "Unsupported data type: {} ",
@@ -610,7 +613,7 @@ impl BloomFilter {
         &self,
         data_value: DataValue,
         data_type: DataTypeImpl,
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn TableContext>,
     ) -> Result<(u64, u64)> {
         let col = data_value.as_const_column(&data_type, 1)?;
 
@@ -642,7 +645,12 @@ impl BloomFilter {
     /// let not_exist =
     ///     BloomFilter::is_supported_type(data_type) && !bloom.find(data_value, data_type)?;
     /// ```
-    pub fn find(&self, val: DataValue, typ: DataTypeImpl, ctx: Arc<QueryContext>) -> Result<bool> {
+    pub fn find(
+        &self,
+        val: DataValue,
+        typ: DataTypeImpl,
+        ctx: Arc<dyn TableContext>,
+    ) -> Result<bool> {
         if !Self::is_supported_type(&typ) {
             return Err(ErrorCode::BadArguments(format!(
                 "Unsupported data type: {:?} ",
