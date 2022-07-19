@@ -9,7 +9,7 @@ echo "drop table if exists test_tsv;" | $MYSQL_CLIENT_CONNECT
 echo "create table test_tsv(a string, b int);" | $MYSQL_CLIENT_CONNECT
 
 copy_from_tsv_cases=(
-  "copy into test_tsv from 's3://testbucket/admin/data/sample.tsv' connection=(aws_key_id='minioadmin' aws_secret_key='minioadmin' endpoint_url='${STORAGE_S3_ENDPOINT_URL}') FILE_FORMAT = (type = 'TSV')"
+  "copy into test_tsv from 's3://testbucket/admin/data/escape.tsv' connection=(aws_key_id='minioadmin' aws_secret_key='minioadmin' endpoint_url='${STORAGE_S3_ENDPOINT_URL}') FILE_FORMAT = (type = 'TSV')"
 )
 
 counter=1
