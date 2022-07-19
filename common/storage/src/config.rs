@@ -63,7 +63,7 @@ impl Display for StorageParams {
                 write!(f, "hdfs://root={},name_node={}", v.root, v.name_node)
             }
             StorageParams::Http(v) => {
-                write!(f, "http://endpoint={}, files={:?}", v.endpoint_url, v.paths)
+                write!(f, "http://endpoint={},paths={:?}", v.endpoint_url, v.paths)
             }
             StorageParams::Memory => write!(f, "memory://"),
             StorageParams::S3(v) => {
