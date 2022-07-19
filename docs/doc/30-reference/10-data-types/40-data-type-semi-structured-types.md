@@ -61,12 +61,14 @@ SELECT arr[3][0] FROM array_table;
 
 ## Object Data Types
 
-Databend OBJECT is a data type likes a "dictionary”, “hash”, or “map” in other programming languages.
+Databend OBJECT is a data type acting like a "dictionary”, “hash”, or “map” in other programming languages.
 An OBJECT contains key-value pairs.
 
 In a Databend OBJECT, each key is a VARCHAR, and each value is a VARIANT.
 
-### Example
+### Example 1
+
+This example shows how to access the values at each hierarchical level of an OBJECT:
 
 Create a table with OBJECT type:
 ```sql
@@ -118,6 +120,60 @@ SELECT obj:b:c FROM object_table;
 | 2       |
 +---------+
 ```
+
+### Example 2
+
+This example shows how to query with data of the OBJECT type:
+
+Create a table with an OBJECT column to hold the employee's contact information including name and Email address:
+
+```sql
+CREATE TABLE employees (id INT, info OBJECT);
+```
+
+Insert two rows to the table:
+
+```sql
+INSERT INTO employees VALUES (1, parse_json('{"Email": "amy@databend.com", "Name":"Amy"}'));
+INSERT INTO employees VALUES (2, parse_json('{"Email": "bob@databend.com", "Name":"Bob"}'));
+```
+
+The following statement lists all the Email addresses of the the employees with an ID smaller than 3:
+
+```sql
+SELECT info:Email FROM employees WHERE id < 3;
+
++------------------+
+| info:Email       |
++------------------+
+| amy@databend.com |
+| bob@databend.com |
++------------------+
+```
+
+The following statement returns Bob's Email address by his name:
+
+```sql
+SELECT info:Email FROM employees WHERE info:Name = 'Bob';
+
++------------------+
+| info:Email       |
++------------------+
+| bob@databend.com |
++------------------+
+```
+The following statement returns Bob's Email address by his ID and name:
+
+```sql
+SELECT info:Email FROM employees WHERE id = 2 and info:Name = 'Bob';
+
++------------------+
+| info:Email       |
++------------------+
+| bob@databend.com |
++------------------+
+```
+
 ## Variant Data Types
 
 A VARIANT can store a value of any other type, including ARRAY and OBJECT, likes "Struct" in other languages.

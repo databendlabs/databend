@@ -5,7 +5,9 @@ members = [
     "common/base",
     "common/building",
     "common/cache",
+    "common/catalog",
     "common/codegen",
+    "common/config",
     "common/contexts",
     "common/datablocks",
     "common/datavalues",
@@ -35,6 +37,7 @@ members = [
     "common/tracing",
     "common/users",
     "common/storage",
+    "common/fuse-meta",
 
     # Query
     "query",

@@ -26,6 +26,7 @@ use common_planners::PlanNode::Insert;
 use databend_query::interpreters::*;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::SessionManager;
+use databend_query::sessions::TableContext;
 use databend_query::sql::*;
 use futures::TryStreamExt;
 

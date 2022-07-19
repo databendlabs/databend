@@ -39,7 +39,7 @@ use crate::pipelines::processors::SyncSourcer;
 use crate::pipelines::Pipe;
 use crate::pipelines::Pipeline;
 use crate::pipelines::SinkPipeBuilder;
-use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::storages::StorageContext;
 use crate::storages::StorageDescription;
 use crate::storages::Table;
@@ -74,7 +74,7 @@ impl Table for NullTable {
 
     async fn read_partitions(
         &self,
-        _ctx: Arc<QueryContext>,
+        _ctx: Arc<dyn TableContext>,
         _push_downs: Option<Extras>,
     ) -> Result<(Statistics, Partitions)> {
         Ok((Statistics::default(), vec![]))
@@ -82,7 +82,7 @@ impl Table for NullTable {
 
     fn read2(
         &self,
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn TableContext>,
         _: &ReadDataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
@@ -99,7 +99,7 @@ impl Table for NullTable {
 
     async fn append_data(
         &self,
-        _ctx: Arc<QueryContext>,
+        _ctx: Arc<dyn TableContext>,
         mut stream: SendableDataBlockStream,
     ) -> Result<SendableDataBlockStream> {
         while let Some(block) = stream.next().await {
@@ -113,7 +113,7 @@ impl Table for NullTable {
         )))
     }
 
-    fn append2(&self, _: Arc<QueryContext>, pipeline: &mut Pipeline) -> Result<()> {
+    fn append2(&self, _: Arc<dyn TableContext>, pipeline: &mut Pipeline) -> Result<()> {
         let mut sink_pipeline_builder = SinkPipeBuilder::create();
         for _ in 0..pipeline.output_len() {
             let input_port = InputPort::create();
@@ -125,7 +125,7 @@ impl Table for NullTable {
 
     async fn truncate(
         &self,
-        _ctx: Arc<QueryContext>,
+        _ctx: Arc<dyn TableContext>,
         _truncate_plan: TruncateTablePlan,
     ) -> Result<()> {
         Ok(())
@@ -139,7 +139,7 @@ struct NullSource {
 
 impl NullSource {
     pub fn create(
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
         schema: DataSchemaRef,
     ) -> Result<ProcessorPtr> {

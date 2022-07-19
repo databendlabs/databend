@@ -34,6 +34,7 @@ use common_meta_app::schema::TableMeta;
 use common_planners::OptimizeTableAction;
 use common_planners::*;
 
+use crate::sessions::TableContext;
 use crate::sql::binder::scalar::ScalarBinder;
 use crate::sql::binder::Binder;
 use crate::sql::is_reserved_opt_key;

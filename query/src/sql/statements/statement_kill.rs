@@ -21,6 +21,7 @@ use common_tracing::tracing;
 use sqlparser::ast::Ident;
 
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
 

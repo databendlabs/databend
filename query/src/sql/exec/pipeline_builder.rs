@@ -53,6 +53,7 @@ use crate::pipelines::processors::TransformSortPartial;
 use crate::pipelines::Pipeline;
 use crate::pipelines::SinkPipeBuilder;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::sql::exec::physical_plan::ColumnID;
 use crate::sql::exec::physical_plan::PhysicalPlan;
 use crate::sql::exec::AggregateFunctionDesc;

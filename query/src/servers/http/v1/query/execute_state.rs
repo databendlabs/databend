@@ -39,6 +39,7 @@ use serde::Serialize;
 use ExecuteState::*;
 
 use super::http_query::HttpQueryRequest;
+use crate::clusters::ClusterHelper;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
 use crate::interpreters::InterpreterFactoryV2;
@@ -50,6 +51,7 @@ use crate::pipelines::Pipe;
 use crate::pipelines::Pipeline;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionRef;
+use crate::sessions::TableContext;
 use crate::sql::exec::PhysicalPlan;
 use crate::sql::exec::PipelineBuilder;
 use crate::sql::ColumnBinding;

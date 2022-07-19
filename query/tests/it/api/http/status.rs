@@ -23,6 +23,7 @@ use databend_query::interpreters::Interpreter;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::SessionManager;
 use databend_query::sessions::SessionType;
+use databend_query::sessions::TableContext;
 use databend_query::sql::PlanParser;
 use poem::get;
 use poem::http::header;

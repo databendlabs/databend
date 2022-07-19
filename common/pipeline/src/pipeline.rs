@@ -17,13 +17,12 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::pipelines::executor::FinishedCallback;
-use crate::pipelines::pipe::Pipe;
-use crate::pipelines::pipe::TransformPipeBuilder;
-use crate::pipelines::processors::port::InputPort;
-use crate::pipelines::processors::port::OutputPort;
-use crate::pipelines::processors::processor::ProcessorPtr;
-use crate::pipelines::processors::ResizeProcessor;
+use crate::processors::port::InputPort;
+use crate::processors::port::OutputPort;
+use crate::processors::processor::ProcessorPtr;
+use crate::processors::ResizeProcessor;
+use crate::Pipe;
+use crate::TransformPipeBuilder;
 
 /// The struct of new pipeline
 ///                                                                              +----------+
@@ -48,6 +47,8 @@ pub struct Pipeline {
     pub pipes: Vec<Pipe>,
     on_finished: Option<FinishedCallback>,
 }
+
+pub type FinishedCallback = Arc<Box<dyn Fn(&Option<ErrorCode>) + Send + Sync + 'static>>;
 
 impl Pipeline {
     pub fn create() -> Pipeline {

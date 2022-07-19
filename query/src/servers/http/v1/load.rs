@@ -48,6 +48,7 @@ use crate::servers::http::v1::multipart_format::MultipartFormat;
 use crate::servers::http::v1::multipart_format::MultipartWorker;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionType;
+use crate::sessions::TableContext;
 use crate::sql::PlanParser;
 
 #[derive(Serialize, Deserialize, Debug)]

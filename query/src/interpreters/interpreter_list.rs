@@ -26,6 +26,7 @@ use common_tracing::tracing;
 use crate::interpreters::interpreter_common::list_files;
 use crate::interpreters::Interpreter;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 
 pub struct ListInterpreter {
     ctx: Arc<QueryContext>,

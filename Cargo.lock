@@ -1002,7 +1002,6 @@ dependencies = [
  "common-functions",
  "common-meta-types",
  "fast-float",
- "glob",
  "goldenfile",
  "itertools",
  "logos",
@@ -1060,6 +1059,54 @@ dependencies = [
  "ritelinked",
  "tempfile",
  "walkdir",
+]
+
+[[package]]
+name = "common-catalog"
+version = "0.1.0"
+dependencies = [
+ "async-trait 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)",
+ "common-base",
+ "common-config",
+ "common-contexts",
+ "common-datablocks",
+ "common-datavalues",
+ "common-exception",
+ "common-functions",
+ "common-fuse-meta",
+ "common-io",
+ "common-meta-app",
+ "common-meta-types",
+ "common-pipeline",
+ "common-planners",
+ "common-settings",
+ "common-streams",
+ "common-users",
+ "dyn-clone",
+ "opendal",
+ "parking_lot 0.12.1",
+ "time 0.3.11",
+]
+
+[[package]]
+name = "common-config"
+version = "0.1.0"
+dependencies = [
+ "async-trait 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)",
+ "clap 3.2.6",
+ "common-base",
+ "common-exception",
+ "common-grpc",
+ "common-hive-meta-store",
+ "common-storage",
+ "common-tracing",
+ "once_cell",
+ "opendal",
+ "semver",
+ "serde",
+ "serfig",
+ "thrift",
+ "time 0.3.11",
 ]
 
 [[package]]
@@ -1218,6 +1265,20 @@ dependencies = [
  "strength_reduce",
  "twox-hash",
  "uuid 1.1.2",
+]
+
+[[package]]
+name = "common-fuse-meta"
+version = "0.1.0"
+dependencies = [
+ "common-base",
+ "common-cache",
+ "common-config",
+ "common-datablocks",
+ "common-datavalues",
+ "common-exception",
+ "common-metrics",
+ "serde",
 ]
 
 [[package]]
@@ -1520,6 +1581,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-pipeline"
+version = "0.1.0"
+dependencies = [
+ "async-trait 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)",
+ "common-base",
+ "common-datablocks",
+ "common-datavalues",
+ "common-exception",
+ "common-tracing",
+ "futures",
+ "futures-util",
+ "itertools",
+ "num_cpus",
+ "once_cell",
+ "parking_lot 0.12.1",
+ "petgraph",
+ "serde",
+ "time 0.3.11",
+]
+
+[[package]]
 name = "common-planners"
 version = "0.1.0"
 dependencies = [
@@ -1564,6 +1646,34 @@ dependencies = [
  "prost-build",
  "tonic",
  "tonic-build",
+]
+
+[[package]]
+name = "common-settings"
+version = "0.1.0"
+dependencies = [
+ "async-trait 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)",
+ "clap 3.2.6",
+ "common-base",
+ "common-config",
+ "common-datavalues",
+ "common-exception",
+ "common-grpc",
+ "common-meta-types",
+ "common-storage",
+ "common-tracing",
+ "common-users",
+ "futures",
+ "futures-util",
+ "itertools",
+ "num_cpus",
+ "once_cell",
+ "opendal",
+ "parking_lot 0.12.1",
+ "semver",
+ "serde",
+ "serfig",
+ "time 0.3.11",
 ]
 
 [[package]]
@@ -2162,12 +2272,15 @@ dependencies = [
  "common-base",
  "common-building",
  "common-cache",
+ "common-catalog",
+ "common-config",
  "common-contexts",
  "common-datablocks",
  "common-datavalues",
  "common-exception",
  "common-formats",
  "common-functions",
+ "common-fuse-meta",
  "common-grpc",
  "common-hashtable",
  "common-hive-meta-store",
@@ -2184,7 +2297,9 @@ dependencies = [
  "common-meta-store",
  "common-meta-types",
  "common-metrics",
+ "common-pipeline",
  "common-planners",
+ "common-settings",
  "common-storage",
  "common-streams",
  "common-tracing",

@@ -21,13 +21,14 @@ use common_datablocks::DataBlock;
 use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_fuse_meta::meta::BlockMeta;
+use common_fuse_meta::meta::SegmentInfo;
+use common_fuse_meta::meta::Statistics;
+use common_fuse_meta::meta::TableSnapshot;
+use common_fuse_meta::meta::Versioned;
+use databend_query::sessions::TableContext;
 use databend_query::storages::fuse::io::SegmentWriter;
 use databend_query::storages::fuse::io::TableMetaLocationGenerator;
-use databend_query::storages::fuse::meta::BlockMeta;
-use databend_query::storages::fuse::meta::SegmentInfo;
-use databend_query::storages::fuse::meta::Statistics;
-use databend_query::storages::fuse::meta::TableSnapshot;
-use databend_query::storages::fuse::meta::Versioned;
 use databend_query::storages::fuse::operations::DeletionMutator;
 use uuid::Uuid;
 
@@ -86,7 +87,8 @@ async fn test_deletion_mutator_multiple_empty_segments() -> Result<()> {
         None,
     );
 
-    let mut mutator = DeletionMutator::try_create(&ctx, &location_generator, &base_snapshot)?;
+    let mut mutator =
+        DeletionMutator::try_create(ctx.as_ref(), &location_generator, &base_snapshot)?;
 
     // clear half of the segments
     for (i, _) in test_segment_locations.iter().enumerate().take(100) {

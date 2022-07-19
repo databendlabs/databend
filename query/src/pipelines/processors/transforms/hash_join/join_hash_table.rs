@@ -51,6 +51,7 @@ use crate::pipelines::processors::transforms::hash_join::row::RowPtr;
 use crate::pipelines::processors::transforms::hash_join::row::RowSpace;
 use crate::pipelines::processors::HashJoinState;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::sql::exec::ColumnID;
 use crate::sql::exec::PhysicalScalar;
 use crate::sql::planner::plans::JoinType;

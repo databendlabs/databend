@@ -138,7 +138,57 @@ For information about how to manage buckets and Access Keys for your cloud objec
 ### Downloading Databend
 a. Create a folder named `databend` in the directory `/usr/local`.
 
-b. Download and extract the latest Databend package for your platform from https://github.com/datafuselabs/databend/releases.
+b. Download and extract the latest Databend release for your platform from [Github Release](https://github.com/datafuselabs/databend/releases):
+
+<Tabs groupId="operating-systems">
+<TabItem value="linux" label="Linux">
+
+```shell
+curl -LJO https://github.com/datafuselabs/databend/releases/download/${version}/databend-${version}-x86_64-unknown-linux-musl.tar.gz
+```
+
+</TabItem>
+<TabItem value="mac" label="MacOS">
+
+```shell
+curl -LJO https://github.com/datafuselabs/databend/releases/download/${version}/databend-${version}-aarch64-apple-darwin.tar.gz
+```
+
+</TabItem>
+
+<TabItem value="arm" label="Linux Arm">
+
+```shell
+curl -LJO https://github.com/datafuselabs/databend/releases/download/${version}/databend-${version}-aarch64-unknown-linux-musl.tar.gz
+```
+
+</TabItem>
+</Tabs>
+
+<Tabs groupId="operating-systems">
+<TabItem value="linux" label="Linux">
+
+```shell
+tar xzvf databend-${version}-x86_64-unknown-linux-musl.tar.gz
+```
+
+</TabItem>
+<TabItem value="mac" label="MacOS">
+
+```shell
+tar xzvf databend-${version}-aarch64-apple-darwin.tar.gz
+```
+
+</TabItem>
+
+<TabItem value="arm" label="Linux Arm">
+
+```shell
+tar xzvf databend-${version}-aarch64-unknown-linux-musl.tar.gz
+```
+
+</TabItem>
+</Tabs>
 
 c. Move the extracted folders `bin` and `etc` to the folder `/usr/local/databend`.
 
@@ -170,7 +220,7 @@ b. In the file `databend-query-node.toml`, set the parameter `type` in [storage]
 type = "s3"
 ```
 
-c. Comment out the [storage.fs] block first, and then uncomment the [storage.s3] block if you're using a S3 compatible object storage, or uncomment the [storage.azblob] block if you're using Azure Blob storage.
+c. Comment out the `[storage.fs]` block first, and then uncomment the `[storage.s3]` block if you're using a S3 compatible object storage, or uncomment the `[storage.azblob]` block if you're using Azure Blob storage.
 
 ```toml
 # Set a local folder to store your data.
@@ -300,3 +350,4 @@ INSERT INTO t1 VALUES(1), (2);
 
 SELECT * FROM t1;
 ```
+<GetLatest/>

@@ -26,7 +26,7 @@ use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 use common_meta_types::UserDefinedFunction;
 
-use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::storages::system::table::AsyncOneBlockSystemTable;
 use crate::storages::system::table::AsyncSystemTable;
 use crate::storages::Table;
@@ -43,7 +43,7 @@ impl AsyncSystemTable for FunctionsTable {
         &self.table_info
     }
 
-    async fn get_full_data(&self, ctx: Arc<QueryContext>) -> Result<DataBlock> {
+    async fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
         let function_factory = FunctionFactory::instance();
         let aggregate_function_factory = AggregateFunctionFactory::instance();
         let func_names = function_factory.registered_names();
@@ -172,7 +172,7 @@ impl FunctionsTable {
         AsyncOneBlockSystemTable::create(FunctionsTable { table_info })
     }
 
-    async fn get_udfs(ctx: Arc<QueryContext>) -> Result<Vec<UserDefinedFunction>> {
+    async fn get_udfs(ctx: Arc<dyn TableContext>) -> Result<Vec<UserDefinedFunction>> {
         let tenant = ctx.get_tenant();
         let user_mgr = ctx.get_user_manager();
         user_mgr.get_udfs(&tenant).await

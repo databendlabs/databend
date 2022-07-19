@@ -113,6 +113,17 @@ pub struct ShareId {
     pub share_id: u64,
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
+pub struct ShareIdToName {
+    pub share_id: u64,
+}
+
+impl Display for ShareIdToName {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.share_id)
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum ShareGrantObject {
     Database(u64),
@@ -197,6 +208,10 @@ impl ShareMeta {
             comment,
             ..Default::default()
         }
+    }
+
+    pub fn get_accounts(&self) -> Vec<String> {
+        Vec::<String>::from_iter(self.accounts.clone().into_iter())
     }
 
     pub fn has_account(&self, account: &String) -> bool {

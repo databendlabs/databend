@@ -28,6 +28,7 @@ use sqlparser::ast::TableWithJoins;
 
 use crate::catalogs::CATALOG_DEFAULT;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::sql::statements::analyzer_expr::ExpressionAnalyzer;
 use crate::sql::statements::query::query_schema_joined::JoinedSchema;
 use crate::sql::statements::resolve_table;

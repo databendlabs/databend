@@ -43,6 +43,7 @@ use poem::Route;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::clusters::ClusterHelper;
 use crate::interpreters::InterpreterFactory;
 use crate::interpreters::InterpreterFactoryV2;
 use crate::pipelines::processors::port::OutputPort;
@@ -52,6 +53,7 @@ use crate::servers::clickhouse::CLickHouseFederated;
 use crate::servers::http::v1::HttpQueryContext;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionType;
+use crate::sessions::TableContext;
 use crate::sql::plans::Plan;
 use crate::sql::DfParser;
 use crate::sql::PlanParser;

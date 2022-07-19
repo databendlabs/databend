@@ -106,17 +106,67 @@ impl Evaluator {
                 (Scalar::UInt8(val), DataType::UInt16) => {
                     Ok(Value::Scalar(Scalar::UInt16(val as u16)))
                 }
+                (Scalar::UInt8(val), DataType::UInt32) => {
+                    Ok(Value::Scalar(Scalar::UInt32(val as u32)))
+                }
+                (Scalar::UInt16(val), DataType::UInt32) => {
+                    Ok(Value::Scalar(Scalar::UInt32(val as u32)))
+                }
+                (Scalar::UInt8(val), DataType::UInt64) => {
+                    Ok(Value::Scalar(Scalar::UInt64(val as u64)))
+                }
+                (Scalar::UInt16(val), DataType::UInt64) => {
+                    Ok(Value::Scalar(Scalar::UInt64(val as u64)))
+                }
+                (Scalar::UInt32(val), DataType::UInt64) => {
+                    Ok(Value::Scalar(Scalar::UInt64(val as u64)))
+                }
                 (Scalar::Int8(val), DataType::Int16) => {
                     Ok(Value::Scalar(Scalar::Int16(val as i16)))
                 }
                 (Scalar::UInt8(val), DataType::Int16) => {
                     Ok(Value::Scalar(Scalar::Int16(val as i16)))
                 }
+                (Scalar::Int8(val), DataType::Int32) => {
+                    Ok(Value::Scalar(Scalar::Int32(val as i32)))
+                }
+                (Scalar::Int16(val), DataType::Int32) => {
+                    Ok(Value::Scalar(Scalar::Int32(val as i32)))
+                }
+                (Scalar::UInt8(val), DataType::Int32) => {
+                    Ok(Value::Scalar(Scalar::Int32(val as i32)))
+                }
+                (Scalar::UInt16(val), DataType::Int32) => {
+                    Ok(Value::Scalar(Scalar::Int32(val as i32)))
+                }
+                (Scalar::Int8(val), DataType::Int64) => {
+                    Ok(Value::Scalar(Scalar::Int64(val as i64)))
+                }
+                (Scalar::Int16(val), DataType::Int64) => {
+                    Ok(Value::Scalar(Scalar::Int64(val as i64)))
+                }
+                (Scalar::Int32(val), DataType::Int64) => {
+                    Ok(Value::Scalar(Scalar::Int64(val as i64)))
+                }
+                (Scalar::UInt8(val), DataType::Int64) => {
+                    Ok(Value::Scalar(Scalar::Int64(val as i64)))
+                }
+                (Scalar::UInt16(val), DataType::Int64) => {
+                    Ok(Value::Scalar(Scalar::Int64(val as i64)))
+                }
+                (Scalar::UInt32(val), DataType::Int64) => {
+                    Ok(Value::Scalar(Scalar::Int64(val as i64)))
+                }
                 (scalar @ Scalar::Boolean(_), DataType::Boolean)
                 | (scalar @ Scalar::String(_), DataType::String)
                 | (scalar @ Scalar::UInt8(_), DataType::UInt8)
+                | (scalar @ Scalar::UInt16(_), DataType::UInt16)
+                | (scalar @ Scalar::UInt32(_), DataType::UInt32)
+                | (scalar @ Scalar::UInt64(_), DataType::UInt64)
                 | (scalar @ Scalar::Int8(_), DataType::Int8)
                 | (scalar @ Scalar::Int16(_), DataType::Int16)
+                | (scalar @ Scalar::Int32(_), DataType::Int32)
+                | (scalar @ Scalar::Int64(_), DataType::Int64)
                 | (scalar @ Scalar::Null, DataType::Null)
                 | (scalar @ Scalar::EmptyArray, DataType::EmptyArray) => Ok(Value::Scalar(scalar)),
                 (scalar, dest_ty) => Err((
@@ -174,17 +224,67 @@ impl Evaluator {
                 (Column::UInt8(column), DataType::UInt16) => Ok(Value::Column(Column::UInt16(
                     column.iter().map(|v| *v as u16).collect(),
                 ))),
+                (Column::UInt8(column), DataType::UInt32) => Ok(Value::Column(Column::UInt32(
+                    column.iter().map(|v| *v as u32).collect(),
+                ))),
+                (Column::UInt16(column), DataType::UInt32) => Ok(Value::Column(Column::UInt32(
+                    column.iter().map(|v| *v as u32).collect(),
+                ))),
+                (Column::UInt8(column), DataType::UInt64) => Ok(Value::Column(Column::UInt64(
+                    column.iter().map(|v| *v as u64).collect(),
+                ))),
+                (Column::UInt16(column), DataType::UInt64) => Ok(Value::Column(Column::UInt64(
+                    column.iter().map(|v| *v as u64).collect(),
+                ))),
+                (Column::UInt32(column), DataType::UInt64) => Ok(Value::Column(Column::UInt64(
+                    column.iter().map(|v| *v as u64).collect(),
+                ))),
                 (Column::Int8(column), DataType::Int16) => Ok(Value::Column(Column::Int16(
                     column.iter().map(|v| *v as i16).collect(),
                 ))),
                 (Column::UInt8(column), DataType::Int16) => Ok(Value::Column(Column::Int16(
                     column.iter().map(|v| *v as i16).collect(),
                 ))),
+                (Column::Int8(column), DataType::Int32) => Ok(Value::Column(Column::Int32(
+                    column.iter().map(|v| *v as i32).collect(),
+                ))),
+                (Column::Int16(column), DataType::Int32) => Ok(Value::Column(Column::Int32(
+                    column.iter().map(|v| *v as i32).collect(),
+                ))),
+                (Column::UInt8(column), DataType::Int32) => Ok(Value::Column(Column::Int32(
+                    column.iter().map(|v| *v as i32).collect(),
+                ))),
+                (Column::UInt16(column), DataType::Int32) => Ok(Value::Column(Column::Int32(
+                    column.iter().map(|v| *v as i32).collect(),
+                ))),
+                (Column::Int8(column), DataType::Int64) => Ok(Value::Column(Column::Int64(
+                    column.iter().map(|v| *v as i64).collect(),
+                ))),
+                (Column::Int16(column), DataType::Int64) => Ok(Value::Column(Column::Int64(
+                    column.iter().map(|v| *v as i64).collect(),
+                ))),
+                (Column::Int32(column), DataType::Int64) => Ok(Value::Column(Column::Int64(
+                    column.iter().map(|v| *v as i64).collect(),
+                ))),
+                (Column::UInt8(column), DataType::Int64) => Ok(Value::Column(Column::Int64(
+                    column.iter().map(|v| *v as i64).collect(),
+                ))),
+                (Column::UInt16(column), DataType::Int64) => Ok(Value::Column(Column::Int64(
+                    column.iter().map(|v| *v as i64).collect(),
+                ))),
+                (Column::UInt32(column), DataType::Int64) => Ok(Value::Column(Column::Int64(
+                    column.iter().map(|v| *v as i64).collect(),
+                ))),
                 (col @ Column::Boolean(_), DataType::Boolean)
                 | (col @ Column::String { .. }, DataType::String)
                 | (col @ Column::UInt8(_), DataType::UInt8)
+                | (col @ Column::UInt16(_), DataType::UInt16)
+                | (col @ Column::UInt32(_), DataType::UInt32)
+                | (col @ Column::UInt64(_), DataType::UInt64)
                 | (col @ Column::Int8(_), DataType::Int8)
                 | (col @ Column::Int16(_), DataType::Int16)
+                | (col @ Column::Int32(_), DataType::Int32)
+                | (col @ Column::Int64(_), DataType::Int64)
                 | (col @ Column::Null { .. }, DataType::Null)
                 | (col @ Column::EmptyArray { .. }, DataType::EmptyArray) => Ok(Value::Column(col)),
                 (col, dest_ty) => Err((span, (format!("unable to cast {col:?} to {dest_ty}")))),
@@ -197,8 +297,12 @@ impl Evaluator {
             Literal::Null => Scalar::Null,
             Literal::Int8(val) => Scalar::Int8(*val),
             Literal::Int16(val) => Scalar::Int16(*val),
+            Literal::Int32(val) => Scalar::Int32(*val),
+            Literal::Int64(val) => Scalar::Int64(*val),
             Literal::UInt8(val) => Scalar::UInt8(*val),
             Literal::UInt16(val) => Scalar::UInt16(*val),
+            Literal::UInt32(val) => Scalar::UInt32(*val),
+            Literal::UInt64(val) => Scalar::UInt64(*val),
             Literal::Boolean(val) => Scalar::Boolean(*val),
             Literal::String(val) => Scalar::String(val.clone()),
         }
@@ -251,6 +355,11 @@ impl DomainCalculator {
                 min: *i as i64,
                 max: *i as i64,
             }),
+            Literal::Int32(i) => Domain::Int(IntDomain {
+                min: *i as i64,
+                max: *i as i64,
+            }),
+            Literal::Int64(i) => Domain::Int(IntDomain { min: *i, max: *i }),
             Literal::UInt8(i) => Domain::UInt(UIntDomain {
                 min: *i as u64,
                 max: *i as u64,
@@ -259,6 +368,11 @@ impl DomainCalculator {
                 min: *i as u64,
                 max: *i as u64,
             }),
+            Literal::UInt32(i) => Domain::UInt(UIntDomain {
+                min: *i as u64,
+                max: *i as u64,
+            }),
+            Literal::UInt64(i) => Domain::UInt(UIntDomain { min: *i, max: *i }),
             Literal::Boolean(true) => Domain::Boolean(BooleanDomain {
                 has_false: false,
                 has_true: true,
@@ -317,6 +431,38 @@ impl DomainCalculator {
                 Ok(Domain::Int(IntDomain {
                     min: (*min).min(i16::MAX as u64) as i64,
                     max: (*max).min(i16::MAX as u64) as i64,
+                }))
+            }
+            (Domain::UInt(UIntDomain { min, max }), DataType::UInt32) => {
+                Ok(Domain::UInt(UIntDomain {
+                    min: (*min).min(u32::MAX as u64),
+                    max: (*max).min(u32::MAX as u64),
+                }))
+            }
+            (Domain::Int(IntDomain { min, max }), DataType::Int32) => Ok(Domain::Int(IntDomain {
+                min: (*min).max(i32::MIN as i64).min(i32::MAX as i64),
+                max: (*max).max(i32::MIN as i64).min(i32::MAX as i64),
+            })),
+            (Domain::UInt(UIntDomain { min, max }), DataType::Int32) => {
+                Ok(Domain::Int(IntDomain {
+                    min: (*min).min(i32::MAX as u64) as i64,
+                    max: (*max).min(i32::MAX as u64) as i64,
+                }))
+            }
+            (Domain::UInt(UIntDomain { min, max }), DataType::UInt64) => {
+                Ok(Domain::UInt(UIntDomain {
+                    min: (*min).min(u64::MAX),
+                    max: (*max).min(u64::MAX),
+                }))
+            }
+            (Domain::Int(IntDomain { min, max }), DataType::Int64) => Ok(Domain::Int(IntDomain {
+                min: (*min).max(i64::MIN).min(i64::MAX),
+                max: (*max).max(i64::MIN).min(i64::MAX),
+            })),
+            (Domain::UInt(UIntDomain { min, max }), DataType::Int64) => {
+                Ok(Domain::Int(IntDomain {
+                    min: (*min).min(i64::MAX as u64) as i64,
+                    max: (*max).min(i64::MAX as u64) as i64,
                 }))
             }
             (Domain::Boolean(_), DataType::Boolean)

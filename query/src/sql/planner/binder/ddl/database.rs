@@ -39,6 +39,7 @@ use common_planners::RenameDatabaseEntity;
 use common_planners::RenameDatabasePlan;
 use common_planners::ShowCreateDatabasePlan;
 
+use crate::sessions::TableContext;
 use crate::sql::binder::Binder;
 use crate::sql::plans::Plan;
 use crate::sql::BindContext;

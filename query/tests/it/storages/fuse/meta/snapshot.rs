@@ -15,7 +15,7 @@
 use std::ops::Add;
 
 use common_datavalues::DataSchema;
-use databend_query::storages::fuse::meta::TableSnapshot;
+use common_fuse_meta::meta::TableSnapshot;
 use uuid::Uuid;
 
 fn default_snapshot() -> TableSnapshot {

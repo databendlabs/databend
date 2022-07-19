@@ -37,6 +37,7 @@ use crate::pipelines::processors::TransformCastSchema;
 use crate::pipelines::Pipeline;
 use crate::pipelines::SourcePipeBuilder;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::sql::plans::Insert;
 use crate::sql::plans::InsertInputSource;
 use crate::sql::plans::Plan;

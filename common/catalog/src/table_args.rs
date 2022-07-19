@@ -13,21 +13,6 @@
 //  limitations under the License.
 //
 
-mod common;
+use common_planners::Expression;
 
-/// Re-exports meta data structures of current version, i.e. v1
-mod current;
-mod v0;
-mod v1;
-mod versions;
-
-pub use common::ClusterKey;
-pub use common::ColumnId;
-pub use common::Compression;
-pub use common::Location;
-pub use common::SnapshotId;
-pub use common::Statistics;
-pub use common::Versioned;
-pub use current::*;
-pub use versions::SegmentInfoVersion;
-pub use versions::SnapshotVersion;
+pub type TableArgs = Option<Vec<Expression>>;

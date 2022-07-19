@@ -24,6 +24,7 @@ use common_tracing::tracing;
 
 use crate::interpreters::Interpreter;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 
 /// interprets DeletePlan
 pub struct DeleteInterpreter {

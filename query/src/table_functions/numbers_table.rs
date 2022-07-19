@@ -43,7 +43,7 @@ use crate::pipelines::processors::SyncSourcer;
 use crate::pipelines::Pipe;
 use crate::pipelines::Pipeline;
 use crate::pipelines::SourcePipeBuilder;
-use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::storages::Table;
 use crate::table_functions::generate_numbers_parts;
 use crate::table_functions::numbers_part::NumbersPartInfo;
@@ -124,7 +124,7 @@ impl Table for NumbersTable {
 
     async fn read_partitions(
         &self,
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn TableContext>,
         push_downs: Option<Extras>,
     ) -> Result<(Statistics, Partitions)> {
         let max_block_size = ctx.get_settings().get_max_block_size()?;
@@ -179,7 +179,7 @@ impl Table for NumbersTable {
 
     fn read2(
         &self,
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn TableContext>,
         plan: &ReadDataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
@@ -226,7 +226,7 @@ struct NumbersSource {
 impl NumbersSource {
     pub fn create(
         output: Arc<OutputPort>,
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn TableContext>,
         numbers_part: &PartInfoPtr,
         schema: DataSchemaRef,
     ) -> Result<ProcessorPtr> {
