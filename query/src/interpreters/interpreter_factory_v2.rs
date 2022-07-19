@@ -92,6 +92,60 @@ impl InterpreterFactoryV2 {
         )
     }
 
+    pub fn enable_default(stmt: &DfStatement) -> bool {
+        matches!(
+            stmt,
+            // DfStatement::Query(_)
+            DfStatement::Copy(_)
+            //     | DfStatement::Explain(_)
+            | DfStatement::CreateStage(_)
+                | DfStatement::ShowStages(_)
+                | DfStatement::DescribeStage(_)
+                | DfStatement::List(_)
+                | DfStatement::DropStage(_)
+                | DfStatement::RemoveStage(_)
+                | DfStatement::ShowDatabases(_)
+                | DfStatement::ShowCreateDatabase(_)
+                | DfStatement::ShowTables(_)
+                | DfStatement::ShowCreateTable(_)
+                | DfStatement::DescribeTable(_)
+                | DfStatement::ShowTablesStatus(_)
+                | DfStatement::CreateTable(_)
+                | DfStatement::CreateView(_)
+                | DfStatement::AlterView(_)
+                | DfStatement::DropTable(_)
+                | DfStatement::UndropTable(_)
+                | DfStatement::AlterTable(_)
+                | DfStatement::RenameTable(_)
+                | DfStatement::TruncateTable(_)
+                | DfStatement::OptimizeTable(_)
+                | DfStatement::ExistsTable(_)
+                | DfStatement::DropView(_)
+                | DfStatement::ShowFunctions(_)
+                | DfStatement::ShowMetrics(_)
+                | DfStatement::ShowProcessList(_)
+                | DfStatement::ShowSettings(_)
+                | DfStatement::CreateDatabase(_)
+                | DfStatement::DropDatabase(_) /* | DfStatement::InsertQuery(_)
+                                                * | DfStatement::ShowUsers(_)
+                                                * | DfStatement::CreateUser(_)
+                                                * | DfStatement::ShowRoles(_)
+                                                * | DfStatement::AlterDatabase(_)
+                                                * | DfStatement::CreateUDF(_)
+                                                * | DfStatement::DropUser(_)
+                                                * | DfStatement::AlterUser(_)
+                                                * | DfStatement::CreateRole(_)
+                                                * | DfStatement::DropRole(_)
+                                                * | DfStatement::GrantPrivilege(_)
+                                                * | DfStatement::GrantRole(_)
+                                                * | DfStatement::ShowGrants(_)
+                                                * | DfStatement::RevokeRole(_)
+                                                * | DfStatement::RevokePrivilege(_)
+                                                * | DfStatement::Call(_)
+                                                * | DfStatement::SetVariable(_) */
+        )
+    }
+
     pub fn get(ctx: Arc<QueryContext>, plan: &Plan) -> Result<InterpreterPtr> {
         let inner = InterpreterFactoryV2::create_interpreter(ctx.clone(), plan)?;
 
@@ -134,9 +188,6 @@ impl InterpreterFactoryV2 {
             Plan::ShowSettings => Ok(Arc::new(ShowSettingsInterpreter::try_create(ctx)?)),
 
             // Databases
-            Plan::ShowDatabases(show_databases) => Ok(Arc::new(
-                ShowDatabasesInterpreter::try_create(ctx, *show_databases.clone())?,
-            )),
             Plan::ShowCreateDatabase(show_create_database) => Ok(Arc::new(
                 ShowCreateDatabaseInterpreter::try_create(ctx, *show_create_database.clone())?,
             )),
@@ -152,18 +203,11 @@ impl InterpreterFactoryV2 {
             )),
 
             // Tables
-            Plan::ShowTables(show_tables) => Ok(Arc::new(ShowTablesInterpreter::try_create(
-                ctx,
-                *show_tables.clone(),
-            )?)),
             Plan::ShowCreateTable(show_create_table) => Ok(Arc::new(
                 ShowCreateTableInterpreter::try_create(ctx, *show_create_table.clone())?,
             )),
             Plan::DescribeTable(describe_table) => Ok(Arc::new(
                 DescribeTableInterpreter::try_create(ctx, *describe_table.clone())?,
-            )),
-            Plan::ShowTablesStatus(show_tables_status) => Ok(Arc::new(
-                ShowTablesStatusInterpreter::try_create(ctx, *show_tables_status.clone())?,
             )),
             Plan::CreateTable(create_table) => Ok(Arc::new(CreateTableInterpreterV2::try_create(
                 ctx,

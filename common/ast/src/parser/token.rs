@@ -373,6 +373,8 @@ pub enum TokenKind {
     EXTRACT,
     #[token("FALSE", ignore(ascii_case))]
     FALSE,
+    #[token("FIELDS", ignore(ascii_case))]
+    FIELDS,
     #[token("FIELD_DELIMITER", ignore(ascii_case))]
     FIELD_DELIMITER,
     #[token("FILE_FORMAT", ignore(ascii_case))]
