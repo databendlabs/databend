@@ -219,7 +219,7 @@ def get_statements(suite_path, suite_name):
                 result_count = len(s.label) + 1
             for i in range(result_count):
                 results.append(get_result(lines))
-        yield ParsedStatement(line_idx, s, suite_name, text, results, runs_on)
+        yield ParsedStatement(line_idx + 1, s, suite_name, text, results, runs_on)
 
 
 def format_value(vals, val_num):
@@ -281,8 +281,7 @@ class SuiteRunner(object):
         if callable(getattr(self, "batch_execute")):
             # case batch
             for (file_path, suite_name) in self.statement_files:
-                log.info("Batch execute, suite name:{} in file {}".format(
-                    suite_name, file_path))
+                log.info("Run query with the same session every suite file, suite file path:{}".format(file_path))
                 statement_list = list()
                 for state in get_statements(file_path, suite_name):
                     statement_list.append(state)
@@ -290,19 +289,18 @@ class SuiteRunner(object):
         else:
             # case one by one
             for (file_path, suite_name) in self.statement_files:
-                log.info("One by one execute, suite name:{} in file {}".format(
-                    suite_name, file_path))
+                log.info("Run query without session every statements, suite file path:{}".format(file_path))
                 for state in get_statements(file_path, suite_name):
                     self.execute_statement(state)
 
     def execute_statement(self, statement):
         if self.kind not in statement.runs_on:
-            log.info(
+            log.debug(
                 "Skip execute statement with {} SuiteRunner, only runs on {}".
                 format(self.kind, statement.runs_on))
             return
         if self.show_query_on_execution:
-            log.info("executing statement, type {}\n{}\n".format(
+            log.debug("executing statement, type {}\n{}\n".format(
                 statement.s_type.type, statement.text))
         if statement.s_type.type == "query":
             self.assert_execute_query(statement)
@@ -327,7 +325,8 @@ class SuiteRunner(object):
         # use join after split instead of strip
         compare_f = "".join(f.split())
         compare_result = "".join(resultset[2].split())
-        assert compare_f == compare_result, "Expected:\n{}\n Actual:\n{}\n Statement:{}\n Start " \
+        assert compare_f == compare_result, "\n\n------------ Error Statement details ------------\n"\
+                                            " Expected:\n{}\n Actual:\n{}\n Statement:{}\n Start " \
                                             "Line: {}, Result Label: {}".format(resultset[2].rstrip(),
                                                                                 f.rstrip(),
                                                                                 str(statement), resultset[1],
@@ -335,7 +334,7 @@ class SuiteRunner(object):
 
     def assert_execute_query(self, statement):
         if statement.s_type.query_type == "skipped":
-            log.warning("{} statement is skipped".format(statement))
+            log.debug("{} statement is skipped".format(statement.text))
             return
         actual = safe_execute(lambda: self.execute_query(statement), statement)
         try:
