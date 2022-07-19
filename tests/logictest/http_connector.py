@@ -167,7 +167,7 @@ class HttpConnector():
 
         response_list = list()
         response = self.query(statement, current_session)
-        log.info("response content: {}".format(response))
+        log.debug("response content: {}".format(response))
         response_list.append(response)
         for i in range(12):
             if response['next_uri'] is not None:
@@ -176,7 +176,7 @@ class HttpConnector():
                         self._host, self._port, response['next_uri']),
                                         headers=self.make_headers())
                     response = json.loads(resp.content)
-                    log.info(
+                    log.debug(
                         "Sql in progress, fetch next_uri content: {}".format(
                             response))
                     response_list.append(response)

@@ -69,28 +69,28 @@ class TestMySQL(logictest.SuiteRunner, ABC):
 
                 if query_type[i] == 'I':
                     if not isinstance(v, int):
-                        log.error(
+                        log.debug(
                             "Expected int, got type {} in query {} row {} col {} value {}"
                             .format(type(v), statement.text, ri, i, v))
                 elif query_type[i] == 'F' or query_type[i] == 'R':
                     if not isinstance(v, float):
-                        log.error(
+                        log.debug(
                             "Expected float, got type {} in query {} row {} col {} value {}"
                             .format(type(v), statement.text, ri, i, v))
                 elif query_type[i] == 'T':
                     if not (isinstance(v, str) or isinstance(v, datetime) or
                             isinstance(v, date)):
-                        log.error(
+                        log.debug(
                             "Expected string, got type {} in query {} row {} col {} value {}"
                             .format(type(v), statement.text, ri, i, v))
                 elif query_type[i] == 'B':
                     # bool return int in mysql
                     if not isinstance(v, int):
-                        log.error(
+                        log.debug(
                             "Expected Bool, got type {} in query {} row {} col {} value {}"
                             .format(type(v), statement.text, ri, i, v))
                 else:
-                    log.error(
+                    log.debug(
                         "Unknown type {} in query {} row {} col {} value {}".
                         format(query_type[i], statement.text, ri, i, v))
                 vals.append(str(v))
