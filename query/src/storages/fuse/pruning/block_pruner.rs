@@ -13,24 +13,31 @@
 //  limitations under the License.
 //
 
-use std::collections::HashMap;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
+use common_arrow::arrow::io::parquet::read::read_columns_many_async;
+use common_arrow::arrow::io::parquet::read::read_metadata_async;
+use common_arrow::arrow::io::parquet::read::RowGroupDeserializer;
+use common_datablocks::DataBlock;
+use common_datavalues::DataField;
+use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
+use common_datavalues::Vu8;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_fuse_meta::meta::BlockMeta;
 use common_fuse_meta::meta::SegmentInfo;
 use common_fuse_meta::meta::StatisticsOfColumns;
 use common_fuse_meta::meta::TableSnapshot;
+use common_planners::find_column_exprs;
+use common_planners::Expression;
 use common_planners::Extras;
-use common_streams::ParquetSourceBuilder;
-use common_streams::Source;
 use common_tracing::tracing;
 use futures::StreamExt;
 use futures::TryStreamExt;
+use opendal::Operator;
 
 use crate::sessions::TableContext;
 use crate::storages::fuse::io::MetaReaders;
@@ -59,7 +66,8 @@ impl BlockPruner {
         let block_pred: Pred = match push_down {
             Some(exprs) if !exprs.filters.is_empty() => {
                 // for the time being, we only handle the first expr
-                let range_filter = RangeFilter::try_create(ctx.clone(), &exprs.filters[0], schema)?;
+                let range_filter =
+                    RangeFilter::try_create(ctx.clone(), &exprs.filters[0], schema.clone())?;
                 Box::new(move |v: &StatisticsOfColumns| range_filter.eval(v))
             }
             _ => Box::new(|_: &StatisticsOfColumns| Ok(true)),
@@ -96,20 +104,21 @@ impl BlockPruner {
             .map(|(idx, (loc, ver))| (NonCopy(idx), (loc, NonCopy(ver))));
 
         let dal = ctx.get_storage_operator()?;
-        let bloom_index_schema = BloomFilterIndexer::to_bloom_schema(schema.as_ref());
-
-        // map from filed name to index
-        let bloom_field_to_idx = bloom_index_schema
-            .fields()
-            .iter()
-            .enumerate()
-            .map(|(idx, filed)| (filed.name().clone(), idx))
-            .collect::<HashMap<_, _>>();
+        //        let bloom_index_schema = BloomFilterIndexer::to_bloom_schema(schema.as_ref());
+        //
+        //        // map from filed name to index
+        //        let bloom_fields = bloom_index_schema
+        //            .fields()
+        //            .iter()
+        //            .map(|filed| (field.name, filed.clone()))
+        //            .collect::<HashMap<_, _>>();
 
         let stream = futures::stream::iter(segment_locs)
             .map(|(idx, (seg_loc, u))| async {
-                let version = { u }.0; // use block expression to force moving
+                // use block expression to force moving
+                let version = { u }.0;
                 let idx = { idx }.0;
+
                 if accumulated_rows.load(Ordering::Acquire) < limit {
                     let segment_reader = MetaReaders::segment_info_reader(ctx.as_ref());
                     let segment_info = segment_reader.read(seg_loc, None, version).await?;
@@ -122,30 +131,12 @@ impl BlockPruner {
                     .into_iter()
                     .map(|v| (idx, v));
 
-                    if let Some(Extras {
-                        projection: Some(proj),
-                        filters,
-                        ..
-                    }) = push_down
-                    {
+                    if let Some(Extras { filters, .. }) = push_down {
                         let mut res = vec![];
                         if !filters.is_empty() {
+                            // TODO init these once
                             let filter_expr = &filters[0];
-
-                            let mut parquet_source_builder =
-                                ParquetSourceBuilder::create(Arc::new(bloom_index_schema.clone()));
-
-                            // collects the column index that gonna be used
-                            let mut projection = Vec::with_capacity(schema.fields().len());
-                            for idx in proj {
-                                let field = &schema.fields()[*idx];
-                                let bloom_filter_col_name =
-                                    BloomFilterIndexer::to_bloom_column_name(field.name());
-                                if let Some(pos) = bloom_field_to_idx.get(&bloom_filter_col_name) {
-                                    projection.push(*pos)
-                                }
-                            }
-                            parquet_source_builder.projection(projection);
+                            let filter_block_project = filter_columns(filter_expr);
 
                             // load filters of columns
                             for (idx, meta) in blocks {
@@ -153,10 +144,12 @@ impl BlockPruner {
                                     TableMetaLocationGenerator::block_bloom_index_location(
                                         &meta.location.0,
                                     );
-                                let object = dal.object(bloom_idx_location.as_str());
-                                let reader = object.seekable_reader(0..);
-                                let mut source = parquet_source_builder.build(reader)?;
-                                let block = source.read().await?.unwrap();
+                                let block = load_filter_columns(
+                                    dal.clone(),
+                                    &filter_block_project,
+                                    &bloom_idx_location,
+                                )
+                                .await?;
                                 let ctx = ctx.clone();
                                 let index = BloomFilterIndexer::from_bloom_block(
                                     schema.clone(),
@@ -211,4 +204,44 @@ impl BlockPruner {
             Ok(vec![])
         }
     }
+}
+
+fn filter_columns(filter_expr: &Expression) -> Vec<String> {
+    // TODO avoid this clone!!!
+    find_column_exprs(&[filter_expr.clone()])
+        .iter()
+        .map(|e| BloomFilterIndexer::to_bloom_column_name(&e.column_name()))
+        .collect::<Vec<_>>()
+}
+
+async fn load_filter_columns(
+    dal: Operator,
+    projection: &[String],
+    location: &str,
+) -> Result<DataBlock> {
+    use common_datavalues::ToDataType;
+    let object = dal.object(location);
+    let mut reader = object.seekable_reader(0..);
+    let file_meta = read_metadata_async(&mut reader).await?;
+    let row_groups = file_meta.row_groups;
+    // TODO filter out columns that not in the bloom block
+    let fields = projection
+        .iter()
+        .map(|name| DataField::new(name, Vu8::to_data_type()))
+        .collect::<Vec<_>>();
+    let row_group = &row_groups[0];
+    let arrow_fields = fields.iter().map(|f| f.to_arrow()).collect::<Vec<_>>();
+    let arrays = read_columns_many_async(
+        || Box::pin(async { Ok(object.seekable_reader(0..)) }),
+        row_group,
+        arrow_fields,
+        None,
+    )
+    .await?;
+    // TODO error handling
+    let chunk = RowGroupDeserializer::new(arrays, row_group.num_rows(), None)
+        .next()
+        .unwrap()?;
+    let schema = Arc::new(DataSchema::new(fields));
+    DataBlock::from_chunk(&schema, &chunk)
 }

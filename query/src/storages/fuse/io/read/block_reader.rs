@@ -175,7 +175,6 @@ impl BlockReader {
         let part = FusePartInfo::from_part(&part)?;
 
         let rows = part.nums_rows;
-        // TODO: add prefetch column data.
         let num_cols = self.projection.len();
         let mut column_chunk_futs = Vec::with_capacity(num_cols);
         let mut col_idx = Vec::with_capacity(num_cols);
@@ -266,39 +265,28 @@ impl BlockReader {
     }
 
     pub async fn read_column(o: Object, offset: u64, length: u64) -> Result<Vec<u8>> {
-        let handler = common_base::base::tokio::spawn(async move {
-            let op = || async {
-                let mut chunk = vec![0; length as usize];
-                // Sine error conversion DO matters: retry depends on the conversion
-                // to distinguish transient errors from permanent ones.
-                // Explict error conversion is used here, to make the code easy to be followed
-                let mut r = o
-                    .range_reader(offset..offset + length)
-                    .await
-                    .map_err(retry::from_io_error)?;
-                r.read_exact(&mut chunk).await?;
-                Ok(chunk)
-            };
-
-            let notify = |e: std::io::Error, duration| {
-                warn!(
-                    "transient error encountered while reading column, at duration {:?} : {}",
-                    duration, e,
-                )
-            };
-
-            let chunk = op.retry_with_notify(notify).await?;
+        let op = || async {
+            let mut chunk = vec![0; length as usize];
+            let mut r = o
+                .range_reader(offset..offset + length)
+                .await
+                // Error conversion DO matters: retry depends on it.
+                // To distinguish transient errors from permanent ones,
+                // explict error conversion is used here
+                .map_err(retry::from_io_error)?;
+            r.read_exact(&mut chunk).await?;
             Ok(chunk)
-        });
+        };
 
-        match handler.await {
-            Ok(Ok(data)) => Ok(data),
-            Ok(Err(cause)) => Err(cause),
-            Err(cause) => Err(ErrorCode::TokioError(format!(
-                "Cannot join future {:?}",
-                cause
-            ))),
-        }
+        let notify = |e: std::io::Error, duration| {
+            warn!(
+                "transient error encountered while reading column, at duration {:?} : {}",
+                duration, e,
+            )
+        };
+
+        let chunk = op.retry_with_notify(notify).await?;
+        Ok(chunk)
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
