@@ -98,6 +98,9 @@ impl FileSplitter {
         format_state: &mut Box<dyn InputState>,
         rows_to_skip: &mut u64,
     ) -> Result<()> {
+        if data.is_empty() {
+            return Ok(())
+        }
         let mut data_slice = data;
 
         if *rows_to_skip > 0 {
