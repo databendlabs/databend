@@ -188,6 +188,7 @@ select count_if(a = '1'), count_if(a = '2'), count_if(a = '3'), count_if(a is nu
 );
 select case when number >= 2 then 'ge2' WHEN number >= 1 then 'ge1' ELSE null end from numbers(3);
 select case when 1 = 3 then null when 1 = 2 then 20.0 when 1 = 1 then 1 ELSE null END;
+select case when number > 1 then 1 when number < 1 then 2 else 1 end from numbers(2) where false;
 
 select COALESCE(NULL, NULL, 1, 2);
 -- subquery in from
