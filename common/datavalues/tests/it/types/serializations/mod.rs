@@ -184,7 +184,7 @@ fn test_serializers() -> Result<()> {
 
 #[test]
 fn test_convert_arrow() {
-    let t = TimestampType::new_impl(0);
+    let t = TimestampType::new_impl(6);
     let arrow_y = t.to_arrow_field("x");
     let new_t = from_arrow_field(&arrow_y);
 

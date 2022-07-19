@@ -39,7 +39,7 @@ use sqlparser::ast::UnaryOperator;
 use sqlparser::ast::Value;
 use sqlparser::ast::WindowSpec;
 
-use crate::procedures::ContextFunction;
+use crate::context_function::ContextFunction;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionType;
 use crate::sessions::TableContext;
