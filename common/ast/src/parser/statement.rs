@@ -1258,7 +1258,7 @@ pub fn role_option(i: Input) -> IResult<RoleOption> {
 pub fn user_identity(i: Input) -> IResult<UserIdentity> {
     map(
         rule! {
-            #literal_string ~ ( "@" ~ #literal_string )?
+            #parameter_to_string ~ ( "@" ~ #literal_string )?
         },
         |(username, opt_hostname)| UserIdentity {
             username,
