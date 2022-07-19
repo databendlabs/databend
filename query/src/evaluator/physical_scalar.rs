@@ -18,8 +18,8 @@ use common_exception::Result;
 use common_functions::scalars::CastFunction;
 use common_functions::scalars::FunctionFactory;
 
-use crate::common::evaluator::eval_node::EvalNode;
-use crate::common::evaluator::Evaluator;
+use crate::evaluator::eval_node::EvalNode;
+use crate::evaluator::Evaluator;
 use crate::sql::exec::PhysicalScalar;
 
 impl Evaluator {

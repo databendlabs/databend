@@ -15,12 +15,12 @@ http_client.connect(**http_config)
 
 def run(source_file, target_path="."):
     if not os.path.isfile(source_file):
-        print("{} not a file".format(source_file))
+        print(f"{source_file} not a file")
         return
-    print("Source file: {}".format(source_file))
+    print(f"Source file: {source_file}")
     case_name = os.path.basename(source_file)
-    print("Case name: {}".format(case_name))
-    out = open("{}/{}".format(target_path, case_name),
+    print(f"Case name: {case_name}")
+    out = open(f"{target_path}/{case_name}",
                mode="w+",
                encoding='UTF-8')
 
@@ -32,7 +32,6 @@ def run(source_file, target_path="."):
         if line.startswith("statement"):
             if len(statement) != 0:
                 sql = "".join(statement[1:])
-                # print("Get a sql: {}".format(sql))
                 try:
                     http_results = format_result(http_client.fetch_all(sql))
                     query_options = http_client.get_query_option()
@@ -40,8 +39,7 @@ def run(source_file, target_path="."):
                         statement[0] = statement[0].strip(
                         ) + " " + query_options + "\n"
                 except Exception as err:
-                    print("Get query results error, with msg: {}".format(
-                        str(err)))
+                    print(f"Get query results error, with msg: {str(err)}")
 
                 # print(query_options)
                 # print(http_results)

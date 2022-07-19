@@ -117,7 +117,7 @@ impl<T: ObjectType> Column for ObjectColumn<T> {
         self.values.len() * std::mem::size_of::<T>()
     }
 
-    fn as_arrow_array(&self) -> common_arrow::ArrayRef {
+    fn as_arrow_array(&self, logical_type: DataTypeImpl) -> common_arrow::ArrayRef {
         let mut offsets: Vec<i64> = Vec::with_capacity(self.values.len());
         let mut values: Vec<u8> = Vec::with_capacity(self.values.len());
 
@@ -131,7 +131,7 @@ impl<T: ObjectType> Column for ObjectColumn<T> {
         }
 
         Box::new(LargeBinaryArray::from_data(
-            self.data_type().arrow_type(),
+            logical_type.arrow_type(),
             Buffer::from(offsets),
             Buffer::from(values),
             None,
