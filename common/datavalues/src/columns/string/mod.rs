@@ -155,9 +155,9 @@ impl Column for StringColumn {
         self.values.len() + self.offsets.len() * std::mem::size_of::<i64>()
     }
 
-    fn as_arrow_array(&self) -> ArrayRef {
+    fn as_arrow_array(&self, logical_type: DataTypeImpl) -> ArrayRef {
         Box::new(LargeBinaryArray::from_data(
-            ArrowType::LargeBinary,
+            logical_type.arrow_type(),
             self.offsets.clone(),
             self.values.clone(),
             None,

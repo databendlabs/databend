@@ -22,7 +22,7 @@ use common_datavalues::Int32Type;
 use common_datavalues::Int64Type;
 use common_datavalues::PrimitiveColumn;
 use common_exception::Result;
-use databend_query::common::Evaluator;
+use databend_query::evaluator::Evaluator;
 use databend_query::sessions::TableContext;
 use databend_query::sql::plans::BoundColumnRef;
 use databend_query::sql::plans::ConstantExpr;

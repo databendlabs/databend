@@ -86,9 +86,9 @@ impl Column for ConstColumn {
         self.column.memory_size()
     }
 
-    fn as_arrow_array(&self) -> ArrayRef {
+    fn as_arrow_array(&self, logical_type: DataTypeImpl) -> ArrayRef {
         let column = self.column.replicate(&[self.length]);
-        column.as_arrow_array()
+        column.as_arrow_array(logical_type)
     }
 
     fn arc(&self) -> ColumnRef {

@@ -49,7 +49,7 @@ use common_functions::scalars::CastFunction;
 use common_functions::scalars::FunctionFactory;
 use common_functions::scalars::TupleFunction;
 
-use crate::common::Evaluator;
+use crate::evaluator::Evaluator;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::binder::wrap_cast_if_needed;

@@ -125,7 +125,6 @@ impl<'a> ScalarViewer<'a> for BooleanViewer {
     type Iterator = Self;
 
     fn try_create(column: &ColumnRef) -> Result<Self> {
-        debug_assert!(!column.is_empty());
         let (inner, validity) = try_extract_inner(column)?;
         let col: &BooleanColumn = Series::check_get(inner)?;
         let values = col.values().clone();
