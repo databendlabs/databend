@@ -23,9 +23,9 @@ use common_exception::Result;
 use common_functions::scalars::Function;
 use common_functions::scalars::FunctionContext;
 
-use crate::common::evaluator::eval_context::EmptyEvalContext;
-use crate::common::evaluator::TypedVector;
-use crate::common::EvalContext;
+use crate::evaluator::eval_context::EmptyEvalContext;
+use crate::evaluator::EvalContext;
+use crate::evaluator::TypedVector;
 
 /// A intermediate representation of a evaluable scalar expression, with configurable
 /// EvalContext.

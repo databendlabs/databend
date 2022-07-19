@@ -19,7 +19,7 @@ use common_datavalues::DataField;
 use common_exception::Result;
 use common_functions::scalars::FunctionContext;
 
-use crate::common::EvalNode;
+use crate::evaluator::EvalNode;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::ProcessorPtr;

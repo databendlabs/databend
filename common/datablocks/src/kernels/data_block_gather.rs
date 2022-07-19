@@ -54,7 +54,7 @@ impl DataBlock {
     ) -> Result<ColumnRef> {
         let arrays = columns
             .iter()
-            .map(|c| c.as_arrow_array())
+            .map(|c| c.as_arrow_array(c.data_type()))
             .collect::<Vec<ArrayRef>>();
 
         let arrays: Vec<&dyn Array> = arrays.iter().map(|array| array.as_ref()).collect();

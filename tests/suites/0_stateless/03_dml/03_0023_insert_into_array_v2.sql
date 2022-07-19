@@ -106,7 +106,7 @@ select '==Array(Date)==';
 CREATE TABLE IF NOT EXISTS t12(id Int, arr Array(Date)) Engine = Fuse;
 
 INSERT INTO t12 (id, arr) VALUES(1, ['2021-01-01', '2022-01-01']), (2, ['1990-12-01', '2030-01-12']);
-INSERT INTO t12 (id, arr) VALUES(3, ['1000000-01-01', '2000000-01-01']); -- {ErrorCode 1010}
+INSERT INTO t12 (id, arr) VALUES(3, ['1000000-01-01', '2000000-01-01']); -- {ErrorCode 1002}
 
 select * from t12;
 select arr[0], arr[1] from t12;
@@ -116,7 +116,7 @@ select '==Array(Timestamp)==';
 CREATE TABLE IF NOT EXISTS t13(id Int, arr Array(Timestamp)) Engine = Fuse;
 
 INSERT INTO t13 (id, arr) VALUES(1, ['2021-01-01 01:01:01', '2022-01-01 01:01:01']), (2, ['1990-12-01 10:11:12', '2030-01-12 22:00:00']);
-INSERT INTO t13 (id, arr) VALUES(3, ['1000000-01-01 01:01:01', '2000000-01-01 01:01:01']); -- {ErrorCode 1010}
+INSERT INTO t13 (id, arr) VALUES(3, ['1000000-01-01 01:01:01', '2000000-01-01 01:01:01']); -- {ErrorCode 1002}
 
 select * from t13;
 select arr[0], arr[1] from t13;
