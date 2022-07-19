@@ -46,12 +46,12 @@ impl<T: PrimitiveType> From<PrimitiveArray<T>> for PrimitiveColumn<T> {
     }
 }
 
-fn precision(x: &TimeUnit) -> usize {
+fn convert_precision_to_micros(x: &TimeUnit) -> (i64, i64) {
     match x {
-        TimeUnit::Second => 1,
-        TimeUnit::Millisecond => 1_000,
-        TimeUnit::Microsecond => 1_000_000,
-        TimeUnit::Nanosecond => 1_000_000_000,
+        TimeUnit::Second => (1_000_000, 1),
+        TimeUnit::Millisecond => (1_000, 1),
+        TimeUnit::Microsecond => (1, 1),
+        TimeUnit::Nanosecond => (1, 1_000),
     }
 }
 
@@ -72,17 +72,6 @@ impl<T: PrimitiveType> PrimitiveColumn<T> {
 
         if &expected_arrow != array.data_type() {
             match array.data_type() {
-                // u32
-                ArrowDataType::Timestamp(x, _) => {
-                    let p = precision(x);
-                    let array = array
-                        .as_any()
-                        .downcast_ref::<PrimitiveArray<i64>>()
-                        .expect("primitive cast should be ok");
-                    let array = unary(array, |x| (x as usize / p) as u32, expected_arrow);
-
-                    Self::from_arrow_array(&array)
-                }
                 ArrowDataType::Date32 => {
                     let array = cast::cast(array, &ArrowDataType::Int32, cast_options)
                         .expect("primitive cast should be ok");
@@ -90,34 +79,47 @@ impl<T: PrimitiveType> PrimitiveColumn<T> {
                         .expect("primitive cast should be ok");
                     Self::from_arrow_array(array.as_ref())
                 }
-                // TODO(veeupup): it seems buggy because we do not support store date as i64
+
                 ArrowDataType::Date64 => {
-                    let array = cast::cast(array, &ArrowDataType::Int64, cast_options)
+                    let array = cast::cast(array, &ArrowDataType::Int32, cast_options)
                         .expect("primitive cast should be ok");
                     let array = cast::cast(array.as_ref(), &expected_arrow, cast_options)
                         .expect("primitive cast should be ok");
 
                     Self::from_arrow_array(array.as_ref())
                 }
+
+                // for all the timestamp column we will cast to int64 with microsecond precision
+                ArrowDataType::Timestamp(x, _) => {
+                    let p = convert_precision_to_micros(x);
+                    let array = array
+                        .as_any()
+                        .downcast_ref::<PrimitiveArray<i64>>()
+                        .expect("primitive cast should be ok");
+                    let array = unary(array, |x| x * p.0 / p.1, expected_arrow);
+
+                    Self::from_arrow_array(&array)
+                }
+
                 ArrowDataType::Time32(x) => {
-                    let p = precision(x);
+                    let p = convert_precision_to_micros(x);
                     let array = array
                         .as_any()
                         .downcast_ref::<PrimitiveArray<i32>>()
                         .expect("primitive cast should be ok");
 
-                    let array = unary(array, |x| (x as usize / p) as u32, expected_arrow);
+                    let array = unary(array, |x| x as i64 * p.0 / p.1, expected_arrow);
 
                     Self::from_arrow_array(&array)
                 }
                 ArrowDataType::Time64(x) => {
-                    let p = precision(x);
+                    let p = convert_precision_to_micros(x);
                     let array = array
                         .as_any()
                         .downcast_ref::<PrimitiveArray<i64>>()
                         .expect("primitive cast should be ok");
 
-                    let array = unary(array, |x| (x as usize / p) as u32, expected_arrow);
+                    let array = unary(array, |x| x as i64 * p.0 / p.1, expected_arrow);
                     Self::from_arrow_array(&array)
                 }
                 _ => unreachable!(),
@@ -173,8 +175,8 @@ impl<T: PrimitiveType> Column for PrimitiveColumn<T> {
         self.values.len() * std::mem::size_of::<T>()
     }
 
-    fn as_arrow_array(&self) -> common_arrow::ArrayRef {
-        let data_type = self.data_type().arrow_type();
+    fn as_arrow_array(&self, logical_type: DataTypeImpl) -> common_arrow::ArrayRef {
+        let data_type = logical_type.arrow_type();
         Box::new(PrimitiveArray::<T>::from_data(
             data_type,
             self.values.clone(),

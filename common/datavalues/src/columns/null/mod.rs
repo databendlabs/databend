@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use common_arrow::arrow::array::*;
 use common_arrow::arrow::bitmap::Bitmap;
-use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_arrow::ArrayRef;
 
 use crate::prelude::*;
@@ -84,8 +83,8 @@ impl Column for NullColumn {
         std::mem::size_of::<usize>()
     }
 
-    fn as_arrow_array(&self) -> ArrayRef {
-        Box::new(NullArray::new_null(ArrowType::Null, self.length))
+    fn as_arrow_array(&self, logical_type: DataTypeImpl) -> ArrayRef {
+        Box::new(NullArray::new_null(logical_type.arrow_type(), self.length))
     }
 
     fn arc(&self) -> ColumnRef {

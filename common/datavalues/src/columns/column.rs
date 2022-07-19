@@ -79,7 +79,7 @@ pub trait Column: Send + Sync {
 
     fn memory_size(&self) -> usize;
     fn arc(&self) -> ColumnRef;
-    fn as_arrow_array(&self) -> ArrayRef;
+    fn as_arrow_array(&self, logical_type: DataTypeImpl) -> ArrayRef;
     fn slice(&self, offset: usize, length: usize) -> ColumnRef;
 
     fn filter(&self, filter: &BooleanColumn) -> ColumnRef;

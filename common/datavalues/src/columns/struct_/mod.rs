@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_arrow::arrow::array::*;
+use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_arrow::ArrayRef;
 
 use crate::prelude::*;
@@ -90,10 +91,23 @@ impl Column for StructColumn {
         self.values.iter().map(|v| v.memory_size()).sum()
     }
 
-    fn as_arrow_array(&self) -> ArrayRef {
-        let arrow_type = self.data_type().arrow_type();
-        let arrays = self.values.iter().map(|v| v.as_arrow_array()).collect();
-        Box::new(StructArray::from_data(arrow_type, arrays, None))
+    fn as_arrow_array(&self, logical_type: DataTypeImpl) -> ArrayRef {
+        let arrow_type = logical_type.arrow_type();
+
+        if let ArrowType::Struct(f) = &arrow_type {
+            let arrays = self
+                .values
+                .iter()
+                .zip(f.iter())
+                .map(|(v, f)| {
+                    let f = from_arrow_field(f);
+                    v.as_arrow_array(f)
+                })
+                .collect();
+            Box::new(StructArray::from_data(arrow_type, arrays, None))
+        } else {
+            unreachable!()
+        }
     }
 
     fn arc(&self) -> ColumnRef {

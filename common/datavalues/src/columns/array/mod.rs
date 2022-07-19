@@ -123,15 +123,20 @@ impl Column for ArrayColumn {
         self.values.memory_size() + self.offsets.len() * std::mem::size_of::<i64>()
     }
 
-    fn as_arrow_array(&self) -> ArrayRef {
-        let arrow_type = self.data_type().arrow_type();
-        let array = self.values.as_arrow_array();
-        Box::new(LargeListArray::from_data(
-            arrow_type,
-            self.offsets.clone(),
-            array,
-            None,
-        ))
+    fn as_arrow_array(&self, data_type: DataTypeImpl) -> ArrayRef {
+        let arrow_type = data_type.arrow_type();
+        if let ArrowType::LargeList(ref f) = arrow_type {
+            let inner_f = from_arrow_field(f.as_ref());
+            let array = self.values.as_arrow_array(inner_f);
+            Box::new(LargeListArray::from_data(
+                arrow_type,
+                self.offsets.clone(),
+                array,
+                None,
+            ))
+        } else {
+            unreachable!()
+        }
     }
 
     fn arc(&self) -> ColumnRef {
