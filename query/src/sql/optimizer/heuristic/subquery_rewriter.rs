@@ -266,10 +266,7 @@ impl SubqueryRewriter {
                     if let Some(index) = self.derived_columns.get(&output_column) {
                         output_column = *index;
                     }
-                    (
-                        output_column,
-                        format!("scalar_subquery_{}", output_column).to_string(),
-                    )
+                    (output_column, format!("scalar_subquery_{output_column}"))
                 } else {
                     let index = *prop
                         .output_columns
@@ -510,8 +507,6 @@ pub fn check_child_expr_in_subquery(
             let (_, is_other_condition) = check_child_expr_in_subquery(arg, op)?;
             Ok((child_expr.clone(), is_other_condition))
         }
-        _ => {
-            return Err(ErrorCode::LogicalError("Invalid child expr in subquery"));
-        }
+        _ => Err(ErrorCode::LogicalError("Invalid child expr in subquery")),
     }
 }

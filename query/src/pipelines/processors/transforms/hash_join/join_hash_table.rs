@@ -354,10 +354,10 @@ impl JoinHashTable {
                     .hash_method
                     .build_keys_state(&probe_keys, input.num_rows())?;
                 let keys_iter = table.hash_method.build_keys_iter(&keys_state)?;
-                let keys_iter =
+                let keys_ref =
                     keys_iter.map(|key| KeysRef::create(key.as_ptr() as usize, key.len()));
 
-                self.result_blocks(&table.hash_table, probe_state, keys_iter, input)
+                self.result_blocks(&table.hash_table, probe_state, keys_ref, input)
             }
             HashTable::KeyU8HashTable(table) => {
                 let keys_state = table
@@ -508,9 +508,9 @@ impl HashJoinState for JoinHashTable {
                         }
                     }
                     if let Some(v) = valids {
-                        for idx in 0..chunk.num_rows() {
+                        for (idx, marker) in markers.iter_mut().enumerate() {
                             if !v.get_bit(idx) {
-                                markers[idx] = Some(MarkerKind::Null);
+                                *marker = Some(MarkerKind::Null);
                             }
                         }
                     }

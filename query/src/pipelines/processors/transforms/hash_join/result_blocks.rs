@@ -212,50 +212,48 @@ impl JoinHashTable {
                         // If find join partner, set the marker to true.
                         let mut self_row_ptrs = self.row_ptrs.write();
                         if let Some(p) = self_row_ptrs.iter_mut().find(|p| (*p).eq(&ptr)) {
-                            if self.hash_join_desc.other_predicate.is_none() {
-                                p.marker = Some(MarkerKind::True);
-                            }
+                            p.marker = Some(MarkerKind::True);
                         }
                     }
                 }
             }
-            if self.hash_join_desc.other_predicate.is_none() {
-                return Ok(());
-            }
+        }
+        if self.hash_join_desc.other_predicate.is_none() {
+            return Ok(());
+        }
 
-            if self.hash_join_desc.from_correlated_subquery {
-                // Must be correlated ANY subquery, we won't need to check `has_null` in `mark_join_blocks`.
-                // In the following, if value is Null and Marker is False, we'll set the marker to Null
-                let mut has_null = self.hash_join_desc.marker_join_desc.has_null.write();
-                *has_null = false;
-            }
-            let probe_block = DataBlock::block_take_by_indices(input, probe_indexs)?;
-            let build_block = self.row_space.gather(build_indexs)?;
-            let merged_block = self.merge_eq_block(&build_block, &probe_block)?;
-            let func_ctx = self.ctx.try_get_function_context()?;
-            let type_vector = self
-                .hash_join_desc
-                .other_predicate
-                .as_ref()
-                .unwrap()
-                .eval(&func_ctx, &merged_block)?;
-            let filter_column = type_vector.vector();
-            let mut row_ptrs = self.row_ptrs.write();
-            for (idx, build_index) in build_indexs.iter().enumerate() {
-                let self_row_ptr = row_ptrs.iter_mut().find(|p| (*p).eq(&build_index)).unwrap();
-                match filter_column.get(idx) {
-                    DataValue::Null => {
-                        if self_row_ptr.marker == Some(MarkerKind::False) {
-                            self_row_ptr.marker = Some(MarkerKind::Null);
-                        }
+        if self.hash_join_desc.from_correlated_subquery {
+            // Must be correlated ANY subquery, we won't need to check `has_null` in `mark_join_blocks`.
+            // In the following, if value is Null and Marker is False, we'll set the marker to Null
+            let mut has_null = self.hash_join_desc.marker_join_desc.has_null.write();
+            *has_null = false;
+        }
+        let probe_block = DataBlock::block_take_by_indices(input, probe_indexs)?;
+        let build_block = self.row_space.gather(build_indexs)?;
+        let merged_block = self.merge_eq_block(&build_block, &probe_block)?;
+        let func_ctx = self.ctx.try_get_function_context()?;
+        let type_vector = self
+            .hash_join_desc
+            .other_predicate
+            .as_ref()
+            .unwrap()
+            .eval(&func_ctx, &merged_block)?;
+        let filter_column = type_vector.vector();
+        let mut row_ptrs = self.row_ptrs.write();
+        for (idx, build_index) in build_indexs.iter().enumerate() {
+            let self_row_ptr = row_ptrs.iter_mut().find(|p| (*p).eq(&build_index)).unwrap();
+            match filter_column.get(idx) {
+                DataValue::Null => {
+                    if self_row_ptr.marker == Some(MarkerKind::False) {
+                        self_row_ptr.marker = Some(MarkerKind::Null);
                     }
-                    DataValue::Boolean(value) => {
-                        if value {
-                            self_row_ptr.marker = Some(MarkerKind::True);
-                        }
-                    }
-                    _ => unreachable!(),
                 }
+                DataValue::Boolean(value) => {
+                    if value {
+                        self_row_ptr.marker = Some(MarkerKind::True);
+                    }
+                }
+                _ => unreachable!(),
             }
         }
         Ok(())

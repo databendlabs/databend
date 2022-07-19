@@ -208,17 +208,6 @@ WHERE
 1  CA
 
 statement query IT
-SELECT *
-FROM c
-WHERE
-    (SELECT count(*) FROM o WHERE o.c_id=c.c_id) > 1
-    OR EXISTS(SELECT ship FROM o WHERE o.c_id=c.c_id AND ship IS NULL);
-----
-1  CA
-2  TX
-4  TX
-
-statement query IT
 SELECT c_id, bill
 FROM c AS c2
 WHERE EXISTS
@@ -296,3 +285,6 @@ SELECT c_id, bill = ALL(SELECT ship FROM o WHERE o.c_id=c.c_id) FROM c ORDER BY 
 5  1
 6  0
 
+statement ok
+drop table o;
+drop table c;

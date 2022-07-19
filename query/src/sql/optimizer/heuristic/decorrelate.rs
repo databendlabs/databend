@@ -279,8 +279,8 @@ impl SubqueryRewriter {
                 let mut right_conditions = Vec::with_capacity(correlated_columns.len());
                 self.add_equi_conditions(
                     &correlated_columns,
-                    &mut left_conditions,
                     &mut right_conditions,
+                    &mut left_conditions,
                 )?;
                 let join_plan = LogicalInnerJoin {
                     left_conditions,
@@ -290,7 +290,7 @@ impl SubqueryRewriter {
                     marker_index: None,
                     from_correlated_subquery: true,
                 };
-                let s_expr = SExpr::create_binary(join_plan.into(), flatten_plan, left.clone());
+                let s_expr = SExpr::create_binary(join_plan.into(), left.clone(), flatten_plan);
                 Ok((s_expr, UnnestResult::SingleJoin))
             }
             SubqueryType::Exists => {
@@ -441,7 +441,7 @@ impl SubqueryRewriter {
                 other_conditions: vec![],
                 join_type: JoinType::Cross,
                 marker_index: None,
-                from_correlated_subquery: true,
+                from_correlated_subquery: false,
             }
             .into();
             return Ok(SExpr::create_binary(cross_join, logical_get, plan.clone()));
@@ -487,12 +487,12 @@ impl SubqueryRewriter {
                 }
                 let metadata = self.metadata.read();
                 for derived_column in self.derived_columns.values() {
-                    let column_entry = metadata.column(derived_column.clone());
+                    let column_entry = metadata.column(*derived_column);
                     let column_binding = ColumnBinding {
                         database_name: None,
                         table_name: None,
                         column_name: format!("subquery_{}", derived_column),
-                        index: derived_column.clone(),
+                        index: *derived_column,
                         data_type: Box::from(column_entry.data_type.clone()),
                         visible_in_unqualified_wildcard: false,
                     };
@@ -500,7 +500,7 @@ impl SubqueryRewriter {
                         scalar: Scalar::BoundColumnRef(BoundColumnRef {
                             column: column_binding,
                         }),
-                        index: derived_column.clone(),
+                        index: *derived_column,
                     });
                 }
                 Ok(SExpr::create_unary(
@@ -552,12 +552,12 @@ impl SubqueryRewriter {
                 for derived_column in self.derived_columns.values() {
                     let column_binding = {
                         let metadata = self.metadata.read();
-                        let column_entry = metadata.column(derived_column.clone());
+                        let column_entry = metadata.column(*derived_column);
                         ColumnBinding {
                             database_name: None,
                             table_name: None,
                             column_name: format!("subquery_{}", derived_column),
-                            index: derived_column.clone(),
+                            index: *derived_column,
                             data_type: Box::from(column_entry.data_type.clone()),
                             visible_in_unqualified_wildcard: false,
                         }
@@ -566,7 +566,7 @@ impl SubqueryRewriter {
                         scalar: Scalar::BoundColumnRef(BoundColumnRef {
                             column: column_binding,
                         }),
-                        index: derived_column.clone(),
+                        index: *derived_column,
                     });
                 }
                 let mut agg_items = Vec::with_capacity(aggregate.aggregate_functions.len());
