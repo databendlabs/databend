@@ -126,37 +126,6 @@ impl TypeFactory {
         }
     }
 
-    // pub fn add_array_wrapper(&mut self) {
-    //     let mut arrays = HashMap::new();
-    //     for (k, v) in self.case_insensitive_types.iter() {
-    //         let data_type: DataTypeImpl = ArrayType::new_impl(v.clone());
-    //         arrays.insert(
-    //             format!("Array({})", k).to_ascii_lowercase(),
-    //             data_type.clone(),
-    //         );
-    //     }
-    //     self.case_insensitive_types.extend(arrays);
-    // }
-
-    // pub fn add_nullable_wrapper(&mut self) {
-    //     let mut nulls = HashMap::new();
-    //     for (k, v) in self.case_insensitive_types.iter() {
-    //         if v.can_inside_nullable() {
-    //             let data_type: DataTypeImpl = NullableType::new_impl(v.clone());
-    //             nulls.insert(
-    //                 format!("Nullable({})", k).to_ascii_lowercase(),
-    //                 data_type.clone(),
-    //             );
-
-    //             nulls.insert(
-    //                 format!("{} Null", k).to_ascii_lowercase(),
-    //                 data_type.clone(),
-    //             );
-    //         }
-    //     }
-    //     self.case_insensitive_types.extend(nulls);
-    // }
-
     pub fn conversion_names(&self) -> Vec<&str> {
         self.conversion_types.iter().map(|s| s.as_str()).collect()
     }
