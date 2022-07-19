@@ -407,6 +407,8 @@ impl SubqueryRewriter {
             // Construct a LogicalGet plan by correlated columns.
             // Finally generate a cross join, so we finish flattening the subquery.
             let mut metadata = self.metadata.write();
+            // Currently, we don't support left plan's from clause contains subquery.
+            // Such as: select t2.a from (select a + 1 as a from t) as t2 where (select sum(a) from t as t1 where t1.a < t2.a) = 1;
             let table_index = metadata
                 .table_index_by_column_indexes(correlated_columns)
                 .unwrap();

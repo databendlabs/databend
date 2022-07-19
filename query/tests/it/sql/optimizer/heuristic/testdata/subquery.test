@@ -117,12 +117,12 @@ Project: [number]
 select t.number from numbers(1) as t, numbers(1) as t1 where (select count(*) = 1 from numbers(1) where t.number = number) and t.number = t1.number
 ----
 Project: [number]
-    HashJoin: SINGLE, build keys: [subquery_5], probe keys: [subquery_0], join filters: []
-        HashJoin: INNER, build keys: [t1.number], probe keys: [t.number], join filters: []
-            Scan: default.system.numbers
-            Scan: default.system.numbers
-        Project: [COUNT(*) = 1,number]
-            Filter: [scalar_subquery_3]
+    Filter: [scalar_subquery_3]
+        HashJoin: SINGLE, build keys: [subquery_5], probe keys: [subquery_0], join filters: []
+            HashJoin: INNER, build keys: [t1.number], probe keys: [t.number], join filters: []
+                Scan: default.system.numbers
+                Scan: default.system.numbers
+            Project: [COUNT(*) = 1,number]
                 EvalScalar: [COUNT(*) = 1]
                     Aggregate: group items: [subquery_5], aggregate functions: [COUNT(*)]
                         HashJoin: INNER, build keys: [numbers.number], probe keys: [subquery_5], join filters: []

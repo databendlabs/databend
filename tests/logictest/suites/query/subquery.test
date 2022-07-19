@@ -256,12 +256,10 @@ WHERE EXISTS
 2  TX
 4  TX
 
-statement query IT
+statement ok
 SELECT *
 FROM c
 WHERE (SELECT o_id FROM o WHERE o.c_id=c.c_id AND ship='WY')=4;
-
-----
 
 statement query IT
 SELECT * FROM c WHERE c_id=(SELECT c_id FROM o WHERE ship='WA' AND bill='FL')
