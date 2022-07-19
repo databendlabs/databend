@@ -43,6 +43,7 @@ pub struct StageSourceHelper {
     file_format: Arc<dyn InputFormat>,
     files: Arc<Mutex<VecDeque<String>>>,
     table_info: StageTableInfo,
+    format_settings: FormatSettings,
 }
 
 impl StageSourceHelper {
@@ -54,26 +55,27 @@ impl StageSourceHelper {
     ) -> Result<StageSourceHelper> {
         let stage_info = &table_info.stage_info;
         let file_format_options = &stage_info.file_format_options;
-        let mut settings = ctx.get_format_settings()?;
+        let mut format_settings = ctx.get_format_settings()?;
         let size_limit = stage_info.copy_options.size_limit;
-        settings.size_limit = if size_limit > 0 {
+        format_settings.size_limit = if size_limit > 0 {
             Some(size_limit)
         } else {
             None
         };
-        settings.skip_header = file_format_options.skip_header > 0;
-        settings.field_delimiter = stage_info
+        format_settings.skip_header = file_format_options.skip_header;
+        format_settings.field_delimiter = stage_info
             .file_format_options
             .field_delimiter
             .as_bytes()
             .to_vec();
-        settings.record_delimiter = stage_info
+        format_settings.record_delimiter = stage_info
             .file_format_options
             .record_delimiter
             .as_bytes()
             .to_vec();
 
-        let file_format = Self::get_input_format(&file_format_options.format, schema, settings)?;
+        let file_format =
+            Self::get_input_format(&file_format_options.format, schema, format_settings.clone())?;
 
         let operator_info = if stage_info.stage_type == StageType::Internal {
             OperatorInfo::Op(ctx.get_storage_operator()?)
@@ -86,6 +88,7 @@ impl StageSourceHelper {
             file_format,
             files,
             table_info,
+            format_settings,
         };
         Ok(src)
     }
@@ -97,6 +100,7 @@ impl StageSourceHelper {
             output,
             self.file_format.clone(),
             self.table_info.stage_info.file_format_options.compression,
+            self.format_settings.clone(),
             self.files.clone(),
         )
     }
