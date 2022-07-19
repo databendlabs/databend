@@ -44,8 +44,8 @@ use primitive_types::U256;
 use primitive_types::U512;
 
 use super::ProbeState;
-use crate::common::EvalNode;
-use crate::common::Evaluator;
+use crate::evaluator::EvalNode;
+use crate::evaluator::Evaluator;
 use crate::pipelines::processors::transforms::group_by::keys_ref::KeysRef;
 use crate::pipelines::processors::transforms::hash_join::row::RowPtr;
 use crate::pipelines::processors::transforms::hash_join::row::RowSpace;
