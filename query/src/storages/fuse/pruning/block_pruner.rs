@@ -70,7 +70,10 @@ impl BlockPruner {
                     RangeFilter::try_create(ctx.clone(), &exprs.filters[0], schema.clone())?;
                 Box::new(move |v: &StatisticsOfColumns| range_filter.eval(v))
             }
-            _ => Box::new(|_: &StatisticsOfColumns| Ok(true)),
+            _ => {
+                // TODO make this a shortcut!
+                Box::new(|_: &StatisticsOfColumns| Ok(true))
+            }
         };
 
         let segment_locs = self.table_snapshot.segments.clone();
@@ -104,14 +107,16 @@ impl BlockPruner {
             .map(|(idx, (loc, ver))| (NonCopy(idx), (loc, NonCopy(ver))));
 
         let dal = ctx.get_storage_operator()?;
-        //        let bloom_index_schema = BloomFilterIndexer::to_bloom_schema(schema.as_ref());
-        //
-        //        // map from filed name to index
-        //        let bloom_fields = bloom_index_schema
-        //            .fields()
-        //            .iter()
-        //            .map(|filed| (field.name, filed.clone()))
-        //            .collect::<HashMap<_, _>>();
+
+        let filter_expr = if let Some(Extras { filters, .. }) = push_down {
+            let filter_expression = &filters[0];
+            Some((
+                column_names_of_expression(filter_expression),
+                filter_expression,
+            ))
+        } else {
+            None
+        };
 
         let stream = futures::stream::iter(segment_locs)
             .map(|(idx, (seg_loc, u))| async {
@@ -131,39 +136,30 @@ impl BlockPruner {
                     .into_iter()
                     .map(|v| (idx, v));
 
-                    if let Some(Extras { filters, .. }) = push_down {
+                    if let Some((names, expression)) = &filter_expr {
                         let mut res = vec![];
-                        if !filters.is_empty() {
-                            // TODO init these once
-                            let filter_expr = &filters[0];
-                            let filter_block_project = filter_columns(filter_expr);
-
-                            // load filters of columns
-                            for (idx, meta) in blocks {
-                                let bloom_idx_location =
-                                    TableMetaLocationGenerator::block_bloom_index_location(
-                                        &meta.location.0,
-                                    );
-                                let block = load_filter_columns(
-                                    dal.clone(),
-                                    &filter_block_project,
-                                    &bloom_idx_location,
-                                )
-                                .await?;
-                                let ctx = ctx.clone();
-                                let index = BloomFilterIndexer::from_bloom_block(
-                                    schema.clone(),
-                                    block,
-                                    ctx,
-                                )?;
-                                if BloomFilterExprEvalResult::False != index.eval(filter_expr)? {
-                                    res.push((idx, meta))
-                                }
+                        for (idx, meta) in blocks {
+                            let bloom_idx_location =
+                                TableMetaLocationGenerator::block_bloom_index_location(
+                                    &meta.location.0,
+                                );
+                            let filter_block = load_bloom_filter_by_columns(
+                                dal.clone(),
+                                names,
+                                &bloom_idx_location,
+                            )
+                            .await?;
+                            let ctx = ctx.clone();
+                            let index = BloomFilterIndexer::from_bloom_block(
+                                schema.clone(),
+                                filter_block,
+                                ctx,
+                            )?;
+                            if BloomFilterExprEvalResult::False != index.eval(expression)? {
+                                res.push((idx, meta))
                             }
-                            Ok::<_, ErrorCode>(res)
-                        } else {
-                            Ok::<_, ErrorCode>(blocks.collect::<Vec<_>>())
                         }
+                        Ok::<_, ErrorCode>(res)
                     } else {
                         Ok::<_, ErrorCode>(blocks.collect::<Vec<_>>())
                     }
@@ -206,15 +202,15 @@ impl BlockPruner {
     }
 }
 
-fn filter_columns(filter_expr: &Expression) -> Vec<String> {
-    // TODO avoid this clone!!!
+fn column_names_of_expression(filter_expr: &Expression) -> Vec<String> {
+    // TODO can we avoid this clone?
     find_column_exprs(&[filter_expr.clone()])
         .iter()
         .map(|e| BloomFilterIndexer::to_bloom_column_name(&e.column_name()))
         .collect::<Vec<_>>()
 }
 
-async fn load_filter_columns(
+async fn load_bloom_filter_by_columns(
     dal: Operator,
     projection: &[String],
     location: &str,
@@ -224,6 +220,7 @@ async fn load_filter_columns(
     let mut reader = object.seekable_reader(0..);
     let file_meta = read_metadata_async(&mut reader).await?;
     let row_groups = file_meta.row_groups;
+
     // TODO filter out columns that not in the bloom block
     let fields = projection
         .iter()
@@ -238,10 +235,12 @@ async fn load_filter_columns(
         None,
     )
     .await?;
-    // TODO error handling
-    let chunk = RowGroupDeserializer::new(arrays, row_group.num_rows(), None)
-        .next()
-        .unwrap()?;
+
     let schema = Arc::new(DataSchema::new(fields));
-    DataBlock::from_chunk(&schema, &chunk)
+    if let Some(next_item) = RowGroupDeserializer::new(arrays, row_group.num_rows(), None).next() {
+        let chunk = next_item?;
+        DataBlock::from_chunk(&schema, &chunk)
+    } else {
+        Ok(DataBlock::empty_with_schema(schema))
+    }
 }

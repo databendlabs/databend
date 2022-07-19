@@ -51,6 +51,7 @@ pub struct BlockMeta {
     pub col_metas: HashMap<ColumnId, ColumnMeta>,
     pub cluster_stats: Option<ClusterStatistics>,
     pub location: Location,
+    pub bloom_filter_index: Option<Location>,
 
     /// Compression algo used to compress the columns of blocks
     ///
@@ -79,6 +80,7 @@ impl BlockMeta {
             col_metas,
             cluster_stats,
             location,
+            bloom_filter_index: None,
             compression: Compression::Lz4Raw,
         }
     }
@@ -124,6 +126,7 @@ impl From<v0::BlockMeta> for BlockMeta {
             col_metas: s.col_metas,
             cluster_stats: None,
             location: (s.location.path, DataBlock::VERSION),
+            bloom_filter_index: None,
             compression: Compression::Lz4,
         }
     }

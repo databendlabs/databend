@@ -70,7 +70,7 @@ mod converters {
 
     impl TryFrom<u64> for SegmentInfoVersion {
         type Error = ErrorCode;
-        fn try_from(value: u64) -> std::result::Result<Self, Self::Error> {
+        fn try_from(value: u64) -> Result<Self, Self::Error> {
             match value {
                 0 => Ok(SegmentInfoVersion::V0(
                     // `ver_eq<_, 0>` is merely a static check to make sure that
@@ -87,7 +87,7 @@ mod converters {
 
     impl TryFrom<u64> for SnapshotVersion {
         type Error = ErrorCode;
-        fn try_from(value: u64) -> std::result::Result<Self, Self::Error> {
+        fn try_from(value: u64) -> Result<Self, Self::Error> {
             match value {
                 0 => Ok(SnapshotVersion::V0(ver_eq::<_, 0>(PhantomData))),
                 1 => Ok(SnapshotVersion::V1(ver_eq::<_, 1>(PhantomData))),

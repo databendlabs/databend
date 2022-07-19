@@ -122,7 +122,7 @@ impl StatisticsAccumulator {
                 max = maxs.get(0);
             }
             let (is_all_null, bitmap) = col.validity();
-            let unset_bits = match (is_all_null, bitmap) {
+            let null_count = match (is_all_null, bitmap) {
                 (true, _) => rows,
                 (false, Some(bitmap)) => bitmap.unset_bits(),
                 (false, None) => 0,
@@ -132,7 +132,7 @@ impl StatisticsAccumulator {
             let col_stats = ColumnStatistics {
                 min,
                 max,
-                null_count: unset_bits as u64,
+                null_count: null_count as u64,
                 in_memory_size,
             };
 
