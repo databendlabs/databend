@@ -98,8 +98,7 @@ class LogicError(Exception):
         self.expected = expected
 
     def __str__(self):
-        return "Expected regex{}, Actual: {}".format(self.expected,
-                                                     self.message)
+        return f"Expected regex{self.expected}, Actual: {self.message}"
 
 
 class Statement:
@@ -124,12 +123,10 @@ class Statement:
                 qo = matched.group("queryOptions")
                 s = qo.split(" ", 1)
                 if len(s) < 1:
-                    raise Exception("Invalid query options: {}".format(qo))
+                    raise Exception(f"Invalid query options: {qo}")
                 if len(s) == 1:
                     if is_empty_line(s[0]):
-                        raise Exception(
-                            "Invalid query options, query type should not be empty: {}"
-                            .format(qo))
+                        raise Exception(f"Invalid query options, query type should not be empty: {qo}")
                     self.query_type = s[0]
                     return
                 query_type, options = qo.split(" ", 1)
@@ -146,16 +143,16 @@ class Statement:
                         self.retry = True
 
         else:
-            raise Exception("Unknown statement type {}".format(matched.group()))
+            raise Exception(f"Unknown statement type {matched.group()}")
 
     def __str__(self):
-        s = "Statement: {}, type: {}".format(self.type, self.query_type)
+        s = f"Statement: {self.type}, type: {self.query_type}"
         if self.type == "query":
             if self.query_type is not None:
-                s += ", query_type: {}".format(self.query_type)
+                s += f", query_type: {self.query_type}"
                 if self.label is not None:
-                    s += ", label: {}".format(self.label)
-                s += ", retry: {}".format(self.retry)
+                    s += f", label: {self.label}"
+                s += f", retry: {self.retry}"
 
         return s
 
@@ -265,11 +262,11 @@ class SuiteRunner(object):
     def fetch_files(self):
         skip_files = os.getenv("SKIP_TEST_FILES")
         skip_tests = skip_files.split(",") if skip_files is not None else []
-        log.debug("Skip test file list {}".format(skip_tests))
-        for filename in glob.iglob('{}/**'.format(self.path), recursive=True):
+        log.debug(f"Skip test file list {skip_tests}")
+        for filename in glob.iglob(f'{self.path}/**', recursive=True):
             if os.path.isfile(filename):
                 if os.path.basename(filename) in skip_tests:
-                    log.info("Skip test file {}".format(filename))
+                    log.info(f"Skip test file {filename}")
                     continue
                 if re.match(self.pattern, filename):
                     self.statement_files.append(
@@ -281,7 +278,7 @@ class SuiteRunner(object):
         if callable(getattr(self, "batch_execute")):
             # case batch
             for (file_path, suite_name) in self.statement_files:
-                log.info("Run query with the same session every suite file, suite file path:{}".format(file_path))
+                log.info(f"Run query with the same session every suite file, suite file path:{file_path}")
                 statement_list = list()
                 for state in get_statements(file_path, suite_name):
                     statement_list.append(state)
@@ -289,19 +286,16 @@ class SuiteRunner(object):
         else:
             # case one by one
             for (file_path, suite_name) in self.statement_files:
-                log.info("Run query without session every statements, suite file path:{}".format(file_path))
+                log.info(f"Run query without session every statements, suite file path:{file_path}")
                 for state in get_statements(file_path, suite_name):
                     self.execute_statement(state)
 
     def execute_statement(self, statement):
         if self.kind not in statement.runs_on:
-            log.debug(
-                "Skip execute statement with {} SuiteRunner, only runs on {}".
-                format(self.kind, statement.runs_on))
+            log.debug(f"Skip execute statement with {self.kind} SuiteRunner, only runs on {statement.runs_on}")
             return
         if self.show_query_on_execution:
-            log.debug("executing statement, type {}\n{}\n".format(
-                statement.s_type.type, statement.text))
+            log.debug(f"executing statement, type {statement.s_type.type}\n{statement.text}\n")
         if statement.s_type.type == "query":
             self.assert_execute_query(statement)
         elif statement.s_type.type == "error":
@@ -334,16 +328,15 @@ class SuiteRunner(object):
 
     def assert_execute_query(self, statement):
         if statement.s_type.query_type == "skipped":
-            log.debug("{} statement is skipped".format(statement.text))
+            log.debug(f"{statement.text} statement is skipped")
             return
         actual = safe_execute(lambda: self.execute_query(statement), statement)
         try:
             f = format_value(actual, len(statement.s_type.query_type))
         except Exception:
-            assert "{} statement type is query but get no result".format(
-                statement)
+            assert f"{statement} statement type is query but get no result"
         assert statement.results is not None and len(
-            statement.results) > 0, "No result found {}".format(statement)
+            statement.results) > 0, f"No result found {statement}"
         hasResult = False
         for resultset in statement.results:
             if resultset[0].group("label") is not None and resultset[0].group(
@@ -356,7 +349,7 @@ class SuiteRunner(object):
                         resultset[0].group("label")) == 0:
                     self.assert_query_equal(f, resultset, statement)
                     hasResult = True
-        assert hasResult, "No result found {}".format(statement)
+        assert hasResult, f"No result found {statement}"
 
     # expect the query just return error
     def assert_execute_error(self, statement):
@@ -367,12 +360,10 @@ class SuiteRunner(object):
         match = re.search(statement.s_type.expect_error, actual.msg)
         assert_that(
             match, is_not(none()),
-            "statement {}, expect error regex {}, found {}".format(
-                str(statement), statement.s_type.expect_error, actual))
+            f"statement {str(statement)}, expect error regex {statement.s_type.expect_error}, found {actual}")
 
     def run_sql_suite(self):
-        log.info("run_sql_suite for {} on base {}".format(
-            self.kind, os.path.abspath(self.path)))
+        log.info(f"run_sql_suite for {self.kind} on base {os.path.abspath(self.path)}")
         self.fetch_files()
         self.execute()
 
