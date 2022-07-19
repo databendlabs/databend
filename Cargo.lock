@@ -141,7 +141,7 @@ dependencies = [
 [[package]]
 name = "arrow2"
 version = "0.12.0"
-source = "git+https://github.com/datafuse-extras/arrow2?rev=f5f6b7e3#f5f6b7e3aa10b80dc574abacf96b30e0927410fe"
+source = "git+https://github.com/datafuse-extras/arrow2?rev=4cdf6ff2#4cdf6ff2a90de01f501266b43955e04ad00dd816"
 dependencies = [
  "ahash",
  "arrow-format",
@@ -153,6 +153,7 @@ dependencies = [
  "dyn-clone",
  "either",
  "fallible-streaming-iterator",
+ "foreign_vec",
  "futures",
  "hash_hasher",
  "indexmap",
@@ -2805,6 +2806,12 @@ name = "foreign-types-shared"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "00b0228411908ca8685dba7fc2cdd70ec9990a6e753e89b6ac91a84c40fbaf4b"
+
+[[package]]
+name = "foreign_vec"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ee1b05cbd864bcaecbd3455d6d967862d446e4ebfc3c2e5e5b9841e53cba6673"
 
 [[package]]
 name = "form_urlencoded"

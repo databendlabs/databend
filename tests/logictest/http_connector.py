@@ -48,7 +48,7 @@ def get_query_options(response):
         return ret
     for field in response['schema']['fields']:
         type = str.lower(get_data_type(field))
-        log.debug("type:{}".format(type))
+        log.debug(f"type:{type}")
         if "int" in type:
             ret = ret + "I"
         elif "float" in type or "double" in type:
@@ -76,8 +76,7 @@ def get_error(response):
         return None
 
     # Wrap errno into msg, for result check
-    wrapMsg = "errno:{},msg:{}".format(response['error']['code'],
-                                       response['error']['message'])
+    wrapMsg = f"errno:{response['error']['code']},msg:{response['error']['message']}"
     return Error(msg=wrapMsg, errno=response['error']['code'])
 
 
@@ -115,7 +114,7 @@ class HttpConnector():
             return {**headers, **self._additonal_headers}
 
     def query(self, statement, session=None):
-        url = "http://{}:{}/v1/query/".format(self._host, self._port)
+        url = f"http://{self._host}:{self._port}/v1/query/"
 
         def parseSQL(sql):
             # for cases like:
@@ -128,11 +127,11 @@ class HttpConnector():
             else:
                 return sql  #  do nothing
 
-        log.debug("http sql: " + parseSQL(statement))
+        log.debug(f"http sql: {parseSQL(statement)}")
         query_sql = {'sql': parseSQL(statement), "string_fields": True}
         if session is not None:
             query_sql['session'] = session
-        log.debug("http headers {}".format(self.make_headers()))
+        log.debug(f"http headers {self.make_headers()}")
         response = requests.post(url,
                                  data=json.dumps(query_sql),
                                  headers=self.make_headers())
@@ -140,8 +139,7 @@ class HttpConnector():
         try:
             return json.loads(response.content)
         except Exception as err:
-            log.error("http error, SQL: {}\ncontent: {}\nerror msg:{}".format(
-                statement, response.content, str(err)))
+            log.error(f"http error, SQL: {statement}\ncontent: {response.content}\nerror msg:{str(err)}")
             raise
 
     def set_database(self, database):
@@ -167,7 +165,7 @@ class HttpConnector():
 
         response_list = list()
         response = self.query(statement, current_session)
-        log.info("response content: {}".format(response))
+        log.debug(f"response content: {response}")
         response_list.append(response)
         for i in range(12):
             if response['next_uri'] is not None:
@@ -176,19 +174,14 @@ class HttpConnector():
                         self._host, self._port, response['next_uri']),
                                         headers=self.make_headers())
                     response = json.loads(resp.content)
-                    log.info(
-                        "Sql in progress, fetch next_uri content: {}".format(
-                            response))
+                    log.debug(f"Sql in progress, fetch next_uri content: {response}")
                     response_list.append(response)
                 except Exception as err:
-                    log.warning("Fetch next_uri response with error: {}".format(
-                        str(err)))
+                    log.warning(f"Fetch next_uri response with error: {str(err)}")
                 continue
             break
         if response['next_uri'] is not None:
-            log.warning(
-                "after waited for 12 secs, query still not finished (next url not none)!"
-            )
+            log.warning(f"after waited for 12 secs, query still not finished (next url not none)!")
 
         if self._session is None:
             if response is not None and "session_id" in response:

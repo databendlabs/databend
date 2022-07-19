@@ -231,10 +231,8 @@ impl WindowFuncCompact {
         let partition_by_arrow_array = partition_by
             .iter()
             .map(|expr| {
-                block
-                    .try_column_by_name(&expr.column_name())
-                    .unwrap()
-                    .as_arrow_array()
+                let c = block.try_column_by_name(&expr.column_name()).unwrap();
+                c.as_arrow_array(c.data_type())
             })
             .collect::<Vec<ArrayRef>>();
         let partition_by_sort_column = partition_by_arrow_array
@@ -312,10 +310,8 @@ impl WindowFuncCompact {
                     let order_by_arrow_array = order_by
                         .iter()
                         .map(|expr| {
-                            block
-                                .try_column_by_name(&expr.column_name())
-                                .unwrap()
-                                .as_arrow_array()
+                            let c = block.try_column_by_name(&expr.column_name()).unwrap();
+                            c.as_arrow_array(c.data_type())
                         })
                         .collect::<Vec<ArrayRef>>();
                     let order_by_sort_column = order_by_arrow_array
@@ -347,10 +343,8 @@ impl WindowFuncCompact {
                     let order_by_arrow_array = order_by
                         .iter()
                         .map(|expr| {
-                            block
-                                .try_column_by_name(&expr.column_name())
-                                .unwrap()
-                                .as_arrow_array()
+                            let c = block.try_column_by_name(&expr.column_name()).unwrap();
+                            c.as_arrow_array(c.data_type())
                         })
                         .collect::<Vec<ArrayRef>>();
                     let order_by_sort_column = order_by_arrow_array

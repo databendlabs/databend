@@ -32,7 +32,6 @@ impl Plan {
             Plan::Call(plan) => Ok(format!("{:?}", plan)),
 
             // Databases
-            Plan::ShowDatabases(show_databases) => Ok(format!("{:?}", show_databases)),
             Plan::ShowCreateDatabase(show_create_database) => {
                 Ok(format!("{:?}", show_create_database))
             }
@@ -41,9 +40,7 @@ impl Plan {
             Plan::RenameDatabase(rename_database) => Ok(format!("{:?}", rename_database)),
 
             // Tables
-            Plan::ShowTables(show_tables) => Ok(format!("{:?}", show_tables)),
             Plan::ShowCreateTable(show_create_table) => Ok(format!("{:?}", show_create_table)),
-            Plan::ShowTablesStatus(show_tables_status) => Ok(format!("{:?}", show_tables_status)),
             Plan::CreateTable(create_table) => Ok(format!("{:?}", create_table)),
             Plan::DropTable(drop_table) => Ok(format!("{:?}", drop_table)),
             Plan::UndropTable(undrop_table) => Ok(format!("{:?}", undrop_table)),

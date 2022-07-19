@@ -265,6 +265,17 @@ pub enum TypeName {
     Array { item_type: Option<Box<TypeName>> },
     Object,
     Variant,
+    Nullable(Box<TypeName>),
+}
+
+impl TypeName {
+    pub fn wrap_nullable(self) -> Self {
+        if !matches!(&self, &Self::Nullable(_)) {
+            Self::Nullable(Box::new(self))
+        } else {
+            self
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -537,6 +548,9 @@ impl Display for TypeName {
             }
             TypeName::Variant => {
                 write!(f, "VARIANT")?;
+            }
+            TypeName::Nullable(ty) => {
+                write!(f, "{} NULL", ty)?;
             }
         }
         Ok(())
