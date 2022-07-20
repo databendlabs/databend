@@ -35,6 +35,7 @@ use crate::servers::http::v1::query::Executor;
 use crate::servers::http::v1::query::PageManager;
 use crate::servers::http::v1::query::ResponseData;
 use crate::servers::http::v1::query::Wait;
+use crate::sessions::QueryAffect;
 use crate::sessions::SessionType;
 use crate::sessions::TableContext;
 use crate::storages::result::block_buffer::BlockBuffer;
@@ -125,6 +126,7 @@ pub struct ResponseState {
     pub running_time_ms: f64,
     pub progresses: Progresses,
     pub state: ExecuteStateKind,
+    pub affect: Option<QueryAffect>,
     pub error: Option<ErrorCode>,
 }
 
@@ -257,6 +259,7 @@ impl HttpQuery {
             progresses: state.get_progress(),
             state: exe_state,
             error: err,
+            affect: state.get_affect(),
         }
     }
 

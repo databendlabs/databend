@@ -47,6 +47,7 @@ use crate::pipelines::executor::PipelineExecutor;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::Pipe;
 use crate::pipelines::Pipeline;
+use crate::sessions::QueryAffect;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionRef;
 use crate::sessions::TableContext;
@@ -114,6 +115,7 @@ pub struct ExecuteRunning {
 
 pub struct ExecuteStopped {
     stats: Progresses,
+    affect: Option<QueryAffect>,
     reason: Result<()>,
     stop_time: Instant,
 }
@@ -128,6 +130,13 @@ impl Executor {
         match &self.state {
             Running(r) => Progresses::from_context(&r.ctx),
             Stopped(f) => f.stats.clone(),
+        }
+    }
+
+    pub(crate) fn get_affect(&self) -> Option<QueryAffect> {
+        match &self.state {
+            Running(r) => r.ctx.get_affect(),
+            Stopped(r) => r.affect.clone(),
         }
     }
 
@@ -155,6 +164,7 @@ impl Executor {
                 stats: Progresses::from_context(&r.ctx),
                 reason: reason.clone(),
                 stop_time: Instant::now(),
+                affect: r.ctx.get_affect(),
             });
 
             if let Err(e) = reason {
