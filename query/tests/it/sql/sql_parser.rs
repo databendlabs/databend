@@ -14,14 +14,8 @@
 
 use common_exception::Result;
 use databend_query::sessions::SessionType;
-use databend_query::sql::statements::DfQueryStatement;
 use databend_query::sql::*;
 use pretty_assertions::assert_eq;
-use sqlparser::ast::*;
-use sqlparser::dialect::GenericDialect;
-use sqlparser::parser::Parser;
-use sqlparser::parser::ParserError;
-use sqlparser::tokenizer::Tokenizer;
 
 pub fn expect_parse_ok(sql: &str, expected: DfStatement) -> Result<()> {
     let (statements, _) = DfParser::parse_sql(sql, SessionType::Dummy)?;
@@ -31,23 +25,6 @@ pub fn expect_parse_ok(sql: &str, expected: DfStatement) -> Result<()> {
         "Expected to parse exactly one statement"
     );
     assert_eq!(statements[0], expected);
-    Ok(())
-}
-
-pub fn expect_synonym_parse_eq(sql: &str, sql2: &str) -> Result<()> {
-    let (statements, _) = DfParser::parse_sql(sql, SessionType::Dummy)?;
-    assert_eq!(
-        statements.len(),
-        1,
-        "Expected to parse exactly one statement"
-    );
-    let (statements2, _) = DfParser::parse_sql(sql2, SessionType::Dummy)?;
-    assert_eq!(
-        statements2.len(),
-        1,
-        "Expected to parse exactly one statement"
-    );
-    assert_eq!(statements[0], statements2[0]);
     Ok(())
 }
 
@@ -75,39 +52,6 @@ pub fn expect_parse_err_contains(sql: &str, expected: String) -> Result<()> {
         expected
     );
     Ok(())
-}
-
-pub fn verified_query(sql: &str) -> Result<Box<DfQueryStatement>> {
-    let mut parser = DfParser::new_with_dialect(sql, &GenericDialect {})?;
-    let stmt = parser.parse_statement()?;
-    if let DfStatement::Query(query) = stmt {
-        return Ok(query);
-    }
-    Err(ParserError::ParserError("Expect query statement".to_string()).into())
-}
-
-pub fn make_column_def(
-    name: impl Into<String>,
-    quote_style: Option<char>,
-    data_type: DataType,
-) -> ColumnDef {
-    ColumnDef {
-        name: Ident {
-            value: name.into(),
-            quote_style,
-        },
-        data_type,
-        collation: None,
-        options: vec![],
-    }
-}
-
-pub fn parse_sql_to_expr(query_expr: &str) -> Expr {
-    let dialect = GenericDialect {};
-    let mut tokenizer = Tokenizer::new(&dialect, query_expr);
-    let (tokens, position_map) = tokenizer.tokenize().unwrap();
-    let mut parser = Parser::new(tokens, position_map, &dialect);
-    parser.parse_expr().unwrap()
 }
 
 #[test]

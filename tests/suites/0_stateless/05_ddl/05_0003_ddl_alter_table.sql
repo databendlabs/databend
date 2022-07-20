@@ -12,5 +12,5 @@ ALTER TABLE IF EXISTS `05_0003_at_t0` RENAME TO `05_0003_at_t1`;
 DROP TABLE `05_0003_at_t0`; -- {ErrorCode 1025}
 SELECT * FROM `05_0003_at_t1`;
 
-ALTER TABLE `05_0003_at_t1` RENAME TO system.`05_0003_at_t1`; -- {ErrorCode 1002}
+ALTER TABLE `05_0003_at_t1` RENAME TO system.`05_0003_at_t1`; -- {ErrorCode 1005}
 DROP TABLE IF EXISTS `05_0003_at_t1`;

@@ -18,6 +18,9 @@ pub use aggregate::AggregateInfo;
 pub use bind_context::BindContext;
 pub use bind_context::ColumnBinding;
 use common_ast::ast::Statement;
+use common_ast::parser::parse_sql;
+use common_ast::parser::tokenize_sql;
+use common_ast::Backtrace;
 use common_datavalues::DataTypeImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -118,8 +121,17 @@ impl<'a> Binder {
 
             Statement::Copy(stmt) => self.bind_copy(bind_context, stmt).await?,
 
-            Statement::ShowMetrics => Plan::ShowMetrics,
-            Statement::ShowProcessList => Plan::ShowProcessList,
+            Statement::ShowMetrics => {
+                self.bind_rewrite_to_query(
+                    bind_context,
+                    "SELECT metric, kind, labels, value FROM system.metrics",
+                )
+                .await?
+            }
+            Statement::ShowProcessList => {
+                self.bind_rewrite_to_query(bind_context, "SELECT * FROM system.processes")
+                    .await?
+            }
             Statement::ShowSettings { like } => self.bind_show_settings(bind_context, like).await?,
 
             // Databases
@@ -156,11 +168,11 @@ impl<'a> Binder {
                 if_exists: *if_exists,
                 user: user.clone(),
             })),
-            Statement::ShowUsers => Plan::ShowUsers,
+            Statement::ShowUsers => self.bind_rewrite_to_query(bind_context, "SELECT name, hostname, auth_type, auth_string FROM system.users ORDER BY name").await?,
             Statement::AlterUser(stmt) => self.bind_alter_user(stmt).await?,
 
             // Roles
-            Statement::ShowRoles => Plan::ShowRoles,
+            Statement::ShowRoles => self.bind_rewrite_to_query(bind_context, "SELECT name, inherited_roles FROM system.roles ORDER BY name").await?,
             Statement::CreateRole {
                 if_not_exists,
                 role_name,
@@ -177,7 +189,7 @@ impl<'a> Binder {
             })),
 
             // Stages
-            Statement::ShowStages => Plan::ShowStages,
+            Statement::ShowStages => self.bind_rewrite_to_query(bind_context, "SELECT name, stage_type, number_of_files, creator, comment FROM system.stages ORDER BY name").await?,
             Statement::ListStage { location, pattern } => {
                 self.bind_list_stage(location, pattern).await?
             }
@@ -274,6 +286,17 @@ impl<'a> Binder {
             }
         };
         Ok(plan)
+    }
+
+    async fn bind_rewrite_to_query(
+        &mut self,
+        bind_context: &BindContext,
+        query: &str,
+    ) -> Result<Plan> {
+        let tokens = tokenize_sql(query)?;
+        let backtrace = Backtrace::new();
+        let (stmt, _) = parse_sql(&tokens, &backtrace)?;
+        self.bind_statement(bind_context, &stmt).await
     }
 
     /// Create a new ColumnBinding with assigned index

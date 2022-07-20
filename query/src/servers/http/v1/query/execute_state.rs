@@ -25,8 +25,6 @@ use common_datavalues::DataField;
 use common_datavalues::DataSchemaRefExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::PlanNode;
-use common_planners::PlanNode::Insert;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
@@ -191,8 +189,7 @@ impl ExecuteState {
         };
 
         let settings = ctx.get_settings();
-        if settings.get_enable_new_processor_framework()? != 0
-            && !ctx.get_config().query.management_mode
+        if !ctx.get_config().query.management_mode
             && ctx.get_cluster().is_empty()
             && settings.get_enable_planner_v2()? != 0
             && matches!(stmts.get(0), Some(DfStatement::Query(_)))
@@ -223,15 +220,25 @@ impl ExecuteState {
 
             Ok(executor)
         } else {
-            let plan = match PlanParser::parse(ctx.clone(), sql).await {
-                Ok(p) => p,
-                Err(e) => {
-                    InterpreterQueryLog::fail_to_start(ctx, e.clone()).await;
-                    return Err(e);
-                }
-            };
+            let interpreter = if stmts
+                .get(0)
+                .map_or(false, InterpreterFactoryV2::enable_default)
+            {
+                let mut planner = Planner::new(ctx.clone());
+                let (plan, _, _) = planner.plan_sql(sql).await?;
+                InterpreterFactoryV2::get(ctx.clone(), &plan)
+            } else {
+                let plan = match PlanParser::parse(ctx.clone(), sql).await {
+                    Ok(p) => p,
+                    Err(e) => {
+                        InterpreterQueryLog::fail_to_start(ctx, e.clone()).await;
+                        return Err(e);
+                    }
+                };
 
-            let interpreter = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+                InterpreterFactory::get(ctx.clone(), plan)
+            }?;
+
             // Write Start to query log table.
             let _ = interpreter
                 .start()
@@ -251,14 +258,9 @@ impl ExecuteState {
             let executor_clone = executor.clone();
             let ctx_clone = ctx.clone();
             let block_buffer_clone = block_buffer.clone();
+
             ctx.try_spawn(async move {
-                let res = execute(
-                    interpreter,
-                    ctx_clone,
-                    block_buffer,
-                    executor_clone.clone(),
-                    Arc::new(plan),
-                );
+                let res = execute(interpreter, ctx_clone, block_buffer, executor_clone.clone());
                 match AssertUnwindSafe(res).catch_unwind().await {
                     Ok(Err(err)) => {
                         Executor::stop(&executor_clone, Err(err), false).await;
@@ -287,54 +289,9 @@ async fn execute(
     ctx: Arc<QueryContext>,
     block_buffer: Arc<BlockBuffer>,
     executor: Arc<RwLock<Executor>>,
-    plan: Arc<PlanNode>,
 ) -> Result<()> {
-    let data_stream: Result<SendableDataBlockStream> = {
-        if ctx.get_settings().get_enable_async_insert()? != 0
-            && matches!(&*plan, PlanNode::Insert(_))
-        {
-            match &*plan {
-                Insert(insert_plan) => {
-                    let queue = ctx
-                        .get_current_session()
-                        .get_session_manager()
-                        .get_async_insert_queue()
-                        .read()
-                        .clone()
-                        .unwrap();
-                    queue
-                        .clone()
-                        .push(Arc::new(insert_plan.to_owned()), ctx.clone())
-                        .await?;
-
-                    let wait_for_async_insert = ctx.get_settings().get_wait_for_async_insert()?;
-                    let wait_for_async_insert_timeout =
-                        ctx.get_settings().get_wait_for_async_insert_timeout()?;
-
-                    if wait_for_async_insert == 1 {
-                        queue
-                            .clone()
-                            .wait_for_processing_insert(
-                                ctx.get_id(),
-                                Duration::from_secs(wait_for_async_insert_timeout),
-                            )
-                            .await?;
-                    }
-
-                    Ok(Box::pin(DataBlockStream::create(
-                        plan.schema(),
-                        None,
-                        vec![],
-                    )))
-                }
-                _ => unreachable!(),
-            }
-        } else {
-            interpreter.execute(None).await
-        }
-    };
-
-    let mut data_stream = ctx.try_create_abortable(data_stream?)?;
+    let data_stream = interpreter.execute(None).await?;
+    let mut data_stream = ctx.try_create_abortable(data_stream)?;
     let use_result_cache = !ctx.get_config().query.management_mode;
 
     match data_stream.next().await {

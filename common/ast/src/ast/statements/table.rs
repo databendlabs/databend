@@ -12,13 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
 use crate::ast::statements::show::ShowLimit;
 use crate::ast::write_comma_separated_list;
 use crate::ast::write_period_separated_list;
-use crate::ast::write_space_seperated_list;
+use crate::ast::write_space_seperated_map;
 use crate::ast::Expr;
 use crate::ast::Identifier;
 use crate::ast::Query;
@@ -100,10 +101,10 @@ pub struct CreateTableStmt<'a> {
     pub database: Option<Identifier<'a>>,
     pub table: Identifier<'a>,
     pub source: Option<CreateTableSource<'a>>,
-    pub table_options: Vec<TableOption>,
+    pub engine: Option<Engine>,
     pub cluster_by: Vec<Expr<'a>>,
+    pub table_options: BTreeMap<String, String>,
     pub as_query: Option<Box<Query<'a>>>,
-    pub comment: Option<String>,
     pub transient: bool,
 }
 
@@ -129,16 +130,17 @@ impl Display for CreateTableStmt<'_> {
             write!(f, " {source}")?;
         }
 
-        // Format table options
-        write_space_seperated_list(f, self.table_options.iter())?;
-
-        if let Some(comment) = &self.comment {
-            write!(f, " COMMENT = {comment}")?;
+        if let Some(engine) = &self.engine {
+            write!(f, " ENGINE={engine}")?;
         }
+
         if !self.cluster_by.is_empty() {
             write!(f, " CLUSTER BY ")?;
             write_comma_separated_list(f, &self.cluster_by)?;
         }
+
+        // Format table options
+        write_space_seperated_map(f, self.table_options.iter())?;
         if let Some(as_query) = &self.as_query {
             write!(f, " AS {as_query}")?;
         }
@@ -443,42 +445,10 @@ impl Display for OptimizeTableAction {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum TableOption {
-    Engine(Engine),
-    Comment(String),
-}
-
-impl TableOption {
-    pub fn option_key(&self) -> String {
-        match self {
-            TableOption::Engine(_) => "ENGINE".to_string(),
-            TableOption::Comment(_) => "COMMENT".to_string(),
-        }
-    }
-
-    pub fn option_value(&self) -> String {
-        match self {
-            TableOption::Engine(engine) => engine.to_string(),
-            TableOption::Comment(comment) => comment.clone(),
-        }
-    }
-}
-
-impl Display for TableOption {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            TableOption::Engine(engine) => write!(f, "ENGINE = {engine}"),
-            TableOption::Comment(comment) => write!(f, "COMMENT = {comment}"),
-        }
-    }
-}
-
 #[derive(Debug, Clone, PartialEq)]
 pub struct ColumnDefinition<'a> {
     pub name: Identifier<'a>,
     pub data_type: TypeName,
-    pub nullable: bool,
     pub default_expr: Option<Box<Expr<'a>>>,
     pub comment: Option<String>,
 }
@@ -486,11 +456,11 @@ pub struct ColumnDefinition<'a> {
 impl<'a> Display for ColumnDefinition<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{} {}", self.name, self.data_type)?;
-        if self.nullable {
-            write!(f, " NULL")?;
-        } else {
+
+        if !matches!(self.data_type, TypeName::Nullable(_)) {
             write!(f, " NOT NULL")?;
         }
+
         if let Some(default_expr) = &self.default_expr {
             write!(f, " DEFAULT {default_expr}")?;
         }
