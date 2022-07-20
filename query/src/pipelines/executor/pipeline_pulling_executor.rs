@@ -29,7 +29,7 @@ use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::Sink;
 use crate::pipelines::processors::Sinker;
-use crate::pipelines::Pipe;
+use crate::pipelines::{Pipe, PipelineBuildResult};
 use crate::pipelines::Pipeline;
 
 struct State {
@@ -88,6 +88,26 @@ impl PipelinePullingExecutor {
         })
     }
 
+    pub fn from_pipelines(
+        async_runtime: Arc<Runtime>,
+        query_need_abort: Arc<AtomicBool>,
+        mut build_res: PipelineBuildResult,
+    ) -> Result<PipelinePullingExecutor> {
+        let mut main_pipeline = build_res.main_pipeline;
+        let (sender, receiver) = std::sync::mpsc::sync_channel(main_pipeline.output_len());
+        let state = State::create(sender.clone());
+        Self::wrap_pipeline(&mut main_pipeline, sender)?;
+
+        let mut pipelines = build_res.sources_pipelines;
+        pipelines.push(main_pipeline);
+
+        Ok(PipelinePullingExecutor {
+            receiver,
+            state,
+            executor: PipelineExecutor::from_pipelines(async_runtime, query_need_abort, pipelines)?,
+        })
+    }
+
     pub fn start(&mut self) {
         let state = self.state.clone();
         let threads_executor = self.executor.clone();
@@ -127,7 +147,7 @@ impl PipelinePullingExecutor {
     }
 
     pub fn try_pull_data<F>(&mut self, f: F) -> Result<Option<DataBlock>>
-    where F: Fn() -> bool {
+        where F: Fn() -> bool {
         if !self.executor.is_finished() {
             while !f() {
                 return match self.receiver.recv_timeout(Duration::from_millis(100)) {

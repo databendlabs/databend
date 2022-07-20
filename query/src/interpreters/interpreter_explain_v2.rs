@@ -112,22 +112,22 @@ impl ExplainInterpreterV2 {
     ) -> Result<Vec<DataBlock>> {
         let builder = PhysicalPlanBuilder::new(metadata);
         let plan = builder.build(&s_expr)?;
-        let mut pb = PipelineBuilder::new();
-        let mut root_pipeline = Pipeline::create();
-        pb.build_pipeline(self.ctx.clone(), &plan, &mut root_pipeline)?;
-        let pipelines = pb.pipelines;
+
+        let mut pipeline_builder = PipelineBuilder::create(self.ctx.clone());
+        let build_res = pipeline_builder.finalize(&plan)?;
+
         let mut blocks = vec![];
         // Format root pipeline
         blocks.push(DataBlock::create(self.schema.clone(), vec![
             Series::from_data(
-                format!("{}", root_pipeline.display_indent())
+                format!("{}", build_res.main_pipeline.display_indent())
                     .lines()
                     .map(|s| s.as_bytes())
                     .collect::<Vec<_>>(),
             ),
         ]));
         // Format child pipelines
-        for pipeline in pipelines.iter() {
+        for pipeline in build_res.sources_pipelines.iter() {
             blocks.push(DataBlock::create(self.schema.clone(), vec![
                 Series::from_data(
                     format!("\n{}", pipeline.display_indent())

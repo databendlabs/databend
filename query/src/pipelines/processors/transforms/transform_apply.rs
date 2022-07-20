@@ -227,34 +227,17 @@ impl TransformApply {
         let mut rewriter = OuterRefRewriter::new(outer_columns);
         let physical_plan = rewriter.rewrite_physical_plan(&self.subquery)?;
 
-        let mut pipeline = Pipeline::create();
-        let mut pb = PipelineBuilder::new();
-        pb.build_pipeline(
-            QueryContext::create_from(self.ctx.clone()),
-            &physical_plan,
-            &mut pipeline,
-        )?;
-
-        let mut children = pb.pipelines;
+        let subquery_ctx = QueryContext::create_from(self.ctx.clone());
+        let mut pipeline_builder = PipelineBuilder::create(subquery_ctx);
+        let mut build_res = pipeline_builder.finalize(&physical_plan)?;
 
         // Set max threads
         let settings = self.ctx.get_settings();
-        pipeline.set_max_threads(settings.get_max_threads()? as usize);
-        for pipeline in children.iter_mut() {
-            pipeline.set_max_threads(settings.get_max_threads()? as usize);
-        }
+        build_res.set_max_threads(settings.get_max_threads()? as usize);
 
         let runtime = self.ctx.get_storage_runtime();
         let query_need_abort = self.ctx.query_need_abort();
-        // Spawn sub-pipelines
-        for pipeline in children {
-            let executor =
-                PipelineExecutor::create(runtime.clone(), query_need_abort.clone(), pipeline)?;
-            executor.execute()?;
-        }
-
-        let mut executor =
-            PipelinePullingExecutor::try_create(runtime, query_need_abort, pipeline)?;
+        let mut executor = PipelinePullingExecutor::from_pipelines(runtime, query_need_abort, build_res)?;
         executor.start();
         let mut results = vec![];
         while let Some(result) = executor.pull_data()? {

@@ -272,7 +272,7 @@ impl ExecuteState {
                             Err(ErrorCode::PanicError("interpreter panic!")),
                             false,
                         )
-                        .await;
+                            .await;
                         block_buffer_clone.stop_push().await.unwrap();
                     }
                     _ => {}
@@ -314,7 +314,7 @@ async fn execute(
                         user: ctx.get_current_user()?.identity(),
                     },
                 )
-                .await?
+                    .await?
             } else {
                 Box::new(BlockBufferWriterMemOnly(block_buffer))
             };
@@ -354,20 +354,20 @@ impl HttpQueryHandle {
         let executor = self.executor.clone();
         let block_buffer = self.block_buffer.clone();
         let last_schema = physical_plan.output_schema()?;
-        let mut pb = PipelineBuilder::new();
-        let mut root_pipeline = Pipeline::create();
-        pb.build_pipeline(ctx.clone(), physical_plan, &mut root_pipeline)?;
-        pb.render_result_set(last_schema, result_columns, &mut root_pipeline)?;
 
-        let mut pipelines = pb.pipelines;
+        let mut pipeline_builder = PipelineBuilder::create(ctx.clone());
+        let mut build_res = pipeline_builder.finalize(physical_plan)?;
+
+        PipelineBuilder::render_result_set(
+            last_schema,
+            result_columns,
+            &mut build_res.main_pipeline,
+        )?;
+
         let async_runtime = ctx.get_storage_runtime();
+        build_res.set_max_threads(ctx.get_settings().get_max_threads()? as usize);
 
-        root_pipeline.set_max_threads(ctx.get_settings().get_max_threads()? as usize);
-        for pipeline in pipelines.iter_mut() {
-            pipeline.set_max_threads(ctx.get_settings().get_max_threads()? as usize);
-        }
-
-        root_pipeline.resize(1)?;
+        build_res.main_pipeline.resize(1)?;
         let input = InputPort::create();
 
         let schema = DataSchemaRefExt::create(
@@ -391,7 +391,8 @@ impl HttpQueryHandle {
             query_info,
             self.block_buffer,
         )?;
-        root_pipeline.add_pipe(Pipe::SimplePipe {
+
+        build_res.main_pipeline.add_pipe(Pipe::SimplePipe {
             outputs_port: vec![],
             inputs_port: vec![input],
             processors: vec![sink],
@@ -401,18 +402,12 @@ impl HttpQueryHandle {
         let query_need_abort = ctx.query_need_abort();
 
         let run = move || -> Result<()> {
-            for pipeline in pipelines {
-                let executor = PipelineExecutor::create(
-                    async_runtime_clone.clone(),
-                    query_need_abort.clone(),
-                    pipeline,
-                )?;
-                executor.execute()?;
-            }
-            let pipeline_executor = PipelineCompleteExecutor::try_create(
+            let mut pipelines = build_res.sources_pipelines;
+            pipelines.push(build_res.main_pipeline);
+            let pipeline_executor = PipelineCompleteExecutor::from_pipelines(
                 async_runtime_clone,
                 query_need_abort.clone(),
-                root_pipeline,
+                pipelines,
             )?;
             pipeline_executor.execute()
         };

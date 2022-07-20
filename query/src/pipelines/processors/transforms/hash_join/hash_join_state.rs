@@ -17,6 +17,7 @@ use common_exception::Result;
 
 use super::ProbeState;
 
+#[async_trait::async_trait]
 /// Concurrent hash table for hash join.
 pub trait HashJoinState: Send + Sync {
     /// Build hash table with input DataBlock
@@ -37,6 +38,8 @@ pub trait HashJoinState: Send + Sync {
     /// Finish building hash table, will be called only once as soon as all handles
     /// have been detached from current state.
     fn finish(&self) -> Result<()>;
+
+    async fn wait_finish(&self) -> Result<()>;
 
     /// Get mark join results
     fn mark_join_blocks(&self) -> Result<Vec<DataBlock>>;
