@@ -20,6 +20,7 @@ common-io = { path = "../io" }
 
 # Crates.io dependencies
 once_cell = "1.12.0"
+similar-asserts = "1.2.0"
 strum = "0.24.1"
 strum_macros = "0.24.0"
 
