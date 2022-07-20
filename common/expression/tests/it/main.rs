@@ -26,6 +26,7 @@ use common_ast::DisplayError;
 use common_expression::chunk::Chunk;
 use common_expression::evaluator::DomainCalculator;
 use common_expression::evaluator::Evaluator;
+use common_expression::expression::RemoteExpr;
 use common_expression::function::vectorize_2_arg;
 use common_expression::function::Function;
 use common_expression::function::FunctionContext;
@@ -1148,6 +1149,9 @@ fn run_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType, Domain
 
         let fn_registry = builtin_functions();
         let (expr, output_ty) = type_check::check(&raw_expr, &fn_registry)?;
+
+        let remote_expr = RemoteExpr::from_expr(expr);
+        let expr = remote_expr.into_expr(&fn_registry).unwrap();
 
         let domain_calculator = DomainCalculator {
             input_domains: columns

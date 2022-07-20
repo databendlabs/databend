@@ -27,6 +27,8 @@ use std::ops::Range;
 
 use common_arrow::arrow::trusted_len::TrustedLen;
 use enum_as_inner::EnumAsInner;
+use serde::Deserialize;
+use serde::Serialize;
 
 pub use self::any::AnyType;
 pub use self::array::ArrayType;
@@ -43,7 +45,7 @@ use crate::values::Scalar;
 
 pub type GenericMap<'a> = [DataType];
 
-#[derive(Debug, Clone, PartialEq, Eq, EnumAsInner)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, EnumAsInner)]
 pub enum DataType {
     Boolean,
     String,

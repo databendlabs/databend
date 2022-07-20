@@ -1197,6 +1197,7 @@ dependencies = [
  "itertools",
  "match-template",
  "num-traits",
+ "serde",
 ]
 
 [[package]]
