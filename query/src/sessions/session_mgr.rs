@@ -88,7 +88,8 @@ impl SessionManager {
         let storage_runtime = {
             let mut storage_num_cpus = conf.storage.num_cpus as usize;
             if storage_num_cpus == 0 {
-                storage_num_cpus = std::cmp::max(1, num_cpus::get() / 2)
+                // We need at least two threads to schedule.
+                storage_num_cpus = std::cmp::max(2, num_cpus::get() / 2)
             }
 
             Runtime::with_worker_threads(storage_num_cpus, Some("IO-worker".to_owned()))?
