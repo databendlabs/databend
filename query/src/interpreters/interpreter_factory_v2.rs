@@ -96,9 +96,10 @@ impl InterpreterFactoryV2 {
         matches!(
             stmt,
             // DfStatement::Query(_)
+            //   | DfStatement::Explain(_)
+            // | DfStatement::InsertQuery(_)
             DfStatement::Copy(_)
-            //     | DfStatement::Explain(_)
-            | DfStatement::CreateStage(_)
+                | DfStatement::CreateStage(_)
                 | DfStatement::ShowStages(_)
                 | DfStatement::DescribeStage(_)
                 | DfStatement::List(_)
@@ -126,23 +127,23 @@ impl InterpreterFactoryV2 {
                 | DfStatement::ShowProcessList(_)
                 | DfStatement::ShowSettings(_)
                 | DfStatement::CreateDatabase(_)
-                | DfStatement::DropDatabase(_) /* | DfStatement::InsertQuery(_)
-                                                * | DfStatement::ShowUsers(_)
-                                                * | DfStatement::CreateUser(_)
-                                                * | DfStatement::ShowRoles(_)
-                                                * | DfStatement::AlterDatabase(_)
-                                                * | DfStatement::CreateUDF(_)
-                                                * | DfStatement::DropUser(_)
-                                                * | DfStatement::AlterUser(_)
-                                                * | DfStatement::CreateRole(_)
-                                                * | DfStatement::DropRole(_)
-                                                * | DfStatement::GrantPrivilege(_)
-                                                * | DfStatement::GrantRole(_)
-                                                * | DfStatement::ShowGrants(_)
-                                                * | DfStatement::RevokeRole(_)
-                                                * | DfStatement::RevokePrivilege(_)
-                                                * | DfStatement::Call(_)
-                                                * | DfStatement::SetVariable(_) */
+                | DfStatement::DropDatabase(_)
+                | DfStatement::ShowUsers(_)
+                | DfStatement::CreateUser(_)
+                | DfStatement::ShowRoles(_)
+                | DfStatement::AlterDatabase(_)
+                | DfStatement::CreateUDF(_)
+                | DfStatement::DropUser(_)
+                | DfStatement::AlterUser(_)
+                | DfStatement::CreateRole(_)
+                | DfStatement::DropRole(_)
+                | DfStatement::GrantPrivilege(_)
+                | DfStatement::GrantRole(_)
+                | DfStatement::ShowGrants(_)
+                | DfStatement::RevokeRole(_)
+                | DfStatement::RevokePrivilege(_)
+                | DfStatement::Call(_)
+                | DfStatement::SetVariable(_)
         )
     }
 
@@ -181,11 +182,6 @@ impl InterpreterFactoryV2 {
                 ctx,
                 *copy_plan.clone(),
             )?)),
-
-            // Shows
-            Plan::ShowMetrics => Ok(Arc::new(ShowMetricsInterpreter::try_create(ctx)?)),
-            Plan::ShowProcessList => Ok(Arc::new(ShowProcessListInterpreter::try_create(ctx)?)),
-            Plan::ShowSettings => Ok(Arc::new(ShowSettingsInterpreter::try_create(ctx)?)),
 
             // Databases
             Plan::ShowCreateDatabase(show_create_database) => Ok(Arc::new(
@@ -257,7 +253,6 @@ impl InterpreterFactoryV2 {
             )?)),
 
             // Users
-            Plan::ShowUsers => Ok(Arc::new(ShowUsersInterpreter::try_create(ctx)?)),
             Plan::CreateUser(create_user) => Ok(Arc::new(CreateUserInterpreter::try_create(
                 ctx,
                 *create_user.clone(),
@@ -279,7 +274,6 @@ impl InterpreterFactoryV2 {
             )?)),
 
             // Roles
-            Plan::ShowRoles => Ok(Arc::new(ShowRolesInterpreter::try_create(ctx)?)),
             Plan::CreateRole(create_role) => Ok(Arc::new(CreateRoleInterpreter::try_create(
                 ctx,
                 *create_role.clone(),
@@ -290,7 +284,6 @@ impl InterpreterFactoryV2 {
             )?)),
 
             // Stages
-            Plan::ShowStages => Ok(Arc::new(ShowStagesInterpreter::try_create(ctx)?)),
             Plan::ListStage(s) => Ok(Arc::new(ListInterpreter::try_create(ctx, *s.clone())?)),
             Plan::DescribeStage(s) => Ok(Arc::new(DescribeUserStageInterpreter::try_create(
                 ctx,

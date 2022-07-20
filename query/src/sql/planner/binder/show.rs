@@ -13,9 +13,6 @@
 // limitations under the License.
 
 use common_ast::ast::ShowLimit;
-use common_ast::parser::parse_sql;
-use common_ast::parser::tokenize_sql;
-use common_ast::Backtrace;
 use common_exception::Result;
 
 use crate::sql::plans::Plan;
@@ -47,10 +44,7 @@ impl<'a> Binder {
                 }
             }
         );
-        let tokens = tokenize_sql(query.as_str())?;
-        let backtrace = Backtrace::new();
-        let (stmt, _) = parse_sql(&tokens, &backtrace)?;
-        self.bind_statement(bind_context, &stmt).await
+        self.bind_rewrite_to_query(bind_context, &query).await
     }
 
     pub(in crate::sql::planner::binder) async fn bind_show_settings(
@@ -67,9 +61,6 @@ impl<'a> Binder {
             sub_query
         );
 
-        let tokens = tokenize_sql(query.as_str())?;
-        let backtrace = Backtrace::new();
-        let (stmt, _) = parse_sql(&tokens, &backtrace)?;
-        self.bind_statement(bind_context, &stmt).await
+        self.bind_rewrite_to_query(bind_context, &query).await
     }
 }
