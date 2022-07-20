@@ -321,12 +321,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "atomic_refcell"
-version = "0.1.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "73b5e5f48b927f04e952dedc932f31995a65a0bf65ec971c74436e51bf6e970d"
-
-[[package]]
 name = "atty"
 version = "0.2.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1217,6 +1211,7 @@ dependencies = [
  "common-io",
  "once_cell",
  "pretty_assertions",
+ "similar-asserts",
  "strum",
  "strum_macros",
 ]
@@ -2254,7 +2249,6 @@ dependencies = [
  "async-recursion",
  "async-stream",
  "async-trait 0.1.56 (git+https://github.com/datafuse-extras/async-trait?rev=f0b0fd5)",
- "atomic_refcell",
  "backoff",
  "backon",
  "base64 0.13.0",

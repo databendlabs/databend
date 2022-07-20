@@ -177,7 +177,7 @@ pub fn from_arrow_type(dt: &ArrowType) -> DataTypeImpl {
         ArrowType::Float64 => DataTypeImpl::Float64(Float64Type::default()),
 
         // TODO support other list
-        ArrowType::LargeList(f) => {
+        ArrowType::List(f) | ArrowType::LargeList(f) | ArrowType::FixedSizeList(f, _) => {
             let inner = from_arrow_field(f);
             DataTypeImpl::Array(ArrayType::create(inner))
         }

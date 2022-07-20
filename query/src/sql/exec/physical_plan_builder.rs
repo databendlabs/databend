@@ -88,6 +88,7 @@ impl PhysicalPlanBuilder {
                         })
                         .collect::<Result<_>>()?,
                     marker_index: join.marker_index,
+                    from_correlated_subquery: join.from_correlated_subquery,
                 })
             }
             RelOperator::Project(project) => {
@@ -190,15 +191,6 @@ impl PhysicalPlanBuilder {
                 input: Box::new(self.build(s_expr.child(0)?)?),
                 limit: limit.limit,
                 offset: limit.offset,
-            }),
-            RelOperator::CrossApply(cross_apply) => Ok(PhysicalPlan::CrossApply {
-                input: Box::new(self.build(s_expr.child(0)?)?),
-                subquery: Box::new(self.build(s_expr.child(1)?)?),
-                correlated_columns: cross_apply
-                    .correlated_columns
-                    .iter()
-                    .map(|v| v.to_string())
-                    .collect(),
             }),
             RelOperator::Max1Row(_) => Ok(PhysicalPlan::Max1Row {
                 input: Box::new(self.build(s_expr.child(0)?)?),

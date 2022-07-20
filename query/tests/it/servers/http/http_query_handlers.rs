@@ -35,6 +35,7 @@ use databend_query::servers::http::v1::HttpSession;
 use databend_query::servers::http::v1::QueryResponse;
 use databend_query::servers::HttpHandler;
 use databend_query::servers::HttpHandlerKind;
+use databend_query::sessions::QueryAffect;
 use databend_query::sessions::SessionManager;
 use headers::Header;
 use jwt_simple::algorithms::RS256KeyPair;
@@ -1294,6 +1295,39 @@ async fn test_multi_partition() -> Result<()> {
         assert!(result.error.is_none(), "{:?}", result.error);
         assert_eq!(result.state, ExecuteStateKind::Succeeded);
         assert_eq!(result.data.len(), data_len);
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_affect() -> Result<()> {
+    let route = create_endpoint();
+
+    let sqls = vec![
+        (
+            "set max_threads=1",
+            Some(QueryAffect::ChangeSetting {
+                key: "max_threads".to_string(),
+                value: "1".to_string(),
+                is_global: false,
+            }),
+        ),
+        ("create database if not exists db2", None),
+        (
+            "use db2",
+            Some(QueryAffect::UseDB {
+                name: "db2".to_string(),
+            }),
+        ),
+    ];
+
+    for (sql, data_len) in sqls {
+        let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": 1}});
+        let (status, result) = post_json_to_endpoint(&route, &json).await?;
+        assert_eq!(status, StatusCode::OK);
+        assert!(result.error.is_none(), "{:?}", result.error);
+        assert_eq!(result.state, ExecuteStateKind::Succeeded);
+        assert_eq!(result.affect, data_len);
     }
     Ok(())
 }

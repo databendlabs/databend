@@ -270,6 +270,7 @@ select '===Explain Pipeline===';
 explain pipeline select t1.a from t1 join t2 on t1.a = t2.a;
 drop table t1;
 drop table t2;
+
 -- position function
 select '===Position Function===';
 SELECT POSITION('bar' IN 'foobarbar');
@@ -400,5 +401,23 @@ select user(), currentuser(), current_user();
 -- Query has keyword
 SELECT '====WITH_KEYWORD====';
 SELECT database, table, name, type, default_kind as default_type, default_expression, comment FROM system.columns  WHERE database LIKE 'system'  AND table LIKE 'settings' ORDER BY name;
+
+-- Correlated subquery
+SELECT '====Correlated====';
+create table t1(a int null , b int null);
+insert into t1 values(1, 2), (2, 3), (null, 1);
+create table t2(a int null, b int null);
+insert into t2 values(3, 4), (2, 3), (null, 2);
+select t1.a, (select t2.a from t2 where t1.a > 1 and t2.a > 2) from t1;
+select t1.a from t1 where t1.a > (select t2.a from t2 where t1.a = t2.a );
+select t1.a from t1 where exists (select t2.a from t2 where t1.a = t2.a) or t1.b > 1;
+select t1.a from t1 where exists (select t2.a from t2 where t1.a = t2.a) and t1.b > 1;
+select t1.a from t1 where not exists (select t2.a from t2 where t1.a = t2.a) and t1.b > 1;
+select * from t1 where t1.a = any (select t2.a from t2 where t1.a = t2.a);
+select * from t1 where t1.a = any (select t2.a from t2 where t1.a > 1);
+select * from t1 where t1.a > any (select t2.a from t2 where t1.a > 1);
+drop table t1;
+drop table t2;
+
 set enable_planner_v2 = 0;
 
