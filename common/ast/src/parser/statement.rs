@@ -93,6 +93,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     let show_stages = value(Statement::ShowStages, rule! { SHOW ~ STAGES });
     let show_process_list = value(Statement::ShowProcessList, rule! { SHOW ~ PROCESSLIST });
     let show_metrics = value(Statement::ShowMetrics, rule! { SHOW ~ METRICS });
+    let show_engines = value(Statement::ShowEngines, rule! { SHOW ~ ENGINES });
     let show_functions = map(
         rule! {
             SHOW ~ FUNCTIONS ~ #show_limit?
@@ -161,6 +162,16 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             })
         },
     );
+
+    let undrop_database = map(
+        rule! {
+            UNDROP ~ DATABASE ~ #peroid_separated_idents_1_to_2
+        },
+        |(_, _, (catalog, database))| {
+            Statement::UndropDatabase(UndropDatabaseStmt { catalog, database })
+        },
+    );
+
     let alter_database = map(
         rule! {
             ALTER ~ DATABASE ~ ( IF ~ EXISTS )? ~ #peroid_separated_idents_1_to_2 ~ #alter_database_action
@@ -723,12 +734,14 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             | #delete : "`DELETE FROM <table> [WHERE ...]`"
             | #show_settings : "`SHOW SETTINGS [<show_limit>]`"
             | #show_stages : "`SHOW STAGES`"
+            | #show_engines : "`SHOW ENGINES`"
             | #show_process_list : "`SHOW PROCESSLIST`"
             | #show_metrics : "`SHOW METRICS`"
             | #show_functions : "`SHOW FUNCTIONS [<show_limit>]`"
             | #kill_stmt : "`KILL (QUERY | CONNECTION) <object_id>`"
             | #set_variable : "`SET <variable> = <value>`"
             | #show_databases : "`SHOW DATABASES [<show_limit>]`"
+            | #undrop_database : "`UNDROP DATABASE <database>`"
             | #show_create_database : "`SHOW CREATE DATABASE <database>`"
             | #create_database : "`CREATE DATABASE [IF NOT EXIST] <database> [ENGINE = <engine>]`"
             | #drop_database : "`DROP DATABASE [IF EXISTS] <database>`"

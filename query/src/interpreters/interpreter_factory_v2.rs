@@ -93,57 +93,12 @@ impl InterpreterFactoryV2 {
     }
 
     pub fn enable_default(stmt: &DfStatement) -> bool {
-        matches!(
+        !matches!(
             stmt,
-            // DfStatement::Query(_)
-            //   | DfStatement::Explain(_)
-            // | DfStatement::InsertQuery(_)
-            DfStatement::Copy(_)
-                | DfStatement::CreateStage(_)
-                | DfStatement::ShowStages(_)
-                | DfStatement::DescribeStage(_)
-                | DfStatement::List(_)
-                | DfStatement::DropStage(_)
-                | DfStatement::RemoveStage(_)
-                | DfStatement::ShowDatabases(_)
-                | DfStatement::ShowCreateDatabase(_)
-                | DfStatement::ShowTables(_)
-                | DfStatement::ShowCreateTable(_)
-                | DfStatement::DescribeTable(_)
-                | DfStatement::ShowTablesStatus(_)
-                | DfStatement::CreateTable(_)
-                | DfStatement::CreateView(_)
-                | DfStatement::AlterView(_)
-                | DfStatement::DropTable(_)
-                | DfStatement::UndropTable(_)
-                | DfStatement::AlterTable(_)
-                | DfStatement::RenameTable(_)
-                | DfStatement::TruncateTable(_)
-                | DfStatement::OptimizeTable(_)
-                | DfStatement::ExistsTable(_)
-                | DfStatement::DropView(_)
-                | DfStatement::ShowFunctions(_)
-                | DfStatement::ShowMetrics(_)
-                | DfStatement::ShowProcessList(_)
-                | DfStatement::ShowSettings(_)
-                | DfStatement::CreateDatabase(_)
-                | DfStatement::DropDatabase(_)
-                | DfStatement::ShowUsers(_)
-                | DfStatement::CreateUser(_)
-                | DfStatement::ShowRoles(_)
-                | DfStatement::AlterDatabase(_)
-                | DfStatement::CreateUDF(_)
-                | DfStatement::DropUser(_)
-                | DfStatement::AlterUser(_)
-                | DfStatement::CreateRole(_)
-                | DfStatement::DropRole(_)
-                | DfStatement::GrantPrivilege(_)
-                | DfStatement::GrantRole(_)
-                | DfStatement::ShowGrants(_)
-                | DfStatement::RevokeRole(_)
-                | DfStatement::RevokePrivilege(_)
-                | DfStatement::Call(_)
-                | DfStatement::SetVariable(_)
+            DfStatement::Query(_)
+                | DfStatement::Explain(_)
+                | DfStatement::InsertQuery(_)
+                | DfStatement::Delete(_)
         )
     }
 
@@ -194,6 +149,11 @@ impl InterpreterFactoryV2 {
                 ctx,
                 *drop_database.clone(),
             )?)),
+
+            Plan::UndropDatabase(undrop_database) => Ok(Arc::new(
+                UndropDatabaseInterpreter::try_create(ctx, *undrop_database.clone())?,
+            )),
+
             Plan::RenameDatabase(rename_database) => Ok(Arc::new(
                 RenameDatabaseInterpreter::try_create(ctx, *rename_database.clone())?,
             )),

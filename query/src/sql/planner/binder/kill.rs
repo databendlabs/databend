@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 use common_ast::ast::KillTarget;
 use common_exception::Result;
 use common_planners::KillPlan;
@@ -26,11 +25,11 @@ impl<'a> Binder {
         &mut self,
         _bind_context: &BindContext,
         kill_target: &KillTarget,
-        object_id: &String,
+        object_id: &str,
     ) -> Result<Plan> {
         let kill_connection = matches!(kill_target, KillTarget::Connection);
         let plan = Box::new(KillPlan {
-            id: object_id.clone(),
+            id: object_id.to_string(),
             kill_connection,
         });
 

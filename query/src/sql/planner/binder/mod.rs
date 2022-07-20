@@ -133,6 +133,10 @@ impl<'a> Binder {
                 self.bind_rewrite_to_query(bind_context, "SELECT * FROM system.processes")
                     .await?
             }
+            Statement::ShowEngines => {
+                 self.bind_rewrite_to_query(bind_context, "SELECT Engine, Comment FROM system.engines ORDER BY Engine ASC")
+                    .await?
+            },
             Statement::ShowSettings { like } => self.bind_show_settings(bind_context, like).await?,
 
             // Databases
@@ -140,6 +144,7 @@ impl<'a> Binder {
             Statement::ShowCreateDatabase(stmt) => self.bind_show_create_database(stmt).await?,
             Statement::CreateDatabase(stmt) => self.bind_create_database(stmt).await?,
             Statement::DropDatabase(stmt) => self.bind_drop_database(stmt).await?,
+            Statement::UndropDatabase(stmt) => self.bind_undrop_database(stmt).await?,
             Statement::AlterDatabase(stmt) => self.bind_alter_database(stmt).await?,
             Statement::UseDatabase { database } =>  {
                 Plan::UseDatabase(Box::new(UseDatabasePlan {
@@ -284,7 +289,7 @@ impl<'a> Binder {
                     .await?
             }
             Statement::KillStmt { kill_target, object_id } => {
-                self.bind_kill_stmt(bind_context, kill_target, object_id)
+                self.bind_kill_stmt(bind_context, kill_target, object_id.as_str())
                     .await?
             }
         };

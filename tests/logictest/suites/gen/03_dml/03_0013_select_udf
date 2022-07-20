@@ -39,3 +39,9 @@ DROP FUNCTION cal;
 
 statement ok
 DROP FUNCTION notnull;
+
+statement ok
+DROP FUNCTION cal;
+
+statement ok
+DROP FUNCTION notnull;

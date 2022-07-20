@@ -24,6 +24,7 @@ use common_ast::ast::SQLProperty;
 use common_ast::ast::ShowCreateDatabaseStmt;
 use common_ast::ast::ShowDatabasesStmt;
 use common_ast::ast::ShowLimit;
+use common_ast::ast::UndropDatabaseStmt;
 use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
 use common_ast::Backtrace;
@@ -38,6 +39,7 @@ use common_planners::DropDatabasePlan;
 use common_planners::RenameDatabaseEntity;
 use common_planners::RenameDatabasePlan;
 use common_planners::ShowCreateDatabasePlan;
+use common_planners::UndropDatabasePlan;
 
 use crate::sessions::TableContext;
 use crate::sql::binder::Binder;
@@ -147,6 +149,26 @@ impl<'a> Binder {
 
         Ok(Plan::DropDatabase(Box::new(DropDatabasePlan {
             if_exists: *if_exists,
+            tenant,
+            catalog,
+            database,
+        })))
+    }
+
+    pub(in crate::sql::planner::binder) async fn bind_undrop_database(
+        &self,
+        stmt: &UndropDatabaseStmt<'a>,
+    ) -> Result<Plan> {
+        let UndropDatabaseStmt { catalog, database } = stmt;
+
+        let tenant = self.ctx.get_tenant();
+        let catalog = catalog
+            .as_ref()
+            .map(|catalog| catalog.name.to_lowercase())
+            .unwrap_or_else(|| self.ctx.get_current_catalog());
+        let database = database.name.to_lowercase();
+
+        Ok(Plan::UndropDatabase(Box::new(UndropDatabasePlan {
             tenant,
             catalog,
             database,

@@ -82,6 +82,7 @@ use common_planners::ShowCreateDatabasePlan;
 use common_planners::ShowCreateTablePlan;
 use common_planners::ShowGrantsPlan;
 use common_planners::TruncateTablePlan;
+use common_planners::UndropDatabasePlan;
 use common_planners::UndropTablePlan;
 use common_planners::UseDatabasePlan;
 pub use copy_v2::CopyPlanV2;
@@ -141,6 +142,7 @@ pub enum Plan {
     ShowCreateDatabase(Box<ShowCreateDatabasePlan>),
     CreateDatabase(Box<CreateDatabasePlan>),
     DropDatabase(Box<DropDatabasePlan>),
+    UndropDatabase(Box<UndropDatabasePlan>),
     RenameDatabase(Box<RenameDatabasePlan>),
     UseDatabase(Box<UseDatabasePlan>),
 
@@ -212,6 +214,7 @@ impl Display for Plan {
             Plan::ShowCreateDatabase(_) => write!(f, "ShowCreateDatabase"),
             Plan::CreateDatabase(_) => write!(f, "CreateDatabase"),
             Plan::DropDatabase(_) => write!(f, "DropDatabase"),
+            Plan::UndropDatabase(_) => write!(f, "UndropDatabase"),
             Plan::UseDatabase(_) => write!(f, "UseDatabase"),
             Plan::RenameDatabase(_) => write!(f, "RenameDatabase"),
             Plan::ShowCreateTable(_) => write!(f, "ShowCreateTable"),
@@ -273,6 +276,7 @@ impl Plan {
             Plan::CreateDatabase(plan) => plan.schema(),
             Plan::UseDatabase(_) => Arc::new(DataSchema::empty()),
             Plan::DropDatabase(plan) => plan.schema(),
+            Plan::UndropDatabase(plan) => plan.schema(),
             Plan::RenameDatabase(plan) => plan.schema(),
             Plan::ShowCreateTable(plan) => plan.schema(),
             Plan::DescribeTable(plan) => plan.schema(),

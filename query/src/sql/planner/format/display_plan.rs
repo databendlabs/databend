@@ -37,6 +37,7 @@ impl Plan {
             }
             Plan::CreateDatabase(create_database) => Ok(format!("{:?}", create_database)),
             Plan::DropDatabase(drop_database) => Ok(format!("{:?}", drop_database)),
+            Plan::UndropDatabase(undrop_database) => Ok(format!("{:?}", undrop_database)),
             Plan::RenameDatabase(rename_database) => Ok(format!("{:?}", rename_database)),
 
             // Tables

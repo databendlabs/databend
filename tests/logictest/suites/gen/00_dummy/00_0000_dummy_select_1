@@ -4,7 +4,7 @@ SELECT 1;
 ----  
 1
 
-statement error 1065
+statement error 1058
 SELECT x; 
 
 statement query T 
