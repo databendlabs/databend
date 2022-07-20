@@ -13,12 +13,20 @@
 // limitations under the License.
 
 use sqlparser::parser::ParserError;
+use sqlparser::tokenizer::Token;
 
 use crate::sql::DfParser;
 use crate::sql::DfStatement;
 
 impl<'a> DfParser<'a> {
     pub(crate) fn parse_presign(&mut self) -> Result<DfStatement<'a>, ParserError> {
+        // Consume all remaining tokens;
+        loop {
+            if let Token::EOF = self.parser.next_token() {
+                break;
+            }
+        }
+
         // Presign is a placeholder, we will forward to the new planner
         Ok(DfStatement::Presign)
     }
