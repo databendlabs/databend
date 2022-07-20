@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,19 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod executor;
-pub mod processors;
+use common_pipeline::Pipeline;
 
-use common_pipeline::pipe;
-use common_pipeline::pipeline;
+pub struct PipelineBuildResult {
+    pub main_pipeline: Pipeline,
+    // Containing some sub queries pipelines, must be complete pipeline
+    pub sources_pipelines: Vec<Pipeline>,
+}
 
-mod pipeline_build_res;
-mod pipeline_builder;
+impl PipelineBuildResult {
+    pub fn set_max_threads(&mut self, max_threads: usize) {
+        self.main_pipeline.set_max_threads(max_threads);
 
-pub use pipe::Pipe;
-pub use pipe::SinkPipeBuilder;
-pub use pipe::SourcePipeBuilder;
-pub use pipe::TransformPipeBuilder;
-pub use pipeline::Pipeline;
-pub use pipeline_build_res::PipelineBuildResult;
-pub use pipeline_builder::QueryPipelineBuilder;
+        for source_pipeline in &mut self.sources_pipelines {
+            source_pipeline.set_max_threads(max_threads);
+        }
+    }
+}

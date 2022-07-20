@@ -18,6 +18,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 use common_arrow::arrow::bitmap::MutableBitmap;
+use common_base::base::tokio::sync::Notify;
 use common_datablocks::DataBlock;
 use common_datablocks::HashMethod;
 use common_datablocks::HashMethodFixedKeys;
@@ -140,6 +141,7 @@ pub struct JoinHashTable {
     pub(crate) row_space: RowSpace,
     pub(crate) hash_join_desc: HashJoinDesc,
     pub(crate) row_ptrs: RwLock<Vec<RowPtr>>,
+    finished_notify: Arc<Notify>,
 }
 
 impl JoinHashTable {
@@ -254,6 +256,7 @@ impl JoinHashTable {
             ctx,
             hash_table: RwLock::new(hash_table),
             row_ptrs: RwLock::new(vec![]),
+            finished_notify: Arc::new(Notify::new()),
         })
     }
 
@@ -411,6 +414,7 @@ impl JoinHashTable {
     }
 }
 
+#[async_trait::async_trait]
 impl HashJoinState for JoinHashTable {
     fn build(&self, input: DataBlock) -> Result<()> {
         let func_ctx = self.ctx.try_get_function_context()?;
@@ -449,6 +453,7 @@ impl HashJoinState for JoinHashTable {
             self.finish()?;
             let mut is_finished = self.is_finished.lock().unwrap();
             *is_finished = true;
+            self.finished_notify.notify_waiters();
             Ok(())
         } else {
             Ok(())
@@ -612,6 +617,14 @@ impl HashJoinState for JoinHashTable {
                 },
             }
         }
+        Ok(())
+    }
+
+    async fn wait_finish(&self) -> Result<()> {
+        if !self.is_finished()? {
+            self.finished_notify.notified().await;
+        }
+
         Ok(())
     }
 
