@@ -67,7 +67,7 @@ where R: BufferRead
         let v = std::str::from_utf8(buf.as_slice())
             .map_err_to_code(ErrorCode::BadBytes, || "Cannot convert value to utf8")?;
         // convert zero timestamp to `1970-01-01 00:00:00`
-        let res = if v == "0000-00-00 00:00:00" {
+        let res = if v == "0000-00-00 00:00:00" || v == "0000-00-00T00:00:00" {
             tz.from_utc_datetime(&NaiveDate::from_ymd(1970, 1, 1).and_hms(0, 0, 0))
         } else {
             tz.datetime_from_str(v, "%Y-%m-%d %H:%M:%S")

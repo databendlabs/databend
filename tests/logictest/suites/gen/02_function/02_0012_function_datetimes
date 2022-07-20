@@ -103,6 +103,11 @@ select to_datetime('0999-12-31 23:59:59');
 ----
 1000-01-01 00:00:00.000000
 
+statement query T
+select to_datetime('2022-12-31T23:59:59+00:00');
+
+----
+2022-12-31 23:59:59.000000
 
 statement query B
 select typeof(today() + 3) = 'DATE';
@@ -110,15 +115,11 @@ select typeof(today() + 3) = 'DATE';
 ----
 1
 
-
-
 statement query B
 select typeof(today() - 3) = 'DATE';
 
 ----
 1
-
-
 
 statement query B
 select typeof(now() - 3) = 'TIMESTAMP(6)';
@@ -126,15 +127,11 @@ select typeof(now() - 3) = 'TIMESTAMP(6)';
 ----
 1
 
-
-
 statement query B
 select typeof(to_datetime(1640019661000000)) = 'TIMESTAMP(6)';
 
 ----
 1
-
-
 
 statement query B
 select today() + 1 - today() = 1;
@@ -142,15 +139,11 @@ select today() + 1 - today() = 1;
 ----
 1
 
-
-
 statement query B
 select typeof(today() - today()) = 'INT';
 
 ----
 1
-
-
 
 statement query B
 select typeof(now() - now()) = 'INT';
@@ -158,15 +151,11 @@ select typeof(now() - now()) = 'INT';
 ----
 1
 
-
-
 statement query B
 select sum(today() + number - today()) = 45 from numbers(10);
 
 ----
 1
-
-
 
 statement query B
 select today() - 1 = yesterday();
@@ -174,15 +163,11 @@ select today() - 1 = yesterday();
 ----
 1
 
-
-
 statement query B
 select today() - yesterday()  = 1;
 
 ----
 1
-
-
 
 statement query B
 select today() + 1 = tomorrow();
@@ -197,8 +182,6 @@ select tomorrow() - today() = 1;
 
 ----
 1
-
-
 
 statement query I
 select toYYYYMM(to_datetime(1630833797000000));
@@ -218,15 +201,11 @@ select toYYYYMM(to_datetime(1630833797000000))  =  202109;
 ----
 1
 
-
-
 statement query B
 select toYYYYMM(to_date(18875))  =  202109;
 
 ----
 1
-
-
 
 statement query T
 select timeSlot(to_datetime(1630320462000000));
@@ -270,8 +249,6 @@ select timeSlot(now()) <= now();
 ----
 1
 
-
-
 statement query I
 select toYYYYMMDDhhmmss(to_datetime(1630833797000000));
 
@@ -290,15 +267,11 @@ select toYYYYMMDDhhmmss(to_datetime(1630833797000000))  =  20210905092317;
 ----
 1
 
-
-
 statement query B
 select toYYYYMMDDhhmmss(to_date(18875))  =  20210905000000;
 
 ----
 1
-
-
 
 statement query I
 select toYYYYMMDD(to_datetime(1630833797000000));
@@ -318,15 +291,11 @@ select toYYYYMMDD(to_datetime(1630833797000000))  =  20210905;
 ----
 1
 
-
-
 statement query B
 select toYYYYMMDD(to_date(18875))  =  20210905;
 
 ----
 1
-
-
 
 statement query T
 select toStartOfYear(to_datetime(1630812366000000));
@@ -892,8 +861,6 @@ select to_datetime('2022-04-01 06:50:20')   < '2022-04-02 04:50:20';
 ----
 1
 
-
-
 statement ok
 drop table if exists ts;
 
@@ -909,10 +876,11 @@ select to_datetime(a) = to_datetime(b) from ts;
 ----
 1
 
-
-
 statement ok
 drop table if exists ts;
+
+statement ok
+drop table if exists t;
 
 statement ok
 create table t(a datetime, b DateTime(3), c Date);
