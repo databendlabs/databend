@@ -117,10 +117,6 @@ root = ""
 name_node = ""
 root = ""
 
-[storage.http]
-endpoint_url = ""
-paths = []
-
 [catalog]
 meta_store_address = "127.0.0.1:9083"
 protocol = "binary"
