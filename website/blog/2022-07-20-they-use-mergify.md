@@ -1,6 +1,6 @@
 ---
-title: They Use Mergify: Databend
-description: They Use Mergify: Databend
+title: They Use Mergify - Databend
+description: They Use Mergify
 slug: they-use-mergify
 date: 2022-07-20
 tags: [databend, mergify]
