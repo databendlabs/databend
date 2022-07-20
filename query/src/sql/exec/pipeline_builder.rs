@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
-use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use common_datablocks::SortColumnDescription;
@@ -26,10 +25,12 @@ use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::aggregates::AggregateFunctionRef;
 use common_functions::scalars::FunctionFactory;
 use common_planners::ReadDataSourcePlan;
+use parking_lot::RwLock;
 
 use crate::evaluator::EvalNode;
 use crate::evaluator::Evaluator;
 use crate::pipelines::processors::port::InputPort;
+use crate::pipelines::processors::transforms::hash_join::MarkJoinDesc;
 use crate::pipelines::processors::transforms::ExpressionTransformV2;
 use crate::pipelines::processors::transforms::TransformFilterV2;
 use crate::pipelines::processors::transforms::TransformMarkJoin;
@@ -37,13 +38,13 @@ use crate::pipelines::processors::transforms::TransformProject;
 use crate::pipelines::processors::transforms::TransformRename;
 use crate::pipelines::processors::AggregatorParams;
 use crate::pipelines::processors::AggregatorTransformParams;
+use crate::pipelines::processors::HashJoinDesc;
 use crate::pipelines::processors::JoinHashTable;
 use crate::pipelines::processors::MarkJoinCompactor;
 use crate::pipelines::processors::SinkBuildHashTable;
 use crate::pipelines::processors::Sinker;
 use crate::pipelines::processors::SortMergeCompactor;
 use crate::pipelines::processors::TransformAggregator;
-use crate::pipelines::processors::TransformApply;
 use crate::pipelines::processors::TransformHashJoinProbe;
 use crate::pipelines::processors::TransformLimit;
 use crate::pipelines::processors::TransformMax1Row;
@@ -160,16 +161,36 @@ impl PipelineBuilder {
                 other_conditions,
                 join_type,
                 marker_index,
+                from_correlated_subquery,
             } => {
                 let predicate = Self::join_predicate(other_conditions)?;
+
+                let hash_join_desc = HashJoinDesc {
+                    build_keys: build_keys
+                        .iter()
+                        .map(Evaluator::eval_physical_scalar)
+                        .collect::<Result<_>>()?,
+                    probe_keys: probe_keys
+                        .iter()
+                        .map(Evaluator::eval_physical_scalar)
+                        .collect::<Result<_>>()?,
+                    join_type: join_type.clone(),
+                    other_predicate: predicate
+                        .as_ref()
+                        .map(Evaluator::eval_physical_scalar)
+                        .transpose()?,
+                    marker_join_desc: MarkJoinDesc {
+                        marker_index: *marker_index,
+                        has_null: RwLock::new(false),
+                    },
+                    from_correlated_subquery: *from_correlated_subquery,
+                };
+
                 let join_state = JoinHashTable::create_join_state(
                     self.ctx.clone(),
-                    join_type.clone(),
                     build_keys,
-                    probe_keys,
-                    predicate.as_ref(),
                     build.output_schema()?,
-                    *marker_index,
+                    hash_join_desc,
                 )?;
 
                 self.expand_build_side_pipeline(build, join_state.clone())?;
@@ -177,14 +198,6 @@ impl PipelineBuilder {
                 self.build_pipeline(probe)?;
                 self.build_hash_join(plan.output_schema()?, join_type.clone(), join_state)?;
                 Ok(())
-            }
-            v @ PhysicalPlan::CrossApply {
-                input,
-                subquery,
-                correlated_columns,
-            } => {
-                self.build_pipeline(input)?;
-                self.build_apply(subquery, correlated_columns, v.output_schema()?)
             }
             PhysicalPlan::Max1Row { input } => {
                 self.build_pipeline(input)?;
@@ -540,26 +553,7 @@ impl PipelineBuilder {
         Ok(())
     }
 
-    fn build_apply(
-        &mut self,
-        subquery: &PhysicalPlan,
-        outer_columns: &BTreeSet<ColumnID>,
-        output_schema: DataSchemaRef,
-    ) -> Result<()> {
-        let ctx = self.ctx.clone();
-        self.main_pipeline.add_transform(|input, output| {
-            Ok(TransformApply::create(
-                input,
-                output,
-                ctx.clone(),
-                outer_columns.clone(),
-                output_schema.clone(),
-                subquery.clone(),
-            ))
-        })
-    }
-
-    fn build_max_one_row(&mut self) -> Result<()> {
+    pub fn build_max_one_row(&mut self) -> Result<()> {
         self.main_pipeline
             .add_transform(|input, output| Ok(TransformMax1Row::create(input, output)))
     }

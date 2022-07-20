@@ -41,7 +41,16 @@ impl NullableColumn {
             let inner = c.inner().clone();
             // If the column is const, it means the `inner` column is just one size
             // So we just need the first bit of the validity
-            let validity = validity.map(|b| b.slice(0, 1));
+
+            let validity = if let Some(b) = validity {
+                if b.is_empty() {
+                    None
+                } else {
+                    Some(b.slice(0, 1))
+                }
+            } else {
+                None
+            };
             let nullable_column = Self::new_from_opt(inner, validity).arc();
             ConstColumn::new(nullable_column, c.len()).arc()
         }

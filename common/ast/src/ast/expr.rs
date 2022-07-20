@@ -788,7 +788,7 @@ impl<'a> Display for Expr<'a> {
                 write!(f, " END")?;
             }
             Expr::Exists { subquery, .. } => {
-                write!(f, "EXITS ({subquery})")?;
+                write!(f, "EXISTS ({subquery})")?;
             }
             Expr::Subquery {
                 subquery, modifier, ..
