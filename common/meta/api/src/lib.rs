@@ -50,6 +50,7 @@ pub use kv_api_utils::txn_op_del;
 pub use kv_api_utils::txn_op_put;
 pub use kv_api_utils::TXN_MAX_RETRY_TIMES;
 pub use schema_api::SchemaApi;
+pub(crate) use schema_api_impl::get_db_or_err;
 pub use schema_api_keys::DatabaseIdGen;
 pub use schema_api_keys::TableIdGen;
 pub(crate) use schema_api_keys::PREFIX_ID_GEN;

@@ -32,6 +32,19 @@ fn s(ss: impl ToString) -> String {
     ss.to_string()
 }
 
+fn new_db_meta_v1() -> mt::DatabaseMeta {
+    mt::DatabaseMeta {
+        engine: "44".to_string(),
+        engine_options: btreemap! {s("abc") => s("def")},
+        options: btreemap! {s("xyz") => s("foo")},
+        created_on: Utc.ymd(2014, 11, 28).and_hms(12, 0, 9),
+        updated_on: Utc.ymd(2014, 11, 29).and_hms(12, 0, 9),
+        comment: "foo bar".to_string(),
+        drop_on: None,
+        shared_by: BTreeSet::new(),
+    }
+}
+
 fn new_db_meta() -> mt::DatabaseMeta {
     mt::DatabaseMeta {
         engine: "44".to_string(),
@@ -41,22 +54,23 @@ fn new_db_meta() -> mt::DatabaseMeta {
         updated_on: Utc.ymd(2014, 11, 29).and_hms(12, 0, 9),
         comment: "foo bar".to_string(),
         drop_on: None,
+        shared_by: BTreeSet::from_iter(vec![1].into_iter()),
     }
 }
 
 fn new_share_meta() -> share::ShareMeta {
+    let now = Utc::now();
+
     let db_entry = share::ShareGrantEntry::new(
         share::ShareGrantObject::Database(1),
-        BitFlags::<share::ShareGrantObjectPrivilege, u64>::from_flag(
-            share::ShareGrantObjectPrivilege::Usage,
-        ),
+        share::ShareGrantObjectPrivilege::Usage,
+        now.clone(),
     );
     let mut entries = BTreeMap::new();
     for entry in vec![share::ShareGrantEntry::new(
         share::ShareGrantObject::Table(19),
-        BitFlags::<share::ShareGrantObjectPrivilege, u64>::from_flag(
-            share::ShareGrantObjectPrivilege::Select,
-        ),
+        share::ShareGrantObjectPrivilege::Select,
+        now.clone(),
     )] {
         entries.insert(entry.to_string().clone(), entry);
     }
@@ -265,6 +279,22 @@ fn test_load_old() -> anyhow::Result<()> {
 
         let p: pb::DatabaseMeta =
             common_protos::prost::Message::decode(db_meta_v1.as_slice()).map_err(print_err)?;
+
+        let got = mt::DatabaseMeta::from_pb(p).map_err(print_err)?;
+
+        let want = new_db_meta_v1();
+        assert_eq!(want, got);
+
+        let db_meta_v2: Vec<u8> = vec![
+            34, 10, 10, 3, 120, 121, 122, 18, 3, 102, 111, 111, 42, 2, 52, 52, 50, 10, 10, 3, 97,
+            98, 99, 18, 3, 100, 101, 102, 162, 1, 23, 50, 48, 49, 52, 45, 49, 49, 45, 50, 56, 32,
+            49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 170, 1, 23, 50, 48, 49, 52, 45, 49, 49,
+            45, 50, 57, 32, 49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 178, 1, 7, 102, 111,
+            111, 32, 98, 97, 114, 194, 1, 1, 1, 160, 6, 2, 168, 6, 1,
+        ];
+
+        let p: pb::DatabaseMeta =
+            common_protos::prost::Message::decode(db_meta_v2.as_slice()).map_err(print_err)?;
 
         let got = mt::DatabaseMeta::from_pb(p).map_err(print_err)?;
 

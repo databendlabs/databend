@@ -63,11 +63,13 @@ impl ShareApiTestSuite {
         let share_id: u64;
 
         tracing::info!("--- create share1");
+        let create_on = Utc::now();
         {
             let req = CreateShareReq {
                 if_not_exists: false,
                 share_name: share_name.clone(),
                 comment: None,
+                create_on,
             };
 
             let res = mt.create_share(req).await;
@@ -88,6 +90,7 @@ impl ShareApiTestSuite {
                 if_not_exists: false,
                 share_name: share_name.clone(),
                 comment: None,
+                create_on,
             };
 
             let res = mt.create_share(req).await;
@@ -105,6 +108,7 @@ impl ShareApiTestSuite {
                 if_not_exists: true,
                 share_name: share_name.clone(),
                 comment: None,
+                create_on,
             };
 
             let res = mt.create_share(req).await;
@@ -164,6 +168,7 @@ impl ShareApiTestSuite {
         };
         let share_id: u64;
         let share_on = Utc::now();
+        let create_on = Utc::now();
 
         tracing::info!("--- prepare share1");
         {
@@ -171,6 +176,7 @@ impl ShareApiTestSuite {
                 if_not_exists: false,
                 share_name: share_name.clone(),
                 comment: None,
+                create_on,
             };
 
             let res = mt.create_share(req).await;

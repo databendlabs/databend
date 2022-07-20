@@ -1996,8 +1996,8 @@ fn is_drop_time_out_of_retention_time(
 }
 
 /// Returns (db_id_seq, db_id, db_meta_seq, db_meta)
-async fn get_db_or_err(
-    kv_api: &impl KVApi,
+pub(crate) async fn get_db_or_err(
+    kv_api: &(impl KVApi + ?Sized),
     name_key: &DatabaseNameIdent,
     msg: impl Display,
 ) -> Result<(u64, u64, u64, DatabaseMeta), MetaError> {

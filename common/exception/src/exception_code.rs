@@ -224,6 +224,7 @@ build_exceptions! {
     UnknownShareId(2707),
     ShareAccountAlreadyExists(2708),
     UnknownShareAccount(2709),
+    WrongShareObject(2710),
 
     // Variable error codes.
     UnknownVariable(2801),

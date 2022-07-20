@@ -14,17 +14,28 @@
 
 use std::fmt::Display;
 
-use common_datavalues::chrono::Utc;
+use common_meta_app::schema::DBIdTableName;
+use common_meta_app::schema::DatabaseId;
+use common_meta_app::schema::DatabaseNameIdent;
+use common_meta_app::schema::TableId;
+use common_meta_app::schema::TableMeta;
 use common_meta_app::share::AddShareAccountReply;
 use common_meta_app::share::AddShareAccountReq;
 use common_meta_app::share::CreateShareReply;
 use common_meta_app::share::CreateShareReq;
 use common_meta_app::share::DropShareReply;
 use common_meta_app::share::DropShareReq;
+use common_meta_app::share::GrantShareObjectReply;
+use common_meta_app::share::GrantShareObjectReq;
 use common_meta_app::share::RemoveShareAccountReply;
 use common_meta_app::share::RemoveShareAccountReq;
+use common_meta_app::share::RevokeShareObjectReply;
+use common_meta_app::share::RevokeShareObjectReq;
 use common_meta_app::share::ShareAccountMeta;
 use common_meta_app::share::ShareAccountNameIdent;
+use common_meta_app::share::ShareGrantObject;
+use common_meta_app::share::ShareGrantObjectName;
+use common_meta_app::share::ShareGrantObjectSeqAndId;
 use common_meta_app::share::ShareId;
 use common_meta_app::share::ShareIdToName;
 use common_meta_app::share::ShareMeta;
@@ -39,11 +50,14 @@ use common_meta_types::app_error::UnknownShareId;
 use common_meta_types::ConditionResult::Eq;
 use common_meta_types::MetaError;
 use common_meta_types::MetaResult;
+use common_meta_types::TxnCondition;
+use common_meta_types::TxnOp;
 use common_meta_types::TxnRequest;
 use common_tracing::func_name;
 use common_tracing::tracing;
 
 use crate::fetch_id;
+use crate::get_db_or_err;
 use crate::get_struct_value;
 use crate::get_u64_value;
 use crate::send_txn;
@@ -100,7 +114,6 @@ impl<KV: KVApi> ShareApi for KV {
 
             // Create share by transaction.
             {
-                let now = Utc::now();
                 let txn_req = TxnRequest {
                     condition: vec![
                         txn_cond_seq(name_key, Eq, 0),
@@ -110,7 +123,7 @@ impl<KV: KVApi> ShareApi for KV {
                         txn_op_put(name_key, serialize_u64(share_id)?), /* (tenant, share_name) -> share_id */
                         txn_op_put(
                             &id_key,
-                            serialize_struct(&ShareMeta::new(now, req.comment.clone()))?,
+                            serialize_struct(&ShareMeta::new(req.create_on, req.comment.clone()))?,
                         ), /* (share_id) -> share_meta */
                         txn_op_put(&id_to_name_key, serialize_struct(name_key)?), /* __fd_share_id_to_name/<share_id> -> (tenant,share_name) */
                     ],
@@ -414,6 +427,258 @@ impl<KV: KVApi> ShareApi for KV {
             TxnRetryMaxTimes::new("remove_share_account", TXN_MAX_RETRY_TIMES),
         )))
     }
+
+    async fn grant_object(&self, req: GrantShareObjectReq) -> MetaResult<GrantShareObjectReply> {
+        tracing::debug!(req = debug(&req), "ShareApi: {}", func_name!());
+
+        let share_name_key = &req.share_name;
+        let mut retry = 0;
+        while retry < TXN_MAX_RETRY_TIMES {
+            retry += 1;
+            let res = get_share_or_err(
+                self,
+                share_name_key,
+                format!("grant_object: {}", &share_name_key),
+            )
+            .await;
+
+            let (share_id_seq, share_id, share_meta_seq, mut share_meta) = match res {
+                Ok(x) => x,
+                Err(e) => {
+                    return Err(e);
+                }
+            };
+
+            let seq_and_id =
+                get_share_object_seq_and_id(self, &req.object, &share_name_key.tenant).await?;
+
+            // Check the object privilege has been granted
+            let has_granted_privileges =
+                share_meta.has_granted_privileges(&req.object, &seq_and_id, req.privilege)?;
+
+            if has_granted_privileges {
+                return Ok(GrantShareObjectReply {});
+            }
+
+            // Grant the object privilege by inserting these record:
+            // add privilege and upsert (share_id) -> share_meta
+            // if grant database then update db_meta.shared_on and upsert (db_id) -> db_meta
+
+            // Grant the object privilege by transaction.
+            {
+                let id_key = ShareId { share_id };
+                // modify the share_meta add privilege
+                let object = ShareGrantObject::new(&seq_and_id);
+                share_meta.grant_object_privileges(object, req.privilege, req.grant_on);
+
+                // condition
+                let mut condition: Vec<TxnCondition> = vec![
+                    txn_cond_seq(share_name_key, Eq, share_id_seq),
+                    txn_cond_seq(&id_key, Eq, share_meta_seq),
+                ];
+                add_txn_condition(&seq_and_id, &mut condition);
+                // if_then
+                let mut if_then = vec![
+                    txn_op_put(&id_key, serialize_struct(&share_meta)?), /* (share_id) -> share_meta */
+                ];
+                add_grant_object_txn_if_then(share_id, seq_and_id, &mut if_then)?;
+
+                let txn_req = TxnRequest {
+                    condition,
+                    if_then,
+                    else_then: vec![],
+                };
+
+                let (succ, _responses) = send_txn(self, txn_req).await?;
+
+                tracing::debug!(
+                    name = debug(&share_name_key),
+                    id = debug(&id_key),
+                    succ = display(succ),
+                    "grant_object"
+                );
+
+                if succ {
+                    return Ok(GrantShareObjectReply {});
+                }
+            }
+        }
+
+        Err(MetaError::AppError(AppError::TxnRetryMaxTimes(
+            TxnRetryMaxTimes::new("grant_object", TXN_MAX_RETRY_TIMES),
+        )))
+    }
+
+    async fn revoke_object(&self, req: RevokeShareObjectReq) -> MetaResult<RevokeShareObjectReply> {
+        tracing::debug!(req = debug(&req), "ShareApi: {}", func_name!());
+
+        let share_name_key = &req.share_name;
+        let mut retry = 0;
+        while retry < TXN_MAX_RETRY_TIMES {
+            retry += 1;
+            let res = get_share_or_err(
+                self,
+                share_name_key,
+                format!("grant_object: {}", &share_name_key),
+            )
+            .await;
+
+            let (share_id_seq, share_id, share_meta_seq, mut share_meta) = match res {
+                Ok(x) => x,
+                Err(e) => {
+                    return Err(e);
+                }
+            };
+
+            let seq_and_id =
+                get_share_object_seq_and_id(self, &req.object, &share_name_key.tenant).await?;
+
+            // Check the object privilege has not been granted.
+            let has_granted_privileges =
+                share_meta.has_granted_privileges(&req.object, &seq_and_id, req.privilege)?;
+
+            if !has_granted_privileges {
+                return Ok(RevokeShareObjectReply {});
+            }
+
+            // Revoke the object privilege by upserting these record:
+            // revoke privilege in share_meta and upsert (share_id) -> share_meta
+            // if revoke database then update db_meta.shared_on and upsert (db_id) -> db_meta
+
+            // Revoke the object privilege by transaction.
+            {
+                let id_key = ShareId { share_id };
+                // modify the share_meta add privilege
+                let object = ShareGrantObject::new(&seq_and_id);
+                let _ =
+                    share_meta.revoke_object_privileges(object, req.privilege, req.update_on)?;
+
+                // condition
+                let mut condition: Vec<TxnCondition> = vec![
+                    txn_cond_seq(share_name_key, Eq, share_id_seq),
+                    txn_cond_seq(&id_key, Eq, share_meta_seq),
+                ];
+                add_txn_condition(&seq_and_id, &mut condition);
+                // if_then
+                let mut if_then = vec![
+                    txn_op_put(&id_key, serialize_struct(&share_meta)?), /* (share_id) -> share_meta */
+                ];
+
+                if let ShareGrantObjectSeqAndId::Database(_seq, db_id, mut db_meta) = seq_and_id {
+                    db_meta.shared_by.remove(&share_id);
+                    let key = DatabaseId { db_id };
+                    if_then.push(txn_op_put(&key, serialize_struct(&db_meta)?));
+                }
+
+                let txn_req = TxnRequest {
+                    condition,
+                    if_then,
+                    else_then: vec![],
+                };
+
+                let (succ, _responses) = send_txn(self, txn_req).await?;
+
+                tracing::debug!(
+                    name = debug(&share_name_key),
+                    id = debug(&id_key),
+                    succ = display(succ),
+                    "revoke_object"
+                );
+
+                if succ {
+                    return Ok(RevokeShareObjectReply {});
+                }
+            }
+        }
+
+        Err(MetaError::AppError(AppError::TxnRetryMaxTimes(
+            TxnRetryMaxTimes::new("revoke_object", TXN_MAX_RETRY_TIMES),
+        )))
+    }
+}
+
+/// Returns ShareGrantObjectSeqAndId by ShareGrantObjectName
+async fn get_share_object_seq_and_id(
+    kv_api: &(impl KVApi + ?Sized),
+    obj_name: &ShareGrantObjectName,
+    tenant: &str,
+) -> Result<ShareGrantObjectSeqAndId, MetaError> {
+    match obj_name {
+        ShareGrantObjectName::Database(db_name) => {
+            let name_key = DatabaseNameIdent {
+                tenant: tenant.to_string(),
+                db_name: db_name.clone(),
+            };
+            let (_db_id_seq, db_id, db_meta_seq, db_meta) = get_db_or_err(
+                kv_api,
+                &name_key,
+                format!("get_share_object_seq_and_id: {}", name_key),
+            )
+            .await?;
+
+            Ok(ShareGrantObjectSeqAndId::Database(
+                db_meta_seq,
+                db_id,
+                db_meta,
+            ))
+        }
+
+        ShareGrantObjectName::Table(db_name, table_name) => {
+            let db_name_key = DatabaseNameIdent {
+                tenant: tenant.to_string(),
+                db_name: db_name.clone(),
+            };
+            let (_db_seq, db_id) = get_u64_value(kv_api, &db_name_key).await?;
+
+            let name_key = DBIdTableName {
+                db_id,
+                table_name: table_name.clone(),
+            };
+
+            let (_table_seq, table_id) = get_u64_value(kv_api, &name_key).await?;
+
+            let tbid = TableId { table_id };
+            let (table_meta_seq, _tb_meta): (_, Option<TableMeta>) =
+                get_struct_value(kv_api, &tbid).await?;
+
+            Ok(ShareGrantObjectSeqAndId::Table(table_meta_seq, table_id))
+        }
+    }
+}
+
+fn add_txn_condition(seq_and_id: &ShareGrantObjectSeqAndId, condition: &mut Vec<TxnCondition>) {
+    match seq_and_id {
+        ShareGrantObjectSeqAndId::Database(db_meta_seq, db_id, _meta) => {
+            let key = DatabaseId { db_id: *db_id };
+            condition.push(txn_cond_seq(&key, Eq, *db_meta_seq))
+        }
+        ShareGrantObjectSeqAndId::Table(table_meta_seq, table_id) => {
+            let key = TableId {
+                table_id: *table_id,
+            };
+            condition.push(txn_cond_seq(&key, Eq, *table_meta_seq))
+        }
+    }
+}
+
+fn add_grant_object_txn_if_then(
+    share_id: u64,
+    seq_and_id: ShareGrantObjectSeqAndId,
+    if_then: &mut Vec<TxnOp>,
+) -> MetaResult<()> {
+    match seq_and_id {
+        ShareGrantObjectSeqAndId::Database(_db_meta_seq, db_id, mut db_meta) => {
+            // modify db_meta add share_id into shared_by
+            if !db_meta.shared_by.contains(&share_id) {
+                db_meta.shared_by.insert(share_id);
+                let key = DatabaseId { db_id };
+                if_then.push(txn_op_put(&key, serialize_struct(&db_meta)?));
+            }
+        }
+        ShareGrantObjectSeqAndId::Table(_, _) => {}
+    }
+
+    Ok(())
 }
 
 /// Returns (share_meta_seq, share_meta)

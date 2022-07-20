@@ -42,7 +42,7 @@ pub const TXN_MAX_RETRY_TIMES: u32 = 10;
 /// It returns (seq, `u64` value).
 /// If not found, (0,0) is returned.
 pub async fn get_u64_value<T: KVApiKey>(
-    kv_api: &impl KVApi,
+    kv_api: &(impl KVApi + ?Sized),
     key: &T,
 ) -> Result<(u64, u64), MetaError> {
     let res = kv_api.get_kv(&key.to_key()).await?;
