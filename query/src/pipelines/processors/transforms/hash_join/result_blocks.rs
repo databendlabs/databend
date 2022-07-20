@@ -18,10 +18,11 @@ use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_datablocks::DataBlock;
 use common_datavalues::BooleanColumn;
+use common_datavalues::BooleanViewer;
 use common_datavalues::Column;
 use common_datavalues::ColumnRef;
-use common_datavalues::DataValue;
 use common_datavalues::NullableColumn;
+use common_datavalues::ScalarViewer;
 use common_datavalues::Series;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -239,21 +240,16 @@ impl JoinHashTable {
             .unwrap()
             .eval(&func_ctx, &merged_block)?;
         let filter_column = type_vector.vector();
+        let boolean_viewer = BooleanViewer::try_create(filter_column)?;
         let mut row_ptrs = self.row_ptrs.write();
         for (idx, build_index) in build_indexs.iter().enumerate() {
             let self_row_ptr = row_ptrs.iter_mut().find(|p| (*p).eq(&build_index)).unwrap();
-            match filter_column.get(idx) {
-                DataValue::Null => {
-                    if self_row_ptr.marker == Some(MarkerKind::False) {
-                        self_row_ptr.marker = Some(MarkerKind::Null);
-                    }
+            if !boolean_viewer.valid_at(idx) {
+                if self_row_ptr.marker == Some(MarkerKind::False) {
+                    self_row_ptr.marker = Some(MarkerKind::Null);
                 }
-                DataValue::Boolean(value) => {
-                    if value {
-                        self_row_ptr.marker = Some(MarkerKind::True);
-                    }
-                }
-                _ => unreachable!(),
+            } else if boolean_viewer.value_at(idx) {
+                self_row_ptr.marker = Some(MarkerKind::True);
             }
         }
         Ok(())
