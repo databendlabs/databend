@@ -1211,6 +1211,7 @@ dependencies = [
  "common-io",
  "once_cell",
  "pretty_assertions",
+ "similar-asserts",
  "strum",
  "strum_macros",
 ]
