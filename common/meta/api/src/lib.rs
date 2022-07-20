@@ -45,6 +45,7 @@ pub use kv_api_utils::meta_encode_err;
 pub use kv_api_utils::send_txn;
 pub use kv_api_utils::serialize_struct;
 pub use kv_api_utils::serialize_u64;
+pub use kv_api_utils::table_has_to_exist;
 pub use kv_api_utils::txn_cond_seq;
 pub use kv_api_utils::txn_op_del;
 pub use kv_api_utils::txn_op_put;

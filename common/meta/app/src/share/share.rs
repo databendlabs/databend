@@ -97,7 +97,9 @@ pub struct RemoveShareAccountReply {}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum ShareGrantObjectName {
+    // database name
     Database(String),
+    // database name, table name
     Table(String, String),
 }
 
@@ -118,14 +120,13 @@ impl Display for ShareGrantObjectName {
 pub enum ShareGrantObjectSeqAndId {
     // db_meta_seq, db_id, DatabaseMeta
     Database(u64, u64, DatabaseMeta),
-    // table_meta_seq, table_id,
-    Table(u64, u64),
+    // db_id, table_meta_seq, table_id,
+    Table(u64, u64, u64),
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct GrantShareObjectReq {
     pub share_name: ShareNameIdent,
-    pub account: String,
     pub object: ShareGrantObjectName,
     pub grant_on: DateTime<Utc>,
     pub privilege: ShareGrantObjectPrivilege,
@@ -137,7 +138,6 @@ pub struct GrantShareObjectReply {}
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct RevokeShareObjectReq {
     pub share_name: ShareNameIdent,
-    pub account: String,
     pub object: ShareGrantObjectName,
     pub privilege: ShareGrantObjectPrivilege,
     pub update_on: DateTime<Utc>,
@@ -193,7 +193,9 @@ impl ShareGrantObject {
             ShareGrantObjectSeqAndId::Database(_seq, db_id, _meta) => {
                 ShareGrantObject::Database(*db_id)
             }
-            ShareGrantObjectSeqAndId::Table(_seq, table_id) => ShareGrantObject::Table(*table_id),
+            ShareGrantObjectSeqAndId::Table(_db_id, _seq, table_id) => {
+                ShareGrantObject::Table(*table_id)
+            }
         }
     }
 }
@@ -437,7 +439,7 @@ impl ShareMeta {
                 },
                 None => Ok(false),
             },
-            ShareGrantObjectSeqAndId::Table(_table_seq, table_id) => {
+            ShareGrantObjectSeqAndId::Table(_db_id, _table_seq, table_id) => {
                 let key = ShareGrantObject::Table(*table_id).to_string();
                 match self.entries.get(&key) {
                     Some(entry) => Ok(entry.has_granted_privileges(privileges)),

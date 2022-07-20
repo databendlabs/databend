@@ -22,6 +22,7 @@ common-proto-conv = { path = "../../proto-conv" }
 common-protos = { path = "../../protos" }
 common-tracing = { path = "../../tracing" }
 
+enumflags2 = { version = "0.7.5", features = ["serde"] }
 anyerror = "0.1.6"
 anyhow = "1.0.58"
 async-trait = "0.1.56"

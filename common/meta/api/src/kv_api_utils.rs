@@ -12,7 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::Display;
+
 use anyerror::AnyError;
+use common_meta_app::schema::TableNameIdent;
+use common_meta_types::app_error::AppError;
+use common_meta_types::app_error::UnknownTable;
 use common_meta_types::txn_condition::Target;
 use common_meta_types::txn_op::Request;
 use common_meta_types::ConditionResult;
@@ -27,6 +32,7 @@ use common_meta_types::TxnPutRequest;
 use common_meta_types::TxnRequest;
 use common_meta_types::UpsertKVReq;
 use common_proto_conv::FromToProto;
+use common_tracing::tracing;
 
 use crate::KVApi;
 use crate::KVApiKey;
@@ -165,5 +171,24 @@ pub fn txn_op_del(key: &impl KVApiKey) -> TxnOp {
             key: key.to_key(),
             prev_value: true,
         })),
+    }
+}
+
+/// Return OK if a table_id or table_meta exists by checking the seq.
+///
+/// Otherwise returns UnknownTable error
+pub fn table_has_to_exist(
+    seq: u64,
+    name_ident: &TableNameIdent,
+    ctx: impl Display,
+) -> Result<(), MetaError> {
+    if seq == 0 {
+        tracing::debug!(seq, ?name_ident, "does not exist");
+
+        Err(MetaError::AppError(AppError::UnknownTable(
+            UnknownTable::new(&name_ident.table_name, format!("{}: {}", ctx, name_ident)),
+        )))
+    } else {
+        Ok(())
     }
 }

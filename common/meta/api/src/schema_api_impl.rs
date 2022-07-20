@@ -98,6 +98,7 @@ use crate::meta_encode_err;
 use crate::send_txn;
 use crate::serialize_struct;
 use crate::serialize_u64;
+use crate::table_has_to_exist;
 use crate::txn_cond_seq;
 use crate::txn_op_del;
 use crate::txn_op_put;
@@ -2034,25 +2035,6 @@ fn db_has_to_exist(
                 &db_name_ident.db_name,
                 format!("{}: {}", msg, db_name_ident),
             ),
-        )))
-    } else {
-        Ok(())
-    }
-}
-
-/// Return OK if a table_id or table_meta exists by checking the seq.
-///
-/// Otherwise returns UnknownTable error
-fn table_has_to_exist(
-    seq: u64,
-    name_ident: &TableNameIdent,
-    ctx: impl Display,
-) -> Result<(), MetaError> {
-    if seq == 0 {
-        tracing::debug!(seq, ?name_ident, "does not exist");
-
-        Err(MetaError::AppError(AppError::UnknownTable(
-            UnknownTable::new(&name_ident.table_name, format!("{}: {}", ctx, name_ident)),
         )))
     } else {
         Ok(())

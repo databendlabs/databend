@@ -19,6 +19,7 @@ use common_meta_app::schema::DatabaseId;
 use common_meta_app::schema::DatabaseNameIdent;
 use common_meta_app::schema::TableId;
 use common_meta_app::schema::TableMeta;
+use common_meta_app::schema::TableNameIdent;
 use common_meta_app::share::AddShareAccountReply;
 use common_meta_app::share::AddShareAccountReq;
 use common_meta_app::share::CreateShareReply;
@@ -33,6 +34,7 @@ use common_meta_app::share::RevokeShareObjectReply;
 use common_meta_app::share::RevokeShareObjectReq;
 use common_meta_app::share::ShareAccountMeta;
 use common_meta_app::share::ShareAccountNameIdent;
+use common_meta_app::share::ShareGrantEntry;
 use common_meta_app::share::ShareGrantObject;
 use common_meta_app::share::ShareGrantObjectName;
 use common_meta_app::share::ShareGrantObjectSeqAndId;
@@ -47,6 +49,7 @@ use common_meta_types::app_error::TxnRetryMaxTimes;
 use common_meta_types::app_error::UnknownShare;
 use common_meta_types::app_error::UnknownShareAccount;
 use common_meta_types::app_error::UnknownShareId;
+use common_meta_types::app_error::WrongShareObject;
 use common_meta_types::ConditionResult::Eq;
 use common_meta_types::MetaError;
 use common_meta_types::MetaResult;
@@ -63,6 +66,7 @@ use crate::get_u64_value;
 use crate::send_txn;
 use crate::serialize_struct;
 use crate::serialize_u64;
+use crate::table_has_to_exist;
 use crate::txn_cond_seq;
 use crate::txn_op_del;
 use crate::txn_op_put;
@@ -452,6 +456,8 @@ impl<KV: KVApi> ShareApi for KV {
             let seq_and_id =
                 get_share_object_seq_and_id(self, &req.object, &share_name_key.tenant).await?;
 
+            check_share_object(&share_meta.database, &seq_and_id, &req.object)?;
+
             // Check the object privilege has been granted
             let has_granted_privileges =
                 share_meta.has_granted_privileges(&req.object, &seq_and_id, req.privilege)?;
@@ -533,6 +539,8 @@ impl<KV: KVApi> ShareApi for KV {
             let seq_and_id =
                 get_share_object_seq_and_id(self, &req.object, &share_name_key.tenant).await?;
 
+            check_share_object(&share_meta.database, &seq_and_id, &req.object)?;
+
             // Check the object privilege has not been granted.
             let has_granted_privileges =
                 share_meta.has_granted_privileges(&req.object, &seq_and_id, req.privilege)?;
@@ -597,6 +605,39 @@ impl<KV: KVApi> ShareApi for KV {
     }
 }
 
+fn check_share_object(
+    database: &Option<ShareGrantEntry>,
+    seq_and_id: &ShareGrantObjectSeqAndId,
+    obj_name: &ShareGrantObjectName,
+) -> Result<(), MetaError> {
+    if let Some(entry) = database {
+        if let ShareGrantObject::Database(db_id) = entry.object {
+            let object_db_id = match seq_and_id {
+                ShareGrantObjectSeqAndId::Database(_, db_id, _) => db_id,
+                ShareGrantObjectSeqAndId::Table(db_id, _, _) => db_id,
+            };
+            if db_id != *object_db_id {
+                return Err(MetaError::AppError(AppError::WrongShareObject(
+                    WrongShareObject::new(obj_name.to_string()),
+                )));
+            }
+        } else {
+            unreachable!("");
+        }
+    } else {
+        match seq_and_id {
+            ShareGrantObjectSeqAndId::Database(_, _, _) => {}
+            ShareGrantObjectSeqAndId::Table(_, _, _) => {
+                return Err(MetaError::AppError(AppError::WrongShareObject(
+                    WrongShareObject::new(obj_name.to_string()),
+                )));
+            }
+        };
+    }
+
+    Ok(())
+}
+
 /// Returns ShareGrantObjectSeqAndId by ShareGrantObjectName
 async fn get_share_object_seq_and_id(
     kv_api: &(impl KVApi + ?Sized),
@@ -635,13 +676,26 @@ async fn get_share_object_seq_and_id(
                 table_name: table_name.clone(),
             };
 
-            let (_table_seq, table_id) = get_u64_value(kv_api, &name_key).await?;
+            let (table_seq, table_id) = get_u64_value(kv_api, &name_key).await?;
+            table_has_to_exist(
+                table_seq,
+                &TableNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.clone(),
+                    table_name: table_name.clone(),
+                },
+                format!("get_share_object_seq_and_id: {}", name_key),
+            )?;
 
             let tbid = TableId { table_id };
             let (table_meta_seq, _tb_meta): (_, Option<TableMeta>) =
                 get_struct_value(kv_api, &tbid).await?;
 
-            Ok(ShareGrantObjectSeqAndId::Table(table_meta_seq, table_id))
+            Ok(ShareGrantObjectSeqAndId::Table(
+                db_id,
+                table_meta_seq,
+                table_id,
+            ))
         }
     }
 }
@@ -652,7 +706,7 @@ fn add_txn_condition(seq_and_id: &ShareGrantObjectSeqAndId, condition: &mut Vec<
             let key = DatabaseId { db_id: *db_id };
             condition.push(txn_cond_seq(&key, Eq, *db_meta_seq))
         }
-        ShareGrantObjectSeqAndId::Table(table_meta_seq, table_id) => {
+        ShareGrantObjectSeqAndId::Table(_db_id, table_meta_seq, table_id) => {
             let key = TableId {
                 table_id: *table_id,
             };
@@ -675,7 +729,7 @@ fn add_grant_object_txn_if_then(
                 if_then.push(txn_op_put(&key, serialize_struct(&db_meta)?));
             }
         }
-        ShareGrantObjectSeqAndId::Table(_, _) => {}
+        ShareGrantObjectSeqAndId::Table(_, _, _) => {}
     }
 
     Ok(())
