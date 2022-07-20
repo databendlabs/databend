@@ -25,7 +25,6 @@ use common_storage::StorageAzblobConfig as InnerStorageAzblobConfig;
 use common_storage::StorageConfig as InnerStorageConfig;
 use common_storage::StorageFsConfig as InnerStorageFsConfig;
 use common_storage::StorageHdfsConfig as InnerStorageHdfsConfig;
-use common_storage::StorageHttpConfig as InnerStorageHttpConfig;
 use common_storage::StorageParams;
 use common_storage::StorageS3Config as InnerStorageS3Config;
 use common_tracing::Config as InnerLogConfig;
@@ -186,10 +185,6 @@ pub struct StorageConfig {
     // hdfs storage backend config
     #[clap(flatten)]
     pub hdfs: HdfsConfig,
-
-    // http storage backend config
-    #[clap(flatten)]
-    pub http: HttpConfig,
 }
 
 impl Default for StorageConfig {
@@ -208,7 +203,6 @@ impl From<InnerStorageConfig> for StorageConfig {
             s3: Default::default(),
             azblob: Default::default(),
             hdfs: Default::default(),
-            http: Default::default(),
         };
 
         match inner.params {
@@ -232,10 +226,7 @@ impl From<InnerStorageConfig> for StorageConfig {
                 cfg.storage_type = "s3".to_string();
                 cfg.s3 = v.into()
             }
-            StorageParams::Http(v) => {
-                cfg.storage_type = "http".to_string();
-                cfg.http = v.into()
-            }
+            v => unreachable!("{v:?} should not be used as storage backend"),
         }
 
         cfg
@@ -257,7 +248,6 @@ impl TryInto<InnerStorageConfig> for StorageConfig {
                     "hdfs" => StorageParams::Hdfs(self.hdfs.try_into()?),
                     "memory" => StorageParams::Memory,
                     "s3" => StorageParams::S3(self.s3.try_into()?),
-                    "http" => StorageParams::Http(self.http.try_into()?),
                     _ => return Err(ErrorCode::StorageOther("not supported storage type")),
                 }
             },
@@ -503,43 +493,6 @@ impl TryInto<InnerStorageHdfsConfig> for HdfsConfig {
         Ok(InnerStorageHdfsConfig {
             name_node: self.name_node,
             root: self.hdfs_root,
-        })
-    }
-}
-
-#[derive(Clone, PartialEq, Eq, Serialize, Deserialize, Args, Debug)]
-#[serde(default)]
-pub struct HttpConfig {
-    #[clap(long = "storage-http-endpoint-url", default_value_t)]
-    #[serde(rename = "endpoint_url")]
-    pub http_endpoint_url: String,
-    #[clap(long = "storage-http-paths")]
-    #[serde(rename = "paths")]
-    pub http_paths: Vec<String>,
-}
-
-impl Default for HttpConfig {
-    fn default() -> Self {
-        InnerStorageHttpConfig::default().into()
-    }
-}
-
-impl From<InnerStorageHttpConfig> for HttpConfig {
-    fn from(inner: InnerStorageHttpConfig) -> Self {
-        Self {
-            http_endpoint_url: inner.endpoint_url,
-            http_paths: inner.paths,
-        }
-    }
-}
-
-impl TryInto<InnerStorageHttpConfig> for HttpConfig {
-    type Error = ErrorCode;
-
-    fn try_into(self) -> Result<InnerStorageHttpConfig> {
-        Ok(InnerStorageHttpConfig {
-            endpoint_url: self.http_endpoint_url,
-            paths: self.http_paths,
         })
     }
 }
