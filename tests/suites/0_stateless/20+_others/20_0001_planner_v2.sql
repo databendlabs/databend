@@ -416,6 +416,11 @@ select t1.a from t1 where not exists (select t2.a from t2 where t1.a = t2.a) and
 select * from t1 where t1.a = any (select t2.a from t2 where t1.a = t2.a);
 select * from t1 where t1.a = any (select t2.a from t2 where t1.a > 1);
 select * from t1 where t1.a > any (select t2.a from t2 where t1.a > 1);
+
+-- Uncorrelated scalar subquery
+select t1.a, (select t2.a from t2 where t2.a > 2) from t1;
+select t1.a, (select t2.a from t2 where t2.a > 3) from t1;
+select t1.a from t1 where t1.a > (select t2.a from t2 where t2.a > 2);
 drop table t1;
 drop table t2;
 

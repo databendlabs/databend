@@ -21,7 +21,11 @@ use common_datavalues::BooleanColumn;
 use common_datavalues::BooleanViewer;
 use common_datavalues::Column;
 use common_datavalues::ColumnRef;
+use common_datavalues::DataType;
+use common_datavalues::DataTypeImpl;
+use common_datavalues::DataValue;
 use common_datavalues::NullableColumn;
+use common_datavalues::NullableType;
 use common_datavalues::ScalarViewer;
 use common_datavalues::Series;
 use common_exception::ErrorCode;
@@ -438,7 +442,26 @@ impl JoinHashTable {
         }
 
         let validity: Bitmap = validity.into();
-        let build_block = self.row_space.gather(build_indexs)?;
+        let build_block = if !self.hash_join_desc.from_correlated_subquery
+            && self.hash_join_desc.join_type == JoinType::Single
+            && validity.unset_bits() == input.num_rows()
+        {
+            // Uncorrelated scalar subquery and no row was returned by subquery
+            // We just construct a block with NULLs
+            let build_data_schema = self.row_space.data_schema.clone();
+            assert_eq!(build_data_schema.fields().len(), 1);
+            let data_type = build_data_schema.field(0).data_type().clone();
+            let nullable_type = if let DataTypeImpl::Nullable(..) = data_type {
+                data_type
+            } else {
+                NullableType::new_impl(data_type)
+            };
+            let null_column =
+                nullable_type.create_column(&vec![DataValue::Null; input.num_rows()])?;
+            DataBlock::create(build_data_schema.clone(), vec![null_column])
+        } else {
+            self.row_space.gather(build_indexs)?
+        };
 
         let nullable_columns = build_block
             .columns()
