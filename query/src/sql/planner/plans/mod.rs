@@ -13,7 +13,6 @@
 // limitations under the License.
 
 mod aggregate;
-mod apply;
 mod copy_v2;
 pub mod create_table_v2;
 mod eval_scalar;
@@ -36,7 +35,6 @@ use std::fmt::Display;
 use std::sync::Arc;
 
 pub use aggregate::*;
-pub use apply::CrossApply;
 use common_ast::ast::ExplainKind;
 use common_datavalues::DataField;
 use common_datavalues::DataSchema;

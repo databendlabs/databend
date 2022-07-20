@@ -19,9 +19,11 @@ use crate::sql::binder::scalar_visitor::Recursion;
 use crate::sql::binder::scalar_visitor::ScalarVisitor;
 use crate::sql::optimizer::RelationalProperty;
 use crate::sql::plans::AndExpr;
+use crate::sql::plans::BoundColumnRef;
 use crate::sql::plans::CastExpr;
 use crate::sql::plans::ComparisonExpr;
 use crate::sql::plans::ComparisonOp;
+use crate::sql::plans::OrExpr;
 use crate::sql::plans::Scalar;
 use crate::sql::plans::ScalarExpr;
 
@@ -120,6 +122,9 @@ impl<'a> JoinCondition<'a> {
         left_prop: &RelationalProperty,
         right_prop: &RelationalProperty,
     ) -> Self {
+        if contain_subquery(scalar) {
+            return Self::Other(scalar);
+        }
         if satisfied_by(scalar, left_prop) {
             return Self::Left(scalar);
         }
@@ -148,5 +153,26 @@ impl<'a> JoinCondition<'a> {
         }
 
         Self::Other(scalar)
+    }
+}
+
+pub fn contain_subquery(scalar: &Scalar) -> bool {
+    match scalar {
+        Scalar::BoundColumnRef(BoundColumnRef { column }) => {
+            // For example: SELECT * FROM c WHERE c_id=(SELECT c_id FROM o WHERE ship='WA' AND bill='FL');
+            // predicate `c_id = scalar_subquery_{}` can't be pushed down to the join condition.
+            // TODO(xudong963): need a better way to handle this, such as add a field to predicate to indicate if it derives from subquery.
+            column.column_name == format!("scalar_subquery_{}", column.index)
+        }
+        Scalar::ComparisonExpr(ComparisonExpr { left, right, .. }) => {
+            contain_subquery(left) || contain_subquery(right)
+        }
+        Scalar::AndExpr(AndExpr { left, right, .. }) => {
+            contain_subquery(left) || contain_subquery(right)
+        }
+        Scalar::OrExpr(OrExpr { left, right, .. }) => {
+            contain_subquery(left) || contain_subquery(right)
+        }
+        _ => false,
     }
 }
