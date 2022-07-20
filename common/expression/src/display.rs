@@ -28,6 +28,7 @@ use crate::function::Function;
 use crate::function::FunctionSignature;
 use crate::property::BooleanDomain;
 use crate::property::Domain;
+use crate::property::FloatDomain;
 use crate::property::FunctionProperty;
 use crate::property::IntDomain;
 use crate::property::NullableDomain;
@@ -89,6 +90,8 @@ impl<'a> Display for ScalarRef<'a> {
             ScalarRef::UInt16(i) => write!(f, "{}", i),
             ScalarRef::UInt32(i) => write!(f, "{}", i),
             ScalarRef::UInt64(i) => write!(f, "{}", i),
+            ScalarRef::Float32(i) => write!(f, "{}", i),
+            ScalarRef::Float64(i) => write!(f, "{}", i),
             ScalarRef::Boolean(b) => write!(f, "{}", b),
             ScalarRef::String(s) => write!(f, "{}", String::from_utf8_lossy(s)),
             ScalarRef::Array(col) => write!(f, "[{}]", col.iter().join(", ")),
@@ -144,6 +147,8 @@ impl Display for Literal {
             Literal::UInt16(val) => write!(f, "{val}_u16"),
             Literal::UInt32(val) => write!(f, "{val}_u32"),
             Literal::UInt64(val) => write!(f, "{val}_u64"),
+            Literal::Float32(val) => write!(f, "{val}_f32"),
+            Literal::Float64(val) => write!(f, "{val}_f64"),
             Literal::Int8(val) => write!(f, "{val}_i8"),
             Literal::Int16(val) => write!(f, "{val}_i16"),
             Literal::Int32(val) => write!(f, "{val}_i32"),
@@ -166,6 +171,8 @@ impl Display for DataType {
             DataType::Int16 => write!(f, "Int16"),
             DataType::Int32 => write!(f, "Int32"),
             DataType::Int64 => write!(f, "Int64"),
+            DataType::Float32 => write!(f, "Float32"),
+            DataType::Float64 => write!(f, "Float64"),
             DataType::Null => write!(f, "NULL"),
             DataType::Nullable(inner) => write!(f, "{inner} NULL"),
             DataType::EmptyArray => write!(f, "Array(Nothing)"),
@@ -346,11 +353,18 @@ impl Display for UIntDomain {
     }
 }
 
+impl Display for FloatDomain {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{{{}..={}}}", self.min, self.max)
+    }
+}
+
 impl Display for Domain {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             Domain::Int(domain) => write!(f, "{domain}"),
             Domain::UInt(domain) => write!(f, "{domain}"),
+            Domain::Float(domain) => write!(f, "{domain}"),
             Domain::Boolean(domain) => write!(f, "{domain}"),
             Domain::String(domain) => write!(f, "{domain}"),
             Domain::Nullable(domain) => write!(f, "{domain}"),
