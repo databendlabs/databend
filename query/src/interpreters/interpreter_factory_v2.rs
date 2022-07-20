@@ -144,6 +144,7 @@ impl InterpreterFactoryV2 {
                 | DfStatement::RevokePrivilege(_)
                 | DfStatement::Call(_)
                 | DfStatement::SetVariable(_)
+                | DfStatement::Presign
         )
     }
 

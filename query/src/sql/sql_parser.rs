@@ -242,6 +242,7 @@ impl<'a> DfParser<'a> {
                             self.parser.next_token();
                             self.parse_undrop()
                         }
+                        "PRESIGN" => self.parse_presign(),
                         _ => self.expected("Keyword", self.parser.peek_token()),
                     },
                     _ => self.expected("an SQL statement", Token::Word(w)),
