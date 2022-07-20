@@ -98,7 +98,7 @@ impl QueryFragment for ReadDatasourceQueryFragment {
     }
 
     fn finalize(&self, actions: &mut QueryFragmentsActions) -> Result<()> {
-        let fragment_id = self.ctx.get_and_inc_fragment_id();
+        let fragment_id = self.ctx.get_fragment_id();
         let mut fragment_actions = QueryFragmentActions::create(false, fragment_id);
 
         match self.get_out_partition()? {

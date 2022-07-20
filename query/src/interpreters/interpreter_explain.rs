@@ -103,10 +103,10 @@ impl ExplainInterpreter {
         let plan = plan_schedulers::apply_plan_rewrite(optimizer, &self.explain.input)?;
 
         let pipeline_builder = QueryPipelineBuilder::create(self.ctx.clone());
-        let pipeline = pipeline_builder.finalize(&plan)?;
+        let build_res = pipeline_builder.finalize(&plan)?;
 
         let formatted_pipeline = Series::from_data(
-            format!("{}", pipeline.display_indent())
+            format!("{}", build_res.main_pipeline.display_indent())
                 .lines()
                 .map(|s| s.as_bytes())
                 .collect::<Vec<_>>(),

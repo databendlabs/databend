@@ -22,7 +22,7 @@ use common_tracing::tracing::debug;
 use crate::interpreters::fragments::QueryFragmentsActions;
 use crate::interpreters::fragments::QueryFragmentsBuilder;
 use crate::interpreters::fragments::RootQueryFragment;
-use crate::pipelines::Pipeline;
+use crate::pipelines::{Pipeline, PipelineBuildResult};
 use crate::pipelines::QueryPipelineBuilder;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
@@ -32,7 +32,7 @@ async fn schedule_query_impl(ctx: Arc<QueryContext>, plan: &PlanNode) -> Result<
     let root_query_fragments = RootQueryFragment::create(query_fragments, ctx.clone(), plan)?;
 
     if !root_query_fragments.distribute_query()? {
-        return QueryPipelineBuilder::create(ctx.clone()).finalize(plan);
+        return Ok(QueryPipelineBuilder::create(ctx.clone()).finalize(plan)?.main_pipeline);
     }
 
     let exchange_manager = ctx.get_exchange_manager();

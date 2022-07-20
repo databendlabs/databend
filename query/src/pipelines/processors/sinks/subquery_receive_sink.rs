@@ -2,7 +2,7 @@ use std::any::Any;
 use std::sync::Arc;
 use common_base::base::tokio::sync::broadcast::Sender;
 use common_datablocks::DataBlock;
-use common_datavalues::DataValue;
+use common_datavalues::{DataSchemaRef, DataValue};
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::{Processor, Sink, Sinker};
 use common_exception::Result;
@@ -14,10 +14,16 @@ pub struct SubqueryReceiveSink {
 }
 
 impl SubqueryReceiveSink {
-    pub fn try_create(input: Arc<InputPort>, sender: Sender<DataValue>) -> Result<ProcessorPtr> {
+    pub fn try_create(input: Arc<InputPort>, schema: DataSchemaRef, sender: Sender<DataValue>) -> Result<ProcessorPtr> {
+        let mut input_columns = Vec::with_capacity(schema.fields().len());
+
+        for _index in 0..schema.fields().len() {
+            input_columns.push(vec![]);
+        }
+
         Ok(Sinker::create(input, SubqueryReceiveSink {
             sender,
-            input_columns: vec![],
+            input_columns,
         }))
     }
 }

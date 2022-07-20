@@ -52,7 +52,7 @@ use crate::pipelines::processors::TransformLimit;
 use crate::pipelines::processors::TransformLimitBy;
 use crate::pipelines::processors::TransformSortMerge;
 use crate::pipelines::processors::TransformSortPartial;
-use crate::pipelines::{Pipe, SinkPipeBuilder};
+use crate::pipelines::{Pipe, PipelineBuildResult, SinkPipeBuilder};
 use crate::pipelines::processors::port::{InputPort, OutputPort};
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
@@ -85,28 +85,41 @@ impl QueryPipelineBuilder {
     /// The core of generating the pipeline
     /// It will recursively visit the entire plan tree, and create a `SimplePipe` for each node,
     /// adding it to the pipeline
-    pub fn finalize(mut self, plan: &PlanNode) -> Result<Pipeline> {
+    pub fn finalize(mut self, plan: &PlanNode) -> Result<PipelineBuildResult> {
         self.visit_plan_node(plan)?;
-        Ok(self.main_pipeline)
+
+        for source_pipeline in &self.sources_pipeline {
+            if !source_pipeline.is_complete_pipeline()? {
+                return Err(ErrorCode::IllegalPipelineState(
+                    "Source pipeline must be complete pipeline.",
+                ));
+            }
+        }
+
+        Ok(PipelineBuildResult {
+            main_pipeline: self.main_pipeline,
+            sources_pipelines: self.sources_pipeline,
+        })
     }
 
     fn expand_subquery(&mut self, query_plan: &Arc<PlanNode>) -> Result<Receiver<DataValue>> {
         let subquery_ctx = QueryContext::create_from(self.ctx.clone());
         let pipeline_builder = QueryPipelineBuilder::create(subquery_ctx);
-        let mut subquery_pipeline = pipeline_builder.finalize(query_plan)?;
+        let mut build_res = pipeline_builder.finalize(query_plan)?;
 
-        assert!(subquery_pipeline.is_pulling_pipeline()?);
+        assert!(build_res.main_pipeline.is_pulling_pipeline()?);
 
-        subquery_pipeline.resize(1)?;
+        build_res.main_pipeline.resize(1)?;
         let (tx, rx) = channel(1);
         let input = InputPort::create();
-        subquery_pipeline.add_pipe(Pipe::SimplePipe {
+        build_res.main_pipeline.add_pipe(Pipe::SimplePipe {
             outputs_port: vec![],
             inputs_port: vec![input.clone()],
-            processors: vec![SubqueryReceiveSink::try_create(input, tx)?],
+            processors: vec![SubqueryReceiveSink::try_create(input, query_plan.schema(), tx)?],
         });
 
-        self.sources_pipeline.push(subquery_pipeline);
+        self.sources_pipeline.push(build_res.main_pipeline);
+        self.sources_pipeline.extend(build_res.sources_pipelines.into_iter());
         Ok(rx)
     }
 }

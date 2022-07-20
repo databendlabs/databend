@@ -1,5 +1,6 @@
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
+use common_catalog::table_context::TableContext;
 use common_datavalues::DataSchemaRef;
 use common_planners::{AggregatorFinalPlan, AggregatorPartialPlan, AlterTableClusterKeyPlan, AlterUserPlan, AlterUserUDFPlan, AlterViewPlan, BroadcastPlan, CallPlan, CopyPlan, CreateDatabasePlan, CreateRolePlan, CreateTablePlan, CreateUserPlan, CreateUserStagePlan, CreateUserUDFPlan, CreateViewPlan, DeletePlan, DescribeTablePlan, DescribeUserStagePlan, DropDatabasePlan, DropRolePlan, DropTableClusterKeyPlan, DropTablePlan, DropUserPlan, DropUserStagePlan, DropUserUDFPlan, DropViewPlan, EmptyPlan, ExistsTablePlan, ExplainPlan, Expression, ExpressionPlan, Expressions, FilterPlan, GrantPrivilegePlan, GrantRolePlan, HavingPlan, InsertPlan, KillPlan, LimitByPlan, LimitPlan, ListPlan, OptimizeTablePlan, PlanBuilder, PlanNode, PlanRewriter, ProjectionPlan, ReadDataSourcePlan, RemotePlan, RemoveUserStagePlan, RenameDatabasePlan, RenameTablePlan, RevokePrivilegePlan, RevokeRolePlan, SelectPlan, SettingPlan, ShowCreateDatabasePlan, ShowCreateTablePlan, ShowPlan, SinkPlan, SortPlan, SubQueriesSetPlan, TruncateTablePlan, UndropDatabasePlan, UndropTablePlan, UseDatabasePlan, WindowFuncPlan};
 use crate::interpreters::fragments::partition_state::PartitionState;
@@ -22,7 +23,7 @@ impl BroadcastQueryFragment {
         node: &BroadcastPlan,
         input: Box<dyn QueryFragment>,
     ) -> Result<Box<dyn QueryFragment>> {
-        let id = ctx.get_and_inc_fragment_id();
+        let id = ctx.get_fragment_id();
         Ok(Box::new(BroadcastQueryFragment {
             id,
             ctx,

@@ -73,13 +73,29 @@ impl Interpreter for SelectInterpreter {
         &self,
         _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
-        let query_pipeline = self.create_new_pipeline().await?;
-        let async_runtime = self.ctx.get_storage_runtime();
-        let query_need_abort = self.ctx.query_need_abort();
-        let executor =
-            PipelinePullingExecutor::try_create(async_runtime, query_need_abort, query_pipeline)?;
+        match self.ctx.get_cluster().is_empty() {
+            true => {
+                let settings = self.ctx.get_settings();
+                let builder = QueryPipelineBuilder::create(self.ctx.clone());
+                let mut build_res = builder.finalize(&self.rewrite_plan()?)?;
+                build_res.set_max_threads(settings.get_max_threads()? as usize);
 
-        Ok(Box::pin(ProcessorExecutorStream::create(executor)?))
+                let async_runtime = self.ctx.get_storage_runtime();
+                let query_need_abort = self.ctx.query_need_abort();
+                Ok(Box::pin(ProcessorExecutorStream::create(
+                    PipelinePullingExecutor::from_pipelines(async_runtime, query_need_abort, build_res)?
+                )?))
+            }
+            false => {
+                let query_pipeline = self.create_new_pipeline().await?;
+                let async_runtime = self.ctx.get_storage_runtime();
+                let query_need_abort = self.ctx.query_need_abort();
+                let executor =
+                    PipelinePullingExecutor::try_create(async_runtime, query_need_abort, query_pipeline)?;
+
+                Ok(Box::pin(ProcessorExecutorStream::create(executor)?))
+            }
+        }
     }
 
     /// This method will create a new pipeline
@@ -91,7 +107,7 @@ impl Interpreter for SelectInterpreter {
                 let builder = QueryPipelineBuilder::create(self.ctx.clone());
                 let mut query_pipeline = builder.finalize(&self.rewrite_plan()?)?;
                 query_pipeline.set_max_threads(settings.get_max_threads()? as usize);
-                Ok(query_pipeline)
+                Ok(query_pipeline.main_pipeline)
             }
             false => {
                 let ctx = self.ctx.clone();

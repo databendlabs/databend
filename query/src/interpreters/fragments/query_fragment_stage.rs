@@ -50,7 +50,7 @@ impl StageQueryFragment {
         node: &StagePlan,
         input: Box<dyn QueryFragment>,
     ) -> Result<Box<dyn QueryFragment>> {
-        let id = ctx.get_and_inc_fragment_id();
+        let id = ctx.get_fragment_id();
         Ok(Box::new(StageQueryFragment {
             id,
             stage: node.clone(),

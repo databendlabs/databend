@@ -55,7 +55,7 @@ use crate::api::rpc::flight_scatter_broadcast::BroadcastFlightScatter;
 use crate::interpreters::QueryFragmentActions;
 use crate::interpreters::QueryFragmentsActions;
 use crate::pipelines::executor::PipelineCompleteExecutor;
-use crate::pipelines::Pipe;
+use crate::pipelines::{Pipe, PipelineBuildResult};
 use crate::pipelines::Pipeline;
 use crate::pipelines::QueryPipelineBuilder;
 use crate::sessions::QueryContext;
@@ -745,16 +745,16 @@ impl FragmentCoordinator {
         if !self.initialized {
             self.initialized = true;
             let pipeline_builder = QueryPipelineBuilder::create(ctx.clone());
-            let mut pipeline = pipeline_builder.finalize(&self.node)?;
+            let mut build_res = pipeline_builder.finalize(&self.node)?;
 
             let ctx = ctx.clone();
             let query_id = query_id.to_string();
-            pipeline.set_on_finished(move |may_error| {
+            build_res.main_pipeline.set_on_finished(move |may_error| {
                 let exchange_manager = ctx.get_exchange_manager();
                 exchange_manager.on_finished_query(&query_id, may_error);
             });
 
-            self.pipeline = Some(pipeline);
+            self.pipeline = Some(build_res.main_pipeline);
         }
 
         Ok(())
