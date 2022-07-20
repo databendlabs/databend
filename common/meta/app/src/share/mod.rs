@@ -29,6 +29,7 @@ pub use share::ShareGrantEntry;
 pub use share::ShareGrantObject;
 pub use share::ShareGrantObjectPrivilege;
 pub use share::ShareId;
+pub use share::ShareIdToName;
 pub use share::ShareIdent;
 pub use share::ShareInfo;
 pub use share::ShareMeta;

@@ -33,6 +33,7 @@ use crate::interpreters::SelectInterpreterV2;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::Pipeline;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::sql::plans::CopyPlanV2;
 use crate::sql::plans::Plan;
 use crate::storages::stage::StageSourceHelper;
@@ -74,14 +75,16 @@ impl CopyInterpreterV2 {
                     }
                     files_with_path
                 } else if !path.ends_with('/') {
-                    let op = StageSourceHelper::get_op(&self.ctx, &table_info.stage_info).await?;
+                    let rename_me: Arc<dyn TableContext> = self.ctx.clone();
+                    let op = StageSourceHelper::get_op(&rename_me, &table_info.stage_info).await?;
                     if op.object(path).is_exist().await? {
                         vec![path.to_string()]
                     } else {
                         vec![]
                     }
                 } else {
-                    let op = StageSourceHelper::get_op(&self.ctx, &table_info.stage_info).await?;
+                    let rename_me: Arc<dyn TableContext> = self.ctx.clone();
+                    let op = StageSourceHelper::get_op(&rename_me, &table_info.stage_info).await?;
                     let mut list = vec![];
 
                     // TODO: we could rewrite into try_collect.

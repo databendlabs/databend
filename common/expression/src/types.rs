@@ -49,13 +49,13 @@ pub enum DataType {
     String,
     UInt8,
     UInt16,
+    UInt32,
+    UInt64,
     Int8,
     Int16,
+    Int32,
+    Int64,
     // TODO: Implement them
-    // UInt32,
-    // Int32,
-    // UInt64,
-    // Int64,
     // Float32,
     // Float64,
     // Timestamp

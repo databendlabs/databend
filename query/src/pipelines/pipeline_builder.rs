@@ -55,6 +55,7 @@ use crate::pipelines::processors::TransformSortPartial;
 use crate::pipelines::{Pipe, SinkPipeBuilder};
 use crate::pipelines::processors::port::{InputPort, OutputPort};
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 
 /// Builder for query pipeline
 /// ```

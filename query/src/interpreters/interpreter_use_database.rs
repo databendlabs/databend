@@ -22,6 +22,7 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
+use crate::sessions::QueryAffect;
 use crate::sessions::QueryContext;
 
 pub struct UseDatabaseInterpreter {
@@ -51,6 +52,9 @@ impl Interpreter for UseDatabaseInterpreter {
         self.ctx
             .set_current_database(self.plan.database.clone())
             .await?;
+        self.ctx.set_affect(QueryAffect::UseDB {
+            name: self.plan.database.clone(),
+        });
         let schema = Arc::new(DataSchema::empty());
         Ok(Box::pin(DataBlockStream::create(schema, None, vec![])))
     }

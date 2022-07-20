@@ -17,6 +17,11 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_fuse_meta::caches::TenantLabel;
+use common_fuse_meta::meta::SegmentInfo;
+use common_fuse_meta::meta::SegmentInfoVersion;
+use common_fuse_meta::meta::SnapshotVersion;
+use common_fuse_meta::meta::TableSnapshot;
 use futures::io::BufReader;
 use futures::stream;
 use opendal::BytesReader;
@@ -25,13 +30,8 @@ use super::cached_reader::CachedReader;
 use super::cached_reader::HasTenantLabel;
 use super::cached_reader::Loader;
 use super::versioned_reader::VersionedReader;
-use crate::sessions::QueryContext;
-use crate::storages::fuse::cache::TenantLabel;
+use crate::sessions::TableContext;
 use crate::storages::fuse::io::TableMetaLocationGenerator;
-use crate::storages::fuse::meta::SegmentInfo;
-use crate::storages::fuse::meta::SegmentInfoVersion;
-use crate::storages::fuse::meta::SnapshotVersion;
-use crate::storages::fuse::meta::TableSnapshot;
 
 /// Provider of [BufReader]
 ///
@@ -42,13 +42,13 @@ pub trait BufReaderProvider {
     async fn buf_reader(&self, path: &str, len: Option<u64>) -> Result<BufReader<BytesReader>>;
 }
 
-pub type SegmentInfoReader<'a> = CachedReader<SegmentInfo, &'a QueryContext>;
-pub type TableSnapshotReader<'a> = CachedReader<TableSnapshot, &'a QueryContext>;
+pub type SegmentInfoReader<'a> = CachedReader<SegmentInfo, &'a dyn TableContext>;
+pub type TableSnapshotReader<'a> = CachedReader<TableSnapshot, &'a dyn TableContext>;
 
 pub struct MetaReaders;
 
 impl MetaReaders {
-    pub fn segment_info_reader(ctx: &QueryContext) -> SegmentInfoReader {
+    pub fn segment_info_reader(ctx: &dyn TableContext) -> SegmentInfoReader {
         SegmentInfoReader::new(
             ctx.get_storage_cache_manager().get_table_segment_cache(),
             ctx,
@@ -56,7 +56,7 @@ impl MetaReaders {
         )
     }
 
-    pub fn table_snapshot_reader(ctx: &QueryContext) -> TableSnapshotReader {
+    pub fn table_snapshot_reader(ctx: &dyn TableContext) -> TableSnapshotReader {
         TableSnapshotReader::new(
             ctx.get_storage_cache_manager().get_table_snapshot_cache(),
             ctx,
@@ -184,7 +184,7 @@ where T: BufReaderProvider + Sync
 }
 
 #[async_trait::async_trait]
-impl BufReaderProvider for &QueryContext {
+impl BufReaderProvider for &dyn TableContext {
     async fn buf_reader(&self, path: &str, len: Option<u64>) -> Result<BufReader<BytesReader>> {
         let operator = self.get_storage_operator()?;
         let object = operator.object(path);
@@ -207,19 +207,19 @@ impl BufReaderProvider for &QueryContext {
     }
 }
 
-impl HasTenantLabel for &QueryContext {
+impl HasTenantLabel for &dyn TableContext {
     fn tenant_label(&self) -> TenantLabel {
-        ctx_tenant_label(self)
+        ctx_tenant_label(*self)
     }
 }
 
-impl HasTenantLabel for Arc<QueryContext> {
+impl HasTenantLabel for Arc<dyn TableContext> {
     fn tenant_label(&self) -> TenantLabel {
-        ctx_tenant_label(self)
+        ctx_tenant_label(self.as_ref())
     }
 }
 
-fn ctx_tenant_label(ctx: &QueryContext) -> TenantLabel {
+fn ctx_tenant_label(ctx: &dyn TableContext) -> TenantLabel {
     let mgr = ctx.get_storage_cache_manager();
     TenantLabel {
         tenant_id: mgr.get_tenant_id().to_owned(),

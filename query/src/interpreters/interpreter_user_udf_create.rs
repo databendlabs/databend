@@ -22,6 +22,7 @@ use common_tracing::tracing;
 
 use crate::interpreters::Interpreter;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 
 #[derive(Debug)]
 pub struct CreateUserUDFInterpreter {

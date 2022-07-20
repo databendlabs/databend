@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+pub use common_catalog::catalog::StorageDescription;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::TableInfo;
@@ -42,13 +43,6 @@ where
     fn try_create(&self, ctx: StorageContext, table_info: TableInfo) -> Result<Box<dyn Table>> {
         self(ctx, table_info)
     }
-}
-
-#[derive(Default, Clone)]
-pub struct StorageDescription {
-    pub engine_name: String,
-    pub comment: String,
-    pub support_cluster_key: bool,
 }
 
 pub trait StorageDescriptor: Send + Sync {

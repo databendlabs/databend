@@ -26,6 +26,7 @@ use sqlparser::ast::Expr;
 use sqlparser::ast::ObjectName;
 
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::sql::statements::query::QueryASTIRVisitor;
 use crate::sql::statements::resolve_table;
 use crate::sql::statements::AnalyzableStatement;

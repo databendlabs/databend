@@ -122,11 +122,40 @@ pub trait BufferReadExt: BufferRead {
     }
 
     fn read_escaped_string_text(&mut self, buf: &mut Vec<u8>) -> Result<()> {
-        self.keep_read(buf, |f| f != b'\t' && f != b'\n' && f != b'\\')?;
-        if self.ignore_byte(b'\\')? {
-            // TODO parse complex escape sequence
-            buf.push(b'\\');
-            self.read_escaped_string_text(buf)?;
+        loop {
+            self.keep_read(buf, |f| f != b'\t' && f != b'\n' && f != b'\\')?;
+            if self.ignore_byte(b'\\')? {
+                let buffer = self.fill_buf()?;
+                let c = buffer[0];
+                match c {
+                    b'\'' | b'\"' | b'\\' | b'/' | b'`' => {
+                        buf.push(c);
+                        self.consume(1);
+                    }
+                    b'N' => {
+                        self.consume(1);
+                    }
+                    b'x' => {
+                        self.consume(1);
+                        let mut b = [0u8; 2];
+                        self.read_exact(&mut b[..])?;
+                        let high = hex_char_to_digit(b[0]);
+                        let low = hex_char_to_digit(b[1]);
+                        let c = high * 0x10 + low;
+                        buf.push(c);
+                    }
+                    _ => {
+                        let e = unescape(c);
+                        if !is_control_ascii(e) {
+                            buf.push(b'\\');
+                        }
+                        buf.push(e);
+                        self.consume(1);
+                    }
+                }
+            } else {
+                break;
+            }
         }
         Ok(())
     }
@@ -333,5 +362,35 @@ where R: BufferRead
             self.consume(1);
         }
         Ok(bytes)
+    }
+}
+
+fn unescape(c: u8) -> u8 {
+    match c {
+        b'a' => b'\x07', // \a in c
+        b'b' => b'\x08', // \b in c
+        b'v' => b'\x0B', // \v in c
+        b'f' => b'\x0C', // \e in c
+        b'e' => b'\x1B', // \e in c
+        b'n' => b'\n',
+        b'r' => b'\r',
+        b't' => b'\t',
+        b'0' => b'\0',
+        _ => c,
+    }
+}
+
+#[inline]
+fn is_control_ascii(c: u8) -> bool {
+    c <= 31
+}
+
+#[inline]
+fn hex_char_to_digit(c: u8) -> u8 {
+    match c {
+        b'A'..=b'F' => c - b'A' + 10,
+        b'a'..=b'f' => c - b'a' + 10,
+        b'0'..=b'9' => c - b'0',
+        _ => 0xff,
     }
 }

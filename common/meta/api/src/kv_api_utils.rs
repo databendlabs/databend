@@ -58,7 +58,7 @@ pub async fn get_u64_value<T: KVApiKey>(
 ///
 /// It returns seq number and the data.
 pub async fn get_struct_value<K, PB, T>(
-    kv_api: &impl KVApi,
+    kv_api: &(impl KVApi + ?Sized),
     k: &K,
 ) -> Result<(u64, Option<T>), MetaError>
 where

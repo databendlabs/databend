@@ -14,5 +14,5 @@ statement error 1025
 DROP TABLE t; 
 
 statement error 1002
-DROP TABLE system.null; 
+DROP TABLE system.abc; 
 

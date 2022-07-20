@@ -21,6 +21,7 @@ use common_planners::SelectPlan;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 
+use crate::clusters::ClusterHelper;
 use crate::interpreters::plan_schedulers;
 use crate::interpreters::stream::ProcessorExecutorStream;
 use crate::interpreters::Interpreter;
@@ -29,6 +30,7 @@ use crate::pipelines::executor::PipelinePullingExecutor;
 use crate::pipelines::Pipeline;
 use crate::pipelines::QueryPipelineBuilder;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 
 /// SelectInterpreter struct which interprets SelectPlan
 pub struct SelectInterpreter {

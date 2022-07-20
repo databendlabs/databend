@@ -25,6 +25,7 @@ use crate::interpreters::fragments::RootQueryFragment;
 use crate::pipelines::Pipeline;
 use crate::pipelines::QueryPipelineBuilder;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 
 async fn schedule_query_impl(ctx: Arc<QueryContext>, plan: &PlanNode) -> Result<Pipeline> {
     let query_fragments = QueryFragmentsBuilder::build(ctx.clone(), plan)?;

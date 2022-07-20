@@ -31,6 +31,7 @@ use crate::pipelines::processors::SyncSourcer;
 use crate::pipelines::Pipeline;
 use crate::pipelines::SourcePipeBuilder;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 
 struct State {
     finished: AtomicBool,

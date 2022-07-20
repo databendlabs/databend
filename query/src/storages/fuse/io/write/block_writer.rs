@@ -17,14 +17,14 @@ use common_arrow::parquet::metadata::ThriftFileMetaData;
 use common_datablocks::serialize_data_blocks;
 use common_datablocks::DataBlock;
 use common_exception::Result;
+use common_fuse_meta::meta::BlockMeta;
+use common_fuse_meta::meta::Versioned;
 use common_tracing::tracing::warn;
 use opendal::Operator;
 
 use crate::storages::fuse::io::retry;
 use crate::storages::fuse::io::retry::Retryable;
 use crate::storages::fuse::io::TableMetaLocationGenerator;
-use crate::storages::fuse::meta::BlockMeta;
-use crate::storages::fuse::meta::Versioned;
 use crate::storages::fuse::operations::util;
 use crate::storages::fuse::statistics::accumulator;
 

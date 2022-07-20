@@ -21,17 +21,17 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_fuse_meta::meta::BlockMeta;
 use common_planners::Expression;
 use serde_json::json;
 
-use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::storages::fuse::io::MetaReaders;
-use crate::storages::fuse::meta::BlockMeta;
 use crate::storages::fuse::FuseTable;
 use crate::storages::Table;
 
 pub struct ClusteringInformation<'a> {
-    pub ctx: Arc<QueryContext>,
+    pub ctx: Arc<dyn TableContext>,
     pub table: &'a FuseTable,
     pub cluster_keys: Vec<Expression>,
 }
@@ -46,7 +46,7 @@ struct ClusteringStatistics {
 
 impl<'a> ClusteringInformation<'a> {
     pub fn new(
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn TableContext>,
         table: &'a FuseTable,
         cluster_keys: Vec<Expression>,
     ) -> Self {

@@ -17,9 +17,8 @@ use std::collections::HashMap;
 use common_arrow::parquet::metadata::ThriftFileMetaData;
 use common_exception::ErrorCode;
 use common_exception::Result;
-
-use crate::storages::fuse::meta::ColumnId;
-use crate::storages::fuse::meta::ColumnMeta;
+use common_fuse_meta::meta::ColumnId;
+use common_fuse_meta::meta::ColumnMeta;
 
 pub fn column_metas(file_meta: &ThriftFileMetaData) -> Result<HashMap<ColumnId, ColumnMeta>> {
     // currently we use one group only

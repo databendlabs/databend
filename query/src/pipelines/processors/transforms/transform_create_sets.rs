@@ -41,6 +41,7 @@ use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::Processor;
 use crate::pipelines::QueryPipelineBuilder;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 
 pub enum SubqueryReceiver {
     Subquery(Receiver<DataValue>),

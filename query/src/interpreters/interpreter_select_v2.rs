@@ -21,10 +21,10 @@ use common_tracing::tracing;
 
 use crate::interpreters::stream::ProcessorExecutorStream;
 use crate::interpreters::Interpreter;
-use crate::pipelines::executor::PipelineExecutor;
 use crate::pipelines::executor::PipelinePullingExecutor;
 use crate::pipelines::Pipeline;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::sql::exec::PhysicalPlanBuilder;
 use crate::sql::exec::PipelineBuilder;
 use crate::sql::optimizer::SExpr;
@@ -76,37 +76,23 @@ impl Interpreter for SelectInterpreterV2 {
         }
 
         let last_schema = physical_plan.output_schema()?;
+        let pipeline_builder = PipelineBuilder::create(self.ctx.clone());
+        let mut build_res = pipeline_builder.finalize(&physical_plan)?;
 
-        let mut pb = PipelineBuilder::new();
-        let mut root_pipeline = Pipeline::create();
-        pb.build_pipeline(self.ctx.clone(), &physical_plan, &mut root_pipeline)?;
         // Render result set with given output schema
-        pb.render_result_set(last_schema, &self.bind_context.columns, &mut root_pipeline)?;
-        let mut pipelines = pb.pipelines;
+        PipelineBuilder::render_result_set(
+            last_schema,
+            &self.bind_context.columns,
+            &mut build_res.main_pipeline,
+        )?;
+
         let async_runtime = self.ctx.get_storage_runtime();
         let query_need_abort = self.ctx.query_need_abort();
+        build_res.set_max_threads(self.ctx.get_settings().get_max_threads()? as usize);
 
-        root_pipeline.set_max_threads(self.ctx.get_settings().get_max_threads()? as usize);
-        for pipeline in pipelines.iter_mut() {
-            pipeline.set_max_threads(self.ctx.get_settings().get_max_threads()? as usize);
-        }
-
-        // Spawn sub-pipelines
-        for pipeline in pipelines {
-            let executor = PipelineExecutor::create(
-                async_runtime.clone(),
-                query_need_abort.clone(),
-                pipeline,
-            )?;
-            executor.execute()?;
-        }
-
-        // Spawn root pipeline
-        let executor =
-            PipelinePullingExecutor::try_create(async_runtime, query_need_abort, root_pipeline)?;
-
-        let stream = ProcessorExecutorStream::create(executor)?;
-        Ok(Box::pin(Box::pin(stream)))
+        Ok(Box::pin(ProcessorExecutorStream::create(
+            PipelinePullingExecutor::from_pipelines(async_runtime, query_need_abort, build_res)?,
+        )?))
     }
 
     /// This method will create a new pipeline
@@ -115,17 +101,25 @@ impl Interpreter for SelectInterpreterV2 {
         let builder = PhysicalPlanBuilder::new(self.metadata.clone());
         let physical_plan = builder.build(&self.s_expr)?;
         let last_schema = physical_plan.output_schema()?;
-        let mut pb = PipelineBuilder::new();
-        let mut root_pipeline = Pipeline::create();
-        pb.build_pipeline(self.ctx.clone(), &physical_plan, &mut root_pipeline)?;
-        pb.render_result_set(last_schema, &self.bind_context.columns, &mut root_pipeline)?;
-        root_pipeline.set_max_threads(self.ctx.get_settings().get_max_threads()? as usize);
-        if !pb.pipelines.is_empty() {
+
+        let pipeline_builder = PipelineBuilder::create(self.ctx.clone());
+        let mut build_res = pipeline_builder.finalize(&physical_plan)?;
+
+        PipelineBuilder::render_result_set(
+            last_schema,
+            &self.bind_context.columns,
+            &mut build_res.main_pipeline,
+        )?;
+
+        build_res.set_max_threads(self.ctx.get_settings().get_max_threads()? as usize);
+
+        if !build_res.sources_pipelines.is_empty() {
             return Err(ErrorCode::UnImplement(
                 "Unsupported run query with sub-pipeline".to_string(),
             ));
         }
-        Ok(root_pipeline)
+
+        Ok(build_res.main_pipeline)
     }
 
     async fn start(&self) -> Result<()> {

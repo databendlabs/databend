@@ -23,7 +23,7 @@ select a+b from t2;
 
 create table t2(a int,b int) Engine = Fuse; -- {ErrorCode 2302}
 create table t2(a int,b int) Engine = Fuse; -- {ErrorCode 2302}
-create table t2(a INT auto_increment); -- {ErrorCode 1022}
+create table t2(a INT auto_increment); -- {ErrorCode 1005}
 
 create table t3(a int,b int) engine=Memory CLUSTER BY(a); -- {ErrorCode 2703}
 
@@ -67,8 +67,8 @@ SELECT '====END TEST CREATE TABLE AS SELECT STATEMENT====';
 
 
 SELECT '====TIMESTAMP====';
-create table db2.test6(id Int8, created timestamp  DEFAULT CURRENT_TIMESTAMP); -- {ErrorCode 1006}
-create table db2.test6(id Int8, created timestamp  DEFAULT today() + a); -- {ErrorCode 1006}
+create table db2.test6(id Int8, created timestamp  DEFAULT CURRENT_TIMESTAMP); -- {ErrorCode 1065}
+create table db2.test6(id Int8, created timestamp  DEFAULT today() + a); -- {ErrorCode 1065}
 create table db2.test6(id Int8, created timestamp  DEFAULT today() + 3);
 
 
@@ -84,7 +84,7 @@ desc db2.test8;
 DROP DATABASE db1;
 DROP DATABASE db2;
 
-CREATE TABLE system.test; -- {ErrorCode 1002}
+CREATE TABLE system.test(a INT); -- {ErrorCode 1002}
 
 
 

@@ -64,7 +64,7 @@ async fn test_parse_csv_delimiter() -> Result<()> {
             );
 
             let mut builder = CsvSourceBuilder::create(schema, FormatSettings::default());
-            builder.skip_header(false);
+            builder.skip_header(0);
             builder.field_delimiter(field_delimiter);
             builder.record_delimiter(record_delimiter);
             builder.block_size(10);
@@ -129,7 +129,7 @@ async fn test_parse_csv_text() -> Result<()> {
     );
 
     let mut builder = CsvSourceBuilder::create(schema, FormatSettings::default());
-    builder.skip_header(false);
+    builder.skip_header(0);
     builder.field_delimiter(",");
     builder.record_delimiter("\n");
     builder.block_size(10);

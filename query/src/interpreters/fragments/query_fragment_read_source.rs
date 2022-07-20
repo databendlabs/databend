@@ -32,6 +32,7 @@ use crate::interpreters::fragments::query_fragment_actions::QueryFragmentAction;
 use crate::interpreters::fragments::query_fragment_actions::QueryFragmentActions;
 use crate::interpreters::fragments::query_fragment_actions::QueryFragmentsActions;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 
 pub struct ReadDatasourceQueryFragment {
     ctx: Arc<QueryContext>,

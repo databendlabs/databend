@@ -21,11 +21,14 @@ use crate::api::rpc::exchange::exchange_params::ExchangeParams;
 use crate::api::rpc::exchange::exchange_params::MergeExchangeParams;
 use crate::api::rpc::exchange::exchange_sink_merge::ExchangeMergeSink;
 use crate::api::rpc::exchange::exchange_sink_shuffle::ExchangePublisherSink;
-use crate::pipelines::processors::port::{InputPort, OutputPort};
+use crate::pipelines::processors::port::OutputPort;
+use crate::clusters::ClusterHelper;
+use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::Pipeline;
 use crate::pipelines::SinkPipeBuilder;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 
 pub struct ExchangeSink;
 

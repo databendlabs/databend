@@ -19,6 +19,7 @@ use common_exception::Result;
 use common_planners::Expression;
 
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::sql::statements::query::query_ast_ir::QueryASTIRVisitor;
 use crate::sql::statements::query::query_schema_joined::JoinedTableDesc;
 use crate::sql::statements::query::JoinedSchema;

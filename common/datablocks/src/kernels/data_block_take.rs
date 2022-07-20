@@ -67,7 +67,10 @@ impl DataBlock {
         slices: &[MergeSlice],
         limit: Option<usize>,
     ) -> Result<ColumnRef> {
-        let arrays: Vec<ArrayRef> = columns.iter().map(|c| c.as_arrow_array()).collect();
+        let arrays: Vec<ArrayRef> = columns
+            .iter()
+            .map(|c| c.as_arrow_array(c.data_type()))
+            .collect();
         let arrays: Vec<&dyn Array> = arrays.iter().map(|c| c.as_ref()).collect();
         let taked = Self::take_arrays_by_slices_limit(&arrays, slices, limit);
 

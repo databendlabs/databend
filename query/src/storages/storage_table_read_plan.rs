@@ -37,7 +37,6 @@ pub trait ToReadDataSourcePlan {
             .await
     }
 
-    // TODO(dantengsky) NO, we should embed catalog in TableInfo
     async fn read_plan_with_catalog(
         &self,
         ctx: Arc<QueryContext>,
