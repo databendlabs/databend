@@ -103,9 +103,14 @@ pub fn string_to_timestamp(date_str: impl AsRef<[u8]>, tz: &Tz) -> Option<DateTi
     let s = std::str::from_utf8(date_str.as_ref()).ok();
     if let Some(s) = s {
         // convert zero timestamp to `1970-01-01 00:00:00`
-        if s.len() >= DATE_TIME_LEN && &s[..DATE_TIME_LEN] == "0000-00-00 00:00:00" {
+        if s.len() >= DATE_TIME_LEN
+            && (&s[..DATE_TIME_LEN] == "0000-00-00 00:00:00"
+                || &s[..DATE_TIME_LEN] == "0000-00-00T00:00:00")
+        {
             let t = format!("1970-01-01 00:00:00{}", &s[DATE_TIME_LEN..]);
-            tz.datetime_from_str(&t, "%Y-%m-%d %H:%M:%S%.f").ok()
+            tz.datetime_from_str(&t, "%Y-%m-%d %H:%M:%S%.f")
+                .or_else(|_| tz.datetime_from_str(s, "%Y-%m-%dT%H:%M:%S%.f%z"))
+                .ok()
         } else {
             match tz
                 .datetime_from_str(s, "%Y-%m-%d %H:%M:%S%.f")
@@ -121,7 +126,25 @@ pub fn string_to_timestamp(date_str: impl AsRef<[u8]>, tz: &Tz) -> Option<DateTi
                         Some(dt)
                     }
                 }
-                Err(_) => None,
+                Err(_) => {
+                    //DateTime::parse_from_str requires that it successfully parse an entire DateTime -- full date and time and timezone.
+                    match DateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%S%.f%z") {
+                        Ok(dt) => {
+                            // convert timestamp less than `1000-01-01 00:00:00` to `1000-01-01 00:00:00`
+                                if dt.year() < 1000 {
+                                Some(
+                                    tz.from_utc_datetime(&NaiveDate::from_ymd(1000, 1, 1).and_hms(0, 0, 0)),
+                                    )
+                                } else {
+                                Some(dt.with_timezone(tz))
+                                }
+                            }
+                        Err(_) => {
+                            None
+                            }
+                        }
+
+                },
             }
         }
     } else {

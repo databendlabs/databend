@@ -15,6 +15,7 @@ select to_datetime('1000-01-01 00:00:00');
 select to_datetime('9999-12-31 23:59:59');
 select to_datetime('10000-01-01 00:00:00'); -- {ErrorCode 1010}
 select to_datetime('0999-12-31 23:59:59');
+select to_datetime('2022-12-31T23:59:59+00:00');
 
 select typeof(today() + 3) = 'DATE';
 select typeof(today() - 3) = 'DATE';
@@ -219,10 +220,11 @@ select '===INSERT===';
 drop table if exists ts;
 create table ts(a DateTime(6), b DateTime, c Date);
 insert into ts values(now(), now(), today());
+insert into ts values("2022-02-01T12:01:02+00:00", "2022-02-01 12:01:02", now());
 select to_datetime(a) = to_datetime(b) from ts;
 drop table if exists ts;
 
-
+drop table if exists t;
 create table t(a datetime, b DateTime(3), c Date);
 
 insert into t values('2022-04-02 15:10:28', '2022-04-02 15:10:28', '1000-01-01');
