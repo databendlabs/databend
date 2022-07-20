@@ -19,6 +19,7 @@ use std::io::Result;
 
 use anyhow::anyhow;
 use opendal::Scheme;
+use percent_encoding::percent_decode_str;
 
 use crate::config::StorageHttpConfig;
 use crate::config::STORAGE_S3_DEFAULT_ENDPOINT;
@@ -120,9 +121,11 @@ pub fn parse_uri_location(l: &UriLocation) -> Result<(StorageParams, String)> {
                 })?,
         }),
         Scheme::Http => {
+            // Make sure path has been percent decoded before parse pattern.
+            let path = percent_decode_str(&l.path).decode_utf8_lossy();
             let cfg = StorageHttpConfig {
                 endpoint_url: format!("{}://{}", l.protocol, l.name),
-                paths: globiter::Pattern::parse(&l.path)
+                paths: globiter::Pattern::parse(&path)
                     .map_err(|err| {
                         Error::new(
                             ErrorKind::InvalidInput,

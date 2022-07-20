@@ -1678,6 +1678,7 @@ dependencies = [
  "anyhow",
  "globiter",
  "opendal",
+ "percent-encoding",
  "serde",
 ]
 
