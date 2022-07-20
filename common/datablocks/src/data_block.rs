@@ -239,7 +239,8 @@ impl TryFrom<DataBlock> for Chunk<ArrayRef> {
         let arrays = v
             .columns()
             .iter()
-            .map(|c| c.as_arrow_array())
+            .zip(v.schema.fields().iter())
+            .map(|(c, f)| c.as_arrow_array(f.data_type().clone()))
             .collect::<Vec<_>>();
 
         Ok(Chunk::try_new(arrays)?)

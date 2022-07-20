@@ -36,7 +36,10 @@ pub enum JoinType {
     Semi,
     Anti,
     Cross,
+    /// Mark Join is a special case of join that is used to process Any subquery and correlated Exists subquery.
     Mark,
+    /// Single Join is a special kind of join that is used to process correlated scalar subquery.
+    Single,
 }
 
 impl Display for JoinType {
@@ -66,6 +69,9 @@ impl Display for JoinType {
             JoinType::Mark => {
                 write!(f, "MARK")
             }
+            JoinType::Single => {
+                write!(f, "SINGLE")
+            }
         }
     }
 }
@@ -78,6 +84,7 @@ pub struct LogicalInnerJoin {
     pub join_type: JoinType,
     // marker_index is for MarkJoin only.
     pub marker_index: Option<IndexType>,
+    pub from_correlated_subquery: bool,
 }
 
 impl Operator for LogicalInnerJoin {

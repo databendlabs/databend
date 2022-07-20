@@ -141,7 +141,7 @@ dependencies = [
 [[package]]
 name = "arrow2"
 version = "0.12.0"
-source = "git+https://github.com/datafuse-extras/arrow2?rev=f5f6b7e3#f5f6b7e3aa10b80dc574abacf96b30e0927410fe"
+source = "git+https://github.com/datafuse-extras/arrow2?rev=4cdf6ff2#4cdf6ff2a90de01f501266b43955e04ad00dd816"
 dependencies = [
  "ahash",
  "arrow-format",
@@ -153,6 +153,7 @@ dependencies = [
  "dyn-clone",
  "either",
  "fallible-streaming-iterator",
+ "foreign_vec",
  "futures",
  "hash_hasher",
  "indexmap",
@@ -318,12 +319,6 @@ checksum = "67cd4b51d303cf3501c301e8125df442128d3c6d7c69f71b27833d253de47e77"
 dependencies = [
  "crossbeam-utils",
 ]
-
-[[package]]
-name = "atomic_refcell"
-version = "0.1.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "73b5e5f48b927f04e952dedc932f31995a65a0bf65ec971c74436e51bf6e970d"
 
 [[package]]
 name = "atty"
@@ -1216,6 +1211,7 @@ dependencies = [
  "common-io",
  "once_cell",
  "pretty_assertions",
+ "similar-asserts",
  "strum",
  "strum_macros",
 ]
@@ -2254,7 +2250,6 @@ dependencies = [
  "async-recursion",
  "async-stream",
  "async-trait 0.1.56 (git+https://github.com/datafuse-extras/async-trait?rev=f0b0fd5)",
- "atomic_refcell",
  "backoff",
  "backon",
  "base64 0.13.0",
@@ -2819,6 +2814,12 @@ name = "foreign-types-shared"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "00b0228411908ca8685dba7fc2cdd70ec9990a6e753e89b6ac91a84c40fbaf4b"
+
+[[package]]
+name = "foreign_vec"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ee1b05cbd864bcaecbd3455d6d967862d446e4ebfc3c2e5e5b9841e53cba6673"
 
 [[package]]
 name = "form_urlencoded"

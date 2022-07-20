@@ -29,9 +29,7 @@ SHOW TABLE STATUS FROM showtabstat WHERE Name = 't4';
 insert into showtabstat.t4 values(1);
 SHOW TABLE STATUS FROM showtabstat WHERE Name = 't4';
 
--- use columns of system.tables is NOT allowed
-SHOW TABLE STATUS FROM showtabstat WHERE engine = 'test'; -- {ErrorCode 1058}
-SHOW TABLE STATUS FROM showtabstat WHERE created_on = 'test'; -- {ErrorCode 1058}
-
+SHOW TABLE STATUS FROM showtabstat WHERE engine = 'test';
+SHOW TABLE STATUS FROM showtabstat WHERE Create_time = 'test';
 
 DROP DATABASE IF EXISTS showtabstat;

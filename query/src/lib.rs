@@ -20,13 +20,15 @@
 #![feature(assert_matches)]
 #![feature(trusted_len)]
 #![feature(box_patterns)]
+#![feature(sync_unsafe_cell)]
 
 pub mod api;
 pub mod auth;
 pub mod catalogs;
 pub mod clusters;
-pub mod common;
+pub mod context_function;
 pub mod databases;
+pub mod evaluator;
 pub mod interpreters;
 pub mod metrics;
 pub mod optimizers;

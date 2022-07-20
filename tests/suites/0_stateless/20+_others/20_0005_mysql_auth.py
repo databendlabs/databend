@@ -22,7 +22,7 @@ with NativeClient(name='client1>') as client1:
     client1.expect('')
     client1.send('drop user if exists u1;')
     client1.expect(prompt)
-    client1.send('create user u1 identified by abc123;')
+    client1.send("create user u1 identified by 'abc123';")
     client1.expect(prompt)
 
 mydb = mysql.connector.connect(host="127.0.0.1",
