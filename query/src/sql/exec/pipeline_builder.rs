@@ -80,6 +80,13 @@ impl PipelineBuilder {
 
     pub fn finalize(mut self, plan: &PhysicalPlan) -> Result<PipelineBuildResult> {
         self.build_pipeline(plan)?;
+
+        for source_pipeline in &self.pipelines {
+            if !source_pipeline.is_complete_pipeline()? {
+                return Err(ErrorCode::IllegalPipelineState("Source pipeline must be complete pipeline."));
+            }
+        }
+
         Ok(PipelineBuildResult { main_pipeline: self.main_pipeline, sources_pipelines: self.pipelines })
     }
 

@@ -106,7 +106,6 @@ impl Interpreter for SelectInterpreterV2 {
         let last_schema = physical_plan.output_schema()?;
 
         let mut pipeline_builder = PipelineBuilder::create(self.ctx.clone());
-        let mut root_pipeline = Pipeline::create();
         let mut build_res = pipeline_builder.finalize(&physical_plan)?;
 
         PipelineBuilder::render_result_set(
@@ -123,7 +122,7 @@ impl Interpreter for SelectInterpreterV2 {
             ));
         }
 
-        Ok(root_pipeline)
+        Ok(build_res.main_pipeline)
     }
 
     async fn start(&self) -> Result<()> {
