@@ -962,13 +962,14 @@ pub fn grant_level(i: Input) -> IResult<AccountMgrLevel> {
         },
         |(database, _)| AccountMgrLevel::Database(database.map(|(database, _)| database.name)),
     );
-    // db.table
+
+    // `db01`.'tb1' or `db01`.`tb1` or `db01`.tb1
     let table = map(
         rule! {
-            ( #ident ~ "." )? ~ #ident
+            ( #ident ~ "." )? ~ #parameter_to_string
         },
         |(database, table)| {
-            AccountMgrLevel::Table(database.map(|(database, _)| database.name), table.name)
+            AccountMgrLevel::Table(database.map(|(database, _)| database.name), table)
         },
     );
 
@@ -1257,7 +1258,7 @@ pub fn role_option(i: Input) -> IResult<RoleOption> {
 pub fn user_identity(i: Input) -> IResult<UserIdentity> {
     map(
         rule! {
-            #literal_string ~ ( "@" ~ #literal_string )?
+            #parameter_to_string ~ ( "@" ~ #literal_string )?
         },
         |(username, opt_hostname)| UserIdentity {
             username,
@@ -1278,15 +1279,7 @@ pub fn auth_type(i: Input) -> IResult<AuthType> {
 }
 
 pub fn ident_to_string(i: Input) -> IResult<String> {
-    map_res(ident, |ident| {
-        if ident.quote.is_none() {
-            Ok(ident.to_string())
-        } else {
-            Err(ErrorKind::Other(
-                "unexpected quoted identifier, try to remove the quote",
-            ))
-        }
-    })(i)
+    map_res(ident, |ident| Ok(ident.name))(i)
 }
 
 pub fn u64_to_string(i: Input) -> IResult<String> {
