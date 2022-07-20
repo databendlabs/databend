@@ -39,6 +39,7 @@ pub trait HashJoinState: Send + Sync {
     /// have been detached from current state.
     fn finish(&self) -> Result<()>;
 
+    /// Wait until the build phase is finished
     async fn wait_finish(&self) -> Result<()>;
 
     /// Get mark join results

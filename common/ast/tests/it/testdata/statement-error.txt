@@ -195,9 +195,7 @@ error:
   --> SQL:1:27
   |
 1 | GRANT ROLE 'test' TO ROLE test-user;
-  | -----                     ^^^^ expected <QuotedString>
-  | |                          
-  | while parsing `GRANT { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } TO { [ROLE <role_name>] | [USER] <user> }`
+  |                           ^^^^ expected <QuotedString>, `@`, `FORMAT`, or `;`
 
 
 ---------- Input ----------

@@ -44,13 +44,16 @@ def run(source_file, target_path="."):
                 # print(query_options)
                 # print(http_results)
 
-                if "query" not in statement[0]:
+                if "query" not in statement[0] or "skipped" in statement[0]:
                     pass
                 elif len(http_results) == 0:
                     out.write(
                         "-- auto generated, statement query get no results\n"
                     )  # manual check
                     statement[0] = "statement query skipped\n"
+                    statement.append("----\n")
+                    statement.append("Add results here\n")
+                    statement.append("\n")
                 else:
                     statement.append("----\n")
                     statement.append(http_results)
