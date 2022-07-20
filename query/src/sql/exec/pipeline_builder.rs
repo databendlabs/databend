@@ -37,7 +37,6 @@ use crate::pipelines::processors::transforms::TransformProject;
 use crate::pipelines::processors::transforms::TransformRename;
 use crate::pipelines::processors::AggregatorParams;
 use crate::pipelines::processors::AggregatorTransformParams;
-use crate::pipelines::processors::HashJoinState;
 use crate::pipelines::processors::JoinHashTable;
 use crate::pipelines::processors::MarkJoinCompactor;
 use crate::pipelines::processors::SinkBuildHashTable;
@@ -50,7 +49,8 @@ use crate::pipelines::processors::TransformLimit;
 use crate::pipelines::processors::TransformMax1Row;
 use crate::pipelines::processors::TransformSortMerge;
 use crate::pipelines::processors::TransformSortPartial;
-use crate::pipelines::{Pipeline, PipelineBuildResult};
+use crate::pipelines::Pipeline;
+use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::SinkPipeBuilder;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
@@ -61,7 +61,6 @@ use crate::sql::exec::PhysicalScalar;
 use crate::sql::exec::SortDesc;
 use crate::sql::plans::JoinType;
 use crate::sql::ColumnBinding;
-use crate::sql::IndexType;
 
 pub struct PipelineBuilder {
     ctx: Arc<QueryContext>,
@@ -83,11 +82,16 @@ impl PipelineBuilder {
 
         for source_pipeline in &self.pipelines {
             if !source_pipeline.is_complete_pipeline()? {
-                return Err(ErrorCode::IllegalPipelineState("Source pipeline must be complete pipeline."));
+                return Err(ErrorCode::IllegalPipelineState(
+                    "Source pipeline must be complete pipeline.",
+                ));
             }
         }
 
-        Ok(PipelineBuildResult { main_pipeline: self.main_pipeline, sources_pipelines: self.pipelines })
+        Ok(PipelineBuildResult {
+            main_pipeline: self.main_pipeline,
+            sources_pipelines: self.pipelines,
+        })
     }
 
     fn build_pipeline(&mut self, plan: &PhysicalPlan) -> Result<()> {
@@ -168,13 +172,10 @@ impl PipelineBuilder {
                     *marker_index,
                 )?;
 
-                self.expand_build_side_pipeline(build, join_state.clone());
+                self.expand_build_side_pipeline(build, join_state.clone())?;
 
                 self.build_pipeline(probe)?;
-                self.build_hash_join(
-                    plan.output_schema()?,
-                    join_type.clone(), join_state,
-                )?;
+                self.build_hash_join(plan.output_schema()?, join_type.clone(), join_state)?;
                 Ok(())
             }
             v @ PhysicalPlan::CrossApply {
@@ -192,9 +193,13 @@ impl PipelineBuilder {
         }
     }
 
-    fn expand_build_side_pipeline(&mut self, build: &Box<PhysicalPlan>, join_state: Arc<JoinHashTable>) -> Result<()> {
+    fn expand_build_side_pipeline(
+        &mut self,
+        build: &PhysicalPlan,
+        join_state: Arc<JoinHashTable>,
+    ) -> Result<()> {
         let build_side_context = QueryContext::create_from(self.ctx.clone());
-        let mut build_side_builder = PipelineBuilder::create(build_side_context);
+        let build_side_builder = PipelineBuilder::create(build_side_context);
         let mut build_res = build_side_builder.finalize(build)?;
 
         assert!(build_res.main_pipeline.is_pulling_pipeline()?);
@@ -210,14 +215,17 @@ impl PipelineBuilder {
             );
         }
 
-        build_res.main_pipeline.add_pipe(sink_pipeline_builder.finalize());
+        build_res
+            .main_pipeline
+            .add_pipe(sink_pipeline_builder.finalize());
 
         self.pipelines.push(build_res.main_pipeline);
-        self.pipelines.extend(build_res.sources_pipelines.into_iter());
+        self.pipelines
+            .extend(build_res.sources_pipelines.into_iter());
         Ok(())
     }
 
-    fn join_predicate(other_conditions: &Vec<PhysicalScalar>) -> Result<Option<PhysicalScalar>> {
+    fn join_predicate(other_conditions: &[PhysicalScalar]) -> Result<Option<PhysicalScalar>> {
         other_conditions.iter().cloned().fold(
             Result::<Option<PhysicalScalar>>::Ok(None),
             |acc, next| {
@@ -275,7 +283,12 @@ impl PipelineBuilder {
         Ok(())
     }
 
-    fn build_table_scan(&mut self, output_schema: DataSchemaRef, name_mapping: &BTreeMap<String, ColumnID>, source: &ReadDataSourcePlan) -> Result<()> {
+    fn build_table_scan(
+        &mut self,
+        output_schema: DataSchemaRef,
+        name_mapping: &BTreeMap<String, ColumnID>,
+        source: &ReadDataSourcePlan,
+    ) -> Result<()> {
         let table = self.ctx.build_table_from_source_plan(source)?;
         self.ctx.try_set_partitions(source.parts.clone())?;
         table.read2(self.ctx.clone(), source, &mut self.main_pipeline)?;
@@ -491,13 +504,17 @@ impl PipelineBuilder {
     fn build_limit(&mut self, limit: Option<usize>, offset: usize) -> Result<()> {
         self.main_pipeline.resize(1)?;
 
-        self.main_pipeline.add_transform(|input, output| {
-            TransformLimit::try_create(limit, offset, input, output)
-        })
+        self.main_pipeline
+            .add_transform(|input, output| TransformLimit::try_create(limit, offset, input, output))
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn build_hash_join(&mut self, output_schema: DataSchemaRef, join_type: JoinType, hash_join_state: Arc<JoinHashTable>) -> Result<()> {
+    fn build_hash_join(
+        &mut self,
+        output_schema: DataSchemaRef,
+        join_type: JoinType,
+        hash_join_state: Arc<JoinHashTable>,
+    ) -> Result<()> {
         // Probe side
         self.main_pipeline.add_transform(|input, output| {
             Ok(TransformHashJoinProbe::create(
@@ -523,7 +540,12 @@ impl PipelineBuilder {
         Ok(())
     }
 
-    fn build_apply(&mut self, subquery: &PhysicalPlan, outer_columns: &BTreeSet<ColumnID>, output_schema: DataSchemaRef) -> Result<()> {
+    fn build_apply(
+        &mut self,
+        subquery: &PhysicalPlan,
+        outer_columns: &BTreeSet<ColumnID>,
+        output_schema: DataSchemaRef,
+    ) -> Result<()> {
         let ctx = self.ctx.clone();
         self.main_pipeline.add_transform(|input, output| {
             Ok(TransformApply::create(
@@ -538,8 +560,7 @@ impl PipelineBuilder {
     }
 
     fn build_max_one_row(&mut self) -> Result<()> {
-        self.main_pipeline.add_transform(|input, output|
-            Ok(TransformMax1Row::create(input, output))
-        )
+        self.main_pipeline
+            .add_transform(|input, output| Ok(TransformMax1Row::create(input, output)))
     }
 }

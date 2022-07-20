@@ -29,8 +29,9 @@ use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::Sink;
 use crate::pipelines::processors::Sinker;
-use crate::pipelines::{Pipe, PipelineBuildResult};
+use crate::pipelines::Pipe;
 use crate::pipelines::Pipeline;
+use crate::pipelines::PipelineBuildResult;
 
 struct State {
     sender: SyncSender<Result<Option<DataBlock>>>,
@@ -91,7 +92,7 @@ impl PipelinePullingExecutor {
     pub fn from_pipelines(
         async_runtime: Arc<Runtime>,
         query_need_abort: Arc<AtomicBool>,
-        mut build_res: PipelineBuildResult,
+        build_res: PipelineBuildResult,
     ) -> Result<PipelinePullingExecutor> {
         let mut main_pipeline = build_res.main_pipeline;
         let (sender, receiver) = std::sync::mpsc::sync_channel(main_pipeline.output_len());
@@ -147,7 +148,7 @@ impl PipelinePullingExecutor {
     }
 
     pub fn try_pull_data<F>(&mut self, f: F) -> Result<Option<DataBlock>>
-        where F: Fn() -> bool {
+    where F: Fn() -> bool {
         if !self.executor.is_finished() {
             while !f() {
                 return match self.receiver.recv_timeout(Duration::from_millis(100)) {

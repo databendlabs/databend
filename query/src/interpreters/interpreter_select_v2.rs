@@ -21,7 +21,6 @@ use common_tracing::tracing;
 
 use crate::interpreters::stream::ProcessorExecutorStream;
 use crate::interpreters::Interpreter;
-use crate::pipelines::executor::PipelineExecutor;
 use crate::pipelines::executor::PipelinePullingExecutor;
 use crate::pipelines::Pipeline;
 use crate::sessions::QueryContext;
@@ -77,7 +76,7 @@ impl Interpreter for SelectInterpreterV2 {
         }
 
         let last_schema = physical_plan.output_schema()?;
-        let mut pipeline_builder = PipelineBuilder::create(self.ctx.clone());
+        let pipeline_builder = PipelineBuilder::create(self.ctx.clone());
         let mut build_res = pipeline_builder.finalize(&physical_plan)?;
 
         // Render result set with given output schema
@@ -92,10 +91,8 @@ impl Interpreter for SelectInterpreterV2 {
         build_res.set_max_threads(self.ctx.get_settings().get_max_threads()? as usize);
 
         Ok(Box::pin(ProcessorExecutorStream::create(
-            PipelinePullingExecutor::from_pipelines(
-                async_runtime, query_need_abort, build_res,
-            )?)?
-        ))
+            PipelinePullingExecutor::from_pipelines(async_runtime, query_need_abort, build_res)?,
+        )?))
     }
 
     /// This method will create a new pipeline
@@ -105,7 +102,7 @@ impl Interpreter for SelectInterpreterV2 {
         let physical_plan = builder.build(&self.s_expr)?;
         let last_schema = physical_plan.output_schema()?;
 
-        let mut pipeline_builder = PipelineBuilder::create(self.ctx.clone());
+        let pipeline_builder = PipelineBuilder::create(self.ctx.clone());
         let mut build_res = pipeline_builder.finalize(&physical_plan)?;
 
         PipelineBuilder::render_result_set(

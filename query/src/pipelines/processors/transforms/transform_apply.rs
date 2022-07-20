@@ -24,14 +24,12 @@ use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataValue;
 use common_exception::Result;
 
-use crate::pipelines::executor::PipelineExecutor;
 use crate::pipelines::executor::PipelinePullingExecutor;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::transforms::transform::Transform;
 use crate::pipelines::processors::transforms::transform::Transformer;
-use crate::pipelines::Pipeline;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::exec::ColumnID;
@@ -228,7 +226,7 @@ impl TransformApply {
         let physical_plan = rewriter.rewrite_physical_plan(&self.subquery)?;
 
         let subquery_ctx = QueryContext::create_from(self.ctx.clone());
-        let mut pipeline_builder = PipelineBuilder::create(subquery_ctx);
+        let pipeline_builder = PipelineBuilder::create(subquery_ctx);
         let mut build_res = pipeline_builder.finalize(&physical_plan)?;
 
         // Set max threads
@@ -237,7 +235,8 @@ impl TransformApply {
 
         let runtime = self.ctx.get_storage_runtime();
         let query_need_abort = self.ctx.query_need_abort();
-        let mut executor = PipelinePullingExecutor::from_pipelines(runtime, query_need_abort, build_res)?;
+        let mut executor =
+            PipelinePullingExecutor::from_pipelines(runtime, query_need_abort, build_res)?;
         executor.start();
         let mut results = vec![];
         while let Some(result) = executor.pull_data()? {

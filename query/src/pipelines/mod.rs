@@ -18,13 +18,13 @@ pub mod processors;
 use common_pipeline::pipe;
 use common_pipeline::pipeline;
 
-mod pipeline_builder;
 mod pipeline_build_res;
+mod pipeline_builder;
 
 pub use pipe::Pipe;
 pub use pipe::SinkPipeBuilder;
 pub use pipe::SourcePipeBuilder;
 pub use pipe::TransformPipeBuilder;
 pub use pipeline::Pipeline;
-pub use pipeline_builder::QueryPipelineBuilder;
 pub use pipeline_build_res::PipelineBuildResult;
+pub use pipeline_builder::QueryPipelineBuilder;

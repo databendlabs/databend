@@ -43,10 +43,8 @@ use crate::interpreters::InterpreterFactory;
 use crate::interpreters::InterpreterFactoryV2;
 use crate::interpreters::InterpreterQueryLog;
 use crate::pipelines::executor::PipelineCompleteExecutor;
-use crate::pipelines::executor::PipelineExecutor;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::Pipe;
-use crate::pipelines::Pipeline;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionRef;
 use crate::sessions::TableContext;
@@ -272,7 +270,7 @@ impl ExecuteState {
                             Err(ErrorCode::PanicError("interpreter panic!")),
                             false,
                         )
-                            .await;
+                        .await;
                         block_buffer_clone.stop_push().await.unwrap();
                     }
                     _ => {}
@@ -314,7 +312,7 @@ async fn execute(
                         user: ctx.get_current_user()?.identity(),
                     },
                 )
-                    .await?
+                .await?
             } else {
                 Box::new(BlockBufferWriterMemOnly(block_buffer))
             };
@@ -355,7 +353,7 @@ impl HttpQueryHandle {
         let block_buffer = self.block_buffer.clone();
         let last_schema = physical_plan.output_schema()?;
 
-        let mut pipeline_builder = PipelineBuilder::create(ctx.clone());
+        let pipeline_builder = PipelineBuilder::create(ctx.clone());
         let mut build_res = pipeline_builder.finalize(physical_plan)?;
 
         PipelineBuilder::render_result_set(
@@ -406,7 +404,7 @@ impl HttpQueryHandle {
             pipelines.push(build_res.main_pipeline);
             let pipeline_executor = PipelineCompleteExecutor::from_pipelines(
                 async_runtime_clone,
-                query_need_abort.clone(),
+                query_need_abort,
                 pipelines,
             )?;
             pipeline_executor.execute()

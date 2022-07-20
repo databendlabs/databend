@@ -18,6 +18,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 use common_arrow::arrow::bitmap::MutableBitmap;
+use common_base::base::tokio::sync::Notify;
 use common_datablocks::DataBlock;
 use common_datablocks::HashMethod;
 use common_datablocks::HashMethodFixedKeys;
@@ -42,7 +43,6 @@ use common_hashtable::HashMap;
 use parking_lot::RwLock;
 use primitive_types::U256;
 use primitive_types::U512;
-use common_base::base::tokio::sync::Notify;
 
 use super::ProbeState;
 use crate::evaluator::EvalNode;
