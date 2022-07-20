@@ -13,6 +13,9 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::sync::atomic::AtomicUsize;
+use common_base::base::tokio::sync::broadcast::{channel, Receiver};
+use common_datavalues::DataValue;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -36,12 +39,11 @@ use super::processors::transforms::TransformWindowFunc;
 use super::processors::transforms::WindowFuncCompact;
 use super::processors::SortMergeCompactor;
 use crate::pipelines::pipeline::Pipeline;
-use crate::pipelines::processors::transforms::get_sort_descriptions;
-use crate::pipelines::processors::AggregatorParams;
+use crate::pipelines::processors::transforms::{get_sort_descriptions, SubqueryReceiver};
+use crate::pipelines::processors::{AggregatorParams, SubqueryReceiveSink};
 use crate::pipelines::processors::AggregatorTransformParams;
 use crate::pipelines::processors::ExpressionTransform;
 use crate::pipelines::processors::ProjectionTransform;
-use crate::pipelines::processors::SubQueriesPuller;
 use crate::pipelines::processors::TransformAggregator;
 use crate::pipelines::processors::TransformCreateSets;
 use crate::pipelines::processors::TransformFilter;
@@ -50,6 +52,8 @@ use crate::pipelines::processors::TransformLimit;
 use crate::pipelines::processors::TransformLimitBy;
 use crate::pipelines::processors::TransformSortMerge;
 use crate::pipelines::processors::TransformSortPartial;
+use crate::pipelines::{Pipe, SinkPipeBuilder};
+use crate::pipelines::processors::port::{InputPort, OutputPort};
 use crate::sessions::QueryContext;
 
 /// Builder for query pipeline
@@ -83,6 +87,26 @@ impl QueryPipelineBuilder {
     pub fn finalize(mut self, plan: &PlanNode) -> Result<Pipeline> {
         self.visit_plan_node(plan)?;
         Ok(self.main_pipeline)
+    }
+
+    fn expand_subquery(&mut self, query_plan: &Arc<PlanNode>) -> Result<Receiver<DataValue>> {
+        let subquery_ctx = QueryContext::create_from(self.ctx.clone());
+        let pipeline_builder = QueryPipelineBuilder::create(subquery_ctx);
+        let mut subquery_pipeline = pipeline_builder.finalize(query_plan)?;
+
+        assert!(subquery_pipeline.is_pulling_pipeline()?);
+
+        subquery_pipeline.resize(1)?;
+        let (tx, rx) = channel(1);
+        let input = InputPort::create();
+        subquery_pipeline.add_pipe(Pipe::SimplePipe {
+            outputs_port: vec![],
+            inputs_port: vec![input.clone()],
+            processors: vec![SubqueryReceiveSink::try_create(input, tx)?],
+        });
+
+        self.sources_pipeline.push(subquery_pipeline);
+        Ok(rx)
     }
 }
 
@@ -281,26 +305,41 @@ impl PlanVisitor for QueryPipelineBuilder {
         let schema = plan.schema();
         let context = self.ctx.clone();
 
+        let mut sub_queries_receiver = Vec::with_capacity(plan.expressions.len());
         for expression in &plan.expressions {
-            match expression {
-                Expression::Subquery { name, query_plan } => {
-                    // self.sources_pipeline
-                }
-                Expression::ScalarSubquery { name, query_plan } => {}
-                _ => {}
-            }
+            sub_queries_receiver.push(match expression {
+                Expression::Subquery { query_plan, .. } => Ok(SubqueryReceiver::Subquery(self.expand_subquery(query_plan)?)),
+                Expression::ScalarSubquery { query_plan, .. } => Ok(SubqueryReceiver::ScalarSubquery(self.expand_subquery(query_plan)?)),
+                _ => Err(ErrorCode::IllegalPipelineState("Must be subquery plan or scalar subquery plan.")),
+            }?);
         }
 
-        let sub_queries_puller = SubQueriesPuller::create(context, plan.expressions.to_vec());
-        self.main_pipeline
-            .add_transform(|transform_input_port, transform_output_port| {
-                TransformCreateSets::try_create(
-                    transform_input_port,
-                    transform_output_port,
-                    schema.clone(),
-                    sub_queries_puller.clone(),
-                )
-            })
+        let mut inputs_port = Vec::with_capacity(self.main_pipeline.output_len());
+        let mut outputs_port = Vec::with_capacity(self.main_pipeline.output_len());
+        let mut processors = Vec::with_capacity(self.main_pipeline.output_len());
+
+        for _index in 0..self.main_pipeline.output_len() {
+            let transform_input_port = InputPort::create();
+            let transform_output_port = OutputPort::create();
+
+            let mut receivers = Vec::with_capacity(sub_queries_receiver.len());
+
+            for subquery_receiver in &mut sub_queries_receiver {
+                receivers.push(subquery_receiver.subscribe());
+            }
+
+            inputs_port.push(transform_input_port.clone());
+            outputs_port.push(transform_output_port.clone());
+            processors.push(TransformCreateSets::try_create(
+                transform_input_port,
+                transform_output_port,
+                schema.clone(),
+                receivers,
+            )?);
+        }
+
+        self.main_pipeline.add_pipe(Pipe::SimplePipe { processors, inputs_port, outputs_port });
+        Ok(())
     }
 
     fn visit_sort(&mut self, plan: &SortPlan) -> Result<()> {

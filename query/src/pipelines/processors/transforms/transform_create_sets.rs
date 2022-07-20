@@ -28,6 +28,8 @@ use common_planners::Expression;
 use common_planners::PlanNode;
 use common_planners::SelectPlan;
 use parking_lot::Mutex;
+use common_base::base::tokio::sync::oneshot::error::RecvError;
+use common_base::base::tokio::sync::broadcast::Receiver;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreter;
@@ -40,6 +42,20 @@ use crate::pipelines::processors::Processor;
 use crate::pipelines::QueryPipelineBuilder;
 use crate::sessions::QueryContext;
 
+pub enum SubqueryReceiver {
+    Subquery(Receiver<DataValue>),
+    ScalarSubquery(Receiver<DataValue>),
+}
+
+impl SubqueryReceiver {
+    pub fn subscribe(&mut self) -> SubqueryReceiver {
+        match self {
+            SubqueryReceiver::Subquery(rx) => SubqueryReceiver::Subquery(rx.resubscribe()),
+            SubqueryReceiver::ScalarSubquery(rx) => SubqueryReceiver::ScalarSubquery(rx.resubscribe())
+        }
+    }
+}
+
 pub struct TransformCreateSets {
     initialized: bool,
     schema: DataSchemaRef,
@@ -50,10 +66,7 @@ pub struct TransformCreateSets {
     output_data: Option<DataBlock>,
 
     sub_queries_result: Vec<DataValue>,
-    sub_queries_puller: Arc<SubQueriesPuller>,
-
-    runtime: Arc<Runtime>,
-    sub_queries_res_handle: Option<JoinHandle<Result<Vec<DataValue>>>>,
+    sub_queries_receiver: Vec<SubqueryReceiver>,
 }
 
 impl TransformCreateSets {
@@ -61,7 +74,7 @@ impl TransformCreateSets {
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         schema: DataSchemaRef,
-        puller: Arc<SubQueriesPuller>,
+        sub_queries_receiver: Vec<SubqueryReceiver>,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(TransformCreateSets {
             schema,
@@ -69,11 +82,9 @@ impl TransformCreateSets {
             output,
             input_data: None,
             initialized: false,
+            sub_queries_receiver,
             sub_queries_result: vec![],
-            sub_queries_puller: puller,
             output_data: None,
-            sub_queries_res_handle: None,
-            runtime: Arc::new(Runtime::with_worker_threads(1, None)?),
         })))
     }
 }
@@ -90,11 +101,6 @@ impl Processor for TransformCreateSets {
 
     fn event(&mut self) -> Result<Event> {
         if !self.initialized {
-            let sub_queries_puller = self.sub_queries_puller.clone();
-            self.sub_queries_res_handle = Some(
-                self.runtime
-                    .spawn(async move { sub_queries_puller.execute_sub_queries().await }),
-            );
             return Ok(Event::Async);
         }
 
@@ -109,6 +115,7 @@ impl Processor for TransformCreateSets {
         }
 
         if let Some(output_data) = self.output_data.take() {
+            println!("create sets out {:?}", output_data);
             self.output.push_data(Ok(output_data));
             return Ok(Event::NeedConsume);
         }
@@ -150,148 +157,37 @@ impl Processor for TransformCreateSets {
     }
 
     async fn async_process(&mut self) -> Result<()> {
-        if let Some(handler) = self.sub_queries_res_handle.take() {
-            self.sub_queries_result = match handler.await {
-                Ok(Ok(res)) => Ok(res),
-                Ok(Err(error_code)) => Err(error_code),
-                Err(join_error) => {
-                    if !join_error.is_panic() {
-                        return Err(ErrorCode::TokioError("Join handler is canceled."));
-                    }
-
-                    let panic_error = join_error.into_panic();
-                    return match panic_error.downcast_ref::<&'static str>() {
-                        None => match panic_error.downcast_ref::<String>() {
-                            None => Err(ErrorCode::PanicError("Sorry, unknown panic message")),
-                            Some(message) => Err(ErrorCode::PanicError(message.to_string())),
-                        },
-                        Some(message) => Err(ErrorCode::PanicError(message.to_string())),
-                    };
-                }
-            }?;
-
+        if !self.initialized {
             self.initialized = true;
+
+            let sub_queries_receiver = std::mem::take(&mut self.sub_queries_receiver);
+            let mut async_get = Vec::with_capacity(sub_queries_receiver.len());
+
+            for subquery_receiver in sub_queries_receiver.into_iter() {
+                async_get.push(async move {
+                    match subquery_receiver {
+                        SubqueryReceiver::Subquery(mut rx) => rx.recv().await,
+                        SubqueryReceiver::ScalarSubquery(mut rx) => rx.recv().await,
+                    }
+                });
+            }
+
+            match futures::future::try_join_all(async_get).await {
+                Ok(sub_queries_result) => {
+                    self.sub_queries_result = sub_queries_result;
+                }
+                Err(cause) => {
+                    println!("receive subquery error: {:?}", cause);
+                }
+            }
+            // if let Ok(sub_queries_result) = futures::future::try_join_all(async_get).await {
+            //     println!("receive subquery result {:?}", sub_queries_result);
+            //     self.sub_queries_result = sub_queries_result;
+            // } else {
+            //     println!("receive subquery error");
+            // }
         }
 
         Ok(())
-    }
-}
-
-pub struct SubQueriesPuller {
-    ctx: Arc<QueryContext>,
-    expressions: Vec<Expression>,
-    sub_queries_result: Mutex<Vec<DataValue>>,
-}
-
-impl SubQueriesPuller {
-    pub fn create(ctx: Arc<QueryContext>, exprs: Vec<Expression>) -> Arc<SubQueriesPuller> {
-        Arc::new(SubQueriesPuller {
-            ctx,
-            expressions: exprs,
-            sub_queries_result: Mutex::new(vec![]),
-        })
-    }
-
-    async fn receive_subquery(&self, node: &PlanNode) -> Result<DataValue> {
-        let schema = node.schema();
-        let subquery_ctx = QueryContext::create_from(self.ctx.clone());
-        let async_runtime = subquery_ctx.get_storage_runtime();
-        let query_need_abort = subquery_ctx.query_need_abort();
-
-        let pipeline_builder = QueryPipelineBuilder::create(subquery_ctx);
-        let query_pipeline = pipeline_builder.finalize(node)?;
-        let mut query_executor =
-            PipelinePullingExecutor::try_create(async_runtime, query_need_abort, query_pipeline)?;
-
-        let mut columns = Vec::with_capacity(schema.fields().len());
-
-        for _ in schema.fields() {
-            columns.push(Vec::new())
-        }
-
-        query_executor.start();
-        while let Some(data_block) = query_executor.pull_data()? {
-            #[allow(clippy::needless_range_loop)]
-            for column_index in 0..data_block.num_columns() {
-                let column = data_block.column(column_index);
-                let mut values = column.to_values();
-                columns[column_index].append(&mut values)
-            }
-        }
-
-        let mut struct_fields = Vec::with_capacity(columns.len());
-
-        for values in columns {
-            struct_fields.push(DataValue::Array(values))
-        }
-
-        match struct_fields.len() {
-            1 => Ok(struct_fields.remove(0)),
-            _ => Ok(DataValue::Struct(struct_fields)),
-        }
-    }
-
-    async fn receive_scalar_subquery(&self, node: &PlanNode) -> Result<DataValue> {
-        let schema = node.schema();
-        let subquery_ctx = QueryContext::create_from(self.ctx.clone());
-        let async_runtime = subquery_ctx.get_storage_runtime();
-        let query_need_abort = subquery_ctx.query_need_abort();
-
-        let pipeline_builder = QueryPipelineBuilder::create(subquery_ctx);
-        let query_pipeline = pipeline_builder.finalize(node)?;
-
-        let mut query_executor =
-            PipelinePullingExecutor::try_create(async_runtime, query_need_abort, query_pipeline)?;
-
-        query_executor.start();
-        match query_executor.pull_data()? {
-            None => Err(ErrorCode::ScalarSubqueryBadRows(
-                "Scalar subquery result set must be one row.",
-            )),
-            Some(data_block) => {
-                if data_block.num_rows() != 1 {
-                    return Err(ErrorCode::ScalarSubqueryBadRows(
-                        "Scalar subquery result set must be one row.",
-                    ));
-                }
-
-                let mut columns = Vec::with_capacity(schema.fields().len());
-
-                for column_index in 0..data_block.num_columns() {
-                    let column = data_block.column(column_index);
-                    columns.push(column.get(0));
-                }
-
-                match columns.len() {
-                    1 => Ok(columns.remove(0)),
-                    _ => Ok(DataValue::Struct(columns)),
-                }
-            }
-        }
-    }
-
-    pub async fn execute_sub_queries(&self) -> Result<Vec<DataValue>> {
-        for sub_query_expr in &self.expressions {
-            match sub_query_expr {
-                Expression::Subquery { query_plan, .. } => {
-                    let subquery_res = self.receive_subquery(query_plan).await?;
-                    let mut sub_queries_result = self.sub_queries_result.lock();
-                    sub_queries_result.push(subquery_res);
-                }
-                Expression::ScalarSubquery { query_plan, .. } => {
-                    let query_result = self.receive_scalar_subquery(query_plan).await?;
-                    let mut sub_queries_result = self.sub_queries_result.lock();
-                    sub_queries_result.push(query_result);
-                }
-                _ => {
-                    return Err(ErrorCode::LogicalError(
-                        "Expression must be Subquery or ScalarSubquery",
-                    ));
-                }
-            };
-        }
-
-        let sub_queries_result = self.sub_queries_result.lock();
-        Ok(sub_queries_result.to_owned())
     }
 }
