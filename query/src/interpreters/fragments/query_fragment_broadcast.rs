@@ -84,8 +84,8 @@ impl QueryFragment for BroadcastQueryFragment {
 
     fn rewrite_remote_plan(&self, node: &PlanNode, _: &PlanNode) -> Result<PlanNode> {
         let query_id = self.ctx.get_id();
-        let mut stage_rewrite = BroadcastRewrite::create(query_id, self.id);
-        stage_rewrite.rewrite_plan_node(node)
+        let mut broadcast_rewrite = BroadcastRewrite::create(query_id, self.id);
+        broadcast_rewrite.rewrite_plan_node(node)
     }
 }
 

@@ -139,6 +139,14 @@ impl QueryFragmentsActions {
         Ok(())
     }
 
+    pub fn add_fragments_actions(&mut self, actions: QueryFragmentsActions) -> Result<()> {
+        for fragment_actions in actions.fragments_actions.into_iter() {
+            self.fragments_actions.push(fragment_actions);
+        }
+
+        Ok(())
+    }
+
     pub fn update_root_fragment_actions(&mut self, actions: QueryFragmentActions) -> Result<()> {
         if self.fragments_actions.is_empty() {
             return Err(ErrorCode::LogicalError(
@@ -347,8 +355,9 @@ impl Debug for QueryFragmentsActions {
 
 impl Debug for QueryFragmentAction {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let node_str = format!("{:?}", self.node).replace("\n", "\\n");
         f.debug_struct("QueryFragmentAction")
-            .field("node", &self.node)
+            .field("node", &node_str)
             .field("executor", &self.executor)
             .finish()
     }

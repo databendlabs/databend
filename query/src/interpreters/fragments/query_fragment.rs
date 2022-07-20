@@ -155,24 +155,6 @@ impl BuilderVisitor {
 
     fn visit_subquery_expr(&self, node: &SubQueriesSetPlan) -> Result<Box<dyn QueryFragment>> {
         let input = self.visit(&node.input)?;
-
-        let mut subqueries_fragment = HashMap::with_capacity(node.expressions.len());
-        for expression in &node.expressions {
-            match expression {
-                Expression::Subquery { name, query_plan } => {
-                    let builder = BuilderVisitor { ctx: self.ctx.clone() };
-                    let subquery_fragment = builder.visit(query_plan)?;
-                    subqueries_fragment.insert(name.clone(), subquery_fragment);
-                }
-                Expression::ScalarSubquery { name, query_plan } => {
-                    let builder = BuilderVisitor { ctx: self.ctx.clone() };
-                    let subquery_fragment = builder.visit(query_plan)?;
-                    subqueries_fragment.insert(name.clone(), subquery_fragment);
-                }
-                _ => {}
-            };
-        }
-
-        SubQueriesFragment::create(self.ctx.clone(), node, input, subqueries_fragment)
+        SubQueriesFragment::create(self.ctx.clone(), node, input)
     }
 }

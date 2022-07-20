@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::AggregatorFinalPlan;
+use common_planners::{AggregatorFinalPlan, Expression};
 use common_planners::AggregatorPartialPlan;
 use common_planners::ExpressionPlan;
 use common_planners::FilterPlan;
@@ -59,7 +59,8 @@ use crate::sessions::QueryContext;
 /// ```
 pub struct QueryPipelineBuilder {
     ctx: Arc<QueryContext>,
-    pipeline: Pipeline,
+    main_pipeline: Pipeline,
+    sources_pipeline: Vec<Pipeline>,
     limit: Option<usize>,
     offset: usize,
 }
@@ -69,7 +70,8 @@ impl QueryPipelineBuilder {
     pub fn create(ctx: Arc<QueryContext>) -> QueryPipelineBuilder {
         QueryPipelineBuilder {
             ctx,
-            pipeline: Pipeline::create(),
+            main_pipeline: Pipeline::create(),
+            sources_pipeline: vec![],
             limit: None,
             offset: 0,
         }
@@ -80,7 +82,7 @@ impl QueryPipelineBuilder {
     /// adding it to the pipeline
     pub fn finalize(mut self, plan: &PlanNode) -> Result<Pipeline> {
         self.visit_plan_node(plan)?;
-        Ok(self.pipeline)
+        Ok(self.main_pipeline)
     }
 }
 
@@ -117,7 +119,7 @@ impl PlanVisitor for QueryPipelineBuilder {
             &plan.input.schema(),
             &plan.schema(),
         )?;
-        self.pipeline
+        self.main_pipeline
             .add_transform(|transform_input_port, transform_output_port| {
                 TransformAggregator::try_create_partial(
                     transform_input_port.clone(),
@@ -135,14 +137,14 @@ impl PlanVisitor for QueryPipelineBuilder {
     fn visit_aggregate_final(&mut self, plan: &AggregatorFinalPlan) -> Result<()> {
         self.visit_plan_node(&plan.input)?;
 
-        self.pipeline.resize(1)?;
+        self.main_pipeline.resize(1)?;
         let aggregator_params = AggregatorParams::try_create(
             &plan.aggr_expr,
             &plan.group_expr,
             &plan.schema_before_group_by,
             &plan.schema,
         )?;
-        self.pipeline
+        self.main_pipeline
             .add_transform(|transform_input_port, transform_output_port| {
                 TransformAggregator::try_create_final(
                     transform_input_port.clone(),
@@ -159,9 +161,9 @@ impl PlanVisitor for QueryPipelineBuilder {
 
     fn visit_window_func(&mut self, plan: &WindowFuncPlan) -> Result<()> {
         self.visit_plan_node(&plan.input)?;
-        self.pipeline.resize(1)?;
+        self.main_pipeline.resize(1)?;
 
-        self.pipeline
+        self.main_pipeline
             .add_transform(|transform_input_port, transform_output_port| {
                 let compactor = WindowFuncCompact::create(
                     plan.window_func.clone(),
@@ -178,7 +180,7 @@ impl PlanVisitor for QueryPipelineBuilder {
 
     fn visit_projection(&mut self, plan: &ProjectionPlan) -> Result<()> {
         self.visit_plan_node(&plan.input)?;
-        self.pipeline
+        self.main_pipeline
             .add_transform(|transform_input_port, transform_output_port| {
                 ProjectionTransform::try_create(
                     transform_input_port,
@@ -200,12 +202,11 @@ impl PlanVisitor for QueryPipelineBuilder {
             RemotePlan::V2(plan) => {
                 let fragment_id = plan.receive_fragment_id;
                 let query_id = plan.receive_query_id.to_owned();
-                let exchange_manager = self.ctx.get_exchange_manager();
-                exchange_manager.get_fragment_source(
+                self.ctx.get_exchange_manager().get_fragment_source(
                     query_id,
                     fragment_id,
                     schema,
-                    &mut self.pipeline,
+                    &mut self.main_pipeline,
                 )
             }
         }
@@ -214,7 +215,7 @@ impl PlanVisitor for QueryPipelineBuilder {
     fn visit_expression(&mut self, plan: &ExpressionPlan) -> Result<()> {
         self.visit_plan_node(&plan.input)?;
 
-        self.pipeline
+        self.main_pipeline
             .add_transform(|transform_input_port, transform_output_port| {
                 ExpressionTransform::try_create(
                     transform_input_port,
@@ -230,7 +231,7 @@ impl PlanVisitor for QueryPipelineBuilder {
     fn visit_filter(&mut self, plan: &FilterPlan) -> Result<()> {
         self.visit_plan_node(&plan.input)?;
 
-        self.pipeline
+        self.main_pipeline
             .add_transform(|transform_input_port, transform_output_port| {
                 TransformFilter::try_create(
                     plan.schema(),
@@ -245,7 +246,7 @@ impl PlanVisitor for QueryPipelineBuilder {
     fn visit_having(&mut self, plan: &HavingPlan) -> Result<()> {
         self.visit_plan_node(&plan.input)?;
 
-        self.pipeline
+        self.main_pipeline
             .add_transform(|transform_input_port, transform_output_port| {
                 TransformHaving::try_create(
                     plan.schema(),
@@ -262,8 +263,8 @@ impl PlanVisitor for QueryPipelineBuilder {
         self.offset = plan.offset;
         self.visit_plan_node(&plan.input)?;
 
-        self.pipeline.resize(1)?;
-        self.pipeline
+        self.main_pipeline.resize(1)?;
+        self.main_pipeline
             .add_transform(|transform_input_port, transform_output_port| {
                 TransformLimit::try_create(
                     plan.n,
@@ -279,9 +280,19 @@ impl PlanVisitor for QueryPipelineBuilder {
 
         let schema = plan.schema();
         let context = self.ctx.clone();
-        let expressions = plan.expressions.to_vec();
-        let sub_queries_puller = SubQueriesPuller::create(context, expressions);
-        self.pipeline
+
+        for expression in &plan.expressions {
+            match expression {
+                Expression::Subquery { name, query_plan } => {
+                    // self.sources_pipeline
+                }
+                Expression::ScalarSubquery { name, query_plan } => {}
+                _ => {}
+            }
+        }
+
+        let sub_queries_puller = SubQueriesPuller::create(context, plan.expressions.to_vec());
+        self.main_pipeline
             .add_transform(|transform_input_port, transform_output_port| {
                 TransformCreateSets::try_create(
                     transform_input_port,
@@ -303,7 +314,7 @@ impl PlanVisitor for QueryPipelineBuilder {
         // processor 1: block ---> sort_stream
         // processor 2: block ---> sort_stream
         // processor 3: block ---> sort_stream
-        self.pipeline
+        self.main_pipeline
             .add_transform(|transform_input_port, transform_output_port| {
                 TransformSortPartial::try_create(
                     transform_input_port,
@@ -316,7 +327,7 @@ impl PlanVisitor for QueryPipelineBuilder {
         // processor 1: [sorted blocks ...] ---> merge to one sorted block
         // processor 2: [sorted blocks ...] ---> merge to one sorted block
         // processor 3: [sorted blocks ...] ---> merge to one sorted block
-        self.pipeline
+        self.main_pipeline
             .add_transform(|transform_input_port, transform_output_port| {
                 TransformSortMerge::try_create(
                     transform_input_port,
@@ -333,8 +344,8 @@ impl PlanVisitor for QueryPipelineBuilder {
         // processor2 sorted block ----> processor  --> merge to one sorted block
         //                             /
         // processor3 sorted block --
-        self.pipeline.resize(1)?;
-        self.pipeline
+        self.main_pipeline.resize(1)?;
+        self.main_pipeline
             .add_transform(|transform_input_port, transform_output_port| {
                 TransformSortMerge::try_create(
                     transform_input_port,
@@ -350,8 +361,8 @@ impl PlanVisitor for QueryPipelineBuilder {
     fn visit_limit_by(&mut self, plan: &LimitByPlan) -> Result<()> {
         self.visit_plan_node(&plan.input)?;
 
-        self.pipeline.resize(1)?;
-        self.pipeline
+        self.main_pipeline.resize(1)?;
+        self.main_pipeline
             .add_transform(|transform_input_port, transform_output_port| {
                 TransformLimitBy::try_create(
                     transform_input_port,
@@ -366,6 +377,6 @@ impl PlanVisitor for QueryPipelineBuilder {
         // Bind plan partitions to context.
         self.ctx.try_set_partitions(plan.parts.clone())?;
         let table = self.ctx.build_table_from_source_plan(plan)?;
-        table.read2(self.ctx.clone(), plan, &mut self.pipeline)
+        table.read2(self.ctx.clone(), plan, &mut self.main_pipeline)
     }
 }

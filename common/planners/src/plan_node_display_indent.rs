@@ -17,7 +17,7 @@ use std::fmt::Formatter;
 
 use common_datavalues::DataType;
 
-use crate::AggregatorFinalPlan;
+use crate::{AggregatorFinalPlan, RemotePlan};
 use crate::AggregatorPartialPlan;
 use crate::AlterTableClusterKeyPlan;
 use crate::BroadcastPlan;
@@ -67,6 +67,7 @@ impl<'a> fmt::Display for PlanNodeIndentFormatDisplay<'a> {
         match self.node {
             PlanNode::Stage(plan) => Self::format_stage(f, plan),
             PlanNode::Broadcast(plan) => Self::format_broadcast(f, plan),
+            PlanNode::Remote(plan) => Self::format_remote(f, plan),
             PlanNode::Projection(plan) => Self::format_projection(f, plan),
             PlanNode::Expression(plan) => Self::format_expression(f, plan),
             PlanNode::AggregatorPartial(plan) => Self::format_aggregator_partial(f, plan),
@@ -130,6 +131,13 @@ impl<'a> fmt::Display for PlanNodeIndentFormatDisplay<'a> {
 impl<'a> PlanNodeIndentFormatDisplay<'a> {
     fn format_stage(f: &mut Formatter, plan: &StagePlan) -> fmt::Result {
         write!(f, "RedistributeStage[expr: {:?}]", plan.scatters_expr)
+    }
+
+    fn format_remote(f: &mut Formatter, plan: &RemotePlan) -> fmt::Result {
+        match plan {
+            RemotePlan::V1(_) => write!(f, "Remote"),
+            RemotePlan::V2(v2_plan) => write!(f, "Remote[receive fragment: {}]", v2_plan.receive_fragment_id),
+        }
     }
 
     fn format_broadcast(f: &mut Formatter, _plan: &BroadcastPlan) -> fmt::Result {
@@ -343,7 +351,7 @@ impl<'a> PlanNodeIndentFormatDisplay<'a> {
         write!(f, "Rename database,")?;
         write!(f, " [")?;
         for (i, entity) in plan.entities.iter().enumerate() {
-            write!(f, "{:} to {:}", entity.database, entity.new_database,)?;
+            write!(f, "{:} to {:}", entity.database, entity.new_database, )?;
 
             if i + 1 != plan.entities.len() {
                 write!(f, ", ")?;

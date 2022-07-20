@@ -160,6 +160,7 @@ impl DataExchangeManager {
     }
 
     pub fn on_finished_query(&self, query_id: &str, may_error: &Option<ErrorCode>) {
+        println!("on finished query : {}", query_id);
         let queries_coordinator_lock = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_lock.as_ptr() };
         if let Some(mut query_coordinator) = queries_coordinator.remove(query_id) {
@@ -277,7 +278,10 @@ impl DataExchangeManager {
         let queries_coordinator = unsafe { &mut *queries_coordinator_lock.as_ptr() };
 
         match queries_coordinator.get_mut(&query_id) {
-            None => Err(ErrorCode::LogicalError("Query not exists.")),
+            None => {
+                let s = queries_coordinator.keys().collect::<Vec<_>>();
+                Err(ErrorCode::LogicalError(format!("Query not exists. query id: {}, fragment id: {}, queries: {:?}", query_id, fragment_id, s)))
+            }
             Some(query_coordinator) => {
                 query_coordinator.subscribe_fragment(fragment_id, schema, pipeline)
             }
