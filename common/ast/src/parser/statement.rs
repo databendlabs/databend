@@ -99,15 +99,18 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         },
         |(_, _, limit)| Statement::ShowFunctions { limit },
     );
+
+    // kill query 199;
     let kill_stmt = map(
         rule! {
-            KILL ~ #kill_target ~ #ident
+            KILL ~ #kill_target ~ #parameter_to_string
         },
         |(_, kill_target, object_id)| Statement::KillStmt {
             kill_target,
             object_id,
         },
     );
+
     let set_variable = map(
         rule! {
             SET ~ (GLOBAL)? ~ #ident ~ "=" ~ #literal

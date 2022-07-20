@@ -22,7 +22,6 @@ use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
 use common_ast::Backtrace;
 use common_datavalues::DataTypeImpl;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::UserDefinedFunction;
 use common_planners::AlterUserUDFPlan;
@@ -35,6 +34,7 @@ use common_planners::DropUserPlan;
 use common_planners::DropUserStagePlan;
 use common_planners::DropUserUDFPlan;
 use common_planners::ShowGrantsPlan;
+use common_planners::UseDatabasePlan;
 pub use scalar::ScalarBinder;
 pub use scalar_common::*;
 
@@ -51,6 +51,7 @@ mod delete;
 mod distinct;
 mod insert;
 mod join;
+mod kill;
 mod limit;
 mod presign;
 mod project;
@@ -140,7 +141,11 @@ impl<'a> Binder {
             Statement::CreateDatabase(stmt) => self.bind_create_database(stmt).await?,
             Statement::DropDatabase(stmt) => self.bind_drop_database(stmt).await?,
             Statement::AlterDatabase(stmt) => self.bind_alter_database(stmt).await?,
-
+            Statement::UseDatabase { database } =>  {
+                Plan::UseDatabase(Box::new(UseDatabasePlan {
+                    database: database.name.clone(),
+                }))
+            }
             // Tables
             Statement::ShowTables(stmt) => self.bind_show_tables(bind_context, stmt).await?,
             Statement::ShowCreateTable(stmt) => self.bind_show_create_table(stmt).await?,
@@ -278,11 +283,9 @@ impl<'a> Binder {
                 self.bind_set_variable(bind_context, *is_global, variable, value)
                     .await?
             }
-
-            _ => {
-                return Err(ErrorCode::UnImplement(format!(
-                    "UnImplemented stmt {stmt} in binder"
-                )));
+            Statement::KillStmt { kill_target, object_id } => {
+                self.bind_kill_stmt(bind_context, kill_target, object_id)
+                    .await?
             }
         };
         Ok(plan)

@@ -69,6 +69,7 @@ use common_planners::DropViewPlan;
 use common_planners::ExistsTablePlan;
 use common_planners::GrantPrivilegePlan;
 use common_planners::GrantRolePlan;
+use common_planners::KillPlan;
 use common_planners::ListPlan;
 use common_planners::OptimizeTablePlan;
 use common_planners::RemoveUserStagePlan;
@@ -82,6 +83,7 @@ use common_planners::ShowCreateTablePlan;
 use common_planners::ShowGrantsPlan;
 use common_planners::TruncateTablePlan;
 use common_planners::UndropTablePlan;
+use common_planners::UseDatabasePlan;
 pub use copy_v2::CopyPlanV2;
 pub use copy_v2::ValidationMode;
 pub use create_table_v2::CreateTablePlanV2;
@@ -140,6 +142,7 @@ pub enum Plan {
     CreateDatabase(Box<CreateDatabasePlan>),
     DropDatabase(Box<DropDatabasePlan>),
     RenameDatabase(Box<RenameDatabasePlan>),
+    UseDatabase(Box<UseDatabasePlan>),
 
     // Tables
     // ShowTables/ShowTablesStatus -> Rewrite to Query,
@@ -197,6 +200,7 @@ pub enum Plan {
 
     // Set
     SetVariable(Box<SettingPlan>),
+    Kill(Box<KillPlan>),
 }
 
 impl Display for Plan {
@@ -208,6 +212,7 @@ impl Display for Plan {
             Plan::ShowCreateDatabase(_) => write!(f, "ShowCreateDatabase"),
             Plan::CreateDatabase(_) => write!(f, "CreateDatabase"),
             Plan::DropDatabase(_) => write!(f, "DropDatabase"),
+            Plan::UseDatabase(_) => write!(f, "UseDatabase"),
             Plan::RenameDatabase(_) => write!(f, "RenameDatabase"),
             Plan::ShowCreateTable(_) => write!(f, "ShowCreateTable"),
             Plan::DescribeTable(_) => write!(f, "DescribeTable"),
@@ -246,6 +251,7 @@ impl Display for Plan {
             Plan::Call(_) => write!(f, "Call"),
             Plan::Presign(_) => write!(f, "Presign"),
             Plan::SetVariable(_) => write!(f, "SetVariable"),
+            Plan::Kill(_) => write!(f, "Kill"),
         }
     }
 }
@@ -265,6 +271,7 @@ impl Plan {
             Plan::Copy(_) => Arc::new(DataSchema::empty()),
             Plan::ShowCreateDatabase(plan) => plan.schema(),
             Plan::CreateDatabase(plan) => plan.schema(),
+            Plan::UseDatabase(_) => Arc::new(DataSchema::empty()),
             Plan::DropDatabase(plan) => plan.schema(),
             Plan::RenameDatabase(plan) => plan.schema(),
             Plan::ShowCreateTable(plan) => plan.schema(),
@@ -304,6 +311,7 @@ impl Plan {
             Plan::Call(_) => Arc::new(DataSchema::empty()),
             Plan::Presign(plan) => plan.schema(),
             Plan::SetVariable(plan) => plan.schema(),
+            Plan::Kill(_) => Arc::new(DataSchema::empty()),
         }
     }
 }

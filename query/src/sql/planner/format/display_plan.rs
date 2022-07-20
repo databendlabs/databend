@@ -89,7 +89,9 @@ impl Plan {
 
             Plan::Presign(presign) => Ok(format!("{:?}", presign)),
 
-            Plan::SetVariable(_set_variable) => Ok("SET".to_string()),
+            Plan::SetVariable(p) => Ok(format!("{:?}", p)),
+            Plan::UseDatabase(p) => Ok(format!("{:?}", p)),
+            Plan::Kill(p) => Ok(format!("{:?}", p)),
         }
     }
 }

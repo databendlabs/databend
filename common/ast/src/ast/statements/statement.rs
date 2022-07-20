@@ -48,7 +48,7 @@ pub enum Statement<'a> {
 
     KillStmt {
         kill_target: KillTarget,
-        object_id: Identifier<'a>,
+        object_id: String,
     },
 
     SetVariable {
@@ -214,7 +214,7 @@ impl<'a> Display for Statement<'a> {
                     KillTarget::Query => write!(f, " QUERY")?,
                     KillTarget::Connection => write!(f, " CONNECTION")?,
                 }
-                write!(f, " {object_id}")?;
+                write!(f, " '{object_id}'")?;
             }
             Statement::SetVariable {
                 is_global,

@@ -344,6 +344,11 @@ impl InterpreterFactoryV2 {
                 ctx,
                 *set_variable.clone(),
             )?)),
+            Plan::UseDatabase(p) => Ok(Arc::new(UseDatabaseInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            Plan::Kill(p) => Ok(Arc::new(KillInterpreter::try_create(ctx, *p.clone())?)),
         }
     }
 }
