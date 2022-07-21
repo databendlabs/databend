@@ -9,11 +9,9 @@ doctest = false
 test = false
 
 [dependencies]
-common-base = { path = "../base" }
 common-datablocks = { path = "../datablocks" }
 common-datavalues = { path = "../datavalues" }
 common-exception = { path = "../exception" }
-common-tracing = { path = "../tracing" }
 
 async-trait = "0.1.56"
 futures = "0.3.21"

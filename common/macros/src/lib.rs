@@ -13,9 +13,6 @@
 // limitations under the License.
 
 mod async_entrypoint;
-mod malloc_sizeof;
-
-synstructure::decl_derive!([MallocSizeOf, attributes(ignore_malloc_size_of, conditional_malloc_size_of)] => malloc_sizeof::malloc_size_of_derive);
 
 use proc_macro::TokenStream;
 

@@ -21,7 +21,6 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_macros::MallocSizeOf;
 use ordered_float::OrderedFloat;
 use serde_json::json;
 
@@ -49,7 +48,7 @@ pub enum DataValue {
 
 impl Eq for DataValue {}
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, MallocSizeOf)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
 pub enum ValueType {
     Null,
     Boolean,
