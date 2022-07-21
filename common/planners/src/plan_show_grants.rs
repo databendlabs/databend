@@ -12,9 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_datavalues::DataField;
+use common_datavalues::DataSchemaRef;
+use common_datavalues::DataSchemaRefExt;
+use common_datavalues::ToDataType;
+use common_datavalues::Vu8;
 use common_meta_types::PrincipalIdentity;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct ShowGrantsPlan {
     pub principal: Option<PrincipalIdentity>,
+}
+
+impl ShowGrantsPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        DataSchemaRefExt::create(vec![DataField::new("Grants", Vu8::to_data_type())])
+    }
 }

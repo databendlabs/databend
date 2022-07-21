@@ -16,7 +16,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use super::aggregate::Aggregate;
-use super::apply::CrossApply;
 use super::eval_scalar::EvalScalar;
 use super::filter::Filter;
 use super::hash_join::PhysicalHashJoin;
@@ -75,7 +74,6 @@ pub enum RelOp {
     Aggregate,
     Sort,
     Limit,
-    CrossApply,
     Max1Row,
 
     // Pattern
@@ -97,7 +95,6 @@ pub enum RelOperator {
     Aggregate(Aggregate),
     Sort(Sort),
     Limit(Limit),
-    CrossApply(CrossApply),
     Max1Row(Max1Row),
 
     Pattern(PatternPlan),
@@ -116,7 +113,6 @@ impl Operator for RelOperator {
             RelOperator::Aggregate(rel_op) => rel_op.rel_op(),
             RelOperator::Sort(rel_op) => rel_op.rel_op(),
             RelOperator::Limit(rel_op) => rel_op.rel_op(),
-            RelOperator::CrossApply(rel_op) => rel_op.rel_op(),
             RelOperator::Max1Row(rel_op) => rel_op.rel_op(),
             RelOperator::Pattern(rel_op) => rel_op.rel_op(),
         }
@@ -134,7 +130,6 @@ impl Operator for RelOperator {
             RelOperator::Aggregate(rel_op) => rel_op.is_physical(),
             RelOperator::Sort(rel_op) => rel_op.is_physical(),
             RelOperator::Limit(rel_op) => rel_op.is_physical(),
-            RelOperator::CrossApply(rel_op) => rel_op.is_physical(),
             RelOperator::Max1Row(rel_op) => rel_op.is_physical(),
             RelOperator::Pattern(rel_op) => rel_op.is_physical(),
         }
@@ -152,7 +147,6 @@ impl Operator for RelOperator {
             RelOperator::Aggregate(rel_op) => rel_op.is_logical(),
             RelOperator::Sort(rel_op) => rel_op.is_logical(),
             RelOperator::Limit(rel_op) => rel_op.is_logical(),
-            RelOperator::CrossApply(rel_op) => rel_op.is_logical(),
             RelOperator::Max1Row(rel_op) => rel_op.is_logical(),
             RelOperator::Pattern(rel_op) => rel_op.is_logical(),
         }
@@ -170,7 +164,6 @@ impl Operator for RelOperator {
             RelOperator::Aggregate(rel_op) => rel_op.as_logical(),
             RelOperator::Sort(rel_op) => rel_op.as_logical(),
             RelOperator::Limit(rel_op) => rel_op.as_logical(),
-            RelOperator::CrossApply(rel_op) => rel_op.as_logical(),
             RelOperator::Max1Row(rel_op) => rel_op.as_logical(),
             RelOperator::Pattern(rel_op) => rel_op.as_logical(),
         }
@@ -188,7 +181,6 @@ impl Operator for RelOperator {
             RelOperator::Aggregate(rel_op) => rel_op.as_physical(),
             RelOperator::Sort(rel_op) => rel_op.as_physical(),
             RelOperator::Limit(rel_op) => rel_op.as_physical(),
-            RelOperator::CrossApply(rel_op) => rel_op.as_physical(),
             RelOperator::Max1Row(rel_op) => rel_op.as_physical(),
             RelOperator::Pattern(rel_op) => rel_op.as_physical(),
         }
@@ -381,25 +373,6 @@ impl TryFrom<RelOperator> for Limit {
         } else {
             Err(ErrorCode::LogicalError(
                 "Cannot downcast RelOperator to Limit",
-            ))
-        }
-    }
-}
-
-impl From<CrossApply> for RelOperator {
-    fn from(v: CrossApply) -> Self {
-        Self::CrossApply(v)
-    }
-}
-
-impl TryFrom<RelOperator> for CrossApply {
-    type Error = ErrorCode;
-    fn try_from(value: RelOperator) -> Result<Self> {
-        if let RelOperator::CrossApply(value) = value {
-            Ok(value)
-        } else {
-            Err(ErrorCode::LogicalError(
-                "Cannot downcast RelOperator to CrossApply",
             ))
         }
     }

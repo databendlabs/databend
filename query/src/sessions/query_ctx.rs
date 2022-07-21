@@ -60,6 +60,7 @@ use crate::catalogs::Catalog;
 use crate::catalogs::CatalogManager;
 use crate::clusters::Cluster;
 use crate::servers::http::v1::HttpQueryHandle;
+use crate::sessions::query_affect::QueryAffect;
 use crate::sessions::ProcessInfo;
 use crate::sessions::QueryContextShared;
 use crate::sessions::SessionRef;
@@ -240,6 +241,14 @@ impl QueryContext {
 
     pub fn get_query_logger(&self) -> Option<Arc<dyn tracing::Subscriber + Send + Sync>> {
         self.shared.session.session_mgr.get_query_logger()
+    }
+
+    pub fn get_affect(self: &Arc<Self>) -> Option<QueryAffect> {
+        self.shared.get_affect()
+    }
+
+    pub fn set_affect(self: &Arc<Self>, affect: QueryAffect) {
+        self.shared.set_affect(affect)
     }
 }
 

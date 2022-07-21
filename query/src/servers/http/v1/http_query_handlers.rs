@@ -42,6 +42,7 @@ use super::query::HttpQueryResponseInternal;
 use crate::servers::http::v1::query::Progresses;
 use crate::servers::http::v1::HttpQueryContext;
 use crate::servers::http::v1::JsonBlock;
+use crate::sessions::QueryAffect;
 use crate::sessions::SessionType;
 use crate::storages::result::ResultTable;
 
@@ -93,6 +94,7 @@ pub struct QueryResponse {
     // only sql query error
     pub error: Option<QueryError>,
     pub stats: QueryStats,
+    pub affect: Option<QueryAffect>,
     pub stats_uri: Option<String>,
     // just call it after client not use it anymore, not care about the server-side behavior
     pub final_uri: Option<String>,
@@ -121,6 +123,7 @@ impl QueryResponse {
             schema: Some(schema),
             session_id: Some(session_id),
             stats,
+            affect: state.affect,
             id: id.clone(),
             next_uri: next_url,
             stats_uri: Some(make_state_uri(&id)),
@@ -135,6 +138,7 @@ impl QueryResponse {
             id: "".to_string(),
             stats: QueryStats::default(),
             state: ExecuteStateKind::Failed,
+            affect: None,
             data: vec![],
             schema: None,
             session_id: None,

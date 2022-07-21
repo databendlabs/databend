@@ -37,7 +37,7 @@ SELECT * FROM `05_0003_at_t1`;
 ----  
 1
 
-statement error 1002
+statement error 1005
 ALTER TABLE `05_0003_at_t1` RENAME TO system.`05_0003_at_t1`; 
 
 statement ok

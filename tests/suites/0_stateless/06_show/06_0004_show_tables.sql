@@ -14,14 +14,14 @@ SHOW TABLES LIKE 't%';
 SHOW TABLES LIKE 't2';
 SHOW TABLES LIKE 't';
 
-SHOW TABLES WHERE Tables_in_showtable LIKE 't%';
-SHOW TABLES WHERE Tables_in_showtable = 't%' AND 1 = 0;
-SHOW TABLES WHERE Tables_in_showtable = 't2' OR 1 = 1;
-SHOW TABLES WHERE Tables_in_showtable = 't2' AND 1 = 1;
+SHOW TABLES WHERE name LIKE 't%';
+SHOW TABLES WHERE name = 't%' AND 1 = 0;
+SHOW TABLES WHERE name = 't2' OR 1 = 1;
+SHOW TABLES WHERE name = 't2' AND 1 = 1;
 
 USE default;
-SHOW TABLES FROM showtables WHERE Tables_in_showtables LIKE 't%';
-SHOW TABLES FROM showtables WHERE Tables_in_showtables = "t%" AND 1 = 0;
-SHOW TABLES FROM showtables WHERE Tables_in_showtables = 't2' OR 1 = 1;
-SHOW TABLES FROM showtables WHERE Tables_in_showtables = 't2' AND 1 = 1;
+SHOW TABLES FROM showtables WHERE name LIKE 't%';
+SHOW TABLES FROM showtables WHERE name = 't%' AND 1 = 0;
+SHOW TABLES FROM showtables WHERE name = 't2' OR 1 = 1;
+SHOW TABLES FROM showtables WHERE name = 't2' AND 1 = 1;
 DROP DATABASE showtable;

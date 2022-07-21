@@ -16,8 +16,7 @@ class ClickhouseConnector():
                 user="root",
                 password="",
                 database=default_database):
-        self._uri = "clickhouse+http://{}:{}@{}:{}/{}".format(
-            user, password, host, port, database)
+        self._uri = f"clickhouse+http://{user}:{password}@{host}:{port}/{database}"
         log.debug(self._uri)
         e = environs.Env()
         self._additonal_headers = dict()

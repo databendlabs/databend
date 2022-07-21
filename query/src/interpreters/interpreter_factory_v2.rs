@@ -92,6 +92,62 @@ impl InterpreterFactoryV2 {
         )
     }
 
+    pub fn enable_default(stmt: &DfStatement) -> bool {
+        matches!(
+            stmt,
+            // DfStatement::Query(_)
+            //   | DfStatement::Explain(_)
+            // | DfStatement::InsertQuery(_)
+            DfStatement::Copy(_)
+                | DfStatement::CreateStage(_)
+                | DfStatement::ShowStages(_)
+                | DfStatement::DescribeStage(_)
+                | DfStatement::List(_)
+                | DfStatement::DropStage(_)
+                | DfStatement::RemoveStage(_)
+                | DfStatement::ShowDatabases(_)
+                | DfStatement::ShowCreateDatabase(_)
+                | DfStatement::ShowTables(_)
+                | DfStatement::ShowCreateTable(_)
+                | DfStatement::DescribeTable(_)
+                | DfStatement::ShowTablesStatus(_)
+                | DfStatement::CreateTable(_)
+                | DfStatement::CreateView(_)
+                | DfStatement::AlterView(_)
+                | DfStatement::DropTable(_)
+                | DfStatement::UndropTable(_)
+                | DfStatement::AlterTable(_)
+                | DfStatement::RenameTable(_)
+                | DfStatement::TruncateTable(_)
+                | DfStatement::OptimizeTable(_)
+                | DfStatement::ExistsTable(_)
+                | DfStatement::DropView(_)
+                | DfStatement::ShowFunctions(_)
+                | DfStatement::ShowMetrics(_)
+                | DfStatement::ShowProcessList(_)
+                | DfStatement::ShowSettings(_)
+                | DfStatement::CreateDatabase(_)
+                | DfStatement::DropDatabase(_)
+                | DfStatement::ShowUsers(_)
+                | DfStatement::CreateUser(_)
+                | DfStatement::ShowRoles(_)
+                | DfStatement::AlterDatabase(_)
+                | DfStatement::CreateUDF(_)
+                | DfStatement::DropUser(_)
+                | DfStatement::AlterUser(_)
+                | DfStatement::CreateRole(_)
+                | DfStatement::DropRole(_)
+                | DfStatement::GrantPrivilege(_)
+                | DfStatement::GrantRole(_)
+                | DfStatement::ShowGrants(_)
+                | DfStatement::RevokeRole(_)
+                | DfStatement::RevokePrivilege(_)
+                | DfStatement::Call(_)
+                | DfStatement::SetVariable(_)
+                | DfStatement::Presign
+        )
+    }
+
     pub fn get(ctx: Arc<QueryContext>, plan: &Plan) -> Result<InterpreterPtr> {
         let inner = InterpreterFactoryV2::create_interpreter(ctx.clone(), plan)?;
 
@@ -128,15 +184,7 @@ impl InterpreterFactoryV2 {
                 *copy_plan.clone(),
             )?)),
 
-            // Shows
-            Plan::ShowMetrics => Ok(Arc::new(ShowMetricsInterpreter::try_create(ctx)?)),
-            Plan::ShowProcessList => Ok(Arc::new(ShowProcessListInterpreter::try_create(ctx)?)),
-            Plan::ShowSettings => Ok(Arc::new(ShowSettingsInterpreter::try_create(ctx)?)),
-
             // Databases
-            Plan::ShowDatabases(show_databases) => Ok(Arc::new(
-                ShowDatabasesInterpreter::try_create(ctx, *show_databases.clone())?,
-            )),
             Plan::ShowCreateDatabase(show_create_database) => Ok(Arc::new(
                 ShowCreateDatabaseInterpreter::try_create(ctx, *show_create_database.clone())?,
             )),
@@ -152,18 +200,11 @@ impl InterpreterFactoryV2 {
             )),
 
             // Tables
-            Plan::ShowTables(show_tables) => Ok(Arc::new(ShowTablesInterpreter::try_create(
-                ctx,
-                *show_tables.clone(),
-            )?)),
             Plan::ShowCreateTable(show_create_table) => Ok(Arc::new(
                 ShowCreateTableInterpreter::try_create(ctx, *show_create_table.clone())?,
             )),
             Plan::DescribeTable(describe_table) => Ok(Arc::new(
                 DescribeTableInterpreter::try_create(ctx, *describe_table.clone())?,
-            )),
-            Plan::ShowTablesStatus(show_tables_status) => Ok(Arc::new(
-                ShowTablesStatusInterpreter::try_create(ctx, *show_tables_status.clone())?,
             )),
             Plan::CreateTable(create_table) => Ok(Arc::new(CreateTableInterpreterV2::try_create(
                 ctx,
@@ -213,7 +254,6 @@ impl InterpreterFactoryV2 {
             )?)),
 
             // Users
-            Plan::ShowUsers => Ok(Arc::new(ShowUsersInterpreter::try_create(ctx)?)),
             Plan::CreateUser(create_user) => Ok(Arc::new(CreateUserInterpreter::try_create(
                 ctx,
                 *create_user.clone(),
@@ -235,7 +275,6 @@ impl InterpreterFactoryV2 {
             )?)),
 
             // Roles
-            Plan::ShowRoles => Ok(Arc::new(ShowRolesInterpreter::try_create(ctx)?)),
             Plan::CreateRole(create_role) => Ok(Arc::new(CreateRoleInterpreter::try_create(
                 ctx,
                 *create_role.clone(),
@@ -246,7 +285,6 @@ impl InterpreterFactoryV2 {
             )?)),
 
             // Stages
-            Plan::ShowStages => Ok(Arc::new(ShowStagesInterpreter::try_create(ctx)?)),
             Plan::ListStage(s) => Ok(Arc::new(ListInterpreter::try_create(ctx, *s.clone())?)),
             Plan::DescribeStage(s) => Ok(Arc::new(DescribeUserStageInterpreter::try_create(
                 ctx,

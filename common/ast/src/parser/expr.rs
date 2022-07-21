@@ -1153,27 +1153,35 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
     );
     let ty_object = value(TypeName::Object, rule! { OBJECT | MAP });
     let ty_variant = value(TypeName::Variant, rule! { VARIANT | JSON });
-
-    rule!(
-        ( #ty_boolean
-        | #ty_uint8
-        | #ty_uint16
-        | #ty_uint32
-        | #ty_uint64
-        | #ty_int8
-        | #ty_int16
-        | #ty_int32
-        | #ty_int64
-        | #ty_float32
-        | #ty_float64
-        | #ty_array
-        | #ty_date
-        | #ty_datetime
-        | #ty_timestamp
-        | #ty_string
-        | #ty_object
-        | #ty_variant
-        ) : "type name"
+    map(
+        rule! {
+            ( #ty_boolean
+            | #ty_uint8
+            | #ty_uint16
+            | #ty_uint32
+            | #ty_uint64
+            | #ty_int8
+            | #ty_int16
+            | #ty_int32
+            | #ty_int64
+            | #ty_float32
+            | #ty_float64
+            | #ty_array
+            | #ty_date
+            | #ty_datetime
+            | #ty_timestamp
+            | #ty_string
+            | #ty_object
+            | #ty_variant
+            ) ~ NULL? : "type name"
+        },
+        |(ty, null_opt)| {
+            if null_opt.is_some() {
+                TypeName::Nullable(Box::new(ty))
+            } else {
+                ty
+            }
+        },
     )(i)
 }
 

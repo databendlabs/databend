@@ -85,7 +85,7 @@ Max_data_length: NULL
 
 Showing the tables begin with `"t"` with `WHERE`:
 ```sql
-SHOW TABLE STATUS WHERE table_name LIKE 't%'\G
+SHOW TABLE STATUS WHERE name LIKE 't%'\G
 *************************** 1. row ***************************
            Name: t
          Engine: FUSE

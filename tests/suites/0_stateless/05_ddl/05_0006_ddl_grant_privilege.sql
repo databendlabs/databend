@@ -1,5 +1,5 @@
 CREATE DATABASE IF NOT EXISTS `db01`;
-CREATE TABLE IF NOT EXISTS `db01`.`tb1`;
+CREATE TABLE IF NOT EXISTS `db01`.`tb1`(t INT);
 
 CREATE USER 'test-grant'@'localhost' IDENTIFIED BY 'password';
 GRANT SELECT ON * TO 'test-grant'@'localhost';
@@ -26,5 +26,7 @@ GRANT SELECT ON * TO ROLE 'test-grant-role';
 GRANT SELECT ON * TO ROLE 'test-grant-role1'; -- {ErrorCode 2204}
 SHOW GRANTS FOR ROLE 'test-grant-role';
 DROP ROLE 'test-grant-role';
+
+DROP USER 'test-grant'@'localhost';
 
 DROP DATABASE `db01`;
