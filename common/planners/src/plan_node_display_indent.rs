@@ -36,6 +36,7 @@ use crate::LimitPlan;
 use crate::PlanNode;
 use crate::ProjectionPlan;
 use crate::ReadDataSourcePlan;
+use crate::RemotePlan;
 use crate::RenameDatabasePlan;
 use crate::RenameTablePlan;
 use crate::SortPlan;
@@ -67,6 +68,7 @@ impl<'a> fmt::Display for PlanNodeIndentFormatDisplay<'a> {
         match self.node {
             PlanNode::Stage(plan) => Self::format_stage(f, plan),
             PlanNode::Broadcast(plan) => Self::format_broadcast(f, plan),
+            PlanNode::Remote(plan) => Self::format_remote(f, plan),
             PlanNode::Projection(plan) => Self::format_projection(f, plan),
             PlanNode::Expression(plan) => Self::format_expression(f, plan),
             PlanNode::AggregatorPartial(plan) => Self::format_aggregator_partial(f, plan),
@@ -130,6 +132,17 @@ impl<'a> fmt::Display for PlanNodeIndentFormatDisplay<'a> {
 impl<'a> PlanNodeIndentFormatDisplay<'a> {
     fn format_stage(f: &mut Formatter, plan: &StagePlan) -> fmt::Result {
         write!(f, "RedistributeStage[expr: {:?}]", plan.scatters_expr)
+    }
+
+    fn format_remote(f: &mut Formatter, plan: &RemotePlan) -> fmt::Result {
+        match plan {
+            RemotePlan::V1(_) => write!(f, "Remote"),
+            RemotePlan::V2(v2_plan) => write!(
+                f,
+                "Remote[receive fragment: {}]",
+                v2_plan.receive_fragment_id
+            ),
+        }
     }
 
     fn format_broadcast(f: &mut Formatter, _plan: &BroadcastPlan) -> fmt::Result {

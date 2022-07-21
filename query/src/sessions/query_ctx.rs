@@ -60,6 +60,7 @@ use crate::catalogs::Catalog;
 use crate::catalogs::CatalogManager;
 use crate::clusters::Cluster;
 use crate::servers::http::v1::HttpQueryHandle;
+use crate::sessions::query_affect::QueryAffect;
 use crate::sessions::ProcessInfo;
 use crate::sessions::QueryContextShared;
 use crate::sessions::SessionRef;
@@ -241,6 +242,14 @@ impl QueryContext {
     pub fn get_query_logger(&self) -> Option<Arc<dyn tracing::Subscriber + Send + Sync>> {
         self.shared.session.session_mgr.get_query_logger()
     }
+
+    pub fn get_affect(self: &Arc<Self>) -> Option<QueryAffect> {
+        self.shared.get_affect()
+    }
+
+    pub fn set_affect(self: &Arc<Self>, affect: QueryAffect) {
+        self.shared.set_affect(affect)
+    }
 }
 
 #[async_trait::async_trait]
@@ -327,6 +336,7 @@ impl TableContext for QueryContext {
     fn attach_query_plan(&self, query_plan: &PlanNode) {
         self.shared.attach_query_plan(query_plan);
     }
+
     fn get_fragment_id(&self) -> usize {
         self.fragment_id.fetch_add(1, Ordering::Release)
     }

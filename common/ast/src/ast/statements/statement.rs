@@ -42,13 +42,14 @@ pub enum Statement<'a> {
     },
     ShowProcessList,
     ShowMetrics,
+    ShowEngines,
     ShowFunctions {
         limit: Option<ShowLimit<'a>>,
     },
 
     KillStmt {
         kill_target: KillTarget,
-        object_id: Identifier<'a>,
+        object_id: String,
     },
 
     SetVariable {
@@ -70,6 +71,7 @@ pub enum Statement<'a> {
     ShowCreateDatabase(ShowCreateDatabaseStmt<'a>),
     CreateDatabase(CreateDatabaseStmt<'a>),
     DropDatabase(DropDatabaseStmt<'a>),
+    UndropDatabase(UndropDatabaseStmt<'a>),
     AlterDatabase(AlterDatabaseStmt<'a>),
     UseDatabase {
         database: Identifier<'a>,
@@ -199,6 +201,7 @@ impl<'a> Display for Statement<'a> {
             }
             Statement::ShowProcessList => write!(f, "SHOW PROCESSLIST")?,
             Statement::ShowMetrics => write!(f, "SHOW METRICS")?,
+            Statement::ShowEngines => write!(f, "SHOW ENGINES")?,
             Statement::ShowFunctions { limit } => {
                 write!(f, "SHOW FUNCTIONS")?;
                 if let Some(limit) = limit {
@@ -214,7 +217,7 @@ impl<'a> Display for Statement<'a> {
                     KillTarget::Query => write!(f, " QUERY")?,
                     KillTarget::Connection => write!(f, " CONNECTION")?,
                 }
-                write!(f, " {object_id}")?;
+                write!(f, " '{object_id}'")?;
             }
             Statement::SetVariable {
                 is_global,
@@ -231,6 +234,7 @@ impl<'a> Display for Statement<'a> {
             Statement::ShowCreateDatabase(stmt) => write!(f, "{stmt}")?,
             Statement::CreateDatabase(stmt) => write!(f, "{stmt}")?,
             Statement::DropDatabase(stmt) => write!(f, "{stmt}")?,
+            Statement::UndropDatabase(stmt) => write!(f, "{stmt}")?,
             Statement::AlterDatabase(stmt) => write!(f, "{stmt}")?,
             Statement::UseDatabase { database } => write!(f, "USE {database}")?,
             Statement::ShowTables(stmt) => write!(f, "{stmt}")?,

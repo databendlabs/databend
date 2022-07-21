@@ -12,31 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use common_datablocks::DataBlock;
-use common_datavalues::DataSchemaRef;
 use common_exception::Result;
-use common_planners::Expression;
 
 use crate::api::rpc::flight_scatter::FlightScatter;
-use crate::sessions::QueryContext;
 
 pub struct BroadcastFlightScatter {
     scattered_size: usize,
 }
 
 impl BroadcastFlightScatter {
-    #[allow(unused)]
-    pub fn try_create(
-        _: Arc<QueryContext>,
-        _: DataSchemaRef,
-        _: Option<Expression>,
-        num: usize,
-    ) -> Result<Self> {
-        Ok(BroadcastFlightScatter {
-            scattered_size: num,
-        })
+    pub fn try_create(scattered_size: usize) -> Result<Self> {
+        Ok(BroadcastFlightScatter { scattered_size })
     }
 }
 

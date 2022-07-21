@@ -43,10 +43,9 @@ use crate::interpreters::InterpreterFactory;
 use crate::interpreters::InterpreterFactoryV2;
 use crate::interpreters::InterpreterQueryLog;
 use crate::pipelines::executor::PipelineCompleteExecutor;
-use crate::pipelines::executor::PipelineExecutor;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::Pipe;
-use crate::pipelines::Pipeline;
+use crate::sessions::QueryAffect;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionRef;
 use crate::sessions::TableContext;
@@ -114,6 +113,7 @@ pub struct ExecuteRunning {
 
 pub struct ExecuteStopped {
     stats: Progresses,
+    affect: Option<QueryAffect>,
     reason: Result<()>,
     stop_time: Instant,
 }
@@ -128,6 +128,13 @@ impl Executor {
         match &self.state {
             Running(r) => Progresses::from_context(&r.ctx),
             Stopped(f) => f.stats.clone(),
+        }
+    }
+
+    pub(crate) fn get_affect(&self) -> Option<QueryAffect> {
+        match &self.state {
+            Running(r) => r.ctx.get_affect(),
+            Stopped(r) => r.affect.clone(),
         }
     }
 
@@ -155,6 +162,7 @@ impl Executor {
                 stats: Progresses::from_context(&r.ctx),
                 reason: reason.clone(),
                 stop_time: Instant::now(),
+                affect: r.ctx.get_affect(),
             });
 
             if let Err(e) = reason {
@@ -220,9 +228,10 @@ impl ExecuteState {
 
             Ok(executor)
         } else {
-            let interpreter = if stmts
-                .get(0)
-                .map_or(false, InterpreterFactoryV2::enable_default)
+            let interpreter = if ctx.get_cluster().is_empty()
+                && stmts
+                    .get(0)
+                    .map_or(false, InterpreterFactoryV2::enable_default)
             {
                 let mut planner = Planner::new(ctx.clone());
                 let (plan, _, _) = planner.plan_sql(sql).await?;
@@ -354,20 +363,20 @@ impl HttpQueryHandle {
         let executor = self.executor.clone();
         let block_buffer = self.block_buffer.clone();
         let last_schema = physical_plan.output_schema()?;
-        let mut pb = PipelineBuilder::new();
-        let mut root_pipeline = Pipeline::create();
-        pb.build_pipeline(ctx.clone(), physical_plan, &mut root_pipeline)?;
-        pb.render_result_set(last_schema, result_columns, &mut root_pipeline)?;
 
-        let mut pipelines = pb.pipelines;
+        let pipeline_builder = PipelineBuilder::create(ctx.clone());
+        let mut build_res = pipeline_builder.finalize(physical_plan)?;
+
+        PipelineBuilder::render_result_set(
+            last_schema,
+            result_columns,
+            &mut build_res.main_pipeline,
+        )?;
+
         let async_runtime = ctx.get_storage_runtime();
+        build_res.set_max_threads(ctx.get_settings().get_max_threads()? as usize);
 
-        root_pipeline.set_max_threads(ctx.get_settings().get_max_threads()? as usize);
-        for pipeline in pipelines.iter_mut() {
-            pipeline.set_max_threads(ctx.get_settings().get_max_threads()? as usize);
-        }
-
-        root_pipeline.resize(1)?;
+        build_res.main_pipeline.resize(1)?;
         let input = InputPort::create();
 
         let schema = DataSchemaRefExt::create(
@@ -391,7 +400,8 @@ impl HttpQueryHandle {
             query_info,
             self.block_buffer,
         )?;
-        root_pipeline.add_pipe(Pipe::SimplePipe {
+
+        build_res.main_pipeline.add_pipe(Pipe::SimplePipe {
             outputs_port: vec![],
             inputs_port: vec![input],
             processors: vec![sink],
@@ -401,18 +411,12 @@ impl HttpQueryHandle {
         let query_need_abort = ctx.query_need_abort();
 
         let run = move || -> Result<()> {
-            for pipeline in pipelines {
-                let executor = PipelineExecutor::create(
-                    async_runtime_clone.clone(),
-                    query_need_abort.clone(),
-                    pipeline,
-                )?;
-                executor.execute()?;
-            }
-            let pipeline_executor = PipelineCompleteExecutor::try_create(
+            let mut pipelines = build_res.sources_pipelines;
+            pipelines.push(build_res.main_pipeline);
+            let pipeline_executor = PipelineCompleteExecutor::from_pipelines(
                 async_runtime_clone,
-                query_need_abort.clone(),
-                root_pipeline,
+                query_need_abort,
+                pipelines,
             )?;
             pipeline_executor.execute()
         };

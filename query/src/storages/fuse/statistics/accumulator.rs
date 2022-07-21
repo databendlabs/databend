@@ -17,9 +17,7 @@ use std::collections::HashMap;
 
 use common_arrow::parquet::metadata::ThriftFileMetaData;
 use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_functions::aggregates::eval_aggr;
 use common_fuse_meta::meta::BlockMeta;
 use common_fuse_meta::meta::ClusterStatistics;
 use common_fuse_meta::meta::ColumnId;
@@ -29,6 +27,8 @@ use common_fuse_meta::meta::StatisticsOfColumns;
 use common_fuse_meta::meta::Versioned;
 
 use crate::storages::fuse::operations::column_metas;
+use crate::storages::fuse::statistics::block_statistics::BlockStatistics;
+use crate::storages::fuse::statistics::column_statistic;
 
 #[derive(Default)]
 pub struct StatisticsAccumulator {
@@ -56,7 +56,7 @@ impl StatisticsAccumulator {
         self.summary_block_count += 1;
         self.summary_row_count += row_count;
         self.in_memory_size += block_in_memory_size;
-        let block_stats = columns_statistics(block)?;
+        let block_stats = column_statistic::gen_columns_statistics(block)?;
         self.blocks_statistics.push(block_stats.clone());
         Ok(PartiallyAccumulated {
             accumulator: self,
@@ -100,47 +100,6 @@ impl StatisticsAccumulator {
         Ok(())
     }
 
-    pub fn acc_columns(data_block: &DataBlock) -> common_exception::Result<StatisticsOfColumns> {
-        let mut statistics = StatisticsOfColumns::new();
-
-        let rows = data_block.num_rows();
-        for idx in 0..data_block.num_columns() {
-            let col = data_block.column(idx);
-            let field = data_block.schema().field(idx);
-            let column_field = ColumnWithField::new(col.clone(), field.clone());
-
-            let mut min = DataValue::Null;
-            let mut max = DataValue::Null;
-
-            let mins = eval_aggr("min", vec![], &[column_field.clone()], rows)?;
-            let maxs = eval_aggr("max", vec![], &[column_field], rows)?;
-
-            if mins.len() > 0 {
-                min = mins.get(0);
-            }
-            if maxs.len() > 0 {
-                max = maxs.get(0);
-            }
-            let (is_all_null, bitmap) = col.validity();
-            let unset_bits = match (is_all_null, bitmap) {
-                (true, _) => rows,
-                (false, Some(bitmap)) => bitmap.unset_bits(),
-                (false, None) => 0,
-            };
-
-            let in_memory_size = col.memory_size() as u64;
-            let col_stats = ColumnStatistics {
-                min,
-                max,
-                null_count: unset_bits as u64,
-                in_memory_size,
-            };
-
-            statistics.insert(idx as u32, col_stats);
-        }
-        Ok(statistics)
-    }
-
     pub fn summary(&self) -> Result<StatisticsOfColumns> {
         super::reduce_block_statistics(&self.blocks_statistics)
     }
@@ -182,110 +141,4 @@ impl PartiallyAccumulated {
         stats.blocks_metas.push(block_meta);
         self.accumulator
     }
-}
-
-pub struct BlockStatistics {
-    pub block_rows_size: u64,
-    pub block_bytes_size: u64,
-    pub block_file_location: String,
-    pub block_column_statistics: HashMap<ColumnId, ColumnStatistics>,
-    pub block_cluster_statistics: Option<ClusterStatistics>,
-}
-
-impl BlockStatistics {
-    pub fn from(
-        data_block: &DataBlock,
-        location: String,
-        cluster_stats: Option<ClusterStatistics>,
-    ) -> Result<BlockStatistics> {
-        Ok(BlockStatistics {
-            block_file_location: location,
-            block_rows_size: data_block.num_rows() as u64,
-            block_bytes_size: data_block.memory_size() as u64,
-            block_column_statistics: columns_statistics(data_block)?,
-            block_cluster_statistics: cluster_stats,
-        })
-    }
-
-    pub fn clusters_statistics(
-        cluster_key_id: u32,
-        cluster_key_index: &[usize],
-        block: &DataBlock,
-    ) -> Result<Option<ClusterStatistics>> {
-        if cluster_key_index.is_empty() {
-            return Ok(None);
-        }
-
-        let mut min = Vec::with_capacity(cluster_key_index.len());
-        let mut max = Vec::with_capacity(cluster_key_index.len());
-
-        for key in cluster_key_index.iter() {
-            let col = block.column(*key);
-
-            let mut left = col.get_checked(0)?;
-            // To avoid high cardinality, for the string column,
-            // cluster statistics uses only the first 5 bytes.
-            if let DataValue::String(v) = &left {
-                let l = v.len() as usize;
-                let e = if l < 5 { l } else { 5 };
-                left = DataValue::from(&v[0..e]);
-            }
-            min.push(left);
-
-            let mut right = col.get_checked(col.len() - 1)?;
-            if let DataValue::String(v) = &right {
-                let l = v.len() as usize;
-                let e = if l < 5 { l } else { 5 };
-                right = DataValue::from(&v[0..e]);
-            }
-            max.push(right);
-        }
-
-        Ok(Some(ClusterStatistics {
-            cluster_key_id,
-            min,
-            max,
-        }))
-    }
-}
-
-pub fn columns_statistics(data_block: &DataBlock) -> Result<StatisticsOfColumns> {
-    let mut statistics = StatisticsOfColumns::new();
-
-    let rows = data_block.num_rows();
-    for idx in 0..data_block.num_columns() {
-        let col = data_block.column(idx);
-        let field = data_block.schema().field(idx);
-        let column_field = ColumnWithField::new(col.clone(), field.clone());
-
-        let mut min = DataValue::Null;
-        let mut max = DataValue::Null;
-
-        let mins = eval_aggr("min", vec![], &[column_field.clone()], rows)?;
-        let maxs = eval_aggr("max", vec![], &[column_field], rows)?;
-
-        if mins.len() > 0 {
-            min = mins.get(0);
-        }
-        if maxs.len() > 0 {
-            max = maxs.get(0);
-        }
-        let (is_all_null, bitmap) = col.validity();
-        let unset_bits = match (is_all_null, bitmap) {
-            (true, _) => rows,
-            (false, Some(bitmap)) => bitmap.unset_bits(),
-            (false, None) => 0,
-        };
-
-        let in_memory_size = col.memory_size() as u64;
-        let col_stats = ColumnStatistics {
-            min,
-            max,
-            null_count: unset_bits as u64,
-            in_memory_size,
-        };
-
-        statistics.insert(idx as u32, col_stats);
-    }
-    Ok(statistics)
 }

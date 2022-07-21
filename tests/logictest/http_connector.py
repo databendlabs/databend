@@ -139,7 +139,9 @@ class HttpConnector():
         try:
             return json.loads(response.content)
         except Exception as err:
-            log.error(f"http error, SQL: {statement}\ncontent: {response.content}\nerror msg:{str(err)}")
+            log.error(
+                f"http error, SQL: {statement}\ncontent: {response.content}\nerror msg:{str(err)}"
+            )
             raise
 
     def set_database(self, database):
@@ -174,14 +176,18 @@ class HttpConnector():
                         self._host, self._port, response['next_uri']),
                                         headers=self.make_headers())
                     response = json.loads(resp.content)
-                    log.debug(f"Sql in progress, fetch next_uri content: {response}")
+                    log.debug(
+                        f"Sql in progress, fetch next_uri content: {response}")
                     response_list.append(response)
                 except Exception as err:
-                    log.warning(f"Fetch next_uri response with error: {str(err)}")
+                    log.warning(
+                        f"Fetch next_uri response with error: {str(err)}")
                 continue
             break
         if response['next_uri'] is not None:
-            log.warning(f"after waited for 12 secs, query still not finished (next url not none)!")
+            log.warning(
+                f"after waited for 12 secs, query still not finished (next url not none)!"
+            )
 
         if self._session is None:
             if response is not None and "session_id" in response:

@@ -15,9 +15,12 @@
 mod partition_state;
 mod query_fragment;
 mod query_fragment_actions;
+mod query_fragment_actions_display;
+mod query_fragment_broadcast;
 mod query_fragment_read_source;
 mod query_fragment_root;
 mod query_fragment_stage;
+mod query_fragment_subqueries;
 
 pub use query_fragment::QueryFragment;
 pub use query_fragment::QueryFragmentsBuilder;

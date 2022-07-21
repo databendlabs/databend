@@ -18,8 +18,10 @@ pub use aggregate::AggregateInfo;
 pub use bind_context::BindContext;
 pub use bind_context::ColumnBinding;
 use common_ast::ast::Statement;
+use common_ast::parser::parse_sql;
+use common_ast::parser::tokenize_sql;
+use common_ast::Backtrace;
 use common_datavalues::DataTypeImpl;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::UserDefinedFunction;
 use common_planners::AlterUserUDFPlan;
@@ -32,6 +34,7 @@ use common_planners::DropUserPlan;
 use common_planners::DropUserStagePlan;
 use common_planners::DropUserUDFPlan;
 use common_planners::ShowGrantsPlan;
+use common_planners::UseDatabasePlan;
 pub use scalar::ScalarBinder;
 pub use scalar_common::*;
 
@@ -48,6 +51,7 @@ mod delete;
 mod distinct;
 mod insert;
 mod join;
+mod kill;
 mod limit;
 mod presign;
 mod project;
@@ -118,8 +122,21 @@ impl<'a> Binder {
 
             Statement::Copy(stmt) => self.bind_copy(bind_context, stmt).await?,
 
-            Statement::ShowMetrics => Plan::ShowMetrics,
-            Statement::ShowProcessList => Plan::ShowProcessList,
+            Statement::ShowMetrics => {
+                self.bind_rewrite_to_query(
+                    bind_context,
+                    "SELECT metric, kind, labels, value FROM system.metrics",
+                )
+                .await?
+            }
+            Statement::ShowProcessList => {
+                self.bind_rewrite_to_query(bind_context, "SELECT * FROM system.processes")
+                    .await?
+            }
+            Statement::ShowEngines => {
+                 self.bind_rewrite_to_query(bind_context, "SELECT Engine, Comment FROM system.engines ORDER BY Engine ASC")
+                    .await?
+            },
             Statement::ShowSettings { like } => self.bind_show_settings(bind_context, like).await?,
 
             // Databases
@@ -127,8 +144,13 @@ impl<'a> Binder {
             Statement::ShowCreateDatabase(stmt) => self.bind_show_create_database(stmt).await?,
             Statement::CreateDatabase(stmt) => self.bind_create_database(stmt).await?,
             Statement::DropDatabase(stmt) => self.bind_drop_database(stmt).await?,
+            Statement::UndropDatabase(stmt) => self.bind_undrop_database(stmt).await?,
             Statement::AlterDatabase(stmt) => self.bind_alter_database(stmt).await?,
-
+            Statement::UseDatabase { database } =>  {
+                Plan::UseDatabase(Box::new(UseDatabasePlan {
+                    database: database.name.clone(),
+                }))
+            }
             // Tables
             Statement::ShowTables(stmt) => self.bind_show_tables(bind_context, stmt).await?,
             Statement::ShowCreateTable(stmt) => self.bind_show_create_table(stmt).await?,
@@ -156,11 +178,11 @@ impl<'a> Binder {
                 if_exists: *if_exists,
                 user: user.clone(),
             })),
-            Statement::ShowUsers => Plan::ShowUsers,
+            Statement::ShowUsers => self.bind_rewrite_to_query(bind_context, "SELECT name, hostname, auth_type, auth_string FROM system.users ORDER BY name").await?,
             Statement::AlterUser(stmt) => self.bind_alter_user(stmt).await?,
 
             // Roles
-            Statement::ShowRoles => Plan::ShowRoles,
+            Statement::ShowRoles => self.bind_rewrite_to_query(bind_context, "SELECT name, inherited_roles FROM system.roles ORDER BY name").await?,
             Statement::CreateRole {
                 if_not_exists,
                 role_name,
@@ -177,7 +199,7 @@ impl<'a> Binder {
             })),
 
             // Stages
-            Statement::ShowStages => Plan::ShowStages,
+            Statement::ShowStages => self.bind_rewrite_to_query(bind_context, "SELECT name, stage_type, number_of_files, creator, comment FROM system.stages ORDER BY name").await?,
             Statement::ListStage { location, pattern } => {
                 self.bind_list_stage(location, pattern).await?
             }
@@ -266,14 +288,23 @@ impl<'a> Binder {
                 self.bind_set_variable(bind_context, *is_global, variable, value)
                     .await?
             }
-
-            _ => {
-                return Err(ErrorCode::UnImplement(format!(
-                    "UnImplemented stmt {stmt} in binder"
-                )));
+            Statement::KillStmt { kill_target, object_id } => {
+                self.bind_kill_stmt(bind_context, kill_target, object_id.as_str())
+                    .await?
             }
         };
         Ok(plan)
+    }
+
+    async fn bind_rewrite_to_query(
+        &mut self,
+        bind_context: &BindContext,
+        query: &str,
+    ) -> Result<Plan> {
+        let tokens = tokenize_sql(query)?;
+        let backtrace = Backtrace::new();
+        let (stmt, _) = parse_sql(&tokens, &backtrace)?;
+        self.bind_statement(bind_context, &stmt).await
     }
 
     /// Create a new ColumnBinding with assigned index

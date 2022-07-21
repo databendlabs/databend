@@ -195,9 +195,7 @@ error:
   --> SQL:1:27
   |
 1 | GRANT ROLE 'test' TO ROLE test-user;
-  | -----                     ^^^^ expected <QuotedString>
-  | |                          
-  | while parsing `GRANT { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } TO { [ROLE <role_name>] | [USER] <user> }`
+  |                           ^^^^ expected <QuotedString>, `@`, `FORMAT`, or `;`
 
 
 ---------- Input ----------
@@ -232,7 +230,7 @@ error:
   --> SQL:1:6
   |
 1 | SHOW GRANT FOR ROLE role1;
-  |      ^^^^^ expected `SETTINGS`, `STAGES`, `PROCESSLIST`, `METRICS`, `FUNCTIONS`, `DATABASES`, or 9 more ...
+  |      ^^^^^ expected `SETTINGS`, `STAGES`, `ENGINES`, `PROCESSLIST`, `METRICS`, `FUNCTIONS`, or 10 more ...
 
 
 ---------- Input ----------

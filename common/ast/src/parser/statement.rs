@@ -93,21 +93,25 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     let show_stages = value(Statement::ShowStages, rule! { SHOW ~ STAGES });
     let show_process_list = value(Statement::ShowProcessList, rule! { SHOW ~ PROCESSLIST });
     let show_metrics = value(Statement::ShowMetrics, rule! { SHOW ~ METRICS });
+    let show_engines = value(Statement::ShowEngines, rule! { SHOW ~ ENGINES });
     let show_functions = map(
         rule! {
             SHOW ~ FUNCTIONS ~ #show_limit?
         },
         |(_, _, limit)| Statement::ShowFunctions { limit },
     );
+
+    // kill query 199;
     let kill_stmt = map(
         rule! {
-            KILL ~ #kill_target ~ #ident
+            KILL ~ #kill_target ~ #parameter_to_string
         },
         |(_, kill_target, object_id)| Statement::KillStmt {
             kill_target,
             object_id,
         },
     );
+
     let set_variable = map(
         rule! {
             SET ~ (GLOBAL)? ~ #ident ~ "=" ~ #literal
@@ -158,6 +162,16 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             })
         },
     );
+
+    let undrop_database = map(
+        rule! {
+            UNDROP ~ DATABASE ~ #peroid_separated_idents_1_to_2
+        },
+        |(_, _, (catalog, database))| {
+            Statement::UndropDatabase(UndropDatabaseStmt { catalog, database })
+        },
+    );
+
     let alter_database = map(
         rule! {
             ALTER ~ DATABASE ~ ( IF ~ EXISTS )? ~ #peroid_separated_idents_1_to_2 ~ #alter_database_action
@@ -720,12 +734,14 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             | #delete : "`DELETE FROM <table> [WHERE ...]`"
             | #show_settings : "`SHOW SETTINGS [<show_limit>]`"
             | #show_stages : "`SHOW STAGES`"
+            | #show_engines : "`SHOW ENGINES`"
             | #show_process_list : "`SHOW PROCESSLIST`"
             | #show_metrics : "`SHOW METRICS`"
             | #show_functions : "`SHOW FUNCTIONS [<show_limit>]`"
             | #kill_stmt : "`KILL (QUERY | CONNECTION) <object_id>`"
             | #set_variable : "`SET <variable> = <value>`"
             | #show_databases : "`SHOW DATABASES [<show_limit>]`"
+            | #undrop_database : "`UNDROP DATABASE <database>`"
             | #show_create_database : "`SHOW CREATE DATABASE <database>`"
             | #create_database : "`CREATE DATABASE [IF NOT EXIST] <database> [ENGINE = <engine>]`"
             | #drop_database : "`DROP DATABASE [IF EXISTS] <database>`"
@@ -962,13 +978,14 @@ pub fn grant_level(i: Input) -> IResult<AccountMgrLevel> {
         },
         |(database, _)| AccountMgrLevel::Database(database.map(|(database, _)| database.name)),
     );
-    // db.table
+
+    // `db01`.'tb1' or `db01`.`tb1` or `db01`.tb1
     let table = map(
         rule! {
-            ( #ident ~ "." )? ~ #ident
+            ( #ident ~ "." )? ~ #parameter_to_string
         },
         |(database, table)| {
-            AccountMgrLevel::Table(database.map(|(database, _)| database.name), table.name)
+            AccountMgrLevel::Table(database.map(|(database, _)| database.name), table)
         },
     );
 
@@ -1257,7 +1274,7 @@ pub fn role_option(i: Input) -> IResult<RoleOption> {
 pub fn user_identity(i: Input) -> IResult<UserIdentity> {
     map(
         rule! {
-            #literal_string ~ ( "@" ~ #literal_string )?
+            #parameter_to_string ~ ( "@" ~ #literal_string )?
         },
         |(username, opt_hostname)| UserIdentity {
             username,
@@ -1278,15 +1295,7 @@ pub fn auth_type(i: Input) -> IResult<AuthType> {
 }
 
 pub fn ident_to_string(i: Input) -> IResult<String> {
-    map_res(ident, |ident| {
-        if ident.quote.is_none() {
-            Ok(ident.to_string())
-        } else {
-            Err(ErrorKind::Other(
-                "unexpected quoted identifier, try to remove the quote",
-            ))
-        }
-    })(i)
+    map_res(ident, |ident| Ok(ident.name))(i)
 }
 
 pub fn u64_to_string(i: Input) -> IResult<String> {

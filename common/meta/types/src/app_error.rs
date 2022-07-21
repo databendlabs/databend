@@ -323,6 +323,20 @@ impl UnknownShareAccount {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[error("WrongShareObject: {obj_name} does not belong to the database that is being shared")]
+pub struct WrongShareObject {
+    obj_name: String,
+}
+
+impl WrongShareObject {
+    pub fn new(obj_name: impl Into<String>) -> Self {
+        Self {
+            obj_name: obj_name.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
 #[error("UnknownShare: {share_name} while {context}")]
 pub struct UnknownShare {
     share_name: String,
@@ -438,6 +452,9 @@ pub enum AppError {
 
     #[error(transparent)]
     UnknownShareAccount(#[from] UnknownShareAccount),
+
+    #[error(transparent)]
+    WrongShareObject(#[from] WrongShareObject),
 }
 
 impl AppErrorMessage for UnknownDatabase {
@@ -536,6 +553,15 @@ impl AppErrorMessage for UnknownShareAccount {
     }
 }
 
+impl AppErrorMessage for WrongShareObject {
+    fn message(&self) -> String {
+        format!(
+            " {} does not belong to the database that is being shared",
+            self.obj_name
+        )
+    }
+}
+
 impl AppErrorMessage for TxnRetryMaxTimes {
     fn message(&self) -> String {
         format!(
@@ -609,6 +635,7 @@ impl From<AppError> for ErrorCode {
                 ErrorCode::ShareAccountAlreadyExists(err.message())
             }
             AppError::UnknownShareAccount(err) => ErrorCode::UnknownShareAccount(err.message()),
+            AppError::WrongShareObject(err) => ErrorCode::WrongShareObject(err.message()),
             AppError::TxnRetryMaxTimes(err) => ErrorCode::TxnRetryMaxTimes(err.message()),
         }
     }

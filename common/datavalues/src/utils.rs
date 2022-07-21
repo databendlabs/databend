@@ -57,6 +57,15 @@ pub fn combine_validities_2(lhs: Option<Bitmap>, rhs: Option<Bitmap>) -> Option<
     }
 }
 
+pub fn combine_validities_3(lhs: Option<Bitmap>, rhs: Option<Bitmap>) -> Option<Bitmap> {
+    match (lhs, rhs) {
+        (Some(lhs), None) => Some(lhs),
+        (None, Some(rhs)) => Some(rhs),
+        (None, None) => None,
+        (Some(lhs), Some(rhs)) => Some((&lhs) | (&rhs)),
+    }
+}
+
 /// Forked from Arrow until their API stabilizes.
 ///
 /// Note that the bound checks are optimized away.

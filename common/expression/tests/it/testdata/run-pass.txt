@@ -241,6 +241,211 @@ evaluation (internal):
 +--------+------------------------------------------------------------------+
 
 
+ast            : divide(a, 10)
+raw expr       : divide(ColumnRef(0)::UInt8 NULL, 10_u8)
+checked expr   : divide<Float32 NULL, Float32 NULL>(cast<dest_type=Float32 NULL>(ColumnRef(0)), cast<dest_type=Float32 NULL>(10_u8))
+evaluation:
++--------+--------------------+-----------------------------------------------------------------------------------------------+
+|        | a                  | Output                                                                                        |
++--------+--------------------+-----------------------------------------------------------------------------------------------+
+| Type   | UInt8 NULL         | Float32 NULL                                                                                  |
+| Domain | {10..=12} ∪ {NULL} | {-340282346638528860000000000000000000000..=340282346638528860000000000000000000000} ∪ {NULL} |
+| Row 0  | NULL               | NULL                                                                                          |
+| Row 1  | 11                 | 1.1                                                                                           |
+| Row 2  | NULL               | NULL                                                                                          |
++--------+--------------------+-----------------------------------------------------------------------------------------------+
+evaluation (internal):
++--------+-----------------------------------------------------------------------+
+| Column | Data                                                                  |
++--------+-----------------------------------------------------------------------+
+| a      | Nullable { column: UInt8([10, 11, 12]), validity: [0b_____010] }      |
+| Output | Nullable { column: Float32([1.0, 1.1, 1.2]), validity: [0b_____010] } |
++--------+-----------------------------------------------------------------------+
+
+
+ast            : divide(a, b)
+raw expr       : divide(ColumnRef(0)::UInt16 NULL, ColumnRef(1)::Int16 NULL)
+checked expr   : divide<Float32 NULL, Float32 NULL>(cast<dest_type=Float32 NULL>(ColumnRef(0)), cast<dest_type=Float32 NULL>(ColumnRef(1)))
+evaluation:
++--------+--------------------+------------------+-----------------------------------------------------------------------------------------------+
+|        | a                  | b                | Output                                                                                        |
++--------+--------------------+------------------+-----------------------------------------------------------------------------------------------+
+| Type   | UInt16 NULL        | Int16 NULL       | Float32 NULL                                                                                  |
+| Domain | {10..=12} ∪ {NULL} | {1..=3} ∪ {NULL} | {-340282346638528860000000000000000000000..=340282346638528860000000000000000000000} ∪ {NULL} |
+| Row 0  | NULL               | NULL             | NULL                                                                                          |
+| Row 1  | 11                 | 2                | 5.5                                                                                           |
+| Row 2  | NULL               | 3                | NULL                                                                                          |
++--------+--------------------+------------------+-----------------------------------------------------------------------------------------------+
+evaluation (internal):
++--------+------------------------------------------------------------------------+
+| Column | Data                                                                   |
++--------+------------------------------------------------------------------------+
+| a      | Nullable { column: UInt16([10, 11, 12]), validity: [0b_____010] }      |
+| b      | Nullable { column: Int16([1, 2, 3]), validity: [0b_____110] }          |
+| Output | Nullable { column: Float32([10.0, 5.5, 4.0]), validity: [0b_____010] } |
++--------+------------------------------------------------------------------------+
+
+
+ast            : divide(a, b)
+raw expr       : divide(ColumnRef(0)::UInt8 NULL, ColumnRef(1)::NULL)
+checked expr   : divide<Float32 NULL, NULL>(cast<dest_type=Float32 NULL>(ColumnRef(0)), ColumnRef(1))
+evaluation:
++--------+--------------------+--------+--------+
+|        | a                  | b      | Output |
++--------+--------------------+--------+--------+
+| Type   | UInt8 NULL         | NULL   | NULL   |
+| Domain | {10..=12} ∪ {NULL} | {NULL} | {NULL} |
+| Row 0  | NULL               | NULL   | NULL   |
+| Row 1  | 11                 | NULL   | NULL   |
+| Row 2  | NULL               | NULL   | NULL   |
++--------+--------------------+--------+--------+
+evaluation (internal):
++--------+------------------------------------------------------------------+
+| Column | Data                                                             |
++--------+------------------------------------------------------------------+
+| a      | Nullable { column: UInt8([10, 11, 12]), validity: [0b_____010] } |
+| b      | Null { len: 3 }                                                  |
+| Output | Null { len: 3 }                                                  |
++--------+------------------------------------------------------------------+
+
+
+ast            : avg(a, 10)
+raw expr       : avg(ColumnRef(0)::UInt8 NULL, 10_u8)
+checked expr   : avg<Float64 NULL, Float64 NULL>(cast<dest_type=Float64 NULL>(ColumnRef(0)), cast<dest_type=Float64 NULL>(10_u8))
+evaluation:
++--------+--------------------+--------------------+
+|        | a                  | Output             |
++--------+--------------------+--------------------+
+| Type   | UInt8 NULL         | Float64 NULL       |
+| Domain | {10..=12} ∪ {NULL} | {10..=11} ∪ {NULL} |
+| Row 0  | NULL               | NULL               |
+| Row 1  | 11                 | 10.5               |
+| Row 2  | NULL               | NULL               |
++--------+--------------------+--------------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| a      | Nullable { column: UInt8([10, 11, 12]), validity: [0b_____010] }         |
+| Output | Nullable { column: Float64([10.0, 10.5, 11.0]), validity: [0b_____010] } |
++--------+--------------------------------------------------------------------------+
+
+
+ast            : avg(a, b)
+raw expr       : avg(ColumnRef(0)::UInt16 NULL, ColumnRef(1)::Int16 NULL)
+checked expr   : avg<Float64 NULL, Float64 NULL>(cast<dest_type=Float64 NULL>(ColumnRef(0)), cast<dest_type=Float64 NULL>(ColumnRef(1)))
+evaluation:
++--------+--------------------+------------------+----------------------+
+|        | a                  | b                | Output               |
++--------+--------------------+------------------+----------------------+
+| Type   | UInt16 NULL        | Int16 NULL       | Float64 NULL         |
+| Domain | {10..=12} ∪ {NULL} | {1..=3} ∪ {NULL} | {5.5..=7.5} ∪ {NULL} |
+| Row 0  | NULL               | NULL             | NULL                 |
+| Row 1  | 11                 | 2                | 6.5                  |
+| Row 2  | NULL               | 3                | NULL                 |
++--------+--------------------+------------------+----------------------+
+evaluation (internal):
++--------+-----------------------------------------------------------------------+
+| Column | Data                                                                  |
++--------+-----------------------------------------------------------------------+
+| a      | Nullable { column: UInt16([10, 11, 12]), validity: [0b_____010] }     |
+| b      | Nullable { column: Int16([1, 2, 3]), validity: [0b_____110] }         |
+| Output | Nullable { column: Float64([5.5, 6.5, 7.5]), validity: [0b_____010] } |
++--------+-----------------------------------------------------------------------+
+
+
+ast            : avg(a, b)
+raw expr       : avg(ColumnRef(0)::UInt32 NULL, ColumnRef(1)::Int32 NULL)
+checked expr   : avg<Float64 NULL, Float64 NULL>(cast<dest_type=Float64 NULL>(ColumnRef(0)), cast<dest_type=Float64 NULL>(ColumnRef(1)))
+evaluation:
++--------+--------------------+------------------+----------------------+
+|        | a                  | b                | Output               |
++--------+--------------------+------------------+----------------------+
+| Type   | UInt32 NULL        | Int32 NULL       | Float64 NULL         |
+| Domain | {10..=12} ∪ {NULL} | {1..=3} ∪ {NULL} | {5.5..=7.5} ∪ {NULL} |
+| Row 0  | NULL               | NULL             | NULL                 |
+| Row 1  | 11                 | 2                | 6.5                  |
+| Row 2  | NULL               | 3                | NULL                 |
++--------+--------------------+------------------+----------------------+
+evaluation (internal):
++--------+-----------------------------------------------------------------------+
+| Column | Data                                                                  |
++--------+-----------------------------------------------------------------------+
+| a      | Nullable { column: UInt32([10, 11, 12]), validity: [0b_____010] }     |
+| b      | Nullable { column: Int32([1, 2, 3]), validity: [0b_____110] }         |
+| Output | Nullable { column: Float64([5.5, 6.5, 7.5]), validity: [0b_____010] } |
++--------+-----------------------------------------------------------------------+
+
+
+ast            : avg(a, b)
+raw expr       : avg(ColumnRef(0)::Float32 NULL, ColumnRef(1)::Int32 NULL)
+checked expr   : avg<Float64 NULL, Float64 NULL>(cast<dest_type=Float64 NULL>(ColumnRef(0)), cast<dest_type=Float64 NULL>(ColumnRef(1)))
+evaluation:
++--------+--------------------+------------------+----------------------+
+|        | a                  | b                | Output               |
++--------+--------------------+------------------+----------------------+
+| Type   | Float32 NULL       | Int32 NULL       | Float64 NULL         |
+| Domain | {10..=12} ∪ {NULL} | {1..=3} ∪ {NULL} | {5.5..=7.5} ∪ {NULL} |
+| Row 0  | NULL               | NULL             | NULL                 |
+| Row 1  | 11                 | 2                | 6.5                  |
+| Row 2  | NULL               | 3                | NULL                 |
++--------+--------------------+------------------+----------------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| a      | Nullable { column: Float32([10.0, 11.0, 12.0]), validity: [0b_____010] } |
+| b      | Nullable { column: Int32([1, 2, 3]), validity: [0b_____110] }            |
+| Output | Nullable { column: Float64([5.5, 6.5, 7.5]), validity: [0b_____010] }    |
++--------+--------------------------------------------------------------------------+
+
+
+ast            : avg(a, b)
+raw expr       : avg(ColumnRef(0)::Float32 NULL, ColumnRef(1)::Float64 NULL)
+checked expr   : avg<Float64 NULL, Float64 NULL>(cast<dest_type=Float64 NULL>(ColumnRef(0)), ColumnRef(1))
+evaluation:
++--------+--------------------+------------------+----------------------+
+|        | a                  | b                | Output               |
++--------+--------------------+------------------+----------------------+
+| Type   | Float32 NULL       | Float64 NULL     | Float64 NULL         |
+| Domain | {10..=12} ∪ {NULL} | {1..=3} ∪ {NULL} | {5.5..=7.5} ∪ {NULL} |
+| Row 0  | NULL               | NULL             | NULL                 |
+| Row 1  | 11                 | 2                | 6.5                  |
+| Row 2  | NULL               | 3                | NULL                 |
++--------+--------------------+------------------+----------------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| a      | Nullable { column: Float32([10.0, 11.0, 12.0]), validity: [0b_____010] } |
+| b      | Nullable { column: Float64([1.0, 2.0, 3.0]), validity: [0b_____110] }    |
+| Output | Nullable { column: Float64([5.5, 6.5, 7.5]), validity: [0b_____010] }    |
++--------+--------------------------------------------------------------------------+
+
+
+ast            : multiply(a, b)
+raw expr       : multiply(ColumnRef(0)::Int8 NULL, ColumnRef(1)::NULL)
+checked expr   : multiply<Int64 NULL, NULL>(cast<dest_type=Int64 NULL>(ColumnRef(0)), ColumnRef(1))
+evaluation:
++--------+--------------------+--------+--------+
+|        | a                  | b      | Output |
++--------+--------------------+--------+--------+
+| Type   | Int8 NULL          | NULL   | NULL   |
+| Domain | {10..=12} ∪ {NULL} | {NULL} | {NULL} |
+| Row 0  | NULL               | NULL   | NULL   |
+| Row 1  | 11                 | NULL   | NULL   |
+| Row 2  | NULL               | NULL   | NULL   |
++--------+--------------------+--------+--------+
+evaluation (internal):
++--------+------------------------------------------------------------------+
+| Column | Data                                                             |
++--------+------------------------------------------------------------------+
+| a      | Nullable { column: UInt8([10, 11, 12]), validity: [0b_____010] } |
+| b      | Null { len: 3 }                                                  |
+| Output | Null { len: 3 }                                                  |
++--------+------------------------------------------------------------------+
+
+
 ast            : bool_not(a)
 raw expr       : bool_not(ColumnRef(0)::Boolean NULL)
 checked expr   : bool_not<Boolean NULL>(ColumnRef(0))

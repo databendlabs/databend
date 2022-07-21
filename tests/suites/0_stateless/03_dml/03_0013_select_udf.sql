@@ -3,3 +3,7 @@ CREATE FUNCTION notnull AS (p) -> not(is_null(p));
 SELECT notnull(null);
 SELECT notnull('null');
 SELECT cal(1, 2, 3, 4, 6);
+
+DROP FUNCTION cal;
+DROP FUNCTION notnull;
+
