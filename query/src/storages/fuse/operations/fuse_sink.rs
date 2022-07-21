@@ -33,7 +33,7 @@ use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::Processor;
 use crate::sessions::TableContext;
 use crate::storages::fuse::io::TableMetaLocationGenerator;
-use crate::storages::fuse::statistics::accumulator::BlockStatistics;
+use crate::storages::fuse::statistics::BlockStatistics;
 use crate::storages::fuse::statistics::StatisticsAccumulator;
 use crate::storages::index::ClusterKeyInfo;
 

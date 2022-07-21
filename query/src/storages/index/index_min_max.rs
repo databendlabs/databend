@@ -12,63 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
-
-use common_datablocks::DataBlock;
-use common_datavalues::DataValue;
-use common_exception::Result;
-use common_planners::Expression;
-
-use crate::storages::index::IndexSchemaVersion;
+/// MinMaxIndex is absorbed into the table meta statics
+use crate::storages::index::SupportedType;
 
 /// Min and Max index.
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub struct MinMaxIndex {
-    pub col: String,
-    pub min: DataValue,
-    pub max: DataValue,
-    pub version: IndexSchemaVersion,
-}
+pub struct MinMaxIndex {}
 
-impl MinMaxIndex {
-    fn create(col: String, min: DataValue, max: DataValue) -> Self {
-        MinMaxIndex {
-            col,
-            min,
-            max,
-            version: IndexSchemaVersion::V1,
-        }
-    }
-
-    pub fn typ(&self) -> &str {
-        "min_max"
-    }
-
-    /// Create index for one parquet file.
-    /// All blocks are belong to a Parquet file and globally sorted.
-    /// Each block is one row group of a parquet file and sorted by primary key.
-    /// For example:
-    /// parquet.file
-    /// | sorted-block | sorted-block | ... |
-    pub fn create_index(keys: &[String], blocks: &[DataBlock]) -> Result<Vec<MinMaxIndex>> {
-        let first = 0;
-        let last = blocks.len() - 1;
-        let mut keys_idx = vec![];
-
-        for key in keys {
-            let min = blocks[first].first(key)?;
-            let max = blocks[last].last(key)?;
-            let min_max = MinMaxIndex::create(key.clone(), min, max);
-            keys_idx.push(min_max);
-        }
-        Ok(keys_idx)
-    }
-
-    /// Apply the expr against the idx_map, and get the result:
-    /// true: need
-    /// false: skip
-    pub fn apply_index(_idx_map: HashMap<String, MinMaxIndex>, _expr: &Expression) -> Result<bool> {
-        // TODO(bohu): expression apply.
-        Ok(true)
-    }
-}
+/// using the default implementation
+impl SupportedType for MinMaxIndex {}

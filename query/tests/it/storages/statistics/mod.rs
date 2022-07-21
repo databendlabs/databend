@@ -1,4 +1,4 @@
-//  Copyright 2021 Datafuse Labs.
+//  Copyright 2022 Datafuse Labs.
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
 //  you may not use this file except in compliance with the License.
@@ -12,15 +12,4 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-pub mod accumulator;
-mod block_statistics;
-mod column_statistic;
-pub mod reducers;
-
-pub use accumulator::PartiallyAccumulated;
-pub use accumulator::StatisticsAccumulator;
-pub use block_statistics::BlockStatistics;
-pub use column_statistic::gen_columns_statistics;
-pub use column_statistic::traverse;
-pub use reducers::merge_statistics;
-pub use reducers::reduce_block_statistics;
+mod column_statistics;
