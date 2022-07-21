@@ -226,6 +226,7 @@ impl From<InnerStorageConfig> for StorageConfig {
                 cfg.storage_type = "s3".to_string();
                 cfg.s3 = v.into()
             }
+            v => unreachable!("{v:?} should not be used as storage backend"),
         }
 
         cfg

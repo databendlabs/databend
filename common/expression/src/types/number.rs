@@ -20,6 +20,7 @@ use common_arrow::arrow::buffer::Buffer;
 use common_arrow::arrow::types::NativeType;
 
 use crate::property::Domain;
+use crate::property::FloatDomain;
 use crate::property::IntDomain;
 use crate::property::UIntDomain;
 use crate::types::ArgType;
@@ -464,6 +465,84 @@ impl Number for i64 {
         IntDomain {
             min: i64::MIN,
             max: i64::MAX,
+        }
+    }
+}
+
+impl Number for f32 {
+    type Storage = f32;
+    type Domain = FloatDomain;
+
+    fn data_type() -> DataType {
+        DataType::Float32
+    }
+
+    fn try_downcast_scalar(scalar: &Scalar) -> Option<Self::Storage> {
+        scalar.as_float32().cloned()
+    }
+
+    fn try_downcast_column(col: &Column) -> Option<Buffer<Self::Storage>> {
+        col.as_float32().cloned()
+    }
+
+    fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
+        domain.as_float().cloned()
+    }
+
+    fn upcast_scalar(scalar: Self::Storage) -> Scalar {
+        Scalar::Float32(scalar)
+    }
+
+    fn upcast_column(col: Buffer<Self::Storage>) -> Column {
+        Column::Float32(col)
+    }
+
+    fn upcast_domain(domain: Self::Domain) -> Domain {
+        Domain::Float(domain)
+    }
+
+    fn full_domain() -> Self::Domain {
+        FloatDomain {
+            min: f32::MIN as f64,
+            max: f32::MAX as f64,
+        }
+    }
+}
+
+impl Number for f64 {
+    type Storage = f64;
+    type Domain = FloatDomain;
+
+    fn data_type() -> DataType {
+        DataType::Float64
+    }
+
+    fn try_downcast_scalar(scalar: &Scalar) -> Option<Self::Storage> {
+        scalar.as_float64().cloned()
+    }
+
+    fn try_downcast_column(col: &Column) -> Option<Buffer<Self::Storage>> {
+        col.as_float64().cloned()
+    }
+
+    fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
+        domain.as_float().cloned()
+    }
+    fn upcast_scalar(scalar: Self::Storage) -> Scalar {
+        Scalar::Float64(scalar)
+    }
+
+    fn upcast_column(col: Buffer<Self::Storage>) -> Column {
+        Column::Float64(col)
+    }
+
+    fn upcast_domain(domain: Self::Domain) -> Domain {
+        Domain::Float(domain)
+    }
+    fn full_domain() -> Self::Domain {
+        FloatDomain {
+            min: f64::MIN,
+            max: f64::MAX,
         }
     }
 }

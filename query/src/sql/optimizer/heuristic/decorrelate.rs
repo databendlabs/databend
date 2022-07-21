@@ -594,8 +594,7 @@ impl SubqueryRewriter {
                 let flatten_plan = self.flatten(plan.child(0)?, correlated_columns)?;
                 Ok(SExpr::create_unary(plan.plan().clone(), flatten_plan))
             }
-            RelOperator::Max1Row(_)
-            | RelOperator::Pattern(_)
+            RelOperator::Pattern(_)
             | RelOperator::LogicalGet(_)
             | RelOperator::PhysicalScan(_)
             | RelOperator::PhysicalHashJoin(_) => Err(ErrorCode::LogicalError(

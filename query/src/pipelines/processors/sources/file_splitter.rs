@@ -23,7 +23,7 @@ use common_formats::InputFormat;
 use common_formats::InputState;
 use common_io::prelude::FormatSettings;
 use futures::AsyncRead;
-use futures::AsyncReadExt;
+use futures_util::AsyncReadExt;
 use opendal::io_util::CompressAlgorithm;
 use opendal::io_util::DecompressDecoder;
 use opendal::io_util::DecompressState;
@@ -186,13 +186,28 @@ impl FileSplitter {
         }
     }
 
+    /// Fill will try its best to fill the `input_buf`
+    ///
+    /// Either the input_buf is full or the reader has been consumed.
     async fn fill(&mut self) -> Result<()> {
-        let n_read = self.reader.read(&mut *self.input_buf).await?;
-        if n_read > 0 {
-            self.state = State::ReceivedData(n_read);
-        } else {
-            self.state = State::NeedFlush;
+        let mut buf = &mut self.input_buf[0..];
+        let mut n = 0;
+
+        while !buf.is_empty() {
+            let read = self.reader.read(buf).await?;
+            if read == 0 {
+                break;
+            }
+
+            n += read;
+            buf = &mut self.input_buf[n..]
         }
+
+        self.state = if n > 0 {
+            State::ReceivedData(n)
+        } else {
+            State::NeedFlush
+        };
         Ok(())
     }
 

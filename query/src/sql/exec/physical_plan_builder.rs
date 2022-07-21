@@ -192,10 +192,6 @@ impl PhysicalPlanBuilder {
                 limit: limit.limit,
                 offset: limit.offset,
             }),
-            RelOperator::Max1Row(_) => Ok(PhysicalPlan::Max1Row {
-                input: Box::new(self.build(s_expr.child(0)?)?),
-            }),
-
             _ => Err(ErrorCode::LogicalError(format!(
                 "Unsupported physical plan: {:?}",
                 s_expr.plan()

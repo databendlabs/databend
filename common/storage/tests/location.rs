@@ -12,9 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::io::Result;
 
 use common_storage::parse_uri_location;
+use common_storage::StorageHttpConfig;
 use common_storage::StorageParams;
 use common_storage::StorageS3Config;
 use common_storage::UriLocation;
@@ -77,6 +79,66 @@ fn test_parse_uri_location() -> Result<()> {
                     root: "/tmp/".to_string(),
                     disable_credential_loader: true,
                     enable_virtual_host_style: false,
+                }),
+                "/".to_string(),
+            ),
+        ),
+        (
+            "http_without_glob",
+            UriLocation {
+                protocol: "https".to_string(),
+                name: "example.com".to_string(),
+                path: "/tmp.csv".to_string(),
+                connection: BTreeMap::default(),
+            },
+            (
+                StorageParams::Http(StorageHttpConfig {
+                    endpoint_url: "https://example.com".to_string(),
+                    paths: ["/tmp.csv"].iter().map(|v| v.to_string()).collect(),
+                }),
+                "/".to_string(),
+            ),
+        ),
+        (
+            "http_with_set_glob",
+            UriLocation {
+                protocol: "https".to_string(),
+                name: "example.com".to_string(),
+                path: "/tmp-{a,b,c}.csv".to_string(),
+                connection: BTreeMap::default(),
+            },
+            (
+                StorageParams::Http(StorageHttpConfig {
+                    endpoint_url: "https://example.com".to_string(),
+                    paths: ["/tmp-a.csv", "/tmp-b.csv", "/tmp-c.csv"]
+                        .iter()
+                        .map(|v| v.to_string())
+                        .collect(),
+                }),
+                "/".to_string(),
+            ),
+        ),
+        (
+            "http_with_range_glob",
+            UriLocation {
+                protocol: "https".to_string(),
+                name: "example.com".to_string(),
+                path: "/tmp-[11-15].csv".to_string(),
+                connection: BTreeMap::default(),
+            },
+            (
+                StorageParams::Http(StorageHttpConfig {
+                    endpoint_url: "https://example.com".to_string(),
+                    paths: [
+                        "/tmp-11.csv",
+                        "/tmp-12.csv",
+                        "/tmp-13.csv",
+                        "/tmp-14.csv",
+                        "/tmp-15.csv",
+                    ]
+                    .iter()
+                    .map(|v| v.to_string())
+                    .collect(),
                 }),
                 "/".to_string(),
             ),

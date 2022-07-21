@@ -361,6 +361,8 @@ pub enum TokenKind {
     ENCRYPTION,
     #[token("ENGINE", ignore(ascii_case))]
     ENGINE,
+    #[token("ENGINES", ignore(ascii_case))]
+    ENGINES,
     #[token("EPOCH", ignore(ascii_case))]
     EPOCH,
     #[token("EXISTS", ignore(ascii_case))]

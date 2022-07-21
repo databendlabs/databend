@@ -81,9 +81,6 @@ pub enum PhysicalPlan {
         marker_index: Option<IndexType>,
         from_correlated_subquery: bool,
     },
-    Max1Row {
-        input: Box<PhysicalPlan>,
-    },
 }
 
 impl PhysicalPlan {
@@ -200,7 +197,6 @@ impl PhysicalPlan {
                 }
                 Ok(DataSchemaRefExt::create(fields))
             }
-            PhysicalPlan::Max1Row { input, .. } => input.output_schema(),
         }
     }
 }

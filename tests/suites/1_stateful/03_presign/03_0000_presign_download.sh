@@ -14,7 +14,7 @@ echo "CREATE STAGE presign_stage;" | $MYSQL_CLIENT_CONNECT
 # -w "%{http_code}": only print http code so that we can use this for test.
 # -o /dev/null: redirect content to /dev/null to avoid pollute our result.
 # cut -f 3: get the third value of output - the url.
-curl -s -w "%{http_code}\n" -o /dev/null "`echo "set enable_planner_v2 = 1; PRESIGN @presign_stage/ontime_200.csv" | $MYSQL_CLIENT_CONNECT | cut -f 3`"
+curl -s -w "%{http_code}\n" -o /dev/null "`echo "PRESIGN @presign_stage/ontime_200.csv" | $MYSQL_CLIENT_CONNECT | cut -f 3`"
 
 ## Drop table.
 echo "drop stage if exists presign_stage" | $MYSQL_CLIENT_CONNECT
