@@ -108,13 +108,11 @@ impl FileSplitter {
         let mut data_slice = data;
 
         if *rows_to_skip > 0 {
-            let len = data_slice.len();
-            let mut skip_size = 0;
-            while *rows_to_skip > 0 {
-                skip_size += input_format.skip_header(data_slice, format_state, 1)?;
-                *rows_to_skip -= 1;
-            }
-            if skip_size < len {
+            let skip_size =
+                input_format.skip_header(data_slice, format_state, *rows_to_skip as usize)?;
+            let skip_rows = input_format.read_row_num(format_state)?;
+            if skip_rows == *rows_to_skip as usize {
+                *rows_to_skip = 0;
                 *format_state = input_format.create_state();
                 data_slice = &data_slice[skip_size..];
             } else {
