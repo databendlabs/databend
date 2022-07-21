@@ -120,6 +120,10 @@ root = ""
 [catalog]
 meta_store_address = "127.0.0.1:9083"
 protocol = "binary"
+
+[task]
+delay_seconds = 3600
+compaction_enabled = false
 "#;
 
     let tom_actual = toml::to_string(&actual.into_outer()).unwrap();
@@ -389,6 +393,10 @@ root = ""
 [catalog]
 meta_store_address = "127.0.0.1:9083"
 protocol = "binary"
+
+[task]
+delay_seconds = 3600
+compaction_enabled = false
     "#
         .as_bytes(),
     )?;
