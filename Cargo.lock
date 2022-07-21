@@ -1120,7 +1120,6 @@ dependencies = [
  "ahash",
  "comfy-table",
  "common-arrow",
- "common-base",
  "common-datavalues",
  "common-exception",
  "common-io",
@@ -1139,10 +1138,8 @@ dependencies = [
  "chrono",
  "chrono-tz",
  "common-arrow",
- "common-base",
  "common-exception",
  "common-io",
- "common-macros",
  "criterion",
  "dyn-clone",
  "enum_dispatch",
@@ -1347,7 +1344,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
- "synstructure",
 ]
 
 [[package]]
@@ -1581,11 +1577,9 @@ name = "common-pipeline"
 version = "0.1.0"
 dependencies = [
  "async-trait 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)",
- "common-base",
  "common-datablocks",
  "common-datavalues",
  "common-exception",
- "common-tracing",
  "futures",
  "futures-util",
  "itertools",

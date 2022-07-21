@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use common_arrow::arrow::datatypes::Field as ArrowField;
-use common_macros::MallocSizeOf;
 
 use crate::remove_nullable;
 use crate::types::data_type::from_arrow_field;
@@ -22,12 +21,11 @@ use crate::types::data_type::DataTypeImpl;
 use crate::wrap_nullable;
 use crate::TypeID;
 
-#[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Clone, MallocSizeOf)]
+#[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Clone)]
 pub struct DataField {
     name: String,
     /// default_expr is serialized representation from PlanExpression
     default_expr: Option<String>,
-    #[ignore_malloc_size_of = "insignificant"]
     data_type: DataTypeImpl,
 }
 
