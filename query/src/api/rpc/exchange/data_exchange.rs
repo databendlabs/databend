@@ -73,6 +73,9 @@ pub struct BroadcastExchange {
 
 impl BroadcastExchange {
     pub fn create(from_multiple_nodes: bool, destination_ids: Vec<String>) -> DataExchange {
-        DataExchange::Broadcast(BroadcastExchange { from_multiple_nodes, destination_ids })
+        DataExchange::Broadcast(BroadcastExchange {
+            from_multiple_nodes,
+            destination_ids,
+        })
     }
 }

@@ -22,9 +22,11 @@ use common_planners::ExplainType;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
-use crate::interpreters::{plan_schedulers, QueryFragmentActions, QueryFragmentsActions};
-use crate::interpreters::fragments::{QueryFragmentsBuilder, RootQueryFragment};
+use crate::interpreters::fragments::QueryFragmentsBuilder;
+use crate::interpreters::fragments::RootQueryFragment;
+use crate::interpreters::plan_schedulers;
 use crate::interpreters::Interpreter;
+use crate::interpreters::QueryFragmentsActions;
 use crate::optimizers::Optimizers;
 use crate::pipelines::QueryPipelineBuilder;
 use crate::sessions::QueryContext;
@@ -121,7 +123,6 @@ impl ExplainInterpreter {
             &self.explain.input,
         )?;
 
-
         let query_fragments = QueryFragmentsBuilder::build(ctx.clone(), &plan)?;
         let root_query_fragment = RootQueryFragment::create(query_fragments, ctx.clone(), &plan)?;
 
@@ -129,7 +130,8 @@ impl ExplainInterpreter {
         root_query_fragment.finalize(&mut fragments_actions)?;
 
         let formatted_fragments = Series::from_data(
-            fragments_actions.display_indent()
+            fragments_actions
+                .display_indent()
                 .to_string()
                 .lines()
                 .map(|s| s.as_bytes())

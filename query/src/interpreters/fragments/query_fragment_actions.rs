@@ -357,9 +357,8 @@ impl Debug for QueryFragmentsActions {
 
 impl Debug for QueryFragmentAction {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let node_str = format!("{:?}", self.node).replace("\n", "\\n");
         f.debug_struct("QueryFragmentAction")
-            .field("node", &node_str)
+            .field("node", &self.node)
             .field("executor", &self.executor)
             .finish()
     }

@@ -13,14 +13,15 @@
 // limitations under the License.
 
 use std::sync::Arc;
-use std::sync::atomic::AtomicUsize;
-use common_base::base::tokio::sync::broadcast::{channel, Receiver};
-use common_datavalues::DataValue;
 
+use common_base::base::tokio::sync::broadcast::channel;
+use common_base::base::tokio::sync::broadcast::Receiver;
+use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::{AggregatorFinalPlan, Expression};
+use common_planners::AggregatorFinalPlan;
 use common_planners::AggregatorPartialPlan;
+use common_planners::Expression;
 use common_planners::ExpressionPlan;
 use common_planners::FilterPlan;
 use common_planners::HavingPlan;
@@ -39,11 +40,15 @@ use super::processors::transforms::TransformWindowFunc;
 use super::processors::transforms::WindowFuncCompact;
 use super::processors::SortMergeCompactor;
 use crate::pipelines::pipeline::Pipeline;
-use crate::pipelines::processors::transforms::{get_sort_descriptions, SubqueryReceiver};
-use crate::pipelines::processors::{AggregatorParams, SubqueryReceiveSink};
+use crate::pipelines::processors::port::InputPort;
+use crate::pipelines::processors::port::OutputPort;
+use crate::pipelines::processors::transforms::get_sort_descriptions;
+use crate::pipelines::processors::transforms::SubqueryReceiver;
+use crate::pipelines::processors::AggregatorParams;
 use crate::pipelines::processors::AggregatorTransformParams;
 use crate::pipelines::processors::ExpressionTransform;
 use crate::pipelines::processors::ProjectionTransform;
+use crate::pipelines::processors::SubqueryReceiveSink;
 use crate::pipelines::processors::TransformAggregator;
 use crate::pipelines::processors::TransformCreateSets;
 use crate::pipelines::processors::TransformFilter;
@@ -52,8 +57,8 @@ use crate::pipelines::processors::TransformLimit;
 use crate::pipelines::processors::TransformLimitBy;
 use crate::pipelines::processors::TransformSortMerge;
 use crate::pipelines::processors::TransformSortPartial;
-use crate::pipelines::{Pipe, PipelineBuildResult, SinkPipeBuilder};
-use crate::pipelines::processors::port::{InputPort, OutputPort};
+use crate::pipelines::Pipe;
+use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 
@@ -115,11 +120,16 @@ impl QueryPipelineBuilder {
         build_res.main_pipeline.add_pipe(Pipe::SimplePipe {
             outputs_port: vec![],
             inputs_port: vec![input.clone()],
-            processors: vec![SubqueryReceiveSink::try_create(input, query_plan.schema(), tx)?],
+            processors: vec![SubqueryReceiveSink::try_create(
+                input,
+                query_plan.schema(),
+                tx,
+            )?],
         });
 
         self.sources_pipeline.push(build_res.main_pipeline);
-        self.sources_pipeline.extend(build_res.sources_pipelines.into_iter());
+        self.sources_pipeline
+            .extend(build_res.sources_pipelines.into_iter());
         Ok(rx)
     }
 }
@@ -240,14 +250,15 @@ impl PlanVisitor for QueryPipelineBuilder {
             RemotePlan::V2(plan) => {
                 let fragment_id = plan.receive_fragment_id;
                 let query_id = plan.receive_query_id.to_owned();
-                let mut build_res = self.ctx.get_exchange_manager().get_fragment_source(
+                let build_res = self.ctx.get_exchange_manager().get_fragment_source(
                     query_id,
                     fragment_id,
                     schema,
                 )?;
 
                 self.main_pipeline = build_res.main_pipeline;
-                self.sources_pipeline.extend(build_res.sources_pipelines.into_iter());
+                self.sources_pipeline
+                    .extend(build_res.sources_pipelines.into_iter());
                 Ok(())
             }
         }
@@ -323,9 +334,15 @@ impl PlanVisitor for QueryPipelineBuilder {
         let mut sub_queries_receiver = Vec::with_capacity(plan.expressions.len());
         for expression in &plan.expressions {
             sub_queries_receiver.push(match expression {
-                Expression::Subquery { query_plan, .. } => Ok(SubqueryReceiver::Subquery(self.expand_subquery(query_plan)?)),
-                Expression::ScalarSubquery { query_plan, .. } => Ok(SubqueryReceiver::ScalarSubquery(self.expand_subquery(query_plan)?)),
-                _ => Err(ErrorCode::IllegalPipelineState("Must be subquery plan or scalar subquery plan.")),
+                Expression::Subquery { query_plan, .. } => Ok(SubqueryReceiver::Subquery(
+                    self.expand_subquery(query_plan)?,
+                )),
+                Expression::ScalarSubquery { query_plan, .. } => Ok(
+                    SubqueryReceiver::ScalarSubquery(self.expand_subquery(query_plan)?),
+                ),
+                _ => Err(ErrorCode::IllegalPipelineState(
+                    "Must be subquery plan or scalar subquery plan.",
+                )),
             }?);
         }
 
@@ -353,7 +370,11 @@ impl PlanVisitor for QueryPipelineBuilder {
             )?);
         }
 
-        self.main_pipeline.add_pipe(Pipe::SimplePipe { processors, inputs_port, outputs_port });
+        self.main_pipeline.add_pipe(Pipe::SimplePipe {
+            processors,
+            inputs_port,
+            outputs_port,
+        });
         Ok(())
     }
 

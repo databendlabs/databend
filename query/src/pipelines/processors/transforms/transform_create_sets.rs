@@ -15,33 +15,18 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use common_base::base::tokio::task::JoinHandle;
-use common_base::base::Runtime;
-use common_base::base::TrySpawn;
+use common_base::base::tokio::sync::broadcast::Receiver;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
-use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::Expression;
-use common_planners::PlanNode;
-use common_planners::SelectPlan;
-use parking_lot::Mutex;
-use common_base::base::tokio::sync::oneshot::error::RecvError;
-use common_base::base::tokio::sync::broadcast::Receiver;
 
-use crate::interpreters::Interpreter;
-use crate::interpreters::SelectInterpreter;
-use crate::pipelines::executor::PipelinePullingExecutor;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::Event;
 use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::Processor;
-use crate::pipelines::QueryPipelineBuilder;
-use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
 
 pub enum SubqueryReceiver {
     Subquery(Receiver<DataValue>),
@@ -52,7 +37,9 @@ impl SubqueryReceiver {
     pub fn subscribe(&mut self) -> SubqueryReceiver {
         match self {
             SubqueryReceiver::Subquery(rx) => SubqueryReceiver::Subquery(rx.resubscribe()),
-            SubqueryReceiver::ScalarSubquery(rx) => SubqueryReceiver::ScalarSubquery(rx.resubscribe())
+            SubqueryReceiver::ScalarSubquery(rx) => {
+                SubqueryReceiver::ScalarSubquery(rx.resubscribe())
+            }
         }
     }
 }

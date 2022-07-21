@@ -44,6 +44,7 @@ use crate::api::rpc::exchange::exchange_params::MergeExchangeParams;
 use crate::api::rpc::exchange::exchange_params::ShuffleExchangeParams;
 use crate::api::rpc::exchange::exchange_sink::ExchangeSink;
 use crate::api::rpc::exchange::exchange_source::ExchangeSource;
+use crate::api::rpc::flight_scatter_broadcast::BroadcastFlightScatter;
 use crate::api::rpc::flight_scatter_hash::HashFlightScatter;
 use crate::api::rpc::packets::DataPacket;
 use crate::api::rpc::Packet;
@@ -51,12 +52,12 @@ use crate::api::DataExchange;
 use crate::api::FragmentPlanPacket;
 use crate::api::InitNodesChannelPacket;
 use crate::api::QueryFragmentsPlanPacket;
-use crate::api::rpc::flight_scatter_broadcast::BroadcastFlightScatter;
 use crate::interpreters::QueryFragmentActions;
 use crate::interpreters::QueryFragmentsActions;
 use crate::pipelines::executor::PipelineCompleteExecutor;
-use crate::pipelines::{Pipe, PipelineBuildResult};
+use crate::pipelines::Pipe;
 use crate::pipelines::Pipeline;
+use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::QueryPipelineBuilder;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
@@ -443,7 +444,11 @@ impl QueryCoordinator {
         Ok(())
     }
 
-    pub fn prepare_subscribes_channel(&mut self, ctx: Arc<QueryContext>, prepare: &QueryFragmentsPlanPacket) -> Result<()> {
+    pub fn prepare_subscribes_channel(
+        &mut self,
+        ctx: Arc<QueryContext>,
+        prepare: &QueryFragmentsPlanPacket,
+    ) -> Result<()> {
         for (source, fragments_id) in &prepare.source_2_fragments {
             if source == &prepare.executor {
                 continue;
@@ -646,11 +651,16 @@ impl QueryCoordinator {
         }
     }
 
-    pub fn subscribe_fragment(&mut self, fragment_id: usize, schema: DataSchemaRef) -> Result<PipelineBuildResult> {
+    pub fn subscribe_fragment(
+        &mut self,
+        fragment_id: usize,
+        schema: DataSchemaRef,
+    ) -> Result<PipelineBuildResult> {
         let (tx, rx) = async_channel::bounded(1);
 
         // Register subscriber for data exchange.
-        self.subscribe_fragments.insert(fragment_id, FragmentReceiver::create_unrecorded(tx));
+        self.subscribe_fragments
+            .insert(fragment_id, FragmentReceiver::create_unrecorded(tx));
 
         // Merge pipelines if exist locally pipeline
         if let Some(mut fragment_coordinator) = self.fragments_coordinator.remove(&fragment_id) {

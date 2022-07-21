@@ -1,14 +1,39 @@
-use std::fmt::{Debug, Formatter};
+// Copyright 2022 Datafuse Labs.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+use std::fmt::Debug;
+use std::fmt::Formatter;
 use std::sync::Arc;
+
 use common_catalog::table_context::TableContext;
-use common_datavalues::DataSchemaRef;
-use common_planners::{AggregatorFinalPlan, AggregatorPartialPlan, AlterTableClusterKeyPlan, AlterUserPlan, AlterUserUDFPlan, AlterViewPlan, BroadcastPlan, CallPlan, CopyPlan, CreateDatabasePlan, CreateRolePlan, CreateTablePlan, CreateUserPlan, CreateUserStagePlan, CreateUserUDFPlan, CreateViewPlan, DeletePlan, DescribeTablePlan, DescribeUserStagePlan, DropDatabasePlan, DropRolePlan, DropTableClusterKeyPlan, DropTablePlan, DropUserPlan, DropUserStagePlan, DropUserUDFPlan, DropViewPlan, EmptyPlan, ExistsTablePlan, ExplainPlan, Expression, ExpressionPlan, Expressions, FilterPlan, GrantPrivilegePlan, GrantRolePlan, HavingPlan, InsertPlan, KillPlan, LimitByPlan, LimitPlan, ListPlan, OptimizeTablePlan, PlanBuilder, PlanNode, PlanRewriter, ProjectionPlan, ReadDataSourcePlan, RemotePlan, RemoveUserStagePlan, RenameDatabasePlan, RenameTablePlan, RevokePrivilegePlan, RevokeRolePlan, SelectPlan, SettingPlan, ShowCreateDatabasePlan, ShowCreateTablePlan, ShowPlan, SinkPlan, SortPlan, SubQueriesSetPlan, TruncateTablePlan, UndropDatabasePlan, UndropTablePlan, UseDatabasePlan, WindowFuncPlan};
+use common_exception::ErrorCode;
+use common_exception::Result;
+use common_planners::AggregatorFinalPlan;
+use common_planners::AggregatorPartialPlan;
+use common_planners::BroadcastPlan;
+use common_planners::PlanBuilder;
+use common_planners::PlanNode;
+use common_planners::PlanRewriter;
+use common_planners::RemotePlan;
+
+use crate::api::BroadcastExchange;
 use crate::interpreters::fragments::partition_state::PartitionState;
 use crate::interpreters::fragments::QueryFragment;
-use crate::interpreters::{QueryFragmentAction, QueryFragmentActions, QueryFragmentsActions};
+use crate::interpreters::QueryFragmentAction;
+use crate::interpreters::QueryFragmentActions;
+use crate::interpreters::QueryFragmentsActions;
 use crate::sessions::QueryContext;
-use common_exception::{ErrorCode, Result};
-use crate::api::BroadcastExchange;
 
 pub struct BroadcastQueryFragment {
     id: usize,
@@ -78,7 +103,10 @@ impl QueryFragment for BroadcastQueryFragment {
             }
         }
 
-        fragment_actions.set_exchange(BroadcastExchange::create(from_multiple_nodes, actions.get_executors()));
+        fragment_actions.set_exchange(BroadcastExchange::create(
+            from_multiple_nodes,
+            actions.get_executors(),
+        ));
 
         match input_actions.exchange_actions {
             true => actions.add_fragment_actions(fragment_actions),
@@ -133,7 +161,7 @@ impl PlanRewriter for BroadcastRewrite {
 }
 
 impl Debug for BroadcastQueryFragment {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, _f: &mut Formatter<'_>) -> std::fmt::Result {
         unimplemented!()
     }
 }

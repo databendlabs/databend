@@ -15,7 +15,8 @@
 use std::sync::Arc;
 
 use common_datavalues::DataSchemaRef;
-use common_exception::{ErrorCode, Result};
+use common_exception::ErrorCode;
+use common_exception::Result;
 use common_planners::PlanNode;
 use common_planners::SelectPlan;
 use common_streams::SendableDataBlockStream;
@@ -27,7 +28,8 @@ use crate::interpreters::stream::ProcessorExecutorStream;
 use crate::interpreters::Interpreter;
 use crate::optimizers::Optimizers;
 use crate::pipelines::executor::PipelinePullingExecutor;
-use crate::pipelines::{Pipeline, PipelineBuildResult};
+use crate::pipelines::Pipeline;
+use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::QueryPipelineBuilder;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
@@ -94,7 +96,7 @@ impl Interpreter for SelectInterpreter {
         let async_runtime = self.ctx.get_storage_runtime();
         let query_need_abort = self.ctx.query_need_abort();
         Ok(Box::pin(ProcessorExecutorStream::create(
-            PipelinePullingExecutor::from_pipelines(async_runtime, query_need_abort, build_res)?
+            PipelinePullingExecutor::from_pipelines(async_runtime, query_need_abort, build_res)?,
         )?))
     }
 
@@ -104,7 +106,9 @@ impl Interpreter for SelectInterpreter {
         let build_res = self.build_pipeline().await?;
 
         if !build_res.sources_pipelines.is_empty() {
-            return Err(ErrorCode::IllegalPipelineState("Sources pipeline must be empty."));
+            return Err(ErrorCode::IllegalPipelineState(
+                "Sources pipeline must be empty.",
+            ));
         }
 
         Ok(build_res.main_pipeline)

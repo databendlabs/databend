@@ -12,14 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::{AggregatorFinalPlan, BroadcastPlan, Expression, SubQueriesSetPlan};
+use common_planners::AggregatorFinalPlan;
 use common_planners::AggregatorPartialPlan;
+use common_planners::BroadcastPlan;
 use common_planners::ExpressionPlan;
 use common_planners::FilterPlan;
 use common_planners::HavingPlan;
@@ -32,6 +32,7 @@ use common_planners::SelectPlan;
 use common_planners::SinkPlan;
 use common_planners::SortPlan;
 use common_planners::StagePlan;
+use common_planners::SubQueriesSetPlan;
 use common_planners::WindowFuncPlan;
 
 use crate::interpreters::fragments::partition_state::PartitionState;

@@ -1,12 +1,29 @@
-use std::any::Any;
+// Copyright 2022 Datafuse Labs.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 use std::sync::Arc;
+
 use common_base::base::tokio::sync::broadcast::Sender;
 use common_datablocks::DataBlock;
-use common_datavalues::{DataSchemaRef, DataValue};
-use crate::pipelines::processors::port::InputPort;
-use crate::pipelines::processors::{Processor, Sink, Sinker};
+use common_datavalues::DataSchemaRef;
+use common_datavalues::DataValue;
 use common_exception::Result;
-use crate::pipelines::processors::processor::{Event, ProcessorPtr};
+
+use crate::pipelines::processors::port::InputPort;
+use crate::pipelines::processors::processor::ProcessorPtr;
+use crate::pipelines::processors::Sink;
+use crate::pipelines::processors::Sinker;
 
 pub struct SubqueryReceiveSink {
     input_columns: Vec<Vec<DataValue>>,
@@ -14,7 +31,11 @@ pub struct SubqueryReceiveSink {
 }
 
 impl SubqueryReceiveSink {
-    pub fn try_create(input: Arc<InputPort>, schema: DataSchemaRef, sender: Sender<DataValue>) -> Result<ProcessorPtr> {
+    pub fn try_create(
+        input: Arc<InputPort>,
+        schema: DataSchemaRef,
+        sender: Sender<DataValue>,
+    ) -> Result<ProcessorPtr> {
         let mut input_columns = Vec::with_capacity(schema.fields().len());
 
         for _index in 0..schema.fields().len() {
@@ -59,7 +80,6 @@ impl Sink for SubqueryReceiveSink {
         Ok(())
     }
 }
-//
 // #[async_trait::async_trait]
 // impl Processor for SubqueryReceiveSink {
 //     fn name(&self) -> &'static str {

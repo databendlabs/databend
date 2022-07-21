@@ -17,7 +17,7 @@ use std::fmt::Formatter;
 
 use common_datavalues::DataType;
 
-use crate::{AggregatorFinalPlan, RemotePlan};
+use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
 use crate::AlterTableClusterKeyPlan;
 use crate::BroadcastPlan;
@@ -36,6 +36,7 @@ use crate::LimitPlan;
 use crate::PlanNode;
 use crate::ProjectionPlan;
 use crate::ReadDataSourcePlan;
+use crate::RemotePlan;
 use crate::RenameDatabasePlan;
 use crate::RenameTablePlan;
 use crate::SortPlan;
@@ -136,7 +137,11 @@ impl<'a> PlanNodeIndentFormatDisplay<'a> {
     fn format_remote(f: &mut Formatter, plan: &RemotePlan) -> fmt::Result {
         match plan {
             RemotePlan::V1(_) => write!(f, "Remote"),
-            RemotePlan::V2(v2_plan) => write!(f, "Remote[receive fragment: {}]", v2_plan.receive_fragment_id),
+            RemotePlan::V2(v2_plan) => write!(
+                f,
+                "Remote[receive fragment: {}]",
+                v2_plan.receive_fragment_id
+            ),
         }
     }
 
@@ -351,7 +356,7 @@ impl<'a> PlanNodeIndentFormatDisplay<'a> {
         write!(f, "Rename database,")?;
         write!(f, " [")?;
         for (i, entity) in plan.entities.iter().enumerate() {
-            write!(f, "{:} to {:}", entity.database, entity.new_database, )?;
+            write!(f, "{:} to {:}", entity.database, entity.new_database,)?;
 
             if i + 1 != plan.entities.len() {
                 write!(f, ", ")?;

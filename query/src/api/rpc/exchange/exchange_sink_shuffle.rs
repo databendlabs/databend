@@ -61,7 +61,9 @@ impl<const HAS_OUTPUT: bool> ExchangePublisherSink<HAS_OUTPUT> {
         shuffle_exchange_params: ShuffleExchangeParams,
     ) -> Result<ProcessorPtr> {
         let serialize_params = shuffle_exchange_params.create_serialize_params()?;
-        Ok(ProcessorPtr::create(Box::new(ExchangePublisherSink::<HAS_OUTPUT> {
+        Ok(ProcessorPtr::create(Box::new(ExchangePublisherSink::<
+            HAS_OUTPUT,
+        > {
             ctx,
             input,
             output,

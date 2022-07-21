@@ -1,15 +1,40 @@
-use std::collections::hash_map::Entry;
+// Copyright 2022 Datafuse Labs.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 use std::collections::HashMap;
-use std::fmt::{Debug, Formatter};
+use std::fmt::Debug;
+use std::fmt::Formatter;
 use std::sync::Arc;
-use common_datavalues::DataSchemaRef;
-use common_planners::{AggregatorFinalPlan, AggregatorPartialPlan, AlterTableClusterKeyPlan, AlterUserPlan, AlterUserUDFPlan, AlterViewPlan, BroadcastPlan, CallPlan, CopyPlan, CreateDatabasePlan, CreateRolePlan, CreateTablePlan, CreateUserPlan, CreateUserStagePlan, CreateUserUDFPlan, CreateViewPlan, DeletePlan, DescribeTablePlan, DescribeUserStagePlan, DropDatabasePlan, DropRolePlan, DropTableClusterKeyPlan, DropTablePlan, DropUserPlan, DropUserStagePlan, DropUserUDFPlan, DropViewPlan, EmptyPlan, ExistsTablePlan, ExplainPlan, Expression, ExpressionPlan, Expressions, FilterPlan, GrantPrivilegePlan, GrantRolePlan, HavingPlan, InsertPlan, KillPlan, LimitByPlan, LimitPlan, ListPlan, OptimizeTablePlan, PlanBuilder, PlanNode, PlanRewriter, ProjectionPlan, ReadDataSourcePlan, RemotePlan, RemoveUserStagePlan, RenameDatabasePlan, RenameTablePlan, RevokePrivilegePlan, RevokeRolePlan, SelectPlan, SettingPlan, ShowCreateDatabasePlan, ShowCreateTablePlan, ShowPlan, SinkPlan, SortPlan, StagePlan, SubQueriesSetPlan, TruncateTablePlan, UndropDatabasePlan, UndropTablePlan, UseDatabasePlan, WindowFuncPlan};
-use crate::interpreters::fragments::QueryFragment;
-use crate::sessions::QueryContext;
-use common_exception::{ErrorCode, Result};
+
+use common_exception::ErrorCode;
+use common_exception::Result;
+use common_planners::AggregatorFinalPlan;
+use common_planners::AggregatorPartialPlan;
+use common_planners::Expression;
+use common_planners::Expressions;
+use common_planners::PlanBuilder;
+use common_planners::PlanNode;
+use common_planners::PlanRewriter;
+use common_planners::SubQueriesSetPlan;
+
 use crate::interpreters::fragments::partition_state::PartitionState;
 use crate::interpreters::fragments::query_fragment::BuilderVisitor;
-use crate::interpreters::{QueryFragmentAction, QueryFragmentActions, QueryFragmentsActions};
+use crate::interpreters::fragments::QueryFragment;
+use crate::interpreters::QueryFragmentAction;
+use crate::interpreters::QueryFragmentActions;
+use crate::interpreters::QueryFragmentsActions;
+use crate::sessions::QueryContext;
 
 pub struct SubQueriesFragment {
     ctx: Arc<QueryContext>,
@@ -79,7 +104,7 @@ impl SubQueriesFragment {
 
                     actions.add_fragments_actions(fragments_actions)?;
                 }
-                _ => panic!("Logical error, expressions must be Subquery or ScalarSubquery")
+                _ => panic!("Logical error, expressions must be Subquery or ScalarSubquery"),
             };
         }
 
@@ -105,7 +130,7 @@ impl QueryFragment for SubQueriesFragment {
                         return Ok(true);
                     }
                 }
-                _ => panic!("Logical error, expressions must be Subquery or ScalarSubquery")
+                _ => panic!("Logical error, expressions must be Subquery or ScalarSubquery"),
             };
         }
 
@@ -119,12 +144,10 @@ impl QueryFragment for SubQueriesFragment {
     fn finalize(&self, actions: &mut QueryFragmentsActions) -> Result<()> {
         self.input.finalize(actions)?;
         let root_actions = actions.pop_root_actions().unwrap();
-        let mut new_expressions = self.finalize_expressions(actions)?;
+        let new_expressions = self.finalize_expressions(actions)?;
 
-        let mut new_root_fragment_actions = QueryFragmentActions::create(
-            root_actions.exchange_actions,
-            root_actions.fragment_id,
-        );
+        let mut new_root_fragment_actions =
+            QueryFragmentActions::create(root_actions.exchange_actions, root_actions.fragment_id);
 
         for fragment_action in &root_actions.fragment_actions {
             new_root_fragment_actions.add_action(QueryFragmentAction::create(
@@ -143,16 +166,13 @@ impl QueryFragment for SubQueriesFragment {
     fn rewrite_remote_plan(&self, node: &PlanNode, new_node: &PlanNode) -> Result<PlanNode> {
         match new_node {
             PlanNode::SubQueryExpression(v) => QueriesRewrite::create(v).rewrite_plan_node(node),
-            _ => Err(ErrorCode::UnknownPlan(
-                format!(
-                    "Unknown plan type while in rewrite_remote_plan, {:?}",
-                    new_node,
-                )
-            ))
+            _ => Err(ErrorCode::UnknownPlan(format!(
+                "Unknown plan type while in rewrite_remote_plan, {:?}",
+                new_node,
+            ))),
         }
     }
 }
-
 
 struct QueriesRewrite<'a> {
     new_node: &'a SubQueriesSetPlan,
@@ -161,7 +181,10 @@ struct QueriesRewrite<'a> {
 
 impl<'a> QueriesRewrite<'a> {
     pub fn create(new_node: &'a SubQueriesSetPlan) -> QueriesRewrite {
-        QueriesRewrite { new_node, queries: Default::default() }
+        QueriesRewrite {
+            new_node,
+            queries: Default::default(),
+        }
     }
 }
 
@@ -193,17 +216,35 @@ impl<'a> PlanRewriter for QueriesRewrite<'a> {
     fn rewrite_sub_queries_sets(&mut self, plan: &SubQueriesSetPlan) -> Result<PlanNode> {
         assert_eq!(self.new_node.expressions.len(), plan.expressions.len());
 
-        for (left, right) in plan.expressions.iter().zip(self.new_node.expressions.iter()) {
+        for (left, right) in plan
+            .expressions
+            .iter()
+            .zip(self.new_node.expressions.iter())
+        {
             match (left, right) {
-                (Expression::Subquery { query_plan: left, .. },
-                    Expression::Subquery { query_plan: right, .. }) => {
-                    self.queries.insert(format!("{:?}", left), right.as_ref().clone());
+                (
+                    Expression::Subquery {
+                        query_plan: left, ..
+                    },
+                    Expression::Subquery {
+                        query_plan: right, ..
+                    },
+                ) => {
+                    self.queries
+                        .insert(format!("{:?}", left), right.as_ref().clone());
                 }
-                (Expression::ScalarSubquery { query_plan: left, .. },
-                    Expression::ScalarSubquery { query_plan: right, .. }) => {
-                    self.queries.insert(format!("{:?}", left), right.as_ref().clone());
+                (
+                    Expression::ScalarSubquery {
+                        query_plan: left, ..
+                    },
+                    Expression::ScalarSubquery {
+                        query_plan: right, ..
+                    },
+                ) => {
+                    self.queries
+                        .insert(format!("{:?}", left), right.as_ref().clone());
                 }
-                _ => panic!("")
+                _ => panic!(""),
             }
         }
 
@@ -212,7 +253,7 @@ impl<'a> PlanRewriter for QueriesRewrite<'a> {
 }
 
 impl Debug for SubQueriesFragment {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, _f: &mut Formatter<'_>) -> std::fmt::Result {
         unimplemented!()
     }
 }
