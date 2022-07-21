@@ -20,6 +20,8 @@ chrono-tz = "0.6.1"
 comfy-table = "6"
 enum-as-inner = "0.4"
 itertools = "0.10"
+num-traits = "0.2"
+match-template = "0.0.1"
 
 [dev-dependencies]
 common-ast = { path = "../ast" }

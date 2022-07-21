@@ -31,12 +31,16 @@ pub enum RawExpr {
         id: usize,
         data_type: DataType,
     },
-    // TODO: support user cast
-    // Cast {
-    //     is_try: bool,
-    //     expr: Box<Expr>,
-    //     dest_type: DataType,
-    // },
+    Cast {
+        span: Span,
+        expr: Box<RawExpr>,
+        dest_type: DataType,
+    },
+    TryCast {
+        span: Span,
+        expr: Box<RawExpr>,
+        dest_type: DataType,
+    },
     FunctionCall {
         span: Span,
         name: String,
@@ -57,7 +61,11 @@ pub enum Expr {
     },
     Cast {
         span: Span,
-        // is_try: bool,
+        expr: Box<Expr>,
+        dest_type: DataType,
+    },
+    TryCast {
+        span: Span,
         expr: Box<Expr>,
         dest_type: DataType,
     },

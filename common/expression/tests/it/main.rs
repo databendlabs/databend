@@ -518,7 +518,7 @@ pub fn test_pass() {
         }),
         Column::Null { len: 5 },
     )]);
-    run_ast(&mut file, "least(10, 20, 30, 40)", &[]);
+    run_ast(&mut file, "least(10, CAST(20 as Int8), 30, 40)", &[]);
     run_ast(&mut file, "create_tuple(null, true)", &[]);
     run_ast(&mut file, "get_tuple(1)(create_tuple(a, b))", &[
         (
@@ -658,6 +658,104 @@ pub fn test_pass() {
             Column::UInt8(vec![0, 1, 2, 3, 4].into()),
         ),
     ]);
+    run_ast(&mut file, "TRY_CAST(a AS UINT8)", &[(
+        "a",
+        DataType::UInt16,
+        Domain::Int(IntDomain { min: 0, max: 1024 }),
+        Column::UInt16(vec![0, 64, 255, 512, 1024].into()),
+    )]);
+    run_ast(&mut file, "TRY_CAST(a AS UINT16)", &[(
+        "a",
+        DataType::Int16,
+        Domain::Int(IntDomain { min: -4, max: 3 }),
+        Column::Int16(vec![0, 1, 2, 3, -4].into()),
+    )]);
+    run_ast(&mut file, "TRY_CAST(a AS INT64)", &[(
+        "a",
+        DataType::Int16,
+        Domain::Int(IntDomain { min: -4, max: 3 }),
+        Column::Int16(vec![0, 1, 2, 3, -4].into()),
+    )]);
+    run_ast(
+        &mut file,
+        "create_tuple(TRY_CAST(a AS FLOAT32), TRY_CAST(a AS INT32), TRY_CAST(b AS FLOAT32), TRY_CAST(b AS INT32))",
+        &[
+            (
+                "a",
+                DataType::UInt64,
+                Domain::UInt(UIntDomain {
+                    min: 0,
+                    max: u64::MAX,
+                }),
+                Column::UInt64(
+                    vec![
+                        0,
+                        1,
+                        u8::MAX as u64,
+                        u16::MAX as u64,
+                        u32::MAX as u64,
+                        u64::MAX,
+                    ]
+                    .into(),
+                ),
+            ),
+            (
+                "b",
+                DataType::Float64,
+                Domain::Float(FloatDomain {
+                    min: f64::MIN,
+                    max: f64::MAX,
+                }),
+                Column::Float64(
+                    vec![
+                        0.0,
+                        u32::MAX as f64,
+                        u64::MAX as f64,
+                        f64::MIN,
+                        f64::MAX,
+                        f64::INFINITY,
+                    ]
+                    .into(),
+                ),
+            ),
+        ],
+    );
+    run_ast(
+        &mut file,
+        "TRY_CAST(create_array(create_array(a, b), null, null) AS Array(Array(Int8)))",
+        &[
+            (
+                "a",
+                DataType::Int16,
+                Domain::Int(IntDomain { min: 0, max: 255 }),
+                Column::Int16(vec![0, 1, 2, 127, 255].into()),
+            ),
+            (
+                "b",
+                DataType::Int16,
+                Domain::Int(IntDomain { min: -129, max: 0 }),
+                Column::Int16(vec![0, -1, -127, -128, -129].into()),
+            ),
+        ],
+    );
+    run_ast(
+        &mut file,
+        "TRY_CAST(create_tuple(a, b, NULL) AS (Int8, UInt8, Boolean NULL))",
+        &[
+            (
+                "a",
+                DataType::Int16,
+                Domain::Int(IntDomain { min: 0, max: 255 }),
+                Column::Int16(vec![0, 1, 2, 127, 256].into()),
+            ),
+            (
+                "b",
+                DataType::Int16,
+                Domain::Int(IntDomain { min: -129, max: 1 }),
+                Column::Int16(vec![0, 1, -127, -128, -129].into()),
+            ),
+        ],
+    );
 }
 
 #[test]
@@ -709,6 +807,12 @@ pub fn test_eval_fail() {
             Column::Int16(vec![0, 1, 2, 3, 4].into()),
         ),
     ]);
+    run_ast(&mut file, "CAST(a AS UINT16)", &[(
+        "a",
+        DataType::Int16,
+        Domain::Int(IntDomain { min: -4, max: 4 }),
+        Column::Int16(vec![0, 1, 2, 3, -4].into()),
+    )]);
 }
 
 fn builtin_functions() -> FunctionRegistry {

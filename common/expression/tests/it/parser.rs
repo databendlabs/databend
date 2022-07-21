@@ -51,6 +51,26 @@ pub fn transform_expr(ast: common_ast::ast::Expr, columns: &[(&str, DataType)]) 
                 data_type: columns[col_id].1.clone(),
             }
         }
+        common_ast::ast::Expr::Cast {
+            span,
+            expr,
+            target_type,
+            ..
+        } => RawExpr::Cast {
+            span: transform_span(span),
+            expr: Box::new(transform_expr(*expr, columns)),
+            dest_type: transform_data_type(target_type),
+        },
+        common_ast::ast::Expr::TryCast {
+            span,
+            expr,
+            target_type,
+            ..
+        } => RawExpr::TryCast {
+            span: transform_span(span),
+            expr: Box::new(transform_expr(*expr, columns)),
+            dest_type: transform_data_type(target_type),
+        },
         common_ast::ast::Expr::FunctionCall {
             span,
             name,
@@ -72,6 +92,33 @@ pub fn transform_expr(ast: common_ast::ast::Expr, columns: &[(&str, DataType)]) 
                 })
                 .collect(),
         },
+        _ => unimplemented!(),
+    }
+}
+
+fn transform_data_type(target_type: common_ast::ast::TypeName) -> DataType {
+    match target_type {
+        common_ast::ast::TypeName::Boolean => DataType::Boolean,
+        common_ast::ast::TypeName::UInt8 => DataType::UInt8,
+        common_ast::ast::TypeName::UInt16 => DataType::UInt16,
+        common_ast::ast::TypeName::UInt32 => DataType::UInt32,
+        common_ast::ast::TypeName::UInt64 => DataType::UInt64,
+        common_ast::ast::TypeName::Int8 => DataType::Int8,
+        common_ast::ast::TypeName::Int16 => DataType::Int16,
+        common_ast::ast::TypeName::Int32 => DataType::Int32,
+        common_ast::ast::TypeName::Int64 => DataType::Int64,
+        common_ast::ast::TypeName::Float32 => DataType::Float32,
+        common_ast::ast::TypeName::Float64 => DataType::Float64,
+        common_ast::ast::TypeName::String => DataType::String,
+        common_ast::ast::TypeName::Array {
+            item_type: Some(item_type),
+        } => DataType::Array(Box::new(transform_data_type(*item_type))),
+        common_ast::ast::TypeName::Tuple { fields_type } => {
+            DataType::Tuple(fields_type.into_iter().map(transform_data_type).collect())
+        }
+        common_ast::ast::TypeName::Nullable(inner_type) => {
+            DataType::Nullable(Box::new(transform_data_type(*inner_type)))
+        }
         _ => unimplemented!(),
     }
 }

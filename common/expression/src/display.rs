@@ -90,8 +90,8 @@ impl<'a> Display for ScalarRef<'a> {
             ScalarRef::UInt16(i) => write!(f, "{}", i),
             ScalarRef::UInt32(i) => write!(f, "{}", i),
             ScalarRef::UInt64(i) => write!(f, "{}", i),
-            ScalarRef::Float32(i) => write!(f, "{}", i),
-            ScalarRef::Float64(i) => write!(f, "{}", i),
+            ScalarRef::Float32(i) => write!(f, "{:?}", i),
+            ScalarRef::Float64(i) => write!(f, "{:?}", i),
             ScalarRef::Boolean(b) => write!(f, "{}", b),
             ScalarRef::String(s) => write!(f, "{}", String::from_utf8_lossy(s)),
             ScalarRef::Array(col) => write!(f, "[{}]", col.iter().join(", ")),
@@ -111,6 +111,16 @@ impl Display for RawExpr {
         match self {
             RawExpr::Literal { lit, .. } => write!(f, "{lit}"),
             RawExpr::ColumnRef { id, data_type, .. } => write!(f, "ColumnRef({id})::{data_type}"),
+            RawExpr::Cast {
+                expr, dest_type, ..
+            } => {
+                write!(f, "CAST({expr} AS {dest_type})")
+            }
+            RawExpr::TryCast {
+                expr, dest_type, ..
+            } => {
+                write!(f, "TRY_CAST({expr} AS {dest_type})")
+            }
             RawExpr::FunctionCall {
                 name, args, params, ..
             } => {
@@ -201,6 +211,16 @@ impl Display for Expr {
         match self {
             Expr::Literal { lit, .. } => write!(f, "{lit}"),
             Expr::ColumnRef { id, .. } => write!(f, "ColumnRef({id})"),
+            Expr::Cast {
+                expr, dest_type, ..
+            } => {
+                write!(f, "CAST({expr} AS {dest_type})")
+            }
+            Expr::TryCast {
+                expr, dest_type, ..
+            } => {
+                write!(f, "TRY_CAST({expr} AS {dest_type})")
+            }
             Expr::FunctionCall {
                 function,
                 args,
@@ -235,11 +255,24 @@ impl Display for Expr {
                 }
                 write!(f, ")")
             }
-            Expr::Cast {
-                expr, dest_type, ..
-            } => {
-                write!(f, "cast<dest_type={dest_type}>({expr})")
-            }
+        }
+    }
+}
+
+impl<T: ValueType> Debug for Value<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Value::Scalar(s) => write!(f, "Scalar({:?})", s),
+            Value::Column(c) => write!(f, "Column({:?})", c),
+        }
+    }
+}
+
+impl<'a, T: ValueType> Debug for ValueRef<'a, T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ValueRef::Scalar(s) => write!(f, "Scalar({:?})", s),
+            ValueRef::Column(c) => write!(f, "Column({:?})", c),
         }
     }
 }
@@ -355,7 +388,7 @@ impl Display for UIntDomain {
 
 impl Display for FloatDomain {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{{{}..={}}}", self.min, self.max)
+        write!(f, "{{{:?}..={:?}}}", self.min, self.max)
     }
 }
 

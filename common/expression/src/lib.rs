@@ -12,8 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![feature(const_try)]
 #![feature(generic_associated_types)]
 #![feature(iterator_try_reduce)]
+#![feature(const_fmt_arguments_new)]
 #![feature(box_patterns)]
 #![feature(associated_type_defaults)]
 #![allow(clippy::len_without_is_empty)]

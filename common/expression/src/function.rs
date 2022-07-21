@@ -176,7 +176,7 @@ impl FunctionRegistry {
     {
         let has_nullable = &[I1::data_type(), O::data_type()]
             .iter()
-            .any(|ty| ty.as_nullable().is_some());
+            .any(|ty| ty.as_nullable().is_some() || ty.is_null());
 
         assert!(
             !has_nullable,
@@ -230,7 +230,7 @@ impl FunctionRegistry {
     {
         let has_nullable = &[I1::data_type(), O::data_type()]
             .iter()
-            .any(|ty| ty.as_nullable().is_some());
+            .any(|ty| ty.as_nullable().is_some() || ty.is_null());
 
         assert!(
             !has_nullable,
@@ -306,7 +306,7 @@ impl FunctionRegistry {
     {
         let has_nullable = &[I1::data_type(), I2::data_type(), O::data_type()]
             .iter()
-            .any(|ty| ty.as_nullable().is_some());
+            .any(|ty| ty.as_nullable().is_some() || ty.is_null());
 
         assert!(
             !has_nullable,
@@ -372,7 +372,7 @@ impl FunctionRegistry {
     {
         let has_nullable = &[I1::data_type(), I2::data_type(), O::data_type()]
             .iter()
-            .any(|ty| ty.as_nullable().is_some());
+            .any(|ty| ty.as_nullable().is_some() || ty.is_null());
 
         assert!(
             !has_nullable,
