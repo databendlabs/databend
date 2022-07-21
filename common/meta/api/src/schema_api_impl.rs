@@ -75,7 +75,6 @@ use common_meta_types::app_error::UndropDbWithNoDropTime;
 use common_meta_types::app_error::UndropTableAlreadyExists;
 use common_meta_types::app_error::UndropTableHasNoHistory;
 use common_meta_types::app_error::UndropTableWithNoDropTime;
-use common_meta_types::app_error::UnknownDatabase;
 use common_meta_types::app_error::UnknownTable;
 use common_meta_types::app_error::UnknownTableId;
 use common_meta_types::ConditionResult;
@@ -89,6 +88,7 @@ use common_tracing::func_name;
 use common_tracing::tracing;
 use ConditionResult::Eq;
 
+use crate::db_has_to_exist;
 use crate::deserialize_struct;
 use crate::deserialize_u64;
 use crate::fetch_id;
@@ -2017,28 +2017,6 @@ pub(crate) async fn get_db_or_err(
         // Safe unwrap(): db_meta_seq > 0 implies db_meta is not None.
         db_meta.unwrap(),
     ))
-}
-
-/// Return OK if a db_id or db_meta exists by checking the seq.
-///
-/// Otherwise returns UnknownDatabase error
-fn db_has_to_exist(
-    seq: u64,
-    db_name_ident: &DatabaseNameIdent,
-    msg: impl Display,
-) -> Result<(), MetaError> {
-    if seq == 0 {
-        tracing::debug!(seq, ?db_name_ident, "db does not exist");
-
-        Err(MetaError::AppError(AppError::UnknownDatabase(
-            UnknownDatabase::new(
-                &db_name_ident.db_name,
-                format!("{}: {}", msg, db_name_ident),
-            ),
-        )))
-    } else {
-        Ok(())
-    }
 }
 
 /// Return OK if a db_id or db_meta does not exist by checking the seq.

@@ -36,6 +36,7 @@ pub use kv_api::KVApi;
 pub use kv_api_key::KVApiKey;
 pub use kv_api_key::KVApiKeyError;
 pub use kv_api_test_suite::KVApiTestSuite;
+pub use kv_api_utils::db_has_to_exist;
 pub use kv_api_utils::deserialize_struct;
 pub use kv_api_utils::deserialize_u64;
 pub use kv_api_utils::fetch_id;

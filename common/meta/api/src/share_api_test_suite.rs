@@ -419,7 +419,7 @@ impl ShareApiTestSuite {
             let req = GrantShareObjectReq {
                 share_name: share_name.clone(),
                 object: ShareGrantObjectName::Database("unknown_db".to_string()),
-                grant_on: create_on.clone(),
+                grant_on: create_on,
                 privilege: ShareGrantObjectPrivilege::Usage,
             };
 
@@ -437,7 +437,7 @@ impl ShareApiTestSuite {
                     db_name.to_string(),
                     "unknown_table".to_string(),
                 ),
-                grant_on: create_on.clone(),
+                grant_on: create_on,
                 privilege: ShareGrantObjectPrivilege::Usage,
             };
 
@@ -458,7 +458,7 @@ impl ShareApiTestSuite {
                     share_name: "share2".to_string(),
                 },
                 object: ShareGrantObjectName::Database("db2".to_string()),
-                grant_on: create_on.clone(),
+                grant_on: create_on,
                 privilege: ShareGrantObjectPrivilege::Usage,
             };
 
@@ -476,7 +476,7 @@ impl ShareApiTestSuite {
             let req = GrantShareObjectReq {
                 share_name: share_name.clone(),
                 object: ShareGrantObjectName::Table(db2_name.to_string(), tbl2_name.to_string()),
-                grant_on: create_on.clone(),
+                grant_on: create_on,
                 privilege: ShareGrantObjectPrivilege::Usage,
             };
 
@@ -494,7 +494,7 @@ impl ShareApiTestSuite {
             let req = GrantShareObjectReq {
                 share_name: share_name.clone(),
                 object: ShareGrantObjectName::Database(db_name.to_string()),
-                grant_on: create_on.clone(),
+                grant_on: create_on,
                 privilege: ShareGrantObjectPrivilege::Usage,
             };
 
@@ -506,7 +506,7 @@ impl ShareApiTestSuite {
             let req = GrantShareObjectReq {
                 share_name: share_name.clone(),
                 object: tbl_ob_name.clone(),
-                grant_on: create_on.clone(),
+                grant_on: create_on,
                 privilege: ShareGrantObjectPrivilege::Usage,
             };
 
@@ -521,7 +521,7 @@ impl ShareApiTestSuite {
                     ShareGrantObject::Database(obj_db_id) => {
                         assert_eq!(obj_db_id, db_id);
 
-                        assert_eq!(entry.grant_on, create_on.clone());
+                        assert_eq!(entry.grant_on, create_on);
                         assert_eq!(
                             entry.privileges,
                             BitFlags::from(ShareGrantObjectPrivilege::Usage)
@@ -539,7 +539,7 @@ impl ShareApiTestSuite {
             let object = ShareGrantObject::Table(table_id);
             if let Some(entry) = share_meta.entries.get(&object.to_string()) {
                 assert_eq!(entry.object, object);
-                assert_eq!(entry.grant_on, create_on.clone());
+                assert_eq!(entry.grant_on, create_on);
                 assert_eq!(
                     entry.privileges,
                     BitFlags::from(ShareGrantObjectPrivilege::Usage)
@@ -554,7 +554,7 @@ impl ShareApiTestSuite {
             let req = GrantShareObjectReq {
                 share_name: share_name.clone(),
                 object: ShareGrantObjectName::Database(db2_name.to_string()),
-                grant_on: create_on.clone(),
+                grant_on: create_on,
                 privilege: ShareGrantObjectPrivilege::Usage,
             };
 
@@ -569,7 +569,7 @@ impl ShareApiTestSuite {
             let req = GrantShareObjectReq {
                 share_name: share_name.clone(),
                 object: ShareGrantObjectName::Table(db2_name.to_string(), tbl2_name.to_string()),
-                grant_on: create_on.clone(),
+                grant_on: create_on,
                 privilege: ShareGrantObjectPrivilege::Usage,
             };
 
@@ -587,7 +587,7 @@ impl ShareApiTestSuite {
             let req = RevokeShareObjectReq {
                 share_name: share_name.clone(),
                 object: ShareGrantObjectName::Table(db_name.to_string(), tbl_name.to_string()),
-                update_on: create_on.clone(),
+                update_on: create_on,
                 privilege: ShareGrantObjectPrivilege::Usage,
             };
 
@@ -602,7 +602,7 @@ impl ShareApiTestSuite {
                     ShareGrantObject::Database(obj_db_id) => {
                         assert_eq!(obj_db_id, db_id);
 
-                        assert_eq!(entry.grant_on, create_on.clone());
+                        assert_eq!(entry.grant_on, create_on);
                         assert_eq!(
                             entry.privileges,
                             BitFlags::from(ShareGrantObjectPrivilege::Usage)
@@ -620,6 +620,44 @@ impl ShareApiTestSuite {
             let object = ShareGrantObject::Table(table_id);
             assert!(share_meta.entries.get(&object.to_string()).is_none());
         }
+
+        tracing::info!("--- grant share of table again, and revoke the database");
+        {
+            // first grant share table again
+            let req = GrantShareObjectReq {
+                share_name: share_name.clone(),
+                object: ShareGrantObjectName::Table(db_name.to_string(), tbl_name.to_string()),
+                grant_on: create_on,
+                privilege: ShareGrantObjectPrivilege::Usage,
+            };
+
+            let res = mt.grant_object(req).await?;
+            tracing::info!("grant object res: {:?}", res);
+
+            // assert table share exists
+            let (_share_meta_seq, share_meta) =
+                get_share_meta_by_id_or_err(mt.as_kv_api(), share_id, "").await?;
+            let object = ShareGrantObject::Table(table_id);
+            assert!(share_meta.entries.get(&object.to_string()).is_some());
+
+            // then revoke the database
+            let req = RevokeShareObjectReq {
+                share_name: share_name.clone(),
+                object: ShareGrantObjectName::Database(db_name.to_string()),
+                update_on: create_on,
+                privilege: ShareGrantObjectPrivilege::Usage,
+            };
+
+            let res = mt.revoke_object(req).await?;
+            tracing::info!("revoke object res: {:?}", res);
+
+            // assert share_meta.database is none, and share_meta.entries is empty
+            let (_share_meta_seq, share_meta) =
+                get_share_meta_by_id_or_err(mt.as_kv_api(), share_id, "").await?;
+            assert!(share_meta.database.is_none());
+            assert!(share_meta.entries.is_empty());
+        }
+
         Ok(())
     }
 }

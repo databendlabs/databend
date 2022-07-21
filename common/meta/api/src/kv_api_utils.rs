@@ -15,8 +15,10 @@
 use std::fmt::Display;
 
 use anyerror::AnyError;
+use common_meta_app::schema::DatabaseNameIdent;
 use common_meta_app::schema::TableNameIdent;
 use common_meta_types::app_error::AppError;
+use common_meta_types::app_error::UnknownDatabase;
 use common_meta_types::app_error::UnknownTable;
 use common_meta_types::txn_condition::Target;
 use common_meta_types::txn_op::Request;
@@ -171,6 +173,28 @@ pub fn txn_op_del(key: &impl KVApiKey) -> TxnOp {
             key: key.to_key(),
             prev_value: true,
         })),
+    }
+}
+
+/// Return OK if a db_id or db_meta exists by checking the seq.
+///
+/// Otherwise returns UnknownDatabase error
+pub fn db_has_to_exist(
+    seq: u64,
+    db_name_ident: &DatabaseNameIdent,
+    msg: impl Display,
+) -> Result<(), MetaError> {
+    if seq == 0 {
+        tracing::debug!(seq, ?db_name_ident, "db does not exist");
+
+        Err(MetaError::AppError(AppError::UnknownDatabase(
+            UnknownDatabase::new(
+                &db_name_ident.db_name,
+                format!("{}: {}", msg, db_name_ident),
+            ),
+        )))
+    } else {
+        Ok(())
     }
 }
 

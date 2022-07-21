@@ -25,7 +25,6 @@ use common_meta_app::share;
 use common_proto_conv::FromToProto;
 use common_proto_conv::Incompatible;
 use common_protos::pb;
-use enumflags2::BitFlags;
 use maplit::btreemap;
 
 fn s(ss: impl ToString) -> String {
@@ -59,18 +58,18 @@ fn new_db_meta() -> mt::DatabaseMeta {
 }
 
 fn new_share_meta() -> share::ShareMeta {
-    let now = Utc::now();
+    let now = Utc.ymd(2014, 11, 28).and_hms(12, 0, 9);
 
     let db_entry = share::ShareGrantEntry::new(
         share::ShareGrantObject::Database(1),
         share::ShareGrantObjectPrivilege::Usage,
-        now.clone(),
+        now,
     );
     let mut entries = BTreeMap::new();
     for entry in vec![share::ShareGrantEntry::new(
         share::ShareGrantObject::Table(19),
         share::ShareGrantObjectPrivilege::Select,
-        now.clone(),
+        now,
     )] {
         entries.insert(entry.to_string().clone(), entry);
     }
@@ -360,11 +359,14 @@ fn test_load_old() -> anyhow::Result<()> {
     // ShareMeta is loadable
     {
         let share_meta_v2: Vec<u8> = vec![
-            10, 18, 10, 8, 8, 1, 160, 6, 2, 168, 6, 1, 16, 1, 160, 6, 2, 168, 6, 1, 18, 18, 10, 8,
-            16, 19, 160, 6, 2, 168, 6, 1, 16, 4, 160, 6, 2, 168, 6, 1, 26, 1, 97, 26, 1, 98, 34, 7,
-            99, 111, 109, 109, 101, 110, 116, 42, 23, 50, 48, 49, 52, 45, 49, 49, 45, 50, 56, 32,
-            49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 50, 23, 50, 48, 49, 52, 45, 49, 49, 45,
-            50, 57, 32, 49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 160, 6, 2, 168, 6, 1,
+            10, 43, 10, 8, 8, 1, 160, 6, 2, 168, 6, 1, 16, 1, 26, 23, 50, 48, 49, 52, 45, 49, 49,
+            45, 50, 56, 32, 49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 160, 6, 2, 168, 6, 1,
+            18, 43, 10, 8, 16, 19, 160, 6, 2, 168, 6, 1, 16, 4, 26, 23, 50, 48, 49, 52, 45, 49, 49,
+            45, 50, 56, 32, 49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 160, 6, 2, 168, 6, 1,
+            26, 1, 97, 26, 1, 98, 34, 7, 99, 111, 109, 109, 101, 110, 116, 42, 23, 50, 48, 49, 52,
+            45, 49, 49, 45, 50, 56, 32, 49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 50, 23, 50,
+            48, 49, 52, 45, 49, 49, 45, 50, 57, 32, 49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84, 67,
+            160, 6, 2, 168, 6, 1,
         ];
         let p: pb::ShareMeta =
             common_protos::prost::Message::decode(share_meta_v2.as_slice()).map_err(print_err)?;

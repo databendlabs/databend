@@ -109,7 +109,7 @@ impl Display for ShareGrantObjectName {
             ShareGrantObjectName::Database(db) => {
                 write!(f, "Database {}", db)
             }
-            ShareGrantObjectName::Table(table, db) => {
+            ShareGrantObjectName::Table(db, table) => {
                 write!(f, "Table {}/{}", db, table)
             }
         }
@@ -409,10 +409,7 @@ impl ShareMeta {
                 None => return Ok(()),
             },
         }
-
-        Err(MetaError::AppError(AppError::WrongShareObject(
-            WrongShareObject::new(object.to_string()),
-        )))
+        Ok(())
     }
 
     pub fn has_granted_privileges(

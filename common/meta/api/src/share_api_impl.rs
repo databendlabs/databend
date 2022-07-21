@@ -59,6 +59,7 @@ use common_meta_types::TxnRequest;
 use common_tracing::func_name;
 use common_tracing::tracing;
 
+use crate::db_has_to_exist;
 use crate::fetch_id;
 use crate::get_db_or_err;
 use crate::get_struct_value;
@@ -525,7 +526,7 @@ impl<KV: KVApi> ShareApi for KV {
             let res = get_share_or_err(
                 self,
                 share_name_key,
-                format!("grant_object: {}", &share_name_key),
+                format!("revoke_object: {}", &share_name_key),
             )
             .await;
 
@@ -613,26 +614,24 @@ fn check_share_object(
     if let Some(entry) = database {
         if let ShareGrantObject::Database(db_id) = entry.object {
             let object_db_id = match seq_and_id {
-                ShareGrantObjectSeqAndId::Database(_, db_id, _) => db_id,
-                ShareGrantObjectSeqAndId::Table(db_id, _, _) => db_id,
+                ShareGrantObjectSeqAndId::Database(_, db_id, _) => *db_id,
+                ShareGrantObjectSeqAndId::Table(db_id, _seq, _id) => *db_id,
             };
-            if db_id != *object_db_id {
+            if db_id != object_db_id {
                 return Err(MetaError::AppError(AppError::WrongShareObject(
                     WrongShareObject::new(obj_name.to_string()),
                 )));
             }
         } else {
-            unreachable!("");
+            unreachable!("database MUST be Database object");
         }
     } else {
-        match seq_and_id {
-            ShareGrantObjectSeqAndId::Database(_, _, _) => {}
-            ShareGrantObjectSeqAndId::Table(_, _, _) => {
-                return Err(MetaError::AppError(AppError::WrongShareObject(
-                    WrongShareObject::new(obj_name.to_string()),
-                )));
-            }
-        };
+        // Table cannot be granted without database has been granted.
+        if let ShareGrantObjectSeqAndId::Table(_, _, _) = seq_and_id {
+            return Err(MetaError::AppError(AppError::WrongShareObject(
+                WrongShareObject::new(obj_name.to_string()),
+            )));
+        }
     }
 
     Ok(())
@@ -669,7 +668,12 @@ async fn get_share_object_seq_and_id(
                 tenant: tenant.to_string(),
                 db_name: db_name.clone(),
             };
-            let (_db_seq, db_id) = get_u64_value(kv_api, &db_name_key).await?;
+            let (db_seq, db_id) = get_u64_value(kv_api, &db_name_key).await?;
+            db_has_to_exist(
+                db_seq,
+                &db_name_key,
+                format!("get_share_object_seq_and_id: {}", db_name_key),
+            )?;
 
             let name_key = DBIdTableName {
                 db_id,
