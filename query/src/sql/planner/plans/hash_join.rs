@@ -29,6 +29,7 @@ pub struct PhysicalHashJoin {
     pub other_conditions: Vec<Scalar>,
     pub join_type: JoinType,
     pub marker_index: Option<IndexType>,
+    pub from_correlated_subquery: bool,
 }
 
 impl Operator for PhysicalHashJoin {

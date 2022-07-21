@@ -175,10 +175,10 @@ SELECT '====TIMESTAMP====';
 ----  
 ====TIMESTAMP====
 
-statement error 1006
+statement error 1065
 create table db2.test6(id Int8, created timestamp  DEFAULT CURRENT_TIMESTAMP); 
 
-statement error 1006
+statement error 1065
 create table db2.test6(id Int8, created timestamp  DEFAULT today() + a); 
 
 statement ok
@@ -203,5 +203,5 @@ statement ok
 DROP DATABASE db2;
 
 statement error 1002
-CREATE TABLE system.test; 
+CREATE TABLE system.test(a INT);
 

@@ -17,20 +17,20 @@ use std::sync::Arc;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_fuse_meta::meta::TableSnapshot;
 
-use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::storages::fuse::io::MetaReaders;
-use crate::storages::fuse::meta::TableSnapshot;
 use crate::storages::fuse::FuseTable;
 
 pub struct FuseSegment<'a> {
-    pub ctx: Arc<QueryContext>,
+    pub ctx: Arc<dyn TableContext>,
     pub table: &'a FuseTable,
     pub snapshot_id: String,
 }
 
 impl<'a> FuseSegment<'a> {
-    pub fn new(ctx: Arc<QueryContext>, table: &'a FuseTable, snapshot_id: String) -> Self {
+    pub fn new(ctx: Arc<dyn TableContext>, table: &'a FuseTable, snapshot_id: String) -> Self {
         Self {
             ctx,
             table,
@@ -73,7 +73,7 @@ impl<'a> FuseSegment<'a> {
 
         for segment_location in &snapshot.segments {
             let (location, version) = (segment_location.0.clone(), segment_location.1);
-            let reader = MetaReaders::segment_info_reader(&self.ctx);
+            let reader = MetaReaders::segment_info_reader(self.ctx.as_ref());
             let segment_info = reader.read(&location, None, version).await?;
 
             format_versions.push(version);

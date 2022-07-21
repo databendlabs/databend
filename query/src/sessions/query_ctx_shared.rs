@@ -37,6 +37,7 @@ use crate::auth::AuthMgr;
 use crate::catalogs::CatalogManager;
 use crate::clusters::Cluster;
 use crate::servers::http::v1::HttpQueryHandle;
+use crate::sessions::query_affect::QueryAffect;
 use crate::sessions::Session;
 use crate::sessions::Settings;
 use crate::sql::SQLCommon;
@@ -76,6 +77,7 @@ pub struct QueryContextShared {
     pub(in crate::sessions) dal_ctx: Arc<DalContext>,
     pub(in crate::sessions) user_manager: Arc<UserApiProvider>,
     pub(in crate::sessions) auth_manager: Arc<AuthMgr>,
+    pub(in crate::sessions) affect: Arc<Mutex<Option<QueryAffect>>>,
 
     pub(in crate::sessions) query_need_abort: Arc<AtomicBool>,
 }
@@ -109,6 +111,7 @@ impl QueryContextShared {
             user_manager: user_manager.clone(),
             auth_manager: Arc::new(AuthMgr::create(conf, user_manager.clone()).await?),
             query_need_abort: Arc::new(AtomicBool::new(false)),
+            affect: Arc::new(Mutex::new(None)),
         }))
     }
 
@@ -293,6 +296,16 @@ impl QueryContextShared {
 
     pub async fn reload_config(&self) -> Result<()> {
         self.session.session_mgr.reload_config().await
+    }
+
+    pub fn get_affect(&self) -> Option<QueryAffect> {
+        let guard = self.affect.lock();
+        (*guard).clone()
+    }
+
+    pub fn set_affect(&self, affect: QueryAffect) {
+        let mut guard = self.affect.lock();
+        *guard = Some(affect);
     }
 }
 

@@ -35,6 +35,7 @@ use opensrv_mysql::StatementMetaWriter;
 use rand::RngCore;
 use tokio_stream::StreamExt;
 
+use crate::clusters::ClusterHelper;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
 use crate::interpreters::InterpreterFactoryV2;
@@ -45,6 +46,7 @@ use crate::servers::mysql::MySQLFederated;
 use crate::servers::mysql::MYSQL_VERSION;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionRef;
+use crate::sessions::TableContext;
 use crate::sql::DfParser;
 use crate::sql::PlanParser;
 use crate::sql::Planner;
@@ -294,10 +296,12 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
                 let interpreter: Result<Arc<dyn Interpreter>>;
                 if let Ok((stmts, h)) = stmts_hints {
                     hints = h;
-                    interpreter = if settings.get_enable_new_processor_framework()? != 0
-                        && context.get_cluster().is_empty()
+                    interpreter = if context.get_cluster().is_empty()
                         && settings.get_enable_planner_v2()? != 0
                         && stmts.get(0).map_or(false, InterpreterFactoryV2::check)
+                        || stmts
+                            .get(0)
+                            .map_or(false, InterpreterFactoryV2::enable_default)
                     {
                         let mut planner = Planner::new(context.clone());
                         planner

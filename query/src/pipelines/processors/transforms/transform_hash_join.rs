@@ -28,6 +28,7 @@ use crate::pipelines::processors::transforms::hash_join::HashJoinState;
 use crate::pipelines::processors::Processor;
 use crate::pipelines::processors::Sink;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 
 pub struct SinkBuildHashTable {
     join_state: Arc<dyn HashJoinState>,
@@ -97,6 +98,7 @@ impl TransformHashJoinProbe {
     }
 }
 
+#[async_trait::async_trait]
 impl Processor for TransformHashJoinProbe {
     fn name(&self) -> &'static str {
         static NAME: &str = "TransformHashJoin";
@@ -109,15 +111,7 @@ impl Processor for TransformHashJoinProbe {
 
     fn event(&mut self) -> Result<Event> {
         match self.step {
-            HashJoinStep::Build => {
-                if self.join_state.is_finished()? {
-                    self.step = HashJoinStep::Probe;
-                    Ok(Event::Sync)
-                } else {
-                    // Idle till build finished
-                    Ok(Event::NeedData)
-                }
-            }
+            HashJoinStep::Build => Ok(Event::Async),
             HashJoinStep::Probe => {
                 if self.output_port.is_finished() {
                     self.input_port.finish();
@@ -167,5 +161,14 @@ impl Processor for TransformHashJoinProbe {
                 Ok(())
             }
         }
+    }
+
+    async fn async_process(&mut self) -> Result<()> {
+        if let HashJoinStep::Build = &self.step {
+            self.join_state.wait_finish().await?;
+            self.step = HashJoinStep::Probe;
+        }
+
+        Ok(())
     }
 }

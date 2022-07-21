@@ -43,6 +43,7 @@ use common_tracing::tracing;
 
 use crate::pipelines::processors::transforms::ExpressionExecutor;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::sql::binder::Binder;
 use crate::sql::binder::ScalarBinder;
 use crate::sql::exec::ExpressionBuilder;

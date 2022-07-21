@@ -22,6 +22,7 @@ use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 
 pub struct OptimizeTableInterpreter {
     ctx: Arc<QueryContext>,

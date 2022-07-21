@@ -26,6 +26,7 @@ use common_streams::SendableDataBlockStream;
 use crate::interpreters::InsertInterpreterV2;
 use crate::interpreters::Interpreter;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::sql::plans::create_table_v2::CreateTablePlanV2;
 use crate::sql::plans::insert::Insert;
 use crate::sql::plans::insert::InsertInputSource;

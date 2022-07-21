@@ -24,7 +24,6 @@ use crate::sql::plans::Aggregate;
 use crate::sql::plans::AndExpr;
 use crate::sql::plans::ComparisonExpr;
 use crate::sql::plans::ComparisonOp;
-use crate::sql::plans::CrossApply;
 use crate::sql::plans::EvalScalar;
 use crate::sql::plans::Filter;
 use crate::sql::plans::JoinType;
@@ -76,8 +75,6 @@ impl Display for FormatContext {
             RelOperator::Aggregate(op) => format_aggregate(f, &self.metadata, op),
             RelOperator::Sort(op) => format_sort(f, &self.metadata, op),
             RelOperator::Limit(op) => format_limit(f, &self.metadata, op),
-            RelOperator::CrossApply(op) => format_cross_apply(f, &self.metadata, op),
-            RelOperator::Max1Row(_) => write!(f, "Max1Row"),
             RelOperator::Pattern(_) => write!(f, "Pattern"),
         }
     }
@@ -336,12 +333,4 @@ pub fn format_limit(
 ) -> std::fmt::Result {
     let limit = if let Some(val) = op.limit { val } else { 0 };
     write!(f, "Limit: [{}], Offset: [{}]", limit, op.offset)
-}
-
-pub fn format_cross_apply(
-    f: &mut std::fmt::Formatter<'_>,
-    _metadata: &MetadataRef,
-    _op: &CrossApply,
-) -> std::fmt::Result {
-    write!(f, "CrossApply")
 }

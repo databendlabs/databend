@@ -21,6 +21,7 @@ pub use config::StorageAzblobConfig;
 pub use config::StorageConfig;
 pub use config::StorageFsConfig;
 pub use config::StorageHdfsConfig;
+pub use config::StorageHttpConfig;
 pub use config::StorageParams;
 pub use config::StorageS3Config;
 pub use config::STORAGE_S3_DEFAULT_ENDPOINT;
@@ -30,6 +31,7 @@ pub use operator::init_azblob_operator;
 pub use operator::init_fs_operator;
 #[cfg(feature = "storage-hdfs")]
 pub use operator::init_hdfs_operator;
+pub use operator::init_http_operator;
 pub use operator::init_memory_operator;
 pub use operator::init_operator;
 pub use operator::init_s3_operator;

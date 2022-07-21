@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
-use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use common_datablocks::SortColumnDescription;
@@ -26,10 +25,12 @@ use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::aggregates::AggregateFunctionRef;
 use common_functions::scalars::FunctionFactory;
 use common_planners::ReadDataSourcePlan;
+use parking_lot::RwLock;
 
-use crate::common::EvalNode;
-use crate::common::Evaluator;
+use crate::evaluator::EvalNode;
+use crate::evaluator::Evaluator;
 use crate::pipelines::processors::port::InputPort;
+use crate::pipelines::processors::transforms::hash_join::MarkJoinDesc;
 use crate::pipelines::processors::transforms::ExpressionTransformV2;
 use crate::pipelines::processors::transforms::TransformFilterV2;
 use crate::pipelines::processors::transforms::TransformMarkJoin;
@@ -37,22 +38,22 @@ use crate::pipelines::processors::transforms::TransformProject;
 use crate::pipelines::processors::transforms::TransformRename;
 use crate::pipelines::processors::AggregatorParams;
 use crate::pipelines::processors::AggregatorTransformParams;
-use crate::pipelines::processors::HashJoinState;
+use crate::pipelines::processors::HashJoinDesc;
 use crate::pipelines::processors::JoinHashTable;
 use crate::pipelines::processors::MarkJoinCompactor;
 use crate::pipelines::processors::SinkBuildHashTable;
 use crate::pipelines::processors::Sinker;
 use crate::pipelines::processors::SortMergeCompactor;
 use crate::pipelines::processors::TransformAggregator;
-use crate::pipelines::processors::TransformApply;
 use crate::pipelines::processors::TransformHashJoinProbe;
 use crate::pipelines::processors::TransformLimit;
-use crate::pipelines::processors::TransformMax1Row;
 use crate::pipelines::processors::TransformSortMerge;
 use crate::pipelines::processors::TransformSortPartial;
 use crate::pipelines::Pipeline;
+use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::SinkPipeBuilder;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::sql::exec::physical_plan::ColumnID;
 use crate::sql::exec::physical_plan::PhysicalPlan;
 use crate::sql::exec::AggregateFunctionDesc;
@@ -60,61 +61,69 @@ use crate::sql::exec::PhysicalScalar;
 use crate::sql::exec::SortDesc;
 use crate::sql::plans::JoinType;
 use crate::sql::ColumnBinding;
-use crate::sql::IndexType;
 
-#[derive(Default)]
 pub struct PipelineBuilder {
+    ctx: Arc<QueryContext>,
+    main_pipeline: Pipeline,
     pub pipelines: Vec<Pipeline>,
 }
 
 impl PipelineBuilder {
-    pub fn new() -> Self {
-        Self::default()
+    pub fn create(ctx: Arc<QueryContext>) -> PipelineBuilder {
+        PipelineBuilder {
+            ctx,
+            pipelines: vec![],
+            main_pipeline: Pipeline::create(),
+        }
     }
 
-    pub fn build_pipeline(
-        &mut self,
-        context: Arc<QueryContext>,
-        plan: &PhysicalPlan,
-        pipeline: &mut Pipeline,
-    ) -> Result<()> {
+    pub fn finalize(mut self, plan: &PhysicalPlan) -> Result<PipelineBuildResult> {
+        self.build_pipeline(plan)?;
+
+        for source_pipeline in &self.pipelines {
+            if !source_pipeline.is_complete_pipeline()? {
+                return Err(ErrorCode::IllegalPipelineState(
+                    "Source pipeline must be complete pipeline.",
+                ));
+            }
+        }
+
+        Ok(PipelineBuildResult {
+            main_pipeline: self.main_pipeline,
+            sources_pipelines: self.pipelines,
+        })
+    }
+
+    fn build_pipeline(&mut self, plan: &PhysicalPlan) -> Result<()> {
         match plan {
             PhysicalPlan::TableScan {
                 name_mapping,
                 source,
                 ..
-            } => self.build_table_scan(
-                context,
-                plan.output_schema()?,
-                name_mapping,
-                source,
-                pipeline,
-            ),
+            } => self.build_table_scan(plan.output_schema()?, name_mapping, source),
             PhysicalPlan::Filter { input, predicates } => {
-                self.build_pipeline(context.clone(), input, pipeline)?;
-                self.build_filter(context, predicates, pipeline)
+                self.build_pipeline(input)?;
+                self.build_filter(predicates)
             }
             PhysicalPlan::Project { input, projections } => {
-                self.build_pipeline(context, input, pipeline)?;
-                self.build_project(projections, pipeline)
+                self.build_pipeline(input)?;
+                self.build_project(projections)
             }
             PhysicalPlan::EvalScalar { input, scalars } => {
-                self.build_pipeline(context.clone(), input, pipeline)?;
-                self.build_eval_scalar(context, scalars, pipeline)
+                self.build_pipeline(input)?;
+                self.build_eval_scalar(scalars)
             }
             PhysicalPlan::AggregatePartial {
                 input,
                 group_by,
                 agg_funcs,
             } => {
-                self.build_pipeline(context.clone(), input, pipeline)?;
+                self.build_pipeline(input)?;
                 self.build_aggregate_partial(
-                    context,
                     input.output_schema()?,
                     plan.output_schema()?,
                     group_by,
                     agg_funcs,
-                    pipeline,
                 )
             }
             PhysicalPlan::AggregateFinal {
@@ -123,27 +132,25 @@ impl PipelineBuilder {
                 agg_funcs,
                 before_group_by_schema,
             } => {
-                self.build_pipeline(context.clone(), input, pipeline)?;
+                self.build_pipeline(input)?;
                 self.build_aggregate_final(
-                    context,
                     before_group_by_schema.clone(),
                     plan.output_schema()?,
                     group_by,
                     agg_funcs,
-                    pipeline,
                 )
             }
             PhysicalPlan::Sort { input, order_by } => {
-                self.build_pipeline(context.clone(), input, pipeline)?;
-                self.build_sort(context, order_by, pipeline)
+                self.build_pipeline(input)?;
+                self.build_sort(order_by)
             }
             PhysicalPlan::Limit {
                 input,
                 limit,
                 offset,
             } => {
-                self.build_pipeline(context, input, pipeline)?;
-                self.build_limit(*limit, *offset, pipeline)
+                self.build_pipeline(input)?;
+                self.build_limit(*limit, *offset)
             }
             PhysicalPlan::HashJoin {
                 build,
@@ -153,48 +160,106 @@ impl PipelineBuilder {
                 other_conditions,
                 join_type,
                 marker_index,
+                from_correlated_subquery,
             } => {
-                let mut build_side_pipeline = Pipeline::create();
-                let build_side_context = QueryContext::create_from(context.clone());
-                self.build_pipeline(build_side_context, build, &mut build_side_pipeline)?;
-                self.build_pipeline(context.clone(), probe, pipeline)?;
-                self.build_hash_join(
-                    context,
-                    plan.output_schema()?,
-                    build.output_schema()?,
+                let predicate = Self::join_predicate(other_conditions)?;
+
+                let hash_join_desc = HashJoinDesc {
+                    build_keys: build_keys
+                        .iter()
+                        .map(Evaluator::eval_physical_scalar)
+                        .collect::<Result<_>>()?,
+                    probe_keys: probe_keys
+                        .iter()
+                        .map(Evaluator::eval_physical_scalar)
+                        .collect::<Result<_>>()?,
+                    join_type: join_type.clone(),
+                    other_predicate: predicate
+                        .as_ref()
+                        .map(Evaluator::eval_physical_scalar)
+                        .transpose()?,
+                    marker_join_desc: MarkJoinDesc {
+                        marker_index: *marker_index,
+                        has_null: RwLock::new(false),
+                    },
+                    from_correlated_subquery: *from_correlated_subquery,
+                };
+
+                let join_state = JoinHashTable::create_join_state(
+                    self.ctx.clone(),
                     build_keys,
-                    probe_keys,
-                    other_conditions,
-                    join_type.clone(),
-                    *marker_index,
-                    build_side_pipeline,
-                    pipeline,
+                    build.output_schema()?,
+                    hash_join_desc,
                 )?;
+
+                self.expand_build_side_pipeline(build, join_state.clone())?;
+
+                self.build_pipeline(probe)?;
+                self.build_hash_join(plan.output_schema()?, join_type.clone(), join_state)?;
                 Ok(())
-            }
-            v @ PhysicalPlan::CrossApply {
-                input,
-                subquery,
-                correlated_columns,
-            } => {
-                self.build_pipeline(context.clone(), input, pipeline)?;
-                self.build_apply(
-                    context,
-                    subquery,
-                    correlated_columns,
-                    v.output_schema()?,
-                    pipeline,
-                )
-            }
-            PhysicalPlan::Max1Row { input } => {
-                self.build_pipeline(context, input, pipeline)?;
-                self.build_max_one_row(pipeline)
             }
         }
     }
 
-    pub fn render_result_set(
+    fn expand_build_side_pipeline(
         &mut self,
+        build: &PhysicalPlan,
+        join_state: Arc<JoinHashTable>,
+    ) -> Result<()> {
+        let build_side_context = QueryContext::create_from(self.ctx.clone());
+        let build_side_builder = PipelineBuilder::create(build_side_context);
+        let mut build_res = build_side_builder.finalize(build)?;
+
+        assert!(build_res.main_pipeline.is_pulling_pipeline()?);
+        let mut sink_pipeline_builder = SinkPipeBuilder::create();
+        for _index in 0..build_res.main_pipeline.output_len() {
+            let input_port = InputPort::create();
+            sink_pipeline_builder.add_sink(
+                input_port.clone(),
+                Sinker::<SinkBuildHashTable>::create(
+                    input_port,
+                    SinkBuildHashTable::try_create(join_state.clone())?,
+                ),
+            );
+        }
+
+        build_res
+            .main_pipeline
+            .add_pipe(sink_pipeline_builder.finalize());
+
+        self.pipelines.push(build_res.main_pipeline);
+        self.pipelines
+            .extend(build_res.sources_pipelines.into_iter());
+        Ok(())
+    }
+
+    fn join_predicate(other_conditions: &[PhysicalScalar]) -> Result<Option<PhysicalScalar>> {
+        other_conditions.iter().cloned().fold(
+            Result::<Option<PhysicalScalar>>::Ok(None),
+            |acc, next| {
+                if let Ok(None) = acc {
+                    Ok(Some(next))
+                } else if let Ok(Some(prev)) = acc {
+                    let left_type = prev.data_type();
+                    let right_type = next.data_type();
+                    let data_types = vec![&left_type, &right_type];
+                    let func = FunctionFactory::instance().get("and", &data_types)?;
+                    Ok(Some(PhysicalScalar::Function {
+                        name: "and".to_string(),
+                        args: vec![
+                            (prev.clone(), prev.data_type()),
+                            (next.clone(), next.data_type()),
+                        ],
+                        return_type: func.return_type(),
+                    }))
+                } else {
+                    acc
+                }
+            },
+        )
+    }
+
+    pub fn render_result_set(
         input_schema: DataSchemaRef,
         result_columns: &[ColumnBinding],
         pipeline: &mut Pipeline,
@@ -226,44 +291,35 @@ impl PipelineBuilder {
         Ok(())
     }
 
-    pub fn build_table_scan(
+    fn build_table_scan(
         &mut self,
-        context: Arc<QueryContext>,
         output_schema: DataSchemaRef,
         name_mapping: &BTreeMap<String, ColumnID>,
         source: &ReadDataSourcePlan,
-        pipeline: &mut Pipeline,
     ) -> Result<()> {
-        let table = context.build_table_from_source_plan(source)?;
-        context.try_set_partitions(source.parts.clone())?;
-        table.read2(context.clone(), source, pipeline)?;
+        let table = self.ctx.build_table_from_source_plan(source)?;
+        self.ctx.try_set_partitions(source.parts.clone())?;
+        table.read2(self.ctx.clone(), source, &mut self.main_pipeline)?;
         let schema = source.schema();
         let projections = name_mapping
             .iter()
             .map(|(name, _)| schema.index_of(name.as_str()))
             .collect::<Result<Vec<usize>>>()?;
 
-        pipeline.add_transform(|input, output| {
+        self.main_pipeline.add_transform(|input, output| {
             Ok(TransformProject::create(input, output, projections.clone()))
         })?;
 
-        pipeline.add_transform(|input, output| {
+        self.main_pipeline.add_transform(|input, output| {
             Ok(TransformRename::create(
                 input,
                 output,
                 output_schema.clone(),
             ))
-        })?;
-
-        Ok(())
+        })
     }
 
-    pub fn build_filter(
-        &mut self,
-        context: Arc<QueryContext>,
-        predicates: &[PhysicalScalar],
-        pipeline: &mut Pipeline,
-    ) -> Result<()> {
+    fn build_filter(&mut self, predicates: &[PhysicalScalar]) -> Result<()> {
         if predicates.is_empty() {
             return Err(ErrorCode::LogicalError(
                 "Invalid empty predicate list".to_string(),
@@ -284,9 +340,9 @@ impl PipelineBuilder {
                 return_type: func.return_type(),
             };
         }
-        let func_ctx = context.try_get_function_context()?;
+        let func_ctx = self.ctx.try_get_function_context()?;
 
-        pipeline.add_transform(|input, output| {
+        self.main_pipeline.add_transform(|input, output| {
             TransformFilterV2::try_create(
                 input,
                 output,
@@ -298,8 +354,8 @@ impl PipelineBuilder {
         Ok(())
     }
 
-    pub fn build_project(&mut self, projections: &[usize], pipeline: &mut Pipeline) -> Result<()> {
-        pipeline.add_transform(|input, output| {
+    fn build_project(&mut self, projections: &[usize]) -> Result<()> {
+        self.main_pipeline.add_transform(|input, output| {
             Ok(TransformProject::create(
                 input,
                 output,
@@ -308,19 +364,14 @@ impl PipelineBuilder {
         })
     }
 
-    pub fn build_eval_scalar(
-        &mut self,
-        context: Arc<QueryContext>,
-        scalars: &[(PhysicalScalar, ColumnID)],
-        pipeline: &mut Pipeline,
-    ) -> Result<()> {
+    fn build_eval_scalar(&mut self, scalars: &[(PhysicalScalar, ColumnID)]) -> Result<()> {
         let eval_nodes: Vec<(EvalNode<ColumnID>, String)> = scalars
             .iter()
             .map(|(scalar, id)| Ok((Evaluator::eval_physical_scalar(scalar)?, id.clone())))
             .collect::<Result<_>>()?;
-        let func_ctx = context.try_get_function_context()?;
+        let func_ctx = self.ctx.try_get_function_context()?;
 
-        pipeline.add_transform(|input, output| {
+        self.main_pipeline.add_transform(|input, output| {
             Ok(ExpressionTransformV2::create(
                 input,
                 output,
@@ -332,49 +383,45 @@ impl PipelineBuilder {
         Ok(())
     }
 
-    pub fn build_aggregate_partial(
+    fn build_aggregate_partial(
         &mut self,
-        context: Arc<QueryContext>,
         input_schema: DataSchemaRef,
         output_schema: DataSchemaRef,
         group_by: &[ColumnID],
         agg_funcs: &[AggregateFunctionDesc],
-        pipeline: &mut Pipeline,
     ) -> Result<()> {
         let params =
             Self::build_aggregator_params(input_schema, output_schema, group_by, agg_funcs)?;
 
-        pipeline.add_transform(|input, output| {
+        self.main_pipeline.add_transform(|input, output| {
             TransformAggregator::try_create_partial(
                 input.clone(),
                 output.clone(),
                 AggregatorTransformParams::try_create(input, output, &params)?,
-                context.clone(),
+                self.ctx.clone(),
             )
         })?;
 
         Ok(())
     }
 
-    pub fn build_aggregate_final(
+    fn build_aggregate_final(
         &mut self,
-        context: Arc<QueryContext>,
         input_schema: DataSchemaRef,
         output_schema: DataSchemaRef,
         group_by: &[ColumnID],
         agg_funcs: &[AggregateFunctionDesc],
-        pipeline: &mut Pipeline,
     ) -> Result<()> {
         let params =
             Self::build_aggregator_params(input_schema, output_schema, group_by, agg_funcs)?;
 
-        pipeline.resize(1)?;
-        pipeline.add_transform(|input, output| {
+        self.main_pipeline.resize(1)?;
+        self.main_pipeline.add_transform(|input, output| {
             TransformAggregator::try_create_final(
                 input.clone(),
                 output.clone(),
                 AggregatorTransformParams::try_create(input, output, &params)?,
-                context.clone(),
+                self.ctx.clone(),
             )
         })?;
 
@@ -426,12 +473,7 @@ impl PipelineBuilder {
         Ok(params)
     }
 
-    pub fn build_sort(
-        &mut self,
-        _context: Arc<QueryContext>,
-        order_by: &[SortDesc],
-        pipeline: &mut Pipeline,
-    ) -> Result<()> {
+    fn build_sort(&mut self, order_by: &[SortDesc]) -> Result<()> {
         let sort_desc: Vec<SortColumnDescription> = order_by
             .iter()
             .map(|desc| SortColumnDescription {
@@ -442,12 +484,12 @@ impl PipelineBuilder {
             .collect();
 
         // Sort
-        pipeline.add_transform(|input, output| {
+        self.main_pipeline.add_transform(|input, output| {
             TransformSortPartial::try_create(input, output, None, sort_desc.clone())
         })?;
 
         // Merge
-        pipeline.add_transform(|input, output| {
+        self.main_pipeline.add_transform(|input, output| {
             TransformSortMerge::try_create(
                 input,
                 output,
@@ -455,87 +497,36 @@ impl PipelineBuilder {
             )
         })?;
 
-        pipeline.resize(1)?;
+        self.main_pipeline.resize(1)?;
 
         // Concat merge in single thread
-        pipeline.add_transform(|input, output| {
+        self.main_pipeline.add_transform(|input, output| {
             TransformSortMerge::try_create(
                 input,
                 output,
                 SortMergeCompactor::new(None, sort_desc.clone()),
             )
-        })?;
-
-        Ok(())
+        })
     }
 
-    pub fn build_limit(
-        &mut self,
-        limit: Option<usize>,
-        offset: usize,
-        pipeline: &mut Pipeline,
-    ) -> Result<()> {
-        pipeline.resize(1)?;
-        pipeline.add_transform(|input, output| {
-            TransformLimit::try_create(limit, offset, input, output)
-        })?;
-        Ok(())
+    fn build_limit(&mut self, limit: Option<usize>, offset: usize) -> Result<()> {
+        self.main_pipeline.resize(1)?;
+
+        self.main_pipeline
+            .add_transform(|input, output| TransformLimit::try_create(limit, offset, input, output))
     }
 
     #[allow(clippy::too_many_arguments)]
     fn build_hash_join(
         &mut self,
-        ctx: Arc<QueryContext>,
         output_schema: DataSchemaRef,
-        build_schema: DataSchemaRef,
-        build_keys: &[PhysicalScalar],
-        probe_keys: &[PhysicalScalar],
-        other_conditions: &[PhysicalScalar],
         join_type: JoinType,
-        marker_index: Option<IndexType>,
-        mut child_pipeline: Pipeline,
-        pipeline: &mut Pipeline,
+        hash_join_state: Arc<JoinHashTable>,
     ) -> Result<()> {
-        let predicate = other_conditions.iter().cloned().fold(
-            Result::<Option<PhysicalScalar>>::Ok(None),
-            |acc, next| {
-                if let Ok(None) = acc {
-                    Ok(Some(next))
-                } else if let Ok(Some(prev)) = acc {
-                    let left_type = prev.data_type();
-                    let right_type = next.data_type();
-                    let data_types = vec![&left_type, &right_type];
-                    let func = FunctionFactory::instance().get("and", &data_types)?;
-                    Ok(Some(PhysicalScalar::Function {
-                        name: "and".to_string(),
-                        args: vec![
-                            (prev.clone(), prev.data_type()),
-                            (next.clone(), next.data_type()),
-                        ],
-                        return_type: func.return_type(),
-                    }))
-                } else {
-                    acc
-                }
-            },
-        )?;
-        let hash_join_state = JoinHashTable::create_join_state(
-            ctx.clone(),
-            join_type.clone(),
-            build_keys,
-            probe_keys,
-            predicate.as_ref(),
-            build_schema,
-            marker_index,
-        )?;
-
-        // Build side
-        self.build_sink_hash_table(hash_join_state.clone(), &mut child_pipeline)?;
-
         // Probe side
-        pipeline.add_transform(|input, output| {
+        self.main_pipeline.add_transform(|input, output| {
             Ok(TransformHashJoinProbe::create(
-                ctx.clone(),
+                self.ctx.clone(),
                 input,
                 output,
                 hash_join_state.clone(),
@@ -544,8 +535,8 @@ impl PipelineBuilder {
         })?;
 
         if join_type == JoinType::Mark {
-            pipeline.resize(1)?;
-            pipeline.add_transform(|input, output| {
+            self.main_pipeline.resize(1)?;
+            self.main_pipeline.add_transform(|input, output| {
                 TransformMarkJoin::try_create(
                     input,
                     output,
@@ -553,57 +544,6 @@ impl PipelineBuilder {
                 )
             })?;
         }
-
-        self.pipelines.push(child_pipeline);
-
-        Ok(())
-    }
-
-    fn build_sink_hash_table(
-        &mut self,
-        state: Arc<dyn HashJoinState>,
-        pipeline: &mut Pipeline,
-    ) -> Result<()> {
-        let mut sink_pipeline_builder = SinkPipeBuilder::create();
-        for _ in 0..pipeline.output_len() {
-            let input_port = InputPort::create();
-            sink_pipeline_builder.add_sink(
-                input_port.clone(),
-                Sinker::<SinkBuildHashTable>::create(
-                    input_port,
-                    SinkBuildHashTable::try_create(state.clone())?,
-                ),
-            );
-        }
-
-        pipeline.add_pipe(sink_pipeline_builder.finalize());
-        Ok(())
-    }
-
-    pub fn build_apply(
-        &mut self,
-        context: Arc<QueryContext>,
-        subquery: &PhysicalPlan,
-        outer_columns: &BTreeSet<ColumnID>,
-        output_schema: DataSchemaRef,
-        pipeline: &mut Pipeline,
-    ) -> Result<()> {
-        pipeline.add_transform(|input, output| {
-            Ok(TransformApply::create(
-                input,
-                output,
-                context.clone(),
-                outer_columns.clone(),
-                output_schema.clone(),
-                subquery.clone(),
-            ))
-        })?;
-
-        Ok(())
-    }
-
-    pub fn build_max_one_row(&mut self, pipeline: &mut Pipeline) -> Result<()> {
-        pipeline.add_transform(|input, output| Ok(TransformMax1Row::create(input, output)))?;
 
         Ok(())
     }

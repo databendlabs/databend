@@ -31,6 +31,7 @@ use crate::pipelines::processors::Sink;
 use crate::pipelines::processors::Sinker;
 use crate::pipelines::Pipe;
 use crate::pipelines::Pipeline;
+use crate::pipelines::PipelineBuildResult;
 
 struct State {
     sender: SyncSender<Result<Option<DataBlock>>>,
@@ -85,6 +86,26 @@ impl PipelinePullingExecutor {
             receiver,
             state,
             executor,
+        })
+    }
+
+    pub fn from_pipelines(
+        async_runtime: Arc<Runtime>,
+        query_need_abort: Arc<AtomicBool>,
+        build_res: PipelineBuildResult,
+    ) -> Result<PipelinePullingExecutor> {
+        let mut main_pipeline = build_res.main_pipeline;
+        let (sender, receiver) = std::sync::mpsc::sync_channel(main_pipeline.output_len());
+        let state = State::create(sender.clone());
+        Self::wrap_pipeline(&mut main_pipeline, sender)?;
+
+        let mut pipelines = build_res.sources_pipelines;
+        pipelines.push(main_pipeline);
+
+        Ok(PipelinePullingExecutor {
+            receiver,
+            state,
+            executor: PipelineExecutor::from_pipelines(async_runtime, query_need_abort, pipelines)?,
         })
     }
 

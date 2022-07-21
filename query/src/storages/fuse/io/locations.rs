@@ -17,14 +17,14 @@ use std::marker::PhantomData;
 
 use common_datablocks::DataBlock;
 use common_exception::Result;
+use common_fuse_meta::meta::SegmentInfo;
+use common_fuse_meta::meta::SnapshotVersion;
+use common_fuse_meta::meta::Versioned;
 use uuid::Uuid;
 
 use crate::storages::fuse::constants::FUSE_TBL_BLOCK_PREFIX;
 use crate::storages::fuse::constants::FUSE_TBL_SEGMENT_PREFIX;
 use crate::storages::fuse::constants::FUSE_TBL_SNAPSHOT_PREFIX;
-use crate::storages::fuse::meta::SegmentInfo;
-use crate::storages::fuse::meta::SnapshotVersion;
-use crate::storages::fuse::meta::Versioned;
 
 static SNAPSHOT_V0: SnapshotVersion = SnapshotVersion::V0(PhantomData);
 static SNAPSHOT_V1: SnapshotVersion = SnapshotVersion::V1(PhantomData);

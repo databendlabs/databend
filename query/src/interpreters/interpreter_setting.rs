@@ -23,7 +23,9 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
+use crate::sessions::QueryAffect;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 
 pub struct SettingInterpreter {
     ctx: Arc<QueryContext>,
@@ -64,9 +66,16 @@ impl Interpreter for SettingInterpreter {
                     )?;
                 }
                 _ => {
-                    self.ctx
-                        .get_settings()
-                        .set_settings(var.variable, var.value, var.is_global)?;
+                    self.ctx.get_settings().set_settings(
+                        var.variable.clone(),
+                        var.value.clone(),
+                        var.is_global,
+                    )?;
+                    self.ctx.set_affect(QueryAffect::ChangeSetting {
+                        key: var.variable.clone(),
+                        value: var.value.clone(),
+                        is_global: var.is_global,
+                    })
                 }
             }
         }

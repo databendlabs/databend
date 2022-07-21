@@ -8,13 +8,13 @@ statement ok
 DROP DATABASE IF EXISTS `test`;
 
 statement ok
-CREATE DATABASE `test`;
+CREATE DATABASE `test` ENGINE=DEFAULT
 
 statement query TT 
 SHOW CREATE DATABASE `test`;
 
 ----  
-test CREATE DATABASE `test`
+test CREATE DATABASE `test` ENGINE=DEFAULT
 
 statement ok
 DROP DATABASE `test`;
@@ -44,7 +44,7 @@ statement query TT
 SHOW CREATE SCHEMA `test`;
 
 ----  
-test CREATE DATABASE `test`
+test CREATE DATABASE `test`  ENGINE=DEFAULT
 
 statement ok
 DROP SCHEMA `test`;

@@ -33,6 +33,7 @@ use crate::interpreters::SelectInterpreterV2;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::Pipeline;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::sql::plans::CopyPlanV2;
 use crate::sql::plans::Plan;
 use crate::storages::stage::StageSourceHelper;
@@ -74,24 +75,31 @@ impl CopyInterpreterV2 {
                     }
                     files_with_path
                 } else if !path.ends_with('/') {
-                    let op = StageSourceHelper::get_op(&self.ctx, &table_info.stage_info).await?;
+                    let rename_me: Arc<dyn TableContext> = self.ctx.clone();
+                    let op = StageSourceHelper::get_op(&rename_me, &table_info.stage_info).await?;
                     if op.object(path).is_exist().await? {
                         vec![path.to_string()]
                     } else {
                         vec![]
                     }
                 } else {
-                    let op = StageSourceHelper::get_op(&self.ctx, &table_info.stage_info).await?;
+                    let rename_me: Arc<dyn TableContext> = self.ctx.clone();
+                    let op = StageSourceHelper::get_op(&rename_me, &table_info.stage_info).await?;
                     let mut list = vec![];
 
                     // TODO: we could rewrite into try_collect.
-                    let mut objects = op.object(path).list().await?;
+                    let mut objects = op.batch().walk_top_down(path)?;
                     while let Some(de) = objects.try_next().await? {
+                        if de.mode().is_dir() {
+                            continue;
+                        }
                         list.push(de.path().to_string());
                     }
 
                     list
                 };
+
+                tracing::info!("listed files: {:?}", &files_with_path);
 
                 Ok(files_with_path)
             }
@@ -107,8 +115,8 @@ impl CopyInterpreterV2 {
         mut plan: ReadDataSourcePlan,
         files: Vec<String>,
     ) -> ReadDataSourcePlan {
-        if let SourceInfo::StageSource(ref mut s3) = plan.source_info {
-            s3.files = files
+        if let SourceInfo::StageSource(ref mut stage) = plan.source_info {
+            stage.files = files
         }
         plan
     }
@@ -135,7 +143,7 @@ impl CopyInterpreterV2 {
         let mut pipeline = Pipeline::create();
         let read_source_plan = from.clone();
         let read_source_plan = Self::rewrite_read_plan_file_name(read_source_plan, files);
-        tracing::info!("copy_files_to_table: source plan:{:?}", read_source_plan);
+        tracing::info!("copy_files_to_table from source: {:?}", read_source_plan);
         let table = ctx.build_table_from_source_plan(&read_source_plan)?;
         let res = table.read2(ctx.clone(), &read_source_plan, &mut pipeline);
         if let Err(e) = res {
@@ -258,7 +266,7 @@ impl Interpreter for CopyInterpreterV2 {
                     files = matched_files;
                 }
 
-                tracing::info!("copy file list:{:?}, pattern:{}", &files, pattern,);
+                tracing::info!("matched files: {:?}, pattern: {}", &files, pattern);
 
                 let write_results = self
                     .copy_files_to_table(catalog_name, database_name, table_name, from, files)

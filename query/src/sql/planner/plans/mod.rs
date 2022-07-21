@@ -13,7 +13,6 @@
 // limitations under the License.
 
 mod aggregate;
-mod apply;
 mod copy_v2;
 pub mod create_table_v2;
 mod eval_scalar;
@@ -23,7 +22,6 @@ pub mod insert;
 mod limit;
 mod logical_get;
 mod logical_join;
-mod max_one_row;
 mod operator;
 mod pattern;
 mod physical_scan;
@@ -36,7 +34,6 @@ use std::fmt::Display;
 use std::sync::Arc;
 
 pub use aggregate::*;
-pub use apply::CrossApply;
 use common_ast::ast::ExplainKind;
 use common_datavalues::DataField;
 use common_datavalues::DataSchema;
@@ -79,10 +76,7 @@ use common_planners::RevokeRolePlan;
 use common_planners::SettingPlan;
 use common_planners::ShowCreateDatabasePlan;
 use common_planners::ShowCreateTablePlan;
-use common_planners::ShowDatabasesPlan;
 use common_planners::ShowGrantsPlan;
-use common_planners::ShowTablesPlan;
-use common_planners::ShowTablesStatusPlan;
 use common_planners::TruncateTablePlan;
 use common_planners::UndropTablePlan;
 pub use copy_v2::CopyPlanV2;
@@ -99,7 +93,6 @@ pub use limit::Limit;
 pub use logical_get::LogicalGet;
 pub use logical_join::JoinType;
 pub use logical_join::LogicalInnerJoin;
-pub use max_one_row::Max1Row;
 pub use operator::*;
 pub use pattern::PatternPlan;
 pub use physical_scan::PhysicalScan;
@@ -135,22 +128,19 @@ pub enum Plan {
     Call(Box<CallPlan>),
 
     // System
-    ShowMetrics,
-    ShowProcessList,
-    ShowSettings,
+    // ShowSettings, ShowMetrics, ShowProcessList-> Rewrite to Query,
 
     // Databases
-    ShowDatabases(Box<ShowDatabasesPlan>),
+    // ShowDatabases(_) -> Rewrite to Query,
     ShowCreateDatabase(Box<ShowCreateDatabasePlan>),
     CreateDatabase(Box<CreateDatabasePlan>),
     DropDatabase(Box<DropDatabasePlan>),
     RenameDatabase(Box<RenameDatabasePlan>),
 
     // Tables
-    ShowTables(Box<ShowTablesPlan>),
+    // ShowTables/ShowTablesStatus -> Rewrite to Query,
     ShowCreateTable(Box<ShowCreateTablePlan>),
     DescribeTable(Box<DescribeTablePlan>),
-    ShowTablesStatus(Box<ShowTablesStatusPlan>),
     CreateTable(Box<CreateTablePlanV2>),
     DropTable(Box<DropTablePlan>),
     UndropTable(Box<UndropTablePlan>),
@@ -171,7 +161,7 @@ pub enum Plan {
     DropView(Box<DropViewPlan>),
 
     // Account
-    ShowUsers,
+    // ShowUsers -> Rewrite to Query,
     AlterUser(Box<AlterUserPlan>),
     CreateUser(Box<CreateUserPlan>),
     DropUser(Box<DropUserPlan>),
@@ -181,7 +171,7 @@ pub enum Plan {
     AlterUDF(Box<AlterUserUDFPlan>),
     DropUDF(Box<DropUserUDFPlan>),
 
-    ShowRoles,
+    // ShowRoles  -> Rewrite to Query,
     CreateRole(Box<CreateRolePlan>),
     DropRole(Box<DropRolePlan>),
     GrantRole(Box<GrantRolePlan>),
@@ -191,7 +181,7 @@ pub enum Plan {
     RevokeRole(Box<RevokeRolePlan>),
 
     // Stages
-    ShowStages,
+    // ShowStages -> Rewrite to Query,
     ListStage(Box<ListPlan>),
     DescribeStage(Box<DescribeUserStagePlan>),
     CreateStage(Box<CreateUserStagePlan>),
@@ -211,18 +201,12 @@ impl Display for Plan {
             Plan::Query { .. } => write!(f, "Query"),
             Plan::Copy(_) => write!(f, "Copy"),
             Plan::Explain { .. } => write!(f, "Explain"),
-            Plan::ShowMetrics => write!(f, "ShowMetrics"),
-            Plan::ShowProcessList => write!(f, "ShowProcessList"),
-            Plan::ShowSettings => write!(f, "ShowSettings"),
-            Plan::ShowDatabases(_) => write!(f, "ShowDatabases"),
             Plan::ShowCreateDatabase(_) => write!(f, "ShowCreateDatabase"),
             Plan::CreateDatabase(_) => write!(f, "CreateDatabase"),
             Plan::DropDatabase(_) => write!(f, "DropDatabase"),
             Plan::RenameDatabase(_) => write!(f, "RenameDatabase"),
-            Plan::ShowTables(_) => write!(f, "ShowTables"),
             Plan::ShowCreateTable(_) => write!(f, "ShowCreateTable"),
             Plan::DescribeTable(_) => write!(f, "DescribeTable"),
-            Plan::ShowTablesStatus(_) => write!(f, "ShowTablesStatus"),
             Plan::CreateTable(_) => write!(f, "CreateTable"),
             Plan::DropTable(_) => write!(f, "DropTable"),
             Plan::UndropTable(_) => write!(f, "UndropTable"),
@@ -235,14 +219,11 @@ impl Display for Plan {
             Plan::CreateView(_) => write!(f, "CreateView"),
             Plan::AlterView(_) => write!(f, "AlterView"),
             Plan::DropView(_) => write!(f, "DropView"),
-            Plan::ShowUsers => write!(f, "ShowUsers"),
             Plan::AlterUser(_) => write!(f, "AlterUser"),
             Plan::CreateUser(_) => write!(f, "CreateUser"),
             Plan::DropUser(_) => write!(f, "DropUser"),
-            Plan::ShowRoles => write!(f, "ShowRoles"),
             Plan::CreateRole(_) => write!(f, "CreateRole"),
             Plan::DropRole(_) => write!(f, "DropRole"),
-            Plan::ShowStages => write!(f, "ShowStages"),
             Plan::ListStage(_) => write!(f, "ListStage"),
             Plan::DescribeStage(_) => write!(f, "DescribeStage"),
             Plan::CreateStage(_) => write!(f, "CreateStage"),
@@ -265,6 +246,7 @@ impl Display for Plan {
     }
 }
 
+// TODO the schema is not completed
 impl Plan {
     pub fn schema(&self) -> DataSchemaRef {
         match self {
@@ -277,18 +259,12 @@ impl Plan {
                 DataSchemaRefExt::create(vec![DataField::new("explain", Vu8::to_data_type())])
             }
             Plan::Copy(_) => Arc::new(DataSchema::empty()),
-            Plan::ShowMetrics => Arc::new(DataSchema::empty()),
-            Plan::ShowProcessList => Arc::new(DataSchema::empty()),
-            Plan::ShowSettings => Arc::new(DataSchema::empty()),
-            Plan::ShowDatabases(_) => Arc::new(DataSchema::empty()),
-            Plan::ShowCreateDatabase(_) => Arc::new(DataSchema::empty()),
+            Plan::ShowCreateDatabase(plan) => plan.schema(),
             Plan::CreateDatabase(plan) => plan.schema(),
             Plan::DropDatabase(plan) => plan.schema(),
             Plan::RenameDatabase(plan) => plan.schema(),
-            Plan::ShowTables(_) => Arc::new(DataSchema::empty()),
-            Plan::ShowCreateTable(_) => Arc::new(DataSchema::empty()),
+            Plan::ShowCreateTable(plan) => plan.schema(),
             Plan::DescribeTable(plan) => plan.schema(),
-            Plan::ShowTablesStatus(_) => Arc::new(DataSchema::empty()),
             Plan::CreateTable(plan) => plan.schema(),
             Plan::DropTable(plan) => plan.schema(),
             Plan::UndropTable(plan) => plan.schema(),
@@ -301,17 +277,14 @@ impl Plan {
             Plan::CreateView(plan) => plan.schema(),
             Plan::AlterView(plan) => plan.schema(),
             Plan::DropView(plan) => plan.schema(),
-            Plan::ShowUsers => Arc::new(DataSchema::empty()),
             Plan::AlterUser(plan) => plan.schema(),
             Plan::CreateUser(plan) => plan.schema(),
             Plan::DropUser(plan) => plan.schema(),
-            Plan::ShowRoles => Arc::new(DataSchema::empty()),
             Plan::CreateRole(plan) => plan.schema(),
             Plan::DropRole(plan) => plan.schema(),
             Plan::GrantRole(plan) => plan.schema(),
             Plan::GrantPriv(plan) => plan.schema(),
-            Plan::ShowGrants(_) => Arc::new(DataSchema::empty()),
-            Plan::ShowStages => Arc::new(DataSchema::empty()),
+            Plan::ShowGrants(plan) => plan.schema(),
             Plan::ListStage(plan) => plan.schema(),
             Plan::DescribeStage(plan) => plan.schema(),
             Plan::CreateStage(plan) => plan.schema(),

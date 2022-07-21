@@ -21,6 +21,7 @@ mod parser_explain;
 mod parser_insert;
 mod parser_kill;
 mod parser_optimize;
+mod parser_presign;
 mod parser_query;
 mod parser_set;
 mod parser_show;

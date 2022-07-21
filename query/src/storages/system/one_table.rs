@@ -24,7 +24,7 @@ use common_planners::Extras;
 use common_planners::Partitions;
 use common_planners::Statistics;
 
-use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::storages::system::table::SyncOneBlockSystemTable;
 use crate::storages::system::table::SyncSystemTable;
 use crate::storages::Table;
@@ -40,7 +40,7 @@ impl SyncSystemTable for OneTable {
         &self.table_info
     }
 
-    fn get_full_data(&self, _ctx: Arc<QueryContext>) -> Result<DataBlock> {
+    fn get_full_data(&self, _ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
         Ok(DataBlock::create(self.table_info.schema(), vec![
             Series::from_data(vec![1u8]),
         ]))
@@ -48,7 +48,7 @@ impl SyncSystemTable for OneTable {
 
     fn get_partitions(
         &self,
-        _ctx: Arc<QueryContext>,
+        _ctx: Arc<dyn TableContext>,
         _push_downs: Option<Extras>,
     ) -> Result<(Statistics, Partitions)> {
         Ok((Statistics::new_exact(1, 1, 1, 1), vec![]))

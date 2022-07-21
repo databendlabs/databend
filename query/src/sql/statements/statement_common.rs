@@ -31,6 +31,7 @@ use common_tracing::tracing::debug;
 use sqlparser::ast::ObjectName;
 
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 
 /// Named stage(start with `@`):
 ///

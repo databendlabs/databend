@@ -21,8 +21,9 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_formats::InputFormat;
 use common_formats::InputState;
+use common_io::prelude::FormatSettings;
 use futures::AsyncRead;
-use futures::AsyncReadExt;
+use futures_util::AsyncReadExt;
 use opendal::io_util::CompressAlgorithm;
 use opendal::io_util::DecompressDecoder;
 use opendal::io_util::DecompressState;
@@ -48,19 +49,20 @@ pub struct FileSplitter {
     decompress_buf: Vec<u8>,
 
     format_state: Box<dyn InputState>,
-    skipped_header: bool,
+    rows_to_skip: u64,
 }
 
 impl FileSplitter {
     pub fn create<R: AsyncRead + Unpin + Send + 'static>(
         reader: R,
         input_format: Arc<dyn InputFormat>,
+        format_settings: FormatSettings,
         compress_algorithm: Option<CompressAlgorithm>,
     ) -> FileSplitter {
         let decoder = compress_algorithm.map(DecompressDecoder::new);
         FileSplitter {
             state: State::NeedData,
-            skipped_header: false,
+            rows_to_skip: format_settings.skip_header,
             reader: Box::new(reader),
             input_buf: vec![0; 1024 * 1024],
             decompress_buf: vec![0; 1024 * 1024],
@@ -84,7 +86,7 @@ impl FileSplitter {
                 &self.input_format,
                 output_splits,
                 &mut self.format_state,
-                &mut self.skipped_header,
+                &mut self.rows_to_skip,
             )
         }
     }
@@ -94,18 +96,26 @@ impl FileSplitter {
         input_format: &Arc<dyn InputFormat>,
         output_splits: &mut VecDeque<Vec<u8>>,
         format_state: &mut Box<dyn InputState>,
-        skipped_header: &mut bool,
+        rows_to_skip: &mut u64,
     ) -> Result<()> {
+        if data.is_empty() {
+            return Ok(());
+        }
         let mut data_slice = data;
 
-        if !*skipped_header {
+        if *rows_to_skip > 0 {
             let len = data_slice.len();
-            let skip_size = input_format.skip_header(data_slice, format_state, 1)?;
-            if skip_size < len {
-                *skipped_header = true;
-                *format_state = input_format.create_state();
+            let mut skip_size = 0;
+            while *rows_to_skip > 0 {
+                skip_size += input_format.skip_header(data_slice, format_state, 1)?;
+                *rows_to_skip -= 1;
             }
-            data_slice = &data_slice[skip_size..];
+            if skip_size < len {
+                *format_state = input_format.create_state();
+                data_slice = &data_slice[skip_size..];
+            } else {
+                return Ok(());
+            }
         }
 
         while !data_slice.is_empty() {
@@ -147,7 +157,7 @@ impl FileSplitter {
                         &self.input_format,
                         output_splits,
                         &mut self.format_state,
-                        &mut self.skipped_header,
+                        &mut self.rows_to_skip,
                     )?;
                 }
                 DecompressState::Flushing => {
@@ -159,7 +169,7 @@ impl FileSplitter {
                         &self.input_format,
                         output_splits,
                         &mut self.format_state,
-                        &mut self.skipped_header,
+                        &mut self.rows_to_skip,
                     )?;
                 }
                 DecompressState::Done => break,
@@ -176,13 +186,28 @@ impl FileSplitter {
         }
     }
 
+    /// Fill will try its best to fill the `input_buf`
+    ///
+    /// Either the input_buf is full or the reader has been consumed.
     async fn fill(&mut self) -> Result<()> {
-        let n_read = self.reader.read(&mut *self.input_buf).await?;
-        if n_read > 0 {
-            self.state = State::ReceivedData(n_read);
-        } else {
-            self.state = State::NeedFlush;
+        let mut buf = &mut self.input_buf[0..];
+        let mut n = 0;
+
+        while !buf.is_empty() {
+            let read = self.reader.read(buf).await?;
+            if read == 0 {
+                break;
+            }
+
+            n += read;
+            buf = &mut self.input_buf[n..]
         }
+
+        self.state = if n > 0 {
+            State::ReceivedData(n)
+        } else {
+            State::NeedFlush
+        };
         Ok(())
     }
 

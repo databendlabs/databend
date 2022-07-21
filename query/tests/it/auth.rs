@@ -20,6 +20,7 @@ use common_meta_types::UserIdentity;
 use common_users::CustomClaims;
 use common_users::EnsureUser;
 use databend_query::auth::Credential;
+use databend_query::sessions::TableContext;
 use jwt_simple::prelude::*;
 use wiremock::matchers::method;
 use wiremock::matchers::path;

@@ -51,6 +51,7 @@ use crate::pipelines::processors::TransformLimitBy;
 use crate::pipelines::processors::TransformSortMerge;
 use crate::pipelines::processors::TransformSortPartial;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 
 /// Builder for query pipeline
 /// ```

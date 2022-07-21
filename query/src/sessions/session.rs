@@ -66,7 +66,8 @@ impl Session {
     ) -> Result<Arc<Session>> {
         let session_ctx = Arc::new(SessionContext::try_create(conf.clone())?);
         let user_api = session_mgr.get_user_api_provider();
-        let session_settings = Settings::try_create(&conf, user_api, session_ctx.clone())?;
+        let session_settings =
+            Settings::try_create(&conf, user_api, session_ctx.get_current_tenant()).await?;
         let ref_count = Arc::new(AtomicUsize::new(0));
         let status = Arc::new(Default::default());
         Ok(Arc::new(Session {
@@ -166,7 +167,7 @@ impl Session {
             format.record_delimiter = settings.get_record_delimiter()?;
             format.field_delimiter = settings.get_field_delimiter()?;
             format.empty_as_default = settings.get_empty_as_default()? > 0;
-            format.skip_header = settings.get_skip_header()? > 0;
+            format.skip_header = settings.get_skip_header()?;
 
             let tz = String::from_utf8(settings.get_timezone()?).map_err(|_| {
                 ErrorCode::LogicalError("Timezone has been checked and should be valid.")

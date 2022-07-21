@@ -49,8 +49,9 @@ use common_functions::scalars::CastFunction;
 use common_functions::scalars::FunctionFactory;
 use common_functions::scalars::TupleFunction;
 
-use crate::common::Evaluator;
+use crate::evaluator::Evaluator;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::sql::binder::wrap_cast_if_needed;
 use crate::sql::binder::Binder;
 use crate::sql::optimizer::RelExpr;
@@ -558,20 +559,28 @@ impl<'a> TypeChecker<'a> {
                 ))
             }
 
-            Expr::Exists { subquery, not, .. } => {
-                self.resolve_subquery(
-                    if *not {
-                        SubqueryType::NotExists
-                    } else {
-                        SubqueryType::Exists
-                    },
-                    subquery,
-                    true,
-                    None,
-                    None,
-                    None,
-                )
-                .await?
+            Expr::Exists {
+                subquery,
+                not,
+                span,
+                ..
+            } => {
+                if *not {
+                    return self
+                        .resolve_function(
+                            span,
+                            "not",
+                            &[&Expr::Exists {
+                                span: *span,
+                                not: false,
+                                subquery: subquery.clone(),
+                            }],
+                            None,
+                        )
+                        .await;
+                }
+                self.resolve_subquery(SubqueryType::Exists, subquery, true, None, None, None)
+                    .await?
             }
 
             Expr::Subquery { subquery, .. } => {

@@ -24,6 +24,7 @@ use common_tracing::tracing;
 
 use crate::interpreters::Interpreter;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::sql::is_internal_opt_key;
 use crate::sql::PlanParser;
 
@@ -123,12 +124,7 @@ impl Interpreter for ShowCreateTableInterpreter {
                 .as_str()
         });
 
-        let show_fields = vec![
-            DataField::new("Table", Vu8::to_data_type()),
-            DataField::new("Create Table", Vu8::to_data_type()),
-        ];
-        let show_schema = DataSchemaRefExt::create(show_fields);
-
+        let show_schema = self.plan.schema();
         let block = DataBlock::create(show_schema.clone(), vec![
             Series::from_data(vec![name.as_bytes()]),
             Series::from_data(vec![table_create_sql.into_bytes()]),

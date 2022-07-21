@@ -80,11 +80,11 @@ skipif clickhouse
 statement ok
 SHOW TABLE STATUS FROM showtabstat WHERE Name = 't4';
 
-statement error 1058
+statement ok
 SHOW TABLE STATUS FROM showtabstat WHERE engine = 'test'; 
 
-statement error 1058
-SHOW TABLE STATUS FROM showtabstat WHERE created_on = 'test'; 
+statement ok
+SHOW TABLE STATUS FROM showtabstat WHERE Create_time = 'test'; 
 
 statement ok
 DROP DATABASE IF EXISTS showtabstat;
