@@ -93,11 +93,21 @@ impl QueryFragment for SubQueriesFragment {
             return Ok(true);
         }
 
-        // for (_name, fragment) in &self.subqueries_fragment {
-        //     if fragment.distribute_query()? {
-        //         return Ok(true);
-        //     }
-        // }
+        for expression in &self.node.expressions {
+            match expression {
+                Expression::Subquery { query_plan, .. } => {
+                    if self.subquery_fragment(query_plan)?.distribute_query()? {
+                        return Ok(true);
+                    }
+                }
+                Expression::ScalarSubquery { query_plan, .. } => {
+                    if self.subquery_fragment(query_plan)?.distribute_query()? {
+                        return Ok(true);
+                    }
+                }
+                _ => panic!("Logical error, expressions must be Subquery or ScalarSubquery")
+            };
+        }
 
         Ok(false)
     }
@@ -132,11 +142,7 @@ impl QueryFragment for SubQueriesFragment {
 
     fn rewrite_remote_plan(&self, node: &PlanNode, new_node: &PlanNode) -> Result<PlanNode> {
         match new_node {
-            PlanNode::SubQueryExpression(v) => {
-                let new_node = QueriesRewrite::create(v).rewrite_plan_node(node)?;
-                println!("before rewritten: {:?}, after rewritten: {:?} ", node, new_node);
-                Ok(new_node)
-            }
+            PlanNode::SubQueryExpression(v) => QueriesRewrite::create(v).rewrite_plan_node(node),
             _ => Err(ErrorCode::UnknownPlan(
                 format!(
                     "Unknown plan type while in rewrite_remote_plan, {:?}",
@@ -201,7 +207,6 @@ impl<'a> PlanRewriter for QueriesRewrite<'a> {
             }
         }
 
-        // Ok(PlanNode::SubQueryExpression(self.new_node.clone()))
         Ok(self.new_node.input.as_ref().clone())
     }
 }

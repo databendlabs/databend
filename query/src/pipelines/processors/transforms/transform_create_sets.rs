@@ -116,7 +116,6 @@ impl Processor for TransformCreateSets {
         }
 
         if let Some(output_data) = self.output_data.take() {
-            println!("create sets out {:?}", output_data);
             self.output.push_data(Ok(output_data));
             return Ok(Event::NeedConsume);
         }
@@ -173,20 +172,9 @@ impl Processor for TransformCreateSets {
                 });
             }
 
-            match futures::future::try_join_all(async_get).await {
-                Ok(sub_queries_result) => {
-                    self.sub_queries_result = sub_queries_result;
-                }
-                Err(cause) => {
-                    println!("receive subquery error: {:?}", cause);
-                }
+            if let Ok(sub_queries_result) = futures::future::try_join_all(async_get).await {
+                self.sub_queries_result = sub_queries_result;
             }
-            // if let Ok(sub_queries_result) = futures::future::try_join_all(async_get).await {
-            //     println!("receive subquery result {:?}", sub_queries_result);
-            //     self.sub_queries_result = sub_queries_result;
-            // } else {
-            //     println!("receive subquery error");
-            // }
         }
 
         Ok(())

@@ -44,9 +44,7 @@ impl Sink for SubqueryReceiveSink {
             _ => DataValue::Struct(struct_fields),
         };
 
-        if let Err(cause) = self.sender.send(subquery_data_values) {
-            println!("Send failure : {:?}", cause);
-        }
+        self.sender.send(subquery_data_values).ok();
 
         Ok(())
     }

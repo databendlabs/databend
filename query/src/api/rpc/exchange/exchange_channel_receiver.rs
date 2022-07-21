@@ -51,13 +51,13 @@ impl ExchangeReceiver {
         query_id: String,
         runtime: Arc<Runtime>,
         rx: Receiver<Result<DataPacket>>,
-        receivers_map: &HashMap<usize, FragmentReceiver>,
+        receivers_map: HashMap<usize, &FragmentReceiver>,
     ) -> Arc<ExchangeReceiver> {
         let max_fragments_id = receivers_map.keys().max().cloned().unwrap_or(0);
         let mut receivers_array = vec![None; max_fragments_id + 1];
 
         for (fragment_id, receiver) in receivers_map {
-            receivers_array[*fragment_id] = Some(receiver.clone());
+            receivers_array[fragment_id] = Some(receiver.clone());
         }
 
         Arc::new(ExchangeReceiver {

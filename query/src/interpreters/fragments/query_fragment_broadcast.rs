@@ -47,6 +47,8 @@ impl QueryFragment for BroadcastQueryFragment {
         let input_actions = actions.get_root_actions()?;
         let mut fragment_actions = QueryFragmentActions::create(true, self.id);
 
+        let mut from_multiple_nodes = false;
+
         if self.input.get_out_partition()? == PartitionState::NotPartition {
             if input_actions.get_actions().is_empty() {
                 return Err(ErrorCode::LogicalError(
@@ -63,6 +65,7 @@ impl QueryFragment for BroadcastQueryFragment {
 
             fragment_actions.add_action(fragment_action);
         } else {
+            from_multiple_nodes = true;
             // We run exchange data on the current hosts
             for action in input_actions.get_actions() {
                 let fragment_action = QueryFragmentAction::create(
@@ -75,7 +78,7 @@ impl QueryFragment for BroadcastQueryFragment {
             }
         }
 
-        fragment_actions.set_exchange(BroadcastExchange::create(actions.get_executors()));
+        fragment_actions.set_exchange(BroadcastExchange::create(from_multiple_nodes, actions.get_executors()));
 
         match input_actions.exchange_actions {
             true => actions.add_fragment_actions(fragment_actions),

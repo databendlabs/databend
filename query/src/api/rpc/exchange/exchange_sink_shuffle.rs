@@ -106,11 +106,11 @@ impl<const HAS_OUTPUT: bool> ExchangePublisherSink<HAS_OUTPUT> {
                     destination_id,
                 )?));
             } else {
-                // if !HAS_OUTPUT {
-                //     return Err(ErrorCode::LogicalError(
-                //         "Has local output, but not found output port. It's a bug.",
-                //     ));
-                // }
+                if !HAS_OUTPUT {
+                    return Err(ErrorCode::LogicalError(
+                        "Has local output, but not found output port. It's a bug.",
+                    ));
+                }
 
                 res.push(None);
             }

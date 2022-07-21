@@ -15,7 +15,11 @@ struct QueryFragmentsActionsWrap<'a> {
 
 impl<'a> Display for QueryFragmentsActionsWrap<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        for fragment_actions in &self.inner.fragments_actions {
+        for (index, fragment_actions) in self.inner.fragments_actions.iter().enumerate() {
+            if index != 0 {
+                writeln!(f, "");
+            }
+
             writeln!(f, "{}", fragment_actions.display_indent())?;
         }
 

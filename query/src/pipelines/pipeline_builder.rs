@@ -240,12 +240,15 @@ impl PlanVisitor for QueryPipelineBuilder {
             RemotePlan::V2(plan) => {
                 let fragment_id = plan.receive_fragment_id;
                 let query_id = plan.receive_query_id.to_owned();
-                self.ctx.get_exchange_manager().get_fragment_source(
+                let mut build_res = self.ctx.get_exchange_manager().get_fragment_source(
                     query_id,
                     fragment_id,
                     schema,
-                    &mut self.main_pipeline,
-                )
+                )?;
+
+                self.main_pipeline = build_res.main_pipeline;
+                self.sources_pipeline.extend(build_res.sources_pipelines.into_iter());
+                Ok(())
             }
         }
     }
@@ -317,8 +320,6 @@ impl PlanVisitor for QueryPipelineBuilder {
         self.visit_plan_node(&plan.input)?;
 
         let schema = plan.schema();
-        let context = self.ctx.clone();
-
         let mut sub_queries_receiver = Vec::with_capacity(plan.expressions.len());
         for expression in &plan.expressions {
             sub_queries_receiver.push(match expression {

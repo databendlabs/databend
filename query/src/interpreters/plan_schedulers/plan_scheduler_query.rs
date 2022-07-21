@@ -27,20 +27,18 @@ use crate::pipelines::QueryPipelineBuilder;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 
-async fn schedule_query_impl(ctx: Arc<QueryContext>, plan: &PlanNode) -> Result<Pipeline> {
+async fn schedule_query_impl(ctx: Arc<QueryContext>, plan: &PlanNode) -> Result<PipelineBuildResult> {
     let query_fragments = QueryFragmentsBuilder::build(ctx.clone(), plan)?;
     let root_query_fragments = RootQueryFragment::create(query_fragments, ctx.clone(), plan)?;
 
     if !root_query_fragments.distribute_query()? {
-        return Ok(QueryPipelineBuilder::create(ctx.clone()).finalize(plan)?.main_pipeline);
+        return QueryPipelineBuilder::create(ctx.clone()).finalize(plan);
     }
 
     let exchange_manager = ctx.get_exchange_manager();
     let mut fragments_actions = QueryFragmentsActions::create(ctx.clone());
     root_query_fragments.finalize(&mut fragments_actions)?;
 
-    println!("Query id: {:?}", ctx.get_id());
-    println!("QueryFragments actions: {:?}", fragments_actions);
     debug!("QueryFragments actions: {:?}", fragments_actions);
 
     // TODO: move commit into pipeline processor(e.g CommitActionProcessor). It can help us make
@@ -50,7 +48,7 @@ async fn schedule_query_impl(ctx: Arc<QueryContext>, plan: &PlanNode) -> Result<
         .await
 }
 
-pub async fn schedule_query_new(ctx: Arc<QueryContext>, plan: &PlanNode) -> Result<Pipeline> {
+pub async fn schedule_query_new(ctx: Arc<QueryContext>, plan: &PlanNode) -> Result<PipelineBuildResult> {
     let settings = ctx.get_settings();
     let mut pipeline = schedule_query_impl(ctx, plan).await?;
     pipeline.set_max_threads(settings.get_max_threads()? as usize);
