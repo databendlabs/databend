@@ -3,7 +3,7 @@ title: The New Logging
 description: Make Databend Logging Great Again!
 ---
 
-- RFC PR: [datafuselabs/databend#0000](https://github.com/datafuselabs/databend/pull/0000)
+- RFC PR: [datafuselabs/databend#6729](https://github.com/datafuselabs/databend/pull/6729)
 - Tracking Issue: [datafuselabs/databend#0000](https://github.com/datafuselabs/databend/issues/0000)
 
 # Summary
