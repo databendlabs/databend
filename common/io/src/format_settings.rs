@@ -39,6 +39,9 @@ pub struct FormatSettings {
     pub tsv_null_bytes: Vec<u8>,
     pub json_quote_denormals: bool,
     pub json_escape_forward_slashes: bool,
+
+    pub input_buffer_size: usize,
+    pub decompress_buffer_size: usize,
 }
 
 impl Default for FormatSettings {
@@ -60,6 +63,8 @@ impl Default for FormatSettings {
             tsv_null_bytes: vec![b'\\', b'N'],
             json_quote_denormals: false,
             json_escape_forward_slashes: true,
+            input_buffer_size: 1024 * 1024,
+            decompress_buffer_size: 1024 * 1024,
         }
     }
 }

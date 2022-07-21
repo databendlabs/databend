@@ -29,7 +29,7 @@ use opendal::io_util::DecompressDecoder;
 use opendal::io_util::DecompressState;
 
 #[derive(Copy, Clone)]
-pub enum State {
+pub enum FileSplitterState {
     NeedData,
     ReceivedData(usize),
     NeedFlush,
@@ -40,7 +40,7 @@ pub enum State {
 pub struct FileSplitter {
     input_format: Arc<dyn InputFormat>,
 
-    state: State,
+    state: FileSplitterState,
 
     reader: Box<dyn AsyncRead + Send + Unpin>,
     input_buf: Vec<u8>,
@@ -60,24 +60,28 @@ impl FileSplitter {
         compress_algorithm: Option<CompressAlgorithm>,
     ) -> FileSplitter {
         let decoder = compress_algorithm.map(DecompressDecoder::new);
+        let decompress_buf = if decoder.is_some() {
+            vec![0; format_settings.decompress_buffer_size]
+        } else {
+            vec![]
+        };
         FileSplitter {
-            state: State::NeedData,
+            state: FileSplitterState::NeedData,
             rows_to_skip: format_settings.skip_header,
             reader: Box::new(reader),
-            input_buf: vec![0; 1024 * 1024],
-            decompress_buf: vec![0; 1024 * 1024],
+            input_buf: vec![0; format_settings.input_buffer_size],
+            decompress_buf,
             decoder,
             input_format: input_format.clone(),
             format_state: input_format.create_state(),
         }
     }
 
-    pub fn state(&self) -> State {
+    pub fn state(&self) -> FileSplitterState {
         self.state
     }
 
     fn split(&mut self, size: usize, output_splits: &mut VecDeque<Vec<u8>>) -> Result<()> {
-        // let data = &self.input_buf[..size];
         if self.decoder.is_some() {
             self.dec_and_split(size, output_splits)
         } else {
@@ -104,13 +108,11 @@ impl FileSplitter {
         let mut data_slice = data;
 
         if *rows_to_skip > 0 {
-            let len = data_slice.len();
-            let mut skip_size = 0;
-            while *rows_to_skip > 0 {
-                skip_size += input_format.skip_header(data_slice, format_state, 1)?;
-                *rows_to_skip -= 1;
-            }
-            if skip_size < len {
+            let skip_size =
+                input_format.skip_header(data_slice, format_state, *rows_to_skip as usize)?;
+            let skip_rows = input_format.read_row_num(format_state)?;
+            if skip_rows == *rows_to_skip as usize {
+                *rows_to_skip = 0;
                 *format_state = input_format.create_state();
                 data_slice = &data_slice[skip_size..];
             } else {
@@ -204,9 +206,9 @@ impl FileSplitter {
         }
 
         self.state = if n > 0 {
-            State::ReceivedData(n)
+            FileSplitterState::ReceivedData(n)
         } else {
-            State::NeedFlush
+            FileSplitterState::NeedFlush
         };
         Ok(())
     }
@@ -216,22 +218,22 @@ impl FileSplitter {
         output_splits: &mut VecDeque<Vec<u8>>,
         progress_values: &mut ProgressValues,
     ) -> Result<()> {
-        match replace(&mut self.state, State::NeedData) {
-            State::ReceivedData(size) => {
+        match replace(&mut self.state, FileSplitterState::NeedData) {
+            FileSplitterState::ReceivedData(size) => {
                 self.split(size, output_splits)?;
                 progress_values.bytes += size
             }
-            State::NeedFlush => {
+            FileSplitterState::NeedFlush => {
                 self.flush(output_splits);
-                self.state = State::Finished;
+                self.state = FileSplitterState::Finished;
             }
             _ => return self.wrong_state(),
         }
         Ok(())
     }
 
-    pub(crate) async fn async_process(&mut self) -> Result<()> {
-        if let State::NeedData = replace(&mut self.state, State::NeedData) {
+    pub async fn async_process(&mut self) -> Result<()> {
+        if let FileSplitterState::NeedData = replace(&mut self.state, FileSplitterState::NeedData) {
             self.fill().await
         } else {
             self.wrong_state()
