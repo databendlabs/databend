@@ -60,12 +60,17 @@ impl FileSplitter {
         compress_algorithm: Option<CompressAlgorithm>,
     ) -> FileSplitter {
         let decoder = compress_algorithm.map(DecompressDecoder::new);
+        let decompress_buf = if decoder.is_some() {
+            vec![0; format_settings.decompress_buffer_size]
+        } else {
+            vec![]
+        };
         FileSplitter {
             state: FileSplitterState::NeedData,
             rows_to_skip: format_settings.skip_header,
             reader: Box::new(reader),
-            input_buf: vec![0; 1024 * 1024],
-            decompress_buf: vec![0; 1024 * 1024],
+            input_buf: vec![0; format_settings.input_buffer_size],
+            decompress_buf,
             decoder,
             input_format: input_format.clone(),
             format_state: input_format.create_state(),
