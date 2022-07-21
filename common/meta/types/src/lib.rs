@@ -86,6 +86,7 @@ pub use app_error::UnknownDatabaseId;
 pub use app_error::UnknownShare;
 pub use app_error::UnknownTable;
 pub use app_error::UnknownTableId;
+pub use app_error::WrongShareObject;
 pub use applied_state::AppliedState;
 pub use change::AddResult;
 pub use change::Change;

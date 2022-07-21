@@ -15,6 +15,8 @@
 //! This mod is the key point about compatibility.
 //! Everytime update anything in this file, update the `VER` and let the tests pass.
 
+use std::collections::BTreeSet;
+
 use common_datavalues::chrono::DateTime;
 use common_datavalues::chrono::Utc;
 use common_meta_app::schema as mt;
@@ -63,6 +65,7 @@ impl FromToProto<pb::DatabaseMeta> for mt::DatabaseMeta {
                 None => None,
             },
             comment: p.comment,
+            shared_by: BTreeSet::from_iter(p.shared_by.into_iter()),
         };
         Ok(v)
     }
@@ -81,6 +84,7 @@ impl FromToProto<pb::DatabaseMeta> for mt::DatabaseMeta {
                 None => None,
             },
             comment: self.comment.clone(),
+            shared_by: Vec::from_iter(self.shared_by.clone().into_iter()),
         };
         Ok(p)
     }
