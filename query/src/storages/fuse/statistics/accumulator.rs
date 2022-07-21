@@ -29,6 +29,12 @@ use common_fuse_meta::meta::StatisticsOfColumns;
 use common_fuse_meta::meta::Versioned;
 
 use crate::storages::fuse::operations::column_metas;
+use crate::storages::index::MinMaxIndex;
+use crate::storages::index::SupportedType;
+
+// pub trait FieldEnumerator {
+//    fn fields(&self) -> dyn Iterator<iter = (u32, &DataField)>;
+//}
 
 #[derive(Default)]
 pub struct StatisticsAccumulator {
@@ -98,47 +104,6 @@ impl StatisticsAccumulator {
         ));
 
         Ok(())
-    }
-
-    pub fn acc_columns(data_block: &DataBlock) -> common_exception::Result<StatisticsOfColumns> {
-        let mut statistics = StatisticsOfColumns::new();
-
-        let rows = data_block.num_rows();
-        for idx in 0..data_block.num_columns() {
-            let col = data_block.column(idx);
-            let field = data_block.schema().field(idx);
-            let column_field = ColumnWithField::new(col.clone(), field.clone());
-
-            let mut min = DataValue::Null;
-            let mut max = DataValue::Null;
-
-            let mins = eval_aggr("min", vec![], &[column_field.clone()], rows)?;
-            let maxs = eval_aggr("max", vec![], &[column_field], rows)?;
-
-            if mins.len() > 0 {
-                min = mins.get(0);
-            }
-            if maxs.len() > 0 {
-                max = maxs.get(0);
-            }
-            let (is_all_null, bitmap) = col.validity();
-            let unset_bits = match (is_all_null, bitmap) {
-                (true, _) => rows,
-                (false, Some(bitmap)) => bitmap.unset_bits(),
-                (false, None) => 0,
-            };
-
-            let in_memory_size = col.memory_size() as u64;
-            let col_stats = ColumnStatistics {
-                min,
-                max,
-                null_count: unset_bits as u64,
-                in_memory_size,
-            };
-
-            statistics.insert(idx as u32, col_stats);
-        }
-        Ok(statistics)
     }
 
     pub fn summary(&self) -> Result<StatisticsOfColumns> {
@@ -252,14 +217,21 @@ impl BlockStatistics {
 pub fn columns_statistics(data_block: &DataBlock) -> Result<StatisticsOfColumns> {
     let mut statistics = StatisticsOfColumns::new();
 
-    let rows = data_block.num_rows();
-    for idx in 0..data_block.num_columns() {
-        let col = data_block.column(idx);
-        let field = data_block.schema().field(idx);
-        let column_field = ColumnWithField::new(col.clone(), field.clone());
+    let leaves = traverse::traverse_columns_dfs(data_block.columns())?;
 
+    for (idx, col) in leaves.iter().enumerate() {
+        let col_data_type = col.data_type();
+        if !MinMaxIndex::is_supported_type(&col_data_type) {
+            continue;
+        }
+
+        // later, during the evaluation of expressions, name of field does not matter
+        let data_field = DataField::new("", col_data_type);
+        let column_field = ColumnWithField::new(col.clone(), data_field);
         let mut min = DataValue::Null;
         let mut max = DataValue::Null;
+
+        let rows = col.len();
 
         let mins = eval_aggr("min", vec![], &[column_field.clone()], rows)?;
         let maxs = eval_aggr("max", vec![], &[column_field], rows)?;
@@ -288,4 +260,32 @@ pub fn columns_statistics(data_block: &DataBlock) -> Result<StatisticsOfColumns>
         statistics.insert(idx as u32, col_stats);
     }
     Ok(statistics)
+}
+
+mod traverse {
+    use super::*;
+
+    // traverses columns and collects the leaves in depth first manner
+    pub(crate) fn traverse_columns_dfs(columns: &[ColumnRef]) -> Result<Vec<ColumnRef>> {
+        let mut leaves = vec![];
+        for f in columns {
+            traverse_recursive(f, &mut leaves)?;
+        }
+        Ok(leaves)
+    }
+
+    fn traverse_recursive(column: &ColumnRef, leaves: &mut Vec<ColumnRef>) -> Result<()> {
+        match column.data_type() {
+            DataTypeImpl::Struct(_) => {
+                let struct_col: &StructColumn = Series::check_get(column)?;
+                for f in struct_col.values() {
+                    traverse_recursive(f, leaves)?
+                }
+            }
+            _ => {
+                leaves.push(column.clone());
+            }
+        }
+        Ok(())
+    }
 }

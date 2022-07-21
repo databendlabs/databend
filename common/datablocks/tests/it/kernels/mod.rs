@@ -17,6 +17,7 @@ mod data_block_filter;
 mod data_block_gather;
 mod data_block_group_by;
 mod data_block_group_by_hash;
+mod data_block_nested_struct;
 mod data_block_scatter;
 mod data_block_slice;
 mod data_block_sort;
