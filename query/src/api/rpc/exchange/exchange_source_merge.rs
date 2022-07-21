@@ -72,7 +72,6 @@ impl Processor for ExchangeMergeSource {
         }
 
         if let Some(data_block) = self.remote_data_block.take() {
-            // println!("receive remote data block {:?}", data_block);
             self.output.push_data(Ok(data_block));
             return Ok(Event::NeedConsume);
         }
@@ -81,10 +80,12 @@ impl Processor for ExchangeMergeSource {
             return Ok(Event::Sync);
         }
 
-        match self.rx.is_closed() && self.rx.is_empty() {
-            true => Ok(Event::Finished),
-            false => Ok(Event::Async),
+        if self.rx.is_closed() && self.rx.is_empty() {
+            self.output.finish();
+            return Ok(Event::Finished);
         }
+
+        Ok(Event::Async)
     }
 
     fn process(&mut self) -> common_exception::Result<()> {

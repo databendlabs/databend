@@ -23,6 +23,7 @@ pub enum ExplainType {
     Syntax,
     Graph,
     Pipeline,
+    Fragments,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]

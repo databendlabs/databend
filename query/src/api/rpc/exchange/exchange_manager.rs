@@ -44,6 +44,7 @@ use crate::api::rpc::exchange::exchange_params::MergeExchangeParams;
 use crate::api::rpc::exchange::exchange_params::ShuffleExchangeParams;
 use crate::api::rpc::exchange::exchange_sink::ExchangeSink;
 use crate::api::rpc::exchange::exchange_source::ExchangeSource;
+use crate::api::rpc::flight_scatter_broadcast::BroadcastFlightScatter;
 use crate::api::rpc::flight_scatter_hash::HashFlightScatter;
 use crate::api::rpc::packets::DataPacket;
 use crate::api::rpc::Packet;
@@ -56,6 +57,7 @@ use crate::interpreters::QueryFragmentsActions;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::Pipe;
 use crate::pipelines::Pipeline;
+use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::QueryPipelineBuilder;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
@@ -185,7 +187,7 @@ impl DataExchangeManager {
         &self,
         ctx: Arc<QueryContext>,
         actions: QueryFragmentsActions,
-    ) -> Result<Pipeline> {
+    ) -> Result<PipelineBuildResult> {
         let settings = ctx.get_settings();
         let timeout = settings.get_flight_client_timeout()?;
         let root_actions = actions.get_root_actions()?;
@@ -197,7 +199,7 @@ impl DataExchangeManager {
             .await?;
 
         // Get local pipeline of local task
-        let mut root_pipeline = self.get_root_pipeline(ctx.get_id(), root_actions)?;
+        let mut build_res = self.get_root_pipeline(ctx.get_id(), root_actions)?;
 
         // Initialize channels between cluster nodes
         let init_nodes_channel_packets = actions.get_init_nodes_channel_packets()?;
@@ -206,25 +208,23 @@ impl DataExchangeManager {
             .commit(&self.config, timeout)
             .await?;
 
-        QueryCoordinator::init_pipeline(&mut root_pipeline)?;
+        QueryCoordinator::init_pipeline(&mut build_res)?;
         let execute_partial_query_packets = actions.get_execute_partial_query_packets()?;
         execute_partial_query_packets
             .commit(&self.config, timeout)
             .await?;
 
-        Ok(root_pipeline)
+        Ok(build_res)
     }
 
     fn get_root_pipeline(
         &self,
         query_id: String,
         root_actions: &QueryFragmentActions,
-    ) -> Result<Pipeline> {
+    ) -> Result<PipelineBuildResult> {
         let schema = root_actions.get_schema()?;
         let fragment_id = root_actions.fragment_id;
-        let mut pipeline = Pipeline::create();
-        self.get_fragment_source(query_id, fragment_id, schema, &mut pipeline)?;
-        Ok(pipeline)
+        self.get_fragment_source(query_id, fragment_id, schema)
     }
 
     fn init_root_pipeline_channel(
@@ -272,16 +272,13 @@ impl DataExchangeManager {
         query_id: String,
         fragment_id: usize,
         schema: DataSchemaRef,
-        pipeline: &mut Pipeline,
-    ) -> Result<()> {
+    ) -> Result<PipelineBuildResult> {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 
         match queries_coordinator.get_mut(&query_id) {
             None => Err(ErrorCode::LogicalError("Query not exists.")),
-            Some(query_coordinator) => {
-                query_coordinator.subscribe_fragment(fragment_id, schema, pipeline)
-            }
+            Some(query_coordinator) => query_coordinator.subscribe_fragment(fragment_id, schema),
         }
     }
 }
@@ -452,20 +449,33 @@ impl QueryCoordinator {
         ctx: Arc<QueryContext>,
         prepare: &QueryFragmentsPlanPacket,
     ) -> Result<()> {
-        for source in prepare.source_2_fragments.keys() {
-            if source != &prepare.executor {
-                let (tx, rx) = async_channel::bounded(1);
-
-                let ctx = ctx.clone();
-                let query_id = prepare.query_id.clone();
-                let runtime = self.runtime.clone();
-                let receivers_map = &self.subscribe_fragments;
-                let receiver = ExchangeReceiver::create(ctx, query_id, runtime, rx, receivers_map);
-
-                receiver.listen()?;
-                self.exchange_receivers.push(receiver);
-                self.subscribe_channel.insert(source.to_string(), tx);
+        for (source, fragments_id) in &prepare.source_2_fragments {
+            if source == &prepare.executor {
+                continue;
             }
+
+            let (tx, rx) = async_channel::bounded(1);
+
+            let ctx = ctx.clone();
+            let query_id = prepare.query_id.clone();
+            let runtime = self.runtime.clone();
+            let receivers_map = {
+                let mut receivers_map = HashMap::with_capacity(fragments_id.len());
+                for receive_fragment_id in fragments_id {
+                    receivers_map.insert(
+                        *receive_fragment_id,
+                        &self.subscribe_fragments[receive_fragment_id],
+                    );
+                }
+
+                receivers_map
+            };
+
+            let receiver = ExchangeReceiver::create(ctx, query_id, runtime, rx, receivers_map);
+
+            receiver.listen()?;
+            self.exchange_receivers.push(receiver);
+            self.subscribe_channel.insert(source.to_string(), tx);
         }
 
         Ok(())
@@ -486,22 +496,23 @@ impl QueryCoordinator {
         }
 
         for ((_, coordinator), params) in self.fragments_coordinator.iter_mut().zip(params) {
-            if let Some(mut pipeline) = coordinator.pipeline.take() {
-                pipeline.set_max_threads(max_threads as usize);
+            if let Some(mut build_res) = coordinator.pipeline_build_res.take() {
+                build_res.set_max_threads(max_threads as usize);
 
-                if !pipeline.is_pulling_pipeline()? {
+                if !build_res.main_pipeline.is_pulling_pipeline()? {
                     return Err(ErrorCode::LogicalError("Logical error, It's a bug"));
                 }
 
                 // Add exchange data publisher.
-                ExchangeSink::publisher_sink(&self.ctx, &params, &mut pipeline)?;
+                ExchangeSink::publisher_sink(&self.ctx, &params, &mut build_res.main_pipeline)?;
 
-                if !pipeline.is_complete_pipeline()? {
+                if !build_res.main_pipeline.is_complete_pipeline()? {
                     return Err(ErrorCode::LogicalError("Logical error, It's a bug"));
                 }
 
-                QueryCoordinator::init_pipeline(&mut pipeline)?;
-                pipelines.push(pipeline);
+                QueryCoordinator::init_pipeline(&mut build_res)?;
+                pipelines.push(build_res.main_pipeline);
+                pipelines.extend(build_res.sources_pipelines.into_iter());
             }
         }
 
@@ -541,19 +552,29 @@ impl QueryCoordinator {
         }
 
         for coordinator in self.fragments_coordinator.values_mut() {
-            if let Some(pipeline) = coordinator.pipeline.as_mut() {
-                Self::init_pipeline(pipeline)?;
+            if let Some(build_res) = coordinator.pipeline_build_res.as_mut() {
+                Self::init_pipeline(build_res)?;
             }
         }
 
         Ok(())
     }
 
-    pub fn init_pipeline(pipeline: &mut Pipeline) -> Result<()> {
-        for pipe in &mut pipeline.pipes {
+    pub fn init_pipeline(build_res: &mut PipelineBuildResult) -> Result<()> {
+        for pipe in &mut build_res.main_pipeline.pipes {
             if let Pipe::SimplePipe { processors, .. } = pipe {
                 for processor in processors {
                     ExchangeSink::init(processor)?;
+                }
+            }
+        }
+
+        for source_pipeline in &mut build_res.sources_pipelines {
+            for pipe in &mut source_pipeline.pipes {
+                if let Pipe::SimplePipe { processors, .. } = pipe {
+                    for processor in processors {
+                        ExchangeSink::init(processor)?;
+                    }
                 }
             }
         }
@@ -634,8 +655,7 @@ impl QueryCoordinator {
         &mut self,
         fragment_id: usize,
         schema: DataSchemaRef,
-        pipeline: &mut Pipeline,
-    ) -> Result<()> {
+    ) -> Result<PipelineBuildResult> {
         let (tx, rx) = async_channel::bounded(1);
 
         // Register subscriber for data exchange.
@@ -646,7 +666,7 @@ impl QueryCoordinator {
         if let Some(mut fragment_coordinator) = self.fragments_coordinator.remove(&fragment_id) {
             fragment_coordinator.prepare_pipeline(&self.query_id, &self.ctx)?;
 
-            if fragment_coordinator.pipeline.is_none() {
+            if fragment_coordinator.pipeline_build_res.is_none() {
                 return Err(ErrorCode::LogicalError(
                     "Pipeline is none, maybe query fragment circular dependency.",
                 ));
@@ -655,25 +675,37 @@ impl QueryCoordinator {
             if fragment_coordinator.data_exchange.is_none() {
                 // When the root fragment and the data has been send to the coordination node,
                 // we do not need to wait for the data of other nodes.
-                *pipeline = fragment_coordinator.pipeline.unwrap();
-                return Ok(());
+                return Ok(fragment_coordinator.pipeline_build_res.unwrap());
             }
 
             let exchange_params = fragment_coordinator.create_exchange_params(self)?;
-            *pipeline = fragment_coordinator.pipeline.unwrap();
+            let mut build_res = fragment_coordinator.pipeline_build_res.unwrap();
 
             // Add exchange data publisher.
-            ExchangeSink::via_exchange(&self.ctx, &exchange_params, pipeline)?;
+            ExchangeSink::via_exchange(&self.ctx, &exchange_params, &mut build_res.main_pipeline)?;
+
+            let data_exchange = fragment_coordinator.data_exchange.as_ref().unwrap();
 
             // Add exchange data subscriber.
-            return ExchangeSource::via_exchange(rx, &exchange_params, pipeline);
+            if data_exchange.from_multiple_nodes() {
+                ExchangeSource::via_exchange(rx, &exchange_params, &mut build_res.main_pipeline)?;
+            }
+
+            return Ok(build_res);
         }
+
+        let mut pipeline = Pipeline::create();
 
         let settings = self.ctx.get_settings();
         let max_threads = settings.get_max_threads()? as usize;
         let max_threads = std::cmp::max(max_threads, 1);
+
         // Add exchange data subscriber.
-        ExchangeSource::create_source(rx, schema, pipeline, max_threads)
+        ExchangeSource::create_source(rx, schema, &mut pipeline, max_threads)?;
+        Ok(PipelineBuildResult {
+            main_pipeline: pipeline,
+            sources_pipelines: vec![],
+        })
     }
 }
 
@@ -682,7 +714,7 @@ struct FragmentCoordinator {
     initialized: bool,
     fragment_id: usize,
     data_exchange: Option<DataExchange>,
-    pipeline: Option<Pipeline>,
+    pipeline_build_res: Option<PipelineBuildResult>,
 }
 
 impl FragmentCoordinator {
@@ -692,7 +724,7 @@ impl FragmentCoordinator {
             node: packet.node.clone(),
             fragment_id: packet.fragment_id,
             data_exchange: packet.data_exchange.clone(),
-            pipeline: None,
+            pipeline_build_res: None,
         })
     }
 
@@ -705,6 +737,18 @@ impl FragmentCoordinator {
                     fragment_id: self.fragment_id,
                     query_id: query.query_id.to_string(),
                     destination_id: exchange.destination_id.clone(),
+                }))
+            }
+            Some(DataExchange::Broadcast(exchange)) => {
+                Ok(ExchangeParams::ShuffleExchange(ShuffleExchangeParams {
+                    schema: self.node.schema(),
+                    fragment_id: self.fragment_id,
+                    query_id: query.query_id.to_string(),
+                    executor_id: query.executor_id.to_string(),
+                    destination_ids: exchange.destination_ids.to_owned(),
+                    shuffle_scatter: Arc::new(Box::new(BroadcastFlightScatter::try_create(
+                        exchange.destination_ids.len(),
+                    )?)),
                 }))
             }
             Some(DataExchange::ShuffleDataExchange(exchange)) => {
@@ -729,16 +773,16 @@ impl FragmentCoordinator {
         if !self.initialized {
             self.initialized = true;
             let pipeline_builder = QueryPipelineBuilder::create(ctx.clone());
-            let mut pipeline = pipeline_builder.finalize(&self.node)?;
+            let mut build_res = pipeline_builder.finalize(&self.node)?;
 
             let ctx = ctx.clone();
             let query_id = query_id.to_string();
-            pipeline.set_on_finished(move |may_error| {
+            build_res.main_pipeline.set_on_finished(move |may_error| {
                 let exchange_manager = ctx.get_exchange_manager();
                 exchange_manager.on_finished_query(&query_id, may_error);
             });
 
-            self.pipeline = Some(pipeline);
+            self.pipeline_build_res = Some(build_res);
         }
 
         Ok(())

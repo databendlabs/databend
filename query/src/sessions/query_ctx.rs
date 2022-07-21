@@ -336,6 +336,7 @@ impl TableContext for QueryContext {
     fn attach_query_plan(&self, query_plan: &PlanNode) {
         self.shared.attach_query_plan(query_plan);
     }
+
     fn get_fragment_id(&self) -> usize {
         self.fragment_id.fetch_add(1, Ordering::Release)
     }

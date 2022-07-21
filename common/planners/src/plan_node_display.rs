@@ -25,8 +25,8 @@ use crate::plan_node_display_indent::PlanNodeIndentFormatDisplay;
 use crate::PlanNode;
 
 impl PlanNode {
-    pub fn display_indent_format(&self) -> impl fmt::Display + '_ {
-        PlanNodeIndentFormatDisplay::create(0, self, false)
+    pub fn display_indent_format(&self, indent: usize) -> impl fmt::Display + '_ {
+        PlanNodeIndentFormatDisplay::create(indent, self, false)
     }
 
     pub fn display_graphviz(&self) -> impl fmt::Display + '_ {
@@ -95,6 +95,6 @@ impl PlanNode {
 
 impl fmt::Debug for PlanNode {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        self.display_indent_format().fmt(f)
+        self.display_indent_format(0).fmt(f)
     }
 }
