@@ -107,13 +107,15 @@ impl<'a> Binder {
             None
         };
 
-        let order_items = self.analyze_order_items(
-            &from_context,
-            &scalar_items,
-            &projections,
-            order_by,
-            stmt.distinct,
-        )?;
+        let order_items = self
+            .analyze_order_items(
+                &from_context,
+                &mut scalar_items,
+                &projections,
+                order_by,
+                stmt.distinct,
+            )
+            .await?;
 
         if !from_context.aggregate_info.aggregate_functions.is_empty()
             || !stmt.group_by.is_empty()

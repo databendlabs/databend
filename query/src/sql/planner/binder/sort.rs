@@ -37,6 +37,7 @@ use crate::sql::plans::Sort;
 use crate::sql::plans::SortItem;
 use crate::sql::BindContext;
 use crate::sql::IndexType;
+use crate::sql::ScalarExpr;
 
 pub struct OrderItems<'a> {
     items: Vec<OrderItem<'a>>,
@@ -46,91 +47,114 @@ pub struct OrderItem<'a> {
     pub expr: OrderByExpr<'a>,
     pub index: IndexType,
     pub name: String,
-    // True if item reference a alias scalar expression in select list
-    pub need_project: bool,
+    // True if item need to wrap EvalScalar plan.
+    pub need_eval_scalar: bool,
 }
 
 impl<'a> Binder {
-    pub(super) fn analyze_order_items(
+    pub(super) async fn analyze_order_items(
         &mut self,
         from_context: &BindContext,
-        scalar_items: &HashMap<IndexType, ScalarItem>,
+        scalar_items: &mut HashMap<IndexType, ScalarItem>,
         projections: &[ColumnBinding],
         order_by: &'a [OrderByExpr<'a>],
         distinct: bool,
     ) -> Result<OrderItems<'a>> {
         let mut order_items = Vec::with_capacity(order_by.len());
         for order in order_by {
-            if let Expr::ColumnRef {
-                database: ref database_name,
-                table: ref table_name,
-                column: ref ident,
-                ..
-            } = order.expr
-            {
-                // We first search the identifier in select list
-                let mut found = false;
-                for item in projections.iter() {
-                    if item.column_name == ident.name {
-                        order_items.push(OrderItem {
-                            expr: order.clone(),
-                            index: item.index,
-                            name: item.column_name.clone(),
-                            need_project: scalar_items.get(&item.index).map_or(
-                                false,
-                                |scalar_item| {
-                                    !matches!(&scalar_item.scalar, Scalar::BoundColumnRef(_))
-                                },
-                            ),
-                        });
-                        found = true;
-                        break;
+            match &order.expr {
+                Expr::ColumnRef {
+                    database: ref database_name,
+                    table: ref table_name,
+                    column: ref ident,
+                    ..
+                } => {
+                    // We first search the identifier in select list
+                    let mut found = false;
+                    for item in projections.iter() {
+                        if item.column_name == ident.name {
+                            order_items.push(OrderItem {
+                                expr: order.clone(),
+                                index: item.index,
+                                name: item.column_name.clone(),
+                                need_eval_scalar: scalar_items.get(&item.index).map_or(
+                                    false,
+                                    |scalar_item| {
+                                        !matches!(&scalar_item.scalar, Scalar::BoundColumnRef(_))
+                                    },
+                                ),
+                            });
+                            found = true;
+                            break;
+                        }
                     }
-                }
 
-                if found {
-                    continue;
-                }
-
-                // If there isn't a matched alias in select list, we will fallback to
-                // from clause.
-                let column = from_context.resolve_column(database_name.as_ref().map(|v| v.name.as_str()), table_name.as_ref().map(|v| v.name.as_str()), ident).and_then(|v| {
-                    if distinct {
-                        Err(ErrorCode::SemanticError(order.expr.span().display_error("for SELECT DISTINCT, ORDER BY expressions must appear in select list".to_string())))
-                    } else {
-                        Ok(v)
+                    if found {
+                        continue;
                     }
-                })?;
-                order_items.push(OrderItem {
-                    expr: order.clone(),
-                    name: column.column_name.clone(),
-                    index: column.index,
-                    need_project: false,
-                });
-            } else if let Expr::Literal {
-                lit: Literal::Integer(index),
-                ..
-            } = &order.expr
-            {
-                let index = *index as usize - 1;
-                if index >= projections.len() {
-                    return Err(ErrorCode::SemanticError(order.expr.span().display_error(
-                        format!("ORDER BY position {} is not in select list", index + 1),
-                    )));
+
+                    // If there isn't a matched alias in select list, we will fallback to
+                    // from clause.
+                    let column = from_context.resolve_column(database_name.as_ref().map(|v| v.name.as_str()), table_name.as_ref().map(|v| v.name.as_str()), ident).and_then(|v| {
+                        if distinct {
+                            Err(ErrorCode::SemanticError(order.expr.span().display_error("for SELECT DISTINCT, ORDER BY expressions must appear in select list".to_string())))
+                        } else {
+                            Ok(v)
+                        }
+                    })?;
+                    order_items.push(OrderItem {
+                        expr: order.clone(),
+                        name: column.column_name.clone(),
+                        index: column.index,
+                        need_eval_scalar: false,
+                    });
                 }
-                order_items.push(OrderItem {
-                    expr: order.clone(),
-                    name: projections[index].column_name.clone(),
-                    index: projections[index].index,
-                    need_project: false,
-                });
-            } else {
-                return Err(ErrorCode::SemanticError(
-                    order
-                        .expr
-                        .span()
-                        .display_error("can only order by column".to_string()),
-                ));
+                Expr::Literal {
+                    lit: Literal::Integer(index),
+                    ..
+                } => {
+                    let index = *index as usize - 1;
+                    if index >= projections.len() {
+                        return Err(ErrorCode::SemanticError(order.expr.span().display_error(
+                            format!("ORDER BY position {} is not in select list", index + 1),
+                        )));
+                    }
+                    order_items.push(OrderItem {
+                        expr: order.clone(),
+                        name: projections[index].column_name.clone(),
+                        index: projections[index].index,
+                        need_eval_scalar: false,
+                    });
+                }
+                Expr::BinaryOp { .. } => {
+                    let mut scalar_binder =
+                        ScalarBinder::new(from_context, self.ctx.clone(), self.metadata.clone());
+                    let (bound_expr, _) = scalar_binder.bind(&order.expr).await?;
+                    let column_binding = self.create_column_binding(
+                        None,
+                        None,
+                        format!("{:#}", order.expr),
+                        bound_expr.data_type(),
+                    );
+                    order_items.push(OrderItem {
+                        expr: order.clone(),
+                        name: column_binding.column_name.clone(),
+                        index: column_binding.index,
+                        need_eval_scalar: true,
+                    });
+                    scalar_items.insert(column_binding.index, ScalarItem {
+                        scalar: bound_expr,
+                        index: column_binding.index,
+                    });
+                }
+                _ => {
+                    return Err(ErrorCode::SemanticError(
+                        order
+                            .expr
+                            .span()
+                            .display_error("can only order by column".to_string()),
+                    ));
+                }
             }
         }
         Ok(OrderItems { items: order_items })
@@ -189,7 +213,7 @@ impl<'a> Binder {
                         .await?;
                 }
             }
-            if order.need_project {
+            if order.need_eval_scalar {
                 if let Entry::Occupied(entry) = scalar_items.entry(order.index) {
                     let (index, item) = entry.remove_entry();
                     let mut scalar = item.scalar;

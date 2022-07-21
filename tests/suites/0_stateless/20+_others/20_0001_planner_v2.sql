@@ -142,6 +142,8 @@ create table t3(a int, b int);
 insert into t3 values(1,2),(2,3);
 select * from t3 order by 2 desc;
 select a from t3 order by 1 desc;
+select a from t3 order by t3.a + 1;
+select number from numbers(10) order by number + 1;
 drop table t;
 drop table t1;
 drop table t2;
