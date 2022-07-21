@@ -13,3 +13,5 @@ ALTER FUNCTION test_alter_udf_unknown AS (d) -> not(is_not_null(d));
 statement error 2603
 ALTER FUNCTION is_not_null AS (d) -> not(is_null(d)); 
 
+statement ok
+DROP FUNCTION test_alter_udf;
