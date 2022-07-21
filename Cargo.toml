@@ -38,18 +38,14 @@ members = [
     "common/users",
     "common/storage",
     "common/fuse-meta",
-
     # Query
     "query",
-
     # Meta
     "metasrv",
-
     # Tools
     "tools/fuzz",
     "tools/metabench",
     "tools/metactl",
-
     # Hack
     # This crate is used to hack our cargo.lock to resovle CVEs and so on.
     "common/dep-hack",
