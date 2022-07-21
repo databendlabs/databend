@@ -30,7 +30,7 @@ use opendal::Operator;
 use parking_lot::Mutex;
 
 use super::file_splitter::FileSplitter;
-use super::file_splitter::State;
+use super::file_splitter::FileSplitterState;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::Event;
 use crate::pipelines::processors::processor::ProcessorPtr;
@@ -160,10 +160,10 @@ impl Processor for MultiFileSplitter {
         match &self.current_file {
             None => Ok(Event::Async),
             Some(splitter) => match &splitter.state() {
-                State::NeedData => Ok(Event::Async),
-                State::Finished => Ok(Event::Async),
-                State::ReceivedData(_) => Ok(Event::Sync),
-                State::NeedFlush => Ok(Event::Sync),
+                FileSplitterState::NeedData => Ok(Event::Async),
+                FileSplitterState::Finished => Ok(Event::Async),
+                FileSplitterState::ReceivedData(_) => Ok(Event::Sync),
+                FileSplitterState::NeedFlush => Ok(Event::Sync),
             },
         }
     }
@@ -173,7 +173,7 @@ impl Processor for MultiFileSplitter {
         let current = self.current_file.as_mut().unwrap();
         let mut output_splits = VecDeque::default();
         current.process(&mut output_splits, &mut progress_values)?;
-        if matches!(current.state(), State::Finished) {
+        if matches!(current.state(), FileSplitterState::Finished) {
             self.current_file = None;
         }
         self.output_splits.extend(output_splits.into_iter());
