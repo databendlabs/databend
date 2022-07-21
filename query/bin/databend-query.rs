@@ -17,7 +17,6 @@ use std::ops::Deref;
 use std::sync::Arc;
 
 use common_base::base::RuntimeTracker;
-use common_exception::ErrorCode;
 use common_macros::databend_main;
 use common_meta_embedded::MetaEmbedded;
 use common_meta_grpc::MIN_METASRV_SEMVER;
@@ -27,9 +26,6 @@ use common_tracing::set_panic_hook;
 use common_tracing::tracing;
 use databend_query::api::HttpService;
 use databend_query::api::RpcService;
-use databend_query::catalogs::CATALOG_DEFAULT;
-use databend_query::cmd::compaction;
-use databend_query::cmd::do_compaction;
 use databend_query::metrics::MetricService;
 use databend_query::servers::ClickHouseHandler;
 use databend_query::servers::HttpHandler;
@@ -38,31 +34,15 @@ use databend_query::servers::MySQLHandler;
 use databend_query::servers::Server;
 use databend_query::servers::ShutdownHandle;
 use databend_query::sessions::SessionManager;
-use databend_query::sessions::SessionType;
-use databend_query::sessions::TableContext;
+use databend_query::tasks::Task;
 use databend_query::Config;
 use databend_query::QUERY_SEMVER;
-use tokio_cron_scheduler::Job;
-use tokio_cron_scheduler::JobScheduler;
 
 #[databend_main]
 async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<()> {
     let conf: Config = Config::load()?;
 
-    if !conf.cmd.is_empty() {
-        match conf.cmd.as_str() {
-            "ver" => {
-                println!("version: {}", QUERY_SEMVER.deref());
-                println!("min-compatible-metasrv-version: {}", MIN_METASRV_SEMVER);
-            }
-            "compaction" => run_compaction_cmd(&conf).await?,
-            _ => {
-                eprintln!("Invalid cmd: {}", conf.cmd);
-                eprintln!("Available cmds:");
-                eprintln!("  --cmd ver");
-                eprintln!("    Print version and the min compatible databend-meta version");
-            }
-        }
+    if run_cmd(&conf) {
         return Ok(());
     }
 
@@ -236,7 +216,11 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
     }
 
     // Background tasks.
-    {}
+    {
+        let background_tasks = Task::new(session_manager.clone(), conf.clone());
+        background_tasks.start().await?;
+        tracing::info!("Databend background tasks has been enabled.");
+    }
 
     tracing::info!("Ready for connections.");
     shutdown_handle.wait_for_termination_request().await;
@@ -244,60 +228,23 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
     Ok(())
 }
 
-async fn run_compaction_cmd(conf: &Config) -> common_exception::Result<()> {
-    let sessions = SessionManager::from_conf(conf.clone()).await?;
-    let mut shutdown_handle = ShutdownHandle::create(sessions.clone());
-
-    let executor_session = sessions.create_session(SessionType::Dummy).await?;
-    let qc = executor_session.create_query_context().await?;
-    let tenant = qc.get_tenant();
-    let cl = qc.get_catalog(CATALOG_DEFAULT)?;
-
-    let ctx = qc.clone();
-    let catalog = cl.clone();
-    let sched = JobScheduler::new().expect("Failed to new JobScheduler");
-    let cron_job = Job::new_async("@daily", move |_, _| {
-        let catalog = Arc::clone(&catalog);
-        let tenant = tenant.clone();
-        let ctx = Arc::clone(&ctx);
-        Box::pin(async move {
-            let databases = catalog.list_databases(tenant.as_str()).await.unwrap();
-
-            for database in databases {
-                let name = database.name();
-                if is_system_database(name) {
-                    continue;
-                }
-                let tables = catalog.list_tables(tenant.as_str(), name).await.unwrap();
-                for table in tables {
-                    do_compaction(ctx.clone(), table, name.to_string())
-                        .await
-                        .unwrap();
-                }
-            }
-        })
-    })
-    .unwrap();
-    sched.add(cron_job).expect("Failed to add cron job");
-
-    async {
-        let start = sched.start();
-        if let Err(e) = start {
-            return Err(ErrorCode::JobSchedulerError(format!(
-                "Error starting scheduler: {}",
-                e
-            )));
-        }
-        Ok(())
+fn run_cmd(conf: &Config) -> bool {
+    if conf.cmd.is_empty() {
+        return false;
     }
-    .await?;
 
-    compaction(qc.clone(), conf).await?;
+    match conf.cmd.as_str() {
+        "ver" => {
+            println!("version: {}", QUERY_SEMVER.deref());
+            println!("min-compatible-metasrv-version: {}", MIN_METASRV_SEMVER);
+        }
+        _ => {
+            eprintln!("Invalid cmd: {}", conf.cmd);
+            eprintln!("Available cmds:");
+            eprintln!("  --cmd ver");
+            eprintln!("    Print version and the min compatible databend-meta version");
+        }
+    }
 
-    shutdown_handle.wait_for_termination_request().await;
-    Ok(())
-}
-
-fn is_system_database(name: &str) -> bool {
-    name == "INFORMATION_SCHEMA" || name == "system"
+    true
 }

@@ -955,9 +955,6 @@ impl Debug for MetaConfig {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct TaskConfig {
-    #[clap(long = "cron-expression", default_value = "0 0 0 * * *")]
-    #[serde(alias = "cron_expression")]
-    pub cron_expression: String,
     #[clap(long = "delay-seconds", default_value = "3600")]
     #[serde(alias = "delay_seconds")]
     pub delay_seconds: u64,
@@ -977,7 +974,6 @@ impl TryInto<InnerTaskConfig> for TaskConfig {
 
     fn try_into(self) -> Result<InnerTaskConfig> {
         Ok(InnerTaskConfig {
-            cron_expression: self.cron_expression,
             delay_seconds: self.delay_seconds,
             compaction_enabled: self.compaction_enabled,
         })
@@ -987,7 +983,6 @@ impl TryInto<InnerTaskConfig> for TaskConfig {
 impl From<InnerTaskConfig> for TaskConfig {
     fn from(inner: InnerTaskConfig) -> Self {
         Self {
-            cron_expression: inner.cron_expression,
             delay_seconds: inner.delay_seconds,
             compaction_enabled: inner.compaction_enabled,
         }

@@ -352,7 +352,6 @@ impl Debug for MetaConfig {
 /// Config for background tasks.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TaskConfig {
-    pub cron_expression: String,
     pub delay_seconds: u64,
     pub compaction_enabled: bool,
 }
@@ -360,7 +359,6 @@ pub struct TaskConfig {
 impl Default for TaskConfig {
     fn default() -> Self {
         Self {
-            cron_expression: "0 0 0 * * *".to_string(),
             delay_seconds: 3600,
             compaction_enabled: false,
         }

@@ -15,5 +15,4 @@
 mod compaction;
 mod task;
 
-pub use compaction::compaction;
-pub use compaction::do_compaction;
+pub use task::Task;

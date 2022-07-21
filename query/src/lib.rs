@@ -25,7 +25,6 @@ pub mod api;
 pub mod auth;
 pub mod catalogs;
 pub mod clusters;
-pub mod cmd;
 pub mod context_function;
 pub mod databases;
 pub mod evaluator;
@@ -39,6 +38,7 @@ pub mod sessions;
 pub mod sql;
 pub mod storages;
 pub mod table_functions;
+pub mod tasks;
 
 mod config;
 mod version;

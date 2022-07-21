@@ -14,23 +14,30 @@
 
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
 use common_exception::Result;
-use tokio_cron_scheduler::Job;
-use tokio_cron_scheduler::JobScheduler;
 
-use crate::sessions::QueryContext;
+use super::compaction::CompactionTask;
 use crate::sessions::SessionManager;
+use crate::sessions::SessionType;
 use crate::Config;
 
 pub struct Task {
-    cfg: Config,
     sessions: Arc<SessionManager>,
+    conf: Config,
 }
 
 impl Task {
-    pub fn try_create(ctx: Arc<QueryContext>) -> Self {
-        todo!()
+    pub fn new(sessions: Arc<SessionManager>, conf: Config) -> Self {
+        Self { sessions, conf }
     }
 
+    pub async fn start(&self) -> Result<()> {
+        if self.conf.task.compaction_enabled {
+            let executor_session = self.sessions.create_session(SessionType::Dummy).await?;
+            let ctx = executor_session.create_query_context().await?;
+            let compaction_task = CompactionTask::try_create(self.conf.clone(), ctx)?;
+            compaction_task.start().await?;
+        }
+        Ok(())
+    }
 }

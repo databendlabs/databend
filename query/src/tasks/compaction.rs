@@ -20,12 +20,11 @@ use std::time::Duration;
 
 use common_base::base::tokio;
 use common_base::base::tokio::sync::mpsc::channel;
-use common_base::base::tokio::sync::mpsc::error::SendError;
-use common_base::base::tokio::sync::mpsc::Receiver;
 use common_base::base::tokio::sync::mpsc::Sender;
 use common_base::base::TrySpawn;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_grpc::RpcClientConf;
 use common_meta_api::deserialize_struct;
 use common_meta_api::get_start_and_end_of_prefix;
 use common_meta_api::KVApiKey;
@@ -39,9 +38,9 @@ use common_meta_types::protobuf::watch_request::FilterType;
 use common_meta_types::protobuf::WatchRequest;
 use common_planners::OptimizeTableAction;
 use common_planners::OptimizeTablePlan;
+use common_tracing::tracing;
 use futures::ready;
 use futures::Stream;
-use tokio_cron_scheduler::Job;
 use tokio_stream::StreamExt;
 use tokio_util::time::delay_queue;
 use tokio_util::time::DelayQueue;
@@ -52,117 +51,102 @@ use crate::sessions::TableContext;
 use crate::storages::Table;
 use crate::Config;
 
-struct CompactionTask {
-    cfg: Config,
+pub(crate) struct CompactionTask {
+    rpc_conf: RpcClientConf,
+    delay_seconds: u64,
     ctx: Arc<QueryContext>,
 }
 
 impl CompactionTask {
-    fn try_create_job(self) -> Result<Job> {
-        let schedule = self.cfg.task.cron_expression.as_str();
-        Job::new_async(schedule, move |_, _| {
-            let ctx = Arc::clone(&self.ctx);
-            let tenant = ctx.get_tenant();
-            let catalog = ctx.get_catalog(CATALOG_DEFAULT).unwrap();
-            Box::pin(async move {
-                let databases = catalog.list_databases(tenant.as_str()).await.unwrap();
-
-                for database in databases {
-                    let name = database.name();
-                    if is_system_database(name) {
-                        continue;
-                    }
-                    let tables = catalog.list_tables(tenant.as_str(), name).await.unwrap();
-                    for table in tables {
-                        do_compaction(ctx.clone(), table, name.to_string())
-                            .await
-                            .unwrap();
-                    }
-                }
-            })
-        })
-        .map_err(|e| ErrorCode::JobSchedulerError(e.to_string()))
-    }
-}
-
-pub async fn compaction(ctx: Arc<QueryContext>, conf: &Config) -> Result<()> {
-    let rpc_conf = conf.meta.to_meta_grpc_client_conf();
-    if rpc_conf.local_mode() {
-        return Err(ErrorCode::BackgroundTaskError(
-            "Auto compaction is not supported in local mode".to_string(),
-        ));
-    }
-
-    let (key, key_end) = get_start_and_end_of_prefix(PREFIX_TABLE_BY_ID)?;
-    let watch = WatchRequest {
-        key,
-        key_end: Some(key_end),
-        filter_type: FilterType::Update.into(),
-    };
-    // Create a new client of metasrv.
-    let client = MetaGrpcClient::try_new(&rpc_conf)?;
-
-    // Watch the table meta update.
-    let mut client_stream = client.request(watch).await?;
-    let task = CompactionQueue::new(Duration::from_secs(30));
-    let delay_queue_insert = task.create_channel(ctx.clone());
-
-    while let Ok(Some(resp)) = client_stream.message().await {
-        if let Some(event) = resp.event {
-            if event.prev.is_none() || event.current.is_none() {
-                continue;
-            }
-
-            let key = event.key;
-            let id = TableId::from_key(&key).unwrap();
-
-            let current_seqv = event.current.unwrap();
-            let seq = current_seqv.seq;
-            let current: TableMeta = deserialize_struct(&current_seqv.data).unwrap();
-            if current.drop_on.is_some() || current.default_cluster_key.is_some() {
-                continue;
-            }
-
-            let prev_seqv = event.prev.unwrap();
-            let prev: TableMeta = deserialize_struct(&prev_seqv.data).unwrap();
-            if current.statistics.number_of_rows == prev.statistics.number_of_rows {
-                continue;
-            }
-
-            let ident = TableIdent::new(id.table_id, seq);
-            let table_info = TableInfo {
-                ident,
-                desc: "".to_owned(),
-                name: "".to_owned(),
-                meta: current,
-            };
-            
-                delay_queue_insert.send((id.table_id, table_info))
-                .await
-                .unwrap();
+    pub fn try_create(conf: Config, ctx: Arc<QueryContext>) -> Result<Self> {
+        let rpc_conf = conf.meta.to_meta_grpc_client_conf();
+        if rpc_conf.local_mode() {
+            tracing::error!("Auto compaction is not supported in local mode");
+            return Err(ErrorCode::BackgroundTaskError(
+                "Auto compaction is not supported in local mode".to_string(),
+            ));
         }
+        let delay_seconds = conf.task.delay_seconds;
+        Ok(Self {
+            rpc_conf,
+            delay_seconds,
+            ctx,
+        })
     }
 
-    Ok(())
-}
+    pub async fn start(&self) -> Result<()> {
+        let (key, key_end) = get_start_and_end_of_prefix(PREFIX_TABLE_BY_ID)?;
+        let watch = WatchRequest {
+            key,
+            key_end: Some(key_end),
+            filter_type: FilterType::Update.into(),
+        };
+        // Create a new client of metasrv.
+        let client = MetaGrpcClient::try_new(&self.rpc_conf)?;
 
-pub async fn do_compaction(
-    ctx: Arc<QueryContext>,
-    table: Arc<dyn Table>,
-    database: String,
-) -> Result<()> {
-    if !table.auto_compaction() {
-        return Ok(());
+        // Watch the table meta update.
+        let mut client_stream = client.request(watch).await?;
+        let task = CompactionQueue::new(Duration::from_secs(self.delay_seconds));
+        let delay_queue_insert = task.create_channel(self.ctx.clone());
+        while let Ok(Some(resp)) = client_stream.message().await {
+            if let Some(event) = resp.event {
+                if event.prev.is_none() || event.current.is_none() {
+                    continue;
+                }
+
+                let key = event.key;
+                let id = TableId::from_key(&key).unwrap();
+
+                let current_seqv = event.current.unwrap();
+                let seq = current_seqv.seq;
+                let current: TableMeta = deserialize_struct(&current_seqv.data).unwrap();
+                if current.drop_on.is_some() || current.default_cluster_key.is_some() {
+                    continue;
+                }
+
+                let prev_seqv = event.prev.unwrap();
+                let prev: TableMeta = deserialize_struct(&prev_seqv.data).unwrap();
+                if current.statistics.number_of_rows == prev.statistics.number_of_rows {
+                    continue;
+                }
+
+                let ident = TableIdent::new(id.table_id, seq);
+                let table_info = TableInfo {
+                    ident,
+                    desc: "".to_owned(),
+                    name: "".to_owned(),
+                    meta: current,
+                };
+
+                delay_queue_insert
+                    .send((id.table_id, table_info))
+                    .await
+                    .unwrap();
+            }
+        }
+
+        Ok(())
     }
 
-    let plan = OptimizeTablePlan {
-        catalog: ctx.get_current_catalog(),
-        database,
-        table: table.name().to_string(),
-        action: OptimizeTableAction::Compact,
-    };
+    async fn do_compaction(
+        ctx: Arc<QueryContext>,
+        table: Arc<dyn Table>,
+        database: String,
+    ) -> Result<()> {
+        if !table.auto_compaction() {
+            tracing::info!("Table {} is not auto compaction", table.get_id());
+            return Ok(());
+        }
 
-    table.compact(ctx.clone(), plan).await
+        let plan = OptimizeTablePlan {
+            catalog: ctx.get_current_catalog(),
+            database,
+            table: table.name().to_string(),
+            action: OptimizeTableAction::Compact,
+        };
+
+        table.compact(ctx.clone(), plan).await
+    }
 }
 
 struct CompactionQueue {
@@ -202,7 +186,7 @@ impl CompactionQueue {
     }
 
     fn create_channel(self, ctx: Arc<QueryContext>) -> Sender<(u64, TableInfo)> {
-        let (queue_add, mut queue_add_rx) = channel::<(u64, TableInfo)>(1);
+        let (queue_add_tx, mut queue_add_rx) = channel::<(u64, TableInfo)>(1);
         let catalog = ctx.get_catalog(CATALOG_DEFAULT).unwrap();
 
         ctx.get_storage_runtime().spawn(async move {
@@ -217,17 +201,17 @@ impl CompactionQueue {
                                 let table = catalog.get_table_by_info(&item).unwrap();
                                 let ctx = Arc::clone(&ctx);
                                 ctx.get_storage_runtime()
-                                .spawn(async move { do_compaction(ctx.clone(), table, "".to_owned()).await });
+                                .spawn(async move { CompactionTask::do_compaction(ctx.clone(), table, "".to_owned()).await });
                             },
                             None => {
-                                // if the queue_add channel is gone, we're done.
+                                // if the queue_add_tx channel is gone, we're done.
                                 if queue_add_eof {
                                     break;
                                 }
                             },
                         }
                     }
-                    // an item is received from the queue_add channel.
+                    // an item is received from the queue_add_tx channel.
                     new_item = queue_add_rx.recv(), if !queue_add_eof => {
                         match new_item {
                             Some(item) => {
@@ -235,7 +219,7 @@ impl CompactionQueue {
                                 task.insert(item.0, item.1);
                             },
                             None => {
-                                // the queue_add channel was dropped.
+                                // the queue_add_tx channel was dropped.
                                 queue_add_eof = true;
                             },
                         }
@@ -243,7 +227,7 @@ impl CompactionQueue {
                 }
             }
         });
-        queue_add
+        queue_add_tx
     }
 }
 
@@ -257,8 +241,4 @@ impl Stream for CompactionQueue {
         let self_mut = self.get_mut();
         self_mut.poll_expired(ctx)
     }
-}
-
-fn is_system_database(name: &str) -> bool {
-    name == "INFORMATION_SCHEMA" || name == "system"
 }
