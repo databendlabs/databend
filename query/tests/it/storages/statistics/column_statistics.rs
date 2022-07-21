@@ -25,19 +25,10 @@ use common_datavalues::StructColumn;
 use common_datavalues::StructType;
 use common_datavalues::ToDataType;
 use common_exception::Result;
+use databend_query::storages::fuse::statistics::gen_columns_statistics;
 use databend_query::storages::fuse::statistics::traverse;
-#[test]
-fn test_column_traverse() -> Result<()> {
-    let nested_layer_1 = StructType::create(vec!["c".to_owned(), "d".to_owned()], vec![
-        i64::to_data_type(),
-        f64::to_data_type(),
-    ]);
 
-    let nested_layer_0 = StructType::create(vec!["b".to_owned(), "e".to_owned()], vec![
-        DataTypeImpl::Struct(nested_layer_1.clone()),
-        f64::to_data_type(),
-    ]);
-
+fn gen_sample_block() -> (DataBlock, Vec<ColumnRef>) {
     //   sample message
     //
     //   struct {
@@ -51,50 +42,79 @@ fn test_column_traverse() -> Result<()> {
     //      f : i64,
     //      g: f64,
     //   }
+
+    let col_b_type = StructType::create(vec!["c".to_owned(), "d".to_owned()], vec![
+        i64::to_data_type(),
+        f64::to_data_type(),
+    ]);
+
+    let col_a_type = StructType::create(vec!["b".to_owned(), "e".to_owned()], vec![
+        DataTypeImpl::Struct(col_b_type.clone()),
+        f64::to_data_type(),
+    ]);
+
     let schema = DataSchemaRefExt::create(vec![
-        DataField::new("a", DataTypeImpl::Struct(nested_layer_0.clone())),
+        DataField::new("a", DataTypeImpl::Struct(col_a_type.clone())),
         DataField::new("f", i64::to_data_type()),
         DataField::new("g", f64::to_data_type()),
     ]);
 
-    // prepare four cols
+    // prepare leaves
     let col_c = Series::from_data(vec![1i64, 2, 3]);
     let col_d = Series::from_data(vec![1.0f64, 2., 3.]);
     let col_e = Series::from_data(vec![4.0f64, 5., 6.]);
     let col_f = Series::from_data(vec![7i64, 8, 9]);
     let col_g = Series::from_data(vec![10.0f64, 11., 12.]);
+
+    // inner/root nodes
     let col_b: ColumnRef = Arc::new(StructColumn::from_data(
         vec![col_c.clone(), col_d.clone()],
-        DataTypeImpl::Struct(nested_layer_1),
+        DataTypeImpl::Struct(col_b_type),
     ));
     let col_a: ColumnRef = Arc::new(StructColumn::from_data(
         vec![col_b.clone(), col_e.clone()],
-        DataTypeImpl::Struct(nested_layer_0),
+        DataTypeImpl::Struct(col_a_type),
     ));
 
-    let raw = DataBlock::create(schema, vec![col_a.clone(), col_f.clone(), col_g.clone()]);
+    (
+        DataBlock::create(schema, vec![col_a.clone(), col_f.clone(), col_g.clone()]),
+        vec![col_c, col_d, col_e, col_f, col_g],
+    )
+}
 
-    let cols = traverse::traverse_columns_dfs(raw.columns())?;
+#[test]
+fn test_column_traverse() -> Result<()> {
+    let (sample_block, sample_cols) = gen_sample_block();
+    let cols = traverse::traverse_columns_dfs(sample_block.columns())?;
 
-    // recall
-
-    //   struct {
-    //      a: struct {
-    //          b: struct {
-    //             c: i64,
-    //             d: f64,
-    //          },
-    //          e: f64
-    //      }
-    //      f : i64,
-    //      g: f64,
-    //   }
     assert_eq!(5, cols.len());
-    assert_eq!(cols[0], col_c);
-    assert_eq!(cols[1], col_d);
-    assert_eq!(cols[2], col_e);
-    assert_eq!(cols[3], col_f);
-    assert_eq!(cols[4], col_g);
+    (0..5).for_each(|i| assert_eq!(cols[i], sample_cols[i], "checking col {}", i));
+
+    Ok(())
+}
+
+#[test]
+fn test_column_statistic() -> Result<()> {
+    let (sample_block, sample_cols) = gen_sample_block();
+    let col_stats = gen_columns_statistics(&sample_block)?;
+
+    assert_eq!(5, col_stats.len());
+
+    (0..5).for_each(|i| {
+        let stats = col_stats.get(&(i as u32)).unwrap();
+        assert_eq!(
+            &stats.min,
+            sample_cols[i].to_values().iter().min().unwrap(),
+            "checking min of col {}",
+            i
+        );
+        assert_eq!(
+            &stats.max,
+            sample_cols[i].to_values().iter().max().unwrap(),
+            "checking max of col {}",
+            i
+        );
+    });
 
     Ok(())
 }
