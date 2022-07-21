@@ -22,7 +22,6 @@ use super::hash_join::PhysicalHashJoin;
 use super::limit::Limit;
 use super::logical_get::LogicalGet;
 use super::logical_join::LogicalInnerJoin;
-use super::max_one_row::Max1Row;
 use super::pattern::PatternPlan;
 use super::physical_scan::PhysicalScan;
 use super::project::Project;
@@ -74,7 +73,6 @@ pub enum RelOp {
     Aggregate,
     Sort,
     Limit,
-    Max1Row,
 
     // Pattern
     Pattern,
@@ -95,7 +93,6 @@ pub enum RelOperator {
     Aggregate(Aggregate),
     Sort(Sort),
     Limit(Limit),
-    Max1Row(Max1Row),
 
     Pattern(PatternPlan),
 }
@@ -113,7 +110,6 @@ impl Operator for RelOperator {
             RelOperator::Aggregate(rel_op) => rel_op.rel_op(),
             RelOperator::Sort(rel_op) => rel_op.rel_op(),
             RelOperator::Limit(rel_op) => rel_op.rel_op(),
-            RelOperator::Max1Row(rel_op) => rel_op.rel_op(),
             RelOperator::Pattern(rel_op) => rel_op.rel_op(),
         }
     }
@@ -130,7 +126,6 @@ impl Operator for RelOperator {
             RelOperator::Aggregate(rel_op) => rel_op.is_physical(),
             RelOperator::Sort(rel_op) => rel_op.is_physical(),
             RelOperator::Limit(rel_op) => rel_op.is_physical(),
-            RelOperator::Max1Row(rel_op) => rel_op.is_physical(),
             RelOperator::Pattern(rel_op) => rel_op.is_physical(),
         }
     }
@@ -147,7 +142,6 @@ impl Operator for RelOperator {
             RelOperator::Aggregate(rel_op) => rel_op.is_logical(),
             RelOperator::Sort(rel_op) => rel_op.is_logical(),
             RelOperator::Limit(rel_op) => rel_op.is_logical(),
-            RelOperator::Max1Row(rel_op) => rel_op.is_logical(),
             RelOperator::Pattern(rel_op) => rel_op.is_logical(),
         }
     }
@@ -164,7 +158,6 @@ impl Operator for RelOperator {
             RelOperator::Aggregate(rel_op) => rel_op.as_logical(),
             RelOperator::Sort(rel_op) => rel_op.as_logical(),
             RelOperator::Limit(rel_op) => rel_op.as_logical(),
-            RelOperator::Max1Row(rel_op) => rel_op.as_logical(),
             RelOperator::Pattern(rel_op) => rel_op.as_logical(),
         }
     }
@@ -181,7 +174,6 @@ impl Operator for RelOperator {
             RelOperator::Aggregate(rel_op) => rel_op.as_physical(),
             RelOperator::Sort(rel_op) => rel_op.as_physical(),
             RelOperator::Limit(rel_op) => rel_op.as_physical(),
-            RelOperator::Max1Row(rel_op) => rel_op.as_physical(),
             RelOperator::Pattern(rel_op) => rel_op.as_physical(),
         }
     }
@@ -373,25 +365,6 @@ impl TryFrom<RelOperator> for Limit {
         } else {
             Err(ErrorCode::LogicalError(
                 "Cannot downcast RelOperator to Limit",
-            ))
-        }
-    }
-}
-
-impl From<Max1Row> for RelOperator {
-    fn from(v: Max1Row) -> Self {
-        Self::Max1Row(v)
-    }
-}
-
-impl TryFrom<RelOperator> for Max1Row {
-    type Error = ErrorCode;
-    fn try_from(value: RelOperator) -> Result<Self> {
-        if let RelOperator::Max1Row(value) = value {
-            Ok(value)
-        } else {
-            Err(ErrorCode::LogicalError(
-                "Cannot downcast RelOperator to Max1Row",
             ))
         }
     }

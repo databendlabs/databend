@@ -39,7 +39,6 @@ use crate::sql::plans::FunctionCall;
 use crate::sql::plans::JoinType;
 use crate::sql::plans::Limit;
 use crate::sql::plans::LogicalInnerJoin;
-use crate::sql::plans::Max1Row;
 use crate::sql::plans::OrExpr;
 use crate::sql::plans::Project;
 use crate::sql::plans::RelOperator;
@@ -125,8 +124,7 @@ impl SubqueryRewriter {
 
             RelOperator::LogicalGet(_) => Ok(s_expr.clone()),
 
-            RelOperator::Max1Row(_)
-            | RelOperator::PhysicalHashJoin(_)
+            RelOperator::PhysicalHashJoin(_)
             | RelOperator::Pattern(_)
             | RelOperator::PhysicalScan(_) => Err(ErrorCode::LogicalError("Invalid plan type")),
         }
@@ -309,23 +307,18 @@ impl SubqueryRewriter {
     ) -> Result<(SExpr, UnnestResult)> {
         match subquery.typ {
             SubqueryType::Scalar => {
-                let cross_join = LogicalInnerJoin {
+                let join_plan = LogicalInnerJoin {
                     left_conditions: vec![],
                     right_conditions: vec![],
                     other_conditions: vec![],
-                    join_type: JoinType::Cross,
+                    join_type: JoinType::Single,
                     marker_index: None,
                     from_correlated_subquery: false,
                 }
                 .into();
-                Ok((
-                    SExpr::create_binary(
-                        cross_join,
-                        left.clone(),
-                        SExpr::create_unary(Max1Row.into(), *subquery.subquery.clone()),
-                    ),
-                    UnnestResult::Uncorrelated,
-                ))
+                let s_expr =
+                    SExpr::create_binary(join_plan, left.clone(), *subquery.subquery.clone());
+                Ok((s_expr, UnnestResult::SingleJoin))
             }
             SubqueryType::Exists => {
                 let mut subquery_expr = *subquery.subquery.clone();
