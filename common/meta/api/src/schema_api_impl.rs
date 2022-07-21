@@ -75,7 +75,6 @@ use common_meta_types::app_error::UndropDbWithNoDropTime;
 use common_meta_types::app_error::UndropTableAlreadyExists;
 use common_meta_types::app_error::UndropTableHasNoHistory;
 use common_meta_types::app_error::UndropTableWithNoDropTime;
-use common_meta_types::app_error::UnknownDatabase;
 use common_meta_types::app_error::UnknownTable;
 use common_meta_types::app_error::UnknownTableId;
 use common_meta_types::ConditionResult;
@@ -89,6 +88,7 @@ use common_tracing::func_name;
 use common_tracing::tracing;
 use ConditionResult::Eq;
 
+use crate::db_has_to_exist;
 use crate::deserialize_struct;
 use crate::deserialize_u64;
 use crate::fetch_id;
@@ -98,6 +98,7 @@ use crate::meta_encode_err;
 use crate::send_txn;
 use crate::serialize_struct;
 use crate::serialize_u64;
+use crate::table_has_to_exist;
 use crate::txn_cond_seq;
 use crate::txn_op_del;
 use crate::txn_op_put;
@@ -1996,8 +1997,8 @@ fn is_drop_time_out_of_retention_time(
 }
 
 /// Returns (db_id_seq, db_id, db_meta_seq, db_meta)
-async fn get_db_or_err(
-    kv_api: &impl KVApi,
+pub(crate) async fn get_db_or_err(
+    kv_api: &(impl KVApi + ?Sized),
     name_key: &DatabaseNameIdent,
     msg: impl Display,
 ) -> Result<(u64, u64, u64, DatabaseMeta), MetaError> {
@@ -2016,47 +2017,6 @@ async fn get_db_or_err(
         // Safe unwrap(): db_meta_seq > 0 implies db_meta is not None.
         db_meta.unwrap(),
     ))
-}
-
-/// Return OK if a db_id or db_meta exists by checking the seq.
-///
-/// Otherwise returns UnknownDatabase error
-fn db_has_to_exist(
-    seq: u64,
-    db_name_ident: &DatabaseNameIdent,
-    msg: impl Display,
-) -> Result<(), MetaError> {
-    if seq == 0 {
-        tracing::debug!(seq, ?db_name_ident, "db does not exist");
-
-        Err(MetaError::AppError(AppError::UnknownDatabase(
-            UnknownDatabase::new(
-                &db_name_ident.db_name,
-                format!("{}: {}", msg, db_name_ident),
-            ),
-        )))
-    } else {
-        Ok(())
-    }
-}
-
-/// Return OK if a table_id or table_meta exists by checking the seq.
-///
-/// Otherwise returns UnknownTable error
-fn table_has_to_exist(
-    seq: u64,
-    name_ident: &TableNameIdent,
-    ctx: impl Display,
-) -> Result<(), MetaError> {
-    if seq == 0 {
-        tracing::debug!(seq, ?name_ident, "does not exist");
-
-        Err(MetaError::AppError(AppError::UnknownTable(
-            UnknownTable::new(&name_ident.table_name, format!("{}: {}", ctx, name_ident)),
-        )))
-    } else {
-        Ok(())
-    }
 }
 
 /// Return OK if a db_id or db_meta does not exist by checking the seq.

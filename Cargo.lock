@@ -1386,6 +1386,7 @@ dependencies = [
  "common-proto-conv",
  "common-protos",
  "common-tracing",
+ "enumflags2",
  "maplit",
  "serde",
  "serde_json",

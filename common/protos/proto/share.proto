@@ -56,6 +56,8 @@ message ShareGrantEntry {
 
   ShareGrantObject object = 1;
   uint64 privileges = 2;
+  string grant_on = 3;
+  optional string update_on = 4;
 }
 
 message ShareMeta {

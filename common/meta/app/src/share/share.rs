@@ -20,8 +20,13 @@ use std::fmt::Formatter;
 
 use common_datavalues::chrono::DateTime;
 use common_datavalues::chrono::Utc;
+use common_meta_types::app_error::AppError;
+use common_meta_types::app_error::WrongShareObject;
+use common_meta_types::MetaError;
 use enumflags2::bitflags;
 use enumflags2::BitFlags;
+
+use crate::schema::DatabaseMeta;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
 pub struct ShareNameIdent {
@@ -52,6 +57,7 @@ pub struct CreateShareReq {
     pub if_not_exists: bool,
     pub share_name: ShareNameIdent,
     pub comment: Option<String>,
+    pub create_on: DateTime<Utc>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -88,6 +94,57 @@ pub struct RemoveShareAccountReq {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct RemoveShareAccountReply {}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub enum ShareGrantObjectName {
+    // database name
+    Database(String),
+    // database name, table name
+    Table(String, String),
+}
+
+impl Display for ShareGrantObjectName {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ShareGrantObjectName::Database(db) => {
+                write!(f, "Database {}", db)
+            }
+            ShareGrantObjectName::Table(db, table) => {
+                write!(f, "Table {}/{}", db, table)
+            }
+        }
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub enum ShareGrantObjectSeqAndId {
+    // db_meta_seq, db_id, DatabaseMeta
+    Database(u64, u64, DatabaseMeta),
+    // db_id, table_meta_seq, table_id,
+    Table(u64, u64, u64),
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct GrantShareObjectReq {
+    pub share_name: ShareNameIdent,
+    pub object: ShareGrantObjectName,
+    pub grant_on: DateTime<Utc>,
+    pub privilege: ShareGrantObjectPrivilege,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct GrantShareObjectReply {}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct RevokeShareObjectReq {
+    pub share_name: ShareNameIdent,
+    pub object: ShareGrantObjectName,
+    pub privilege: ShareGrantObjectPrivilege,
+    pub update_on: DateTime<Utc>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct RevokeShareObjectReply {}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct ShareAccountMeta {
@@ -130,6 +187,19 @@ pub enum ShareGrantObject {
     Table(u64),
 }
 
+impl ShareGrantObject {
+    pub fn new(seq_and_id: &ShareGrantObjectSeqAndId) -> ShareGrantObject {
+        match seq_and_id {
+            ShareGrantObjectSeqAndId::Database(_seq, db_id, _meta) => {
+                ShareGrantObject::Database(*db_id)
+            }
+            ShareGrantObjectSeqAndId::Table(_db_id, _seq, table_id) => {
+                ShareGrantObject::Table(*table_id)
+            }
+        }
+    }
+}
+
 impl Display for ShareGrantObject {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -167,13 +237,44 @@ pub enum ShareGrantObjectPrivilege {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct ShareGrantEntry {
-    object: ShareGrantObject,
-    privileges: BitFlags<ShareGrantObjectPrivilege>,
+    pub object: ShareGrantObject,
+    pub privileges: BitFlags<ShareGrantObjectPrivilege>,
+    pub grant_on: DateTime<Utc>,
+    pub update_on: Option<DateTime<Utc>>,
 }
 
 impl ShareGrantEntry {
-    pub fn new(object: ShareGrantObject, privileges: BitFlags<ShareGrantObjectPrivilege>) -> Self {
-        Self { object, privileges }
+    pub fn new(
+        object: ShareGrantObject,
+        privileges: ShareGrantObjectPrivilege,
+        grant_on: DateTime<Utc>,
+    ) -> Self {
+        Self {
+            object,
+            privileges: BitFlags::from(privileges),
+            grant_on,
+            update_on: None,
+        }
+    }
+
+    pub fn grant_privileges(
+        &mut self,
+        privileges: ShareGrantObjectPrivilege,
+        grant_on: DateTime<Utc>,
+    ) {
+        self.update_on = Some(grant_on);
+        self.privileges = BitFlags::from(privileges);
+    }
+
+    // return true if all privileges are empty.
+    pub fn revoke_privileges(
+        &mut self,
+        privileges: ShareGrantObjectPrivilege,
+        update_on: DateTime<Utc>,
+    ) -> bool {
+        self.update_on = Some(update_on);
+        self.privileges.remove(BitFlags::from(privileges));
+        self.privileges.is_empty()
     }
 
     pub fn object(&self) -> &ShareGrantObject {
@@ -182,6 +283,10 @@ impl ShareGrantEntry {
 
     pub fn privileges(&self) -> &BitFlags<ShareGrantObjectPrivilege> {
         &self.privileges
+    }
+
+    pub fn has_granted_privileges(&self, privileges: ShareGrantObjectPrivilege) -> bool {
+        self.privileges.contains(privileges)
     }
 }
 
@@ -224,6 +329,121 @@ impl ShareMeta {
 
     pub fn del_account(&mut self, account: &String) {
         self.accounts.remove(account);
+    }
+
+    pub fn grant_object_privileges(
+        &mut self,
+        object: ShareGrantObject,
+        privileges: ShareGrantObjectPrivilege,
+        grant_on: DateTime<Utc>,
+    ) {
+        let key = object.to_string();
+
+        match object {
+            ShareGrantObject::Database(_db_id) => {
+                if let Some(db) = &mut self.database {
+                    db.grant_privileges(privileges, grant_on);
+                } else {
+                    self.database = Some(ShareGrantEntry::new(object, privileges, grant_on));
+                }
+            }
+            ShareGrantObject::Table(_table_id) => {
+                match self.entries.get_mut(&key) {
+                    Some(entry) => {
+                        entry.grant_privileges(privileges, grant_on);
+                    }
+                    None => {
+                        let entry = ShareGrantEntry::new(object, privileges, grant_on);
+                        self.entries.insert(key, entry);
+                    }
+                };
+            }
+        }
+    }
+
+    pub fn revoke_object_privileges(
+        &mut self,
+        object: ShareGrantObject,
+        privileges: ShareGrantObjectPrivilege,
+        update_on: DateTime<Utc>,
+    ) -> Result<(), MetaError> {
+        let key = object.to_string();
+
+        match object {
+            ShareGrantObject::Database(_db_id) => {
+                if let Some(entry) = &mut self.database {
+                    if object == entry.object {
+                        if entry.revoke_privileges(privileges, update_on) {
+                            // all database privileges have been revoked, clear database and entries.
+                            self.database = None;
+                            self.entries.clear();
+                            self.update_on = Some(update_on);
+                        }
+                    } else {
+                        return Err(MetaError::AppError(AppError::WrongShareObject(
+                            WrongShareObject::new(&key),
+                        )));
+                    }
+                } else {
+                    return Err(MetaError::AppError(AppError::WrongShareObject(
+                        WrongShareObject::new(object.to_string()),
+                    )));
+                }
+            }
+            ShareGrantObject::Table(table_id) => match self.entries.get_mut(&key) {
+                Some(entry) => {
+                    if let ShareGrantObject::Table(self_table_id) = entry.object {
+                        if self_table_id == table_id {
+                            if entry.revoke_privileges(privileges, update_on) {
+                                self.entries.remove(&key);
+                            }
+                        } else {
+                            return Err(MetaError::AppError(AppError::WrongShareObject(
+                                WrongShareObject::new(object.to_string()),
+                            )));
+                        }
+                    } else {
+                        unreachable!("ShareMeta.entries MUST be Table Object");
+                    }
+                }
+                None => return Ok(()),
+            },
+        }
+        Ok(())
+    }
+
+    pub fn has_granted_privileges(
+        &self,
+        obj_name: &ShareGrantObjectName,
+        object: &ShareGrantObjectSeqAndId,
+        privileges: ShareGrantObjectPrivilege,
+    ) -> Result<bool, MetaError> {
+        match object {
+            ShareGrantObjectSeqAndId::Database(_seq, db_id, _meta) => match &self.database {
+                Some(db) => match db.object {
+                    ShareGrantObject::Database(self_db_id) => {
+                        if self_db_id != *db_id {
+                            Err(MetaError::AppError(AppError::WrongShareObject(
+                                WrongShareObject::new(obj_name.to_string()),
+                            )))
+                        } else {
+                            Ok(db.has_granted_privileges(privileges))
+                        }
+                    }
+                    ShareGrantObject::Table(_) => {
+                        unreachable!("grant database CANNOT be a table");
+                    }
+                },
+                None => Ok(false),
+            },
+            ShareGrantObjectSeqAndId::Table(_db_id, _table_seq, table_id) => {
+                let key = ShareGrantObject::Table(*table_id).to_string();
+                match self.entries.get(&key) {
+                    Some(entry) => Ok(entry.has_granted_privileges(privileges)),
+                    None => Ok(false),
+                }
+            }
+        }
     }
 }
 
