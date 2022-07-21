@@ -458,7 +458,7 @@ impl JoinHashTable {
             };
             let null_column =
                 nullable_type.create_column(&vec![DataValue::Null; input.num_rows()])?;
-            DataBlock::create(build_data_schema.clone(), vec![null_column])
+            DataBlock::create(build_data_schema, vec![null_column])
         } else {
             self.row_space.gather(build_indexs)?
         };

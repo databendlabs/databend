@@ -547,25 +547,4 @@ impl PipelineBuilder {
 
         Ok(())
     }
-
-    fn build_sink_hash_table(
-        &mut self,
-        state: Arc<dyn HashJoinState>,
-        pipeline: &mut Pipeline,
-    ) -> Result<()> {
-        let mut sink_pipeline_builder = SinkPipeBuilder::create();
-        for _ in 0..pipeline.output_len() {
-            let input_port = InputPort::create();
-            sink_pipeline_builder.add_sink(
-                input_port.clone(),
-                Sinker::<SinkBuildHashTable>::create(
-                    input_port,
-                    SinkBuildHashTable::try_create(state.clone())?,
-                ),
-            );
-        }
-
-        pipeline.add_pipe(sink_pipeline_builder.finalize());
-        Ok(())
-    }
 }
