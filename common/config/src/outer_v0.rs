@@ -39,6 +39,7 @@ use super::inner::Config as InnerConfig;
 use super::inner::HiveCatalogConfig as InnerHiveCatalogConfig;
 use super::inner::MetaConfig as InnerMetaConfig;
 use super::inner::QueryConfig as InnerQueryConfig;
+use super::inner::TaskConfig as InnerTaskConfig;
 use crate::DATABEND_COMMIT_VERSION;
 
 /// Outer config for `query`.
@@ -83,6 +84,10 @@ pub struct Config {
     // - currently only supports HIVE (via hive meta store)
     #[clap(flatten)]
     pub catalog: HiveCatalogConfig,
+
+    // Background tasks config.
+    #[clap(flatten)]
+    pub task: TaskConfig,
 }
 
 impl Default for Config {
@@ -135,6 +140,7 @@ impl From<InnerConfig> for Config {
             meta: inner.meta.into(),
             storage: inner.storage.into(),
             catalog: inner.catalog.into(),
+            task: inner.task.into(),
         }
     }
 }
@@ -151,6 +157,7 @@ impl TryInto<InnerConfig> for Config {
             meta: self.meta.try_into()?,
             storage: self.storage.try_into()?,
             catalog: self.catalog.try_into()?,
+            task: self.task.try_into()?,
         })
     }
 }
@@ -942,5 +949,47 @@ impl Debug for MetaConfig {
                 &self.rpc_tls_meta_service_domain_name,
             )
             .finish()
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
+#[serde(default)]
+pub struct TaskConfig {
+    #[clap(long = "cron-expression", default_value = "0 0 0 * * *")]
+    #[serde(alias = "cron_expression")]
+    pub cron_expression: String,
+    #[clap(long = "delay-seconds", default_value = "3600")]
+    #[serde(alias = "delay_seconds")]
+    pub delay_seconds: u64,
+    #[clap(long = "compaction-enabled")]
+    #[serde(alias = "compaction_enabled")]
+    pub compaction_enabled: bool,
+}
+
+impl Default for TaskConfig {
+    fn default() -> Self {
+        InnerTaskConfig::default().into()
+    }
+}
+
+impl TryInto<InnerTaskConfig> for TaskConfig {
+    type Error = ErrorCode;
+
+    fn try_into(self) -> Result<InnerTaskConfig> {
+        Ok(InnerTaskConfig {
+            cron_expression: self.cron_expression,
+            delay_seconds: self.delay_seconds,
+            compaction_enabled: self.compaction_enabled,
+        })
+    }
+}
+
+impl From<InnerTaskConfig> for TaskConfig {
+    fn from(inner: InnerTaskConfig) -> Self {
+        Self {
+            cron_expression: inner.cron_expression,
+            delay_seconds: inner.delay_seconds,
+            compaction_enabled: inner.compaction_enabled,
+        }
     }
 }

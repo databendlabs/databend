@@ -235,6 +235,9 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
         tracing::info!("Databend async insert has been enabled.")
     }
 
+    // Background tasks.
+    {}
+
     tracing::info!("Ready for connections.");
     shutdown_handle.wait_for_termination_request().await;
     tracing::info!("Shutdown server.");

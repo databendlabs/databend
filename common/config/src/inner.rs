@@ -52,6 +52,9 @@ pub struct Config {
     // - Later, catalog information SHOULD be kept in KV Service
     // - currently only supports HIVE (via hive meta store)
     pub catalog: HiveCatalogConfig,
+
+    // Background tasks config.
+    pub task: TaskConfig,
 }
 
 impl Config {
@@ -343,5 +346,23 @@ impl Debug for MetaConfig {
                 &self.rpc_tls_meta_service_domain_name,
             )
             .finish()
+    }
+}
+
+/// Config for background tasks.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TaskConfig {
+    pub cron_expression: String,
+    pub delay_seconds: u64,
+    pub compaction_enabled: bool,
+}
+
+impl Default for TaskConfig {
+    fn default() -> Self {
+        Self {
+            cron_expression: "0 0 0 * * *".to_string(),
+            delay_seconds: 3600,
+            compaction_enabled: false,
+        }
     }
 }

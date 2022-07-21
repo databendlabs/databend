@@ -25,6 +25,7 @@ use common_base::base::tokio::sync::mpsc::Receiver;
 use common_base::base::tokio::sync::mpsc::Sender;
 use common_base::base::TrySpawn;
 use common_exception::ErrorCode;
+use common_exception::Result;
 use common_meta_api::deserialize_struct;
 use common_meta_api::get_start_and_end_of_prefix;
 use common_meta_api::KVApiKey;
@@ -40,6 +41,7 @@ use common_planners::OptimizeTableAction;
 use common_planners::OptimizeTablePlan;
 use futures::ready;
 use futures::Stream;
+use tokio_cron_scheduler::Job;
 use tokio_stream::StreamExt;
 use tokio_util::time::delay_queue;
 use tokio_util::time::DelayQueue;
@@ -50,10 +52,43 @@ use crate::sessions::TableContext;
 use crate::storages::Table;
 use crate::Config;
 
-pub async fn compaction(ctx: Arc<QueryContext>, conf: &Config) -> common_exception::Result<()> {
+struct CompactionTask {
+    cfg: Config,
+    ctx: Arc<QueryContext>,
+}
+
+impl CompactionTask {
+    fn try_create_job(self) -> Result<Job> {
+        let schedule = self.cfg.task.cron_expression.as_str();
+        Job::new_async(schedule, move |_, _| {
+            let ctx = Arc::clone(&self.ctx);
+            let tenant = ctx.get_tenant();
+            let catalog = ctx.get_catalog(CATALOG_DEFAULT).unwrap();
+            Box::pin(async move {
+                let databases = catalog.list_databases(tenant.as_str()).await.unwrap();
+
+                for database in databases {
+                    let name = database.name();
+                    if is_system_database(name) {
+                        continue;
+                    }
+                    let tables = catalog.list_tables(tenant.as_str(), name).await.unwrap();
+                    for table in tables {
+                        do_compaction(ctx.clone(), table, name.to_string())
+                            .await
+                            .unwrap();
+                    }
+                }
+            })
+        })
+        .map_err(|e| ErrorCode::JobSchedulerError(e.to_string()))
+    }
+}
+
+pub async fn compaction(ctx: Arc<QueryContext>, conf: &Config) -> Result<()> {
     let rpc_conf = conf.meta.to_meta_grpc_client_conf();
     if rpc_conf.local_mode() {
-        return Err(ErrorCode::CompactionError(
+        return Err(ErrorCode::BackgroundTaskError(
             "Auto compaction is not supported in local mode".to_string(),
         ));
     }
@@ -69,46 +104,43 @@ pub async fn compaction(ctx: Arc<QueryContext>, conf: &Config) -> common_excepti
 
     // Watch the table meta update.
     let mut client_stream = client.request(watch).await?;
-    let task = CompactionQueue::new(Duration::from_secs(3600));
-    let (mut delay_queue_insert, mut delay_queue_read) = task.create_channel(ctx.clone());
-    ctx.get_storage_runtime().spawn(async move {
-        while let Ok(Some(resp)) = client_stream.message().await {
-            if let Some(event) = resp.event {
-                if event.prev.is_none() || event.current.is_none() {
-                    continue;
-                }
+    let task = CompactionQueue::new(Duration::from_secs(30));
+    let delay_queue_insert = task.create_channel(ctx.clone());
 
-                let key = event.key;
-                let id = TableId::from_key(&key).unwrap();
-
-                let current_seqv = event.current.unwrap();
-                let seq = current_seqv.seq;
-                let meta: TableMeta = deserialize_struct(&current_seqv.data).unwrap();
-                if meta.drop_on.is_some() || meta.default_cluster_key.is_some() {
-                    continue;
-                }
-
-                let ident = TableIdent::new(id.table_id, seq);
-                let table_info = TableInfo {
-                    ident,
-                    desc: "".to_owned(),
-                    name: "".to_owned(),
-                    meta,
-                };
-                delay_queue_insert
-                    .insert(id.table_id, table_info)
-                    .await
-                    .unwrap();
+    while let Ok(Some(resp)) = client_stream.message().await {
+        if let Some(event) = resp.event {
+            if event.prev.is_none() || event.current.is_none() {
+                continue;
             }
-        }
-    });
 
-    let catalog = ctx.get_catalog(CATALOG_DEFAULT)?;
-    while let Some(info) = delay_queue_read.next().await {
-        let table = catalog.get_table_by_info(&info)?;
-        let ctx = Arc::clone(&ctx);
-        ctx.get_storage_runtime()
-            .spawn(async move { do_compaction(ctx.clone(), table, "".to_owned()).await });
+            let key = event.key;
+            let id = TableId::from_key(&key).unwrap();
+
+            let current_seqv = event.current.unwrap();
+            let seq = current_seqv.seq;
+            let current: TableMeta = deserialize_struct(&current_seqv.data).unwrap();
+            if current.drop_on.is_some() || current.default_cluster_key.is_some() {
+                continue;
+            }
+
+            let prev_seqv = event.prev.unwrap();
+            let prev: TableMeta = deserialize_struct(&prev_seqv.data).unwrap();
+            if current.statistics.number_of_rows == prev.statistics.number_of_rows {
+                continue;
+            }
+
+            let ident = TableIdent::new(id.table_id, seq);
+            let table_info = TableInfo {
+                ident,
+                desc: "".to_owned(),
+                name: "".to_owned(),
+                meta: current,
+            };
+            
+                delay_queue_insert.send((id.table_id, table_info))
+                .await
+                .unwrap();
+        }
     }
 
     Ok(())
@@ -118,7 +150,7 @@ pub async fn do_compaction(
     ctx: Arc<QueryContext>,
     table: Arc<dyn Table>,
     database: String,
-) -> common_exception::Result<()> {
+) -> Result<()> {
     if !table.auto_compaction() {
         return Ok(());
     }
@@ -169,9 +201,9 @@ impl CompactionQueue {
         }
     }
 
-    fn create_channel(self, ctx: Arc<QueryContext>) -> (DelayQueueInsert, DelayQueueRead) {
+    fn create_channel(self, ctx: Arc<QueryContext>) -> Sender<(u64, TableInfo)> {
         let (queue_add, mut queue_add_rx) = channel::<(u64, TableInfo)>(1);
-        let (queue_read_tx, queue_read) = channel::<Option<TableInfo>>(1);
+        let catalog = ctx.get_catalog(CATALOG_DEFAULT).unwrap();
 
         ctx.get_storage_runtime().spawn(async move {
             let mut task = self;
@@ -182,11 +214,10 @@ impl CompactionQueue {
                     delayed_item = task.next() => {
                         match delayed_item {
                             Some(item) => {
-                                // forward it to the queue_read channel.
-                                if queue_read_tx.send(Some(item)).await.is_err() {
-                                    // queue_read channel receiver side was dropped.
-                                    break;
-                                }
+                                let table = catalog.get_table_by_info(&item).unwrap();
+                                let ctx = Arc::clone(&ctx);
+                                ctx.get_storage_runtime()
+                                .spawn(async move { do_compaction(ctx.clone(), table, "".to_owned()).await });
                             },
                             None => {
                                 // if the queue_add channel is gone, we're done.
@@ -212,7 +243,7 @@ impl CompactionQueue {
                 }
             }
         });
-        (DelayQueueInsert(queue_add), DelayQueueRead(queue_read))
+        queue_add
     }
 }
 
@@ -228,28 +259,6 @@ impl Stream for CompactionQueue {
     }
 }
 
-pub struct DelayQueueInsert(Sender<(u64, TableInfo)>);
-
-impl DelayQueueInsert {
-    /// Insert an item into the DelayQueue.
-    pub async fn insert(
-        &mut self,
-        table_id: u64,
-        table_info: TableInfo,
-    ) -> Result<(), SendError<(u64, TableInfo)>> {
-        self.0.send((table_id, table_info)).await
-    }
-}
-
-pub struct DelayQueueRead(Receiver<Option<TableInfo>>);
-
-impl DelayQueueRead {
-    /// Read the next item from the DelayQueue.
-    pub async fn next(&mut self) -> Option<TableInfo> {
-        match self.0.recv().await {
-            Some(Some(item)) => Some(item),
-            Some(None) => None,
-            None => None,
-        }
-    }
+fn is_system_database(name: &str) -> bool {
+    name == "INFORMATION_SCHEMA" || name == "system"
 }

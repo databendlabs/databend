@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,8 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod compaction;
-mod task;
+use std::sync::Arc;
 
-pub use compaction::compaction;
-pub use compaction::do_compaction;
+use common_exception::ErrorCode;
+use common_exception::Result;
+use tokio_cron_scheduler::Job;
+use tokio_cron_scheduler::JobScheduler;
+
+use crate::sessions::QueryContext;
+use crate::sessions::SessionManager;
+use crate::Config;
+
+pub struct Task {
+    cfg: Config,
+    sessions: Arc<SessionManager>,
+}
+
+impl Task {
+    pub fn try_create(ctx: Arc<QueryContext>) -> Self {
+        todo!()
+    }
+
+}
