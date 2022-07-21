@@ -69,6 +69,5 @@ pub use transforms::TransformHashJoinProbe;
 pub use transforms::TransformHaving;
 pub use transforms::TransformLimit;
 pub use transforms::TransformLimitBy;
-pub use transforms::TransformMax1Row;
 pub use transforms::TransformSortMerge;
 pub use transforms::TransformSortPartial;

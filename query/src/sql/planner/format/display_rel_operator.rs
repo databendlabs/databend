@@ -75,7 +75,6 @@ impl Display for FormatContext {
             RelOperator::Aggregate(op) => format_aggregate(f, &self.metadata, op),
             RelOperator::Sort(op) => format_sort(f, &self.metadata, op),
             RelOperator::Limit(op) => format_limit(f, &self.metadata, op),
-            RelOperator::Max1Row(_) => write!(f, "Max1Row"),
             RelOperator::Pattern(_) => write!(f, "Pattern"),
         }
     }

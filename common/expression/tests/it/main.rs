@@ -33,6 +33,7 @@ use common_expression::function::FunctionRegistry;
 use common_expression::function::FunctionSignature;
 use common_expression::property::BooleanDomain;
 use common_expression::property::Domain;
+use common_expression::property::FloatDomain;
 use common_expression::property::FunctionProperty;
 use common_expression::property::IntDomain;
 use common_expression::property::NullableDomain;
@@ -254,6 +255,224 @@ pub fn test_pass() {
         (
             "a",
             DataType::Nullable(Box::new(DataType::UInt8)),
+            Domain::Nullable(NullableDomain {
+                has_null: true,
+                value: Some(Box::new(Domain::UInt(UIntDomain { min: 10, max: 12 }))),
+            }),
+            Column::Nullable {
+                column: Box::new(Column::UInt8(vec![10, 11, 12].into())),
+                validity: vec![false, true, false].into(),
+            },
+        ),
+        (
+            "b",
+            DataType::Null,
+            Domain::Nullable(NullableDomain {
+                has_null: true,
+                value: None,
+            }),
+            Column::Null { len: 3 },
+        ),
+    ]);
+
+    run_ast(&mut file, "divide(a, 10)", &[(
+        "a",
+        DataType::Nullable(Box::new(DataType::UInt8)),
+        Domain::Nullable(NullableDomain {
+            has_null: true,
+            value: Some(Box::new(Domain::UInt(UIntDomain { min: 10, max: 12 }))),
+        }),
+        Column::Nullable {
+            column: Box::new(Column::UInt8(vec![10, 11, 12].into())),
+            validity: vec![false, true, false].into(),
+        },
+    )]);
+
+    run_ast(&mut file, "divide(a, b)", &[
+        (
+            "a",
+            DataType::Nullable(Box::new(DataType::UInt16)),
+            Domain::Nullable(NullableDomain {
+                has_null: true,
+                value: Some(Box::new(Domain::UInt(UIntDomain { min: 10, max: 12 }))),
+            }),
+            Column::Nullable {
+                column: Box::new(Column::UInt16(vec![10, 11, 12].into())),
+                validity: vec![false, true, false].into(),
+            },
+        ),
+        (
+            "b",
+            DataType::Nullable(Box::new(DataType::Int16)),
+            Domain::Nullable(NullableDomain {
+                has_null: true,
+                value: Some(Box::new(Domain::Int(IntDomain { min: 1, max: 3 }))),
+            }),
+            Column::Nullable {
+                column: Box::new(Column::Int16(vec![1, 2, 3].into())),
+                validity: vec![false, true, true].into(),
+            },
+        ),
+    ]);
+
+    run_ast(&mut file, "divide(a, b)", &[
+        (
+            "a",
+            DataType::Nullable(Box::new(DataType::UInt8)),
+            Domain::Nullable(NullableDomain {
+                has_null: true,
+                value: Some(Box::new(Domain::UInt(UIntDomain { min: 10, max: 12 }))),
+            }),
+            Column::Nullable {
+                column: Box::new(Column::UInt8(vec![10, 11, 12].into())),
+                validity: vec![false, true, false].into(),
+            },
+        ),
+        (
+            "b",
+            DataType::Null,
+            Domain::Nullable(NullableDomain {
+                has_null: true,
+                value: None,
+            }),
+            Column::Null { len: 3 },
+        ),
+    ]);
+
+    run_ast(&mut file, "avg(a, 10)", &[(
+        "a",
+        DataType::Nullable(Box::new(DataType::UInt8)),
+        Domain::Nullable(NullableDomain {
+            has_null: true,
+            value: Some(Box::new(Domain::UInt(UIntDomain { min: 10, max: 12 }))),
+        }),
+        Column::Nullable {
+            column: Box::new(Column::UInt8(vec![10, 11, 12].into())),
+            validity: vec![false, true, false].into(),
+        },
+    )]);
+
+    run_ast(&mut file, "avg(a, b)", &[
+        (
+            "a",
+            DataType::Nullable(Box::new(DataType::UInt16)),
+            Domain::Nullable(NullableDomain {
+                has_null: true,
+                value: Some(Box::new(Domain::UInt(UIntDomain { min: 10, max: 12 }))),
+            }),
+            Column::Nullable {
+                column: Box::new(Column::UInt16(vec![10, 11, 12].into())),
+                validity: vec![false, true, false].into(),
+            },
+        ),
+        (
+            "b",
+            DataType::Nullable(Box::new(DataType::Int16)),
+            Domain::Nullable(NullableDomain {
+                has_null: true,
+                value: Some(Box::new(Domain::Int(IntDomain { min: 1, max: 3 }))),
+            }),
+            Column::Nullable {
+                column: Box::new(Column::Int16(vec![1, 2, 3].into())),
+                validity: vec![false, true, true].into(),
+            },
+        ),
+    ]);
+
+    run_ast(&mut file, "avg(a, b)", &[
+        (
+            "a",
+            DataType::Nullable(Box::new(DataType::UInt32)),
+            Domain::Nullable(NullableDomain {
+                has_null: true,
+                value: Some(Box::new(Domain::UInt(UIntDomain { min: 10, max: 12 }))),
+            }),
+            Column::Nullable {
+                column: Box::new(Column::UInt32(vec![10, 11, 12].into())),
+                validity: vec![false, true, false].into(),
+            },
+        ),
+        (
+            "b",
+            DataType::Nullable(Box::new(DataType::Int32)),
+            Domain::Nullable(NullableDomain {
+                has_null: true,
+                value: Some(Box::new(Domain::Int(IntDomain { min: 1, max: 3 }))),
+            }),
+            Column::Nullable {
+                column: Box::new(Column::Int32(vec![1, 2, 3].into())),
+                validity: vec![false, true, true].into(),
+            },
+        ),
+    ]);
+
+    run_ast(&mut file, "avg(a, b)", &[
+        (
+            "a",
+            DataType::Nullable(Box::new(DataType::Float32)),
+            Domain::Nullable(NullableDomain {
+                has_null: true,
+                value: Some(Box::new(Domain::Float(FloatDomain {
+                    min: 10f64,
+                    max: 12f64,
+                }))),
+            }),
+            Column::Nullable {
+                column: Box::new(Column::Float32(vec![10f32, 11f32, 12f32].into())),
+                validity: vec![false, true, false].into(),
+            },
+        ),
+        (
+            "b",
+            DataType::Nullable(Box::new(DataType::Int32)),
+            Domain::Nullable(NullableDomain {
+                has_null: true,
+                value: Some(Box::new(Domain::Int(IntDomain { min: 1, max: 3 }))),
+            }),
+            Column::Nullable {
+                column: Box::new(Column::Int32(vec![1, 2, 3].into())),
+                validity: vec![false, true, true].into(),
+            },
+        ),
+    ]);
+
+    run_ast(&mut file, "avg(a, b)", &[
+        (
+            "a",
+            DataType::Nullable(Box::new(DataType::Float32)),
+            Domain::Nullable(NullableDomain {
+                has_null: true,
+                value: Some(Box::new(Domain::Float(FloatDomain {
+                    min: 10f64,
+                    max: 12f64,
+                }))),
+            }),
+            Column::Nullable {
+                column: Box::new(Column::Float32(vec![10f32, 11f32, 12f32].into())),
+                validity: vec![false, true, false].into(),
+            },
+        ),
+        (
+            "b",
+            DataType::Nullable(Box::new(DataType::Float64)),
+            Domain::Nullable(NullableDomain {
+                has_null: true,
+                value: Some(Box::new(Domain::Float(FloatDomain {
+                    min: 1f64,
+                    max: 3f64,
+                }))),
+            }),
+            Column::Nullable {
+                column: Box::new(Column::Float64(vec![1f64, 2f64, 3f64].into())),
+                validity: vec![false, true, true].into(),
+            },
+        ),
+    ]);
+
+    run_ast(&mut file, "multiply(a, b)", &[
+        (
+            "a",
+            DataType::Nullable(Box::new(DataType::Int8)),
             Domain::Nullable(NullableDomain {
                 has_null: true,
                 value: Some(Box::new(Domain::UInt(UIntDomain { min: 10, max: 12 }))),
@@ -536,6 +755,25 @@ fn builtin_functions() -> FunctionRegistry {
         FunctionProperty::default(),
         |_, _| None,
         |lhs, rhs| lhs * rhs,
+    );
+
+    registry.register_2_arg::<NumberType<f32>, NumberType<f32>, NumberType<f32>, _, _>(
+        "divide",
+        FunctionProperty::default(),
+        |_, _| None,
+        |lhs, rhs| lhs / rhs,
+    );
+
+    registry.register_2_arg::<NumberType<f64>, NumberType<f64>, NumberType<f64>, _, _>(
+        "avg",
+        FunctionProperty::default(),
+        |lhs, rhs| {
+            Some(FloatDomain {
+                min: (lhs.min + rhs.min) / 2.0,
+                max: (lhs.max + rhs.max) / 2.0,
+            })
+        },
+        |lhs, rhs| (lhs + rhs) / 2.0,
     );
 
     registry.register_1_arg::<BooleanType, BooleanType, _, _>(
