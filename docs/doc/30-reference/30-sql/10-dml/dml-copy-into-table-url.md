@@ -21,9 +21,11 @@ FROM 'https://<site>/<directory>/<filename>'
 
 You can specify a single file to load data from the file, for example, `mydata_2022_10000.csv`. 
 
-You can also specify multiple files with sequential numbers in their names using a pair of square or curly brackets to load data from them. 
+You can also specify multiple files with sequential numbers in their names using a pair of square or curly brackets to load data from them. See the examples below:
 
-For example, `mydata_2022_{10001,10002}.csv` will include the files `mydata_2022_10001.csv` and `mydata_2022_10002.csv`; `mydata_2022_[10003-10005].csv` will include the files `mydata_2022_10003.csv`, `mydata_2022_10004.csv`, and `mydata_2022_10005.csv`. 
+- `mydata_2022_{10001,10002}.csv`: This will include the files `mydata_2022_10001.csv` and `mydata_2022_10002.csv`.
+
+- `mydata_2022_[10003-10005].csv`: This will include the files `mydata_2022_10003.csv`, `mydata_2022_10004.csv`, and `mydata_2022_10005.csv`. 
 
 ### formatTypeOptions
 
