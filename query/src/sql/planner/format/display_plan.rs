@@ -37,6 +37,7 @@ impl Plan {
             }
             Plan::CreateDatabase(create_database) => Ok(format!("{:?}", create_database)),
             Plan::DropDatabase(drop_database) => Ok(format!("{:?}", drop_database)),
+            Plan::UndropDatabase(undrop_database) => Ok(format!("{:?}", undrop_database)),
             Plan::RenameDatabase(rename_database) => Ok(format!("{:?}", rename_database)),
 
             // Tables
@@ -89,7 +90,9 @@ impl Plan {
 
             Plan::Presign(presign) => Ok(format!("{:?}", presign)),
 
-            Plan::SetVariable(_set_variable) => Ok("SET".to_string()),
+            Plan::SetVariable(p) => Ok(format!("{:?}", p)),
+            Plan::UseDatabase(p) => Ok(format!("{:?}", p)),
+            Plan::Kill(p) => Ok(format!("{:?}", p)),
         }
     }
 }
