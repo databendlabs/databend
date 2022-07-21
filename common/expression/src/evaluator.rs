@@ -606,7 +606,14 @@ impl DomainCalculator {
                     max: (*max).min(i64::MAX as u64) as i64,
                 }))
             }
-            (Domain::UInt(UIntDomain { min, max }), DataType::Float32 | DataType::Float64) => {
+            (Domain::UInt(UIntDomain { min, max }), DataType::Float32) => {
+                // Cast to f32 and then to f64 to round to the nearest f32 value.
+                Ok(Domain::Float(FloatDomain {
+                    min: *min as f32 as f64,
+                    max: *max as f32 as f64,
+                }))
+            }
+            (Domain::UInt(UIntDomain { min, max }), DataType::Float64) => {
                 Ok(Domain::Float(FloatDomain {
                     min: *min as f64,
                     max: *max as f64,
@@ -650,7 +657,14 @@ impl DomainCalculator {
                 max: (*max).clamp(i32::MIN as i64, i32::MAX as i64),
             })),
             (Domain::Int(_), DataType::Int64) => Ok(domain.clone()),
-            (Domain::Int(IntDomain { min, max }), DataType::Float32 | DataType::Float64) => {
+            (Domain::Int(IntDomain { min, max }), DataType::Float32) => {
+                // Cast to f32 and then to f64 to round to the nearest f32 value.
+                Ok(Domain::Float(FloatDomain {
+                    min: (*min) as f32 as f64,
+                    max: (*max) as f32 as f64,
+                }))
+            }
+            (Domain::Int(IntDomain { min, max }), DataType::Float64) => {
                 Ok(Domain::Float(FloatDomain {
                     min: (*min) as f64,
                     max: (*max) as f64,
@@ -707,8 +721,9 @@ impl DomainCalculator {
             }
             (Domain::Float(FloatDomain { min, max }), DataType::Float32) => {
                 Ok(Domain::Float(FloatDomain {
-                    min: (*min).clamp(f32::MIN as f64, f32::MAX as f64),
-                    max: (*max).clamp(f32::MIN as f64, f32::MAX as f64),
+                    // Cast to f32 and back to f64 to round to the nearest f32 value.
+                    min: (*min).clamp(f32::MIN as f64, f32::MAX as f64) as f32 as f64,
+                    max: (*max).clamp(f32::MIN as f64, f32::MAX as f64) as f32 as f64,
                 }))
             }
             (Domain::Float(_), DataType::Float64) => Ok(domain.clone()),
