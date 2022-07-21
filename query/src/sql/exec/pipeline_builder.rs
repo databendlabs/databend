@@ -47,7 +47,6 @@ use crate::pipelines::processors::SortMergeCompactor;
 use crate::pipelines::processors::TransformAggregator;
 use crate::pipelines::processors::TransformHashJoinProbe;
 use crate::pipelines::processors::TransformLimit;
-use crate::pipelines::processors::TransformMax1Row;
 use crate::pipelines::processors::TransformSortMerge;
 use crate::pipelines::processors::TransformSortPartial;
 use crate::pipelines::Pipeline;
@@ -198,10 +197,6 @@ impl PipelineBuilder {
                 self.build_pipeline(probe)?;
                 self.build_hash_join(plan.output_schema()?, join_type.clone(), join_state)?;
                 Ok(())
-            }
-            PhysicalPlan::Max1Row { input } => {
-                self.build_pipeline(input)?;
-                self.build_max_one_row()
             }
         }
     }
@@ -551,10 +546,5 @@ impl PipelineBuilder {
         }
 
         Ok(())
-    }
-
-    pub fn build_max_one_row(&mut self) -> Result<()> {
-        self.main_pipeline
-            .add_transform(|input, output| Ok(TransformMax1Row::create(input, output)))
     }
 }

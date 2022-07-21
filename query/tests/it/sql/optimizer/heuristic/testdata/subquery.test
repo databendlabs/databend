@@ -48,9 +48,9 @@ Project: [number]
 select t.number from numbers(1) as t where number = (select * from numbers(1) where number = 0)
 ----
 Project: [number]
-    HashJoin: INNER, build keys: [subquery_1], probe keys: [CAST(t.number AS BIGINT UNSIGNED NULL)], join filters: []
-        Scan: default.system.numbers
-        Max1Row
+    Filter: [t.number = scalar_subquery_1]
+        HashJoin: SINGLE, build keys: [], probe keys: [], join filters: []
+            Scan: default.system.numbers
             Filter: [numbers.number = 0]
                 Scan: default.system.numbers
 
