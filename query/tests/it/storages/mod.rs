@@ -17,4 +17,5 @@ mod index;
 mod memory;
 mod null;
 mod result;
+mod statistics;
 mod system;
