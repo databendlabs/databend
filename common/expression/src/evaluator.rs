@@ -22,6 +22,7 @@ use crate::expression::Span;
 use crate::function::FunctionContext;
 use crate::property::BooleanDomain;
 use crate::property::Domain;
+use crate::property::FloatDomain;
 use crate::property::IntDomain;
 use crate::property::NullableDomain;
 use crate::property::StringDomain;
@@ -157,6 +158,39 @@ impl Evaluator {
                 (Scalar::UInt32(val), DataType::Int64) => {
                     Ok(Value::Scalar(Scalar::Int64(val as i64)))
                 }
+                (Scalar::Int8(val), DataType::Float32) => {
+                    Ok(Value::Scalar(Scalar::Float32(val as f32)))
+                }
+                (Scalar::Int16(val), DataType::Float32) => {
+                    Ok(Value::Scalar(Scalar::Float32(val as f32)))
+                }
+                (Scalar::UInt8(val), DataType::Float32) => {
+                    Ok(Value::Scalar(Scalar::Float32(val as f32)))
+                }
+                (Scalar::UInt16(val), DataType::Float32) => {
+                    Ok(Value::Scalar(Scalar::Float32(val as f32)))
+                }
+                (Scalar::Int8(val), DataType::Float64) => {
+                    Ok(Value::Scalar(Scalar::Float64(val as f64)))
+                }
+                (Scalar::Int16(val), DataType::Float64) => {
+                    Ok(Value::Scalar(Scalar::Float64(val as f64)))
+                }
+                (Scalar::Int32(val), DataType::Float64) => {
+                    Ok(Value::Scalar(Scalar::Float64(val as f64)))
+                }
+                (Scalar::UInt8(val), DataType::Float64) => {
+                    Ok(Value::Scalar(Scalar::Float64(val as f64)))
+                }
+                (Scalar::UInt16(val), DataType::Float64) => {
+                    Ok(Value::Scalar(Scalar::Float64(val as f64)))
+                }
+                (Scalar::UInt32(val), DataType::Float64) => {
+                    Ok(Value::Scalar(Scalar::Float64(val as f64)))
+                }
+                (Scalar::Float32(val), DataType::Float64) => {
+                    Ok(Value::Scalar(Scalar::Float64(val as f64)))
+                }
                 (scalar @ Scalar::Boolean(_), DataType::Boolean)
                 | (scalar @ Scalar::String(_), DataType::String)
                 | (scalar @ Scalar::UInt8(_), DataType::UInt8)
@@ -167,11 +201,13 @@ impl Evaluator {
                 | (scalar @ Scalar::Int16(_), DataType::Int16)
                 | (scalar @ Scalar::Int32(_), DataType::Int32)
                 | (scalar @ Scalar::Int64(_), DataType::Int64)
+                | (scalar @ Scalar::Float32(_), DataType::Float32)
+                | (scalar @ Scalar::Float64(_), DataType::Float64)
                 | (scalar @ Scalar::Null, DataType::Null)
                 | (scalar @ Scalar::EmptyArray, DataType::EmptyArray) => Ok(Value::Scalar(scalar)),
                 (scalar, dest_ty) => Err((
                     span,
-                    (format!("unable to cast {} to {dest_ty}", scalar.as_ref())),
+                    (format!("unable to cast scalar {} to {dest_ty}", scalar.as_ref())),
                 )),
             },
             Value::Column(col) => match (col, dest_type) {
@@ -275,6 +311,39 @@ impl Evaluator {
                 (Column::UInt32(column), DataType::Int64) => Ok(Value::Column(Column::Int64(
                     column.iter().map(|v| *v as i64).collect(),
                 ))),
+                (Column::Int8(column), DataType::Float32) => Ok(Value::Column(Column::Float32(
+                    column.iter().map(|v| *v as f32).collect(),
+                ))),
+                (Column::Int16(column), DataType::Float32) => Ok(Value::Column(Column::Float32(
+                    column.iter().map(|v| *v as f32).collect(),
+                ))),
+                (Column::UInt8(column), DataType::Float32) => Ok(Value::Column(Column::Float32(
+                    column.iter().map(|v| *v as f32).collect(),
+                ))),
+                (Column::UInt16(column), DataType::Float32) => Ok(Value::Column(Column::Float32(
+                    column.iter().map(|v| *v as f32).collect(),
+                ))),
+                (Column::Int8(column), DataType::Float64) => Ok(Value::Column(Column::Float64(
+                    column.iter().map(|v| *v as f64).collect(),
+                ))),
+                (Column::Int16(column), DataType::Float64) => Ok(Value::Column(Column::Float64(
+                    column.iter().map(|v| *v as f64).collect(),
+                ))),
+                (Column::Int32(column), DataType::Float64) => Ok(Value::Column(Column::Float64(
+                    column.iter().map(|v| *v as f64).collect(),
+                ))),
+                (Column::UInt8(column), DataType::Float64) => Ok(Value::Column(Column::Float64(
+                    column.iter().map(|v| *v as f64).collect(),
+                ))),
+                (Column::UInt16(column), DataType::Float64) => Ok(Value::Column(Column::Float64(
+                    column.iter().map(|v| *v as f64).collect(),
+                ))),
+                (Column::UInt32(column), DataType::Float64) => Ok(Value::Column(Column::Float64(
+                    column.iter().map(|v| *v as f64).collect(),
+                ))),
+                (Column::Float32(column), DataType::Float64) => Ok(Value::Column(Column::Float64(
+                    column.iter().map(|v| *v as f64).collect(),
+                ))),
                 (col @ Column::Boolean(_), DataType::Boolean)
                 | (col @ Column::String { .. }, DataType::String)
                 | (col @ Column::UInt8(_), DataType::UInt8)
@@ -285,9 +354,14 @@ impl Evaluator {
                 | (col @ Column::Int16(_), DataType::Int16)
                 | (col @ Column::Int32(_), DataType::Int32)
                 | (col @ Column::Int64(_), DataType::Int64)
+                | (col @ Column::Float32(_), DataType::Float32)
+                | (col @ Column::Float64(_), DataType::Float64)
                 | (col @ Column::Null { .. }, DataType::Null)
                 | (col @ Column::EmptyArray { .. }, DataType::EmptyArray) => Ok(Value::Column(col)),
-                (col, dest_ty) => Err((span, (format!("unable to cast {col:?} to {dest_ty}")))),
+                (col, dest_ty) => Err((
+                    span,
+                    (format!("unable to cast column {col:?} to {dest_ty}")),
+                )),
             },
         }
     }
@@ -303,6 +377,8 @@ impl Evaluator {
             Literal::UInt16(val) => Scalar::UInt16(*val),
             Literal::UInt32(val) => Scalar::UInt32(*val),
             Literal::UInt64(val) => Scalar::UInt64(*val),
+            Literal::Float32(val) => Scalar::Float32(*val),
+            Literal::Float64(val) => Scalar::Float64(*val),
             Literal::Boolean(val) => Scalar::Boolean(*val),
             Literal::String(val) => Scalar::String(val.clone()),
         }
@@ -373,6 +449,11 @@ impl DomainCalculator {
                 max: *i as u64,
             }),
             Literal::UInt64(i) => Domain::UInt(UIntDomain { min: *i, max: *i }),
+            Literal::Float32(i) => Domain::Float(FloatDomain {
+                min: *i as f64,
+                max: *i as f64,
+            }),
+            Literal::Float64(i) => Domain::Float(FloatDomain { min: *i, max: *i }),
             Literal::Boolean(true) => Domain::Boolean(BooleanDomain {
                 has_false: false,
                 has_true: true,
@@ -465,11 +546,51 @@ impl DomainCalculator {
                     max: (*max).min(i64::MAX as u64) as i64,
                 }))
             }
+            (Domain::Int(IntDomain { min, max }), DataType::Float32) => {
+                Ok(Domain::Float(FloatDomain {
+                    min: (*min as f64).max(f32::MIN as f64).min(f32::MAX as f64),
+                    max: (*max as f64).max(f32::MIN as f64).min(f32::MAX as f64),
+                }))
+            }
+            (Domain::UInt(UIntDomain { min, max }), DataType::Float32) => {
+                Ok(Domain::Float(FloatDomain {
+                    min: (*min as f64).max(f32::MIN as f64).min(f32::MAX as f64),
+                    max: (*max as f64).max(f32::MIN as f64).min(f32::MAX as f64),
+                }))
+            }
+            (Domain::Float(FloatDomain { min, max }), DataType::Float32) => {
+                Ok(Domain::Float(FloatDomain {
+                    min: (*min).min(f32::MAX as f64),
+                    max: (*max).min(f32::MAX as f64),
+                }))
+            }
+            (Domain::Int(IntDomain { min, max }), DataType::Float64) => {
+                Ok(Domain::Float(FloatDomain {
+                    min: (*min as f64).max(f64::MIN).min(f64::MAX),
+                    max: (*max as f64).max(f64::MIN).min(f64::MAX),
+                }))
+            }
+            (Domain::UInt(UIntDomain { min, max }), DataType::Float64) => {
+                Ok(Domain::Float(FloatDomain {
+                    min: (*min as f64).max(f64::MIN).min(f64::MAX),
+                    max: (*max as f64).max(f64::MIN).min(f64::MAX),
+                }))
+            }
+            (Domain::Float(FloatDomain { min, max }), DataType::Float64) => {
+                Ok(Domain::Float(FloatDomain {
+                    min: (*min).min(f64::MAX),
+                    max: (*max).min(f64::MAX),
+                }))
+            }
+
             (Domain::Boolean(_), DataType::Boolean)
             | (Domain::String(_), DataType::String)
             | (Domain::UInt(_), DataType::UInt8)
             | (Domain::Int(_), DataType::Int8) => Ok(input.clone()),
-            (domain, dest_ty) => Err((span, (format!("unable to cast {domain} to {dest_ty}",)))),
+            (domain, dest_ty) => Err((
+                span,
+                (format!("unable to cast domain {domain} to {dest_ty}",)),
+            )),
         }
     }
 }

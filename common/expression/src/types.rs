@@ -55,9 +55,9 @@ pub enum DataType {
     Int16,
     Int32,
     Int64,
+    Float32,
+    Float64,
     // TODO: Implement them
-    // Float32,
-    // Float64,
     // Timestamp
     // Interval,
     Null,
