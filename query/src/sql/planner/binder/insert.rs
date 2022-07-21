@@ -356,6 +356,7 @@ pub fn skip_to_next_row<R: BufferRead>(
     let _ = reader.ignore_white_spaces()?;
 
     let mut quoted = false;
+    let mut escaped = false;
 
     while balance > 0 {
         let buffer = reader.fill_buf()?;
@@ -373,8 +374,15 @@ pub fn skip_to_next_row<R: BufferRead>(
             let c = buffer[it];
             reader.consume(it + 1);
 
+            if it == 0 && escaped {
+                escaped = false;
+                continue;
+            }
+            escaped = false;
+
             match c {
                 b'\\' => {
+                    escaped = true;
                     continue;
                 }
                 b'\'' => {
@@ -394,6 +402,7 @@ pub fn skip_to_next_row<R: BufferRead>(
                 _ => {}
             }
         } else {
+            escaped = false;
             reader.consume(size);
         }
     }
