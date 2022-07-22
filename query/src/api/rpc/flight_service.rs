@@ -160,7 +160,7 @@ impl FlightService for DatabendQueryFlightService {
     }
 
     async fn do_exchange(&self, _: StreamReq<FlightData>) -> Response<Self::DoExchangeStream> {
-        Result::Err(Status::unimplemented(
+        Err(Status::unimplemented(
             "DatabendQuery does not implement do_exchange.",
         ))
     }
