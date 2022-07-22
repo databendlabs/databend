@@ -29,8 +29,20 @@ fn test_read_number_ext() -> Result<()> {
 
     assert_eq!(res, expected);
 
-    let mut reader = BufferReader::new("3,32,789.2,+2,-2.33333,-23,1.903583017e+9,1.903583017e9,1.903583017e-9".as_bytes());
-    let expected = vec![3.0, 32.0, 789.2, 2.0, -2.33333, -23.0, 1903583017.0, 1903583017.0, 1.903583017e-9];
+    let mut reader = BufferReader::new(
+        "3,32,789.2,+2,-2.33333,-23,1.903583017e+9,1.903583017e9,1.903583017e-9".as_bytes(),
+    );
+    let expected = vec![
+        3.0,
+        32.0,
+        789.2,
+        2.0,
+        -2.33333,
+        -23.0,
+        1903583017.0,
+        1903583017.0,
+        1.903583017e-9,
+    ];
     let mut res = vec![];
     for _ in 0..9 {
         res.push(reader.read_float_text::<f64>()?);
