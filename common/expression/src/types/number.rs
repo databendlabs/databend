@@ -33,7 +33,7 @@ use crate::values::Scalar;
 
 pub trait Number: 'static {
     type Storage: NativeType;
-    type Domain: Debug + Clone;
+    type Domain: Debug + Clone + PartialEq;
 
     fn data_type() -> DataType;
     fn try_downcast_scalar(scalar: &Scalar) -> Option<Self::Storage>;

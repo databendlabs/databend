@@ -263,6 +263,7 @@ pub enum TypeName {
     Timestamp,
     String,
     Array { item_type: Option<Box<TypeName>> },
+    Tuple { fields_type: Vec<TypeName> },
     Object,
     Variant,
     Nullable(Box<TypeName>),
@@ -541,6 +542,15 @@ impl Display for TypeName {
                 write!(f, "ARRAY")?;
                 if let Some(item_type) = item_type {
                     write!(f, "({})", *item_type)?;
+                }
+            }
+            TypeName::Tuple { fields_type } => {
+                write!(f, "(")?;
+                write_comma_separated_list(f, fields_type)?;
+                if fields_type.len() == 1 {
+                    write!(f, ",)")?;
+                } else {
+                    write!(f, ")")?;
                 }
             }
             TypeName::Object => {

@@ -1404,6 +1404,49 @@ TryCast {
 
 
 ---------- Input ----------
+TRY_CAST(col1 AS (BIGINT UNSIGNED NULL, BOOLEAN))
+---------- Output ---------
+TRY_CAST(col1 AS (UInt64 NULL, BOOLEAN))
+---------- AST ------------
+TryCast {
+    span: [
+        TRY_CAST(0..8),
+        LParen(8..9),
+        Ident(9..13),
+        AS(14..16),
+        LParen(17..18),
+        BIGINT(18..24),
+        UNSIGNED(25..33),
+        NULL(34..38),
+        Comma(38..39),
+        BOOLEAN(40..47),
+        RParen(47..48),
+        RParen(48..49),
+    ],
+    expr: ColumnRef {
+        span: [
+            Ident(9..13),
+        ],
+        database: None,
+        table: None,
+        column: Identifier {
+            name: "col1",
+            quote: None,
+            span: Ident(9..13),
+        },
+    },
+    target_type: Tuple {
+        fields_type: [
+            Nullable(
+                UInt64,
+            ),
+            Boolean,
+        ],
+    },
+}
+
+
+---------- Input ----------
 trim(leading 'abc' from 'def')
 ---------- Output ---------
 TRIM(LEADING 'abc' FROM 'def')

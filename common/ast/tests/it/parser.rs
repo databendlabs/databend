@@ -415,6 +415,7 @@ fn test_expr() {
         r#"covar_samp(number, number)"#,
         r#"CAST(col1 AS BIGINT UNSIGNED)"#,
         r#"TRY_CAST(col1 AS BIGINT UNSIGNED)"#,
+        r#"TRY_CAST(col1 AS (BIGINT UNSIGNED NULL, BOOLEAN))"#,
         r#"trim(leading 'abc' from 'def')"#,
         r#"extract(year from d)"#,
         r#"position('a' in str)"#,

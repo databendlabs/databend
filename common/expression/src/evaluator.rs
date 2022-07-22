@@ -12,7 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_arrow::arrow::bitmap;
+use common_arrow::arrow::bitmap::MutableBitmap;
 use itertools::Itertools;
+use num_traits::ToPrimitive;
 
 use crate::chunk::Chunk;
 use crate::error::Result;
@@ -34,6 +37,7 @@ use crate::values::Column;
 use crate::values::ColumnBuilder;
 use crate::values::Scalar;
 use crate::values::Value;
+use crate::with_number_type;
 
 pub struct Evaluator {
     pub input_columns: Chunk,
@@ -75,294 +79,38 @@ impl Evaluator {
                 dest_type,
             } => {
                 let value = self.run(expr)?;
-                self.run_cast(value, dest_type, span.clone())
+                match value {
+                    Value::Scalar(scalar) => Ok(Value::Scalar(self.run_cast_scalar(
+                        span.clone(),
+                        scalar,
+                        dest_type,
+                    )?)),
+                    Value::Column(col) => Ok(Value::Column(self.run_cast_column(
+                        span.clone(),
+                        col,
+                        dest_type,
+                    )?)),
+                }
             }
-        }
-    }
-
-    pub fn run_cast(
-        &self,
-        input: Value<AnyType>,
-        dest_type: &DataType,
-        span: Span,
-    ) -> Result<Value<AnyType>> {
-        match input {
-            Value::Scalar(scalar) => match (scalar, dest_type) {
-                (Scalar::Null, DataType::Nullable(_)) => Ok(Value::Scalar(Scalar::Null)),
-                (Scalar::EmptyArray, DataType::Array(dest_ty)) => {
-                    let column = ColumnBuilder::with_capacity(dest_ty, 0).build();
-                    Ok(Value::Scalar(Scalar::Array(column)))
+            Expr::TryCast {
+                span,
+                expr,
+                dest_type,
+            } => {
+                let value = self.run(expr)?;
+                match value {
+                    Value::Scalar(scalar) => Ok(Value::Scalar(self.run_try_cast_scalar(
+                        span.clone(),
+                        scalar,
+                        dest_type,
+                    ))),
+                    Value::Column(col) => Ok(Value::Column(self.run_try_cast_column(
+                        span.clone(),
+                        col,
+                        dest_type,
+                    ))),
                 }
-                (scalar, DataType::Nullable(dest_ty)) => {
-                    self.run_cast(Value::Scalar(scalar), dest_ty, span)
-                }
-                (Scalar::Array(array), DataType::Array(dest_ty)) => {
-                    let array = self
-                        .run_cast(Value::Column(array), dest_ty, span)?
-                        .into_column()
-                        .ok()
-                        .unwrap();
-                    Ok(Value::Scalar(Scalar::Array(array)))
-                }
-                (Scalar::UInt8(val), DataType::UInt16) => {
-                    Ok(Value::Scalar(Scalar::UInt16(val as u16)))
-                }
-                (Scalar::UInt8(val), DataType::UInt32) => {
-                    Ok(Value::Scalar(Scalar::UInt32(val as u32)))
-                }
-                (Scalar::UInt16(val), DataType::UInt32) => {
-                    Ok(Value::Scalar(Scalar::UInt32(val as u32)))
-                }
-                (Scalar::UInt8(val), DataType::UInt64) => {
-                    Ok(Value::Scalar(Scalar::UInt64(val as u64)))
-                }
-                (Scalar::UInt16(val), DataType::UInt64) => {
-                    Ok(Value::Scalar(Scalar::UInt64(val as u64)))
-                }
-                (Scalar::UInt32(val), DataType::UInt64) => {
-                    Ok(Value::Scalar(Scalar::UInt64(val as u64)))
-                }
-                (Scalar::Int8(val), DataType::Int16) => {
-                    Ok(Value::Scalar(Scalar::Int16(val as i16)))
-                }
-                (Scalar::UInt8(val), DataType::Int16) => {
-                    Ok(Value::Scalar(Scalar::Int16(val as i16)))
-                }
-                (Scalar::Int8(val), DataType::Int32) => {
-                    Ok(Value::Scalar(Scalar::Int32(val as i32)))
-                }
-                (Scalar::Int16(val), DataType::Int32) => {
-                    Ok(Value::Scalar(Scalar::Int32(val as i32)))
-                }
-                (Scalar::UInt8(val), DataType::Int32) => {
-                    Ok(Value::Scalar(Scalar::Int32(val as i32)))
-                }
-                (Scalar::UInt16(val), DataType::Int32) => {
-                    Ok(Value::Scalar(Scalar::Int32(val as i32)))
-                }
-                (Scalar::Int8(val), DataType::Int64) => {
-                    Ok(Value::Scalar(Scalar::Int64(val as i64)))
-                }
-                (Scalar::Int16(val), DataType::Int64) => {
-                    Ok(Value::Scalar(Scalar::Int64(val as i64)))
-                }
-                (Scalar::Int32(val), DataType::Int64) => {
-                    Ok(Value::Scalar(Scalar::Int64(val as i64)))
-                }
-                (Scalar::UInt8(val), DataType::Int64) => {
-                    Ok(Value::Scalar(Scalar::Int64(val as i64)))
-                }
-                (Scalar::UInt16(val), DataType::Int64) => {
-                    Ok(Value::Scalar(Scalar::Int64(val as i64)))
-                }
-                (Scalar::UInt32(val), DataType::Int64) => {
-                    Ok(Value::Scalar(Scalar::Int64(val as i64)))
-                }
-                (Scalar::Int8(val), DataType::Float32) => {
-                    Ok(Value::Scalar(Scalar::Float32(val as f32)))
-                }
-                (Scalar::Int16(val), DataType::Float32) => {
-                    Ok(Value::Scalar(Scalar::Float32(val as f32)))
-                }
-                (Scalar::UInt8(val), DataType::Float32) => {
-                    Ok(Value::Scalar(Scalar::Float32(val as f32)))
-                }
-                (Scalar::UInt16(val), DataType::Float32) => {
-                    Ok(Value::Scalar(Scalar::Float32(val as f32)))
-                }
-                (Scalar::Int8(val), DataType::Float64) => {
-                    Ok(Value::Scalar(Scalar::Float64(val as f64)))
-                }
-                (Scalar::Int16(val), DataType::Float64) => {
-                    Ok(Value::Scalar(Scalar::Float64(val as f64)))
-                }
-                (Scalar::Int32(val), DataType::Float64) => {
-                    Ok(Value::Scalar(Scalar::Float64(val as f64)))
-                }
-                (Scalar::UInt8(val), DataType::Float64) => {
-                    Ok(Value::Scalar(Scalar::Float64(val as f64)))
-                }
-                (Scalar::UInt16(val), DataType::Float64) => {
-                    Ok(Value::Scalar(Scalar::Float64(val as f64)))
-                }
-                (Scalar::UInt32(val), DataType::Float64) => {
-                    Ok(Value::Scalar(Scalar::Float64(val as f64)))
-                }
-                (Scalar::Float32(val), DataType::Float64) => {
-                    Ok(Value::Scalar(Scalar::Float64(val as f64)))
-                }
-                (scalar @ Scalar::Boolean(_), DataType::Boolean)
-                | (scalar @ Scalar::String(_), DataType::String)
-                | (scalar @ Scalar::UInt8(_), DataType::UInt8)
-                | (scalar @ Scalar::UInt16(_), DataType::UInt16)
-                | (scalar @ Scalar::UInt32(_), DataType::UInt32)
-                | (scalar @ Scalar::UInt64(_), DataType::UInt64)
-                | (scalar @ Scalar::Int8(_), DataType::Int8)
-                | (scalar @ Scalar::Int16(_), DataType::Int16)
-                | (scalar @ Scalar::Int32(_), DataType::Int32)
-                | (scalar @ Scalar::Int64(_), DataType::Int64)
-                | (scalar @ Scalar::Float32(_), DataType::Float32)
-                | (scalar @ Scalar::Float64(_), DataType::Float64)
-                | (scalar @ Scalar::Null, DataType::Null)
-                | (scalar @ Scalar::EmptyArray, DataType::EmptyArray) => Ok(Value::Scalar(scalar)),
-                (scalar, dest_ty) => Err((
-                    span,
-                    (format!("unable to cast scalar {} to {dest_ty}", scalar.as_ref())),
-                )),
-            },
-            Value::Column(col) => match (col, dest_type) {
-                (Column::Null { len }, DataType::Nullable(_)) => {
-                    let mut builder = ColumnBuilder::with_capacity(dest_type, len);
-                    for _ in 0..len {
-                        builder.push_default();
-                    }
-                    Ok(Value::Column(builder.build()))
-                }
-                (Column::EmptyArray { len }, DataType::Array(dest_ty)) => {
-                    Ok(Value::Column(Column::Array {
-                        array: Box::new(ColumnBuilder::with_capacity(dest_ty, 0).build()),
-                        offsets: vec![0; len + 1].into(),
-                    }))
-                }
-                (Column::Nullable { column, validity }, DataType::Nullable(dest_ty)) => {
-                    let column = self
-                        .run_cast(Value::Column(*column), dest_ty, span)?
-                        .into_column()
-                        .ok()
-                        .unwrap();
-                    Ok(Value::Column(Column::Nullable {
-                        column: Box::new(column),
-                        validity,
-                    }))
-                }
-                (col, DataType::Nullable(dest_ty)) => {
-                    let column = self
-                        .run_cast(Value::Column(col), dest_ty, span)?
-                        .into_column()
-                        .ok()
-                        .unwrap();
-                    Ok(Value::Column(Column::Nullable {
-                        validity: constant_bitmap(true, column.len()).into(),
-                        column: Box::new(column),
-                    }))
-                }
-                (Column::Array { array, offsets }, DataType::Array(dest_ty)) => {
-                    let array = self
-                        .run_cast(Value::Column(*array), dest_ty, span)?
-                        .into_column()
-                        .ok()
-                        .unwrap();
-                    Ok(Value::Column(Column::Array {
-                        array: Box::new(array),
-                        offsets,
-                    }))
-                }
-                (Column::UInt8(column), DataType::UInt16) => Ok(Value::Column(Column::UInt16(
-                    column.iter().map(|v| *v as u16).collect(),
-                ))),
-                (Column::UInt8(column), DataType::UInt32) => Ok(Value::Column(Column::UInt32(
-                    column.iter().map(|v| *v as u32).collect(),
-                ))),
-                (Column::UInt16(column), DataType::UInt32) => Ok(Value::Column(Column::UInt32(
-                    column.iter().map(|v| *v as u32).collect(),
-                ))),
-                (Column::UInt8(column), DataType::UInt64) => Ok(Value::Column(Column::UInt64(
-                    column.iter().map(|v| *v as u64).collect(),
-                ))),
-                (Column::UInt16(column), DataType::UInt64) => Ok(Value::Column(Column::UInt64(
-                    column.iter().map(|v| *v as u64).collect(),
-                ))),
-                (Column::UInt32(column), DataType::UInt64) => Ok(Value::Column(Column::UInt64(
-                    column.iter().map(|v| *v as u64).collect(),
-                ))),
-                (Column::Int8(column), DataType::Int16) => Ok(Value::Column(Column::Int16(
-                    column.iter().map(|v| *v as i16).collect(),
-                ))),
-                (Column::UInt8(column), DataType::Int16) => Ok(Value::Column(Column::Int16(
-                    column.iter().map(|v| *v as i16).collect(),
-                ))),
-                (Column::Int8(column), DataType::Int32) => Ok(Value::Column(Column::Int32(
-                    column.iter().map(|v| *v as i32).collect(),
-                ))),
-                (Column::Int16(column), DataType::Int32) => Ok(Value::Column(Column::Int32(
-                    column.iter().map(|v| *v as i32).collect(),
-                ))),
-                (Column::UInt8(column), DataType::Int32) => Ok(Value::Column(Column::Int32(
-                    column.iter().map(|v| *v as i32).collect(),
-                ))),
-                (Column::UInt16(column), DataType::Int32) => Ok(Value::Column(Column::Int32(
-                    column.iter().map(|v| *v as i32).collect(),
-                ))),
-                (Column::Int8(column), DataType::Int64) => Ok(Value::Column(Column::Int64(
-                    column.iter().map(|v| *v as i64).collect(),
-                ))),
-                (Column::Int16(column), DataType::Int64) => Ok(Value::Column(Column::Int64(
-                    column.iter().map(|v| *v as i64).collect(),
-                ))),
-                (Column::Int32(column), DataType::Int64) => Ok(Value::Column(Column::Int64(
-                    column.iter().map(|v| *v as i64).collect(),
-                ))),
-                (Column::UInt8(column), DataType::Int64) => Ok(Value::Column(Column::Int64(
-                    column.iter().map(|v| *v as i64).collect(),
-                ))),
-                (Column::UInt16(column), DataType::Int64) => Ok(Value::Column(Column::Int64(
-                    column.iter().map(|v| *v as i64).collect(),
-                ))),
-                (Column::UInt32(column), DataType::Int64) => Ok(Value::Column(Column::Int64(
-                    column.iter().map(|v| *v as i64).collect(),
-                ))),
-                (Column::Int8(column), DataType::Float32) => Ok(Value::Column(Column::Float32(
-                    column.iter().map(|v| *v as f32).collect(),
-                ))),
-                (Column::Int16(column), DataType::Float32) => Ok(Value::Column(Column::Float32(
-                    column.iter().map(|v| *v as f32).collect(),
-                ))),
-                (Column::UInt8(column), DataType::Float32) => Ok(Value::Column(Column::Float32(
-                    column.iter().map(|v| *v as f32).collect(),
-                ))),
-                (Column::UInt16(column), DataType::Float32) => Ok(Value::Column(Column::Float32(
-                    column.iter().map(|v| *v as f32).collect(),
-                ))),
-                (Column::Int8(column), DataType::Float64) => Ok(Value::Column(Column::Float64(
-                    column.iter().map(|v| *v as f64).collect(),
-                ))),
-                (Column::Int16(column), DataType::Float64) => Ok(Value::Column(Column::Float64(
-                    column.iter().map(|v| *v as f64).collect(),
-                ))),
-                (Column::Int32(column), DataType::Float64) => Ok(Value::Column(Column::Float64(
-                    column.iter().map(|v| *v as f64).collect(),
-                ))),
-                (Column::UInt8(column), DataType::Float64) => Ok(Value::Column(Column::Float64(
-                    column.iter().map(|v| *v as f64).collect(),
-                ))),
-                (Column::UInt16(column), DataType::Float64) => Ok(Value::Column(Column::Float64(
-                    column.iter().map(|v| *v as f64).collect(),
-                ))),
-                (Column::UInt32(column), DataType::Float64) => Ok(Value::Column(Column::Float64(
-                    column.iter().map(|v| *v as f64).collect(),
-                ))),
-                (Column::Float32(column), DataType::Float64) => Ok(Value::Column(Column::Float64(
-                    column.iter().map(|v| *v as f64).collect(),
-                ))),
-                (col @ Column::Boolean(_), DataType::Boolean)
-                | (col @ Column::String { .. }, DataType::String)
-                | (col @ Column::UInt8(_), DataType::UInt8)
-                | (col @ Column::UInt16(_), DataType::UInt16)
-                | (col @ Column::UInt32(_), DataType::UInt32)
-                | (col @ Column::UInt64(_), DataType::UInt64)
-                | (col @ Column::Int8(_), DataType::Int8)
-                | (col @ Column::Int16(_), DataType::Int16)
-                | (col @ Column::Int32(_), DataType::Int32)
-                | (col @ Column::Int64(_), DataType::Int64)
-                | (col @ Column::Float32(_), DataType::Float32)
-                | (col @ Column::Float64(_), DataType::Float64)
-                | (col @ Column::Null { .. }, DataType::Null)
-                | (col @ Column::EmptyArray { .. }, DataType::EmptyArray) => Ok(Value::Column(col)),
-                (col, dest_ty) => Err((
-                    span,
-                    (format!("unable to cast column {col:?} to {dest_ty}")),
-                )),
-            },
+            }
         }
     }
 
@@ -383,6 +131,301 @@ impl Evaluator {
             Literal::String(val) => Scalar::String(val.clone()),
         }
     }
+
+    pub fn run_cast_scalar(
+        &self,
+        span: Span,
+        scalar: Scalar,
+        dest_type: &DataType,
+    ) -> Result<Scalar> {
+        match (scalar, dest_type) {
+            (Scalar::Null, DataType::Nullable(_)) => Ok(Scalar::Null),
+            (Scalar::EmptyArray, DataType::Array(dest_ty)) => {
+                let new_column = ColumnBuilder::with_capacity(dest_ty, 0).build();
+                Ok(Scalar::Array(new_column))
+            }
+            (scalar, DataType::Nullable(dest_ty)) => self.run_cast_scalar(span, scalar, dest_ty),
+            (Scalar::Array(array), DataType::Array(dest_ty)) => {
+                let new_array = self.run_cast_column(span, array, dest_ty)?;
+                Ok(Scalar::Array(new_array))
+            }
+            (Scalar::Tuple(fields), DataType::Tuple(fields_ty)) => {
+                let new_fields = fields
+                    .into_iter()
+                    .zip(fields_ty.iter())
+                    .map(|(field, dest_ty)| self.run_cast_scalar(span.clone(), field, dest_ty))
+                    .collect::<Result<Vec<_>>>()?;
+                Ok(Scalar::Tuple(new_fields))
+            }
+
+            // identical types
+            (scalar @ Scalar::Null, DataType::Null)
+            | (scalar @ Scalar::EmptyArray, DataType::EmptyArray)
+            | (scalar @ Scalar::Boolean(_), DataType::Boolean)
+            | (scalar @ Scalar::String(_), DataType::String) => Ok(scalar),
+
+            (scalar, dest_ty) => {
+                // number types
+                with_number_type!(SRC_TYPE, match scalar {
+                    Scalar::SRC_TYPE(value) => {
+                        with_number_type!(DEST_TYPE, match dest_ty {
+                            DataType::DEST_TYPE => {
+                                let src_info = DataType::SRC_TYPE.number_type_info().unwrap();
+                                let dest_info = DataType::DEST_TYPE.number_type_info().unwrap();
+                                if src_info.can_lossless_cast_to(dest_info) {
+                                    return Ok(Scalar::DEST_TYPE(value as _));
+                                } else {
+                                    let value = num_traits::cast::cast(value).ok_or_else(|| {
+                                        (
+                                            span.clone(),
+                                            format!(
+                                                "unable to cast {} to {}",
+                                                scalar.as_ref(),
+                                                stringify!(DEST_TYPE)
+                                            ),
+                                        )
+                                    })?;
+                                    return Ok(Scalar::DEST_TYPE(value));
+                                }
+                            }
+                            _ => (),
+                        })
+                    }
+                    _ => (),
+                });
+
+                // failure cases
+                Err((
+                    span,
+                    (format!("unable to cast {} to {dest_ty}", scalar.as_ref())),
+                ))
+            }
+        }
+    }
+
+    pub fn run_cast_column(
+        &self,
+        span: Span,
+        column: Column,
+        dest_type: &DataType,
+    ) -> Result<Column> {
+        match (column, dest_type) {
+            (Column::Null { len }, DataType::Nullable(_)) => {
+                let mut builder = ColumnBuilder::with_capacity(dest_type, len);
+                for _ in 0..len {
+                    builder.push_default();
+                }
+                Ok(builder.build())
+            }
+            (Column::EmptyArray { len }, DataType::Array(_)) => {
+                let mut builder = ColumnBuilder::with_capacity(dest_type, len);
+                for _ in 0..len {
+                    builder.push_default();
+                }
+                Ok(builder.build())
+            }
+            (Column::Nullable { column, validity }, DataType::Nullable(dest_ty)) => {
+                let column = self.run_cast_column(span, *column, dest_ty)?;
+                Ok(Column::Nullable {
+                    column: Box::new(column),
+                    validity,
+                })
+            }
+            (col, DataType::Nullable(dest_ty)) => {
+                let column = self.run_cast_column(span, col, dest_ty)?;
+                Ok(Column::Nullable {
+                    validity: constant_bitmap(true, column.len()).into(),
+                    column: Box::new(column),
+                })
+            }
+            (Column::Array { array, offsets }, DataType::Array(dest_ty)) => {
+                let array = self.run_cast_column(span, *array, dest_ty)?;
+                Ok(Column::Array {
+                    array: Box::new(array),
+                    offsets,
+                })
+            }
+            (Column::Tuple { fields, len }, DataType::Tuple(fields_ty)) => {
+                let new_fields = fields
+                    .into_iter()
+                    .zip(fields_ty)
+                    .map(|(field, field_ty)| self.run_cast_column(span.clone(), field, field_ty))
+                    .collect::<Result<_>>()?;
+                Ok(Column::Tuple {
+                    fields: new_fields,
+                    len,
+                })
+            }
+
+            // identical types
+            (col @ Column::Null { .. }, DataType::Null)
+            | (col @ Column::EmptyArray { .. }, DataType::EmptyArray)
+            | (col @ Column::Boolean(_), DataType::Boolean)
+            | (col @ Column::String { .. }, DataType::String) => Ok(col),
+
+            (col, dest_ty) => {
+                // number types
+                with_number_type!(SRC_TYPE, match &col {
+                    Column::SRC_TYPE(col) => {
+                        with_number_type!(DEST_TYPE, match dest_ty {
+                            DataType::DEST_TYPE => {
+                                let src_info = DataType::SRC_TYPE.number_type_info().unwrap();
+                                let dest_info = DataType::DEST_TYPE.number_type_info().unwrap();
+                                if src_info.can_lossless_cast_to(dest_info) {
+                                    let new_col = col.iter().map(|x| *x as _).collect::<Vec<_>>();
+                                    return Ok(Column::DEST_TYPE(new_col.into()));
+                                } else {
+                                    let mut new_col = Vec::with_capacity(col.len());
+                                    for &val in col.iter() {
+                                        let new_val =
+                                            num_traits::cast::cast(val).ok_or_else(|| {
+                                                (
+                                                    span.clone(),
+                                                    format!(
+                                                        "unable to cast {} to {}",
+                                                        val,
+                                                        stringify!(DEST_TYPE)
+                                                    ),
+                                                )
+                                            })?;
+                                        new_col.push(new_val);
+                                    }
+                                    return Ok(Column::DEST_TYPE(new_col.into()));
+                                }
+                            }
+                            _ => (),
+                        })
+                    }
+                    _ => (),
+                });
+
+                // failure cases
+                Err((span, (format!("unable to cast {col:?} to {dest_ty}"))))
+            }
+        }
+    }
+
+    pub fn run_try_cast_scalar(&self, span: Span, scalar: Scalar, dest_type: &DataType) -> Scalar {
+        let inner_type: &DataType = dest_type.as_nullable().unwrap();
+        self.run_cast_scalar(span, scalar, inner_type)
+            .unwrap_or(Scalar::Null)
+    }
+
+    pub fn run_try_cast_column(&self, span: Span, column: Column, dest_type: &DataType) -> Column {
+        let inner_type: &DataType = dest_type.as_nullable().unwrap();
+        match (column, inner_type) {
+            (_, DataType::Null | DataType::Nullable(_)) => {
+                unreachable!("inner type can not be nullable")
+            }
+            (Column::Null { len }, _) => {
+                let mut builder = ColumnBuilder::with_capacity(dest_type, len);
+                for _ in 0..len {
+                    builder.push_default();
+                }
+                builder.build()
+            }
+            (Column::EmptyArray { len }, DataType::Array(_)) => {
+                let mut builder = ColumnBuilder::with_capacity(dest_type, len);
+                for _ in 0..len {
+                    builder.push_default();
+                }
+                builder.build()
+            }
+            (Column::Nullable { column, validity }, _) => {
+                let (new_col, new_validity) = self
+                    .run_try_cast_column(span, *column, dest_type)
+                    .into_nullable()
+                    .unwrap();
+                Column::Nullable {
+                    column: new_col,
+                    validity: bitmap::or(&validity, &new_validity),
+                }
+            }
+            (Column::Array { array, offsets }, DataType::Array(dest_ty)) => {
+                let new_array = self.run_try_cast_column(span, *array, dest_ty);
+                let new_col = Column::Array {
+                    array: Box::new(new_array),
+                    offsets,
+                };
+                Column::Nullable {
+                    validity: constant_bitmap(true, new_col.len()).into(),
+                    column: Box::new(new_col),
+                }
+            }
+            (Column::Tuple { fields, len }, DataType::Tuple(fields_ty)) => {
+                let new_fields = fields
+                    .into_iter()
+                    .zip(fields_ty)
+                    .map(|(field, field_ty)| {
+                        self.run_try_cast_column(span.clone(), field, field_ty)
+                    })
+                    .collect();
+                let new_col = Column::Tuple {
+                    fields: new_fields,
+                    len,
+                };
+                Column::Nullable {
+                    validity: constant_bitmap(true, len).into(),
+                    column: Box::new(new_col),
+                }
+            }
+
+            // identical types
+            (col @ Column::Boolean(_), DataType::Boolean)
+            | (col @ Column::String { .. }, DataType::String)
+            | (col @ Column::EmptyArray { .. }, DataType::EmptyArray) => Column::Nullable {
+                validity: constant_bitmap(true, col.len()).into(),
+                column: Box::new(col),
+            },
+
+            (col, dest_ty) => {
+                // number types
+                with_number_type!(SRC_TYPE, match &col {
+                    Column::SRC_TYPE(col) => {
+                        with_number_type!(DEST_TYPE, match dest_ty {
+                            DataType::DEST_TYPE => {
+                                let src_info = DataType::SRC_TYPE.number_type_info().unwrap();
+                                let dest_info = DataType::DEST_TYPE.number_type_info().unwrap();
+                                if src_info.can_lossless_cast_to(dest_info) {
+                                    let new_col = col.iter().map(|x| *x as _).collect::<Vec<_>>();
+                                    return Column::Nullable {
+                                        validity: constant_bitmap(true, new_col.len()).into(),
+                                        column: Box::new(Column::DEST_TYPE(new_col.into())),
+                                    };
+                                } else {
+                                    let mut new_col = Vec::with_capacity(col.len());
+                                    let mut validity = MutableBitmap::with_capacity(col.len());
+                                    for &val in col.iter() {
+                                        if let Some(new_val) = num_traits::cast::cast(val) {
+                                            new_col.push(new_val);
+                                            validity.push(true);
+                                        } else {
+                                            new_col.push(Default::default());
+                                            validity.push(false);
+                                        }
+                                    }
+                                    return Column::Nullable {
+                                        validity: validity.into(),
+                                        column: Box::new(Column::DEST_TYPE(new_col.into())),
+                                    };
+                                }
+                            }
+                            _ => (),
+                        })
+                    }
+                    _ => (),
+                });
+
+                // failure cases
+                let len = col.len();
+                let mut builder = ColumnBuilder::with_capacity(dest_type, len);
+                for _ in 0..len {
+                    builder.push_default();
+                }
+                builder.build()
+            }
+        }
+    }
 }
 
 pub struct DomainCalculator {
@@ -400,7 +443,15 @@ impl DomainCalculator {
                 dest_type,
             } => {
                 let domain = self.calculate(expr)?;
-                self.calculate_cast(&domain, dest_type, span.clone())
+                self.calculate_cast(span.clone(), &domain, dest_type)
+            }
+            Expr::TryCast {
+                span,
+                expr,
+                dest_type,
+            } => {
+                let domain = self.calculate(expr)?;
+                Ok(self.calculate_try_cast(span.clone(), &domain, dest_type))
             }
             Expr::FunctionCall {
                 function,
@@ -471,16 +522,18 @@ impl DomainCalculator {
 
     pub fn calculate_cast(
         &self,
-        input: &Domain,
-        dest_type: &DataType,
         span: Span,
+        domain: &Domain,
+        dest_type: &DataType,
     ) -> Result<Domain> {
-        match (input, dest_type) {
+        match (domain, dest_type) {
             (
                 Domain::Nullable(NullableDomain { value: None, .. }),
                 DataType::Null | DataType::Nullable(_),
-            ) => Ok(input.clone()),
-            (Domain::Array(None), DataType::EmptyArray | DataType::Array(_)) => Ok(input.clone()),
+            ) => Ok(domain.clone()),
+            (Domain::Array(None), DataType::EmptyArray | DataType::Array(_)) => {
+                Ok(Domain::Array(None))
+            }
             (
                 Domain::Nullable(NullableDomain {
                     has_null,
@@ -489,29 +542,39 @@ impl DomainCalculator {
                 DataType::Nullable(ty),
             ) => Ok(Domain::Nullable(NullableDomain {
                 has_null: *has_null,
-                value: Some(Box::new(self.calculate_cast(value, ty, span)?)),
+                value: Some(Box::new(self.calculate_cast(span, value, ty)?)),
             })),
             (domain, DataType::Nullable(ty)) => Ok(Domain::Nullable(NullableDomain {
                 has_null: false,
-                value: Some(Box::new(self.calculate_cast(domain, ty, span)?)),
+                value: Some(Box::new(self.calculate_cast(span, domain, ty)?)),
             })),
             (Domain::Array(Some(domain)), DataType::Array(ty)) => Ok(Domain::Array(Some(
-                Box::new(self.calculate_cast(domain, ty, span)?),
+                Box::new(self.calculate_cast(span, domain, ty)?),
             ))),
+            (Domain::Tuple(fields), DataType::Tuple(fields_ty)) => Ok(Domain::Tuple(
+                fields
+                    .iter()
+                    .zip(fields_ty)
+                    .map(|(field, ty)| self.calculate_cast(span.clone(), field, ty))
+                    .collect::<Result<Vec<_>>>()?,
+            )),
+
+            // identical types
+            (Domain::Boolean(_), DataType::Boolean) | (Domain::String(_), DataType::String) => {
+                Ok(domain.clone())
+            }
+
+            // number types
+            (Domain::UInt(UIntDomain { min, max }), DataType::UInt8) => {
+                Ok(Domain::UInt(UIntDomain {
+                    min: (*min).min(u8::MAX as u64),
+                    max: (*max).min(u8::MAX as u64),
+                }))
+            }
             (Domain::UInt(UIntDomain { min, max }), DataType::UInt16) => {
                 Ok(Domain::UInt(UIntDomain {
                     min: (*min).min(u16::MAX as u64),
                     max: (*max).min(u16::MAX as u64),
-                }))
-            }
-            (Domain::Int(IntDomain { min, max }), DataType::Int16) => Ok(Domain::Int(IntDomain {
-                min: (*min).max(i16::MIN as i64).min(i16::MAX as i64),
-                max: (*max).max(i16::MIN as i64).min(i16::MAX as i64),
-            })),
-            (Domain::UInt(UIntDomain { min, max }), DataType::Int16) => {
-                Ok(Domain::Int(IntDomain {
-                    min: (*min).min(i16::MAX as u64) as i64,
-                    max: (*max).min(i16::MAX as u64) as i64,
                 }))
             }
             (Domain::UInt(UIntDomain { min, max }), DataType::UInt32) => {
@@ -520,77 +583,359 @@ impl DomainCalculator {
                     max: (*max).min(u32::MAX as u64),
                 }))
             }
-            (Domain::Int(IntDomain { min, max }), DataType::Int32) => Ok(Domain::Int(IntDomain {
-                min: (*min).max(i32::MIN as i64).min(i32::MAX as i64),
-                max: (*max).max(i32::MIN as i64).min(i32::MAX as i64),
+            (Domain::UInt(_), DataType::UInt64) => Ok(domain.clone()),
+            (Domain::UInt(UIntDomain { min, max }), DataType::Int8) => Ok(Domain::Int(IntDomain {
+                min: (*min).min(i8::MAX as u64) as i64,
+                max: (*max).min(i8::MAX as u64) as i64,
             })),
+            (Domain::UInt(UIntDomain { min, max }), DataType::Int16) => {
+                Ok(Domain::Int(IntDomain {
+                    min: (*min).min(i16::MAX as u64) as i64,
+                    max: (*max).min(i16::MAX as u64) as i64,
+                }))
+            }
             (Domain::UInt(UIntDomain { min, max }), DataType::Int32) => {
                 Ok(Domain::Int(IntDomain {
                     min: (*min).min(i32::MAX as u64) as i64,
                     max: (*max).min(i32::MAX as u64) as i64,
                 }))
             }
-            (Domain::UInt(UIntDomain { min, max }), DataType::UInt64) => {
-                Ok(Domain::UInt(UIntDomain {
-                    min: (*min).min(u64::MAX),
-                    max: (*max).min(u64::MAX),
-                }))
-            }
-            (Domain::Int(IntDomain { min, max }), DataType::Int64) => Ok(Domain::Int(IntDomain {
-                min: (*min).max(i64::MIN).min(i64::MAX),
-                max: (*max).max(i64::MIN).min(i64::MAX),
-            })),
             (Domain::UInt(UIntDomain { min, max }), DataType::Int64) => {
                 Ok(Domain::Int(IntDomain {
                     min: (*min).min(i64::MAX as u64) as i64,
                     max: (*max).min(i64::MAX as u64) as i64,
                 }))
             }
-            (Domain::Int(IntDomain { min, max }), DataType::Float32) => {
-                Ok(Domain::Float(FloatDomain {
-                    min: (*min as f64).max(f32::MIN as f64).min(f32::MAX as f64),
-                    max: (*max as f64).max(f32::MIN as f64).min(f32::MAX as f64),
-                }))
-            }
             (Domain::UInt(UIntDomain { min, max }), DataType::Float32) => {
+                // Cast to f32 and then to f64 to round to the nearest f32 value.
                 Ok(Domain::Float(FloatDomain {
-                    min: (*min as f64).max(f32::MIN as f64).min(f32::MAX as f64),
-                    max: (*max as f64).max(f32::MIN as f64).min(f32::MAX as f64),
-                }))
-            }
-            (Domain::Float(FloatDomain { min, max }), DataType::Float32) => {
-                Ok(Domain::Float(FloatDomain {
-                    min: (*min).min(f32::MAX as f64),
-                    max: (*max).min(f32::MAX as f64),
-                }))
-            }
-            (Domain::Int(IntDomain { min, max }), DataType::Float64) => {
-                Ok(Domain::Float(FloatDomain {
-                    min: (*min as f64).max(f64::MIN).min(f64::MAX),
-                    max: (*max as f64).max(f64::MIN).min(f64::MAX),
+                    min: *min as f32 as f64,
+                    max: *max as f32 as f64,
                 }))
             }
             (Domain::UInt(UIntDomain { min, max }), DataType::Float64) => {
                 Ok(Domain::Float(FloatDomain {
-                    min: (*min as f64).max(f64::MIN).min(f64::MAX),
-                    max: (*max as f64).max(f64::MIN).min(f64::MAX),
-                }))
-            }
-            (Domain::Float(FloatDomain { min, max }), DataType::Float64) => {
-                Ok(Domain::Float(FloatDomain {
-                    min: (*min).min(f64::MAX),
-                    max: (*max).min(f64::MAX),
+                    min: *min as f64,
+                    max: *max as f64,
                 }))
             }
 
-            (Domain::Boolean(_), DataType::Boolean)
-            | (Domain::String(_), DataType::String)
-            | (Domain::UInt(_), DataType::UInt8)
-            | (Domain::Int(_), DataType::Int8) => Ok(input.clone()),
-            (domain, dest_ty) => Err((
-                span,
-                (format!("unable to cast domain {domain} to {dest_ty}",)),
-            )),
+            (Domain::Int(IntDomain { min, max }), DataType::UInt8) => {
+                Ok(Domain::UInt(UIntDomain {
+                    min: (*min).clamp(0, u8::MAX as i64) as u64,
+                    max: (*max).clamp(0, u8::MAX as i64) as u64,
+                }))
+            }
+            (Domain::Int(IntDomain { min, max }), DataType::UInt16) => {
+                Ok(Domain::UInt(UIntDomain {
+                    min: (*min).clamp(0, u16::MAX as i64) as u64,
+                    max: (*max).clamp(0, u16::MAX as i64) as u64,
+                }))
+            }
+            (Domain::Int(IntDomain { min, max }), DataType::UInt32) => {
+                Ok(Domain::UInt(UIntDomain {
+                    min: (*min).clamp(0, u32::MAX as i64) as u64,
+                    max: (*max).clamp(0, u32::MAX as i64) as u64,
+                }))
+            }
+            (Domain::Int(IntDomain { min, max }), DataType::UInt64) => {
+                Ok(Domain::UInt(UIntDomain {
+                    min: (*min).max(0) as u64,
+                    max: (*max).max(0) as u64,
+                }))
+            }
+            (Domain::Int(IntDomain { min, max }), DataType::Int8) => Ok(Domain::Int(IntDomain {
+                min: (*min).clamp(i8::MIN as i64, i8::MAX as i64),
+                max: (*max).clamp(i8::MIN as i64, i8::MAX as i64),
+            })),
+            (Domain::Int(IntDomain { min, max }), DataType::Int16) => Ok(Domain::Int(IntDomain {
+                min: (*min).clamp(i16::MIN as i64, i16::MAX as i64),
+                max: (*max).clamp(i16::MIN as i64, i16::MAX as i64),
+            })),
+            (Domain::Int(IntDomain { min, max }), DataType::Int32) => Ok(Domain::Int(IntDomain {
+                min: (*min).clamp(i32::MIN as i64, i32::MAX as i64),
+                max: (*max).clamp(i32::MIN as i64, i32::MAX as i64),
+            })),
+            (Domain::Int(_), DataType::Int64) => Ok(domain.clone()),
+            (Domain::Int(IntDomain { min, max }), DataType::Float32) => {
+                // Cast to f32 and then to f64 to round to the nearest f32 value.
+                Ok(Domain::Float(FloatDomain {
+                    min: (*min) as f32 as f64,
+                    max: (*max) as f32 as f64,
+                }))
+            }
+            (Domain::Int(IntDomain { min, max }), DataType::Float64) => {
+                Ok(Domain::Float(FloatDomain {
+                    min: (*min) as f64,
+                    max: (*max) as f64,
+                }))
+            }
+
+            (Domain::Float(FloatDomain { min, max }), DataType::UInt8) => {
+                Ok(Domain::UInt(UIntDomain {
+                    min: (*min).round().clamp(0.0, u8::MAX as f64) as u64,
+                    max: (*max).round().clamp(0.0, u8::MAX as f64) as u64,
+                }))
+            }
+            (Domain::Float(FloatDomain { min, max }), DataType::UInt16) => {
+                Ok(Domain::UInt(UIntDomain {
+                    min: (*min).round().clamp(0.0, u16::MAX as f64) as u64,
+                    max: (*max).round().clamp(0.0, u16::MAX as f64) as u64,
+                }))
+            }
+            (Domain::Float(FloatDomain { min, max }), DataType::UInt32) => {
+                Ok(Domain::UInt(UIntDomain {
+                    min: (*min).round().clamp(0.0, u32::MAX as f64) as u64,
+                    max: (*max).round().clamp(0.0, u32::MAX as f64) as u64,
+                }))
+            }
+            (Domain::Float(FloatDomain { min, max }), DataType::UInt64) => {
+                Ok(Domain::UInt(UIntDomain {
+                    min: (*min).round().clamp(0.0, u64::MAX as f64) as u64,
+                    max: (*max).round().clamp(0.0, u64::MAX as f64) as u64,
+                }))
+            }
+            (Domain::Float(FloatDomain { min, max }), DataType::Int8) => {
+                Ok(Domain::Int(IntDomain {
+                    min: (*min).round().clamp(i8::MIN as f64, i8::MAX as f64) as i64,
+                    max: (*max).round().clamp(i8::MIN as f64, i8::MAX as f64) as i64,
+                }))
+            }
+            (Domain::Float(FloatDomain { min, max }), DataType::Int16) => {
+                Ok(Domain::Int(IntDomain {
+                    min: (*min).round().clamp(i16::MIN as f64, i16::MAX as f64) as i64,
+                    max: (*max).round().clamp(i16::MIN as f64, i16::MAX as f64) as i64,
+                }))
+            }
+            (Domain::Float(FloatDomain { min, max }), DataType::Int32) => {
+                Ok(Domain::Int(IntDomain {
+                    min: (*min).round().clamp(i32::MIN as f64, i32::MAX as f64) as i64,
+                    max: (*max).round().clamp(i32::MIN as f64, i32::MAX as f64) as i64,
+                }))
+            }
+            (Domain::Float(FloatDomain { min, max }), DataType::Int64) => {
+                Ok(Domain::Int(IntDomain {
+                    min: (*min).round().clamp(i64::MIN as f64, i64::MAX as f64) as i64,
+                    max: (*max).round().clamp(i64::MIN as f64, i64::MAX as f64) as i64,
+                }))
+            }
+            (Domain::Float(FloatDomain { min, max }), DataType::Float32) => {
+                Ok(Domain::Float(FloatDomain {
+                    // Cast to f32 and back to f64 to round to the nearest f32 value.
+                    min: (*min).clamp(f32::MIN as f64, f32::MAX as f64) as f32 as f64,
+                    max: (*max).clamp(f32::MIN as f64, f32::MAX as f64) as f32 as f64,
+                }))
+            }
+            (Domain::Float(_), DataType::Float64) => Ok(domain.clone()),
+
+            // failure cases
+            (domain, dest_ty) => Err((span, (format!("unable to cast {domain} to {dest_ty}",)))),
+        }
+    }
+
+    pub fn calculate_try_cast(&self, span: Span, domain: &Domain, dest_type: &DataType) -> Domain {
+        let inner_type: &DataType = dest_type.as_nullable().unwrap();
+        match (domain, inner_type) {
+            (_, DataType::Null | DataType::Nullable(_)) => {
+                unreachable!("inner type cannot be nullable")
+            }
+            (Domain::Array(None), DataType::EmptyArray | DataType::Array(_)) => {
+                Domain::Nullable(NullableDomain {
+                    has_null: false,
+                    value: Some(Box::new(Domain::Array(None))),
+                })
+            }
+            (
+                Domain::Nullable(NullableDomain {
+                    has_null,
+                    value: Some(value),
+                }),
+                _,
+            ) => {
+                let inner_domain = self
+                    .calculate_try_cast(span, value, dest_type)
+                    .into_nullable()
+                    .unwrap();
+                Domain::Nullable(NullableDomain {
+                    has_null: *has_null || inner_domain.has_null,
+                    value: inner_domain.value,
+                })
+            }
+            (Domain::Array(Some(domain)), DataType::Array(ty)) => {
+                let inner_domain = self.calculate_try_cast(span, domain, ty);
+                Domain::Nullable(NullableDomain {
+                    has_null: false,
+                    value: Some(Box::new(Domain::Array(Some(Box::new(inner_domain))))),
+                })
+            }
+            (Domain::Tuple(fields), DataType::Tuple(fields_ty)) => {
+                let new_fields = fields
+                    .iter()
+                    .zip(fields_ty)
+                    .map(|(field, ty)| self.calculate_try_cast(span.clone(), field, ty))
+                    .collect();
+                Domain::Nullable(NullableDomain {
+                    has_null: false,
+                    value: Some(Box::new(Domain::Tuple(new_fields))),
+                })
+            }
+
+            // identical types
+            (Domain::Boolean(_), DataType::Boolean) | (Domain::String(_), DataType::String) => {
+                Domain::Nullable(NullableDomain {
+                    has_null: false,
+                    value: Some(Box::new(domain.clone())),
+                })
+            }
+
+            // numeric types
+            (
+                Domain::UInt(_),
+                DataType::UInt8 | DataType::UInt16 | DataType::UInt32 | DataType::UInt64,
+            ) => {
+                let new_domain = self.calculate_cast(span, domain, inner_type).unwrap();
+                Domain::Nullable(NullableDomain {
+                    has_null: *domain != new_domain,
+                    value: Some(Box::new(new_domain)),
+                })
+            }
+            (
+                Domain::UInt(UIntDomain { min, max }),
+                DataType::Int8 | DataType::Int16 | DataType::Int32 | DataType::Int64,
+            ) => {
+                let new_domain = self
+                    .calculate_cast(span, domain, inner_type)
+                    .unwrap()
+                    .into_int()
+                    .unwrap();
+                let has_null = min.to_i64().filter(|min| *min == new_domain.min).is_none()
+                    || max.to_i64().filter(|max| *max == new_domain.max).is_none();
+                Domain::Nullable(NullableDomain {
+                    has_null,
+                    value: Some(Box::new(Domain::Int(new_domain))),
+                })
+            }
+            (Domain::UInt(UIntDomain { min, max }), DataType::Float32 | DataType::Float64) => {
+                let new_domain = self
+                    .calculate_cast(span, domain, inner_type)
+                    .unwrap()
+                    .into_float()
+                    .unwrap();
+                let has_null = (*min)
+                    .to_f64()
+                    .filter(|min| *min == new_domain.min)
+                    .is_none()
+                    || (*max)
+                        .to_f64()
+                        .filter(|max| *max == new_domain.max)
+                        .is_none();
+                Domain::Nullable(NullableDomain {
+                    has_null,
+                    value: Some(Box::new(Domain::Float(new_domain))),
+                })
+            }
+            (
+                Domain::Int(IntDomain { min, max }),
+                DataType::UInt8 | DataType::UInt16 | DataType::UInt32 | DataType::UInt64,
+            ) => {
+                let new_domain = self
+                    .calculate_cast(span, domain, inner_type)
+                    .unwrap()
+                    .into_u_int()
+                    .unwrap();
+                let has_null = min.to_u64().filter(|min| *min == new_domain.min).is_none()
+                    || max.to_u64().filter(|max| *max == new_domain.max).is_none();
+                Domain::Nullable(NullableDomain {
+                    has_null,
+                    value: Some(Box::new(Domain::UInt(new_domain))),
+                })
+            }
+            (
+                Domain::Int(_),
+                DataType::Int8 | DataType::Int16 | DataType::Int32 | DataType::Int64,
+            ) => {
+                let new_domain = self.calculate_cast(span, domain, inner_type).unwrap();
+                Domain::Nullable(NullableDomain {
+                    has_null: *domain != new_domain,
+                    value: Some(Box::new(new_domain)),
+                })
+            }
+            (Domain::Int(IntDomain { min, max }), DataType::Float32 | DataType::Float64) => {
+                let new_domain = self
+                    .calculate_cast(span, domain, inner_type)
+                    .unwrap()
+                    .into_float()
+                    .unwrap();
+                let has_null = (*min)
+                    .to_f64()
+                    .filter(|min| *min == new_domain.min)
+                    .is_none()
+                    || (*max)
+                        .to_f64()
+                        .filter(|max| *max == new_domain.max)
+                        .is_none();
+                Domain::Nullable(NullableDomain {
+                    has_null,
+                    value: Some(Box::new(Domain::Float(new_domain))),
+                })
+            }
+            (
+                Domain::Float(FloatDomain { min, max }),
+                DataType::UInt8 | DataType::UInt16 | DataType::UInt32 | DataType::UInt64,
+            ) => {
+                let new_domain = self
+                    .calculate_cast(span, domain, inner_type)
+                    .unwrap()
+                    .into_u_int()
+                    .unwrap();
+                let has_null = (*min)
+                    .to_u64()
+                    .filter(|min| *min == new_domain.min)
+                    .is_none()
+                    || (*max)
+                        .to_u64()
+                        .filter(|max| *max == new_domain.max)
+                        .is_none();
+                Domain::Nullable(NullableDomain {
+                    has_null,
+                    value: Some(Box::new(Domain::UInt(new_domain))),
+                })
+            }
+            (
+                Domain::Float(FloatDomain { min, max }),
+                DataType::Int8 | DataType::Int16 | DataType::Int32 | DataType::Int64,
+            ) => {
+                let new_domain = self
+                    .calculate_cast(span, domain, inner_type)
+                    .unwrap()
+                    .into_int()
+                    .unwrap();
+                let has_null = (*min)
+                    .to_i64()
+                    .filter(|min| *min == new_domain.min)
+                    .is_none()
+                    || (*max)
+                        .to_i64()
+                        .filter(|max| *max == new_domain.max)
+                        .is_none();
+                Domain::Nullable(NullableDomain {
+                    has_null,
+                    value: Some(Box::new(Domain::Int(new_domain))),
+                })
+            }
+            (Domain::Float(_), DataType::Float32 | DataType::Float64) => {
+                let new_domain = self.calculate_cast(span, domain, inner_type).unwrap();
+                Domain::Nullable(NullableDomain {
+                    has_null: false,
+                    value: Some(Box::new(new_domain)),
+                })
+            }
+
+            // failure cases
+            _ => Domain::Nullable(NullableDomain {
+                has_null: true,
+                value: None,
+            }),
         }
     }
 }
