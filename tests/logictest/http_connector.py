@@ -1,6 +1,7 @@
 import json
 import os
 import base64
+import time
 
 import environs
 import requests
@@ -10,6 +11,32 @@ from log import log
 headers = {'Content-Type': 'application/json', 'Accept': 'application/json'}
 
 default_database = "default"
+
+
+class ClientSession(object):
+
+    def __init__(self):
+        self.db = None
+        self.settings = {}
+
+    def apply_affect(self, affect):
+        if affect is None:
+            return
+        typ = affect["type"]
+        if typ == "ChangeSetting":
+            key = affect["key"]
+            value = affect["value"]
+            self.settings[key] = value
+        elif typ == "UseDB":
+            self.db = affect["name"]
+
+    def to_json(self):
+        v = {}
+        if self.db:
+            v["database"] = self.db
+        if self.settings:
+            v["settings"] = self.settings
+        return v
 
 
 def format_result(results):
@@ -91,13 +118,16 @@ class HttpConnector():
     #   'port': 3307,
     #   'database': 'default'
     # }
+    def __init__(self):
+        self._session = None
+
     def connect(self, host, port, user="root", database=default_database):
         self._host = host
         self._port = port
         self._user = user
         self._database = database
         self._session_max_idle_time = 30
-        self._session = None
+        self._session = ClientSession()
         self._additonal_headers = dict()
         e = environs.Env()
         if os.getenv("ADDITIONAL_HEADERS") is not None:
@@ -113,7 +143,7 @@ class HttpConnector():
         else:
             return {**headers, **self._additonal_headers}
 
-    def query(self, statement, session=None):
+    def query(self, statement, session):
         url = f"http://{self._host}:{self._port}/v1/query/"
 
         def parseSQL(sql):
@@ -130,7 +160,7 @@ class HttpConnector():
         log.debug(f"http sql: {parseSQL(statement)}")
         query_sql = {'sql': parseSQL(statement), "string_fields": True}
         if session is not None:
-            query_sql['session'] = session
+            query_sql['session'] = session.to_json()
         log.debug(f"http headers {self.make_headers()}")
         response = requests.post(url,
                                  data=json.dumps(query_sql),
@@ -144,32 +174,19 @@ class HttpConnector():
             )
             raise
 
-    def set_database(self, database):
-        self._database = database
-
-    def query_without_session(self, statement):
-        return self.query(statement, {"database": self._database})
-
     def reset_session(self):
-        self._database = default_database
-        self._session = None
+        self._session = ClientSession()
 
-    # query_with_session keep session_id for every query
     # return a list of response util empty next_uri
     def query_with_session(self, statement):
         current_session = self._session
-        if current_session is None:
-            # new session
-            current_session = {
-                "database": self._database,
-                "max_idle_time": self._session_max_idle_time
-            }
-
         response_list = list()
         response = self.query(statement, current_session)
         log.debug(f"response content: {response}")
         response_list.append(response)
-        for i in range(12):
+        start_time = time.time()
+        time_limit = 12
+        while True:
             if response['next_uri'] is not None:
                 try:
                     resp = requests.get(url="http://{}:{}{}".format(
@@ -182,16 +199,16 @@ class HttpConnector():
                 except Exception as err:
                     log.warning(
                         f"Fetch next_uri response with error: {str(err)}")
-                continue
+                if time.time() - start_time > time_limit:
+                    break
+                else:
+                    continue
             break
+        self._session.apply_affect(response['affect'])
         if response['next_uri'] is not None:
             log.warning(
-                f"after waited for 12 secs, query still not finished (next url not none)!"
+                f"after waited for {time_limit} secs, query still not finished (next url not none)!"
             )
-
-        if self._session is None:
-            if response is not None and "session_id" in response:
-                self._session = {"id": response["session_id"]}
         return response_list
 
     def fetch_all(self, statement):

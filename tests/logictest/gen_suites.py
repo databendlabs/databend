@@ -213,20 +213,11 @@ def parse_cases(sql_file):
         else:
             # ok statement
             try:
-                if str.lower(statement).startswith("use"):
-                    # use for sql session, ignore results
-                    database = get_database(statement).group("database")
-                    log.debug(f"use database {database}")
-                    http_client.set_database(database)
-                # mysql excute for data
-                if str.lower(statement).startswith("drop"):
-                    http_client.set_database("default")
-                if str.lower(statement).startswith("set"):
-                    http_client.query_with_session(statement)
+                http_client.query_with_session(statement)
                 mysql_client.execute(statement)
             except Exception as err:
                 log.warning(
-                    f"statement {statement} excute error,msg {str(err)}")
+                    f"statement {statement} execute error,msg {str(err)}")
                 pass
 
             content_output = content_output + STATEMENT_OK.format(
