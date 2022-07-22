@@ -46,7 +46,7 @@ impl ValueType for StringType {
 
 impl ArgType for StringType {
     type ColumnIterator<'a> = StringIterator<'a>;
-    type ColumnBuilder = (Vec<u8>, Vec<u64>);
+    type ColumnBuilder = StringColumnBuilder;
 
     fn data_type() -> DataType {
         DataType::String
@@ -114,44 +114,39 @@ impl ArgType for StringType {
     }
 
     fn create_builder(capacity: usize, _: &GenericMap) -> Self::ColumnBuilder {
-        let mut offsets = Vec::with_capacity(capacity + 1);
-        offsets.push(0);
-        (Vec::new(), offsets)
+        StringColumnBuilder::with_capacity(0, capacity)
     }
 
     fn column_to_builder((data, offsets): Self::Column) -> Self::ColumnBuilder {
-        (buffer_into_mut(data), offsets.to_vec())
+        StringColumnBuilder {
+            data: buffer_into_mut(data),
+            offsets: offsets.to_vec(),
+        }
     }
 
-    fn builder_len((_, offsets): &Self::ColumnBuilder) -> usize {
-        offsets.len() - 1
+    fn builder_len(builder: &Self::ColumnBuilder) -> usize {
+        builder.len()
     }
 
-    fn push_item((data, offsets): &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>) {
-        data.extend_from_slice(item);
-        offsets.push(data.len() as u64);
+    fn push_item(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>) {
+        builder.put_slice(item);
+        builder.commit_row();
     }
 
-    fn push_default((data, offsets): &mut Self::ColumnBuilder) {
-        offsets.push(data.len() as u64);
+    fn push_default(builder: &mut Self::ColumnBuilder) {
+        builder.commit_row();
     }
 
-    fn append_builder(
-        (data, offsets): &mut Self::ColumnBuilder,
-        (other_data, other_offsets): &Self::ColumnBuilder,
-    ) {
-        data.extend_from_slice(other_data);
-        let start = offsets.last().cloned().unwrap();
-        offsets.extend(other_offsets.iter().skip(1).map(|offset| start + offset));
+    fn append_builder(builder: &mut Self::ColumnBuilder, other_builder: &Self::ColumnBuilder) {
+        builder.append(other_builder)
     }
 
-    fn build_column((data, offsets): Self::ColumnBuilder) -> Self::Column {
-        (data.into(), offsets.into())
+    fn build_column(builder: Self::ColumnBuilder) -> Self::Column {
+        builder.build()
     }
 
-    fn build_scalar((data, offsets): Self::ColumnBuilder) -> Self::Scalar {
-        assert_eq!(offsets.len(), 2);
-        data[(offsets[0] as usize)..(offsets[1] as usize)].to_vec()
+    fn build_scalar(builder: Self::ColumnBuilder) -> Self::Scalar {
+        builder.build_scalar()
     }
 }
 
@@ -175,3 +170,61 @@ impl<'a> Iterator for StringIterator<'a> {
 }
 
 unsafe impl<'a> TrustedLen for StringIterator<'a> {}
+
+#[derive(Debug, Clone)]
+pub struct StringColumnBuilder {
+    pub data: Vec<u8>,
+    pub offsets: Vec<u64>,
+}
+
+impl StringColumnBuilder {
+    pub fn with_capacity(data_capacity: usize, offsets_capactiy: usize) -> Self {
+        let mut offsets = Vec::with_capacity(offsets_capactiy);
+        offsets.push(0);
+        StringColumnBuilder {
+            data: Vec::with_capacity(data_capacity),
+            offsets,
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        self.offsets.len() - 1
+    }
+
+    pub fn put_u8(&mut self, item: u8) {
+        self.data.push(item);
+    }
+
+    pub fn put_char(&mut self, item: char) {
+        self.data
+            .extend_from_slice(item.encode_utf8(&mut [0; 4]).as_bytes());
+    }
+
+    pub fn put_str(&mut self, item: &str) {
+        self.data.extend_from_slice(item.as_bytes());
+    }
+
+    pub fn put_slice(&mut self, item: &[u8]) {
+        self.data.extend_from_slice(item);
+    }
+
+    pub fn commit_row(&mut self) {
+        self.offsets.push(self.data.len() as u64);
+    }
+
+    pub fn append(&mut self, other: &Self) {
+        self.data.extend_from_slice(&other.data);
+        let start = self.offsets.last().cloned().unwrap();
+        self.offsets
+            .extend(other.offsets.iter().skip(1).map(|offset| start + offset));
+    }
+
+    pub fn build(self) -> (Buffer<u8>, Buffer<u64>) {
+        (self.data.into(), self.offsets.into())
+    }
+
+    pub fn build_scalar(self) -> Vec<u8> {
+        assert_eq!(self.offsets.len(), 2);
+        self.data[(self.offsets[0] as usize)..(self.offsets[1] as usize)].to_vec()
+    }
+}

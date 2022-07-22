@@ -503,8 +503,8 @@ impl Number for f32 {
 
     fn full_domain() -> Self::Domain {
         FloatDomain {
-            min: f32::MIN as f64,
-            max: f32::MAX as f64,
+            min: f32::NEG_INFINITY as f64,
+            max: f32::INFINITY as f64,
         }
     }
 }
@@ -541,8 +541,8 @@ impl Number for f64 {
     }
     fn full_domain() -> Self::Domain {
         FloatDomain {
-            min: f64::MIN,
-            max: f64::MAX,
+            min: f64::NEG_INFINITY,
+            max: f64::INFINITY,
         }
     }
 }

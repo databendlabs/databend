@@ -30,6 +30,7 @@ use crate::property::IntDomain;
 use crate::property::NullableDomain;
 use crate::property::StringDomain;
 use crate::property::UIntDomain;
+use crate::types::string::StringColumnBuilder;
 use crate::types::*;
 use crate::util::append_bitmap;
 use crate::util::bitmap_into_mut;
@@ -146,10 +147,7 @@ pub enum ColumnBuilder {
     Float32(Vec<f32>),
     Float64(Vec<f64>),
     Boolean(MutableBitmap),
-    String {
-        data: Vec<u8>,
-        offsets: Vec<u64>,
-    },
+    String(StringColumnBuilder),
     Array {
         array: Box<ColumnBuilder>,
         offsets: Vec<u64>,
@@ -280,7 +278,7 @@ impl<'a> ScalarRef<'a> {
                 let offsets = once(0)
                     .chain((0..n).map(|i| (len * (i + 1)) as u64))
                     .collect();
-                ColumnBuilder::String { data, offsets }
+                ColumnBuilder::String(StringColumnBuilder { data, offsets })
             }
             ScalarRef::Array(col) => {
                 let col = ColumnBuilder::from_column(col.clone());
@@ -985,10 +983,10 @@ impl ColumnBuilder {
             Column::Float32(col) => ColumnBuilder::Float32(buffer_into_mut(col)),
             Column::Float64(col) => ColumnBuilder::Float64(buffer_into_mut(col)),
             Column::Boolean(col) => ColumnBuilder::Boolean(bitmap_into_mut(col)),
-            Column::String { data, offsets } => ColumnBuilder::String {
+            Column::String { data, offsets } => ColumnBuilder::String(StringColumnBuilder {
                 data: buffer_into_mut(data),
                 offsets: offsets.to_vec(),
-            },
+            }),
             Column::Array { array, offsets } => ColumnBuilder::Array {
                 array: Box::new(ColumnBuilder::from_column(*array)),
                 offsets: offsets.to_vec(),
@@ -1022,7 +1020,7 @@ impl ColumnBuilder {
             ColumnBuilder::Float32(col) => col.len(),
             ColumnBuilder::Float64(col) => col.len(),
             ColumnBuilder::Boolean(col) => col.len(),
-            ColumnBuilder::String { data: _, offsets } => offsets.len() - 1,
+            ColumnBuilder::String(col) => col.len(),
             ColumnBuilder::Array { array: _, offsets } => offsets.len() - 1,
             ColumnBuilder::Nullable {
                 column: _,
@@ -1038,12 +1036,7 @@ impl ColumnBuilder {
             DataType::EmptyArray => ColumnBuilder::EmptyArray { len: 0 },
             DataType::Boolean => ColumnBuilder::Boolean(MutableBitmap::with_capacity(capacity)),
             DataType::String => {
-                let mut offsets = Vec::with_capacity(capacity + 1);
-                offsets.push(0);
-                ColumnBuilder::String {
-                    data: Vec::new(),
-                    offsets,
-                }
+                ColumnBuilder::String(StringColumnBuilder::with_capacity(0, capacity))
             }
             DataType::UInt8 => ColumnBuilder::UInt8(Vec::with_capacity(capacity)),
             DataType::UInt16 => ColumnBuilder::UInt16(Vec::with_capacity(capacity)),
@@ -1089,9 +1082,9 @@ impl ColumnBuilder {
             (ColumnBuilder::UInt8(col), ScalarRef::UInt8(value)) => col.push(value),
             (ColumnBuilder::UInt16(col), ScalarRef::UInt16(value)) => col.push(value),
             (ColumnBuilder::Boolean(col), ScalarRef::Boolean(value)) => col.push(value),
-            (ColumnBuilder::String { data, offsets }, ScalarRef::String(value)) => {
-                data.extend_from_slice(value);
-                offsets.push(data.len() as u64);
+            (ColumnBuilder::String(col), ScalarRef::String(value)) => {
+                col.put_slice(value);
+                col.commit_row();
             }
             (ColumnBuilder::Array { array, offsets }, ScalarRef::Array(value)) => {
                 array.append(&ColumnBuilder::from_column(value));
@@ -1131,8 +1124,8 @@ impl ColumnBuilder {
             ColumnBuilder::Float32(col) => col.push(0f32),
             ColumnBuilder::Float64(col) => col.push(0f64),
             ColumnBuilder::Boolean(col) => col.push(false),
-            ColumnBuilder::String { data, offsets } => {
-                offsets.push(data.len() as u64);
+            ColumnBuilder::String(col) => {
+                col.commit_row();
             }
             ColumnBuilder::Array { array, offsets } => {
                 offsets.push(array.len() as u64);
@@ -1173,16 +1166,8 @@ impl ColumnBuilder {
             (ColumnBuilder::Boolean(builder), ColumnBuilder::Boolean(other_builder)) => {
                 append_bitmap(builder, other_builder);
             }
-            (
-                ColumnBuilder::String { data, offsets },
-                ColumnBuilder::String {
-                    data: other_data,
-                    offsets: other_offsets,
-                },
-            ) => {
-                data.extend_from_slice(other_data);
-                let start = offsets.last().cloned().unwrap();
-                offsets.extend(other_offsets.iter().skip(1).map(|offset| start + offset));
+            (ColumnBuilder::String(builder), ColumnBuilder::String(other_builder)) => {
+                builder.append(other_builder);
             }
             (
                 ColumnBuilder::Array { array, offsets },
@@ -1237,10 +1222,10 @@ impl ColumnBuilder {
             ColumnBuilder::Float32(builder) => Column::Float32(builder.into()),
             ColumnBuilder::Float64(builder) => Column::Float64(builder.into()),
             ColumnBuilder::Boolean(builder) => Column::Boolean(builder.into()),
-            ColumnBuilder::String { data, offsets } => Column::String {
-                data: data.into(),
-                offsets: offsets.into(),
-            },
+            ColumnBuilder::String(builder) => {
+                let (data, offsets) = builder.build();
+                Column::String { data, offsets }
+            }
             ColumnBuilder::Array { array, offsets } => Column::Array {
                 array: Box::new(array.build()),
                 offsets: offsets.into(),
@@ -1272,9 +1257,7 @@ impl ColumnBuilder {
             ColumnBuilder::Float32(builder) => Scalar::Float32(builder[0]),
             ColumnBuilder::Float64(builder) => Scalar::Float64(builder[0]),
             ColumnBuilder::Boolean(builder) => Scalar::Boolean(builder.get(0)),
-            ColumnBuilder::String { data, offsets } => {
-                Scalar::String(data[(offsets[0] as usize)..(offsets[1] as usize)].to_vec())
-            }
+            ColumnBuilder::String(builder) => Scalar::String(builder.build_scalar()),
             ColumnBuilder::Array { array, offsets } => Scalar::Array(
                 array
                     .build()
