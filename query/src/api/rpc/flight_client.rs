@@ -86,8 +86,8 @@ impl FlightClient {
 
         match response.into_inner().message().await? {
             Some(response) => Ok(response.body),
-            None => Result::Err(ErrorCode::EmptyDataFromServer(format!(
-                "Can not receive data from flight server, action: {action_type:?}",
+            None => Err(ErrorCode::EmptyDataFromServer(format!(
+                "Can not receive data from flight server, action: {:?}", action_type
             ))),
         }
     }
