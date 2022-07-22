@@ -51,6 +51,10 @@ members = [
     "common/dep-hack",
 ]
 
+# cargo-lambda can't find build binary if we have multiple targets.
+# split `lambda` into seperate workspace can help resolve this.
+exclude = ["lambda"]
+
 [profile.release]
 debug = 1
 lto = "thin"

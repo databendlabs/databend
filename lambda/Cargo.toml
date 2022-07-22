@@ -1,0 +1,31 @@
+[package]
+name = "databend-lambda"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[[bin]]
+name = "databend-lambda"
+path = "src/main.rs"
+
+[dependencies]
+lambda_http = { version = "0.6.0", default-features = false, features = ["apigw_http"] }
+lambda_runtime = "0.6.0"
+serde_json = "1.0.82"
+tokio = "1.20.0"
+databend-query = { path = "../query" }
+common-tracing = { path = "../common/tracing" }
+common-exception = { path = "../common/exception" }
+anyhow = "1.0.58"
+common-meta-embedded = { path = "../common/meta/embedded" }
+common-datablocks = { path = "../common/datablocks" }
+common-io = { path = "../common/io" }
+common-base = { path = "../common/base" }
+futures = "0.3.21"
+tokio-stream = "0.1.9"
+
+[patch.crates-io]
+parquet2 = { version = "0.14.1", optional = true, git = "https://github.com/datafuse-extras/parquet2", rev = "3a468fc3c4" }
+chrono = { git = "https://github.com/datafuse-extras/chrono", rev = "279f590" }
+
