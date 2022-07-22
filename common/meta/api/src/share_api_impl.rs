@@ -42,6 +42,8 @@ use common_meta_app::share::ShareId;
 use common_meta_app::share::ShareIdToName;
 use common_meta_app::share::ShareMeta;
 use common_meta_app::share::ShareNameIdent;
+use common_meta_app::share::ShowShareReply;
+use common_meta_app::share::ShowShareReq;
 use common_meta_types::app_error::AppError;
 use common_meta_types::app_error::ShareAccountAlreadyExists;
 use common_meta_types::app_error::ShareAlreadyExists;
@@ -80,6 +82,45 @@ use crate::TXN_MAX_RETRY_TIMES;
 /// Thus every type that impl KVApi impls ShareApi.
 #[async_trait::async_trait]
 impl<KV: KVApi> ShareApi for KV {
+    #[tracing::instrument(level = "debug", ret, err, skip_all)]
+    async fn show_share(&self, req: ShowShareReq) -> MetaResult<ShowShareReply> {
+        tracing::debug!(req = debug(&req), "ShareApi: {}", func_name!());
+
+        let name_key = req.share_name.clone();
+        // Get share by name
+        let res =
+            get_share_or_err(self, &name_key, format!("get_share: {}", &name_key.clone())).await?;
+
+        let (_share_id_seq, share_id, _share_meta_seq, share_meta) = res;
+
+        let mut share_account_meta = vec![];
+        for account in share_meta.get_accounts().iter() {
+            let share_account_key = ShareAccountNameIdent {
+                account: account.clone(),
+                share_id,
+            };
+            let ret = get_share_account_meta_or_err(
+                self,
+                &share_account_key,
+                format!("show_share's account: {}/{}", share_id, account),
+            )
+            .await;
+            match ret {
+                Err(_) => {}
+                Ok((_seq, meta)) => share_account_meta.push(meta),
+            }
+        }
+
+        let rep = ShowShareReply {
+            share_name: name_key,
+            share_id,
+            share_meta,
+            share_account_meta,
+        };
+
+        Ok(rep)
+    }
+
     #[tracing::instrument(level = "debug", ret, err, skip_all)]
     async fn create_share(&self, req: CreateShareReq) -> MetaResult<CreateShareReply> {
         tracing::debug!(req = debug(&req), "ShareApi: {}", func_name!());
