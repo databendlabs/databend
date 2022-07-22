@@ -55,9 +55,9 @@ uuid = { version = "1.1.2", features = ["v4"] }
 
 [dev-dependencies]
 bumpalo = "3.10.0"
-goldenfile = "1.4"
 comfy-table = "6"
 common-ast = { path = "../ast" }
 common-datablocks = { path = "../datablocks" }
 float-cmp = "0.9.0"
+goldenfile = "1.4"
 pretty_assertions = "1.2.1"
