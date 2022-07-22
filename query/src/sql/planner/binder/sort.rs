@@ -29,8 +29,14 @@ use crate::sql::binder::Binder;
 use crate::sql::binder::ColumnBinding;
 use crate::sql::optimizer::SExpr;
 use crate::sql::planner::semantic::GroupingChecker;
+use crate::sql::plans::AggregateFunction;
+use crate::sql::plans::AndExpr;
 use crate::sql::plans::BoundColumnRef;
+use crate::sql::plans::CastExpr;
+use crate::sql::plans::ComparisonExpr;
 use crate::sql::plans::EvalScalar;
+use crate::sql::plans::FunctionCall;
+use crate::sql::plans::OrExpr;
 use crate::sql::plans::Scalar;
 use crate::sql::plans::ScalarItem;
 use crate::sql::plans::Sort;
@@ -126,15 +132,32 @@ impl<'a> Binder {
                         need_eval_scalar: false,
                     });
                 }
-                Expr::BinaryOp { .. } => {
+                _ => {
+                    let mut bind_context = from_context.clone();
+                    for column_binding in projections.iter() {
+                        if bind_context.columns.contains(column_binding) {
+                            continue;
+                        }
+                        bind_context.columns.push(column_binding.clone());
+                    }
                     let mut scalar_binder =
-                        ScalarBinder::new(from_context, self.ctx.clone(), self.metadata.clone());
+                        ScalarBinder::new(&bind_context, self.ctx.clone(), self.metadata.clone());
                     let (bound_expr, _) = scalar_binder.bind(&order.expr).await?;
+                    let rewrite_scalar = self
+                        .rewrite_scalar_with_replacement(&bound_expr, &|nest_scalar| {
+                            if let Scalar::BoundColumnRef(BoundColumnRef { column }) = nest_scalar {
+                                if let Some(scalar_item) = scalar_items.get(&column.index) {
+                                    return Ok(Some(scalar_item.scalar.clone()));
+                                }
+                            }
+                            Ok(None)
+                        })
+                        .map_err(|e| ErrorCode::SemanticError(e.message()))?;
                     let column_binding = self.create_column_binding(
                         None,
                         None,
                         format!("{:#}", order.expr),
-                        bound_expr.data_type(),
+                        rewrite_scalar.data_type(),
                     );
                     order_items.push(OrderItem {
                         expr: order.clone(),
@@ -143,17 +166,9 @@ impl<'a> Binder {
                         need_eval_scalar: true,
                     });
                     scalar_items.insert(column_binding.index, ScalarItem {
-                        scalar: bound_expr,
+                        scalar: rewrite_scalar,
                         index: column_binding.index,
                     });
-                }
-                _ => {
-                    return Err(ErrorCode::SemanticError(
-                        order
-                            .expr
-                            .span()
-                            .display_error("can only order by column".to_string()),
-                    ));
                 }
             }
         }
@@ -180,19 +195,6 @@ impl<'a> Binder {
                     .find(|item| item.alias == order.name)
                 {
                     group_checker.resolve(&scalar_item.scalar, None)?;
-                } else {
-                    group_checker.resolve(
-                        &BoundColumnRef {
-                            column: from_context
-                                .columns
-                                .iter()
-                                .find(|col| col.column_name == order.name)
-                                .cloned()
-                                .ok_or_else(|| ErrorCode::LogicalError("Invalid order by item"))?,
-                        }
-                        .into(),
-                        None,
-                    )?;
                 }
             }
             if let Expr::ColumnRef {
@@ -288,5 +290,120 @@ impl<'a> Binder {
             items: order_by_items,
         };
         Ok(SExpr::create_unary(sort_plan.into(), child))
+    }
+
+    fn rewrite_scalar_with_replacement<F>(
+        &self,
+        original_scalar: &Scalar,
+        replacement_fn: &F,
+    ) -> Result<Scalar>
+    where
+        F: Fn(&Scalar) -> Result<Option<Scalar>>,
+    {
+        let replacement_opt = replacement_fn(original_scalar)?;
+        match replacement_opt {
+            Some(replacement) => Ok(replacement),
+            None => match original_scalar {
+                Scalar::AndExpr(AndExpr {
+                    left,
+                    right,
+                    return_type,
+                }) => {
+                    let left =
+                        Box::new(self.rewrite_scalar_with_replacement(left, replacement_fn)?);
+                    let right =
+                        Box::new(self.rewrite_scalar_with_replacement(right, replacement_fn)?);
+                    Ok(Scalar::AndExpr(AndExpr {
+                        left,
+                        right,
+                        return_type: return_type.clone(),
+                    }))
+                }
+                Scalar::OrExpr(OrExpr {
+                    left,
+                    right,
+                    return_type,
+                }) => {
+                    let left =
+                        Box::new(self.rewrite_scalar_with_replacement(left, replacement_fn)?);
+                    let right =
+                        Box::new(self.rewrite_scalar_with_replacement(right, replacement_fn)?);
+                    Ok(Scalar::OrExpr(OrExpr {
+                        left,
+                        right,
+                        return_type: return_type.clone(),
+                    }))
+                }
+                Scalar::ComparisonExpr(ComparisonExpr {
+                    op,
+                    left,
+                    right,
+                    return_type,
+                }) => {
+                    let left =
+                        Box::new(self.rewrite_scalar_with_replacement(left, replacement_fn)?);
+                    let right =
+                        Box::new(self.rewrite_scalar_with_replacement(right, replacement_fn)?);
+                    Ok(Scalar::ComparisonExpr(ComparisonExpr {
+                        op: op.clone(),
+                        left,
+                        right,
+                        return_type: return_type.clone(),
+                    }))
+                }
+                Scalar::AggregateFunction(AggregateFunction {
+                    display_name,
+                    func_name,
+                    distinct,
+                    params,
+                    args,
+                    return_type,
+                }) => {
+                    let args = args
+                        .iter()
+                        .map(|arg| self.rewrite_scalar_with_replacement(arg, replacement_fn))
+                        .collect::<Result<Vec<_>>>()?;
+                    Ok(Scalar::AggregateFunction(AggregateFunction {
+                        display_name: display_name.clone(),
+                        func_name: func_name.clone(),
+                        distinct: *distinct,
+                        params: params.clone(),
+                        args,
+                        return_type: return_type.clone(),
+                    }))
+                }
+                Scalar::FunctionCall(FunctionCall {
+                    arguments,
+                    func_name,
+                    arg_types,
+                    return_type,
+                }) => {
+                    let arguments = arguments
+                        .iter()
+                        .map(|arg| self.rewrite_scalar_with_replacement(arg, replacement_fn))
+                        .collect::<Result<Vec<_>>>()?;
+                    Ok(Scalar::FunctionCall(FunctionCall {
+                        arguments,
+                        func_name: func_name.clone(),
+                        arg_types: arg_types.clone(),
+                        return_type: return_type.clone(),
+                    }))
+                }
+                Scalar::CastExpr(CastExpr {
+                    argument,
+                    from_type,
+                    target_type,
+                }) => {
+                    let argument =
+                        Box::new(self.rewrite_scalar_with_replacement(argument, replacement_fn)?);
+                    Ok(Scalar::CastExpr(CastExpr {
+                        argument,
+                        from_type: from_type.clone(),
+                        target_type: target_type.clone(),
+                    }))
+                }
+                _ => Ok(original_scalar.clone()),
+            },
+        }
     }
 }
