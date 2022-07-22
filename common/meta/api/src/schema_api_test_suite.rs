@@ -2190,9 +2190,11 @@ impl SchemaApiTestSuite {
         // assert old db meta and id to name mapping has been removed
         for db_id in old_id_list.iter() {
             let id_key = DatabaseId { db_id: *db_id };
-            let id_mapping = DatabaseIdToName {db_id: *db_id};
-            let meta_res: Result<DatabaseMeta, MetaError> = get_test_data(mt.as_kv_api(), &id_key).await;
-            let mapping_res: Result<DatabaseNameIdent, MetaError> = get_test_data(mt.as_kv_api(), &id_mapping).await;
+            let id_mapping = DatabaseIdToName { db_id: *db_id };
+            let meta_res: Result<DatabaseMeta, MetaError> =
+                get_test_data(mt.as_kv_api(), &id_key).await;
+            let mapping_res: Result<DatabaseNameIdent, MetaError> =
+                get_test_data(mt.as_kv_api(), &id_mapping).await;
             assert!(meta_res.is_err());
             assert!(mapping_res.is_err());
         }
@@ -2338,8 +2340,10 @@ impl SchemaApiTestSuite {
             let id_mapping = TableIdToName {
                 table_id: *table_id,
             };
-            let meta_res: Result<DatabaseMeta, MetaError> = get_test_data(mt.as_kv_api(), &id_key).await;
-            let mapping_res: Result<DBIdTableName, MetaError> = get_test_data(mt.as_kv_api(), &id_mapping).await;
+            let meta_res: Result<DatabaseMeta, MetaError> =
+                get_test_data(mt.as_kv_api(), &id_key).await;
+            let mapping_res: Result<DBIdTableName, MetaError> =
+                get_test_data(mt.as_kv_api(), &id_mapping).await;
             assert!(meta_res.is_err());
             assert!(mapping_res.is_err());
         }

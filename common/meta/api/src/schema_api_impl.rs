@@ -1854,7 +1854,10 @@ async fn gc_dropped_table(
                     get_struct_value(kv_api, &id_to_name).await?;
 
                 if name_seq == 0 || name.is_none() {
-                    tracing::error!("get_table_history cannot find {:?} database_id_table_name", id_to_name);
+                    tracing::error!(
+                        "get_table_history cannot find {:?} database_id_table_name",
+                        id_to_name
+                    );
                     continue;
                 }
                 // Safe unwrap() because: tb_meta_seq > 0
@@ -1890,7 +1893,7 @@ async fn gc_dropped_table(
                 if_then.push(txn_op_del(&key.0));
             }
             // remove table_id -> table_name mappings
-            for (key,  seq) in remove_table_id_mappings.iter() {
+            for (key, seq) in remove_table_id_mappings.iter() {
                 condition.push(txn_cond_seq(key, Eq, *seq));
                 if_then.push(txn_op_del(key));
             }
@@ -1960,9 +1963,7 @@ async fn gc_dropped_db(
                 continue;
             }
 
-            let id_to_name = DatabaseIdToName {
-                db_id: *db_id
-            };
+            let id_to_name = DatabaseIdToName { db_id: *db_id };
             let (name_ident_seq, name_ident): (_, Option<DatabaseNameIdent>) =
                 get_struct_value(kv_api, &id_to_name).await?;
             if name_ident_seq == 0 || name_ident.is_none() {
