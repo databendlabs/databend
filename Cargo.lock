@@ -1197,6 +1197,7 @@ dependencies = [
  "itertools",
  "match-template",
  "num-traits",
+ "ordered-float 1.1.1",
  "serde",
 ]
 

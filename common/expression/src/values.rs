@@ -20,7 +20,16 @@ use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::arrow::buffer::Buffer;
 use common_arrow::arrow::trusted_len::TrustedLen;
 use enum_as_inner::EnumAsInner;
+use itertools::Itertools;
+use ordered_float::NotNan;
 
+use crate::property::BooleanDomain;
+use crate::property::Domain;
+use crate::property::FloatDomain;
+use crate::property::IntDomain;
+use crate::property::NullableDomain;
+use crate::property::StringDomain;
+use crate::property::UIntDomain;
 use crate::types::*;
 use crate::util::append_bitmap;
 use crate::util::bitmap_into_mut;
@@ -456,6 +465,134 @@ impl Column {
             column: self,
             index: 0,
             len: self.len(),
+        }
+    }
+
+    pub fn domain(&self) -> Domain {
+        assert!(self.len() > 0);
+        match self {
+            Column::Null { .. } => Domain::Nullable(NullableDomain {
+                has_null: true,
+                value: None,
+            }),
+            Column::EmptyArray { .. } => Domain::Array(None),
+            Column::Int8(col) => {
+                let (min, max) = col.iter().minmax().into_option().unwrap();
+                Domain::Int(IntDomain {
+                    min: *min as i64,
+                    max: *max as i64,
+                })
+            }
+            Column::Int16(col) => {
+                let (min, max) = col.iter().minmax().into_option().unwrap();
+                Domain::Int(IntDomain {
+                    min: *min as i64,
+                    max: *max as i64,
+                })
+            }
+            Column::Int32(col) => {
+                let (min, max) = col.iter().minmax().into_option().unwrap();
+                Domain::Int(IntDomain {
+                    min: *min as i64,
+                    max: *max as i64,
+                })
+            }
+            Column::Int64(col) => {
+                let (min, max) = col.iter().minmax().into_option().unwrap();
+                Domain::Int(IntDomain {
+                    min: *min as i64,
+                    max: *max as i64,
+                })
+            }
+            Column::UInt8(col) => {
+                let (min, max) = col.iter().minmax().into_option().unwrap();
+                Domain::UInt(UIntDomain {
+                    min: *min as u64,
+                    max: *max as u64,
+                })
+            }
+            Column::UInt16(col) => {
+                let (min, max) = col.iter().minmax().into_option().unwrap();
+                Domain::UInt(UIntDomain {
+                    min: *min as u64,
+                    max: *max as u64,
+                })
+            }
+            Column::UInt32(col) => {
+                let (min, max) = col.iter().minmax().into_option().unwrap();
+                Domain::UInt(UIntDomain {
+                    min: *min as u64,
+                    max: *max as u64,
+                })
+            }
+            Column::UInt64(col) => {
+                let (min, max) = col.iter().minmax().into_option().unwrap();
+                Domain::UInt(UIntDomain {
+                    min: *min as u64,
+                    max: *max as u64,
+                })
+            }
+            Column::Float32(col) => {
+                // TODO: may panic if all values are NaN
+                let (min, max) = col
+                    .iter()
+                    .cloned()
+                    .map(NotNan::new)
+                    .filter_map(Result::ok)
+                    .minmax()
+                    .into_option()
+                    .unwrap();
+                Domain::Float(FloatDomain {
+                    // Cast to f32 and then to f64 to round to the nearest f32 value.
+                    min: *min as f32 as f64,
+                    max: *max as f32 as f64,
+                })
+            }
+            Column::Float64(col) => {
+                // TODO: may panic if all values are NaN
+                let (min, max) = col
+                    .iter()
+                    .cloned()
+                    .map(NotNan::new)
+                    .filter_map(Result::ok)
+                    .minmax()
+                    .into_option()
+                    .unwrap();
+                Domain::Float(FloatDomain {
+                    min: *min,
+                    max: *max,
+                })
+            }
+            Column::Boolean(col) => Domain::Boolean(BooleanDomain {
+                has_false: col.unset_bits() > 0,
+                has_true: col.len() - col.unset_bits() > 0,
+            }),
+            Column::String { data, offsets } => {
+                let col = (data.clone(), offsets.clone());
+                let (min, max) = StringType::iter_column(&col)
+                    .minmax()
+                    .into_option()
+                    .unwrap();
+                Domain::String(StringDomain {
+                    min: min.to_vec(),
+                    max: Some(max.to_vec()),
+                })
+            }
+            Column::Array { array, .. } => {
+                let inner_domain = array.domain();
+                Domain::Array(Some(Box::new(inner_domain)))
+            }
+            Column::Nullable { column, validity } => {
+                let inner_domain = column.domain();
+                Domain::Nullable(NullableDomain {
+                    has_null: validity.unset_bits() > 0,
+                    value: Some(Box::new(inner_domain)),
+                })
+            }
+            Column::Tuple { fields, .. } => {
+                let domains = fields.iter().map(|col| col.domain()).collect::<Vec<_>>();
+                Domain::Tuple(domains)
+            }
         }
     }
 
