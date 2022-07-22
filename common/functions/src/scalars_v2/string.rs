@@ -40,13 +40,13 @@ pub fn register(registry: &mut FunctionRegistry) {
 fn upper(val: &[u8], writer: &mut StringColumnBuilder) {
     for (start, end, ch) in val.char_indices() {
         if ch == '\u{FFFD}' {
-            // If char is not valid, just copy it.
+            // If char is invalid, just copy it.
             writer.put_slice(&val.as_bytes()[start..end]);
         } else if ch.is_ascii() {
             writer.put_u8(ch.to_ascii_uppercase() as u8);
         } else {
             for x in ch.to_uppercase() {
-                writer.put_slice(x.encode_utf8(&mut [0; 4]).as_bytes());
+                writer.put_char(x);
             }
         }
     }
