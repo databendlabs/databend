@@ -7,7 +7,7 @@ description:
 
 This command loads data into a table from one or more remote files by their URL.
 
-`COPY` can also load data into a table from files staged in an object storage system (for example, AWS S3 compatible object storage services, or Azure Blob storage). See [COPY INTO \<table\> FROM STAGED FILES](dml-copy-into-table.md).
+`COPY` can also load data into a table from files staged in an object storage system (for example, AWS S3 compatible object storage services, or Azure Blob storage). See [COPY INTO `<table>` FROM STAGED FILES](dml-copy-into-table.md).
 
 ## Syntax
 
