@@ -65,7 +65,8 @@ jobs:
           profile: release
 
   test_unit:
-    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    runs-on: [self-hosted, X64, Linux]
     steps:
       - uses: actions/checkout@v3
         with:
