@@ -103,8 +103,7 @@ def get_all_cases():
 
 def parse_cases(sql_file):
     # New session every case file
-    http_client = HttpConnector()
-    http_client.connect(**http_config)
+    http_client = HttpConnector(**http_config)
     cnx = mysql.connector.connect(**mysql_config)
     mysql_client = cnx.cursor()
 

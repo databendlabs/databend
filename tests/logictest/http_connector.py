@@ -45,19 +45,19 @@ def format_result(results):
         return ""
 
     for line in results:
-        lineTmp = ""
+        buf = ""
         for item in line:
             if isinstance(item, bool):
                 item = str.lower(str(item))
-            if lineTmp == "":
-                lineTmp = str(item)
+            if buf == "":
+                buf = str(item)
             else:
-                lineTmp = lineTmp + " " + str(
+                buf = buf + " " + str(
                     item)  # every item seperate by space
-        if len(lineTmp) == 0:
+        if len(buf) == 0:
             # empty line in results will replace with tab
-            lineTmp = "\t"
-        res = res + lineTmp + "\n"
+            buf = "\t"
+        res = res + buf + "\n"
     return res
 
 
@@ -71,16 +71,16 @@ def get_data_type(field):
 
 def get_query_options(response):
     ret = ""
-    if get_error(response) != None:
+    if get_error(response) is not None:
         return ret
     for field in response['schema']['fields']:
-        type = str.lower(get_data_type(field))
-        log.debug(f"type:{type}")
-        if "int" in type:
+        typ = str.lower(get_data_type(field))
+        log.debug(f"type:{typ}")
+        if "int" in typ:
             ret = ret + "I"
-        elif "float" in type or "double" in type:
+        elif "float" in typ or "double" in typ:
             ret = ret + "F"
-        elif "bool" in type:
+        elif "bool" in typ:
             ret = ret + "B"
         else:
             ret = ret + "T"
@@ -103,12 +103,12 @@ def get_error(response):
         return None
 
     # Wrap errno into msg, for result check
-    wrapMsg = f"errno:{response['error']['code']},msg:{response['error']['message']}"
-    return Error(msg=wrapMsg, errno=response['error']['code'])
+    wrap_msg = f"errno:{response['error']['code']},msg:{response['error']['message']}"
+    return Error(msg=wrap_msg, errno=response['error']['code'])
 
 
-class HttpConnector():
-    # Databend http hander doc: https://databend.rs/doc/reference/api/rest
+class HttpConnector(object):
+    # Databend http handler doc: https://databend.rs/doc/reference/api/rest
 
     # Call connect(**driver)
     # driver is a dict contains:
@@ -118,30 +118,28 @@ class HttpConnector():
     #   'port': 3307,
     #   'database': 'default'
     # }
-    def __init__(self):
-        self._session = None
-
-    def connect(self, host, port, user="root", database=default_database):
+    def __init__(self, host, port, user="root", database=default_database):
         self._host = host
         self._port = port
         self._user = user
         self._database = database
         self._session_max_idle_time = 30
         self._session = ClientSession()
-        self._additonal_headers = dict()
+        self._additional_headers = dict()
+        self._query_option = None
         e = environs.Env()
         if os.getenv("ADDITIONAL_HEADERS") is not None:
-            self._additonal_headers = e.dict("ADDITIONAL_HEADERS")
+            self._additional_headers = e.dict("ADDITIONAL_HEADERS")
 
     def make_headers(self):
-        if "Authorization" not in self._additonal_headers:
+        if "Authorization" not in self._additional_headers:
             return {
                 **headers, "Authorization":
                     "Basic " + base64.b64encode("{}:{}".format(
                         self._user, "").encode(encoding="utf-8")).decode()
             }
         else:
-            return {**headers, **self._additonal_headers}
+            return {**headers, **self._additional_headers}
 
     def query(self, statement, session):
         url = f"http://{self._host}:{self._port}/v1/query/"
@@ -152,10 +150,10 @@ class HttpConnector():
             # SELECT parse_json('"false"')::boolean;          => SELECT parse_json('\"false\"')::boolean;
             if '"' in sql:
                 if '\'' in sql:
-                    return str.replace(sql, '"', '\\\"')  #  "  -> \"
-                return str.replace(sql, "\"", "'")  #  "  -> '
+                    return str.replace(sql, '"', '\\\"')  # "  -> \"
+                return str.replace(sql, "\"", "'")  # "  -> '
             else:
-                return sql  #  do nothing
+                return sql  # do nothing
 
         log.debug(f"http sql: {parseSQL(statement)}")
         query_sql = {'sql': parseSQL(statement), "string_fields": True}
@@ -191,7 +189,7 @@ class HttpConnector():
                 try:
                     resp = requests.get(url="http://{}:{}{}".format(
                         self._host, self._port, response['next_uri']),
-                                        headers=self.make_headers())
+                        headers=self.make_headers())
                     response = json.loads(resp.content)
                     log.debug(
                         f"Sql in progress, fetch next_uri content: {response}")
@@ -226,7 +224,6 @@ class HttpConnector():
 
     def get_query_option(self):
         return self._query_option
-
 
 # if __name__ == '__main__':
 #     from config import http_config
