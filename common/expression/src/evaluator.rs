@@ -429,10 +429,14 @@ impl Evaluator {
 }
 
 pub struct DomainCalculator {
-    pub input_domains: Vec<Domain>,
+    input_domains: Vec<Domain>,
 }
 
 impl DomainCalculator {
+    pub fn new(input_domains: Vec<Domain>) -> Self {
+        DomainCalculator { input_domains }
+    }
+
     pub fn calculate(&self, expr: &Expr) -> Result<Domain> {
         match expr {
             Expr::Literal { lit, .. } => Ok(self.calculate_literal(lit)),

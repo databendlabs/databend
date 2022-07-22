@@ -23,30 +23,30 @@ use std::sync::Arc;
 
 use comfy_table::Table;
 use common_ast::DisplayError;
-use common_expression::chunk::Chunk;
-use common_expression::evaluator::DomainCalculator;
-use common_expression::evaluator::Evaluator;
-use common_expression::expression::RemoteExpr;
-use common_expression::function::vectorize_2_arg;
-use common_expression::function::Function;
-use common_expression::function::FunctionContext;
-use common_expression::function::FunctionRegistry;
-use common_expression::function::FunctionSignature;
-use common_expression::property::BooleanDomain;
-use common_expression::property::Domain;
-use common_expression::property::FloatDomain;
-use common_expression::property::FunctionProperty;
-use common_expression::property::IntDomain;
-use common_expression::property::NullableDomain;
 use common_expression::type_check;
 use common_expression::types::ArrayType;
 use common_expression::types::DataType;
 use common_expression::types::*;
-use common_expression::values::Column;
-use common_expression::values::ColumnBuilder;
-use common_expression::values::Scalar;
-use common_expression::values::Value;
-use common_expression::values::ValueRef;
+use common_expression::vectorize_2_arg;
+use common_expression::BooleanDomain;
+use common_expression::Chunk;
+use common_expression::Column;
+use common_expression::ColumnBuilder;
+use common_expression::Domain;
+use common_expression::DomainCalculator;
+use common_expression::Evaluator;
+use common_expression::FloatDomain;
+use common_expression::Function;
+use common_expression::FunctionContext;
+use common_expression::FunctionProperty;
+use common_expression::FunctionRegistry;
+use common_expression::FunctionSignature;
+use common_expression::IntDomain;
+use common_expression::NullableDomain;
+use common_expression::RemoteExpr;
+use common_expression::Scalar;
+use common_expression::Value;
+use common_expression::ValueRef;
 use goldenfile::Mint;
 use parser::parse_raw_expr;
 
@@ -926,9 +926,7 @@ fn run_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType, Column
             .map(|(_, _, col)| col.domain())
             .collect::<Vec<_>>();
 
-        let domain_calculator = DomainCalculator {
-            input_domains: input_domains.clone(),
-        };
+        let domain_calculator = DomainCalculator::new(input_domains.clone());
         let output_domain = domain_calculator.calculate(&expr)?;
 
         let chunk = Chunk::new(

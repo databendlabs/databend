@@ -19,6 +19,7 @@
 pub mod aggregates;
 pub mod rdoc;
 pub mod scalars;
+pub mod scalars_v2;
 pub mod window;
 
 use aggregates::AggregateFunctionFactory;

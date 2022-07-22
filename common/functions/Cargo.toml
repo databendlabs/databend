@@ -8,7 +8,6 @@ edition = "2021"
 
 [lib]
 doctest = false
-test = false
 
 [dependencies] # In alphabetical order
 # Workspace dependencies
@@ -16,6 +15,7 @@ common-arrow = { path = "../arrow" }
 common-datablocks = { path = "../datablocks" }
 common-datavalues = { path = "../datavalues" }
 common-exception = { path = "../exception" }
+common-expression = { path = "../expression" }
 common-io = { path = "../io" }
 
 # Crates.io dependencies
@@ -55,6 +55,9 @@ uuid = { version = "1.1.2", features = ["v4"] }
 
 [dev-dependencies]
 bumpalo = "3.10.0"
+goldenfile = "1.4"
+comfy-table = "6"
+common-ast = { path = "../ast" }
 common-datablocks = { path = "../datablocks" }
 float-cmp = "0.9.0"
 pretty_assertions = "1.2.1"
