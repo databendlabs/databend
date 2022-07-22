@@ -120,3 +120,19 @@ output domain  : {NULL}
 output         : NULL
 
 
+ast            : true XOR false
+raw expr       : xor(true, false)
+checked expr   : xor<Boolean, Boolean>(true, false)
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : null XOR false
+raw expr       : xor(NULL, false)
+checked expr   : xor<NULL, Boolean NULL>(NULL, CAST(false AS Boolean NULL))
+output type    : NULL
+output domain  : {NULL}
+output         : NULL
+
+
