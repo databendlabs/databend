@@ -17,18 +17,12 @@ use common_expression::types::string::StringColumnBuilder;
 use common_expression::types::StringType;
 use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
-use common_expression::StringDomain;
 
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_with_writer_1_arg::<StringType, StringType, _, _>(
         "upper",
         FunctionProperty::default(),
-        |arg| {
-            Some(StringDomain {
-                min: run_scalar(&arg.min, upper),
-                max: arg.max.as_ref().map(|max| run_scalar(max, upper)),
-            })
-        },
+        |_| None ,
         |val, writer| {
             upper(val, writer);
             Ok(())
@@ -51,10 +45,4 @@ fn upper(val: &[u8], writer: &mut StringColumnBuilder) {
         }
     }
     writer.commit_row();
-}
-
-fn run_scalar(val: &[u8], f: impl Fn(&[u8], &mut StringColumnBuilder)) -> Vec<u8> {
-    let mut builder = StringColumnBuilder::with_capacity(val.len(), 1);
-    f(val, &mut builder);
-    builder.build_scalar()
 }

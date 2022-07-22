@@ -2,7 +2,7 @@ ast            : upper('Abc')
 raw expr       : upper(Abc)
 checked expr   : upper<String>(Abc)
 output type    : String
-output domain  : {"ABC"..="ABC"}
+output domain  : {""..}
 output         : ABC
 
 
@@ -10,7 +10,7 @@ ast            : upper('Dobrý den')
 raw expr       : upper(Dobrý den)
 checked expr   : upper<String>(Dobrý den)
 output type    : String
-output domain  : {"DOBRÝ DEN"..="DOBRÝ DEN"}
+output domain  : {""..}
 output         : DOBRÝ DEN
 
 
@@ -18,7 +18,7 @@ ast            : upper('ß😀山')
 raw expr       : upper(ß😀山)
 checked expr   : upper<String>(ß😀山)
 output type    : String
-output domain  : {"SS😀山"..="SS😀山"}
+output domain  : {""..}
 output         : SS😀山
 
 
@@ -34,15 +34,15 @@ ast            : ucase(a)
 raw expr       : ucase(ColumnRef(0)::String)
 checked expr   : upper<String>(ColumnRef(0))
 evaluation:
-+--------+-------------------+--------------------+
-|        | a                 | Output             |
-+--------+-------------------+--------------------+
-| Type   | String            | String             |
-| Domain | {"Abc"..="ß😀山"} | {"ABC"..="SS😀山"} |
-| Row 0  | Abc               | ABC                |
-| Row 1  | Dobrý den         | DOBRÝ DEN          |
-| Row 2  | ß😀山             | SS😀山             |
-+--------+-------------------+--------------------+
++--------+-------------------+-----------+
+|        | a                 | Output    |
++--------+-------------------+-----------+
+| Type   | String            | String    |
+| Domain | {"Abc"..="ß😀山"} | {""..}    |
+| Row 0  | Abc               | ABC       |
+| Row 1  | Dobrý den         | DOBRÝ DEN |
+| Row 2  | ß😀山             | SS😀山    |
++--------+-------------------+-----------+
 evaluation (internal):
 +--------+----------------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                               |
