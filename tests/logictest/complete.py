@@ -9,8 +9,7 @@ from config import http_config
 
 target_dir = "./"
 
-http_client = HttpConnector()
-http_client.connect(**http_config)
+http_client = HttpConnector(**http_config)
 
 
 def run(source_file, target_path="."):

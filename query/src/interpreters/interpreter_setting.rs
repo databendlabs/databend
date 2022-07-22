@@ -50,9 +50,9 @@ impl Interpreter for SettingInterpreter {
     ) -> Result<SendableDataBlockStream> {
         let plan = self.set.clone();
         for var in plan.vars {
-            match var.variable.to_lowercase().as_str() {
+            let ok = match var.variable.to_lowercase().as_str() {
                 // To be compatible with some drivers
-                "sql_mode" | "autocommit" => {}
+                "sql_mode" | "autocommit" => false,
                 "timezone" => {
                     // check if the timezone is valid
                     let tz = var.value.trim_matches(|c| c == '\'' || c == '\"');
@@ -60,10 +60,11 @@ impl Interpreter for SettingInterpreter {
                         ErrorCode::InvalidTimezone(format!("Invalid Timezone: {}", var.value))
                     })?;
                     self.ctx.get_settings().set_settings(
-                        var.variable,
+                        var.variable.clone(),
                         tz.to_string(),
                         var.is_global,
                     )?;
+                    true
                 }
                 _ => {
                     self.ctx.get_settings().set_settings(
@@ -71,12 +72,15 @@ impl Interpreter for SettingInterpreter {
                         var.value.clone(),
                         var.is_global,
                     )?;
-                    self.ctx.set_affect(QueryAffect::ChangeSetting {
-                        key: var.variable.clone(),
-                        value: var.value.clone(),
-                        is_global: var.is_global,
-                    })
+                    true
                 }
+            };
+            if ok {
+                self.ctx.set_affect(QueryAffect::ChangeSetting {
+                    key: var.variable.clone(),
+                    value: var.value.clone(),
+                    is_global: var.is_global,
+                })
             }
         }
 
