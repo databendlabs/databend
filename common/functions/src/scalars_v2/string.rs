@@ -22,7 +22,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_with_writer_1_arg::<StringType, StringType, _, _>(
         "upper",
         FunctionProperty::default(),
-        |_| None ,
+        |_| None,
         |val, writer| {
             upper(val, writer);
             Ok(())
