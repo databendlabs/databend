@@ -1,14 +1,14 @@
-ast            : bool_and(true, false)
-raw expr       : bool_and(true, false)
-checked expr   : bool_and<Boolean, Boolean>(true, false)
+ast            : true AND false
+raw expr       : and(true, false)
+checked expr   : and<Boolean, Boolean>(true, false)
 output type    : Boolean
 output domain  : {FALSE}
 output         : false
 
 
-ast            : bool_and(null, false)
-raw expr       : bool_and(NULL, false)
-checked expr   : bool_and<NULL, Boolean NULL>(NULL, CAST(false AS Boolean NULL))
+ast            : null AND false
+raw expr       : and(NULL, false)
+checked expr   : and<NULL, Boolean NULL>(NULL, CAST(false AS Boolean NULL))
 output type    : NULL
 output domain  : {NULL}
 output         : NULL
@@ -446,9 +446,9 @@ evaluation (internal):
 +--------+------------------------------------------------------------------+
 
 
-ast            : bool_not(a)
-raw expr       : bool_not(ColumnRef(0)::Boolean NULL)
-checked expr   : bool_not<Boolean NULL>(ColumnRef(0))
+ast            : NOT a
+raw expr       : not(ColumnRef(0)::Boolean NULL)
+checked expr   : not<Boolean NULL>(ColumnRef(0))
 evaluation:
 +--------+------------------------+------------------------+
 |        | a                      | Output                 |
@@ -468,9 +468,9 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------+
 
 
-ast            : bool_not(a)
-raw expr       : bool_not(ColumnRef(0)::NULL)
-checked expr   : bool_not<NULL>(ColumnRef(0))
+ast            : NOT a
+raw expr       : not(ColumnRef(0)::NULL)
+checked expr   : not<NULL>(ColumnRef(0))
 evaluation:
 +--------+--------+--------+
 |        | a      | Output |
@@ -750,18 +750,18 @@ ast            : create_tuple(TRY_CAST(a AS FLOAT32), TRY_CAST(a AS INT32), TRY_
 raw expr       : create_tuple(TRY_CAST(ColumnRef(0)::UInt64 AS Float32), TRY_CAST(ColumnRef(0)::UInt64 AS Int32), TRY_CAST(ColumnRef(1)::Float64 AS Float32), TRY_CAST(ColumnRef(1)::Float64 AS Int32))
 checked expr   : create_tuple<Float32 NULL, Int32 NULL, Float32 NULL, Int32 NULL>(TRY_CAST(ColumnRef(0) AS Float32 NULL), TRY_CAST(ColumnRef(0) AS Int32 NULL), TRY_CAST(ColumnRef(1) AS Float32 NULL), TRY_CAST(ColumnRef(1) AS Int32 NULL))
 evaluation:
-+--------+----------------------------+----------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------+
-|        | a                          | b                                                  | Output                                                                                                                                            |
-+--------+----------------------------+----------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------+
-| Type   | UInt64                     | Float64                                            | (Float32 NULL, Int32 NULL, Float32 NULL, Int32 NULL)                                                                                              |
-| Domain | {0..=18446744073709551615} | {-1.7976931348623157e308..=1.7976931348623157e308} | ({0.0..=1.8446744073709552e19}, {0..=2147483647} ∪ {NULL}, {-3.4028234663852886e38..=3.4028234663852886e38}, {-2147483648..=2147483647} ∪ {NULL}) |
-| Row 0  | 0                          | 0.0                                                | (0.0, 0, 0.0, 0)                                                                                                                                  |
-| Row 1  | 1                          | 4294967295.0                                       | (1.0, 1, 4294967300.0, NULL)                                                                                                                      |
-| Row 2  | 255                        | 1.8446744073709552e19                              | (255.0, 255, 1.8446744e19, NULL)                                                                                                                  |
-| Row 3  | 65535                      | -1.7976931348623157e308                            | (65535.0, 65535, -inf, NULL)                                                                                                                      |
-| Row 4  | 4294967295                 | 1.7976931348623157e308                             | (4294967300.0, NULL, inf, NULL)                                                                                                                   |
-| Row 5  | 18446744073709551615       | inf                                                | (1.8446744e19, NULL, inf, NULL)                                                                                                                   |
-+--------+----------------------------+----------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------+
++--------+----------------------------+---------------------------------+---------------------------------------------------------------------------------------------------------------+
+|        | a                          | b                               | Output                                                                                                        |
++--------+----------------------------+---------------------------------+---------------------------------------------------------------------------------------------------------------+
+| Type   | UInt64                     | Float64                         | (Float32 NULL, Int32 NULL, Float32 NULL, Int32 NULL)                                                          |
+| Domain | {0..=18446744073709551615} | {-1.7976931348623157e308..=inf} | ({0.0..=1.8446744073709552e19}, {0..=2147483647} ∪ {NULL}, {-inf..=inf}, {-2147483648..=2147483647} ∪ {NULL}) |
+| Row 0  | 0                          | 0.0                             | (0.0, 0, 0.0, 0)                                                                                              |
+| Row 1  | 1                          | 4294967295.0                    | (1.0, 1, 4294967300.0, NULL)                                                                                  |
+| Row 2  | 255                        | 1.8446744073709552e19           | (255.0, 255, 1.8446744e19, NULL)                                                                              |
+| Row 3  | 65535                      | -1.7976931348623157e308         | (65535.0, 65535, -inf, NULL)                                                                                  |
+| Row 4  | 4294967295                 | 1.7976931348623157e308          | (4294967300.0, NULL, inf, NULL)                                                                               |
+| Row 5  | 18446744073709551615       | inf                             | (1.8446744e19, NULL, inf, NULL)                                                                               |
++--------+----------------------------+---------------------------------+---------------------------------------------------------------------------------------------------------------+
 evaluation (internal):
 +--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                                                                                                                                                                                                                                                                                    |
@@ -805,7 +805,7 @@ evaluation:
 |        | a         | b          | Output                                         |
 +--------+-----------+------------+------------------------------------------------+
 | Type   | Int16     | Int16      | (Int8 NULL, UInt8 NULL, Boolean NULL) NULL     |
-| Domain | {0..=255} | {-129..=1} | ({0..=127} ∪ {NULL}, {0..=1} ∪ {NULL}, {NULL}) |
+| Domain | {0..=256} | {-129..=1} | ({0..=127} ∪ {NULL}, {0..=1} ∪ {NULL}, {NULL}) |
 | Row 0  | 0         | 0          | (0, 0, NULL)                                   |
 | Row 1  | 1         | 1          | (1, 1, NULL)                                   |
 | Row 2  | 2         | -127       | (2, NULL, NULL)                                |
