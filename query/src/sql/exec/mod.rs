@@ -19,6 +19,8 @@ mod pipeline_builder;
 mod util;
 
 pub use expression_builder::ExpressionBuilder;
+pub use expression_builder::ExpressionBuilderWithRenaming;
+pub use expression_builder::ExpressionBuilderWithoutRenaming;
 pub use physical_plan::*;
 pub use physical_plan_builder::PhysicalPlanBuilder;
 pub use pipeline_builder::PipelineBuilder;
