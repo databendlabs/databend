@@ -29,6 +29,7 @@ use common_functions::scalars_v2::builtin_functions;
 
 mod boolean;
 mod parser;
+mod string;
 
 pub fn run_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType, Column)]) {
     let result = try {

@@ -15,9 +15,11 @@
 use common_expression::FunctionRegistry;
 
 mod boolean;
+mod string;
 
 pub fn builtin_functions() -> FunctionRegistry {
     let mut registry = FunctionRegistry::new();
     boolean::register(&mut registry);
+    string::register(&mut registry);
     registry
 }

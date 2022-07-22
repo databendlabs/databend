@@ -1,0 +1,54 @@
+ast            : upper('Abc')
+raw expr       : upper(Abc)
+checked expr   : upper<String>(Abc)
+output type    : String
+output domain  : {""..}
+output         : ABC
+
+
+ast            : upper('Dobrý den')
+raw expr       : upper(Dobrý den)
+checked expr   : upper<String>(Dobrý den)
+output type    : String
+output domain  : {""..}
+output         : DOBRÝ DEN
+
+
+ast            : upper('ß😀山')
+raw expr       : upper(ß😀山)
+checked expr   : upper<String>(ß😀山)
+output type    : String
+output domain  : {""..}
+output         : SS😀山
+
+
+ast            : upper(NULL)
+raw expr       : upper(NULL)
+checked expr   : upper<NULL>(NULL)
+output type    : NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : ucase(a)
+raw expr       : ucase(ColumnRef(0)::String)
+checked expr   : upper<String>(ColumnRef(0))
+evaluation:
++--------+-------------------+-----------+
+|        | a                 | Output    |
++--------+-------------------+-----------+
+| Type   | String            | String    |
+| Domain | {"Abc"..="ß😀山"} | {""..}    |
+| Row 0  | Abc               | ABC       |
+| Row 1  | Dobrý den         | DOBRÝ DEN |
+| Row 2  | ß😀山             | SS😀山    |
++--------+-------------------+-----------+
+evaluation (internal):
++--------+----------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                               |
++--------+----------------------------------------------------------------------------------------------------------------------------------------------------+
+| a      | String { data: [65, 98, 99, 68, 111, 98, 114, 195, 189, 32, 100, 101, 110, 195, 159, 240, 159, 152, 128, 229, 177, 177], offsets: [0, 3, 13, 22] } |
+| Output | String { data: [65, 66, 67, 68, 79, 66, 82, 195, 157, 32, 68, 69, 78, 83, 83, 240, 159, 152, 128, 229, 177, 177], offsets: [0, 3, 13, 22] }        |
++--------+----------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
