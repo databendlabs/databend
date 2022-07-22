@@ -12,14 +12,6 @@ statement error must appear in the GROUP BY clause or be used in an aggregate fu
 select count(number) from numbers(10) group by number+1 having number = 1;
 
 onlyif mysql
-statement error must appear in the GROUP BY clause or be used in an aggregate function
-select count(number) from numbers(10) group by number+1 order by number;
-
-onlyif mysql
-statement error must appear in the GROUP BY clause or be used in an aggregate function
-select count(number) from numbers(10) order by number;
-
-onlyif mysql
 statement query I
 select number +1 from numbers(1) group by number+1;
 
