@@ -27,6 +27,8 @@ fn test_boolean() {
 
     test_and(file);
     test_not(file);
+    test_or(file);
+    test_xor(file);
 }
 
 fn test_and(file: &mut impl Write) {
@@ -59,4 +61,14 @@ fn test_not(file: &mut impl Write) {
             validity: vec![true, true, false].into(),
         },
     )]);
+}
+
+fn test_or(file: &mut impl Write) {
+    run_ast(file, "true OR false", &[]);
+    run_ast(file, "null OR false", &[]);
+}
+
+fn test_xor(file: &mut impl Write) {
+    run_ast(file, "true XOR false", &[]);
+    run_ast(file, "null XOR false", &[]);
 }
