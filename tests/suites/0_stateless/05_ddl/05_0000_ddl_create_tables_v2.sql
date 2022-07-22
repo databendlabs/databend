@@ -76,7 +76,7 @@ desc db2.test7;
 
 
 SELECT '====CREATE TRANSIENT TABLE====';
-create transient table db2.test8(tiny TINYINT, tiny_unsigned TINYINT UNSIGNED, smallint SMALLINT, smallint_unsigned SMALLINT UNSIGNED, int INT, int_unsigned INT UNSIGNED, bigint BIGINT, bigint_unsigned BIGINT UNSIGNED,float FLOAT, double DOUBLE, date DATE, datetime DATETIME, ts TIMESTAMP, str VARCHAR default '3', bool BOOLEAN, arr ARRAY, obj OBJECT, variant VARIANT);
+create transient table db2.test8(tiny TINYINT, tiny_unsigned TINYINT UNSIGNED, smallint SMALLINT, smallint_unsigned SMALLINT UNSIGNED, int INT, int_unsigned INT UNSIGNED, bigint BIGINT, bigint_unsigned BIGINT UNSIGNED,float FLOAT, double DOUBLE, date DATE, datetime DATETIME, ts TIMESTAMP(6), str VARCHAR default '3', bool BOOLEAN, arr ARRAY, obj OBJECT, variant VARIANT);
 desc db2.test8;
 
 -- clean up test databases

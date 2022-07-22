@@ -17,11 +17,9 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 
 use chrono_tz::Tz;
-use common_base::mem_allocator::malloc_size;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::FormatSettings;
-use common_macros::MallocSizeOf;
 use common_meta_types::GrantObject;
 use common_meta_types::UserInfo;
 use common_meta_types::UserPrivilegeType;
@@ -40,18 +38,13 @@ use crate::sessions::SessionType;
 use crate::sessions::Settings;
 use crate::Config;
 
-#[derive(MallocSizeOf)]
 pub struct Session {
     pub(in crate::sessions) id: String,
-    #[ignore_malloc_size_of = "insignificant"]
     pub(in crate::sessions) typ: RwLock<SessionType>,
-    #[ignore_malloc_size_of = "insignificant"]
     pub(in crate::sessions) session_mgr: Arc<SessionManager>,
     pub(in crate::sessions) ref_count: Arc<AtomicUsize>,
     pub(in crate::sessions) session_ctx: Arc<SessionContext>,
-    #[ignore_malloc_size_of = "insignificant"]
     session_settings: Settings,
-    #[ignore_malloc_size_of = "insignificant"]
     status: Arc<RwLock<SessionStatus>>,
     pub(in crate::sessions) mysql_connection_id: Option<u32>,
 }
@@ -287,7 +280,8 @@ impl Session {
     }
 
     pub fn get_memory_usage(self: &Arc<Self>) -> usize {
-        malloc_size(self)
+        // TODO(winter): use thread memory tracker
+        0
     }
 
     pub fn get_storage_operator(self: &Arc<Self>) -> Operator {

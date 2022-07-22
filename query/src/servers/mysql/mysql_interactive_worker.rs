@@ -57,7 +57,6 @@ struct InteractiveWorkerBase<W: std::io::Write> {
 }
 
 pub struct InteractiveWorker<W: std::io::Write> {
-    session: SessionRef,
     base: InteractiveWorkerBase<W>,
     version: String,
     salt: [u8; 20],
@@ -73,7 +72,7 @@ impl<W: std::io::Write + Send + Sync> AsyncMysqlShim<W> for InteractiveWorker<W>
     }
 
     fn connect_id(&self) -> u32 {
-        match self.session.get_mysql_conn_id() {
+        match self.base.session.get_mysql_conn_id() {
             Some(conn_id) => conn_id,
             None => {
                 // default conn id
@@ -128,7 +127,7 @@ impl<W: std::io::Write + Send + Sync> AsyncMysqlShim<W> for InteractiveWorker<W>
         query: &'a str,
         writer: StatementMetaWriter<'a, W>,
     ) -> Result<()> {
-        if self.session.is_aborting() {
+        if self.base.session.is_aborting() {
             writer.error(
                 ErrorKind::ER_ABORTING_CONNECTION,
                 "Aborting this connection. because we are try aborting server.".as_bytes(),
@@ -148,7 +147,7 @@ impl<W: std::io::Write + Send + Sync> AsyncMysqlShim<W> for InteractiveWorker<W>
         param: ParamParser<'a>,
         writer: QueryResultWriter<'a, W>,
     ) -> Result<()> {
-        if self.session.is_aborting() {
+        if self.base.session.is_aborting() {
             writer.error(
                 ErrorKind::ER_ABORTING_CONNECTION,
                 "Aborting this connection. because we are try aborting server.".as_bytes(),
@@ -173,7 +172,7 @@ impl<W: std::io::Write + Send + Sync> AsyncMysqlShim<W> for InteractiveWorker<W>
         query: &'a str,
         writer: QueryResultWriter<'a, W>,
     ) -> Result<()> {
-        if self.session.is_aborting() {
+        if self.base.session.is_aborting() {
             writer.error(
                 ErrorKind::ER_ABORTING_CONNECTION,
                 "Aborting this connection. because we are try aborting server.".as_bytes(),
@@ -189,7 +188,7 @@ impl<W: std::io::Write + Send + Sync> AsyncMysqlShim<W> for InteractiveWorker<W>
         let instant = Instant::now();
         let blocks = self.base.do_query(query).await;
 
-        let format = self.session.get_format_settings()?;
+        let format = self.base.session.get_format_settings()?;
         let mut write_result = writer.write(blocks, &format);
 
         if let Err(cause) = write_result {
@@ -210,7 +209,7 @@ impl<W: std::io::Write + Send + Sync> AsyncMysqlShim<W> for InteractiveWorker<W>
         database_name: &'a str,
         writer: InitWriter<'a, W>,
     ) -> Result<()> {
-        if self.session.is_aborting() {
+        if self.base.session.is_aborting() {
             writer.error(
                 ErrorKind::ER_ABORTING_CONNECTION,
                 "Aborting this connection. because we are try aborting server.".as_bytes(),
@@ -459,7 +458,6 @@ impl<W: std::io::Write> InteractiveWorker<W> {
         }
 
         InteractiveWorker::<W> {
-            session: session.clone(),
             base: InteractiveWorkerBase::<W> {
                 session,
                 generic_hold: PhantomData::default(),

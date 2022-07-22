@@ -128,6 +128,17 @@ where R: BufferRead
             let _ = self.keep_read(&mut buf, |f| (b'0'..=b'9').contains(&f))?;
         }
 
+        // #[regex(r"([0-9]*\.[0-9]+(e[+-]?[0-9]+)?)|([0-9]+\.[0-9]*(e[+-]?[0-9]+)?)")]
+        if self.ignore_byte(b'e')? {
+            buf.push(b'e');
+            if self.ignore_byte(b'+')? {
+                buf.push(b'+');
+            } else if self.ignore_byte(b'-')? {
+                buf.push(b'-');
+            }
+            let _ = self.keep_read(&mut buf, |f| (b'0'..=b'9').contains(&f))?;
+        }
+
         FromLexical::from_lexical(buf.as_slice()).map_err_to_code(ErrorCode::BadBytes, || {
             format!("Cannot parse value:{:?} to number type", buf)
         })

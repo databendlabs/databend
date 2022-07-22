@@ -31,7 +31,7 @@ error:
 1 | create table a (c varch)
   | ------          - ^^^^^
   | |               | |
-  | |               | expected `BOOLEAN`, `BOOL`, `UINT8`, `TINYINT`, `UINT16`, `SMALLINT`, or 25 more ...
+  | |               | expected `BOOLEAN`, `BOOL`, `UINT8`, `TINYINT`, `UINT16`, `SMALLINT`, or 26 more ...
   | |               | while parsing type name
   | |               while parsing `<column name> <type> [DEFAULT <default value>] [COMMENT '<comment>']`
   | while parsing `CREATE TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`

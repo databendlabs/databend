@@ -16,6 +16,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use chrono_tz::Tz;
+use serde::Deserialize;
+use serde::Serialize;
 
 use crate::property::Domain;
 use crate::property::FunctionProperty;
@@ -47,14 +49,14 @@ impl Default for FunctionContext {
 
 /// `FunctionID` is a unique identifier for a function. It's used to construct
 /// the exactly same function from the remote execution nodes.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum FunctionID {
     Builtin {
-        name: &'static str,
+        name: String,
         id: usize,
     },
     Factory {
-        name: &'static str,
+        name: String,
         id: usize,
         params: Vec<usize>,
         args_type: Vec<DataType>,
@@ -83,6 +85,25 @@ pub struct FunctionRegistry {
 }
 
 impl FunctionRegistry {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn get(&self, id: &FunctionID) -> Option<Arc<Function>> {
+        match id {
+            FunctionID::Builtin { name, id } => self.funcs.get(name.as_str())?.get(*id).cloned(),
+            FunctionID::Factory {
+                name,
+                id,
+                params,
+                args_type,
+            } => {
+                let factory = self.factories.get(name.as_str())?.get(*id)?;
+                factory(params, args_type)
+            }
+        }
+    }
+
     pub fn search_candidates(
         &self,
         name: &str,
@@ -92,16 +113,22 @@ impl FunctionRegistry {
         if params.is_empty() {
             let builtin_funcs = self
                 .funcs
-                .get_key_value(name)
-                .map(|(name, funcs)| {
+                .get(name)
+                .map(|funcs| {
                     funcs
                         .iter()
                         .enumerate()
                         .filter_map(|(id, func)| {
-                            if func.signature.name == *name
+                            if func.signature.name == name
                                 && func.signature.args_type.len() == args_type.len()
                             {
-                                Some((FunctionID::Builtin { name, id }, func.clone()))
+                                Some((
+                                    FunctionID::Builtin {
+                                        name: name.to_string(),
+                                        id,
+                                    },
+                                    func.clone(),
+                                ))
                             } else {
                                 None
                             }
@@ -116,8 +143,8 @@ impl FunctionRegistry {
         }
 
         self.factories
-            .get_key_value(name)
-            .map(|(name, factories)| {
+            .get(name)
+            .map(|factories| {
                 factories
                     .iter()
                     .enumerate()
@@ -125,7 +152,7 @@ impl FunctionRegistry {
                         factory(params, args_type).map(|func| {
                             (
                                 FunctionID::Factory {
-                                    name,
+                                    name: name.to_string(),
                                     id,
                                     params: params.to_vec(),
                                     args_type: args_type.to_vec(),
@@ -176,7 +203,7 @@ impl FunctionRegistry {
     {
         let has_nullable = &[I1::data_type(), O::data_type()]
             .iter()
-            .any(|ty| ty.as_nullable().is_some());
+            .any(|ty| ty.as_nullable().is_some() || ty.is_null());
 
         assert!(
             !has_nullable,
@@ -230,7 +257,7 @@ impl FunctionRegistry {
     {
         let has_nullable = &[I1::data_type(), O::data_type()]
             .iter()
-            .any(|ty| ty.as_nullable().is_some());
+            .any(|ty| ty.as_nullable().is_some() || ty.is_null());
 
         assert!(
             !has_nullable,
@@ -306,7 +333,7 @@ impl FunctionRegistry {
     {
         let has_nullable = &[I1::data_type(), I2::data_type(), O::data_type()]
             .iter()
-            .any(|ty| ty.as_nullable().is_some());
+            .any(|ty| ty.as_nullable().is_some() || ty.is_null());
 
         assert!(
             !has_nullable,
@@ -372,7 +399,7 @@ impl FunctionRegistry {
     {
         let has_nullable = &[I1::data_type(), I2::data_type(), O::data_type()]
             .iter()
-            .any(|ty| ty.as_nullable().is_some());
+            .any(|ty| ty.as_nullable().is_some() || ty.is_null());
 
         assert!(
             !has_nullable,

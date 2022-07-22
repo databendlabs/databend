@@ -27,6 +27,8 @@ use std::ops::Range;
 
 use common_arrow::arrow::trusted_len::TrustedLen;
 use enum_as_inner::EnumAsInner;
+use serde::Deserialize;
+use serde::Serialize;
 
 pub use self::any::AnyType;
 pub use self::array::ArrayType;
@@ -43,7 +45,7 @@ use crate::values::Scalar;
 
 pub type GenericMap<'a> = [DataType];
 
-#[derive(Debug, Clone, PartialEq, Eq, EnumAsInner)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, EnumAsInner)]
 pub enum DataType {
     Boolean,
     String,
@@ -72,7 +74,7 @@ pub trait ValueType: Sized + 'static {
     type Scalar: Debug + Clone;
     type ScalarRef<'a>: Debug + Clone;
     type Column: Debug + Clone;
-    type Domain: Debug + Clone;
+    type Domain: Debug + Clone + PartialEq;
 
     fn to_owned_scalar<'a>(scalar: Self::ScalarRef<'a>) -> Self::Scalar;
     fn to_scalar_ref<'a>(scalar: &'a Self::Scalar) -> Self::ScalarRef<'a>;
@@ -116,4 +118,228 @@ pub trait ArgType: ValueType {
     fn append_builder(builder: &mut Self::ColumnBuilder, other_builder: &Self::ColumnBuilder);
     fn build_column(builder: Self::ColumnBuilder) -> Self::Column;
     fn build_scalar(builder: Self::ColumnBuilder) -> Self::Scalar;
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct NumberTypeInfo {
+    pub is_float: bool,
+    pub is_signed: bool,
+    pub bit_width: u8,
+}
+
+impl DataType {
+    pub const fn new_number(info: NumberTypeInfo) -> Self {
+        match info {
+            NumberTypeInfo {
+                is_float: false,
+                is_signed: false,
+                bit_width: 8,
+            } => DataType::UInt8,
+            NumberTypeInfo {
+                is_float: false,
+                is_signed: false,
+                bit_width: 16,
+            } => DataType::UInt16,
+            NumberTypeInfo {
+                is_float: false,
+                is_signed: false,
+                bit_width: 32,
+            } => DataType::UInt32,
+            NumberTypeInfo {
+                is_float: false,
+                is_signed: false,
+                bit_width: 64,
+            } => DataType::UInt64,
+            NumberTypeInfo {
+                is_float: false,
+                is_signed: true,
+                bit_width: 8,
+            } => DataType::Int8,
+            NumberTypeInfo {
+                is_float: false,
+                is_signed: true,
+                bit_width: 16,
+            } => DataType::Int16,
+            NumberTypeInfo {
+                is_float: false,
+                is_signed: true,
+                bit_width: 32,
+            } => DataType::Int32,
+            NumberTypeInfo {
+                is_float: false,
+                is_signed: true,
+                bit_width: 64,
+            } => DataType::Int64,
+            NumberTypeInfo {
+                is_float: true,
+                is_signed: true,
+                bit_width: 32,
+            } => DataType::Float32,
+            NumberTypeInfo {
+                is_float: true,
+                is_signed: true,
+                bit_width: 64,
+            } => DataType::Float64,
+            _ => panic!("unsupported numeric type"),
+        }
+    }
+
+    pub const fn number_type_info(&self) -> Option<NumberTypeInfo> {
+        match self {
+            DataType::UInt8 => Some(NumberTypeInfo {
+                is_float: false,
+                is_signed: false,
+                bit_width: 8,
+            }),
+            DataType::UInt16 => Some(NumberTypeInfo {
+                is_float: false,
+                is_signed: false,
+                bit_width: 16,
+            }),
+            DataType::UInt32 => Some(NumberTypeInfo {
+                is_float: false,
+                is_signed: false,
+                bit_width: 32,
+            }),
+            DataType::UInt64 => Some(NumberTypeInfo {
+                is_float: false,
+                is_signed: false,
+                bit_width: 64,
+            }),
+            DataType::Int8 => Some(NumberTypeInfo {
+                is_float: false,
+                is_signed: true,
+                bit_width: 8,
+            }),
+            DataType::Int16 => Some(NumberTypeInfo {
+                is_float: false,
+                is_signed: true,
+                bit_width: 16,
+            }),
+            DataType::Int32 => Some(NumberTypeInfo {
+                is_float: false,
+                is_signed: true,
+                bit_width: 32,
+            }),
+            DataType::Int64 => Some(NumberTypeInfo {
+                is_float: false,
+                is_signed: true,
+                bit_width: 64,
+            }),
+            DataType::Float32 => Some(NumberTypeInfo {
+                is_float: true,
+                is_signed: true,
+                bit_width: 32,
+            }),
+            DataType::Float64 => Some(NumberTypeInfo {
+                is_float: true,
+                is_signed: true,
+                bit_width: 64,
+            }),
+            _ => None,
+        }
+    }
+}
+
+impl NumberTypeInfo {
+    pub const fn can_lossless_cast_to(self, dest: Self) -> bool {
+        match (self.is_float, dest.is_float) {
+            (true, true) => self.bit_width <= dest.bit_width,
+            (true, false) => false,
+            (false, true) => self.bit_width < dest.bit_width,
+            (false, false) => match (self.is_signed, dest.is_signed) {
+                (true, true) | (false, false) => self.bit_width <= dest.bit_width,
+                (false, true) => {
+                    if let Some(self_next_bit_width) = next_bit_width(self.bit_width) {
+                        self_next_bit_width <= dest.bit_width
+                    } else {
+                        false
+                    }
+                }
+                (true, false) => false,
+            },
+        }
+    }
+
+    pub const fn lossless_super_type(self, other: Self) -> Option<Self> {
+        Some(match (self.is_float, other.is_float) {
+            (true, true) => NumberTypeInfo {
+                is_float: true,
+                is_signed: true,
+                bit_width: max_bit_with(self.bit_width, other.bit_width),
+            },
+            (true, false) => NumberTypeInfo {
+                is_float: true,
+                is_signed: true,
+                bit_width: if let Some(next_other_bit_width) = next_bit_width(other.bit_width) {
+                    max_bit_with(self.bit_width, next_other_bit_width)
+                } else {
+                    return None;
+                },
+            },
+            (false, true) => NumberTypeInfo {
+                is_float: true,
+                is_signed: true,
+                bit_width: if let Some(next_self_bit_width) = next_bit_width(self.bit_width) {
+                    max_bit_with(next_self_bit_width, other.bit_width)
+                } else {
+                    return None;
+                },
+            },
+            (false, false) => match (self.is_signed, other.is_signed) {
+                (true, true) => NumberTypeInfo {
+                    is_float: false,
+                    is_signed: true,
+                    bit_width: max_bit_with(self.bit_width, other.bit_width),
+                },
+                (false, false) => NumberTypeInfo {
+                    is_float: false,
+                    is_signed: false,
+                    bit_width: max_bit_with(self.bit_width, other.bit_width),
+                },
+                (false, true) => NumberTypeInfo {
+                    is_float: false,
+                    is_signed: true,
+                    bit_width: if let Some(next_other_bit_width) = next_bit_width(other.bit_width) {
+                        max_bit_with(self.bit_width, next_other_bit_width)
+                    } else {
+                        return None;
+                    },
+                },
+                (true, false) => NumberTypeInfo {
+                    is_float: false,
+                    is_signed: true,
+                    bit_width: if let Some(next_self_bit_width) = next_bit_width(self.bit_width) {
+                        max_bit_with(next_self_bit_width, other.bit_width)
+                    } else {
+                        return None;
+                    },
+                },
+            },
+        })
+    }
+}
+
+const fn next_bit_width(width: u8) -> Option<u8> {
+    match width {
+        8 => Some(16),
+        16 => Some(32),
+        32 => Some(64),
+        64 => None,
+        _ => panic!("invalid bit width"),
+    }
+}
+
+const fn max_bit_with(lhs: u8, rhs: u8) -> u8 {
+    if lhs > rhs { lhs } else { rhs }
+}
+
+#[macro_export]
+macro_rules! with_number_type {
+    ($t:tt, $($tail:tt)*) => {{
+        match_template::match_template! {
+            $t = [UInt8, UInt16, UInt32, UInt64, Int8, Int16, Int32, Int64, Float32, Float64],
+            $($tail)*
+        }
+    }}
 }

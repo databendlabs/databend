@@ -1139,14 +1139,17 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
             item_type: opt_item_type.map(|(_, opt_item_type, _)| Box::new(opt_item_type)),
         },
     );
+    let ty_tuple = map(
+        rule! { "(" ~ #comma_separated_list1(type_name) ~ ")" },
+        |(_, fields_type, _)| TypeName::Tuple { fields_type },
+    );
     let ty_date = value(TypeName::Date, rule! { DATE });
     let ty_datetime = map(
-        rule! { DATETIME ~ ( "(" ~ #literal_u64 ~ ")" )? },
-        |(_, opt_precision)| TypeName::DateTime {
+        rule! { (DATETIME | TIMESTAMP) ~ ( "(" ~ #literal_u64 ~ ")" )? },
+        |(_, opt_precision)| TypeName::Timestamp {
             precision: opt_precision.map(|(_, precision, _)| precision),
         },
     );
-    let ty_timestamp = value(TypeName::Timestamp, rule! { TIMESTAMP });
     let ty_string = value(
         TypeName::String,
         rule! { ( STRING | VARCHAR ) ~ ( "(" ~ #literal_u64 ~ ")" )? },
@@ -1167,9 +1170,9 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
             | #ty_float32
             | #ty_float64
             | #ty_array
+            | #ty_tuple
             | #ty_date
             | #ty_datetime
-            | #ty_timestamp
             | #ty_string
             | #ty_object
             | #ty_variant

@@ -259,10 +259,10 @@ pub enum TypeName {
     Float32,
     Float64,
     Date,
-    DateTime { precision: Option<u64> },
-    Timestamp,
+    Timestamp { precision: Option<u64> },
     String,
     Array { item_type: Option<Box<TypeName>> },
+    Tuple { fields_type: Vec<TypeName> },
     Object,
     Variant,
     Nullable(Box<TypeName>),
@@ -525,14 +525,11 @@ impl Display for TypeName {
             TypeName::Date => {
                 write!(f, "DATE")?;
             }
-            TypeName::DateTime { precision } => {
-                write!(f, "DATETIME")?;
+            TypeName::Timestamp { precision } => {
+                write!(f, "Timestamp")?;
                 if let Some(precision) = precision {
                     write!(f, "({})", *precision)?;
                 }
-            }
-            TypeName::Timestamp => {
-                write!(f, "TIMESTAMP")?;
             }
             TypeName::String => {
                 write!(f, "STRING")?;
@@ -541,6 +538,15 @@ impl Display for TypeName {
                 write!(f, "ARRAY")?;
                 if let Some(item_type) = item_type {
                     write!(f, "({})", *item_type)?;
+                }
+            }
+            TypeName::Tuple { fields_type } => {
+                write!(f, "(")?;
+                write_comma_separated_list(f, fields_type)?;
+                if fields_type.len() == 1 {
+                    write!(f, ",)")?;
+                } else {
+                    write!(f, ")")?;
                 }
             }
             TypeName::Object => {

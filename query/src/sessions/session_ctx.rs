@@ -18,7 +18,6 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_macros::MallocSizeOf;
 use common_meta_types::UserInfo;
 use futures::channel::oneshot::Sender;
 use parking_lot::RwLock;
@@ -26,21 +25,15 @@ use parking_lot::RwLock;
 use crate::sessions::QueryContextShared;
 use crate::Config;
 
-#[derive(MallocSizeOf)]
 pub struct SessionContext {
-    #[ignore_malloc_size_of = "insignificant"]
     conf: Config,
     abort: AtomicBool,
     current_catalog: RwLock<String>,
     current_database: RwLock<String>,
     current_tenant: RwLock<String>,
-    #[ignore_malloc_size_of = "insignificant"]
     current_user: RwLock<Option<UserInfo>>,
-    #[ignore_malloc_size_of = "insignificant"]
     client_host: RwLock<Option<SocketAddr>>,
-    #[ignore_malloc_size_of = "insignificant"]
     io_shutdown_tx: RwLock<Option<Sender<Sender<()>>>>,
-    #[ignore_malloc_size_of = "insignificant"]
     query_context_shared: RwLock<Option<Arc<QueryContextShared>>>,
 }
 

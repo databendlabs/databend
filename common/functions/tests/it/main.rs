@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![feature(try_blocks)]
+
 mod aggregates;
 mod rdoc;
 mod scalars;
+mod scalars_v2;

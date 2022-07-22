@@ -103,8 +103,7 @@ def get_all_cases():
 
 def parse_cases(sql_file):
     # New session every case file
-    http_client = HttpConnector()
-    http_client.connect(**http_config)
+    http_client = HttpConnector(**http_config)
     cnx = mysql.connector.connect(**mysql_config)
     mysql_client = cnx.cursor()
 
@@ -126,7 +125,8 @@ def parse_cases(sql_file):
                 ret = ret + row_string + "\n"
         except Exception as err:
             log.warning(
-                f"SQL: {sql}  fetch no results, msg:{str(err)} ,check it manual.")
+                f"SQL: {sql}  fetch no results, msg:{str(err)} ,check it manual."
+            )
         return ret
 
     target_dir = os.path.dirname(
@@ -178,7 +178,9 @@ def parse_cases(sql_file):
                 continue
 
             if query_options == "":
-                log.warning(f"statement: {statement} type query could not get query_option change to ok statement")
+                log.warning(
+                    f"statement: {statement} type query could not get query_option change to ok statement"
+                )
                 content_output = content_output + STATEMENT_OK.format(
                     statement=statement)
                 continue
@@ -210,19 +212,11 @@ def parse_cases(sql_file):
         else:
             # ok statement
             try:
-                if str.lower(statement).startswith("use"):
-                    # use for sql session, ignore results
-                    database = get_database(statement).group("database")
-                    log.debug(f"use database {database}")
-                    http_client.set_database(database)
-                # mysql excute for data
-                if str.lower(statement).startswith("drop"):
-                    http_client.set_database("default")
-                if str.lower(statement).startswith("set"):
-                    http_client.query_with_session(statement)
+                http_client.query_with_session(statement)
                 mysql_client.execute(statement)
             except Exception as err:
-                log.warning(f"statement {statement} excute error,msg {str(err)}")
+                log.warning(
+                    f"statement {statement} execute error,msg {str(err)}")
                 pass
 
             content_output = content_output + STATEMENT_OK.format(
@@ -276,5 +270,7 @@ def main(pattern=".*"):
 
 
 if __name__ == '__main__':
-    log.info(f"Start generate sqllogictest suites from path: {suite_path} to path: {logictest_path}")
+    log.info(
+        f"Start generate sqllogictest suites from path: {suite_path} to path: {logictest_path}"
+    )
     fire.Fire(main)

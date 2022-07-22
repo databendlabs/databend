@@ -126,7 +126,9 @@ class Statement:
                     raise Exception(f"Invalid query options: {qo}")
                 if len(s) == 1:
                     if is_empty_line(s[0]):
-                        raise Exception(f"Invalid query options, query type should not be empty: {qo}")
+                        raise Exception(
+                            f"Invalid query options, query type should not be empty: {qo}"
+                        )
                     self.query_type = s[0]
                     return
                 query_type, options = qo.split(" ", 1)
@@ -216,7 +218,8 @@ def get_statements(suite_path, suite_name):
                 result_count = len(s.label) + 1
             for i in range(result_count):
                 results.append(get_result(lines))
-        yield ParsedStatement(line_idx + 1, s, suite_name, text, results, runs_on)
+        yield ParsedStatement(line_idx + 1, s, suite_name, text, results,
+                              runs_on)
 
 
 def format_value(vals, val_num):
@@ -278,7 +281,9 @@ class SuiteRunner(object):
         if callable(getattr(self, "batch_execute")):
             # case batch
             for (file_path, suite_name) in self.statement_files:
-                log.info(f"Run query with the same session every suite file, suite file path:{file_path}")
+                log.info(
+                    f"Run query with the same session every suite file, suite file path:{file_path}"
+                )
                 statement_list = list()
                 for state in get_statements(file_path, suite_name):
                     statement_list.append(state)
@@ -286,16 +291,22 @@ class SuiteRunner(object):
         else:
             # case one by one
             for (file_path, suite_name) in self.statement_files:
-                log.info(f"Run query without session every statements, suite file path:{file_path}")
+                log.info(
+                    f"Run query without session every statements, suite file path:{file_path}"
+                )
                 for state in get_statements(file_path, suite_name):
                     self.execute_statement(state)
 
     def execute_statement(self, statement):
         if self.kind not in statement.runs_on:
-            log.debug(f"Skip execute statement with {self.kind} SuiteRunner, only runs on {statement.runs_on}")
+            log.debug(
+                f"Skip execute statement with {self.kind} SuiteRunner, only runs on {statement.runs_on}"
+            )
             return
         if self.show_query_on_execution:
-            log.debug(f"executing statement, type {statement.s_type.type}\n{statement.text}\n")
+            log.debug(
+                f"executing statement, type {statement.s_type.type}\n{statement.text}\n"
+            )
         if statement.s_type.type == "query":
             self.assert_execute_query(statement)
         elif statement.s_type.type == "error":
@@ -360,10 +371,13 @@ class SuiteRunner(object):
         match = re.search(statement.s_type.expect_error, actual.msg)
         assert_that(
             match, is_not(none()),
-            f"statement {str(statement)}, expect error regex {statement.s_type.expect_error}, found {actual}")
+            f"statement {str(statement)}, expect error regex {statement.s_type.expect_error}, found {actual}"
+        )
 
     def run_sql_suite(self):
-        log.info(f"run_sql_suite for {self.kind} on base {os.path.abspath(self.path)}")
+        log.info(
+            f"run_sql_suite for {self.kind} on base {os.path.abspath(self.path)}"
+        )
         self.fetch_files()
         self.execute()
 

@@ -21,6 +21,7 @@ mod executor_worker_context;
 mod pipeline_complete_executor;
 mod pipeline_pulling_executor;
 mod pipeline_pushing_executor;
+mod processor_async_task;
 
 pub use executor_graph::RunningGraph;
 pub use pipeline_complete_executor::PipelineCompleteExecutor;

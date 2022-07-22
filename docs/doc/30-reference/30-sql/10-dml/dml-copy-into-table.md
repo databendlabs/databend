@@ -1,8 +1,8 @@
 ---
-title: 'COPY INTO <table>'
-sidebar_label: 'COPY INTO <table>'
+title: 'COPY INTO <table> FROM STAGED FILES'
+sidebar_label: 'COPY INTO <table> FROM STAGED FILES'
 description:
-  'Load Data using COPY INTO <table>'
+  'Loads data from staged files'
 ---
 
 `COPY` moves data between Databend tables and object storage systems (AWS S3 compatible object storage services and Azure Blob storage).
@@ -12,6 +12,8 @@ This command loads data into a table from files staged in one of the following l
 * Named internal stage, files can be staged using the [PUT to Stage](../../00-api/10-put-to-stage.md).
 * Named external stage that references an external location (AWS S3 compatible object storage services and Azure Blob storage).
 * External location. This includes AWS S3 compatible object storage services and Azure Blob storage.
+
+`COPY` can also load data into a table from one or more remote files by their URL. See [COPY INTO \<table\> FROM FILES BY URL](dml-copy-into-table-url.md).
 
 ## Syntax
 

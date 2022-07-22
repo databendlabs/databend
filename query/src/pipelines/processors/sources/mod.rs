@@ -29,6 +29,8 @@ pub use async_source::AsyncSourcer;
 pub use blocks_source::BlocksSource;
 pub use deserializer::Deserializer;
 pub use empty_source::EmptySource;
+pub use file_splitter::FileSplitter;
+pub use file_splitter::FileSplitterState;
 pub use multi_file_splitter::MultiFileSplitter;
 pub use multi_file_splitter::OperatorInfo;
 pub use stream_source::StreamSource;

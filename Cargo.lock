@@ -1120,7 +1120,6 @@ dependencies = [
  "ahash",
  "comfy-table",
  "common-arrow",
- "common-base",
  "common-datavalues",
  "common-exception",
  "common-io",
@@ -1139,10 +1138,8 @@ dependencies = [
  "chrono",
  "chrono-tz",
  "common-arrow",
- "common-base",
  "common-exception",
  "common-io",
- "common-macros",
  "criterion",
  "dyn-clone",
  "enum_dispatch",
@@ -1198,6 +1195,10 @@ dependencies = [
  "enum-as-inner",
  "goldenfile",
  "itertools",
+ "match-template",
+ "num-traits",
+ "ordered-float 1.1.1",
+ "serde",
 ]
 
 [[package]]
@@ -1226,15 +1227,19 @@ dependencies = [
  "bumpalo",
  "bytes 1.1.0",
  "chrono-tz",
+ "comfy-table",
  "common-arrow",
+ "common-ast",
  "common-datablocks",
  "common-datavalues",
  "common-exception",
+ "common-expression",
  "common-io",
  "crc32fast",
  "dyn-clone",
  "float-cmp",
  "geo-types",
+ "goldenfile",
  "h3ron",
  "hex",
  "itertools",
@@ -1347,7 +1352,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
- "synstructure",
 ]
 
 [[package]]
@@ -1581,11 +1585,9 @@ name = "common-pipeline"
 version = "0.1.0"
 dependencies = [
  "async-trait 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)",
- "common-base",
  "common-datablocks",
  "common-datavalues",
  "common-exception",
- "common-tracing",
  "futures",
  "futures-util",
  "itertools",
@@ -4137,6 +4139,17 @@ name = "maplit"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3e2e65a1a2e43cfcb47a895c4c8b10d1f4a61097f9f254f183aee60cad9c651d"
+
+[[package]]
+name = "match-template"
+version = "0.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c334ac67725febd94c067736ac46ef1c7cacf1c743ca14b9f917c2df2c20acd8"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
 
 [[package]]
 name = "match_cfg"
