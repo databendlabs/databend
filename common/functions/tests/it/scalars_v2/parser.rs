@@ -128,6 +128,7 @@ fn transform_binary_op(op: common_ast::ast::BinaryOperator) -> &'static str {
         common_ast::ast::BinaryOperator::Plus => "plus",
         common_ast::ast::BinaryOperator::Minus => "minus",
         common_ast::ast::BinaryOperator::And => "and",
+        common_ast::ast::BinaryOperator::Or => "or",
         _ => unimplemented!(),
     }
 }

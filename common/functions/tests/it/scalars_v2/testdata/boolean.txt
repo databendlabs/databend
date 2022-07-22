@@ -104,3 +104,19 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------+
 
 
+ast            : true OR false
+raw expr       : or(true, false)
+checked expr   : or<Boolean, Boolean>(true, false)
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : null OR false
+raw expr       : or(NULL, false)
+checked expr   : or<NULL, Boolean NULL>(NULL, CAST(false AS Boolean NULL))
+output type    : NULL
+output domain  : {NULL}
+output         : NULL
+
+

@@ -40,4 +40,15 @@ pub fn register(registry: &mut FunctionRegistry) {
         },
         |lhs, rhs| lhs && rhs,
     );
+    registry.register_2_arg::<BooleanType, BooleanType, BooleanType, _, _>(
+        "or",
+        FunctionProperty::default(),
+        |lhs, rhs| {
+            Some(BooleanDomain {
+                has_false: lhs.has_false && rhs.has_false,
+                has_true: lhs.has_true || rhs.has_true,
+            })
+        },
+        |lhs, rhs| lhs || rhs,
+    );
 }
