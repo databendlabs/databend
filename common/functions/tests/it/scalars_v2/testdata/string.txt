@@ -52,3 +52,57 @@ evaluation (internal):
 +--------+----------------------------------------------------------------------------------------------------------------------------------------------------+
 
 
+ast            : lower('Abc')
+raw expr       : lower(Abc)
+checked expr   : lower<String>(Abc)
+output type    : String
+output domain  : {""..}
+output         : abc
+
+
+ast            : lower('DOBRÝ DEN')
+raw expr       : lower(DOBRÝ DEN)
+checked expr   : lower<String>(DOBRÝ DEN)
+output type    : String
+output domain  : {""..}
+output         : dobrý den
+
+
+ast            : lower('SS😀山')
+raw expr       : lower(SS😀山)
+checked expr   : lower<String>(SS😀山)
+output type    : String
+output domain  : {""..}
+output         : ss😀山
+
+
+ast            : lower(NULL)
+raw expr       : lower(NULL)
+checked expr   : lower<NULL>(NULL)
+output type    : NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : lcase(a)
+raw expr       : lcase(ColumnRef(0)::String)
+checked expr   : lower<String>(ColumnRef(0))
+evaluation:
++--------+--------------------+-----------+
+|        | a                  | Output    |
++--------+--------------------+-----------+
+| Type   | String             | String    |
+| Domain | {"Abc"..="SS😀山"} | {""..}    |
+| Row 0  | Abc                | abc       |
+| Row 1  | DOBRÝ DEN          | dobrý den |
+| Row 2  | SS😀山             | ss😀山    |
++--------+--------------------+-----------+
+evaluation (internal):
++--------+-----------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                |
++--------+-----------------------------------------------------------------------------------------------------------------------------------------------------+
+| a      | String { data: [65, 98, 99, 68, 79, 66, 82, 195, 157, 32, 68, 69, 78, 83, 83, 240, 159, 152, 128, 229, 177, 177], offsets: [0, 3, 13, 22] }         |
+| Output | String { data: [97, 98, 99, 100, 111, 98, 114, 195, 189, 32, 100, 101, 110, 115, 115, 240, 159, 152, 128, 229, 177, 177], offsets: [0, 3, 13, 22] } |
++--------+-----------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
