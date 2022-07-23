@@ -38,6 +38,7 @@ pub use self::generic::GenericType;
 pub use self::null::NullType;
 pub use self::nullable::NullableType;
 pub use self::number::NumberType;
+pub use self::string::StringColumnBuilder;
 pub use self::string::StringType;
 use crate::property::Domain;
 use crate::values::Column;

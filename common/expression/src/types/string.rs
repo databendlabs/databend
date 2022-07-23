@@ -227,4 +227,67 @@ impl StringColumnBuilder {
         assert_eq!(self.offsets.len(), 2);
         self.data[(self.offsets[0] as usize)..(self.offsets[1] as usize)].to_vec()
     }
+
+    pub fn from_scalar(data: Vec<u8>) -> Self {
+        StringColumnBuilder {
+            offsets: vec![0, data.len() as u64],
+            data,
+        }
+    }
+
+    pub fn try_from_transform<F>(
+        src: StringIterator<'_>,
+        estimate_bytes: usize,
+        mut f: F,
+    ) -> Result<StringColumnBuilder, String>
+    where
+        F: FnMut(&[u8], &mut [u8]) -> Result<usize, String>,
+    {
+        let mut values: Vec<u8> = Vec::with_capacity(estimate_bytes);
+        let mut offsets: Vec<u64> = Vec::with_capacity(src.size_hint().0 + 1);
+        offsets.push(0);
+
+        let mut offset: usize = 0;
+        unsafe {
+            for x in src {
+                let bytes = std::slice::from_raw_parts_mut(
+                    values.as_mut_ptr().add(offset),
+                    values.capacity() - offset,
+                );
+
+                match f(x, bytes) {
+                    Ok(l) => {
+                        offset += l;
+                        offsets.push(offset as u64);
+                    }
+
+                    Err(e) => return Err(e),
+                }
+            }
+            values.set_len(offset);
+            values.shrink_to_fit();
+
+            Ok(StringColumnBuilder {
+                data: values,
+                offsets,
+            })
+        }
+    }
+}
+
+impl From<&[u8]> for StringColumnBuilder {
+    fn from(data: &[u8]) -> Self {
+        let mut builder = StringColumnBuilder::with_capacity(data.len(), 1);
+        builder.put_slice(data);
+        builder
+    }
+}
+
+impl From<Vec<u8>> for StringColumnBuilder {
+    fn from(data: Vec<u8>) -> Self {
+        StringColumnBuilder {
+            offsets: vec![0, data.len() as u64],
+            data,
+        }
+    }
 }

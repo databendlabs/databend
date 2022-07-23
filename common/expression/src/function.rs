@@ -481,6 +481,55 @@ impl FunctionRegistry {
             }));
     }
 
+    pub fn register_string_2_string<F, G, H>(
+        &mut self,
+        name: &'static str,
+        property: FunctionProperty,
+        calc_domain: F,
+        func: G,
+        estimate_bytes_fn: H,
+    ) where
+        F: Fn(&<StringType as ValueType>::Domain) -> Option<<StringType as ValueType>::Domain>
+            + 'static
+            + Clone
+            + Copy,
+        G: Fn(<StringType as ValueType>::ScalarRef<'_>, &mut [u8]) -> Result<usize, String>
+            + 'static
+            + Clone
+            + Copy,
+        H: Fn(&<StringType as ValueType>::Column) -> usize + 'static + Copy + Clone,
+    {
+        self.register_1_arg_core::<NullType, NullType, _, _>(
+            name,
+            property.clone(),
+            |_| None,
+            vectorize_1_arg::<NullType, NullType>(|_| ()),
+        );
+
+        self.register_1_arg_core::<StringType, StringType, _, _>(
+            name,
+            property.clone(),
+            calc_domain,
+            vectorize_string_2_string(func, estimate_bytes_fn),
+        );
+
+        self.register_1_arg_core::<NullableType<StringType>, NullableType<StringType>, _, _>(
+            name,
+            property,
+            move |arg1| {
+                let value = match &arg1.value {
+                    Some(value) => Some(calc_domain(value)?),
+                    None => None,
+                };
+                Some(NullableDomain {
+                    has_null: arg1.has_null,
+                    value: value.map(Box::new),
+                })
+            },
+            vectorize_passthrough_nullable_string_2_string(func, estimate_bytes_fn),
+        );
+    }
+
     pub fn register_function_factory(
         &mut self,
         name: &'static str,
@@ -762,6 +811,65 @@ pub fn vectorize_with_writer_passthrough_nullable_2_arg<I1: ArgType, I2: ArgType
             }
             let validity = common_arrow::arrow::bitmap::and(&arg1_validity, &arg2_validity);
             Ok(Value::Column((O::build_column(builder), validity)))
+        }
+    }
+}
+
+pub fn vectorize_string_2_string(
+    func: impl Fn(<StringType as ValueType>::ScalarRef<'_>, &mut [u8]) -> Result<usize, String> + Copy,
+    estimate_bytes_fn: impl Fn(&<StringType as ValueType>::Column) -> usize + Copy,
+) -> impl Fn(ValueRef<StringType>, &GenericMap) -> Result<Value<StringType>, String> + Copy {
+    move |arg1, _| match arg1 {
+        ValueRef::Scalar(val) => {
+            let data_len = estimate_bytes_fn(&StringColumnBuilder::build(val.into()));
+            let mut buf = Vec::with_capacity(data_len);
+            unsafe {
+                let bytes = std::slice::from_raw_parts_mut(buf.as_mut_ptr(), buf.capacity());
+                let len = func(val, bytes)?;
+                buf.set_len(len);
+            }
+            Ok(Value::Scalar(StringColumnBuilder::build_scalar(buf.into())))
+        }
+        ValueRef::Column(col) => {
+            let data_len = estimate_bytes_fn(&col);
+            let iter = StringType::iter_column(&col);
+            let builder =
+                StringColumnBuilder::try_from_transform(iter, data_len, |val, buf| func(val, buf))?;
+            Ok(Value::Column(builder.build()))
+        }
+    }
+}
+
+pub fn vectorize_passthrough_nullable_string_2_string(
+    func: impl Fn(<StringType as ValueType>::ScalarRef<'_>, &mut [u8]) -> Result<usize, String> + Copy,
+    estimate_bytes_fn: impl Fn(&<StringType as ValueType>::Column) -> usize + Copy,
+) -> impl Fn(
+    ValueRef<NullableType<StringType>>,
+    &GenericMap,
+) -> Result<Value<NullableType<StringType>>, String>
++ Copy {
+    move |arg1, _| match arg1 {
+        ValueRef::Scalar(None) => Ok(Value::Scalar(None)),
+        ValueRef::Scalar(Some(val)) => {
+            // Maybe clone can be removed.
+            let data_len = estimate_bytes_fn(&StringColumnBuilder::build(val.into()));
+            // TODO(ygf11): do as try_from_transform.
+            let mut buf = Vec::with_capacity(data_len);
+            unsafe {
+                let bytes = std::slice::from_raw_parts_mut(buf.as_mut_ptr(), buf.capacity());
+                let len = func(val, bytes)?;
+                buf.set_len(len);
+            }
+            Ok(Value::Scalar(Some(StringColumnBuilder::build_scalar(
+                buf.into(),
+            ))))
+        }
+        ValueRef::Column((col, validity)) => {
+            let data_len = estimate_bytes_fn(&col);
+            let iter = StringType::iter_column(&col);
+            let builder =
+                StringColumnBuilder::try_from_transform(iter, data_len, |val, buf| func(val, buf))?;
+            Ok(Value::Column((StringType::build_column(builder), validity)))
         }
     }
 }
