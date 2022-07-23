@@ -1,0 +1,22 @@
+[package]
+name = "common-functions-v2"
+version = "0.1.0"
+authors = ["Databend Authors <opensource@datafuselabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[lib]
+doctest = false
+
+[dependencies] # In alphabetical order
+# Workspace dependencies
+common-expression = { path = "../expression" }
+
+# Crates.io dependencies
+bstr = "0.2.17"
+
+[dev-dependencies]
+comfy-table = "6"
+common-ast = { path = "../ast" }
+goldenfile = "1.4"

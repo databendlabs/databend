@@ -22,7 +22,7 @@ use super::run_ast;
 
 #[test]
 fn test_boolean() {
-    let mut mint = Mint::new("tests/it/scalars_v2/testdata");
+    let mut mint = Mint::new("tests/it/scalars/testdata");
     let file = &mut mint.new_goldenfile("boolean.txt").unwrap();
 
     test_and(file);
