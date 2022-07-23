@@ -1581,6 +1581,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-new-functions"
+version = "0.1.0"
+dependencies = [
+ "bstr",
+ "comfy-table",
+ "common-ast",
+ "common-expression",
+ "goldenfile",
+]
+
+[[package]]
 name = "common-pipeline"
 version = "0.1.0"
 dependencies = [

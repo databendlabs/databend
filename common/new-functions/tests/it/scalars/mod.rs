@@ -25,7 +25,7 @@ use common_expression::Evaluator;
 use common_expression::FunctionContext;
 use common_expression::RemoteExpr;
 use common_expression::Value;
-use common_functions::scalars_v2::builtin_functions;
+use common_new_functions::scalars::builtin_functions;
 
 mod boolean;
 mod parser;
