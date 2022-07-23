@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use chrono_tz::Tz;
+use common_arrow::arrow::buffer::Buffer;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -497,7 +498,7 @@ impl FunctionRegistry {
             + 'static
             + Clone
             + Copy,
-        H: Fn(&<StringType as ValueType>::Column) -> usize + 'static + Copy + Clone,
+        H: Fn((&[u8], &Buffer<u64>)) -> usize + 'static + Copy + Clone,
     {
         self.register_1_arg_core::<NullType, NullType, _, _>(
             name,
@@ -817,11 +818,12 @@ pub fn vectorize_with_writer_passthrough_nullable_2_arg<I1: ArgType, I2: ArgType
 
 pub fn vectorize_string_2_string(
     func: impl Fn(<StringType as ValueType>::ScalarRef<'_>, &mut [u8]) -> Result<usize, String> + Copy,
-    estimate_bytes_fn: impl Fn(&<StringType as ValueType>::Column) -> usize + Copy,
+    estimate_bytes_fn: impl Fn((&[u8], &Buffer<u64>)) -> usize + Copy,
 ) -> impl Fn(ValueRef<StringType>, &GenericMap) -> Result<Value<StringType>, String> + Copy {
     move |arg1, _| match arg1 {
         ValueRef::Scalar(val) => {
-            let data_len = estimate_bytes_fn(&StringColumnBuilder::build(val.into()));
+            let offsets = vec![0, val.len() as u64];
+            let data_len = estimate_bytes_fn((val, &offsets.into()));
             let mut buf = Vec::with_capacity(data_len);
             unsafe {
                 let bytes = std::slice::from_raw_parts_mut(buf.as_mut_ptr(), buf.capacity());
@@ -831,8 +833,9 @@ pub fn vectorize_string_2_string(
             Ok(Value::Scalar(StringColumnBuilder::build_scalar(buf.into())))
         }
         ValueRef::Column(col) => {
-            let data_len = estimate_bytes_fn(&col);
             let iter = StringType::iter_column(&col);
+            let (data, offsets) = &col;
+            let data_len = estimate_bytes_fn((&data, offsets));
             let builder =
                 StringColumnBuilder::try_from_transform(iter, data_len, |val, buf| func(val, buf))?;
             Ok(Value::Column(builder.build()))
@@ -842,7 +845,7 @@ pub fn vectorize_string_2_string(
 
 pub fn vectorize_passthrough_nullable_string_2_string(
     func: impl Fn(<StringType as ValueType>::ScalarRef<'_>, &mut [u8]) -> Result<usize, String> + Copy,
-    estimate_bytes_fn: impl Fn(&<StringType as ValueType>::Column) -> usize + Copy,
+    estimate_bytes_fn: impl Fn((&[u8], &Buffer<u64>)) -> usize + Copy,
 ) -> impl Fn(
     ValueRef<NullableType<StringType>>,
     &GenericMap,
@@ -852,7 +855,8 @@ pub fn vectorize_passthrough_nullable_string_2_string(
         ValueRef::Scalar(None) => Ok(Value::Scalar(None)),
         ValueRef::Scalar(Some(val)) => {
             // Maybe clone can be removed.
-            let data_len = estimate_bytes_fn(&StringColumnBuilder::build(val.into()));
+            let offsets = vec![0, val.len() as u64];
+            let data_len = estimate_bytes_fn((val, &offsets.into()));
             // TODO(ygf11): do as try_from_transform.
             let mut buf = Vec::with_capacity(data_len);
             unsafe {
@@ -865,8 +869,9 @@ pub fn vectorize_passthrough_nullable_string_2_string(
             ))))
         }
         ValueRef::Column((col, validity)) => {
-            let data_len = estimate_bytes_fn(&col);
             let iter = StringType::iter_column(&col);
+            let (data, offsets) = &col;
+            let data_len = estimate_bytes_fn((&data, offsets));
             let builder =
                 StringColumnBuilder::try_from_transform(iter, data_len, |val, buf| func(val, buf))?;
             Ok(Value::Column((StringType::build_column(builder), validity)))
