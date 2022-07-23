@@ -147,7 +147,7 @@ impl Table for QueryLogTable {
         // TODO: split data for multiple threads
         let output = OutputPort::create();
         let mut source_builder = SourcePipeBuilder::create();
-        
+
         source_builder.add_source(
             output.clone(),
             QueryLogSource::create(ctx, output, &self.data.read())?,
