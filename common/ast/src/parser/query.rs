@@ -98,26 +98,15 @@ pub fn table_reference(i: Input) -> IResult<TableReference> {
 pub fn aliased_table(i: Input) -> IResult<TableReference> {
     map(
         consumed(rule! {
-            #ident ~ ( "." ~ #ident )? ~ ( "." ~ #ident )? ~ #travel_point? ~ #table_alias?
+            #peroid_separated_idents_1_to_3 ~ #travel_point? ~ #table_alias?
         }),
-        |(input, (fst, snd, third, travel_point, alias))| {
-            let (catalog, database, table) = match (fst, snd, third) {
-                (catalog, Some((_, database)), Some((_, table))) => {
-                    (Some(catalog), Some(database), table)
-                }
-                (database, Some((_, table)), None) => (None, Some(database), table),
-                (database, None, Some((_, table))) => (None, Some(database), table),
-                (table, None, None) => (None, None, table),
-            };
-
-            TableReference::Table {
-                span: input.0,
-                catalog,
-                database,
-                table,
-                alias,
-                travel_point,
-            }
+        |(input, ((catalog, database, table), travel_point, alias))| TableReference::Table {
+            span: input.0,
+            catalog,
+            database,
+            table,
+            alias,
+            travel_point,
         },
     )(i)
 }

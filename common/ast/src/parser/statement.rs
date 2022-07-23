@@ -20,6 +20,7 @@ use common_meta_types::PrincipalIdentity;
 use common_meta_types::UserIdentity;
 use common_meta_types::UserPrivilegeType;
 use nom::branch::alt;
+use nom::combinator::consumed;
 use nom::combinator::map;
 use nom::combinator::value;
 use nom::Slice;
@@ -70,18 +71,31 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         },
     );
 
-    let delete = map(
-        rule! {
-            DELETE ~ FROM ~ #peroid_separated_idents_1_to_3
-            ~ ( WHERE ~ ^#expr )?
-        },
-        |(_, _, (catalog, database, table), opt_where_block)| Statement::Delete {
+    let table_reference_only = map(
+        consumed(rule! {
+            #peroid_separated_idents_1_to_3
+        }),
+        |(input, (catalog, database, table))| TableReference::Table {
+            span: input.0,
             catalog,
             database,
             table,
-            selection: opt_where_block.map(|(_, selection)| selection),
+            alias: None,
+            travel_point: None,
         },
     );
+
+    let delete = map(
+        rule! {
+            DELETE ~ FROM ~ #table_reference_only
+            ~ ( WHERE ~ ^#expr )?
+        },
+        |(_, _, table_reference, opt_selection)| Statement::Delete {
+            table_reference,
+            selection: opt_selection.map(|(_, selection)| selection),
+        },
+    );
+
     let show_settings = map(
         rule! {
             SHOW ~ SETTINGS ~ (LIKE ~ #literal_string)?

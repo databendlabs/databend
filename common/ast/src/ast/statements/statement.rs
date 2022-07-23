@@ -24,6 +24,7 @@ use crate::ast::Expr;
 use crate::ast::Identifier;
 use crate::ast::Literal;
 use crate::ast::Query;
+use crate::ast::TableReference;
 
 // SQL statement
 #[derive(Debug, Clone, PartialEq)]
@@ -61,9 +62,7 @@ pub enum Statement<'a> {
     Insert(InsertStmt<'a>),
 
     Delete {
-        catalog: Option<Identifier<'a>>,
-        database: Option<Identifier<'a>>,
-        table: Identifier<'a>,
+        table_reference: TableReference<'a>,
         selection: Option<Expr<'a>>,
     },
     // Databases
@@ -181,13 +180,11 @@ impl<'a> Display for Statement<'a> {
             Statement::Query(query) => write!(f, "{query}")?,
             Statement::Insert(insert) => write!(f, "{insert}")?,
             Statement::Delete {
-                catalog,
-                database,
-                table,
+                table_reference,
                 selection,
+                ..
             } => {
-                write!(f, "DELETE FROM ")?;
-                write_comma_separated_list(f, catalog.iter().chain(database).chain(Some(table)))?;
+                write!(f, "DELETE FROM {table_reference}")?;
                 if let Some(conditions) = selection {
                     write!(f, "WHERE {conditions} ")?;
                 }

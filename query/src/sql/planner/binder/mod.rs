@@ -221,12 +221,10 @@ impl<'a> Binder {
             }
             Statement::Insert(stmt) => self.bind_insert(bind_context, stmt).await?,
             Statement::Delete {
-                catalog,
-                database,
-                table,
+                table_reference,
                 selection,
             } => {
-                self.bind_delete(bind_context, catalog, database, table, selection)
+                self.bind_delete(bind_context, table_reference, selection)
                     .await?
             }
 
