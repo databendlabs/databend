@@ -60,5 +60,18 @@ pub fn register(registry: &mut FunctionRegistry) {
             Ok(())
         },
     );
+    registry.register_with_writer_1_arg::<StringType, NumberType<u64>, _, _>(
+        "char_length",
+        FunctionProperty::default(),
+        |_| None,
+        |val, writer| {
+            let char_length = match std::str::from_utf8(val) {
+                Ok(s) => s.chars().count() as u64,
+                Err(_) => val.len() as u64,
+            };
+            writer.push(char_length);
+            Ok(())
+        },
+    );
     registry.register_aliases("upper", &["ucase"]);
 }
