@@ -1264,6 +1264,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-functions-v2"
+version = "0.1.0"
+dependencies = [
+ "bstr",
+ "comfy-table",
+ "common-ast",
+ "common-expression",
+ "goldenfile",
+]
+
+[[package]]
 name = "common-fuse-meta"
 version = "0.1.0"
 dependencies = [
@@ -1574,17 +1585,6 @@ dependencies = [
  "prometheus-parse",
  "serde",
  "tokio",
-]
-
-[[package]]
-name = "common-new-functions"
-version = "0.1.0"
-dependencies = [
- "bstr",
- "comfy-table",
- "common-ast",
- "common-expression",
- "goldenfile",
 ]
 
 [[package]]

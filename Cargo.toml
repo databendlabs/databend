@@ -15,7 +15,7 @@ members = [
     "common/expression",
     "common/formats",
     "common/functions",
-    "common/new-functions",
+    "common/functions-v2",
     "common/grpc",
     "common/hashtable",
     "common/hive-meta-store",

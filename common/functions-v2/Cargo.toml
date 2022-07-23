@@ -1,5 +1,5 @@
 [package]
-name = "common-new-functions"
+name = "common-functions-v2"
 version = "0.1.0"
 authors = ["Databend Authors <opensource@datafuselabs.com>"]
 license = "Apache-2.0"
