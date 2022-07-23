@@ -53,10 +53,11 @@ select 'deleted unconditionally (with const true)';
 delete from t where 1 = 1;
 select count(*) = 0 from t;
 
-insert into t values (1),(2),(NULL);
-select 'deleted with nullary expr now()';
-delete from t where now();
-select count(*) = 0 from t;
+-- commented out, not sure if we should support this
+--insert into t values (1),(2),(NULL);
+--select 'deleted with nullary expr now()';
+--delete from t where now();
+--select count(*) = 0 from t;
 
 drop table t all;
 
