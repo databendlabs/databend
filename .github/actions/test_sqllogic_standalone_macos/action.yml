@@ -29,8 +29,8 @@ runs:
       run: |
         bash ./scripts/ci/ci-run-sqllogic-tests.sh
 
-    - name: Upload failure
-      if: failure()
-      uses: ./.github/actions/artifact_failure
-      with:
-        name: test-sqllogic-standalone-macos
+    # - name: Upload failure
+    #   if: failure()
+    #   uses: ./.github/actions/artifact_failure
+    #   with:
+    #     name: test-sqllogic-standalone-macos

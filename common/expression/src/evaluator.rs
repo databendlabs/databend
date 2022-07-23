@@ -429,10 +429,14 @@ impl Evaluator {
 }
 
 pub struct DomainCalculator {
-    pub input_domains: Vec<Domain>,
+    input_domains: Vec<Domain>,
 }
 
 impl DomainCalculator {
+    pub fn new(input_domains: Vec<Domain>) -> Self {
+        DomainCalculator { input_domains }
+    }
+
     pub fn calculate(&self, expr: &Expr) -> Result<Domain> {
         match expr {
             Expr::Literal { lit, .. } => Ok(self.calculate_literal(lit)),
@@ -722,8 +726,8 @@ impl DomainCalculator {
             (Domain::Float(FloatDomain { min, max }), DataType::Float32) => {
                 Ok(Domain::Float(FloatDomain {
                     // Cast to f32 and back to f64 to round to the nearest f32 value.
-                    min: (*min).clamp(f32::MIN as f64, f32::MAX as f64) as f32 as f64,
-                    max: (*max).clamp(f32::MIN as f64, f32::MAX as f64) as f32 as f64,
+                    min: (*min) as f32 as f64,
+                    max: (*max) as f32 as f64,
                 }))
             }
             (Domain::Float(_), DataType::Float64) => Ok(domain.clone()),

@@ -82,9 +82,15 @@ pub struct FunctionRegistry {
         &'static str,
         Vec<Box<dyn Fn(&[usize], &[DataType]) -> Option<Arc<Function>> + 'static>>,
     >,
+    /// Aliases map from alias function name to concrete function name.
+    pub aliases: HashMap<&'static str, &'static str>,
 }
 
 impl FunctionRegistry {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
     pub fn get(&self, id: &FunctionID) -> Option<Arc<Function>> {
         match id {
             FunctionID::Builtin { name, id } => self.funcs.get(name.as_str())?.get(*id).cloned(),
@@ -106,6 +112,7 @@ impl FunctionRegistry {
         params: &[usize],
         args_type: &[DataType],
     ) -> Vec<(FunctionID, Arc<Function>)> {
+        let name = self.aliases.get(name).cloned().unwrap_or(name);
         if params.is_empty() {
             let builtin_funcs = self
                 .funcs
@@ -483,6 +490,12 @@ impl FunctionRegistry {
             .entry(name)
             .or_insert_with(Vec::new)
             .push(Box::new(factory));
+    }
+
+    pub fn register_aliases(&mut self, fn_name: &'static str, aliases: &[&'static str]) {
+        for alias in aliases {
+            self.aliases.insert(alias, fn_name);
+        }
     }
 }
 
