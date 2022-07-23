@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use bstr::ByteSlice;
+use common_expression::types::NumberType;
 use common_expression::types::StringType;
 use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
@@ -36,6 +37,16 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
             }
             writer.commit_row();
+            Ok(())
+        },
+    );
+    registry.register_with_writer_1_arg::<StringType, NumberType<u64>, _, _>(
+        "bit_length",
+        FunctionProperty::default(),
+        |_| None,
+        |val, writer| {
+            let bit_length = 8 * val.len() as u64;
+            writer.push(bit_length);
             Ok(())
         },
     );
