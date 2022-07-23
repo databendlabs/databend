@@ -482,6 +482,8 @@ impl FunctionRegistry {
             }));
     }
 
+    /// The estimate_bytes_fn is used to make sure  enough space has allocated for `data` in `StringColumnBuilder`.
+    /// To make `estimate_bytes_fn` simple, we only pass column to it, and `Scalar` will cast to one item column.
     pub fn register_string_2_string<F, G, H>(
         &mut self,
         name: &'static str,
@@ -824,20 +826,15 @@ pub fn vectorize_string_2_string(
         ValueRef::Scalar(val) => {
             let offsets = vec![0, val.len() as u64];
             let data_len = estimate_bytes_fn((val, &offsets.into()));
-            let builder =
-                StringColumnBuilder::try_from_transform_scalar(val, data_len, |val, buf| {
-                    func(val, buf)
-                })?;
-            Ok(Value::Scalar(builder.build_scalar()))
+            let result = try_transform_scalar(val, data_len, |val, buf| func(val, buf))?;
+            Ok(Value::Scalar(result))
         }
         ValueRef::Column(col) => {
             let iter = StringType::iter_column(&col);
             let (data, offsets) = &col;
             let data_len = estimate_bytes_fn((data, offsets));
             let builder =
-                StringColumnBuilder::try_from_transform_column(iter, data_len, |val, buf| {
-                    func(val, buf)
-                })?;
+                StringColumnBuilder::try_from_transform(iter, data_len, |val, buf| func(val, buf))?;
             Ok(Value::Column(builder.build()))
         }
     }
@@ -856,21 +853,16 @@ pub fn vectorize_passthrough_nullable_string_2_string(
         ValueRef::Scalar(Some(val)) => {
             let offsets = vec![0, val.len() as u64];
             let data_len = estimate_bytes_fn((val, &offsets.into()));
-            let builder =
-                StringColumnBuilder::try_from_transform_scalar(val, data_len, |val, buf| {
-                    func(val, buf)
-                })?;
-            Ok(Value::Scalar(Some(builder.build_scalar())))
+            let result = try_transform_scalar(val, data_len, |val, buf| func(val, buf))?;
+            Ok(Value::Scalar(Some(result)))
         }
         ValueRef::Column((col, validity)) => {
             let iter = StringType::iter_column(&col);
             let (data, offsets) = &col;
             let data_len = estimate_bytes_fn((data, offsets));
             let builder =
-                StringColumnBuilder::try_from_transform_column(iter, data_len, |val, buf| {
-                    func(val, buf)
-                })?;
-            Ok(Value::Column((StringType::build_column(builder), validity)))
+                StringColumnBuilder::try_from_transform(iter, data_len, |val, buf| func(val, buf))?;
+            Ok(Value::Column((builder.build(), validity)))
         }
     }
 }
