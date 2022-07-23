@@ -113,17 +113,7 @@ const config = {
                         href: 'https://github.com/datafuselabs/databend',
                         label: 'GitHub',
                         position: 'right',
-                    },
-                    {
-                        type: 'localeDropdown',
-                        position: 'right',
-                        dropdownItemsAfter: [
-                            {
-                                to: 'https://databend.crowdin.com/databend',
-                                label: 'Help Us Translate',
-                            },
-                        ],
-                    },
+                    }
                 ],
             },
             footer: {
