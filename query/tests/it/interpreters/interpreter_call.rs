@@ -179,7 +179,7 @@ async fn test_call_clustering_information_interpreter() -> Result<()> {
         let res = executor.execute(None).await;
         assert_eq!(res.is_err(), true);
         let expect =
-            "Code: 1070, displayText = Invalid clustering keys or table a is not clustered.";
+            "Code: 1081, displayText = Invalid clustering keys or table a is not clustered.";
         assert_eq!(expect, res.err().unwrap().to_string());
     }
 
