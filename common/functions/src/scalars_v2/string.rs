@@ -50,5 +50,15 @@ pub fn register(registry: &mut FunctionRegistry) {
             Ok(())
         },
     );
+    registry.register_with_writer_1_arg::<StringType, NumberType<u64>, _, _>(
+        "octet_length",
+        FunctionProperty::default(),
+        |_| None,
+        |val, writer| {
+            let octet_length = val.len() as u64;
+            writer.push(octet_length);
+            Ok(())
+        },
+    );
     registry.register_aliases("upper", &["ucase"]);
 }
