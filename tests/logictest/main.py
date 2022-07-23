@@ -35,10 +35,21 @@ def run(args):
 
 if __name__ == '__main__':
     parser = ArgumentParser(description='databend sqlogical tests')
-    parser.add_argument('--disable-mysql-test', action='store_true', default=False, help='Disable mysql handler test')
-    parser.add_argument('--disable-http-test', action='store_true', default=False, help='Disable http handler test')
-    parser.add_argument('--disable-clickhouse-test', action='store_true', default=False, help='Disable clickhouse handler test')
-    parser.add_argument('pattern', nargs='*', default=".*", help='Optional test case name regex')
-    
+    parser.add_argument('--disable-mysql-test',
+                        action='store_true',
+                        default=False,
+                        help='Disable mysql handler test')
+    parser.add_argument('--disable-http-test',
+                        action='store_true',
+                        default=False,
+                        help='Disable http handler test')
+    parser.add_argument('--disable-clickhouse-test',
+                        action='store_true',
+                        default=False,
+                        help='Disable clickhouse handler test')
+    parser.add_argument('pattern',
+                        nargs='*',
+                        help='Optional test case name regex')
+
     args = parser.parse_args()
     run(args)
