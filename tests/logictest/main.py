@@ -37,15 +37,15 @@ if __name__ == '__main__':
     parser = ArgumentParser(description='databend sqlogical tests')
     parser.add_argument('--disable-mysql-test',
                         action='store_true',
-                        default=False,
+                        default=os.environ.get('DISABLE_MYSQL_LOGIC_TEST'),
                         help='Disable mysql handler test')
     parser.add_argument('--disable-http-test',
                         action='store_true',
-                        default=False,
+                        default=os.environ.get('DISABLE_HTTP_LOGIC_TEST'),
                         help='Disable http handler test')
     parser.add_argument('--disable-clickhouse-test',
                         action='store_true',
-                        default=False,
+                        default=os.environ.get('DISABLE_CLICKHOUSE_LOGIC_TEST'),
                         help='Disable clickhouse handler test')
     parser.add_argument('pattern',
                         nargs='*',
