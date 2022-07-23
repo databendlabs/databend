@@ -74,4 +74,6 @@ pub fn register(registry: &mut FunctionRegistry) {
         },
     );
     registry.register_aliases("upper", &["ucase"]);
+    registry.register_aliases("octet_length", &["length"]);
+    registry.register_aliases("char_length", &["character_length"]);
 }

@@ -106,8 +106,8 @@ output domain  : {NULL}
 output         : NULL
 
 
-ast            : octet_length(a)
-raw expr       : octet_length(ColumnRef(0)::String)
+ast            : length(a)
+raw expr       : length(ColumnRef(0)::String)
 checked expr   : octet_length<String>(ColumnRef(0))
 evaluation:
 +--------+-----------------------------------+----------------------------+
@@ -144,8 +144,8 @@ output domain  : {NULL}
 output         : NULL
 
 
-ast            : char_length(a)
-raw expr       : char_length(ColumnRef(0)::String)
+ast            : character_length(a)
+raw expr       : character_length(ColumnRef(0)::String)
 checked expr   : char_length<String>(ColumnRef(0))
 evaluation:
 +--------+-----------------------------------+----------------------------+

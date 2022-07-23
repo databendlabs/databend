@@ -58,7 +58,7 @@ fn test_bit_length(file: &mut impl Write) {
 fn test_octet_length(file: &mut impl Write) {
     run_ast(file, "octet_length('latin')", &[]);
     run_ast(file, "octet_length(NULL)", &[]);
-    run_ast(file, "octet_length(a)", &[(
+    run_ast(file, "length(a)", &[(
         "a",
         DataType::String,
         build_string_column(&["latin", "кириллица", "кириллица and latin"]),
@@ -68,7 +68,7 @@ fn test_octet_length(file: &mut impl Write) {
 fn test_char_length(file: &mut impl Write) {
     run_ast(file, "char_length('latin')", &[]);
     run_ast(file, "char_length(NULL)", &[]);
-    run_ast(file, "char_length(a)", &[(
+    run_ast(file, "character_length(a)", &[(
         "a",
         DataType::String,
         build_string_column(&["latin", "кириллица", "кириллица and latin"]),
