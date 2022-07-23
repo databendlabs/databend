@@ -40,37 +40,25 @@ pub fn register(registry: &mut FunctionRegistry) {
             Ok(())
         },
     );
-    registry.register_with_writer_1_arg::<StringType, NumberType<u64>, _, _>(
+    registry.register_1_arg::<StringType, NumberType<u64>, _, _>(
         "bit_length",
         FunctionProperty::default(),
         |_| None,
-        |val, writer| {
-            let bit_length = 8 * val.len() as u64;
-            writer.push(bit_length);
-            Ok(())
-        },
+        |val| 8 * val.len() as u64,
     );
-    registry.register_with_writer_1_arg::<StringType, NumberType<u64>, _, _>(
+    registry.register_1_arg::<StringType, NumberType<u64>, _, _>(
         "octet_length",
         FunctionProperty::default(),
         |_| None,
-        |val, writer| {
-            let octet_length = val.len() as u64;
-            writer.push(octet_length);
-            Ok(())
-        },
+        |val| val.len() as u64,
     );
-    registry.register_with_writer_1_arg::<StringType, NumberType<u64>, _, _>(
+    registry.register_1_arg::<StringType, NumberType<u64>, _, _>(
         "char_length",
         FunctionProperty::default(),
         |_| None,
-        |val, writer| {
-            let char_length = match std::str::from_utf8(val) {
-                Ok(s) => s.chars().count() as u64,
-                Err(_) => val.len() as u64,
-            };
-            writer.push(char_length);
-            Ok(())
+        |val| match std::str::from_utf8(val) {
+            Ok(s) => s.chars().count() as u64,
+            Err(_) => val.len() as u64,
         },
     );
     registry.register_aliases("upper", &["ucase"]);
