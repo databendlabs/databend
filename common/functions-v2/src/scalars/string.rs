@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use bstr::ByteSlice;
+use common_expression::types::NumberType;
 use common_expression::types::StringType;
 use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
@@ -40,4 +41,30 @@ pub fn register(registry: &mut FunctionRegistry) {
         },
     );
     registry.register_aliases("upper", &["ucase"]);
+
+    registry.register_1_arg::<StringType, NumberType<u64>, _, _>(
+        "bit_length",
+        FunctionProperty::default(),
+        |_| None,
+        |val| 8 * val.len() as u64,
+    );
+
+    registry.register_1_arg::<StringType, NumberType<u64>, _, _>(
+        "octet_length",
+        FunctionProperty::default(),
+        |_| None,
+        |val| val.len() as u64,
+    );
+    registry.register_aliases("octet_length", &["length"]);
+
+    registry.register_1_arg::<StringType, NumberType<u64>, _, _>(
+        "char_length",
+        FunctionProperty::default(),
+        |_| None,
+        |val| match std::str::from_utf8(val) {
+            Ok(s) => s.chars().count() as u64,
+            Err(_) => val.len() as u64,
+        },
+    );
+    registry.register_aliases("char_length", &["character_length"]);
 }
