@@ -46,12 +46,12 @@ fn test_upper(file: &mut impl Write) {
 fn test_lower(file: &mut impl Write) {
     run_ast(file, "lower('Abc')", &[]);
     run_ast(file, "lower('DOBRÝ DEN')", &[]);
-    run_ast(file, "lower('ß😀山')", &[]);
+    run_ast(file, "lower('İ😀山')", &[]);
     run_ast(file, "lower(NULL)", &[]);
     run_ast(file, "lcase(a)", &[(
         "a",
         DataType::String,
-        build_string_column(&["Abc", "DOBRÝ DEN", "ß😀山"]),
+        build_string_column(&["Abc", "DOBRÝ DEN", "İ😀山"]),
     )]);
 }
 

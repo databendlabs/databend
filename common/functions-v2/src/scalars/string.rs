@@ -39,6 +39,8 @@ pub fn register(registry: &mut FunctionRegistry) {
             Ok(())
         },
     );
+    registry.register_aliases("upper", &["ucase"]);
+
     registry.register_with_writer_1_arg::<StringType, StringType, _, _>(
         "lower",
         FunctionProperty::default(),
@@ -60,6 +62,5 @@ pub fn register(registry: &mut FunctionRegistry) {
             Ok(())
         },
     );
-    registry.register_aliases("upper", &["ucase"]);
     registry.register_aliases("lower", &["lcase"]);
 }
