@@ -534,6 +534,18 @@ pub fn test_pass() {
             ),
         ],
     );
+
+    run_ast(&mut file, "CAST(a AS INT16)", &[(
+        "a",
+        DataType::Float64,
+        Column::Float64(vec![0.0f64, 1.1, 2.2, 3.3, -4.4].into()),
+    )]);
+
+    run_ast(&mut file, "CAST(b AS INT16)", &[(
+        "b",
+        DataType::Int8,
+        Column::Int8(vec![0, 1, 2, 3, -4].into()),
+    )]);
 }
 
 #[test]
@@ -581,6 +593,12 @@ pub fn test_eval_fail() {
         "a",
         DataType::Int16,
         Column::Int16(vec![0, 1, 2, 3, -4].into()),
+    )]);
+
+    run_ast(&mut file, "CAST(c AS INT16)", &[(
+        "c",
+        DataType::Int64,
+        Column::Int64(vec![0, 11111111111, 2, 3, -4].into()),
     )]);
 }
 

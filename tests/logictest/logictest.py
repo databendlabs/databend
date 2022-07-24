@@ -271,9 +271,14 @@ class SuiteRunner(object):
                 if os.path.basename(filename) in skip_tests:
                     log.info(f"Skip test file {filename}")
                     continue
-                if re.match(self.pattern, filename):
+
+                if not self.pattern or any([
+                        re.search(r,
+                                  filename.split("/")[-1]) for r in self.pattern
+                ]):
                     self.statement_files.append(
                         (filename, os.path.relpath(filename, self.path)))
+
         self.statement_files.sort()
 
     def execute(self):
