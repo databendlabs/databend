@@ -40,18 +40,23 @@ pub fn register(registry: &mut FunctionRegistry) {
             Ok(())
         },
     );
+    registry.register_aliases("upper", &["ucase"]);
+
     registry.register_1_arg::<StringType, NumberType<u64>, _, _>(
         "bit_length",
         FunctionProperty::default(),
         |_| None,
         |val| 8 * val.len() as u64,
     );
+
     registry.register_1_arg::<StringType, NumberType<u64>, _, _>(
         "octet_length",
         FunctionProperty::default(),
         |_| None,
         |val| val.len() as u64,
     );
+    registry.register_aliases("octet_length", &["length"]);
+
     registry.register_1_arg::<StringType, NumberType<u64>, _, _>(
         "char_length",
         FunctionProperty::default(),
@@ -61,7 +66,5 @@ pub fn register(registry: &mut FunctionRegistry) {
             Err(_) => val.len() as u64,
         },
     );
-    registry.register_aliases("upper", &["ucase"]);
-    registry.register_aliases("octet_length", &["length"]);
     registry.register_aliases("char_length", &["character_length"]);
 }
