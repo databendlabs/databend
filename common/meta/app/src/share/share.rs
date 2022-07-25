@@ -366,9 +366,7 @@ impl ShareMeta {
     }
 
     pub fn get_grant_entry(&self, object: ShareGrantObject) -> Option<ShareGrantEntry> {
-        if self.database.is_none() {
-            return None;
-        }
+        self.database.as_ref()?;
 
         let database = self.database.as_ref().unwrap();
         if database.object == object {
@@ -376,13 +374,8 @@ impl ShareMeta {
         }
 
         match object {
-            ShareGrantObject::Database(_db_id) => {
-                return None;
-            }
-            ShareGrantObject::Table(_table_id) => match self.entries.get(&object.to_string()) {
-                Some(entry) => Some(entry.clone()),
-                None => None,
-            },
+            ShareGrantObject::Database(_db_id) => None,
+            ShareGrantObject::Table(_table_id) => self.entries.get(&object.to_string()).cloned(),
         }
     }
 
