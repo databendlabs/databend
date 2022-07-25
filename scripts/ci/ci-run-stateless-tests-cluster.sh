@@ -9,4 +9,4 @@ SCRIPT_PATH="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd)"
 cd "$SCRIPT_PATH/../../tests" || exit
 
 echo "Starting databend-test"
-./databend-test --mode 'cluster' --run-dir 0_stateless
+./databend-test --mode 'cluster' --run-dir 0_stateless --skip '13_00*'
