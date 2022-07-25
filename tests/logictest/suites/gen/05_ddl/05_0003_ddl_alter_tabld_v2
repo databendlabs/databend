@@ -1,4 +1,7 @@
 statement ok
+set enable_planner_v2 = 1;
+
+statement ok
 DROP TABLE IF EXISTS `05_0003_at_t0`;
 
 statement ok
@@ -34,9 +37,9 @@ SELECT * FROM `05_0003_at_t1`;
 ----
 1
 
-statement error 1005
-ALTER TABLE `05_0003_at_t1` RENAME TO system.`05_0003_at_t1`; 
-
 statement ok
 DROP TABLE IF EXISTS `05_0003_at_t1`;
+
+statement ok
+set enable_planner_v2 = 0;
 

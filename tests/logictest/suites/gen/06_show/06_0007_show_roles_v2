@@ -1,4 +1,7 @@
 statement ok
+set enable_planner_v2 = 1;
+
+statement ok
 CREATE ROLE 'test';
 
 statement query TI 

@@ -1,8 +1,20 @@
 statement ok
+SET enable_planner_v2 = 1;
+
+statement ok
+DROP USER IF EXISTS 'test-grant'@'localhost';
+
+statement ok
+DROP DATABASE IF EXISTS `db01`;
+
+statement ok
+DROP ROLE IF EXISTS 'test-grant-role';
+
+statement ok
 CREATE DATABASE IF NOT EXISTS `db01`;
 
 statement ok
-CREATE TABLE IF NOT EXISTS `db01`.`tb1`(t INT);
+CREATE TABLE IF NOT EXISTS `db01`.`tb1` (id int);
 
 statement ok
 CREATE USER 'test-grant'@'localhost' IDENTIFIED BY 'password';
@@ -29,7 +41,7 @@ statement ok
 GRANT SELECT ON db01.tb1 TO 'test-grant'@'localhost';
 
 statement ok
-GRANT SELECT ON `db01`.'tb1' TO 'test-grant'@'localhost';
+GRANT SELECT ON `db01`.`tb1` TO 'test-grant'@'localhost';
 
 statement error 1025
 GRANT SELECT ON db01.tbnotexists TO 'test-grant'@'localhost'; 
@@ -87,4 +99,7 @@ DROP USER 'test-grant'@'localhost';
 
 statement ok
 DROP DATABASE `db01`;
+
+statement ok
+SET enable_planner_v2 = 0;
 

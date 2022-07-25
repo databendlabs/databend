@@ -1,4 +1,7 @@
 statement ok
+set enable_planner_v2 = 1;
+
+statement ok
 DROP TABLE IF EXISTS t;
 
 statement ok
@@ -11,6 +14,9 @@ statement ok
 DROP TABLE IF EXISTS t4;
 
 statement ok
+DROP TABLE IF EXISTS column_comment_test;
+
+statement ok
 CREATE TABLE t(c1 int) ENGINE = Null;
 
 statement ok
@@ -20,7 +26,7 @@ statement error 2302
 CREATE TABLE t(c1 int) ENGINE = Null; 
 
 statement ok
-create table t2(a int,b int) Engine = Fuse;
+create table t2(a int,b int) engine=Memory;
 
 statement ok
 insert into t2 values(1,1),(2,2);
@@ -33,13 +39,10 @@ select a+b from t2;
 4
 
 statement error 2302
-create table t2(a int,b int) Engine = Fuse; 
+create table t2(a int,b int) engine=Memory; 
 
 statement error 2302
-create table t2(a int,b int) Engine = Fuse; 
-
-statement error 1005
-create table t2(a INT auto_increment); 
+create table t2(a int,b int) engine=Memory; 
 
 statement error 2703
 create table t3(a int,b int) engine=Memory CLUSTER BY(a); 
@@ -63,19 +66,13 @@ statement ok
 DROP TABLE IF EXISTS t4;
 
 statement ok
-DROP DATABASE IF EXISTS db1;
-
-statement ok
-DROP DATABASE IF EXISTS db2;
-
-statement ok
 CREATE DATABASE db1;
 
 statement ok
 CREATE DATABASE db2;
 
 statement ok
-CREATE TABLE db1.test1(a INT, b INT null) Engine = Fuse;
+CREATE TABLE db1.test1(a INT, b INT null) ENGINE=memory;
 
 statement ok
 INSERT INTO db1.test1 VALUES (1, 2), (2, 3), (3, 4);
@@ -148,12 +145,6 @@ NULL
 NULL
 NULL
 
-statement error 1065
-create table db2.test6(id Int8, created timestamp  DEFAULT CURRENT_TIMESTAMP); 
-
-statement error 1065
-create table db2.test6(id Int8, created timestamp  DEFAULT today() + a); 
-
 statement ok
 create table db2.test6(id Int8, created timestamp  DEFAULT today() + 3);
 
@@ -164,7 +155,7 @@ statement ok
 desc db2.test7;
 
 statement ok
-create transient table db2.test8(tiny TINYINT, tiny_unsigned TINYINT UNSIGNED, smallint SMALLINT, smallint_unsigned SMALLINT UNSIGNED, int INT, int_unsigned INT UNSIGNED, bigint BIGINT, bigint_unsigned BIGINT UNSIGNED,float FLOAT, double DOUBLE, date DATE, datetime DATETIME, ts TIMESTAMP, str VARCHAR default '3', bool BOOLEAN, arr ARRAY, obj OBJECT, variant VARIANT);
+create transient table db2.test8(tiny TINYINT, tiny_unsigned TINYINT UNSIGNED, smallint SMALLINT, smallint_unsigned SMALLINT UNSIGNED, int INT, int_unsigned INT UNSIGNED, bigint BIGINT, bigint_unsigned BIGINT UNSIGNED,float FLOAT, double DOUBLE, date DATE, datetime DATETIME, ts TIMESTAMP(6), str VARCHAR default '3', bool BOOLEAN, arr ARRAY, obj OBJECT, variant VARIANT);
 
 statement ok
 desc db2.test8;
@@ -175,6 +166,6 @@ DROP DATABASE db1;
 statement ok
 DROP DATABASE db2;
 
-statement error 1002
-CREATE TABLE system.test(a INT); 
+statement error 1006
+CREATE TABLE system.test; 
 
