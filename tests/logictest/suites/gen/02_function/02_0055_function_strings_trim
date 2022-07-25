@@ -1,24 +1,21 @@
-statement query T 
+statement query T
 select trim('      abc   ');
 
-----  
+----
 abc
 
-statement query T 
+statement ok
 select trim('');
 
-----  
-	
-
-statement query T 
+statement query T
 select trim('abc');
 
-----  
+----
 abc
 
-statement query T 
+statement query T
 select trim(null);
 
-----  
+----
 NULL
 
