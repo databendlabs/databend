@@ -14,6 +14,7 @@
 
 use common_arrow::arrow::chunk::Chunk;
 use common_arrow::arrow::datatypes::DataType as ArrowDataType;
+use common_arrow::arrow::io::parquet::write::transverse;
 use common_arrow::arrow::io::parquet::write::RowGroupIterator;
 use common_arrow::arrow::io::parquet::write::WriteOptions;
 use common_arrow::parquet::compression::CompressionOptions;
@@ -44,14 +45,16 @@ pub fn serialize_data_blocks(
         .map(Chunk::try_from)
         .collect::<Result<Vec<_>>>()?;
 
+    let encoding_map = |data_type: &ArrowDataType| match data_type {
+        ArrowDataType::Dictionary(..) => Encoding::RleDictionary,
+        _ => col_encoding(data_type),
+    };
+
     let encodings: Vec<Vec<_>> = arrow_schema
         .fields
         .iter()
-        .map(|f| match f.data_type() {
-            ArrowDataType::Dictionary(..) => vec![Encoding::RleDictionary],
-            _ => vec![col_encoding(f.data_type())],
-        })
-        .collect();
+        .map(|f| transverse(&f.data_type, encoding_map))
+        .collect::<Vec<_>>();
 
     let row_groups = RowGroupIterator::try_new(
         batches.into_iter().map(Ok),

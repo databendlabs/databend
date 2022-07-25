@@ -36,11 +36,8 @@ impl TupleFunction {
         _display_name: &str,
         args: &[&DataTypeImpl],
     ) -> Result<Box<dyn Function>> {
-        let names = (0..args.len())
-            .map(|i| format!("item_{}", i))
-            .collect::<Vec<_>>();
         let types = args.iter().map(|x| (*x).clone()).collect::<Vec<_>>();
-        let result_type = DataTypeImpl::Struct(StructType::create(names, types));
+        let result_type = DataTypeImpl::Struct(StructType::create(None, types));
 
         Ok(Box::new(TupleFunction {
             _display_name: "tuple".to_string(),

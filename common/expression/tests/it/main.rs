@@ -522,7 +522,7 @@ pub fn test_pass() {
     );
     run_ast(
         &mut file,
-        "TRY_CAST(create_tuple(a, b, NULL) AS (Int8, UInt8, Boolean NULL))",
+        "TRY_CAST(create_tuple(a, b, NULL) AS TUPLE(Int8, UInt8, Boolean NULL))",
         &[
             (
                 "a",

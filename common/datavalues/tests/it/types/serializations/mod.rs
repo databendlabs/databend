@@ -95,7 +95,7 @@ fn test_serializers() -> Result<()> {
         Test {
             name: "struct",
             data_type: DataTypeImpl::Struct(StructType::create(
-                vec!["date".to_owned(), "integer".to_owned()],
+                Some(vec!["date".to_owned(), "integer".to_owned()]),
                 vec![DateType::new_impl(), Int8Type::new_impl()],
             )),
             column: Arc::new(StructColumn::from_data(
@@ -104,7 +104,7 @@ fn test_serializers() -> Result<()> {
                     Series::from_data(vec![1i8, 2i8, 3]),
                 ],
                 DataTypeImpl::Struct(StructType::create(
-                    vec!["date".to_owned(), "integer".to_owned()],
+                    Some(vec!["date".to_owned(), "integer".to_owned()]),
                     vec![DateType::new_impl(), Int8Type::new_impl()],
                 )),
             )),
@@ -151,12 +151,12 @@ fn test_serializers() -> Result<()> {
 
     {
         let data_type = StructType::create(
-            vec![
+            Some(vec![
                 "item_1".to_owned(),
                 "item_2".to_owned(),
                 "item_3".to_owned(),
                 "item_4".to_owned(),
-            ],
+            ]),
             vec![
                 Float64Type::new_impl(),
                 StringType::new_impl(),

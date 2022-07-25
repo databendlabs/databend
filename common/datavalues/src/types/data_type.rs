@@ -206,7 +206,7 @@ pub fn from_arrow_type(dt: &ArrowType) -> DataTypeImpl {
             let names = fields.iter().map(|f| f.name.clone()).collect();
             let types = fields.iter().map(from_arrow_field).collect();
 
-            DataTypeImpl::Struct(StructType::create(names, types))
+            DataTypeImpl::Struct(StructType::create(Some(names), types))
         }
         ArrowType::Extension(custom_name, _, _) => match custom_name.as_str() {
             "Variant" => DataTypeImpl::Variant(VariantType::default()),
@@ -241,6 +241,16 @@ pub fn from_arrow_field(f: &ArrowField) -> DataTypeImpl {
             "Variant" => return VariantType::new_impl(),
             "VariantArray" => return VariantArrayType::new_impl(),
             "VariantObject" => return VariantObjectType::new_impl(),
+            "Tuple" => {
+                let dt = f.data_type();
+                match dt {
+                    ArrowType::Struct(fields) => {
+                        let types = fields.iter().map(from_arrow_field).collect();
+                        return DataTypeImpl::Struct(StructType::create(None, types));
+                    }
+                    _ => unreachable!(),
+                }
+            }
             _ => {}
         }
     }
