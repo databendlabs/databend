@@ -64,7 +64,6 @@ impl BlockPruner {
         push_down: &Option<Extras>,
     ) -> Result<Vec<(usize, BlockMeta)>> {
         let segment_locs = self.table_snapshot.segments.clone();
-        let segment_num = segment_locs.len();
 
         if segment_locs.is_empty() {
             return Ok(vec![]);
@@ -75,10 +74,7 @@ impl BlockPruner {
             .filter(|p| p.order_by.is_empty())
             .and_then(|p| p.limit);
 
-        let filter_expr = push_down
-            .as_ref()
-            .map(|extra| extra.filters.get(0))
-            .flatten();
+        let filter_expr = push_down.as_ref().and_then(|extra| extra.filters.get(0));
 
         let segment_num = segment_locs.len();
 
@@ -92,29 +88,31 @@ impl BlockPruner {
                             .blocks
                             .clone()
                             .into_iter()
-                            .map(move |item| (idx, item)),
+                            .map(move |item| (idx, item))
+                            .collect::<Vec<_>>(),
                     )
                 })
                 .buffered(std::cmp::min(10, segment_num))
                 .try_collect::<Vec<_>>()
                 .await?
                 .into_iter()
-                .flatten();
-            return Ok(a.collect::<Vec<_>>());
+                .flatten()
+                .collect::<Vec<_>>();
+            return Ok(a);
         }
 
         // Segments and blocks are accumulated concurrently, thus an atomic counter is used
         // to **try** collecting as less blocks as possible. But concurrency is preferred to
         // "accuracy". In [FuseTable::do_read_partitions], the "limit" will be treated precisely.
-
+        //
         let accumulated_rows = AtomicUsize::new(0);
 
         // A !Copy Wrapper of u64
         struct NonCopy<T>(T);
-
         // convert u64 (which is Copy) into NonCopy( struct which is !Copy)
         // so that "async move" can be avoided in the latter async block
         // See https://github.com/rust-lang/rust/issues/81653
+
         let segment_locs = segment_locs
             .into_iter()
             .enumerate()
