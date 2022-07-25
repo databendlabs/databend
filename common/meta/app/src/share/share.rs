@@ -96,6 +96,14 @@ pub struct RemoveShareAccountReq {
 pub struct RemoveShareAccountReply {}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct ShowShareOfReq {
+    pub share_name: ShareNameIdent,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct ShowShareOfReply {}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum ShareGrantObjectName {
     // database name
     Database(String),
@@ -145,6 +153,19 @@ pub struct RevokeShareObjectReq {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct RevokeShareObjectReply {}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct GetShareGrantObjectReq {
+    pub share_name: ShareNameIdent,
+    // If object is None, return all the granted objects.
+    pub object: Option<ShareGrantObjectName>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct GetShareGrantObjectReply {
+    pub share_name: ShareNameIdent,
+    pub objects: Vec<ShareGrantEntry>,
+}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct ShareAccountMeta {
@@ -329,6 +350,27 @@ impl ShareMeta {
 
     pub fn del_account(&mut self, account: &String) {
         self.accounts.remove(account);
+    }
+
+    pub fn get_grant_entry(&self, object: ShareGrantObject) -> Option<ShareGrantEntry> {
+        if self.database.is_none() {
+            return None;
+        }
+
+        let database = self.database.as_ref().unwrap();
+        if database.object == object {
+            return Some(database.clone());
+        }
+
+        match object {
+            ShareGrantObject::Database(_db_id) => {
+                return None;
+            }
+            ShareGrantObject::Table(_table_id) => match self.entries.get(&object.to_string()) {
+                Some(entry) => Some(entry.clone()),
+                None => None,
+            },
+        }
     }
 
     pub fn grant_object_privileges(

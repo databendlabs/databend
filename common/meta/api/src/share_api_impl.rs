@@ -26,6 +26,8 @@ use common_meta_app::share::CreateShareReply;
 use common_meta_app::share::CreateShareReq;
 use common_meta_app::share::DropShareReply;
 use common_meta_app::share::DropShareReq;
+use common_meta_app::share::GetShareGrantObjectReply;
+use common_meta_app::share::GetShareGrantObjectReq;
 use common_meta_app::share::GrantShareObjectReply;
 use common_meta_app::share::GrantShareObjectReq;
 use common_meta_app::share::RemoveShareAccountReply;
@@ -603,6 +605,62 @@ impl<KV: KVApi> ShareApi for KV {
         Err(MetaError::AppError(AppError::TxnRetryMaxTimes(
             TxnRetryMaxTimes::new("revoke_object", TXN_MAX_RETRY_TIMES),
         )))
+    }
+
+    async fn get_share_grant_objects(
+        &self,
+        req: GetShareGrantObjectReq,
+    ) -> MetaResult<GetShareGrantObjectReply> {
+        tracing::debug!(req = debug(&req), "ShareApi: {}", func_name!());
+
+        let share_name_key = &req.share_name;
+
+        let res = get_share_or_err(
+            self,
+            share_name_key,
+            format!("revoke_object: {}", &share_name_key),
+        )
+        .await;
+
+        let (_share_id_seq, _share_id, _share_meta_seq, share_meta) = match res {
+            Ok(x) => x,
+            Err(e) => {
+                return Err(e);
+            }
+        };
+
+        if share_meta.database.is_none() {
+            return Ok(GetShareGrantObjectReply {
+                share_name: req.share_name,
+                objects: vec![],
+            });
+        }
+
+        let entries = match req.object {
+            Some(object_name) => {
+                let seq_and_id =
+                    get_share_object_seq_and_id(self, &object_name, &share_name_key.tenant).await?;
+                let object = ShareGrantObject::new(&seq_and_id);
+                let entry = share_meta.get_grant_entry(object);
+                match entry {
+                    Some(entry) => vec![entry],
+                    None => vec![],
+                }
+            }
+            None => {
+                let mut entries = Vec::new();
+                for entry in share_meta.entries {
+                    entries.push(entry.1);
+                }
+                entries.push(share_meta.database.unwrap());
+                entries
+            }
+        };
+
+        Ok(GetShareGrantObjectReply {
+            share_name: req.share_name,
+            objects: entries,
+        })
     }
 }
 
