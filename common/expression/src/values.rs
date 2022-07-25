@@ -30,6 +30,7 @@ use crate::property::IntDomain;
 use crate::property::NullableDomain;
 use crate::property::StringDomain;
 use crate::property::UIntDomain;
+use crate::types::string::StringColumn;
 use crate::types::string::StringColumnBuilder;
 use crate::types::*;
 use crate::util::append_bitmap;
@@ -110,10 +111,7 @@ pub enum Column {
     Float32(Buffer<f32>),
     Float64(Buffer<f64>),
     Boolean(Bitmap),
-    String {
-        data: Buffer<u8>,
-        offsets: Buffer<u64>,
-    },
+    String(StringColumn),
     Array {
         array: Box<Column>,
         offsets: Buffer<u64>,
@@ -319,7 +317,7 @@ impl Column {
             Column::Float32(col) => col.len(),
             Column::Float64(col) => col.len(),
             Column::Boolean(col) => col.len(),
-            Column::String { data: _, offsets } => offsets.len() - 1,
+            Column::String(col) => col.len(),
             Column::Array { array: _, offsets } => offsets.len() - 1,
             Column::Nullable {
                 column: _,
@@ -344,15 +342,7 @@ impl Column {
             Column::Float32(col) => Some(ScalarRef::Float32(col.get(index).cloned()?)),
             Column::Float64(col) => Some(ScalarRef::Float64(col.get(index).cloned()?)),
             Column::Boolean(col) => Some(ScalarRef::Boolean(col.get(index)?)),
-            Column::String { data, offsets } => {
-                if offsets.len() > index + 1 {
-                    Some(ScalarRef::String(
-                        &data[(offsets[index] as usize)..(offsets[index + 1] as usize)],
-                    ))
-                } else {
-                    None
-                }
-            }
+            Column::String(col) => col.index(index).map(ScalarRef::String),
             Column::Array { array, offsets } => {
                 if offsets.len() > index + 1 {
                     Some(ScalarRef::Array(array.slice(
@@ -423,15 +413,7 @@ impl Column {
             Column::Boolean(col) => {
                 Column::Boolean(col.clone().slice(range.start, range.end - range.start))
             }
-            Column::String { data, offsets } => {
-                let offsets = offsets
-                    .clone()
-                    .slice(range.start, range.end - range.start + 1);
-                Column::String {
-                    data: data.clone(),
-                    offsets,
-                }
-            }
+            Column::String(col) => Column::String(col.slice(range)),
             Column::Array { array, offsets } => {
                 let offsets = offsets
                     .clone()
@@ -565,12 +547,8 @@ impl Column {
                 has_false: col.unset_bits() > 0,
                 has_true: col.len() - col.unset_bits() > 0,
             }),
-            Column::String { data, offsets } => {
-                let col = (data.clone(), offsets.clone());
-                let (min, max) = StringType::iter_column(&col)
-                    .minmax()
-                    .into_option()
-                    .unwrap();
+            Column::String(col) => {
+                let (min, max) = StringType::iter_column(col).minmax().into_option().unwrap();
                 Domain::String(StringDomain {
                     min: min.to_vec(),
                     max: Some(max.to_vec()),
@@ -731,11 +709,11 @@ impl Column {
                 col.clone(),
                 None,
             )),
-            Column::String { data, offsets } => {
+            Column::String(col) => {
                 Box::new(common_arrow::arrow::array::BinaryArray::<i64>::from_data(
                     self.arrow_type(),
-                    offsets.iter().map(|offset| *offset as i64).collect(),
-                    data.clone(),
+                    col.offsets.iter().map(|offset| *offset as i64).collect(),
+                    col.data.clone(),
                     None,
                 ))
             }
@@ -869,10 +847,10 @@ impl Column {
                     .iter()
                     .map(|x| *x as u64)
                     .collect::<Vec<_>>();
-                Column::String {
+                Column::String(StringColumn {
                     data: arrow_col.values().clone(),
                     offsets: offsets.into(),
-                }
+                })
             }
             // TODO: deprecate it and use LargeBinary instead
             ArrowDataType::Binary => {
@@ -885,10 +863,10 @@ impl Column {
                     .iter()
                     .map(|x| *x as u64)
                     .collect::<Vec<_>>();
-                Column::String {
+                Column::String(StringColumn {
                     data: arrow_col.values().clone(),
                     offsets: offsets.into(),
-                }
+                })
             }
             // TODO: deprecate it and use LargeBinary instead
             ArrowDataType::Utf8 => {
@@ -901,10 +879,10 @@ impl Column {
                     .iter()
                     .map(|x| *x as u64)
                     .collect::<Vec<_>>();
-                Column::String {
+                Column::String(StringColumn {
                     data: arrow_col.values().clone(),
                     offsets: offsets.into(),
-                }
+                })
             }
             // TODO: deprecate it and use LargeBinary instead
             ArrowDataType::LargeUtf8 => {
@@ -917,10 +895,10 @@ impl Column {
                     .iter()
                     .map(|x| *x as u64)
                     .collect::<Vec<_>>();
-                Column::String {
+                Column::String(StringColumn {
                     data: arrow_col.values().clone(),
                     offsets: offsets.into(),
-                }
+                })
             }
             ArrowDataType::LargeList(_) => {
                 let arrow_col = arrow_col
@@ -983,10 +961,7 @@ impl ColumnBuilder {
             Column::Float32(col) => ColumnBuilder::Float32(buffer_into_mut(col)),
             Column::Float64(col) => ColumnBuilder::Float64(buffer_into_mut(col)),
             Column::Boolean(col) => ColumnBuilder::Boolean(bitmap_into_mut(col)),
-            Column::String { data, offsets } => ColumnBuilder::String(StringColumnBuilder {
-                data: buffer_into_mut(data),
-                offsets: offsets.to_vec(),
-            }),
+            Column::String(col) => ColumnBuilder::String(StringColumnBuilder::from_column(col)),
             Column::Array { array, offsets } => ColumnBuilder::Array {
                 array: Box::new(ColumnBuilder::from_column(*array)),
                 offsets: offsets.to_vec(),
@@ -1036,7 +1011,7 @@ impl ColumnBuilder {
             DataType::EmptyArray => ColumnBuilder::EmptyArray { len: 0 },
             DataType::Boolean => ColumnBuilder::Boolean(MutableBitmap::with_capacity(capacity)),
             DataType::String => {
-                ColumnBuilder::String(StringColumnBuilder::with_capacity(0, capacity))
+                ColumnBuilder::String(StringColumnBuilder::with_capacity(capacity, 0))
             }
             DataType::UInt8 => ColumnBuilder::UInt8(Vec::with_capacity(capacity)),
             DataType::UInt16 => ColumnBuilder::UInt16(Vec::with_capacity(capacity)),
@@ -1222,10 +1197,7 @@ impl ColumnBuilder {
             ColumnBuilder::Float32(builder) => Column::Float32(builder.into()),
             ColumnBuilder::Float64(builder) => Column::Float64(builder.into()),
             ColumnBuilder::Boolean(builder) => Column::Boolean(builder.into()),
-            ColumnBuilder::String(builder) => {
-                let (data, offsets) = builder.build();
-                Column::String { data, offsets }
-            }
+            ColumnBuilder::String(builder) => Column::String(builder.build()),
             ColumnBuilder::Array { array, offsets } => Column::Array {
                 array: Box::new(array.build()),
                 offsets: offsets.into(),

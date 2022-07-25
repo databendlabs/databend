@@ -118,11 +118,6 @@ build_exceptions! {
     PermissionDenied(1063),
     UnmarshalError(1064),
     SemanticError(1065),
-    InvalidAuthInfo(1066),
-    InvalidTimezone(1067),
-    InvalidDate(1068),
-    InvalidTimestamp(1069),
-    InvalidClusterKeys(1070),
 
     // Uncategorized error codes.
     UnexpectedResponseType(1066),
@@ -143,6 +138,12 @@ build_exceptions! {
     UnknownFormat(1074),
     UnknownCompressionType(1075),
     InvalidCompressionData(1076),
+
+    InvalidAuthInfo(1077),
+    InvalidTimezone(1078),
+    InvalidDate(1079),
+    InvalidTimestamp(1080),
+    InvalidClusterKeys(1081),
 
     // Tenant error codes.
     TenantIsEmpty(1101),

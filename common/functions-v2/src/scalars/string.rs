@@ -13,49 +13,87 @@
 // limitations under the License.
 
 use bstr::ByteSlice;
+use common_expression::types::string::StringColumn;
+use common_expression::types::string::StringColumnBuilder;
+use common_expression::types::GenericMap;
+use common_expression::types::NumberType;
 use common_expression::types::StringType;
 use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
+use common_expression::Value;
+use common_expression::ValueRef;
 
 pub fn register(registry: &mut FunctionRegistry) {
-    registry.register_with_writer_1_arg::<StringType, StringType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
         "upper",
         FunctionProperty::default(),
         |_| None,
-        |val, writer| {
-            for (start, end, ch) in val.char_indices() {
-                if ch == '\u{FFFD}' {
-                    // If char is invalid, just copy it.
-                    writer.put_slice(&val.as_bytes()[start..end]);
-                } else if ch.is_ascii() {
-                    writer.put_u8(ch.to_ascii_uppercase() as u8);
-                } else {
-                    for x in ch.to_uppercase() {
-                        writer.put_char(x);
+        vectorize_string_to_string(
+            |_| 0,
+            |val, writer| {
+                for (start, end, ch) in val.char_indices() {
+                    if ch == '\u{FFFD}' {
+                        // If char is invalid, just copy it.
+                        writer.put_slice(&val.as_bytes()[start..end]);
+                    } else if ch.is_ascii() {
+                        writer.put_u8(ch.to_ascii_uppercase() as u8);
+                    } else {
+                        for x in ch.to_uppercase() {
+                            writer.put_char(x);
+                        }
                     }
                 }
-            }
-            writer.commit_row();
-            Ok(())
-        },
+                writer.commit_row();
+                Ok(())
+            },
+        ),
     );
     registry.register_aliases("upper", &["ucase"]);
 
-    registry.register_string_2_string(
-        "to_base64",
+    registry.register_1_arg::<StringType, NumberType<u64>, _, _>(
+        "bit_length",
         FunctionProperty::default(),
         |_| None,
-        |val, buf| Ok(base64::encode_config_slice(val, base64::STANDARD, buf)),
-        |(data, offsets)| data.len() * 4 / 3 + (offsets.len() - 1) * 4,
+        |val| 8 * val.len() as u64,
     );
 
-    registry.register_string_2_string(
-        "from_base64",
+    registry.register_1_arg::<StringType, NumberType<u64>, _, _>(
+        "octet_length",
         FunctionProperty::default(),
         |_| None,
-        |val, buf| {
-            base64::decode_config_slice(val, base64::STANDARD, buf).map_err(|e| e.to_string())
-        },
-        |(data, offsets)| data.len() * 4 / 3 + (offsets.len() - 1) * 4,
+        |val| val.len() as u64,
     );
+    registry.register_aliases("octet_length", &["length"]);
+
+    registry.register_1_arg::<StringType, NumberType<u64>, _, _>(
+        "char_length",
+        FunctionProperty::default(),
+        |_| None,
+        |val| match std::str::from_utf8(val) {
+            Ok(s) => s.chars().count() as u64,
+            Err(_) => val.len() as u64,
+        },
+    );
+    registry.register_aliases("char_length", &["character_length"]);
+}
+
+fn vectorize_string_to_string(
+    estimate_bytes: impl Fn(&StringColumn) -> usize + Copy,
+    func: impl Fn(&[u8], &mut StringColumnBuilder) -> Result<(), String> + Copy,
+) -> impl Fn(ValueRef<StringType>, &GenericMap) -> Result<Value<StringType>, String> + Copy {
+    move |arg1, _| match arg1 {
+        ValueRef::Scalar(val) => {
+            let mut builder = StringColumnBuilder::with_capacity(1, 0);
+            func(val, &mut builder)?;
+            Ok(Value::Scalar(builder.build_scalar()))
+        }
+        ValueRef::Column(col) => {
+            let data_capacity = estimate_bytes(&col);
+            let mut builder = StringColumnBuilder::with_capacity(col.len(), data_capacity);
+            for val in col.iter() {
+                func(val, &mut builder)?;
+            }
+            Ok(Value::Column(builder.build()))
+        }
+    }
 }
