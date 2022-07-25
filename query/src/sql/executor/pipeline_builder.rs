@@ -27,6 +27,17 @@ use common_functions::scalars::FunctionFactory;
 use common_planners::ReadDataSourcePlan;
 use parking_lot::RwLock;
 
+use super::AggregateFinal;
+use super::AggregatePartial;
+use super::EvalScalar;
+use super::ExchangeSink;
+use super::ExchangeSource;
+use super::Filter;
+use super::HashJoin;
+use super::Limit;
+use super::Project;
+use super::Sort;
+use super::TableScan;
 use crate::evaluator::EvalNode;
 use crate::evaluator::Evaluator;
 use crate::pipelines::processors::port::InputPort;
@@ -54,11 +65,11 @@ use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::SinkPipeBuilder;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
-use crate::sql::exec::physical_plan::ColumnID;
-use crate::sql::exec::physical_plan::PhysicalPlan;
-use crate::sql::exec::AggregateFunctionDesc;
-use crate::sql::exec::PhysicalScalar;
-use crate::sql::exec::SortDesc;
+use crate::sql::executor::physical_plan::ColumnID;
+use crate::sql::executor::physical_plan::PhysicalPlan;
+use crate::sql::executor::AggregateFunctionDesc;
+use crate::sql::executor::PhysicalScalar;
+use crate::sql::executor::SortDesc;
 use crate::sql::plans::JoinType;
 use crate::sql::ColumnBinding;
 
@@ -96,28 +107,28 @@ impl PipelineBuilder {
 
     fn build_pipeline(&mut self, plan: &PhysicalPlan) -> Result<()> {
         match plan {
-            PhysicalPlan::TableScan {
+            PhysicalPlan::TableScan(TableScan {
                 name_mapping,
                 source,
                 ..
-            } => self.build_table_scan(plan.output_schema()?, name_mapping, source),
-            PhysicalPlan::Filter { input, predicates } => {
+            }) => self.build_table_scan(plan.output_schema()?, name_mapping, source),
+            PhysicalPlan::Filter(Filter { input, predicates }) => {
                 self.build_pipeline(input)?;
                 self.build_filter(predicates)
             }
-            PhysicalPlan::Project { input, projections } => {
+            PhysicalPlan::Project(Project { input, projections }) => {
                 self.build_pipeline(input)?;
                 self.build_project(projections)
             }
-            PhysicalPlan::EvalScalar { input, scalars } => {
+            PhysicalPlan::EvalScalar(EvalScalar { input, scalars }) => {
                 self.build_pipeline(input)?;
                 self.build_eval_scalar(scalars)
             }
-            PhysicalPlan::AggregatePartial {
+            PhysicalPlan::AggregatePartial(AggregatePartial {
                 input,
                 group_by,
                 agg_funcs,
-            } => {
+            }) => {
                 self.build_pipeline(input)?;
                 self.build_aggregate_partial(
                     input.output_schema()?,
@@ -126,12 +137,12 @@ impl PipelineBuilder {
                     agg_funcs,
                 )
             }
-            PhysicalPlan::AggregateFinal {
+            PhysicalPlan::AggregateFinal(AggregateFinal {
                 input,
                 group_by,
                 agg_funcs,
                 before_group_by_schema,
-            } => {
+            }) => {
                 self.build_pipeline(input)?;
                 self.build_aggregate_final(
                     before_group_by_schema.clone(),
@@ -140,19 +151,19 @@ impl PipelineBuilder {
                     agg_funcs,
                 )
             }
-            PhysicalPlan::Sort { input, order_by } => {
+            PhysicalPlan::Sort(Sort { input, order_by }) => {
                 self.build_pipeline(input)?;
                 self.build_sort(order_by)
             }
-            PhysicalPlan::Limit {
+            PhysicalPlan::Limit(Limit {
                 input,
                 limit,
                 offset,
-            } => {
+            }) => {
                 self.build_pipeline(input)?;
                 self.build_limit(*limit, *offset)
             }
-            PhysicalPlan::HashJoin {
+            PhysicalPlan::HashJoin(HashJoin {
                 build,
                 probe,
                 build_keys,
@@ -161,7 +172,7 @@ impl PipelineBuilder {
                 join_type,
                 marker_index,
                 from_correlated_subquery,
-            } => {
+            }) => {
                 let predicate = Self::join_predicate(other_conditions)?;
 
                 let hash_join_desc = HashJoinDesc {
@@ -198,6 +209,14 @@ impl PipelineBuilder {
                 self.build_hash_join(plan.output_schema()?, join_type.clone(), join_state)?;
                 Ok(())
             }
+            PhysicalPlan::ExchangeSource(exchange_source) => {
+                self.build_exchange_source(exchange_source)
+            }
+            PhysicalPlan::ExchangeSink(exchange_sink) => self.build_exchange_sink(exchange_sink),
+
+            PhysicalPlan::Exchange(_) => Err(ErrorCode::LogicalError(
+                "Invalid physical plan with PhysicalPlan::Exchange",
+            )),
         }
     }
 
@@ -516,7 +535,6 @@ impl PipelineBuilder {
             .add_transform(|input, output| TransformLimit::try_create(limit, offset, input, output))
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn build_hash_join(
         &mut self,
         output_schema: DataSchemaRef,
@@ -546,5 +564,23 @@ impl PipelineBuilder {
         }
 
         Ok(())
+    }
+
+    pub fn build_exchange_source(&mut self, exchange_source: &ExchangeSource) -> Result<()> {
+        let exchange_manager = self.ctx.get_exchange_manager();
+        let build_res = exchange_manager.get_fragment_source(
+            exchange_source.query_id.clone(),
+            exchange_source.source_fragment_id,
+            exchange_source.schema.clone(),
+        )?;
+
+        self.main_pipeline = build_res.main_pipeline;
+        self.pipelines.extend(build_res.sources_pipelines);
+        Ok(())
+    }
+
+    pub fn build_exchange_sink(&mut self, exchange_sink: &ExchangeSink) -> Result<()> {
+        // ExchangeSink will be appended by `ExchangeManager::execute_pipeline`
+        self.build_pipeline(&exchange_sink.input)
     }
 }

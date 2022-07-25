@@ -30,6 +30,7 @@ use crate::sql::optimizer::RelExpr;
 use crate::sql::optimizer::SExpr;
 use crate::sql::plans::Aggregate;
 use crate::sql::plans::AggregateFunction;
+use crate::sql::plans::AggregateMode;
 use crate::sql::plans::AndExpr;
 use crate::sql::plans::BoundColumnRef;
 use crate::sql::plans::CastExpr;
@@ -581,6 +582,7 @@ impl SubqueryRewriter {
                 }
                 Ok(SExpr::create_unary(
                     Aggregate {
+                        mode: AggregateMode::Initial,
                         group_items,
                         aggregate_functions: agg_items,
                         from_distinct: aggregate.from_distinct,
@@ -594,7 +596,9 @@ impl SubqueryRewriter {
                 let flatten_plan = self.flatten(plan.child(0)?, correlated_columns)?;
                 Ok(SExpr::create_unary(plan.plan().clone(), flatten_plan))
             }
-            RelOperator::Pattern(_)
+
+            RelOperator::Exchange(_)
+            | RelOperator::Pattern(_)
             | RelOperator::LogicalGet(_)
             | RelOperator::PhysicalScan(_)
             | RelOperator::PhysicalHashJoin(_) => Err(ErrorCode::LogicalError(

@@ -248,11 +248,10 @@ pub async fn clickhouse_handler_get(
 
     let settings = context.get_settings();
     if !context.get_config().query.management_mode
-        && (context.get_cluster().is_empty()
-            && settings
-                .get_enable_planner_v2()
-                .map_err(InternalServerError)?
-                != 0
+        && (settings
+            .get_enable_planner_v2()
+            .map_err(InternalServerError)?
+            != 0
             && !stmts.is_empty()
             && stmts.get(0).map_or(false, InterpreterFactoryV2::check)
             || stmts

@@ -27,6 +27,7 @@ use common_planners::RemotePlan;
 use common_planners::StageKind;
 use common_planners::StagePlan;
 
+use crate::api::FragmentPayload;
 use crate::api::MergeExchange;
 use crate::api::ShuffleDataExchange;
 use crate::interpreters::fragments::partition_state::PartitionState;
@@ -61,7 +62,7 @@ impl StageQueryFragment {
 }
 
 impl QueryFragment for StageQueryFragment {
-    fn distribute_query(&self) -> Result<bool> {
+    fn is_distributed_query(&self) -> Result<bool> {
         Ok(true)
     }
 
@@ -86,20 +87,26 @@ impl QueryFragment for StageQueryFragment {
             }
 
             let action = &input_actions.get_actions()[0];
+            let new = match &action.payload {
+                FragmentPayload::PlanV1(plan) => plan,
+                FragmentPayload::PlanV2(_) => unreachable!(),
+            };
             let fragment_action = QueryFragmentAction::create(
                 actions.get_local_executor(),
-                self.input
-                    .rewrite_remote_plan(&self.stage.input, &action.node)?,
+                self.input.rewrite_remote_plan(&self.stage.input, new)?,
             );
 
             fragment_actions.add_action(fragment_action);
         } else {
             // We run exchange data on the current hosts
             for action in input_actions.get_actions() {
+                let new = match &action.payload {
+                    FragmentPayload::PlanV1(plan) => plan,
+                    FragmentPayload::PlanV2(_) => unreachable!(),
+                };
                 let fragment_action = QueryFragmentAction::create(
                     action.executor.clone(),
-                    self.input
-                        .rewrite_remote_plan(&self.stage.input, &action.node)?,
+                    self.input.rewrite_remote_plan(&self.stage.input, new)?,
                 );
 
                 fragment_actions.add_action(fragment_action);

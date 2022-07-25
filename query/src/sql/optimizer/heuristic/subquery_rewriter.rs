@@ -28,6 +28,7 @@ use crate::sql::optimizer::RelExpr;
 use crate::sql::optimizer::SExpr;
 use crate::sql::plans::Aggregate;
 use crate::sql::plans::AggregateFunction;
+use crate::sql::plans::AggregateMode;
 use crate::sql::plans::AndExpr;
 use crate::sql::plans::BoundColumnRef;
 use crate::sql::plans::CastExpr;
@@ -126,6 +127,7 @@ impl SubqueryRewriter {
 
             RelOperator::PhysicalHashJoin(_)
             | RelOperator::Pattern(_)
+            | RelOperator::Exchange(_)
             | RelOperator::PhysicalScan(_) => Err(ErrorCode::LogicalError("Invalid plan type")),
         }
     }
@@ -354,6 +356,7 @@ impl SubqueryRewriter {
                         index: agg_func_index,
                     }],
                     from_distinct: false,
+                    mode: AggregateMode::Initial,
                 };
 
                 // COUNT(*) = 1

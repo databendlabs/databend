@@ -29,4 +29,5 @@ pub use data_exchange::BroadcastExchange;
 pub use data_exchange::DataExchange;
 pub use data_exchange::MergeExchange;
 pub use data_exchange::ShuffleDataExchange;
+pub use data_exchange::ShuffleDataExchangeV2;
 pub use exchange_manager::DataExchangeManager;

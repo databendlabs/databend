@@ -18,7 +18,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Expression;
 
-use crate::sql::exec::util::format_field_name;
+use crate::sql::executor::util::format_field_name;
 use crate::sql::plans::AggregateFunction;
 use crate::sql::plans::AndExpr;
 use crate::sql::plans::BoundColumnRef;

@@ -393,6 +393,8 @@ pub enum TokenKind {
     FOR,
     #[token("FORMAT", ignore(ascii_case))]
     FORMAT,
+    #[token("FRAGMENTS", ignore(ascii_case))]
+    FRAGMENTS,
     #[token("FROM", ignore(ascii_case))]
     FROM,
     #[token("FULL", ignore(ascii_case))]

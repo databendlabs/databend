@@ -16,4 +16,5 @@ mod plan_scheduler_query;
 mod plan_scheduler_rewriter;
 
 pub use plan_scheduler_query::schedule_query_new;
+pub use plan_scheduler_query::schedule_query_v2;
 pub use plan_scheduler_rewriter::apply_plan_rewrite;
