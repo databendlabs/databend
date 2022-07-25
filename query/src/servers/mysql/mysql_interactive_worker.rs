@@ -35,7 +35,6 @@ use opensrv_mysql::StatementMetaWriter;
 use rand::RngCore;
 use tokio_stream::StreamExt;
 
-use crate::clusters::ClusterHelper;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
 use crate::interpreters::InterpreterFactoryV2;
@@ -295,8 +294,7 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
                 let interpreter: Result<Arc<dyn Interpreter>>;
                 if let Ok((stmts, h)) = stmts_hints {
                     hints = h;
-                    interpreter = if context.get_cluster().is_empty()
-                        && settings.get_enable_planner_v2()? != 0
+                    interpreter = if settings.get_enable_planner_v2()? != 0
                         && stmts.get(0).map_or(false, InterpreterFactoryV2::check)
                         || stmts
                             .get(0)

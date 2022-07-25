@@ -16,16 +16,29 @@ use std::collections::BTreeMap;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_planners::StageKind;
 use itertools::Itertools;
 
-use crate::sql::exec::util::check_physical;
-use crate::sql::exec::AggregateFunctionDesc;
-use crate::sql::exec::AggregateFunctionSignature;
-use crate::sql::exec::ColumnID;
-use crate::sql::exec::PhysicalPlan;
-use crate::sql::exec::PhysicalScalar;
-use crate::sql::exec::SortDesc;
+use super::AggregateFinal;
+use super::AggregatePartial;
+use super::Exchange as PhysicalExchange;
+use super::Filter;
+use super::HashJoin;
+use super::Limit;
+use super::Project;
+use super::Sort;
+use super::TableScan;
+use crate::sql::executor::util::check_physical;
+use crate::sql::executor::AggregateFunctionDesc;
+use crate::sql::executor::AggregateFunctionSignature;
+use crate::sql::executor::ColumnID;
+use crate::sql::executor::EvalScalar;
+use crate::sql::executor::PhysicalPlan;
+use crate::sql::executor::PhysicalScalar;
+use crate::sql::executor::SortDesc;
 use crate::sql::optimizer::SExpr;
+use crate::sql::plans::AggregateMode;
+use crate::sql::plans::Exchange;
 use crate::sql::plans::RelOperator;
 use crate::sql::plans::Scalar;
 use crate::sql::MetadataRef;
@@ -51,15 +64,15 @@ impl PhysicalPlanBuilder {
                     let name = metadata.column(*index).name.clone();
                     name_mapping.insert(name, index.to_string());
                 }
-                Ok(PhysicalPlan::TableScan {
+                Ok(PhysicalPlan::TableScan(TableScan {
                     name_mapping,
                     source: Box::new(metadata.table(scan.table_index).source.clone()),
-                })
+                }))
             }
             RelOperator::PhysicalHashJoin(join) => {
                 let build_side = self.build(s_expr.child(1)?)?;
                 let probe_side = self.build(s_expr.child(0)?)?;
-                Ok(PhysicalPlan::HashJoin {
+                Ok(PhysicalPlan::HashJoin(HashJoin {
                     build: Box::new(build_side),
                     probe: Box::new(probe_side),
                     join_type: join.join_type.clone(),
@@ -89,12 +102,12 @@ impl PhysicalPlanBuilder {
                         .collect::<Result<_>>()?,
                     marker_index: join.marker_index,
                     from_correlated_subquery: join.from_correlated_subquery,
-                })
+                }))
             }
             RelOperator::Project(project) => {
                 let input = self.build(s_expr.child(0)?)?;
                 let input_schema = input.output_schema()?;
-                Ok(PhysicalPlan::Project {
+                Ok(PhysicalPlan::Project(Project {
                     input: Box::new(input),
                     projections: project
                         .columns
@@ -102,9 +115,9 @@ impl PhysicalPlanBuilder {
                         .sorted()
                         .map(|index| input_schema.index_of(index.to_string().as_str()))
                         .collect::<Result<_>>()?,
-                })
+                }))
             }
-            RelOperator::EvalScalar(eval_scalar) => Ok(PhysicalPlan::EvalScalar {
+            RelOperator::EvalScalar(eval_scalar) => Ok(PhysicalPlan::EvalScalar(EvalScalar {
                 input: Box::new(self.build(s_expr.child(0)?)?),
                 scalars: eval_scalar
                     .items
@@ -114,9 +127,9 @@ impl PhysicalPlanBuilder {
                         Ok((builder.build(&item.scalar)?, item.index.to_string()))
                     })
                     .collect::<Result<_>>()?,
-            }),
+            })),
 
-            RelOperator::Filter(filter) => Ok(PhysicalPlan::Filter {
+            RelOperator::Filter(filter) => Ok(PhysicalPlan::Filter(Filter {
                 input: Box::new(self.build(s_expr.child(0)?)?),
                 predicates: filter
                     .predicates
@@ -126,7 +139,7 @@ impl PhysicalPlanBuilder {
                         builder.build(pred)
                     })
                     .collect::<Result<_>>()?,
-            }),
+            })),
             RelOperator::Aggregate(agg) => {
                 let input = self.build(s_expr.child(0)?)?;
                 let group_items: Vec<ColumnID> = agg
@@ -160,22 +173,46 @@ impl PhysicalPlanBuilder {
                         Err(ErrorCode::LogicalError("Expected aggregate function".to_string()))
                     }
                 }).collect::<Result<_>>()?;
-                let before_group_by_schema = input.output_schema()?;
-                let partial_agg = PhysicalPlan::AggregatePartial {
-                    input: Box::new(input),
-                    group_by: group_items.clone(),
-                    agg_funcs: agg_funcs.clone(),
-                };
-                let final_agg = PhysicalPlan::AggregateFinal {
-                    input: Box::new(partial_agg),
-                    group_by: group_items,
-                    agg_funcs,
-                    before_group_by_schema,
+                let result = match &agg.mode {
+                    AggregateMode::Partial => PhysicalPlan::AggregatePartial(AggregatePartial {
+                        input: Box::new(input),
+                        group_by: group_items,
+                        agg_funcs,
+                    }),
+
+                    // Hack to get before group by schema, we should refactor this
+                    AggregateMode::Final => match input {
+                        PhysicalPlan::AggregatePartial(ref agg) => {
+                            let before_group_by_schema = agg.input.output_schema()?;
+                            PhysicalPlan::AggregateFinal(AggregateFinal {
+                                input: Box::new(input),
+                                group_by: group_items,
+                                agg_funcs,
+                                before_group_by_schema,
+                            })
+                        }
+
+                        PhysicalPlan::Exchange(PhysicalExchange {
+                            input: box PhysicalPlan::AggregatePartial(ref agg),
+                            ..
+                        }) => {
+                            let before_group_by_schema = agg.input.output_schema()?;
+                            PhysicalPlan::AggregateFinal(AggregateFinal {
+                                input: Box::new(input),
+                                group_by: group_items,
+                                agg_funcs,
+                                before_group_by_schema,
+                            })
+                        }
+
+                        _ => unreachable!(),
+                    },
+                    AggregateMode::Initial => unreachable!(),
                 };
 
-                Ok(final_agg)
+                Ok(result)
             }
-            RelOperator::Sort(sort) => Ok(PhysicalPlan::Sort {
+            RelOperator::Sort(sort) => Ok(PhysicalPlan::Sort(Sort {
                 input: Box::new(self.build(s_expr.child(0)?)?),
                 order_by: sort
                     .items
@@ -186,12 +223,32 @@ impl PhysicalPlanBuilder {
                         order_by: v.index.to_string(),
                     })
                     .collect(),
-            }),
-            RelOperator::Limit(limit) => Ok(PhysicalPlan::Limit {
+            })),
+            RelOperator::Limit(limit) => Ok(PhysicalPlan::Limit(Limit {
                 input: Box::new(self.build(s_expr.child(0)?)?),
                 limit: limit.limit,
                 offset: limit.offset,
-            }),
+            })),
+            RelOperator::Exchange(exchange) => {
+                let mut keys = vec![];
+                let kind = match exchange {
+                    Exchange::Hash(scalars) => {
+                        for scalar in scalars {
+                            let mut builder = PhysicalScalarBuilder;
+                            keys.push(builder.build(scalar)?);
+                        }
+                        StageKind::Normal
+                    }
+                    Exchange::Broadcast => StageKind::Expansive,
+                    Exchange::Merge => StageKind::Merge,
+                };
+                Ok(PhysicalPlan::Exchange(PhysicalExchange {
+                    input: Box::new(self.build(s_expr.child(0)?)?),
+                    kind,
+                    keys,
+                }))
+            }
+
             _ => Err(ErrorCode::LogicalError(format!(
                 "Unsupported physical plan: {:?}",
                 s_expr.plan()

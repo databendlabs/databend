@@ -24,7 +24,7 @@ use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::transforms::transform::Transform;
 use crate::pipelines::processors::transforms::transform::Transformer;
-use crate::sql::exec::ColumnID;
+use crate::sql::executor::ColumnID;
 
 pub struct TransformFilterV2 {
     predicate: EvalNode<ColumnID>,

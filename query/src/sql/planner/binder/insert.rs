@@ -46,8 +46,10 @@ use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::binder::Binder;
 use crate::sql::binder::ScalarBinder;
-use crate::sql::exec::ExpressionBuilderWithRenaming;
+use crate::sql::executor::ExpressionBuilderWithRenaming;
 use crate::sql::optimizer::optimize;
+use crate::sql::optimizer::OptimizerConfig;
+use crate::sql::optimizer::OptimizerContext;
 use crate::sql::plans::Insert;
 use crate::sql::plans::InsertInputSource;
 use crate::sql::plans::InsertValueBlock;
@@ -112,7 +114,9 @@ impl<'a> Binder {
             InsertSource::Select { query } => {
                 let statement = Statement::Query(query);
                 let select_plan = self.bind_statement(bind_context, &statement).await?;
-                let optimized_plan = optimize(self.ctx.clone(), select_plan)?;
+                // Don't enable distributed optimization for `INSERT INTO ... SELECT ...` for now
+                let opt_ctx = Arc::new(OptimizerContext::new(OptimizerConfig::default()));
+                let optimized_plan = optimize(self.ctx.clone(), opt_ctx, select_plan)?;
                 Ok(InsertInputSource::SelectPlan(Box::new(optimized_plan)))
             }
         };

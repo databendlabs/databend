@@ -20,7 +20,7 @@ use common_functions::scalars::FunctionFactory;
 
 use crate::evaluator::eval_node::EvalNode;
 use crate::evaluator::Evaluator;
-use crate::sql::exec::PhysicalScalar;
+use crate::sql::executor::PhysicalScalar;
 
 impl Evaluator {
     pub fn eval_physical_scalar<VectorID>(

@@ -17,11 +17,11 @@ mod group;
 mod heuristic;
 mod m_expr;
 mod memo;
-mod optimize_context;
 mod pattern_extractor;
 mod property;
 mod rule;
 mod s_expr;
+mod util;
 
 use std::sync::Arc;
 
@@ -30,9 +30,9 @@ pub use heuristic::HeuristicOptimizer;
 pub use heuristic::DEFAULT_REWRITE_RULES;
 pub use m_expr::MExpr;
 pub use memo::Memo;
-pub use optimize_context::OptimizeContext;
 pub use pattern_extractor::PatternExtractor;
 pub use property::ColumnSet;
+pub use property::Distribution;
 pub use property::PhysicalProperty;
 pub use property::RelExpr;
 pub use property::RelationalProperty;
@@ -40,6 +40,7 @@ pub use property::RequiredProperty;
 pub use rule::RuleFactory;
 pub use s_expr::SExpr;
 
+use self::util::contains_local_table_scan;
 use super::plans::Plan;
 use crate::sessions::QueryContext;
 pub use crate::sql::optimizer::heuristic::RuleList;
@@ -48,20 +49,40 @@ use crate::sql::optimizer::rule::RuleSet;
 use crate::sql::plans::CopyPlanV2;
 use crate::sql::MetadataRef;
 
-pub fn optimize(ctx: Arc<QueryContext>, plan: Plan) -> Result<Plan> {
+#[derive(Debug, Clone, Default)]
+pub struct OptimizerConfig {
+    pub enable_distributed_optimization: bool,
+}
+
+#[derive(Debug)]
+pub struct OptimizerContext {
+    pub config: OptimizerConfig,
+}
+
+impl OptimizerContext {
+    pub fn new(config: OptimizerConfig) -> Self {
+        Self { config }
+    }
+}
+
+pub fn optimize(
+    ctx: Arc<QueryContext>,
+    opt_ctx: Arc<OptimizerContext>,
+    plan: Plan,
+) -> Result<Plan> {
     match plan {
         Plan::Query {
             s_expr,
             bind_context,
             metadata,
         } => Ok(Plan::Query {
-            s_expr: optimize_query(ctx, metadata.clone(), s_expr)?,
+            s_expr: optimize_query(ctx, opt_ctx, metadata.clone(), s_expr)?,
             bind_context,
             metadata,
         }),
         Plan::Explain { kind, plan } => Ok(Plan::Explain {
             kind,
-            plan: Box::new(optimize(ctx, *plan)?),
+            plan: Box::new(optimize(ctx, opt_ctx, *plan)?),
         }),
         Plan::Copy(v) => {
             Ok(Plan::Copy(Box::new(match *v {
@@ -76,7 +97,7 @@ pub fn optimize(ctx: Arc<QueryContext>, plan: Plan) -> Result<Plan> {
                         path,
                         validation_mode,
                         // Make sure the subquery has been optimized.
-                        from: Box::new(optimize(ctx, *from)?),
+                        from: Box::new(optimize(ctx, opt_ctx, *from)?),
                     }
                 }
                 into_table => into_table,
@@ -89,11 +110,18 @@ pub fn optimize(ctx: Arc<QueryContext>, plan: Plan) -> Result<Plan> {
 
 pub fn optimize_query(
     ctx: Arc<QueryContext>,
+    opt_ctx: Arc<OptimizerContext>,
     metadata: MetadataRef,
     s_expr: SExpr,
 ) -> Result<SExpr> {
     let rules = RuleList::create(DEFAULT_REWRITE_RULES.clone())?;
-    let mut heuristic = HeuristicOptimizer::new(ctx, metadata, rules);
+
+    // So far, we don't have ability to execute distributed query
+    // with reading data from local tales(e.g. system tables).
+    let enable_distributed_query = opt_ctx.config.enable_distributed_optimization
+        && !contains_local_table_scan(&s_expr, &metadata);
+
+    let mut heuristic = HeuristicOptimizer::new(ctx, metadata, rules, enable_distributed_query);
     let optimized = heuristic.optimize(s_expr)?;
     // TODO: enable cascades optimizer
     // let mut cascades = CascadesOptimizer::create(ctx);

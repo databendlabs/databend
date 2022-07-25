@@ -25,7 +25,7 @@ use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::transforms::transform::Transform;
 use crate::pipelines::processors::transforms::transform::Transformer;
-use crate::sql::exec::ColumnID;
+use crate::sql::executor::ColumnID;
 
 pub struct ExpressionTransformV2 {
     expressions: Vec<(EvalNode<ColumnID>, String)>,

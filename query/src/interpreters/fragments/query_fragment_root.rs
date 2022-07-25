@@ -18,6 +18,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::PlanNode;
 
+use crate::api::FragmentPayload;
 use crate::api::MergeExchange;
 use crate::interpreters::fragments::partition_state::PartitionState;
 use crate::interpreters::fragments::query_fragment::QueryFragment;
@@ -49,8 +50,8 @@ impl RootQueryFragment {
 }
 
 impl QueryFragment for RootQueryFragment {
-    fn distribute_query(&self) -> Result<bool> {
-        self.input.distribute_query()
+    fn is_distributed_query(&self) -> Result<bool> {
+        self.input.is_distributed_query()
     }
 
     fn get_out_partition(&self) -> Result<PartitionState> {
@@ -71,17 +72,25 @@ impl QueryFragment for RootQueryFragment {
             }
 
             let action = &input_actions.get_actions()[0];
+            let new = match &action.payload {
+                FragmentPayload::PlanV1(plan) => plan,
+                FragmentPayload::PlanV2(_) => unreachable!(),
+            };
 
             fragment_actions.add_action(QueryFragmentAction::create(
                 actions.get_local_executor(),
-                self.input.rewrite_remote_plan(&self.node, &action.node)?,
+                self.input.rewrite_remote_plan(&self.node, new)?,
             ));
         } else {
             // This is an implicit stage. We run remaining plans on the current hosts
             for action in input_actions.get_actions() {
+                let new = match &action.payload {
+                    FragmentPayload::PlanV1(plan) => plan,
+                    FragmentPayload::PlanV2(_) => unreachable!(),
+                };
                 fragment_actions.add_action(QueryFragmentAction::create(
                     action.executor.clone(),
-                    self.input.rewrite_remote_plan(&self.node, &action.node)?,
+                    self.input.rewrite_remote_plan(&self.node, new)?,
                 ));
             }
 

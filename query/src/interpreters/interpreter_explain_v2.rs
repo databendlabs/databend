@@ -21,13 +21,14 @@ use common_exception::Result;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
+use super::fragments::Fragmenter;
+use super::QueryFragmentsActions;
 use crate::interpreters::Interpreter;
 use crate::sessions::QueryContext;
-use crate::sql::exec::PhysicalPlanBuilder;
-use crate::sql::exec::PipelineBuilder;
+use crate::sql::executor::PhysicalPlanBuilder;
+use crate::sql::executor::PipelineBuilder;
 use crate::sql::optimizer::SExpr;
 use crate::sql::plans::Plan;
-use crate::sql::BindContext;
 use crate::sql::MetadataRef;
 
 pub struct ExplainInterpreterV2 {
@@ -48,16 +49,19 @@ impl Interpreter for ExplainInterpreterV2 {
         _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
         let blocks = match &self.kind {
-            ExplainKind::Syntax => self.explain_syntax(&self.plan).await?,
+            ExplainKind::Syntax => self.explain_syntax(&self.plan)?,
             ExplainKind::Pipeline => match &self.plan {
                 Plan::Query {
-                    s_expr,
-                    metadata,
-                    bind_context,
-                } => {
-                    self.explain_pipeline(s_expr.clone(), *bind_context.clone(), metadata.clone())
-                        .await?
+                    s_expr, metadata, ..
+                } => self.explain_pipeline(s_expr.clone(), metadata.clone())?,
+                _ => {
+                    return Err(ErrorCode::UnImplement("Unsupported EXPLAIN statement"));
                 }
+            },
+            ExplainKind::Fragments => match &self.plan {
+                Plan::Query {
+                    s_expr, metadata, ..
+                } => self.explain_fragments(s_expr.clone(), metadata.clone())?,
                 _ => {
                     return Err(ErrorCode::UnImplement("Unsupported EXPLAIN statement"));
                 }
@@ -94,7 +98,7 @@ impl ExplainInterpreterV2 {
         })
     }
 
-    pub async fn explain_syntax(&self, plan: &Plan) -> Result<Vec<DataBlock>> {
+    pub fn explain_syntax(&self, plan: &Plan) -> Result<Vec<DataBlock>> {
         let result = plan.format_indent()?;
         let line_splitted_result: Vec<&str> = result.lines().collect();
         let formatted_plan = Series::from_data(line_splitted_result);
@@ -103,12 +107,7 @@ impl ExplainInterpreterV2 {
         ])])
     }
 
-    pub async fn explain_pipeline(
-        &self,
-        s_expr: SExpr,
-        _bind_context: BindContext,
-        metadata: MetadataRef,
-    ) -> Result<Vec<DataBlock>> {
+    pub fn explain_pipeline(&self, s_expr: SExpr, metadata: MetadataRef) -> Result<Vec<DataBlock>> {
         let builder = PhysicalPlanBuilder::new(metadata);
         let plan = builder.build(&s_expr)?;
 
@@ -137,5 +136,26 @@ impl ExplainInterpreterV2 {
             ]));
         }
         Ok(blocks)
+    }
+
+    fn explain_fragments(&self, s_expr: SExpr, metadata: MetadataRef) -> Result<Vec<DataBlock>> {
+        let ctx = self.ctx.clone();
+        let plan = PhysicalPlanBuilder::new(metadata).build(&s_expr)?;
+
+        let root_fragment = Fragmenter::try_create(ctx.clone())?.build_fragment(&plan)?;
+
+        let mut fragments_actions = QueryFragmentsActions::create(ctx.clone());
+        root_fragment.get_actions(ctx, &mut fragments_actions)?;
+
+        let display_string = fragments_actions.display_indent().to_string();
+        let formatted_fragments = Series::from_data(
+            display_string
+                .lines()
+                .map(|s| s.as_bytes())
+                .collect::<Vec<_>>(),
+        );
+        Ok(vec![DataBlock::create(self.schema.clone(), vec![
+            formatted_fragments,
+        ])])
     }
 }
