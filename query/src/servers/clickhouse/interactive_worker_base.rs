@@ -102,7 +102,7 @@ impl InteractiveWorkerBase {
         ctx: Arc<QueryContext>,
     ) -> Result<Receiver<BlockItem>> {
         let sample_block = DataBlock::empty_with_schema(insert.schema());
-        let (sender, rec) = channel(32);
+        let (sender, rec) = channel(2);
         ch_ctx.state.out = Some(sender);
 
         let sc = sample_block.schema().clone();
@@ -129,7 +129,7 @@ impl InteractiveWorkerBase {
             .set_source_pipe_builder(Option::from(source_pipe_builder))
             .map_err(|e| tracing::error!("interpreter.set_source_pipe_builder.error: {:?}", e));
 
-        let (mut tx, rx) = mpsc::channel(32);
+        let (mut tx, rx) = mpsc::channel(2);
 
         tx.send(BlockItem::InsertSample(sample_block)).await.ok();
 
