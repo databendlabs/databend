@@ -165,7 +165,7 @@ impl InteractiveWorkerBase {
         let cancel = Arc::new(AtomicBool::new(false));
         let cancel_clone = cancel.clone();
 
-        let (tx, rx) = mpsc::channel(32);
+        let (tx, rx) = mpsc::channel(2);
         let mut data_tx = tx.clone();
         let mut progress_tx = tx;
 
