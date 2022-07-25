@@ -13,5 +13,4 @@
 // limitations under the License.
 
 mod bloom_filter;
-mod index_sparse;
 mod range_filter;
