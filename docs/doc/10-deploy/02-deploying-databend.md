@@ -190,17 +190,17 @@ tar xzvf databend-${version}-aarch64-unknown-linux-musl.tar.gz
 </TabItem>
 </Tabs>
 
-c. Move the extracted folders `bin` and `etc` to the folder `/usr/local/databend`.
+c. Move the extracted folders `bin` and `configs` to the folder `/usr/local/databend`.
 
 ### Deploying a Meta Node
-a. Open the file `databend-meta-node.toml` in the folder `/usr/local/databend/etc`, and replace `0.0.0.0` with `127.0.0.1` within the whole file.
+a. Open the file `databend-meta-node.toml` in the folder `/usr/local/databend/configs`, and replace `0.0.0.0` with `127.0.0.1` within the whole file.
 
 b. Open a terminal window and navigate to the folder `/usr/local/databend/bin`.
 
 c. Run the following command to start the Meta node:
 
 ```shell
-./databend-meta -c ../etc/databend-meta.toml > meta.log 2>&1 &
+./databend-meta -c ../configs/databend-meta.toml > meta.log 2>&1 &
 ```
 
 d. Run the following command to check if the Meta node was started successfully:
@@ -210,7 +210,7 @@ curl -I  http://127.0.0.1:28101/v1/health
 ```
 
 ### Deploying a Query Node
-a. Open the file `databend-query-node.toml` in the folder `/usr/local/databend/etc`, and replace `0.0.0.0` with `127.0.0.1` within the whole file.
+a. Open the file `databend-query-node.toml` in the folder `/usr/local/databend/configs`, and replace `0.0.0.0` with `127.0.0.1` within the whole file.
 
 b. In the file `databend-query-node.toml`, set the parameter `type` in [storage] block to `s3` if you're using a S3 compatible object storage, or `azblob` if you're using Azure Blob storage.
 
@@ -328,7 +328,7 @@ e. Open a terminal window and navigate to the folder `/usr/local/databend/bin`.
 f. Run the following command to start the Query node:
 
 ```shell
-./databend-query -c ../etc/databend-query.toml > query.log 2>&1 &
+./databend-query -c ../configs/databend-query.toml > query.log 2>&1 &
 ```
 
 g. Run the following command to check if the Query node was started successfully:
