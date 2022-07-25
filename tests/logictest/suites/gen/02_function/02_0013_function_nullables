@@ -2,36 +2,53 @@ statement ok
 DROP TABLE IF EXISTS nullable_test;
 
 statement ok
-CREATE TABLE nullable_test (a UInt32 null, b UInt32 null) Engine = Fuse;
+CREATE TABLE nullable_test (a UInt32 null, b UInt32 null, c UInt32) Engine = Fuse;
 
 statement ok
-INSERT INTO nullable_test VALUES(1, Null), (Null, 2), (3, 3);
+INSERT INTO nullable_test VALUES(1, Null, 1), (Null, 2, 2), (3, 3, 3);
 
 statement query IBIB label(http)
-SELECT a, is_null(a), b, is_not_null(b) FROM nullable_test ORDER BY a, b ASC;
+SELECT a, is_null(a), b, is_not_null(b) FROM nullable_test ORDER BY c ASC;
 
-----  
-NULL 1 2 1
+----
 1 0 NULL 0
+NULL 1 2 1
 3 0 3 1
 
-----  http
-NULL true 2 true
+---- http
 1 false NULL false
+NULL true 2 true
 3 false 3 true
 
 statement query I 
-SELECT a FROM nullable_test WHERE a is Not Null ORDER BY a;
+SELECT a FROM nullable_test WHERE a is Not Null ORDER BY c;
 
-----  
+----
 1
 3
 
 statement query I 
-SELECT b FROM nullable_test WHERE a is Null ORDER BY b;
+SELECT b FROM nullable_test WHERE a is Null ORDER BY c;
 
-----  
+----
 2
+
+statement error 1007
+SELECT assume_not_null(null); 
+
+statement query III 
+SELECT assume_not_null(a), assume_not_null(b), assume_not_null(c) from nullable_test ORDER BY c;
+
+----
+1 0 1
+0 2 2
+3 3 3
+
+statement query IT 
+SELECT to_nullable(3), to_nullable(null);
+
+----
+3 NULL
 
 statement ok
 DROP TABLE IF EXISTS nullable_test;

@@ -1,34 +1,28 @@
 statement query T 
-select '==parse_json==';
-
-----  
-==parse_json==
-
-statement query T 
 select parse_json(null);
 
-----  
+----
 NULL
 
 statement query T 
 select parse_json(true);
 
-----  
+----
 true
 
 statement query T 
 select parse_json(123);
 
-----  
+----
 123
 
 statement query T 
 select parse_json(12.34);
 
-----  
+----
 12.34
 
-statement query T
+statement query T 
 select parse_json('null');
 
 ----
@@ -37,40 +31,40 @@ null
 statement query T 
 select parse_json('true');
 
-----  
+----
 true
 
 statement query T 
 select parse_json('-17');
 
-----  
+----
 -17
 
 statement query T 
 select parse_json('123.12');
 
-----  
+----
 123.12
 
 statement query T 
 select parse_json('1.912e2');
 
-----  
+----
 191.2
 
-statement query T label
+statement query T 
 select parse_json('"Om ara pa ca na dhih"  ');
 
 ----
 "Om ara pa ca na dhih"
 
-statement query T
+statement query T 
 select parse_json('[-1, 12, 289, 2188, false]');
 
 ----
 [-1,12,289,2188,false]
 
-statement query T
+statement query T 
 select parse_json('{ "x" : "abc", "y" : false, "z": 10} ');
 
 ----
@@ -85,7 +79,7 @@ select parse_json('"ab');
 statement query T 
 select parse_json(parse_json('123'));
 
-----  
+----
 123
 
 -- http handler could not parse
@@ -114,101 +108,101 @@ select get(parse_json('a', 'aa'));
 statement query T 
 select '==try_parse_json==';
 
-----  
+----
 ==try_parse_json==
 
 statement query T 
 select try_parse_json(null);
 
-----  
+----
 NULL
 
 statement query T 
 select try_parse_json(true);
 
-----  
+----
 true
 
 statement query T 
 select try_parse_json(123);
 
-----  
+----
 123
 
 statement query T 
 select try_parse_json(12.34);
 
-----  
+----
 12.34
 
-statement query T
+statement query T 
 select try_parse_json('null');
 
 ----
 null
 
-statement query T
+statement query T 
 select try_parse_json('true');
 
-----  
+----
 true
 
 statement query T 
 select try_parse_json('-17');
 
-----  
+----
 -17
 
 statement query T 
 select try_parse_json('123.12');
 
-----  
+----
 123.12
 
 statement query T 
 select try_parse_json('1.912e2');
 
-----  
+----
 191.2
 
-statement query T
+statement query T 
 select try_parse_json('"Om ara pa ca na dhih"  ');
 
 ----
 "Om ara pa ca na dhih"
 
-statement query T
+statement query T 
 select try_parse_json('[-1, 12, 289, 2188, false]');
 
 ----
 [-1,12,289,2188,false]
 
-statement query T
+statement query T 
 select try_parse_json('{ "x" : "abc", "y" : false, "z": 10} ');
 
 ----
 {"x":"abc","y":false,"z":10}
 
-statement query T
+statement query T 
 select try_parse_json('[1,');
 
-----  
+----
 NULL
 
 statement query T 
 select try_parse_json('"ab');
 
-----  
+----
 NULL
 
 statement query T 
 select try_parse_json(parse_json('123'));
 
-----  
+----
 123
 
 onlyif mysql
-statement ok
+statement query T
 select try_parse_json(parse_json('"\\\"abc\\\""'));
 
 ----
@@ -217,13 +211,13 @@ select try_parse_json(parse_json('"\\\"abc\\\""'));
 statement query T 
 select try_parse_json(parse_json('"abc"'));
 
-----  
+----
 NULL
 
 statement query T 
 select try_parse_json(to_date('2022-01-01'));
 
-----  
+----
 NULL
 
 statement ok
@@ -244,20 +238,38 @@ insert into t1 values (null),('null'),('true'),('123'),('"abc"'),('[1,2,3]'),('{
 statement query T 
 select '==parse_json from table==';
 
-----  
+----
 ==parse_json from table==
 
-statement ok
+statement query TT 
 select parse_json(v), v from t1;
+
+----
+NULL NULL
+null null
+true true
+123 123
+"abc" "abc"
+[1,2,3] [1,2,3]
+{"a":"b"} {"a":"b"}
 
 statement query T 
 select '==try_parse_json from table==';
 
-----  
+----
 ==try_parse_json from table==
 
-statement ok
+statement query TT 
 select try_parse_json(v), v from t1;
+
+----
+NULL NULL
+null null
+true true
+123 123
+"abc" "abc"
+[1,2,3] [1,2,3]
+{"a":"b"} {"a":"b"}
 
 statement ok
 CREATE TABLE IF NOT EXISTS t2(v String null) Engine = Fuse;
@@ -265,25 +277,12 @@ CREATE TABLE IF NOT EXISTS t2(v String null) Engine = Fuse;
 statement ok
 insert into t2 values ('abc'),('[1,');
 
-statement query T 
-select '==parse_json from table invalid json==';
-
-----  
-==parse_json from table invalid json==
-
--- TODO: need fix, clickhouse handler lost connection here
-skipif clickhouse
-statement error 1010
-select parse_json(v), v from t2; 
-
-statement query T 
-select '==try_parse_json from table invalid json==';
-
-----  
-==try_parse_json from table invalid json==
-
-statement ok
+statement query TT 
 select try_parse_json(v), v from t2;
+
+----
+NULL abc
+NULL [1,
 
 statement ok
 DROP DATABASE db1;

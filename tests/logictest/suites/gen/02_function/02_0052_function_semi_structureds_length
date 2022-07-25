@@ -1,16 +1,13 @@
-statement ok
-use default;
-
 statement query I 
 select length(parse_json('[1, 2, [1, 2]]'));
 
-----  
+----
 3
 
 statement query I 
 select length(parse_json('[]'));
 
-----  
+----
 0
 
 statement ok
@@ -25,7 +22,7 @@ INSERT INTO array_length_test VALUES([1,2]), ([3,4]);
 statement query I 
 SELECT LENGTH(number) FROM array_length_test ;
 
-----  
+----
 2
 2
 

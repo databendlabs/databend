@@ -1,40 +1,139 @@
+statement ok
 SET enable_planner_v2 = 1;
 
-SELECT '==nullif_const_values==';
--- SELECT NULLIF(1, 1);
+statement query I 
 SELECT NULLIF(2, 1);
+
+----
+2
+
+statement query I 
 SELECT NULLIF(1, 2);
+
+----
+1
+
+statement query I 
 SELECT NULLIF(1, NULL);
+
+----
+1
+
+statement query T 
 SELECT NULLIF(NULL, 1);
--- SELECT NULLIF('a', 'a');
+
+----
+NULL
+
+statement query T 
 SELECT NULLIF('a', 'b');
+
+----
+a
+
+statement query T 
 SELECT NULLIF('b', 'a');
+
+----
+b
+
+statement query T 
 SELECT NULLIF('a', NULL);
+
+----
+a
+
+statement query T 
 SELECT NULLIF(NULL, 'a');
+
+----
+NULL
+
+statement query T 
 SELECT NULLIF(NULL, NULL);
 
-SELECT '==nullif_non_nullable_columns=';
+----
+NULL
+
+statement ok
 CREATE TABLE IF NOT EXISTS t(a INT, b INT) ENGINE=Memory;
+
+statement ok
 INSERT INTO t VALUES(0, 0), (0, 1), (1, 0), (1, 1);
+
+statement query III 
 SELECT a, b, NULLIF(a, b) FROM t;
+
+----
+0 0 NULL
+0 1 0
+1 0 1
+1 1 NULL
+
+statement ok
 DROP TABLE t;
 
-SELECT '==nullif_nullable_columns==';
+statement ok
 CREATE TABLE IF NOT EXISTS t(a INT NULL, b INT NULL) ENGINE=Memory;
+
+statement ok
 INSERT INTO t VALUES(0, 0), (0, 1), (0, NULL), (1, 0), (1, 1), (1, NULL), (NULL, 0), (NULL, 1), (NULL, NULL);
+
+statement query III 
 SELECT a, b, NULLIF(a, b) FROM t;
+
+----
+0 0 NULL
+0 1 0
+0 NULL 0
+1 0 1
+1 1 NULL
+1 NULL 1
+NULL 0 NULL
+NULL 1 NULL
+NULL NULL NULL
+
+statement ok
 DROP TABLE t;
 
-SELECT '==nullif_lhs_all_null==';
+statement ok
 CREATE TABLE IF NOT EXISTS t(a INT NULL, b INT NULL) ENGINE=Memory;
+
+statement ok
 INSERT INTO t VALUES(NULL, 0), (NULL, 1), (NULL, NULL), (NULL, 0), (NULL, 1);
+
+statement query III 
 SELECT a, b, NULLIF(a, b) FROM t;
+
+----
+NULL 0 NULL
+NULL 1 NULL
+NULL NULL NULL
+NULL 0 NULL
+NULL 1 NULL
+
+statement ok
 DROP TABLE t;
 
-SELECT '==nullif_rhs_all_null==';
+statement ok
 CREATE TABLE IF NOT EXISTS t(a INT NULL, b INT NULL) ENGINE=Memory;
+
+statement ok
 INSERT INTO t VALUES(0, NULL), (1, NULL), (0, NULL), (1, NULL), (NULL, NULL);
+
+statement query III 
 SELECT a, b, NULLIF(a, b) FROM t;
+
+----
+0 NULL 0
+1 NULL 1
+0 NULL 0
+1 NULL 1
+NULL NULL NULL
+
+statement ok
 DROP TABLE t;
 
+statement ok
 SET enable_planner_v2 = 0;
+

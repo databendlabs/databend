@@ -10,7 +10,7 @@ insert into running_difference_test values (1, 1, 1, 'a', 1, 1),(3, 3, 3, 'b', 3
 statement query IIIFI 
 select running_difference(a), running_difference(b), running_difference(c), running_difference(e), running_difference(10) from running_difference_test;
 
-----  
+----
 0 0 0 0.0 0
 2 2 2 2.0 0
 2 2 2 2.0 0

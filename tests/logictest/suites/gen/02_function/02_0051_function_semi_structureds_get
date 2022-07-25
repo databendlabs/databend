@@ -1,145 +1,176 @@
 statement query T 
-select '==get==';
-
-----  
-==get==
-
-statement query T 
 select get(parse_json('[2.71, 3.14]'), 0);
 
-----  
+----
 2.71
 
 statement query T 
 select get(parse_json('[2.71, 3.14]'), 2);
 
-----  
+----
 NULL
 
 statement query T 
 select get(parse_json('{"aa":1, "aA":2, "Aa":3}'), 'aA');
 
-----  
+----
 2
 
 statement query T 
 select get(parse_json('{"aa":1, "aA":2, "Aa":3}'), 'AA');
 
-----  
+----
 NULL
+
+statement query T 
+select parse_json('[2.71, 3.14]')[0];
+
+----
+2.71
+
+statement query T 
+select parse_json('[[2.71, 3.14]]')[0][1];
+
+----
+3.14
+
+statement query T 
+select parse_json('{"aa":1, "aA":2, "Aa":3}')['aa'];
+
+----
+1
 
 statement query T 
 select '==get_ignore_case==';
 
-----  
+----
 ==get_ignore_case==
 
-skipif clickhouse
 statement query T 
 select get_ignore_case(parse_json('{"aa":1, "aA":2, "Aa":3}'), 'aA');
 
-----  
+----
 2
 
-skipif clickhouse
 statement query T 
 select get_ignore_case(parse_json('{"aa":1, "aA":2, "Aa":3}'), 'AA');
 
-----  
+----
 1
 
-statement query T 
-select '==get_path==';
-
-----  
-==get_path==
-
-skipif clickhouse
 statement query T 
 select get_path(parse_json('{"attr":[{"name":1}, {"name":2}]}'), 'attr[0].name');
 
-----  
+----
 1
 
-skipif clickhouse
 statement query T 
 select get_path(parse_json('{"attr":[{"name":1}, {"name":2}]}'), 'attr[1]:name');
 
-----  
+----
 2
 
-skipif clickhouse
 statement query T 
 select get_path(parse_json('{"customer":{"id":1, "name":"databend", "extras":["ext", "test"]}}'), 'customer:id');
 
-----  
+----
 1
 
-statement query T
+statement query T 
 select get_path(parse_json('{"customer":{"id":1, "name":"databend", "extras":["ext", "test"]}}'), 'customer.name');
 
 ----
 "databend"
 
-statement query T
+statement query T 
 select get_path(parse_json('{"customer":{"id":1, "name":"databend", "extras":["ext", "test"]}}'), 'customer["extras"][0]');
 
 ----
 "ext"
 
-statement query T
+statement query T 
 select get_path(parse_json('{"customer":{"id":1, "name":"databend", "extras":["ext", "test"]}}'), 'customer["extras"][2]');
 
-----  
+----
 NULL
 
 statement error 1005
 select get_path(parse_json('{"customer":{"id":1, "name":"databend", "extras":["ext", "test"]}}'), ''); 
 
 statement query T 
-select '==json_extract_path_text==';
-
-----  
-==json_extract_path_text==
-
-statement query T 
 select json_extract_path_text('{"attr":[{"name":1}, {"name":2}]}', 'attr[0].name');
 
-----  
+----
 1
 
 statement query T 
 select json_extract_path_text('{"attr":[{"name":1}, {"name":2}]}', 'attr[1]:name');
 
-----  
+----
 2
 
 statement query T 
 select json_extract_path_text('{"customer":{"id":1, "name":"databend", "extras":["ext", "test"]}}', 'customer:id');
 
-----  
+----
 1
 
 statement query T 
 select json_extract_path_text('{"customer":{"id":1, "name":"databend", "extras":["ext", "test"]}}', 'customer.name');
 
-----  
+----
 "databend"
 
 statement query T 
 select json_extract_path_text('{"customer":{"id":1, "name":"databend", "extras":["ext", "test"]}}', 'customer["extras"][0]');
 
-----  
+----
 "ext"
 
 statement query T 
 select json_extract_path_text('{"customer":{"id":1, "name":"databend", "extras":["ext", "test"]}}', 'customer["extras"][2]');
 
-----  
+----
 NULL
 
 statement error 1005
 select json_extract_path_text('{"customer":{"id":1, "name":"databend", "extras":["ext", "test"]}}', ''); 
+
+statement query T 
+select [][0];
+
+----
+NULL
+
+statement query I 
+select [0,1,2,3][0];
+
+----
+0
+
+statement query T 
+select [[[1,2,3],[4,5,6]],[[7,8,9]]][0];
+
+----
+[[1, 2, 3], [4, 5, 6]]
+
+statement query T 
+select [[[1,2,3],[4,5,6]],[[7,8,9]]][0][1];
+
+----
+[4, 5, 6]
+
+statement query I 
+select [[[1,2,3],[4,5,6]],[[7,8,9]]][0][1][2];
+
+----
+6
+
+statement query I 
+select ([0,1,2,3])[0];
+
+----
+0
 
 statement ok
 DROP DATABASE IF EXISTS db1;
@@ -175,97 +206,139 @@ statement ok
 insert into t4 values(1, [10,20,30,40]), (2, [50,60,70,80]);
 
 statement query T 
-select '==get from table==';
-
-----  
-==get from table==
-
-statement ok
 select get(arr, 0) from t1;
 
-statement ok
+----
+1
+
+statement query T 
 select get(arr, 'a') from t1;
 
-statement ok
+----
+NULL
+
+statement query T 
 select get(obj, 0) from t2;
 
-statement ok
+----
+NULL
+
+statement query T 
 select get(obj, 'a') from t2;
 
+----
+1
+
 statement query T 
-select '==get_ignore_case from table==';
-
-----  
-==get_ignore_case from table==
-
-statement ok
 select get_ignore_case(obj, 'a') from t2;
 
-statement ok
+----
+1
+
+statement query T 
 select get_ignore_case(obj, 'A') from t2;
 
+----
+1
+
 statement query T 
-select '==get_path from table==';
-
-----  
-==get_path from table==
-
-statement ok
 select get_path(arr, '[0]') from t1;
 
-statement ok
+----
+1
+
+statement query T 
 select get_path(arr, '[3][0]') from t1;
 
-statement ok
+----
+"a"
+
+statement query T 
 select get_path(obj, 'a') from t2;
 
-statement ok
+----
+1
+
+statement query T 
 select get_path(obj, '["a"]') from t2;
 
-statement ok
+----
+1
+
+statement query T 
 select get_path(obj, 'b.c') from t2;
 
-statement ok
+----
+2
+
+statement query T 
 select get_path(obj, '["b"]["c"]') from t2;
 
-statement query T 
-select '==json_extract_path_text from table==';
+----
+2
 
-----  
-==json_extract_path_text from table==
-
-statement ok
+statement query IT 
 select id, json_extract_path_text(str, '[0]') from t3;
 
-statement ok
+----
+1 1
+2 NULL
+
+statement query IT 
 select id, json_extract_path_text(str, '[3][0]') from t3;
 
-statement ok
+----
+1 "a"
+2 NULL
+
+statement query IT 
 select id, json_extract_path_text(str, 'a') from t3;
 
-statement ok
+----
+1 NULL
+2 1
+
+statement query IT 
 select id, json_extract_path_text(str, '["a"]') from t3;
 
-statement ok
+----
+1 NULL
+2 1
+
+statement query IT 
 select id, json_extract_path_text(str, 'b.c') from t3;
 
-statement ok
+----
+1 NULL
+2 2
+
+statement query IT 
 select id, json_extract_path_text(str, '["b"]["c"]') from t3;
 
-statement query T 
-select '==get from array table==';
+----
+1 NULL
+2 2
 
-----  
-==get from array table==
-
-statement ok
+statement query II 
 select id, get(arr, 0) from t4;
 
-statement ok
+----
+1 10
+2 50
+
+statement query II 
 select id, get(arr, 1) from t4;
 
-statement ok
+----
+1 20
+2 60
+
+statement query II 
 select id, get(arr, 4) from t4;
+
+----
+1 NULL
+2 NULL
 
 statement error 1007
 select id, get(arr, 'a') from t4; 

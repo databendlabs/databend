@@ -49,7 +49,7 @@ INSERT INTO strings_oct_sample_i64 VALUES (0), ('-9223372036854775808'), (922337
 statement query T 
 select oct(value) from strings_oct_sample_u8;
 
-----  
+----
 0
 0377
 0177
@@ -58,7 +58,7 @@ NULL
 statement query T 
 select oct(value) from strings_oct_sample_u16;
 
-----  
+----
 0
 0177777
 0100000
@@ -67,7 +67,7 @@ NULL
 statement query T 
 select oct(value) from strings_oct_sample_u32;
 
-----  
+----
 0
 037777777777
 017777777777
@@ -76,7 +76,7 @@ NULL
 statement query T 
 select oct(value) from strings_oct_sample_u64;
 
-----  
+----
 0
 01777777777777777777777
 0777777777777777777777
@@ -85,7 +85,7 @@ NULL
 statement query T 
 select oct(value) from strings_oct_sample_i8;
 
-----  
+----
 0
 -0200
 0177
@@ -94,7 +94,7 @@ NULL
 statement query T 
 select oct(value) from strings_oct_sample_i16;
 
-----  
+----
 0
 -0100000
 077777
@@ -103,7 +103,7 @@ NULL
 statement query T 
 select oct(value) from strings_oct_sample_i32;
 
-----  
+----
 0
 -020000000000
 017777777777
@@ -112,7 +112,7 @@ NULL
 statement query T 
 select oct(value) from strings_oct_sample_i64;
 
-----  
+----
 0
 -01000000000000000000000
 0777777777777777777777
@@ -121,13 +121,13 @@ NULL
 statement query T 
 select oct(-128);
 
-----  
+----
 -0200
 
 statement query T 
 select oct(127);
 
-----  
+----
 0177
 
 statement ok

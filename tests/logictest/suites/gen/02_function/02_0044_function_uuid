@@ -1,96 +1,105 @@
 statement query B label(http)
 SELECT LENGTH(gen_random_uuid()) = 36;
 
-----  
+----
 1
 
-----  http
+---- http
 true
 
 statement query B label(http)
 SELECT IGNORE(gen_random_uuid());
 
-----  
+----
 0
 
-----  http
+---- http
 false
 
 statement query T 
 SELECT gen_zero_uuid();
 
-----  
+----
 00000000-0000-0000-0000-000000000000
 
 statement query B label(http)
 SELECT is_empty_uuid(gen_random_uuid());
 
-----  
+----
 0
 
-----  http
+---- http
 false
 
 statement query B label(http)
 SELECT is_empty_uuid(gen_zero_uuid());
 
-----  
+----
 1
 
-----  http
+---- http
 true
 
 statement query B label(http)
 SELECT is_empty_uuid('5');
 
-----  
+----
 1
 
-----  http
+---- http
 true
 
 statement query B label(http)
 SELECT is_empty_uuid(null);
 
-----  
+----
 1
 
-----  http
+---- http
 true
 
 statement query B label(http)
 SELECT is_not_empty_uuid(gen_random_uuid());
 
-----  
+----
 1
 
-----  http
+---- http
 true
 
 statement query B label(http)
 SELECT is_not_empty_uuid(gen_zero_uuid());
 
-----  
+----
 0
 
-----  http
+---- http
 false
 
 statement query B label(http)
 SELECT is_not_empty_uuid('5');
 
-----  
+----
 0
 
-----  http
+---- http
 false
 
 statement query B label(http)
 SELECT is_not_empty_uuid(null);
 
-----  
+----
 0
 
-----  http
+---- http
 false
+
+statement query BB label(http)
+SELECT UNIQ(gen_random_uuid())  = 10, COUNT_IF(LENGTH(gen_random_uuid()) = 36)  = 10 from numbers(10);
+
+----
+1 1
+
+---- http
+true true
 
