@@ -15,6 +15,8 @@
 #[allow(clippy::module_inception)]
 mod share;
 
+pub use share::ShowShareReq;
+pub use share::ShowShareReply;
 pub use share::AddShareAccountReply;
 pub use share::AddShareAccountReq;
 pub use share::CreateShareReply;
