@@ -44,16 +44,22 @@ pull_request_rules:
       queue:
         name: docs_queue
 
-  # If there is a conflict in an approved PR, ping the author.
-  - name: Ping author on conflicts
+  # Check if PR has conflicts for merging
+  - name: Check PR conflicts
     conditions:
       - conflict
-      - -draft
-      - "#approved-reviews-by >= 2"
     actions:
-      comment:
-        message: |
-          This pull request has merge conflicts that must be resolved before it can be merged. @{{author}} please update it 🙏.
+      post_check:
+        title: |
+          {% if check_succeed %}
+          PR has conflicts
+          {% else %}
+          PR doesn't have conflicts
+          {% endif %}
+        summary: |
+          {% if not check_succeed %}
+          Pull request has merge conflicts that must be resolved before it can be merged, please update it 🙏.
+          {% endif %}
 
   # Check if PR description contains CLA
   - name: Check PR description
