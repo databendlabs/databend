@@ -259,13 +259,6 @@ impl StringColumnBuilder {
         self.data[(self.offsets[0] as usize)..(self.offsets[1] as usize)].to_vec()
     }
 
-    pub fn from_scalar(data: Vec<u8>) -> Self {
-        StringColumnBuilder {
-            offsets: vec![0, data.len() as u64],
-            data,
-        }
-    }
-
     pub fn try_from_transform<F>(
         src: StringIterator<'_>,
         estimate_bytes: usize,
