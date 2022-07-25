@@ -63,24 +63,20 @@ impl BlockPruner {
         schema: DataSchemaRef,
         push_down: &Option<Extras>,
     ) -> Result<Vec<(usize, BlockMeta)>> {
-        let block_pred: Pred = match push_down {
-            Some(exprs) if !exprs.filters.is_empty() => {
-                // for the time being, we only handle the first expr
-                let range_filter =
-                    RangeFilter::try_create(ctx.clone(), &exprs.filters[0], schema.clone())?;
-                Box::new(move |v: &StatisticsOfColumns| range_filter.eval(v))
-            }
-            _ => {
-                // TODO make this a shortcut!
-                Box::new(|_: &StatisticsOfColumns| Ok(true))
-            }
-        };
-
         let segment_locs = self.table_snapshot.segments.clone();
         let segment_num = segment_locs.len();
 
         if segment_locs.is_empty() {
             return Ok(vec![]);
+        };
+
+        let block_pred: Pred = match push_down {
+            Some(extras) if !extras.filters.is_empty() => {
+                let range_filter =
+                    RangeFilter::try_create(ctx.clone(), &extras.filters[0], schema.clone())?;
+                Box::new(move |v: &StatisticsOfColumns| range_filter.eval(v))
+            }
+            _ => Box::new(|_: &StatisticsOfColumns| Ok(true)),
         };
 
         let limit = push_down
@@ -203,13 +199,13 @@ impl BlockPruner {
 }
 
 fn column_names_of_expression(filter_expr: &Expression) -> Vec<String> {
-    // TODO can we avoid this clone?
     find_column_exprs(&[filter_expr.clone()])
         .iter()
         .map(|e| BloomFilterIndexer::to_bloom_column_name(&e.column_name()))
         .collect::<Vec<_>>()
 }
 
+#[tracing::instrument(level = "debug", skip(dal))]
 async fn load_bloom_filter_by_columns(
     dal: Operator,
     projection: &[String],
