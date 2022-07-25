@@ -21,7 +21,6 @@ use common_meta_app::schema::DatabaseNameIdent;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TableNameIdent;
 use common_meta_app::share::AddShareAccountReq;
-use common_meta_app::share::ShowShareReq;
 use common_meta_app::share::CreateShareReq;
 use common_meta_app::share::DropShareReq;
 use common_meta_app::share::GrantShareObjectReq;
@@ -32,6 +31,7 @@ use common_meta_app::share::ShareGrantObject;
 use common_meta_app::share::ShareGrantObjectName;
 use common_meta_app::share::ShareGrantObjectPrivilege;
 use common_meta_app::share::ShareNameIdent;
+use common_meta_app::share::ShowShareReq;
 use common_tracing::tracing;
 use enumflags2::BitFlags;
 
@@ -259,6 +259,29 @@ impl ShareApiTestSuite {
             assert_eq!(share_account_meta.share_on, share_on);
         }
 
+        // test show share api
+        tracing::info!("--- show share check account information");
+        {
+            let req = ShowShareReq {
+                share_name: share_name.clone(),
+            };
+
+            let res = mt.show_share(req).await;
+            tracing::info!("show share res: {:?}", res);
+            assert!(res.is_ok());
+            let res = res.unwrap();
+
+            let meta = res.share_meta;
+            assert!(meta.has_account(&account.to_string()));
+
+            let account_meta = res.share_account_meta.get(0);
+            assert!(account_meta.is_some());
+            let share_account_meta = account_meta.unwrap();
+            assert_eq!(share_account_meta.share_id, share_id);
+            assert_eq!(share_account_meta.account, account.to_string());
+            assert_eq!(share_account_meta.share_on, share_on);
+        }
+
         tracing::info!("--- add account account1 again");
         {
             let req = AddShareAccountReq {
@@ -292,6 +315,28 @@ impl ShareApiTestSuite {
             let (_share_meta_seq, share_meta) =
                 get_share_meta_by_id_or_err(mt.as_kv_api(), share_id, "").await?;
             assert!(share_meta.has_account(&account2.to_string()));
+        }
+
+        tracing::info!("--- show share again");
+        {
+            let req = ShowShareReq {
+                share_name: share_name.clone(),
+            };
+
+            let res = mt.show_share(req).await;
+            tracing::info!("show share res: {:?}", res);
+            assert!(res.is_ok());
+            let res = res.unwrap();
+
+            let meta = res.share_meta;
+            assert!(meta.has_account(&account.to_string()));
+            assert!(meta.has_account(&account2.to_string()));
+
+            assert_eq!(
+                res.share_account_meta.len(),
+                2,
+                "there should be 2 share accounts"
+            );
         }
 
         tracing::info!("--- remove account account2");
