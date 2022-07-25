@@ -41,7 +41,7 @@ select * from clustering_information('db1','t09_0015');
 statement ok
 ALTER TABLE t09_0015 DROP CLUSTER KEY;
 
-statement error 1070
+statement error 1081
 ALTER TABLE t09_0015 CLUSTER BY(rand()+a);
 
 statement ok

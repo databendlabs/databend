@@ -12,6 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod aggregates;
-mod rdoc;
-mod scalars;
+use common_expression::FunctionRegistry;
+
+mod boolean;
+mod string;
+
+pub fn builtin_functions() -> FunctionRegistry {
+    let mut registry = FunctionRegistry::new();
+    boolean::register(&mut registry);
+    string::register(&mut registry);
+    registry
+}

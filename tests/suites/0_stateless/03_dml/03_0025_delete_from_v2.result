@@ -22,5 +22,3 @@ expects 1 null valued row kept
 1
 deleted unconditionally (with const true)
 1
-deleted with nullary expr now()
-1

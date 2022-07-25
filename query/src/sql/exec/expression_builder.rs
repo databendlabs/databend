@@ -31,11 +31,32 @@ use crate::sql::plans::Scalar;
 use crate::sql::IndexType;
 use crate::sql::MetadataRef;
 
-pub struct ExpressionBuilder {
+pub trait FiledNameFormat {
+    fn format(display_name: &str, index: IndexType) -> String;
+}
+
+impl FiledNameFormat for ExpressionBuilder<true> {
+    fn format(display_name: &str, index: IndexType) -> String {
+        format_field_name(display_name, index)
+    }
+}
+
+impl FiledNameFormat for ExpressionBuilder<false> {
+    fn format(display_name: &str, _index: IndexType) -> String {
+        display_name.to_owned()
+    }
+}
+
+pub struct ExpressionBuilder<const FORMAT_WITH_INDEX: bool> {
     metadata: MetadataRef,
 }
 
-impl ExpressionBuilder {
+pub type ExpressionBuilderWithoutRenaming = ExpressionBuilder<false>;
+pub type ExpressionBuilderWithRenaming = ExpressionBuilder<true>;
+
+impl<const T: bool> ExpressionBuilder<T>
+where ExpressionBuilder<T>: FiledNameFormat
+{
     pub fn create(metadata: MetadataRef) -> Self {
         ExpressionBuilder { metadata }
     }
@@ -44,7 +65,7 @@ impl ExpressionBuilder {
         let expr = self.build(scalar)?;
         let name = self.metadata.read().column(index).name.clone();
         Ok(Expression::Alias(
-            format_field_name(name.as_str(), index),
+            Self::format(name.as_str(), index),
             Box::new(expr),
         ))
     }
@@ -117,7 +138,7 @@ impl ExpressionBuilder {
 
     pub fn build_column_ref(&self, index: IndexType) -> Result<Expression> {
         let name = self.metadata.read().column(index).name.clone();
-        Ok(Expression::Column(format_field_name(name.as_str(), index)))
+        Ok(Expression::Column(Self::format(name.as_str(), index)))
     }
 
     pub fn build_literal(

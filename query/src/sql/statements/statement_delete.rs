@@ -91,7 +91,6 @@ impl AnalyzableStatement for DfDeleteStatement {
         let mut projection = vec![];
         let schema = tbl_info.meta.schema.as_ref();
         for col_name in require_columns {
-            // TODO refine this, performance & error message
             if let Some((idx, _)) = schema.column_with_name(col_name.as_str()) {
                 projection.push(idx);
             } else {
