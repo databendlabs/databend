@@ -11,11 +11,13 @@ doctest = false
 
 [dependencies] # In alphabetical order
 # Workspace dependencies
+common-arrow = { path = "../arrow" }
 common-expression = { path = "../expression" }
 
 # Crates.io dependencies
 base64 = "0.13.0"
 bstr = "0.2.17"
+bytes = "1.1.0"
 
 [dev-dependencies]
 comfy-table = "6"

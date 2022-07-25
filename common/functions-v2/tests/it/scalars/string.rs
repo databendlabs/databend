@@ -28,11 +28,11 @@ fn test_string() {
     let file = &mut mint.new_goldenfile("string.txt").unwrap();
 
     test_upper(file);
-    test_to_base64(file);
-    test_from_base64(file);
     test_bit_length(file);
     test_octet_length(file);
     test_char_length(file);
+    test_to_base64(file);
+    test_from_base64(file);
 }
 
 fn test_upper(file: &mut impl Write) {
@@ -45,28 +45,6 @@ fn test_upper(file: &mut impl Write) {
         DataType::String,
         build_string_column(&["Abc", "Dobrý den", "ß😀山"]),
     )]);
-}
-
-fn test_to_base64(file: &mut impl Write) {
-    run_ast(file, "to_base64('Abc')", &[]);
-    run_ast(file, "to_base64('123')", &[]);
-    run_ast(file, "to_base64(Null)", &[]);
-    run_ast(file, "to_base64(a)", &[(
-        "a",
-        DataType::String,
-        build_string_column(&["Abc", "123"]),
-    )]);
-}
-
-fn test_from_base64(file: &mut impl Write) {
-    run_ast(file, "from_base64('QWJj')", &[]);
-    run_ast(file, "from_base64('MTIz')", &[]);
-    run_ast(file, "to_base64(Null)", &[]);
-    run_ast(file, "to_base64(a)", &[(
-        "a",
-        DataType::String,
-        build_string_column(&["QWJj", "MTIz"]),
-    )])
 }
 
 fn test_bit_length(file: &mut impl Write) {
@@ -97,6 +75,28 @@ fn test_char_length(file: &mut impl Write) {
         DataType::String,
         build_string_column(&["latin", "кириллица", "кириллица and latin"]),
     )]);
+}
+
+fn test_to_base64(file: &mut impl Write) {
+    run_ast(file, "to_base64('Abc')", &[]);
+    run_ast(file, "to_base64('123')", &[]);
+    run_ast(file, "to_base64(Null)", &[]);
+    run_ast(file, "to_base64(a)", &[(
+        "a",
+        DataType::String,
+        build_string_column(&["Abc", "123"]),
+    )]);
+}
+
+fn test_from_base64(file: &mut impl Write) {
+    run_ast(file, "from_base64('QWJj')", &[]);
+    run_ast(file, "from_base64('MTIz')", &[]);
+    run_ast(file, "to_base64(Null)", &[]);
+    run_ast(file, "to_base64(a)", &[(
+        "a",
+        DataType::String,
+        build_string_column(&["QWJj", "MTIz"]),
+    )])
 }
 
 fn build_string_column(strings: &[&str]) -> Column {

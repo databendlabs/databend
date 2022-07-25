@@ -16,7 +16,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use chrono_tz::Tz;
-use common_arrow::arrow::buffer::Buffer;
 use serde::Deserialize;
 use serde::Serialize;
 
