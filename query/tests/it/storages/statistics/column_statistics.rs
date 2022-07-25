@@ -43,12 +43,12 @@ fn gen_sample_block() -> (DataBlock, Vec<ColumnRef>) {
     //      g: f64,
     //   }
 
-    let col_b_type = StructType::create(vec!["c".to_owned(), "d".to_owned()], vec![
+    let col_b_type = StructType::create(Some(vec!["c".to_owned(), "d".to_owned()]), vec![
         i64::to_data_type(),
         f64::to_data_type(),
     ]);
 
-    let col_a_type = StructType::create(vec!["b".to_owned(), "e".to_owned()], vec![
+    let col_a_type = StructType::create(Some(vec!["b".to_owned(), "e".to_owned()]), vec![
         DataTypeImpl::Struct(col_b_type.clone()),
         f64::to_data_type(),
     ]);

@@ -83,6 +83,14 @@ impl Column for StructColumn {
         "Struct".to_string()
     }
 
+    fn column_meta(&self) -> ColumnMeta {
+        let data_type: StructType = self.data_type.clone().try_into().unwrap();
+        ColumnMeta::Struct {
+            inner_names: data_type.names().clone(),
+            inner_types: data_type.types().clone(),
+        }
+    }
+
     fn len(&self) -> usize {
         self.values[0].len()
     }

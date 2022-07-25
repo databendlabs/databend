@@ -59,8 +59,8 @@ impl MutableStructColumn {
 impl Default for MutableStructColumn {
     fn default() -> Self {
         Self::with_capacity_meta(0, ColumnMeta::Struct {
-            inner_names: vec!["default".to_string()],
-            inner_types: vec![UInt64Type::new_impl()],
+            inner_names: None,
+            inner_types: vec![NullType::new_impl()],
         })
     }
 }
