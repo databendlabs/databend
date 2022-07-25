@@ -47,14 +47,14 @@ pull_request_rules:
   # Check if PR has conflicts for merging
   - name: Check PR conflicts
     conditions:
-      - conflict
+      - -conflict
     actions:
       post_check:
         title: |
           {% if check_succeed %}
-          PR has conflicts
-          {% else %}
           PR doesn't have conflicts
+          {% else %}
+          PR has conflicts
           {% endif %}
         summary: |
           {% if not check_succeed %}
