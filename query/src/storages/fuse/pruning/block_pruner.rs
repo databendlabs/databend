@@ -70,20 +70,38 @@ impl BlockPruner {
             return Ok(vec![]);
         };
 
-        let block_pred: Pred = match push_down {
-            Some(extras) if !extras.filters.is_empty() => {
-                let range_filter =
-                    RangeFilter::try_create(ctx.clone(), &extras.filters[0], schema.clone())?;
-                Box::new(move |v: &StatisticsOfColumns| range_filter.eval(v))
-            }
-            _ => Box::new(|_: &StatisticsOfColumns| Ok(true)),
-        };
-
         let limit = push_down
             .as_ref()
             .filter(|p| p.order_by.is_empty())
-            .and_then(|p| p.limit)
-            .unwrap_or(usize::MAX);
+            .and_then(|p| p.limit);
+
+        let filter_expr = push_down
+            .as_ref()
+            .map(|extra| extra.filters.get(0))
+            .flatten();
+
+        let segment_num = segment_locs.len();
+
+        if limit.is_none() && filter_expr.is_none() {
+            let a = futures::stream::iter(segment_locs.into_iter().enumerate())
+                .map(|(idx, (seg_loc, ver))| async move {
+                    let segment_reader = MetaReaders::segment_info_reader(ctx.as_ref());
+                    let segment_info = segment_reader.read(seg_loc, None, ver).await?;
+                    Ok::<_, ErrorCode>(
+                        segment_info
+                            .blocks
+                            .clone()
+                            .into_iter()
+                            .map(move |item| (idx, item)),
+                    )
+                })
+                .buffered(std::cmp::min(10, segment_num))
+                .try_collect::<Vec<_>>()
+                .await?
+                .into_iter()
+                .flatten();
+            return Ok(a.collect::<Vec<_>>());
+        }
 
         // Segments and blocks are accumulated concurrently, thus an atomic counter is used
         // to **try** collecting as less blocks as possible. But concurrency is preferred to
@@ -104,15 +122,17 @@ impl BlockPruner {
 
         let dal = ctx.get_storage_operator()?;
 
-        let filter_expr = if let Some(Extras { filters, .. }) = push_down {
-            let filter_expression = &filters[0];
-            Some((
-                column_names_of_expression(filter_expression),
-                filter_expression,
-            ))
-        } else {
-            None
+        let block_pred: Pred = match filter_expr {
+            Some(expr) => {
+                let range_filter = RangeFilter::try_create(ctx.clone(), expr, schema.clone())?;
+                Box::new(move |v: &StatisticsOfColumns| range_filter.eval(v))
+            }
+            _ => Box::new(|_: &StatisticsOfColumns| Ok(true)),
         };
+
+        let filter_expr_info = filter_expr.map(|expr| (column_names_of_expression(expr), expr));
+
+        let limit = limit.unwrap_or(usize::MAX);
 
         let stream = futures::stream::iter(segment_locs)
             .map(|(idx, (seg_loc, u))| async {
@@ -132,7 +152,7 @@ impl BlockPruner {
                     .into_iter()
                     .map(|v| (idx, v));
 
-                    if let Some((names, expression)) = &filter_expr {
+                    if let Some((names, expression)) = &filter_expr_info {
                         let mut res = vec![];
                         for (idx, meta) in blocks {
                             let bloom_idx_location =
