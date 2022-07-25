@@ -23,6 +23,7 @@ use petgraph::prelude::NodeIndex;
 
 use crate::pipelines::executor::executor_condvar::WorkersCondvar;
 use crate::pipelines::executor::executor_tasks::CompletedAsyncTask;
+use crate::pipelines::executor::processor_async_task::ProcessorAsyncTask;
 use crate::pipelines::executor::PipelineExecutor;
 use crate::pipelines::processors::processor::ProcessorPtr;
 
@@ -90,25 +91,14 @@ impl ExecutorWorkerContext {
         let worker_id = self.worker_num;
         let workers_condvar = self.get_workers_condvar().clone();
         let tasks_queue = executor.global_tasks_queue.clone();
-        let clone_processor = processor.clone();
-        let join_handle = executor
-            .async_runtime
-            .spawn(async move { processor.async_process().await });
-        executor.async_runtime.spawn(async move {
-            let res = match join_handle.await {
-                Ok(Ok(_)) => Ok(()),
-                Ok(Err(cause)) => Err(cause),
-                Err(cause) => Err(ErrorCode::PanicError(format!(
-                    "Panic error, cause {}",
-                    cause
-                ))),
-            };
 
-            tasks_queue.completed_async_task(
-                workers_condvar,
-                CompletedAsyncTask::create(clone_processor, worker_id, res),
-            );
-        });
+        executor.async_runtime.spawn(ProcessorAsyncTask::create(
+            worker_id,
+            processor.clone(),
+            tasks_queue,
+            workers_condvar,
+            processor.async_process(),
+        ));
 
         Ok(None)
     }

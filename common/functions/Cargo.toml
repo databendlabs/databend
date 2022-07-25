@@ -8,7 +8,6 @@ edition = "2021"
 
 [lib]
 doctest = false
-test = false
 
 [dependencies] # In alphabetical order
 # Workspace dependencies

@@ -321,12 +321,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "atomic_refcell"
-version = "0.1.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "73b5e5f48b927f04e952dedc932f31995a65a0bf65ec971c74436e51bf6e970d"
-
-[[package]]
 name = "atty"
 version = "0.2.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1126,7 +1120,6 @@ dependencies = [
  "ahash",
  "comfy-table",
  "common-arrow",
- "common-base",
  "common-datavalues",
  "common-exception",
  "common-io",
@@ -1145,10 +1138,8 @@ dependencies = [
  "chrono",
  "chrono-tz",
  "common-arrow",
- "common-base",
  "common-exception",
  "common-io",
- "common-macros",
  "criterion",
  "dyn-clone",
  "enum_dispatch",
@@ -1204,6 +1195,10 @@ dependencies = [
  "enum-as-inner",
  "goldenfile",
  "itertools",
+ "match-template",
+ "num-traits",
+ "ordered-float 1.1.1",
+ "serde",
 ]
 
 [[package]]
@@ -1217,6 +1212,7 @@ dependencies = [
  "common-io",
  "once_cell",
  "pretty_assertions",
+ "similar-asserts",
  "strum",
  "strum_macros",
 ]
@@ -1265,6 +1261,17 @@ dependencies = [
  "strength_reduce",
  "twox-hash",
  "uuid 1.1.2",
+]
+
+[[package]]
+name = "common-functions-v2"
+version = "0.1.0"
+dependencies = [
+ "bstr",
+ "comfy-table",
+ "common-ast",
+ "common-expression",
+ "goldenfile",
 ]
 
 [[package]]
@@ -1352,7 +1359,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
- "synstructure",
 ]
 
 [[package]]
@@ -1391,6 +1397,7 @@ dependencies = [
  "common-proto-conv",
  "common-protos",
  "common-tracing",
+ "enumflags2",
  "maplit",
  "serde",
  "serde_json",
@@ -1585,11 +1592,9 @@ name = "common-pipeline"
 version = "0.1.0"
 dependencies = [
  "async-trait 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)",
- "common-base",
  "common-datablocks",
  "common-datavalues",
  "common-exception",
- "common-tracing",
  "futures",
  "futures-util",
  "itertools",
@@ -1681,7 +1686,9 @@ name = "common-storage"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "globiter",
  "opendal",
+ "percent-encoding",
  "serde",
 ]
 
@@ -2254,7 +2261,6 @@ dependencies = [
  "async-recursion",
  "async-stream",
  "async-trait 0.1.56 (git+https://github.com/datafuse-extras/async-trait?rev=f0b0fd5)",
- "atomic_refcell",
  "backoff",
  "backon",
  "base64 0.13.0",
@@ -2573,6 +2579,12 @@ checksum = "9852635589dc9f9ea1b6fe9f05b50ef208c85c834a562f0c6abb1c475736ec2b"
 dependencies = [
  "cfg-if",
 ]
+
+[[package]]
+name = "endian-type"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c34f04666d835ff5d62e058c3995147c06f42fe86ff053337632bca83e42702d"
 
 [[package]]
 name = "enum-as-inner"
@@ -3182,6 +3194,16 @@ name = "glob"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9b919933a397b79c37e33b77bb2aa3dc8eb6e165ad809e58ff75bc7db2e34574"
+
+[[package]]
+name = "globiter"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0757cd38a6dc71ff622f52309d213d1b3a39297f49db6aaf6a820f9487c7cb34"
+dependencies = [
+ "anyhow",
+ "itertools",
+]
 
 [[package]]
 name = "goldenfile"
@@ -4126,6 +4148,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3e2e65a1a2e43cfcb47a895c4c8b10d1f4a61097f9f254f183aee60cad9c651d"
 
 [[package]]
+name = "match-template"
+version = "0.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c334ac67725febd94c067736ac46ef1c7cacf1c743ca14b9f917c2df2c20acd8"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "match_cfg"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4489,6 +4522,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "nibble_vec"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "77a5d83df9f36fe23f0c3648c6bbb8b0298bb5f1939c8f2704431371f4b84d43"
+dependencies = [
+ "smallvec",
+]
+
+[[package]]
 name = "nix"
 version = "0.24.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4731,9 +4773,9 @@ checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
 
 [[package]]
 name = "opendal"
-version = "0.11.0"
+version = "0.11.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "770a7e8a4d84cf9fd2fbaea08b86fb59823b849b6b056c272be7ff806f3174f2"
+checksum = "174ff4560c5da73de06deaf047051299b1d25b1b441cc95c42958a6b4ada5370"
 dependencies = [
  "anyhow",
  "async-compat",
@@ -4757,6 +4799,7 @@ dependencies = [
  "percent-encoding",
  "pin-project",
  "quick-xml",
+ "radix_trie",
  "reqsign",
  "serde",
  "thiserror",
@@ -5698,6 +5741,16 @@ name = "radium"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dc33ff2d4973d518d823d61aa239014831e521c75da58e3df4840d3f47749d09"
+
+[[package]]
+name = "radix_trie"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c069c179fcdc6a2fe24d8d18305cf085fdbd4f922c041943e203685d6a1c58fd"
+dependencies = [
+ "endian-type",
+ "nibble_vec",
+]
 
 [[package]]
 name = "rand"

@@ -27,6 +27,7 @@ use common_tracing::tracing;
 
 use crate::pipelines::processors::transforms::ExpressionExecutor;
 use crate::storages::index::IndexSchemaVersion;
+use crate::storages::index::SupportedType;
 
 /// BloomFilterExprEvalResult represents the evaluation result of an expression by bloom filter.
 ///
@@ -444,39 +445,6 @@ impl BloomFilter {
         Self::with_size(self.num_bits(), self.num_hashes(), self.seed)
     }
 
-    /// Returns whether the data type is supported by bloom filter.
-    ///
-    /// The supported types are most same as Databricks:
-    /// https://docs.microsoft.com/en-us/azure/databricks/delta/optimizations/bloom-filters
-    ///
-    /// "Bloom filters support columns with the following (input) data types: byte, short, int,
-    /// long, float, double, date, timestamp, and string."
-    ///
-    /// Nulls are not added to the Bloom
-    /// filter, so any null related filter requires reading the data file. "
-    pub fn is_supported_type(data_type: &DataTypeImpl) -> bool {
-        // we support nullable column but Nulls are not added into the bloom filter.
-        let inner_type = remove_nullable(data_type);
-        let data_type_id = inner_type.data_type_id();
-        matches!(
-            data_type_id,
-            TypeID::UInt8
-                | TypeID::UInt16
-                | TypeID::UInt32
-                | TypeID::UInt64
-                | TypeID::Int8
-                | TypeID::Int16
-                | TypeID::Int32
-                | TypeID::Int64
-                | TypeID::Float32
-                | TypeID::Float64
-                | TypeID::Date
-                | TypeID::Timestamp
-                | TypeID::Interval
-                | TypeID::String
-        )
-    }
-
     #[inline(always)]
     fn compute_hash_bit_pos(&self, index: usize, h1: Wrapping<u64>, h2: Wrapping<u64>) -> usize {
         let i = Wrapping(index as u64);
@@ -700,3 +668,5 @@ impl BloomFilter {
         }
     }
 }
+
+impl SupportedType for BloomFilter {}

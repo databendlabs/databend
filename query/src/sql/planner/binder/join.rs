@@ -190,6 +190,7 @@ impl<'a> Binder {
             other_conditions,
             join_type,
             marker_index: None,
+            from_correlated_subquery: false,
         };
         let expr = SExpr::create_binary(inner_join.into(), left_child, right_child);
 

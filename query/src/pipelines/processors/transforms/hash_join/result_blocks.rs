@@ -18,11 +18,17 @@ use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_datablocks::DataBlock;
 use common_datavalues::BooleanColumn;
+use common_datavalues::BooleanViewer;
 use common_datavalues::Column;
 use common_datavalues::ColumnRef;
+use common_datavalues::DataType;
+use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
 use common_datavalues::NullableColumn;
+use common_datavalues::NullableType;
+use common_datavalues::ScalarViewer;
 use common_datavalues::Series;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_hashtable::HashMap;
 use common_hashtable::HashTableKeyable;
@@ -58,7 +64,12 @@ impl JoinHashTable {
         match self.hash_join_desc.join_type {
             JoinType::Inner => {
                 for (i, key) in keys_iter.enumerate() {
-                    let probe_result_ptr = Self::probe_key(hash_table, key, valids, i);
+                    // If the join is derived from correlated subquery, then null equality is safe.
+                    let probe_result_ptr = if self.hash_join_desc.from_correlated_subquery {
+                        hash_table.find_key(&key)
+                    } else {
+                        Self::probe_key(hash_table, key, valids, i)
+                    };
                     match probe_result_ptr {
                         Some(v) => {
                             let probe_result_ptrs = v.get_value();
@@ -127,39 +138,46 @@ impl JoinHashTable {
                 }
             }
 
-            // probe_blocks left join build blocks
-            JoinType::Left => {
+            // Single join is similar to left join, but the result is a single row.
+            JoinType::Left | JoinType::Single => {
                 if self.hash_join_desc.other_predicate.is_none() {
-                    let result =
-                        self.left_join::<false, _, _>(hash_table, probe_state, keys_iter, input)?;
-                    return Ok(vec![result]);
-                } else {
-                    let result =
-                        self.left_join::<true, _, _>(hash_table, probe_state, keys_iter, input)?;
-                    return Ok(vec![result]);
-                }
-            }
-            Mark => {
-                results.push(DataBlock::empty());
-                // Either there is only non-equi condition, or there is only equi-condition
-                // It's impossible for both to coexist.
-                if self.hash_join_desc.other_predicate.is_some() {
-                    self.mark_join_with_other_condition(input, probe_state)?;
-                } else {
-                    self.mark_join_without_other_condition(
+                    let result = self.left_or_single_join::<false, _, _>(
                         hash_table,
                         probe_state,
                         keys_iter,
                         input,
                     )?;
+                    return Ok(vec![result]);
+                } else {
+                    let result = self.left_or_single_join::<true, _, _>(
+                        hash_table,
+                        probe_state,
+                        keys_iter,
+                        input,
+                    )?;
+                    return Ok(vec![result]);
                 }
+            }
+            Mark => {
+                results.push(DataBlock::empty());
+                // Three cases will produce Mark join:
+                // 1. uncorrelated ANY subquery: only have one kind of join condition, equi-condition or non-equi-condition.
+                // 2. correlated ANY subquery: must have two kinds of join condition, one is equi-condition and the other is non-equi-condition.
+                //    equi-condition is subquery's outer columns with subquery's derived columns.
+                //    non-equi-condition is subquery's child expr with subquery's output column.
+                //    for example: select * from t1 where t1.a = ANY (select t2.a from t2 where t2.b = t1.b); [t1: a, b], [t2: a, b]
+                //    subquery's outer columns: t1.b, and it'll derive a new column: subquery_5 when subquery cross join t1;
+                //    so equi-condition is t1.b = subquery_5, and non-equi-condition is t1.a = t2.a.
+                // 3. Correlated Exists subquery： only have one kind of join condition, equi-condition.
+                //    equi-condition is subquery's outer columns with subquery's derived columns. (see the above example in correlated ANY subquery)
+                self.mark_join(hash_table, probe_state, keys_iter, input)?;
             }
             _ => unreachable!(),
         }
         Ok(results)
     }
 
-    fn mark_join_without_other_condition<Key, IT>(
+    fn mark_join<Key, IT>(
         &self,
         hash_table: &HashMap<Key, Vec<RowPtr>>,
         probe_state: &mut ProbeState,
@@ -180,54 +198,62 @@ impl JoinHashTable {
                 *has_null = true;
             }
         }
+        let probe_indexs = &mut probe_state.probe_indexs;
+        let build_indexs = &mut probe_state.build_indexs;
         let valids = &probe_state.valids;
         for (i, key) in keys_iter.enumerate() {
-            let probe_result_ptr = Self::probe_key(hash_table, key, valids, i);
+            let probe_result_ptr = if self.hash_join_desc.from_correlated_subquery {
+                hash_table.find_key(&key)
+            } else {
+                Self::probe_key(hash_table, key, valids, i)
+            };
             if let Some(v) = probe_result_ptr {
                 let probe_result_ptrs = v.get_value();
+                build_indexs.extend_from_slice(probe_result_ptrs);
+                probe_indexs.extend(std::iter::repeat(i as u32).take(probe_result_ptrs.len()));
                 for ptr in probe_result_ptrs {
-                    // If find join partner, set the marker to true.
-                    let mut self_row_ptrs = self.row_ptrs.write();
-                    if let Some(p) = self_row_ptrs.iter_mut().find(|p| (*p).eq(&ptr)) {
-                        p.marker = Some(MarkerKind::True);
+                    // If has other conditions, we'll process marker later
+                    if self.hash_join_desc.other_predicate.is_none() {
+                        // If find join partner, set the marker to true.
+                        let mut self_row_ptrs = self.row_ptrs.write();
+                        if let Some(p) = self_row_ptrs.iter_mut().find(|p| (*p).eq(&ptr)) {
+                            p.marker = Some(MarkerKind::True);
+                        }
                     }
                 }
             }
         }
-        Ok(())
-    }
+        if self.hash_join_desc.other_predicate.is_none() {
+            return Ok(());
+        }
 
-    fn mark_join_with_other_condition(
-        &self,
-        input: &DataBlock,
-        probe_state: &mut ProbeState,
-    ) -> Result<()> {
-        let cross_join_blocks = self.probe_cross_join(input, probe_state)?;
+        if self.hash_join_desc.from_correlated_subquery {
+            // Must be correlated ANY subquery, we won't need to check `has_null` in `mark_join_blocks`.
+            // In the following, if value is Null and Marker is False, we'll set the marker to Null
+            let mut has_null = self.hash_join_desc.marker_join_desc.has_null.write();
+            *has_null = false;
+        }
+        let probe_block = DataBlock::block_take_by_indices(input, probe_indexs)?;
+        let build_block = self.row_space.gather(build_indexs)?;
+        let merged_block = self.merge_eq_block(&build_block, &probe_block)?;
         let func_ctx = self.ctx.try_get_function_context()?;
-        for block in cross_join_blocks.iter() {
-            let type_vector = self
-                .hash_join_desc
-                .other_predicate
-                .as_ref()
-                .unwrap()
-                .eval(&func_ctx, block)?;
-            let filter_column = type_vector.vector();
-            assert_eq!(filter_column.len(), block.num_rows());
-            let mut row_ptrs = self.row_ptrs.write();
-            for idx in 0..filter_column.len() {
-                match filter_column.get(idx) {
-                    DataValue::Null => {
-                        if row_ptrs[idx].marker == Some(MarkerKind::False) {
-                            row_ptrs[idx].marker = Some(MarkerKind::Null);
-                        }
-                    }
-                    DataValue::Boolean(value) => {
-                        if value {
-                            row_ptrs[idx].marker = Some(MarkerKind::True);
-                        }
-                    }
-                    _ => unreachable!(),
+        let type_vector = self
+            .hash_join_desc
+            .other_predicate
+            .as_ref()
+            .unwrap()
+            .eval(&func_ctx, &merged_block)?;
+        let filter_column = type_vector.vector();
+        let boolean_viewer = BooleanViewer::try_create(filter_column)?;
+        let mut row_ptrs = self.row_ptrs.write();
+        for (idx, build_index) in build_indexs.iter().enumerate() {
+            let self_row_ptr = row_ptrs.iter_mut().find(|p| (*p).eq(&build_index)).unwrap();
+            if !boolean_viewer.valid_at(idx) {
+                if self_row_ptr.marker == Some(MarkerKind::False) {
+                    self_row_ptr.marker = Some(MarkerKind::Null);
                 }
+            } else if boolean_viewer.value_at(idx) {
+                self_row_ptr.marker = Some(MarkerKind::True);
             }
         }
         Ok(())
@@ -248,7 +274,11 @@ impl JoinHashTable {
         let valids = &probe_state.valids;
 
         for (i, key) in keys_iter.enumerate() {
-            let probe_result_ptr = Self::probe_key(hash_table, key, valids, i);
+            let probe_result_ptr = if self.hash_join_desc.from_correlated_subquery {
+                hash_table.find_key(&key)
+            } else {
+                Self::probe_key(hash_table, key, valids, i)
+            };
 
             match (probe_result_ptr, SEMI) {
                 (Some(_), true) | (None, false) => {
@@ -282,7 +312,11 @@ impl JoinHashTable {
         let mut dummys = 0;
 
         for (i, key) in keys_iter.enumerate() {
-            let probe_result_ptr = Self::probe_key(hash_table, key, valids, i);
+            let probe_result_ptr = if self.hash_join_desc.from_correlated_subquery {
+                hash_table.find_key(&key)
+            } else {
+                Self::probe_key(hash_table, key, valids, i)
+            };
 
             match (probe_result_ptr, SEMI) {
                 (Some(v), _) => {
@@ -343,7 +377,7 @@ impl JoinHashTable {
         DataBlock::filter_block(probe_block, &predicate)
     }
 
-    fn left_join<const WITH_OTHER_CONJUNCT: bool, Key, IT>(
+    fn left_or_single_join<const WITH_OTHER_CONJUNCT: bool, Key, IT>(
         &self,
         hash_table: &HashMap<Key, Vec<RowPtr>>,
         probe_state: &mut ProbeState,
@@ -366,11 +400,22 @@ impl JoinHashTable {
 
         let mut validity = MutableBitmap::new();
         for (i, key) in keys_iter.enumerate() {
-            let probe_result_ptr = Self::probe_key(hash_table, key, valids, i);
+            let probe_result_ptr = if self.hash_join_desc.from_correlated_subquery {
+                hash_table.find_key(&key)
+            } else {
+                Self::probe_key(hash_table, key, valids, i)
+            };
 
             match probe_result_ptr {
                 Some(v) => {
                     let probe_result_ptrs = v.get_value();
+                    if self.hash_join_desc.join_type == JoinType::Single
+                        && probe_result_ptrs.len() > 1
+                    {
+                        return Err(ErrorCode::LogicalError(
+                            "Scalar subquery can't return more than one row",
+                        ));
+                    }
                     build_indexs.extend_from_slice(probe_result_ptrs);
                     probe_indexs.extend(std::iter::repeat(i as u32).take(probe_result_ptrs.len()));
 
@@ -397,7 +442,26 @@ impl JoinHashTable {
         }
 
         let validity: Bitmap = validity.into();
-        let build_block = self.row_space.gather(build_indexs)?;
+        let build_block = if !self.hash_join_desc.from_correlated_subquery
+            && self.hash_join_desc.join_type == JoinType::Single
+            && validity.unset_bits() == input.num_rows()
+        {
+            // Uncorrelated scalar subquery and no row was returned by subquery
+            // We just construct a block with NULLs
+            let build_data_schema = self.row_space.data_schema.clone();
+            assert_eq!(build_data_schema.fields().len(), 1);
+            let data_type = build_data_schema.field(0).data_type().clone();
+            let nullable_type = if let DataTypeImpl::Nullable(..) = data_type {
+                data_type
+            } else {
+                NullableType::new_impl(data_type)
+            };
+            let null_column =
+                nullable_type.create_column(&vec![DataValue::Null; input.num_rows()])?;
+            DataBlock::create(build_data_schema, vec![null_column])
+        } else {
+            self.row_space.gather(build_indexs)?
+        };
 
         let nullable_columns = build_block
             .columns()

@@ -35,10 +35,11 @@ impl FunctionProperty {
     }
 }
 
-#[derive(Debug, Clone, EnumAsInner)]
+#[derive(Debug, Clone, PartialEq, EnumAsInner)]
 pub enum Domain {
     Int(IntDomain),
     UInt(UIntDomain),
+    Float(FloatDomain),
     Boolean(BooleanDomain),
     String(StringDomain),
     Nullable(NullableDomain<AnyType>),
@@ -46,25 +47,31 @@ pub enum Domain {
     Tuple(Vec<Domain>),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IntDomain {
     pub min: i64,
     pub max: i64,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UIntDomain {
     pub min: u64,
     pub max: u64,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
+pub struct FloatDomain {
+    pub min: f64,
+    pub max: f64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BooleanDomain {
     pub has_false: bool,
     pub has_true: bool,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StringDomain {
     pub min: Vec<u8>,
     pub max: Option<Vec<u8>>,
@@ -81,6 +88,12 @@ impl<T: ValueType> Clone for NullableDomain<T> {
             has_null: self.has_null,
             value: self.value.clone(),
         }
+    }
+}
+
+impl<T: ValueType> PartialEq for NullableDomain<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.has_null == other.has_null && self.value == other.value
     }
 }
 
@@ -109,6 +122,8 @@ impl Domain {
             DataType::UInt16 => Domain::UInt(NumberType::<u16>::full_domain(generics)),
             DataType::UInt32 => Domain::UInt(NumberType::<u32>::full_domain(generics)),
             DataType::UInt64 => Domain::UInt(NumberType::<u64>::full_domain(generics)),
+            DataType::Float32 => Domain::Float(NumberType::<f32>::full_domain(generics)),
+            DataType::Float64 => Domain::Float(NumberType::<f64>::full_domain(generics)),
             DataType::Boolean => Domain::Boolean(BooleanType::full_domain(generics)),
             DataType::String => Domain::String(StringType::full_domain(generics)),
             DataType::Nullable(ty) => Domain::Nullable(NullableDomain {
@@ -130,6 +145,10 @@ impl Domain {
                 max: self_int.max.max(other_int.max),
             }),
             (Domain::UInt(self_uint), Domain::UInt(other_uint)) => Domain::UInt(UIntDomain {
+                min: self_uint.min.min(other_uint.min),
+                max: self_uint.max.max(other_uint.max),
+            }),
+            (Domain::Float(self_uint), Domain::Float(other_uint)) => Domain::Float(FloatDomain {
                 min: self_uint.min.min(other_uint.min),
                 max: self_uint.max.max(other_uint.max),
             }),

@@ -50,7 +50,7 @@ pub struct QueryFragmentActions {
     pub fragment_id: usize,
     pub exchange_actions: bool,
     pub data_exchange: Option<DataExchange>,
-    fragment_actions: Vec<QueryFragmentAction>,
+    pub fragment_actions: Vec<QueryFragmentAction>,
 }
 
 impl QueryFragmentActions {
@@ -101,7 +101,7 @@ impl QueryFragmentActions {
 
 pub struct QueryFragmentsActions {
     ctx: Arc<QueryContext>,
-    fragments_actions: Vec<QueryFragmentActions>,
+    pub fragments_actions: Vec<QueryFragmentActions>,
 }
 
 impl QueryFragmentsActions {
@@ -132,8 +132,20 @@ impl QueryFragmentsActions {
         }
     }
 
+    pub fn pop_root_actions(&mut self) -> Option<QueryFragmentActions> {
+        self.fragments_actions.pop()
+    }
+
     pub fn add_fragment_actions(&mut self, actions: QueryFragmentActions) -> Result<()> {
         self.fragments_actions.push(actions);
+        Ok(())
+    }
+
+    pub fn add_fragments_actions(&mut self, actions: QueryFragmentsActions) -> Result<()> {
+        for fragment_actions in actions.fragments_actions.into_iter() {
+            self.fragments_actions.push(fragment_actions);
+        }
+
         Ok(())
     }
 

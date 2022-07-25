@@ -12,10 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::malloc_size::MallocSizeOf;
-use super::malloc_size::MallocSizeOfOps;
-use super::malloc_size::MallocUnconditionalSizeOf;
-
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
@@ -30,23 +26,10 @@ mod platform {
     use std::alloc::GlobalAlloc;
     use std::alloc::Layout;
     use std::os::raw::c_int;
-    use std::os::raw::c_void;
 
     use tikv_jemalloc_sys as ffi;
 
     use crate::base::ThreadTracker;
-    use crate::mem_allocator::malloc_size::VoidPtrToSizeFn;
-
-    /// Get the size of a heap block.
-    pub unsafe extern "C" fn usable_size(ptr: *const c_void) -> usize {
-        ffi::malloc_usable_size(ptr as *const _)
-    }
-
-    /// No enclosing function defined.
-    #[inline]
-    pub fn new_enclosing_size_fn() -> Option<VoidPtrToSizeFn> {
-        None
-    }
 
     /// Memory allocation APIs compatible with libc
     pub mod libc_compat {
@@ -128,35 +111,5 @@ mod platform {
             let flags = layout_to_flags(layout.align(), new_size);
             ffi::rallocx(ptr as *mut _, new_size, flags) as *mut u8
         }
-    }
-}
-
-/// Get a new instance of a MallocSizeOfOps
-pub fn new_malloc_size_ops() -> MallocSizeOfOps {
-    MallocSizeOfOps::new(
-        platform::usable_size,
-        platform::new_enclosing_size_fn(),
-        None,
-    )
-}
-
-/// Extension methods for `MallocSizeOf` trait, do not implement
-/// directly.
-/// It allows getting heapsize without exposing `MallocSizeOfOps`
-/// (a single default `MallocSizeOfOps` is used for each call).
-pub trait MallocSizeOfExt: MallocSizeOf {
-    /// Method to launch a heapsize measurement with a
-    /// fresh state.
-    fn malloc_size_of(&self) -> usize {
-        let mut ops = new_malloc_size_ops();
-        <Self as MallocSizeOf>::size_of(self, &mut ops)
-    }
-}
-
-impl<T: MallocSizeOf> MallocSizeOfExt for T {}
-
-impl<T: MallocSizeOf> MallocSizeOf for std::sync::Arc<T> {
-    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
-        self.unconditional_size_of(ops)
     }
 }

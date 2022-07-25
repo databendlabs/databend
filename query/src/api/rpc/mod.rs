@@ -26,6 +26,7 @@ mod flight_scatter_hash;
 mod flight_service;
 mod packets;
 
+pub use exchange::BroadcastExchange;
 pub use exchange::DataExchange;
 pub use exchange::DataExchangeManager;
 pub use exchange::MergeExchange;

@@ -33,7 +33,7 @@ use crate::pipelines::processors::Processor;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::storages::fuse::io::BlockReader;
-use crate::storages::fuse::statistics::accumulator::BlockStatistics;
+use crate::storages::fuse::statistics::BlockStatistics;
 use crate::storages::fuse::statistics::StatisticsAccumulator;
 use crate::storages::fuse::FuseTable;
 use crate::storages::result::block_buffer::BlockBuffer;

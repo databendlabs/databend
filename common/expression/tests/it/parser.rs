@@ -17,10 +17,10 @@ use common_ast::parser::parse_expr;
 use common_ast::parser::token::Token;
 use common_ast::parser::tokenize_sql;
 use common_ast::Backtrace;
-use common_expression::expression::Literal;
-use common_expression::expression::RawExpr;
-use common_expression::expression::Span;
 use common_expression::types::DataType;
+use common_expression::Literal;
+use common_expression::RawExpr;
+use common_expression::Span;
 
 pub fn parse_raw_expr(text: &str, columns: &[(&str, DataType)]) -> RawExpr {
     let backtrace = Backtrace::new();
@@ -51,6 +51,26 @@ pub fn transform_expr(ast: common_ast::ast::Expr, columns: &[(&str, DataType)]) 
                 data_type: columns[col_id].1.clone(),
             }
         }
+        common_ast::ast::Expr::Cast {
+            span,
+            expr,
+            target_type,
+            ..
+        } => RawExpr::Cast {
+            span: transform_span(span),
+            expr: Box::new(transform_expr(*expr, columns)),
+            dest_type: transform_data_type(target_type),
+        },
+        common_ast::ast::Expr::TryCast {
+            span,
+            expr,
+            target_type,
+            ..
+        } => RawExpr::TryCast {
+            span: transform_span(span),
+            expr: Box::new(transform_expr(*expr, columns)),
+            dest_type: transform_data_type(target_type),
+        },
         common_ast::ast::Expr::FunctionCall {
             span,
             name,
@@ -72,6 +92,69 @@ pub fn transform_expr(ast: common_ast::ast::Expr, columns: &[(&str, DataType)]) 
                 })
                 .collect(),
         },
+        common_ast::ast::Expr::UnaryOp { span, op, expr } => RawExpr::FunctionCall {
+            span: transform_span(span),
+            name: transform_unary_op(op).to_string(),
+            params: vec![],
+            args: vec![transform_expr(*expr, columns)],
+        },
+        common_ast::ast::Expr::BinaryOp {
+            span,
+            op,
+            left,
+            right,
+        } => RawExpr::FunctionCall {
+            span: transform_span(span),
+            name: transform_binary_op(op).to_string(),
+            params: vec![],
+            args: vec![
+                transform_expr(*left, columns),
+                transform_expr(*right, columns),
+            ],
+        },
+        _ => unimplemented!(),
+    }
+}
+
+fn transform_unary_op(op: common_ast::ast::UnaryOperator) -> &'static str {
+    match op {
+        common_ast::ast::UnaryOperator::Not => "not",
+        _ => unimplemented!(),
+    }
+}
+
+fn transform_binary_op(op: common_ast::ast::BinaryOperator) -> &'static str {
+    match op {
+        common_ast::ast::BinaryOperator::Plus => "plus",
+        common_ast::ast::BinaryOperator::Minus => "minus",
+        common_ast::ast::BinaryOperator::And => "and",
+        _ => unimplemented!(),
+    }
+}
+
+fn transform_data_type(target_type: common_ast::ast::TypeName) -> DataType {
+    match target_type {
+        common_ast::ast::TypeName::Boolean => DataType::Boolean,
+        common_ast::ast::TypeName::UInt8 => DataType::UInt8,
+        common_ast::ast::TypeName::UInt16 => DataType::UInt16,
+        common_ast::ast::TypeName::UInt32 => DataType::UInt32,
+        common_ast::ast::TypeName::UInt64 => DataType::UInt64,
+        common_ast::ast::TypeName::Int8 => DataType::Int8,
+        common_ast::ast::TypeName::Int16 => DataType::Int16,
+        common_ast::ast::TypeName::Int32 => DataType::Int32,
+        common_ast::ast::TypeName::Int64 => DataType::Int64,
+        common_ast::ast::TypeName::Float32 => DataType::Float32,
+        common_ast::ast::TypeName::Float64 => DataType::Float64,
+        common_ast::ast::TypeName::String => DataType::String,
+        common_ast::ast::TypeName::Array {
+            item_type: Some(item_type),
+        } => DataType::Array(Box::new(transform_data_type(*item_type))),
+        common_ast::ast::TypeName::Tuple { fields_type } => {
+            DataType::Tuple(fields_type.into_iter().map(transform_data_type).collect())
+        }
+        common_ast::ast::TypeName::Nullable(inner_type) => {
+            DataType::Nullable(Box::new(transform_data_type(*inner_type)))
+        }
         _ => unimplemented!(),
     }
 }

@@ -202,6 +202,7 @@ impl<'a> AnalyzableStatement for DfStatement<'a> {
             DfStatement::ShowTablesStatus(v) => v.analyze(ctx).await,
             DfStatement::ShowStages(v) => v.analyze(ctx).await,
             DfStatement::RemoveStage(v) => v.analyze(ctx).await,
+            DfStatement::Presign => unreachable!("should be forward to new planner"),
         }
     }
 }

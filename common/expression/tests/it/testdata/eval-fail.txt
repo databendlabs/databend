@@ -14,3 +14,19 @@ error:
 
 
 
+error: 
+  --> SQL:1:1
+  |
+1 | CAST(a AS UINT16)
+  | ^^^^^^^^^^^^^^^^^ unable to cast -4 to UInt16
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | CAST(c AS INT16)
+  | ^^^^^^^^^^^^^^^^ unable to cast 11111111111 to Int16
+
+
+

@@ -75,7 +75,6 @@ use common_meta_types::app_error::UndropDbWithNoDropTime;
 use common_meta_types::app_error::UndropTableAlreadyExists;
 use common_meta_types::app_error::UndropTableHasNoHistory;
 use common_meta_types::app_error::UndropTableWithNoDropTime;
-use common_meta_types::app_error::UnknownDatabase;
 use common_meta_types::app_error::UnknownTable;
 use common_meta_types::app_error::UnknownTableId;
 use common_meta_types::ConditionResult;
@@ -89,6 +88,7 @@ use common_tracing::func_name;
 use common_tracing::tracing;
 use ConditionResult::Eq;
 
+use crate::db_has_to_exist;
 use crate::deserialize_struct;
 use crate::deserialize_u64;
 use crate::fetch_id;
@@ -98,6 +98,7 @@ use crate::meta_encode_err;
 use crate::send_txn;
 use crate::serialize_struct;
 use crate::serialize_u64;
+use crate::table_has_to_exist;
 use crate::txn_cond_seq;
 use crate::txn_op_del;
 use crate::txn_op_put;
@@ -1802,13 +1803,13 @@ async fn gc_dropped_table(
     let (tenant_dbnames, _db_ids) = list_u64_value(kv_api, &name_key).await?;
 
     let now = Utc::now();
-    for i in 0..tenant_dbnames.len() {
-        let tenant_dbname = tenant_dbnames.get(i).unwrap();
+    for tenant_dbname in tenant_dbnames.iter() {
         let (db_id_seq, db_id) = get_u64_value(kv_api, tenant_dbname).await?;
         let dbid_tbname_idlist = TableIdListKey {
             db_id,
             table_name: "".to_string(),
         };
+        // check dropped tables
         let table_id_list_keys = list_keys(kv_api, &dbid_tbname_idlist).await?;
         for table_id_list_key in table_id_list_keys.iter() {
             // get table id list from _fd_table_id_list/db_id/table_name
@@ -1830,22 +1831,40 @@ async fn gc_dropped_table(
             };
             let mut new_tb_id_list = TableIdList::new();
             let mut remove_table_keys = vec![];
+            let mut remove_table_id_mappings = vec![];
             for table_id in tb_id_list.id_list.iter() {
                 let tbid = TableId {
                     table_id: *table_id,
                 };
+                let id_to_name = TableIdToName {
+                    table_id: *table_id,
+                };
 
+                // Get meta data
                 let (tb_meta_seq, tb_meta): (_, Option<TableMeta>) =
                     get_struct_value(kv_api, &tbid).await?;
+
                 if tb_meta_seq == 0 || tb_meta.is_none() {
                     tracing::error!("get_table_history cannot find {:?} table_meta", table_id);
                     continue;
                 }
 
+                // Get id -> name mapping
+                let (name_seq, name): (_, Option<DBIdTableName>) =
+                    get_struct_value(kv_api, &id_to_name).await?;
+
+                if name_seq == 0 || name.is_none() {
+                    tracing::error!(
+                        "get_table_history cannot find {:?} database_id_table_name",
+                        id_to_name
+                    );
+                    continue;
+                }
                 // Safe unwrap() because: tb_meta_seq > 0
                 let tb_meta = tb_meta.unwrap();
                 if is_drop_time_out_of_retention_time(&tb_meta.drop_on, &now) {
-                    remove_table_keys.push((tbid, tb_meta_seq));
+                    remove_table_keys.push((tbid.clone(), tb_meta_seq));
+                    remove_table_id_mappings.push((id_to_name, name_seq));
                     continue;
                 }
                 new_tb_id_list.append(*table_id);
@@ -1872,6 +1891,11 @@ async fn gc_dropped_table(
             // remove out of time table meta
             for key in remove_table_keys.iter() {
                 if_then.push(txn_op_del(&key.0));
+            }
+            // remove table_id -> table_name mappings
+            for (key, seq) in remove_table_id_mappings.iter() {
+                condition.push(txn_cond_seq(key, Eq, *seq));
+                if_then.push(txn_op_del(key));
             }
             let txn_req = TxnRequest {
                 condition,
@@ -1927,6 +1951,7 @@ async fn gc_dropped_db(
 
         let mut new_db_id_list = DbIdList::new();
         let mut removed_id_keys = vec![];
+        let mut removed_id_mappings = vec![];
 
         for db_id in db_id_list.id_list.iter() {
             let dbid = DatabaseId { db_id: *db_id };
@@ -1937,9 +1962,19 @@ async fn gc_dropped_db(
                 tracing::error!("get_database_history cannot find {:?} db_meta", db_id);
                 continue;
             }
+
+            let id_to_name = DatabaseIdToName { db_id: *db_id };
+            let (name_ident_seq, name_ident): (_, Option<DatabaseNameIdent>) =
+                get_struct_value(kv_api, &id_to_name).await?;
+            if name_ident_seq == 0 || name_ident.is_none() {
+                tracing::error!("cannot find {:?} db_name_ident", db_id);
+                continue;
+            }
+
             let db_meta = db_meta.unwrap();
             if is_drop_time_out_of_retention_time(&db_meta.drop_on, &utc) {
                 removed_id_keys.push((dbid, db_meta_seq));
+                removed_id_mappings.push((id_to_name, name_ident_seq));
                 continue;
             }
             new_db_id_list.append(*db_id);
@@ -1965,6 +2000,11 @@ async fn gc_dropped_db(
         for key in removed_id_keys.iter() {
             // remove out of retention time table meta
             if_then.push(txn_op_del(&key.0));
+        }
+
+        for (key, ident_seq) in removed_id_mappings.iter() {
+            condition.push(txn_cond_seq(key, Eq, *ident_seq));
+            if_then.push(txn_op_del(key));
         }
 
         let txn_req = TxnRequest {
@@ -1996,8 +2036,8 @@ fn is_drop_time_out_of_retention_time(
 }
 
 /// Returns (db_id_seq, db_id, db_meta_seq, db_meta)
-async fn get_db_or_err(
-    kv_api: &impl KVApi,
+pub(crate) async fn get_db_or_err(
+    kv_api: &(impl KVApi + ?Sized),
     name_key: &DatabaseNameIdent,
     msg: impl Display,
 ) -> Result<(u64, u64, u64, DatabaseMeta), MetaError> {
@@ -2016,47 +2056,6 @@ async fn get_db_or_err(
         // Safe unwrap(): db_meta_seq > 0 implies db_meta is not None.
         db_meta.unwrap(),
     ))
-}
-
-/// Return OK if a db_id or db_meta exists by checking the seq.
-///
-/// Otherwise returns UnknownDatabase error
-fn db_has_to_exist(
-    seq: u64,
-    db_name_ident: &DatabaseNameIdent,
-    msg: impl Display,
-) -> Result<(), MetaError> {
-    if seq == 0 {
-        tracing::debug!(seq, ?db_name_ident, "db does not exist");
-
-        Err(MetaError::AppError(AppError::UnknownDatabase(
-            UnknownDatabase::new(
-                &db_name_ident.db_name,
-                format!("{}: {}", msg, db_name_ident),
-            ),
-        )))
-    } else {
-        Ok(())
-    }
-}
-
-/// Return OK if a table_id or table_meta exists by checking the seq.
-///
-/// Otherwise returns UnknownTable error
-fn table_has_to_exist(
-    seq: u64,
-    name_ident: &TableNameIdent,
-    ctx: impl Display,
-) -> Result<(), MetaError> {
-    if seq == 0 {
-        tracing::debug!(seq, ?name_ident, "does not exist");
-
-        Err(MetaError::AppError(AppError::UnknownTable(
-            UnknownTable::new(&name_ident.table_name, format!("{}: {}", ctx, name_ident)),
-        )))
-    } else {
-        Ok(())
-    }
 }
 
 /// Return OK if a db_id or db_meta does not exist by checking the seq.

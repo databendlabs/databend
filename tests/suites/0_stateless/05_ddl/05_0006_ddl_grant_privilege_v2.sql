@@ -31,6 +31,7 @@ GRANT SELECT ON * TO ROLE 'test-grant-role';
 GRANT SELECT ON * TO ROLE 'test-grant-role1'; -- {ErrorCode 2204}
 SHOW GRANTS FOR ROLE 'test-grant-role';
 DROP ROLE 'test-grant-role';
+DROP USER 'test-grant'@'localhost';
 
 DROP DATABASE `db01`;
 SET enable_planner_v2 = 0;

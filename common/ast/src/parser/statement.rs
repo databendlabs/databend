@@ -20,6 +20,7 @@ use common_meta_types::PrincipalIdentity;
 use common_meta_types::UserIdentity;
 use common_meta_types::UserPrivilegeType;
 use nom::branch::alt;
+use nom::combinator::consumed;
 use nom::combinator::map;
 use nom::combinator::value;
 use nom::Slice;
@@ -70,18 +71,31 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         },
     );
 
-    let delete = map(
-        rule! {
-            DELETE ~ FROM ~ #peroid_separated_idents_1_to_3
-            ~ ( WHERE ~ ^#expr )?
-        },
-        |(_, _, (catalog, database, table), opt_where_block)| Statement::Delete {
+    let table_reference_only = map(
+        consumed(rule! {
+            #peroid_separated_idents_1_to_3
+        }),
+        |(input, (catalog, database, table))| TableReference::Table {
+            span: input.0,
             catalog,
             database,
             table,
-            selection: opt_where_block.map(|(_, selection)| selection),
+            alias: None,
+            travel_point: None,
         },
     );
+
+    let delete = map(
+        rule! {
+            DELETE ~ FROM ~ #table_reference_only
+            ~ ( WHERE ~ ^#expr )?
+        },
+        |(_, _, table_reference, opt_selection)| Statement::Delete {
+            table_reference,
+            selection: opt_selection.map(|(_, selection)| selection),
+        },
+    );
+
     let show_settings = map(
         rule! {
             SHOW ~ SETTINGS ~ (LIKE ~ #literal_string)?
@@ -93,21 +107,25 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     let show_stages = value(Statement::ShowStages, rule! { SHOW ~ STAGES });
     let show_process_list = value(Statement::ShowProcessList, rule! { SHOW ~ PROCESSLIST });
     let show_metrics = value(Statement::ShowMetrics, rule! { SHOW ~ METRICS });
+    let show_engines = value(Statement::ShowEngines, rule! { SHOW ~ ENGINES });
     let show_functions = map(
         rule! {
             SHOW ~ FUNCTIONS ~ #show_limit?
         },
         |(_, _, limit)| Statement::ShowFunctions { limit },
     );
+
+    // kill query 199;
     let kill_stmt = map(
         rule! {
-            KILL ~ #kill_target ~ #ident
+            KILL ~ #kill_target ~ #parameter_to_string
         },
         |(_, kill_target, object_id)| Statement::KillStmt {
             kill_target,
             object_id,
         },
     );
+
     let set_variable = map(
         rule! {
             SET ~ (GLOBAL)? ~ #ident ~ "=" ~ #literal
@@ -158,6 +176,16 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             })
         },
     );
+
+    let undrop_database = map(
+        rule! {
+            UNDROP ~ DATABASE ~ #peroid_separated_idents_1_to_2
+        },
+        |(_, _, (catalog, database))| {
+            Statement::UndropDatabase(UndropDatabaseStmt { catalog, database })
+        },
+    );
+
     let alter_database = map(
         rule! {
             ALTER ~ DATABASE ~ ( IF ~ EXISTS )? ~ #peroid_separated_idents_1_to_2 ~ #alter_database_action
@@ -214,6 +242,21 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             })
         },
     );
+
+    // parse `show fields from` statement
+    let show_fields = map(
+        rule! {
+            SHOW ~ FIELDS ~ FROM ~ #peroid_separated_idents_1_to_3
+        },
+        |(_, _, _, (catalog, database, table))| {
+            Statement::DescribeTable(DescribeTableStmt {
+                catalog,
+                database,
+                table,
+            })
+        },
+    );
+
     let show_tables_status = map(
         rule! {
             SHOW ~ ( TABLES | TABLE ) ~ STATUS ~ ( FROM ~ ^#ident )? ~ #show_limit?
@@ -230,9 +273,9 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             CREATE ~ TRANSIENT? ~ TABLE ~ ( IF ~ NOT ~ EXISTS )?
             ~ #peroid_separated_idents_1_to_3
             ~ #create_table_source?
-            ~ ( #table_option )*
-            ~ ( COMMENT ~ "=" ~ #literal_string )?
+            ~ ( #engine )?
             ~ ( CLUSTER ~ ^BY ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")" )?
+            ~ ( #table_option )?
             ~ ( AS ~ ^#query )?
         },
         |(
@@ -242,9 +285,9 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             opt_if_not_exists,
             (catalog, database, table),
             source,
-            table_options,
-            opt_comment,
+            engine,
             opt_cluster_by,
+            opt_table_options,
             opt_as_query,
         )| {
             Statement::CreateTable(CreateTableStmt {
@@ -253,11 +296,11 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
                 database,
                 table,
                 source,
-                table_options,
-                comment: opt_comment.map(|(_, _, comment)| comment),
+                engine,
                 cluster_by: opt_cluster_by
                     .map(|(_, _, _, exprs, _)| exprs)
                     .unwrap_or_default(),
+                table_options: opt_table_options.unwrap_or_default(),
                 as_query: opt_as_query.map(|(_, query)| Box::new(query)),
                 transient: opt_transient.is_some(),
             })
@@ -705,12 +748,14 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             | #delete : "`DELETE FROM <table> [WHERE ...]`"
             | #show_settings : "`SHOW SETTINGS [<show_limit>]`"
             | #show_stages : "`SHOW STAGES`"
+            | #show_engines : "`SHOW ENGINES`"
             | #show_process_list : "`SHOW PROCESSLIST`"
             | #show_metrics : "`SHOW METRICS`"
             | #show_functions : "`SHOW FUNCTIONS [<show_limit>]`"
             | #kill_stmt : "`KILL (QUERY | CONNECTION) <object_id>`"
             | #set_variable : "`SET <variable> = <value>`"
             | #show_databases : "`SHOW DATABASES [<show_limit>]`"
+            | #undrop_database : "`UNDROP DATABASE <database>`"
             | #show_create_database : "`SHOW CREATE DATABASE <database>`"
             | #create_database : "`CREATE DATABASE [IF NOT EXIST] <database> [ENGINE = <engine>]`"
             | #drop_database : "`DROP DATABASE [IF EXISTS] <database>`"
@@ -721,6 +766,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             #show_tables : "`SHOW [FULL] TABLES [FROM <database>] [<show_limit>]`"
             | #show_create_table : "`SHOW CREATE TABLE [<database>.]<table>`"
             | #describe_table : "`DESCRIBE [<database>.]<table>`"
+            | #show_fields : "`SHOW FIELDS FROM [<database>.]<table>`"
             | #show_tables_status : "`SHOW TABLES STATUS [FROM <database>] [<show_limit>]`"
             | #create_table : "`CREATE TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`"
             | #drop_table : "`DROP TABLE [IF EXISTS] [<database>.]<table>`"
@@ -730,7 +776,9 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             | #truncate_table : "`TRUNCATE TABLE [<database>.]<table> [PURGE]`"
             | #optimize_table : "`OPTIMIZE TABLE [<database>.]<table> (ALL | PURGE | COMPACT)`"
             | #exists_table : "`EXISTS TABLE [<database>.]<table>`"
-            | #create_view : "`CREATE VIEW [IF NOT EXISTS] [<database>.]<view> AS SELECT ...`"
+        ),
+        rule!(
+            #create_view : "`CREATE VIEW [IF NOT EXISTS] [<database>.]<view> AS SELECT ...`"
             | #drop_view : "`DROP VIEW [IF EXISTS] [<database>.]<view>`"
             | #alter_view : "`ALTER VIEW [<database>.]<view> AS SELECT ...`"
         ),
@@ -846,6 +894,7 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
         },
         |(_, default_expr)| ColumnConstraint::DefaultExpr(Box::new(default_expr)),
     );
+
     let comment = map(
         rule! {
             COMMENT ~ #literal_string
@@ -859,21 +908,24 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
             ~ #type_name
             ~ ( #nullable | #default_expr )*
             ~ ( #comment )?
-            : "`<column name> <type> [NOT NULL | NULL] [DEFAULT <default value>] [COMMENT '<comment>']`"
+            : "`<column name> <type> [DEFAULT <default value>] [COMMENT '<comment>']`"
         },
         |(name, data_type, constraints, comment)| {
             let mut def = ColumnDefinition {
                 name,
                 data_type,
-                nullable: false,
                 default_expr: None,
                 comment,
             };
             for constraint in constraints {
                 match constraint {
-                    ColumnConstraint::Nullable(nullable) => def.nullable = nullable,
                     ColumnConstraint::DefaultExpr(default_expr) => {
                         def.default_expr = Some(default_expr)
+                    }
+                    ColumnConstraint::Nullable(nullable) => {
+                        if nullable {
+                            def.data_type = def.data_type.wrap_nullable();
+                        }
                     }
                 }
             }
@@ -940,13 +992,14 @@ pub fn grant_level(i: Input) -> IResult<AccountMgrLevel> {
         },
         |(database, _)| AccountMgrLevel::Database(database.map(|(database, _)| database.name)),
     );
-    // db.table
+
+    // `db01`.'tb1' or `db01`.`tb1` or `db01`.tb1
     let table = map(
         rule! {
-            ( #ident ~ "." )? ~ #ident
+            ( #ident ~ "." )? ~ #parameter_to_string
         },
         |(database, table)| {
-            AccountMgrLevel::Table(database.map(|(database, _)| database.name), table.name)
+            AccountMgrLevel::Table(database.map(|(database, _)| database.name), table)
         },
     );
 
@@ -1177,16 +1230,13 @@ pub fn show_limit(i: Input) -> IResult<ShowLimit> {
     )(i)
 }
 
-pub fn table_option(i: Input) -> IResult<TableOption> {
-    alt((
-        map(engine, TableOption::Engine),
-        map(
-            rule! {
-                COMMENT ~ ^"=" ~ #literal_string
-            },
-            |(_, _, comment)| TableOption::Comment(comment),
-        ),
-    ))(i)
+pub fn table_option(i: Input) -> IResult<BTreeMap<String, String>> {
+    map(
+        rule! {
+           ( #ident_to_string ~ "=" ~ #parameter_to_string )*
+        },
+        |opts| BTreeMap::from_iter(opts.iter().map(|(k, _, v)| (k.to_lowercase(), v.clone()))),
+    )(i)
 }
 
 pub fn engine(i: Input) -> IResult<Engine> {
@@ -1238,7 +1288,7 @@ pub fn role_option(i: Input) -> IResult<RoleOption> {
 pub fn user_identity(i: Input) -> IResult<UserIdentity> {
     map(
         rule! {
-            #literal_string ~ ( "@" ~ #literal_string )?
+            #parameter_to_string ~ ( "@" ~ #literal_string )?
         },
         |(username, opt_hostname)| UserIdentity {
             username,
@@ -1259,15 +1309,7 @@ pub fn auth_type(i: Input) -> IResult<AuthType> {
 }
 
 pub fn ident_to_string(i: Input) -> IResult<String> {
-    map_res(ident, |ident| {
-        if ident.quote.is_none() {
-            Ok(ident.to_string())
-        } else {
-            Err(ErrorKind::Other(
-                "unexpected quoted identifier, try to remove the quote",
-            ))
-        }
-    })(i)
+    map_res(ident, |ident| Ok(ident.name))(i)
 }
 
 pub fn u64_to_string(i: Input) -> IResult<String> {

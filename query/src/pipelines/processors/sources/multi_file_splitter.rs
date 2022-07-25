@@ -21,6 +21,7 @@ use common_base::base::ProgressValues;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_formats::InputFormat;
+use common_io::prelude::FormatSettings;
 use common_meta_types::StageFileCompression;
 use common_storage::init_operator;
 use common_storage::StorageParams;
@@ -29,7 +30,7 @@ use opendal::Operator;
 use parking_lot::Mutex;
 
 use super::file_splitter::FileSplitter;
-use super::file_splitter::State;
+use super::file_splitter::FileSplitterState;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::Event;
 use crate::pipelines::processors::processor::ProcessorPtr;
@@ -43,6 +44,7 @@ pub struct MultiFileSplitter {
     scan_progress: Arc<Progress>,
     output_splits: VecDeque<Vec<u8>>,
     input_format: Arc<dyn InputFormat>,
+    format_settings: FormatSettings,
     files: Arc<Mutex<VecDeque<String>>>,
     compress_option: StageFileCompression,
 }
@@ -60,6 +62,7 @@ impl MultiFileSplitter {
         output: Arc<OutputPort>,
         input_format: Arc<dyn InputFormat>,
         compress_option: StageFileCompression,
+        format_settings: FormatSettings,
         files: Arc<Mutex<VecDeque<String>>>,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(MultiFileSplitter {
@@ -70,6 +73,7 @@ impl MultiFileSplitter {
             output_splits: Default::default(),
             compress_option,
             input_format,
+            format_settings,
             finished: false,
             files,
         })))
@@ -94,6 +98,7 @@ impl MultiFileSplitter {
         self.current_file = Some(FileSplitter::create(
             reader,
             self.input_format.clone(),
+            self.format_settings.clone(),
             self.get_compression_algo(path)?,
         ));
         Ok(())
@@ -155,10 +160,10 @@ impl Processor for MultiFileSplitter {
         match &self.current_file {
             None => Ok(Event::Async),
             Some(splitter) => match &splitter.state() {
-                State::NeedData => Ok(Event::Async),
-                State::Finished => Ok(Event::Async),
-                State::ReceivedData(_) => Ok(Event::Sync),
-                State::NeedFlush => Ok(Event::Sync),
+                FileSplitterState::NeedData => Ok(Event::Async),
+                FileSplitterState::Finished => Ok(Event::Async),
+                FileSplitterState::ReceivedData(_) => Ok(Event::Sync),
+                FileSplitterState::NeedFlush => Ok(Event::Sync),
             },
         }
     }
@@ -168,7 +173,7 @@ impl Processor for MultiFileSplitter {
         let current = self.current_file.as_mut().unwrap();
         let mut output_splits = VecDeque::default();
         current.process(&mut output_splits, &mut progress_values)?;
-        if matches!(current.state(), State::Finished) {
+        if matches!(current.state(), FileSplitterState::Finished) {
             self.current_file = None;
         }
         self.output_splits.extend(output_splits.into_iter());

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod metrics;
+mod query_affect;
 pub mod query_ctx;
 mod query_ctx_shared;
 mod session;
@@ -27,6 +28,7 @@ mod session_status;
 mod session_type;
 
 pub use common_catalog::table_context::TableContext;
+pub use query_affect::QueryAffect;
 pub use query_ctx::QueryContext;
 pub use query_ctx_shared::QueryContextShared;
 pub use session::Session;

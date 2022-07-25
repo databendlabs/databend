@@ -17,6 +17,7 @@ use std::io::Result;
 
 use opendal::services::azblob;
 use opendal::services::fs;
+use opendal::services::http;
 use opendal::services::memory;
 use opendal::services::s3;
 use opendal::Operator;
@@ -25,6 +26,7 @@ use super::StorageAzblobConfig;
 use super::StorageFsConfig;
 use super::StorageParams;
 use super::StorageS3Config;
+use crate::config::StorageHttpConfig;
 
 /// init_operator will init an opendal operator based on storage config.
 pub async fn init_operator(cfg: &StorageParams) -> Result<Operator> {
@@ -33,6 +35,7 @@ pub async fn init_operator(cfg: &StorageParams) -> Result<Operator> {
         StorageParams::Fs(cfg) => init_fs_operator(cfg).await?,
         #[cfg(feature = "storage-hdfs")]
         StorageParams::Hdfs(cfg) => init_hdfs_operator(cfg).await?,
+        StorageParams::Http(cfg) => init_http_operator(cfg).await?,
         StorageParams::Memory => init_memory_operator().await?,
         StorageParams::S3(cfg) => init_s3_operator(cfg).await?,
     })
@@ -83,6 +86,18 @@ pub async fn init_hdfs_operator(cfg: &super::StorageHdfsConfig) -> Result<Operat
 
     // Root
     builder.root(&cfg.root);
+
+    Ok(Operator::new(builder.finish().await?))
+}
+
+pub async fn init_http_operator(cfg: &StorageHttpConfig) -> Result<Operator> {
+    let mut builder = http::Backend::build();
+
+    // Endpoint.
+    builder.endpoint(&cfg.endpoint_url);
+
+    // Update index.
+    builder.extend_index(cfg.paths.iter().map(|v| v.as_str()));
 
     Ok(Operator::new(builder.finish().await?))
 }

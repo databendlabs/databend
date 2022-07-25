@@ -46,7 +46,7 @@ use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::binder::Binder;
 use crate::sql::binder::ScalarBinder;
-use crate::sql::exec::ExpressionBuilder;
+use crate::sql::exec::ExpressionBuilderWithRenaming;
 use crate::sql::optimizer::optimize;
 use crate::sql::plans::Insert;
 use crate::sql::plans::InsertInputSource;
@@ -356,6 +356,7 @@ pub fn skip_to_next_row<R: BufferRead>(
     let _ = reader.ignore_white_spaces()?;
 
     let mut quoted = false;
+    let mut escaped = false;
 
     while balance > 0 {
         let buffer = reader.fill_buf()?;
@@ -373,8 +374,15 @@ pub fn skip_to_next_row<R: BufferRead>(
             let c = buffer[it];
             reader.consume(it + 1);
 
+            if it == 0 && escaped {
+                escaped = false;
+                continue;
+            }
+            escaped = false;
+
             match c {
                 b'\\' => {
+                    escaped = true;
                     continue;
                 }
                 b'\'' => {
@@ -394,6 +402,7 @@ pub fn skip_to_next_row<R: BufferRead>(
                 _ => {}
             }
         } else {
+            escaped = false;
             reader.consume(size);
         }
     }
@@ -416,7 +425,7 @@ async fn exprs_to_datavalue<'a>(
     for (i, expr) in exprs.iter().enumerate() {
         let mut scalar_binder = ScalarBinder::new(bind_context, ctx.clone(), metadata.clone());
         let scalar = scalar_binder.bind(expr).await?.0;
-        let expression_builder = ExpressionBuilder::create(metadata.clone());
+        let expression_builder = ExpressionBuilderWithRenaming::create(metadata.clone());
         let expr = expression_builder.build(&scalar)?;
         let expr = if &expr.to_data_type(schema)? != schema.field(i).data_type() {
             Expression::Cast {

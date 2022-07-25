@@ -24,6 +24,7 @@ use super::interpreter_user_stage_drop::DropUserStageInterpreter;
 use super::AlterViewInterpreter;
 use super::CreateUserStageInterpreter;
 use super::ListInterpreter;
+use super::ShowDatabasesInterpreter;
 use super::ShowStagesInterpreter;
 use crate::interpreters::interpreter_show_engines::ShowEnginesInterpreter;
 use crate::interpreters::interpreter_table_rename::RenameTableInterpreter;
@@ -66,7 +67,6 @@ use crate::interpreters::SelectInterpreter;
 use crate::interpreters::SettingInterpreter;
 use crate::interpreters::ShowCreateDatabaseInterpreter;
 use crate::interpreters::ShowCreateTableInterpreter;
-use crate::interpreters::ShowDatabasesInterpreter;
 use crate::interpreters::ShowFunctionsInterpreter;
 use crate::interpreters::ShowGrantsInterpreter;
 use crate::interpreters::ShowMetricsInterpreter;
@@ -104,6 +104,7 @@ impl InterpreterFactory {
             PlanNode::Delete(v) => Ok(Arc::new(DeleteInterpreter::try_create(ctx, v)?)),
             PlanNode::Copy(v) => Ok(Arc::new(CopyInterpreter::try_create(ctx, v)?)),
             PlanNode::Call(v) => Ok(Arc::new(CallInterpreter::try_create(ctx, v)?)),
+
             PlanNode::Show(ShowPlan::ShowDatabases(v)) => {
                 Ok(Arc::new(ShowDatabasesInterpreter::try_create(ctx, v)?))
             }

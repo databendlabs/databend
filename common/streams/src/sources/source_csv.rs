@@ -33,7 +33,7 @@ use crate::Source;
 #[derive(Debug, Clone)]
 pub struct CsvSourceBuilder {
     schema: DataSchemaRef,
-    skip_header: bool,
+    skip_header: u64,
     empty_as_default: bool,
     block_size: usize,
     size_limit: usize,
@@ -86,7 +86,7 @@ impl CsvSourceBuilder {
     }
 
     // Whether to skip the header
-    pub fn skip_header(&mut self, skip_header: bool) -> &mut Self {
+    pub fn skip_header(&mut self, skip_header: u64) -> &mut Self {
         self.skip_header = skip_header;
         self
     }
@@ -136,7 +136,7 @@ where R: AsyncRead + Unpin + Send
 {
     fn try_create(builder: CsvSourceBuilder, reader: R) -> Result<Self> {
         let reader = AsyncReaderBuilder::new()
-            .has_headers(builder.skip_header)
+            .has_headers(builder.skip_header > 0)
             .delimiter(builder.field_delimiter)
             .terminator(builder.record_delimiter)
             .create_reader(reader);

@@ -89,6 +89,17 @@ impl InterpreterFactoryV2 {
                 | DfStatement::RevokePrivilege(_)
                 | DfStatement::Call(_)
                 | DfStatement::SetVariable(_)
+                | DfStatement::Delete(_)
+        )
+    }
+
+    pub fn enable_default(stmt: &DfStatement) -> bool {
+        !matches!(
+            stmt,
+            DfStatement::Query(_)
+                | DfStatement::Explain(_)
+                | DfStatement::InsertQuery(_)
+                | DfStatement::Delete(_)
         )
     }
 
@@ -128,15 +139,7 @@ impl InterpreterFactoryV2 {
                 *copy_plan.clone(),
             )?)),
 
-            // Shows
-            Plan::ShowMetrics => Ok(Arc::new(ShowMetricsInterpreter::try_create(ctx)?)),
-            Plan::ShowProcessList => Ok(Arc::new(ShowProcessListInterpreter::try_create(ctx)?)),
-            Plan::ShowSettings => Ok(Arc::new(ShowSettingsInterpreter::try_create(ctx)?)),
-
             // Databases
-            Plan::ShowDatabases(show_databases) => Ok(Arc::new(
-                ShowDatabasesInterpreter::try_create(ctx, *show_databases.clone())?,
-            )),
             Plan::ShowCreateDatabase(show_create_database) => Ok(Arc::new(
                 ShowCreateDatabaseInterpreter::try_create(ctx, *show_create_database.clone())?,
             )),
@@ -147,23 +150,21 @@ impl InterpreterFactoryV2 {
                 ctx,
                 *drop_database.clone(),
             )?)),
+
+            Plan::UndropDatabase(undrop_database) => Ok(Arc::new(
+                UndropDatabaseInterpreter::try_create(ctx, *undrop_database.clone())?,
+            )),
+
             Plan::RenameDatabase(rename_database) => Ok(Arc::new(
                 RenameDatabaseInterpreter::try_create(ctx, *rename_database.clone())?,
             )),
 
             // Tables
-            Plan::ShowTables(show_tables) => Ok(Arc::new(ShowTablesInterpreter::try_create(
-                ctx,
-                *show_tables.clone(),
-            )?)),
             Plan::ShowCreateTable(show_create_table) => Ok(Arc::new(
                 ShowCreateTableInterpreter::try_create(ctx, *show_create_table.clone())?,
             )),
             Plan::DescribeTable(describe_table) => Ok(Arc::new(
                 DescribeTableInterpreter::try_create(ctx, *describe_table.clone())?,
-            )),
-            Plan::ShowTablesStatus(show_tables_status) => Ok(Arc::new(
-                ShowTablesStatusInterpreter::try_create(ctx, *show_tables_status.clone())?,
             )),
             Plan::CreateTable(create_table) => Ok(Arc::new(CreateTableInterpreterV2::try_create(
                 ctx,
@@ -213,7 +214,6 @@ impl InterpreterFactoryV2 {
             )?)),
 
             // Users
-            Plan::ShowUsers => Ok(Arc::new(ShowUsersInterpreter::try_create(ctx)?)),
             Plan::CreateUser(create_user) => Ok(Arc::new(CreateUserInterpreter::try_create(
                 ctx,
                 *create_user.clone(),
@@ -235,7 +235,6 @@ impl InterpreterFactoryV2 {
             )?)),
 
             // Roles
-            Plan::ShowRoles => Ok(Arc::new(ShowRolesInterpreter::try_create(ctx)?)),
             Plan::CreateRole(create_role) => Ok(Arc::new(CreateRoleInterpreter::try_create(
                 ctx,
                 *create_role.clone(),
@@ -246,7 +245,6 @@ impl InterpreterFactoryV2 {
             )?)),
 
             // Stages
-            Plan::ShowStages => Ok(Arc::new(ShowStagesInterpreter::try_create(ctx)?)),
             Plan::ListStage(s) => Ok(Arc::new(ListInterpreter::try_create(ctx, *s.clone())?)),
             Plan::DescribeStage(s) => Ok(Arc::new(DescribeUserStageInterpreter::try_create(
                 ctx,
@@ -307,6 +305,11 @@ impl InterpreterFactoryV2 {
                 ctx,
                 *set_variable.clone(),
             )?)),
+            Plan::UseDatabase(p) => Ok(Arc::new(UseDatabaseInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            Plan::Kill(p) => Ok(Arc::new(KillInterpreter::try_create(ctx, *p.clone())?)),
         }
     }
 }

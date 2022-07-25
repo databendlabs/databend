@@ -75,7 +75,6 @@ async-channel = "1.6.1"
 async-compat = "0.2.1"
 async-recursion = "1.0.0"
 async-stream = "0.3.3"
-atomic_refcell = "0.1.8"
 backoff = { version = "0.4.0", features = ["futures", "tokio"] }
 backon = "0.0.2"
 base64 = "0.13.0"
@@ -102,7 +101,7 @@ num = "0.4.0"
 num_cpus = "1.13.1"
 octocrab = "0.16.0"
 once_cell = "1.12.0"
-opendal = { version = "0.11.0", features = ["retry", "compress"] }
+opendal = { version = "0.11.2", features = ["retry", "compress"] }
 opensrv-clickhouse = "0.1.0"
 opensrv-mysql = "0.1.0"
 openssl = { version = "0.10.40", features = ["vendored"] }

@@ -14,8 +14,12 @@
 
 use std::sync::Arc;
 
+use serde::Deserialize;
+use serde::Serialize;
+
 use crate::function::Function;
 use crate::function::FunctionID;
+use crate::function::FunctionRegistry;
 use crate::types::DataType;
 
 pub type Span = Option<std::ops::Range<usize>>;
@@ -31,12 +35,16 @@ pub enum RawExpr {
         id: usize,
         data_type: DataType,
     },
-    // TODO: support user cast
-    // Cast {
-    //     is_try: bool,
-    //     expr: Box<Expr>,
-    //     dest_type: DataType,
-    // },
+    Cast {
+        span: Span,
+        expr: Box<RawExpr>,
+        dest_type: DataType,
+    },
+    TryCast {
+        span: Span,
+        expr: Box<RawExpr>,
+        dest_type: DataType,
+    },
     FunctionCall {
         span: Span,
         name: String,
@@ -57,7 +65,11 @@ pub enum Expr {
     },
     Cast {
         span: Span,
-        // is_try: bool,
+        expr: Box<Expr>,
+        dest_type: DataType,
+    },
+    TryCast {
+        span: Span,
         expr: Box<Expr>,
         dest_type: DataType,
     },
@@ -70,7 +82,35 @@ pub enum Expr {
     },
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum RemoteExpr {
+    Literal {
+        span: Span,
+        lit: Literal,
+    },
+    ColumnRef {
+        span: Span,
+        id: usize,
+    },
+    Cast {
+        span: Span,
+        expr: Box<RemoteExpr>,
+        dest_type: DataType,
+    },
+    TryCast {
+        span: Span,
+        expr: Box<RemoteExpr>,
+        dest_type: DataType,
+    },
+    FunctionCall {
+        span: Span,
+        id: FunctionID,
+        generics: Vec<DataType>,
+        args: Vec<RemoteExpr>,
+    },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Literal {
     Null,
     Int8(i8),
@@ -81,6 +121,90 @@ pub enum Literal {
     UInt16(u16),
     UInt32(u32),
     UInt64(u64),
+    Float32(f32),
+    Float64(f64),
     Boolean(bool),
     String(Vec<u8>),
+}
+
+impl RemoteExpr {
+    pub fn from_expr(expr: Expr) -> Self {
+        match expr {
+            Expr::Literal { span, lit } => RemoteExpr::Literal { span, lit },
+            Expr::ColumnRef { span, id } => RemoteExpr::ColumnRef { span, id },
+            Expr::Cast {
+                span,
+                expr,
+                dest_type,
+            } => RemoteExpr::Cast {
+                span,
+                expr: Box::new(RemoteExpr::from_expr(*expr)),
+                dest_type,
+            },
+            Expr::TryCast {
+                span,
+                expr,
+                dest_type,
+            } => RemoteExpr::TryCast {
+                span,
+                expr: Box::new(RemoteExpr::from_expr(*expr)),
+                dest_type,
+            },
+            Expr::FunctionCall {
+                span,
+                id,
+                function: _,
+                generics,
+                args,
+            } => RemoteExpr::FunctionCall {
+                span,
+                id,
+                generics,
+                args: args.into_iter().map(RemoteExpr::from_expr).collect(),
+            },
+        }
+    }
+
+    pub fn into_expr(self, fn_registry: &FunctionRegistry) -> Option<Expr> {
+        Some(match self {
+            RemoteExpr::Literal { span, lit } => Expr::Literal { span, lit },
+            RemoteExpr::ColumnRef { span, id } => Expr::ColumnRef { span, id },
+            RemoteExpr::Cast {
+                span,
+                expr,
+                dest_type,
+            } => Expr::Cast {
+                span,
+                expr: Box::new(expr.into_expr(fn_registry)?),
+                dest_type,
+            },
+            RemoteExpr::TryCast {
+                span,
+                expr,
+                dest_type,
+            } => Expr::TryCast {
+                span,
+                expr: Box::new(expr.into_expr(fn_registry)?),
+                dest_type,
+            },
+            RemoteExpr::FunctionCall {
+                span,
+                id,
+                generics,
+                args,
+            } => {
+                let function = fn_registry.get(&id)?;
+                Expr::FunctionCall {
+                    span,
+                    id,
+                    function,
+                    generics,
+                    args: args
+                        .into_iter()
+                        .map(|arg| arg.into_expr(fn_registry))
+                        .collect::<Option<_>>()?,
+                }
+            }
+        })
+    }
 }

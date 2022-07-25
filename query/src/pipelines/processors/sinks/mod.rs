@@ -14,12 +14,14 @@
 
 mod async_sink;
 mod empty_sink;
+mod subquery_receive_sink;
 mod sync_sink;
 mod sync_sink_sender;
 
 pub use async_sink::AsyncSink;
 pub use async_sink::AsyncSinker;
 pub use empty_sink::EmptySink;
+pub use subquery_receive_sink::SubqueryReceiveSink;
 pub use sync_sink::Sink;
 pub use sync_sink::Sinker;
 pub use sync_sink_sender::SyncSenderSink;

@@ -94,6 +94,20 @@ impl Display for DropDatabaseStmt<'_> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UndropDatabaseStmt<'a> {
+    pub catalog: Option<Identifier<'a>>,
+    pub database: Identifier<'a>,
+}
+
+impl Display for UndropDatabaseStmt<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "UNDROP DATABASE ")?;
+        write_period_separated_list(f, self.catalog.iter().chain(Some(&self.database)))?;
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AlterDatabaseStmt<'a> {
     pub if_exists: bool,
     pub catalog: Option<Identifier<'a>>,

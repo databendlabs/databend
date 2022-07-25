@@ -149,6 +149,7 @@ fn test_format() {
             other_conditions: vec![],
             join_type: JoinType::Inner,
             marker_index: None,
+            from_correlated_subquery: false,
         }
         .into(),
         SExpr::create_unary(

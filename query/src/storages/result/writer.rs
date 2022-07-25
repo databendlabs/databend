@@ -26,7 +26,7 @@ use opendal::Operator;
 
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
-use crate::storages::fuse::statistics::accumulator::BlockStatistics;
+use crate::storages::fuse::statistics::BlockStatistics;
 use crate::storages::fuse::statistics::StatisticsAccumulator;
 use crate::storages::fuse::FuseTable;
 use crate::storages::result::result_locations::ResultLocations;

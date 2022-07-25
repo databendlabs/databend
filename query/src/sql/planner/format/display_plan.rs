@@ -32,18 +32,16 @@ impl Plan {
             Plan::Call(plan) => Ok(format!("{:?}", plan)),
 
             // Databases
-            Plan::ShowDatabases(show_databases) => Ok(format!("{:?}", show_databases)),
             Plan::ShowCreateDatabase(show_create_database) => {
                 Ok(format!("{:?}", show_create_database))
             }
             Plan::CreateDatabase(create_database) => Ok(format!("{:?}", create_database)),
             Plan::DropDatabase(drop_database) => Ok(format!("{:?}", drop_database)),
+            Plan::UndropDatabase(undrop_database) => Ok(format!("{:?}", undrop_database)),
             Plan::RenameDatabase(rename_database) => Ok(format!("{:?}", rename_database)),
 
             // Tables
-            Plan::ShowTables(show_tables) => Ok(format!("{:?}", show_tables)),
             Plan::ShowCreateTable(show_create_table) => Ok(format!("{:?}", show_create_table)),
-            Plan::ShowTablesStatus(show_tables_status) => Ok(format!("{:?}", show_tables_status)),
             Plan::CreateTable(create_table) => Ok(format!("{:?}", create_table)),
             Plan::DropTable(drop_table) => Ok(format!("{:?}", drop_table)),
             Plan::UndropTable(undrop_table) => Ok(format!("{:?}", undrop_table)),
@@ -69,17 +67,11 @@ impl Plan {
             Plan::Delete(delete) => Ok(format!("{:?}", delete)),
 
             // Stages
-            Plan::ShowStages => Ok("SHOW STAGES".to_string()),
             Plan::ListStage(s) => Ok(format!("{:?}", s)),
             Plan::DescribeStage(s) => Ok(format!("{:?}", s)),
             Plan::CreateStage(create_stage) => Ok(format!("{:?}", create_stage)),
             Plan::DropStage(s) => Ok(format!("{:?}", s)),
             Plan::RemoveStage(s) => Ok(format!("{:?}", s)),
-
-            // Shows
-            Plan::ShowMetrics => Ok("SHOW METRICS".to_string()),
-            Plan::ShowProcessList => Ok("SHOW PROCESSLIST".to_string()),
-            Plan::ShowSettings => Ok("SHOW SETTINGS".to_string()),
 
             // Account
             Plan::GrantRole(grant_role) => Ok(format!("{:?}", grant_role)),
@@ -87,20 +79,20 @@ impl Plan {
             Plan::ShowGrants(show_grants) => Ok(format!("{:?}", show_grants)),
             Plan::RevokePriv(revoke_priv) => Ok(format!("{:?}", revoke_priv)),
             Plan::RevokeRole(revoke_role) => Ok(format!("{:?}", revoke_role)),
-            Plan::ShowUsers => Ok("SHOW USERS".to_string()),
             Plan::CreateUser(create_user) => Ok(format!("{:?}", create_user)),
             Plan::DropUser(drop_user) => Ok(format!("{:?}", drop_user)),
             Plan::CreateUDF(create_user_udf) => Ok(format!("{:?}", create_user_udf)),
             Plan::AlterUDF(alter_user_udf) => Ok(format!("{alter_user_udf:?}")),
             Plan::DropUDF(drop_udf) => Ok(format!("{drop_udf:?}")),
             Plan::AlterUser(alter_user) => Ok(format!("{:?}", alter_user)),
-            Plan::ShowRoles => Ok("SHOW ROLES".to_string()),
             Plan::CreateRole(create_role) => Ok(format!("{:?}", create_role)),
             Plan::DropRole(drop_role) => Ok(format!("{:?}", drop_role)),
 
             Plan::Presign(presign) => Ok(format!("{:?}", presign)),
 
-            Plan::SetVariable(_set_variable) => Ok("SET".to_string()),
+            Plan::SetVariable(p) => Ok(format!("{:?}", p)),
+            Plan::UseDatabase(p) => Ok(format!("{:?}", p)),
+            Plan::Kill(p) => Ok(format!("{:?}", p)),
         }
     }
 }

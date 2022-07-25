@@ -178,6 +178,10 @@ pub enum DfStatement<'a> {
 
     // Engine
     ShowEngines(DfShowEngines),
+
+    // Presign only implemented in the new planner.
+    // We add a placeholder here, forword the query to new planner always.
+    Presign,
 }
 
 /// Comment hints from SQL.

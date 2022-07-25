@@ -361,6 +361,8 @@ pub enum TokenKind {
     ENCRYPTION,
     #[token("ENGINE", ignore(ascii_case))]
     ENGINE,
+    #[token("ENGINES", ignore(ascii_case))]
+    ENGINES,
     #[token("EPOCH", ignore(ascii_case))]
     EPOCH,
     #[token("EXISTS", ignore(ascii_case))]
@@ -373,6 +375,8 @@ pub enum TokenKind {
     EXTRACT,
     #[token("FALSE", ignore(ascii_case))]
     FALSE,
+    #[token("FIELDS", ignore(ascii_case))]
+    FIELDS,
     #[token("FIELD_DELIMITER", ignore(ascii_case))]
     FIELD_DELIMITER,
     #[token("FILE_FORMAT", ignore(ascii_case))]

@@ -93,7 +93,7 @@ impl RpcService {
             .add_service(FlightServiceServer::new(flight_api_service))
             .serve_with_incoming_shutdown(listener_stream, self.shutdown_notify());
 
-        common_base::base::tokio::spawn(server);
+        tokio::spawn(server);
         Ok(())
     }
 }

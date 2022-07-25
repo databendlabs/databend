@@ -81,7 +81,7 @@ SHOW TABLES LIKE 'co%';
 Showing the tables begin with `"co"` with `WHERE`:
 
 ```sql
-SHOW TABLES WHERE table_name LIKE 'co%';
+SHOW TABLES WHERE name LIKE 'co%';
 +------------------+
 | Tables_in_system |
 +------------------+
