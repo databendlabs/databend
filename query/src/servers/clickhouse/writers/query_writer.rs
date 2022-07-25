@@ -24,7 +24,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::FormatSettings;
 use common_tracing::tracing;
-use futures::channel::mpsc::UnboundedReceiver;
+use futures::channel::mpsc::Receiver;
 use futures::StreamExt;
 use opensrv_clickhouse::connection::Connection;
 use opensrv_clickhouse::errors::Error as CHError;
@@ -51,7 +51,7 @@ impl<'a> QueryWriter<'a> {
 
     pub async fn write(
         &mut self,
-        receiver: Result<UnboundedReceiver<BlockItem>>,
+        receiver: Result<Receiver<BlockItem>>,
         format: &FormatSettings,
     ) -> Result<()> {
         match receiver {
@@ -103,7 +103,7 @@ impl<'a> QueryWriter<'a> {
 
     async fn write_data(
         &mut self,
-        mut receiver: UnboundedReceiver<BlockItem>,
+        mut receiver: Receiver<BlockItem>,
         format: &FormatSettings,
     ) -> Result<()> {
         loop {

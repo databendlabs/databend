@@ -1,4 +1,0 @@
-columntest	ID	INT			
-columntest	ID2	INT	DEFAULT	1	
-columntest	ID3	VARCHAR			
-columntest	ID4	VARCHAR	DEFAULT	'ID4'	
