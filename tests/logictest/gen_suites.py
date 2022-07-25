@@ -44,7 +44,7 @@ STATEMENT_QUERY = """statement query {query_options} {labels}
 
 # results_string looks like, result is seperate by space.
 # 1 1 1
-RESULTS_TEMPLATE = """----  {label}
+RESULTS_TEMPLATE = """{label_separate}
 {results_string}"""
 
 
@@ -195,15 +195,15 @@ def parse_cases(sql_file):
 
             if http_results is not None and mysql_results != http_results:
                 case_results = RESULTS_TEMPLATE.format(
-                    results_string=mysql_results, label="")
+                    results_string=mysql_results, label_separate="----")
 
                 case_results = case_results + "\n" + RESULTS_TEMPLATE.format(
-                    results_string=http_results, label="http")
+                    results_string=http_results, label_separate="---- http")
 
                 labels = "label(http)"
             else:
                 case_results = RESULTS_TEMPLATE.format(
-                    results_string=mysql_results, label="")
+                    results_string=mysql_results, label_separate="----")
 
             content_output = content_output + STATEMENT_QUERY.format(
                 query_options=query_options,

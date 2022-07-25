@@ -1,7 +1,7 @@
 statement query I 
 select * from numbers(100) where number > 95;
 
-----  
+----
 96
 97
 98
@@ -10,7 +10,7 @@ select * from numbers(100) where number > 95;
 statement query B label(http)
 select count(*) > 0 from system.query_log;
 
-----  
+----
 1
 
 ----  http
@@ -38,14 +38,14 @@ insert into  tbl_01_0002 values(2);
 statement query I 
 select count(*) from tbl_01_0002 where a > 1;
 
-----  
+----
 1
 
 -- TODO sometimes get 0 here
 -- statement query I 
 -- select count(1) from system.query_log where query_text='select count(*) from tbl_01_0002 where a > 1' and scan_partitions = 1 and total_partitions = 2;
 
--- ----  
+-- ----
 -- 1
 
 statement ok

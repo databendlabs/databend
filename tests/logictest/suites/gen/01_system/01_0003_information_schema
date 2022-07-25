@@ -1,7 +1,7 @@
 statement query T 
 show tables from information_schema;
 
-----  
+----
 COLUMNS
 KEYWORDS
 SCHEMATA
@@ -11,7 +11,7 @@ VIEWS
 statement query T 
 SHOW TABLES FROM INFORMATION_SCHEMA;
 
-----  
+----
 COLUMNS
 KEYWORDS
 SCHEMATA
@@ -21,7 +21,7 @@ VIEWS
 statement query B label(http)
 select count(1) > 1 from information_schema.columns;
 
-----  
+----
 1
 
 ----  http
@@ -30,7 +30,7 @@ true
 statement query B label(http)
 select count(1) > 1 from information_Schema.Columns;
 
-----  
+----
 1
 
 ----  http
