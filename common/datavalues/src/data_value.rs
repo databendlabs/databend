@@ -136,9 +136,8 @@ impl DataValue {
                 ArrayType::new_impl(inner_type)
             }
             DataValue::Struct(vals) => {
-                let names = (0..vals.len()).map(|i| i.to_string()).collect::<Vec<_>>();
                 let types = vals.iter().map(|v| v.data_type()).collect::<Vec<_>>();
-                StructType::new_impl(names, types)
+                StructType::new_impl(None, types)
             }
             DataValue::Variant(_) => VariantType::new_impl(),
         }
@@ -166,9 +165,8 @@ impl DataValue {
                 ArrayType::new_impl(inner_type)
             }
             DataValue::Struct(vals) => {
-                let names = (0..vals.len()).map(|i| i.to_string()).collect::<Vec<_>>();
                 let types = vals.iter().map(|v| v.max_data_type()).collect::<Vec<_>>();
-                StructType::new_impl(names, types)
+                StructType::new_impl(None, types)
             }
             DataValue::Variant(_) => VariantType::new_impl(),
         }
@@ -509,8 +507,17 @@ impl fmt::Display for DataValue {
                         .join(", ")
                 )
             }
-            DataValue::Struct(v) => write!(f, "{:?}", v),
-            DataValue::Variant(v) => write!(f, "{:#}", v),
+            DataValue::Struct(v) => {
+                write!(
+                    f,
+                    "({})",
+                    v.iter()
+                        .map(|v| v.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            }
+            DataValue::Variant(v) => write!(f, "{}", v),
         }
     }
 }
@@ -525,8 +532,8 @@ impl fmt::Debug for DataValue {
             DataValue::Float64(v) => write!(f, "{}", v),
             DataValue::String(_) => write!(f, "{}", self),
             DataValue::Array(_) => write!(f, "{}", self),
-            DataValue::Struct(v) => write!(f, "{:?}", v),
-            DataValue::Variant(v) => write!(f, "{:#?}", v),
+            DataValue::Struct(_) => write!(f, "{}", self),
+            DataValue::Variant(v) => write!(f, "{}", v),
         }
     }
 }

@@ -120,7 +120,7 @@ fn new_table_meta() -> mt::TableMeta {
                 dv::DataField::new(
                     "struct",
                     dv::StructType::create(
-                        vec![s("foo"), s("bar")],
+                        Some(vec![s("foo"), s("bar")]),
                         vec![
                             dv::BooleanType::default().into(),
                             dv::StringType::default().into(),

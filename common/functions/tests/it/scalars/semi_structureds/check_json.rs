@@ -162,7 +162,7 @@ fn test_check_json_function() -> Result<()> {
                     Series::from_data(vec![1i8, 2i8, 3]),
                 ],
                 DataTypeImpl::Struct(StructType::create(
-                    vec!["date".to_owned(), "integer".to_owned()],
+                    Some(vec!["date".to_owned(), "integer".to_owned()]),
                     vec![DateType::new_impl(), Int8Type::new_impl()],
                 )),
             ))],

@@ -24,8 +24,6 @@ use crate::prelude::*;
 
 #[derive(Clone)]
 pub struct StructSerializer<'a> {
-    #[allow(unused)]
-    pub(crate) names: Vec<String>,
     pub(crate) inners: Vec<TypeSerializerImpl<'a>>,
     pub(crate) column: &'a ColumnRef,
 }
