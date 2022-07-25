@@ -24,10 +24,12 @@ use std::sync::Arc;
 use comfy_table::Table;
 use common_ast::DisplayError;
 use common_expression::type_check;
+use common_expression::types::string::StringColumn;
 use common_expression::types::ArrayType;
 use common_expression::types::DataType;
 use common_expression::types::*;
 use common_expression::vectorize_2_arg;
+use common_expression::vectorize_with_writer_2_arg;
 use common_expression::BooleanDomain;
 use common_expression::Chunk;
 use common_expression::Column;
@@ -355,10 +357,10 @@ pub fn test_pass() {
             "b",
             DataType::Nullable(Box::new(DataType::String)),
             Column::Nullable {
-                column: Box::new(Column::String {
+                column: Box::new(Column::String(StringColumn {
                     data: "abcde".as_bytes().to_vec().into(),
                     offsets: vec![0, 1, 2, 3, 4, 5].into(),
-                }),
+                })),
                 validity: vec![true, true, false, false, false].into(),
             },
         ),
@@ -376,10 +378,10 @@ pub fn test_pass() {
             "b",
             DataType::Nullable(Box::new(DataType::String)),
             Column::Nullable {
-                column: Box::new(Column::String {
+                column: Box::new(Column::String(StringColumn {
                     data: "abcde".as_bytes().to_vec().into(),
                     offsets: vec![0, 1, 2, 3, 4, 5].into(),
-                }),
+                })),
                 validity: vec![true, true, false, false, false].into(),
             },
         ),
@@ -534,6 +536,18 @@ pub fn test_pass() {
             ),
         ],
     );
+
+    run_ast(&mut file, "CAST(a AS INT16)", &[(
+        "a",
+        DataType::Float64,
+        Column::Float64(vec![0.0f64, 1.1, 2.2, 3.3, -4.4].into()),
+    )]);
+
+    run_ast(&mut file, "CAST(b AS INT16)", &[(
+        "b",
+        DataType::Int8,
+        Column::Int8(vec![0, 1, 2, 3, -4].into()),
+    )]);
 }
 
 #[test]
@@ -581,6 +595,12 @@ pub fn test_eval_fail() {
         "a",
         DataType::Int16,
         Column::Int16(vec![0, 1, 2, 3, -4].into()),
+    )]);
+
+    run_ast(&mut file, "CAST(c AS INT16)", &[(
+        "c",
+        DataType::Int64,
+        Column::Int64(vec![0, 11111111111, 2, 3, -4].into()),
     )]);
 }
 
@@ -772,17 +792,18 @@ fn builtin_functions() -> FunctionRegistry {
         }))
     });
 
-    registry.register_with_writer_2_arg::<ArrayType<GenericType<0>>, NumberType<i16>, GenericType<0>,_, _>(
+    registry.register_passthrough_nullable_2_arg::<ArrayType<GenericType<0>>, NumberType<i16>, GenericType<0>,_, _>(
         "get",
         FunctionProperty::default(),
         |item_domain, _| Some(item_domain.clone()),
-        |array, idx, output| {
+        vectorize_with_writer_2_arg::<ArrayType<GenericType<0>>, NumberType<i16>, GenericType<0>>(
+            |array, idx, output| {
             let item = array
                 .index(idx as usize)
                 .ok_or_else(|| format!("index out of bounds: the len is {} but the index is {}", array.len(), idx))?;
             output.push(item);
             Ok(())
-        },
+        }),
     );
 
     registry.register_function_factory("create_tuple", |_, args_type| {

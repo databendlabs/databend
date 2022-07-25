@@ -12,12 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_expression::FunctionRegistry;
+#![feature(try_blocks)]
 
-mod boolean;
-
-pub fn builtin_functions() -> FunctionRegistry {
-    let mut registry = FunctionRegistry::new();
-    boolean::register(&mut registry);
-    registry
-}
+mod scalars;

@@ -651,11 +651,11 @@ select toStartOfWeek(to_date(18769), 9);
 2021-05-17
 
 skipif clickhouse
-statement error 1068
+statement error 1079
 select toStartOfWeek(to_date('1000-01-01')); 
 
 skipif clickhouse
-statement error 1068
+statement error 1079
 select toStartOfWeek(to_datetime('1000-01-01 00:00:00')); 
 
 skipif clickhouse
@@ -743,11 +743,11 @@ select addYears(to_datetime(1582970400000000), cast(-50, INT8)); -- 2020-2-29T10
 1970-02-28 10:00:00.000000
 
 skipif clickhouse
-statement error 1068
+statement error 1079
 select addYears(to_date('9999-12-31'), 1); 
 
 skipif clickhouse
-statement error 1069
+statement error 1080
 select addYears(to_datetime('9999-12-31 23:59:59'), 1); 
 
 skipif clickhouse
@@ -793,11 +793,11 @@ select to_datetime(1582970400000000) -  interval '122' month;
 2009-12-29 10:00:00.000000
 
 skipif clickhouse
-statement error 1068
+statement error 1079
 select subtractMonths(to_date('1000-01-01'), 1); 
 
 skipif clickhouse
-statement error 1069
+statement error 1080
 select subtractMonths(to_datetime('1000-01-01 00:00:00'), 1); 
 
 skipif clickhouse
@@ -843,11 +843,11 @@ select to_datetime(1582970400000000) + interval '-1' day;
 2020-02-28 10:00:00.000000
 
 skipif clickhouse
-statement error 1068
+statement error 1079
 select addDays(to_date('9999-12-31'), 1); 
 
 skipif clickhouse
-statement error 1069
+statement error 1080
 select addDays(to_datetime('9999-12-31 23:59:59'), 1); 
 
 skipif clickhouse
@@ -886,11 +886,11 @@ select addHours(to_date(18321), cast(1.2, Float32));
 2020-02-29 01:00:00.000000
 
 skipif clickhouse
-statement error 1069
+statement error 1080
 select addHours(to_date('9999-12-31'), 24); 
 
 skipif clickhouse
-statement error 1069
+statement error 1080
 select addHours(to_datetime('9999-12-31 23:59:59'), 1); 
 
 skipif clickhouse
@@ -915,11 +915,11 @@ select subtractMinutes(to_datetime(1582970400000000), cast(1, INT32)); -- 2020-2
 2020-02-29 09:59:00.000000
 
 skipif clickhouse
-statement error 1069
+statement error 1080
 select subtractMinutes(to_date('1000-01-01'), 1); 
 
 skipif clickhouse
-statement error 1069
+statement error 1080
 select subtractMinutes(to_datetime('1000-01-01 00:00:00'), 1); 
 
 skipif clickhouse
