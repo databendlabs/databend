@@ -212,7 +212,7 @@ curl -I  http://127.0.0.1:28101/v1/health
 ### Deploying a Query Node
 a. Open the file `databend-query.toml` in the folder `/usr/local/databend/configs`, and replace `0.0.0.0` with `127.0.0.1` within the whole file.
 
-b. In the file `databend-query-node.toml`, set the parameter `type` in [storage] block to `s3` if you're using a S3 compatible object storage, or `azblob` if you're using Azure Blob storage.
+b. In the file `databend-query.toml`, set the parameter `type` in [storage] block to `s3` if you're using a S3 compatible object storage, or `azblob` if you're using Azure Blob storage.
 
 ```toml
 [storage]
