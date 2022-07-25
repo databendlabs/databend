@@ -12,6 +12,7 @@ test = false
 common-datablocks = { path = "../datablocks" }
 common-datavalues = { path = "../datavalues" }
 common-exception = { path = "../exception" }
+common-io= { path = "../io" }
 
 async-trait = "0.1.56"
 futures = "0.3.21"

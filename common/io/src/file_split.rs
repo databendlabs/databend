@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,23 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// https://github.com/rust-lang/rust-clippy/issues/8334
-#![allow(clippy::ptr_arg)]
-#![feature(can_vector)]
-#![feature(read_buf)]
-#![feature(slice_internals)]
-#![feature(maybe_uninit_slice)]
-#![feature(new_uninit)]
-
-pub mod prelude;
-
-mod binary_read;
-mod binary_write;
-
-mod buffer;
-mod file_split;
-mod format_settings;
-mod options_deserializer;
-mod position;
-mod stat_buffer;
-mod utils;
+#[derive(Debug)]
+pub struct FileSplit {
+    pub path: Option<String>,
+    pub start_offset: usize,
+    pub start_row: usize,
+    pub buf: Vec<u8>,
+}

@@ -1599,6 +1599,7 @@ dependencies = [
  "common-datablocks",
  "common-datavalues",
  "common-exception",
+ "common-io",
  "futures",
  "futures-util",
  "itertools",
