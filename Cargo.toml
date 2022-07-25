@@ -44,13 +44,16 @@ members = [
     # Meta
     "metasrv",
     # Tools
-    "tools/fuzz",
     "tools/metabench",
     "tools/metactl",
     # Hack
     # This crate is used to hack our cargo.lock to resovle CVEs and so on.
     "common/dep-hack",
 ]
+
+# cargo can't build fuzz targets with afl
+# split `fuzz` into seperate workspace can help resolve this.
+exclude = ["tools/fuzz"]
 
 [profile.release]
 debug = 1

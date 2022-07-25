@@ -53,6 +53,19 @@ impl Display for ShareAccountNameIdent {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct ShowShareReq {
+    pub share_name: ShareNameIdent,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct ShowShareReply {
+    pub share_name: ShareNameIdent,
+    pub share_id: u64,
+    pub share_meta: ShareMeta,
+    pub share_account_meta: Vec<ShareAccountMeta>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct CreateShareReq {
     pub if_not_exists: bool,
     pub share_name: ShareNameIdent,
