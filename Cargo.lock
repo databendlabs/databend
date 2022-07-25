@@ -1197,6 +1197,7 @@ dependencies = [
  "itertools",
  "match-template",
  "num-traits",
+ "ordered-float 1.1.1",
  "serde",
 ]
 
@@ -1260,6 +1261,17 @@ dependencies = [
  "strength_reduce",
  "twox-hash",
  "uuid 1.1.2",
+]
+
+[[package]]
+name = "common-functions-v2"
+version = "0.1.0"
+dependencies = [
+ "bstr",
+ "comfy-table",
+ "common-ast",
+ "common-expression",
+ "goldenfile",
 ]
 
 [[package]]

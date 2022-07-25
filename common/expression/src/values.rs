@@ -20,7 +20,18 @@ use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::arrow::buffer::Buffer;
 use common_arrow::arrow::trusted_len::TrustedLen;
 use enum_as_inner::EnumAsInner;
+use itertools::Itertools;
+use ordered_float::NotNan;
 
+use crate::property::BooleanDomain;
+use crate::property::Domain;
+use crate::property::FloatDomain;
+use crate::property::IntDomain;
+use crate::property::NullableDomain;
+use crate::property::StringDomain;
+use crate::property::UIntDomain;
+use crate::types::string::StringColumn;
+use crate::types::string::StringColumnBuilder;
 use crate::types::*;
 use crate::util::append_bitmap;
 use crate::util::bitmap_into_mut;
@@ -100,10 +111,7 @@ pub enum Column {
     Float32(Buffer<f32>),
     Float64(Buffer<f64>),
     Boolean(Bitmap),
-    String {
-        data: Buffer<u8>,
-        offsets: Buffer<u64>,
-    },
+    String(StringColumn),
     Array {
         array: Box<Column>,
         offsets: Buffer<u64>,
@@ -137,10 +145,7 @@ pub enum ColumnBuilder {
     Float32(Vec<f32>),
     Float64(Vec<f64>),
     Boolean(MutableBitmap),
-    String {
-        data: Vec<u8>,
-        offsets: Vec<u64>,
-    },
+    String(StringColumnBuilder),
     Array {
         array: Box<ColumnBuilder>,
         offsets: Vec<u64>,
@@ -271,7 +276,7 @@ impl<'a> ScalarRef<'a> {
                 let offsets = once(0)
                     .chain((0..n).map(|i| (len * (i + 1)) as u64))
                     .collect();
-                ColumnBuilder::String { data, offsets }
+                ColumnBuilder::String(StringColumnBuilder { data, offsets })
             }
             ScalarRef::Array(col) => {
                 let col = ColumnBuilder::from_column(col.clone());
@@ -312,7 +317,7 @@ impl Column {
             Column::Float32(col) => col.len(),
             Column::Float64(col) => col.len(),
             Column::Boolean(col) => col.len(),
-            Column::String { data: _, offsets } => offsets.len() - 1,
+            Column::String(col) => col.len(),
             Column::Array { array: _, offsets } => offsets.len() - 1,
             Column::Nullable {
                 column: _,
@@ -337,15 +342,7 @@ impl Column {
             Column::Float32(col) => Some(ScalarRef::Float32(col.get(index).cloned()?)),
             Column::Float64(col) => Some(ScalarRef::Float64(col.get(index).cloned()?)),
             Column::Boolean(col) => Some(ScalarRef::Boolean(col.get(index)?)),
-            Column::String { data, offsets } => {
-                if offsets.len() > index + 1 {
-                    Some(ScalarRef::String(
-                        &data[(offsets[index] as usize)..(offsets[index + 1] as usize)],
-                    ))
-                } else {
-                    None
-                }
-            }
+            Column::String(col) => col.index(index).map(ScalarRef::String),
             Column::Array { array, offsets } => {
                 if offsets.len() > index + 1 {
                     Some(ScalarRef::Array(array.slice(
@@ -416,15 +413,7 @@ impl Column {
             Column::Boolean(col) => {
                 Column::Boolean(col.clone().slice(range.start, range.end - range.start))
             }
-            Column::String { data, offsets } => {
-                let offsets = offsets
-                    .clone()
-                    .slice(range.start, range.end - range.start + 1);
-                Column::String {
-                    data: data.clone(),
-                    offsets,
-                }
-            }
+            Column::String(col) => Column::String(col.slice(range)),
             Column::Array { array, offsets } => {
                 let offsets = offsets
                     .clone()
@@ -456,6 +445,130 @@ impl Column {
             column: self,
             index: 0,
             len: self.len(),
+        }
+    }
+
+    pub fn domain(&self) -> Domain {
+        assert!(self.len() > 0);
+        match self {
+            Column::Null { .. } => Domain::Nullable(NullableDomain {
+                has_null: true,
+                value: None,
+            }),
+            Column::EmptyArray { .. } => Domain::Array(None),
+            Column::Int8(col) => {
+                let (min, max) = col.iter().minmax().into_option().unwrap();
+                Domain::Int(IntDomain {
+                    min: *min as i64,
+                    max: *max as i64,
+                })
+            }
+            Column::Int16(col) => {
+                let (min, max) = col.iter().minmax().into_option().unwrap();
+                Domain::Int(IntDomain {
+                    min: *min as i64,
+                    max: *max as i64,
+                })
+            }
+            Column::Int32(col) => {
+                let (min, max) = col.iter().minmax().into_option().unwrap();
+                Domain::Int(IntDomain {
+                    min: *min as i64,
+                    max: *max as i64,
+                })
+            }
+            Column::Int64(col) => {
+                let (min, max) = col.iter().minmax().into_option().unwrap();
+                Domain::Int(IntDomain {
+                    min: *min as i64,
+                    max: *max as i64,
+                })
+            }
+            Column::UInt8(col) => {
+                let (min, max) = col.iter().minmax().into_option().unwrap();
+                Domain::UInt(UIntDomain {
+                    min: *min as u64,
+                    max: *max as u64,
+                })
+            }
+            Column::UInt16(col) => {
+                let (min, max) = col.iter().minmax().into_option().unwrap();
+                Domain::UInt(UIntDomain {
+                    min: *min as u64,
+                    max: *max as u64,
+                })
+            }
+            Column::UInt32(col) => {
+                let (min, max) = col.iter().minmax().into_option().unwrap();
+                Domain::UInt(UIntDomain {
+                    min: *min as u64,
+                    max: *max as u64,
+                })
+            }
+            Column::UInt64(col) => {
+                let (min, max) = col.iter().minmax().into_option().unwrap();
+                Domain::UInt(UIntDomain {
+                    min: *min as u64,
+                    max: *max as u64,
+                })
+            }
+            Column::Float32(col) => {
+                // TODO: may panic if all values are NaN
+                let (min, max) = col
+                    .iter()
+                    .cloned()
+                    .map(NotNan::new)
+                    .filter_map(Result::ok)
+                    .minmax()
+                    .into_option()
+                    .unwrap();
+                Domain::Float(FloatDomain {
+                    // Cast to f32 and then to f64 to round to the nearest f32 value.
+                    min: *min as f32 as f64,
+                    max: *max as f32 as f64,
+                })
+            }
+            Column::Float64(col) => {
+                // TODO: may panic if all values are NaN
+                let (min, max) = col
+                    .iter()
+                    .cloned()
+                    .map(NotNan::new)
+                    .filter_map(Result::ok)
+                    .minmax()
+                    .into_option()
+                    .unwrap();
+                Domain::Float(FloatDomain {
+                    min: *min,
+                    max: *max,
+                })
+            }
+            Column::Boolean(col) => Domain::Boolean(BooleanDomain {
+                has_false: col.unset_bits() > 0,
+                has_true: col.len() - col.unset_bits() > 0,
+            }),
+            Column::String(col) => {
+                let (min, max) = StringType::iter_column(col).minmax().into_option().unwrap();
+                Domain::String(StringDomain {
+                    min: min.to_vec(),
+                    max: Some(max.to_vec()),
+                })
+            }
+            Column::Array { array, .. } => {
+                let inner_domain = array.domain();
+                Domain::Array(Some(Box::new(inner_domain)))
+            }
+            Column::Nullable { column, validity } => {
+                let inner_domain = column.domain();
+                Domain::Nullable(NullableDomain {
+                    has_null: validity.unset_bits() > 0,
+                    value: Some(Box::new(inner_domain)),
+                })
+            }
+            Column::Tuple { fields, .. } => {
+                let domains = fields.iter().map(|col| col.domain()).collect::<Vec<_>>();
+                Domain::Tuple(domains)
+            }
         }
     }
 
@@ -596,11 +709,11 @@ impl Column {
                 col.clone(),
                 None,
             )),
-            Column::String { data, offsets } => {
+            Column::String(col) => {
                 Box::new(common_arrow::arrow::array::BinaryArray::<i64>::from_data(
                     self.arrow_type(),
-                    offsets.iter().map(|offset| *offset as i64).collect(),
-                    data.clone(),
+                    col.offsets.iter().map(|offset| *offset as i64).collect(),
+                    col.data.clone(),
                     None,
                 ))
             }
@@ -734,10 +847,10 @@ impl Column {
                     .iter()
                     .map(|x| *x as u64)
                     .collect::<Vec<_>>();
-                Column::String {
+                Column::String(StringColumn {
                     data: arrow_col.values().clone(),
                     offsets: offsets.into(),
-                }
+                })
             }
             // TODO: deprecate it and use LargeBinary instead
             ArrowDataType::Binary => {
@@ -750,10 +863,10 @@ impl Column {
                     .iter()
                     .map(|x| *x as u64)
                     .collect::<Vec<_>>();
-                Column::String {
+                Column::String(StringColumn {
                     data: arrow_col.values().clone(),
                     offsets: offsets.into(),
-                }
+                })
             }
             // TODO: deprecate it and use LargeBinary instead
             ArrowDataType::Utf8 => {
@@ -766,10 +879,10 @@ impl Column {
                     .iter()
                     .map(|x| *x as u64)
                     .collect::<Vec<_>>();
-                Column::String {
+                Column::String(StringColumn {
                     data: arrow_col.values().clone(),
                     offsets: offsets.into(),
-                }
+                })
             }
             // TODO: deprecate it and use LargeBinary instead
             ArrowDataType::LargeUtf8 => {
@@ -782,10 +895,10 @@ impl Column {
                     .iter()
                     .map(|x| *x as u64)
                     .collect::<Vec<_>>();
-                Column::String {
+                Column::String(StringColumn {
                     data: arrow_col.values().clone(),
                     offsets: offsets.into(),
-                }
+                })
             }
             ArrowDataType::LargeList(_) => {
                 let arrow_col = arrow_col
@@ -848,10 +961,7 @@ impl ColumnBuilder {
             Column::Float32(col) => ColumnBuilder::Float32(buffer_into_mut(col)),
             Column::Float64(col) => ColumnBuilder::Float64(buffer_into_mut(col)),
             Column::Boolean(col) => ColumnBuilder::Boolean(bitmap_into_mut(col)),
-            Column::String { data, offsets } => ColumnBuilder::String {
-                data: buffer_into_mut(data),
-                offsets: offsets.to_vec(),
-            },
+            Column::String(col) => ColumnBuilder::String(StringColumnBuilder::from_column(col)),
             Column::Array { array, offsets } => ColumnBuilder::Array {
                 array: Box::new(ColumnBuilder::from_column(*array)),
                 offsets: offsets.to_vec(),
@@ -885,7 +995,7 @@ impl ColumnBuilder {
             ColumnBuilder::Float32(col) => col.len(),
             ColumnBuilder::Float64(col) => col.len(),
             ColumnBuilder::Boolean(col) => col.len(),
-            ColumnBuilder::String { data: _, offsets } => offsets.len() - 1,
+            ColumnBuilder::String(col) => col.len(),
             ColumnBuilder::Array { array: _, offsets } => offsets.len() - 1,
             ColumnBuilder::Nullable {
                 column: _,
@@ -901,12 +1011,7 @@ impl ColumnBuilder {
             DataType::EmptyArray => ColumnBuilder::EmptyArray { len: 0 },
             DataType::Boolean => ColumnBuilder::Boolean(MutableBitmap::with_capacity(capacity)),
             DataType::String => {
-                let mut offsets = Vec::with_capacity(capacity + 1);
-                offsets.push(0);
-                ColumnBuilder::String {
-                    data: Vec::new(),
-                    offsets,
-                }
+                ColumnBuilder::String(StringColumnBuilder::with_capacity(capacity, 0))
             }
             DataType::UInt8 => ColumnBuilder::UInt8(Vec::with_capacity(capacity)),
             DataType::UInt16 => ColumnBuilder::UInt16(Vec::with_capacity(capacity)),
@@ -952,9 +1057,9 @@ impl ColumnBuilder {
             (ColumnBuilder::UInt8(col), ScalarRef::UInt8(value)) => col.push(value),
             (ColumnBuilder::UInt16(col), ScalarRef::UInt16(value)) => col.push(value),
             (ColumnBuilder::Boolean(col), ScalarRef::Boolean(value)) => col.push(value),
-            (ColumnBuilder::String { data, offsets }, ScalarRef::String(value)) => {
-                data.extend_from_slice(value);
-                offsets.push(data.len() as u64);
+            (ColumnBuilder::String(col), ScalarRef::String(value)) => {
+                col.put_slice(value);
+                col.commit_row();
             }
             (ColumnBuilder::Array { array, offsets }, ScalarRef::Array(value)) => {
                 array.append(&ColumnBuilder::from_column(value));
@@ -994,8 +1099,8 @@ impl ColumnBuilder {
             ColumnBuilder::Float32(col) => col.push(0f32),
             ColumnBuilder::Float64(col) => col.push(0f64),
             ColumnBuilder::Boolean(col) => col.push(false),
-            ColumnBuilder::String { data, offsets } => {
-                offsets.push(data.len() as u64);
+            ColumnBuilder::String(col) => {
+                col.commit_row();
             }
             ColumnBuilder::Array { array, offsets } => {
                 offsets.push(array.len() as u64);
@@ -1036,16 +1141,8 @@ impl ColumnBuilder {
             (ColumnBuilder::Boolean(builder), ColumnBuilder::Boolean(other_builder)) => {
                 append_bitmap(builder, other_builder);
             }
-            (
-                ColumnBuilder::String { data, offsets },
-                ColumnBuilder::String {
-                    data: other_data,
-                    offsets: other_offsets,
-                },
-            ) => {
-                data.extend_from_slice(other_data);
-                let start = offsets.last().cloned().unwrap();
-                offsets.extend(other_offsets.iter().skip(1).map(|offset| start + offset));
+            (ColumnBuilder::String(builder), ColumnBuilder::String(other_builder)) => {
+                builder.append(other_builder);
             }
             (
                 ColumnBuilder::Array { array, offsets },
@@ -1100,10 +1197,7 @@ impl ColumnBuilder {
             ColumnBuilder::Float32(builder) => Column::Float32(builder.into()),
             ColumnBuilder::Float64(builder) => Column::Float64(builder.into()),
             ColumnBuilder::Boolean(builder) => Column::Boolean(builder.into()),
-            ColumnBuilder::String { data, offsets } => Column::String {
-                data: data.into(),
-                offsets: offsets.into(),
-            },
+            ColumnBuilder::String(builder) => Column::String(builder.build()),
             ColumnBuilder::Array { array, offsets } => Column::Array {
                 array: Box::new(array.build()),
                 offsets: offsets.into(),
@@ -1135,9 +1229,7 @@ impl ColumnBuilder {
             ColumnBuilder::Float32(builder) => Scalar::Float32(builder[0]),
             ColumnBuilder::Float64(builder) => Scalar::Float64(builder[0]),
             ColumnBuilder::Boolean(builder) => Scalar::Boolean(builder.get(0)),
-            ColumnBuilder::String { data, offsets } => {
-                Scalar::String(data[(offsets[0] as usize)..(offsets[1] as usize)].to_vec())
-            }
+            ColumnBuilder::String(builder) => Scalar::String(builder.build_scalar()),
             ColumnBuilder::Array { array, offsets } => Scalar::Array(
                 array
                     .build()
