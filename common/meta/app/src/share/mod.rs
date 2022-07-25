@@ -42,3 +42,5 @@ pub use share::ShareIdent;
 pub use share::ShareInfo;
 pub use share::ShareMeta;
 pub use share::ShareNameIdent;
+pub use share::ShowShareReply;
+pub use share::ShowShareReq;

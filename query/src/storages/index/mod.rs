@@ -14,7 +14,6 @@
 
 mod bloom_filter;
 mod index_min_max;
-mod index_sparse;
 pub mod range_filter;
 pub use bloom_filter::BloomFilter;
 pub use bloom_filter::BloomFilterExprEvalResult;
@@ -24,8 +23,6 @@ use common_datavalues::DataType;
 use common_datavalues::DataTypeImpl;
 use common_datavalues::NullableType;
 pub use index_min_max::MinMaxIndex;
-pub use index_sparse::SparseIndex;
-pub use index_sparse::SparseIndexValue;
 pub use range_filter::ClusterKeyInfo;
 pub use range_filter::RangeFilter;
 
