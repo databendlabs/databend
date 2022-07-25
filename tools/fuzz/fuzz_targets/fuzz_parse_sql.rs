@@ -12,14 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_query::sessions::SessionType;
-use databend_query::sql::DfParser;
-use honggfuzz::fuzz;
+#[macro_use]
+extern crate afl;
+
+use common_ast::parser::parse_expr;
+use common_ast::parser::tokenize_sql;
+use common_ast::Backtrace;
 
 fn main() {
     loop {
-        fuzz!(|data: String| {
-            let _ = DfParser::parse_sql(&data, SessionType::Fuzz);
+        fuzz!(|text: String| {
+            let backtrace = Backtrace::new();
+            let tokens = tokenize_sql(&text).unwrap();
+            let _ = parse_expr(&tokens, &backtrace);
         });
     }
 }

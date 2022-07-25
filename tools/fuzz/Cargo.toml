@@ -11,5 +11,7 @@ doctest = false
 test = false
 
 [dependencies]
-databend-query = { path = "../../query" }
-honggfuzz = "0.5.54"
+common-ast = { path = "../../common/ast" }
+
+afl = "0.12"
+arbitrary = "1.1.3"
