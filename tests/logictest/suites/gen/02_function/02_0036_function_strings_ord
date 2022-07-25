@@ -1,34 +1,34 @@
-statement query T 
+statement query T
 SELECT ORD(NULL);
 
 ----
 NULL
 
-statement query I 
+statement query I
 SELECT ORD('и');
 
 ----
 53432
 
-statement query I 
+statement query I
 SELECT ORD('早ab');
 
 ----
 15112105
 
-statement query I 
+statement query I
 SELECT ORD('💖');
 
 ----
 4036989590
 
-statement query I 
+statement query I
 SELECT ORD('a💖');
 
 ----
 97
 
-statement query I 
+statement query I
 SELECT ORD('💖a');
 
 ----

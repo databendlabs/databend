@@ -1,82 +1,82 @@
-statement query I 
+statement query I
 SELECT FIND_IN_SET('a', 'a');
 
 ----
 1
 
-statement query I 
+statement query I
 SELECT FIND_IN_SET('a', ',a');
 
 ----
 2
 
-statement query I 
+statement query I
 SELECT FIND_IN_SET('a', 'a,');
 
 ----
 1
 
-statement query I 
+statement query I
 SELECT FIND_IN_SET('a', ',,a,');
 
 ----
 3
 
-statement query I 
+statement query I
 SELECT FIND_IN_SET('a', '1,2,a,4,5');
 
 ----
 3
 
-statement query I 
+statement query I
 SELECT FIND_IN_SET('a', '1,2,a,4,5');
 
 ----
 3
 
-statement query I 
+statement query I
 SELECT FIND_IN_SET('a', '1,2,a,');
 
 ----
 3
 
-statement query I 
+statement query I
 SELECT FIND_IN_SET('a', ',1,2,a');
 
 ----
 4
 
-statement query I 
+statement query I
 SELECT FIND_IN_SET('ab', '1,2,ab,3,4,5');
 
 ----
 3
 
-statement query I 
+statement query I
 SELECT FIND_IN_SET('ab', '1,2,ab,');
 
 ----
 3
 
-statement query I 
+statement query I
 SELECT FIND_IN_SET('ab', '1,2,ab');
 
 ----
 3
 
-statement query I 
+statement query I
 SELECT FIND_IN_SET('ab', ',ab');
 
 ----
 2
 
-statement query I 
+statement query I
 SELECT FIND_IN_SET('ab', 'ab');
 
 ----
 1
 
-statement query I 
+statement query I
 SELECT FIND_IN_SET('3', to_varchar(number))  FROM numbers(5) ORDER BY number;
 
 ----
@@ -86,7 +86,7 @@ SELECT FIND_IN_SET('3', to_varchar(number))  FROM numbers(5) ORDER BY number;
 1
 0
 
-statement query I 
+statement query I
 SELECT FIND_IN_SET(to_varchar(number), '1,2,3,4,5')  FROM numbers(5) ORDER BY number;
 
 ----
@@ -96,19 +96,19 @@ SELECT FIND_IN_SET(to_varchar(number), '1,2,3,4,5')  FROM numbers(5) ORDER BY nu
 3
 4
 
-statement query T 
+statement query T
 SELECT FIND_IN_SET(NULL, NULL);
 
 ----
 NULL
 
-statement query T 
+statement query T
 SELECT FIND_IN_SET('abc', NULL);
 
 ----
 NULL
 
-statement query T 
+statement query T
 SELECT FIND_IN_SET(NULL, 'abc,cdf');
 
 ----

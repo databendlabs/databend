@@ -19,13 +19,13 @@ INSERT INTO t1 VALUES(55.72076201, 37.59813500, 15);
 statement ok
 INSERT INTO t1 VALUES(55.72076200, 37.59813500, 14);
 
-statement query I 
+statement query I
 select geo_to_h3(37.63098076, 55.77922738, 15);
 
 ----
 644325529094369568
 
-statement query I 
+statement query I
 select geo_to_h3(lon, lat, resolution) from t1 order by lat, lon, resolution;
 
 ----

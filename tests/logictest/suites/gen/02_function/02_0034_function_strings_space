@@ -1,4 +1,4 @@
-statement query T 
+statement query T
 SELECT SPACE(NULL);
 
 ----

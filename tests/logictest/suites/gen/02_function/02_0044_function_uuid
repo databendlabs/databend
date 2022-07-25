@@ -16,7 +16,7 @@ SELECT IGNORE(gen_random_uuid());
 ---- http
 false
 
-statement query T 
+statement query T
 SELECT gen_zero_uuid();
 
 ----

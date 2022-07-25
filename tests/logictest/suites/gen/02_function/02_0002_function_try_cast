@@ -1,28 +1,28 @@
-statement query F 
+statement query F
 SELECT try_cast(1 + 1, Float64);
 
 ----
 2.0
 
-statement query I 
+statement query I
 SELECT try_cast(try_cast(1 + 1 + 1, String) AS Int8);
 
 ----
 3
 
-statement query I 
+statement query I
 SELECT try_cast(Null as Int64);
 
 ----
 NULL
 
-statement query T 
+statement query T
 SELECT try_cast(Null as Varchar);
 
 ----
 NULL
 
-statement query B 
+statement query B
 SELECT try_cast(Null as Boolean);
 
 ----

@@ -34,28 +34,28 @@ INSERT INTO strings_repeat_sample_u32 VALUES ('abc', 3), ('abc', 0);
 statement ok
 INSERT INTO strings_repeat_sample_u64 VALUES ('abc', 3), ('abc', 0);
 
-statement query T 
+statement query T
 select repeat(s, n) from strings_repeat_sample_u8;
 
 ----
 abcabcabc
 	
 
-statement query T 
+statement query T
 select repeat(s, n) from strings_repeat_sample_u16;
 
 ----
 abcabcabc
 	
 
-statement query T 
+statement query T
 select repeat(s, n) from strings_repeat_sample_u32;
 
 ----
 abcabcabc
 	
 
-statement query T 
+statement query T
 select repeat(s, n) from strings_repeat_sample_u64;
 
 ----
@@ -74,7 +74,7 @@ drop table strings_repeat_sample_u32;
 statement ok
 drop table strings_repeat_sample_u64;
 
-statement query T 
+statement query T
 select repeat('abc', 3);
 
 ----
@@ -107,28 +107,28 @@ INSERT INTO strings_repeat_sample_2_u32 VALUES (3), (0);
 statement ok
 INSERT INTO strings_repeat_sample_2_u64 VALUES (3), (0);
 
-statement query T 
+statement query T
 select repeat('abc', n) from strings_repeat_sample_2_u8;
 
 ----
 abcabcabc
 	
 
-statement query T 
+statement query T
 select repeat('abc', n) from strings_repeat_sample_2_u16;
 
 ----
 abcabcabc
 	
 
-statement query T 
+statement query T
 select repeat('abc', n) from strings_repeat_sample_2_u32;
 
 ----
 abcabcabc
 	
 
-statement query T 
+statement query T
 select repeat('abc', n) from strings_repeat_sample_2_u64;
 
 ----
@@ -153,7 +153,7 @@ CREATE TABLE strings_repeat_sample_3(s String) Engine = Fuse;
 statement ok
 INSERT INTO strings_repeat_sample_3 VALUES ('abc'), ('def');
 
-statement query T 
+statement query T
 select repeat(s, 3) from strings_repeat_sample_3;
 
 ----

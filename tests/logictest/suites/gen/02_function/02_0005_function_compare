@@ -25,7 +25,7 @@ SELECT number ,number-1 , number*100 , 1> 100 ,1 < 10 FROM numbers_mt (10) order
 8 7 800 false true
 9 8 900 false true
 
-statement query I 
+statement query I
 select number from numbers_mt(10) where number not between 4 + 0.1  and 8 - 0.1 order by number;
 
 ----
@@ -37,7 +37,7 @@ select number from numbers_mt(10) where number not between 4 + 0.1  and 8 - 0.1 
 8
 9
 
-statement query I 
+statement query I
 select number from numbers_mt(10) where number between 4 + 0.1  and 8 - 0.1  order by number;
 
 ----
@@ -45,13 +45,13 @@ select number from numbers_mt(10) where number between 4 + 0.1  and 8 - 0.1  ord
 6
 7
 
-statement query T 
+statement query T
 select * from system.databases where name like '%sys%';
 
 ----
 system
 
-statement query T 
+statement query T
 select * from system.databases where name like '_ef_ul_';
 
 ----
@@ -75,14 +75,14 @@ select '%' like '\\%';
 ---- http
 true
 
-statement query T 
+statement query T
 select * from system.databases where name not like '%sys%' order by name;
 
 ----
 INFORMATION_SCHEMA
 default
 
-statement query T 
+statement query T
 select * from system.databases where name not like '_ef_ul_' order by name;
 
 ----
@@ -104,19 +104,19 @@ select * from numbers(10) where null = true;
 statement ok
 select * from numbers(10) where null and true;
 
-statement query T 
+statement query T
 select '==compare_regexp==';
 
 ----
 ==compare_regexp==
 
-statement query T 
+statement query T
 select * from system.databases where name regexp '^sys';
 
 ----
 system
 
-statement query T 
+statement query T
 select * from system.databases where name regexp 'ef+.ul+.';
 
 ----
@@ -131,13 +131,13 @@ select 'foo' regexp 'FOO';
 ---- http
 true
 
-statement query T 
+statement query T
 select * from system.databases where name rlike '^sys';
 
 ----
 system
 
-statement query T 
+statement query T
 select * from system.databases where name rlike 'ef+.ul+.';
 
 ----

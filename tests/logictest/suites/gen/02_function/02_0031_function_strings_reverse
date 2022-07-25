@@ -1,4 +1,4 @@
-statement query T 
+statement query T
 SELECT REVERSE(NULL);
 
 ----
@@ -7,7 +7,7 @@ NULL
 statement ok
 SELECT REVERSE('');
 
-statement query T 
+statement query T
 SELECT REVERSE('abc');
 
 ----

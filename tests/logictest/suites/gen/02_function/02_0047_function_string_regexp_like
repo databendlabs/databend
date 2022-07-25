@@ -1,10 +1,10 @@
-statement query T 
+statement query T
 select * from system.databases where regexp_like(name, '^sys') ;
 
 ----
 system
 
-statement query T 
+statement query T
 select * from system.databases where regexp_like(name, 'ef+.ul+.') ;
 
 ----
@@ -19,19 +19,19 @@ select regexp_like('foo', 'FOO');
 ---- http
 true
 
-statement query T 
+statement query T
 select regexp_like('foo', null);
 
 ----
 NULL
 
-statement query T 
+statement query T
 select regexp_like(null, null);
 
 ----
 NULL
 
-statement query T 
+statement query T
 select regexp_like('foo', 'FOO', null);
 
 ----

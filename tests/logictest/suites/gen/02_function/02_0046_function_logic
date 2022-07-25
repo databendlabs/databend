@@ -43,7 +43,7 @@ SELECT 1 and 1;
 ---- http
 true
 
-statement query B 
+statement query B
 SELECT 1 and null;
 
 ----
@@ -58,13 +58,13 @@ SELECT 0 and null;
 ---- http
 false
 
-statement query B 
+statement query B
 SELECT null and null;
 
 ----
 NULL
 
-statement query I 
+statement query I
 SELECT number from numbers(10) WHERE number > 5 AND number < 8 ORDER BY number;
 
 ----
@@ -134,7 +134,7 @@ SELECT 1 OR null;
 ---- http
 true
 
-statement query B 
+statement query B
 SELECT 0 OR null;
 
 ----
@@ -149,13 +149,13 @@ SELECT null OR 1;
 ---- http
 true
 
-statement query B 
+statement query B
 SELECT null OR null;
 
 ----
 NULL
 
-statement query I 
+statement query I
 SELECT number from numbers(10) WHERE number > 7 OR number < 2 ORDER BY number;
 
 ----
@@ -200,13 +200,13 @@ SELECT false XOR true;
 ---- http
 true
 
-statement query T 
+statement query T
 SELECT null XOR true;
 
 ----
 NULL
 
-statement query T 
+statement query T
 SELECT false XOR null;
 
 ----
@@ -248,7 +248,7 @@ SELECT not 0;
 ---- http
 true
 
-statement query T 
+statement query T
 SELECT not null;
 
 ----

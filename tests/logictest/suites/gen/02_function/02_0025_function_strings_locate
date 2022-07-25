@@ -1,40 +1,40 @@
-statement query I 
+statement query I
 SELECT LOCATE('bar', 'foobarbar');
 
 ----
 4
 
-statement query I 
+statement query I
 SELECT LOCATE('xbar', 'foobar');
 
 ----
 0
 
-statement query I 
+statement query I
 SELECT LOCATE('bar', 'foobarbar', 5);
 
 ----
 7
 
-statement query I 
+statement query I
 SELECT POSITION('bar' IN 'foobarbar');
 
 ----
 4
 
-statement query I 
+statement query I
 SELECT POSITION('xbar' IN 'foobar');
 
 ----
 0
 
-statement query I 
+statement query I
 SELECT INSTR('foobarbar', 'bar');
 
 ----
 4
 
-statement query I 
+statement query I
 SELECT INSTR('foobar', 'xbar');
 
 ----

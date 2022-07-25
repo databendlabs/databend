@@ -20,14 +20,14 @@ NULL 1 2 1
 NULL true 2 true
 3 false 3 true
 
-statement query I 
+statement query I
 SELECT a FROM nullable_test WHERE a is Not Null ORDER BY c;
 
 ----
 1
 3
 
-statement query I 
+statement query I
 SELECT b FROM nullable_test WHERE a is Null ORDER BY c;
 
 ----
@@ -36,7 +36,7 @@ SELECT b FROM nullable_test WHERE a is Null ORDER BY c;
 statement error 1007
 SELECT assume_not_null(null); 
 
-statement query III 
+statement query III
 SELECT assume_not_null(a), assume_not_null(b), assume_not_null(c) from nullable_test ORDER BY c;
 
 ----
@@ -44,7 +44,7 @@ SELECT assume_not_null(a), assume_not_null(b), assume_not_null(c) from nullable_
 0 2 2
 3 3 3
 
-statement query IT 
+statement query IT
 SELECT to_nullable(3), to_nullable(null);
 
 ----

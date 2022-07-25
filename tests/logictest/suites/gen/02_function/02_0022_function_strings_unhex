@@ -1,4 +1,4 @@
-statement query T 
+statement query T
 select unhex('616263');
 
 ----
@@ -7,13 +7,13 @@ abc
 statement error 1054
 select unhex('hello'); 
 
-statement query T 
+statement query T
 select unhex(hex('hello'));
 
 ----
 hello
 
-statement query T 
+statement query T
 select unhex(null);
 
 ----

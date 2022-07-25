@@ -1,40 +1,40 @@
-statement query T 
+statement query T
 SELECT LPAD(NULL, NULL, NULL);
 
 ----
 NULL
 
-statement query T 
+statement query T
 SELECT LPAD('a', NULL, NULL);
 
 ----
 NULL
 
-statement query T 
+statement query T
 SELECT LPAD(NULL, 1, NULL);
 
 ----
 NULL
 
-statement query T 
+statement query T
 SELECT LPAD('a', 1, NULL);
 
 ----
 NULL
 
-statement query T 
+statement query T
 SELECT LPAD(NULL, NULL, 'b');
 
 ----
 NULL
 
-statement query T 
+statement query T
 SELECT LPAD('a', NULL, 'b');
 
 ----
 NULL
 
-statement query T 
+statement query T
 SELECT LPAD(NULL, 1, 'b');
 
 ----
@@ -43,7 +43,7 @@ NULL
 statement ok
 SELECT LPAD('', 0, '');
 
-statement query T 
+statement query T
 SELECT LPAD('', 10, 'abcde');
 
 ----
@@ -55,31 +55,31 @@ SELECT LPAD('12345', 0, '');
 statement ok
 SELECT LPAD('12345', 0, 'a');
 
-statement query T 
+statement query T
 SELECT LPAD('12345', 1, 'a');
 
 ----
 1
 
-statement query T 
+statement query T
 SELECT LPAD('12345', 10, 'a');
 
 ----
 aaaaa12345
 
-statement query T 
+statement query T
 SELECT LPAD('12345', 10, 'abc');
 
 ----
 abcab12345
 
-statement query T 
+statement query T
 SELECT LPAD('12345', 10, 'abcde');
 
 ----
 abcde12345
 
-statement query T 
+statement query T
 SELECT LPAD(to_varchar(number), 3, 'a') FROM numbers(5) ORDER BY number;
 
 ----
@@ -89,7 +89,7 @@ aa2
 aa3
 aa4
 
-statement query T 
+statement query T
 SELECT LPAD('1', number, 'a') FROM numbers(5) ORDER BY number;
 
 ----
@@ -99,7 +99,7 @@ a1
 aa1
 aaa1
 
-statement query T 
+statement query T
 SELECT LPAD(to_varchar(number), number, 'a') FROM numbers(5) ORDER BY number;
 
 ----
@@ -109,7 +109,7 @@ a2
 aa3
 aaa4
 
-statement query T 
+statement query T
 SELECT LPAD('1', 3, to_varchar(number)) FROM numbers(5) ORDER BY number;
 
 ----
@@ -119,7 +119,7 @@ SELECT LPAD('1', 3, to_varchar(number)) FROM numbers(5) ORDER BY number;
 331
 441
 
-statement query T 
+statement query T
 SELECT LPAD(to_varchar(number), 3, to_varchar(number)) FROM numbers(5) ORDER BY number;
 
 ----
@@ -129,7 +129,7 @@ SELECT LPAD(to_varchar(number), 3, to_varchar(number)) FROM numbers(5) ORDER BY 
 333
 444
 
-statement query T 
+statement query T
 SELECT LPAD('1', number, to_varchar(number)) FROM numbers(5) ORDER BY number;
 
 ----
@@ -139,7 +139,7 @@ SELECT LPAD('1', number, to_varchar(number)) FROM numbers(5) ORDER BY number;
 331
 4441
 
-statement query T 
+statement query T
 SELECT LPAD(to_varchar(number), number, to_varchar(number)) FROM numbers(5) ORDER BY number;
 
 ----
@@ -149,43 +149,43 @@ SELECT LPAD(to_varchar(number), number, to_varchar(number)) FROM numbers(5) ORDE
 333
 4444
 
-statement query T 
+statement query T
 SELECT RPAD(NULL, NULL, NULL);
 
 ----
 NULL
 
-statement query T 
+statement query T
 SELECT RPAD('a', NULL, NULL);
 
 ----
 NULL
 
-statement query T 
+statement query T
 SELECT RPAD(NULL, 1, NULL);
 
 ----
 NULL
 
-statement query T 
+statement query T
 SELECT RPAD('a', 1, NULL);
 
 ----
 NULL
 
-statement query T 
+statement query T
 SELECT RPAD(NULL, NULL, 'b');
 
 ----
 NULL
 
-statement query T 
+statement query T
 SELECT RPAD('a', NULL, 'b');
 
 ----
 NULL
 
-statement query T 
+statement query T
 SELECT RPAD(NULL, 1, 'b');
 
 ----
@@ -194,7 +194,7 @@ NULL
 statement ok
 SELECT RPAD('', 0, '');
 
-statement query T 
+statement query T
 SELECT RPAD('', 10, 'abcde');
 
 ----
@@ -206,31 +206,31 @@ SELECT RPAD('12345', 0, '');
 statement ok
 SELECT RPAD('12345', 0, 'a');
 
-statement query T 
+statement query T
 SELECT RPAD('12345', 1, 'a');
 
 ----
 1
 
-statement query T 
+statement query T
 SELECT RPAD('12345', 10, 'a');
 
 ----
 12345aaaaa
 
-statement query T 
+statement query T
 SELECT RPAD('12345', 10, 'abc');
 
 ----
 12345abcab
 
-statement query T 
+statement query T
 SELECT RPAD('12345', 10, 'abcde');
 
 ----
 12345abcde
 
-statement query T 
+statement query T
 SELECT RPAD(to_varchar(number), 3, 'a') FROM numbers(5) ORDER BY number;
 
 ----
@@ -240,7 +240,7 @@ SELECT RPAD(to_varchar(number), 3, 'a') FROM numbers(5) ORDER BY number;
 3aa
 4aa
 
-statement query T 
+statement query T
 SELECT RPAD('1', number, 'a') FROM numbers(5) ORDER BY number;
 
 ----
@@ -250,7 +250,7 @@ SELECT RPAD('1', number, 'a') FROM numbers(5) ORDER BY number;
 1aa
 1aaa
 
-statement query T 
+statement query T
 SELECT RPAD(to_varchar(number), number, 'a') FROM numbers(5) ORDER BY number;
 
 ----
@@ -260,7 +260,7 @@ SELECT RPAD(to_varchar(number), number, 'a') FROM numbers(5) ORDER BY number;
 3aa
 4aaa
 
-statement query T 
+statement query T
 SELECT RPAD('1', 3, to_varchar(number)) FROM numbers(5) ORDER BY number;
 
 ----
@@ -270,7 +270,7 @@ SELECT RPAD('1', 3, to_varchar(number)) FROM numbers(5) ORDER BY number;
 133
 144
 
-statement query T 
+statement query T
 SELECT RPAD(to_varchar(number), 3, to_varchar(number)) FROM numbers(5) ORDER BY number;
 
 ----
@@ -280,7 +280,7 @@ SELECT RPAD(to_varchar(number), 3, to_varchar(number)) FROM numbers(5) ORDER BY 
 333
 444
 
-statement query T 
+statement query T
 SELECT RPAD('1', number, to_varchar(number)) FROM numbers(5) ORDER BY number;
 
 ----
@@ -290,7 +290,7 @@ SELECT RPAD('1', number, to_varchar(number)) FROM numbers(5) ORDER BY number;
 133
 1444
 
-statement query T 
+statement query T
 SELECT RPAD(to_varchar(number), number, to_varchar(number)) FROM numbers(5) ORDER BY number;
 
 ----

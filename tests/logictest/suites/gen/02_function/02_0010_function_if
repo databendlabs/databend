@@ -11,7 +11,7 @@ false
 false
 true
 
-statement query I 
+statement query I
 select if(number>1, number, 1) from numbers(3) order by number;
 
 ----
@@ -19,7 +19,7 @@ select if(number>1, number, 1) from numbers(3) order by number;
 1
 2
 
-statement query I 
+statement query I
 select if(number<1, 2, number) from numbers(3) order by number;
 
 ----
@@ -27,7 +27,7 @@ select if(number<1, 2, number) from numbers(3) order by number;
 1
 2
 
-statement query T 
+statement query T
 select if(number>0, 'Z+', 'zero') from numbers(3) order by number;
 
 ----
@@ -48,19 +48,19 @@ true
 NULL
 NULL
 
-statement query T 
+statement query T
 select typeof(if(number % 3 = 0, to_uint32(1), to_int64(3))) from numbers(10) limit 1;
 
 ----
 BIGINT
 
-statement query T 
+statement query T
 select typeof(if(number % 3 = 0, to_uint32(1), to_float32(3))) from numbers(10) limit 1;
 
 ----
 DOUBLE
 
-statement query I 
+statement query I
 SELECT if (number % 3 = 1, null, number) as a FROM numbers(7) order by number;
 
 ----
@@ -72,7 +72,7 @@ NULL
 5
 6
 
-statement query T 
+statement query T
 SELECT 'multi-if';
 
 ----
@@ -87,25 +87,25 @@ select multi_if(number = 4, 3, number = 5, null, number = 6, 'a', null) from num
 statement error 1028
 select multi_if(number = 4, 3, number = 2, 4) from numbers(1); 
 
-statement query IIII 
+statement query IIII
 select count_if(a = '1'), count_if(a = '2'), count_if(a = '3'), count_if(a is null) from (	SELECT multi_if (number % 4 = 1, '1', number % 4 = 2, '2', number % 4 = 3, '3', null) as a FROM numbers(100));
 
 ----
 25 25 25 25
 
-statement query T 
+statement query T
 SELECT 'constant';
 
 ----
 constant
 
-statement query II 
+statement query II
 select if(true, null, number), if(false, null, number) from numbers(1);
 
 ----
 NULL 0
 
-statement query II 
+statement query II
 select if(true, number, null), if(false, number, null) from numbers(1);
 
 ----

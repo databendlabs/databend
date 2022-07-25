@@ -1,7 +1,7 @@
 statement ok
 set max_threads = 1;
 
-statement query T 
+statement query T
 EXPLAIN SELECT mIn(number) from numbers_mt(10);
 
 ----

@@ -1,11 +1,11 @@
-statement query I 
+statement query I
 SELECT number from numbers_mt(10) WHERE number+1 IN (2, 3 ,20) ORDER BY number;
 
 ----
 1
 2
 
-statement query I 
+statement query I
 SELECT number from numbers_mt(10000) WHERE number+1 IN (2, 3 ,20, 5000) ORDER BY number;
 
 ----
@@ -14,7 +14,7 @@ SELECT number from numbers_mt(10000) WHERE number+1 IN (2, 3 ,20, 5000) ORDER BY
 19
 4999
 
-statement query I 
+statement query I
 SELECT number from numbers_mt(10) WHERE number+1 not IN (2, 3 ,20, 5000) ORDER BY number;
 
 ----
@@ -27,7 +27,7 @@ SELECT number from numbers_mt(10) WHERE number+1 not IN (2, 3 ,20, 5000) ORDER B
 8
 9
 
-statement query T 
+statement query T
 SELECT NULL IN (1, 2, 3);
 
 ----
