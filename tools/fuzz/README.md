@@ -18,7 +18,7 @@ cargo afl build
 Fuzz with the `fuzz_parse_sql` target:
 
 ```shell
-cargo afl fuzz -i in -o out ../../target/debug/fuzz_parse_sql
+cargo afl fuzz -i in -o out target/debug/fuzz_parse_sql
 ```
 
 For more information, please check <https://rust-fuzz.github.io/book/afl/tutorial.html>
