@@ -45,6 +45,7 @@ fn test_upper(file: &mut impl Write) {
         build_string_column(&["Abc", "Dobrý den", "ß😀山"]),
     )]);
 }
+
 fn test_lower(file: &mut impl Write) {
     run_ast(file, "lower('Abc')", &[]);
     run_ast(file, "lower('DOBRÝ DEN')", &[]);

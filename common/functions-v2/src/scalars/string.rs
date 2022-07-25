@@ -50,26 +50,29 @@ pub fn register(registry: &mut FunctionRegistry) {
     );
     registry.register_aliases("upper", &["ucase"]);
 
-    registry.register_with_writer_1_arg::<StringType, StringType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
         "lower",
         FunctionProperty::default(),
         |_| None,
-        |val, writer| {
-            for (start, end, ch) in val.char_indices() {
-                if ch == '\u{FFFD}' {
-                    // If char is invalid, just copy it.
-                    writer.put_slice(&val.as_bytes()[start..end]);
-                } else if ch.is_ascii() {
-                    writer.put_u8(ch.to_ascii_lowercase() as u8);
-                } else {
-                    for x in ch.to_lowercase() {
-                        writer.put_char(x);
+        vectorize_string_to_string(
+            |_| 0,
+            |val, writer| {
+                for (start, end, ch) in val.char_indices() {
+                    if ch == '\u{FFFD}' {
+                        // If char is invalid, just copy it.
+                        writer.put_slice(&val.as_bytes()[start..end]);
+                    } else if ch.is_ascii() {
+                        writer.put_u8(ch.to_ascii_lowercase() as u8);
+                    } else {
+                        for x in ch.to_lowercase() {
+                            writer.put_char(x);
+                        }
                     }
                 }
-            }
-            writer.commit_row();
-            Ok(())
-        },
+                writer.commit_row();
+                Ok(())
+            },
+        ),
     );
     registry.register_aliases("lower", &["lcase"]);
 
