@@ -643,6 +643,8 @@ pub enum TokenKind {
     TRUNCATE,
     #[token("TRY_CAST", ignore(ascii_case))]
     TRY_CAST,
+    #[token("TUPLE", ignore(ascii_case))]
+    TUPLE,
     #[token("TYPE", ignore(ascii_case))]
     TYPE,
     #[token("UNION", ignore(ascii_case))]

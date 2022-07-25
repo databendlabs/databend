@@ -97,7 +97,93 @@ impl TypeFactory {
             return self.get(name).map(ArrayType::new_impl);
         }
 
-        // TODO TUPLE TYPE
+        if lowercase_name.starts_with("tuple(") {
+            let names = origin_name[6..origin_name.len() - 1].to_string();
+            let bytes = names.as_bytes();
+
+            let mut start1 = 0;
+            let mut start2 = 0;
+            let mut index = 0;
+            let mut inner_names = Vec::new();
+            let mut inner_data_types = Vec::new();
+            while index <= bytes.len() {
+                if index == bytes.len() || bytes[index] == b',' {
+                    if start1 != start2 {
+                        inner_names.push(names[start1..start2 - 1].to_string());
+                    }
+                    inner_data_types.push(self.get(&names[start2..index])?);
+                } else if bytes[index] == b'(' {
+                    let mut depth = 1;
+                    let mut sub_index = index + 1;
+                    while sub_index < bytes.len() {
+                        if bytes[sub_index] == b'(' {
+                            depth += 1;
+                        } else if bytes[sub_index] == b')' {
+                            depth -= 1;
+                        }
+                        if depth == 0 {
+                            break;
+                        }
+                        sub_index += 1;
+                    }
+                    if depth != 0 {
+                        return Result::Err(ErrorCode::IllegalDataType(
+                            "The names of tuple elements format error",
+                        ));
+                    }
+                    if index >= 5
+                        && (names[index - 5..index].to_lowercase() == "tuple"
+                            || names[index - 5..index].to_lowercase() == "array")
+                    {
+                        if start1 != start2 {
+                            inner_names.push(names[start1..start2 - 1].to_string());
+                        }
+                        inner_data_types.push(self.get(&names[index - 5..sub_index + 1])?);
+                    } else {
+                        return Result::Err(ErrorCode::IllegalDataType(
+                            "The names of tuple elements format error",
+                        ));
+                    }
+                    index = sub_index + 1;
+                    if index == bytes.len() {
+                        break;
+                    } else if bytes[index] == b',' {
+                        index += 1;
+                        continue;
+                    }
+                } else if bytes[index] == b' ' {
+                    if index > 0 && bytes[index - 1] == b',' {
+                        start1 = index + 1;
+                        start2 = index + 1;
+                    } else {
+                        start2 = index + 1;
+                    }
+                }
+                index += 1;
+            }
+            if inner_data_types.is_empty() {
+                return Result::Err(ErrorCode::IllegalDataType("Tuple cannot be empty"));
+            }
+            if inner_names.is_empty() {
+                return Ok(StructType::new_impl(None, inner_data_types));
+            } else {
+                if inner_names.len() != inner_data_types.len() {
+                    return Result::Err(ErrorCode::IllegalDataType(
+                        "The named tuple elements must have name",
+                    ));
+                }
+                let mut names_set = HashSet::with_capacity(inner_names.len());
+                for inner_name in &inner_names {
+                    if !names_set.insert(inner_name) {
+                        return Result::Err(ErrorCode::IllegalDataType(
+                            "The names of tuple elements must be unique",
+                        ));
+                    }
+                }
+                return Ok(StructType::new_impl(Some(inner_names), inner_data_types));
+            }
+        }
+
         self.case_insensitive_types
             .get(&lowercase_name)
             .cloned()
