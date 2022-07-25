@@ -145,7 +145,7 @@
               "dash": "draw",
               "scale": 1
             },
-            "label": "Cache Services",
+            "label": "Temporary Services",
             "labelPoint": [
               0.5,
               0.5
@@ -560,11 +560,11 @@
             "parentId": "page",
             "childIndex": 16,
             "point": [
-              1464,
+              1455.5,
               599.5
             ],
             "rotation": 0,
-            "text": "Auto GC",
+            "text": "Timely GC",
             "style": {
               "color": "indigo",
               "size": "small",
@@ -638,11 +638,11 @@
             "parentId": "page",
             "childIndex": 18,
             "point": [
-              1454.5,
+              1445,
               458.5
             ],
             "rotation": 0,
-            "text": "Auto GC",
+            "text": "Auto Evict",
             "style": {
               "color": "orange",
               "size": "small",
@@ -1958,8 +1958,7 @@
             0
           ],
           "zoom": 1
-        },
-        "editingId": null
+        }
       },
       "86b5c8b4-9d6b-4a65-33c0-d063555f4393": {
         "id": "86b5c8b4-9d6b-4a65-33c0-d063555f4393",
