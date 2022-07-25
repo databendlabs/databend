@@ -21,6 +21,7 @@ use common_meta_app::schema::DatabaseNameIdent;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TableNameIdent;
 use common_meta_app::share::AddShareAccountReq;
+use common_meta_app::share::ShowShareReq;
 use common_meta_app::share::CreateShareReq;
 use common_meta_app::share::DropShareReq;
 use common_meta_app::share::GrantShareObjectReq;
@@ -59,7 +60,7 @@ impl ShareApiTestSuite {
     {
         let suite = ShareApiTestSuite {};
 
-        suite.share_create_get_drop(&b.build().await).await?;
+        suite.share_create_show_drop(&b.build().await).await?;
         suite.share_add_remove_account(&b.build().await).await?;
         suite.share_grant_revoke_object(&b.build().await).await?;
 
@@ -67,7 +68,7 @@ impl ShareApiTestSuite {
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
-    async fn share_create_get_drop<MT: ShareApi + AsKVApi>(&self, mt: &MT) -> anyhow::Result<()> {
+    async fn share_create_show_drop<MT: ShareApi + AsKVApi>(&self, mt: &MT) -> anyhow::Result<()> {
         let tenant = "tenant1";
         let share1 = "share1";
         let share_name = ShareNameIdent {
@@ -75,6 +76,22 @@ impl ShareApiTestSuite {
             share_name: share1.to_string(),
         };
         let share_id: u64;
+
+        tracing::info!("--- show share when there are no share");
+        {
+            let req = ShowShareReq {
+                share_name: share_name.clone(),
+            };
+
+            let res = mt.show_share(req).await;
+            tracing::info!("show share res: {:?}", res);
+            assert!(res.is_err());
+            let err = res.unwrap_err();
+            assert_eq!(
+                ErrorCode::UnknownShare("").code(),
+                ErrorCode::from(err).code()
+            );
+        }
 
         tracing::info!("--- create share1");
         let create_on = Utc::now();
@@ -129,6 +146,18 @@ impl ShareApiTestSuite {
             tracing::info!("create share res: {:?}", res);
             let res = res.unwrap();
             assert_eq!(1, res.share_id, "first share id is 1");
+        }
+
+        tracing::info!("--- show share in current database");
+        {
+            let req = ShowShareReq {
+                share_name: share_name.clone(),
+            };
+
+            let res = mt.show_share(req).await;
+            tracing::info!("show share res: {:?}", res);
+            let res = res.unwrap();
+            assert_eq!(1, res.share_id, "share id should be 1");
         }
 
         tracing::info!("--- drop share1 with if_exists=true");
