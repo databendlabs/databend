@@ -34,6 +34,7 @@ pub struct EnsureUser {
 #[derive(Default, Deserialize, Serialize)]
 pub struct CustomClaims {
     pub tenant_id: Option<String>,
+    pub role: Option<String>,
     pub ensure_user: Option<EnsureUser>,
 }
 
@@ -41,12 +42,18 @@ impl CustomClaims {
     pub fn new() -> Self {
         CustomClaims {
             tenant_id: None,
+            role: None,
             ensure_user: None,
         }
     }
 
     pub fn with_tenant_id(mut self, tenant_id: &str) -> Self {
         self.tenant_id = Some(tenant_id.to_string());
+        self
+    }
+
+    pub fn with_role(mut self, role: String) -> Self {
+        self.role = Some(role);
         self
     }
 
