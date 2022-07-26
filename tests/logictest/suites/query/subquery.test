@@ -556,7 +556,7 @@ ORDER BY c_id;
 6  0
 
 onlyif mysql
-statement query IT
+statement query IIT
 SELECT
     c.c_id,
     o.o_id,
