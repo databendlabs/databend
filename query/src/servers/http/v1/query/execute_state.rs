@@ -227,8 +227,7 @@ impl ExecuteState {
 
             Ok(executor)
         } else {
-            let interpreter = if ctx.get_cluster().is_empty()
-                && stmts
+            let interpreter = if stmts
                     .get(0)
                     .map_or(false, InterpreterFactoryV2::enable_default)
             {
