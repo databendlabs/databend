@@ -17,6 +17,7 @@ pub mod array;
 pub mod boolean;
 pub mod empty_array;
 pub mod generic;
+pub mod map;
 pub mod null;
 pub mod nullable;
 pub mod number;
@@ -35,6 +36,7 @@ pub use self::array::ArrayType;
 pub use self::boolean::BooleanType;
 pub use self::empty_array::EmptyArrayType;
 pub use self::generic::GenericType;
+pub use self::map::MapType;
 pub use self::null::NullType;
 pub use self::nullable::NullableType;
 pub use self::number::NumberType;
@@ -66,11 +68,12 @@ pub enum DataType {
     Nullable(Box<DataType>),
     EmptyArray,
     Array(Box<DataType>),
+    Map(Box<DataType>),
     Tuple(Vec<DataType>),
     Generic(usize),
 }
 
-pub trait ValueType: Sized + 'static {
+pub trait ValueType: Debug + Clone + PartialEq + Sized + 'static {
     type Scalar: Debug + Clone;
     type ScalarRef<'a>: Debug + Clone;
     type Column: Debug + Clone;

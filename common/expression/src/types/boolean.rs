@@ -27,6 +27,7 @@ use crate::util::bitmap_into_mut;
 use crate::values::Column;
 use crate::values::Scalar;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BooleanType;
 
 impl ValueType for BooleanType {

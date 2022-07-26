@@ -29,6 +29,7 @@ use crate::util::bitmap_into_mut;
 use crate::values::Column;
 use crate::values::Scalar;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NullableType<T: ValueType>(PhantomData<T>);
 
 impl<T: ValueType> ValueType for NullableType<T> {
