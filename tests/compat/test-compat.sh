@@ -201,7 +201,19 @@ run_test() {
         )
         # logictest dir include all suites and scripts fit old query
         cd "old_suite/tests/logictest" || exit
-        python3 main.py "_ddl_"
+
+        # old logic test use NoneType is only support by python3.10
+        sed -i "/^from types.*/d" http_runner.py
+        sed -i "/^from types.*/d" mysql_runner.py
+        sed -i "s/NoneType/type(None)/g" http_runner.py
+        sed -i "s/NoneType/type(None)/g" mysql_runner.py
+
+        # logictest pattern argument change after v0.7.140
+        # old logic test does not support pattern filter
+        mv suites/gen/05_ddl .
+        rm -fr suites/*
+        mv 05_ddl suites/
+        python3 main.py
         cd -
     fi
 }
