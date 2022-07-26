@@ -58,7 +58,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_| None,
         vectorize_string_to_string(
             |(data, _)| data.len(),
-            |val, writer| {
+            |val, mut writer| {
                 for (start, end, ch) in val.char_indices() {
                     if ch == '\u{FFFD}' {
                         // If char is invalid, just copy it.
@@ -67,7 +67,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                         writer.put_u8(ch.to_ascii_lowercase() as u8);
                     } else {
                         for x in ch.to_lowercase() {
-                            writer.put_char(x);
+                            writer.put_slice(x.encode_utf8(&mut [0; 4]).as_bytes());
                         }
                     }
                 }
