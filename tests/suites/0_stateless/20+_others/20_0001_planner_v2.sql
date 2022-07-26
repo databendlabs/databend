@@ -315,9 +315,9 @@ create table t1(a int, b int);
 create table t2(c int, d int);
 insert into t1 values(1, 2), (2, 3), (3 ,4), (2, 3);
 insert into t2 values(2,2), (3, 5), (7 ,8), (2, 3), (3, 4);
-select * from t1 intersect select * from t2;
+select * from t1 intersect select * from t2 order by t1.a, t1.b;
 select '====Except Distinct===';
-select * from t1 except select * from t2;
+select * from t1 except select * from t2 order by t1.a, t1.b;
 drop table t1;
 drop table t2;
 

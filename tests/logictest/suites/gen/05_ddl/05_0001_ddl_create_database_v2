@@ -1,4 +1,7 @@
 statement ok
+set enable_planner_v2 = 1;
+
+statement ok
 DROP DATABASE IF EXISTS db;
 
 statement ok
@@ -63,4 +66,7 @@ DROP SCHEMA system;
 
 statement error 1006
 CREATE SCHEMA catalog_not_exist.t; 
+
+statement ok
+set enable_planner_v2 = 0;
 

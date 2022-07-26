@@ -10,7 +10,7 @@ CREATE TABLE `test`.`a` (    a bigint, b int default 3, c varchar(255) default '
 statement query TT 
 SHOW CREATE TABLE `test`.`a`;
 
-----  
+----
 a CREATE TABLE `a` (
   `a` BIGINT,
   `b` INT DEFAULT 3,
@@ -20,12 +20,12 @@ a CREATE TABLE `a` (
 ) ENGINE=NULL
 
 statement ok
-CREATE TABLE `test`.`b` (    a bigint, b int null default null, c varchar(255), d smallint unsigned null, e Date default today()) Engine = NULL COMMENT = 'test b';
+CREATE TABLE `test`.`b` (    a bigint, b int null default null, c varchar(255), d smallint unsigned null, e Date default today()) Engine = Null COMMENT = 'test b';
 
 statement query TT 
 SHOW CREATE TABLE `test`.`b`;
 
-----  
+----
 b CREATE TABLE `b` (
   `a` BIGINT,
   `b` INT NULL DEFAULT NULL,
@@ -40,7 +40,7 @@ CREATE TABLE test.c (a int) CLUSTER BY (a, a % 3);
 statement query TT 
 SHOW CREATE TABLE `test`.`c`;
 
-----  
+----
 c CREATE TABLE `c` (
   `a` INT
 ) ENGINE=FUSE CLUSTER BY (a, a % 3)

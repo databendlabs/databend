@@ -1,4 +1,7 @@
 statement ok
+set enable_planner_v2 = 1;
+
+statement ok
 DROP TABLE IF EXISTS t1;
 
 statement ok
@@ -20,7 +23,7 @@ statement ok
 DROP TABLE IF EXISTS t2;
 
 statement ok
-CREATE TABLE t2(c1 int) Engine = Fuse;
+CREATE TABLE t2(c1 int) ENGINE = Memory;
 
 statement ok
 INSERT INTO TABLE t2 values(1);
@@ -39,4 +42,7 @@ SELECT * FROM t2;
 
 statement ok
 DROP TABLE IF EXISTS t2;
+
+statement ok
+set enable_planner_v2 = 0;
 

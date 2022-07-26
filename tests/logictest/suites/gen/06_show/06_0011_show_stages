@@ -1,11 +1,10 @@
 statement ok
 CREATE STAGE test_stage;
 
-skipif clickhouse
-statement query TTTTT
+statement query TTITT 
 SHOW STAGES;
 
-----  
+----
 test_stage Internal 0 'root'@'127.0.0.1' 
 
 statement ok
