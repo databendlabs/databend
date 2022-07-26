@@ -52,3 +52,21 @@ SELECT char(0xe4, 0xbd, 0xa0, 0xe5, 0xa5, 0xbd) AS hello;
 ----
 你好
 
+statement ok
+drop database if exists db1;
+
+statement ok
+create database if not exists db1;
+
+statement ok
+create table db1.t as SELECT CHAR(77,121,83,81,76) AS hello;
+
+statement query T
+select * from db1.t;
+
+----
+MySQL
+
+statement ok
+drop database db1;
+

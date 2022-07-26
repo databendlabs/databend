@@ -6,8 +6,8 @@ import http_connector
 
 class TestHttp(logictest.SuiteRunner, ABC):
 
-    def __init__(self, kind, pattern):
-        super().__init__(kind, pattern)
+    def __init__(self, kind, args):
+        super().__init__(kind, args)
         self._http = None
 
     def get_connection(self):

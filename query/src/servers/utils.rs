@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,19 +14,18 @@
 
 // The servers module used for external communication with user, such as MySQL wired protocol, etc.
 
-pub use clickhouse::ClickHouseHandler;
-pub use server::Server;
-pub use server::ShutdownHandle;
+use common_settings::Settings;
 
-pub use self::http::HttpHandler;
-pub use self::http::HttpHandlerKind;
-pub use self::mysql::MySQLConnection;
-pub use self::mysql::MySQLFederated;
-pub use self::mysql::MySQLHandler;
+use crate::interpreters::InterpreterFactoryV2;
+use crate::sql::DfStatement;
 
-pub(crate) mod clickhouse;
-pub(crate) mod federated_helper;
-pub mod http;
-mod mysql;
-pub(crate) mod server;
-mod utils;
+pub fn use_planner_v2(
+    settings: &Settings,
+    stmts: &[DfStatement],
+) -> common_exception::Result<bool> {
+    Ok(settings.get_enable_planner_v2()? != 0
+        && stmts.get(0).map_or(false, InterpreterFactoryV2::check)
+        || stmts
+            .get(0)
+            .map_or(false, InterpreterFactoryV2::enable_default))
+}
