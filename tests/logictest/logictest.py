@@ -291,25 +291,26 @@ class SuiteRunner(object):
         self.statement_files.sort()
 
     def execute(self):
-        # batch execute use single session
-        if callable(getattr(self, "batch_execute")):
-            # case batch
-            for (file_path, suite_name) in self.statement_files:
-                log.info(
-                    f"Run query with the same session every suite file, suite file path:{file_path}"
-                )
-                statement_list = list()
-                for state in get_statements(file_path, suite_name):
-                    statement_list.append(state)
-                self.batch_execute(statement_list)
-        else:
-            # case one by one
-            for (file_path, suite_name) in self.statement_files:
-                log.info(
-                    f"Run query without session every statements, suite file path:{file_path}"
-                )
-                for state in get_statements(file_path, suite_name):
-                    for i in range(0, self.args.test_runs):
+        for i in range(0, self.args.test_runs):
+            # batch execute use single session
+            if callable(getattr(self, "batch_execute")):
+                # case batch
+                for (file_path, suite_name) in self.statement_files:
+                    log.info(
+                        f"Run query with the same session every suite file, suite file path:{file_path}"
+                    )
+                    statement_list = list()
+                    for state in get_statements(file_path, suite_name):
+                        statement_list.append(state)
+                    
+                    self.batch_execute(statement_list)
+            else:
+                # case one by one
+                for (file_path, suite_name) in self.statement_files:
+                    log.info(
+                        f"Run query without session every statements, suite file path:{file_path}"
+                    )
+                    for state in get_statements(file_path, suite_name):
                         self.execute_statement(state)
 
     def execute_statement(self, statement):
