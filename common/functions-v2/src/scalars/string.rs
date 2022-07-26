@@ -12,12 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::io::Write;
+
 use bstr::ByteSlice;
-use bytes::BufMut;
-use common_arrow::arrow::buffer::Buffer;
-use common_expression::types::string::try_transform_scalar;
+use common_expression::types::string::StringColumn;
 use common_expression::types::string::StringColumnBuilder;
-use common_expression::types::ArgType;
 use common_expression::types::GenericMap;
 use common_expression::types::NumberType;
 use common_expression::types::StringType;
@@ -32,8 +31,8 @@ pub fn register(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| None,
         vectorize_string_to_string(
-            |(data, _)| data.len(),
-            |val, mut writer| {
+            |col| col.data.len(),
+            |val, writer| {
                 for (start, end, ch) in val.char_indices() {
                     if ch == '\u{FFFD}' {
                         // If char is invalid, just copy it.
@@ -42,11 +41,12 @@ pub fn register(registry: &mut FunctionRegistry) {
                         writer.put_u8(ch.to_ascii_uppercase() as u8);
                     } else {
                         for x in ch.to_uppercase() {
-                            writer.put_slice(x.encode_utf8(&mut [0; 4]).as_bytes());
+                            writer.put_char(x);
                         }
                     }
                 }
-                Ok(val.len())
+                writer.commit_row();
+                Ok(())
             },
         ),
     );
@@ -57,8 +57,8 @@ pub fn register(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| None,
         vectorize_string_to_string(
-            |(data, _)| data.len(),
-            |val, mut writer| {
+            |col| col.data.len(),
+            |val, writer| {
                 for (start, end, ch) in val.char_indices() {
                     if ch == '\u{FFFD}' {
                         // If char is invalid, just copy it.
@@ -67,11 +67,12 @@ pub fn register(registry: &mut FunctionRegistry) {
                         writer.put_u8(ch.to_ascii_lowercase() as u8);
                     } else {
                         for x in ch.to_lowercase() {
-                            writer.put_slice(x.encode_utf8(&mut [0; 4]).as_bytes());
+                            writer.put_char(x);
                         }
                     }
                 }
-                Ok(val.len())
+                writer.commit_row();
+                Ok(())
             },
         ),
     );
@@ -108,8 +109,14 @@ pub fn register(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| None,
         vectorize_string_to_string(
-            |(data, offsets)| data.len() * 4 / 3 + (offsets.len() - 1) * 4,
-            |val, buf| Ok(base64::encode_config_slice(val, base64::STANDARD, buf)),
+            |col| col.data.len() * 4 / 3 + col.len() * 4,
+            |val, writer| {
+                base64::write::EncoderWriter::new(&mut writer.data, base64::STANDARD)
+                    .write_all(val)
+                    .unwrap();
+                writer.commit_row();
+                Ok(())
+            },
         ),
     );
 
@@ -118,9 +125,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| None,
         vectorize_string_to_string(
-            |(data, offsets)| data.len() * 4 / 3 + (offsets.len() - 1) * 4,
-            |val, buf| {
-                base64::decode_config_slice(val, base64::STANDARD, buf).map_err(|e| e.to_string())
+            |col| col.data.len() * 4 / 3 + col.len() * 4,
+            |val, writer| {
+                base64::decode_config_buf(val, base64::STANDARD, &mut writer.data).unwrap();
+                writer.commit_row();
+                Ok(())
             },
         ),
     );
@@ -128,22 +137,21 @@ pub fn register(registry: &mut FunctionRegistry) {
 
 // Vectorize string to string function with customer estimate_bytes.
 fn vectorize_string_to_string(
-    estimate_bytes: impl Fn((&[u8], Buffer<u64>)) -> usize + Copy,
-    func: impl Fn(&[u8], &mut [u8]) -> Result<usize, String> + Copy,
+    estimate_bytes: impl Fn(&StringColumn) -> usize + Copy,
+    func: impl Fn(&[u8], &mut StringColumnBuilder) -> Result<(), String> + Copy,
 ) -> impl Fn(ValueRef<StringType>, &GenericMap) -> Result<Value<StringType>, String> + Copy {
     move |arg1, _| match arg1 {
         ValueRef::Scalar(val) => {
-            let offsets = vec![0, val.len() as u64];
-            let data_len = estimate_bytes((val, offsets.into()));
-            let scalar = try_transform_scalar(val, data_len, |val, buf| func(val, buf))?;
-            Ok(Value::Scalar(scalar))
+            let mut builder = StringColumnBuilder::with_capacity(1, 0);
+            func(val, &mut builder)?;
+            Ok(Value::Scalar(builder.build_scalar()))
         }
         ValueRef::Column(col) => {
-            let iter = StringType::iter_column(&col);
-            let (data, offsets) = (&col.data, col.offsets.clone());
-            let data_len = estimate_bytes((data, offsets));
-            let builder =
-                StringColumnBuilder::try_from_transform(iter, data_len, |val, buf| func(val, buf))?;
+            let data_capacity = estimate_bytes(&col);
+            let mut builder = StringColumnBuilder::with_capacity(col.len(), data_capacity);
+            for val in col.iter() {
+                func(val, &mut builder)?;
+            }
             Ok(Value::Column(builder.build()))
         }
     }
