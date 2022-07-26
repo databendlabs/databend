@@ -49,8 +49,8 @@ use crate::sessions::QueryAffect;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionRef;
 use crate::sessions::TableContext;
-use crate::sql::exec::PhysicalPlan;
-use crate::sql::exec::PipelineBuilder;
+use crate::sql::executor::PhysicalPlan;
+use crate::sql::executor::PipelineBuilder;
 use crate::sql::ColumnBinding;
 use crate::sql::DfParser;
 use crate::sql::DfStatement;
@@ -198,7 +198,6 @@ impl ExecuteState {
 
         let settings = ctx.get_settings();
         if !ctx.get_config().query.management_mode
-            && ctx.get_cluster().is_empty()
             && settings.get_enable_planner_v2()? != 0
             && matches!(stmts.get(0), Some(DfStatement::Query(_)))
         {

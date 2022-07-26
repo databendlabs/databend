@@ -23,7 +23,6 @@ use crate::sql::optimizer::cascades::implement_rules::get_implement_rule_set;
 use crate::sql::optimizer::group::Group;
 use crate::sql::optimizer::m_expr::MExpr;
 use crate::sql::optimizer::memo::Memo;
-use crate::sql::optimizer::optimize_context::OptimizeContext;
 use crate::sql::optimizer::rule::RulePtr;
 use crate::sql::optimizer::rule::RuleSet;
 use crate::sql::optimizer::rule::TransformState;
@@ -38,7 +37,7 @@ use crate::sql::IndexType;
 /// NOTICE: we don't support cost-based optimization and lower bound searching for now.
 #[allow(dead_code)]
 pub struct CascadesOptimizer {
-    optimize_context: OptimizeContext,
+    // optimize_context: OptimizeContext,
     memo: Memo,
     explore_rules: RuleSet,
     implement_rules: RuleSet,
@@ -46,9 +45,8 @@ pub struct CascadesOptimizer {
 
 impl CascadesOptimizer {
     #[allow(dead_code)]
-    pub fn create(optimize_context: OptimizeContext) -> Self {
+    pub fn create() -> Self {
         CascadesOptimizer {
-            optimize_context,
             memo: Memo::create(),
             explore_rules: get_explore_rule_set(),
             implement_rules: get_implement_rule_set(),
@@ -156,7 +154,7 @@ impl CascadesOptimizer {
     fn find_optimal_plan(&self) -> Result<SExpr> {
         let root_group = self.memo.root().unwrap();
 
-        let required_prop = self.optimize_context.required_prop().clone();
+        let required_prop = RequiredProperty::default();
 
         self.optimize_group(root_group, &required_prop)
     }

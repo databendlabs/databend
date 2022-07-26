@@ -12,12 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_exception::Result;
+
 use crate::sql::optimizer::ColumnSet;
+use crate::sql::optimizer::Distribution;
 use crate::sql::optimizer::PhysicalProperty;
-use crate::sql::optimizer::SExpr;
-use crate::sql::plans::LogicalPlan;
+use crate::sql::optimizer::RelExpr;
+use crate::sql::optimizer::RequiredProperty;
+use crate::sql::plans::LogicalOperator;
 use crate::sql::plans::Operator;
-use crate::sql::plans::PhysicalPlan;
+use crate::sql::plans::PhysicalOperator;
 use crate::sql::plans::RelOp;
 use crate::sql::IndexType;
 
@@ -40,17 +44,29 @@ impl Operator for PhysicalScan {
         false
     }
 
-    fn as_physical(&self) -> Option<&dyn PhysicalPlan> {
-        todo!()
+    fn as_physical(&self) -> Option<&dyn PhysicalOperator> {
+        Some(self)
     }
 
-    fn as_logical(&self) -> Option<&dyn LogicalPlan> {
+    fn as_logical(&self) -> Option<&dyn LogicalOperator> {
         None
     }
 }
 
-impl PhysicalPlan for PhysicalScan {
-    fn compute_physical_prop(&self, _expression: &SExpr) -> PhysicalProperty {
-        todo!()
+impl PhysicalOperator for PhysicalScan {
+    fn derive_physical_prop<'a>(&self, _rel_expr: &RelExpr<'a>) -> Result<PhysicalProperty> {
+        Ok(PhysicalProperty {
+            distribution: Distribution::Random,
+        })
+    }
+
+    // Won't be invoked at all, since `PhysicalScan` is leaf node
+    fn compute_required_prop_child<'a>(
+        &self,
+        _rel_expr: &RelExpr<'a>,
+        _child_index: usize,
+        _required: &RequiredProperty,
+    ) -> Result<RequiredProperty> {
+        unreachable!()
     }
 }

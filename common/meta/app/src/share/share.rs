@@ -109,6 +109,14 @@ pub struct RemoveShareAccountReq {
 pub struct RemoveShareAccountReply {}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct ShowShareOfReq {
+    pub share_name: ShareNameIdent,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct ShowShareOfReply {}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum ShareGrantObjectName {
     // database name
     Database(String),
@@ -158,6 +166,19 @@ pub struct RevokeShareObjectReq {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct RevokeShareObjectReply {}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct GetShareGrantObjectReq {
+    pub share_name: ShareNameIdent,
+    // If object is None, return all the granted objects.
+    pub object: Option<ShareGrantObjectName>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct GetShareGrantObjectReply {
+    pub share_name: ShareNameIdent,
+    pub objects: Vec<ShareGrantEntry>,
+}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct ShareAccountMeta {
@@ -342,6 +363,18 @@ impl ShareMeta {
 
     pub fn del_account(&mut self, account: &String) {
         self.accounts.remove(account);
+    }
+
+    pub fn get_grant_entry(&self, object: ShareGrantObject) -> Option<ShareGrantEntry> {
+        let database = self.database.as_ref()?;
+        if database.object == object {
+            return Some(database.clone());
+        }
+
+        match object {
+            ShareGrantObject::Database(_db_id) => None,
+            ShareGrantObject::Table(_table_id) => self.entries.get(&object.to_string()).cloned(),
+        }
     }
 
     pub fn grant_object_privileges(

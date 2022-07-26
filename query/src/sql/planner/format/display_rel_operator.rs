@@ -21,10 +21,12 @@ use itertools::Itertools;
 use super::FormatTreeNode;
 use crate::sql::optimizer::SExpr;
 use crate::sql::plans::Aggregate;
+use crate::sql::plans::AggregateMode;
 use crate::sql::plans::AndExpr;
 use crate::sql::plans::ComparisonExpr;
 use crate::sql::plans::ComparisonOp;
 use crate::sql::plans::EvalScalar;
+use crate::sql::plans::Exchange;
 use crate::sql::plans::Filter;
 use crate::sql::plans::JoinType;
 use crate::sql::plans::Limit;
@@ -75,6 +77,7 @@ impl Display for FormatContext {
             RelOperator::Aggregate(op) => format_aggregate(f, &self.metadata, op),
             RelOperator::Sort(op) => format_sort(f, &self.metadata, op),
             RelOperator::Limit(op) => format_limit(f, &self.metadata, op),
+            RelOperator::Exchange(op) => format_exchange(f, &self.metadata, op),
             RelOperator::Pattern(_) => write!(f, "Pattern"),
         }
     }
@@ -296,8 +299,14 @@ pub fn format_aggregate(
         .join(", ");
     write!(
         f,
-        "Aggregate: group items: [{}], aggregate functions: [{}]",
-        group_items, agg_funcs
+        "Aggregate({}): group items: [{}], aggregate functions: [{}]",
+        match &op.mode {
+            AggregateMode::Partial => "Partial",
+            AggregateMode::Final => "Final",
+            AggregateMode::Initial => "Initial",
+        },
+        group_items,
+        agg_funcs
     )
 }
 
@@ -333,4 +342,29 @@ pub fn format_limit(
 ) -> std::fmt::Result {
     let limit = if let Some(val) = op.limit { val } else { 0 };
     write!(f, "Limit: [{}], Offset: [{}]", limit, op.offset)
+}
+
+pub fn format_exchange(
+    f: &mut std::fmt::Formatter<'_>,
+    metadata: &MetadataRef,
+    op: &Exchange,
+) -> std::fmt::Result {
+    match op {
+        Exchange::Hash(keys) => {
+            write!(
+                f,
+                "Exchange(Hash): keys: [{}]",
+                keys.iter()
+                    .map(|scalar| format_scalar(metadata, scalar))
+                    .collect::<Vec<String>>()
+                    .join(", ")
+            )
+        }
+        Exchange::Broadcast => {
+            write!(f, "Exchange(Broadcast)")
+        }
+        Exchange::Merge => {
+            write!(f, "Exchange(Merge)")
+        }
+    }
 }

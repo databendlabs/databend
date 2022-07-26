@@ -14,11 +14,14 @@
 
 use common_planners::Expression;
 
+use crate::sql::executor::PhysicalScalar;
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum DataExchange {
     Merge(MergeExchange),
     Broadcast(BroadcastExchange),
     ShuffleDataExchange(ShuffleDataExchange),
+    ShuffleDataExchangeV2(ShuffleDataExchangeV2),
 }
 
 impl DataExchange {
@@ -27,6 +30,7 @@ impl DataExchange {
             DataExchange::Merge(exchange) => vec![exchange.destination_id.clone()],
             DataExchange::Broadcast(exchange) => exchange.destination_ids.clone(),
             DataExchange::ShuffleDataExchange(exchange) => exchange.destination_ids.clone(),
+            DataExchange::ShuffleDataExchangeV2(exchange) => exchange.destination_ids.clone(),
         }
     }
 
@@ -34,6 +38,7 @@ impl DataExchange {
         match self {
             DataExchange::Merge(_) => true,
             DataExchange::ShuffleDataExchange(_) => true,
+            DataExchange::ShuffleDataExchangeV2(_) => true,
             DataExchange::Broadcast(exchange) => exchange.from_multiple_nodes,
         }
     }
@@ -50,6 +55,21 @@ impl ShuffleDataExchange {
         DataExchange::ShuffleDataExchange(ShuffleDataExchange {
             destination_ids,
             exchange_expression,
+        })
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ShuffleDataExchangeV2 {
+    pub destination_ids: Vec<String>,
+    pub shuffle_keys: Vec<PhysicalScalar>,
+}
+
+impl ShuffleDataExchangeV2 {
+    pub fn create(destination_ids: Vec<String>, shuffle_keys: Vec<PhysicalScalar>) -> DataExchange {
+        DataExchange::ShuffleDataExchangeV2(ShuffleDataExchangeV2 {
+            destination_ids,
+            shuffle_keys,
         })
     }
 }

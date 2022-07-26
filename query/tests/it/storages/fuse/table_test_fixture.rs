@@ -120,7 +120,13 @@ impl TestFixture {
     }
 
     pub fn default_schema() -> DataSchemaRef {
-        DataSchemaRefExt::create(vec![DataField::new("id", i32::to_data_type())])
+        let tuple_inner_names = vec!["a".to_string(), "b".to_string()];
+        let tuple_inner_data_types = vec![i32::to_data_type(), i32::to_data_type()];
+        let tuple_data_type = StructType::new_impl(Some(tuple_inner_names), tuple_inner_data_types);
+        DataSchemaRefExt::create(vec![
+            DataField::new("id", i32::to_data_type()),
+            DataField::new("t", tuple_data_type),
+        ])
     }
 
     pub fn default_crate_table_plan(&self) -> CreateTablePlan {
@@ -167,13 +173,34 @@ impl TestFixture {
         (0..num_of_block)
             .into_iter()
             .map(|idx| {
-                let schema =
-                    DataSchemaRefExt::create(vec![DataField::new("id", i32::to_data_type())]);
-                Ok(DataBlock::create(schema, vec![Series::from_data(
+                let tuple_inner_names = vec!["a".to_string(), "b".to_string()];
+                let tuple_inner_data_types = vec![i32::to_data_type(), i32::to_data_type()];
+                let tuple_data_type =
+                    StructType::new_impl(Some(tuple_inner_names), tuple_inner_data_types);
+                let schema = DataSchemaRefExt::create(vec![
+                    DataField::new("id", i32::to_data_type()),
+                    DataField::new("t", tuple_data_type.clone()),
+                ]);
+                let column0 = Series::from_data(
                     std::iter::repeat_with(|| idx as i32 + start)
                         .take(rows_perf_block)
                         .collect::<Vec<i32>>(),
-                )]))
+                );
+                let column1 = Series::from_data(
+                    std::iter::repeat_with(|| (idx as i32 + start) * 2)
+                        .take(rows_perf_block)
+                        .collect::<Vec<i32>>(),
+                );
+                let column2 = Series::from_data(
+                    std::iter::repeat_with(|| (idx as i32 + start) * 3)
+                        .take(rows_perf_block)
+                        .collect::<Vec<i32>>(),
+                );
+                let tuple_inner_columns = vec![column1, column2];
+                let tuple_column =
+                    StructColumn::from_data(tuple_inner_columns, tuple_data_type).arc();
+
+                Ok(DataBlock::create(schema, vec![column0, tuple_column]))
             })
             .collect()
     }

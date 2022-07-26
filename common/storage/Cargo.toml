@@ -12,6 +12,6 @@ storage-hdfs = ["opendal/services-hdfs"]
 [dependencies]
 anyhow = "1.0.58"
 globiter = "0.1.0"
-opendal = { version = "0.11.2", features = ["retry", "services-http"] }
+opendal = { version = "0.11.3", features = ["retry", "services-http"] }
 percent-encoding = "2.1.0"
 serde = { version = "1.0.137", features = ["derive"] }

@@ -53,26 +53,29 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_aliases("upper", &["ucase"]);
 
     registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
-        "to_base64",
+        "lower",
         FunctionProperty::default(),
         |_| None,
         vectorize_string_to_string(
-            |(data, offsets)| data.len() * 4 / 3 + (offsets.len() - 1) * 4,
-            |val, buf| Ok(base64::encode_config_slice(val, base64::STANDARD, buf)),
-        ),
-    );
-
-    registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
-        "from_base64",
-        FunctionProperty::default(),
-        |_| None,
-        vectorize_string_to_string(
-            |(data, offsets)| data.len() * 4 / 3 + (offsets.len() - 1) * 4,
-            |val, buf| {
-                base64::decode_config_slice(val, base64::STANDARD, buf).map_err(|e| e.to_string())
+            |(data, _)| data.len(),
+            |val, writer| {
+                for (start, end, ch) in val.char_indices() {
+                    if ch == '\u{FFFD}' {
+                        // If char is invalid, just copy it.
+                        writer.put_slice(&val.as_bytes()[start..end]);
+                    } else if ch.is_ascii() {
+                        writer.put_u8(ch.to_ascii_lowercase() as u8);
+                    } else {
+                        for x in ch.to_lowercase() {
+                            writer.put_char(x);
+                        }
+                    }
+                }
+                Ok(val.len())
             },
         ),
     );
+    registry.register_aliases("lower", &["lcase"]);
 
     registry.register_1_arg::<StringType, NumberType<u64>, _, _>(
         "bit_length",
@@ -99,6 +102,28 @@ pub fn register(registry: &mut FunctionRegistry) {
         },
     );
     registry.register_aliases("char_length", &["character_length"]);
+
+    registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
+        "to_base64",
+        FunctionProperty::default(),
+        |_| None,
+        vectorize_string_to_string(
+            |(data, offsets)| data.len() * 4 / 3 + (offsets.len() - 1) * 4,
+            |val, buf| Ok(base64::encode_config_slice(val, base64::STANDARD, buf)),
+        ),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
+        "from_base64",
+        FunctionProperty::default(),
+        |_| None,
+        vectorize_string_to_string(
+            |(data, offsets)| data.len() * 4 / 3 + (offsets.len() - 1) * 4,
+            |val, buf| {
+                base64::decode_config_slice(val, base64::STANDARD, buf).map_err(|e| e.to_string())
+            },
+        ),
+    );
 }
 
 // Vectorize string to string function with customer estimate_bytes.

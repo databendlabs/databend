@@ -1,10 +1,10 @@
 statement ok
 set max_threads = 1;
 
-statement query T 
+statement query T
 EXPLAIN SELECT mIn(number) from numbers_mt(10);
 
-----  
+----
 Projection: mIn(number):UInt64
   AggregatorFinal: groupBy=[[]], aggr=[[mIn(number)]]
     AggregatorPartial: groupBy=[[]], aggr=[[mIn(number)]]

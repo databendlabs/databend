@@ -21,6 +21,8 @@ pub use share::CreateShareReply;
 pub use share::CreateShareReq;
 pub use share::DropShareReply;
 pub use share::DropShareReq;
+pub use share::GetShareGrantObjectReply;
+pub use share::GetShareGrantObjectReq;
 pub use share::GrantShareObjectReply;
 pub use share::GrantShareObjectReq;
 pub use share::RemoveShareAccountReply;

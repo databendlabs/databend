@@ -28,6 +28,7 @@ use crate::sql::optimizer::RelExpr;
 use crate::sql::optimizer::SExpr;
 use crate::sql::plans::Aggregate;
 use crate::sql::plans::AggregateFunction;
+use crate::sql::plans::AggregateMode;
 use crate::sql::plans::AndExpr;
 use crate::sql::plans::BoundColumnRef;
 use crate::sql::plans::CastExpr;
@@ -126,6 +127,7 @@ impl SubqueryRewriter {
 
             RelOperator::PhysicalHashJoin(_)
             | RelOperator::Pattern(_)
+            | RelOperator::Exchange(_)
             | RelOperator::PhysicalScan(_) => Err(ErrorCode::LogicalError("Invalid plan type")),
         }
     }
@@ -257,7 +259,7 @@ impl SubqueryRewriter {
                     RelExpr::with_s_expr(s_expr.child(1)?).derive_relational_prop()?
                 };
                 let (index, name) = if let UnnestResult::MarkJoin { marker_index } = result {
-                    (marker_index, "marker".to_string())
+                    (marker_index, marker_index.to_string())
                 } else if let UnnestResult::SingleJoin = result {
                     assert_eq!(subquery_output_columns.len(), 1);
                     let mut output_column = *subquery_output_columns.iter().take(1).next().unwrap();
@@ -283,9 +285,14 @@ impl SubqueryRewriter {
                             *subquery.data_type.clone(),
                         )))
                     }
+                } else if matches! {result, UnnestResult::MarkJoin {..}} {
+                    Box::new(DataTypeImpl::Nullable(NullableType::create(
+                        BooleanType::new_impl(),
+                    )))
                 } else {
                     subquery.data_type.clone()
                 };
+
                 let column_ref = ColumnBinding {
                     database_name: None,
                     table_name: None,
@@ -354,6 +361,7 @@ impl SubqueryRewriter {
                         index: agg_func_index,
                     }],
                     from_distinct: false,
+                    mode: AggregateMode::Initial,
                 };
 
                 // COUNT(*) = 1
@@ -461,11 +469,15 @@ impl SubqueryRewriter {
                 // If subquery contains NULL, the comparison result is TRUE or NULL.
                 // Such as t1.a => {1, 3, 4}, select t1.a in (1, 2, NULL) from t1; The sql will return {true, null, null}.
                 // If subquery doesn't contain NULL, the comparison result is FALSE, TRUE, or NULL.
-                let marker_index = self.metadata.write().add_column(
-                    "marker".to_string(),
-                    NullableType::new_impl(BooleanType::new_impl()),
-                    None,
-                );
+                let marker_index = if let Some(idx) = subquery.index {
+                    idx
+                } else {
+                    self.metadata.write().add_column(
+                        "marker".to_string(),
+                        NullableType::new_impl(BooleanType::new_impl()),
+                        None,
+                    )
+                };
                 // Consider the sql: select * from t1 where t1.a = any(select t2.a from t2);
                 // Will be transferred to:select t1.a, t2.a, marker_index from t2, t1 where t2.a = t1.a;
                 // Note that subquery is the left table, and it'll be the probe side.

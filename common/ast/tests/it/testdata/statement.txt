@@ -412,6 +412,79 @@ CreateTable(
 
 
 ---------- Input ----------
+create table if not exists a.b (c tuple(m integer, n string), d tuple(integer, string));
+---------- Output ---------
+CREATE TABLE IF NOT EXISTS a.b (c TUPLE(m Int32, n STRING) NOT NULL, d TUPLE(Int32, STRING) NOT NULL)
+---------- AST ------------
+CreateTable(
+    CreateTableStmt {
+        if_not_exists: true,
+        catalog: None,
+        database: Some(
+            Identifier {
+                name: "a",
+                quote: None,
+                span: Ident(27..28),
+            },
+        ),
+        table: Identifier {
+            name: "b",
+            quote: None,
+            span: Ident(29..30),
+        },
+        source: Some(
+            Columns(
+                [
+                    ColumnDefinition {
+                        name: Identifier {
+                            name: "c",
+                            quote: None,
+                            span: Ident(32..33),
+                        },
+                        data_type: Tuple {
+                            fields_name: Some(
+                                [
+                                    "m",
+                                    "n",
+                                ],
+                            ),
+                            fields_type: [
+                                Int32,
+                                String,
+                            ],
+                        },
+                        default_expr: None,
+                        comment: None,
+                    },
+                    ColumnDefinition {
+                        name: Identifier {
+                            name: "d",
+                            quote: None,
+                            span: Ident(62..63),
+                        },
+                        data_type: Tuple {
+                            fields_name: None,
+                            fields_type: [
+                                Int32,
+                                String,
+                            ],
+                        },
+                        default_expr: None,
+                        comment: None,
+                    },
+                ],
+            ),
+        ),
+        engine: None,
+        cluster_by: [],
+        table_options: {},
+        as_query: None,
+        transient: false,
+    },
+)
+
+
+---------- Input ----------
 create table a.b like c.d;
 ---------- Output ---------
 CREATE TABLE a.b LIKE c.d

@@ -1,24 +1,15 @@
-statement query T 
+statement query T
 SELECT SPACE(NULL);
 
-----  
+----
 NULL
 
-statement query T 
+statement ok
 SELECT SPACE(0);
 
-----  
-	
-
-statement query T 
+statement ok
 SELECT SPACE(1);
 
-----  
- 
-
-statement query T 
+statement ok
 SELECT SPACE(2);
-
-----  
-  
 

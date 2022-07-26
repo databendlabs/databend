@@ -30,6 +30,7 @@ use crate::sql::optimizer::RelExpr;
 use crate::sql::optimizer::SExpr;
 use crate::sql::plans::Aggregate;
 use crate::sql::plans::AggregateFunction;
+use crate::sql::plans::AggregateMode;
 use crate::sql::plans::AndExpr;
 use crate::sql::plans::BoundColumnRef;
 use crate::sql::plans::CastExpr;
@@ -309,12 +310,15 @@ impl SubqueryRewriter {
                     &mut left_conditions,
                     &mut right_conditions,
                 )?;
-                let mut metadata = self.metadata.write();
-                let marker_index = metadata.add_column(
-                    "marker".to_string(),
-                    NullableType::new_impl(BooleanType::new_impl()),
-                    None,
-                );
+                let marker_index = if let Some(idx) = subquery.index {
+                    idx
+                } else {
+                    self.metadata.write().add_column(
+                        "marker".to_string(),
+                        NullableType::new_impl(BooleanType::new_impl()),
+                        None,
+                    )
+                };
                 let join_plan = LogicalInnerJoin {
                     left_conditions,
                     right_conditions,
@@ -376,12 +380,15 @@ impl SubqueryRewriter {
                     right: Box::new(right_condition),
                     return_type: Box::new(NullableType::new_impl(BooleanType::new_impl())),
                 })];
-                let mut metadata = self.metadata.write();
-                let marker_index = metadata.add_column(
-                    "marker".to_string(),
-                    NullableType::new_impl(BooleanType::new_impl()),
-                    None,
-                );
+                let marker_index = if let Some(idx) = subquery.index {
+                    idx
+                } else {
+                    self.metadata.write().add_column(
+                        "marker".to_string(),
+                        NullableType::new_impl(BooleanType::new_impl()),
+                        None,
+                    )
+                };
                 let mark_join = LogicalInnerJoin {
                     left_conditions,
                     right_conditions,
@@ -581,6 +588,7 @@ impl SubqueryRewriter {
                 }
                 Ok(SExpr::create_unary(
                     Aggregate {
+                        mode: AggregateMode::Initial,
                         group_items,
                         aggregate_functions: agg_items,
                         from_distinct: aggregate.from_distinct,
@@ -594,7 +602,9 @@ impl SubqueryRewriter {
                 let flatten_plan = self.flatten(plan.child(0)?, correlated_columns)?;
                 Ok(SExpr::create_unary(plan.plan().clone(), flatten_plan))
             }
-            RelOperator::Pattern(_)
+
+            RelOperator::Exchange(_)
+            | RelOperator::Pattern(_)
             | RelOperator::LogicalGet(_)
             | RelOperator::PhysicalScan(_)
             | RelOperator::PhysicalHashJoin(_) => Err(ErrorCode::LogicalError(

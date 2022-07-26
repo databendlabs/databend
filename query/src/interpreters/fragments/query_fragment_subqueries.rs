@@ -28,6 +28,7 @@ use common_planners::PlanNode;
 use common_planners::PlanRewriter;
 use common_planners::SubQueriesSetPlan;
 
+use crate::api::FragmentPayload;
 use crate::interpreters::fragments::partition_state::PartitionState;
 use crate::interpreters::fragments::query_fragment::BuilderVisitor;
 use crate::interpreters::fragments::QueryFragment;
@@ -73,12 +74,15 @@ impl SubQueriesFragment {
                     let root_actions = fragments_actions.get_root_actions()?;
 
                     if !root_actions.fragment_actions.is_empty() {
+                        let plan = match &root_actions.fragment_actions[0].payload {
+                            FragmentPayload::PlanV1(node) => node,
+                            FragmentPayload::PlanV2(_) => unreachable!(),
+                        };
                         expressions.push(Expression::Subquery {
                             name: name.clone(),
-                            query_plan: Arc::new(subquery_fragment.rewrite_remote_plan(
-                                query_plan,
-                                &root_actions.fragment_actions[0].node,
-                            )?),
+                            query_plan: Arc::new(
+                                subquery_fragment.rewrite_remote_plan(query_plan, plan)?,
+                            ),
                         });
                     }
 
@@ -93,12 +97,15 @@ impl SubQueriesFragment {
                     let root_actions = fragments_actions.get_root_actions()?;
 
                     if !root_actions.fragment_actions.is_empty() {
+                        let plan = match &root_actions.fragment_actions[0].payload {
+                            FragmentPayload::PlanV1(node) => node,
+                            FragmentPayload::PlanV2(_) => unreachable!(),
+                        };
                         expressions.push(Expression::ScalarSubquery {
                             name: name.clone(),
-                            query_plan: Arc::new(subquery_fragment.rewrite_remote_plan(
-                                query_plan,
-                                &root_actions.fragment_actions[0].node,
-                            )?),
+                            query_plan: Arc::new(
+                                subquery_fragment.rewrite_remote_plan(query_plan, plan)?,
+                            ),
                         });
                     }
 
@@ -113,20 +120,20 @@ impl SubQueriesFragment {
 }
 
 impl QueryFragment for SubQueriesFragment {
-    fn distribute_query(&self) -> Result<bool> {
-        if self.input.distribute_query()? {
+    fn is_distributed_query(&self) -> Result<bool> {
+        if self.input.is_distributed_query()? {
             return Ok(true);
         }
 
         for expression in &self.node.expressions {
             match expression {
                 Expression::Subquery { query_plan, .. } => {
-                    if self.subquery_fragment(query_plan)?.distribute_query()? {
+                    if self.subquery_fragment(query_plan)?.is_distributed_query()? {
                         return Ok(true);
                     }
                 }
                 Expression::ScalarSubquery { query_plan, .. } => {
-                    if self.subquery_fragment(query_plan)?.distribute_query()? {
+                    if self.subquery_fragment(query_plan)?.is_distributed_query()? {
                         return Ok(true);
                     }
                 }
@@ -150,11 +157,15 @@ impl QueryFragment for SubQueriesFragment {
             QueryFragmentActions::create(root_actions.exchange_actions, root_actions.fragment_id);
 
         for fragment_action in &root_actions.fragment_actions {
+            let plan = match &fragment_action.payload {
+                FragmentPayload::PlanV1(node) => node,
+                FragmentPayload::PlanV2(_) => unreachable!(),
+            };
             new_root_fragment_actions.add_action(QueryFragmentAction::create(
                 fragment_action.executor.clone(),
                 PlanNode::SubQueryExpression(SubQueriesSetPlan {
                     expressions: new_expressions.clone(),
-                    input: Arc::new(fragment_action.node.clone()),
+                    input: Arc::new(plan.clone()),
                 }),
             ));
         }

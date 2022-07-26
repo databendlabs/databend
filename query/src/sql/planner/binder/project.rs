@@ -34,6 +34,8 @@ use crate::sql::plans::Project;
 use crate::sql::plans::Scalar;
 use crate::sql::plans::ScalarExpr;
 use crate::sql::plans::ScalarItem;
+use crate::sql::plans::SubqueryExpr;
+use crate::sql::plans::SubqueryType;
 use crate::sql::IndexType;
 
 impl<'a> Binder {
@@ -52,8 +54,36 @@ impl<'a> Binder {
             } else {
                 self.create_column_binding(None, None, item.alias.clone(), item.scalar.data_type())
             };
+            let scalar = if let Scalar::SubqueryExpr(SubqueryExpr {
+                typ,
+                subquery,
+                child_expr,
+                compare_op,
+                data_type,
+                allow_multi_rows,
+                outer_columns,
+                ..
+            }) = item.scalar.clone()
+            {
+                if typ == SubqueryType::Any || typ == SubqueryType::Exists {
+                    Scalar::SubqueryExpr(SubqueryExpr {
+                        typ,
+                        subquery,
+                        child_expr,
+                        compare_op,
+                        index: Some(column_binding.index),
+                        data_type,
+                        allow_multi_rows,
+                        outer_columns,
+                    })
+                } else {
+                    item.scalar.clone()
+                }
+            } else {
+                item.scalar.clone()
+            };
             scalars.insert(column_binding.index, ScalarItem {
-                scalar: item.scalar.clone(),
+                scalar,
                 index: column_binding.index,
             });
             columns.push(column_binding);

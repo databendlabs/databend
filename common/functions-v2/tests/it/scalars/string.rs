@@ -28,6 +28,7 @@ fn test_string() {
     let file = &mut mint.new_goldenfile("string.txt").unwrap();
 
     test_upper(file);
+    test_lower(file);
     test_bit_length(file);
     test_octet_length(file);
     test_char_length(file);
@@ -44,6 +45,18 @@ fn test_upper(file: &mut impl Write) {
         "a",
         DataType::String,
         build_string_column(&["Abc", "Dobrý den", "ß😀山"]),
+    )]);
+}
+
+fn test_lower(file: &mut impl Write) {
+    run_ast(file, "lower('Abc')", &[]);
+    run_ast(file, "lower('DOBRÝ DEN')", &[]);
+    run_ast(file, "lower('İ😀山')", &[]);
+    run_ast(file, "lower(NULL)", &[]);
+    run_ast(file, "lcase(a)", &[(
+        "a",
+        DataType::String,
+        build_string_column(&["Abc", "DOBRÝ DEN", "İ😀山"]),
     )]);
 }
 

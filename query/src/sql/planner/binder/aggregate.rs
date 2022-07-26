@@ -34,6 +34,7 @@ use crate::sql::planner::metadata::MetadataRef;
 use crate::sql::planner::semantic::GroupingChecker;
 use crate::sql::plans::Aggregate;
 use crate::sql::plans::AggregateFunction;
+use crate::sql::plans::AggregateMode;
 use crate::sql::plans::AndExpr;
 use crate::sql::plans::BoundColumnRef;
 use crate::sql::plans::CastExpr;
@@ -313,6 +314,7 @@ impl<'a> Binder {
         }
 
         let aggregate_plan = Aggregate {
+            mode: AggregateMode::Initial,
             group_items: bind_context.aggregate_info.group_items.clone(),
             aggregate_functions: bind_context.aggregate_info.aggregate_functions.clone(),
             from_distinct: false,
