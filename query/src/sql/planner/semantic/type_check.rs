@@ -1307,6 +1307,7 @@ impl<'a> TypeChecker<'a> {
             subquery: Box::new(s_expr),
             child_expr: child_scalar,
             compare_op,
+            index: None,
             data_type: data_type.clone(),
             allow_multi_rows,
             typ,

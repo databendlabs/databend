@@ -310,12 +310,15 @@ impl SubqueryRewriter {
                     &mut left_conditions,
                     &mut right_conditions,
                 )?;
-                let mut metadata = self.metadata.write();
-                let marker_index = metadata.add_column(
-                    "marker".to_string(),
-                    NullableType::new_impl(BooleanType::new_impl()),
-                    None,
-                );
+                let marker_index = if let Some(idx) = subquery.index {
+                    idx
+                } else {
+                    self.metadata.write().add_column(
+                        "marker".to_string(),
+                        NullableType::new_impl(BooleanType::new_impl()),
+                        None,
+                    )
+                };
                 let join_plan = LogicalInnerJoin {
                     left_conditions,
                     right_conditions,
@@ -377,12 +380,15 @@ impl SubqueryRewriter {
                     right: Box::new(right_condition),
                     return_type: Box::new(NullableType::new_impl(BooleanType::new_impl())),
                 })];
-                let mut metadata = self.metadata.write();
-                let marker_index = metadata.add_column(
-                    "marker".to_string(),
-                    NullableType::new_impl(BooleanType::new_impl()),
-                    None,
-                );
+                let marker_index = if let Some(idx) = subquery.index {
+                    idx
+                } else {
+                    self.metadata.write().add_column(
+                        "marker".to_string(),
+                        NullableType::new_impl(BooleanType::new_impl()),
+                        None,
+                    )
+                };
                 let mark_join = LogicalInnerJoin {
                     left_conditions,
                     right_conditions,
