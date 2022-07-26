@@ -102,13 +102,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                         ) => {
                             domain = Some(prev_domain.merge(&args_domain[cond_idx + 1]));
                         }
-                        (a, b) => {
-                            dbg!(cond_idx);
-                            dbg!(a);
-                            dbg!(b);
-
-                            unreachable!()
-                        }
+                        _ => unreachable!(),
                     }
                 }
 
