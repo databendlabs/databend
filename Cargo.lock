@@ -2312,6 +2312,7 @@ dependencies = [
  "http",
  "itertools",
  "jwt-simple",
+ "jwtk",
  "lz4",
  "maplit",
  "metrics 0.19.0",
