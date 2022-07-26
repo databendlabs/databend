@@ -1267,7 +1267,6 @@ dependencies = [
  "base64 0.13.0",
  "bstr",
  "comfy-table",
- "common-arrow",
  "common-ast",
  "common-expression",
  "goldenfile",

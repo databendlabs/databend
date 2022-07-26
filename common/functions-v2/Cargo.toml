@@ -11,7 +11,6 @@ doctest = false
 
 [dependencies] # In alphabetical order
 # Workspace dependencies
-common-arrow = { path = "../arrow" }
 common-expression = { path = "../expression" }
 
 # Crates.io dependencies
