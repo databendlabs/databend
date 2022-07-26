@@ -27,7 +27,7 @@ use crate::types::ValueType;
 use crate::values::Column;
 use crate::values::Scalar;
 
-// Structuaral equals to `Tuple(K, V)`
+// Structuarally equals to `Tuple(K, V)`
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KvPair<K: ValueType, V: ValueType>(PhantomData<(K, V)>);
 
@@ -251,6 +251,8 @@ impl<'a, K: ArgType, V: ArgType> Iterator for KvIterator<'a, K, V> {
 
 unsafe impl<'a, K: ArgType, V: ArgType> TrustedLen for KvIterator<'a, K, V> {}
 
+// Structuarally equals to `Array(Tuple(K, V))` but treated distinct from `Array(Tuple(K, V))`
+// in unification.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MapType<T: ArgType>(PhantomData<T>);
 
