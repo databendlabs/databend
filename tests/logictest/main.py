@@ -15,19 +15,19 @@ def run(args):
     Run tests
     """
     if not args.disable_mysql_test:
-        mysql_test = TestMySQL("mysql", args.pattern)
+        mysql_test = TestMySQL("mysql", args)
         mysql_test.set_driver(mysql_config)
         mysql_test.set_label("mysql")
         mysql_test.run_sql_suite()
 
     if not args.disable_http_test:
-        http = TestHttp("http", args.pattern)
+        http = TestHttp("http", args)
         http.set_driver(http_config)
         http.set_label("http")
         http.run_sql_suite()
 
     if not args.disable_clickhouse_test:
-        http = TestClickhouse("clickhouse", args.pattern)
+        http = TestClickhouse("clickhouse", args)
         http.set_driver(clickhouse_config)
         http.set_label("clickhouse")
         http.run_sql_suite()
@@ -50,6 +50,26 @@ if __name__ == '__main__':
     parser.add_argument('pattern',
                         nargs='*',
                         help='Optional test case name regex')
+
+    parser.add_argument(
+        '--test-runs',
+        default=1,
+        nargs='?',
+        type=int,
+        help='Run each test many times (useful for e.g. flaky check)')
+
+    parser.add_argument('--skip',
+                        nargs='+',
+                        default=os.environ.get('SKIP_TEST_FILES'),
+                        help="Skip these tests via case name regex")
+
+    parser.add_argument('--skip-dir',
+                        nargs='+',
+                        help="Skip all these tests in the dir")
+
+    parser.add_argument('--run-dir',
+                        nargs='+',
+                        help="Only run these tests in the dir")
 
     args = parser.parse_args()
     run(args)

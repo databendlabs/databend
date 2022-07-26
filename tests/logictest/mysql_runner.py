@@ -20,8 +20,8 @@ class StringConverter(MySQLConverter):
 
 class TestMySQL(logictest.SuiteRunner, ABC):
 
-    def __init__(self, kind, pattern):
-        super().__init__(kind, pattern)
+    def __init__(self, kind, args):
+        super().__init__(kind, args)
         self._connection = None
 
     def reset_connection(self):
