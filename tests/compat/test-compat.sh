@@ -192,17 +192,20 @@ run_test() {
 
     if [ "$query_ver" = "current" ]; then
         cd "$SCRIPT_PATH/../../tests/logictest" || exit
-        python3 main.py ".*05_ddl.*"
+        python3 main.py "_ddl_"
         cd -
     else
         (
             # download suites into ./old_suite
             download_test_suite $query_ver
         )
-        # Move and rename suites dir
-        mv old_suite/$query_test_path $(dirname $query_test_path)/05_old_ddl
+        # Move and rename old suites files, add "old_suite"
+        for file in $(ls old_suite/$query_test_path)
+        do
+            mv old_suite/$query_test_path/$file $query_test_path/old_suite_$file
+        done
         cd "$SCRIPT_PATH/../../tests/logictest" || exit
-        python3 main.py ".*05_old_ddl.*"
+        python3 main.py "old_suite_"
         cd -
     fi
 }
