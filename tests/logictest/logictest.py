@@ -249,7 +249,7 @@ def safe_execute(method, *info):
 @six.add_metaclass(abc.ABCMeta)
 class SuiteRunner(object):
 
-    def __init__(self, kind, pattern):
+    def __init__(self, kind, args):
         self.label = None
         self.retry_time = 3
         self.driver = None
@@ -258,24 +258,33 @@ class SuiteRunner(object):
         self.kind = kind
         self.show_query_on_execution = True
         self.on_error_return = False
-        self.pattern = pattern
+        self.dir = dir
+        self.args = args
 
     # return all files under the path
     # format: a list of file absolute path and name(relative path)
     def fetch_files(self):
-        skip_files = os.getenv("SKIP_TEST_FILES")
-        skip_tests = skip_files.split(",") if skip_files is not None else []
-        log.debug(f"Skip test file list {skip_tests}")
+        log.debug(f"Skip test file list {self.args.skip}")
         for filename in glob.iglob(f'{self.path}/**', recursive=True):
             if os.path.isfile(filename):
-                if os.path.basename(filename) in skip_tests:
+                base_name = os.path.basename(filename)
+                dirs = os.path.dirname(filename).split('/')
+                
+                if self.args.skip_dir and any(
+                        s in dirs for s in self.args.skip_dir):
+                    continue
+
+                if self.args.run_dir and not any(s in dirs
+                                                 for s in self.args.run_dir):
+                    continue
+
+                if self.args.skip and any(
+                    [re.search(r, base_name) for r in self.args.skip]):
                     log.info(f"Skip test file {filename}")
                     continue
 
-                if not self.pattern or any([
-                        re.search(r,
-                                  filename.split("/")[-1]) for r in self.pattern
-                ]):
+                if not self.args.pattern or any(
+                    [re.search(r, base_name) for r in self.args.pattern]):
                     self.statement_files.append(
                         (filename, os.path.relpath(filename, self.path)))
 
