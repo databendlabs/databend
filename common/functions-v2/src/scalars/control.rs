@@ -29,7 +29,7 @@ use common_expression::ValueRef;
 
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_function_factory("multi_if", |_, args_type| {
-        if args_type.len() > 2 && args_type.len() % 2 == 0 {
+        if args_type.len() < 3 && args_type.len() % 2 == 0 {
             return None;
         }
         let sig_args_type = (0..(args_type.len() - 1) / 2)
