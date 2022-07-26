@@ -269,7 +269,7 @@ class SuiteRunner(object):
             if os.path.isfile(filename):
                 base_name = os.path.basename(filename)
                 dirs = os.path.dirname(filename).split('/')
-                
+
                 if self.args.skip_dir and any(
                         s in dirs for s in self.args.skip_dir):
                     continue
@@ -309,7 +309,8 @@ class SuiteRunner(object):
                     f"Run query without session every statements, suite file path:{file_path}"
                 )
                 for state in get_statements(file_path, suite_name):
-                    self.execute_statement(state)
+                    for i in range(0, self.args.test_runs):
+                        self.execute_statement(state)
 
     def execute_statement(self, statement):
         if self.kind not in statement.runs_on:
