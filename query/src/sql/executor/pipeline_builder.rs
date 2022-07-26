@@ -110,7 +110,7 @@ impl PipelineBuilder {
             PhysicalPlan::AggregateFinal(aggregate) => self.build_aggregate_final(aggregate),
             PhysicalPlan::Sort(sort) => self.build_sort(sort),
             PhysicalPlan::Limit(limit) => self.build_limit(limit),
-            PhysicalPlan::HashJoin(join) => self.build_join(&join),
+            PhysicalPlan::HashJoin(join) => self.build_join(join),
             PhysicalPlan::ExchangeSink(sink) => self.build_exchange_sink(sink),
             PhysicalPlan::ExchangeSource(source) => self.build_exchange_source(source),
             PhysicalPlan::Exchange(_) => Err(ErrorCode::LogicalError(
@@ -119,8 +119,8 @@ impl PipelineBuilder {
         }
     }
 
-    fn build_join(&mut self, join: &&HashJoin) -> Result<()> {
-        let state = self.build_join_state(&join)?;
+    fn build_join(&mut self, join: &HashJoin) -> Result<()> {
+        let state = self.build_join_state(join)?;
         self.expand_build_side_pipeline(&join.build, state.clone())?;
         self.build_join_probe(join, state)
     }
