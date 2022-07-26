@@ -43,7 +43,6 @@ use poem::Route;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::clusters::ClusterHelper;
 use crate::interpreters::InterpreterFactory;
 use crate::interpreters::InterpreterFactoryV2;
 use crate::pipelines::processors::port::OutputPort;
@@ -51,6 +50,7 @@ use crate::pipelines::processors::StreamSource;
 use crate::pipelines::SourcePipeBuilder;
 use crate::servers::clickhouse::CLickHouseFederated;
 use crate::servers::http::v1::HttpQueryContext;
+use crate::servers::utils::use_planner_v2;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionType;
 use crate::sessions::TableContext;
@@ -324,18 +324,7 @@ pub async fn clickhouse_handler_post(
 
     let (stmts, _) = DfParser::parse_sql(sql.as_str(), ctx.get_current_session().get_type())
         .unwrap_or_else(|_| (vec![], vec![]));
-    if !ctx.get_config().query.management_mode
-        && (ctx.get_cluster().is_empty()
-            && settings
-                .get_enable_planner_v2()
-                .map_err(InternalServerError)?
-                != 0
-            && !stmts.is_empty()
-            && stmts.get(0).map_or(false, InterpreterFactoryV2::check)
-            || stmts
-                .get(0)
-                .map_or(false, InterpreterFactoryV2::enable_default))
-    {
+    if use_planner_v2(&settings, &stmts).map_err(InternalServerError)? {
         let mut planner = Planner::new(ctx.clone());
         let (plan, _, fmt) = planner.plan_sql(&sql).await.map_err(BadRequest)?;
         let format = get_format_with_default(fmt, default_format)?;

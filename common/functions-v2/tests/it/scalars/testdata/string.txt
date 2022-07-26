@@ -220,3 +220,93 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 
+ast            : to_base64('Abc')
+raw expr       : to_base64(Abc)
+checked expr   : to_base64<String>(Abc)
+output type    : String
+output domain  : {""..}
+output         : QWJj
+
+
+ast            : to_base64('123')
+raw expr       : to_base64(123)
+checked expr   : to_base64<String>(123)
+output type    : String
+output domain  : {""..}
+output         : MTIz
+
+
+ast            : to_base64(Null)
+raw expr       : to_base64(NULL)
+checked expr   : to_base64<NULL>(NULL)
+output type    : NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : to_base64(a)
+raw expr       : to_base64(ColumnRef(0)::String)
+checked expr   : to_base64<String>(ColumnRef(0))
+evaluation:
++--------+-----------------+--------+
+|        | a               | Output |
++--------+-----------------+--------+
+| Type   | String          | String |
+| Domain | {"123"..="Abc"} | {""..} |
+| Row 0  | Abc             | QWJj   |
+| Row 1  | 123             | MTIz   |
++--------+-----------------+--------+
+evaluation (internal):
++--------+---------------------------------------------------------------------------------------+
+| Column | Data                                                                                  |
++--------+---------------------------------------------------------------------------------------+
+| a      | String(StringColumn { data: [65, 98, 99, 49, 50, 51], offsets: [0, 3, 6] })           |
+| Output | String(StringColumn { data: [81, 87, 74, 106, 77, 84, 73, 122], offsets: [0, 4, 8] }) |
++--------+---------------------------------------------------------------------------------------+
+
+
+ast            : from_base64('QWJj')
+raw expr       : from_base64(QWJj)
+checked expr   : from_base64<String>(QWJj)
+output type    : String
+output domain  : {""..}
+output         : Abc
+
+
+ast            : from_base64('MTIz')
+raw expr       : from_base64(MTIz)
+checked expr   : from_base64<String>(MTIz)
+output type    : String
+output domain  : {""..}
+output         : 123
+
+
+ast            : to_base64(Null)
+raw expr       : to_base64(NULL)
+checked expr   : to_base64<NULL>(NULL)
+output type    : NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : to_base64(a)
+raw expr       : to_base64(ColumnRef(0)::String)
+checked expr   : to_base64<String>(ColumnRef(0))
+evaluation:
++--------+-------------------+----------+
+|        | a                 | Output   |
++--------+-------------------+----------+
+| Type   | String            | String   |
+| Domain | {"MTIz"..="QWJj"} | {""..}   |
+| Row 0  | QWJj              | UVdKag== |
+| Row 1  | MTIz              | TVRJeg== |
++--------+-------------------+----------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                     |
++--------+--------------------------------------------------------------------------------------------------------------------------+
+| a      | String(StringColumn { data: [81, 87, 74, 106, 77, 84, 73, 122], offsets: [0, 4, 8] })                                    |
+| Output | String(StringColumn { data: [85, 86, 100, 75, 97, 103, 61, 61, 84, 86, 82, 74, 101, 103, 61, 61], offsets: [0, 8, 16] }) |
++--------+--------------------------------------------------------------------------------------------------------------------------+
+
+

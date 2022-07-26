@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::io::Write;
+
 use bstr::ByteSlice;
 use common_expression::types::string::StringColumn;
 use common_expression::types::string::StringColumnBuilder;
@@ -29,7 +31,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| None,
         vectorize_string_to_string(
-            |_| 0,
+            |col| col.data.len(),
             |val, writer| {
                 for (start, end, ch) in val.char_indices() {
                     if ch == '\u{FFFD}' {
@@ -55,7 +57,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| None,
         vectorize_string_to_string(
-            |_| 0,
+            |col| col.data.len(),
             |val, writer| {
                 for (start, end, ch) in val.char_indices() {
                     if ch == '\u{FFFD}' {
@@ -101,8 +103,39 @@ pub fn register(registry: &mut FunctionRegistry) {
         },
     );
     registry.register_aliases("char_length", &["character_length"]);
+
+    registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
+        "to_base64",
+        FunctionProperty::default(),
+        |_| None,
+        vectorize_string_to_string(
+            |col| col.data.len() * 4 / 3 + col.len() * 4,
+            |val, writer| {
+                base64::write::EncoderWriter::new(&mut writer.data, base64::STANDARD)
+                    .write_all(val)
+                    .unwrap();
+                writer.commit_row();
+                Ok(())
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
+        "from_base64",
+        FunctionProperty::default(),
+        |_| None,
+        vectorize_string_to_string(
+            |col| col.data.len() * 4 / 3 + col.len() * 4,
+            |val, writer| {
+                base64::decode_config_buf(val, base64::STANDARD, &mut writer.data).unwrap();
+                writer.commit_row();
+                Ok(())
+            },
+        ),
+    );
 }
 
+// Vectorize string to string function with customer estimate_bytes.
 fn vectorize_string_to_string(
     estimate_bytes: impl Fn(&StringColumn) -> usize + Copy,
     func: impl Fn(&[u8], &mut StringColumnBuilder) -> Result<(), String> + Copy,

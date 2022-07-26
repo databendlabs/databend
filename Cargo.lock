@@ -1264,6 +1264,7 @@ dependencies = [
 name = "common-functions-v2"
 version = "0.1.0"
 dependencies = [
+ "base64 0.13.0",
  "bstr",
  "comfy-table",
  "common-ast",
