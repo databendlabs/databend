@@ -21,6 +21,7 @@ use common_streams::ErrorStream;
 use common_streams::ProgressStream;
 use common_streams::SendableDataBlockStream;
 use parking_lot::Mutex;
+use common_datavalues::DataSchemaRef;
 
 use crate::interpreters::access::ManagementModeAccess;
 use crate::interpreters::Interpreter;
@@ -61,6 +62,10 @@ impl InterceptorInterpreter {
 impl Interpreter for InterceptorInterpreter {
     fn name(&self) -> &str {
         self.inner.name()
+    }
+
+    fn schema(&self) -> DataSchemaRef {
+        self.inner.schema()
     }
 
     async fn execute(

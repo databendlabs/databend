@@ -40,12 +40,12 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
 
     pub fn write(
         &mut self,
-        query_result: Result<(Vec<DataBlock>, String)>,
+        query_result: Result<(Vec<DataBlock>, String, bool, DataSchemaRef)>,
         format: &FormatSettings,
     ) -> Result<()> {
         if let Some(writer) = self.inner.take() {
             match query_result {
-                Ok((blocks, extra_info)) => Self::ok(blocks, extra_info, writer, format)?,
+                Ok((blocks, extra_info, is_result_set, schema)) => Self::ok(blocks, extra_info, is_result_set, schema, writer, format)?,
                 Err(error) => Self::err(&error, writer)?,
             }
         }
@@ -55,6 +55,8 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
     fn ok(
         blocks: Vec<DataBlock>,
         extra_info: String,
+        is_result_set: bool,
+        schema: DataSchemaRef,
         dataset_writer: QueryResultWriter<'a, W>,
         format: &FormatSettings,
     ) -> Result<()> {
@@ -64,7 +66,7 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
             ..Default::default()
         };
 
-        if blocks.is_empty() || (blocks[0].num_columns() == 0) {
+        if !is_result_set && (blocks.is_empty() || (blocks[0].num_columns() == 0)) {
             dataset_writer.completed(default_response)?;
             return Ok(());
         }
@@ -112,9 +114,8 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
             schema.fields().iter().map(make_column_from_field).collect()
         }
 
-        let block = blocks[0].clone();
         let tz = format.timezone;
-        match convert_schema(block.schema()) {
+        match convert_schema(&schema) {
             Err(error) => Self::err(&error, dataset_writer),
             Ok(columns) => {
                 let mut row_writer = dataset_writer.start(&columns)?;

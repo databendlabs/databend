@@ -12,7 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
+use common_datavalues::DataSchemaRef;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -37,6 +38,7 @@ pub struct SelectInterpreterV2 {
     s_expr: SExpr,
     bind_context: BindContext,
     metadata: MetadataRef,
+    schema: RwLock<Option<DataSchemaRef>>,
 }
 
 impl SelectInterpreterV2 {
@@ -51,6 +53,7 @@ impl SelectInterpreterV2 {
             s_expr,
             bind_context,
             metadata,
+            schema: RwLock::new(None),
         })
     }
 }
@@ -59,6 +62,10 @@ impl SelectInterpreterV2 {
 impl Interpreter for SelectInterpreterV2 {
     fn name(&self) -> &str {
         "SelectInterpreterV2"
+    }
+
+    fn schema(&self) -> DataSchemaRef {
+        self.schema.read().unwrap().as_ref().unwrap().clone()
     }
 
     #[tracing::instrument(level = "debug", name = "select_interpreter_v2_execute", skip(self, _input_stream), fields(ctx.id = self.ctx.get_id().as_str()))]
@@ -76,6 +83,10 @@ impl Interpreter for SelectInterpreterV2 {
         }
 
         let last_schema = physical_plan.output_schema()?;
+        {
+            let mut schema = self.schema.write().unwrap();
+            *schema = Some(last_schema.clone());
+        }
         let pipeline_builder = PipelineBuilder::create(self.ctx.clone());
         let mut build_res = pipeline_builder.finalize(&physical_plan)?;
 
