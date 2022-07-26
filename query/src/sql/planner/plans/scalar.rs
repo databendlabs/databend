@@ -23,6 +23,7 @@ use common_functions::scalars::FunctionFactory;
 use crate::sql::binder::ColumnBinding;
 use crate::sql::optimizer::ColumnSet;
 use crate::sql::optimizer::SExpr;
+use crate::sql::IndexType;
 
 pub trait ScalarExpr {
     /// Get return type and nullability
@@ -530,6 +531,7 @@ pub struct SubqueryExpr {
     pub child_expr: Option<Box<Scalar>>,
     // Comparison operator for Any/All, such as t1.a = Any (...), `compare_op` is `=`.
     pub compare_op: Option<ComparisonOp>,
+    pub index: Option<IndexType>,
     pub data_type: Box<DataTypeImpl>,
     pub allow_multi_rows: bool,
     pub outer_columns: ColumnSet,
