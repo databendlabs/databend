@@ -291,6 +291,8 @@ pub enum TokenKind {
     CONFIGRELOAD,
     #[token("CONNECTION", ignore(ascii_case))]
     CONNECTION,
+    #[token("CHAR", ignore(ascii_case))]
+    CHAR,
     #[token("COPY_OPTIONS", ignore(ascii_case))]
     COPY_OPTIONS,
     #[token("COPY", ignore(ascii_case))]
@@ -878,7 +880,7 @@ impl TokenKind {
             | TokenKind::WHEN => true,
             | TokenKind::ARRAY
             | TokenKind::AS
-            // | TokenKind::CHAR
+            | TokenKind::CHAR
             // | TokenKind::CHARACTER
             | TokenKind::CREATE
             | TokenKind::EXCEPT
