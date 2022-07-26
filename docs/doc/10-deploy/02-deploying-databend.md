@@ -337,11 +337,20 @@ curl -I  http://127.0.0.1:8081/v1/health
 ```
 
 ### Verifying Deployment
-In this section, we will run MySQL queries from a SQL client installed on your local machine.
 
-a. Create a connection to 127.0.0.1 from your SQL client. In the connection, set the port to `3307`, and set the username to `root`.
+In this section, we will run some queries against Databend to verify the deployment.
 
-b. Run the following commands to check if the query is successful:
+a. Download and install a SQL client on your local machine.
+
+b. Create a connection to 127.0.0.1 from your SQL client. In the connection, set the port to `3307`, and set the username to `root`.
+
+:::tip
+
+**Create new users**. The `root` user only works when you access Databend from localhost. You will need to create new users first to connect to Databend remotely. For information about creating new users, see [CREATE USER](../30-reference/30-sql/00-ddl/30-user/01-user-create-user.md).
+
+:::
+
+c. Run the following commands and check if the query is successful:
 
 ```sql
 CREATE TABLE t1(a int);
