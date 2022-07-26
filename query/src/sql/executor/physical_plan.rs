@@ -207,8 +207,13 @@ impl HashJoin {
             JoinType::Mark => {
                 fields.clear();
                 fields = self.build.output_schema()?.fields().clone();
+                let name = if let Some(idx) = self.marker_index {
+                    idx.to_string()
+                } else {
+                    "marker".to_string()
+                };
                 fields.push(DataField::new(
-                    "marker",
+                    name.as_str(),
                     NullableType::new_impl(BooleanType::new_impl()),
                 ));
             }
