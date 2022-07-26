@@ -31,21 +31,24 @@ pub fn register(registry: &mut FunctionRegistry) {
         "upper",
         FunctionProperty::default(),
         |_| None,
-        vectorize_string_to_string(|val, mut writer| {
-            for (start, end, ch) in val.char_indices() {
-                if ch == '\u{FFFD}' {
-                    // If char is invalid, just copy it.
-                    writer.put_slice(&val.as_bytes()[start..end]);
-                } else if ch.is_ascii() {
-                    writer.put_u8(ch.to_ascii_uppercase() as u8);
-                } else {
-                    for x in ch.to_uppercase() {
-                        writer.put_slice(x.encode_utf8(&mut [0; 4]).as_bytes());
+        vectorize_string_to_string(
+            |(data, _)| data.len(),
+            |val, mut writer| {
+                for (start, end, ch) in val.char_indices() {
+                    if ch == '\u{FFFD}' {
+                        // If char is invalid, just copy it.
+                        writer.put_slice(&val.as_bytes()[start..end]);
+                    } else if ch.is_ascii() {
+                        writer.put_u8(ch.to_ascii_uppercase() as u8);
+                    } else {
+                        for x in ch.to_uppercase() {
+                            writer.put_slice(x.encode_utf8(&mut [0; 4]).as_bytes());
+                        }
                     }
                 }
-            }
-            Ok(val.len())
-        }),
+                Ok(val.len())
+            },
+        ),
     );
     registry.register_aliases("upper", &["ucase"]);
 
@@ -53,7 +56,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "to_base64",
         FunctionProperty::default(),
         |_| None,
-        vectorize_string_to_string_wise(
+        vectorize_string_to_string(
             |(data, offsets)| data.len() * 4 / 3 + (offsets.len() - 1) * 4,
             |val, buf| Ok(base64::encode_config_slice(val, base64::STANDARD, buf)),
         ),
@@ -63,7 +66,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "from_base64",
         FunctionProperty::default(),
         |_| None,
-        vectorize_string_to_string_wise(
+        vectorize_string_to_string(
             |(data, offsets)| data.len() * 4 / 3 + (offsets.len() - 1) * 4,
             |val, buf| {
                 base64::decode_config_slice(val, base64::STANDARD, buf).map_err(|e| e.to_string())
@@ -98,28 +101,21 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_aliases("char_length", &["character_length"]);
 }
 
-// Vectorize string to string function with default estimate_bytes, which is the original string length.
-fn vectorize_string_to_string(
-    func: impl Fn(&[u8], &mut [u8]) -> Result<usize, String> + Copy,
-) -> impl Fn(ValueRef<StringType>, &GenericMap) -> Result<Value<StringType>, String> + Copy {
-    vectorize_string_to_string_wise(|(data, _)| data.len(), func)
-}
-
 // Vectorize string to string function with customer estimate_bytes.
-fn vectorize_string_to_string_wise(
-    estimate_bytes: impl Fn((&[u8], &Buffer<u64>)) -> usize + Copy,
+fn vectorize_string_to_string(
+    estimate_bytes: impl Fn((&[u8], Buffer<u64>)) -> usize + Copy,
     func: impl Fn(&[u8], &mut [u8]) -> Result<usize, String> + Copy,
 ) -> impl Fn(ValueRef<StringType>, &GenericMap) -> Result<Value<StringType>, String> + Copy {
     move |arg1, _| match arg1 {
         ValueRef::Scalar(val) => {
             let offsets = vec![0, val.len() as u64];
-            let data_len = estimate_bytes((val, &offsets.into()));
+            let data_len = estimate_bytes((val, offsets.into()));
             let scalar = try_transform_scalar(val, data_len, |val, buf| func(val, buf))?;
             Ok(Value::Scalar(scalar))
         }
         ValueRef::Column(col) => {
             let iter = StringType::iter_column(&col);
-            let (data, offsets) = (&col.data, &col.offsets);
+            let (data, offsets) = (&col.data, col.offsets.clone());
             let data_len = estimate_bytes((data, offsets));
             let builder =
                 StringColumnBuilder::try_from_transform(iter, data_len, |val, buf| func(val, buf))?;
