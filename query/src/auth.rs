@@ -21,7 +21,7 @@ use common_meta_types::UserInfo;
 use common_users::JwtAuthenticator;
 use common_users::UserApiProvider;
 
-use crate::sessions::QueryContext;
+use crate::sessions::SessionRef;
 use crate::sessions::TableContext;
 pub use crate::Config;
 
@@ -50,8 +50,8 @@ impl AuthMgr {
         })
     }
 
-    pub async fn auth(&self, ctx: &Arc<QueryContext>, credential: &Credential) -> Result<()> {
-        let ctx_tenant = ctx.get_tenant();
+    pub async fn auth(&self, session: SessionRef, credential: &Credential) -> Result<()> {
+        let session_tenant = session.get_current_tenant();
         let user_info = match credential {
             Credential::Jwt {
                 token: t,
@@ -67,9 +67,9 @@ impl AuthMgr {
                     .extra
                     .tenant_id
                     .clone()
-                    .unwrap_or_else(|| ctx_tenant.clone());
-                if tenant != ctx_tenant {
-                    ctx.set_current_tenant(tenant.clone());
+                    .unwrap_or_else(|| session_tenant.clone());
+                if tenant != session_tenant {
+                    session.set_current_tenant(tenant.clone());
                 }
                 if let Some(ref ensure_user) = claims.extra.ensure_user {
                     let mut user_info = UserInfo::new(user_name, "%", AuthInfo::JWT);
@@ -98,7 +98,11 @@ impl AuthMgr {
             } => {
                 let user = self
                     .user_mgr
-                    .get_user_with_client_ip(&ctx_tenant, n, h.as_ref().unwrap_or(&"%".to_string()))
+                    .get_user_with_client_ip(
+                        &session_tenant,
+                        n,
+                        h.as_ref().unwrap_or(&"%".to_string()),
+                    )
                     .await?;
                 match &user.auth_info {
                     AuthInfo::None => Ok(user),
@@ -119,7 +123,7 @@ impl AuthMgr {
                 }?
             }
         };
-        ctx.set_current_user(user_info);
+        session.set_current_user(user_info);
         Ok(())
     }
 }
