@@ -13,7 +13,7 @@ This command loads data into a table from files staged in one of the following l
 * Named external stage that references an external location (AWS S3 compatible object storage services and Azure Blob storage).
 * External location. This includes AWS S3 compatible object storage services and Azure Blob storage.
 
-`COPY` can also load data into a table from one or more remote files by their URL. See [COPY INTO \<table\> FROM FILES BY URL](dml-copy-into-table-url.md).
+`COPY` can also load data into a table from one or more remote files by their URL. See [COPY INTO \<table\> FROM REMOTE FILES](dml-copy-into-table-url.md).
 
 ## Syntax
 
