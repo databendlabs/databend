@@ -22,4 +22,5 @@ pub mod statistics;
 pub mod table_functions;
 
 pub use constants::*;
+pub use fuse_part::ColumnLeaf;
 pub use fuse_table::FuseTable;

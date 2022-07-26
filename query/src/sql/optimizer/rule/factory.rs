@@ -25,6 +25,7 @@ use crate::sql::optimizer::rule::rewrite::RuleEliminateProject;
 use crate::sql::optimizer::rule::rewrite::RuleMergeEvalScalar;
 use crate::sql::optimizer::rule::rewrite::RuleMergeFilter;
 use crate::sql::optimizer::rule::rewrite::RuleMergeProject;
+use crate::sql::optimizer::rule::rewrite::RuleSplitAggregate;
 use crate::sql::optimizer::rule::rule_implement_get::RuleImplementGet;
 use crate::sql::optimizer::rule::rule_implement_hash_join::RuleImplementHashJoin;
 use crate::sql::optimizer::rule::RuleID;
@@ -51,6 +52,7 @@ impl RuleFactory {
             RuleID::MergeEvalScalar => Ok(Box::new(RuleMergeEvalScalar::new())),
             RuleID::MergeFilter => Ok(Box::new(RuleMergeFilter::new())),
             RuleID::NormalizeScalarFilter => Ok(Box::new(RuleNormalizeScalarFilter::new())),
+            RuleID::SplitAggregate => Ok(Box::new(RuleSplitAggregate::new())),
             RuleID::NormalizeDisjunctiveFilter => {
                 Ok(Box::new(RuleNormalizeDisjunctiveFilter::new()))
             }

@@ -797,7 +797,7 @@ evaluation (internal):
 +--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 
-ast            : TRY_CAST(create_tuple(a, b, NULL) AS (Int8, UInt8, Boolean NULL))
+ast            : TRY_CAST(create_tuple(a, b, NULL) AS TUPLE(Int8, UInt8, Boolean NULL))
 raw expr       : TRY_CAST(create_tuple(ColumnRef(0)::Int16, ColumnRef(1)::Int16, NULL) AS (Int8, UInt8, Boolean NULL))
 checked expr   : TRY_CAST(create_tuple<Int16, Int16, NULL>(ColumnRef(0), ColumnRef(1), NULL) AS (Int8 NULL, UInt8 NULL, Boolean NULL) NULL)
 evaluation:

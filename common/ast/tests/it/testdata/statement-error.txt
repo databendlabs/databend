@@ -38,6 +38,20 @@ error:
 
 
 ---------- Input ----------
+create table a (c tuple())
+---------- Output ---------
+error: 
+  --> SQL:1:25
+  |
+1 | create table a (c tuple())
+  | ------          - ----- ^ expected `BOOLEAN`, `BOOL`, `UINT8`, `TINYINT`, `UINT16`, `SMALLINT`, or 28 more ...
+  | |               | |      
+  | |               | while parsing type name
+  | |               while parsing `<column name> <type> [DEFAULT <default value>] [COMMENT '<comment>']`
+  | while parsing `CREATE TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`
+
+
+---------- Input ----------
 drop table if a.b
 ---------- Output ---------
 error: 

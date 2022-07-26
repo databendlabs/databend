@@ -92,7 +92,7 @@ impl FuseTable {
 
 enum State {
     ReadData(PartInfoPtr),
-    Deserialize(PartInfoPtr, Vec<Vec<u8>>),
+    Deserialize(PartInfoPtr, Vec<(usize, Vec<u8>)>),
     Generated(Option<PartInfoPtr>, DataBlock),
     Finish,
 }

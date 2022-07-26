@@ -1,7 +1,7 @@
 statement query IIIBB label(http)
 SELECT number ,number-1 , number*100 , 1> 100 ,1 < 10 FROM numbers_mt (10) order by number;
 
-----  
+----
 0 -1 0 0 1
 1 0 100 0 1
 2 1 200 0 1
@@ -13,7 +13,7 @@ SELECT number ,number-1 , number*100 , 1> 100 ,1 < 10 FROM numbers_mt (10) order
 8 7 800 0 1
 9 8 900 0 1
 
-----  http
+---- http
 0 -1 0 false true
 1 0 100 false true
 2 1 200 false true
@@ -25,10 +25,10 @@ SELECT number ,number-1 , number*100 , 1> 100 ,1 < 10 FROM numbers_mt (10) order
 8 7 800 false true
 9 8 900 false true
 
-statement query I 
+statement query I
 select number from numbers_mt(10) where number not between 4 + 0.1  and 8 - 0.1 order by number;
 
-----  
+----
 0
 1
 2
@@ -37,65 +37,65 @@ select number from numbers_mt(10) where number not between 4 + 0.1  and 8 - 0.1 
 8
 9
 
-statement query I 
+statement query I
 select number from numbers_mt(10) where number between 4 + 0.1  and 8 - 0.1  order by number;
 
-----  
+----
 5
 6
 7
 
-statement query T 
+statement query T
 select * from system.databases where name like '%sys%';
 
-----  
+----
 system
 
-statement query T 
+statement query T
 select * from system.databases where name like '_ef_ul_';
 
-----  
+----
 default
 
 statement query B label(http)
 select '%' like '\%';
 
-----  
+----
 1
 
-----  http
+---- http
 true
 
 statement query B label(http)
 select '%' like '\\%';
 
-----  
+----
 1
 
-----  http
+---- http
 true
 
-statement query T 
+statement query T
 select * from system.databases where name not like '%sys%' order by name;
 
-----  
+----
 INFORMATION_SCHEMA
 default
 
-statement query T 
+statement query T
 select * from system.databases where name not like '_ef_ul_' order by name;
 
-----  
+----
 INFORMATION_SCHEMA
 system
 
 statement query B label(http)
 select '\%' not like '\%';
 
-----  
+----
 1
 
-----  http
+---- http
 true
 
 statement ok
@@ -104,1026 +104,1344 @@ select * from numbers(10) where null = true;
 statement ok
 select * from numbers(10) where null and true;
 
-statement query T 
+statement query T
 select '==compare_regexp==';
 
-----  
+----
 ==compare_regexp==
 
-statement query T 
+statement query T
 select * from system.databases where name regexp '^sys';
 
-----  
+----
 system
 
-statement query T 
+statement query T
 select * from system.databases where name regexp 'ef+.ul+.';
 
-----  
+----
 default
 
 statement query B label(http)
 select 'foo' regexp 'FOO';
 
-----  
+----
 1
 
-----  http
+---- http
 true
 
-statement query T 
+statement query T
 select * from system.databases where name rlike '^sys';
 
-----  
+----
 system
 
-statement query T 
+statement query T
 select * from system.databases where name rlike 'ef+.ul+.';
 
-----  
+----
 default
 
 statement query B label(http)
 select 'foo' rlike 'FOO';
 
-----  
+----
 1
 
-----  http
+---- http
 true
 
 statement query B label(http)
 select 'Michael!' regexp '.*';
 
-----  
+----
 1
 
-----  http
+---- http
 true
 
-skipif clickhouse
 statement query B label(http)
 select 'new*\n*line' regexp 'new\\*.\\*line';
 
-----  
+----
 0
 
-----  http
+---- http
 false
 
 statement query B label(http)
 select 'a' regexp '^[a-d]';
 
-----  
+----
 1
 
-----  http
+---- http
 true
 
-skipif clickhouse
 statement query B label(http)
 select 'fo\nfo' regexp '^fo$';
 
-----  
+----
 0
 
-----  http
+---- http
 false
 
 statement query B label(http)
 select 'fofo' regexp '^fo';
 
-----  
+----
 1
 
-----  http
+---- http
 true
 
-skipif clickhouse
 statement query B label(http)
 select 'fo\no' regexp '^fo\no$';
 
-----  
+----
 1
 
-----  http
+---- http
 true
 
-skipif clickhouse
 statement query B label(http)
 select 'fo\no' regexp '^fo$';
 
-----  
+----
 0
 
-----  http
+---- http
 false
 
 statement query B label(http)
 select 'fofo' regexp '^f.*$';
 
-----  
+----
 1
 
-----  http
+---- http
 true
 
-skipif clickhouse
 statement query B label(http)
 select 'fo\r\nfo' regexp '^f.*$';
 
-----  
+----
 0
 
-----  http
+---- http
 false
 
-skipif clickhouse
 statement query B label(http)
 select 'fo\r\nfo' regexp '(?m)^f.*$';
 
-----  
+----
 1
 
-----  http
+---- http
 true
 
 statement query B label(http)
 select 'Ban' regexp '^Ba*n';
 
-----  
+----
 1
 
-----  http
+---- http
 true
 
 statement query B label(http)
 select 'Baaan' regexp '^Ba*n';
 
-----  
+----
 1
 
-----  http
+---- http
 true
 
 statement query B label(http)
 select 'Bn' regexp '^Ba*n';
 
-----  
+----
 1
 
-----  http
+---- http
 true
 
 statement query B label(http)
 select 'Ban' regexp '^Ba+n';
 
-----  
+----
 1
 
-----  http
+---- http
 true
 
 statement query B label(http)
 select 'Bn' regexp '^Ba+n';
 
-----  
+----
 0
 
-----  http
+---- http
 false
 
 statement query B label(http)
 select 'Bn' regexp '^Ba?n';
 
-----  
+----
 1
 
-----  http
+---- http
 true
 
 statement query B label(http)
 select 'Ban' regexp '^Ba?n';
 
-----  
+----
 1
 
-----  http
+---- http
 true
 
 statement query B label(http)
 select 'Baan' regexp '^Ba?n';
 
-----  
+----
 0
 
-----  http
+---- http
 false
 
 statement query B label(http)
 select 'pi' regexp 'pi|apa';
 
-----  
+----
 1
 
-----  http
+---- http
 true
 
 statement query B label(http)
 select 'axe' regexp 'pi|apa';
 
-----  
+----
 0
 
-----  http
+---- http
 false
 
 statement query B label(http)
 select 'apa' regexp 'pi|apa';
 
-----  
+----
 1
 
-----  http
+---- http
 true
 
 statement query B label(http)
 select 'apa' regexp '^(pi|apa)$';
 
-----  
+----
 1
 
-----  http
+---- http
 true
 
 statement query B label(http)
 select 'pi' regexp '^(pi|apa)$';
 
-----  
+----
 1
 
-----  http
+---- http
 true
 
 statement query B label(http)
 select 'pix' regexp '^(pi|apa)$';
 
-----  
+----
 0
 
-----  http
+---- http
 false
 
 statement query B label(http)
 select 'pi' regexp '^(pi)*$';
 
-----  
+----
 1
 
-----  http
+---- http
 true
 
 statement query B label(http)
 select 'pip' regexp '^(pi)*$';
 
-----  
+----
 0
 
-----  http
+---- http
 false
 
 statement query B label(http)
 select 'pipi' regexp '^(pi)*$';
 
-----  
+----
 1
 
-----  http
+---- http
 true
 
 statement query B label(http)
 select 'abcde' regexp 'a[bcd]{2}e';
 
-----  
+----
 0
 
-----  http
+---- http
 false
 
 statement query B label(http)
 select 'abcde' regexp 'a[bcd]{3}e';
 
-----  
+----
 1
 
-----  http
+---- http
 true
 
 statement query B label(http)
 select 'abcde' regexp 'a[bcd]{1,10}e';
 
-----  
+----
 1
 
-----  http
+---- http
 true
 
 statement query B label(http)
 select 'aXbc' regexp '[a-dXYZ]';
 
-----  
+----
 1
 
-----  http
+---- http
 true
 
 statement query B label(http)
 select 'aXbc' regexp '^[a-dXYZ]$';
 
-----  
+----
 0
 
-----  http
+---- http
 false
 
 statement query B label(http)
 select 'aXbc' regexp '^[a-dXYZ]+$';
 
-----  
+----
 1
 
-----  http
+---- http
 true
 
 statement query B label(http)
 select 'aXbc' regexp '^[^a-dXYZ]+$';
 
-----  
+----
 0
 
-----  http
+---- http
 false
 
 statement query B label(http)
 select 'gheis' regexp '^[^a-dXYZ]+$';
 
-----  
+----
 1
 
-----  http
+---- http
 true
 
 statement query B label(http)
 select 'gheisa' regexp '^[^a-dXYZ]+$';
 
-----  
+----
 0
 
-----  http
+---- http
 false
 
 statement query B label(http)
 select 'justalnums' regexp '[[:alnum:]]+';
 
-----  
+----
 1
 
-----  http
+---- http
 true
 
 statement query B label(http)
 select '!!' regexp '[[:alnum:]]+';
 
-----  
+----
 0
 
-----  http
+---- http
 false
 
 statement query B label(http)
 select '1+2' regexp '1+2';
 
-----  
+----
 0
 
-----  http
+---- http
 false
 
 statement query B label(http)
 select '1+2' regexp '1\\+2';
 
-----  
+----
 1
 
-----  http
+---- http
 true
 
 statement query B label(http)
 select '🍣🍣b' regexp 'b';
 
-----  
+----
 1
 
-----  http
+---- http
 true
 
 statement query B label(http)
 select 'бжb' regexp 'b';
 
-----  
+----
 1
 
-----  http
+---- http
 true
 
 statement query B label(http)
 select 'µå周çб' regexp '周';
 
-----  
+----
 1
 
-----  http
+---- http
 true
 
 statement query B label(http)
 select '周周周周' regexp '.*';
 
-----  
+----
 1
 
-----  http
+---- http
 true
 
 statement query T 
 select '==compare_not_regexp==';
 
-----  
+----
 ==compare_not_regexp==
 
 statement query B label(http)
 select 'Michael!' not regexp '.*';
 
-----  
+----
 0
 
-----  http
+---- http
 false
 
-skipif clickhouse
 statement query B label(http)
 select 'new*\n*line' not regexp 'new\\*.\\*line';
 
-----  
+----
 1
 
-----  http
+---- http
 true
 
 statement query B label(http)
 select 'a' not regexp '^[a-d]';
 
-----  
+----
 0
 
-----  http
+---- http
 false
 
-skipif clickhouse
 statement query B label(http)
 select 'fo\nfo' not regexp '^fo$';
 
-----  
+----
 1
 
-----  http
+---- http
 true
 
 statement query B label(http)
 select 'fofo' not regexp '^fo';
 
-----  
+----
 0
 
-----  http
+---- http
 false
 
-skipif clickhouse
 statement query B label(http)
 select 'fo\no' not regexp '^fo\no$';
 
-----  
+----
 0
 
-----  http
+---- http
 false
 
-skipif clickhouse
 statement query B label(http)
 select 'fo\no' not regexp '^fo$';
 
-----  
+----
 1
 
-----  http
+---- http
 true
 
 statement query B label(http)
 select 'fofo' not regexp '^f.*$';
 
-----  
+----
 0
 
-----  http
+---- http
 false
 
-skipif clickhouse
 statement query B label(http)
 select 'fo\r\nfo' not regexp '^f.*$';
 
-----  
+----
 1
 
-----  http
+---- http
 true
 
-skipif clickhouse
 statement query B label(http)
 select 'fo\r\nfo' not regexp '(?m)^f.*$';
 
-----  
+----
 0
 
-----  http
+---- http
 false
 
 statement query B label(http)
 select 'Ban' not regexp '^Ba*n';
 
-----  
+----
 0
 
-----  http
+---- http
 false
 
 statement query B label(http)
 select 'Baaan' not regexp '^Ba*n';
 
-----  
+----
 0
 
-----  http
+---- http
 false
 
 statement query B label(http)
 select 'Bn' not regexp '^Ba*n';
 
-----  
+----
 0
 
-----  http
+---- http
 false
 
 statement query B label(http)
 select 'Ban' not regexp '^Ba+n';
 
-----  
+----
 0
 
-----  http
+---- http
 false
 
 statement query B label(http)
 select 'Bn' not regexp '^Ba+n';
 
-----  
+----
 1
 
-----  http
+---- http
 true
 
 statement query B label(http)
 select 'Bn' not regexp '^Ba?n';
 
-----  
+----
 0
 
-----  http
+---- http
 false
 
 statement query B label(http)
 select 'Ban' not regexp '^Ba?n';
 
-----  
+----
 0
 
-----  http
+---- http
 false
 
 statement query B label(http)
 select 'Baan' not regexp '^Ba?n';
 
-----  
+----
 1
 
-----  http
+---- http
 true
 
 statement query B label(http)
 select 'pi' not regexp 'pi|apa';
 
-----  
+----
 0
 
-----  http
+---- http
 false
 
 statement query B label(http)
 select 'axe' not regexp 'pi|apa';
 
-----  
+----
 1
 
-----  http
+---- http
 true
 
 statement query B label(http)
 select 'apa' not regexp 'pi|apa';
 
-----  
+----
 0
 
-----  http
+---- http
 false
 
 statement query B label(http)
 select 'apa' not regexp '^(pi|apa)$';
 
-----  
+----
 0
 
-----  http
+---- http
 false
 
 statement query B label(http)
 select 'pi' not regexp '^(pi|apa)$';
 
-----  
+----
 0
 
-----  http
+---- http
 false
 
 statement query B label(http)
 select 'pix' not regexp '^(pi|apa)$';
 
-----  
+----
 1
 
-----  http
+---- http
 true
 
 statement query B label(http)
 select 'pi' not regexp '^(pi)*$';
 
-----  
+----
 0
 
-----  http
+---- http
 false
 
 statement query B label(http)
 select 'pip' not regexp '^(pi)*$';
 
-----  
+----
 1
 
-----  http
+---- http
 true
 
 statement query B label(http)
 select 'pipi' not regexp '^(pi)*$';
 
-----  
+----
 0
 
-----  http
+---- http
 false
 
 statement query B label(http)
 select 'abcde' not regexp 'a[bcd]{2}e';
 
-----  
+----
 1
 
-----  http
+---- http
 true
 
 statement query B label(http)
 select 'abcde' not regexp 'a[bcd]{3}e';
 
-----  
+----
 0
 
-----  http
+---- http
 false
 
 statement query B label(http)
 select 'abcde' not regexp 'a[bcd]{1,10}e';
 
-----  
+----
 0
 
-----  http
+---- http
 false
 
 statement query B label(http)
 select 'aXbc' not regexp '[a-dXYZ]';
 
-----  
+----
 0
 
-----  http
+---- http
 false
 
 statement query B label(http)
 select 'aXbc' not regexp '^[a-dXYZ]$';
 
-----  
+----
 1
 
-----  http
+---- http
 true
 
 statement query B label(http)
 select 'aXbc' not regexp '^[a-dXYZ]+$';
 
-----  
+----
 0
 
-----  http
+---- http
 false
 
 statement query B label(http)
 select 'aXbc' not regexp '^[^a-dXYZ]+$';
 
-----  
+----
 1
 
-----  http
+---- http
 true
 
 statement query B label(http)
 select 'gheis' not regexp '^[^a-dXYZ]+$';
 
-----  
+----
 0
 
-----  http
+---- http
 false
 
 statement query B label(http)
 select 'gheisa' not regexp '^[^a-dXYZ]+$';
 
-----  
+----
 1
 
-----  http
+---- http
 true
 
 statement query B label(http)
 select 'justalnums' not regexp '[[:alnum:]]+';
 
-----  
+----
 0
 
-----  http
+---- http
 false
 
 statement query B label(http)
 select '!!' not regexp '[[:alnum:]]+';
 
-----  
+----
 1
 
-----  http
+---- http
 true
 
 statement query B label(http)
 select '1+2' not regexp '1+2';
 
-----  
+----
 1
 
-----  http
+---- http
 true
 
 statement query B label(http)
 select '1+2' not regexp '1\\+2';
 
-----  
+----
 0
 
-----  http
+---- http
 false
 
 statement query B label(http)
 select '🍣🍣b' not regexp 'b';
 
-----  
+----
 0
 
-----  http
+---- http
 false
 
 statement query B label(http)
 select 'бжb' not regexp 'b';
 
-----  
+----
 0
 
-----  http
+---- http
 false
 
 statement query B label(http)
 select 'µå周çб' not regexp '周';
 
-----  
+----
 0
 
-----  http
+---- http
 false
 
 statement query B label(http)
 select '周周周周' not regexp '.*';
 
-----  
+----
 0
 
-----  http
+---- http
 false
 
 statement query T 
 select '==compare_number_string==';
 
-----  
+----
 ==compare_number_string==
 
 statement query B label(http)
 select '333' = '333';
 
-----  
+----
 1
 
-----  http
+---- http
 true
 
 statement query B label(http)
 select to_varchar(1) = '1';
 
-----  
+----
 1
 
-----  http
+---- http
 true
 
 statement query B label(http)
 select to_varchar(111) = '111';
 
-----  
+----
 1
 
-----  http
+---- http
 true
 
 statement query B label(http)
 select to_varchar(3 + 4) = '7';
 
-----  
+----
 1
 
-----  http
+---- http
 true
 
 statement query B label(http)
-select '123 ab' = 123; 
+select '123 ab' = 123;
 
-----  
+----
 0
 
-----  http
+---- http
 false
 
 statement query B label(http)
 select '123' = 123;
 
-----  
+----
 1
 
-----  http
+---- http
 true
 
 statement query B label(http)
 select '7.4' = 7.4;
 
-----  
+----
 1
 
-----  http
+---- http
 true
 
 statement query B label(http)
 select '7.4' > 7;
 
-----  
+----
 1
 
-----  http
+---- http
 true
 
 statement query B label(http)
 select '777.4' < 778;
 
-----  
+----
 1
 
-----  http
+---- http
 true
 
 statement query T 
 select '==compare_datetime==';
 
-----  
+----
 ==compare_datetime==
 
 statement query B label(http)
 SELECT '2021-03-05' = to_date('2021-03-05');
 
-----  
+----
 1
 
-----  http
+---- http
 true
 
 statement query B label(http)
 SELECT '2021-03-05 01:01:01' = to_datetime('2021-03-05 01:01:01');
 
-----  
+----
 1
 
-----  http
+---- http
 true
 
 statement query B label(http)
 SELECT '2021-03-05 01:01:02' > to_datetime('2021-03-05 01:01:01');
 
-----  
+----
 1
 
-----  http
+---- http
 true
 
 statement query B label(http)
 SELECT '2021-03-06' > to_date('2021-03-05');
 
-----  
+----
 1
 
-----  http
+---- http
 true
 
 statement query B label(http)
 SELECT to_datetime('2021-03-05 00:00:00') = to_date('2021-03-05');
 
-----  
+----
 1
 
-----  http
+---- http
 true
 
 statement query B label(http)
 SELECT to_datetime('2021-03-05 00:00:01') > to_date('2021-03-05');
 
-----  
+----
 1
 
-----  http
+---- http
 true
 
 statement query B label(http)
 SELECT to_datetime('2021-03-04 00:00:01') < to_date('2021-03-05');
 
-----  
+----
 1
 
-----  http
+---- http
 true
 
 statement query B label(http)
 SELECT to_datetime(to_date('2021-03-05')) = to_date('2021-03-05');
 
-----  
+----
 1
 
-----  http
+---- http
 true
+
+statement query T 
+select '==compare_variant==';
+
+----
+==compare_variant==
+
+statement query B label(http)
+SELECT parse_json('true') = true;
+
+----
+1
+
+---- http
+true
+
+statement query B label(http)
+SELECT parse_json('false') = true;
+
+----
+0
+
+---- http
+false
+
+statement query B label(http)
+SELECT parse_json('true') != true;
+
+----
+0
+
+---- http
+false
+
+statement query B label(http)
+SELECT parse_json('false') != true;
+
+----
+1
+
+---- http
+true
+
+statement query B label(http)
+SELECT parse_json('1') = 1;
+
+----
+1
+
+---- http
+true
+
+statement query B label(http)
+SELECT parse_json('2') = 1;
+
+----
+0
+
+---- http
+false
+
+statement query B label(http)
+SELECT parse_json('1') != 1;
+
+----
+0
+
+---- http
+false
+
+statement query B label(http)
+SELECT parse_json('2') != 1;
+
+----
+1
+
+---- http
+true
+
+statement query B label(http)
+SELECT parse_json('1') > 1;
+
+----
+0
+
+---- http
+false
+
+statement query B label(http)
+SELECT parse_json('2') > 1;
+
+----
+1
+
+---- http
+true
+
+statement query B label(http)
+SELECT parse_json('1') >= 1;
+
+----
+1
+
+---- http
+true
+
+statement query B label(http)
+SELECT parse_json('2') >= 1;
+
+----
+1
+
+---- http
+true
+
+statement query B label(http)
+SELECT parse_json('1') < 1;
+
+----
+0
+
+---- http
+false
+
+statement query B label(http)
+SELECT parse_json('2') < 1;
+
+----
+0
+
+---- http
+false
+
+statement query B label(http)
+SELECT parse_json('1') <= 1;
+
+----
+1
+
+---- http
+true
+
+statement query B label(http)
+SELECT parse_json('2') <= 1;
+
+----
+0
+
+---- http
+false
+
+statement query B label(http)
+SELECT parse_json('"ab"') = 'ab';
+
+----
+1
+
+---- http
+true
+
+statement query B label(http)
+SELECT parse_json('"cd"') = 'ab';
+
+----
+0
+
+---- http
+false
+
+statement query B label(http)
+SELECT parse_json('"ab"') != 'ab';
+
+----
+0
+
+---- http
+false
+
+statement query B label(http)
+SELECT parse_json('"cd"') != 'ab';
+
+----
+1
+
+---- http
+true
+
+statement query B label(http)
+SELECT parse_json('"ab"') > 'ab';
+
+----
+0
+
+---- http
+false
+
+statement query B label(http)
+SELECT parse_json('"cd"') > 'ab';
+
+----
+1
+
+---- http
+true
+
+statement query B label(http)
+SELECT parse_json('"ab"') >= 'ab';
+
+----
+1
+
+---- http
+true
+
+statement query B label(http)
+SELECT parse_json('"cd"') >= 'ab';
+
+----
+1
+
+---- http
+true
+
+statement query B label(http)
+SELECT parse_json('"ab"') < 'ab';
+
+----
+0
+
+---- http
+false
+
+statement query B label(http)
+SELECT parse_json('"cd"') < 'ab';
+
+----
+0
+
+---- http
+false
+
+statement query B label(http)
+SELECT parse_json('"ab"') <= 'ab';
+
+----
+1
+
+---- http
+true
+
+statement query B label(http)
+SELECT parse_json('"cd"') <= 'ab';
+
+----
+0
+
+---- http
+false
+
+statement query B label(http)
+SELECT parse_json('"ab"') like 'ab';
+
+----
+1
+
+---- http
+true
+
+statement query B label(http)
+SELECT parse_json('"cd"') like 'ab';
+
+----
+0
+
+---- http
+false
+
+statement query B label(http)
+SELECT parse_json('"ab"') not like 'ab';
+
+----
+0
+
+---- http
+false
+
+statement query B label(http)
+SELECT parse_json('"cd"') not like 'ab';
+
+----
+1
+
+---- http
+true
+
+statement query B label(http)
+SELECT parse_json('"ab"') regexp '.*';
+
+----
+1
+
+---- http
+true
+
+statement query B label(http)
+SELECT parse_json('"cd"') regexp '.*';
+
+----
+1
+
+---- http
+true
+
+statement query B label(http)
+SELECT parse_json('"ab"') not regexp '.*';
+
+----
+0
+
+---- http
+false
+
+statement query B label(http)
+SELECT parse_json('"cd"') not regexp '.*';
+
+----
+0
+
+---- http
+false
 

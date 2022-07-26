@@ -14,8 +14,8 @@
 
 #[test]
 pub fn test_format_field_name() {
-    use databend_query::sql::exec::decode_field_name;
-    use databend_query::sql::exec::format_field_name;
+    use databend_query::sql::executor::decode_field_name;
+    use databend_query::sql::executor::format_field_name;
     let display_name = "column_name123名字".to_string();
     let index = 12321;
     let field_name = format_field_name(display_name.as_str(), index);

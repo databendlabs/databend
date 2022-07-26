@@ -92,7 +92,8 @@ pub mod traverse {
     fn traverse_recursive(column: &ColumnRef, leaves: &mut Vec<ColumnRef>) -> Result<()> {
         match column.data_type() {
             DataTypeImpl::Struct(_) => {
-                let struct_col: &StructColumn = Series::check_get(column)?;
+                let full_column = column.convert_full_column();
+                let struct_col: &StructColumn = Series::check_get(&full_column)?;
                 for f in struct_col.values() {
                     traverse_recursive(f, leaves)?
                 }

@@ -125,7 +125,7 @@ impl<const HAS_OUTPUT: bool> ExchangePublisherSink<HAS_OUTPUT> {
 #[async_trait::async_trait]
 impl<const HAS_OUTPUT: bool> Processor for ExchangePublisherSink<HAS_OUTPUT> {
     fn name(&self) -> &'static str {
-        "ExchangePublisher"
+        "ExchangeShuffleSink"
     }
 
     fn as_any(&mut self) -> &mut dyn Any {

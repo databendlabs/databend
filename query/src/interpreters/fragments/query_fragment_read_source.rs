@@ -78,7 +78,7 @@ impl ReadDatasourceQueryFragment {
 }
 
 impl QueryFragment for ReadDatasourceQueryFragment {
-    fn distribute_query(&self) -> Result<bool> {
+    fn is_distributed_query(&self) -> Result<bool> {
         let read_table = self
             .ctx
             .build_table_from_source_plan(&self.read_data_source)?;

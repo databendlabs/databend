@@ -1,0 +1,40 @@
+statement ok
+DROP TABLE IF EXISTS t1;
+
+statement ok
+CREATE TABLE t1 (lat Float64, lon Float64, resolution UInt8) ENGINE=Memory;
+
+statement ok
+INSERT INTO t1 VALUES(55.77922738, 37.63098076, 15);
+
+statement ok
+INSERT INTO t1 VALUES(55.76324100, 37.66018300, 15);
+
+statement ok
+INSERT INTO t1 VALUES(55.72076200, 37.59813500, 15);
+
+statement ok
+INSERT INTO t1 VALUES(55.72076201, 37.59813500, 15);
+
+statement ok
+INSERT INTO t1 VALUES(55.72076200, 37.59813500, 14);
+
+statement query I
+select geo_to_h3(37.63098076, 55.77922738, 15);
+
+----
+644325529094369568
+
+statement query I
+select geo_to_h3(lon, lat, resolution) from t1 order by lat, lon, resolution;
+
+----
+639821928864584823
+644325528491955313
+644325528491955313
+644325528627451570
+644325529094369568
+
+statement ok
+DROP TABLE t1;
+
