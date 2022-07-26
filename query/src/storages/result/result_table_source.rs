@@ -32,7 +32,7 @@ use crate::storages::result::result_table_source::State::Generated;
 
 enum State {
     ReadData(PartInfoPtr),
-    Deserialize(PartInfoPtr, Vec<Vec<u8>>),
+    Deserialize(PartInfoPtr, Vec<(usize, Vec<u8>)>),
     Generated(Option<PartInfoPtr>, DataBlock),
     Finish,
 }

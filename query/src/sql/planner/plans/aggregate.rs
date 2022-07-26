@@ -15,18 +15,30 @@
 use common_exception::Result;
 
 use crate::sql::optimizer::ColumnSet;
+use crate::sql::optimizer::Distribution;
 use crate::sql::optimizer::PhysicalProperty;
 use crate::sql::optimizer::RelExpr;
 use crate::sql::optimizer::RelationalProperty;
-use crate::sql::optimizer::SExpr;
-use crate::sql::plans::LogicalPlan;
+use crate::sql::optimizer::RequiredProperty;
+use crate::sql::plans::LogicalOperator;
 use crate::sql::plans::Operator;
-use crate::sql::plans::PhysicalPlan;
+use crate::sql::plans::PhysicalOperator;
 use crate::sql::plans::RelOp;
 use crate::sql::plans::ScalarItem;
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum AggregateMode {
+    Partial,
+    Final,
+
+    // TODO(leiysky): this mode is only used for preventing recursion of
+    // RuleSplitAggregate, find a better way.
+    Initial,
+}
+
 #[derive(Clone, Debug)]
 pub struct Aggregate {
+    pub mode: AggregateMode,
     // group by scalar expressions, such as: group by col1 asc, col2 desc;
     pub group_items: Vec<ScalarItem>,
     // aggregate scalar expressions, such as: sum(col1), count(*);
@@ -48,22 +60,71 @@ impl Operator for Aggregate {
         true
     }
 
-    fn as_logical(&self) -> Option<&dyn LogicalPlan> {
+    fn as_logical(&self) -> Option<&dyn LogicalOperator> {
         Some(self)
     }
 
-    fn as_physical(&self) -> Option<&dyn PhysicalPlan> {
+    fn as_physical(&self) -> Option<&dyn PhysicalOperator> {
         Some(self)
     }
 }
 
-impl PhysicalPlan for Aggregate {
-    fn compute_physical_prop(&self, _expression: &SExpr) -> PhysicalProperty {
-        todo!()
+impl PhysicalOperator for Aggregate {
+    fn derive_physical_prop<'a>(&self, rel_expr: &RelExpr<'a>) -> Result<PhysicalProperty> {
+        rel_expr.derive_physical_prop_child(0)
+    }
+
+    fn compute_required_prop_child<'a>(
+        &self,
+        rel_expr: &RelExpr<'a>,
+        _child_index: usize,
+        required: &RequiredProperty,
+    ) -> Result<RequiredProperty> {
+        let mut required = required.clone();
+        let child_physical_prop = rel_expr.derive_physical_prop_child(0)?;
+
+        if child_physical_prop.distribution == Distribution::Serial {
+            return Ok(required);
+        }
+
+        match self.mode {
+            AggregateMode::Partial => {
+                if self.group_items.is_empty() {
+                    // Scalar aggregation
+                    required.distribution = Distribution::Any;
+                } else {
+                    // Group aggregation, enforce `Hash` distribution
+                    required.distribution = Distribution::Hash(
+                        self.group_items
+                            .iter()
+                            .map(|item| item.scalar.clone())
+                            .collect(),
+                    );
+                }
+            }
+
+            AggregateMode::Final => {
+                if self.group_items.is_empty() {
+                    // Scalar aggregation
+                    required.distribution = Distribution::Serial;
+                } else {
+                    // Group aggregation, enforce `Hash` distribution
+                    required.distribution = Distribution::Hash(
+                        self.group_items
+                            .iter()
+                            .map(|item| item.scalar.clone())
+                            .collect(),
+                    );
+                }
+            }
+
+            AggregateMode::Initial => unreachable!(),
+        }
+        Ok(required)
     }
 }
 
-impl LogicalPlan for Aggregate {
+impl LogicalOperator for Aggregate {
     fn derive_relational_prop<'a>(&self, rel_expr: &RelExpr<'a>) -> Result<RelationalProperty> {
         let input_prop = rel_expr.derive_relational_prop_child(0)?;
 

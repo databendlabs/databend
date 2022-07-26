@@ -16,6 +16,7 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 
 use crate::api::DataExchange;
+use crate::api::FragmentPayload;
 use crate::interpreters::QueryFragmentActions;
 use crate::interpreters::QueryFragmentsActions;
 
@@ -62,12 +63,15 @@ impl<'a> Display for QueryFragmentActionsWrap<'a> {
                 DataExchange::Merge(_) => writeln!(f, "  DataExchange: Merge")?,
                 DataExchange::Broadcast(_) => writeln!(f, "  DataExchange: Broadcast")?,
                 DataExchange::ShuffleDataExchange(_) => writeln!(f, "  DataExchange: Shuffle")?,
+                DataExchange::ShuffleDataExchangeV2(_) => writeln!(f, "  DataExchange: Shuffle")?,
             }
         }
 
         if !self.inner.fragment_actions.is_empty() {
             let fragment_action = &self.inner.fragment_actions[0];
-            write!(f, "{}", fragment_action.node.display_indent_format(1))?;
+            if let FragmentPayload::PlanV1(node) = &fragment_action.payload {
+                write!(f, "{}", node.display_indent_format(1))?;
+            };
         }
 
         Ok(())

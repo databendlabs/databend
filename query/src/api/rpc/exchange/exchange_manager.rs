@@ -46,9 +46,11 @@ use crate::api::rpc::exchange::exchange_sink::ExchangeSink;
 use crate::api::rpc::exchange::exchange_source::ExchangeSource;
 use crate::api::rpc::flight_scatter_broadcast::BroadcastFlightScatter;
 use crate::api::rpc::flight_scatter_hash::HashFlightScatter;
+use crate::api::rpc::flight_scatter_hash_v2::HashFlightScatterV2;
 use crate::api::rpc::packets::DataPacket;
 use crate::api::rpc::Packet;
 use crate::api::DataExchange;
+use crate::api::FragmentPayload;
 use crate::api::FragmentPlanPacket;
 use crate::api::InitNodesChannelPacket;
 use crate::api::QueryFragmentsPlanPacket;
@@ -61,6 +63,8 @@ use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::QueryPipelineBuilder;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
+use crate::sql::executor::PhysicalPlan;
+use crate::sql::executor::PipelineBuilder as PipelineBuilderV2;
 use crate::Config;
 
 pub struct DataExchangeManager {
@@ -239,7 +243,7 @@ impl DataExchangeManager {
 
                 match queries_coordinator.entry(executor_packet.query_id.to_owned()) {
                     Entry::Vacant(_) => Err(ErrorCode::LogicalError(format!(
-                        "Already exists query id {:?}",
+                        "Cannot find query id {:?}",
                         executor_packet.query_id
                     ))),
                     Entry::Occupied(mut entry) => entry
@@ -347,7 +351,14 @@ impl QueryCoordinator {
 
         for fragment_id in fragments_id {
             if let Some(coordinator) = self.fragments_coordinator.get_mut(&fragment_id) {
-                coordinator.prepare_pipeline(&self.query_id, &self.ctx)?;
+                match coordinator.payload.clone() {
+                    FragmentPayload::PlanV1(plan) => {
+                        coordinator.prepare_pipeline(&plan, &self.query_id, &self.ctx)?;
+                    }
+                    FragmentPayload::PlanV2(plan) => {
+                        coordinator.prepare_pipeline_v2(&plan, &self.query_id, &self.ctx)?;
+                    }
+                }
             }
         }
 
@@ -358,6 +369,7 @@ impl QueryCoordinator {
         if let Some(cause) = may_error {
             if let Some(request_server_tx) = self.request_server_tx.take() {
                 let may_error = cause.clone();
+                common_tracing::tracing::warn!("Failed to execute pipeline, cause: {}", may_error);
                 futures::executor::block_on(async move {
                     if request_server_tx
                         .send(DataPacket::ErrorCode(may_error))
@@ -437,7 +449,7 @@ impl QueryCoordinator {
             *shutdown_cause = cause;
         }
 
-        if let Some(executor) = &self.executor {
+        if let Some(executor) = self.executor.clone() {
             executor.finish()?;
         }
 
@@ -518,6 +530,7 @@ impl QueryCoordinator {
 
         let async_runtime = self.ctx.get_storage_runtime();
         let query_need_abort = self.ctx.query_need_abort();
+
         let executor =
             PipelineCompleteExecutor::from_pipelines(async_runtime, query_need_abort, pipelines)?;
         self.executor = Some(executor.clone());
@@ -664,7 +677,14 @@ impl QueryCoordinator {
 
         // Merge pipelines if exist locally pipeline
         if let Some(mut fragment_coordinator) = self.fragments_coordinator.remove(&fragment_id) {
-            fragment_coordinator.prepare_pipeline(&self.query_id, &self.ctx)?;
+            match fragment_coordinator.payload.clone() {
+                FragmentPayload::PlanV1(plan) => {
+                    fragment_coordinator.prepare_pipeline(&plan, &self.query_id, &self.ctx)?;
+                }
+                FragmentPayload::PlanV2(plan) => {
+                    fragment_coordinator.prepare_pipeline_v2(&plan, &self.query_id, &self.ctx)?;
+                }
+            }
 
             if fragment_coordinator.pipeline_build_res.is_none() {
                 return Err(ErrorCode::LogicalError(
@@ -710,7 +730,7 @@ impl QueryCoordinator {
 }
 
 struct FragmentCoordinator {
-    node: PlanNode,
+    payload: FragmentPayload,
     initialized: bool,
     fragment_id: usize,
     data_exchange: Option<DataExchange>,
@@ -721,7 +741,7 @@ impl FragmentCoordinator {
     pub fn create(packet: &FragmentPlanPacket) -> Box<FragmentCoordinator> {
         Box::new(FragmentCoordinator {
             initialized: false,
-            node: packet.node.clone(),
+            payload: packet.payload.clone(),
             fragment_id: packet.fragment_id,
             data_exchange: packet.data_exchange.clone(),
             pipeline_build_res: None,
@@ -730,10 +750,10 @@ impl FragmentCoordinator {
 
     pub fn create_exchange_params(&self, query: &QueryCoordinator) -> Result<ExchangeParams> {
         match &self.data_exchange {
-            None => Err(ErrorCode::LogicalError("Cannot found data exchange.")),
+            None => Err(ErrorCode::LogicalError("Cannot find data exchange.")),
             Some(DataExchange::Merge(exchange)) => {
                 Ok(ExchangeParams::MergeExchange(MergeExchangeParams {
-                    schema: self.node.schema(),
+                    schema: self.payload.schema()?,
                     fragment_id: self.fragment_id,
                     query_id: query.query_id.to_string(),
                     destination_id: exchange.destination_id.clone(),
@@ -741,7 +761,7 @@ impl FragmentCoordinator {
             }
             Some(DataExchange::Broadcast(exchange)) => {
                 Ok(ExchangeParams::ShuffleExchange(ShuffleExchangeParams {
-                    schema: self.node.schema(),
+                    schema: self.payload.schema()?,
                     fragment_id: self.fragment_id,
                     query_id: query.query_id.to_string(),
                     executor_id: query.executor_id.to_string(),
@@ -753,15 +773,29 @@ impl FragmentCoordinator {
             }
             Some(DataExchange::ShuffleDataExchange(exchange)) => {
                 Ok(ExchangeParams::ShuffleExchange(ShuffleExchangeParams {
-                    schema: self.node.schema(),
+                    schema: self.payload.schema()?,
                     fragment_id: self.fragment_id,
                     query_id: query.query_id.to_string(),
                     executor_id: query.executor_id.to_string(),
                     destination_ids: exchange.destination_ids.to_owned(),
                     shuffle_scatter: Arc::new(Box::new(HashFlightScatter::try_create(
                         query.ctx.clone(),
-                        self.node.schema(),
+                        self.payload.schema()?,
                         Some(exchange.exchange_expression.clone()),
+                        exchange.destination_ids.len(),
+                    )?)),
+                }))
+            }
+            Some(DataExchange::ShuffleDataExchangeV2(exchange)) => {
+                Ok(ExchangeParams::ShuffleExchange(ShuffleExchangeParams {
+                    schema: self.payload.schema()?,
+                    fragment_id: self.fragment_id,
+                    query_id: query.query_id.to_string(),
+                    executor_id: query.executor_id.to_string(),
+                    destination_ids: exchange.destination_ids.to_owned(),
+                    shuffle_scatter: Arc::new(Box::new(HashFlightScatterV2::try_create(
+                        query.ctx.try_get_function_context()?,
+                        exchange.shuffle_keys.clone(),
                         exchange.destination_ids.len(),
                     )?)),
                 }))
@@ -769,11 +803,40 @@ impl FragmentCoordinator {
         }
     }
 
-    pub fn prepare_pipeline(&mut self, query_id: &str, ctx: &Arc<QueryContext>) -> Result<()> {
+    pub fn prepare_pipeline(
+        &mut self,
+        plan_node: &PlanNode,
+        query_id: &str,
+        ctx: &Arc<QueryContext>,
+    ) -> Result<()> {
         if !self.initialized {
             self.initialized = true;
             let pipeline_builder = QueryPipelineBuilder::create(ctx.clone());
-            let mut build_res = pipeline_builder.finalize(&self.node)?;
+            let mut build_res = pipeline_builder.finalize(plan_node)?;
+
+            let ctx = ctx.clone();
+            let query_id = query_id.to_string();
+            build_res.main_pipeline.set_on_finished(move |may_error| {
+                let exchange_manager = ctx.get_exchange_manager();
+                exchange_manager.on_finished_query(&query_id, may_error);
+            });
+
+            self.pipeline_build_res = Some(build_res);
+        }
+
+        Ok(())
+    }
+
+    pub fn prepare_pipeline_v2(
+        &mut self,
+        plan: &PhysicalPlan,
+        query_id: &str,
+        ctx: &Arc<QueryContext>,
+    ) -> Result<()> {
+        if !self.initialized {
+            self.initialized = true;
+            let pipeline_builder = PipelineBuilderV2::create(ctx.clone());
+            let mut build_res = pipeline_builder.finalize(plan)?;
 
             let ctx = ctx.clone();
             let query_id = query_id.to_string();

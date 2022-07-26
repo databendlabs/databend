@@ -1,24 +1,21 @@
-statement query T 
+statement query T
 select rtrim('abc      ');
 
-----  
+----
 abc
 
-statement query T 
+statement ok
 select rtrim('');
 
-----  
-	
-
-statement query T 
+statement query T
 select rtrim('abc');
 
-----  
+----
 abc
 
-statement query T 
+statement query T
 select rtrim(null);
 
-----  
+----
 NULL
 

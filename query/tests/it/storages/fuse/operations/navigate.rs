@@ -49,7 +49,10 @@ async fn test_fuse_navigate() -> Result<()> {
     fixture.create_default_table().await?;
 
     // 1.1 first commit
-    let qry = format!("insert into '{}'.'{}' values (1), (2) ", db, tbl);
+    let qry = format!(
+        "insert into '{}'.'{}' values (1, (2, 3)), (2, (4, 6)) ",
+        db, tbl
+    );
     execute_query(ctx.clone(), qry.as_str())
         .await?
         .try_collect::<Vec<DataBlock>>()
@@ -65,7 +68,7 @@ async fn test_fuse_navigate() -> Result<()> {
     tokio::time::sleep(Duration::from_millis(2)).await;
 
     // 1.2 second commit
-    let qry = format!("insert into '{}'.'{}' values (3) ", db, tbl);
+    let qry = format!("insert into '{}'.'{}' values (3, (6, 9)) ", db, tbl);
     execute_query(ctx.clone(), qry.as_str())
         .await?
         .try_collect::<Vec<DataBlock>>()
@@ -133,7 +136,7 @@ async fn test_fuse_historical_table_is_read_only() -> Result<()> {
     let ctx = fixture.ctx();
     fixture.create_default_table().await?;
 
-    let qry = format!("insert into '{}'.'{}' values (1)", db, tbl);
+    let qry = format!("insert into '{}'.'{}' values (1, (2, 3))", db, tbl);
     execute_query(ctx.clone(), qry.as_str())
         .await?
         .try_collect::<Vec<DataBlock>>()

@@ -45,9 +45,9 @@ pub trait Rule {
 pub enum RuleID {
     // Rewrite rules
     NormalizeScalarFilter,
+    NormalizeDisjunctiveFilter,
     PushDownFilterProject,
     PushDownFilterEvalScalar,
-    NormalizeDisjunctiveFilter,
     PushDownFilterJoin,
     EliminateEvalScalar,
     EliminateFilter,
@@ -55,6 +55,7 @@ pub enum RuleID {
     MergeProject,
     MergeEvalScalar,
     MergeFilter,
+    SplitAggregate,
 
     // Implementation rules
     ImplementGet,
@@ -76,6 +77,7 @@ impl Display for RuleID {
             RuleID::MergeEvalScalar => write!(f, "MergeEvalScalar"),
             RuleID::MergeFilter => write!(f, "MergeFilter"),
             RuleID::NormalizeScalarFilter => write!(f, "NormalizeScalarFilter"),
+            RuleID::SplitAggregate => write!(f, "SplitAggregate"),
             RuleID::NormalizeDisjunctiveFilter => write!(f, "NormalizeDisjunctiveFilter"),
         }
     }

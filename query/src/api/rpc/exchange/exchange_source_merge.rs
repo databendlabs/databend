@@ -55,7 +55,7 @@ impl ExchangeMergeSource {
 #[async_trait::async_trait]
 impl Processor for ExchangeMergeSource {
     fn name(&self) -> &'static str {
-        "ExchangeSubscriberSource"
+        "ExchangeMergeSource"
     }
 
     fn as_any(&mut self) -> &mut dyn Any {

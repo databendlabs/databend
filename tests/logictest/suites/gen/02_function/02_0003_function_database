@@ -1,6 +1,6 @@
-statement query T 
-SELECT database();
+statement query TT
+SELECT database(), currentDatabase();
 
-----  
-default
+----
+default default
 

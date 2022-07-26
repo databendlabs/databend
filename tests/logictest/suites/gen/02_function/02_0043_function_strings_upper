@@ -1,18 +1,18 @@
-statement query T 
+statement query T
 SELECT UPPER('Hello,World!');
 
-----  
+----
 HELLO,WORLD!
 
-statement query T 
+statement query T
 SELECT UPPER('Здравствуйте');
 
-----  
+----
 ЗДРАВСТВУЙТЕ
 
-statement query T 
+statement query T
 SELECT UPPER(NULL);
 
-----  
+----
 NULL
 

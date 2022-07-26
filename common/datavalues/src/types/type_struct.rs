@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use common_arrow::arrow::datatypes::DataType as ArrowType;
@@ -20,6 +21,7 @@ use common_exception::Result;
 
 use super::data_type::DataType;
 use super::data_type::DataTypeImpl;
+use super::data_type::ARROW_EXTENSION_NAME;
 use super::type_id::TypeID;
 use crate::prelude::*;
 use crate::serializations::StructSerializer;
@@ -27,21 +29,23 @@ use crate::serializations::TypeSerializerImpl;
 
 #[derive(Default, Clone, serde::Deserialize, serde::Serialize)]
 pub struct StructType {
-    names: Vec<String>,
+    names: Option<Vec<String>>,
     types: Vec<DataTypeImpl>,
 }
 
 impl StructType {
-    pub fn new_impl(names: Vec<String>, types: Vec<DataTypeImpl>) -> DataTypeImpl {
+    pub fn new_impl(names: Option<Vec<String>>, types: Vec<DataTypeImpl>) -> DataTypeImpl {
         DataTypeImpl::Struct(Self::create(names, types))
     }
 
-    pub fn create(names: Vec<String>, types: Vec<DataTypeImpl>) -> Self {
-        debug_assert!(names.len() == types.len());
+    pub fn create(names: Option<Vec<String>>, types: Vec<DataTypeImpl>) -> Self {
+        if let Some(ref names) = names {
+            debug_assert!(names.len() == types.len());
+        }
         StructType { names, types }
     }
 
-    pub fn names(&self) -> &Vec<String> {
+    pub fn names(&self) -> &Option<Vec<String>> {
         &self.names
     }
 
@@ -64,18 +68,64 @@ impl DataType for StructType {
         let mut type_name = String::new();
         type_name.push_str("Struct(");
         let mut first = true;
-        for (name, ty) in self.names.iter().zip(self.types.iter()) {
-            if !first {
-                type_name.push_str(", ");
+        match &self.names {
+            Some(names) => {
+                for (name, ty) in names.iter().zip(self.types.iter()) {
+                    if !first {
+                        type_name.push_str(", ");
+                    }
+                    first = false;
+                    type_name.push_str(name);
+                    type_name.push(' ');
+                    type_name.push_str(&ty.name());
+                }
             }
-            first = false;
-            type_name.push_str(name);
-            type_name.push(' ');
-            type_name.push_str(&ty.name());
+            None => {
+                for ty in self.types.iter() {
+                    if !first {
+                        type_name.push_str(", ");
+                    }
+                    first = false;
+                    type_name.push_str(&ty.name());
+                }
+            }
         }
         type_name.push(')');
 
         type_name
+    }
+
+    fn sql_name(&self) -> String {
+        let mut sql_name = String::new();
+        sql_name.push_str("TUPLE(");
+        let mut first = true;
+        match &self.names {
+            Some(names) => {
+                for (name, ty) in names.iter().zip(self.types.iter()) {
+                    if !first {
+                        sql_name.push_str(", ");
+                    }
+                    first = false;
+                    sql_name.push('`');
+                    sql_name.push_str(name);
+                    sql_name.push('`');
+                    sql_name.push(' ');
+                    sql_name.push_str(&ty.sql_name());
+                }
+            }
+            None => {
+                for ty in self.types.iter() {
+                    if !first {
+                        sql_name.push_str(", ");
+                    }
+                    first = false;
+                    sql_name.push_str(&ty.sql_name());
+                }
+            }
+        }
+        sql_name.push(')');
+
+        sql_name
     }
 
     fn can_inside_nullable(&self) -> bool {
@@ -107,14 +157,30 @@ impl DataType for StructType {
     }
 
     fn arrow_type(&self) -> ArrowType {
-        let fields = self
-            .names
+        let names = match &self.names {
+            Some(names) => names.clone(),
+            None => (0..self.types.len())
+                .map(|i| i.to_string())
+                .collect::<Vec<_>>(),
+        };
+        let fields = names
             .iter()
             .zip(self.types.iter())
             .map(|(name, type_)| type_.to_arrow_field(name))
             .collect();
 
         ArrowType::Struct(fields)
+    }
+
+    fn custom_arrow_meta(&self) -> Option<BTreeMap<String, String>> {
+        match self.names {
+            Some(_) => None,
+            None => {
+                let mut mp = BTreeMap::new();
+                mp.insert(ARROW_EXTENSION_NAME.to_string(), "Tuple".to_string());
+                Some(mp)
+            }
+        }
     }
 
     fn create_serializer_inner<'a>(&self, col: &'a ColumnRef) -> Result<TypeSerializerImpl<'a>> {
@@ -125,7 +191,6 @@ impl DataType for StructType {
             inners.push(t.create_serializer(c)?)
         }
         Ok(StructSerializer {
-            names: self.names.clone(),
             inners,
             column: col,
         }
