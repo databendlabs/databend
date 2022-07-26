@@ -1,6 +1,6 @@
 ---
-title: 'COPY INTO <table> FROM FILES BY URL'
-sidebar_label: 'COPY INTO <table> FROM FILES BY URL'
+title: 'COPY INTO <table> FROM REMOTE FILES'
+sidebar_label: 'COPY INTO <table> FROM REMOTE FILES'
 description:
   'Loads data from remote files by URL'
 ---
