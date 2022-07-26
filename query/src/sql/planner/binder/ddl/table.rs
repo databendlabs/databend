@@ -15,6 +15,7 @@
 use core::fmt::Write;
 use std::collections::BTreeMap;
 use std::collections::HashSet;
+use std::sync::Arc;
 
 use common_ast::ast::OptimizeTableAction as AstOptimizeTableAction;
 use common_ast::ast::*;
@@ -40,6 +41,8 @@ use crate::sql::binder::scalar::ScalarBinder;
 use crate::sql::binder::Binder;
 use crate::sql::is_reserved_opt_key;
 use crate::sql::optimizer::optimize;
+use crate::sql::optimizer::OptimizerConfig;
+use crate::sql::optimizer::OptimizerContext;
 use crate::sql::plans::create_table_v2::CreateTablePlanV2;
 use crate::sql::plans::Plan;
 use crate::sql::BindContext;
@@ -443,8 +446,10 @@ impl<'a> Binder {
                 let bind_context = BindContext::new();
                 let stmt = Statement::Query(Box::new(*query.clone()));
                 let select_plan = self.bind_statement(&bind_context, &stmt).await?;
-                let select_plan = optimize(self.ctx.clone(), select_plan)?;
-                Some(Box::new(select_plan))
+                // Don't enable distributed optimization for `CREATE TABLE ... AS SELECT ...` for now
+                let opt_ctx = Arc::new(OptimizerContext::new(OptimizerConfig::default()));
+                let optimized_plan = optimize(self.ctx.clone(), opt_ctx, select_plan)?;
+                Some(Box::new(optimized_plan))
             } else {
                 None
             },

@@ -23,6 +23,7 @@ mod flight_client;
 mod flight_scatter;
 mod flight_scatter_broadcast;
 mod flight_scatter_hash;
+mod flight_scatter_hash_v2;
 mod flight_service;
 mod packets;
 
@@ -31,7 +32,9 @@ pub use exchange::DataExchange;
 pub use exchange::DataExchangeManager;
 pub use exchange::MergeExchange;
 pub use exchange::ShuffleDataExchange;
+pub use exchange::ShuffleDataExchangeV2;
 pub use packets::ExecutePartialQueryPacket;
+pub use packets::FragmentPayload;
 pub use packets::FragmentPlanPacket;
 pub use packets::InitNodesChannelPacket;
 pub use packets::Packet;

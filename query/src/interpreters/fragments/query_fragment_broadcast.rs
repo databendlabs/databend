@@ -28,6 +28,7 @@ use common_planners::PlanRewriter;
 use common_planners::RemotePlan;
 
 use crate::api::BroadcastExchange;
+use crate::api::FragmentPayload;
 use crate::interpreters::fragments::partition_state::PartitionState;
 use crate::interpreters::fragments::QueryFragment;
 use crate::interpreters::QueryFragmentAction;
@@ -59,7 +60,7 @@ impl BroadcastQueryFragment {
 }
 
 impl QueryFragment for BroadcastQueryFragment {
-    fn distribute_query(&self) -> Result<bool> {
+    fn is_distributed_query(&self) -> Result<bool> {
         Ok(true)
     }
 
@@ -82,10 +83,14 @@ impl QueryFragment for BroadcastQueryFragment {
             }
 
             let action = &input_actions.get_actions()[0];
+            let plan = match &action.payload {
+                FragmentPayload::PlanV1(node) => node,
+                FragmentPayload::PlanV2(_) => unreachable!(),
+            };
             let fragment_action = QueryFragmentAction::create(
                 actions.get_local_executor(),
                 self.input
-                    .rewrite_remote_plan(&self.broadcast_plan.input, &action.node)?,
+                    .rewrite_remote_plan(&self.broadcast_plan.input, plan)?,
             );
 
             fragment_actions.add_action(fragment_action);
@@ -93,10 +98,14 @@ impl QueryFragment for BroadcastQueryFragment {
             from_multiple_nodes = true;
             // We run exchange data on the current hosts
             for action in input_actions.get_actions() {
+                let plan = match &action.payload {
+                    FragmentPayload::PlanV1(node) => node,
+                    FragmentPayload::PlanV2(_) => unreachable!(),
+                };
                 let fragment_action = QueryFragmentAction::create(
                     action.executor.clone(),
                     self.input
-                        .rewrite_remote_plan(&self.broadcast_plan.input, &action.node)?,
+                        .rewrite_remote_plan(&self.broadcast_plan.input, plan)?,
                 );
 
                 fragment_actions.add_action(fragment_action);

@@ -12,10 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod exchange;
 mod join;
 mod select;
 mod subquery;
 
+use std::future::Future;
 use std::io::Write;
 use std::sync::Arc;
 
@@ -59,6 +61,7 @@ async fn run_test(ctx: Arc<QueryContext>, suite: &Suite) -> Result<String> {
                 ctx.clone(),
                 metadata.clone(),
                 RuleList::create(suite.rules.clone())?,
+                false,
             );
             let optimized = heuristic_opt.optimize(s_expr)?;
             optimized.to_format_tree(&metadata).format_indent()
@@ -69,13 +72,14 @@ async fn run_test(ctx: Arc<QueryContext>, suite: &Suite) -> Result<String> {
     Ok(result)
 }
 
-pub(super) async fn run_suites(
+pub(super) async fn run_suites<'a, Fut: Future<Output = Result<String>>>(
     ctx: Arc<QueryContext>,
     file: &mut std::fs::File,
-    suites: &[Suite],
+    suites: &'a [Suite],
+    test_func: impl Fn(Arc<QueryContext>, &'a Suite) -> Fut,
 ) -> Result<()> {
     for suite in suites {
-        let result = run_test(ctx.clone(), suite).await?;
+        let result = test_func(ctx.clone(), suite).await?;
 
         if !suite.comment.is_empty() {
             writeln!(file, "{}", &suite.comment)?;

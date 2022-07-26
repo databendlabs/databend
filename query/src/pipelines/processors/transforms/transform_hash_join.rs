@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::VecDeque;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
@@ -56,12 +57,11 @@ impl Sink for SinkBuildHashTable {
 enum HashJoinStep {
     Build,
     Probe,
-    Finished,
 }
 
 pub struct TransformHashJoinProbe {
     input_data: Option<DataBlock>,
-    output_data_blocks: Vec<DataBlock>,
+    output_data_blocks: VecDeque<DataBlock>,
 
     input_port: Arc<InputPort>,
     output_port: Arc<OutputPort>,
@@ -81,7 +81,7 @@ impl TransformHashJoinProbe {
         let default_block_size = ctx.get_settings().get_max_block_size().unwrap_or(102400);
         ProcessorPtr::create(Box::new(TransformHashJoinProbe {
             input_data: None,
-            output_data_blocks: vec![],
+            output_data_blocks: VecDeque::new(),
             input_port,
             output_port,
             step: HashJoinStep::Build,
@@ -93,7 +93,7 @@ impl TransformHashJoinProbe {
     fn probe(&mut self, block: &DataBlock) -> Result<()> {
         self.probe_state.clear();
         self.output_data_blocks
-            .append(&mut self.join_state.probe(block, &mut self.probe_state)?);
+            .extend(self.join_state.probe(block, &mut self.probe_state)?);
         Ok(())
     }
 }
@@ -101,8 +101,7 @@ impl TransformHashJoinProbe {
 #[async_trait::async_trait]
 impl Processor for TransformHashJoinProbe {
     fn name(&self) -> &'static str {
-        static NAME: &str = "TransformHashJoin";
-        NAME
+        "HashJoin"
     }
 
     fn as_any(&mut self) -> &mut dyn Any {
@@ -119,12 +118,13 @@ impl Processor for TransformHashJoinProbe {
                 }
 
                 if !self.output_port.can_push() {
+                    self.input_port.set_not_need_data();
                     return Ok(Event::NeedConsume);
                 }
 
                 if !self.output_data_blocks.is_empty() {
-                    self.output_port
-                        .push_data(Ok(self.output_data_blocks.remove(0)));
+                    let data = self.output_data_blocks.pop_front().unwrap();
+                    self.output_port.push_data(Ok(data));
                     return Ok(Event::NeedConsume);
                 }
 
@@ -132,27 +132,25 @@ impl Processor for TransformHashJoinProbe {
                     return Ok(Event::Sync);
                 }
 
-                if self.input_port.is_finished() {
-                    self.output_port.finish();
-                    self.step = HashJoinStep::Finished;
-                    return Ok(Event::Finished);
+                if self.input_port.has_data() {
+                    let data = self.input_port.pull_data().unwrap()?;
+                    self.input_data = Some(data);
+                    return Ok(Event::Sync);
                 }
 
-                if let Some(data) = self.input_port.pull_data() {
-                    self.input_data = Some(data?);
-                    return Ok(Event::Sync);
+                if self.input_port.is_finished() {
+                    self.output_port.finish();
+                    return Ok(Event::Finished);
                 }
 
                 self.input_port.set_need_data();
                 Ok(Event::NeedData)
             }
-            HashJoinStep::Finished => Ok(Event::Finished),
         }
     }
 
     fn process(&mut self) -> Result<()> {
         match self.step {
-            HashJoinStep::Finished => Ok(()),
             HashJoinStep::Build => Ok(()),
             HashJoinStep::Probe => {
                 if let Some(data) = self.input_data.take() {

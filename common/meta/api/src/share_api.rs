@@ -18,6 +18,8 @@ use common_meta_app::share::CreateShareReply;
 use common_meta_app::share::CreateShareReq;
 use common_meta_app::share::DropShareReply;
 use common_meta_app::share::DropShareReq;
+use common_meta_app::share::GetShareGrantObjectReply;
+use common_meta_app::share::GetShareGrantObjectReq;
 use common_meta_app::share::GrantShareObjectReply;
 use common_meta_app::share::GrantShareObjectReq;
 use common_meta_app::share::RemoveShareAccountReply;
@@ -43,4 +45,9 @@ pub trait ShareApi: Sync + Send {
         &self,
         req: RemoveShareAccountReq,
     ) -> MetaResult<RemoveShareAccountReply>;
+
+    async fn get_share_grant_objects(
+        &self,
+        req: GetShareGrantObjectReq,
+    ) -> MetaResult<GetShareGrantObjectReply>;
 }
