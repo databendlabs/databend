@@ -10,7 +10,7 @@ pwd
 BUILD_PROFILE="${BUILD_PROFILE:-debug}"
 
 query_config_path="scripts/ci/deploy/config/databend-query-node-1.toml"
-query_test_path="tests/logictest/suites/gen/05_ddl"
+query_test_path="tests/logictest"
 bend_repo_url="https://github.com/datafuselabs/databend"
 
 usage() {
@@ -199,13 +199,9 @@ run_test() {
             # download suites into ./old_suite
             download_test_suite $query_ver
         )
-        # Move and rename old suites files, add "old_suite"
-        for file in $(ls old_suite/$query_test_path)
-        do
-            mv old_suite/$query_test_path/$file $query_test_path/old_suite_$file
-        done
-        cd "$SCRIPT_PATH/../../tests/logictest" || exit
-        python3 main.py "old_suite_"
+        # logictest dir include all suites and scripts fit old query
+        cd "old_suite/tests/logictest" || exit
+        python3 main.py "_ddl_"
         cd -
     fi
 }
