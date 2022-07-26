@@ -1,4 +1,10 @@
 statement ok
+set enable_planner_v2=1;
+
+statement ok
+DROP FUNCTION IF EXISTS test_alter_udf;
+
+statement ok
 CREATE FUNCTION test_alter_udf AS (p) -> not(is_null(p));
 
 statement ok

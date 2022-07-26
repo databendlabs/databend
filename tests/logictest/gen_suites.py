@@ -36,7 +36,7 @@ STATEMENT_ERROR = """statement error {error_id}
 
 """
 
-STATEMENT_QUERY = """statement query {query_options} {labels}
+STATEMENT_QUERY = """statement query {query_options_with_labels}
 {statement}
 
 {results}
@@ -186,7 +186,7 @@ def parse_cases(sql_file):
                 continue
 
             mysql_results = mysql_fetch_results(statement)
-            labels = ""
+            query_options_with_labels = f"{query_options}"
 
             log.debug("sql: " + statement)
             log.debug("mysql return: " + mysql_results)
@@ -199,20 +199,21 @@ def parse_cases(sql_file):
                 case_results = case_results + "\n" + RESULTS_TEMPLATE.format(
                     results_string=http_results, label_separate="---- http")
 
-                labels = "label(http)"
+                query_options_with_labels = f"{query_options} label(http)"
             else:
                 case_results = RESULTS_TEMPLATE.format(
                     results_string=mysql_results, label_separate="----")
 
             content_output = content_output + STATEMENT_QUERY.format(
-                query_options=query_options,
+                query_options_with_labels=query_options_with_labels,
                 statement=statement,
-                results=case_results,
-                labels=labels)
+                results=case_results)
         else:
             # ok statement
             try:
-                http_client.query_with_session(statement)
+                # insert,drop,create does not need to execute by different handlers
+                if str.lower(statement).split()[0] not in ["insert", "drop", "create"]:
+                    http_client.query_with_session(statement)
                 mysql_client.execute(statement)
             except Exception as err:
                 log.warning(

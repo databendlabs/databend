@@ -1,4 +1,7 @@
 statement ok
+SET enable_planner_v2=1;
+
+statement ok
 DROP DATABASE IF EXISTS ss;
 
 statement ok
@@ -16,7 +19,7 @@ CREATE DATABASE ss1;
 statement ok
 CREATE DATABASE ss2;
 
-statement query T 
+statement query T
 SHOW DATABASES like 'ss%';
 
 ----
@@ -24,7 +27,7 @@ ss
 ss1
 ss2
 
-statement query T 
+statement query T
 SHOW SCHEMAS like 'ss%';
 
 ----
@@ -40,4 +43,7 @@ DROP DATABASE IF EXISTS ss1;
 
 statement ok
 DROP DATABASE IF EXISTS ss2;
+
+statement ok
+SET enable_planner_v2=0;
 

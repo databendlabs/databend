@@ -1,4 +1,19 @@
 statement ok
+set enable_planner_v2=1;
+
+statement ok
+DROP USER IF EXISTS 'test-e'@'localhost';
+
+statement ok
+DROP USER IF EXISTS 'test-g'@'localhost';
+
+statement ok
+DROP USER IF EXISTS 'test-h'@'localhost';
+
+statement ok
+DROP USER IF EXISTS 'test-i@localhost';
+
+statement ok
 CREATE USER 'test-e'@'localhost' IDENTIFIED BY 'password';
 
 statement ok
@@ -24,4 +39,16 @@ CREATE USER 'test-i@localhost' IDENTIFIED WITH sha256_password BY 'password';
 
 statement ok
 ALTER USER 'test-i@localhost' IDENTIFIED WITH sha256_password BY 'new-password';
+
+statement ok
+DROP USER IF EXISTS 'test-e'@'localhost';
+
+statement ok
+DROP USER IF EXISTS 'test-g'@'localhost';
+
+statement ok
+DROP USER IF EXISTS 'test-h'@'localhost';
+
+statement ok
+DROP USER IF EXISTS 'test-i@localhost';
 

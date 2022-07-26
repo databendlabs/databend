@@ -1,4 +1,7 @@
 statement ok
+set enable_planner_v2 = 1;
+
+statement ok
 DROP DATABASE IF EXISTS a;
 
 statement ok
@@ -8,7 +11,10 @@ statement ok
 DROP DATABASE IF EXISTS c;
 
 statement ok
-DROP DATABASE IF EXISTS A;
+DROP DATABASE IF EXISTS a2;
+
+statement ok
+DROP DATABASE IF EXISTS b2;
 
 statement ok
 CREATE DATABASE a;
@@ -134,8 +140,30 @@ b
 default
 
 statement ok
-DROP DATABASE b;
+ALTER DATABASE default.b RENAME TO b2;
+
+statement query I
+SELECT * FROM b2.t2;
+
+----
+10
+
+statement query T
+SELECT * FROM system.databases;
+
+----
+system
+INFORMATION_SCHEMA
+a2
+b2
+default
+
+statement ok
+DROP DATABASE b2;
 
 statement ok
 DROP DATABASE a2;
+
+statement ok
+set enable_planner_v2 = 0;
 
