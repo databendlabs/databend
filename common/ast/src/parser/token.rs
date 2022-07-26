@@ -880,7 +880,7 @@ impl TokenKind {
             | TokenKind::WHEN => true,
             | TokenKind::ARRAY
             | TokenKind::AS
-            | TokenKind::CHAR
+            | TokenKind::CHAR => false,
             // | TokenKind::CHARACTER
             | TokenKind::CREATE
             | TokenKind::EXCEPT
