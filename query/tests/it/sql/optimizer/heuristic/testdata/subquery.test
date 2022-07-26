@@ -22,7 +22,7 @@ Project: [number]
 select t.number from numbers(1) as t where exists (select t1.number from numbers(1) as t1 where t.number = t1.number) or t.number > 1
 ----
 Project: [number]
-    Filter: [(marker) OR (t.number > 1)]
+    Filter: [(3) OR (t.number > 1)]
         HashJoin: MARK, build keys: [subquery_0], probe keys: [subquery_2], join filters: []
             HashJoin: INNER, build keys: [t1.number], probe keys: [subquery_2], join filters: []
                 Scan: default.system.numbers
@@ -70,7 +70,7 @@ Project: [number]
 select t.number from numbers(1) as t where not exists (select * from numbers(1) where number = t.number)
 ----
 Project: [number]
-    Filter: [not(marker)]
+    Filter: [not(3)]
         HashJoin: MARK, build keys: [subquery_0], probe keys: [subquery_2], join filters: []
             HashJoin: INNER, build keys: [numbers.number], probe keys: [subquery_2], join filters: []
                 Scan: default.system.numbers
@@ -137,7 +137,7 @@ Project: [number]
 select t.number from numbers(1) as t where exists(select * from numbers(1) as t1 where t.number > t1.number) and not exists(select * from numbers(1) as t1 where t.number < t1.number)
 ----
 Project: [number]
-    Filter: [not(marker)]
+    Filter: [not(4)]
         HashJoin: MARK, build keys: [subquery_0], probe keys: [subquery_3], join filters: []
             Filter: [subquery_3 < t1.number]
                 CrossJoin
