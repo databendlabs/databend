@@ -34,10 +34,10 @@ ALTER DATABASE c RENAME TO a;
 statement ok
 ALTER DATABASE IF EXISTS c RENAME TO a;
 
-statement query T 
+statement query T
 SELECT * FROM system.databases;
 
-----  
+----
 system
 INFORMATION_SCHEMA
 a
@@ -50,10 +50,10 @@ ALTER DATABASE IF EXISTS c RENAME TO C;
 statement error 1003
 ALTER DATABASE c RENAME TO C; 
 
-statement query T 
+statement query T
 SELECT * FROM system.databases;
 
-----  
+----
 system
 INFORMATION_SCHEMA
 a
@@ -66,10 +66,10 @@ ALTER DATABASE IF EXISTS system RENAME TO C;
 statement error 1002
 ALTER DATABASE system RENAME TO C; 
 
-statement query T 
+statement query T
 SELECT * FROM system.databases;
 
-----  
+----
 system
 INFORMATION_SCHEMA
 a
@@ -82,10 +82,10 @@ ALTER DATABASE a RENAME TO b;
 statement error 2301
 ALTER DATABASE IF EXISTS a RENAME TO b; 
 
-statement query T 
+statement query T
 SELECT * FROM system.databases;
 
-----  
+----
 system
 INFORMATION_SCHEMA
 a
@@ -95,20 +95,20 @@ default
 statement ok
 ALTER DATABASE a RENAME TO a2;
 
-statement query T 
+statement query T
 SELECT * FROM system.databases;
 
-----  
+----
 system
 INFORMATION_SCHEMA
 a2
 b
 default
 
-statement query I 
+statement query I
 SELECT * FROM a2.t1;
 
-----  
+----
 1
 
 statement error 1002
@@ -117,16 +117,16 @@ ALTER DATABASE b RENAME TO system;
 statement error 1002
 ALTER DATABASE IF EXISTS b RENAME TO system; 
 
-statement query I 
+statement query I
 SELECT * FROM b.t2;
 
-----  
+----
 10
 
-statement query T 
+statement query T
 SELECT * FROM system.databases;
 
-----  
+----
 system
 INFORMATION_SCHEMA
 a2

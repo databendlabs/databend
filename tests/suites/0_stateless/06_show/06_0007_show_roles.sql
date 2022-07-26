@@ -1,3 +1,0 @@
-CREATE ROLE 'test';
-SHOW ROLES;
-DROP ROLE 'test';

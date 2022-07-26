@@ -12,14 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod desc;
 mod hash_join_state;
 mod join_hash_table;
 mod probe_state;
 mod result_blocks;
 pub(crate) mod row;
 
+pub use desc::HashJoinDesc;
 pub use hash_join_state::HashJoinState;
-pub use join_hash_table::HashJoinDesc;
 pub use join_hash_table::HashTable;
 pub use join_hash_table::JoinHashTable;
 pub use join_hash_table::KeyU128HashTable;

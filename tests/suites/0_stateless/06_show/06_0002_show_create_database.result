@@ -1,6 +1,0 @@
-system	CREATE DATABASE `system` ENGINE=SYSTEM
-test	CREATE DATABASE `test` ENGINE=DEFAULT
-datafuselabs	CREATE DATABASE `datafuselabs` ENGINE=GITHUB(token='xxx')
-system	CREATE DATABASE `system` ENGINE=SYSTEM
-test	CREATE DATABASE `test` ENGINE=DEFAULT
-datafuselabs	CREATE DATABASE `datafuselabs` ENGINE=GITHUB(token='xxx')
