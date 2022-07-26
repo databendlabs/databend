@@ -50,6 +50,8 @@ pub struct BlockPruner {
     table_snapshot: Arc<TableSnapshot>,
 }
 
+const FUTURE_BUFFER_SIZE: usize = 10;
+
 type Pred = Box<dyn Fn(&StatisticsOfColumns) -> Result<bool> + Send + Sync + Unpin>;
 impl BlockPruner {
     pub fn new(table_snapshot: Arc<TableSnapshot>) -> Self {
@@ -78,8 +80,9 @@ impl BlockPruner {
 
         let segment_num = segment_locs.len();
 
+        // shortcut, just returns all the blocks
         if limit.is_none() && filter_expr.is_none() {
-            let a = futures::stream::iter(segment_locs.into_iter().enumerate())
+            let block_metas = futures::stream::iter(segment_locs.into_iter().enumerate())
                 .map(|(idx, (seg_loc, ver))| async move {
                     let segment_reader = MetaReaders::segment_info_reader(ctx.as_ref());
                     let segment_info = segment_reader.read(seg_loc, None, ver).await?;
@@ -88,17 +91,13 @@ impl BlockPruner {
                             .blocks
                             .clone()
                             .into_iter()
-                            .map(move |item| (idx, item))
-                            .collect::<Vec<_>>(),
+                            .map(move |item| (idx, item)),
                     )
                 })
-                .buffered(std::cmp::min(10, segment_num))
+                .buffered(std::cmp::min(FUTURE_BUFFER_SIZE, segment_num))
                 .try_collect::<Vec<_>>()
-                .await?
-                .into_iter()
-                .flatten()
-                .collect::<Vec<_>>();
-            return Ok(a);
+                .await?;
+            return Ok(block_metas.into_iter().flatten().collect::<Vec<_>>());
         }
 
         // Segments and blocks are accumulated concurrently, thus an atomic counter is used
