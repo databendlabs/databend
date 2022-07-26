@@ -366,9 +366,7 @@ impl ShareMeta {
     }
 
     pub fn get_grant_entry(&self, object: ShareGrantObject) -> Option<ShareGrantEntry> {
-        self.database.as_ref()?;
-
-        let database = self.database.as_ref().unwrap();
+        let database = self.database.as_ref()?;
         if database.object == object {
             return Some(database.clone());
         }
