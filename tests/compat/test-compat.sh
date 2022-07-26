@@ -10,7 +10,7 @@ pwd
 BUILD_PROFILE="${BUILD_PROFILE:-debug}"
 
 query_config_path="scripts/ci/deploy/config/databend-query-node-1.toml"
-query_test_path="tests/suites/0_stateless/05_ddl"
+query_test_path="tests/logictest/suites/gen/05_ddl"
 bend_repo_url="https://github.com/datafuselabs/databend"
 
 usage() {
@@ -186,16 +186,25 @@ run_test() {
 
     echo " === Run metasrv related test: 05_ddl"
 
+    # Only run test on mysql handler
+    export DISABLE_HTTP_LOGIC_TEST=true
+    export DISABLE_CLICKHOUSE_LOGIC_TEST=true
+
     if [ "$query_ver" = "current" ]; then
-        suite_path="tests/suites"
+        cd "$SCRIPT_PATH/../../tests/logictest" || exit
+        python3 main.py ".*05_ddl.*"
+        cd -
     else
         (
             # download suites into ./old_suite
             download_test_suite $query_ver
         )
-        suite_path="old_suite/tests/suites"
+        # Move and rename suites dir
+        mv old_suite/$query_test_path $(dirname $query_test_path)/05_old_ddl
+        cd "$SCRIPT_PATH/../../tests/logictest" || exit
+        python3 main.py ".*05_old_ddl.*"
+        cd -
     fi
-    ./tests/databend-test --suites "$suite_path" --mode 'standalone' --run-dir 0_stateless -- '^05_*'
 }
 
 # -- main --
