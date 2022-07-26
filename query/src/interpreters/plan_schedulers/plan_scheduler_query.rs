@@ -19,6 +19,7 @@ use common_exception::Result;
 use common_planners::PlanNode;
 use common_tracing::tracing::debug;
 
+use crate::interpreters::fragments::Fragmenter;
 use crate::interpreters::fragments::QueryFragmentsActions;
 use crate::interpreters::fragments::QueryFragmentsBuilder;
 use crate::interpreters::fragments::RootQueryFragment;
@@ -26,6 +27,9 @@ use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::QueryPipelineBuilder;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
+use crate::sql::executor::PhysicalPlan;
+use crate::sql::executor::PipelineBuilder as PipelineBuilderV2;
+use crate::sql::ColumnBinding;
 
 async fn schedule_query_impl(
     ctx: Arc<QueryContext>,
@@ -34,7 +38,7 @@ async fn schedule_query_impl(
     let query_fragments = QueryFragmentsBuilder::build(ctx.clone(), plan)?;
     let root_query_fragments = RootQueryFragment::create(query_fragments, ctx.clone(), plan)?;
 
-    if !root_query_fragments.distribute_query()? {
+    if !root_query_fragments.is_distributed_query()? {
         return QueryPipelineBuilder::create(ctx.clone()).finalize(plan);
     }
 
@@ -59,4 +63,46 @@ pub async fn schedule_query_new(
     let mut pipeline = schedule_query_impl(ctx, plan).await?;
     pipeline.set_max_threads(settings.get_max_threads()? as usize);
     Ok(pipeline)
+}
+
+pub async fn schedule_query_v2(
+    ctx: Arc<QueryContext>,
+    result_columns: &[ColumnBinding],
+    plan: &PhysicalPlan,
+) -> Result<PipelineBuildResult> {
+    if !plan.is_distributed_plan() {
+        let pb = PipelineBuilderV2::create(ctx.clone());
+        let mut build_res = pb.finalize(plan)?;
+        PipelineBuilderV2::render_result_set(
+            plan.output_schema()?,
+            result_columns,
+            &mut build_res.main_pipeline,
+        )?;
+        build_res.set_max_threads(ctx.get_settings().get_max_threads()? as usize);
+        return Ok(build_res);
+    }
+
+    let fragmenter = Fragmenter::try_create(ctx.clone())?;
+    let root_fragment = fragmenter.build_fragment(plan)?;
+
+    let mut fragments_actions = QueryFragmentsActions::create(ctx.clone());
+    root_fragment.get_actions(ctx.clone(), &mut fragments_actions)?;
+
+    let exchange_manager = ctx.get_exchange_manager();
+
+    let mut build_res = exchange_manager
+        .commit_actions(ctx.clone(), fragments_actions)
+        .await?;
+
+    let settings = ctx.get_settings();
+    build_res.set_max_threads(settings.get_max_threads()? as usize);
+
+    let input_schema = plan.output_schema()?;
+    PipelineBuilderV2::render_result_set(
+        input_schema,
+        result_columns,
+        &mut build_res.main_pipeline,
+    )?;
+
+    Ok(build_res)
 }

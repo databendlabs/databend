@@ -99,7 +99,9 @@ impl Processor for ExchangeShuffleSource {
                     Ok(Event::Sync)
                 }
             };
-        } else if let Ok(flight_data) = self.rx.try_recv() {
+        }
+
+        if let Ok(flight_data) = self.rx.try_recv() {
             self.remote_flight_data = Some(flight_data?);
             return Ok(Event::Sync);
         }

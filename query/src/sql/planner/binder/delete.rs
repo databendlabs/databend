@@ -24,7 +24,7 @@ use common_planners::Expression;
 use crate::sessions::TableContext;
 use crate::sql::binder::Binder;
 use crate::sql::binder::ScalarBinder;
-use crate::sql::exec::ExpressionBuilderWithoutRenaming;
+use crate::sql::executor::ExpressionBuilderWithoutRenaming;
 use crate::sql::plans::Plan;
 use crate::sql::statements::query::QueryASTIRVisitor;
 use crate::sql::BindContext;

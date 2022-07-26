@@ -90,7 +90,7 @@ impl ExchangeMergeSink {
 #[async_trait::async_trait]
 impl Processor for ExchangeMergeSink {
     fn name(&self) -> &'static str {
-        "ExchangeSink"
+        "ExchangeMergeSink"
     }
 
     fn as_any(&mut self) -> &mut dyn Any {

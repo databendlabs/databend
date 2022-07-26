@@ -23,6 +23,7 @@ mod rule_normalize_scalar;
 mod rule_push_down_filter_eval_scalar;
 mod rule_push_down_filter_join;
 mod rule_push_down_filter_project;
+mod rule_split_aggregate;
 
 pub use rule_eliminate_eval_scalar::RuleEliminateEvalScalar;
 pub use rule_eliminate_filter::RuleEliminateFilter;
@@ -35,3 +36,4 @@ pub use rule_normalize_scalar::RuleNormalizeScalarFilter;
 pub use rule_push_down_filter_eval_scalar::RulePushDownFilterEvalScalar;
 pub use rule_push_down_filter_join::RulePushDownFilterJoin;
 pub use rule_push_down_filter_project::RulePushDownFilterProject;
+pub use rule_split_aggregate::RuleSplitAggregate;

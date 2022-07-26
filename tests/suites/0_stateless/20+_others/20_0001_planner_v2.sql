@@ -42,19 +42,19 @@ select parse_json('{"k1": {"k2": [0, 1, 2]}}'):k1.k2[2];
 select '====AGGREGATOR====';
 create table t(a int, b int);
 insert into t values(1, 2), (2, 3), (3, 4);
-select sum(a) + 1 from t group by a;
-select sum(a) from t group by a;
+select sum(a) + 1 from t group by a order by a;
+select sum(a) from t group by a order by a;
 select sum(a) from t;
-select count(a) from t group by a;
+select count(a) from t group by a order by a;
 select count(a) from t;
 select count() from t;
-select count() from t group by a;
+select count() from t group by a order by a;
 select count(1) from t;
-select count(1) from t group by a;
+select count(1) from t group by a order by a;
 select count(*) from t;
-select sum(a) from t group by a having sum(a) > 1;
-select sum(a+1) from t group by a+1 having sum(a+1) = 2;
-select sum(a+1) from t group by a+1, b having sum(a+1) > 3;
+select sum(a) as sum from t group by a having sum(a) > 1 order by sum;
+select sum(a+1) as sum from t group by a+1 having sum(a+1) = 2 order by sum;
+select sum(a+1) as sum from t group by a+1, b having sum(a+1) > 3 order by sum;
 drop table t;
 
 select 1, sum(number) from numbers_mt(1000000);
@@ -120,14 +120,14 @@ insert into t1 values(1.0),(2.0),(3.0);
 create table t2(c smallint unsigned null);
 insert into t2 values(1),(2),(null);
 
-select * from t inner join t1 on t.a = t1.b;
-select * from t inner join t2 on t.a = t2.c;
-select * from t inner join t2 on t.a = t2.c + 1;
-select * from t inner join t2 on t.a = t2.c + 1 and t.a - 1 = t2.c;
-select * from t1 inner join t on t.a = t1.b;
-select * from t2 inner join t on t.a = t2.c;
-select * from t2 inner join t on t.a = t2.c + 1;
-select * from t2 inner join t on t.a = t2.c + 1 and t.a - 1 = t2.c;
+select * from t inner join t1 on t.a = t1.b order by a, b;
+select * from t inner join t2 on t.a = t2.c order by a, c;
+select * from t inner join t2 on t.a = t2.c + 1 order by a, c;
+select * from t inner join t2 on t.a = t2.c + 1 and t.a - 1 = t2.c order by a, c;
+select * from t1 inner join t on t.a = t1.b order by a, b;
+select * from t2 inner join t on t.a = t2.c order by a, c;
+select * from t2 inner join t on t.a = t2.c + 1 order by a, c;
+select * from t2 inner join t on t.a = t2.c + 1 and t.a - 1 = t2.c order by a, c;
 select count(*) from numbers(1000) as t inner join numbers(1000) as t1 on t.number = t1.number;
 
 select t.number from numbers(10000) as t inner join numbers(1000) as t1 on t.number % 1000 = t1.number order by number limit 5;
@@ -222,10 +222,10 @@ insert into t1 values(7, 8), (3, 4), (5, 6);
 drop table if exists t2;
 create table t2(a int, d int);
 insert into t2 values(1, 2), (3, 4), (5, 6);
-select * from t1 join t2 using(a);
-select t1.a from t1 join t2 using(a);
-select t2.d from t1 join t2 using(a);
-select * from t1 natural join t2;
+select * from t1 join t2 using(a) order by t1.a, t2.a;
+select t1.a from t1 join t2 using(a) order by t1.a, t2.a;
+select t2.d from t1 join t2 using(a) order by t1.a, t2.a;
+select * from t1 natural join t2 order by t1.a, t2.a;
 drop table t1;
 drop table t2;
 
@@ -235,7 +235,7 @@ create table t1(a int, b int);
 insert into t1 values(1, 2), (1, 3), (2, 4);
 create table t2(c int, d int);
 insert into t2 values(1, 2), (2, 6);
-select * from t2 inner join t1 on t1.a = t2.c;
+select * from t2 inner join t1 on t1.a = t2.c order by a, b, c, d;
 drop table t1;
 drop table t2;
 
@@ -262,18 +262,6 @@ select [[1, 2, 3],[1, 2, 3]];
 select '====Correlated Subquery====';
 select * from numbers(10) as t where exists (select * from numbers(2) as t1 where t.number = t1.number);
 select (select number from numbers(10) as t1 where t.number = t1.number) from numbers(10) as t order by number;
-
--- explain
-select '===Explain===';
-create table t1(a int, b int);
-create table t2(a int, b int);
-explain select t1.a from t1 where a > 0;
-explain select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a and t2.a > 5 and t1.a > 1);
-explain select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a);
-select '===Explain Pipeline===';
-explain pipeline select t1.a from t1 join t2 on t1.a = t2.a;
-drop table t1;
-drop table t2;
 
 -- position function
 select '===Position Function===';

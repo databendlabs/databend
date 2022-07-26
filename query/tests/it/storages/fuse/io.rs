@@ -341,7 +341,7 @@ async fn test_column_reader_retry_should_return_original_error() -> Result<()> {
     let ctx = create_query_context().await?;
     let operator = ctx.get_storage_operator()?;
     let reader = operator.object("not_exist");
-    let r = BlockReader::read_column(reader, 0, 100).await;
+    let r = BlockReader::read_column(reader, 0, 0, 100).await;
     assert!(r.is_err());
     let e = r.unwrap_err();
     assert_eq!(ErrorCode::storage_not_found_code(), e.code());
@@ -363,7 +363,7 @@ async fn test_column_reader_retry() -> Result<()> {
         let mock = Arc::new(Mock::with_exception(errors));
         let op = Operator::new(mock.clone());
         let reader = op.object("does not matter");
-        let r = BlockReader::read_column(reader, 0, 1).await;
+        let r = BlockReader::read_column(reader, 0, 0, 1).await;
         assert!(r.is_err());
         let e = r.unwrap_err();
         assert_eq!(ErrorCode::storage_other_code(), e.code());
@@ -381,7 +381,7 @@ async fn test_column_reader_retry() -> Result<()> {
         let mock = Arc::new(Mock::with_exception(errors));
         let op = Operator::new(mock.clone());
         let reader = op.object("does not matter");
-        let r = BlockReader::read_column(reader, 0, 1).await;
+        let r = BlockReader::read_column(reader, 0, 0, 1).await;
         assert!(r.is_err());
         let e = r.unwrap_err();
         assert_eq!(ErrorCode::storage_not_found_code(), e.code());
@@ -404,7 +404,7 @@ async fn test_meta_reader_retry() -> Result<()> {
         let mock = Arc::new(Mock::with_exception(errors));
         let op = Operator::new(mock.clone());
         let reader = op.object("does not matter");
-        let r = BlockReader::read_column(reader, 0, 1).await;
+        let r = BlockReader::read_column(reader, 0, 0, 1).await;
         assert!(r.is_err());
         let e = r.unwrap_err();
         assert_eq!(ErrorCode::storage_other_code(), e.code());
@@ -422,7 +422,7 @@ async fn test_meta_reader_retry() -> Result<()> {
         let mock = Arc::new(Mock::with_exception(errors));
         let op = Operator::new(mock.clone());
         let reader = op.object("does not matter");
-        let r = BlockReader::read_column(reader, 0, 1).await;
+        let r = BlockReader::read_column(reader, 0, 0, 1).await;
         assert!(r.is_err());
         let e = r.unwrap_err();
         assert_eq!(ErrorCode::storage_not_found_code(), e.code());

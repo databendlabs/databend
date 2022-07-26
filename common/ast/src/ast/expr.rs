@@ -259,10 +259,17 @@ pub enum TypeName {
     Float32,
     Float64,
     Date,
-    Timestamp { precision: Option<u64> },
+    Timestamp {
+        precision: Option<u64>,
+    },
     String,
-    Array { item_type: Option<Box<TypeName>> },
-    Tuple { fields_type: Vec<TypeName> },
+    Array {
+        item_type: Option<Box<TypeName>>,
+    },
+    Tuple {
+        fields_name: Option<Vec<String>>,
+        fields_type: Vec<TypeName>,
+    },
     Object,
     Variant,
     Nullable(Box<TypeName>),
@@ -540,14 +547,33 @@ impl Display for TypeName {
                     write!(f, "({})", *item_type)?;
                 }
             }
-            TypeName::Tuple { fields_type } => {
-                write!(f, "(")?;
-                write_comma_separated_list(f, fields_type)?;
-                if fields_type.len() == 1 {
-                    write!(f, ",)")?;
-                } else {
-                    write!(f, ")")?;
+            TypeName::Tuple {
+                fields_name,
+                fields_type,
+            } => {
+                write!(f, "TUPLE(")?;
+                let mut first = true;
+                match fields_name {
+                    Some(fields_name) => {
+                        for (name, ty) in fields_name.iter().zip(fields_type.iter()) {
+                            if !first {
+                                write!(f, ", ")?;
+                            }
+                            first = false;
+                            write!(f, "{} {}", name, ty)?;
+                        }
+                    }
+                    None => {
+                        for ty in fields_type.iter() {
+                            if !first {
+                                write!(f, ", ")?;
+                            }
+                            first = false;
+                            write!(f, "{}", ty)?;
+                        }
+                    }
                 }
+                write!(f, ")")?;
             }
             TypeName::Object => {
                 write!(f, "OBJECT")?;

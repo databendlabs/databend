@@ -19,6 +19,7 @@ use goldenfile::Mint;
 
 use super::run_suites;
 use super::Suite;
+use crate::sql::optimizer::heuristic::run_test;
 use crate::tests::create_query_context;
 
 #[tokio::test]
@@ -62,5 +63,5 @@ pub async fn test_heuristic_optimizer_join() -> Result<()> {
         },
     ];
 
-    run_suites(ctx, &mut file, &suites).await
+    run_suites(ctx, &mut file, &suites, run_test).await
 }
