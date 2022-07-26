@@ -23,6 +23,7 @@ use common_meta_app::schema::TableNameIdent;
 use common_meta_app::share::AddShareAccountReq;
 use common_meta_app::share::CreateShareReq;
 use common_meta_app::share::DropShareReq;
+use common_meta_app::share::GetShareGrantObjectReq;
 use common_meta_app::share::GrantShareObjectReq;
 use common_meta_app::share::RemoveShareAccountReq;
 use common_meta_app::share::RevokeShareObjectReq;
@@ -63,6 +64,7 @@ impl ShareApiTestSuite {
         suite.share_create_show_drop(&b.build().await).await?;
         suite.share_add_remove_account(&b.build().await).await?;
         suite.share_grant_revoke_object(&b.build().await).await?;
+        suite.get_share_grant_objects(&b.build().await).await?;
 
         Ok(())
     }
@@ -730,6 +732,165 @@ impl ShareApiTestSuite {
                 get_share_meta_by_id_or_err(mt.as_kv_api(), share_id, "").await?;
             assert!(share_meta.database.is_none());
             assert!(share_meta.entries.is_empty());
+        }
+
+        Ok(())
+    }
+
+    #[tracing::instrument(level = "debug", skip_all)]
+    async fn get_share_grant_objects<MT: ShareApi + AsKVApi + SchemaApi>(
+        &self,
+        mt: &MT,
+    ) -> anyhow::Result<()> {
+        let tenant = "tenant1";
+        let share1 = "share1";
+        let db_name = "db1";
+        let tbl_name = "table1";
+
+        let share_name = ShareNameIdent {
+            tenant: tenant.to_string(),
+            share_name: share1.to_string(),
+        };
+        let db_id: u64;
+
+        tracing::info!("--- get unknown share");
+        {
+            let req = GetShareGrantObjectReq {
+                share_name: share_name.clone(),
+                object: None,
+            };
+
+            let res = mt.get_share_grant_objects(req).await;
+            tracing::info!("get_share_grant_objects res: {:?}", res);
+            let err = res.unwrap_err();
+            assert_eq!(
+                ErrorCode::UnknownShare("").code(),
+                ErrorCode::from(err).code()
+            );
+        }
+
+        tracing::info!("--- create share1");
+        let create_on = Utc::now();
+        {
+            let req = CreateShareReq {
+                if_not_exists: false,
+                share_name: share_name.clone(),
+                comment: None,
+                create_on,
+            };
+
+            let res = mt.create_share(req).await;
+            tracing::info!("create share res: {:?}", res);
+            let res = res.unwrap();
+            assert_eq!(1, res.share_id, "first database id is 1");
+        }
+
+        tracing::info!("--- get share");
+        {
+            let req = GetShareGrantObjectReq {
+                share_name: share_name.clone(),
+                object: None,
+            };
+
+            let res = mt.get_share_grant_objects(req).await;
+            tracing::info!("get_share_grant_objects res: {:?}", res);
+            let res = res.unwrap();
+            assert!(res.objects.is_empty());
+        }
+
+        tracing::info!("--- create db1,table1");
+        {
+            let plan = CreateDatabaseReq {
+                if_not_exists: false,
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                },
+                meta: DatabaseMeta::default(),
+            };
+
+            let res = mt.create_database(plan).await?;
+            tracing::info!("create database res: {:?}", res);
+            db_id = res.db_id;
+
+            let req = CreateTableReq {
+                if_not_exists: false,
+                name_ident: TableNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                    table_name: tbl_name.to_string(),
+                },
+                table_meta: TableMeta::default(),
+            };
+
+            let res = mt.create_table(req.clone()).await?;
+            tracing::info!("create table res: {:?}", res);
+        }
+
+        tracing::info!("--- get share with db1");
+        {
+            let req = GetShareGrantObjectReq {
+                share_name: share_name.clone(),
+                object: Some(ShareGrantObjectName::Database(db_name.to_string())),
+            };
+
+            let res = mt.get_share_grant_objects(req).await;
+            tracing::info!("get_share_grant_objects res: {:?}", res);
+            let res = res.unwrap();
+            assert!(res.objects.is_empty());
+        }
+
+        tracing::info!("--- share db1 and table1");
+        {
+            let req = GrantShareObjectReq {
+                share_name: share_name.clone(),
+                object: ShareGrantObjectName::Database(db_name.to_string()),
+                grant_on: create_on,
+                privilege: ShareGrantObjectPrivilege::Usage,
+            };
+
+            let res = mt.grant_object(req).await?;
+            tracing::info!("grant object res: {:?}", res);
+
+            let tbl_ob_name =
+                ShareGrantObjectName::Table(db_name.to_string(), tbl_name.to_string());
+            let req = GrantShareObjectReq {
+                share_name: share_name.clone(),
+                object: tbl_ob_name.clone(),
+                grant_on: create_on,
+                privilege: ShareGrantObjectPrivilege::Usage,
+            };
+
+            let res = mt.grant_object(req).await?;
+            tracing::info!("grant object res: {:?}", res);
+        }
+
+        tracing::info!("--- get share with db1");
+        {
+            let req = GetShareGrantObjectReq {
+                share_name: share_name.clone(),
+                object: Some(ShareGrantObjectName::Database(db_name.to_string())),
+            };
+
+            let res = mt.get_share_grant_objects(req).await;
+            tracing::info!("get_share_grant_objects res: {:?}", res);
+            let res = res.unwrap();
+            assert_eq!(res.objects.len(), 1);
+            let entry = res.objects.get(0).unwrap();
+            assert_eq!(entry.object, ShareGrantObject::Database(db_id));
+        }
+
+        tracing::info!("--- get all share objects");
+        {
+            let req = GetShareGrantObjectReq {
+                share_name: share_name.clone(),
+                object: None,
+            };
+
+            let res = mt.get_share_grant_objects(req).await;
+            tracing::info!("get_share_grant_objects res: {:?}", res);
+            let res = res.unwrap();
+            assert_eq!(res.objects.len(), 2);
         }
 
         Ok(())
