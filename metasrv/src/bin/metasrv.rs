@@ -23,7 +23,7 @@ use common_grpc::RpcClientConf;
 use common_macros::databend_main;
 use common_meta_sled_store::init_sled_db;
 use common_meta_store::MetaStoreProvider;
-use common_tracing::init_global_tracing;
+use common_tracing::init_logging;
 use common_tracing::tracing;
 use databend_meta::api::GrpcServer;
 use databend_meta::api::HttpService;
@@ -63,12 +63,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
         })));
     }
 
-    let _guards = init_global_tracing(
-        "databend-meta",
-        conf.log_dir.as_str(),
-        conf.log_level.as_str(),
-        None,
-    );
+    let _guards = init_logging("databend-meta", &conf.log);
 
     tracing::info!("Databend-meta version: {}", METASRV_COMMIT_VERSION.as_str());
     tracing::info!("Config: {:?}", serde_json::to_string_pretty(&conf).unwrap());

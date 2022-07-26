@@ -239,10 +239,6 @@ impl QueryContext {
         self.shared.query_need_abort()
     }
 
-    pub fn get_query_logger(&self) -> Option<Arc<dyn tracing::Subscriber + Send + Sync>> {
-        self.shared.session.session_mgr.get_query_logger()
-    }
-
     pub fn get_affect(self: &Arc<Self>) -> Option<QueryAffect> {
         self.shared.get_affect()
     }

@@ -28,6 +28,9 @@ use common_storage::StorageHdfsConfig as InnerStorageHdfsConfig;
 use common_storage::StorageParams;
 use common_storage::StorageS3Config as InnerStorageS3Config;
 use common_tracing::Config as InnerLogConfig;
+use common_tracing::FileConfig;
+use common_tracing::FileConfig as InnerFileLogConfig;
+use common_tracing::StderrConfig as InnerStderrLogConfig;
 use serde::Deserialize;
 use serde::Serialize;
 use serfig::collectors::from_env;
@@ -769,6 +772,12 @@ pub struct LogConfig {
     #[clap(long = "log-query-enabled")]
     #[serde(alias = "log_query_enabled")]
     pub query_enabled: bool,
+
+    #[clap(flatten)]
+    pub file: FileLogConfig,
+
+    #[clap(flatten)]
+    pub stderr: StderrLogConfig,
 }
 
 impl Default for LogConfig {
@@ -781,10 +790,17 @@ impl TryInto<InnerLogConfig> for LogConfig {
     type Error = ErrorCode;
 
     fn try_into(self) -> Result<InnerLogConfig> {
+        let mut file: FileConfig = self.file.try_into()?;
+        if self.level != "INFO" {
+            file.level = self.level.to_string();
+        }
+        if self.dir != "./.databend/logs" {
+            file.dir = self.dir.to_string();
+        }
+
         Ok(InnerLogConfig {
-            level: self.level,
-            dir: self.dir,
-            query_enabled: self.query_enabled,
+            file,
+            stderr: self.stderr.try_into()?,
         })
     }
 }
@@ -792,9 +808,91 @@ impl TryInto<InnerLogConfig> for LogConfig {
 impl From<InnerLogConfig> for LogConfig {
     fn from(inner: InnerLogConfig) -> Self {
         Self {
+            level: "INFO".to_string(),
+            dir: "./.databend/logs".to_string(),
+            query_enabled: false,
+            file: inner.file.into(),
+            stderr: inner.stderr.into(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
+#[serde(default)]
+pub struct FileLogConfig {
+    /// Log level <DEBUG|INFO|ERROR>
+    #[clap(long = "log-file-on")]
+    pub on: bool,
+
+    #[clap(long = "log-file-level")]
+    pub level: String,
+
+    /// Log file dir
+    #[clap(long = "log-file-dir", default_value = "./.databend/logs")]
+    pub dir: String,
+}
+
+impl Default for FileLogConfig {
+    fn default() -> Self {
+        InnerFileLogConfig::default().into()
+    }
+}
+
+impl TryInto<InnerFileLogConfig> for FileLogConfig {
+    type Error = ErrorCode;
+
+    fn try_into(self) -> Result<InnerFileLogConfig> {
+        Ok(InnerFileLogConfig {
+            on: self.on,
+            level: self.level,
+            dir: self.dir,
+        })
+    }
+}
+
+impl From<InnerFileLogConfig> for FileLogConfig {
+    fn from(inner: InnerFileLogConfig) -> Self {
+        Self {
+            on: inner.on,
             level: inner.level,
             dir: inner.dir,
-            query_enabled: inner.query_enabled,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
+#[serde(default)]
+pub struct StderrLogConfig {
+    /// Log level <DEBUG|INFO|ERROR>
+    #[clap(long = "log-stderr-on")]
+    pub on: bool,
+
+    #[clap(long = "log-stderr-level")]
+    pub level: String,
+}
+
+impl Default for StderrLogConfig {
+    fn default() -> Self {
+        InnerStderrLogConfig::default().into()
+    }
+}
+
+impl TryInto<InnerStderrLogConfig> for StderrLogConfig {
+    type Error = ErrorCode;
+
+    fn try_into(self) -> Result<InnerStderrLogConfig> {
+        Ok(InnerStderrLogConfig {
+            on: self.on,
+            level: self.level,
+        })
+    }
+}
+
+impl From<InnerStderrLogConfig> for StderrLogConfig {
+    fn from(inner: InnerStderrLogConfig) -> Self {
+        Self {
+            on: inner.on,
+            level: inner.level,
         }
     }
 }

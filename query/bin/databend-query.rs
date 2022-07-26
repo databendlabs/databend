@@ -21,7 +21,7 @@ use common_macros::databend_main;
 use common_meta_embedded::MetaEmbedded;
 use common_meta_grpc::MIN_METASRV_SEMVER;
 use common_metrics::init_default_metrics_recorder;
-use common_tracing::init_global_tracing;
+use common_tracing::init_logging;
 use common_tracing::set_panic_hook;
 use common_tracing::tracing;
 use databend_query::api::HttpService;
@@ -76,12 +76,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
     }
 
     // let _guards = init_tracing_with_file(
-    let _guards = init_global_tracing(
-        app_name.as_str(),
-        conf.log.dir.as_str(),
-        conf.log.level.as_str(),
-        None,
-    );
+    let _guards = init_global_tracing(app_name.as_str(), conf.log);
 
     init_default_metrics_recorder();
 

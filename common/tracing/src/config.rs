@@ -13,19 +13,44 @@
 // limitations under the License.
 
 /// Config for tracing.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub struct Config {
-    pub level: String,
-    pub dir: String,
-    pub query_enabled: bool,
+    pub file: FileConfig,
+    pub stderr: StderrConfig,
 }
 
-impl Default for Config {
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FileConfig {
+    pub on: bool,
+    pub level: String,
+    pub dir: String,
+    // TODO: Add format support in the future, before that we use `json`
+    // pub format: String,
+}
+
+impl Default for FileConfig {
     fn default() -> Self {
         Self {
+            on: true,
             level: "INFO".to_string(),
             dir: "./.databend/logs".to_string(),
-            query_enabled: false,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct StderrConfig {
+    pub on: bool,
+    pub level: String,
+    // TODO: Add format support in the future, before that we use `text`
+    // pub format: String,
+}
+
+impl Default for StderrConfig {
+    fn default() -> Self {
+        Self {
+            on: false,
+            level: "INFO".to_string(),
         }
     }
 }

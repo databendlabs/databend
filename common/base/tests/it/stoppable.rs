@@ -91,9 +91,6 @@ async fn test_stop_handle() -> Result<()> {
     // - Create 2 tasks and start them.
     // - Stop but the task would block.
     // - Signal the task to force stop.
-
-    common_tracing::init_default_ut_tracing();
-
     let (stop_tx, _) = broadcast::channel::<()>(1024);
 
     let mut t1 = FooTask::default();
@@ -146,9 +143,6 @@ async fn test_stop_handle() -> Result<()> {
 async fn test_stop_handle_drop() -> Result<()> {
     // - Create a task and start it.
     // - Then quit and the Drop should forcibly stop it and the test should not block.
-
-    common_tracing::init_default_ut_tracing();
-
     let mut t1 = FooTask::default();
 
     // Start the task

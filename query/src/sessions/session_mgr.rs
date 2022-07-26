@@ -28,7 +28,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_metrics::label_counter;
 use common_storage::init_operator;
-use common_tracing::init_query_logger;
 use common_tracing::tracing;
 use common_tracing::tracing_appender::non_blocking::WorkerGuard;
 use common_users::RoleCacheMgr;
@@ -62,12 +61,9 @@ pub struct SessionManager {
     pub(in crate::sessions) max_sessions: usize,
     pub(in crate::sessions) active_sessions: Arc<RwLock<HashMap<String, Arc<Session>>>>,
     pub(in crate::sessions) storage_cache_manager: RwLock<Arc<CacheManager>>,
-    pub(in crate::sessions) query_logger:
-        RwLock<Option<Arc<dyn tracing::Subscriber + Send + Sync>>>,
     pub status: Arc<RwLock<SessionManagerStatus>>,
     storage_operator: RwLock<Operator>,
     storage_runtime: Arc<Runtime>,
-    _guards: Vec<WorkerGuard>,
 
     user_api_provider: RwLock<Arc<UserApiProvider>>,
     role_cache_manager: RwLock<Arc<RoleCacheMgr>>,
@@ -106,12 +102,6 @@ impl SessionManager {
         let active_sessions = Arc::new(RwLock::new(HashMap::with_capacity(max_sessions)));
         let status = Arc::new(RwLock::new(Default::default()));
 
-        let (_guards, query_logger) = if conf.log.query_enabled {
-            let (_guards, query_logger) = init_query_logger("query-detail", conf.log.dir.as_str());
-            (_guards, Some(query_logger))
-        } else {
-            (Vec::new(), None)
-        };
         let mysql_conn_map = Arc::new(RwLock::new(HashMap::with_capacity(max_sessions)));
         let user_api_provider =
             UserApiProvider::create_global(conf.meta.to_meta_grpc_client_conf()).await?;
@@ -138,11 +128,9 @@ impl SessionManager {
             active_sessions,
             data_exchange_manager: exchange_manager,
             storage_cache_manager: RwLock::new(storage_cache_manager),
-            query_logger: RwLock::new(query_logger),
             status,
             storage_operator: RwLock::new(storage_operator),
             storage_runtime,
-            _guards,
             user_api_provider: RwLock::new(user_api_provider),
             role_cache_manager: RwLock::new(role_cache_manager),
             mysql_conn_map,

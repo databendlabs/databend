@@ -23,10 +23,9 @@ mod panic_hook;
 mod tracing_to_jaeger;
 
 pub use config::Config;
-pub use logging::init_default_ut_tracing;
-pub use logging::init_global_tracing;
-pub use logging::init_meta_ut_tracing;
-pub use logging::init_query_logger;
+pub use config::FileConfig;
+pub use config::StderrConfig;
+pub use logging::init_logging;
 pub use panic_hook::log_panic;
 pub use panic_hook::set_panic_hook;
 pub use tracing;
