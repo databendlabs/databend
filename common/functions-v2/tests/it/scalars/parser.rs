@@ -44,7 +44,7 @@ pub fn transform_expr(ast: common_ast::ast::Expr, columns: &[(&str, DataType)]) 
             let col_id = columns
                 .iter()
                 .position(|(col_name, _)| *col_name == column.name)
-                .unwrap();
+                .unwrap_or_else(|| panic!("expected column {}", column.name));
             RawExpr::ColumnRef {
                 span: transform_span(span),
                 id: col_id,

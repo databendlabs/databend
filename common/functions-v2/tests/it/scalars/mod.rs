@@ -28,6 +28,7 @@ use common_expression::Value;
 use common_functions_v2::scalars::builtin_functions;
 
 mod boolean;
+mod control;
 mod parser;
 mod string;
 
