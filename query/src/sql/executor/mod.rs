@@ -15,6 +15,7 @@
 mod expression_builder;
 mod physical_plan;
 mod physical_plan_builder;
+mod physical_plan_display;
 mod physical_plan_visitor;
 mod physical_scalar;
 mod pipeline_builder;
