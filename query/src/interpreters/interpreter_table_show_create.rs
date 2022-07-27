@@ -45,6 +45,10 @@ impl Interpreter for ShowCreateTableInterpreter {
         "ShowCreateTableInterpreter"
     }
 
+    fn schema(&self) -> DataSchemaRef {
+        self.plan.schema()
+    }
+
     async fn execute(
         &self,
         _input_stream: Option<SendableDataBlockStream>,
