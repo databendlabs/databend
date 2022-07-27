@@ -1315,7 +1315,7 @@ async fn test_affect() -> Result<()> {
             }),
             Some(HttpSessionConf {
                 database: None,
-                max_idle_time: None,
+                keep_server_session_secs: None,
                 settings: Some(BTreeMap::from([
                     ("max_threads".to_string(), "1".to_string()),
                     ("timezone".to_string(), "Asia/Shanghai".to_string()),
@@ -1327,7 +1327,7 @@ async fn test_affect() -> Result<()> {
             None,
             Some(HttpSessionConf {
                 database: None,
-                max_idle_time: None,
+                keep_server_session_secs: None,
                 settings: Some(BTreeMap::from([(
                     "max_threads".to_string(),
                     "6".to_string(),
@@ -1341,7 +1341,7 @@ async fn test_affect() -> Result<()> {
             }),
             Some(HttpSessionConf {
                 database: Some("db2".to_string()),
-                max_idle_time: None,
+                keep_server_session_secs: None,
                 settings: Some(BTreeMap::from([(
                     "max_threads".to_string(),
                     "6".to_string(),
