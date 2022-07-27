@@ -1356,7 +1356,7 @@ async fn test_affect() -> Result<()> {
         assert!(result.error.is_none(), "{} {:?}", json, result.error);
         assert_eq!(result.state, ExecuteStateKind::Succeeded);
         assert_eq!(result.affect, affect);
-        assert_eq!(result.session_conf, session_conf);
+        assert_eq!(result.session_state, session_conf);
     }
     Ok(())
 }

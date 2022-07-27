@@ -158,7 +158,7 @@ pub struct ResponseState {
 pub struct HttpQueryResponseInternal {
     pub data: Option<ResponseData>,
     pub session_id: String,
-    pub session_conf: Option<HttpSessionConf>,
+    pub session_state: Option<HttpSessionConf>,
     pub state: ResponseState,
 }
 
@@ -275,7 +275,7 @@ impl HttpQuery {
         Ok(HttpQueryResponseInternal {
             data,
             state,
-            session_conf,
+            session_state: session_conf,
             session_id: self.session_id.clone(),
         })
     }
@@ -285,7 +285,7 @@ impl HttpQuery {
             data: None,
             session_id: self.session_id.clone(),
             state: self.get_state().await,
-            session_conf: None,
+            session_state: None,
         }
     }
 
