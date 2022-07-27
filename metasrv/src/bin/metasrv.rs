@@ -65,8 +65,11 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
 
     let _guards = init_logging("databend-meta", &conf.log);
 
-    info!("Databend-meta version: {}", METASRV_COMMIT_VERSION.as_str());
-    info!("Config: {:?}", serde_json::to_string_pretty(&conf).unwrap());
+    info!("Databend Meta version: {}", METASRV_COMMIT_VERSION.as_str());
+    info!(
+        "Databend Meta start with config: {:?}",
+        serde_json::to_string_pretty(&conf).unwrap()
+    );
 
     conf.raft_config.check()?;
 
@@ -111,8 +114,32 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
 
     // Join a raft cluster only after all service started.
     meta_node
-        .join_cluster(&conf.raft_config, conf.grpc_api_address)
+        .join_cluster(&conf.raft_config, conf.grpc_api_address.clone())
         .await?;
+
+    // Print information to users.
+    println!("Databend Metasrv");
+    println!("");
+    println!("Version: {}", METASRV_COMMIT_VERSION.as_str());
+    println!("Log:");
+    println!("    File: {}", conf.log.file);
+    println!("    Stderr: {}", conf.log.stderr);
+    println!("Id: {}", conf.raft_config.config_id);
+    println!("Raft Cluster Name: {}", conf.raft_config.cluster_name);
+    println!("Raft Dir: {}", conf.raft_config.raft_dir);
+    println!(
+        "Raft Status: {}",
+        if conf.raft_config.single {
+            "single".to_string()
+        } else {
+            format!("join {:#?}", conf.raft_config.join)
+        }
+    );
+    println!("");
+    println!("HTTP API");
+    println!("   listened at {}", conf.admin_api_address);
+    println!("gRPC API");
+    println!("   listened at {}", conf.grpc_api_address);
 
     stop_handler.wait_to_terminate(stop_tx).await;
     info!("Databend-meta is done shutting down");
