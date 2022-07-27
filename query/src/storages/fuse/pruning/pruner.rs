@@ -13,7 +13,6 @@
 //  limitations under the License.
 //
 
-use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 
 use common_datavalues::DataSchemaRef;
@@ -21,29 +20,24 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_fuse_meta::meta::BlockMeta;
 use common_fuse_meta::meta::Location;
-use common_fuse_meta::meta::StatisticsOfColumns;
 use common_fuse_meta::meta::TableSnapshot;
 use common_planners::Extras;
 use common_tracing::tracing;
 use futures::StreamExt;
 use futures::TryStreamExt;
 
+use super::bloom_filter_predicate;
 use crate::sessions::TableContext;
 use crate::storages::fuse::io::MetaReaders;
-use crate::storages::fuse::pruning::limiter::BloomFilterPruner;
-use crate::storages::fuse::pruning::limiter::BloomPruner;
+use crate::storages::fuse::pruning::limiter;
 use crate::storages::fuse::pruning::limiter::Limiter;
-use crate::storages::fuse::pruning::limiter::NonPruner;
-use crate::storages::fuse::pruning::limiter::Unlimited;
-use crate::storages::index::RangeFilter;
+use crate::storages::fuse::pruning::range_filter_predicate;
 
 pub struct BlockPruner {
     table_snapshot: Arc<TableSnapshot>,
 }
 
 const FUTURE_BUFFER_SIZE: usize = 10;
-
-type Pred = Box<dyn Fn(&StatisticsOfColumns) -> Result<bool> + Send + Sync + Unpin>;
 
 impl BlockPruner {
     pub fn new(table_snapshot: Arc<TableSnapshot>) -> Self {
@@ -75,43 +69,20 @@ impl BlockPruner {
         if limit.is_none() && filter_expr.is_none() {
             return Self::all_the_blocks(segment_locs, ctx.as_ref()).await;
         }
+
         // prepare the limiter
-        let limiter: Box<dyn Limiter + Send + Sync> = if let Some(size) = limit {
-            Box::new(AtomicUsize::new(size))
-        } else {
-            Box::new(Unlimited)
-        };
+        let limiter = limiter::new_limiter(limit);
 
         // prepare the min/max pruner
-        let min_max_pruner: Pred = match filter_expr {
-            Some(exprs) => {
-                let range_filter = RangeFilter::try_create(ctx.clone(), exprs, schema.clone())?;
-                Box::new(move |v: &StatisticsOfColumns| range_filter.eval(v))
-            }
-            _ => Box::new(|_: &StatisticsOfColumns| Ok(true)),
-        };
+        let range_filter_pruner = range_filter_predicate::new(ctx, filter_expr, &schema)?;
 
         let dal = ctx.get_storage_operator()?;
 
-        let filter_block_cols;
-        let bloom_filter: Box<dyn BloomPruner + Send + Sync> = if let Some(expr) = filter_expr {
-            filter_block_cols = super::util::column_names_of_expression(expr);
-            Box::new(BloomFilterPruner::new(
-                &filter_block_cols,
-                expr,
-                &dal,
-                &schema,
-                ctx,
-            ))
-        } else {
-            Box::new(NonPruner)
-        };
+        let bloom_filter_pruner = bloom_filter_predicate::new(ctx, filter_expr, &schema, &dal);
 
         let segment_num = segment_locs.len();
 
-        // A !Copy Wrapper of u64
         struct NonCopy<T>(T);
-
         // convert u64 (which is Copy) into NonCopy( struct which is !Copy)
         // so that "async move" can be avoided in the latter async block
         // See https://github.com/rust-lang/rust/issues/81653
@@ -126,15 +97,16 @@ impl BlockPruner {
                 let idx = { idx }.0;
                 let segment_reader = MetaReaders::segment_info_reader(ctx.as_ref());
                 let segment_info = segment_reader.read(seg_loc, None, version).await?;
-                let mut result = vec![];
-                if min_max_pruner(&segment_info.summary.col_stats)? {
+                let mut result = Vec::with_capacity(segment_info.blocks.len());
+                if range_filter_pruner(&segment_info.summary.col_stats)? {
                     for block_meta in &segment_info.blocks {
-                        if min_max_pruner(&block_meta.col_stats)?
-                            && bloom_filter.eval(block_meta.location.0.as_str()).await?
+                        if range_filter_pruner(&block_meta.col_stats)?
+                            && bloom_filter_pruner
+                                .eval(block_meta.location.0.as_str())
+                                .await?
                         {
-                            if limiter.within_limit(block_meta.row_count as usize) {
-                                result.push((idx, block_meta.clone()))
-                            } else {
+                            result.push((idx, block_meta.clone()));
+                            if !limiter.within_limit(block_meta.row_count as usize) {
                                 break;
                             }
                         }

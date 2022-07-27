@@ -14,12 +14,6 @@
 
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
-
-use common_catalog::table_context::TableContext;
-use common_datavalues::DataSchemaRef;
-use common_planners::Expression;
-use opendal::Operator;
 
 pub trait Limiter {
     fn within_limit(&self, n: usize) -> bool;
@@ -40,57 +34,9 @@ impl Limiter for AtomicUsize {
     }
 }
 
-#[async_trait::async_trait]
-pub trait BloomPruner {
-    async fn eval(&self, loc: &str) -> common_exception::Result<bool>;
-}
-
-pub(crate) struct NonPruner;
-
-#[async_trait::async_trait]
-impl BloomPruner for NonPruner {
-    async fn eval(&self, _loc: &str) -> common_exception::Result<bool> {
-        Ok(true)
-    }
-}
-
-pub struct BloomFilterPruner<'a> {
-    cols: &'a [String],
-    expr: &'a Expression,
-    dal: &'a Operator,
-    schema: &'a DataSchemaRef,
-    ctx: &'a Arc<dyn TableContext>,
-}
-
-impl<'a> BloomFilterPruner<'a> {
-    pub fn new(
-        filter_block_column_names: &'a [String],
-        filter_expression: &'a Expression,
-        dal: &'a Operator,
-        schema: &'a DataSchemaRef,
-        ctx: &'a Arc<dyn TableContext>,
-    ) -> Self {
-        Self {
-            cols: filter_block_column_names,
-            expr: filter_expression,
-            dal,
-            schema,
-            ctx,
-        }
-    }
-}
-
-#[async_trait::async_trait]
-impl BloomPruner for BloomFilterPruner<'_> {
-    async fn eval(&self, loc: &str) -> common_exception::Result<bool> {
-        super::util::filter_block_by_bloom_index(
-            self.ctx,
-            self.dal.clone(),
-            self.schema,
-            self.expr,
-            self.cols,
-            loc,
-        )
-        .await
+pub fn new_limiter(limit: Option<usize>) -> Box<dyn Limiter + Send + Sync> {
+    match limit {
+        Some(size) if size > 0 => Box::new(AtomicUsize::new(size)),
+        _ => Box::new(Unlimited),
     }
 }

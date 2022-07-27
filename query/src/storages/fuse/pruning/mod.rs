@@ -12,7 +12,8 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-mod block_pruner;
+mod bloom_filter_predicate;
 mod limiter;
-mod util;
-pub use block_pruner::BlockPruner;
+mod pruner;
+mod range_filter_predicate;
+pub use pruner::BlockPruner;
