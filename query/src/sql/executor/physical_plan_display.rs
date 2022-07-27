@@ -14,7 +14,6 @@
 //
 
 use std::fmt::Display;
-use std::fmt::Error;
 use std::fmt::Formatter;
 
 use common_datavalues::format_data_type_sql;
@@ -97,7 +96,7 @@ impl Display for PhysicalScalar {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match &self {
             PhysicalScalar::Variable { column_id, .. } => write!(f, "{}", column_id),
-            PhysicalScalar::Constant { value, .. } => write!(f, "{}", value.to_string()),
+            PhysicalScalar::Constant { value, .. } => write!(f, "{}", value),
             PhysicalScalar::Function { name, args, .. } => write!(
                 f,
                 "{}({})",
@@ -167,7 +166,7 @@ impl Display for AggregateFinal {
         let group_items = self
             .group_by
             .iter()
-            .map(|item| format!("{}", item))
+            .map(String::to_string)
             .collect::<Vec<String>>()
             .join(", ");
 
@@ -180,7 +179,7 @@ impl Display for AggregateFinal {
                     item.sig.name,
                     item.args
                         .iter()
-                        .map(|arg| format!("{}", arg))
+                        .map(String::to_string)
                         .collect::<Vec<String>>()
                         .join(", ")
                 )
@@ -201,7 +200,7 @@ impl Display for AggregatePartial {
         let group_items = self
             .group_by
             .iter()
-            .map(|item| format!("{}", item))
+            .map(String::to_string)
             .collect::<Vec<String>>()
             .join(", ");
 
@@ -214,7 +213,7 @@ impl Display for AggregatePartial {
                     item.sig.name,
                     item.args
                         .iter()
-                        .map(|arg| format!("{}", arg))
+                        .map(String::to_string)
                         .collect::<Vec<String>>()
                         .join(", ")
                 )
