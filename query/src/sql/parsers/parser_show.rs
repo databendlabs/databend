@@ -23,7 +23,6 @@ use crate::sql::statements::DfDescribeTable;
 use crate::sql::statements::DfShowDatabases;
 use crate::sql::statements::DfShowFunctions;
 use crate::sql::statements::DfShowKind;
-use crate::sql::statements::DfShowStages;
 use crate::sql::statements::DfShowTables;
 use crate::sql::statements::DfShowTablesStatus;
 use crate::sql::DfParser;
@@ -66,11 +65,6 @@ impl<'a> DfParser<'a> {
     pub(crate) fn parse_show_functions(&mut self) -> Result<DfStatement<'a>, ParserError> {
         let kind = self.parse_show_kind()?;
         Ok(DfStatement::ShowFunctions(DfShowFunctions::create(kind)))
-    }
-
-    pub(crate) fn parse_show_stages(&mut self) -> Result<DfStatement<'a>, ParserError> {
-        let kind = self.parse_show_kind()?;
-        Ok(DfStatement::ShowStages(DfShowStages::create(kind)))
     }
 
     pub(crate) fn parse_show_kind(&mut self) -> Result<DfShowKind, ParserError> {
