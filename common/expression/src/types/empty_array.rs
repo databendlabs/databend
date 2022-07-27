@@ -22,6 +22,7 @@ use crate::types::ValueType;
 use crate::values::Column;
 use crate::values::Scalar;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EmptyArrayType;
 
 impl ValueType for EmptyArrayType {
