@@ -45,7 +45,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
         return Ok(());
     }
 
-    if conf.meta.address.is_empty() {
+    if conf.meta.address.is_empty() && conf.meta.endpoints.is_empty() {
         MetaEmbedded::init_global_meta_store(conf.meta.embedded_dir.clone()).await?;
     }
     let tenant = conf.query.tenant_id.clone();
@@ -80,8 +80,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
     init_default_metrics_recorder();
 
     set_panic_hook();
-    info!("{:?}", conf);
-    info!("DatabendQuery {}", *databend_query::DATABEND_COMMIT_VERSION);
+    info!("Databend Query start with config: {:?}", conf);
 
     let session_manager = SessionManager::from_conf(conf.clone()).await?;
     let mut shutdown_handle = ShutdownHandle::create(session_manager.clone());
@@ -204,6 +203,74 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
         async_insert_queue.clone().start().await;
         info!("Databend async insert has been enabled.")
     }
+
+    // Print information to users.
+    println!("Databend Query");
+    println!("");
+    println!("Version: {}", *databend_query::DATABEND_COMMIT_VERSION);
+    println!("Log:");
+    println!("    File: {}", conf.log.file);
+    println!("    Stderr: {}", conf.log.stderr);
+    println!(
+        "Meta: {}",
+        if conf.meta.address.is_empty() && conf.meta.endpoints.is_empty() {
+            format!("embedded at {}", conf.meta.embedded_dir)
+        } else if !conf.meta.endpoints.is_empty() {
+            format!("connected to endpoints {:#?}", conf.meta.endpoints)
+        } else {
+            format!("connected to address {}", conf.meta.address)
+        }
+    );
+    println!("Storage: {}", conf.storage.params);
+    println!("");
+    println!("MySQL");
+    println!(
+        "    listened at {}:{}",
+        conf.query.mysql_handler_host, conf.query.mysql_handler_port
+    );
+    println!(
+        "    connect via: mysql -uroot -h{} -P{}",
+        conf.query.mysql_handler_host, conf.query.mysql_handler_port
+    );
+    println!("Clickhouse(native)");
+    println!(
+        "    listened at {}:{}",
+        conf.query.clickhouse_handler_host, conf.query.clickhouse_handler_port
+    );
+    println!(
+        "    connect via: clickhouse-client --host {} --port {}",
+        conf.query.clickhouse_handler_host, conf.query.clickhouse_handler_port
+    );
+    println!("Clickhouse(http)");
+    println!(
+        "    listened at {}:{}",
+        conf.query.clickhouse_http_handler_host, conf.query.clickhouse_http_handler_port
+    );
+    println!(
+        "    usage: {}",
+        HttpHandlerKind::Clickhouse.usage(
+            format!(
+                "{}:{}",
+                conf.query.clickhouse_http_handler_host, conf.query.clickhouse_http_handler_port
+            )
+            .parse()?
+        )
+    );
+    println!("Databend HTTP");
+    println!(
+        "    listened at {}:{}",
+        conf.query.http_handler_host, conf.query.http_handler_port
+    );
+    println!(
+        "    usage: {}",
+        HttpHandlerKind::Query.usage(
+            format!(
+                "{}:{}",
+                conf.query.http_handler_host, conf.query.http_handler_port
+            )
+            .parse()?
+        )
+    );
 
     info!("Ready for connections.");
     shutdown_handle.wait_for_termination_request().await;

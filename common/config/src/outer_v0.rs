@@ -820,7 +820,7 @@ impl From<InnerLogConfig> for LogConfig {
 #[serde(default)]
 pub struct FileLogConfig {
     /// Log level <DEBUG|INFO|ERROR>
-    #[clap(long = "log-file-on")]
+    #[clap(long = "log-file-on", default_value = "true")]
     #[serde(rename = "on")]
     pub file_on: bool,
 
