@@ -26,7 +26,6 @@ use sqlparser::dialect::keywords::Keyword;
 use sqlparser::dialect::Dialect;
 use sqlparser::dialect::GenericDialect;
 use sqlparser::dialect::MySqlDialect;
-use sqlparser::dialect::SnowflakeDialect;
 use sqlparser::parser::Parser;
 use sqlparser::parser::ParserError;
 use sqlparser::tokenizer::Token;
@@ -207,18 +206,14 @@ impl<'a> DfParser<'a> {
                         self.parser.next_token();
                         self.parse_revoke()
                     }
-                    Keyword::COPY => self.parse_copy(),
+                    Keyword::COPY => self.skip_all(DfStatement::Copy),
                     Keyword::CALL => {
                         self.parser.next_token();
                         self.parse_call()
                     }
 
                     // Change to snowflake dialect for list cmd
-                    Keyword::LIST => {
-                        *self = Self::new_with_dialect(self.sql, &SnowflakeDialect {})?;
-                        self.parser.next_token();
-                        self.parse_list_cmd()
-                    }
+                    Keyword::LIST => self.skip_all(DfStatement::List),
                     Keyword::EXISTS => {
                         self.parser.next_token();
                         self.parse_exists()
@@ -229,15 +224,12 @@ impl<'a> DfParser<'a> {
                         "USE" => self.parse_use_database(),
                         "KILL" => self.parse_kill_query(),
                         "OPTIMIZE" => self.parse_optimize(),
-                        "REMOVE" => {
-                            *self = Self::new_with_dialect(self.sql, &SnowflakeDialect {})?;
-                            self.parse_remove()
-                        }
+                        "REMOVE" => self.skip_all(DfStatement::RemoveStage),
                         "UNDROP" => {
                             self.parser.next_token();
                             self.parse_undrop()
                         }
-                        "PRESIGN" => self.parse_presign(),
+                        "PRESIGN" => self.skip_all(DfStatement::Presign),
                         _ => self.expected("Keyword", self.parser.peek_token()),
                     },
                     _ => self.expected("an SQL statement", Token::Word(w)),
@@ -258,7 +250,7 @@ impl<'a> DfParser<'a> {
                     Keyword::USER => self.parse_create_user(),
                     Keyword::ROLE => self.parse_create_role(),
                     Keyword::FUNCTION => self.parse_create_udf(),
-                    Keyword::STAGE => self.parse_create_stage(),
+                    Keyword::STAGE => self.skip_all(DfStatement::CreateStage),
                     Keyword::VIEW => self.parse_create_view(),
                     Keyword::NoKeyword if w.value.as_str().to_uppercase() == "TRANSIENT" => {
                         self.parse_create_transient_table()
@@ -350,7 +342,7 @@ impl<'a> DfParser<'a> {
         match self.parser.next_token() {
             Token::Word(w) => match w.keyword {
                 Keyword::TABLE => self.parse_desc_table(),
-                Keyword::STAGE => self.parse_describe_stage(),
+                Keyword::STAGE => self.skip_all(DfStatement::DescribeStage),
 
                 _ => {
                     self.parser.prev_token();
@@ -375,7 +367,7 @@ impl<'a> DfParser<'a> {
                 Keyword::USER => self.parse_drop_user(),
                 Keyword::ROLE => self.parse_drop_role(),
                 Keyword::FUNCTION => self.parse_drop_udf(),
-                Keyword::STAGE => self.parse_drop_stage(),
+                Keyword::STAGE => self.skip_all(DfStatement::DropStage),
                 Keyword::VIEW => self.parse_drop_view(),
                 _ => self.expected("drop statement", Token::Word(w)),
             },
@@ -391,14 +383,6 @@ impl<'a> DfParser<'a> {
                 _ => self.expected("drop statement", Token::Word(w)),
             },
             unexpected => self.expected("drop statement", unexpected),
-        }
-    }
-
-    /// Remove stage.
-    fn parse_remove(&mut self) -> Result<DfStatement<'a>, ParserError> {
-        match self.consume_token("REMOVE") {
-            true => self.parse_remove_stage(),
-            false => self.expected("Must REMOVE", self.parser.peek_token()),
         }
     }
 
@@ -432,7 +416,7 @@ impl<'a> DfParser<'a> {
         } else if self.consume_token("ENGINES") {
             Ok(DfStatement::ShowEngines(DfShowEngines))
         } else if self.consume_token("STAGES") {
-            self.parse_show_stages()
+            self.skip_all(DfStatement::ShowStages)
         } else {
             self.expected("show statement", self.parser.peek_token())
         }
@@ -528,5 +512,21 @@ impl<'a> DfParser<'a> {
         } else {
             self.expected(expected, self.parser.peek_token())
         }
+    }
+
+    /// Skip all tokens and return input stmt as result.
+    pub(crate) fn skip_all(
+        &mut self,
+        stmt: DfStatement<'a>,
+    ) -> Result<DfStatement<'a>, ParserError> {
+        // Consume all remaining tokens;
+        loop {
+            if let Token::EOF = self.parser.next_token() {
+                break;
+            }
+        }
+
+        // This stmt is a placeholder, we will forward to the new planner
+        Ok(stmt)
     }
 }
