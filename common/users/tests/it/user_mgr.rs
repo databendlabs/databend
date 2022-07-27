@@ -24,7 +24,6 @@ use common_meta_types::UserIdentity;
 use common_meta_types::UserInfo;
 use common_meta_types::UserPrivilegeSet;
 use common_meta_types::UserPrivilegeType;
-use common_users::User;
 use common_users::UserApiProvider;
 use pretty_assertions::assert_eq;
 
@@ -46,14 +45,14 @@ async fn test_user_manager() -> Result<()> {
 
     // add user hostname.
     {
-        let user_info = User::new(username, hostname, auth_info.clone());
-        user_mgr.add_user(tenant, user_info.into(), false).await?;
+        let user_info = UserInfo::new(username, hostname, auth_info.clone());
+        user_mgr.add_user(tenant, user_info, false).await?;
     }
 
     // add user hostname again, error.
     {
-        let user_info = User::new(username, hostname, auth_info.clone());
-        let res = user_mgr.add_user(tenant, user_info.into(), false).await;
+        let user_info = UserInfo::new(username, hostname, auth_info.clone());
+        let res = user_mgr.add_user(tenant, user_info, false).await;
         assert!(res.is_err());
         assert_eq!(
             res.err().unwrap().code(),
@@ -63,14 +62,14 @@ async fn test_user_manager() -> Result<()> {
 
     // add user hostname again, ok.
     {
-        let user_info = User::new(username, hostname, auth_info.clone());
-        user_mgr.add_user(tenant, user_info.into(), true).await?;
+        let user_info = UserInfo::new(username, hostname, auth_info.clone());
+        user_mgr.add_user(tenant, user_info, true).await?;
     }
 
     // add user hostname2.
     {
-        let user_info = User::new(username, hostname2, auth_info.clone());
-        user_mgr.add_user(tenant, user_info.into(), false).await?;
+        let user_info = UserInfo::new(username, hostname2, auth_info.clone());
+        user_mgr.add_user(tenant, user_info, false).await?;
     }
 
     // get all users.
@@ -125,7 +124,7 @@ async fn test_user_manager() -> Result<()> {
 
     // grant privileges
     {
-        let user_info: UserInfo = User::new(username, hostname, auth_info.clone()).into();
+        let user_info: UserInfo = UserInfo::new(username, hostname, auth_info.clone());
         user_mgr.add_user(tenant, user_info.clone(), false).await?;
         let old_user = user_mgr.get_user(tenant, user_info.identity()).await?;
         assert_eq!(old_user.grants, UserGrantSet::empty());
@@ -153,7 +152,7 @@ async fn test_user_manager() -> Result<()> {
 
     // revoke privileges
     {
-        let user_info: UserInfo = User::new(username, hostname, auth_info.clone()).into();
+        let user_info: UserInfo = UserInfo::new(username, hostname, auth_info.clone());
         user_mgr.add_user(tenant, user_info.clone(), false).await?;
         user_mgr
             .grant_privileges_to_user(
@@ -190,7 +189,7 @@ async fn test_user_manager() -> Result<()> {
             hash_value: Vec::from(pwd),
             hash_method: PasswordHashMethod::Sha256,
         };
-        let user_info: UserInfo = User::new(user, hostname, auth_info.clone()).into();
+        let user_info: UserInfo = UserInfo::new(user, hostname, auth_info.clone());
         user_mgr.add_user(tenant, user_info.clone(), false).await?;
 
         let old_user = user_mgr.get_user(tenant, user_info.identity()).await?;
