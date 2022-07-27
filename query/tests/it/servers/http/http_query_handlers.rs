@@ -324,7 +324,7 @@ async fn test_buffer_size() -> Result<()> {
 async fn test_pagination(v2: u64) -> Result<()> {
     let ep = create_endpoint();
     let sql = "select * from numbers(10)";
-    let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": 1, "max_rows_per_page": 2}, "session": { "settings": {"enable_planner_v2": v2.to_string()}}});
+    let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": 1, "max_rows_per_page": 2}, "session_state": { "settings": {"enable_planner_v2": v2.to_string()}}});
 
     let (status, result) = post_json_to_endpoint(&ep, &json).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
@@ -417,7 +417,7 @@ fn test_http_session_serde() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_http_session() -> Result<()> {
     let ep = create_endpoint();
-    let json = serde_json::json!({"sql":  "use system", "session": {"max_idle_time": 10}});
+    let json = serde_json::json!({"sql":  "use system", "session_state": {"keep_server_session_secs": 10}});
 
     let (status, result) = post_json_to_endpoint(&ep, &json).await?;
     assert_eq!(status, StatusCode::OK);
@@ -428,19 +428,19 @@ async fn test_http_session() -> Result<()> {
     assert_eq!(result.state, ExecuteStateKind::Succeeded, "{:?}", result);
     let session_id = &result.session_id.unwrap();
 
-    let json = serde_json::json!({"sql": "select database()", "session": {"id": session_id}});
+    let json = serde_json::json!({"sql": "select database()", "session_id": session_id});
     let (status, result) = post_json_to_endpoint(&ep, &json).await?;
     assert!(result.error.is_none(), "{:?}", result);
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     assert_eq!(result.data.len(), 1, "{:?}", result);
     assert_eq!(result.data[0][0], "system", "{:?}", result);
 
-    let json = serde_json::json!({"sql": "select * from x", "session": {"id": session_id}});
+    let json = serde_json::json!({"sql": "select * from x", "session_id": session_id});
     let (status, result) = post_json_to_endpoint(&ep, &json).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     assert!(result.error.is_some(), "{:?}", result);
 
-    let json = serde_json::json!({"sql": "select 1", "session": {"id": session_id}});
+    let json = serde_json::json!({"sql": "select 1", "session_id": session_id});
     let (status, result) = post_json_to_endpoint(&ep, &json).await?;
     assert!(result.error.is_none(), "{:?}", result);
     assert_eq!(status, StatusCode::OK, "{:?}", result);
@@ -730,7 +730,7 @@ async fn post_sql_to_endpoint_new_session(
     enable_planner_v2: u64,
 ) -> Result<(StatusCode, QueryResponse)> {
     let enable_planner_v2 = enable_planner_v2.to_string();
-    let json = serde_json::json!({ "sql": sql.to_string(), "pagination": {"wait_time_secs": wait_time_secs}, "session": { "settings": {"enable_planner_v2": enable_planner_v2}}});
+    let json = serde_json::json!({ "sql": sql.to_string(), "pagination": {"wait_time_secs": wait_time_secs}, "session_state": { "settings": {"enable_planner_v2": enable_planner_v2}}});
     post_json_to_endpoint(ep, &json).await
 }
 
@@ -1307,7 +1307,7 @@ async fn test_affect() -> Result<()> {
 
     let sqls = vec![
         (
-            serde_json::json!({"sql": "set max_threads=1", "session": {"settings": {"max_threads": "6", "timezone": "Asia/Shanghai"}}}),
+            serde_json::json!({"sql": "set max_threads=1", "session_state": {"settings": {"max_threads": "6", "timezone": "Asia/Shanghai"}}}),
             Some(QueryAffect::ChangeSetting {
                 key: "max_threads".to_string(),
                 value: "1".to_string(),
@@ -1323,7 +1323,7 @@ async fn test_affect() -> Result<()> {
             }),
         ),
         (
-            serde_json::json!({"sql":  "create database if not exists db2", "session": {"settings": {"max_threads": "6"}}}),
+            serde_json::json!({"sql":  "create database if not exists db2", "session_state": {"settings": {"max_threads": "6"}}}),
             None,
             Some(HttpSessionConf {
                 database: None,
@@ -1335,7 +1335,7 @@ async fn test_affect() -> Result<()> {
             }),
         ),
         (
-            serde_json::json!({"sql":  "use db2", "session": {"settings": {"max_threads": "6"}}}),
+            serde_json::json!({"sql":  "use db2", "session_state": {"settings": {"max_threads": "6"}}}),
             Some(QueryAffect::UseDB {
                 name: "db2".to_string(),
             }),
