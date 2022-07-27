@@ -20,7 +20,6 @@ use common_arrow::arrow_format::flight::service::flight_service_client::FlightSe
 use common_base::base::tokio::time::Duration;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_tracing::tracing;
 use tonic::metadata::MetadataKey;
 use tonic::metadata::MetadataValue;
 use tonic::transport::channel::Channel;

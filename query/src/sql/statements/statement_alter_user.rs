@@ -18,7 +18,6 @@ use common_exception::Result;
 use common_meta_types::UserIdentity;
 use common_planners::AlterUserPlan;
 use common_planners::PlanNode;
-use common_tracing::tracing;
 
 use super::statement_create_user::DfAuthOption;
 use crate::sessions::QueryContext;

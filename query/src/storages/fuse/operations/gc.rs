@@ -21,9 +21,9 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_fuse_meta::meta::Location;
 use common_fuse_meta::meta::SnapshotId;
-use common_tracing::tracing::warn;
 use futures::TryStreamExt;
 use opendal::Operator;
+use tracing::warn;
 
 use crate::sessions::TableContext;
 use crate::storages::fuse::io::MetaReaders;

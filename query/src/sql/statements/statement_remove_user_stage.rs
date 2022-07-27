@@ -17,7 +17,6 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_planners::PlanNode;
 use common_planners::RemoveUserStagePlan;
-use common_tracing::tracing;
 
 use super::parse_stage_location;
 use crate::sessions::QueryContext;

@@ -23,7 +23,7 @@ use common_planners::ActionFunction;
 use common_planners::Expression;
 use common_planners::ExpressionAction;
 use common_planners::ExpressionChain;
-use common_tracing::tracing;
+use tracing::debug;
 
 use crate::sessions::TableContext;
 
@@ -72,10 +72,9 @@ impl ExpressionExecutor {
         skip(self, block)
     )]
     pub fn execute(&self, block: &DataBlock) -> Result<DataBlock> {
-        tracing::debug!(
+        debug!(
             "({:#}) execute, actions: {:?}",
-            self.description,
-            self.chain.actions
+            self.description, self.chain.actions
         );
 
         let mut column_map: HashMap<&str, ColumnWithField> = HashMap::new();

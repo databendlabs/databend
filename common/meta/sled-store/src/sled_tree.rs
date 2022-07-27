@@ -22,10 +22,11 @@ use common_meta_types::anyerror::AnyError;
 use common_meta_types::error_context::WithContext;
 use common_meta_types::MetaStorageError;
 use common_meta_types::MetaStorageResult;
-use common_tracing::tracing;
 use sled::transaction::ConflictableTransactionError;
 use sled::transaction::TransactionResult;
 use sled::transaction::TransactionalTree;
+use tracing::debug;
+use tracing::warn;
 
 use crate::sled::transaction::TransactionError;
 use crate::store::Store;
@@ -72,7 +73,7 @@ impl SledTree {
             .open_tree(&tree_name)
             .context(|| format!("open tree: {}", tree_name))?;
 
-        tracing::debug!("SledTree opened tree: {}", tree_name);
+        debug!("SledTree opened tree: {}", tree_name);
 
         let rl = SledTree {
             name: tree_name.to_string(),
@@ -123,7 +124,7 @@ impl SledTree {
                     Ok(r)
                 }
                 Err(meta_sto_err) => {
-                    tracing::warn!("txn error: {:?}", meta_sto_err);
+                    warn!("txn error: {:?}", meta_sto_err);
 
                     match &meta_sto_err {
                         MetaStorageError::BytesError(_e) => {

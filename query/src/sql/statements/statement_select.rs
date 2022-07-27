@@ -23,13 +23,12 @@ use common_planners::find_aggregate_exprs;
 use common_planners::find_aggregate_exprs_in_expr;
 use common_planners::rebase_expr;
 use common_planners::Expression;
-use common_tracing::tracing;
-use common_tracing::tracing::log::debug;
 use sqlparser::ast::Expr;
 use sqlparser::ast::Offset;
 use sqlparser::ast::OrderByExpr;
 use sqlparser::ast::SelectItem;
 use sqlparser::ast::TableWithJoins;
+use tracing::debug;
 
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
@@ -75,7 +74,7 @@ impl AnalyzableStatement for DfQueryStatement {
         QueryCollectPushDowns::collect_extras(&mut ir, &mut joined_schema, has_aggregation)?;
 
         let analyze_state = self.analyze_query(ir).await?;
-        tracing::debug!("analyze state is:\n{:?}", analyze_state);
+        debug!("analyze state is:\n{:?}", analyze_state);
 
         self.check_and_finalize(joined_schema, analyze_state, ctx)
             .await

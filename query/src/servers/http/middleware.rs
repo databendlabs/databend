@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_tracing::tracing;
 use headers::authorization::Basic;
 use headers::authorization::Bearer;
 use headers::authorization::Credentials;
@@ -28,6 +27,8 @@ use poem::Addr;
 use poem::Endpoint;
 use poem::Middleware;
 use poem::Request;
+use tracing::info;
+use tracing::warn;
 
 use super::v1::HttpQueryContext;
 use crate::auth::Credential;
@@ -139,7 +140,7 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
 
     async fn call(&self, mut req: Request) -> PoemResult<Self::Output> {
         // method, url, version, header
-        tracing::info!("receive http handler request: {req:?},");
+        info!("receive http handler request: {req:?},");
         let res = match self.auth(&req).await {
             Ok(ctx) => {
                 req.extensions_mut().insert(ctx);
@@ -151,7 +152,7 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
             )),
         };
         if let Err(ref err) = res {
-            tracing::warn!("http request error: {}", err);
+            warn!("http request error: {}", err);
         };
         res
     }

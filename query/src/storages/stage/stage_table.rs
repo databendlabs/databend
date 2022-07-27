@@ -29,8 +29,8 @@ use common_planners::StageTableInfo;
 use common_planners::Statistics;
 use common_planners::TruncateTablePlan;
 use common_streams::SendableDataBlockStream;
-use common_tracing::tracing::info;
 use parking_lot::Mutex;
+use tracing::info;
 
 use super::StageSourceHelper;
 use crate::pipelines::processors::port::OutputPort;

@@ -14,11 +14,11 @@
 
 use common_base::base::*;
 use common_exception::Result;
-use common_tracing::tracing;
 use tokio::sync::broadcast;
 use tokio::sync::oneshot;
 use tokio::sync::oneshot::error::TryRecvError;
 use tokio::time::Duration;
+use tracing::info;
 
 /// A task that takes 100 years to gracefully stop.
 #[derive(Default)]
@@ -31,12 +31,12 @@ impl Stoppable for FooTask {
     }
 
     async fn stop(&mut self, force: Option<broadcast::Receiver<()>>) -> Result<()> {
-        tracing::info!("--- FooTask stop, force: {:?}", force);
+        info!("--- FooTask stop, force: {:?}", force);
 
         // block the stop until force stop.
 
         if let Some(mut force) = force {
-            tracing::info!("--- waiting for force");
+            info!("--- waiting for force");
             let _ = force.recv().await;
         }
         Ok(())
@@ -91,9 +91,6 @@ async fn test_stop_handle() -> Result<()> {
     // - Create 2 tasks and start them.
     // - Stop but the task would block.
     // - Signal the task to force stop.
-
-    common_tracing::init_default_ut_tracing();
-
     let (stop_tx, _) = broadcast::channel::<()>(1024);
 
     let mut t1 = FooTask::default();
@@ -118,14 +115,14 @@ async fn test_stop_handle() -> Result<()> {
         fin_tx.send(()).expect("fail to send fin signal");
     });
 
-    tracing::info!("--- send graceful stop");
+    info!("--- send graceful stop");
     stop_tx.send(()).expect("fail to set graceful stop");
 
     // Broadcasting receiver can not receive the message sent before subscribing the sender.
     // Wait for a while until the `stop()` method is called for every task.
     tokio::time::sleep(Duration::from_millis(100)).await;
 
-    tracing::info!("--- fin_rx should receive nothing");
+    info!("--- fin_rx should receive nothing");
     let res = fin_rx.try_recv();
     match res {
         Err(TryRecvError::Empty) => { /* good */ }
@@ -134,7 +131,7 @@ async fn test_stop_handle() -> Result<()> {
         }
     };
 
-    tracing::info!("--- send force stop");
+    info!("--- send force stop");
     stop_tx.send(()).expect("fail to set force stop");
 
     assert!(fin_rx.await.is_ok());
@@ -146,9 +143,6 @@ async fn test_stop_handle() -> Result<()> {
 async fn test_stop_handle_drop() -> Result<()> {
     // - Create a task and start it.
     // - Then quit and the Drop should forcibly stop it and the test should not block.
-
-    common_tracing::init_default_ut_tracing();
-
     let mut t1 = FooTask::default();
 
     // Start the task

@@ -19,7 +19,6 @@ use std::string::String;
 use common_base::base::tokio;
 use common_base::base::Stoppable;
 use common_meta_types::Node;
-use common_tracing::tracing;
 use databend_meta::api::http::v1::cluster_state::nodes_handler;
 use databend_meta::api::http::v1::cluster_state::status_handler;
 use databend_meta::api::HttpService;

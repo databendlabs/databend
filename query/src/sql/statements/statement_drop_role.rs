@@ -17,7 +17,6 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_planners::DropRolePlan;
 use common_planners::PlanNode;
-use common_tracing::tracing;
 
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;

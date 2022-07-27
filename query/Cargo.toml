@@ -138,6 +138,8 @@ time = "0.3.10"
 tokio-rustls = "0.23.4"
 tokio-stream = { version = "0.1.9", features = ["net"] }
 tonic = "0.7.2"
+tracing = "0.1.35"
+tracing-appender = "0.2.2"
 twox-hash = "1.6.3"
 typetag = "0.1.8"
 uuid = { version = "1.1.2", features = ["serde", "v4"] }

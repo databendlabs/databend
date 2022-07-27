@@ -19,7 +19,7 @@ use common_meta_types::StageType;
 use common_planners::RemoveUserStagePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
-use common_tracing::tracing;
+use tracing::debug;
 
 use crate::interpreters::interpreter_common::list_files;
 use crate::interpreters::Interpreter;
@@ -66,7 +66,7 @@ impl Interpreter for RemoveUserStageInterpreter {
 
         for name in files.into_iter() {
             let obj = format!("{}/{}", plan.stage.get_prefix(), name);
-            tracing::debug!("Removing object: {}", obj);
+            debug!("Removing object: {}", obj);
             let _ = op.object(&obj).delete().await;
         }
 

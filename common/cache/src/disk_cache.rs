@@ -23,10 +23,11 @@ use std::io::prelude::*;
 use std::path::Path;
 use std::path::PathBuf;
 
-use common_tracing::tracing;
 use filetime::set_file_times;
 use filetime::FileTime;
 use ritelinked::DefaultHashBuilder;
+use tracing::error;
+use tracing::warn;
 use walkdir::WalkDir;
 
 use crate::Cache;
@@ -165,15 +166,14 @@ where
         for (file, size) in get_all_files(&self.root) {
             if !self.can_store(size) {
                 fs::remove_file(file).unwrap_or_else(|e| {
-                    tracing::error!(
+                    error!(
                         "Error removing file `{}` which is too large for the cache ({} bytes)",
-                        e,
-                        size
+                        e, size
                     )
                 });
             } else {
                 self.add_file(AddFile::AbsPath(file), size)
-                    .unwrap_or_else(|e| tracing::error!("Error adding file: {}", e));
+                    .unwrap_or_else(|e| error!("Error adding file: {}", e));
             }
         }
         Ok(self)
@@ -228,7 +228,7 @@ where
         let size = size.unwrap_or(fs::metadata(path)?.len());
         self.add_file(AddFile::RelPath(rel_path), size)
             .map_err(|e| {
-                tracing::error!(
+                error!(
                     "Failed to insert file `{}`: {}",
                     rel_path.to_string_lossy(),
                     e
@@ -262,10 +262,10 @@ where
         let size = fs::metadata(path.as_ref())?.len();
         self.insert_by(key, Some(size), |new_path| {
             fs::rename(path.as_ref(), new_path).or_else(|_| {
-                tracing::warn!("fs::rename failed, falling back to copy!");
+                warn!("fs::rename failed, falling back to copy!");
                 fs::copy(path.as_ref(), new_path)?;
                 fs::remove_file(path.as_ref()).unwrap_or_else(|e| {
-                    tracing::error!("Failed to remove original file in insert_file: {}", e)
+                    error!("Failed to remove original file in insert_file: {}", e)
                 });
                 Ok(())
             })
@@ -304,7 +304,7 @@ where
             Some(_) => {
                 let path = self.rel_to_abs_path(key.as_ref());
                 fs::remove_file(&path).map_err(|e| {
-                    tracing::error!("Error removing file from cache: `{:?}`: {}", path, e);
+                    error!("Error removing file from cache: `{:?}`: {}", path, e);
                     Into::into(e)
                 })
             }
