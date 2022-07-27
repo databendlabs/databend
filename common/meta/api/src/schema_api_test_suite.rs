@@ -60,7 +60,8 @@ use common_meta_types::MetaError;
 use common_meta_types::Operation;
 use common_meta_types::UpsertKVReq;
 use common_proto_conv::FromToProto;
-use common_tracing::tracing;
+use tracing::debug;
+use tracing::info;
 
 use crate::deserialize_struct;
 use crate::serialize_struct;
@@ -370,7 +371,7 @@ impl SchemaApiTestSuite {
         };
 
         {
-            tracing::info!("--- prepare db1,db3 and table");
+            info!("--- prepare db1,db3 and table");
             // prepare db1
             let res = self.create_database(mt, tenant, "db1", "eng1").await?;
             assert_eq!(1, res.db_id);
@@ -397,14 +398,14 @@ impl SchemaApiTestSuite {
         }
 
         {
-            tracing::info!("--- rename exists db db1 to not exists mutable db2");
+            info!("--- rename exists db db1 to not exists mutable db2");
             let req = RenameDatabaseReq {
                 if_exists: false,
                 name_ident: db_name_ident.clone(),
                 new_db_name: db2_name.to_string(),
             };
             let res = mt.rename_database(req).await;
-            tracing::info!("rename database res: {:?}", res);
+            info!("rename database res: {:?}", res);
             assert!(res.is_ok());
 
             let db_id_2_name_key = DatabaseIdToName { db_id };
@@ -422,7 +423,7 @@ impl SchemaApiTestSuite {
         }
 
         {
-            tracing::info!("--- rename exists table1 to not exists mutable table2");
+            info!("--- rename exists table1 to not exists mutable table2");
             let got = mt
                 .rename_table(RenameTableReq {
                     if_exists: true,
@@ -435,7 +436,7 @@ impl SchemaApiTestSuite {
                     new_table_name: table2_name.to_string(),
                 })
                 .await;
-            tracing::debug!("--- rename table on unknown database got: {:?}", got);
+            debug!("--- rename table on unknown database got: {:?}", got);
 
             let table_id_name_key = TableIdToName { table_id };
             let ret_table_name_ident: DBIdTableName =
@@ -447,7 +448,7 @@ impl SchemaApiTestSuite {
         }
 
         {
-            tracing::info!("--- rename exists table1 to not exists mutable db3.table3");
+            info!("--- rename exists table1 to not exists mutable db3.table3");
             let got = mt
                 .rename_table(RenameTableReq {
                     if_exists: true,
@@ -460,7 +461,7 @@ impl SchemaApiTestSuite {
                     new_table_name: table3_name.to_string(),
                 })
                 .await;
-            tracing::debug!("--- rename table on unknown database got: {:?}", got);
+            debug!("--- rename table on unknown database got: {:?}", got);
 
             let table_id_name_key = TableIdToName { table_id };
             let ret_table_name_ident: DBIdTableName =
@@ -477,7 +478,7 @@ impl SchemaApiTestSuite {
     #[tracing::instrument(level = "debug", skip_all)]
     async fn database_create_get_drop<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
         let tenant = "tenant1";
-        tracing::info!("--- create db1");
+        info!("--- create db1");
         {
             let req = CreateDatabaseReq {
                 if_not_exists: false,
@@ -492,12 +493,12 @@ impl SchemaApiTestSuite {
             };
 
             let res = mt.create_database(req).await;
-            tracing::info!("create database res: {:?}", res);
+            info!("create database res: {:?}", res);
             let res = res.unwrap();
             assert_eq!(1, res.db_id, "first database id is 1");
         }
 
-        tracing::info!("--- create db1 again with if_not_exists=false");
+        info!("--- create db1 again with if_not_exists=false");
         {
             let req = CreateDatabaseReq {
                 if_not_exists: false,
@@ -512,7 +513,7 @@ impl SchemaApiTestSuite {
             };
 
             let res = mt.create_database(req).await;
-            tracing::info!("create database res: {:?}", res);
+            info!("create database res: {:?}", res);
             let err = res.unwrap_err();
             assert_eq!(
                 ErrorCode::DatabaseAlreadyExists("").code(),
@@ -520,7 +521,7 @@ impl SchemaApiTestSuite {
             );
         }
 
-        tracing::info!("--- create db1 again with if_not_exists=true");
+        info!("--- create db1 again with if_not_exists=true");
         {
             let req = CreateDatabaseReq {
                 if_not_exists: true,
@@ -535,21 +536,21 @@ impl SchemaApiTestSuite {
             };
 
             let res = mt.create_database(req).await;
-            tracing::info!("create database res: {:?}", res);
+            info!("create database res: {:?}", res);
             let res = res.unwrap();
             assert_eq!(1, res.db_id, "db1 id is 1");
         }
 
-        tracing::info!("--- get db1");
+        info!("--- get db1");
         {
             let res = mt.get_database(GetDatabaseReq::new(tenant, "db1")).await;
-            tracing::debug!("get present database res: {:?}", res);
+            debug!("get present database res: {:?}", res);
             let res = res?;
             assert_eq!(1, res.ident.db_id, "db1 id is 1");
             assert_eq!("db1".to_string(), res.name_ident.db_name, "db1.db is db1");
         }
 
-        tracing::info!("--- create db2");
+        info!("--- create db2");
         {
             let req = CreateDatabaseReq {
                 if_not_exists: false,
@@ -564,7 +565,7 @@ impl SchemaApiTestSuite {
             };
 
             let res = mt.create_database(req).await;
-            tracing::info!("create database res: {:?}", res);
+            info!("create database res: {:?}", res);
             let res = res.unwrap();
             assert_eq!(
                 6, res.db_id,
@@ -572,16 +573,16 @@ impl SchemaApiTestSuite {
             );
         }
 
-        tracing::info!("--- get db2");
+        info!("--- get db2");
         {
             let res = mt.get_database(GetDatabaseReq::new(tenant, "db2")).await?;
             assert_eq!("db2".to_string(), res.name_ident.db_name, "db1.db is db1");
         }
 
-        tracing::info!("--- get absent db");
+        info!("--- get absent db");
         {
             let res = mt.get_database(GetDatabaseReq::new(tenant, "absent")).await;
-            tracing::debug!("=== get absent database res: {:?}", res);
+            debug!("=== get absent database res: {:?}", res);
             assert!(res.is_err());
             let err = res.unwrap_err();
             let err_code = ErrorCode::from(err);
@@ -590,7 +591,7 @@ impl SchemaApiTestSuite {
             assert!(err_code.message().contains("absent"));
         }
 
-        tracing::info!("--- drop db2");
+        info!("--- drop db2");
         {
             mt.drop_database(DropDatabaseReq {
                 if_exists: false,
@@ -602,7 +603,7 @@ impl SchemaApiTestSuite {
             .await?;
         }
 
-        tracing::info!("--- get db2 should not found");
+        info!("--- get db2 should not found");
         {
             let res = mt.get_database(GetDatabaseReq::new(tenant, "db2")).await;
             let err = res.unwrap_err();
@@ -612,7 +613,7 @@ impl SchemaApiTestSuite {
             );
         }
 
-        tracing::info!("--- drop db2 with if_exists=true returns no error");
+        info!("--- drop db2 with if_exists=true returns no error");
         {
             mt.drop_database(DropDatabaseReq {
                 if_exists: true,
@@ -634,7 +635,7 @@ impl SchemaApiTestSuite {
     ) -> anyhow::Result<()> {
         let tenant1 = "tenant1";
         let tenant2 = "tenant2";
-        tracing::info!("--- tenant1 create db1");
+        info!("--- tenant1 create db1");
         let db_id_1 = {
             let req = CreateDatabaseReq {
                 if_not_exists: false,
@@ -649,13 +650,13 @@ impl SchemaApiTestSuite {
             };
 
             let res = mt.create_database(req).await;
-            tracing::info!("create database res: {:?}", res);
+            info!("create database res: {:?}", res);
             let res = res.unwrap();
             assert_eq!(1, res.db_id, "first database id is 1");
             res.db_id
         };
 
-        tracing::info!("--- tenant1 create db2");
+        info!("--- tenant1 create db2");
         let db_id_2 = {
             let req = CreateDatabaseReq {
                 if_not_exists: false,
@@ -670,13 +671,13 @@ impl SchemaApiTestSuite {
             };
 
             let res = mt.create_database(req).await;
-            tracing::info!("create database res: {:?}", res);
+            info!("create database res: {:?}", res);
             let res = res.unwrap();
             assert!(res.db_id > db_id_1, "second database id is > {}", db_id_1);
             res.db_id
         };
 
-        tracing::info!("--- tenant2 create db1");
+        info!("--- tenant2 create db1");
         let _db_id_3 = {
             let req = CreateDatabaseReq {
                 if_not_exists: false,
@@ -691,27 +692,27 @@ impl SchemaApiTestSuite {
             };
 
             let res = mt.create_database(req).await;
-            tracing::info!("create database res: {:?}", res);
+            info!("create database res: {:?}", res);
             let res = res.unwrap();
             assert!(res.db_id > db_id_2, "third database id > {}", db_id_2);
             res.db_id
         };
 
-        tracing::info!("--- tenant1 get db1");
+        info!("--- tenant1 get db1");
         {
             let res = mt.get_database(GetDatabaseReq::new(tenant1, "db1")).await;
-            tracing::debug!("get present database res: {:?}", res);
+            debug!("get present database res: {:?}", res);
             let res = res?;
             assert_eq!(1, res.ident.db_id, "db1 id is 1");
             assert_eq!("db1".to_string(), res.name_ident.db_name, "db1.db is db1");
         }
 
-        tracing::info!("--- tenant1 get absent db");
+        info!("--- tenant1 get absent db");
         {
             let res = mt
                 .get_database(GetDatabaseReq::new(tenant1, "absent"))
                 .await;
-            tracing::debug!("=== get absent database res: {:?}", res);
+            debug!("=== get absent database res: {:?}", res);
             assert!(res.is_err());
             let err = res.unwrap_err();
             let err = ErrorCode::from(err);
@@ -720,10 +721,10 @@ impl SchemaApiTestSuite {
             assert!(err.message().contains("absent"));
         }
 
-        tracing::info!("--- tenant2 get tenant1's db2");
+        info!("--- tenant2 get tenant1's db2");
         {
             let res = mt.get_database(GetDatabaseReq::new(tenant2, "db2")).await;
-            tracing::debug!("=== get other tenant's database res: {:?}", res);
+            debug!("=== get other tenant's database res: {:?}", res);
             assert!(res.is_err());
             let res = res.unwrap_err();
             let err = ErrorCode::from(res);
@@ -732,7 +733,7 @@ impl SchemaApiTestSuite {
             assert_eq!("Unknown database 'db2'".to_string(), err.message());
         }
 
-        tracing::info!("--- drop db2");
+        info!("--- drop db2");
         {
             mt.drop_database(DropDatabaseReq {
                 if_exists: false,
@@ -744,7 +745,7 @@ impl SchemaApiTestSuite {
             .await?;
         }
 
-        tracing::info!("--- tenant1 get db2 should not found");
+        info!("--- tenant1 get db2 should not found");
         {
             let res = mt.get_database(GetDatabaseReq::new(tenant1, "db2")).await;
             let err = res.unwrap_err();
@@ -754,7 +755,7 @@ impl SchemaApiTestSuite {
             );
         }
 
-        tracing::info!("--- tenant1 drop db2 with if_exists=true returns no error");
+        info!("--- tenant1 drop db2 with if_exists=true returns no error");
         {
             mt.drop_database(DropDatabaseReq {
                 if_exists: true,
@@ -771,7 +772,7 @@ impl SchemaApiTestSuite {
 
     #[tracing::instrument(level = "debug", skip_all)]
     async fn database_list<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
-        tracing::info!("--- prepare db1 and db2");
+        info!("--- prepare db1 and db2");
         let mut db_ids = vec![];
         let db_names = vec!["db1", "db2"];
         let engines = vec!["eng1", "eng2"];
@@ -786,7 +787,7 @@ impl SchemaApiTestSuite {
             db_ids.push(res.db_id);
         }
 
-        tracing::info!("--- list_databases");
+        info!("--- list_databases");
         {
             let dbs = mt
                 .list_databases(ListDatabaseReq {
@@ -810,7 +811,7 @@ impl SchemaApiTestSuite {
 
     #[tracing::instrument(level = "debug", skip_all)]
     async fn database_list_in_diff_tenant<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
-        tracing::info!("--- prepare db1 and db2");
+        info!("--- prepare db1 and db2");
         let tenant1 = "tenant1";
         let tenant2 = "tenant2";
 
@@ -830,7 +831,7 @@ impl SchemaApiTestSuite {
             res.db_id
         };
 
-        tracing::info!("--- get_databases by tenant1");
+        info!("--- get_databases by tenant1");
         {
             let dbs = mt
                 .list_databases(ListDatabaseReq {
@@ -841,7 +842,7 @@ impl SchemaApiTestSuite {
             assert_eq!(db_ids, got)
         }
 
-        tracing::info!("--- get_databases by tenant2");
+        info!("--- get_databases by tenant2");
         {
             let dbs = mt
                 .list_databases(ListDatabaseReq {
@@ -863,7 +864,7 @@ impl SchemaApiTestSuite {
         let db2_name = "db2";
         let new_db_name = "db3";
 
-        tracing::info!("--- rename not exists db1 to not exists db2");
+        info!("--- rename not exists db1 to not exists db2");
         {
             let req = RenameDatabaseReq {
                 if_exists: false,
@@ -875,7 +876,7 @@ impl SchemaApiTestSuite {
             };
 
             let res = mt.rename_database(req).await;
-            tracing::info!("rename database res: {:?}", res);
+            info!("rename database res: {:?}", res);
             assert!(res.is_err());
             assert_eq!(
                 ErrorCode::UnknownDatabase("").code(),
@@ -883,13 +884,13 @@ impl SchemaApiTestSuite {
             );
         }
 
-        tracing::info!("--- prepare db1 and db2");
+        info!("--- prepare db1 and db2");
         {
             // prepare db2
             let res = self.create_database(mt, tenant, "db1", "eng1").await?;
             assert_eq!(1, res.db_id);
 
-            tracing::info!("--- rename not exists db4 to exists db1");
+            info!("--- rename not exists db4 to exists db1");
             {
                 let req = RenameDatabaseReq {
                     if_exists: false,
@@ -901,7 +902,7 @@ impl SchemaApiTestSuite {
                 };
 
                 let res = mt.rename_database(req).await;
-                tracing::info!("rename database res: {:?}", res);
+                info!("rename database res: {:?}", res);
                 assert!(res.is_err());
                 assert_eq!(
                     ErrorCode::UnknownDatabase("").code(),
@@ -914,7 +915,7 @@ impl SchemaApiTestSuite {
             assert!(res.db_id > 1);
         }
 
-        tracing::info!("--- rename exists db db1 to exists db db2");
+        info!("--- rename exists db db1 to exists db db2");
         {
             let req = RenameDatabaseReq {
                 if_exists: false,
@@ -926,7 +927,7 @@ impl SchemaApiTestSuite {
             };
 
             let res = mt.rename_database(req).await;
-            tracing::info!("rename database res: {:?}", res);
+            info!("rename database res: {:?}", res);
             assert!(res.is_err());
             assert_eq!(
                 ErrorCode::DatabaseAlreadyExists("").code(),
@@ -934,7 +935,7 @@ impl SchemaApiTestSuite {
             );
         }
 
-        tracing::info!("--- rename exists db db1 to not exists mutable db");
+        info!("--- rename exists db db1 to not exists mutable db");
         {
             let req = RenameDatabaseReq {
                 if_exists: false,
@@ -946,18 +947,18 @@ impl SchemaApiTestSuite {
                 new_db_name: new_db_name.to_string(),
             };
             let res = mt.rename_database(req).await;
-            tracing::info!("rename database res: {:?}", res);
+            info!("rename database res: {:?}", res);
             assert!(res.is_ok());
 
             let res = mt
                 .get_database(GetDatabaseReq::new(tenant, new_db_name))
                 .await;
-            tracing::debug!("get present database res: {:?}", res);
+            debug!("get present database res: {:?}", res);
             let res = res?;
             assert_eq!(1, res.ident.db_id, "db3 id is 1");
             assert_eq!("db3".to_string(), res.name_ident.db_name, "db3.db is db3");
 
-            tracing::info!("--- get old database after rename");
+            info!("--- get old database after rename");
             {
                 let res = mt.get_database(GetDatabaseReq::new(tenant, db_name)).await;
                 let err = res.err().unwrap();
@@ -988,7 +989,7 @@ impl SchemaApiTestSuite {
             db_name: new_db_name.to_string(),
         };
 
-        tracing::info!("--- create and drop db1");
+        info!("--- create and drop db1");
         {
             // first create database
             let req = CreateDatabaseReq {
@@ -1001,7 +1002,7 @@ impl SchemaApiTestSuite {
             };
 
             let res = mt.create_database(req).await;
-            tracing::info!("create database res: {:?}", res);
+            info!("create database res: {:?}", res);
             let res = res.unwrap();
             assert_eq!(1, res.db_id, "first database id is 1");
 
@@ -1053,7 +1054,7 @@ impl SchemaApiTestSuite {
             }]);
         }
 
-        tracing::info!("--- drop and create db1");
+        info!("--- drop and create db1");
         {
             // first drop db1
             mt.drop_database(DropDatabaseReq {
@@ -1098,7 +1099,7 @@ impl SchemaApiTestSuite {
             }]);
         }
 
-        tracing::info!("--- create and rename db2");
+        info!("--- create and rename db2");
         {
             // first create db2
             let req = CreateDatabaseReq {
@@ -1219,7 +1220,7 @@ impl SchemaApiTestSuite {
 
         let unknown_database_code = ErrorCode::UnknownDatabase("").code();
 
-        tracing::info!("--- create or get table on unknown db");
+        info!("--- create or get table on unknown db");
         {
             let created_on = Utc::now();
 
@@ -1236,7 +1237,7 @@ impl SchemaApiTestSuite {
             // test create table
             {
                 let res = mt.create_table(req).await;
-                tracing::debug!("create table on unknown db res: {:?}", res);
+                debug!("create table on unknown db res: {:?}", res);
 
                 assert!(res.is_err());
                 let err = res.unwrap_err();
@@ -1247,7 +1248,7 @@ impl SchemaApiTestSuite {
             // test get table
             {
                 let got = mt.get_table((tenant, db_name, tbl_name).into()).await;
-                tracing::debug!("get table on unknown db got: {:?}", got);
+                debug!("get table on unknown db got: {:?}", got);
 
                 assert!(got.is_err());
                 let err = got.unwrap_err();
@@ -1257,7 +1258,7 @@ impl SchemaApiTestSuite {
             }
         }
 
-        tracing::info!("--- drop table on unknown db");
+        info!("--- drop table on unknown db");
         {
             // casually create a drop table plan
             // should be not vunerable?
@@ -1271,14 +1272,14 @@ impl SchemaApiTestSuite {
             };
 
             let got = mt.drop_table(plan).await;
-            tracing::debug!("--- drop table on unknown database got: {:?}", got);
+            debug!("--- drop table on unknown database got: {:?}", got);
 
             assert!(got.is_err());
             let code = ErrorCode::from(got.unwrap_err()).code();
             assert_eq!(unknown_database_code, code);
         }
 
-        tracing::info!("--- prepare db");
+        info!("--- prepare db");
         {
             let plan = CreateDatabaseReq {
                 if_not_exists: false,
@@ -1293,17 +1294,17 @@ impl SchemaApiTestSuite {
             };
 
             let res = mt.create_database(plan).await?;
-            tracing::info!("create database res: {:?}", res);
+            info!("create database res: {:?}", res);
 
             assert_eq!(1, res.db_id, "first database id is 1");
         }
 
         // check table count
-        tracing::info!("--- check table count of tenant1");
+        info!("--- check table count of tenant1");
         let tb_count = mt.count_tables(Self::req_count_table(tenant)).await?;
         assert_eq!(expected_tb_count, tb_count.count);
 
-        tracing::info!("--- create tb2 and get table");
+        info!("--- create tb2 and get table");
         let created_on = Utc::now();
 
         let mut req = CreateTableReq {
@@ -1343,11 +1344,11 @@ impl SchemaApiTestSuite {
 
         expected_tb_count += 1;
         // check table count
-        tracing::info!("--- check table count of tenant1");
+        info!("--- check table count of tenant1");
         let tb_count = mt.count_tables(Self::req_count_table(tenant)).await?;
         assert_eq!(expected_tb_count, tb_count.count);
 
-        tracing::info!("--- create table again with if_not_exists = true");
+        info!("--- create table again with if_not_exists = true");
         {
             req.if_not_exists = true;
             let res = mt.create_table(req.clone()).await?;
@@ -1367,16 +1368,16 @@ impl SchemaApiTestSuite {
         }
 
         // check table count
-        tracing::info!("--- check table count of tenant1");
+        info!("--- check table count of tenant1");
         let tb_count = mt.count_tables(Self::req_count_table(tenant)).await?;
         assert_eq!(expected_tb_count, tb_count.count);
 
-        tracing::info!("--- create table again with if_not_exists = false");
+        info!("--- create table again with if_not_exists = false");
         {
             req.if_not_exists = false;
 
             let res = mt.create_table(req).await;
-            tracing::info!("create table res: {:?}", res);
+            info!("create table res: {:?}", res);
 
             let status = res.err().unwrap();
             let err_code = ErrorCode::from(status);
@@ -1402,11 +1403,11 @@ impl SchemaApiTestSuite {
         }
 
         // check table count
-        tracing::info!("--- check table count of tenant1");
+        info!("--- check table count of tenant1");
         let tb_count = mt.count_tables(Self::req_count_table(tenant)).await?;
         assert_eq!(expected_tb_count, tb_count.count);
 
-        tracing::info!("--- create another table");
+        info!("--- create another table");
         {
             let created_on = Utc::now();
 
@@ -1433,13 +1434,13 @@ impl SchemaApiTestSuite {
 
         expected_tb_count += 1;
         // check table count
-        tracing::info!("--- check table count of tenant1");
+        info!("--- check table count of tenant1");
         let tb_count = mt.count_tables(Self::req_count_table(tenant)).await?;
         assert_eq!(expected_tb_count, tb_count.count);
 
-        tracing::info!("--- drop table");
+        info!("--- drop table");
         {
-            tracing::info!("--- drop table with if_exists = false");
+            info!("--- drop table with if_exists = false");
             {
                 let plan = DropTableReq {
                     if_exists: false,
@@ -1451,7 +1452,7 @@ impl SchemaApiTestSuite {
                 };
                 mt.drop_table(plan.clone()).await?;
 
-                tracing::info!("--- get table after drop");
+                info!("--- get table after drop");
                 {
                     let res = mt.get_table((tenant, db_name, tbl_name).into()).await;
                     let status = res.err().unwrap();
@@ -1466,7 +1467,7 @@ impl SchemaApiTestSuite {
                 }
             }
 
-            tracing::info!("--- drop table with if_exists = false again, error");
+            info!("--- drop table with if_exists = false again, error");
             {
                 let plan = DropTableReq {
                     if_exists: false,
@@ -1486,7 +1487,7 @@ impl SchemaApiTestSuite {
                 );
             }
 
-            tracing::info!("--- drop table with if_exists = true again, ok");
+            info!("--- drop table with if_exists = true again, ok");
             {
                 let plan = DropTableReq {
                     if_exists: true,
@@ -1501,7 +1502,7 @@ impl SchemaApiTestSuite {
 
             expected_tb_count -= 1;
             // check table count
-            tracing::info!("--- check table count of tenant1");
+            info!("--- check table count of tenant1");
             let tb_count = mt.count_tables(Self::req_count_table(tenant)).await?;
             assert_eq!(expected_tb_count, tb_count.count);
         }
@@ -1545,10 +1546,10 @@ impl SchemaApiTestSuite {
             ..TableMeta::default()
         };
 
-        tracing::info!("--- rename table on unknown db");
+        info!("--- rename table on unknown db");
         {
             let got = mt.rename_table(rename_db1tb2_to_db1tb3(false)).await;
-            tracing::debug!("--- rename table on unknown database got: {:?}", got);
+            debug!("--- rename table on unknown database got: {:?}", got);
 
             assert!(got.is_err());
             assert_eq!(
@@ -1557,7 +1558,7 @@ impl SchemaApiTestSuite {
             );
         }
 
-        tracing::info!("--- prepare db");
+        info!("--- prepare db");
         {
             let plan = CreateDatabaseReq {
                 if_not_exists: false,
@@ -1572,7 +1573,7 @@ impl SchemaApiTestSuite {
             };
 
             let res = mt.create_database(plan).await?;
-            tracing::info!("create database res: {:?}", res);
+            info!("create database res: {:?}", res);
         }
 
         let created_on = Utc::now();
@@ -1586,7 +1587,7 @@ impl SchemaApiTestSuite {
             table_meta: table_meta(created_on),
         };
 
-        tracing::info!("--- create table for rename");
+        info!("--- create table for rename");
         let tb_ident = {
             let old_db = mt.get_database(Self::req_get_db(tenant, db1_name)).await?;
             mt.create_table(create_tb2_req.clone()).await?;
@@ -1596,7 +1597,7 @@ impl SchemaApiTestSuite {
             got.ident.clone()
         };
 
-        tracing::info!("--- rename table, ok");
+        info!("--- rename table, ok");
         {
             let old_db = mt.get_database(Self::req_get_db(tenant, db1_name)).await?;
             mt.rename_table(rename_db1tb2_to_db1tb3(false)).await?;
@@ -1613,7 +1614,7 @@ impl SchemaApiTestSuite {
 
             assert_meta_eq_without_updated!(want, got.as_ref().clone(), "get renamed table");
 
-            tracing::info!("--- get old table after rename");
+            info!("--- get old table after rename");
             {
                 let res = mt.get_table((tenant, db1_name, tb2_name).into()).await;
                 let err = res.err().unwrap();
@@ -1624,7 +1625,7 @@ impl SchemaApiTestSuite {
             }
         }
 
-        tracing::info!("--- db1,tb2(nil) -> db1,tb3(no_nil), error");
+        info!("--- db1,tb2(nil) -> db1,tb3(no_nil), error");
         {
             let res = mt.rename_table(rename_db1tb2_to_db1tb3(false)).await;
             let err = res.unwrap_err();
@@ -1636,12 +1637,12 @@ impl SchemaApiTestSuite {
             );
         }
 
-        tracing::info!("--- db1,tb2(nil) -> db1,tb3(no_nil), with if_exist=true, OK");
+        info!("--- db1,tb2(nil) -> db1,tb3(no_nil), with if_exist=true, OK");
         {
             mt.rename_table(rename_db1tb2_to_db1tb3(true)).await?;
         }
 
-        tracing::info!("--- create db1,db2, ok");
+        info!("--- create db1,db2, ok");
         let tb_ident2 = {
             let old_db = mt.get_database(Self::req_get_db(tenant, db1_name)).await?;
             mt.create_table(create_tb2_req.clone()).await?;
@@ -1654,7 +1655,7 @@ impl SchemaApiTestSuite {
             got.ident.clone()
         };
 
-        tracing::info!("--- db1,tb2(no_nil) -> db1,tb3(no_nil), error");
+        info!("--- db1,tb2(no_nil) -> db1,tb3(no_nil), error");
         {
             let res = mt.rename_table(rename_db1tb2_to_db1tb3(false)).await;
             let err = res.unwrap_err();
@@ -1666,7 +1667,7 @@ impl SchemaApiTestSuite {
             );
         }
 
-        tracing::info!("--- db1,tb2(no_nil) -> db1,tb3(no_nil), if_exists=true, error");
+        info!("--- db1,tb2(no_nil) -> db1,tb3(no_nil), if_exists=true, error");
         {
             let res = mt.rename_table(rename_db1tb2_to_db1tb3(true)).await;
             let err = res.unwrap_err();
@@ -1678,7 +1679,7 @@ impl SchemaApiTestSuite {
             );
         }
 
-        tracing::info!("--- rename table to unknown db, error");
+        info!("--- rename table to unknown db, error");
         {
             let req = RenameTableReq {
                 if_exists: false,
@@ -1691,7 +1692,7 @@ impl SchemaApiTestSuite {
                 new_table_name: tb3_name.to_string(),
             };
             let res = mt.rename_table(req.clone()).await;
-            tracing::debug!("--- rename table to other db got: {:?}", res);
+            debug!("--- rename table to other db got: {:?}", res);
 
             assert!(res.is_err());
             assert_eq!(
@@ -1700,7 +1701,7 @@ impl SchemaApiTestSuite {
             );
         }
 
-        tracing::info!("--- prepare other db");
+        info!("--- prepare other db");
         {
             let plan = CreateDatabaseReq {
                 if_not_exists: false,
@@ -1717,7 +1718,7 @@ impl SchemaApiTestSuite {
             mt.create_database(plan).await?;
         }
 
-        tracing::info!("--- rename table to other db, ok");
+        info!("--- rename table to other db, ok");
         {
             let req = RenameTableReq {
                 if_exists: false,
@@ -1771,7 +1772,7 @@ impl SchemaApiTestSuite {
             ..TableMeta::default()
         };
 
-        tracing::info!("--- prepare db");
+        info!("--- prepare db");
         {
             let plan = CreateDatabaseReq {
                 if_not_exists: false,
@@ -1786,12 +1787,12 @@ impl SchemaApiTestSuite {
             };
 
             let res = mt.create_database(plan).await?;
-            tracing::info!("create database res: {:?}", res);
+            info!("create database res: {:?}", res);
 
             assert_eq!(1, res.db_id, "first database id is 1");
         }
 
-        tracing::info!("--- create and get table");
+        info!("--- create and get table");
         {
             let created_on = Utc::now();
 
@@ -1829,9 +1830,9 @@ impl SchemaApiTestSuite {
             };
         }
 
-        tracing::info!("--- update table meta");
+        info!("--- update table meta");
         {
-            tracing::info!("--- update table meta, normal case");
+            info!("--- update table meta, normal case");
             {
                 let table = mt.get_table((tenant, "db1", "tb2").into()).await.unwrap();
 
@@ -1854,7 +1855,7 @@ impl SchemaApiTestSuite {
                 assert_eq!(table.meta, new_table_meta);
             }
 
-            tracing::info!("--- update table meta: version mismatch");
+            info!("--- update table meta: version mismatch");
             {
                 let table = mt.get_table((tenant, "db1", "tb2").into()).await.unwrap();
 
@@ -1901,7 +1902,7 @@ impl SchemaApiTestSuite {
             ..TableMeta::default()
         };
 
-        tracing::info!("--- prepare db");
+        info!("--- prepare db");
         {
             let plan = CreateDatabaseReq {
                 if_not_exists: false,
@@ -1916,12 +1917,12 @@ impl SchemaApiTestSuite {
             };
 
             let res = mt.create_database(plan).await?;
-            tracing::info!("create database res: {:?}", res);
+            info!("create database res: {:?}", res);
 
             assert_eq!(1, res.db_id, "first database id is 1");
         }
 
-        tracing::info!("--- create and get table");
+        info!("--- create and get table");
         {
             let created_on = Utc::now();
 
@@ -1959,9 +1960,9 @@ impl SchemaApiTestSuite {
             };
         }
 
-        tracing::info!("--- upsert table options");
+        info!("--- upsert table options");
         {
-            tracing::info!("--- upsert table options with key1=val1");
+            info!("--- upsert table options with key1=val1");
             {
                 let table = mt.get_table((tenant, "db1", "tb2").into()).await.unwrap();
 
@@ -1972,7 +1973,7 @@ impl SchemaApiTestSuite {
                 assert_eq!(table.options().get("key1"), Some(&"val1".into()));
             }
 
-            tracing::info!("--- upsert table options with key1=val1");
+            info!("--- upsert table options with key1=val1");
             {
                 let table = mt.get_table((tenant, "db1", "tb2").into()).await.unwrap();
 
@@ -1997,7 +1998,7 @@ impl SchemaApiTestSuite {
                 assert_eq!(table.options().get("key1"), Some(&"val1".into()));
             }
 
-            tracing::info!("--- upsert table options with not exist table id");
+            info!("--- upsert table options with not exist table id");
             {
                 let table = mt.get_table((tenant, "db1", "tb2").into()).await.unwrap();
 
@@ -2037,7 +2038,7 @@ impl SchemaApiTestSuite {
             db_name: db_name.to_string(),
         };
 
-        tracing::info!("--- create and drop db1");
+        info!("--- create and drop db1");
         {
             let drop_on = Some(Utc::now() - Duration::days(1));
 
@@ -2054,7 +2055,7 @@ impl SchemaApiTestSuite {
 
             let res = mt.create_database(req).await?;
             let db_id = res.db_id;
-            tracing::info!("create database res: {:?}", res);
+            info!("create database res: {:?}", res);
 
             let res = mt
                 .get_database_history(ListDatabaseReq {
@@ -2107,7 +2108,7 @@ impl SchemaApiTestSuite {
 
         let res = mt.create_database(req).await?;
         let db_id = res.db_id;
-        tracing::info!("create database res: {:?}", res);
+        info!("create database res: {:?}", res);
 
         let drop_data = DatabaseMeta {
             engine: "github".to_string(),
@@ -2237,7 +2238,7 @@ impl SchemaApiTestSuite {
 
         let res = mt.create_table(req).await?;
         let table_id = res.table_id;
-        tracing::info!("create table res: {:?}", res);
+        info!("create table res: {:?}", res);
 
         let drop_data = TableMeta {
             schema: schema(),
@@ -2284,7 +2285,7 @@ impl SchemaApiTestSuite {
         };
 
         let res = mt.create_database(plan).await?;
-        tracing::info!("create database res: {:?}", res);
+        info!("create database res: {:?}", res);
 
         assert_eq!(1, res.db_id, "first database id is 1");
         let drop_on = Some(Utc::now() - Duration::days(1));
@@ -2372,7 +2373,7 @@ impl SchemaApiTestSuite {
             )]))
         };
 
-        tracing::info!("--- prepare db");
+        info!("--- prepare db");
         {
             let plan = CreateDatabaseReq {
                 if_not_exists: false,
@@ -2387,7 +2388,7 @@ impl SchemaApiTestSuite {
             };
 
             let res = mt.create_database(plan).await?;
-            tracing::info!("create database res: {:?}", res);
+            info!("create database res: {:?}", res);
 
             assert_eq!(1, res.db_id, "first database id is 1");
         }
@@ -2400,7 +2401,7 @@ impl SchemaApiTestSuite {
             // drop_on: Some(created_on - Duration::days(1)),
             ..TableMeta::default()
         };
-        tracing::info!("--- create and get table");
+        info!("--- create and get table");
         {
             let req = CreateTableReq {
                 if_not_exists: false,
@@ -2478,7 +2479,7 @@ impl SchemaApiTestSuite {
             ..TableMeta::default()
         };
 
-        tracing::info!("--- prepare db");
+        info!("--- prepare db");
         {
             let plan = CreateDatabaseReq {
                 if_not_exists: false,
@@ -2493,19 +2494,19 @@ impl SchemaApiTestSuite {
             };
 
             let res = mt.create_database(plan).await?;
-            tracing::info!("create database res: {:?}", res);
+            info!("create database res: {:?}", res);
 
             assert_eq!(1, res.db_id, "first database id is 1");
         }
 
         // check table count
-        tracing::info!("--- check table count of tenant1");
+        info!("--- check table count of tenant1");
         let tb_count = mt.count_tables(Self::req_count_table(tenant)).await?;
         assert_eq!(expected_tb_count, tb_count.count);
 
         let created_on = Utc::now();
         let create_table_meta = table_meta(created_on);
-        tracing::info!("--- create and get table");
+        info!("--- create and get table");
         {
             let req = CreateTableReq {
                 if_not_exists: false,
@@ -2533,11 +2534,11 @@ impl SchemaApiTestSuite {
 
         expected_tb_count += 1;
         // check table count
-        tracing::info!("--- check table count of tenant1");
+        info!("--- check table count of tenant1");
         let tb_count = mt.count_tables(Self::req_count_table(tenant)).await?;
         assert_eq!(expected_tb_count, tb_count.count);
 
-        tracing::info!("--- drop and undrop table");
+        info!("--- drop and undrop table");
         {
             // first drop table
             let old_db = mt.get_database(Self::req_get_db(tenant, db_name)).await?;
@@ -2551,7 +2552,7 @@ impl SchemaApiTestSuite {
 
             expected_tb_count -= 1;
             // check table count
-            tracing::info!("--- check table count of tenant1");
+            info!("--- check table count of tenant1");
             let tb_count = mt.count_tables(Self::req_count_table(tenant)).await?;
             assert_eq!(expected_tb_count, tb_count.count);
 
@@ -2576,7 +2577,7 @@ impl SchemaApiTestSuite {
 
             expected_tb_count += 1;
             // check table count
-            tracing::info!("--- check table count of tenant1");
+            info!("--- check table count of tenant1");
             let tb_count = mt.count_tables(Self::req_count_table(tenant)).await?;
             assert_eq!(expected_tb_count, tb_count.count);
 
@@ -2591,7 +2592,7 @@ impl SchemaApiTestSuite {
             }]);
         }
 
-        tracing::info!("--- drop and create table");
+        info!("--- drop and create table");
         {
             // first drop table
             let old_db = mt.get_database(Self::req_get_db(tenant, db_name)).await?;
@@ -2605,7 +2606,7 @@ impl SchemaApiTestSuite {
 
             expected_tb_count -= 1;
             // check table count
-            tracing::info!("--- check table count of tenant1");
+            info!("--- check table count of tenant1");
             let tb_count = mt.count_tables(Self::req_count_table(tenant)).await?;
             assert_eq!(expected_tb_count, tb_count.count);
 
@@ -2634,7 +2635,7 @@ impl SchemaApiTestSuite {
 
             expected_tb_count += 1;
             // check table count
-            tracing::info!("--- check table count of tenant1");
+            info!("--- check table count of tenant1");
             let tb_count = mt.count_tables(Self::req_count_table(tenant)).await?;
             assert_eq!(expected_tb_count, tb_count.count);
 
@@ -2661,7 +2662,7 @@ impl SchemaApiTestSuite {
 
             expected_tb_count -= 1;
             // check table count
-            tracing::info!("--- check table count of tenant1");
+            info!("--- check table count of tenant1");
             let tb_count = mt.count_tables(Self::req_count_table(tenant)).await?;
             assert_eq!(expected_tb_count, tb_count.count);
 
@@ -2685,7 +2686,7 @@ impl SchemaApiTestSuite {
 
             expected_tb_count += 1;
             // check table count
-            tracing::info!("--- check table count of tenant1");
+            info!("--- check table count of tenant1");
             let tb_count = mt.count_tables(Self::req_count_table(tenant)).await?;
             assert_eq!(expected_tb_count, tb_count.count);
 
@@ -2711,7 +2712,7 @@ impl SchemaApiTestSuite {
             assert_eq!(undrop_table_already_exists, code);
         }
 
-        tracing::info!("--- rename table");
+        info!("--- rename table");
         {
             // first create drop table2
             let req = CreateTableReq {
@@ -2730,7 +2731,7 @@ impl SchemaApiTestSuite {
 
             expected_tb_count += 1;
             // check table count
-            tracing::info!("--- check table count of tenant1");
+            info!("--- check table count of tenant1");
             let tb_count = mt.count_tables(Self::req_count_table(tenant)).await?;
             assert_eq!(expected_tb_count, tb_count.count);
 
@@ -2762,7 +2763,7 @@ impl SchemaApiTestSuite {
 
             expected_tb_count -= 1;
             // check table count
-            tracing::info!("--- check table count of tenant1");
+            info!("--- check table count of tenant1");
             let tb_count = mt.count_tables(Self::req_count_table(tenant)).await?;
             assert_eq!(expected_tb_count, tb_count.count);
 
@@ -2798,7 +2799,7 @@ impl SchemaApiTestSuite {
             assert!(old_db.ident.seq < cur_db.ident.seq);
 
             // check table count
-            tracing::info!("--- check table count of tenant1");
+            info!("--- check table count of tenant1");
             let tb_count = mt.count_tables(Self::req_count_table(tenant)).await?;
             assert_eq!(expected_tb_count, tb_count.count);
 
@@ -2847,7 +2848,7 @@ impl SchemaApiTestSuite {
             ..TableMeta::default()
         };
 
-        tracing::info!("--- prepare db");
+        info!("--- prepare db");
         {
             let plan = CreateDatabaseReq {
                 if_not_exists: false,
@@ -2862,12 +2863,12 @@ impl SchemaApiTestSuite {
             };
 
             let res = mt.create_database(plan).await?;
-            tracing::info!("create database res: {:?}", res);
+            info!("create database res: {:?}", res);
 
             assert_eq!(1, res.db_id, "first database id is 1");
         }
 
-        tracing::info!("--- create and get table");
+        info!("--- create and get table");
         {
             let created_on = Utc::now();
 
@@ -2905,9 +2906,9 @@ impl SchemaApiTestSuite {
             };
         }
 
-        tracing::info!("--- get_table_by_id ");
+        info!("--- get_table_by_id ");
         {
-            tracing::info!("--- get_table_by_id ");
+            info!("--- get_table_by_id ");
             {
                 let table = mt.get_table((tenant, "db1", "tb2").into()).await.unwrap();
 
@@ -2917,7 +2918,7 @@ impl SchemaApiTestSuite {
                 assert_eq!(table_id.table_id, table.ident.table_id);
             }
 
-            tracing::info!("--- get_table_by_id with not exists table_id");
+            info!("--- get_table_by_id with not exists table_id");
             {
                 let got = mt.get_table_by_id(1024).await;
 
@@ -2935,23 +2936,23 @@ impl SchemaApiTestSuite {
         let tenant = "tenant1";
         let db_name = "db1";
 
-        tracing::info!("--- list table on unknown db");
+        info!("--- list table on unknown db");
         {
             let res = mt.list_tables(ListTableReq::new(tenant, db_name)).await;
-            tracing::debug!("list table on unknown db res: {:?}", res);
+            debug!("list table on unknown db res: {:?}", res);
             assert!(res.is_err());
 
             let code = ErrorCode::from(res.unwrap_err()).code();
             assert_eq!(ErrorCode::UnknownDatabase("").code(), code);
         }
 
-        tracing::info!("--- prepare db");
+        info!("--- prepare db");
         {
             let res = self.create_database(mt, tenant, db_name, "eng1").await?;
             assert_eq!(1, res.db_id, "first database id is 1");
         }
 
-        tracing::info!("--- create 2 tables: tb1 tb2");
+        info!("--- create 2 tables: tb1 tb2");
         {
             // Table schema with metadata(due to serde issue).
             let schema = Arc::new(DataSchema::new(vec![DataField::new(
@@ -2996,7 +2997,7 @@ impl SchemaApiTestSuite {
                 vec![tb_id1, tb_id2]
             };
 
-            tracing::info!("--- get_tables");
+            info!("--- get_tables");
             {
                 let res = mt.list_tables(ListTableReq::new(tenant, db_name)).await?;
                 assert_eq!(tb_ids.len(), res.len());
@@ -3012,7 +3013,7 @@ impl SchemaApiTestSuite {
     //     let tenant1 = "tenant1";
     //     let share_name1 = "share1";
     //     let share_name2 = "share2";
-    //     tracing::info!("--- create {}", share_name1);
+    //     info!("--- create {}", share_name1);
     //     {
     //         let req = CreateShareReq {
     //             if_not_exists: false,
@@ -3021,15 +3022,15 @@ impl SchemaApiTestSuite {
     //         };
     //
     //         let res = mt.create_share(req).await;
-    //         tracing::info!("create share res: {:?}", res);
+    //         info!("create share res: {:?}", res);
     //         let res = res.unwrap();
     //         assert_eq!(1, res.share_id, "first share id is 1");
     //     }
     //
-    //     tracing::info!("--- get share1");
+    //     info!("--- get share1");
     //     {
     //         let res = mt.get_share(GetShareReq::new(tenant1, share_name1)).await;
-    //         tracing::debug!("get present share res: {:?}", res);
+    //         debug!("get present share res: {:?}", res);
     //         let res = res?;
     //         assert_eq!(1, res.id, "db1 id is 1");
     //         assert_eq!(
@@ -3040,7 +3041,7 @@ impl SchemaApiTestSuite {
     //         );
     //     }
     //
-    //     tracing::info!("--- create share1 again with if_not_exists=false");
+    //     info!("--- create share1 again with if_not_exists=false");
     //     {
     //         let req = CreateShareReq {
     //             if_not_exists: false,
@@ -3049,7 +3050,7 @@ impl SchemaApiTestSuite {
     //         };
     //
     //         let res = mt.create_share(req).await;
-    //         tracing::info!("create share res: {:?}", res);
+    //         info!("create share res: {:?}", res);
     //         let err = res.unwrap_err();
     //         assert_eq!(
     //             ErrorCode::ShareAlreadyExists("").code(),
@@ -3057,7 +3058,7 @@ impl SchemaApiTestSuite {
     //         );
     //     }
     //
-    //     tracing::info!("--- create share1 again with if_not_exists=true");
+    //     info!("--- create share1 again with if_not_exists=true");
     //     {
     //         let req = CreateShareReq {
     //             if_not_exists: true,
@@ -3066,13 +3067,13 @@ impl SchemaApiTestSuite {
     //         };
     //
     //         let res = mt.create_share(req).await;
-    //         tracing::info!("create database res: {:?}", res);
+    //         info!("create database res: {:?}", res);
     //
     //         let res = res.unwrap();
     //         assert_eq!(1, res.share_id, "share1 id is 1");
     //     }
     //
-    //     tracing::info!("--- create share2");
+    //     info!("--- create share2");
     //     {
     //         let req = CreateShareReq {
     //             if_not_exists: false,
@@ -3081,12 +3082,12 @@ impl SchemaApiTestSuite {
     //         };
     //
     //         let res = mt.create_share(req).await;
-    //         tracing::info!("create share res: {:?}", res);
+    //         info!("create share res: {:?}", res);
     //         let res = res.unwrap();
     //         assert_eq!(2, res.share_id, "second share id is 2 ");
     //     }
     //
-    //     tracing::info!("--- get share2");
+    //     info!("--- get share2");
     //     {
     //         let res = mt.get_share(GetShareReq::new(tenant1, share_name2)).await?;
     //         assert_eq!(2, res.id, "share2 id is 2");
@@ -3098,10 +3099,10 @@ impl SchemaApiTestSuite {
     //         );
     //     }
     //
-    //     tracing::info!("--- get absent share");
+    //     info!("--- get absent share");
     //     {
     //         let res = mt.get_share(GetShareReq::new(tenant1, "absent")).await;
-    //         tracing::debug!("=== get absent share res: {:?}", res);
+    //         debug!("=== get absent share res: {:?}", res);
     //         assert!(res.is_err());
     //         let err = res.unwrap_err();
     //         let err_code = ErrorCode::from(err);
@@ -3110,7 +3111,7 @@ impl SchemaApiTestSuite {
     //         assert!(err_code.message().contains("absent"));
     //     }
     //
-    //     tracing::info!("--- drop share2");
+    //     info!("--- drop share2");
     //     {
     //         mt.drop_share(DropShareReq {
     //             if_exists: false,
@@ -3120,7 +3121,7 @@ impl SchemaApiTestSuite {
     //         .await?;
     //     }
     //
-    //     tracing::info!("--- get share2 should not found");
+    //     info!("--- get share2 should not found");
     //     {
     //         let res = mt.get_share(GetShareReq::new(tenant1, share_name2)).await;
     //         let err = res.unwrap_err();
@@ -3130,7 +3131,7 @@ impl SchemaApiTestSuite {
     //         );
     //     }
     //
-    //     tracing::info!("--- drop share2 with if_exists=true returns no error");
+    //     info!("--- drop share2 with if_exists=true returns no error");
     //     {
     //         mt.drop_share(DropShareReq {
     //             if_exists: true,
@@ -3169,7 +3170,7 @@ impl SchemaApiTestSuite {
         db_name: &str,
         engine: &str,
     ) -> anyhow::Result<CreateDatabaseReply> {
-        tracing::info!("--- create database {}", db_name);
+        info!("--- create database {}", db_name);
 
         let req = CreateDatabaseReq {
             if_not_exists: false,
@@ -3184,7 +3185,7 @@ impl SchemaApiTestSuite {
         };
 
         let res = mt.create_database(req).await?;
-        tracing::info!("create database res: {:?}", res);
+        info!("create database res: {:?}", res);
         Ok(res)
     }
 }
@@ -3198,7 +3199,7 @@ impl SchemaApiTestSuite {
         node_a: &MT,
         node_b: &MT,
     ) -> anyhow::Result<()> {
-        tracing::info!("--- create db1 on node_a");
+        info!("--- create db1 on node_a");
         let tenant = "tenant1";
         {
             let req = CreateDatabaseReq {
@@ -3214,28 +3215,28 @@ impl SchemaApiTestSuite {
             };
 
             let res = node_a.create_database(req).await;
-            tracing::info!("create database res: {:?}", res);
+            info!("create database res: {:?}", res);
             let res = res.unwrap();
             assert_eq!(1, res.db_id, "first database id is 1");
         }
 
-        tracing::info!("--- get db1 on node_b");
+        info!("--- get db1 on node_b");
         {
             let res = node_b
                 .get_database(GetDatabaseReq::new(tenant, "db1"))
                 .await;
-            tracing::debug!("get present database res: {:?}", res);
+            debug!("get present database res: {:?}", res);
             let res = res?;
             assert_eq!(1, res.ident.db_id, "db1 id is 1");
             assert_eq!("db1", res.name_ident.db_name, "db1.db is db1");
         }
 
-        tracing::info!("--- get nonexistent-db on node_b, expect correct error");
+        info!("--- get nonexistent-db on node_b, expect correct error");
         {
             let res = node_b
                 .get_database(GetDatabaseReq::new(tenant, "nonexistent"))
                 .await;
-            tracing::debug!("get present database res: {:?}", res);
+            debug!("get present database res: {:?}", res);
             let err = res.unwrap_err();
             let err = ErrorCode::from(err);
             assert_eq!(ErrorCode::UnknownDatabase("").code(), err.code());
@@ -3255,7 +3256,7 @@ impl SchemaApiTestSuite {
         node_a: &MT,
         node_b: &MT,
     ) -> anyhow::Result<()> {
-        tracing::info!("--- create db1 and db3 on node_a");
+        info!("--- create db1 and db3 on node_a");
         let tenant = "tenant1";
 
         let mut db_ids = vec![];
@@ -3278,14 +3279,14 @@ impl SchemaApiTestSuite {
             }
         }
 
-        tracing::info!("--- list databases from node_b");
+        info!("--- list databases from node_b");
         {
             let res = node_b
                 .list_databases(ListDatabaseReq {
                     tenant: tenant.to_string(),
                 })
                 .await;
-            tracing::debug!("get database list: {:?}", res);
+            debug!("get database list: {:?}", res);
             let res = res?;
             assert_eq!(2, res.len(), "database list len is 2");
             assert_eq!(db_ids[0], res[0].ident.db_id, "db1 id");
@@ -3303,7 +3304,7 @@ impl SchemaApiTestSuite {
         node_a: &MT,
         node_b: &MT,
     ) -> anyhow::Result<()> {
-        tracing::info!("--- create db1 and tb1, tb2 on node_a");
+        info!("--- create db1 and tb1, tb2 on node_a");
         let tenant = "tenant1";
         let db_name = "db1";
 
@@ -3322,7 +3323,7 @@ impl SchemaApiTestSuite {
                 },
             };
             let res = node_a.create_database(req).await;
-            tracing::info!("create database res: {:?}", res);
+            info!("create database res: {:?}", res);
             assert!(res.is_ok());
 
             let tables = vec!["tb1", "tb2"];
@@ -3359,10 +3360,10 @@ impl SchemaApiTestSuite {
             }
         }
 
-        tracing::info!("--- list tables from node_b");
+        info!("--- list tables from node_b");
         {
             let res = node_b.list_tables(ListTableReq::new(tenant, db_name)).await;
-            tracing::debug!("get table list: {:?}", res);
+            debug!("get table list: {:?}", res);
             let res = res?;
             assert_eq!(2, res.len(), "table list len is 2");
             assert_eq!(tb_ids[0], res[0].ident.table_id, "tb1 id");
@@ -3380,7 +3381,7 @@ impl SchemaApiTestSuite {
         node_a: &MT,
         node_b: &MT,
     ) -> anyhow::Result<()> {
-        tracing::info!("--- create table tb1 on node_a");
+        info!("--- create table tb1 on node_a");
         let tenant = "tenant1";
         let db_name = "db1";
         let tb_id = {
@@ -3396,7 +3397,7 @@ impl SchemaApiTestSuite {
                 },
             };
             let res = node_a.create_database(req).await;
-            tracing::info!("create database res: {:?}", res);
+            info!("create database res: {:?}", res);
             assert!(res.is_ok());
 
             let schema = Arc::new(DataSchema::new(vec![DataField::new(
@@ -3432,23 +3433,23 @@ impl SchemaApiTestSuite {
             res.table_id
         };
 
-        tracing::info!("--- get tb1 on node_b");
+        info!("--- get tb1 on node_b");
         {
             let res = node_b
                 .get_table(GetTableReq::new(tenant, "db1", "tb1"))
                 .await;
-            tracing::debug!("get present table res: {:?}", res);
+            debug!("get present table res: {:?}", res);
             let res = res?;
             assert_eq!(tb_id, res.ident.table_id, "tb1 id is 1");
             assert_eq!("tb1", res.name, "tb1.name is tb1");
         }
 
-        tracing::info!("--- get nonexistent-table on node_b, expect correct error");
+        info!("--- get nonexistent-table on node_b, expect correct error");
         {
             let res = node_b
                 .get_table(GetTableReq::new(tenant, "db1", "nonexistent"))
                 .await;
-            tracing::debug!("get present table res: {:?}", res);
+            debug!("get present table res: {:?}", res);
             let err = res.unwrap_err();
             assert_eq!(
                 ErrorCode::UnknownTable("").code(),

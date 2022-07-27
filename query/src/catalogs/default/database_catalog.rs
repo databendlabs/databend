@@ -41,7 +41,7 @@ use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_types::MetaId;
-use common_tracing::tracing;
+use tracing::info;
 
 use crate::catalogs::catalog::Catalog;
 use crate::catalogs::default::ImmutableCatalog;
@@ -145,7 +145,7 @@ impl Catalog for DatabaseCatalog {
                 "Tenant can not empty(while create database)",
             ));
         }
-        tracing::info!("Create database from req:{:?}", req);
+        info!("Create database from req:{:?}", req);
 
         if self
             .immutable_catalog
@@ -167,7 +167,7 @@ impl Catalog for DatabaseCatalog {
                 "Tenant can not empty(while drop database)",
             ));
         }
-        tracing::info!("Drop database from req:{:?}", req);
+        info!("Drop database from req:{:?}", req);
 
         // drop db in BOTTOM layer only
         if self
@@ -186,7 +186,7 @@ impl Catalog for DatabaseCatalog {
                 "Tenant can not empty(while rename database)",
             ));
         }
-        tracing::info!("Rename table from req:{:?}", req);
+        info!("Rename table from req:{:?}", req);
 
         if self
             .immutable_catalog
@@ -330,7 +330,7 @@ impl Catalog for DatabaseCatalog {
                 "Tenant can not empty(while create table)",
             ));
         }
-        tracing::info!("Create table from req:{:?}", req);
+        info!("Create table from req:{:?}", req);
 
         if self
             .immutable_catalog
@@ -348,7 +348,7 @@ impl Catalog for DatabaseCatalog {
                 "Tenant can not empty(while drop table)",
             ));
         }
-        tracing::info!("Drop table from req:{:?}", req);
+        info!("Drop table from req:{:?}", req);
 
         if self
             .immutable_catalog
@@ -366,7 +366,7 @@ impl Catalog for DatabaseCatalog {
                 "Tenant can not empty(while undrop table)",
             ));
         }
-        tracing::info!("Undrop table from req:{:?}", req);
+        info!("Undrop table from req:{:?}", req);
 
         if self
             .immutable_catalog
@@ -384,7 +384,7 @@ impl Catalog for DatabaseCatalog {
                 "Tenant can not empty(while undrop database)",
             ));
         }
-        tracing::info!("Undrop database from req:{:?}", req);
+        info!("Undrop database from req:{:?}", req);
 
         if self
             .immutable_catalog
@@ -402,7 +402,7 @@ impl Catalog for DatabaseCatalog {
                 "Tenant can not empty(while rename table)",
             ));
         }
-        tracing::info!("Rename table from req:{:?}", req);
+        info!("Rename table from req:{:?}", req);
 
         if self
             .immutable_catalog

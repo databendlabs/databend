@@ -265,6 +265,11 @@ class SuiteRunner(object):
     # format: a list of file absolute path and name(relative path)
     def fetch_files(self):
         log.debug(f"Skip test file list {self.args.skip}")
+        skips = self.args.skip
+
+        if type(skips) is str:
+            skips = skips.split(",")
+
         for filename in glob.iglob(f'{self.path}/**', recursive=True):
             if os.path.isfile(filename):
                 base_name = os.path.basename(filename)
@@ -279,7 +284,7 @@ class SuiteRunner(object):
                     continue
 
                 if self.args.skip and any(
-                    [re.search(r, base_name) for r in self.args.skip]):
+                    [re.search(r, base_name) for r in skips]):
                     log.info(f"Skip test file {filename}")
                     continue
 

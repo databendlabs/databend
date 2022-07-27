@@ -23,7 +23,7 @@ use common_meta_types::TxnReply;
 use common_meta_types::TxnRequest;
 use common_meta_types::UpsertKVReply;
 use common_meta_types::UpsertKVReq;
-use common_tracing::tracing;
+use tracing::debug;
 
 use crate::state_machine::StateMachine;
 
@@ -69,7 +69,7 @@ impl KVApi for StateMachine {
     async fn get_kv(&self, key: &str) -> Result<GetKVReply, MetaError> {
         // TODO(xp) refine get(): a &str is enough for key
         let sv = self.kvs().get(&key.to_string())?;
-        tracing::debug!("get_kv sv:{:?}", sv);
+        debug!("get_kv sv:{:?}", sv);
         let sv = match sv {
             None => return Ok(None),
             Some(sv) => sv,

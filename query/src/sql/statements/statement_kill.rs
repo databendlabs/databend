@@ -17,7 +17,6 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_planners::KillPlan;
 use common_planners::PlanNode;
-use common_tracing::tracing;
 use sqlparser::ast::Ident;
 
 use crate::sessions::QueryContext;

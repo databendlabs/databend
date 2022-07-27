@@ -19,7 +19,6 @@ use common_meta_types::PrincipalIdentity;
 use common_planners::RevokeRolePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
-use common_tracing::tracing;
 
 use crate::interpreters::Interpreter;
 use crate::sessions::QueryContext;

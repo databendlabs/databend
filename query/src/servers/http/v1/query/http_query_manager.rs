@@ -20,8 +20,8 @@ use common_base::base::tokio;
 use common_base::base::tokio::sync::RwLock;
 use common_base::base::tokio::time::sleep;
 use common_exception::Result;
-use common_tracing::tracing;
 use parking_lot::Mutex;
+use tracing::warn;
 
 use super::expiring_map::ExpiringMap;
 use super::HttpQueryContext;
@@ -83,7 +83,7 @@ impl HttpQueryManager {
                     sleep(t).await;
                 }
                 if self_clone.remove_query(&query_id_clone).await.is_none() {
-                    tracing::warn!("http query {} timeout", &query_id_clone);
+                    warn!("http query {} timeout", &query_id_clone);
                 } else {
                     query.detach().await;
                 }

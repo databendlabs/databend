@@ -33,8 +33,8 @@ use common_meta_app::share::ShareGrantObjectName;
 use common_meta_app::share::ShareGrantObjectPrivilege;
 use common_meta_app::share::ShareNameIdent;
 use common_meta_app::share::ShowShareReq;
-use common_tracing::tracing;
 use enumflags2::BitFlags;
+use tracing::info;
 
 use crate::get_share_account_meta_or_err;
 use crate::get_share_id_to_name_or_err;
@@ -79,14 +79,14 @@ impl ShareApiTestSuite {
         };
         let share_id: u64;
 
-        tracing::info!("--- show share when there are no share");
+        info!("--- show share when there are no share");
         {
             let req = ShowShareReq {
                 share_name: share_name.clone(),
             };
 
             let res = mt.show_share(req).await;
-            tracing::info!("show share res: {:?}", res);
+            info!("show share res: {:?}", res);
             assert!(res.is_err());
             let err = res.unwrap_err();
             assert_eq!(
@@ -95,7 +95,7 @@ impl ShareApiTestSuite {
             );
         }
 
-        tracing::info!("--- create share1");
+        info!("--- create share1");
         let create_on = Utc::now();
         {
             let req = CreateShareReq {
@@ -106,7 +106,7 @@ impl ShareApiTestSuite {
             };
 
             let res = mt.create_share(req).await;
-            tracing::info!("create share res: {:?}", res);
+            info!("create share res: {:?}", res);
             let res = res.unwrap();
             assert_eq!(1, res.share_id, "first database id is 1");
             share_id = res.share_id;
@@ -117,7 +117,7 @@ impl ShareApiTestSuite {
             assert_eq!(share_name, share_name_ret)
         }
 
-        tracing::info!("--- create share1 again with if_not_exists=false");
+        info!("--- create share1 again with if_not_exists=false");
         {
             let req = CreateShareReq {
                 if_not_exists: false,
@@ -127,7 +127,7 @@ impl ShareApiTestSuite {
             };
 
             let res = mt.create_share(req).await;
-            tracing::info!("create share res: {:?}", res);
+            info!("create share res: {:?}", res);
             let err = res.unwrap_err();
             assert_eq!(
                 ErrorCode::ShareAlreadyExists("").code(),
@@ -135,7 +135,7 @@ impl ShareApiTestSuite {
             );
         }
 
-        tracing::info!("--- create share1 again with if_not_exists=true");
+        info!("--- create share1 again with if_not_exists=true");
         {
             let req = CreateShareReq {
                 if_not_exists: true,
@@ -145,24 +145,24 @@ impl ShareApiTestSuite {
             };
 
             let res = mt.create_share(req).await;
-            tracing::info!("create share res: {:?}", res);
+            info!("create share res: {:?}", res);
             let res = res.unwrap();
             assert_eq!(1, res.share_id, "first share id is 1");
         }
 
-        tracing::info!("--- show share in current database");
+        info!("--- show share in current database");
         {
             let req = ShowShareReq {
                 share_name: share_name.clone(),
             };
 
             let res = mt.show_share(req).await;
-            tracing::info!("show share res: {:?}", res);
+            info!("show share res: {:?}", res);
             let res = res.unwrap();
             assert_eq!(1, res.share_id, "share id should be 1");
         }
 
-        tracing::info!("--- drop share1 with if_exists=true");
+        info!("--- drop share1 with if_exists=true");
         {
             let req = DropShareReq {
                 if_exists: true,
@@ -180,7 +180,7 @@ impl ShareApiTestSuite {
             );
         }
 
-        tracing::info!("--- drop share1 again with if_exists=false");
+        info!("--- drop share1 again with if_exists=false");
         {
             let req = DropShareReq {
                 if_exists: false,
@@ -215,7 +215,7 @@ impl ShareApiTestSuite {
         let share_on = Utc::now();
         let create_on = Utc::now();
 
-        tracing::info!("--- prepare share1");
+        info!("--- prepare share1");
         {
             let req = CreateShareReq {
                 if_not_exists: false,
@@ -225,13 +225,13 @@ impl ShareApiTestSuite {
             };
 
             let res = mt.create_share(req).await;
-            tracing::info!("add share account res: {:?}", res);
+            info!("add share account res: {:?}", res);
             let res = res.unwrap();
             assert_eq!(1, res.share_id, "first database id is 1");
             share_id = res.share_id;
         }
 
-        tracing::info!("--- add account account1");
+        info!("--- add account account1");
         {
             let req = AddShareAccountReq {
                 share_name: share_name.clone(),
@@ -241,7 +241,7 @@ impl ShareApiTestSuite {
 
             // get share meta and check account has been added
             let res = mt.add_share_account(req).await;
-            tracing::info!("add share account res: {:?}", res);
+            info!("add share account res: {:?}", res);
             let res = res.unwrap();
             assert_eq!(res.share_id, share_id);
 
@@ -262,14 +262,14 @@ impl ShareApiTestSuite {
         }
 
         // test show share api
-        tracing::info!("--- show share check account information");
+        info!("--- show share check account information");
         {
             let req = ShowShareReq {
                 share_name: share_name.clone(),
             };
 
             let res = mt.show_share(req).await;
-            tracing::info!("show share res: {:?}", res);
+            info!("show share res: {:?}", res);
             assert!(res.is_ok());
             let res = res.unwrap();
 
@@ -284,7 +284,7 @@ impl ShareApiTestSuite {
             assert_eq!(share_account_meta.share_on, share_on);
         }
 
-        tracing::info!("--- add account account1 again");
+        info!("--- add account account1 again");
         {
             let req = AddShareAccountReq {
                 share_name: share_name.clone(),
@@ -293,7 +293,7 @@ impl ShareApiTestSuite {
             };
 
             let res = mt.add_share_account(req).await;
-            tracing::info!("add share account res: {:?}", res);
+            info!("add share account res: {:?}", res);
             let err = res.unwrap_err();
             assert_eq!(
                 ErrorCode::ShareAccountAlreadyExists("").code(),
@@ -301,7 +301,7 @@ impl ShareApiTestSuite {
             );
         }
 
-        tracing::info!("--- add account account2");
+        info!("--- add account account2");
         {
             let req = AddShareAccountReq {
                 share_name: share_name.clone(),
@@ -310,7 +310,7 @@ impl ShareApiTestSuite {
             };
 
             let res = mt.add_share_account(req).await;
-            tracing::info!("add share account res: {:?}", res);
+            info!("add share account res: {:?}", res);
             let res = res.unwrap();
             assert_eq!(res.share_id, share_id);
 
@@ -319,14 +319,14 @@ impl ShareApiTestSuite {
             assert!(share_meta.has_account(&account2.to_string()));
         }
 
-        tracing::info!("--- show share again");
+        info!("--- show share again");
         {
             let req = ShowShareReq {
                 share_name: share_name.clone(),
             };
 
             let res = mt.show_share(req).await;
-            tracing::info!("show share res: {:?}", res);
+            info!("show share res: {:?}", res);
             assert!(res.is_ok());
             let res = res.unwrap();
 
@@ -341,7 +341,7 @@ impl ShareApiTestSuite {
             );
         }
 
-        tracing::info!("--- remove account account2");
+        info!("--- remove account account2");
         {
             let req = RemoveShareAccountReq {
                 share_id,
@@ -349,7 +349,7 @@ impl ShareApiTestSuite {
             };
 
             let res = mt.remove_share_account(req).await;
-            tracing::info!("remove share account res: {:?}", res);
+            info!("remove share account res: {:?}", res);
             assert!(res.is_ok());
 
             // check account2 has been removed from share_meta
@@ -370,7 +370,7 @@ impl ShareApiTestSuite {
             );
         }
 
-        tracing::info!("--- drop share1 with if_exists=true");
+        info!("--- drop share1 with if_exists=true");
         {
             let req = DropShareReq {
                 if_exists: true,
@@ -416,7 +416,7 @@ impl ShareApiTestSuite {
         let db_id: u64;
         let table_id: u64;
 
-        tracing::info!("--- create share1,db1,table1");
+        info!("--- create share1,db1,table1");
         let create_on = Utc::now();
         {
             let req = CreateShareReq {
@@ -427,7 +427,7 @@ impl ShareApiTestSuite {
             };
 
             let res = mt.create_share(req).await;
-            tracing::info!("create share res: {:?}", res);
+            info!("create share res: {:?}", res);
             let res = res.unwrap();
             assert_eq!(1, res.share_id, "first database id is 1");
             share_id = res.share_id;
@@ -447,7 +447,7 @@ impl ShareApiTestSuite {
             };
 
             let res = mt.create_database(plan).await?;
-            tracing::info!("create database res: {:?}", res);
+            info!("create database res: {:?}", res);
             db_id = res.db_id;
 
             let req = CreateTableReq {
@@ -461,7 +461,7 @@ impl ShareApiTestSuite {
             };
 
             let res = mt.create_table(req.clone()).await?;
-            tracing::info!("create table res: {:?}", res);
+            info!("create table res: {:?}", res);
             table_id = res.table_id;
 
             let plan = CreateDatabaseReq {
@@ -474,7 +474,7 @@ impl ShareApiTestSuite {
             };
 
             let res = mt.create_database(plan).await?;
-            tracing::info!("create database res: {:?}", res);
+            info!("create database res: {:?}", res);
 
             let req = CreateTableReq {
                 if_not_exists: false,
@@ -487,10 +487,10 @@ impl ShareApiTestSuite {
             };
 
             let res = mt.create_table(req.clone()).await?;
-            tracing::info!("create table res: {:?}", res);
+            info!("create table res: {:?}", res);
         }
 
-        tracing::info!("--- grant unknown db2,table2");
+        info!("--- grant unknown db2,table2");
         {
             let req = GrantShareObjectReq {
                 share_name: share_name.clone(),
@@ -500,7 +500,7 @@ impl ShareApiTestSuite {
             };
 
             let res = mt.grant_object(req).await;
-            tracing::info!("grant object res: {:?}", res);
+            info!("grant object res: {:?}", res);
             let err = res.unwrap_err();
             assert_eq!(
                 ErrorCode::UnknownDatabase("").code(),
@@ -518,7 +518,7 @@ impl ShareApiTestSuite {
             };
 
             let res = mt.grant_object(req).await;
-            tracing::info!("grant object res: {:?}", res);
+            info!("grant object res: {:?}", res);
             let err = res.unwrap_err();
             assert_eq!(
                 ErrorCode::UnknownTable("").code(),
@@ -526,7 +526,7 @@ impl ShareApiTestSuite {
             );
         }
 
-        tracing::info!("--- grant unknown share2");
+        info!("--- grant unknown share2");
         {
             let req = GrantShareObjectReq {
                 share_name: ShareNameIdent {
@@ -539,7 +539,7 @@ impl ShareApiTestSuite {
             };
 
             let res = mt.grant_object(req).await;
-            tracing::info!("grant object res: {:?}", res);
+            info!("grant object res: {:?}", res);
             let err = res.unwrap_err();
             assert_eq!(
                 ErrorCode::UnknownShare("").code(),
@@ -547,7 +547,7 @@ impl ShareApiTestSuite {
             );
         }
 
-        tracing::info!("--- grant table2 on a unbound database share");
+        info!("--- grant table2 on a unbound database share");
         {
             let req = GrantShareObjectReq {
                 share_name: share_name.clone(),
@@ -557,7 +557,7 @@ impl ShareApiTestSuite {
             };
 
             let res = mt.grant_object(req).await;
-            tracing::info!("grant object res: {:?}", res);
+            info!("grant object res: {:?}", res);
             let err = res.unwrap_err();
             assert_eq!(
                 ErrorCode::WrongShareObject("").code(),
@@ -565,7 +565,7 @@ impl ShareApiTestSuite {
             );
         }
 
-        tracing::info!("--- grant db object and table object");
+        info!("--- grant db object and table object");
         {
             let req = GrantShareObjectReq {
                 share_name: share_name.clone(),
@@ -575,7 +575,7 @@ impl ShareApiTestSuite {
             };
 
             let res = mt.grant_object(req).await?;
-            tracing::info!("grant object res: {:?}", res);
+            info!("grant object res: {:?}", res);
 
             let tbl_ob_name =
                 ShareGrantObjectName::Table(db_name.to_string(), tbl_name.to_string());
@@ -587,7 +587,7 @@ impl ShareApiTestSuite {
             };
 
             let res = mt.grant_object(req).await?;
-            tracing::info!("grant object res: {:?}", res);
+            info!("grant object res: {:?}", res);
 
             let (_share_meta_seq, share_meta) =
                 get_share_meta_by_id_or_err(mt.as_kv_api(), share_id, "").await?;
@@ -625,7 +625,7 @@ impl ShareApiTestSuite {
             }
         }
 
-        tracing::info!("--- grant db2, table2 on another bounded database share");
+        info!("--- grant db2, table2 on another bounded database share");
         {
             let req = GrantShareObjectReq {
                 share_name: share_name.clone(),
@@ -635,7 +635,7 @@ impl ShareApiTestSuite {
             };
 
             let res = mt.grant_object(req).await;
-            tracing::info!("grant object res: {:?}", res);
+            info!("grant object res: {:?}", res);
             let err = res.unwrap_err();
             assert_eq!(
                 ErrorCode::WrongShareObject("").code(),
@@ -650,7 +650,7 @@ impl ShareApiTestSuite {
             };
 
             let res = mt.grant_object(req).await;
-            tracing::info!("grant object res: {:?}", res);
+            info!("grant object res: {:?}", res);
             let err = res.unwrap_err();
             assert_eq!(
                 ErrorCode::WrongShareObject("").code(),
@@ -658,7 +658,7 @@ impl ShareApiTestSuite {
             );
         }
 
-        tracing::info!("--- revoke share of table");
+        info!("--- revoke share of table");
         {
             let req = RevokeShareObjectReq {
                 share_name: share_name.clone(),
@@ -668,7 +668,7 @@ impl ShareApiTestSuite {
             };
 
             let res = mt.revoke_object(req).await?;
-            tracing::info!("revoke object res: {:?}", res);
+            info!("revoke object res: {:?}", res);
 
             let (_share_meta_seq, share_meta) =
                 get_share_meta_by_id_or_err(mt.as_kv_api(), share_id, "").await?;
@@ -697,7 +697,7 @@ impl ShareApiTestSuite {
             assert!(share_meta.entries.get(&object.to_string()).is_none());
         }
 
-        tracing::info!("--- grant share of table again, and revoke the database");
+        info!("--- grant share of table again, and revoke the database");
         {
             // first grant share table again
             let req = GrantShareObjectReq {
@@ -708,7 +708,7 @@ impl ShareApiTestSuite {
             };
 
             let res = mt.grant_object(req).await?;
-            tracing::info!("grant object res: {:?}", res);
+            info!("grant object res: {:?}", res);
 
             // assert table share exists
             let (_share_meta_seq, share_meta) =
@@ -725,7 +725,7 @@ impl ShareApiTestSuite {
             };
 
             let res = mt.revoke_object(req).await?;
-            tracing::info!("revoke object res: {:?}", res);
+            info!("revoke object res: {:?}", res);
 
             // assert share_meta.database is none, and share_meta.entries is empty
             let (_share_meta_seq, share_meta) =
@@ -753,7 +753,7 @@ impl ShareApiTestSuite {
         };
         let db_id: u64;
 
-        tracing::info!("--- get unknown share");
+        info!("--- get unknown share");
         {
             let req = GetShareGrantObjectReq {
                 share_name: share_name.clone(),
@@ -761,7 +761,7 @@ impl ShareApiTestSuite {
             };
 
             let res = mt.get_share_grant_objects(req).await;
-            tracing::info!("get_share_grant_objects res: {:?}", res);
+            info!("get_share_grant_objects res: {:?}", res);
             let err = res.unwrap_err();
             assert_eq!(
                 ErrorCode::UnknownShare("").code(),
@@ -769,7 +769,7 @@ impl ShareApiTestSuite {
             );
         }
 
-        tracing::info!("--- create share1");
+        info!("--- create share1");
         let create_on = Utc::now();
         {
             let req = CreateShareReq {
@@ -780,12 +780,12 @@ impl ShareApiTestSuite {
             };
 
             let res = mt.create_share(req).await;
-            tracing::info!("create share res: {:?}", res);
+            info!("create share res: {:?}", res);
             let res = res.unwrap();
             assert_eq!(1, res.share_id, "first database id is 1");
         }
 
-        tracing::info!("--- get share");
+        info!("--- get share");
         {
             let req = GetShareGrantObjectReq {
                 share_name: share_name.clone(),
@@ -793,12 +793,12 @@ impl ShareApiTestSuite {
             };
 
             let res = mt.get_share_grant_objects(req).await;
-            tracing::info!("get_share_grant_objects res: {:?}", res);
+            info!("get_share_grant_objects res: {:?}", res);
             let res = res.unwrap();
             assert!(res.objects.is_empty());
         }
 
-        tracing::info!("--- create db1,table1");
+        info!("--- create db1,table1");
         {
             let plan = CreateDatabaseReq {
                 if_not_exists: false,
@@ -810,7 +810,7 @@ impl ShareApiTestSuite {
             };
 
             let res = mt.create_database(plan).await?;
-            tracing::info!("create database res: {:?}", res);
+            info!("create database res: {:?}", res);
             db_id = res.db_id;
 
             let req = CreateTableReq {
@@ -824,10 +824,10 @@ impl ShareApiTestSuite {
             };
 
             let res = mt.create_table(req.clone()).await?;
-            tracing::info!("create table res: {:?}", res);
+            info!("create table res: {:?}", res);
         }
 
-        tracing::info!("--- get share with db1");
+        info!("--- get share with db1");
         {
             let req = GetShareGrantObjectReq {
                 share_name: share_name.clone(),
@@ -835,12 +835,12 @@ impl ShareApiTestSuite {
             };
 
             let res = mt.get_share_grant_objects(req).await;
-            tracing::info!("get_share_grant_objects res: {:?}", res);
+            info!("get_share_grant_objects res: {:?}", res);
             let res = res.unwrap();
             assert!(res.objects.is_empty());
         }
 
-        tracing::info!("--- share db1 and table1");
+        info!("--- share db1 and table1");
         {
             let req = GrantShareObjectReq {
                 share_name: share_name.clone(),
@@ -850,7 +850,7 @@ impl ShareApiTestSuite {
             };
 
             let res = mt.grant_object(req).await?;
-            tracing::info!("grant object res: {:?}", res);
+            info!("grant object res: {:?}", res);
 
             let tbl_ob_name =
                 ShareGrantObjectName::Table(db_name.to_string(), tbl_name.to_string());
@@ -862,10 +862,10 @@ impl ShareApiTestSuite {
             };
 
             let res = mt.grant_object(req).await?;
-            tracing::info!("grant object res: {:?}", res);
+            info!("grant object res: {:?}", res);
         }
 
-        tracing::info!("--- get share with db1");
+        info!("--- get share with db1");
         {
             let req = GetShareGrantObjectReq {
                 share_name: share_name.clone(),
@@ -873,14 +873,14 @@ impl ShareApiTestSuite {
             };
 
             let res = mt.get_share_grant_objects(req).await;
-            tracing::info!("get_share_grant_objects res: {:?}", res);
+            info!("get_share_grant_objects res: {:?}", res);
             let res = res.unwrap();
             assert_eq!(res.objects.len(), 1);
             let entry = res.objects.get(0).unwrap();
             assert_eq!(entry.object, ShareGrantObject::Database(db_id));
         }
 
-        tracing::info!("--- get all share objects");
+        info!("--- get all share objects");
         {
             let req = GetShareGrantObjectReq {
                 share_name: share_name.clone(),
@@ -888,7 +888,7 @@ impl ShareApiTestSuite {
             };
 
             let res = mt.get_share_grant_objects(req).await;
-            tracing::info!("get_share_grant_objects res: {:?}", res);
+            info!("get_share_grant_objects res: {:?}", res);
             let res = res.unwrap();
             assert_eq!(res.objects.len(), 2);
         }

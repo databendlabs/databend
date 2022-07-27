@@ -23,9 +23,9 @@ use common_meta_types::GrantObject;
 use common_meta_types::StageFile;
 use common_meta_types::StageType;
 use common_meta_types::UserStageInfo;
-use common_tracing::tracing::warn;
 use futures::TryStreamExt;
 use regex::Regex;
+use tracing::warn;
 
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;

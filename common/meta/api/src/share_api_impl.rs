@@ -61,7 +61,7 @@ use common_meta_types::TxnCondition;
 use common_meta_types::TxnOp;
 use common_meta_types::TxnRequest;
 use common_tracing::func_name;
-use common_tracing::tracing;
+use tracing::debug;
 
 use crate::db_has_to_exist;
 use crate::fetch_id;
@@ -86,7 +86,7 @@ use crate::TXN_MAX_RETRY_TIMES;
 impl<KV: KVApi> ShareApi for KV {
     #[tracing::instrument(level = "debug", ret, err, skip_all)]
     async fn show_share(&self, req: ShowShareReq) -> MetaResult<ShowShareReply> {
-        tracing::debug!(req = debug(&req), "ShareApi: {}", func_name!());
+        debug!(req = debug(&req), "ShareApi: {}", func_name!());
 
         let name_key = req.share_name.clone();
         // Get share by name
@@ -125,7 +125,7 @@ impl<KV: KVApi> ShareApi for KV {
 
     #[tracing::instrument(level = "debug", ret, err, skip_all)]
     async fn create_share(&self, req: CreateShareReq) -> MetaResult<CreateShareReply> {
-        tracing::debug!(req = debug(&req), "ShareApi: {}", func_name!());
+        debug!(req = debug(&req), "ShareApi: {}", func_name!());
 
         let name_key = &req.share_name;
         let mut retry = 0;
@@ -134,7 +134,7 @@ impl<KV: KVApi> ShareApi for KV {
 
             // Get share by name to ensure absence
             let (share_id_seq, share_id) = get_u64_value(self, name_key).await?;
-            tracing::debug!(share_id_seq, share_id, ?name_key, "get_share");
+            debug!(share_id_seq, share_id, ?name_key, "get_share");
 
             if share_id_seq > 0 {
                 return if req.if_not_exists {
@@ -158,7 +158,7 @@ impl<KV: KVApi> ShareApi for KV {
             let id_key = ShareId { share_id };
             let id_to_name_key = ShareIdToName { share_id };
 
-            tracing::debug!(share_id, name_key = debug(&name_key), "new share id");
+            debug!(share_id, name_key = debug(&name_key), "new share id");
 
             // Create share by transaction.
             {
@@ -180,7 +180,7 @@ impl<KV: KVApi> ShareApi for KV {
 
                 let (succ, _responses) = send_txn(self, txn_req).await?;
 
-                tracing::debug!(
+                debug!(
                     name = debug(&name_key),
                     id = debug(&id_key),
                     succ = display(succ),
@@ -199,7 +199,7 @@ impl<KV: KVApi> ShareApi for KV {
     }
 
     async fn drop_share(&self, req: DropShareReq) -> MetaResult<DropShareReply> {
-        tracing::debug!(req = debug(&req), "ShareApi: {}", func_name!());
+        debug!(req = debug(&req), "ShareApi: {}", func_name!());
 
         let name_key = &req.share_name;
         let mut retry = 0;
@@ -266,7 +266,7 @@ impl<KV: KVApi> ShareApi for KV {
             let share_id_key = ShareId { share_id };
             let id_name_key = ShareIdToName { share_id };
 
-            tracing::debug!(share_id, name_key = debug(&name_key), "drop_share");
+            debug!(share_id, name_key = debug(&name_key), "drop_share");
 
             {
                 let mut condition = vec![
@@ -292,7 +292,7 @@ impl<KV: KVApi> ShareApi for KV {
 
                 let (succ, _responses) = send_txn(self, txn_req).await?;
 
-                tracing::debug!(
+                debug!(
                     name = debug(&name_key),
                     id = debug(&share_id_key),
                     succ = display(succ),
@@ -311,7 +311,7 @@ impl<KV: KVApi> ShareApi for KV {
     }
 
     async fn add_share_account(&self, req: AddShareAccountReq) -> MetaResult<AddShareAccountReply> {
-        tracing::debug!(req = debug(&req), "ShareApi: {}", func_name!());
+        debug!(req = debug(&req), "ShareApi: {}", func_name!());
 
         let name_key = &req.share_name;
         let mut retry = 0;
@@ -368,7 +368,7 @@ impl<KV: KVApi> ShareApi for KV {
 
                 let (succ, _responses) = send_txn(self, txn_req).await?;
 
-                tracing::debug!(
+                debug!(
                     name = debug(&name_key),
                     id = debug(&id_key),
                     succ = display(succ),
@@ -390,7 +390,7 @@ impl<KV: KVApi> ShareApi for KV {
         &self,
         req: RemoveShareAccountReq,
     ) -> MetaResult<RemoveShareAccountReply> {
-        tracing::debug!(req = debug(&req), "ShareApi: {}", func_name!());
+        debug!(req = debug(&req), "ShareApi: {}", func_name!());
 
         let share_id = req.share_id;
         let mut retry = 0;
@@ -459,7 +459,7 @@ impl<KV: KVApi> ShareApi for KV {
 
                 let (succ, _responses) = send_txn(self, txn_req).await?;
 
-                tracing::debug!(
+                debug!(
                     id = debug(&id_key),
                     succ = display(succ),
                     "remove_share_account"
@@ -477,7 +477,7 @@ impl<KV: KVApi> ShareApi for KV {
     }
 
     async fn grant_object(&self, req: GrantShareObjectReq) -> MetaResult<GrantShareObjectReply> {
-        tracing::debug!(req = debug(&req), "ShareApi: {}", func_name!());
+        debug!(req = debug(&req), "ShareApi: {}", func_name!());
 
         let share_name_key = &req.share_name;
         let mut retry = 0;
@@ -541,7 +541,7 @@ impl<KV: KVApi> ShareApi for KV {
 
                 let (succ, _responses) = send_txn(self, txn_req).await?;
 
-                tracing::debug!(
+                debug!(
                     name = debug(&share_name_key),
                     id = debug(&id_key),
                     succ = display(succ),
@@ -560,7 +560,7 @@ impl<KV: KVApi> ShareApi for KV {
     }
 
     async fn revoke_object(&self, req: RevokeShareObjectReq) -> MetaResult<RevokeShareObjectReply> {
-        tracing::debug!(req = debug(&req), "ShareApi: {}", func_name!());
+        debug!(req = debug(&req), "ShareApi: {}", func_name!());
 
         let share_name_key = &req.share_name;
         let mut retry = 0;
@@ -630,7 +630,7 @@ impl<KV: KVApi> ShareApi for KV {
 
                 let (succ, _responses) = send_txn(self, txn_req).await?;
 
-                tracing::debug!(
+                debug!(
                     name = debug(&share_name_key),
                     id = debug(&id_key),
                     succ = display(succ),
@@ -652,7 +652,7 @@ impl<KV: KVApi> ShareApi for KV {
         &self,
         req: GetShareGrantObjectReq,
     ) -> MetaResult<GetShareGrantObjectReply> {
-        tracing::debug!(req = debug(&req), "ShareApi: {}", func_name!());
+        debug!(req = debug(&req), "ShareApi: {}", func_name!());
 
         let share_name_key = &req.share_name;
 
@@ -848,7 +848,7 @@ pub(crate) async fn get_share_id_to_name_or_err(
 
     let (share_name_seq, share_name) = get_struct_value(kv_api, &id_key).await?;
     if share_name_seq == 0 {
-        tracing::debug!(share_name_seq, ?share_id, "share meta does not exist");
+        debug!(share_name_seq, ?share_id, "share meta does not exist");
 
         return Err(MetaError::AppError(AppError::UnknownShareId(
             UnknownShareId::new(share_id, format!("{}: {}", msg, share_id)),
@@ -888,7 +888,7 @@ async fn get_share_or_err(
 
 fn share_meta_has_to_exist(seq: u64, share_id: u64, msg: impl Display) -> Result<(), MetaError> {
     if seq == 0 {
-        tracing::debug!(seq, ?share_id, "share meta does not exist");
+        debug!(seq, ?share_id, "share meta does not exist");
 
         Err(MetaError::AppError(AppError::UnknownShareId(
             UnknownShareId::new(share_id, format!("{}: {}", msg, share_id)),
@@ -907,7 +907,7 @@ fn share_has_to_exist(
     msg: impl Display,
 ) -> Result<(), MetaError> {
     if seq == 0 {
-        tracing::debug!(seq, ?share_name_ident, "share does not exist");
+        debug!(seq, ?share_name_ident, "share does not exist");
 
         Err(MetaError::AppError(AppError::UnknownShare(
             UnknownShare::new(
@@ -946,7 +946,7 @@ fn share_account_meta_has_to_exist(
     msg: impl Display,
 ) -> Result<(), MetaError> {
     if seq == 0 {
-        tracing::debug!(seq, ?name_key, "share account does not exist");
+        debug!(seq, ?name_key, "share account does not exist");
 
         Err(MetaError::AppError(AppError::UnknownShareAccount(
             UnknownShareAccount::new(
