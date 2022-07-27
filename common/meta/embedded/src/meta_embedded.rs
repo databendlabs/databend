@@ -20,8 +20,8 @@ use common_base::base::tokio::sync::Mutex;
 use common_meta_raft_store::config::RaftConfig;
 use common_meta_raft_store::state_machine::StateMachine;
 pub use common_meta_sled_store::init_temp_sled_db;
-use common_tracing::tracing;
 use once_cell::sync::Lazy;
+use tracing::warn;
 
 /// Local storage that provides the API defined by `KVApi+SchemaApi`.
 ///
@@ -57,7 +57,7 @@ impl MetaEmbedded {
         };
 
         if cfg!(target_os = "macos") {
-            tracing::warn!("Disabled fsync for meta data tests. fsync on mac is quite slow");
+            warn!("Disabled fsync for meta data tests. fsync on mac is quite slow");
             config.no_sync = true;
         }
 

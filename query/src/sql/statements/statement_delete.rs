@@ -21,7 +21,6 @@ use common_exception::Result;
 use common_planners::DeletePlan;
 use common_planners::Expression;
 use common_planners::PlanNode;
-use common_tracing::tracing;
 use sqlparser::ast::Expr;
 use sqlparser::ast::ObjectName;
 

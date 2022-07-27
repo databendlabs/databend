@@ -24,7 +24,6 @@ use common_exception::ToErrorCode;
 use common_formats::output_format::OutputFormatType;
 use common_planners::PlanNode;
 use common_streams::SendableDataBlockStream;
-use common_tracing::tracing;
 use futures::StreamExt;
 use http::HeaderMap;
 use naive_cityhash::cityhash128;
@@ -42,6 +41,8 @@ use poem::IntoResponse;
 use poem::Route;
 use serde::Deserialize;
 use serde::Serialize;
+use tracing::error;
+use tracing::info;
 
 use crate::interpreters::InterpreterFactory;
 use crate::interpreters::InterpreterFactoryV2;
@@ -110,14 +111,14 @@ async fn execute_v2(
     let _ = interpreter
         .start()
         .await
-        .map_err(|e| tracing::error!("interpreter.start.error: {:?}", e));
+        .map_err(|e| error!("interpreter.start.error: {:?}", e));
     let output_port = OutputPort::create();
     let stream_source = StreamSource::create(ctx.clone(), None, output_port.clone())?;
     let mut source_pipe_builder = SourcePipeBuilder::create();
     source_pipe_builder.add_source(output_port, stream_source);
     let _ = interpreter
         .set_source_pipe_builder(Option::from(source_pipe_builder))
-        .map_err(|e| tracing::error!("interpreter.set_source_pipe_builder.error: {:?}", e));
+        .map_err(|e| error!("interpreter.set_source_pipe_builder.error: {:?}", e));
     let data_stream = interpreter.execute(None).await?;
 
     let mut data_stream = ctx.try_create_abortable(data_stream)?;
@@ -151,7 +152,7 @@ async fn execute_v2(
         let _ = interpreter
             .finish()
             .await
-            .map_err(|e| tracing::error!("interpreter.finish error: {:?}", e));
+            .map_err(|e| error!("interpreter.finish error: {:?}", e));
     };
 
     Ok(Body::from_bytes_stream(stream).with_content_type(format.get_content_type()))
@@ -168,7 +169,7 @@ async fn execute(
     let _ = interpreter
         .start()
         .await
-        .map_err(|e| tracing::error!("interpreter.start.error: {:?}", e));
+        .map_err(|e| error!("interpreter.start.error: {:?}", e));
     let data_stream: SendableDataBlockStream = {
         let output_port = OutputPort::create();
         let stream_source = StreamSource::create(ctx.clone(), input_stream, output_port.clone())?;
@@ -176,7 +177,7 @@ async fn execute(
         source_pipe_builder.add_source(output_port, stream_source);
         let _ = interpreter
             .set_source_pipe_builder(Option::from(source_pipe_builder))
-            .map_err(|e| tracing::error!("interpreter.set_source_pipe_builder.error: {:?}", e));
+            .map_err(|e| error!("interpreter.set_source_pipe_builder.error: {:?}", e));
         interpreter.execute(None).await?
     };
 
@@ -210,7 +211,7 @@ async fn execute(
         let _ = interpreter
             .finish()
             .await
-            .map_err(|e| tracing::error!("interpreter.finish error: {:?}", e));
+            .map_err(|e| error!("interpreter.finish error: {:?}", e));
     };
 
     Ok(Body::from_bytes_stream(stream).with_content_type(format.get_content_type()))
@@ -315,7 +316,7 @@ pub async fn clickhouse_handler_post(
     } else {
         sql.to_string()
     };
-    tracing::info!("receive clickhouse http post, (query + body) = {}", &msg);
+    info!("receive clickhouse http post, (query + body) = {}", &msg);
 
     if let Some(block) = CLickHouseFederated::check(&sql) {
         return serialize_one_block(ctx.clone(), block, &sql, &params, default_format)

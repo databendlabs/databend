@@ -1014,7 +1014,6 @@ dependencies = [
  "async-trait 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)",
  "common-exception",
  "common-macros",
- "common-tracing",
  "ctrlc",
  "futures",
  "libc",
@@ -1024,6 +1023,7 @@ dependencies = [
  "tikv-jemalloc-ctl",
  "tikv-jemalloc-sys",
  "tokio",
+ "tracing",
  "uuid 1.1.2",
 ]
 
@@ -1034,8 +1034,8 @@ dependencies = [
  "anyhow",
  "cargo-license",
  "cargo_metadata",
- "common-tracing",
  "git2",
+ "tracing",
  "vergen",
 ]
 
@@ -1044,11 +1044,11 @@ name = "common-cache"
 version = "0.1.0"
 dependencies = [
  "common-exception",
- "common-tracing",
  "filetime",
  "heapsize",
  "ritelinked",
  "tempfile",
+ "tracing",
  "walkdir",
 ]
 
@@ -1293,13 +1293,13 @@ dependencies = [
  "anyerror",
  "common-base",
  "common-exception",
- "common-tracing",
  "hyper",
  "jwt-simple",
  "once_cell",
  "serde",
  "thiserror",
  "tonic",
+ "tracing",
  "trust-dns-resolver",
 ]
 
@@ -1325,12 +1325,12 @@ version = "0.1.0"
 dependencies = [
  "common-base",
  "common-exception",
- "common-tracing",
  "futures",
  "poem",
  "pretty_assertions",
  "serde",
  "tempfile",
+ "tracing",
 ]
 
 [[package]]
@@ -1401,6 +1401,7 @@ dependencies = [
  "serde_json",
  "thiserror",
  "tonic",
+ "tracing",
 ]
 
 [[package]]
@@ -1450,6 +1451,7 @@ dependencies = [
  "common-tracing",
  "once_cell",
  "tempfile",
+ "tracing",
 ]
 
 [[package]]
@@ -1479,6 +1481,7 @@ dependencies = [
  "serde_json",
  "thiserror",
  "tonic",
+ "tracing",
 ]
 
 [[package]]
@@ -1506,6 +1509,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
+ "tracing",
 ]
 
 [[package]]
@@ -1523,6 +1527,7 @@ dependencies = [
  "serde_json",
  "sled",
  "tempfile",
+ "tracing",
 ]
 
 [[package]]
@@ -1537,6 +1542,7 @@ dependencies = [
  "common-meta-grpc",
  "common-meta-types",
  "common-tracing",
+ "tracing",
 ]
 
 [[package]]
@@ -1575,7 +1581,6 @@ name = "common-metrics"
 version = "0.1.0"
 dependencies = [
  "common-exception",
- "common-tracing",
  "metrics 0.19.0",
  "metrics-exporter-prometheus",
  "once_cell",
@@ -1583,6 +1588,7 @@ dependencies = [
  "prometheus-parse",
  "serde",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -1703,7 +1709,6 @@ dependencies = [
  "common-datavalues",
  "common-exception",
  "common-io",
- "common-tracing",
  "csv-async",
  "futures",
  "opendal",
@@ -1717,17 +1722,16 @@ dependencies = [
 name = "common-tracing"
 version = "0.1.0"
 dependencies = [
- "atty",
  "console-subscriber",
  "once_cell",
  "opentelemetry",
  "opentelemetry-jaeger",
  "sentry-tracing",
+ "serde",
  "tonic",
  "tracing",
  "tracing-appender",
  "tracing-bunyan-formatter",
- "tracing-futures",
  "tracing-log",
  "tracing-opentelemetry",
  "tracing-subscriber",
@@ -1749,6 +1753,7 @@ dependencies = [
  "parking_lot 0.12.1",
  "pretty_assertions",
  "serde",
+ "tracing",
 ]
 
 [[package]]
@@ -2201,6 +2206,7 @@ dependencies = [
  "tokio-stream",
  "tonic",
  "tonic-reflection",
+ "tracing",
 ]
 
 [[package]]
@@ -2362,6 +2368,8 @@ dependencies = [
  "tokio-stream",
  "toml",
  "tonic",
+ "tracing",
+ "tracing-appender",
  "twox-hash",
  "typetag",
  "url",
@@ -7484,8 +7492,6 @@ version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97d095ae15e245a057c8e8451bab9b3ee1e1f68e9ba2b4fbc18d0ac5237835f2"
 dependencies = [
- "futures",
- "futures-task",
  "pin-project",
  "tracing",
 ]

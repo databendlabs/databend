@@ -21,7 +21,7 @@ use std::sync::Mutex;
 use std::time::Duration;
 
 use async_trait::async_trait;
-use common_tracing::tracing;
+use tracing::debug;
 
 use crate::base::tokio;
 use crate::base::tokio::time::sleep;
@@ -116,7 +116,7 @@ where
 
         if let Some(ref item) = item_opt {
             let check_res = self.manager.check(item.clone()).await;
-            tracing::debug!("check reused item res: {:?}", check_res);
+            debug!("check reused item res: {:?}", check_res);
 
             if let Ok(itm) = check_res {
                 return Ok(itm);
@@ -131,11 +131,11 @@ where
         let n_retry = 3;
 
         for i in 0..n_retry {
-            tracing::debug!("build new item of key: {:?}", key);
+            debug!("build new item of key: {:?}", key);
 
             let new_item = self.manager.build(key).await;
 
-            tracing::debug!("build new item of key res: {:?}", new_item);
+            debug!("build new item of key res: {:?}", new_item);
 
             match new_item {
                 Ok(x) => {

@@ -46,13 +46,13 @@ use common_planners::StageTableInfo;
 use common_planners::Statistics;
 use common_streams::AbortStream;
 use common_streams::SendableDataBlockStream;
-use common_tracing::tracing;
 use common_users::RoleCacheMgr;
 use common_users::UserApiProvider;
 use futures::future::AbortHandle;
 use opendal::Operator;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
+use tracing::debug;
 
 use crate::api::DataExchangeManager;
 use crate::auth::AuthMgr;
@@ -89,7 +89,7 @@ impl QueryContext {
     pub fn create_from_shared(shared: Arc<QueryContextShared>) -> Arc<QueryContext> {
         shared.increment_ref_count();
 
-        tracing::debug!("Create QueryContext");
+        debug!("Create QueryContext");
 
         Arc::new(QueryContext {
             statistics: Arc::new(RwLock::new(Statistics::default())),
@@ -237,10 +237,6 @@ impl QueryContext {
 
     pub fn query_need_abort(self: &Arc<Self>) -> Arc<AtomicBool> {
         self.shared.query_need_abort()
-    }
-
-    pub fn get_query_logger(&self) -> Option<Arc<dyn tracing::Subscriber + Send + Sync>> {
-        self.shared.session.session_mgr.get_query_logger()
     }
 
     pub fn get_affect(self: &Arc<Self>) -> Option<QueryAffect> {
@@ -489,7 +485,7 @@ impl QueryContextShared {
     pub(in crate::sessions) fn destroy_context_ref(&self) {
         if self.ref_count.fetch_sub(1, Ordering::Release) == 1 {
             std::sync::atomic::fence(Acquire);
-            tracing::debug!("Destroy QueryContext");
+            debug!("Destroy QueryContext");
             self.session.destroy_context_shared();
         }
     }

@@ -25,7 +25,7 @@ use common_meta_grpc::MetaGrpcClient;
 use common_meta_types::MatchSeq;
 use common_meta_types::Operation;
 use common_meta_types::UpsertKVReq;
-use common_tracing::tracing;
+use tracing::info;
 
 use crate::init_meta_ut;
 use crate::tests::service::start_metasrv_cluster;
@@ -47,7 +47,7 @@ async fn test_kv_api_restart_cluster_write_read() -> anyhow::Result<()> {
         tcs: &[MetaSrvTestContext],
         key_suffix: &str,
     ) -> anyhow::Result<()> {
-        tracing::info!("--- test write on every node: {}", key_suffix);
+        info!("--- test write on every node: {}", key_suffix);
 
         for tc in tcs.iter() {
             let client = tc.grpc_client().await?;
@@ -62,7 +62,7 @@ async fn test_kv_api_restart_cluster_write_read() -> anyhow::Result<()> {
                 })
                 .await?;
 
-            tracing::info!("--- upsert res: {:?}", res);
+            info!("--- upsert res: {:?}", res);
 
             let res = client.get_kv(&k).await?;
             let res = res.unwrap();
@@ -75,10 +75,10 @@ async fn test_kv_api_restart_cluster_write_read() -> anyhow::Result<()> {
 
     let tcs = start_metasrv_cluster(&[0, 1, 2]).await?;
 
-    tracing::info!("--- test write on a fresh cluster");
+    info!("--- test write on a fresh cluster");
     test_write_read_on_every_node(&tcs, "1st").await?;
 
-    tracing::info!("--- shutdown the cluster");
+    info!("--- shutdown the cluster");
     let stopped_tcs = {
         let mut stopped_tcs = vec![];
         for mut tc in tcs {
@@ -94,7 +94,7 @@ async fn test_kv_api_restart_cluster_write_read() -> anyhow::Result<()> {
         stopped_tcs
     };
 
-    tracing::info!("--- restart the cluster");
+    info!("--- restart the cluster");
     let tcs = {
         let mut tcs = vec![];
         for mut tc in stopped_tcs {
@@ -103,7 +103,7 @@ async fn test_kv_api_restart_cluster_write_read() -> anyhow::Result<()> {
         }
 
         for tc in &tcs {
-            tracing::info!("--- wait until a leader is observed");
+            info!("--- wait until a leader is observed");
             // Every tcs[i] contains one meta node in this context.
             let g = tc.grpc_srv.as_ref().unwrap();
             let meta_node = g.get_meta_node();
@@ -113,12 +113,12 @@ async fn test_kv_api_restart_cluster_write_read() -> anyhow::Result<()> {
                 .metrics(|m| m.current_leader.is_some(), "a leader is observed")
                 .await?;
 
-            tracing::info!("got leader, metrics: {:?}", metrics);
+            info!("got leader, metrics: {:?}", metrics);
         }
         tcs
     };
 
-    tracing::info!("--- test write on a restarted cluster");
+    info!("--- test write on a restarted cluster");
     test_write_read_on_every_node(&tcs, "2nd").await?;
 
     Ok(())
@@ -140,7 +140,7 @@ async fn test_kv_api_restart_cluster_token_expired() -> anyhow::Result<()> {
         client: &ClientHandle,
         key_suffix: &str,
     ) -> anyhow::Result<()> {
-        tracing::info!("--- test write on every node: {}", key_suffix);
+        info!("--- test write on every node: {}", key_suffix);
 
         for (i, tc) in tcs.iter().enumerate() {
             let k = make_key(tc, key_suffix);
@@ -153,7 +153,7 @@ async fn test_kv_api_restart_cluster_token_expired() -> anyhow::Result<()> {
                         value_meta: None,
                     })
                     .await?;
-                tracing::info!("--- upsert res: {:?}", res);
+                info!("--- upsert res: {:?}", res);
             } else {
                 let client = tc.grpc_client().await.unwrap();
                 let res = client
@@ -164,7 +164,7 @@ async fn test_kv_api_restart_cluster_token_expired() -> anyhow::Result<()> {
                         value_meta: None,
                     })
                     .await?;
-                tracing::info!("--- upsert res: {:?}", res);
+                info!("--- upsert res: {:?}", res);
             }
 
             let res = client.get_kv(&k).await?;
@@ -186,11 +186,11 @@ async fn test_kv_api_restart_cluster_token_expired() -> anyhow::Result<()> {
         None,
     )?;
 
-    tracing::info!("--- test write on a fresh cluster");
+    info!("--- test write on a fresh cluster");
     let key_suffix = "1st";
     test_write_read_on_every_node(&tcs, &client, key_suffix).await?;
 
-    tracing::info!("--- shutdown the cluster");
+    info!("--- shutdown the cluster");
     let stopped_tcs = {
         let mut stopped_tcs = vec![];
         for mut tc in tcs {
@@ -204,7 +204,7 @@ async fn test_kv_api_restart_cluster_token_expired() -> anyhow::Result<()> {
         stopped_tcs
     };
 
-    tracing::info!("--- restart the cluster");
+    info!("--- restart the cluster");
     let tcs = {
         let mut tcs = vec![];
         for mut tc in stopped_tcs {
@@ -213,7 +213,7 @@ async fn test_kv_api_restart_cluster_token_expired() -> anyhow::Result<()> {
         }
 
         for tc in &tcs {
-            tracing::info!("--- wait until a leader is observed");
+            info!("--- wait until a leader is observed");
             // Every tcs[i] contains one meta node in this context.
             let g = tc.grpc_srv.as_ref().unwrap();
             let meta_node = g.get_meta_node();
@@ -223,12 +223,12 @@ async fn test_kv_api_restart_cluster_token_expired() -> anyhow::Result<()> {
                 .metrics(|m| m.current_leader.is_some(), "a leader is observed")
                 .await?;
 
-            tracing::info!("got leader, metrics: {:?}", metrics);
+            info!("got leader, metrics: {:?}", metrics);
         }
         tcs
     };
 
-    tracing::info!("--- read use old client");
+    info!("--- read use old client");
     let tc = &tcs[0];
     let k = make_key(tc, key_suffix);
     let res = client.get_kv(&k).await?;

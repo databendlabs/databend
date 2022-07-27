@@ -30,8 +30,8 @@ use common_meta_types::MetaError;
 use common_meta_types::MetaRaftError;
 use common_meta_types::Node;
 use common_meta_types::NodeId;
-use common_tracing::tracing;
 use openraft::raft::ClientWriteRequest;
+use tracing::debug;
 
 use crate::meta_service::ForwardRequestBody;
 use crate::meta_service::JoinRequest;
@@ -56,7 +56,7 @@ impl<'a> MetaLeader<'a> {
         &self,
         req: ForwardRequest,
     ) -> Result<ForwardResponse, MetaError> {
-        tracing::debug!("handle_forwardable_req: {:?}", req);
+        debug!("handle_forwardable_req: {:?}", req);
 
         match req.body {
             ForwardRequestBody::Ping => Ok(ForwardResponse::Pong),
@@ -216,14 +216,14 @@ impl<'a> MetaLeader<'a> {
     /// TODO(xp): elaborate the UnknownError, e.g. LeaderLostError
     #[tracing::instrument(level = "debug", skip(self, entry))]
     pub async fn write(&self, entry: LogEntry) -> Result<AppliedState, MetaError> {
-        tracing::debug!(entry = debug(&entry), "write LogEntry");
+        debug!(entry = debug(&entry), "write LogEntry");
         let write_rst = self
             .meta_node
             .raft
             .client_write(ClientWriteRequest::new(EntryPayload::Normal(entry)))
             .await;
 
-        tracing::debug!("raft.client_write rst: {:?}", write_rst);
+        debug!("raft.client_write rst: {:?}", write_rst);
 
         match write_rst {
             Ok(resp) => {
