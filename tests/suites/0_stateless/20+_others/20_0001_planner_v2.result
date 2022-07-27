@@ -361,8 +361,8 @@ abc
 0
 1
 ====Intersect Distinct===
-3	4
 2	3
+3	4
 ====Except Distinct===
 1	2
 ====Outer Join====

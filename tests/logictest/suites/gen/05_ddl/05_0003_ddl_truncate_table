@@ -25,10 +25,10 @@ CREATE TABLE t2(c1 int) Engine = Fuse;
 statement ok
 INSERT INTO TABLE t2 values(1);
 
-statement query I 
+statement query I
 SELECT * FROM t2;
 
-----  
+----
 1
 
 statement ok

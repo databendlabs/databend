@@ -45,14 +45,13 @@ use primitive_types::U256;
 use primitive_types::U512;
 
 use super::ProbeState;
-use crate::evaluator::EvalNode;
 use crate::pipelines::processors::transforms::group_by::keys_ref::KeysRef;
+use crate::pipelines::processors::transforms::hash_join::desc::HashJoinDesc;
 use crate::pipelines::processors::transforms::hash_join::row::RowPtr;
 use crate::pipelines::processors::transforms::hash_join::row::RowSpace;
 use crate::pipelines::processors::HashJoinState;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
-use crate::sql::executor::ColumnID;
 use crate::sql::executor::PhysicalScalar;
 use crate::sql::planner::plans::JoinType;
 use crate::sql::plans::JoinType::Mark;
@@ -119,16 +118,6 @@ pub enum MarkerKind {
 pub struct MarkJoinDesc {
     pub(crate) marker_index: Option<IndexType>,
     pub(crate) has_null: RwLock<bool>,
-}
-
-pub struct HashJoinDesc {
-    pub(crate) build_keys: Vec<EvalNode<ColumnID>>,
-    pub(crate) probe_keys: Vec<EvalNode<ColumnID>>,
-    pub(crate) join_type: JoinType,
-    pub(crate) other_predicate: Option<EvalNode<ColumnID>>,
-    pub(crate) marker_join_desc: MarkJoinDesc,
-    /// Whether the Join are derived from correlated subquery.
-    pub(crate) from_correlated_subquery: bool,
 }
 
 pub struct JoinHashTable {

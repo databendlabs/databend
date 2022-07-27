@@ -150,6 +150,7 @@ Let's run some [benchmark queries](https://databend.rs/doc/performance/local-vec
 ### Load Data
 
 - [How to Load Data From Local File System](https://databend.rs/doc/load-data/local)
+- [How to Load Data From Remote Files](https://databend.rs/doc/load-data/remote)
 - [How to Load Data From Amazon S3](https://databend.rs/doc/load-data/s3)
 - [How to Load Data From Databend Stages](https://databend.rs/doc/load-data/stage)
 - [How to Load Data From MySQL](https://databend.rs/doc/load-data/mysql)

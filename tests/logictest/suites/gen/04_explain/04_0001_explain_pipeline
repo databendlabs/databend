@@ -1,10 +1,10 @@
 statement ok
 set max_threads=8;
 
-statement query T 
+statement query T
 explain pipeline select sum(number+1)+2 as sumx from numbers_mt(80000) where (number+1)=4 limit 1;
 
-----  
+----
 LimitTransform × 1 processor
   ProjectionTransform × 1 processor
     ExpressionTransform × 1 processor
@@ -15,10 +15,10 @@ LimitTransform × 1 processor
               FilterTransform × 8 processors
                 NumbersSourceTransform × 8 processors
 
-statement query T 
+statement query T
 explain pipeline select avg(number) c   from numbers(100000) group by number % 1000 having c > 100 limit 1;
 
-----  
+----
 LimitTransform × 1 processor
   ProjectionTransform × 1 processor
     HavingTransform × 1 processor

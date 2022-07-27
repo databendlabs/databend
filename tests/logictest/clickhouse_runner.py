@@ -8,8 +8,8 @@ import clickhouse_connector
 
 class TestClickhouse(logictest.SuiteRunner, ABC):
 
-    def __init__(self, kind, pattern):
-        super().__init__(kind, pattern)
+    def __init__(self, kind, args):
+        super().__init__(kind, args)
         self._ch = None
 
     def get_connection(self):

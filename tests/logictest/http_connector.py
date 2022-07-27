@@ -52,8 +52,7 @@ def format_result(results):
             if buf == "":
                 buf = str(item)
             else:
-                buf = buf + " " + str(
-                    item)  # every item seperate by space
+                buf = buf + " " + str(item)  # every item seperate by space
         if len(buf) == 0:
             # empty line in results will replace with tab
             buf = "\t"
@@ -189,7 +188,7 @@ class HttpConnector(object):
                 try:
                     resp = requests.get(url="http://{}:{}{}".format(
                         self._host, self._port, response['next_uri']),
-                        headers=self.make_headers())
+                                        headers=self.make_headers())
                     response = json.loads(resp.content)
                     log.debug(
                         f"Sql in progress, fetch next_uri content: {response}")
@@ -224,6 +223,7 @@ class HttpConnector(object):
 
     def get_query_option(self):
         return self._query_option
+
 
 # if __name__ == '__main__':
 #     from config import http_config

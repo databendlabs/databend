@@ -37,7 +37,6 @@ use tracing::error;
 use ExecuteState::*;
 
 use super::http_query::HttpQueryRequest;
-use crate::clusters::ClusterHelper;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
 use crate::interpreters::InterpreterFactoryV2;
@@ -45,6 +44,7 @@ use crate::interpreters::InterpreterQueryLog;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::Pipe;
+use crate::servers::utils::use_planner_v2;
 use crate::sessions::QueryAffect;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionRef;
@@ -197,9 +197,10 @@ impl ExecuteState {
         };
 
         let settings = ctx.get_settings();
-        if !ctx.get_config().query.management_mode
-            && settings.get_enable_planner_v2()? != 0
-            && matches!(stmts.get(0), Some(DfStatement::Query(_)))
+        if use_planner_v2(&settings, &stmts)?
+            && stmts
+                .get(0)
+                .map_or(false, |stmt| matches!(stmt, DfStatement::Query(_)))
         {
             let mut planner = Planner::new(ctx.clone());
             let (plan, _, _) = planner.plan_sql(sql).await?;
@@ -224,13 +225,11 @@ impl ExecuteState {
                 block_buffer,
             });
             interpreter.execute(None).await?;
-
             Ok(executor)
         } else {
-            let interpreter = if ctx.get_cluster().is_empty()
-                && stmts
-                    .get(0)
-                    .map_or(false, InterpreterFactoryV2::enable_default)
+            let interpreter = if stmts
+                .get(0)
+                .map_or(false, InterpreterFactoryV2::enable_default)
             {
                 let mut planner = Planner::new(ctx.clone());
                 let (plan, _, _) = planner.plan_sql(sql).await?;
@@ -243,10 +242,8 @@ impl ExecuteState {
                         return Err(e);
                     }
                 };
-
                 InterpreterFactory::get(ctx.clone(), plan)
             }?;
-
             // Write Start to query log table.
             let _ = interpreter
                 .start()

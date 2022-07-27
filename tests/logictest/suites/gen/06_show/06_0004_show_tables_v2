@@ -1,0 +1,92 @@
+statement ok
+SET enable_planner_v2=1;
+
+statement ok
+DROP DATABASE IF EXISTS showtable;
+
+statement ok
+CREATE DATABASE showtable;
+
+statement ok
+CREATE TABLE showtable.t1(c1 int) ENGINE = Null;
+
+statement ok
+CREATE TABLE showtable.t2(c1 int) ENGINE = Null;
+
+statement ok
+CREATE TABLE showtable.t3(c1 int) ENGINE = Null;
+
+statement ok
+use showtable;
+
+statement query T 
+SHOW TABLES;
+
+----
+t1
+t2
+t3
+
+statement query T 
+SHOW TABLES LIKE 't%';
+
+----
+t1
+t2
+t3
+
+statement query T 
+SHOW TABLES LIKE 't2';
+
+----
+t2
+
+statement ok
+SHOW TABLES LIKE 't';
+
+statement query T 
+SHOW TABLES WHERE name LIKE 't%';
+
+----
+t1
+t2
+t3
+
+statement ok
+SHOW TABLES WHERE name = 't%' AND 1 = 0;
+
+statement query T 
+SHOW TABLES WHERE name = 't2' OR 1 = 1;
+
+----
+t1
+t2
+t3
+
+statement query T 
+SHOW TABLES WHERE name = 't2' AND 1 = 1;
+
+----
+t2
+
+statement ok
+USE default;
+
+statement ok
+SHOW TABLES FROM showtables WHERE name LIKE 't%';
+
+statement ok
+SHOW TABLES FROM showtables WHERE name = 't%' AND 1 = 0;
+
+statement ok
+SHOW TABLES FROM showtables WHERE name = 't2' OR 1 = 1;
+
+statement ok
+SHOW TABLES FROM showtables WHERE name = 't2' AND 1 = 1;
+
+statement ok
+DROP DATABASE showtable;
+
+statement ok
+SET enable_planner_v2=0;
+

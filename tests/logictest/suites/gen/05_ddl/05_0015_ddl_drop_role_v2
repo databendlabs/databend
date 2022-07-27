@@ -1,0 +1,24 @@
+statement ok
+set enable_planner_v2 = 1;
+
+statement error 2204
+DROP ROLE 'test-b'; 
+
+statement ok
+DROP ROLE IF EXISTS 'test-b';
+
+statement ok
+CREATE ROLE 'test-b';
+
+statement ok
+DROP ROLE 'test-b';
+
+statement error 2204
+DROP ROLE 'test-b'; 
+
+statement ok
+DROP ROLE IF EXISTS 'test-b';
+
+statement ok
+set enable_planner_v2 = 0;
+
