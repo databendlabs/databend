@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use common_expression::ScalarRef;
 use common_expression::types::DataType;
 use common_expression::BooleanDomain;
 use common_expression::Column;
@@ -24,6 +23,7 @@ use common_expression::Function;
 use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
 use common_expression::FunctionSignature;
+use common_expression::ScalarRef;
 use common_expression::Value;
 use common_expression::ValueRef;
 
