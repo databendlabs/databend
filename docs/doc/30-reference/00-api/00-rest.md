@@ -126,14 +126,16 @@ PaginationConf: critical conditions for each HTTP request to return (before all 
 
 QueryResponse:
 
-| field  | type       | description                              |
-|--------|------------|------------------------------------------|
-| state  | string     | choices: "Running","Failed", "Succeeded" |
-| error  | QueryError | error of the sql parsing or execution    |
-| id     | string     | a uniq query_id for this POST request    |
-| data   | array      | each item is a row of results            |
-| schema | Schema     | the schema of the results                |
-| affect | Affect     | the affect of some queries               |
+| field        | type        | description                              |
+|--------------|-------------|------------------------------------------|
+| state        | string      | choices: "Running","Failed", "Succeeded" |
+| error        | QueryError  | error of the sql parsing or execution    |
+| id           | string      | a uniq query_id for this POST request    |
+| data         | array       | each item is a row of results            |
+| schema       | Schema      | the schema of the results                |
+| affect       | Affect      | the affect of some queries               |
+| session_id   | String      |                                          |
+| session_conf | OldSession  |                                          |
 
 Schema:
 
@@ -249,10 +251,21 @@ use the `QueryResponse.session_id ` for `QueryRequest.session.id`.
 the handler will return info about changed setting or current db in the  `affect` field,
 client can remember these changes and put them in the session field in the following requests.
 
+when use client side session,  response will contain `session_conf` field, which is `session` field in request together with the affect applied to it.
+Only use `session_conf` field in next_url, and when the `state` field is "Succeeded"
+
 set statement:
 
 ```json
-{"sql": "set max_threads=1;"}
+{
+  "sql": "set max_threads=1;",
+  "session": {
+    "database": "db1",
+    "settings": {
+      "max_threads": "6"
+    }
+  }
+}
 ```
 
 ```json
@@ -262,6 +275,12 @@ set statement:
     "key": "max_threads",
     "value": "1",
     "is_global": false
+  },
+  "session_conf": {
+    "database": "db1",
+    "settings": {
+      "max_threads": "1"
+    }
   }
 }
 ```
@@ -269,7 +288,14 @@ set statement:
 use statement:
 
 ```json
-{"sql": "use db2"}
+{"sql": "use db2",
+  "session": {
+    "database": "db1",
+    "settings": {
+      "max_threads": "6"
+    }
+  }
+}
 ```
 
 ```json
@@ -277,7 +303,16 @@ use statement:
   "affect": {
     "type": "UseDB",
     "name": "db2"
+  },
+  "session_conf": {
+    "database": "db2",
+    "settings": {
+      "max_threads": "1"
+    }
   }
 }
 ```
+
+
+
 
