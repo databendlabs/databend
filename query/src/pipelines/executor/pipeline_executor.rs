@@ -22,6 +22,7 @@ use common_base::base::Runtime;
 use common_base::base::Thread;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use tracing::warn;
 
 use crate::pipelines::executor::executor_condvar::WorkersCondvar;
 use crate::pipelines::executor::executor_graph::RunningGraph;

@@ -33,6 +33,7 @@ use common_exception::Result;
 use common_meta_app::schema::TableMeta;
 use common_planners::OptimizeTableAction;
 use common_planners::*;
+use tracing::debug;
 
 use crate::catalogs::DatabaseCatalog;
 use crate::sessions::TableContext;

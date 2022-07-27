@@ -17,6 +17,8 @@ use std::sync::atomic::Ordering;
 use std::sync::atomic::Ordering::Acquire;
 use std::sync::Arc;
 
+use tracing::debug;
+
 use crate::sessions::Session;
 
 /// SessionRef is the ptr of session.

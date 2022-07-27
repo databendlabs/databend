@@ -23,6 +23,7 @@ use common_planners::ActionFunction;
 use common_planners::Expression;
 use common_planners::ExpressionAction;
 use common_planners::ExpressionChain;
+use tracing::debug;
 
 use crate::sessions::TableContext;
 

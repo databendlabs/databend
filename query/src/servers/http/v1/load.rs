@@ -37,6 +37,7 @@ use poem::web::Multipart;
 use poem::Request;
 use serde::Deserialize;
 use serde::Serialize;
+use tracing::error;
 
 use super::HttpQueryContext;
 use crate::interpreters::InterpreterFactory;

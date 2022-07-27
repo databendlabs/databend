@@ -22,6 +22,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
 use opensrv_clickhouse::ClickHouseServer;
+use tracing::error;
 
 use crate::servers::clickhouse::interactive_worker::InteractiveWorker;
 use crate::sessions::SessionRef;

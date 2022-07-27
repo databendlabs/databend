@@ -52,6 +52,7 @@ use futures::future::AbortHandle;
 use opendal::Operator;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
+use tracing::debug;
 
 use crate::api::DataExchangeManager;
 use crate::auth::AuthMgr;

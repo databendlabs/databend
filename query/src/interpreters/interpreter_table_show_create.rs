@@ -20,6 +20,7 @@ use common_exception::Result;
 use common_planners::ShowCreateTablePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
+use tracing::debug;
 
 use crate::interpreters::Interpreter;
 use crate::sessions::QueryContext;

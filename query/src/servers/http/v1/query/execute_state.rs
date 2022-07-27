@@ -33,6 +33,7 @@ use futures::StreamExt;
 use futures_util::FutureExt;
 use serde::Deserialize;
 use serde::Serialize;
+use tracing::error;
 use ExecuteState::*;
 
 use super::http_query::HttpQueryRequest;

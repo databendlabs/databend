@@ -21,6 +21,7 @@ use common_base::base::tokio::sync::RwLock;
 use common_base::base::tokio::time::sleep;
 use common_exception::Result;
 use parking_lot::Mutex;
+use tracing::warn;
 
 use super::expiring_map::ExpiringMap;
 use super::HttpQueryContext;

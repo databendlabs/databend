@@ -27,6 +27,7 @@ use common_exception::ABORT_QUERY;
 use common_exception::ABORT_SESSION;
 use common_io::prelude::FormatSettings;
 use opensrv_mysql::*;
+use tracing::error;
 
 pub struct DFQueryResultWriter<'a, W: std::io::Write> {
     inner: Option<QueryResultWriter<'a, W>>,

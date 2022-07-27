@@ -39,6 +39,7 @@ use common_io::prelude::*;
 use common_planners::Expression;
 use common_streams::NDJsonSourceBuilder;
 use common_streams::Source;
+use tracing::debug;
 
 use crate::pipelines::processors::transforms::ExpressionExecutor;
 use crate::sessions::QueryContext;

@@ -34,6 +34,8 @@ use futures::future::Either;
 use futures::StreamExt;
 use opendal::Operator;
 use parking_lot::RwLock;
+use tracing::debug;
+use tracing::info;
 
 use crate::api::DataExchangeManager;
 use crate::catalogs::CatalogManager;

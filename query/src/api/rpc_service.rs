@@ -26,6 +26,7 @@ use tokio_stream::wrappers::TcpListenerStream;
 use tonic::transport::Identity;
 use tonic::transport::Server;
 use tonic::transport::ServerTlsConfig;
+use tracing::info;
 
 use crate::api::rpc::DatabendQueryFlightService;
 use crate::servers::Server as DatabendQueryServer;

@@ -17,7 +17,7 @@ use common_meta_sled_store::SledTree;
 use common_meta_sled_store::Store;
 use common_meta_types::Endpoint;
 use common_meta_types::Node;
-use common_tracing::info;
+use tracing::info;
 
 use crate::init_sled_ut;
 use crate::testing::fake_key_spaces::Nodes;

@@ -22,7 +22,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
 use common_io::prelude::*;
-use common_tracing::tracing::Instrument;
 use common_users::CertifiedInfo;
 use metrics::histogram;
 use opensrv_mysql::AsyncMysqlShim;

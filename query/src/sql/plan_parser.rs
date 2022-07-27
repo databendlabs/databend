@@ -22,6 +22,7 @@ use common_planners::Expression;
 use common_planners::PlanBuilder;
 use common_planners::PlanNode;
 use common_planners::SelectPlan;
+use tracing::debug;
 
 use super::statements::ExpressionSyncAnalyzer;
 use crate::sessions::QueryContext;

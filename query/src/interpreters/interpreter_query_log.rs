@@ -27,6 +27,8 @@ use serde::Serialize;
 use serde::Serializer;
 use serde_json;
 use serde_repr::Serialize_repr;
+use tracing::error;
+use tracing::info;
 
 use crate::catalogs::CATALOG_DEFAULT;
 use crate::sessions::QueryContext;

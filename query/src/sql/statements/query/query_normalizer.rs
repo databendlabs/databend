@@ -25,6 +25,7 @@ use common_planners::Expression;
 use sqlparser::ast::Expr;
 use sqlparser::ast::OffsetRows;
 use sqlparser::ast::SelectItem;
+use tracing::debug;
 
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;

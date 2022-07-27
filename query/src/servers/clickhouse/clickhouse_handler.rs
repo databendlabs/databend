@@ -28,6 +28,8 @@ use futures::stream::Abortable;
 use futures::Future;
 use futures::StreamExt;
 use tokio_stream::wrappers::TcpListenerStream;
+use tracing::error;
+use tracing::info;
 
 use crate::servers::clickhouse::clickhouse_session::ClickHouseConnection;
 use crate::servers::clickhouse::reject_connection::RejectCHConnection;

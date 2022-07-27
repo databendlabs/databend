@@ -22,6 +22,7 @@ use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Expression;
+use tracing::info;
 
 use crate::pipelines::processors::transforms::ExpressionExecutor;
 use crate::sessions::QueryContext;

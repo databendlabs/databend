@@ -32,6 +32,7 @@ use opensrv_clickhouse::errors::ServerError;
 use opensrv_clickhouse::types::column::{self};
 use opensrv_clickhouse::types::Block;
 use opensrv_clickhouse::types::SqlType;
+use tracing::error;
 
 use crate::servers::clickhouse::interactive_worker_base::BlockItem;
 

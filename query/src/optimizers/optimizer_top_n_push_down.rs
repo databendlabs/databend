@@ -20,6 +20,7 @@ use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::*;
+use tracing::error;
 
 use crate::optimizers::Optimizer;
 use crate::sessions::QueryContext;

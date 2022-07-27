@@ -19,6 +19,7 @@ use metrics::histogram;
 use opensrv_clickhouse::connection::Connection;
 use opensrv_clickhouse::CHContext;
 use opensrv_clickhouse::ClickHouseSession;
+use tracing::error;
 
 use crate::auth::Credential;
 use crate::servers::clickhouse::interactive_worker_base::InteractiveWorkerBase;

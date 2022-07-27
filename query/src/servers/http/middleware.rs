@@ -27,6 +27,8 @@ use poem::Addr;
 use poem::Endpoint;
 use poem::Middleware;
 use poem::Request;
+use tracing::info;
+use tracing::warn;
 
 use super::v1::HttpQueryContext;
 use crate::auth::Credential;

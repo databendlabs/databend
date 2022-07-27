@@ -45,6 +45,8 @@ use futures::StreamExt;
 use metrics::gauge;
 use rand::thread_rng;
 use rand::Rng;
+use tracing::error;
+use tracing::warn;
 
 use crate::api::FlightClient;
 use crate::Config;

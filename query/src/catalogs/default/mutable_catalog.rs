@@ -50,6 +50,7 @@ use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_store::MetaStoreProvider;
 use common_meta_types::MetaId;
+use tracing::info;
 
 use super::catalog_context::CatalogContext;
 use crate::catalogs::catalog::Catalog;

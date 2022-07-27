@@ -19,6 +19,7 @@ use common_meta_types::StageType;
 use common_planners::RemoveUserStagePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
+use tracing::debug;
 
 use crate::interpreters::interpreter_common::list_files;
 use crate::interpreters::Interpreter;

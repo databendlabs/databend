@@ -29,6 +29,7 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use futures::TryStreamExt;
 use regex::Regex;
+use tracing::info;
 
 use super::SelectInterpreter;
 use crate::interpreters::Interpreter;

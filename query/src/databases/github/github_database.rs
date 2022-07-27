@@ -15,6 +15,7 @@
 use common_exception::Result;
 use common_meta_app::schema::DatabaseInfo;
 use octocrab::params;
+use tracing::error;
 
 use crate::databases::Database;
 use crate::databases::DatabaseContext;

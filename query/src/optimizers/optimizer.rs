@@ -17,6 +17,7 @@ use std::time::Instant;
 use common_exception::Result;
 use common_planners::PlanNode;
 use metrics::histogram;
+use tracing::debug;
 
 use crate::optimizers::optimizer_scatters::ScattersOptimizer;
 use crate::optimizers::ConstantFoldingOptimizer;

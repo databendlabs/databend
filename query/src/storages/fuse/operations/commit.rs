@@ -34,8 +34,9 @@ use common_meta_app::schema::TableStatistics;
 use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_types::MatchSeq;
-use common_tracing::tracing::info;
-use common_tracing::tracing::warn;
+use tracing::debug;
+use tracing::info;
+use tracing::warn;
 use uuid::Uuid;
 
 use crate::sessions::TableContext;

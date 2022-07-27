@@ -21,6 +21,7 @@ use common_meta_types::GrantObject;
 use common_meta_types::RoleInfo;
 use common_meta_types::UserOptionFlag;
 use common_meta_types::UserPrivilegeSet;
+use tracing::info;
 
 use crate::procedures::Procedure;
 use crate::procedures::ProcedureFeatures;

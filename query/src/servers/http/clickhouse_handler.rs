@@ -41,6 +41,8 @@ use poem::IntoResponse;
 use poem::Route;
 use serde::Deserialize;
 use serde::Serialize;
+use tracing::error;
+use tracing::info;
 
 use crate::clusters::ClusterHelper;
 use crate::interpreters::InterpreterFactory;
