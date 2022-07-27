@@ -141,6 +141,14 @@ impl UserOption {
         self.flags.insert(flag);
     }
 
+    pub fn switch_option_flag(&mut self, flag: UserOptionFlag, on: bool) {
+        if on {
+            self.flags.insert(flag);
+        } else {
+            self.flags.remove(flag);
+        }
+    }
+
     pub fn unset_option_flag(&mut self, flag: UserOptionFlag) {
         self.flags.remove(flag);
     }

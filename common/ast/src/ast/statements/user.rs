@@ -29,7 +29,7 @@ pub struct CreateUserStmt {
     pub if_not_exists: bool,
     pub user: UserIdentity,
     pub auth_option: AuthOption,
-    pub role_options: Vec<RoleOption>,
+    pub user_options: Vec<UserOptionItem>,
 }
 
 impl Display for CreateUserStmt {
@@ -40,9 +40,9 @@ impl Display for CreateUserStmt {
         }
         write!(f, " {} IDENTIFIED", self.user)?;
         write!(f, " {}", self.auth_option)?;
-        if !self.role_options.is_empty() {
+        if !self.user_options.is_empty() {
             write!(f, " WITH")?;
-            for role_option in &self.role_options {
+            for role_option in &self.user_options {
                 write!(f, " {role_option}")?;
             }
         }
@@ -76,7 +76,7 @@ pub struct AlterUserStmt {
     pub user: Option<UserIdentity>,
     // None means no change to make
     pub auth_option: Option<AuthOption>,
-    pub role_options: Vec<RoleOption>,
+    pub user_options: Vec<UserOptionItem>,
 }
 
 impl Display for AlterUserStmt {
@@ -90,9 +90,9 @@ impl Display for AlterUserStmt {
         if let Some(auth_option) = &self.auth_option {
             write!(f, " IDENTIFIED {}", auth_option)?;
         }
-        if !self.role_options.is_empty() {
+        if !self.user_options.is_empty() {
             write!(f, " WITH")?;
-            for with_option in &self.role_options {
+            for with_option in &self.user_options {
                 write!(f, " {with_option}")?;
             }
         }
@@ -155,27 +155,19 @@ pub enum AccountMgrLevel {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum RoleOption {
-    TenantSetting,
-    NoTenantSetting,
-    ConfigReload,
-    NoConfigReload,
+pub enum UserOptionItem {
+    TenantSetting(bool),
+    ConfigReload(bool),
 }
 
-impl RoleOption {
+impl UserOptionItem {
     pub fn apply(&self, option: &mut UserOption) {
         match self {
-            Self::TenantSetting => {
-                option.set_option_flag(UserOptionFlag::TenantSetting);
+            Self::TenantSetting(enabled) => {
+                option.switch_option_flag(UserOptionFlag::TenantSetting, *enabled);
             }
-            Self::NoTenantSetting => {
-                option.unset_option_flag(UserOptionFlag::TenantSetting);
-            }
-            Self::ConfigReload => {
-                option.set_option_flag(UserOptionFlag::ConfigReload);
-            }
-            Self::NoConfigReload => {
-                option.unset_option_flag(UserOptionFlag::ConfigReload);
+            Self::ConfigReload(enabled) => {
+                option.switch_option_flag(UserOptionFlag::ConfigReload, *enabled);
             }
         }
     }
@@ -233,13 +225,13 @@ impl Display for AccountMgrSource {
     }
 }
 
-impl Display for RoleOption {
+impl Display for UserOptionItem {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
-            RoleOption::TenantSetting => write!(f, "TENANTSETTING"),
-            RoleOption::NoTenantSetting => write!(f, "NOTENANTSETTING"),
-            RoleOption::ConfigReload => write!(f, "CONFIGRELOAD"),
-            RoleOption::NoConfigReload => write!(f, "NOCONFIGRELOAD"),
+            UserOptionItem::TenantSetting(true) => write!(f, "TENANTSETTING"),
+            UserOptionItem::TenantSetting(false) => write!(f, "NOTENANTSETTING"),
+            UserOptionItem::ConfigReload(true) => write!(f, "CONFIGRELOAD"),
+            UserOptionItem::ConfigReload(false) => write!(f, "NOCONFIGRELOAD"),
         }
     }
 }

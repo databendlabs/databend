@@ -150,7 +150,7 @@ impl<'a> Binder {
             if_not_exists,
             user,
             auth_option,
-            role_options,
+            user_options: role_options,
         } = stmt;
         let mut user_option = UserOption::default();
         for option in role_options {
@@ -172,7 +172,7 @@ impl<'a> Binder {
         let AlterUserStmt {
             user,
             auth_option,
-            role_options,
+            user_options: role_options,
         } = stmt;
         // None means current user
         let user_info = if user.is_none() {
