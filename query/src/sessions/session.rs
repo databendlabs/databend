@@ -234,7 +234,7 @@ impl Session {
     pub fn get_all_roles(self: &Arc<Self>) -> Result<Vec<String>> {
         let current_user = self.get_current_user()?;
 
-        let mut all_roles = current_user.grants.roles().clone();
+        let mut all_roles = current_user.grants.roles();
         if let Some(auth_role) = self.session_ctx.get_auth_role() {
             all_roles.push(auth_role);
         }

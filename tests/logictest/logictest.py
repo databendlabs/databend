@@ -302,7 +302,7 @@ class SuiteRunner(object):
                     statement_list = list()
                     for state in get_statements(file_path, suite_name):
                         statement_list.append(state)
-                    
+
                     self.batch_execute(statement_list)
             else:
                 # case one by one
