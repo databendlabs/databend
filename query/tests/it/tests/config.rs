@@ -23,9 +23,6 @@ impl ConfigBuilder {
         let mut conf = Config::default();
         conf.query.tenant_id = "test".to_string();
         conf.log = common_tracing::Config::new_testing();
-        if conf.query.num_cpus == 0 {
-            conf.query.num_cpus = num_cpus::get() as u64;
-        }
 
         ConfigBuilder { conf }
     }
