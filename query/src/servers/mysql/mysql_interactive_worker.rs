@@ -18,7 +18,8 @@ use std::time::Instant;
 
 use common_base::base::TrySpawn;
 use common_datablocks::DataBlock;
-use common_datavalues::{DataSchemaRef, DataSchemaRefExt};
+use common_datavalues::DataSchemaRef;
+use common_datavalues::DataSchemaRefExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
@@ -48,31 +49,32 @@ use crate::servers::utils::use_planner_v2;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionRef;
 use crate::sessions::TableContext;
-use crate::sql::{DfParser, DfStatement};
+use crate::sql::DfParser;
+use crate::sql::DfStatement;
 use crate::sql::PlanParser;
 use crate::sql::Planner;
 
 fn is_result_set(stmt: &DfStatement) -> bool {
     matches!(
         stmt,
-        DfStatement::Query(_) |
-        DfStatement::Explain(_) |
-        DfStatement::ShowDatabases(_) |
-        DfStatement::ShowCreateDatabase(_) |
-        DfStatement::ShowTables(_) |
-        DfStatement::ShowCreateTable(_) |
-        DfStatement::ShowTablesStatus(_) |
-        DfStatement::DescribeTable(_) |
-        DfStatement::ShowSettings(_) |
-        DfStatement::ShowProcessList(_) |
-        DfStatement::ShowMetrics(_) |
-        DfStatement::ShowFunctions(_) |
-        DfStatement::ShowUsers(_) |
-        DfStatement::ShowRoles(_) |
-        DfStatement::DescribeStage(_) |
-        DfStatement::ShowStages(_) |
-        DfStatement::ShowGrants(_) |
-        DfStatement::ShowEngines(_)
+        DfStatement::Query(_)
+            | DfStatement::Explain(_)
+            | DfStatement::ShowDatabases(_)
+            | DfStatement::ShowCreateDatabase(_)
+            | DfStatement::ShowTables(_)
+            | DfStatement::ShowCreateTable(_)
+            | DfStatement::ShowTablesStatus(_)
+            | DfStatement::DescribeTable(_)
+            | DfStatement::ShowSettings(_)
+            | DfStatement::ShowProcessList(_)
+            | DfStatement::ShowMetrics(_)
+            | DfStatement::ShowFunctions(_)
+            | DfStatement::ShowUsers(_)
+            | DfStatement::ShowRoles(_)
+            | DfStatement::DescribeStage(_)
+            | DfStatement::ShowStages(_)
+            | DfStatement::ShowGrants(_)
+            | DfStatement::ShowEngines(_)
     )
 }
 
@@ -298,7 +300,10 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    async fn do_query(&mut self, query: &str) -> Result<(Vec<DataBlock>, String, bool, DataSchemaRef)> {
+    async fn do_query(
+        &mut self,
+        query: &str,
+    ) -> Result<(Vec<DataBlock>, String, bool, DataSchemaRef)> {
         match self.federated_server_command_check(query) {
             Some(data_block) => {
                 tracing::info!("Federated query: {}", query);
@@ -352,10 +357,11 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
 
                 match (hint, interpreter) {
                     (None, Ok(interpreter)) => {
-                        let (blocks, extra_info) = Self::exec_query(interpreter.clone(), &context).await?;
+                        let (blocks, extra_info) =
+                            Self::exec_query(interpreter.clone(), &context).await?;
                         let schema = interpreter.schema();
                         Ok((blocks, extra_info, is_result_set, schema))
-                    },
+                    }
                     (Some(code), Ok(interpreter)) => {
                         let res = Self::exec_query(interpreter, &context).await;
                         match res {
@@ -371,7 +377,12 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
                                         e.code()
                                     )));
                                 }
-                                Ok((vec![DataBlock::empty()], String::from(""), false, DataSchemaRefExt::create(vec![])))
+                                Ok((
+                                    vec![DataBlock::empty()],
+                                    String::from(""),
+                                    false,
+                                    DataSchemaRefExt::create(vec![]),
+                                ))
                             }
                         }
                     }
@@ -388,7 +399,12 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
                                 e.code()
                             )));
                         }
-                        Ok((vec![DataBlock::empty()], String::from(""), false, DataSchemaRefExt::create(vec![])))
+                        Ok((
+                            vec![DataBlock::empty()],
+                            String::from(""),
+                            false,
+                            DataSchemaRefExt::create(vec![]),
+                        ))
                     }
                 }
             }

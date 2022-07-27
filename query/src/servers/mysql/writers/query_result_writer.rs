@@ -45,7 +45,9 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
     ) -> Result<()> {
         if let Some(writer) = self.inner.take() {
             match query_result {
-                Ok((blocks, extra_info, is_result_set, schema)) => Self::ok(blocks, extra_info, is_result_set, schema, writer, format)?,
+                Ok((blocks, extra_info, is_result_set, schema)) => {
+                    Self::ok(blocks, extra_info, is_result_set, schema, writer, format)?
+                }
                 Err(error) => Self::err(&error, writer)?,
             }
         }

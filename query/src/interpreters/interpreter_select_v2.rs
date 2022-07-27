@@ -65,7 +65,7 @@ impl Interpreter for SelectInterpreterV2 {
     }
 
     fn schema(&self) -> DataSchemaRef {
-        return self.bind_context.output_schema()
+        self.bind_context.output_schema()
     }
 
     #[tracing::instrument(level = "debug", name = "select_interpreter_v2_execute", skip(self, _input_stream), fields(ctx.id = self.ctx.get_id().as_str()))]
