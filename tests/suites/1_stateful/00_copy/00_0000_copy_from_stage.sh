@@ -3,7 +3,6 @@
 CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../../../shell_env.sh
 
-echo "set enable_planner_v2 = 1;" | $MYSQL_CLIENT_CONNECT
 echo "drop table if exists ontime200;" | $MYSQL_CLIENT_CONNECT
 echo "drop stage if exists s1" | $MYSQL_CLIENT_CONNECT
 echo "drop stage if exists named_external_stage" | $MYSQL_CLIENT_CONNECT
@@ -19,8 +18,8 @@ aws --endpoint-url ${STORAGE_S3_ENDPOINT_URL} s3 cp s3://testbucket/admin/data/o
 aws --endpoint-url ${STORAGE_S3_ENDPOINT_URL} s3 cp s3://testbucket/admin/data/ontime_200.parquet s3://testbucket/admin/stage/s1/ontime_200.parquet >/dev/null 2>&1
 
 ## Copy from internal stage
-echo "set enable_planner_v2 = 1; CREATE STAGE s1;" | $MYSQL_CLIENT_CONNECT
-echo "set enable_planner_v2 = 1; list @s1 PATTERN = 'ontime.*'" | $MYSQL_CLIENT_CONNECT | awk '{print $1}' | sort
+echo "CREATE STAGE s1;" | $MYSQL_CLIENT_CONNECT
+echo "list @s1 PATTERN = 'ontime.*'" | $MYSQL_CLIENT_CONNECT | awk '{print $1}' | sort
 
 copy_from_stage_cases=(
   # copy parquet
@@ -38,14 +37,14 @@ copy_from_stage_cases=(
 )
 
 for i in "${copy_from_stage_cases[@]}"; do
-  echo "set enable_planner_v2 = 1; $i" | $MYSQL_CLIENT_CONNECT
+  echo "$i" | $MYSQL_CLIENT_CONNECT
   echo "select count(1), avg(Year), sum(DayOfWeek)  from ontime200" | $MYSQL_CLIENT_CONNECT
   echo "truncate table ontime200" | $MYSQL_CLIENT_CONNECT
 done
 
 ## Copy from named external stage
-echo "set enable_planner_v2 = 1; CREATE STAGE named_external_stage url = 's3://testbucket/admin/data/' connection=(aws_key_id='minioadmin' aws_secret_key='minioadmin' endpoint_url='${STORAGE_S3_ENDPOINT_URL}');" | $MYSQL_CLIENT_CONNECT
-echo "set enable_planner_v2 = 1; list @named_external_stage PATTERN = 'ontime.*parquet$'" | $MYSQL_CLIENT_CONNECT | awk '{print $1}' | sort
+echo "CREATE STAGE named_external_stage url = 's3://testbucket/admin/data/' connection=(aws_key_id='minioadmin' aws_secret_key='minioadmin' endpoint_url='${STORAGE_S3_ENDPOINT_URL}');" | $MYSQL_CLIENT_CONNECT
+echo "list @named_external_stage PATTERN = 'ontime.*parquet$'" | $MYSQL_CLIENT_CONNECT | awk '{print $1}' | sort
 
 copy_from_named_external_stage_cases=(
   # copy parquet
@@ -61,7 +60,7 @@ copy_from_named_external_stage_cases=(
 )
 
 for i in "${copy_from_named_external_stage_cases[@]}"; do
-  echo "set enable_planner_v2 = 1; $i" | $MYSQL_CLIENT_CONNECT
+  echo "$i" | $MYSQL_CLIENT_CONNECT
   echo "select count(1), avg(Year), sum(DayOfWeek)  from ontime200" | $MYSQL_CLIENT_CONNECT
   echo "truncate table ontime200" | $MYSQL_CLIENT_CONNECT
 done
