@@ -32,7 +32,7 @@ GRANT ALL on *.* TO user1;
 
 ## Java
 
-This guideline show how to connect and query to Databend using JDBC. We will be creating a table named `books` and insert a row, then query it.
+This topic shows how to connect and query Databend using JDBC. We will create a table named books, insert a row, and then query data from the table.
 
 ### demo.java
 
@@ -113,9 +113,9 @@ public class demo {
 
 In this case:
 
-The demo classpath is in the folder: /home/eason/database/source-code/test/out/test/test
+The demo classpath is located at /home/eason/database/source-code/test/out/test/test
 
-The jdbc class is in the folder: /home/eason/Downloads/jar_files/mysql-connector-java-5.1.48.jar
+The demo classpath is located at /home/eason/Downloads/jar_files/mysql-connector-java-5.1.48.jar
 
 ```shell
 $ ~/.jdks/openjdk-17.0.1/bin/java -Dfile.encoding=UTF-8 -classpath /home/eason/database/source-code/test/out/test/test:/home/eason/Downloads/jar_files/mysql-connector-java-5.1.48.jar demo

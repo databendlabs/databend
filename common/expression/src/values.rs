@@ -1061,8 +1061,14 @@ impl ColumnBuilder {
             (ColumnBuilder::EmptyArray { len }, ScalarRef::EmptyArray) => *len += 1,
             (ColumnBuilder::Int8(col), ScalarRef::Int8(value)) => col.push(value),
             (ColumnBuilder::Int16(col), ScalarRef::Int16(value)) => col.push(value),
+            (ColumnBuilder::Int32(col), ScalarRef::Int32(value)) => col.push(value),
+            (ColumnBuilder::Int64(col), ScalarRef::Int64(value)) => col.push(value),
             (ColumnBuilder::UInt8(col), ScalarRef::UInt8(value)) => col.push(value),
             (ColumnBuilder::UInt16(col), ScalarRef::UInt16(value)) => col.push(value),
+            (ColumnBuilder::UInt32(col), ScalarRef::UInt32(value)) => col.push(value),
+            (ColumnBuilder::UInt64(col), ScalarRef::UInt64(value)) => col.push(value),
+            (ColumnBuilder::Float32(col), ScalarRef::Float32(value)) => col.push(value),
+            (ColumnBuilder::Float64(col), ScalarRef::Float64(value)) => col.push(value),
             (ColumnBuilder::Boolean(col), ScalarRef::Boolean(value)) => col.push(value),
             (ColumnBuilder::String(col), ScalarRef::String(value)) => {
                 col.put_slice(value);

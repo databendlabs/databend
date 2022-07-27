@@ -168,6 +168,7 @@ fn test_format() {
                 PhysicalScan {
                     table_index: tab1,
                     columns: Default::default(),
+                    push_down_predicates: None,
                 }
                 .into(),
             ),
@@ -176,6 +177,7 @@ fn test_format() {
             PhysicalScan {
                 table_index: tab1,
                 columns: Default::default(),
+                push_down_predicates: None,
             }
             .into(),
         ),

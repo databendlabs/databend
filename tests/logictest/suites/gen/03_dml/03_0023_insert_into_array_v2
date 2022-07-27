@@ -7,12 +7,6 @@ CREATE DATABASE db1;
 statement ok
 USE db1;
 
-statement query T
-select '==Array(UInt8)==';
-
-----
-==Array(UInt8)==
-
 statement ok
 CREATE TABLE IF NOT EXISTS t1(id Int, arr Array(UInt8)) Engine = Fuse;
 
@@ -387,6 +381,7 @@ select * from t17;
 2 [\N, 'cc']
 3 ['dd', \N]
 4 ['ee', 'ff']
+
 
 statement query TT
 select arr[0], arr[1] from t17;

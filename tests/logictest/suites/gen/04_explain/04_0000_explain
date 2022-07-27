@@ -1,10 +1,10 @@
 statement ok
 set max_threads = 16;
 
-statement query T 
+statement query T
 explain select sum(number+1)+2 as sumx from numbers_mt(80000) where (number+1)=4 limit 1;
 
-----  
+----
 Limit: 1
   Projection: (sum((number + 1)) + 2) as sumx:UInt64
     Expression: (sum((number + 1)) + 2):UInt64 (Before Projection)
