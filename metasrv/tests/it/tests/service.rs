@@ -31,6 +31,8 @@ use common_meta_types::ForwardRequestBody;
 use databend_meta::api::GrpcServer;
 use databend_meta::configs;
 use databend_meta::meta_service::MetaNode;
+use tracing::info;
+use tracing::warn;
 
 // Start one random service and get the session manager.
 #[tracing::instrument(level = "info")]
@@ -206,12 +208,10 @@ macro_rules! init_meta_ut {
         let t = tempfile::tempdir().expect("create temp dir to sled db");
         common_meta_sled_store::init_temp_sled_db(t);
 
-        // common_tracing::init_tracing(&format!("ut-{}", name), "./_logs")
-        common_tracing::init_meta_ut_tracing();
+        common_tracing::init_logging("meta_unittests", &common_tracing::Config::new_testing());
 
         let name = common_tracing::func_name!();
-        let span =
-            common_tracing::tracing::debug_span!("ut", "{}", name.split("::").last().unwrap());
+        let span = tracing::debug_span!("ut", "{}", name.split("::").last().unwrap());
         ((), span)
     }};
 }

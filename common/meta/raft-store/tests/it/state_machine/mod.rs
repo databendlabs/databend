@@ -33,6 +33,7 @@ use openraft::raft::Entry;
 use openraft::raft::EntryPayload;
 use openraft::LogId;
 use pretty_assertions::assert_eq;
+use tracing::info;
 
 use crate::init_raft_store_ut;
 use crate::testing::new_raft_test_context;

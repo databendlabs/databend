@@ -28,6 +28,8 @@ use common_meta_grpc::MIN_METASRV_SEMVER;
 use common_meta_types::protobuf::meta_service_client::MetaServiceClient;
 use databend_meta::version::MIN_METACLI_SEMVER;
 use semver::Version;
+use tracing::debug;
+use tracing::info;
 
 use crate::init_meta_ut;
 use crate::tests::start_metasrv;

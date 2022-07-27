@@ -27,6 +27,8 @@ use common_meta_types::UpsertKVReply;
 use common_meta_types::UpsertKVReq;
 use pretty_assertions::assert_eq;
 use tokio::time::Duration;
+use tracing::debug;
+use tracing::info;
 
 use crate::init_meta_ut;
 use crate::tests::service::MetaSrvTestContext;

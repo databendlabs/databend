@@ -33,6 +33,8 @@ use common_meta_types::LogEntry;
 use databend_meta::store::MetaRaftStore;
 use databend_meta::Opened;
 use maplit::btreeset;
+use tracing::debug;
+use tracing::info;
 
 use crate::init_meta_ut;
 use crate::tests::service::MetaSrvTestContext;

@@ -46,6 +46,7 @@ use databend_meta::meta_service::MetaNode;
 use databend_meta::Opened;
 use maplit::btreeset;
 use pretty_assertions::assert_eq;
+use tracing::info;
 
 use crate::init_meta_ut;
 use crate::tests::service::MetaSrvTestContext;

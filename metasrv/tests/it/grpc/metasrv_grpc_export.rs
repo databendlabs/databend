@@ -23,6 +23,7 @@ use common_meta_types::Operation;
 use common_meta_types::UpsertKVReq;
 use regex::Regex;
 use tokio_stream::StreamExt;
+use tracing::info;
 
 use crate::init_meta_ut;
 

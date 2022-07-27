@@ -19,6 +19,23 @@ pub struct Config {
     pub stderr: StderrConfig,
 }
 
+impl Config {
+    /// new_testing is used for create a Config suitable for testing.
+    pub fn new_testing() -> Self {
+        Self {
+            file: FileConfig {
+                on: true,
+                level: "DEBUG".to_string(),
+                dir: "./.databend/logs".to_string(),
+            },
+            stderr: StderrConfig {
+                on: true,
+                level: "DEBUG".to_string(),
+            },
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct FileConfig {
     pub on: bool,

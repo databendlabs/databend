@@ -27,11 +27,10 @@ macro_rules! init_sled_ut {
         let t = tempfile::tempdir().expect("create temp dir to sled db");
 
         common_meta_sled_store::init_temp_sled_db(t);
-        common_tracing::init_meta_ut_tracing();
+        common_tracing::init_logging("sled_unittests", &common_tracing::Config::new_testing());
 
         let name = common_tracing::func_name!();
-        let span =
-            common_tracing::tracing::debug_span!("ut", "{}", name.split("::").last().unwrap());
+        let span = tracing::debug_span!("ut", "{}", name.split("::").last().unwrap());
         ((), span)
     }};
 }
