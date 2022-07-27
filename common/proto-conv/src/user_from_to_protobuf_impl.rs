@@ -81,13 +81,14 @@ impl FromToProto<pb::UserOption> for mt::UserOption {
     where Self: Sized {
         check_ver(p.ver, p.min_compatible)?;
 
-        let flags = BitFlags::<mt::UserOptionFlag, u64>::from_bits(p.flags);
-        match flags {
-            Ok(flags) => Ok(mt::UserOption::new(flags)),
-            Err(e) => Err(Incompatible {
+        let flags =
+            BitFlags::<mt::UserOptionFlag, u64>::from_bits(p.flags).map_err(|e| Incompatible {
                 reason: format!("UserOptionFlag error: {}", e),
-            }),
-        }
+            })?;
+
+        Ok(mt::UserOption::default()
+            .with_flags(flags)
+            .with_default_role(p.default_role))
     }
 
     fn to_pb(&self) -> Result<pb::UserOption, Incompatible> {
@@ -95,6 +96,7 @@ impl FromToProto<pb::UserOption> for mt::UserOption {
             ver: VER,
             min_compatible: MIN_COMPATIBLE_VER,
             flags: self.flags().bits(),
+            default_role: self.default_role().clone(),
         })
     }
 }
@@ -246,7 +248,6 @@ impl FromToProto<pb::UserInfo> for mt::UserInfo {
         Ok(mt::UserInfo {
             name: p.name.clone(),
             hostname: p.hostname.clone(),
-            default_role: p.default_role.clone(),
             auth_info: mt::AuthInfo::from_pb(p.auth_info.ok_or_else(|| Incompatible {
                 reason: "UserInfo.auth_info cannot be None".to_string(),
             })?)?,
@@ -268,7 +269,6 @@ impl FromToProto<pb::UserInfo> for mt::UserInfo {
             min_compatible: MIN_COMPATIBLE_VER,
             name: self.name.clone(),
             hostname: self.hostname.clone(),
-            default_role: self.default_role.clone(),
             auth_info: Some(mt::AuthInfo::to_pb(&self.auth_info)?),
             grants: Some(mt::UserGrantSet::to_pb(&self.grants)?),
             quota: Some(mt::UserQuota::to_pb(&self.quota)?),

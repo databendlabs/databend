@@ -63,7 +63,6 @@ impl Interpreter for CreateUserInterpreter {
             grants: UserGrantSet::empty(),
             quota: UserQuota::no_limit(),
             option: plan.user_option,
-            default_role: None,
         };
         user_mgr
             .add_user(&tenant, user_info, plan.if_not_exists)

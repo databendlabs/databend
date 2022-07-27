@@ -30,13 +30,13 @@ fn s(ss: impl ToString) -> String {
 }
 
 fn test_user_info() -> UserInfo {
-    let mut option = mt::UserOption::default();
-    option.set_option_flag(mt::UserOptionFlag::TenantSetting);
+    let option = mt::UserOption::default()
+        .with_set_flag(mt::UserOptionFlag::TenantSetting)
+        .with_default_role(Some("role1".to_string()));
 
     mt::UserInfo {
         name: "test_user".to_string(),
         hostname: "localhost".to_string(),
-        default_role: None,
         auth_info: mt::AuthInfo::Password {
             hash_value: [
                 116, 101, 115, 116, 95, 112, 97, 115, 115, 119, 111, 114, 100,

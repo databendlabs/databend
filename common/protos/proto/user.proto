@@ -96,6 +96,7 @@ message UserOption {
   uint64 min_compatible = 101;
 
   uint64 flags = 1;
+  optional string default_role = 2;
 }
 
 message UserInfo {
@@ -108,7 +109,6 @@ message UserInfo {
   UserGrantSet grants = 4;
   UserQuota quota = 5;
   UserOption option = 6;
-  optional string default_role = 7;
 }
 
 message UserIdentity {
