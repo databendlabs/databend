@@ -1,64 +1,147 @@
+statement ok
 set enable_planner_v2 = 1;
 
+statement ok
 DROP DATABASE IF EXISTS db1;
+
+statement ok
 CREATE DATABASE db1;
+
+statement ok
 USE db1;
 
--- setup
+statement ok
 CREATE TABLE IF NOT EXISTS t(c1 Int, c2 Int );
+
+statement ok
 INSERT INTO t VALUES(1,2);
+
+statement ok
 INSERT INTO t VALUES(3,4);
 
-select 'selection not match, nothing deleted';
+statement ok
 delete from t where c1 > 3;
+
+statement query B label(http)
 select count(*) = 2 from t;
 
-select 'delete one rows';
+----
+1
+
+---- http
+true
+
+statement ok
 delete from t where c1 = 1;
-select 'the row should be deleted';
+
+statement query B label(http)
 select count(*) = 0 from t where c1 = 1;
-select 'other rows should be kept';
+
+----
+1
+
+---- http
+true
+
+statement query B label(http)
 select count(*) = 1 from t where c1 <> 1;
 
-select 'deleted unconditionally';
+----
+1
+
+---- http
+true
+
+statement ok
 delete from t;
+
+statement query B label(http)
 select count(*) = 0 from t;
 
+----
+1
+
+---- http
+true
+
+statement ok
 drop table t all;
 
--- setup
-select 'nullable column cases';
+statement ok
 create table t (c Int null);
+
+statement ok
 insert into t values (1),(2),(NULL);
 
-select 'delete with condition "const false"';
+statement ok
 delete from t where 1 = 0;
+
+statement query B label(http)
 select count(*) = 3 from t;
 
-select 'normal deletion';
+----
+1
+
+---- http
+true
+
+statement ok
 delete from t where c = 1;
-select 'expects one row deleted';
+
+statement query B label(http)
 select count(*) = 2 from t;
-select 'expects null valued row kept';
+
+----
+1
+
+---- http
+true
+
+statement query B label(http)
 select count(*) = 1 from t where c IS NULL;
 
-select 'delete all null valued rows';
+----
+1
+
+---- http
+true
+
+statement ok
 delete from t where c IS NULL;
-select 'expects no null valued row kept';
+
+statement query B label(http)
 select count(*) = 0 from t where c IS NULL;
-select 'expects 1 null valued row kept';
+
+----
+1
+
+---- http
+true
+
+statement query B label(http)
 select count(*) = 1 from t where c IS NOT NULL;
 
-select 'deleted unconditionally (with const true)';
+----
+1
+
+---- http
+true
+
+statement ok
 delete from t where 1 = 1;
+
+statement query B label(http)
 select count(*) = 0 from t;
 
--- commented out, not sure if we should support this
---insert into t values (1),(2),(NULL);
---select 'deleted with nullary expr now()';
---delete from t where now();
---select count(*) = 0 from t;
+----
+1
 
+---- http
+true
+
+statement ok
 drop table t all;
 
+statement ok
 DROP DATABASE db1;
+
