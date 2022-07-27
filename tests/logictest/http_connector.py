@@ -175,7 +175,9 @@ class HttpConnector(object):
                 else:
                     continue
             break
-        self._session = response['session_state']
+        session = response['session_state']
+        if session:
+            self._session = session
         if response['next_uri'] is not None:
             log.warning(
                 f"after waited for {time_limit} secs, query still not finished (next url not none)!"
