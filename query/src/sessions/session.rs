@@ -240,13 +240,18 @@ impl Session {
             return Ok(());
         }
 
+        let mut related_roles = current_user.grants.roles().clone();
+        if let Some(auth_role) = self.session_ctx.get_auth_role() {
+            related_roles.push(auth_role);
+        }
+
         let tenant = self.get_current_tenant();
         let role_cache = self
             .get_shared_query_context()
             .await?
             .get_role_cache_manager();
         let role_verified = role_cache
-            .find_related_roles(&tenant, &current_user.grants.roles())
+            .find_related_roles(&tenant, &related_roles)
             .await?
             .iter()
             .any(|r| r.grants.verify_privilege(object, privilege));
