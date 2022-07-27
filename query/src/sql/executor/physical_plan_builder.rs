@@ -16,6 +16,7 @@ use std::collections::BTreeMap;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_planners::Extras;
 use common_planners::StageKind;
 use itertools::Itertools;
 
@@ -33,6 +34,7 @@ use crate::sql::executor::AggregateFunctionDesc;
 use crate::sql::executor::AggregateFunctionSignature;
 use crate::sql::executor::ColumnID;
 use crate::sql::executor::EvalScalar;
+use crate::sql::executor::ExpressionBuilderWithoutRenaming;
 use crate::sql::executor::PhysicalPlan;
 use crate::sql::executor::PhysicalScalar;
 use crate::sql::executor::SortDesc;
@@ -64,6 +66,25 @@ impl PhysicalPlanBuilder {
                     let name = metadata.column(*index).name.clone();
                     name_mapping.insert(name, index.to_string());
                 }
+                let push_down_filters = scan
+                    .push_down_predicates
+                    .clone()
+                    .map(|predicates| {
+                        let builder =
+                            ExpressionBuilderWithoutRenaming::create(self.metadata.clone());
+                        predicates
+                            .into_iter()
+                            .map(|scalar| builder.build(&scalar))
+                            .collect::<Result<Vec<_>>>()
+                    })
+                    .transpose()?;
+
+                let mut source = metadata.table(scan.table_index).source.clone();
+                source.push_downs = push_down_filters.map(|filters| Extras {
+                    filters,
+                    ..Default::default()
+                });
+
                 Ok(PhysicalPlan::TableScan(TableScan {
                     name_mapping,
                     source: Box::new(metadata.table(scan.table_index).source.clone()),
