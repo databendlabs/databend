@@ -225,6 +225,10 @@ impl Session {
         self.session_ctx.set_current_user(user);
     }
 
+    pub fn set_auth_role(self: &Arc<Self>, role: String) {
+        self.session_ctx.set_auth_role(role)
+    }
+
     pub async fn validate_privilege(
         self: &Arc<Self>,
         object: &GrantObject,

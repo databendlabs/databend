@@ -120,6 +120,11 @@ impl AuthMgr {
         // take `sub` field in the claims as user name
         let user_name = claims.sub.clone().unwrap();
 
+        // set user auth_role if claims contain extra.role
+        if let Some(ref auth_role) = claims.extra.role {
+            session.set_auth_role(auth_role.clone());
+        }
+
         // create user if not exists when the JWT claims contains ensure_user
         if let Some(ref ensure_user) = claims.extra.ensure_user {
             let mut user_info = UserInfo::new(&user_name, "%", AuthInfo::JWT);
