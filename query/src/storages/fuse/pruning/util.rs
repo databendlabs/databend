@@ -17,7 +17,6 @@ use std::sync::Arc;
 use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
-use common_fuse_meta::meta::BlockMeta;
 use common_planners::find_column_exprs;
 use common_planners::Expression;
 use common_tracing::tracing;
@@ -79,15 +78,14 @@ async fn load_bloom_filter_by_columns(
 pub async fn filter_block_by_bloom_index(
     ctx: &Arc<dyn TableContext>,
     dal: Operator,
-    schema: DataSchemaRef,
+    schema: &DataSchemaRef,
     filter_expr: &Expression,
     bloom_index_col_names: &[String],
     block_path: &str,
 ) -> common_exception::Result<bool> {
-    let bloom_idx_location = TableMetaLocationGenerator::block_bloom_index_location(&block_path);
+    let bloom_idx_location = TableMetaLocationGenerator::block_bloom_index_location(block_path);
     let filter_block =
-        load_bloom_filter_by_columns(dal.clone(), bloom_index_col_names, &bloom_idx_location)
-            .await?;
+        load_bloom_filter_by_columns(dal, bloom_index_col_names, &bloom_idx_location).await?;
     let ctx = ctx.clone();
     let index = BloomFilterIndexer::from_bloom_block(schema.clone(), filter_block, ctx)?;
     Ok(BloomFilterExprEvalResult::False != index.eval(filter_expr)?)
