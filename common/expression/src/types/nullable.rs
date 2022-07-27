@@ -19,6 +19,7 @@ use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::arrow::trusted_len::TrustedLen;
 
+use super::AnyType;
 use crate::property::Domain;
 use crate::property::NullableDomain;
 use crate::types::ArgType;
@@ -36,10 +37,10 @@ pub struct NullableType<T: ValueType>(PhantomData<T>);
 impl<T: ValueType> ValueType for NullableType<T> {
     type Scalar = Option<T::Scalar>;
     type ScalarRef<'a> = Option<T::ScalarRef<'a>>;
-    type Column = (T::Column, Bitmap);
+    type Column = NullableColumn<T>;
     type Domain = NullableDomain<T>;
     type ColumnIterator<'a> = NullableIterator<'a, T>;
-    type ColumnBuilder = (T::ColumnBuilder, MutableBitmap);
+    type ColumnBuilder = NullableColumnBuilder<T>;
 
     fn to_owned_scalar<'a>(scalar: Self::ScalarRef<'a>) -> Self::Scalar {
         scalar.map(T::to_owned_scalar)
@@ -57,12 +58,7 @@ impl<T: ValueType> ValueType for NullableType<T> {
     }
 
     fn try_downcast_column<'a>(col: &'a Column) -> Option<Self::Column> {
-        match col {
-            Column::Nullable { column, validity } => {
-                Some((T::try_downcast_column(column)?, validity.clone()))
-            }
-            _ => None,
-        }
+        NullableColumn::try_downcast(col.as_nullable()?)
     }
 
     fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
@@ -85,11 +81,8 @@ impl<T: ValueType> ValueType for NullableType<T> {
         }
     }
 
-    fn upcast_column((col, validity): Self::Column) -> Column {
-        Column::Nullable {
-            column: Box::new(T::upcast_column(col)),
-            validity,
-        }
+    fn upcast_column(col: Self::Column) -> Column {
+        Column::Nullable(Box::new(col.upcast()))
     }
 
     fn upcast_domain(domain: Self::Domain) -> Domain {
@@ -99,79 +92,48 @@ impl<T: ValueType> ValueType for NullableType<T> {
         })
     }
 
-    fn column_len<'a>((_, validity): &'a Self::Column) -> usize {
-        validity.len()
+    fn column_len<'a>(col: &'a Self::Column) -> usize {
+        col.len()
     }
 
-    fn index_column<'a>(
-        (col, validity): &'a Self::Column,
-        index: usize,
-    ) -> Option<Self::ScalarRef<'a>> {
-        let scalar = T::index_column(col, index)?;
-        Some(if validity.get(index).unwrap() {
-            Some(scalar)
-        } else {
-            None
-        })
+    fn index_column<'a>(col: &'a Self::Column, index: usize) -> Option<Self::ScalarRef<'a>> {
+        col.index(index)
     }
 
-    fn slice_column<'a>((col, validity): &'a Self::Column, range: Range<usize>) -> Self::Column {
-        (T::slice_column(col, range), validity.clone())
+    fn slice_column<'a>(col: &'a Self::Column, range: Range<usize>) -> Self::Column {
+        col.slice(range)
     }
 
-    fn iter_column<'a>((col, validity): &'a Self::Column) -> Self::ColumnIterator<'a> {
-        NullableIterator {
-            iter: T::iter_column(col),
-            validity: validity.iter(),
-        }
+    fn iter_column<'a>(col: &'a Self::Column) -> Self::ColumnIterator<'a> {
+        col.iter()
     }
 
-    fn column_to_builder((col, validity): Self::Column) -> Self::ColumnBuilder {
-        (T::column_to_builder(col), bitmap_into_mut(validity))
+    fn column_to_builder(col: Self::Column) -> Self::ColumnBuilder {
+        NullableColumnBuilder::from_column(col)
     }
 
-    fn builder_len((_, validity): &Self::ColumnBuilder) -> usize {
-        validity.len()
+    fn builder_len(builder: &Self::ColumnBuilder) -> usize {
+        builder.len()
     }
 
-    fn push_item((builder, validity): &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>) {
-        match item {
-            Some(scalar) => {
-                T::push_item(builder, scalar);
-                validity.push(true);
-            }
-            None => {
-                T::push_default(builder);
-                validity.push(false);
-            }
-        }
+    fn push_item(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>) {
+        builder.push(item);
     }
 
-    fn push_default((builder, validity): &mut Self::ColumnBuilder) {
-        T::push_default(builder);
-        validity.push(false);
+    fn push_default(builder: &mut Self::ColumnBuilder) {
+        builder.push_null();
     }
 
-    fn append_builder(
-        (builder, validity): &mut Self::ColumnBuilder,
-        (other_builder, other_nulls): &Self::ColumnBuilder,
-    ) {
-        T::append_builder(builder, other_builder);
-        validity.extend_from_slice(other_nulls.as_slice(), 0, other_nulls.len());
+    fn append_builder(builder: &mut Self::ColumnBuilder, other_builder: &Self::ColumnBuilder) {
+        builder.append(other_builder);
     }
 
-    fn build_column((builder, validity): Self::ColumnBuilder) -> Self::Column {
-        assert_eq!(T::builder_len(&builder), validity.len());
-        (T::build_column(builder), validity.into())
+    fn build_column(builder: Self::ColumnBuilder) -> Self::Column {
+        builder.build()
     }
 
-    fn build_scalar((builder, validity): Self::ColumnBuilder) -> Self::Scalar {
-        assert_eq!(validity.len(), 1);
-        if validity.get(0) {
-            Some(T::build_scalar(builder))
-        } else {
-            None
-        }
+    fn build_scalar(builder: Self::ColumnBuilder) -> Self::Scalar {
+        builder.build_scalar()
     }
 }
 
@@ -188,10 +150,60 @@ impl<T: ArgType> ArgType for NullableType<T> {
     }
 
     fn create_builder(capacity: usize, generics: &GenericMap) -> Self::ColumnBuilder {
-        (
-            T::create_builder(capacity, generics),
-            MutableBitmap::with_capacity(capacity),
-        )
+        NullableColumnBuilder::with_capacity(capacity, generics)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct NullableColumn<T: ValueType> {
+    pub column: T::Column,
+    pub validity: Bitmap,
+}
+
+impl<T: ValueType> NullableColumn<T> {
+    pub fn len(&self) -> usize {
+        self.validity.len()
+    }
+
+    pub fn index(&self, index: usize) -> Option<Option<T::ScalarRef<'_>>> {
+        match self.validity.get(index) {
+            Some(true) => Some(Some(T::index_column(&self.column, index).unwrap())),
+            Some(false) => Some(None),
+            None => None,
+        }
+    }
+
+    pub fn slice(&self, range: Range<usize>) -> Self {
+        NullableColumn {
+            validity: self
+                .validity
+                .clone()
+                .slice(range.start, range.end - range.start),
+            column: T::slice_column(&self.column, range),
+        }
+    }
+
+    pub fn iter(&self) -> NullableIterator<T> {
+        NullableIterator {
+            iter: T::iter_column(&self.column),
+            validity: self.validity.iter(),
+        }
+    }
+
+    pub fn upcast(self) -> NullableColumn<AnyType> {
+        NullableColumn {
+            column: T::upcast_column(self.column),
+            validity: self.validity,
+        }
+    }
+}
+
+impl NullableColumn<AnyType> {
+    pub fn try_downcast<T: ValueType>(&self) -> Option<NullableColumn<T>> {
+        Some(NullableColumn {
+            column: T::try_downcast_column(&self.column)?,
+            validity: self.validity.clone(),
+        })
     }
 }
 
@@ -218,3 +230,70 @@ impl<'a, T: ValueType> Iterator for NullableIterator<'a, T> {
 }
 
 unsafe impl<'a, T: ValueType> TrustedLen for NullableIterator<'a, T> {}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct NullableColumnBuilder<T: ValueType> {
+    pub builder: T::ColumnBuilder,
+    pub validity: MutableBitmap,
+}
+
+impl<T: ValueType> NullableColumnBuilder<T> {
+    pub fn from_column(col: NullableColumn<T>) -> Self {
+        NullableColumnBuilder {
+            builder: T::column_to_builder(col.column),
+            validity: bitmap_into_mut(col.validity),
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        self.validity.len()
+    }
+
+    pub fn push(&mut self, item: Option<T::ScalarRef<'_>>) {
+        match item {
+            Some(scalar) => {
+                T::push_item(&mut self.builder, scalar);
+                self.validity.push(true);
+            }
+            None => self.push_null(),
+        }
+    }
+
+    pub fn push_null(&mut self) {
+        T::push_default(&mut self.builder);
+        self.validity.push(false);
+    }
+
+    pub fn append(&mut self, other: &Self) {
+        T::append_builder(&mut self.builder, &other.builder);
+        self.validity
+            .extend_from_slice(other.validity.as_slice(), 0, other.validity.len());
+    }
+
+    pub fn build(self) -> NullableColumn<T> {
+        assert_eq!(self.validity.len(), T::builder_len(&self.builder));
+        NullableColumn {
+            column: T::build_column(self.builder),
+            validity: self.validity.into(),
+        }
+    }
+
+    pub fn build_scalar(self) -> Option<T::Scalar> {
+        assert_eq!(T::builder_len(&self.builder), 1);
+        assert_eq!(self.validity.len(), 1);
+        if self.validity.get(0) {
+            Some(T::build_scalar(self.builder))
+        } else {
+            None
+        }
+    }
+}
+
+impl<T: ArgType> NullableColumnBuilder<T> {
+    pub fn with_capacity(capacity: usize, generics: &GenericMap) -> Self {
+        NullableColumnBuilder {
+            builder: T::create_builder(capacity, generics),
+            validity: MutableBitmap::with_capacity(capacity),
+        }
+    }
+}
