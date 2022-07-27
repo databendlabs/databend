@@ -25,7 +25,6 @@ use common_fuse_meta::meta::SegmentInfo;
 use common_fuse_meta::meta::StatisticsOfColumns;
 use common_fuse_meta::meta::TableSnapshot;
 use common_planners::Extras;
-use common_tracing::tracing;
 use futures::StreamExt;
 use futures::TryStreamExt;
 

@@ -21,9 +21,9 @@ use common_base::base::TrySpawn;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
-use common_tracing::tracing;
 use opensrv_mysql::AsyncMysqlIntermediary;
 use opensrv_mysql::IntermediaryOptions;
+use tracing::error;
 
 use crate::servers::mysql::mysql_interactive_worker::InteractiveWorker;
 use crate::sessions::SessionRef;
@@ -62,7 +62,7 @@ impl MySQLConnection {
         let blocking_stream_ref = blocking_stream.try_clone()?;
         session.attach(host, move || {
             if let Err(error) = blocking_stream_ref.shutdown(Shutdown::Both) {
-                tracing::error!("Cannot shutdown MySQL session io {}", error);
+                error!("Cannot shutdown MySQL session io {}", error);
             }
         });
 

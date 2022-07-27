@@ -28,7 +28,6 @@ use common_storage::StorageHdfsConfig as InnerStorageHdfsConfig;
 use common_storage::StorageParams;
 use common_storage::StorageS3Config as InnerStorageS3Config;
 use common_tracing::Config as InnerLogConfig;
-use common_tracing::FileConfig;
 use common_tracing::FileConfig as InnerFileLogConfig;
 use common_tracing::StderrConfig as InnerStderrLogConfig;
 use serde::Deserialize;
@@ -790,7 +789,7 @@ impl TryInto<InnerLogConfig> for LogConfig {
     type Error = ErrorCode;
 
     fn try_into(self) -> Result<InnerLogConfig> {
-        let mut file: FileConfig = self.file.try_into()?;
+        let mut file: InnerFileLogConfig = self.file.try_into()?;
         if self.level != "INFO" {
             file.level = self.level.to_string();
         }

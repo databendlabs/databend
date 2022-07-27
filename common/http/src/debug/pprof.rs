@@ -14,10 +14,10 @@
 
 use common_base::base::tokio::time::Duration;
 use common_base::base::Profiling;
-use common_tracing::tracing;
 use poem::error::InternalServerError;
 use poem::web::Query;
 use poem::IntoResponse;
+use tracing::info;
 
 use crate::debug::PProfRequest;
 
@@ -31,16 +31,15 @@ pub async fn debug_pprof_handler(
     let profile = match req {
         Some(query) => {
             let duration = Duration::from_secs(query.seconds);
-            tracing::info!(
+            info!(
                 "start pprof request second: {:?} frequency: {:?}",
-                query.seconds,
-                query.frequency
+                query.seconds, query.frequency
             );
             Profiling::create(duration, i32::from(query.frequency))
         }
         None => {
             let duration = Duration::from_secs(PProfRequest::default_seconds());
-            tracing::info!(
+            info!(
                 "start pprof request second: {:?} frequency: {:?}",
                 PProfRequest::default_seconds(),
                 PProfRequest::default_frequency()
@@ -50,6 +49,6 @@ pub async fn debug_pprof_handler(
     };
     let body = profile.dump_proto().await.map_err(InternalServerError)?;
 
-    tracing::info!("finished pprof request");
+    info!("finished pprof request");
     Ok(body)
 }

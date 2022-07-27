@@ -28,8 +28,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_metrics::label_counter;
 use common_storage::init_operator;
-use common_tracing::tracing;
-use common_tracing::tracing_appender::non_blocking::WorkerGuard;
 use common_users::RoleCacheMgr;
 use common_users::UserApiProvider;
 use futures::future::Either;
@@ -206,7 +204,7 @@ impl SessionManager {
                 }
             }
             _ => {
-                tracing::debug!(
+                debug!(
                     "session type is {}, mysql_conn_map no need to change.",
                     session_typ
                 );
@@ -325,7 +323,7 @@ impl SessionManager {
     ) -> impl Future<Output = ()> {
         let active_sessions = self.active_sessions.clone();
         async move {
-            tracing::info!(
+            info!(
                 "Waiting {} secs for connections to close. You can press Ctrl + C again to force shutdown.",
                 timeout_secs
             );
@@ -344,7 +342,7 @@ impl SessionManager {
                 };
             }
 
-            tracing::info!("Will shutdown forcefully.");
+            info!("Will shutdown forcefully.");
             active_sessions
                 .read()
                 .values()
@@ -372,7 +370,7 @@ impl SessionManager {
         match active_sessions {
             0 => true,
             _ => {
-                tracing::info!("Waiting for {} connections to close.", active_sessions);
+                info!("Waiting for {} connections to close.", active_sessions);
                 false
             }
         }
@@ -436,10 +434,6 @@ impl SessionManager {
         }
 
         Ok(())
-    }
-
-    pub fn get_query_logger(&self) -> Option<Arc<dyn tracing::Subscriber + Send + Sync>> {
-        self.query_logger.write().to_owned()
     }
 
     pub fn get_async_insert_queue(&self) -> Arc<RwLock<Option<Arc<AsyncInsertQueue>>>> {

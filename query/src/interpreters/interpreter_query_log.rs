@@ -23,7 +23,6 @@ use common_datavalues::prelude::Series;
 use common_datavalues::prelude::SeriesFrom;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_tracing::tracing;
 use serde::Serialize;
 use serde::Serializer;
 use serde_json;
@@ -224,7 +223,7 @@ impl InterpreterQueryLog {
             .append_data(self.ctx.clone(), Box::pin(input_stream))
             .await?;
 
-        tracing::info!("{}", serde_json::to_string(event)?);
+        info!("{}", serde_json::to_string(event)?);
 
         Ok(())
     }
@@ -234,7 +233,7 @@ impl InterpreterQueryLog {
         InterpreterQueryLog::create(ctx, "".to_string())
             .log_start(SystemTime::now(), Some(err))
             .await
-            .unwrap_or_else(|e| tracing::error!("fail to write query_log {:?}", e));
+            .unwrap_or_else(|e| error!("fail to write query_log {:?}", e));
     }
 
     pub async fn log_start(&self, now: SystemTime, err: Option<ErrorCode>) -> Result<()> {

@@ -14,7 +14,7 @@
 
 use common_base::base::*;
 use common_exception::Result;
-use common_tracing::tracing;
+use common_tracing::info;
 use tokio::sync::broadcast;
 use tokio::sync::oneshot;
 use tokio::sync::oneshot::error::TryRecvError;
@@ -31,12 +31,12 @@ impl Stoppable for FooTask {
     }
 
     async fn stop(&mut self, force: Option<broadcast::Receiver<()>>) -> Result<()> {
-        tracing::info!("--- FooTask stop, force: {:?}", force);
+        info!("--- FooTask stop, force: {:?}", force);
 
         // block the stop until force stop.
 
         if let Some(mut force) = force {
-            tracing::info!("--- waiting for force");
+            info!("--- waiting for force");
             let _ = force.recv().await;
         }
         Ok(())
@@ -115,14 +115,14 @@ async fn test_stop_handle() -> Result<()> {
         fin_tx.send(()).expect("fail to send fin signal");
     });
 
-    tracing::info!("--- send graceful stop");
+    info!("--- send graceful stop");
     stop_tx.send(()).expect("fail to set graceful stop");
 
     // Broadcasting receiver can not receive the message sent before subscribing the sender.
     // Wait for a while until the `stop()` method is called for every task.
     tokio::time::sleep(Duration::from_millis(100)).await;
 
-    tracing::info!("--- fin_rx should receive nothing");
+    info!("--- fin_rx should receive nothing");
     let res = fin_rx.try_recv();
     match res {
         Err(TryRecvError::Empty) => { /* good */ }
@@ -131,7 +131,7 @@ async fn test_stop_handle() -> Result<()> {
         }
     };
 
-    tracing::info!("--- send force stop");
+    info!("--- send force stop");
     stop_tx.send(()).expect("fail to set force stop");
 
     assert!(fin_rx.await.is_ok());

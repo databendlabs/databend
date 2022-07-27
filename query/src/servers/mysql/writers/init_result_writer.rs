@@ -14,7 +14,6 @@
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_tracing::tracing;
 use opensrv_mysql::*;
 
 pub struct DFInitResultWriter<'a, W: std::io::Write> {
@@ -43,7 +42,7 @@ impl<'a, W: std::io::Write> DFInitResultWriter<'a, W> {
     }
 
     fn err(error: &ErrorCode, writer: InitWriter<'a, W>) -> Result<()> {
-        tracing::error!("OnInit Error: {:?}", error);
+        error!("OnInit Error: {:?}", error);
         writer.error(ErrorKind::ER_UNKNOWN_ERROR, error.to_string().as_bytes())?;
         Ok(())
     }

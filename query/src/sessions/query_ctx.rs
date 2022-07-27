@@ -46,7 +46,6 @@ use common_planners::StageTableInfo;
 use common_planners::Statistics;
 use common_streams::AbortStream;
 use common_streams::SendableDataBlockStream;
-use common_tracing::tracing;
 use common_users::RoleCacheMgr;
 use common_users::UserApiProvider;
 use futures::future::AbortHandle;
@@ -89,7 +88,7 @@ impl QueryContext {
     pub fn create_from_shared(shared: Arc<QueryContextShared>) -> Arc<QueryContext> {
         shared.increment_ref_count();
 
-        tracing::debug!("Create QueryContext");
+        debug!("Create QueryContext");
 
         Arc::new(QueryContext {
             statistics: Arc::new(RwLock::new(Statistics::default())),
@@ -485,7 +484,7 @@ impl QueryContextShared {
     pub(in crate::sessions) fn destroy_context_ref(&self) {
         if self.ref_count.fetch_sub(1, Ordering::Release) == 1 {
             std::sync::atomic::fence(Acquire);
-            tracing::debug!("Destroy QueryContext");
+            debug!("Destroy QueryContext");
             self.session.destroy_context_shared();
         }
     }

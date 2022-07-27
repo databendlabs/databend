@@ -17,9 +17,10 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
-use common_tracing::tracing;
 use futures::Future;
 use tokio::sync::broadcast;
+use tracing::error;
+use tracing::info;
 
 use super::Stoppable;
 
@@ -86,8 +87,8 @@ impl StopHandle {
             // Ignore the result
             let _ = rx.recv().await;
 
-            tracing::info!("Received termination signal.");
-            tracing::info!("Press Ctrl + C again to force shutdown.");
+            info!("Received termination signal.");
+            info!("Press Ctrl + C again to force shutdown.");
 
             // A second signal indicates a force shutdown.
             // It is the task's responsibility to decide whether to deal with it.
@@ -109,7 +110,7 @@ impl StopHandle {
         let t = tx.clone();
         ctrlc::set_handler(move || {
             if let Err(error) = t.send(()) {
-                tracing::error!("Could not send signal on channel {}", error);
+                error!("Could not send signal on channel {}", error);
                 std::process::exit(1);
             }
         })

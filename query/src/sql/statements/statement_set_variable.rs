@@ -19,9 +19,9 @@ use common_exception::Result;
 use common_planners::PlanNode;
 use common_planners::SettingPlan;
 use common_planners::VarValue;
-use common_tracing::tracing;
 use sqlparser::ast::Ident;
 use sqlparser::ast::SetVariableValue;
+use tracing::debug;
 
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;

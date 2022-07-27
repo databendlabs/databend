@@ -22,7 +22,6 @@ use common_base::base::Runtime;
 use common_base::base::TrySpawn;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_tracing::tracing;
 use futures::future::AbortHandle;
 use futures::future::AbortRegistration;
 use futures::stream::Abortable;
@@ -71,7 +70,7 @@ impl ClickHouseHandler {
             let sessions = sessions.clone();
             async move {
                 match accept_socket {
-                    Err(error) => tracing::error!("Broken session connection: {}", error),
+                    Err(error) => error!("Broken session connection: {}", error),
                     Ok(socket) => ClickHouseHandler::accept_socket(sessions, executor, socket),
                 };
             }
@@ -80,7 +79,7 @@ impl ClickHouseHandler {
 
     async fn reject_connection(stream: TcpStream, error: ErrorCode) {
         if let Err(error) = RejectCHConnection::reject(stream, error).await {
-            tracing::error!(
+            error!(
                 "Unexpected error occurred during reject connection: {:?}",
                 error
             );
@@ -92,9 +91,9 @@ impl ClickHouseHandler {
             match sessions.create_session(SessionType::Clickhouse).await {
                 Err(error) => Self::reject_connection(socket, error).await,
                 Ok(session) => {
-                    tracing::info!("ClickHouse connection coming: {:?}", socket.peer_addr());
+                    info!("ClickHouse connection coming: {:?}", socket.peer_addr());
                     if let Err(error) = ClickHouseConnection::run_on_stream(session, socket) {
-                        tracing::error!("Unexpected error occurred during query: {:?}", error);
+                        error!("Unexpected error occurred during query: {:?}", error);
                     }
                 }
             }
@@ -112,7 +111,7 @@ impl Server for ClickHouseHandler {
 
         if let Some(join_handle) = self.join_handle.take() {
             if let Err(error) = join_handle.await {
-                tracing::error!(
+                error!(
                     "Unexpected error during shutdown ClickHouseHandler. cause {}",
                     error
                 );

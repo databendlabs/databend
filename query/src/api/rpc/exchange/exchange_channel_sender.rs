@@ -202,7 +202,7 @@ impl ExchangeSender {
         if scan_progress_values.rows != 0 || scan_progress_values.bytes != 0 {
             let progress = ProgressInfo::ScanProgress(scan_progress_values);
             if c_tx.send(DataPacket::Progress(progress)).await.is_err() {
-                common_tracing::tracing::warn!(
+                tracing::warn!(
                     "Send scan progress values error, because flight connection is closed."
                 );
                 return;
@@ -215,7 +215,7 @@ impl ExchangeSender {
         if write_progress_values.rows != 0 || write_progress_values.bytes != 0 {
             let progress = ProgressInfo::WriteProgress(write_progress_values);
             if c_tx.send(DataPacket::Progress(progress)).await.is_err() {
-                common_tracing::tracing::warn!(
+                tracing::warn!(
                     "Send write progress values error, because flight connection is closed."
                 );
                 return;
@@ -228,7 +228,7 @@ impl ExchangeSender {
         if result_progress_values.rows != 0 || result_progress_values.bytes != 0 {
             let progress = ProgressInfo::ResultProgress(result_progress_values);
             if c_tx.send(DataPacket::Progress(progress)).await.is_err() {
-                common_tracing::tracing::warn!(
+                tracing::warn!(
                     "Send result progress values error, because flight connection is closed."
                 );
             }
@@ -247,7 +247,7 @@ impl ExchangeSender {
                         .await
                         .is_err()
                     {
-                        common_tracing::tracing::warn!(
+                        tracing::warn!(
                             "Send precommit block error, because flight connection is closed."
                         );
                         return;
@@ -301,12 +301,12 @@ impl ExchangeSender {
         let mut join_handlers = self.join_handlers.lock();
         join_handlers.push(runtime.spawn(async move {
             if let Err(status) = connection.do_put(&query_id, &source, rx).await {
-                common_tracing::tracing::warn!("Flight connection failure: {:?}", status);
+                tracing::warn!("Flight connection failure: {:?}", status);
 
                 // Shutdown all query fragments executor and report error to request server.
                 let exchange_manager = ctx.get_exchange_manager();
                 if let Err(cause) = exchange_manager.shutdown_query(&query_id, Some(status)) {
-                    common_tracing::tracing::warn!("Cannot shutdown query, cause {:?}", cause);
+                    tracing::warn!("Cannot shutdown query, cause {:?}", cause);
                 }
             }
         }));

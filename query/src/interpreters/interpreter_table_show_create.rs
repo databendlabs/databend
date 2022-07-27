@@ -20,7 +20,6 @@ use common_exception::Result;
 use common_planners::ShowCreateTablePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
-use common_tracing::tracing;
 
 use crate::interpreters::Interpreter;
 use crate::sessions::QueryContext;
@@ -129,7 +128,7 @@ impl Interpreter for ShowCreateTableInterpreter {
             Series::from_data(vec![name.as_bytes()]),
             Series::from_data(vec![table_create_sql.into_bytes()]),
         ]);
-        tracing::debug!("Show create table executor result: {:?}", block);
+        debug!("Show create table executor result: {:?}", block);
 
         Ok(Box::pin(DataBlockStream::create(show_schema, None, vec![
             block,

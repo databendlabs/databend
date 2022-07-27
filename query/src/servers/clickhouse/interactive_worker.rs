@@ -15,7 +15,6 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use common_tracing::tracing;
 use metrics::histogram;
 use opensrv_clickhouse::connection::Connection;
 use opensrv_clickhouse::CHContext;
@@ -122,28 +121,24 @@ impl ClickHouseSession for InteractiveWorker {
                 match user_info_auth {
                     Ok(_) => true,
                     Err(failure) => {
-                        tracing::error!(
+                        error!(
                             "ClickHouse handler authenticate failed, \
                              user: {}, \
                              client_address: {}, \
                              cause: {:?}",
-                            user,
-                            client_addr,
-                            failure
+                            user, client_addr, failure
                         );
                         false
                     }
                 }
             }
             Err(e) => {
-                tracing::error!(
+                error!(
                     "ClickHouse handler authenticate failed, \
                      user: {}, \
                      client_address: {}, \
                      cause: {:?}",
-                    user,
-                    client_addr,
-                    e
+                    user, client_addr, e
                 );
                 false
             }

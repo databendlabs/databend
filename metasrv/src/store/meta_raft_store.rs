@@ -43,7 +43,6 @@ use common_meta_types::MetaResult;
 use common_meta_types::MetaStorageError;
 use common_meta_types::Node;
 use common_meta_types::NodeId;
-use common_tracing::tracing;
 use openraft::async_trait::async_trait;
 use openraft::raft::Entry;
 use openraft::storage::HardState;
@@ -51,6 +50,9 @@ use openraft::LogId;
 use openraft::RaftStorage;
 use openraft::SnapshotMeta;
 use openraft::StorageError;
+use tracing::debug;
+use tracing::error;
+use tracing::info;
 
 use crate::export::vec_kv_to_json;
 use crate::metrics::incr_meta_metrics_applying_snapshot;
@@ -121,16 +123,16 @@ impl MetaRaftStore {
         open: Option<()>,
         create: Option<()>,
     ) -> MetaResult<MetaRaftStore> {
-        tracing::info!("open: {:?}, create: {:?}", open, create);
+        info!("open: {:?}, create: {:?}", open, create);
 
         let db = get_sled_db();
 
         let raft_state = RaftState::open_create(&db, config, open, create).await?;
         let is_open = raft_state.is_open();
-        tracing::info!("RaftState opened is_open: {}", is_open);
+        info!("RaftState opened is_open: {}", is_open);
 
         let log = RaftLog::open(&db, config).await?;
-        tracing::info!("RaftLog opened");
+        info!("RaftLog opened");
 
         let (sm_id, prev_sm_id) = raft_state.read_state_machine_id()?;
 
@@ -175,7 +177,7 @@ impl MetaRaftStore {
 
         let new_sm_id = sm_id + 1;
 
-        tracing::debug!("snapshot data len: {}", data.len());
+        debug!("snapshot data len: {}", data.len());
 
         let snap: SerializableSnapshot = serde_json::from_slice(data)?;
 
@@ -185,7 +187,7 @@ impl MetaRaftStore {
             .await?;
 
         let new_sm = StateMachine::open(&self.config, new_sm_id).await?;
-        tracing::info!(
+        info!(
             "insert all key-value into new state machine, n={}",
             snap.kvs.len()
         );
@@ -198,7 +200,7 @@ impl MetaRaftStore {
             tree.insert(k, v.clone()).context(|| "insert snapshot")?;
         }
 
-        tracing::info!(
+        info!(
             "installed state machine from snapshot, no_kvs: {} last_applied: {:?}",
             nkvs,
             new_sm.get_last_applied()?,
@@ -206,14 +208,14 @@ impl MetaRaftStore {
 
         tree.flush_async().await.context(|| "flush snapshot")?;
 
-        tracing::info!("flushed tree, no_kvs: {}", nkvs);
+        info!("flushed tree, no_kvs: {}", nkvs);
 
         // Start to use the new tree, the old can be cleaned.
         self.raft_state
             .write_state_machine_id(&(new_sm_id, sm_id))
             .await?;
 
-        tracing::info!(
+        info!(
             "installed state machine from snapshot, last_applied: {:?}",
             new_sm.get_last_applied()?,
         );
@@ -394,7 +396,7 @@ impl RaftStorage<LogEntry, AppliedState> for MetaRaftStore {
             *current_snapshot = Some(snapshot);
         }
 
-        tracing::debug!(snapshot_size = snapshot_size, "log compaction complete");
+        debug!(snapshot_size = snapshot_size, "log compaction complete");
 
         Ok(openraft::storage::Snapshot {
             meta: snap_meta,
@@ -416,7 +418,7 @@ impl RaftStorage<LogEntry, AppliedState> for MetaRaftStore {
     ) -> Result<StateMachineChanges, StorageError> {
         // TODO(xp): disallow installing a snapshot with smaller last_applied.
 
-        tracing::debug!(
+        debug!(
             { snapshot_size = snapshot.get_ref().len() },
             "decoding snapshot for installation"
         );
@@ -427,14 +429,14 @@ impl RaftStorage<LogEntry, AppliedState> for MetaRaftStore {
             data: snapshot.into_inner(),
         };
 
-        tracing::debug!("snapshot meta: {:?}", meta);
+        debug!("snapshot meta: {:?}", meta);
 
         // Replace state machine with the new one
         let res = self.install_snapshot(&new_snapshot.data).await;
         match res {
             Ok(_) => {}
             Err(e) => {
-                tracing::error!("error: {:?} when install_snapshot", e);
+                error!("error: {:?} when install_snapshot", e);
             }
         };
 
@@ -453,7 +455,7 @@ impl RaftStorage<LogEntry, AppliedState> for MetaRaftStore {
     async fn get_current_snapshot(
         &self,
     ) -> Result<Option<openraft::storage::Snapshot<Self::SnapshotData>>, StorageError> {
-        tracing::info!("get snapshot start");
+        info!("get snapshot start");
         let snap = match &*self.current_snapshot.read().await {
             Some(snapshot) => {
                 let data = snapshot.data.clone();
@@ -465,7 +467,7 @@ impl RaftStorage<LogEntry, AppliedState> for MetaRaftStore {
             None => Ok(None),
         };
 
-        tracing::info!("get snapshot complete");
+        info!("get snapshot complete");
 
         snap
     }

@@ -20,8 +20,8 @@ use common_exception::Result;
 use common_planners::PlanNode;
 use common_planners::RenameTableEntity;
 use common_planners::RenameTablePlan;
-use common_tracing::tracing;
 use sqlparser::ast::ObjectName;
+use tracing::debug;
 
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;

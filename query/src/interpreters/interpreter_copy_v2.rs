@@ -24,7 +24,6 @@ use common_planners::SourceInfo;
 use common_planners::StageTableInfo;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
-use common_tracing::tracing;
 use futures::TryStreamExt;
 use regex::Regex;
 
@@ -99,7 +98,7 @@ impl CopyInterpreterV2 {
                     list
                 };
 
-                tracing::info!("listed files: {:?}", &files_with_path);
+                info!("listed files: {:?}", &files_with_path);
 
                 Ok(files_with_path)
             }
@@ -143,7 +142,7 @@ impl CopyInterpreterV2 {
         let mut pipeline = Pipeline::create();
         let read_source_plan = from.clone();
         let read_source_plan = Self::rewrite_read_plan_file_name(read_source_plan, files);
-        tracing::info!("copy_files_to_table from source: {:?}", read_source_plan);
+        info!("copy_files_to_table from source: {:?}", read_source_plan);
         let table = ctx.build_table_from_source_plan(&read_source_plan)?;
         let res = table.read2(ctx.clone(), &read_source_plan, &mut pipeline);
         if let Err(e) = res {
@@ -266,7 +265,7 @@ impl Interpreter for CopyInterpreterV2 {
                     files = matched_files;
                 }
 
-                tracing::info!("matched files: {:?}, pattern: {}", &files, pattern);
+                info!("matched files: {:?}, pattern: {}", &files, pattern);
 
                 let write_results = self
                     .copy_files_to_table(catalog_name, database_name, table_name, from, files)

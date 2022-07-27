@@ -20,7 +20,6 @@ use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::*;
-use common_tracing::tracing;
 
 use crate::optimizers::Optimizer;
 use crate::sessions::QueryContext;
@@ -181,10 +180,9 @@ impl TopNPushDownImpl {
                 ) {
                     Ok(new_expr) => Ok(new_expr),
                     Err(error) => {
-                        tracing::error!(
+                        error!(
                             "Failed to extract column from sort expression {:?}, {}",
-                            expr,
-                            error
+                            expr, error
                         );
                         Ok(expr.clone())
                     }

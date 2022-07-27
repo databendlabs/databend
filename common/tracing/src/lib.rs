@@ -16,7 +16,6 @@
 
 #[macro_use]
 mod macros;
-
 mod config;
 mod logging;
 mod panic_hook;
@@ -28,10 +27,6 @@ pub use config::StderrConfig;
 pub use logging::init_logging;
 pub use panic_hook::log_panic;
 pub use panic_hook::set_panic_hook;
-pub use tracing;
-pub use tracing_appender;
-pub use tracing_futures;
-pub use tracing_subscriber;
 pub use tracing_to_jaeger::extract_remote_span_as_parent;
 pub use tracing_to_jaeger::inject_span_to_tonic_request;
 

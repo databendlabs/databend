@@ -23,7 +23,6 @@ use common_meta_grpc::MIN_METASRV_SEMVER;
 use common_metrics::init_default_metrics_recorder;
 use common_tracing::init_logging;
 use common_tracing::set_panic_hook;
-use common_tracing::tracing;
 use databend_query::api::HttpService;
 use databend_query::api::RpcService;
 use databend_query::metrics::MetricService;
@@ -81,8 +80,8 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
     init_default_metrics_recorder();
 
     set_panic_hook();
-    tracing::info!("{:?}", conf);
-    tracing::info!("DatabendQuery {}", *databend_query::DATABEND_COMMIT_VERSION);
+    info!("{:?}", conf);
+    info!("DatabendQuery {}", *databend_query::DATABEND_COMMIT_VERSION);
 
     let session_manager = SessionManager::from_conf(conf.clone()).await?;
     let mut shutdown_handle = ShutdownHandle::create(session_manager.clone());
@@ -95,7 +94,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
         let listening = handler.start(listening.parse()?).await?;
         shutdown_handle.add_service(handler);
 
-        tracing::info!(
+        info!(
             "Listening for MySQL compatibility protocol: {}, Usage: mysql -uroot -h{} -P{}",
             listening,
             listening.ip(),
@@ -112,7 +111,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
         let listening = srv.start(listening.parse()?).await?;
         shutdown_handle.add_service(srv);
 
-        tracing::info!(
+        info!(
             "Listening for ClickHouse compatibility native protocol: {}, Usage: clickhouse-client --host {} --port {}",
             listening,
             listening.ip(),
@@ -130,10 +129,9 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
         shutdown_handle.add_service(srv);
 
         let http_handler_usage = HttpHandlerKind::Clickhouse.usage(listening);
-        tracing::info!(
+        info!(
             "Listening for ClickHouse compatibility http protocol: {}, Usage: {}",
-            listening,
-            http_handler_usage
+            listening, http_handler_usage
         );
     }
 
@@ -147,10 +145,9 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
         shutdown_handle.add_service(srv);
 
         let http_handler_usage = HttpHandlerKind::Query.usage(listening);
-        tracing::info!(
+        info!(
             "Listening for Databend HTTP API:  {}, Usage: {}",
-            listening,
-            http_handler_usage
+            listening, http_handler_usage
         );
     }
 
@@ -160,7 +157,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
         let mut srv = MetricService::create(session_manager.clone());
         let listening = srv.start(address.parse()?).await?;
         shutdown_handle.add_service(srv);
-        tracing::info!("Listening for Metric API: {}/metrics", listening);
+        info!("Listening for Metric API: {}/metrics", listening);
     }
 
     // Admin HTTP API service.
@@ -169,7 +166,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
         let mut srv = HttpService::create(session_manager.clone());
         let listening = srv.start(address.parse()?).await?;
         shutdown_handle.add_service(srv);
-        tracing::info!("Listening for Admin HTTP API: {}", listening);
+        info!("Listening for Admin HTTP API: {}", listening);
     }
 
     // RPC API service.
@@ -178,7 +175,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
         let mut srv = RpcService::create(session_manager.clone());
         let listening = srv.start(address.parse()?).await?;
         shutdown_handle.add_service(srv);
-        tracing::info!("Listening for RPC API (interserver): {}", listening);
+        info!("Listening for RPC API (interserver): {}", listening);
     }
 
     // Cluster register.
@@ -186,10 +183,9 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
         let cluster_discovery = session_manager.get_cluster_discovery();
         let register_to_metastore = cluster_discovery.register_to_metastore(&conf);
         register_to_metastore.await?;
-        tracing::info!(
+        info!(
             "Databend query has been registered:{:?} to metasrv:[{:?}].",
-            conf.query.cluster_id,
-            conf.meta.address
+            conf.query.cluster_id, conf.meta.address
         );
     }
 
@@ -206,12 +202,12 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
             *queue = Some(session_manager.clone());
         }
         async_insert_queue.clone().start().await;
-        tracing::info!("Databend async insert has been enabled.")
+        info!("Databend async insert has been enabled.")
     }
 
-    tracing::info!("Ready for connections.");
+    info!("Ready for connections.");
     shutdown_handle.wait_for_termination_request().await;
-    tracing::info!("Shutdown server.");
+    info!("Shutdown server.");
     Ok(())
 }
 

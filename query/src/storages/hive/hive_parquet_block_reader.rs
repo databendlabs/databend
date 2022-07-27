@@ -34,7 +34,6 @@ use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::PartInfoPtr;
-use common_tracing::tracing;
 use common_tracing::tracing::warn;
 use futures::AsyncReadExt;
 use opendal::Object;

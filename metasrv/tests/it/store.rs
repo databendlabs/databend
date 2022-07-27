@@ -30,7 +30,6 @@ use common_meta_sled_store::openraft::Membership;
 use common_meta_sled_store::openraft::RaftStorage;
 use common_meta_types::AppliedState;
 use common_meta_types::LogEntry;
-use common_tracing::tracing;
 use databend_meta::store::MetaRaftStore;
 use databend_meta::Opened;
 use maplit::btreeset;
@@ -80,14 +79,14 @@ async fn test_meta_store_restart() -> anyhow::Result<()> {
     let id = 3;
     let tc = MetaSrvTestContext::new(id);
 
-    tracing::info!("--- new meta store");
+    info!("--- new meta store");
     {
         let sto = MetaRaftStore::open_create(&tc.config.raft_config, None, Some(())).await?;
         assert_eq!(id, sto.id);
         assert!(!sto.is_opened());
         assert_eq!(None, sto.read_hard_state().await?);
 
-        tracing::info!("--- update metasrv");
+        info!("--- update metasrv");
 
         sto.save_hard_state(&HardState {
             current_term: 10,
@@ -108,7 +107,7 @@ async fn test_meta_store_restart() -> anyhow::Result<()> {
         .await?;
     }
 
-    tracing::info!("--- reopen meta store");
+    info!("--- reopen meta store");
     {
         let sto = MetaRaftStore::open_create(&tc.config.raft_config, Some(()), None).await?;
         assert_eq!(id, sto.id);
@@ -138,7 +137,7 @@ async fn test_meta_store_build_snapshot() -> anyhow::Result<()> {
 
     let sto = MetaRaftStore::open_create(&tc.config.raft_config, None, Some(())).await?;
 
-    tracing::info!("--- feed logs and state machine");
+    info!("--- feed logs and state machine");
 
     let (logs, want) = snapshot_logs();
 
@@ -150,13 +149,13 @@ async fn test_meta_store_build_snapshot() -> anyhow::Result<()> {
     let curr_snap = sto.build_snapshot().await?;
     assert_eq!(LogId { term: 1, index: 9 }, curr_snap.meta.last_log_id);
 
-    tracing::info!("--- check snapshot");
+    info!("--- check snapshot");
     {
         let data = curr_snap.snapshot.into_inner();
 
         let ser_snap: SerializableSnapshot = serde_json::from_slice(&data)?;
         let res = pretty_snapshot(&ser_snap.kvs);
-        tracing::debug!("res: {:?}", res);
+        debug!("res: {:?}", res);
 
         assert_eq!(want, res);
     }
@@ -175,7 +174,7 @@ async fn test_meta_store_current_snapshot() -> anyhow::Result<()> {
 
     let sto = MetaRaftStore::open_create(&tc.config.raft_config, None, Some(())).await?;
 
-    tracing::info!("--- feed logs and state machine");
+    info!("--- feed logs and state machine");
 
     let (logs, want) = snapshot_logs();
 
@@ -186,18 +185,18 @@ async fn test_meta_store_current_snapshot() -> anyhow::Result<()> {
 
     sto.build_snapshot().await?;
 
-    tracing::info!("--- check get_current_snapshot");
+    info!("--- check get_current_snapshot");
 
     let curr_snap = sto.get_current_snapshot().await?.unwrap();
     assert_eq!(LogId { term: 1, index: 9 }, curr_snap.meta.last_log_id);
 
-    tracing::info!("--- check snapshot");
+    info!("--- check snapshot");
     {
         let data = curr_snap.snapshot.into_inner();
 
         let ser_snap: SerializableSnapshot = serde_json::from_slice(&data)?;
         let res = pretty_snapshot(&ser_snap.kvs);
-        tracing::debug!("res: {:?}", res);
+        debug!("res: {:?}", res);
 
         assert_eq!(want, res);
     }
@@ -221,7 +220,7 @@ async fn test_meta_store_install_snapshot() -> anyhow::Result<()> {
 
         let sto = MetaRaftStore::open_create(&tc.config.raft_config, None, Some(())).await?;
 
-        tracing::info!("--- feed logs and state machine");
+        info!("--- feed logs and state machine");
 
         for l in logs.iter() {
             sto.log.insert(l).await?;
@@ -232,13 +231,13 @@ async fn test_meta_store_install_snapshot() -> anyhow::Result<()> {
 
     let data = snap.snapshot.into_inner();
 
-    tracing::info!("--- reopen a new metasrv to install snapshot");
+    info!("--- reopen a new metasrv to install snapshot");
     {
         let tc = MetaSrvTestContext::new(id);
 
         let sto = MetaRaftStore::open_create(&tc.config.raft_config, None, Some(())).await?;
 
-        tracing::info!("--- rejected because old sm is not cleaned");
+        info!("--- rejected because old sm is not cleaned");
         {
             sto.raft_state.write_state_machine_id(&(1, 2)).await?;
             let res = sto.install_snapshot(&data).await;
@@ -250,13 +249,13 @@ async fn test_meta_store_install_snapshot() -> anyhow::Result<()> {
             );
         }
 
-        tracing::info!("--- install snapshot");
+        info!("--- install snapshot");
         {
             sto.raft_state.write_state_machine_id(&(0, 0)).await?;
             sto.install_snapshot(&data).await?;
         }
 
-        tracing::info!("--- check installed meta");
+        info!("--- check installed meta");
         {
             assert_eq!((1, 1), sto.raft_state.read_state_machine_id()?);
 
@@ -273,14 +272,14 @@ async fn test_meta_store_install_snapshot() -> anyhow::Result<()> {
             assert_eq!(Some(LogId::new(1, 9)), last_applied);
         }
 
-        tracing::info!("--- check snapshot");
+        info!("--- check snapshot");
         {
             let curr_snap = sto.build_snapshot().await?;
             let data = curr_snap.snapshot.into_inner();
 
             let ser_snap: SerializableSnapshot = serde_json::from_slice(&data)?;
             let res = pretty_snapshot(&ser_snap.kvs);
-            tracing::debug!("res: {:?}", res);
+            debug!("res: {:?}", res);
 
             assert_eq!(want, res);
         }

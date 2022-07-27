@@ -14,11 +14,15 @@
 
 use std::env;
 
+use clap::Args;
 use clap::Parser;
 use common_meta_raft_store::config::get_default_raft_advertise_host;
 use common_meta_raft_store::config::RaftConfig as InnerRaftConfig;
 use common_meta_types::MetaError;
 use common_meta_types::MetaResult;
+use common_tracing::Config as InnerLogConfig;
+use common_tracing::FileConfig as InnerFileLogConfig;
+use common_tracing::StderrConfig as InnerStderrLogConfig;
 use serde::Deserialize;
 use serde::Serialize;
 use serfig::collectors::from_env;
@@ -60,11 +64,8 @@ pub struct Config {
     #[clap(long, short = 'c', default_value = "")]
     pub config_file: String,
 
-    #[clap(long, default_value = "INFO")]
-    pub log_level: String,
-
-    #[clap(long, default_value = "./.databend/logs")]
-    pub log_dir: String,
+    #[clap(flatten)]
+    pub log: LogConfig,
 
     #[clap(long, default_value = "127.0.0.1:28002")]
     pub admin_api_address: String,
@@ -105,8 +106,7 @@ impl From<Config> for InnerConfig {
             username: x.username,
             password: x.password,
             config_file: x.config_file,
-            log_level: x.log_level,
-            log_dir: x.log_dir,
+            log: x.log.into(),
             admin_api_address: x.admin_api_address,
             admin_tls_server_cert: x.admin_tls_server_cert,
             admin_tls_server_key: x.admin_tls_server_key,
@@ -128,8 +128,7 @@ impl From<InnerConfig> for Config {
             username: inner.username,
             password: inner.password,
             config_file: inner.config_file,
-            log_level: inner.log_level,
-            log_dir: inner.log_dir,
+            log: inner.log.into(),
             admin_api_address: inner.admin_api_address,
             admin_tls_server_cert: inner.admin_tls_server_cert,
             admin_tls_server_key: inner.admin_tls_server_key,
@@ -190,6 +189,11 @@ pub struct ConfigViaEnv {
     pub metasrv_config_file: String,
     pub metasrv_log_level: String,
     pub metasrv_log_dir: String,
+    pub metasrv_log_file_on: bool,
+    pub metasrv_log_file_level: String,
+    pub metasrv_log_file_dir: String,
+    pub metasrv_log_stderr_on: bool,
+    pub metasrv_log_stderr_level: String,
     pub admin_api_address: String,
     pub admin_tls_server_cert: String,
     pub admin_tls_server_key: String,
@@ -224,8 +228,13 @@ impl From<Config> for ConfigViaEnv {
     fn from(cfg: Config) -> ConfigViaEnv {
         Self {
             metasrv_config_file: cfg.config_file,
-            metasrv_log_level: cfg.log_level,
-            metasrv_log_dir: cfg.log_dir,
+            metasrv_log_level: "INFO".to_string(),
+            metasrv_log_dir: "./.databend/logs".to_string(),
+            metasrv_log_file_on: cfg.log.file.on,
+            metasrv_log_file_level: cfg.log.file.level,
+            metasrv_log_file_dir: cfg.log.file.dir,
+            metasrv_log_stderr_on: cfg.log.stderr.on,
+            metasrv_log_stderr_level: cfg.log.stderr.level,
             admin_api_address: cfg.admin_api_address,
             admin_tls_server_cert: cfg.admin_tls_server_cert,
             admin_tls_server_key: cfg.admin_tls_server_key,
@@ -276,6 +285,19 @@ impl Into<Config> for ConfigViaEnv {
             sled_tree_prefix: self.sled_tree_prefix,
             cluster_name: self.cluster_name,
         };
+        let log_config = LogConfig {
+            level: self.metasrv_log_level,
+            dir: self.metasrv_log_dir,
+            file: FileLogConfig {
+                on: self.metasrv_log_file_on,
+                level: self.metasrv_log_file_level,
+                dir: self.metasrv_log_file_dir,
+            },
+            stderr: StderrLogConfig {
+                on: self.metasrv_log_stderr_on,
+                level: self.metasrv_log_stderr_level,
+            },
+        };
 
         Config {
             // cmd, key, value and prefix should only be passed in from CLI
@@ -286,8 +308,7 @@ impl Into<Config> for ConfigViaEnv {
             username: "".to_string(),
             password: "".to_string(),
             config_file: self.metasrv_config_file,
-            log_level: self.metasrv_log_level,
-            log_dir: self.metasrv_log_dir,
+            log: log_config,
             admin_api_address: self.admin_api_address,
             admin_tls_server_cert: self.admin_tls_server_cert,
             admin_tls_server_key: self.admin_tls_server_key,
@@ -440,6 +461,136 @@ impl From<InnerRaftConfig> for RaftConfig {
             id: inner.id,
             sled_tree_prefix: inner.sled_tree_prefix,
             cluster_name: inner.cluster_name,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
+#[serde(default)]
+pub struct LogConfig {
+    /// Log level <DEBUG|INFO|ERROR>
+    #[clap(long = "log-level", default_value = "INFO")]
+    #[serde(alias = "log_level")]
+    pub level: String,
+
+    /// Log file dir
+    #[clap(long = "log-dir", default_value = "./.databend/logs")]
+    #[serde(alias = "log_dir")]
+    pub dir: String,
+
+    #[clap(flatten)]
+    pub file: FileLogConfig,
+
+    #[clap(flatten)]
+    pub stderr: StderrLogConfig,
+}
+
+impl Default for LogConfig {
+    fn default() -> Self {
+        InnerLogConfig::default().into()
+    }
+}
+
+impl Into<InnerLogConfig> for LogConfig {
+    fn into(self) -> InnerLogConfig {
+        let mut file: InnerFileLogConfig = self.file.into();
+        if self.level != "INFO" {
+            file.level = self.level.to_string();
+        }
+        if self.dir != "./.databend/logs" {
+            file.dir = self.dir.to_string();
+        }
+
+        InnerLogConfig {
+            file,
+            stderr: self.stderr.into(),
+        }
+    }
+}
+
+impl From<InnerLogConfig> for LogConfig {
+    fn from(inner: InnerLogConfig) -> Self {
+        Self {
+            level: "INFO".to_string(),
+            dir: "./.databend/logs".to_string(),
+            file: inner.file.into(),
+            stderr: inner.stderr.into(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
+#[serde(default)]
+pub struct FileLogConfig {
+    /// Log level <DEBUG|INFO|ERROR>
+    #[clap(long = "log-file-on")]
+    pub on: bool,
+
+    #[clap(long = "log-file-level")]
+    pub level: String,
+
+    /// Log file dir
+    #[clap(long = "log-file-dir", default_value = "./.databend/logs")]
+    pub dir: String,
+}
+
+impl Default for FileLogConfig {
+    fn default() -> Self {
+        InnerFileLogConfig::default().into()
+    }
+}
+
+impl Into<InnerFileLogConfig> for FileLogConfig {
+    fn into(self) -> InnerFileLogConfig {
+        InnerFileLogConfig {
+            on: self.on,
+            level: self.level,
+            dir: self.dir,
+        }
+    }
+}
+
+impl From<InnerFileLogConfig> for FileLogConfig {
+    fn from(inner: InnerFileLogConfig) -> Self {
+        Self {
+            on: inner.on,
+            level: inner.level,
+            dir: inner.dir,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
+#[serde(default)]
+pub struct StderrLogConfig {
+    /// Log level <DEBUG|INFO|ERROR>
+    #[clap(long = "log-stderr-on")]
+    pub on: bool,
+
+    #[clap(long = "log-stderr-level")]
+    pub level: String,
+}
+
+impl Default for StderrLogConfig {
+    fn default() -> Self {
+        InnerStderrLogConfig::default().into()
+    }
+}
+
+impl Into<InnerStderrLogConfig> for StderrLogConfig {
+    fn into(self) -> InnerStderrLogConfig {
+        InnerStderrLogConfig {
+            on: self.on,
+            level: self.level,
+        }
+    }
+}
+
+impl From<InnerStderrLogConfig> for StderrLogConfig {
+    fn from(inner: InnerStderrLogConfig) -> Self {
+        Self {
+            on: inner.on,
+            level: inner.level,
         }
     }
 }

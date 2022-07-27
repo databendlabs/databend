@@ -19,7 +19,6 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_tracing::tracing;
 use petgraph::dot::Config;
 use petgraph::dot::Dot;
 use petgraph::prelude::EdgeIndex;
@@ -342,13 +341,13 @@ pub struct RunningGraph(ExecutingGraph);
 impl RunningGraph {
     pub fn create(pipeline: Pipeline) -> Result<RunningGraph> {
         let graph_state = ExecutingGraph::create(pipeline)?;
-        tracing::debug!("Create running graph:{:?}", graph_state);
+        debug!("Create running graph:{:?}", graph_state);
         Ok(RunningGraph(graph_state))
     }
 
     pub fn from_pipelines(pipelines: Vec<Pipeline>) -> Result<RunningGraph> {
         let graph_state = ExecutingGraph::from_pipelines(pipelines)?;
-        tracing::debug!("Create running graph:{:?}", graph_state);
+        debug!("Create running graph:{:?}", graph_state);
         Ok(RunningGraph(graph_state))
     }
 

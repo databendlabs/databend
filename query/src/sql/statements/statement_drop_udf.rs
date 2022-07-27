@@ -17,7 +17,7 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_planners::DropUserUDFPlan;
 use common_planners::PlanNode;
-use common_tracing::tracing;
+use tracing::debug;
 
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;

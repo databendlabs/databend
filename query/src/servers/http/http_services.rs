@@ -18,7 +18,6 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_http::HttpShutdownHandler;
-use common_tracing::tracing;
 use poem::get;
 use poem::listener::RustlsCertificate;
 use poem::listener::RustlsConfig;
@@ -124,7 +123,7 @@ impl HttpHandler {
     }
 
     async fn start_with_tls(&mut self, listening: SocketAddr) -> Result<SocketAddr> {
-        tracing::info!("Http Handler TLS enabled");
+        info!("Http Handler TLS enabled");
 
         let config = self.session_manager.get_conf();
         let tls_config = Self::build_tls(&config)?;

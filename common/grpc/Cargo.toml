@@ -27,6 +27,7 @@ serde = { version = "1.0.137", features = ["derive"] }
 thiserror = "1.0.31"
 tonic = { version = "0.7.2", features = ["transport", "codegen", "prost", "tls-roots", "tls"] }
 trust-dns-resolver = { version = "0.21.2", features = ["system-config"] }
+tracing = "0.1.35"
 
 [build-dependencies]
 

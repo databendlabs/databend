@@ -369,16 +369,14 @@ impl QueryCoordinator {
         if let Some(cause) = may_error {
             if let Some(request_server_tx) = self.request_server_tx.take() {
                 let may_error = cause.clone();
-                common_tracing::tracing::warn!("Failed to execute pipeline, cause: {}", may_error);
+                tracing::warn!("Failed to execute pipeline, cause: {}", may_error);
                 futures::executor::block_on(async move {
                     if request_server_tx
                         .send(DataPacket::ErrorCode(may_error))
                         .await
                         .is_err()
                     {
-                        common_tracing::tracing::warn!(
-                            "Cannot send error code, request server channel is closed."
-                        );
+                        tracing::warn!("Cannot send error code, request server channel is closed.");
                     }
 
                     drop(request_server_tx);
@@ -394,9 +392,7 @@ impl QueryCoordinator {
                         .await
                         .is_err()
                     {
-                        common_tracing::tracing::warn!(
-                            "Cannot send error code, request server channel is closed."
-                        );
+                        tracing::warn!("Cannot send error code, request server channel is closed.");
                     }
 
                     drop(request_server_tx);
@@ -424,7 +420,7 @@ impl QueryCoordinator {
             let receiver = receiver.clone();
             futures::executor::block_on(async move {
                 if let Err(cause) = receiver.join().await {
-                    common_tracing::tracing::warn!("Receiver join failure {:?}", cause);
+                    tracing::warn!("Receiver join failure {:?}", cause);
                 }
             });
         }
@@ -437,7 +433,7 @@ impl QueryCoordinator {
             let sender = sender.clone();
             futures::executor::block_on(async move {
                 if let Err(cause) = sender.join().await {
-                    common_tracing::tracing::warn!("Sender join failure {:?}", cause);
+                    tracing::warn!("Sender join failure {:?}", cause);
                 }
             });
         }
@@ -633,7 +629,7 @@ impl QueryCoordinator {
                             };
 
                             if let Err(_cause) = subscribe_channel.send(Ok(data_packet)).await {
-                                common_tracing::tracing::warn!(
+                                tracing::warn!(
                                     "Subscribe channel closed, source {}, target {}",
                                     source,
                                     target

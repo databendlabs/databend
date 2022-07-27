@@ -30,7 +30,6 @@ use common_exception::Result;
 use common_exception::ToErrorCode;
 use common_planners::InsertPlan;
 use common_planners::PlanNode;
-use common_tracing::tracing;
 use futures::channel::mpsc;
 use futures::channel::mpsc::Receiver;
 use futures::SinkExt;
@@ -67,7 +66,7 @@ impl InteractiveWorkerBase {
         session: SessionRef,
     ) -> Result<Receiver<BlockItem>> {
         let query = &ch_ctx.state.query;
-        tracing::debug!("{}", query);
+        debug!("{}", query);
 
         let ctx = session.create_query_context().await?;
         ctx.attach_query_str(query);
@@ -127,7 +126,7 @@ impl InteractiveWorkerBase {
 
         let _ = interpreter
             .set_source_pipe_builder(Option::from(source_pipe_builder))
-            .map_err(|e| tracing::error!("interpreter.set_source_pipe_builder.error: {:?}", e));
+            .map_err(|e| error!("interpreter.set_source_pipe_builder.error: {:?}", e));
 
         let (mut tx, rx) = mpsc::channel(2);
 
@@ -196,7 +195,7 @@ impl InteractiveWorkerBase {
             let _ = interpreter
                 .start()
                 .await
-                .map_err(|e| tracing::error!("interpreter.start.error: {:?}", e));
+                .map_err(|e| error!("interpreter.start.error: {:?}", e));
 
             // Execute and read stream data.
             let data_stream = interpreter.execute(None);
@@ -216,7 +215,7 @@ impl InteractiveWorkerBase {
                         }
                         Some(Ok(data)) => {
                             if let Err(cause) = data_tx.send(BlockItem::Block(Ok(data))).await {
-                                tracing::warn!("Cannot send data to channel, cause: {:?}", cause);
+                                warn!("Cannot send data to channel, cause: {:?}", cause);
                                 break 'worker;
                             }
                         }
@@ -224,7 +223,7 @@ impl InteractiveWorkerBase {
                             if let Err(cause) =
                                 data_tx.send(BlockItem::Block(Err(error_code))).await
                             {
-                                tracing::warn!("Cannot send data to channel, cause: {:?}", cause);
+                                warn!("Cannot send data to channel, cause: {:?}", cause);
                             }
                             break 'worker;
                         }
@@ -234,7 +233,7 @@ impl InteractiveWorkerBase {
                 let _ = interpreter
                     .finish()
                     .await
-                    .map_err(|e| tracing::error!("interpreter.finish.error: {:?}", e));
+                    .map_err(|e| error!("interpreter.finish.error: {:?}", e));
                 cancel_clone.store(true, Ordering::Relaxed);
                 Ok::<(), ErrorCode>(())
             });

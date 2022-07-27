@@ -22,7 +22,6 @@ use common_planners::find_aggregate_exprs_in_expr;
 use common_planners::find_window_exprs_in_expr;
 use common_planners::resolve_aliases_to_exprs;
 use common_planners::Expression;
-use common_tracing::tracing;
 use sqlparser::ast::Expr;
 use sqlparser::ast::OffsetRows;
 use sqlparser::ast::SelectItem;
@@ -71,37 +70,37 @@ impl QueryNormalizer {
         if let Err(cause) = self.visit_filter(query).await {
             return Err(cause.add_message_back(" (while in analyze select filter)"));
         }
-        tracing::debug!("after analyse of filter:\n{:?}", self.query_ast_ir);
+        debug!("after analyse of filter:\n{:?}", self.query_ast_ir);
 
         if let Err(cause) = self.analyze_projection(query).await {
             return Err(cause.add_message_back(" (while in analyze select projection)"));
         }
-        tracing::debug!("after analyse of projection:\n{:?}", self.query_ast_ir);
+        debug!("after analyse of projection:\n{:?}", self.query_ast_ir);
 
         if let Err(cause) = self.analyze_group_by(query).await {
             return Err(cause.add_message_back(" (while in analyze select group by)"));
         }
-        tracing::debug!("after analyse of group_by:\n{:?}", self.query_ast_ir);
+        debug!("after analyse of group_by:\n{:?}", self.query_ast_ir);
 
         if let Err(cause) = self.analyze_having(query).await {
             return Err(cause.add_message_back(" (while in analyze select having)"));
         }
-        tracing::debug!("after analyse of having:\n{:?}", self.query_ast_ir);
+        debug!("after analyse of having:\n{:?}", self.query_ast_ir);
 
         if query.distinct {
             self.query_ast_ir.distinct = true;
         }
-        tracing::debug!("after analyse of distinct:\n{:?}", self.query_ast_ir);
+        debug!("after analyse of distinct:\n{:?}", self.query_ast_ir);
 
         if let Err(cause) = self.analyze_order_by(query).await {
             return Err(cause.add_message_back(" (while in analyze select order by)"));
         }
-        tracing::debug!("after analyse of order_by:\n{:?}", self.query_ast_ir);
+        debug!("after analyse of order_by:\n{:?}", self.query_ast_ir);
 
         if let Err(cause) = self.analyze_limit(query).await {
             return Err(cause.add_message_back(" (while in analyze select limit)"));
         }
-        tracing::debug!("after analyse of limit:\n{:?}", self.query_ast_ir);
+        debug!("after analyse of limit:\n{:?}", self.query_ast_ir);
 
         Ok(self.query_ast_ir)
     }

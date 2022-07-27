@@ -20,7 +20,6 @@ use std::sync::Mutex;
 use common_base::base::tokio;
 use common_meta_api::SchemaApiTestSuite;
 use common_meta_api::ShareApiTestSuite;
-use common_tracing::tracing;
 
 use crate::init_meta_ut;
 use crate::tests::service::MetaSrvBuilder;

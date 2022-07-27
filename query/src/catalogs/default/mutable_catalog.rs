@@ -50,7 +50,6 @@ use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_store::MetaStoreProvider;
 use common_meta_types::MetaId;
-use common_tracing::tracing;
 
 use super::catalog_context::CatalogContext;
 use crate::catalogs::catalog::Catalog;
@@ -172,10 +171,9 @@ impl Catalog for MutableCatalog {
     async fn create_database(&self, req: CreateDatabaseReq) -> Result<CreateDatabaseReply> {
         // Create database.
         let res = self.ctx.meta.create_database(req.clone()).await?;
-        tracing::info!(
+        info!(
             "db name: {}, engine: {}",
-            &req.name_ident.db_name,
-            &req.meta.engine
+            &req.name_ident.db_name, &req.meta.engine
         );
 
         // Initial the database after creating.

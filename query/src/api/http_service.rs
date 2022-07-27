@@ -23,7 +23,6 @@ use common_http::home::debug_home_handler;
 use common_http::jeprof::debug_jeprof_dump_handler;
 use common_http::pprof::debug_pprof_handler;
 use common_http::HttpShutdownHandler;
-use common_tracing::tracing;
 use poem::get;
 use poem::listener::RustlsCertificate;
 use poem::listener::RustlsConfig;
@@ -91,7 +90,7 @@ impl HttpService {
     }
 
     async fn start_with_tls(&mut self, listening: SocketAddr) -> Result<SocketAddr> {
-        tracing::info!("Http API TLS enabled");
+        info!("Http API TLS enabled");
 
         let tls_config = Self::build_tls(&self.sessions.get_conf())?;
         let addr = self
@@ -102,7 +101,7 @@ impl HttpService {
     }
 
     async fn start_without_tls(&mut self, listening: SocketAddr) -> Result<SocketAddr> {
-        tracing::warn!("Http API TLS not set");
+        warn!("Http API TLS not set");
 
         let addr = self
             .shutdown_handler

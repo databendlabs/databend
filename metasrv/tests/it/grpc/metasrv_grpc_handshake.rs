@@ -26,7 +26,6 @@ use common_meta_grpc::MetaGrpcClient;
 use common_meta_grpc::METACLI_COMMIT_SEMVER;
 use common_meta_grpc::MIN_METASRV_SEMVER;
 use common_meta_types::protobuf::meta_service_client::MetaServiceClient;
-use common_tracing::tracing;
 use databend_meta::version::MIN_METACLI_SEMVER;
 use semver::Version;
 
@@ -55,7 +54,7 @@ async fn test_metasrv_handshake() -> anyhow::Result<()> {
         .await?;
     let mut client = MetaServiceClient::new(c);
 
-    tracing::info!("--- client has smaller ver than S.min_cli_ver");
+    info!("--- client has smaller ver than S.min_cli_ver");
     {
         let min_client_ver = &MIN_METACLI_SEMVER;
         let cli_ver = smaller_ver(min_client_ver);
@@ -64,7 +63,7 @@ async fn test_metasrv_handshake() -> anyhow::Result<()> {
             MetaGrpcClient::handshake(&mut client, &cli_ver, &MIN_METASRV_SEMVER, "root", "xxx")
                 .await;
 
-        tracing::debug!("handshake res: {:?}", res);
+        debug!("handshake res: {:?}", res);
         let e = res.unwrap_err();
 
         let want = format!(
@@ -74,7 +73,7 @@ async fn test_metasrv_handshake() -> anyhow::Result<()> {
         assert!(e.to_string().contains(&want), "handshake err: {:?}", e);
     }
 
-    tracing::info!("--- server has smaller ver than C.min_srv_ver");
+    info!("--- server has smaller ver than C.min_srv_ver");
     {
         let min_srv_ver = &MIN_METASRV_SEMVER;
         let mut min_srv_ver = min_srv_ver.clone();
@@ -89,7 +88,7 @@ async fn test_metasrv_handshake() -> anyhow::Result<()> {
         )
         .await;
 
-        tracing::debug!("handshake res: {:?}", res);
+        debug!("handshake res: {:?}", res);
         let e = res.unwrap_err();
 
         let want = format!(
@@ -106,14 +105,14 @@ async fn test_metasrv_handshake() -> anyhow::Result<()> {
         );
     }
 
-    tracing::info!("--- old client using ver==0 is allowed");
+    info!("--- old client using ver==0 is allowed");
     {
         let zero = Version::new(0, 0, 0);
 
         let res =
             MetaGrpcClient::handshake(&mut client, &zero, &MIN_METASRV_SEMVER, "root", "xxx").await;
 
-        tracing::debug!("handshake res: {:?}", res);
+        debug!("handshake res: {:?}", res);
         assert!(res.is_ok());
     }
 

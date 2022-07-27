@@ -27,7 +27,6 @@ use common_planners::SourceInfo;
 use common_planners::StageTableInfo;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
-use common_tracing::tracing;
 use futures::TryStreamExt;
 use regex::Regex;
 
@@ -137,7 +136,7 @@ impl CopyInterpreter {
         let mut pipeline = Pipeline::create();
         let read_source_plan = from.clone();
         let read_source_plan = Self::rewrite_read_plan_file_name(read_source_plan, files);
-        tracing::info!("copy_files_to_table: source plan:{:?}", read_source_plan);
+        info!("copy_files_to_table: source plan:{:?}", read_source_plan);
         let table = ctx.build_table_from_source_plan(&read_source_plan)?;
         let res = table.read2(ctx.clone(), &read_source_plan, &mut pipeline);
         if let Err(e) = res {
@@ -229,7 +228,7 @@ impl Interpreter for CopyInterpreter {
                     files = matched_files;
                 }
 
-                tracing::info!("copy file list:{:?}, pattern:{}", &files, pattern,);
+                info!("copy file list:{:?}, pattern:{}", &files, pattern,);
 
                 let write_results = self
                     .copy_files_to_table(catalog_name, db_name, tbl_name, from, files)

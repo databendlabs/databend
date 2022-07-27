@@ -17,7 +17,7 @@ use common_meta_sled_store::SledTree;
 use common_meta_sled_store::Store;
 use common_meta_types::Endpoint;
 use common_meta_types::Node;
-use common_tracing::tracing;
+use common_tracing::info;
 
 use crate::init_sled_ut;
 use crate::testing::fake_key_spaces::Nodes;
@@ -209,7 +209,7 @@ async fn test_sled_txn_tree_key_space_update_and_fetch() -> anyhow::Result<()> {
 
     let k = 100;
 
-    tracing::info!("--- test update default or non-default");
+    info!("--- test update default or non-default");
 
     tree.txn(false, |txn_tree| {
         // sub tree key space
@@ -236,7 +236,7 @@ async fn test_sled_txn_tree_key_space_update_and_fetch() -> anyhow::Result<()> {
         "1st time create a default. then append 2 'a'"
     );
 
-    tracing::info!("--- test delete");
+    info!("--- test delete");
 
     tree.txn(false, |txn_tree| {
         let nodes_ks = txn_tree.key_space::<Nodes>();

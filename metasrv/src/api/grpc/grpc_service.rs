@@ -35,7 +35,6 @@ use common_meta_types::protobuf::WatchRequest;
 use common_meta_types::protobuf::WatchResponse;
 use common_meta_types::TxnReply;
 use common_meta_types::TxnRequest;
-use common_tracing::tracing;
 use futures::StreamExt;
 use prost::Message;
 use tokio_stream;
@@ -45,6 +44,7 @@ use tonic::Request;
 use tonic::Response;
 use tonic::Status;
 use tonic::Streaming;
+use tracing::debug;
 
 use crate::executor::ActionHandler;
 use crate::meta_service::meta_service_impl::GrpcStream;
@@ -156,7 +156,7 @@ impl MetaService for MetaServiceImpl {
 
         add_meta_metrics_meta_request_inflights(1);
 
-        tracing::debug!("Receive write_action: {:?}", action);
+        debug!("Receive write_action: {:?}", action);
 
         let body = self.action_handler.execute_write(action).await;
 
@@ -177,7 +177,7 @@ impl MetaService for MetaServiceImpl {
 
         add_meta_metrics_meta_request_inflights(1);
 
-        tracing::debug!("Receive read_action: {:?}", action);
+        debug!("Receive read_action: {:?}", action);
 
         let res = self.action_handler.execute_read(action).await;
 
@@ -239,7 +239,7 @@ impl MetaService for MetaServiceImpl {
 
         let request = request.into_inner();
 
-        tracing::debug!("Receive txn_request: {:?}", request);
+        debug!("Receive txn_request: {:?}", request);
 
         let body = self.action_handler.execute_txn(request).await;
         add_meta_metrics_meta_request_inflights(-1);

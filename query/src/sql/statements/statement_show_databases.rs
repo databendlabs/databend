@@ -19,7 +19,7 @@ use common_planners::PlanNode;
 use common_planners::PlanShowKind;
 use common_planners::ShowDatabasesPlan;
 use common_planners::ShowPlan;
-use common_tracing::tracing;
+use tracing::debug;
 
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;

@@ -19,7 +19,6 @@ use common_meta_types::StageType;
 use common_planners::DropUserStagePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
-use common_tracing::tracing;
 use common_tracing::tracing::info;
 
 use crate::interpreters::Interpreter;

@@ -26,7 +26,6 @@ use common_exception::Result;
 use common_exception::ABORT_QUERY;
 use common_exception::ABORT_SESSION;
 use common_io::prelude::FormatSettings;
-use common_tracing::tracing;
 use opensrv_mysql::*;
 
 pub struct DFQueryResultWriter<'a, W: std::io::Write> {
@@ -211,7 +210,7 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
 
     fn err(error: &ErrorCode, writer: QueryResultWriter<'a, W>) -> Result<()> {
         if error.code() != ABORT_QUERY && error.code() != ABORT_SESSION {
-            tracing::error!("OnQuery Error: {:?}", error);
+            error!("OnQuery Error: {:?}", error);
             writer.error(ErrorKind::ER_UNKNOWN_ERROR, error.to_string().as_bytes())?;
         } else {
             writer.error(

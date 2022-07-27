@@ -13,13 +13,13 @@
 // limitations under the License.
 
 /// Config for tracing.
-#[derive(Clone, Debug, PartialEq, Eq, Default)]
+#[derive(Clone, Debug, PartialEq, Eq, Default, serde::Serialize)]
 pub struct Config {
     pub file: FileConfig,
     pub stderr: StderrConfig,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct FileConfig {
     pub on: bool,
     pub level: String,
@@ -38,7 +38,7 @@ impl Default for FileConfig {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct StderrConfig {
     pub on: bool,
     pub level: String,

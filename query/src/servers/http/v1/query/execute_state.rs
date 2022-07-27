@@ -27,7 +27,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
-use common_tracing::tracing;
 use futures::future::AbortHandle;
 use futures::future::Abortable;
 use futures::StreamExt;
@@ -157,7 +156,7 @@ impl Executor {
                 .interpreter
                 .finish()
                 .await
-                .map_err(|e| tracing::error!("interpreter.finish error: {:?}", e));
+                .map_err(|e| error!("interpreter.finish error: {:?}", e));
             guard.state = Stopped(ExecuteStopped {
                 stats: Progresses::from_context(&r.ctx),
                 reason: reason.clone(),
@@ -170,7 +169,7 @@ impl Executor {
                     && e.code() != ErrorCode::aborted_query_code()
                 {
                     // query state can be pulled multi times, only log it once
-                    tracing::error!("Query Error: {:?}", e);
+                    error!("Query Error: {:?}", e);
                 }
             }
         };
@@ -209,7 +208,7 @@ impl ExecuteState {
             let _ = interpreter
                 .start()
                 .await
-                .map_err(|e| tracing::error!("interpreter.start.error: {:?}", e));
+                .map_err(|e| error!("interpreter.start.error: {:?}", e));
             let running_state = ExecuteRunning {
                 session,
                 ctx: ctx.clone(),
@@ -251,7 +250,7 @@ impl ExecuteState {
             let _ = interpreter
                 .start()
                 .await
-                .map_err(|e| tracing::error!("interpreter.start.error: {:?}", e));
+                .map_err(|e| error!("interpreter.start.error: {:?}", e));
 
             let running_state = ExecuteRunning {
                 session,

@@ -1033,6 +1033,7 @@ dependencies = [
  "tikv-jemalloc-ctl",
  "tikv-jemalloc-sys",
  "tokio",
+ "tracing",
  "uuid 1.1.2",
 ]
 
@@ -1045,6 +1046,7 @@ dependencies = [
  "cargo_metadata",
  "common-tracing",
  "git2",
+ "tracing",
  "vergen",
 ]
 
@@ -1058,6 +1060,7 @@ dependencies = [
  "heapsize",
  "ritelinked",
  "tempfile",
+ "tracing",
  "walkdir",
 ]
 
@@ -1308,6 +1311,7 @@ dependencies = [
  "serde",
  "thiserror",
  "tonic",
+ "tracing",
  "trust-dns-resolver",
 ]
 
@@ -1339,6 +1343,7 @@ dependencies = [
  "pretty_assertions",
  "serde",
  "tempfile",
+ "tracing",
 ]
 
 [[package]]
@@ -1409,6 +1414,7 @@ dependencies = [
  "serde_json",
  "thiserror",
  "tonic",
+ "tracing",
 ]
 
 [[package]]
@@ -1458,6 +1464,7 @@ dependencies = [
  "common-tracing",
  "once_cell",
  "tempfile",
+ "tracing",
 ]
 
 [[package]]
@@ -1487,6 +1494,7 @@ dependencies = [
  "serde_json",
  "thiserror",
  "tonic",
+ "tracing",
 ]
 
 [[package]]
@@ -1514,6 +1522,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
+ "tracing",
 ]
 
 [[package]]
@@ -1531,6 +1540,7 @@ dependencies = [
  "serde_json",
  "sled",
  "tempfile",
+ "tracing",
 ]
 
 [[package]]
@@ -1545,6 +1555,7 @@ dependencies = [
  "common-meta-grpc",
  "common-meta-types",
  "common-tracing",
+ "tracing",
 ]
 
 [[package]]
@@ -1591,6 +1602,7 @@ dependencies = [
  "prometheus-parse",
  "serde",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -1731,6 +1743,7 @@ dependencies = [
  "opentelemetry",
  "opentelemetry-jaeger",
  "sentry-tracing",
+ "serde",
  "tonic",
  "tracing",
  "tracing-appender",
@@ -1757,6 +1770,7 @@ dependencies = [
  "parking_lot 0.12.1",
  "pretty_assertions",
  "serde",
+ "tracing",
 ]
 
 [[package]]
@@ -2209,6 +2223,7 @@ dependencies = [
  "tokio-stream",
  "tonic",
  "tonic-reflection",
+ "tracing",
 ]
 
 [[package]]
@@ -2370,6 +2385,7 @@ dependencies = [
  "tokio-stream",
  "toml",
  "tonic",
+ "tracing",
  "twox-hash",
  "typetag",
  "url",
@@ -6393,9 +6409,9 @@ dependencies = [
 
 [[package]]
 name = "serde"
-version = "1.0.138"
+version = "1.0.140"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1578c6245786b9d168c5447eeacfb96856573ca56c9d68fdcf394be134882a47"
+checksum = "fc855a42c7967b7c369eb5860f7164ef1f6f81c20c7cc1141f2a604e18723b03"
 dependencies = [
  "serde_derive",
 ]
@@ -6434,9 +6450,9 @@ dependencies = [
 
 [[package]]
 name = "serde_derive"
-version = "1.0.138"
+version = "1.0.140"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "023e9b1467aef8a10fb88f25611870ada9800ef7e22afce356bb0d2387b6f27c"
+checksum = "6f2122636b9fe3b81f1cb25099fcf2d3f542cdb1d45940d56c713158884a05da"
 dependencies = [
  "proc-macro2",
  "quote",

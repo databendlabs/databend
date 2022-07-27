@@ -28,7 +28,6 @@ use common_meta_sled_store::openraft::NodeId;
 use common_meta_types::protobuf::raft_service_client::RaftServiceClient;
 use common_meta_types::ForwardRequest;
 use common_meta_types::ForwardRequestBody;
-use common_tracing::tracing;
 use databend_meta::api::GrpcServer;
 use databend_meta::configs;
 use databend_meta::meta_service::MetaNode;
@@ -105,7 +104,7 @@ impl MetaSrvTestContext {
 
         // On mac File::sync_all() takes 10 ms ~ 30 ms, 500 ms at worst, which very likely to fail a test.
         if cfg!(target_os = "macos") {
-            tracing::warn!("Disabled fsync for meta data tests. fsync on mac is quite slow");
+            warn!("Disabled fsync for meta data tests. fsync on mac is quite slow");
             config.raft_config.no_sync = true;
         }
 
@@ -138,7 +137,7 @@ impl MetaSrvTestContext {
             config.admin_api_address = format!("{}:{}", host, http_port);
         }
 
-        tracing::info!("new test context config: {:?}", config);
+        info!("new test context config: {:?}", config);
 
         MetaSrvTestContext {
             config,
@@ -176,7 +175,7 @@ impl MetaSrvTestContext {
             match client {
                 Ok(x) => return Ok(x),
                 Err(err) => {
-                    tracing::info!("can not yet connect to {}, {}, sleep a while", addr, err);
+                    info!("can not yet connect to {}, {}, sleep a while", addr, err);
                     tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
                 }
             }

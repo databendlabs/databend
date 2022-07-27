@@ -23,7 +23,6 @@ use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::FormatSettings;
-use common_tracing::tracing;
 use futures::channel::mpsc::Receiver;
 use futures::StreamExt;
 use opensrv_clickhouse::connection::Connection;
@@ -81,7 +80,7 @@ impl<'a> QueryWriter<'a> {
     }
 
     async fn write_error(&mut self, error: ErrorCode) -> Result<()> {
-        tracing::error!("OnQuery Error: {:?}", error);
+        error!("OnQuery Error: {:?}", error);
         let clickhouse_err = to_clickhouse_err(error);
         match self.conn.write_error(&clickhouse_err).await {
             Ok(_) => Ok(()),

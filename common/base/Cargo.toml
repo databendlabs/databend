@@ -43,6 +43,7 @@ tikv-jemalloc-ctl = { version = "0.4.2", optional = true }
 tikv-jemalloc-sys = "0.4.3"
 tokio = { version = "1.19.2", features = ["full"] }
 uuid = { version = "1.1.2", features = ["serde", "v4"] }
+tracing = "0.1.35"
 
 [dev-dependencies]
 anyhow = "1.0.58"
