@@ -1,0 +1,88 @@
+statement ok
+SET enable_planner_v2=1;
+
+statement ok
+DROP DATABASE IF EXISTS a;
+
+statement ok
+DROP DATABASE IF EXISTS b;
+
+statement ok
+CREATE DATABASE a;
+
+statement ok
+CREATE TABLE a.t(id INT, id2 INT);
+
+statement ok
+INSERT INTO a.t VALUES (1, 1),(2, 2);
+
+statement query I
+SELECT id FROM a.t ORDER BY id2 ASC;
+
+----
+1
+2
+
+statement query I
+SELECT id FROM a.t ORDER BY t.id2 ASC;
+
+----
+1
+2
+
+statement query I
+SELECT id FROM a.t ORDER BY a.t.id2 ASC;
+
+----
+1
+2
+
+statement query I
+SELECT DISTINCT(id) FROM a.t ORDER BY a.t.id;
+
+----
+1
+2
+
+statement error 1065
+SELECT DISTINCT(id) FROM a.t ORDER BY a.t.id2; 
+
+statement query I
+SELECT SUM(id) as id2 FROM a.t ORDER BY a.t.id2;
+
+----
+3
+
+statement query I
+SELECT DISTINCT(id) as id2 FROM a.t ORDER BY a.t.id2;
+
+----
+1
+2
+
+statement query II
+SELECT * FROM a.t ORDER BY a.t.id ASC;
+
+----
+1 1
+2 2
+
+statement error 1003
+SELECT * FROM a.t ORDER BY B.T.id ASC;  
+
+statement query II
+SELECT * FROM a.t ORDER BY a.t.id DESC;
+
+----
+2 2
+1 1
+
+statement error 1003
+SELECT * FROM a.t ORDER BY B.T.id DESC; 
+
+statement ok
+DROP DATABASE a;
+
+statement ok
+SET enable_planner_v2=0;
+

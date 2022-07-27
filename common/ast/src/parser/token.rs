@@ -291,6 +291,8 @@ pub enum TokenKind {
     CONFIGRELOAD,
     #[token("CONNECTION", ignore(ascii_case))]
     CONNECTION,
+    #[token("CHAR", ignore(ascii_case))]
+    CHAR,
     #[token("COPY_OPTIONS", ignore(ascii_case))]
     COPY_OPTIONS,
     #[token("COPY", ignore(ascii_case))]

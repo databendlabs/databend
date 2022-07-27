@@ -55,7 +55,7 @@ char(208, 191, 209)
 ---------- AST ------------
 FunctionCall {
     span: [
-        Ident(0..4),
+        CHAR(0..4),
         LParen(4..5),
         MySQLLiteralHex(5..9),
         Comma(9..10),
@@ -68,7 +68,7 @@ FunctionCall {
     name: Identifier {
         name: "char",
         quote: None,
-        span: Ident(0..4),
+        span: CHAR(0..4),
     },
     args: [
         Literal {
