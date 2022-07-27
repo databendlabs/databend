@@ -40,6 +40,8 @@ pub struct UserInfo {
 
     pub quota: UserQuota,
 
+    pub default_role: Option<String>,
+
     pub option: UserOption,
 }
 
@@ -53,6 +55,7 @@ impl UserInfo {
         UserInfo {
             name: name.to_string(),
             hostname: hostname.to_string(),
+            default_role: None,
             auth_info,
             grants,
             quota,
