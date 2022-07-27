@@ -23,6 +23,7 @@ use common_base::base::tokio::sync::RwLock;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use serde::Deserialize;
+use serde::Serialize;
 
 use super::HttpQueryContext;
 use crate::servers::http::v1::query::execute_state::Progresses;
@@ -99,12 +100,36 @@ impl PaginationConf {
     }
 }
 
-#[derive(Deserialize, Debug, Default, PartialEq, Eq)]
+#[derive(Deserialize, Serialize, Debug, Default, PartialEq, Eq, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct HttpSessionConf {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub database: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub max_idle_time: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub settings: Option<BTreeMap<String, String>>,
+}
+
+impl HttpSessionConf {
+    fn apply_affect(&self, affect: &QueryAffect) -> HttpSessionConf {
+        let mut ret = self.clone();
+        match affect {
+            QueryAffect::UseDB { name } => {
+                ret.database = Some(name.to_string());
+            }
+            QueryAffect::ChangeSetting {
+                key,
+                value,
+                is_global: _,
+            } => {
+                let settings = ret.settings.get_or_insert_default();
+                settings.insert(key.to_string(), value.to_string());
+            }
+            _ => {}
+        }
+        ret
+    }
 }
 
 #[derive(Deserialize, Debug, PartialEq, Eq)]
@@ -133,13 +158,13 @@ pub struct ResponseState {
 pub struct HttpQueryResponseInternal {
     pub data: Option<ResponseData>,
     pub session_id: String,
+    pub session_conf: Option<HttpSessionConf>,
     pub state: ResponseState,
 }
 
 pub struct HttpQuery {
     pub(crate) id: String,
     pub(crate) session_id: String,
-
     request: HttpQueryRequest,
     state: Arc<RwLock<Executor>>,
     data: Arc<TokioMutex<PageManager>>,
@@ -236,10 +261,22 @@ impl HttpQuery {
     }
 
     pub async fn get_response_page(&self, page_no: usize) -> Result<HttpQueryResponseInternal> {
+        let data = Some(self.get_page(page_no).await?);
+        let state = self.get_state().await;
+        let session_conf = if let HttpSession::New(conf) = &self.request.session {
+            if let Some(affect) = &state.affect {
+                Some(conf.clone().apply_affect(affect))
+            } else {
+                Some(conf.clone())
+            }
+        } else {
+            None
+        };
         Ok(HttpQueryResponseInternal {
-            data: Some(self.get_page(page_no).await?),
+            data,
+            state,
+            session_conf,
             session_id: self.session_id.clone(),
-            state: self.get_state().await,
         })
     }
 
@@ -248,6 +285,7 @@ impl HttpQuery {
             data: None,
             session_id: self.session_id.clone(),
             state: self.get_state().await,
+            session_conf: None,
         }
     }
 
