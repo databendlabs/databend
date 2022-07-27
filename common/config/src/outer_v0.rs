@@ -807,8 +807,8 @@ impl TryInto<InnerLogConfig> for LogConfig {
 impl From<InnerLogConfig> for LogConfig {
     fn from(inner: InnerLogConfig) -> Self {
         Self {
-            level: "INFO".to_string(),
-            dir: "./.databend/logs".to_string(),
+            level: inner.file.level.clone(),
+            dir: inner.file.dir.clone(),
             query_enabled: false,
             file: inner.file.into(),
             stderr: inner.stderr.into(),

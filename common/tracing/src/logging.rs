@@ -58,9 +58,6 @@ use crate::Config;
 pub fn init_logging(name: &str, cfg: &Config) -> Vec<WorkerGuard> {
     let mut guards = vec![];
 
-    // Enable log compatible layer to convert log record to tracing span.
-    LogTracer::init().expect("log tracer must be valid");
-
     let subscriber = Registry::default();
 
     // File Layer
@@ -142,8 +139,12 @@ pub fn init_logging(name: &str, cfg: &Config) -> Vec<WorkerGuard> {
     #[cfg(feature = "console")]
     let subscriber = subscriber.with(console_subscriber::spawn());
 
-    tracing::subscriber::set_global_default(subscriber)
-        .expect("error setting global tracing subscriber");
+    // Enable log compatible layer to convert log record to tracing span.
+    // We will ignore any errors that returned by this fucntions.
+    let _ = LogTracer::init();
+
+    // Ignore errors returned by set_global_default.
+    let _ = tracing::subscriber::set_global_default(subscriber);
 
     guards
 }
