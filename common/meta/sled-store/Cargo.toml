@@ -13,7 +13,6 @@ test = false
 
 [dependencies]
 common-meta-types = { path = "../types" }
-common-tracing = { path = "../../tracing" }
 
 openraft = { git = "https://github.com/datafuselabs/openraft", rev = "v0.7.0-alpha.2" }
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1", default-features = false }
@@ -28,3 +27,4 @@ tracing = "0.1.35"
 
 [dev-dependencies]
 common-base = { path = "../../base" }
+common-tracing = { path = "../../tracing" }

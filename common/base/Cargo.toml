@@ -23,7 +23,6 @@ memory-profiling = [
 [dependencies] # In alphabetical order
 # Workspace dependencies
 common-exception = { path = "../exception" }
-common-tracing = { path = "../tracing" }
 
 # Github dependencies
 

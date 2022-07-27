@@ -1014,7 +1014,6 @@ dependencies = [
  "async-trait 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)",
  "common-exception",
  "common-macros",
- "common-tracing",
  "ctrlc",
  "futures",
  "libc",
@@ -1035,7 +1034,6 @@ dependencies = [
  "anyhow",
  "cargo-license",
  "cargo_metadata",
- "common-tracing",
  "git2",
  "tracing",
  "vergen",
@@ -1046,7 +1044,6 @@ name = "common-cache"
 version = "0.1.0"
 dependencies = [
  "common-exception",
- "common-tracing",
  "filetime",
  "heapsize",
  "ritelinked",
@@ -1296,7 +1293,6 @@ dependencies = [
  "anyerror",
  "common-base",
  "common-exception",
- "common-tracing",
  "hyper",
  "jwt-simple",
  "once_cell",
@@ -1329,7 +1325,6 @@ version = "0.1.0"
 dependencies = [
  "common-base",
  "common-exception",
- "common-tracing",
  "futures",
  "poem",
  "pretty_assertions",
@@ -1586,7 +1581,6 @@ name = "common-metrics"
 version = "0.1.0"
 dependencies = [
  "common-exception",
- "common-tracing",
  "metrics 0.19.0",
  "metrics-exporter-prometheus",
  "once_cell",
@@ -1715,7 +1709,6 @@ dependencies = [
  "common-datavalues",
  "common-exception",
  "common-io",
- "common-tracing",
  "csv-async",
  "futures",
  "opendal",
@@ -1729,7 +1722,6 @@ dependencies = [
 name = "common-tracing"
 version = "0.1.0"
 dependencies = [
- "atty",
  "console-subscriber",
  "once_cell",
  "opentelemetry",
@@ -1740,7 +1732,6 @@ dependencies = [
  "tracing",
  "tracing-appender",
  "tracing-bunyan-formatter",
- "tracing-futures",
  "tracing-log",
  "tracing-opentelemetry",
  "tracing-subscriber",
@@ -7501,8 +7492,6 @@ version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97d095ae15e245a057c8e8451bab9b3ee1e1f68e9ba2b4fbc18d0ac5237835f2"
 dependencies = [
- "futures",
- "futures-task",
  "pin-project",
  "tracing",
 ]

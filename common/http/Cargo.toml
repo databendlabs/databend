@@ -19,7 +19,6 @@ memory-profiling = ["tempfile"]
 # Workspace dependencies
 common-base = { path = "../base" }
 common-exception = { path = "../exception" }
-common-tracing = { path = "../tracing" }
 
 # Github dependencies
 
