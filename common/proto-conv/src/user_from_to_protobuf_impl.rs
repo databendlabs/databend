@@ -246,6 +246,7 @@ impl FromToProto<pb::UserInfo> for mt::UserInfo {
         Ok(mt::UserInfo {
             name: p.name.clone(),
             hostname: p.hostname.clone(),
+            default_role: p.default_role.clone(),
             auth_info: mt::AuthInfo::from_pb(p.auth_info.ok_or_else(|| Incompatible {
                 reason: "UserInfo.auth_info cannot be None".to_string(),
             })?)?,
@@ -267,6 +268,7 @@ impl FromToProto<pb::UserInfo> for mt::UserInfo {
             min_compatible: MIN_COMPATIBLE_VER,
             name: self.name.clone(),
             hostname: self.hostname.clone(),
+            default_role: self.default_role.clone(),
             auth_info: Some(mt::AuthInfo::to_pb(&self.auth_info)?),
             grants: Some(mt::UserGrantSet::to_pb(&self.grants)?),
             quota: Some(mt::UserQuota::to_pb(&self.quota)?),

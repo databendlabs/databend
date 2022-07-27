@@ -108,6 +108,7 @@ message UserInfo {
   UserGrantSet grants = 4;
   UserQuota quota = 5;
   UserOption option = 6;
+  optional string default_role = 7;
 }
 
 message UserIdentity {

@@ -36,6 +36,7 @@ fn test_user_info() -> UserInfo {
     mt::UserInfo {
         name: "test_user".to_string(),
         hostname: "localhost".to_string(),
+        default_role: None,
         auth_info: mt::AuthInfo::Password {
             hash_value: [
                 116, 101, 115, 116, 95, 112, 97, 115, 115, 119, 111, 114, 100,
