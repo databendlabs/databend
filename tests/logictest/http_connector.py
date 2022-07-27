@@ -19,17 +19,6 @@ class ClientSession(object):
         self.db = None
         self.settings = {}
 
-    def apply_affect(self, affect):
-        if affect is None:
-            return
-        typ = affect["type"]
-        if typ == "ChangeSetting":
-            key = affect["key"]
-            value = affect["value"]
-            self.settings[key] = value
-        elif typ == "UseDB":
-            self.db = affect["name"]
-
     def to_json(self):
         v = {}
         if self.db:
@@ -201,7 +190,7 @@ class HttpConnector(object):
                 else:
                     continue
             break
-        self._session.apply_affect(response['affect'])
+        self._session = response['session_conf']
         if response['next_uri'] is not None:
             log.warning(
                 f"after waited for {time_limit} secs, query still not finished (next url not none)!"
