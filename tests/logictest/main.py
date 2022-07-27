@@ -6,6 +6,7 @@ from mysql_runner import TestMySQL
 from http_runner import TestHttp
 from clickhouse_runner import TestClickhouse
 
+from statistics import global_statistics
 from argparse import ArgumentParser
 from config import mysql_config, http_config, clickhouse_config
 
@@ -31,6 +32,8 @@ def run(args):
         http.set_driver(clickhouse_config)
         http.set_label("clickhouse")
         http.run_sql_suite()
+
+    global_statistics.check_and_exit()
 
 
 if __name__ == '__main__':

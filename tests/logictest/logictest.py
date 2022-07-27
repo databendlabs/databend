@@ -3,11 +3,12 @@ import collections
 import glob
 import os
 import re
+import time
 
 import six
-from hamcrest import assert_that, is_, none, is_not
 
 from log import log
+from statistics import global_statistics
 
 supports_labels = ['http', 'mysql', 'clickhouse']
 
@@ -98,7 +99,7 @@ class LogicError(Exception):
         self.expected = expected
 
     def __str__(self):
-        return f"Expected regex{self.expected}, Actual: {self.message}"
+        return f"Expected: {self.expected}\nMessage: {self.message}"
 
 
 class Statement:
@@ -301,6 +302,7 @@ class SuiteRunner(object):
             if callable(getattr(self, "batch_execute")):
                 # case batch
                 for (file_path, suite_name) in self.statement_files:
+                    self.suite_now = suite_name
                     log.info(
                         f"Run query with the same session every suite file, suite file path:{file_path}"
                     )
@@ -308,15 +310,14 @@ class SuiteRunner(object):
                     for state in get_statements(file_path, suite_name):
                         statement_list.append(state)
                     
-                    self.batch_execute(statement_list)
+                    try:
+                        self.batch_execute(statement_list)
+                    except Exception as e:
+                        log.warning(f"Get exception when running suite {suite_name}")
+                        global_statistics.add_failed(self.kind, self.suite_now, e)
+                        continue
             else:
-                # case one by one
-                for (file_path, suite_name) in self.statement_files:
-                    log.info(
-                        f"Run query without session every statements, suite file path:{file_path}"
-                    )
-                    for state in get_statements(file_path, suite_name):
-                        self.execute_statement(state)
+                raise RuntimeError(f"batch_execute is not implement in runner {self.kind}")
 
     def execute_statement(self, statement):
         if self.kind not in statement.runs_on:
@@ -328,6 +329,7 @@ class SuiteRunner(object):
             log.debug(
                 f"executing statement, type {statement.s_type.type}\n{statement.text}\n"
             )
+        start = time.perf_counter()
         if statement.s_type.type == "query":
             self.assert_execute_query(statement)
         elif statement.s_type.type == "error":
@@ -336,27 +338,28 @@ class SuiteRunner(object):
             self.assert_execute_ok(statement)
         else:
             raise Exception("Unknown statement type")
+        end = time.perf_counter()
+        time_cost = end-start
+        global_statistics.add_perf(self.kind, self.suite_now ,statement.text, time_cost)
 
     # expect the query just return ok
     def assert_execute_ok(self, statement):
         actual = safe_execute(lambda: self.execute_ok(statement.text),
                               statement)
-        assert_that(
-            actual,
-            is_(none()),
-            str(statement),
-        )
+        if actual is not None:
+            raise LogicError(message=str(statement), expected="statement ok must get success response, not error code in response")
 
     def assert_query_equal(self, f, resultset, statement):
         # use join after split instead of strip
         compare_f = "".join(f.split())
         compare_result = "".join(resultset[2].split())
-        assert compare_f == compare_result, "\n\n------------ Error Statement details ------------\n"\
-                                            " Expected:\n{}\n Actual:\n{}\n Statement:{}\n Start " \
+        if compare_f != compare_result:
+            raise LogicError(message="\n Expected:\n{}\n Actual:\n{}\n Statement:{}\n Start " \
                                             "Line: {}, Result Label: {}".format(resultset[2].rstrip(),
                                                                                 f.rstrip(),
                                                                                 str(statement), resultset[1],
-                                                                                resultset[0].group("label"))
+                                                                                resultset[0].group("label")),
+                            expected="statement query must get result equal to expected")
 
     def assert_execute_query(self, statement):
         if statement.s_type.query_type == "skipped":
@@ -366,9 +369,10 @@ class SuiteRunner(object):
         try:
             f = format_value(actual, len(statement.s_type.query_type))
         except Exception:
-            assert f"{statement} statement type is query but get no result"
-        assert statement.results is not None and len(
-            statement.results) > 0, f"No result found {statement}"
+            raise LogicError(message = f"{statement} statement type is query but get no result")
+        
+        if statement.results is None or len(statement.results) == 0:
+            raise LogicError(message=f"No result found {statement}")
         hasResult = False
         for resultset in statement.results:
             if resultset[0].group("label") is not None and resultset[0].group(
@@ -381,7 +385,8 @@ class SuiteRunner(object):
                         resultset[0].group("label")) == 0:
                     self.assert_query_equal(f, resultset, statement)
                     hasResult = True
-        assert hasResult, f"No result found {statement}"
+        if not hasResult:
+            raise LogicError(message=f"No result found {statement}")
 
     # expect the query just return error
     def assert_execute_error(self, statement):
@@ -390,10 +395,10 @@ class SuiteRunner(object):
         if actual is None:
             raise Exception("Expected error but got none")
         match = re.search(statement.s_type.expect_error, actual.msg)
-        assert_that(
-            match, is_not(none()),
-            f"statement {str(statement)}, expect error regex {statement.s_type.expect_error}, found {actual}"
-        )
+        if match is None:
+            raise LogicError(
+                message=f"statement {str(statement)}, expect error regex {statement.s_type.expect_error}, found {actual}",
+                expected=f"statement error must get error message in expected string")
 
     def run_sql_suite(self):
         log.info(
