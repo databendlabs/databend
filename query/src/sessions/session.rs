@@ -229,6 +229,18 @@ impl Session {
         self.session_ctx.set_auth_role(role)
     }
 
+    // returns all the roles the current session has, which includes the roles of
+    // the current user and the roles granted on the authentication phase.
+    pub fn get_all_roles(self: &Arc<Self>) -> Result<Vec<String>> {
+        let current_user = self.get_current_user()?;
+
+        let mut all_roles = current_user.grants.roles().clone();
+        if let Some(auth_role) = self.session_ctx.get_auth_role() {
+            all_roles.push(auth_role);
+        }
+        Ok(all_roles)
+    }
+
     pub async fn validate_privilege(
         self: &Arc<Self>,
         object: &GrantObject,
@@ -240,18 +252,15 @@ impl Session {
             return Ok(());
         }
 
-        let mut related_roles = current_user.grants.roles().clone();
-        if let Some(auth_role) = self.session_ctx.get_auth_role() {
-            related_roles.push(auth_role);
-        }
-
+        // TODO: take current role instead of all roles
+        let all_roles = self.get_all_roles()?;
         let tenant = self.get_current_tenant();
         let role_cache = self
             .get_shared_query_context()
             .await?
             .get_role_cache_manager();
         let role_verified = role_cache
-            .find_related_roles(&tenant, &related_roles)
+            .find_related_roles(&tenant, &all_roles)
             .await?
             .iter()
             .any(|r| r.grants.verify_privilege(object, privilege));
