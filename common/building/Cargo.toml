@@ -16,5 +16,5 @@ cargo-license = { git = "https://github.com/datafuse-extras/cargo-license", rev 
 anyhow = "1.0.58"
 cargo_metadata = "0.14.2"
 git2 = { version = "0.14.4", default-features = false }
-vergen = "7.2.1"
 tracing = "0.1.35"
+vergen = "7.2.1"
