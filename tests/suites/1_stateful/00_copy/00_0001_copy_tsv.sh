@@ -15,7 +15,7 @@ copy_from_tsv_cases=(
 counter=1
 for i in "${copy_from_tsv_cases[@]}"; do
   echo "---$counter"
-  echo "set enable_planner_v2 = 1; $i" | $MYSQL_CLIENT_CONNECT
+  echo "$i" | $MYSQL_CLIENT_CONNECT
   echo "select a, b, length(a) from test_tsv" | $MYSQL_CLIENT_CONNECT
   echo "truncate table test_tsv" | $MYSQL_CLIENT_CONNECT
   _=$((counter++))
