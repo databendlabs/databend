@@ -23,7 +23,7 @@ use crate::types::NumberType;
 use crate::types::StringType;
 use crate::types::ValueType;
 
-#[derive(Clone, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct FunctionProperty {
     pub commutative: bool,
 }
@@ -45,6 +45,7 @@ pub enum Domain {
     Nullable(NullableDomain<AnyType>),
     Array(Option<Box<Domain>>),
     Tuple(Vec<Domain>),
+    Undefined,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -77,33 +78,10 @@ pub struct StringDomain {
     pub max: Option<Vec<u8>>,
 }
 
+#[derive(Debug, Clone, PartialEq)]
 pub struct NullableDomain<T: ValueType> {
     pub has_null: bool,
     pub value: Option<Box<T::Domain>>,
-}
-
-impl<T: ValueType> Clone for NullableDomain<T> {
-    fn clone(&self) -> Self {
-        NullableDomain {
-            has_null: self.has_null,
-            value: self.value.clone(),
-        }
-    }
-}
-
-impl<T: ValueType> PartialEq for NullableDomain<T> {
-    fn eq(&self, other: &Self) -> bool {
-        self.has_null == other.has_null && self.value == other.value
-    }
-}
-
-impl<T: ValueType> std::fmt::Debug for NullableDomain<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("NullableDomain")
-            .field("has_null", &self.has_null)
-            .field("value", &self.value)
-            .finish()
-    }
 }
 
 impl Domain {
@@ -134,6 +112,7 @@ impl Domain {
                 Domain::Tuple(tys.iter().map(|ty| Domain::full(ty, generics)).collect())
             }
             DataType::Array(ty) => Domain::Array(Some(Box::new(Domain::full(ty, generics)))),
+            DataType::Map(_) => Domain::Undefined,
             DataType::Generic(idx) => Domain::full(&generics[*idx], generics),
         }
     }
