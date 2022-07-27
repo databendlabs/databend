@@ -15,7 +15,7 @@
 use crate::Expression;
 
 /// Extras is a wrapper for push down items.
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Default)]
 pub struct Extras {
     /// Optional column indices to use as a projection
     pub projection: Option<Vec<usize>>,

@@ -55,6 +55,7 @@ impl Rule for RuleImplementGet {
             PhysicalScan {
                 table_index: logical_get.table_index,
                 columns: logical_get.columns,
+                push_down_predicates: logical_get.push_down_predicates,
             }
             .into(),
         );

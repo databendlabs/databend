@@ -21,12 +21,15 @@ use crate::sql::plans::LogicalOperator;
 use crate::sql::plans::Operator;
 use crate::sql::plans::PhysicalOperator;
 use crate::sql::plans::RelOp;
+use crate::sql::plans::Scalar;
 use crate::sql::IndexType;
 
 #[derive(Clone, Debug)]
 pub struct LogicalGet {
     pub table_index: IndexType,
     pub columns: ColumnSet,
+
+    pub push_down_predicates: Option<Vec<Scalar>>,
 }
 
 impl Operator for LogicalGet {
