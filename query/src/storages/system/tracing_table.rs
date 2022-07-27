@@ -30,6 +30,7 @@ use common_planners::Extras;
 use common_planners::Partitions;
 use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
+use tracing::debug;
 use walkdir::WalkDir;
 
 use crate::pipelines::processors::port::OutputPort;
@@ -75,6 +76,8 @@ impl TracingTable {
     }
 
     fn log_files(ctx: Arc<dyn TableContext>) -> Result<VecDeque<String>> {
+        debug!("list log files from {}", ctx.get_config().log.file.dir);
+
         WalkDir::new(ctx.get_config().log.file.dir.as_str())
             .sort_by_key(|file| file.file_name().to_owned())
             .into_iter()
@@ -115,6 +118,7 @@ impl Table for TracingTable {
 
         let output = OutputPort::create();
         let log_files = Self::log_files(ctx.clone())?;
+        debug!("listed log files: {:?}", log_files);
         let schema = self.table_info.schema();
         let max_block_size = settings.get_max_block_size()? as usize;
 
