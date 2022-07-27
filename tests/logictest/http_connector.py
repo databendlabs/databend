@@ -13,32 +13,6 @@ headers = {'Content-Type': 'application/json', 'Accept': 'application/json'}
 default_database = "default"
 
 
-class ClientSession(object):
-
-    def __init__(self):
-        self.db = None
-        self.settings = {}
-
-    def apply_affect(self, affect):
-        if affect is None:
-            return
-        typ = affect["type"]
-        if typ == "ChangeSetting":
-            key = affect["key"]
-            value = affect["value"]
-            self.settings[key] = value
-        elif typ == "UseDB":
-            self.db = affect["name"]
-
-    def to_json(self):
-        v = {}
-        if self.db:
-            v["database"] = self.db
-        if self.settings:
-            v["settings"] = self.settings
-        return v
-
-
 def format_result(results):
     res = ""
     if results is None:
@@ -123,7 +97,7 @@ class HttpConnector(object):
         self._user = user
         self._database = database
         self._session_max_idle_time = 30
-        self._session = ClientSession()
+        self._session = {}
         self._additional_headers = dict()
         self._query_option = None
         e = environs.Env()
@@ -157,7 +131,7 @@ class HttpConnector(object):
         log.debug(f"http sql: {parseSQL(statement)}")
         query_sql = {'sql': parseSQL(statement), "string_fields": True}
         if session is not None:
-            query_sql['session'] = session.to_json()
+            query_sql['session_state'] = session
         log.debug(f"http headers {self.make_headers()}")
         response = requests.post(url,
                                  data=json.dumps(query_sql),
@@ -172,7 +146,7 @@ class HttpConnector(object):
             raise
 
     def reset_session(self):
-        self._session = ClientSession()
+        self._session = {}
 
     # return a list of response util empty next_uri
     def query_with_session(self, statement):
@@ -201,7 +175,9 @@ class HttpConnector(object):
                 else:
                     continue
             break
-        self._session.apply_affect(response['affect'])
+        session = response['session_state']
+        if session:
+            self._session = session
         if response['next_uri'] is not None:
             log.warning(
                 f"after waited for {time_limit} secs, query still not finished (next url not none)!"
