@@ -83,11 +83,11 @@ pub fn init_logging(name: &str, cfg: &Config) -> Vec<WorkerGuard> {
     let subscriber = subscriber.with(file_layer);
 
     // Stderr (Console) Layer
-    let stderr_layer = if cfg.stderr.on {
+    let rust_log = env::var(EnvFilter::DEFAULT_ENV);
+    let stderr_layer = if cfg.stderr.on || rust_log.is_ok() {
         // Use env RUST_LOG to initialize log if present.
         // Otherwise, use the specified level.
-        let directives =
-            env::var(EnvFilter::DEFAULT_ENV).unwrap_or_else(|_| cfg.stderr.level.to_string());
+        let directives = rust_log.unwrap_or_else(|_| cfg.stderr.level.to_string());
         let env_filter = EnvFilter::new(directives);
 
         let stderr = fmt::layer().with_writer(io::stderr).with_filter(env_filter);
