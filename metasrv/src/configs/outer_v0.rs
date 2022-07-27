@@ -230,11 +230,11 @@ impl From<Config> for ConfigViaEnv {
             metasrv_config_file: cfg.config_file,
             metasrv_log_level: "INFO".to_string(),
             metasrv_log_dir: "./.databend/logs".to_string(),
-            metasrv_log_file_on: cfg.log.file.on,
-            metasrv_log_file_level: cfg.log.file.level,
-            metasrv_log_file_dir: cfg.log.file.dir,
-            metasrv_log_stderr_on: cfg.log.stderr.on,
-            metasrv_log_stderr_level: cfg.log.stderr.level,
+            metasrv_log_file_on: cfg.log.file.file_on,
+            metasrv_log_file_level: cfg.log.file.file_level,
+            metasrv_log_file_dir: cfg.log.file.file_dir,
+            metasrv_log_stderr_on: cfg.log.stderr.stderr_on,
+            metasrv_log_stderr_level: cfg.log.stderr.stderr_level,
             admin_api_address: cfg.admin_api_address,
             admin_tls_server_cert: cfg.admin_tls_server_cert,
             admin_tls_server_key: cfg.admin_tls_server_key,
@@ -289,13 +289,13 @@ impl Into<Config> for ConfigViaEnv {
             level: self.metasrv_log_level,
             dir: self.metasrv_log_dir,
             file: FileLogConfig {
-                on: self.metasrv_log_file_on,
-                level: self.metasrv_log_file_level,
-                dir: self.metasrv_log_file_dir,
+                file_on: self.metasrv_log_file_on,
+                file_level: self.metasrv_log_file_level,
+                file_dir: self.metasrv_log_file_dir,
             },
             stderr: StderrLogConfig {
-                on: self.metasrv_log_stderr_on,
-                level: self.metasrv_log_stderr_level,
+                stderr_on: self.metasrv_log_stderr_on,
+                stderr_level: self.metasrv_log_stderr_level,
             },
         };
 
@@ -525,14 +525,17 @@ impl From<InnerLogConfig> for LogConfig {
 pub struct FileLogConfig {
     /// Log level <DEBUG|INFO|ERROR>
     #[clap(long = "log-file-on")]
-    pub on: bool,
+    #[serde(rename = "on")]
+    pub file_on: bool,
 
-    #[clap(long = "log-file-level")]
-    pub level: String,
+    #[clap(long = "log-file-level", default_value = "INFO")]
+    #[serde(rename = "level")]
+    pub file_level: String,
 
     /// Log file dir
     #[clap(long = "log-file-dir", default_value = "./.databend/logs")]
-    pub dir: String,
+    #[serde(rename = "dir")]
+    pub file_dir: String,
 }
 
 impl Default for FileLogConfig {
@@ -545,9 +548,9 @@ impl Default for FileLogConfig {
 impl Into<InnerFileLogConfig> for FileLogConfig {
     fn into(self) -> InnerFileLogConfig {
         InnerFileLogConfig {
-            on: self.on,
-            level: self.level,
-            dir: self.dir,
+            on: self.file_on,
+            level: self.file_level,
+            dir: self.file_dir,
         }
     }
 }
@@ -555,9 +558,9 @@ impl Into<InnerFileLogConfig> for FileLogConfig {
 impl From<InnerFileLogConfig> for FileLogConfig {
     fn from(inner: InnerFileLogConfig) -> Self {
         Self {
-            on: inner.on,
-            level: inner.level,
-            dir: inner.dir,
+            file_on: inner.on,
+            file_level: inner.level,
+            file_dir: inner.dir,
         }
     }
 }
@@ -567,10 +570,12 @@ impl From<InnerFileLogConfig> for FileLogConfig {
 pub struct StderrLogConfig {
     /// Log level <DEBUG|INFO|ERROR>
     #[clap(long = "log-stderr-on")]
-    pub on: bool,
+    #[serde(rename = "on")]
+    pub stderr_on: bool,
 
-    #[clap(long = "log-stderr-level")]
-    pub level: String,
+    #[clap(long = "log-stderr-level", default_value = "INFO")]
+    #[serde(rename = "level")]
+    pub stderr_level: String,
 }
 
 impl Default for StderrLogConfig {
@@ -583,8 +588,8 @@ impl Default for StderrLogConfig {
 impl Into<InnerStderrLogConfig> for StderrLogConfig {
     fn into(self) -> InnerStderrLogConfig {
         InnerStderrLogConfig {
-            on: self.on,
-            level: self.level,
+            on: self.stderr_on,
+            level: self.stderr_level,
         }
     }
 }
@@ -592,8 +597,8 @@ impl Into<InnerStderrLogConfig> for StderrLogConfig {
 impl From<InnerStderrLogConfig> for StderrLogConfig {
     fn from(inner: InnerStderrLogConfig) -> Self {
         Self {
-            on: inner.on,
-            level: inner.level,
+            stderr_on: inner.on,
+            stderr_level: inner.level,
         }
     }
 }

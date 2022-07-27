@@ -821,14 +821,17 @@ impl From<InnerLogConfig> for LogConfig {
 pub struct FileLogConfig {
     /// Log level <DEBUG|INFO|ERROR>
     #[clap(long = "log-file-on")]
-    pub on: bool,
+    #[serde(rename = "on")]
+    pub file_on: bool,
 
-    #[clap(long = "log-file-level")]
-    pub level: String,
+    #[clap(long = "log-file-level", default_value = "INFO")]
+    #[serde(rename = "level")]
+    pub file_level: String,
 
     /// Log file dir
     #[clap(long = "log-file-dir", default_value = "./.databend/logs")]
-    pub dir: String,
+    #[serde(rename = "dir")]
+    pub file_dir: String,
 }
 
 impl Default for FileLogConfig {
@@ -842,9 +845,9 @@ impl TryInto<InnerFileLogConfig> for FileLogConfig {
 
     fn try_into(self) -> Result<InnerFileLogConfig> {
         Ok(InnerFileLogConfig {
-            on: self.on,
-            level: self.level,
-            dir: self.dir,
+            on: self.file_on,
+            level: self.file_level,
+            dir: self.file_dir,
         })
     }
 }
@@ -852,9 +855,9 @@ impl TryInto<InnerFileLogConfig> for FileLogConfig {
 impl From<InnerFileLogConfig> for FileLogConfig {
     fn from(inner: InnerFileLogConfig) -> Self {
         Self {
-            on: inner.on,
-            level: inner.level,
-            dir: inner.dir,
+            file_on: inner.on,
+            file_level: inner.level,
+            file_dir: inner.dir,
         }
     }
 }
@@ -864,10 +867,12 @@ impl From<InnerFileLogConfig> for FileLogConfig {
 pub struct StderrLogConfig {
     /// Log level <DEBUG|INFO|ERROR>
     #[clap(long = "log-stderr-on")]
-    pub on: bool,
+    #[serde(rename = "on")]
+    pub stderr_on: bool,
 
-    #[clap(long = "log-stderr-level")]
-    pub level: String,
+    #[clap(long = "log-stderr-level", default_value = "INFO")]
+    #[serde(rename = "level")]
+    pub stderr_level: String,
 }
 
 impl Default for StderrLogConfig {
@@ -881,8 +886,8 @@ impl TryInto<InnerStderrLogConfig> for StderrLogConfig {
 
     fn try_into(self) -> Result<InnerStderrLogConfig> {
         Ok(InnerStderrLogConfig {
-            on: self.on,
-            level: self.level,
+            on: self.stderr_on,
+            level: self.stderr_level,
         })
     }
 }
@@ -890,8 +895,8 @@ impl TryInto<InnerStderrLogConfig> for StderrLogConfig {
 impl From<InnerStderrLogConfig> for StderrLogConfig {
     fn from(inner: InnerStderrLogConfig) -> Self {
         Self {
-            on: inner.on,
-            level: inner.level,
+            stderr_on: inner.on,
+            stderr_level: inner.level,
         }
     }
 }
