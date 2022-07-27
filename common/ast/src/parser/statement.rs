@@ -1278,6 +1278,12 @@ pub fn database_engine(i: Input) -> IResult<DatabaseEngine> {
 }
 
 pub fn user_option(i: Input) -> IResult<UserOptionItem> {
+    let default_role_option = map(
+        rule! {
+            "DEFAULT_ROLE" ~ "=" ~ #literal_string
+        },
+        |(_, _, role)| UserOptionItem::DefaultRole(role),
+    );
     alt((
         value(UserOptionItem::TenantSetting(true), rule! { TENANTSETTING }),
         value(
@@ -1289,6 +1295,7 @@ pub fn user_option(i: Input) -> IResult<UserOptionItem> {
             UserOptionItem::ConfigReload(false),
             rule! { NOCONFIGRELOAD },
         ),
+        default_role_option,
     ))(i)
 }
 

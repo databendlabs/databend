@@ -133,6 +133,10 @@ impl UserOption {
         &self.default_role
     }
 
+    pub fn set_default_role(&mut self, default_role: Option<String>) {
+        self.default_role = default_role;
+    }
+
     pub fn set_all_flag(&mut self) {
         self.flags = BitFlags::all();
     }

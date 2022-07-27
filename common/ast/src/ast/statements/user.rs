@@ -158,6 +158,7 @@ pub enum AccountMgrLevel {
 pub enum UserOptionItem {
     TenantSetting(bool),
     ConfigReload(bool),
+    DefaultRole(String),
 }
 
 impl UserOptionItem {
@@ -169,6 +170,7 @@ impl UserOptionItem {
             Self::ConfigReload(enabled) => {
                 option.switch_option_flag(UserOptionFlag::ConfigReload, *enabled);
             }
+            Self::DefaultRole(v) => option.set_default_role(Some(v.clone())),
         }
     }
 }
@@ -232,6 +234,7 @@ impl Display for UserOptionItem {
             UserOptionItem::TenantSetting(false) => write!(f, "NOTENANTSETTING"),
             UserOptionItem::ConfigReload(true) => write!(f, "CONFIGRELOAD"),
             UserOptionItem::ConfigReload(false) => write!(f, "NOCONFIGRELOAD"),
+            UserOptionItem::DefaultRole(v) => write!(f, "DEFAULT_ROLE = '{}'", v),
         }
     }
 }
