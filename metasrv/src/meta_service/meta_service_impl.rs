@@ -28,7 +28,6 @@ use common_meta_types::ForwardRequest;
 use common_meta_types::LogEntry;
 use common_meta_types::MetaError;
 use common_meta_types::MetaRaftError;
-use common_tracing::tracing;
 use tonic::codegen::futures_core::Stream;
 
 use crate::meta_service::ForwardRequestBody;

@@ -69,8 +69,8 @@ cluster_name = "foo_cluster"
 
     temp_env::with_var("METASRV_CONFIG_FILE", Some(file_path.clone()), || {
         let cfg = Config::load().expect("load must success");
-        assert_eq!(cfg.log_level, "ERROR");
-        assert_eq!(cfg.log_dir, "foo/logs");
+        assert_eq!(cfg.log.file.level, "ERROR");
+        assert_eq!(cfg.log.file.dir, "foo/logs");
         assert_eq!(cfg.admin_api_address, "127.0.0.1:9000");
         assert_eq!(cfg.admin_tls_server_cert, "admin tls cert");
         assert_eq!(cfg.admin_tls_server_key, "admin tls key");
@@ -102,7 +102,7 @@ cluster_name = "foo_cluster"
         ],
         || {
             let cfg = Config::load().expect("load must success");
-            assert_eq!(cfg.log_level, "DEBUG");
+            assert_eq!(cfg.log.file.level, "DEBUG");
         },
     );
 

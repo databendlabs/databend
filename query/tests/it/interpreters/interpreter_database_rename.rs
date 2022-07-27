@@ -21,8 +21,6 @@ use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_rename_database_interpreter() -> Result<()> {
-    common_tracing::init_default_ut_tracing();
-
     let ctx = crate::tests::create_query_context().await?;
 
     // Create DB

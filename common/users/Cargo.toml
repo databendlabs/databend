@@ -27,6 +27,7 @@ common-tracing = { path = "../tracing" }
 jwtk = "0.2.3"
 parking_lot = "0.12.1"
 serde = { version = "1.0.137", features = ["derive"] }
+tracing = "0.1.35"
 
 [dev-dependencies]
 pretty_assertions = "1.2.1"

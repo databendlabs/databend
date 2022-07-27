@@ -22,8 +22,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
 use common_io::prelude::*;
-use common_tracing::tracing;
-use common_tracing::tracing::Instrument;
 use common_users::CertifiedInfo;
 use metrics::histogram;
 use opensrv_mysql::AsyncMysqlShim;
@@ -34,6 +32,9 @@ use opensrv_mysql::QueryResultWriter;
 use opensrv_mysql::StatementMetaWriter;
 use rand::RngCore;
 use tokio_stream::StreamExt;
+use tracing::error;
+use tracing::info;
+use tracing::Instrument;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
@@ -108,14 +109,12 @@ impl<W: std::io::Write + Send + Sync> AsyncMysqlShim<W> for InteractiveWorker<W>
         match authenticate.await {
             Ok(res) => res,
             Err(failure) => {
-                tracing::error!(
+                error!(
                     "MySQL handler authenticate failed, \
                         user_name: {}, \
                         client_address: {}, \
                         failure_cause: {}",
-                    username,
-                    client_addr,
-                    failure
+                    username, client_addr, failure
                 );
                 false
             }
@@ -276,14 +275,14 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
     async fn do_query(&mut self, query: &str) -> Result<(Vec<DataBlock>, String)> {
         match self.federated_server_command_check(query) {
             Some(data_block) => {
-                tracing::info!("Federated query: {}", query);
+                info!("Federated query: {}", query);
                 if data_block.num_rows() > 0 {
-                    tracing::info!("Federated response: {:?}", data_block);
+                    info!("Federated response: {:?}", data_block);
                 }
                 Ok((vec![data_block], String::from("")))
             }
             None => {
-                tracing::info!("Normal query: {}", query);
+                info!("Normal query: {}", query);
                 let context = self.session.create_query_context().await?;
                 context.attach_query_str(query);
 
@@ -377,7 +376,7 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
                 let _ = interpreter
                     .start()
                     .await
-                    .map_err(|e| tracing::error!("interpreter.start.error: {:?}", e));
+                    .map_err(|e| error!("interpreter.start.error: {:?}", e));
                 let data_stream = interpreter.execute(None).await?;
                 histogram!(
                     super::mysql_metrics::METRIC_INTERPRETER_USEDTIME,
@@ -390,7 +389,7 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
                 let _ = interpreter
                     .finish()
                     .await
-                    .map_err(|e| tracing::error!("interpreter.finish.error: {:?}", e));
+                    .map_err(|e| error!("interpreter.finish.error: {:?}", e));
 
                 Ok::<Vec<DataBlock>, ErrorCode>(query_result)
             }

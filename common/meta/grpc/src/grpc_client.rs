@@ -61,7 +61,6 @@ use common_metrics::label_counter_with_val_and_labels;
 use common_metrics::label_decrement_gauge_with_val_and_labels;
 use common_metrics::label_histogram_with_val;
 use common_metrics::label_increment_gauge_with_val_and_labels;
-use common_tracing::tracing;
 use futures::stream::StreamExt;
 use parking_lot::Mutex;
 use prost::Message;
@@ -76,6 +75,9 @@ use tonic::transport::Channel;
 use tonic::Code;
 use tonic::Request;
 use tonic::Status;
+use tracing::debug;
+use tracing::info;
+use tracing::warn;
 
 use crate::from_digit_ver;
 use crate::grpc_action::MetaGrpcReadReq;
@@ -312,23 +314,23 @@ impl MetaGrpcClient {
     /// A worker runs a receiving-loop to accept user-request to metasrv and deals with request in the dedicated runtime.
     #[tracing::instrument(level = "info", skip_all)]
     async fn worker_loop(self: Arc<Self>, mut req_rx: Receiver<message::ClientWorkerRequest>) {
-        tracing::info!("MetaGrpcClient::worker spawned");
+        info!("MetaGrpcClient::worker spawned");
 
         loop {
             let start = Instant::now();
             let t = req_rx.recv().await;
             let req = match t {
                 None => {
-                    tracing::info!("MetaGrpcClient handle closed. worker quit");
+                    info!("MetaGrpcClient handle closed. worker quit");
                     return;
                 }
                 Some(x) => x,
             };
 
-            tracing::debug!(req = debug(&req), "MetaGrpcClient recv request");
+            debug!(req = debug(&req), "MetaGrpcClient recv request");
 
             if req.resp_tx.is_closed() {
-                tracing::debug!(
+                debug!(
                     req = debug(&req),
                     "MetaGrpcClient request.resp_tx is closed, cancel handling this request"
                 );
@@ -377,7 +379,7 @@ impl MetaGrpcClient {
                 }
             };
 
-            tracing::debug!(
+            debug!(
                 resp = debug(&resp),
                 "MetaGrpcClient send response to the handle"
             );
@@ -402,7 +404,7 @@ impl MetaGrpcClient {
                                 ],
                                 1,
                             );
-                            tracing::warn!(
+                            warn!(
                                 "MetaGrpcClient failed to send response to the handle:{:?}",
                                 err
                             );
@@ -416,7 +418,7 @@ impl MetaGrpcClient {
                                 ],
                                 1,
                             );
-                            tracing::warn!(
+                            warn!(
                                 "MetaGrpcClient failed to send response to the handle. recv-end closed"
                             );
                         }
@@ -429,7 +431,7 @@ impl MetaGrpcClient {
                     );
                 }
             } else if let Err(err) = res {
-                tracing::warn!(
+                warn!(
                     err = debug(err),
                     "MetaGrpcClient failed to send response to the handle. recv-end closed"
                 );
@@ -474,7 +476,7 @@ impl MetaGrpcClient {
                             }));
                         }
                         Err(e) => {
-                            tracing::warn!("handshake error when make client: {:?}", e);
+                            warn!("handshake error when make client: {:?}", e);
                             {
                                 let mut ue = self.unhealthy_endpoints.lock();
                                 ue.insert(addr.to_string(), ());
@@ -518,10 +520,9 @@ impl MetaGrpcClient {
         match ch {
             Ok(c) => Ok(c),
             Err(e) => {
-                tracing::warn!(
+                warn!(
                     "grpc_client create channel with {} faild, err: {:?}",
-                    addr,
-                    e
+                    addr, e
                 );
                 label_counter_with_val_and_labels(
                     META_GRPC_MAKE_CLIENT_FAILED,
@@ -557,7 +558,7 @@ impl MetaGrpcClient {
 
         // If the fetched endpoints are less than the majority of the current cluster, no replacement should occur.
         if distinct_cnt < endpoints.len() / 2 + 1 {
-            tracing::warn!(
+            warn!(
                 "distinct endpoints small than majority of meta cluster nodes {}<{}, endpoints: {:?}",
                 distinct_cnt,
                 endpoints.len(),
@@ -609,7 +610,7 @@ impl MetaGrpcClient {
                     _ = sleep(interval) => {
                         let r = self.sync_endpoints().await;
                         if let Err(e) = r {
-                            tracing::warn!("auto sync endpoints failed: {:?}", e);
+                            warn!("auto sync endpoints failed: {:?}", e);
                         }
                     }
                 }
@@ -661,7 +662,7 @@ impl MetaGrpcClient {
         username: &str,
         password: &str,
     ) -> std::result::Result<Vec<u8>, MetaError> {
-        tracing::debug!(
+        debug!(
             client_ver = display(client_ver),
             min_metasrv_ver = display(min_metasrv_ver),
             "client version"
@@ -722,7 +723,7 @@ impl MetaGrpcClient {
         &self,
         watch_request: WatchRequest,
     ) -> std::result::Result<tonic::codec::Streaming<WatchResponse>, MetaError> {
-        tracing::debug!(
+        debug!(
             watch_request = debug(&watch_request),
             "MetaGrpcClient worker: handle watch request"
         );
@@ -738,7 +739,7 @@ impl MetaGrpcClient {
         &self,
         export_request: message::ExportReq,
     ) -> std::result::Result<tonic::codec::Streaming<ExportedChunk>, MetaError> {
-        tracing::debug!(
+        debug!(
             export_request = debug(&export_request),
             "MetaGrpcClient worker: handle export request"
         );
@@ -756,11 +757,11 @@ impl MetaGrpcClient {
     {
         let act: MetaGrpcWriteReq = v.into();
 
-        tracing::debug!(req = debug(&act), "MetaGrpcClient::do_write request");
+        debug!(req = debug(&act), "MetaGrpcClient::do_write request");
 
         let req: Request<RaftRequest> = act.clone().try_into()?;
 
-        tracing::debug!(
+        debug!(
             req = debug(&req),
             "MetaGrpcClient::do_write serialized request"
         );
@@ -800,11 +801,11 @@ impl MetaGrpcClient {
     {
         let act: MetaGrpcReadReq = v.into();
 
-        tracing::debug!(req = debug(&act), "MetaGrpcClient::do_read request");
+        debug!(req = debug(&act), "MetaGrpcClient::do_read request");
 
         let req: Request<RaftRequest> = act.clone().try_into()?;
 
-        tracing::debug!(
+        debug!(
             req = debug(&req),
             "MetaGrpcClient::do_read serialized request"
         );
@@ -814,7 +815,7 @@ impl MetaGrpcClient {
         let mut client = self.make_client().await?;
         let result = client.read_msg(req).await;
 
-        tracing::debug!(reply = debug(&result), "MetaGrpcClient::do_read reply");
+        debug!(reply = debug(&result), "MetaGrpcClient::do_read reply");
 
         let rpc_res: std::result::Result<RaftReply, Status> = match result {
             Ok(r) => Ok(r.into_inner()),
@@ -843,7 +844,7 @@ impl MetaGrpcClient {
     ) -> std::result::Result<TxnReply, MetaError> {
         let txn: TxnRequest = req;
 
-        tracing::debug!(req = display(&txn), "MetaGrpcClient::transaction request");
+        debug!(req = display(&txn), "MetaGrpcClient::transaction request");
 
         let req: Request<TxnRequest> = Request::new(txn.clone());
         let req = common_tracing::inject_span_to_tonic_request(req);
@@ -869,7 +870,7 @@ impl MetaGrpcClient {
 
         let reply = result?;
 
-        tracing::debug!(reply = display(&reply), "MetaGrpcClient::transaction reply");
+        debug!(reply = display(&reply), "MetaGrpcClient::transaction reply");
 
         Ok(reply)
     }

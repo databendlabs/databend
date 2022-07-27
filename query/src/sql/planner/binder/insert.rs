@@ -39,7 +39,7 @@ use common_io::prelude::*;
 use common_planners::Expression;
 use common_streams::NDJsonSourceBuilder;
 use common_streams::Source;
-use common_tracing::tracing;
+use tracing::debug;
 
 use crate::pipelines::processors::transforms::ExpressionExecutor;
 use crate::sessions::QueryContext;
@@ -158,7 +158,7 @@ impl<'a> Binder {
         schema: DataSchemaRef,
     ) -> Result<InsertInputSource> {
         let stream_str = stream_str.trim_start();
-        tracing::debug!("{:?}", stream_str);
+        debug!("{:?}", stream_str);
         let settings = self.ctx.get_format_settings()?;
         // TODO migrate format into format factory
         let format = format.map(|v| v.to_uppercase());

@@ -34,7 +34,7 @@ use common_meta_types::TxnPutRequest;
 use common_meta_types::TxnRequest;
 use common_meta_types::UpsertKVReq;
 use common_proto_conv::FromToProto;
-use common_tracing::tracing;
+use tracing::debug;
 
 use crate::KVApi;
 use crate::KVApiKey;
@@ -185,7 +185,7 @@ pub fn db_has_to_exist(
     msg: impl Display,
 ) -> Result<(), MetaError> {
     if seq == 0 {
-        tracing::debug!(seq, ?db_name_ident, "db does not exist");
+        debug!(seq, ?db_name_ident, "db does not exist");
 
         Err(MetaError::AppError(AppError::UnknownDatabase(
             UnknownDatabase::new(
@@ -207,7 +207,7 @@ pub fn table_has_to_exist(
     ctx: impl Display,
 ) -> Result<(), MetaError> {
     if seq == 0 {
-        tracing::debug!(seq, ?name_ident, "does not exist");
+        debug!(seq, ?name_ident, "does not exist");
 
         Err(MetaError::AppError(AppError::UnknownTable(
             UnknownTable::new(&name_ident.table_name, format!("{}: {}", ctx, name_ident)),

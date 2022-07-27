@@ -27,8 +27,8 @@ use common_meta_types::UserStageInfo;
 use common_storage::StorageParams;
 use common_storage::StorageS3Config;
 use common_storage::STORAGE_S3_DEFAULT_ENDPOINT;
-use common_tracing::tracing::debug;
 use sqlparser::ast::ObjectName;
+use tracing::debug;
 
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;

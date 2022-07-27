@@ -19,8 +19,8 @@ use common_datablocks::DataBlock;
 use common_exception::Result;
 use common_fuse_meta::meta::BlockMeta;
 use common_fuse_meta::meta::Versioned;
-use common_tracing::tracing::warn;
 use opendal::Operator;
+use tracing::warn;
 
 use crate::storages::fuse::io::retry;
 use crate::storages::fuse::io::retry::Retryable;

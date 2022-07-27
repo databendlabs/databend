@@ -47,14 +47,17 @@ use common_meta_types::MetaResult;
 use common_meta_types::Node;
 use common_meta_types::NodeId;
 use common_meta_types::ToMetaError;
-use common_tracing::tracing;
-use common_tracing::tracing::Instrument;
 use openraft::Config;
 use openraft::LogId;
 use openraft::Raft;
 use openraft::RaftMetrics;
 use openraft::SnapshotPolicy;
 use openraft::State;
+use tracing::debug;
+use tracing::error;
+use tracing::info;
+use tracing::warn;
+use tracing::Instrument;
 
 use crate::configs::Config as MetaConfig;
 use crate::meta_service::meta_leader::MetaLeader;
@@ -166,7 +169,7 @@ impl MetaNodeBuilder {
         });
 
         if self.monitor_metrics {
-            tracing::info!("about to subscribe raft metrics");
+            info!("about to subscribe raft metrics");
             MetaNode::subscribe_metrics(mn.clone(), metrics_rx).await;
         }
 
@@ -176,7 +179,7 @@ impl MetaNodeBuilder {
             sto.get_node_endpoint(&node_id).await?
         };
 
-        tracing::info!("about to start raft grpc on endpoint {}", endpoint);
+        info!("about to start raft grpc on endpoint {}", endpoint);
 
         MetaNode::start_grpc(mn.clone(), &endpoint.addr, endpoint.port).await?;
 
@@ -266,7 +269,7 @@ impl MetaNode {
             }
         };
 
-        tracing::info!("about to start raft grpc on resolved addr {}", addr);
+        info!("about to start raft grpc on resolved addr {}", addr);
 
         let addr_str = addr.to_string();
         let ret = addr.parse::<std::net::SocketAddr>();
@@ -283,10 +286,9 @@ impl MetaNode {
         let h = tokio::spawn(async move {
             srv.serve_with_shutdown(addr, async move {
                 let _ = rx.changed().await;
-                tracing::info!(
+                info!(
                     "signal received, shutting down: id={} {} ",
-                    node_id,
-                    addr_str
+                    node_id, addr_str
                 );
             })
             .await
@@ -319,7 +321,7 @@ impl MetaNode {
         //
         // On mac File::sync_all() takes 10 ms ~ 30 ms, 500 ms at worst, which very likely to fail a test.
         if cfg!(target_os = "macos") {
-            tracing::warn!("Disabled fsync for meta data tests. fsync on mac is quite slow");
+            warn!("Disabled fsync for meta data tests. fsync on mac is quite slow");
             config.no_sync = true;
         }
 
@@ -337,7 +339,7 @@ impl MetaNode {
             .endpoint(config.raft_api_listen_host_endpoint());
         let mn = builder.build().await?;
 
-        tracing::info!("MetaNode started: {:?}", config);
+        info!("MetaNode started: {:?}", config);
 
         // init_cluster with advertise_host other than listen_host
         if !is_open && is_initialize {
@@ -363,9 +365,9 @@ impl MetaNode {
             if r.is_err() {
                 break;
             }
-            tracing::info!("waiting for raft to shutdown, metrics: {:?}", rx.borrow());
+            info!("waiting for raft to shutdown, metrics: {:?}", rx.borrow());
         }
-        tracing::info!("shutdown raft");
+        info!("shutdown raft");
 
         for j in self.join_handles.lock().await.iter_mut() {
             let _rst = j
@@ -376,7 +378,7 @@ impl MetaNode {
                 .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         }
 
-        tracing::info!("shutdown: id={}", self.sto.id);
+        info!("shutdown: id={}", self.sto.id);
         let joined = self.joined_tasks.load(std::sync::atomic::Ordering::Relaxed);
         Ok(joined)
     }
@@ -427,10 +429,9 @@ impl MetaNode {
                                     let _rst = mn.add_configured_non_voters().await;
 
                                     if _rst.is_err() {
-                                        tracing::warn!(
+                                        warn!(
                                             "fail to add non-voter: my id={}, rst:{:?}",
-                                            mn.sto.id,
-                                            _rst
+                                            mn.sto.id, _rst
                                         );
                                     }
                                     set_meta_metrics_is_leader(true);
@@ -463,9 +464,9 @@ impl MetaNode {
     /// according to config.
     #[tracing::instrument(level = "debug", skip(config))]
     pub async fn start(config: &MetaConfig) -> Result<Arc<MetaNode>, MetaError> {
-        tracing::info!(?config, "start()");
+        info!(?config, "start()");
         let mn = Self::do_start(config).await?;
-        tracing::info!("Done starting MetaNode: {:?}", config);
+        info!("Done starting MetaNode: {:?}", config);
         Ok(mn)
     }
 
@@ -475,32 +476,31 @@ impl MetaNode {
     #[tracing::instrument(level = "info", skip_all)]
     pub async fn leave_cluster(conf: &RaftConfig) -> Result<bool, MetaError> {
         if conf.leave_via.is_empty() {
-            tracing::info!("'--leave-via' is empty, do not need to leave cluster");
+            info!("'--leave-via' is empty, do not need to leave cluster");
             return Ok(false);
         }
 
         let leave_id = if let Some(id) = conf.leave_id {
             id
         } else {
-            tracing::info!("'--leave-id' is None, do not need to leave cluster");
+            info!("'--leave-id' is None, do not need to leave cluster");
             return Ok(false);
         };
 
         let addrs = &conf.leave_via;
-        tracing::info!("node-{} about to leave cluster via {:?}", leave_id, addrs);
+        info!("node-{} about to leave cluster via {:?}", leave_id, addrs);
 
         #[allow(clippy::never_loop)]
         for addr in addrs {
-            tracing::info!("leave cluster via {}...", addr);
+            info!("leave cluster via {}...", addr);
 
             let conn_res = RaftServiceClient::connect(format!("http://{}", addr)).await;
             let mut raft_client = match conn_res {
                 Ok(c) => c,
                 Err(err) => {
-                    tracing::error!(
+                    error!(
                         "fail connecting to {} while leaving cluster, err: {:?}",
-                        addr,
-                        err
+                        addr, err
                     );
                     continue;
                 }
@@ -517,14 +517,14 @@ impl MetaNode {
                     let reply = resp.into_inner();
 
                     if !reply.data.is_empty() {
-                        tracing::info!("Done leaving cluster via {} reply: {:?}", addr, reply.data);
+                        info!("Done leaving cluster via {} reply: {:?}", addr, reply.data);
                         return Ok(true);
                     } else {
-                        tracing::error!("leaving cluster via {} fail: {:?}", addr, reply.error);
+                        error!("leaving cluster via {} fail: {:?}", addr, reply.error);
                     }
                 }
                 Err(s) => {
-                    tracing::error!("leaving cluster via {} fail: {:?}", addr, s);
+                    error!("leaving cluster via {} fail: {:?}", addr, s);
                 }
             };
         }
@@ -538,14 +538,14 @@ impl MetaNode {
     #[tracing::instrument(level = "info", skip(conf, self))]
     pub async fn join_cluster(&self, conf: &RaftConfig, grpc_api_addr: String) -> MetaResult<()> {
         if conf.join.is_empty() {
-            tracing::info!("'--join' is empty, do not need joining cluster");
+            info!("'--join' is empty, do not need joining cluster");
             return Ok(());
         }
 
         // Try to join a cluster only when this node is just created.
         // Joining a node with log has risk messing up the data in this node and in the target cluster.
         if self.is_opened() {
-            tracing::info!("meta node is already initialized, skip joining it to a cluster");
+            info!("meta node is already initialized, skip joining it to a cluster");
             return Ok(());
         }
 
@@ -555,13 +555,13 @@ impl MetaNode {
         let advertise_endpoint = conf.raft_api_advertise_host_endpoint();
         #[allow(clippy::never_loop)]
         for addr in addrs {
-            tracing::info!("try to join cluster via {}...", addr);
+            info!("try to join cluster via {}...", addr);
 
             let conn_res = RaftServiceClient::connect(format!("http://{}", addr)).await;
             let mut raft_client = match conn_res {
                 Ok(c) => c,
                 Err(e) => {
-                    tracing::error!("connect to {} join cluster fail: {:?}", addr, e);
+                    error!("connect to {} join cluster fail: {:?}", addr, e);
                     continue;
                 }
             };
@@ -580,14 +580,14 @@ impl MetaNode {
                 Ok(r) => {
                     let reply = r.into_inner();
                     if !reply.data.is_empty() {
-                        tracing::info!("join cluster via {} success: {:?}", addr, reply.data);
+                        info!("join cluster via {} success: {:?}", addr, reply.data);
                         return Ok(());
                     } else {
-                        tracing::error!("join cluster via {} fail: {:?}", addr, reply.error);
+                        error!("join cluster via {} fail: {:?}", addr, reply.error);
                     }
                 }
                 Err(s) => {
-                    tracing::error!("join cluster via {} fail: {:?}", addr, s);
+                    error!("join cluster via {} fail: {:?}", addr, s);
                 }
             };
         }
@@ -655,7 +655,7 @@ impl MetaNode {
             .await
             .map_err(|x| MetaError::MetaServiceError(format!("{:?}", x)))?;
 
-        tracing::info!("initialized cluster");
+        info!("initialized cluster");
 
         self.add_node(node).await?;
 
@@ -671,11 +671,11 @@ impl MetaNode {
         for i in node_ids.iter() {
             let x = self.raft.add_learner(*i, true).await;
 
-            tracing::info!("add_non_voter result: {:?}", x);
+            info!("add_non_voter result: {:?}", x);
             if x.is_ok() {
-                tracing::info!("non-voter is added: {}", i);
+                info!("non-voter is added: {}", i);
             } else {
-                tracing::info!("non-voter already exist: {}", i);
+                info!("non-voter already exist: {}", i);
             }
         }
         Ok(())
@@ -815,7 +815,7 @@ impl MetaNode {
         &self,
         req: ForwardRequest,
     ) -> Result<ForwardResponse, MetaError> {
-        tracing::debug!("handle_forwardable_request: {:?}", req);
+        debug!("handle_forwardable_request: {:?}", req);
 
         let forward = req.forward_to_leader;
 
@@ -910,7 +910,7 @@ impl MetaNode {
     /// Submit a write request to the known leader. Returns the response after applying the request.
     #[tracing::instrument(level = "debug", skip(self, req))]
     pub async fn write(&self, req: LogEntry) -> Result<AppliedState, MetaError> {
-        tracing::debug!("req: {:?}", req);
+        debug!("req: {:?}", req);
 
         let res = self
             .handle_forwardable_request(ForwardRequest {
@@ -950,7 +950,7 @@ impl MetaNode {
 
             let changed = rx.changed().await;
             if changed.is_err() {
-                tracing::info!("raft metrics tx closed");
+                info!("raft metrics tx closed");
                 return 0;
             }
         }

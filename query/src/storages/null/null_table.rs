@@ -27,8 +27,8 @@ use common_planners::Statistics;
 use common_planners::TruncateTablePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
-use common_tracing::tracing::info;
 use futures::stream::StreamExt;
+use tracing::info;
 
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;

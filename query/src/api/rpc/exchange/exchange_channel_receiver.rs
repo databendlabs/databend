@@ -126,10 +126,7 @@ impl ExchangeReceiver {
                 let error_code = cause.clone();
                 need_shutdown = false;
                 if let Err(_cause) = fragment_receiver.send(Err(error_code)).await {
-                    common_tracing::tracing::warn!(
-                        "Fragment {} flight channel is closed.",
-                        fragment_id
-                    );
+                    tracing::warn!("Fragment {} flight channel is closed.", fragment_id);
                 }
             }
 
@@ -146,7 +143,7 @@ impl ExchangeReceiver {
         let query_id = &this.query_id;
         let exchange_manager = this.ctx.get_exchange_manager();
         if let Err(cause) = exchange_manager.shutdown_query(query_id, Some(cause)) {
-            common_tracing::tracing::warn!("Cannot shutdown query, cause {:?}", cause);
+            tracing::warn!("Cannot shutdown query, cause {:?}", cause);
         }
     }
 
@@ -212,10 +209,7 @@ impl ExchangeReceiver {
             DataPacket::FragmentData(FragmentData::Data(fragment_id, flight_data)) => {
                 if let Some(tx) = &fragments_receiver[fragment_id] {
                     if let Err(_cause) = tx.send(Ok(flight_data)).await {
-                        common_tracing::tracing::warn!(
-                            "Fragment {} flight channel is closed.",
-                            fragment_id
-                        );
+                        tracing::warn!("Fragment {} flight channel is closed.", fragment_id);
                         if let Some(tx) = fragments_receiver[fragment_id].take() {
                             drop(tx);
                             std::sync::atomic::fence(Acquire);

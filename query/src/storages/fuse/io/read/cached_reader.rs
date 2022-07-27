@@ -21,7 +21,7 @@ use common_exception::Result;
 use common_fuse_meta::caches::CacheDeferMetrics;
 use common_fuse_meta::caches::MemoryCache;
 use common_fuse_meta::caches::TenantLabel;
-use common_tracing::tracing::log::warn;
+use tracing::warn;
 
 use crate::storages::fuse::io::retry;
 use crate::storages::fuse::io::retry::Retryable;
