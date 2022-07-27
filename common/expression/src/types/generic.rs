@@ -25,6 +25,7 @@ use crate::values::ColumnIterator;
 use crate::values::Scalar;
 use crate::values::ScalarRef;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GenericType<const INDEX: usize>;
 
 impl<const INDEX: usize> ValueType for GenericType<INDEX> {

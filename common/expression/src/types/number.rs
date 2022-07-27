@@ -31,7 +31,7 @@ use crate::util::buffer_into_mut;
 use crate::values::Column;
 use crate::values::Scalar;
 
-pub trait Number: 'static {
+pub trait Number: Debug + Clone + PartialEq + 'static {
     type Storage: NativeType;
     type Domain: Debug + Clone + PartialEq;
 
@@ -45,6 +45,7 @@ pub trait Number: 'static {
     fn full_domain() -> Self::Domain;
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NumberType<T: Number>(PhantomData<T>);
 
 impl<Int: Number> ValueType for NumberType<Int> {
