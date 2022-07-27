@@ -187,6 +187,7 @@ impl Display for DataType {
             DataType::Nullable(inner) => write!(f, "{inner} NULL"),
             DataType::EmptyArray => write!(f, "Array(Nothing)"),
             DataType::Array(inner) => write!(f, "Array({inner})"),
+            DataType::Map(inner) => write!(f, "Map({inner})"),
             DataType::Tuple(tys) => {
                 if tys.len() == 1 {
                     write!(f, "({},)", tys[0])
@@ -326,12 +327,6 @@ impl Display for FunctionProperty {
     }
 }
 
-impl Debug for FunctionProperty {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{self}")
-    }
-}
-
 impl Display for NullableDomain<AnyType> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         if let Some(value) = &self.value {
@@ -413,6 +408,7 @@ impl Display for Domain {
                 }
                 write!(f, ")")
             }
+            Domain::Undefined => write!(f, "_"),
         }
     }
 }

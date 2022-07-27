@@ -1035,6 +1035,13 @@ impl ColumnBuilder {
                     offsets,
                 }
             }
+            DataType::Map(ty) => Self::with_capacity(
+                &DataType::Array(Box::new(DataType::Tuple(vec![
+                    DataType::String,
+                    (**ty).clone(),
+                ]))),
+                capacity,
+            ),
             DataType::Tuple(fields) => ColumnBuilder::Tuple {
                 fields: fields
                     .iter()

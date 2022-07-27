@@ -27,6 +27,7 @@ use crate::util::buffer_into_mut;
 use crate::values::Column;
 use crate::values::Scalar;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StringType;
 
 impl ValueType for StringType {
