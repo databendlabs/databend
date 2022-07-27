@@ -17,7 +17,7 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_planners::PlanNode;
-use common_tracing::tracing::debug;
+use tracing::debug;
 
 use crate::interpreters::fragments::Fragmenter;
 use crate::interpreters::fragments::QueryFragmentsActions;

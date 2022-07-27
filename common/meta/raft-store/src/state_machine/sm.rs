@@ -62,12 +62,13 @@ use common_meta_types::TxnPutRequest;
 use common_meta_types::TxnPutResponse;
 use common_meta_types::TxnReply;
 use common_meta_types::TxnRequest;
-use common_tracing::tracing;
 use num::FromPrimitive;
 use openraft::raft::Entry;
 use openraft::raft::EntryPayload;
 use serde::Deserialize;
 use serde::Serialize;
+use tracing::debug;
+use tracing::info;
 
 use crate::config::RaftConfig;
 use crate::sled_key_spaces::ClientLastResps;
@@ -263,12 +264,12 @@ impl StateMachine {
     /// command safely in case of network failure etc.
     #[tracing::instrument(level = "debug", skip(self, entry), fields(log_id=%entry.log_id))]
     pub async fn apply(&self, entry: &Entry<LogEntry>) -> Result<AppliedState, MetaStorageError> {
-        tracing::debug!("apply: summary: {}", entry.summary());
-        tracing::debug!("apply: payload: {:?}", entry.payload);
+        debug!("apply: summary: {}", entry.summary());
+        debug!("apply: payload: {:?}", entry.payload);
 
         let log_id = &entry.log_id;
 
-        tracing::debug!("sled tx start: {:?}", entry);
+        debug!("sled tx start: {:?}", entry);
 
         let kv_pairs = self.scan_prefix_if_needed(entry)?;
 
@@ -316,7 +317,7 @@ impl StateMachine {
 
         let opt_applied_state = result?;
 
-        tracing::debug!("sled tx done: {:?}", entry);
+        debug!("sled tx done: {:?}", entry);
 
         let applied_state = match opt_applied_state {
             Some(r) => r,
@@ -352,7 +353,7 @@ impl StateMachine {
             Ok((prev, None).into())
         } else {
             sm_nodes.insert(node_id, node)?;
-            tracing::info!("applied AddNode: {}={:?}", node_id, node);
+            info!("applied AddNode: {}={:?}", node_id, node);
             Ok((prev, Some(node.clone())).into())
         }
     }
@@ -368,7 +369,7 @@ impl StateMachine {
         let prev = sm_nodes.get(node_id)?;
 
         if prev.is_some() {
-            tracing::info!("applied RemoveNode: {}={:?}", node_id, prev);
+            info!("applied RemoveNode: {}={:?}", node_id, prev);
             sm_nodes.remove(node_id)?;
         }
         Ok((prev, None).into())
@@ -383,7 +384,7 @@ impl StateMachine {
         value_meta: &Option<KVMeta>,
         txn_tree: &TransactionSledTree,
     ) -> MetaStorageResult<AppliedState> {
-        tracing::debug!(
+        debug!(
             key = display(key),
             seq = debug(seq),
             value_op = debug(value_op),
@@ -401,7 +402,7 @@ impl StateMachine {
             value_meta.clone(),
         )?;
 
-        tracing::debug!("applied UpsertKV: {} {:?}", key, result);
+        debug!("applied UpsertKV: {} {:?}", key, result);
 
         if let Some(subscriber) = &self.subscriber {
             subscriber.kv_changed(&key_str, prev.clone(), result.clone());
@@ -450,14 +451,14 @@ impl StateMachine {
         txn_tree: &TransactionSledTree,
         cond: &TxnCondition,
     ) -> MetaStorageResult<bool> {
-        tracing::debug!(cond = display(cond), "txn_execute_one_condition");
+        debug!(cond = display(cond), "txn_execute_one_condition");
 
         let key = cond.key.clone();
 
         let sub_tree = txn_tree.key_space::<GenericKV>();
         let sv = sub_tree.get(&key)?;
 
-        tracing::debug!("txn_execute_one_condition: {:?} {:?}", key, sv);
+        debug!("txn_execute_one_condition: {:?} {:?}", key, sv);
 
         if let Some(target) = &cond.target {
             match target {
@@ -493,7 +494,7 @@ impl StateMachine {
         condition: &Vec<TxnCondition>,
     ) -> MetaStorageResult<bool> {
         for cond in condition {
-            tracing::debug!(condition = display(cond), "txn_execute_condition");
+            debug!(condition = display(cond), "txn_execute_condition");
 
             if !self.txn_execute_one_condition(txn_tree, cond)? {
                 return Ok(false);
@@ -652,7 +653,7 @@ impl StateMachine {
         resp: &mut TxnReply,
         events: &mut Option<Vec<NotifyKVEvent>>,
     ) -> MetaStorageResult<()> {
-        tracing::debug!(op = display(op), "txn execute TxnOp");
+        debug!(op = display(op), "txn execute TxnOp");
         match &op.request {
             Some(txn_op::Request::Get(get)) => {
                 self.txn_execute_get_operation(txn_tree, get, resp)?;
@@ -685,7 +686,7 @@ impl StateMachine {
         txn_tree: &TransactionSledTree,
         kv_pairs: Option<&(DeleteByPrefixKeyMap, DeleteByPrefixKeyMap)>,
     ) -> MetaStorageResult<AppliedState> {
-        tracing::debug!(txn = display(req), "apply txn cmd");
+        debug!(txn = display(req), "apply txn cmd");
 
         let condition = &req.condition;
 
@@ -747,7 +748,7 @@ impl StateMachine {
         txn_tree: &TransactionSledTree,
         kv_pairs: Option<&(DeleteByPrefixKeyMap, DeleteByPrefixKeyMap)>,
     ) -> Result<AppliedState, MetaStorageError> {
-        tracing::debug!("apply_cmd: {:?}", cmd);
+        debug!("apply_cmd: {:?}", cmd);
 
         match cmd {
             Cmd::IncrSeq { ref key } => self.apply_incr_seq_cmd(key, txn_tree),
@@ -777,7 +778,7 @@ impl StateMachine {
         let curr = seq_sub_tree.update_and_fetch(&key, |old| Some(old.unwrap_or_default() + 1))?;
         let curr = curr.unwrap();
 
-        tracing::debug!("applied IncrSeq: {}={}", key, curr);
+        debug!("applied IncrSeq: {}={}", key, curr);
 
         Ok(curr.0)
     }
@@ -808,7 +809,7 @@ impl StateMachine {
         let result =
             self.txn_sub_tree_do_update(sub_tree, key, prev.clone(), value_meta, value_op)?;
 
-        tracing::debug!("applied upsert: {} {:?}", key, result);
+        debug!("applied upsert: {} {:?}", key, result);
         Ok((prev, result))
     }
 
@@ -960,7 +961,7 @@ impl StateMachine {
             .unwrap()
             .as_secs();
 
-        tracing::debug!("seq_value: {:?} now: {}", seq_value, now);
+        debug!("seq_value: {:?} now: {}", seq_value, now);
 
         if seq_value.get_expire_at() < now {
             None

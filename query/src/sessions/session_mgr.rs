@@ -28,15 +28,16 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_metrics::label_counter;
 use common_storage::init_operator;
-use common_tracing::init_query_logger;
-use common_tracing::tracing;
-use common_tracing::tracing_appender::non_blocking::WorkerGuard;
+use common_tracing::init_logging;
 use common_users::RoleCacheMgr;
 use common_users::UserApiProvider;
 use futures::future::Either;
 use futures::StreamExt;
 use opendal::Operator;
 use parking_lot::RwLock;
+use tracing::debug;
+use tracing::info;
+use tracing_appender::non_blocking::WorkerGuard;
 
 use crate::api::DataExchangeManager;
 use crate::catalogs::CatalogManager;
@@ -62,12 +63,9 @@ pub struct SessionManager {
     pub(in crate::sessions) max_sessions: usize,
     pub(in crate::sessions) active_sessions: Arc<RwLock<HashMap<String, Arc<Session>>>>,
     pub(in crate::sessions) storage_cache_manager: RwLock<Arc<CacheManager>>,
-    pub(in crate::sessions) query_logger:
-        RwLock<Option<Arc<dyn tracing::Subscriber + Send + Sync>>>,
     pub status: Arc<RwLock<SessionManagerStatus>>,
     storage_operator: RwLock<Operator>,
     storage_runtime: Arc<Runtime>,
-    _guards: Vec<WorkerGuard>,
 
     user_api_provider: RwLock<Arc<UserApiProvider>>,
     role_cache_manager: RwLock<Arc<RoleCacheMgr>>,
@@ -75,10 +73,22 @@ pub struct SessionManager {
     pub(crate) mysql_conn_map: Arc<RwLock<HashMap<Option<u32>, String>>>,
     pub(in crate::sessions) mysql_basic_conn_id: AtomicU32,
     async_insert_queue: Arc<RwLock<Option<Arc<AsyncInsertQueue>>>>,
+
+    /// log_guard preserve the nonblocking logger's guards so that our logger
+    /// can flushes spans/events on a drop
+    ///
+    /// This field should never be used except in `drop`.
+    _log_guards: Vec<WorkerGuard>,
 }
 
 impl SessionManager {
     pub async fn from_conf(conf: Config) -> Result<Arc<SessionManager>> {
+        let app_name = format!(
+            "databend-query-{}-{}",
+            conf.query.tenant_id, conf.query.cluster_id
+        );
+        let _log_guards = init_logging(app_name.as_str(), &conf.log);
+
         let catalogs = Arc::new(CatalogManager::try_new(&conf).await?);
         let storage_cache_manager = Arc::new(CacheManager::init(&conf.query));
 
@@ -106,12 +116,6 @@ impl SessionManager {
         let active_sessions = Arc::new(RwLock::new(HashMap::with_capacity(max_sessions)));
         let status = Arc::new(RwLock::new(Default::default()));
 
-        let (_guards, query_logger) = if conf.log.query_enabled {
-            let (_guards, query_logger) = init_query_logger("query-detail", conf.log.dir.as_str());
-            (_guards, Some(query_logger))
-        } else {
-            (Vec::new(), None)
-        };
         let mysql_conn_map = Arc::new(RwLock::new(HashMap::with_capacity(max_sessions)));
         let user_api_provider =
             UserApiProvider::create_global(conf.meta.to_meta_grpc_client_conf()).await?;
@@ -138,16 +142,15 @@ impl SessionManager {
             active_sessions,
             data_exchange_manager: exchange_manager,
             storage_cache_manager: RwLock::new(storage_cache_manager),
-            query_logger: RwLock::new(query_logger),
             status,
             storage_operator: RwLock::new(storage_operator),
             storage_runtime,
-            _guards,
             user_api_provider: RwLock::new(user_api_provider),
             role_cache_manager: RwLock::new(role_cache_manager),
             mysql_conn_map,
             mysql_basic_conn_id: AtomicU32::new(9_u32.to_le() as u32),
             async_insert_queue,
+            _log_guards,
         }))
     }
 
@@ -218,7 +221,7 @@ impl SessionManager {
                 }
             }
             _ => {
-                tracing::debug!(
+                debug!(
                     "session type is {}, mysql_conn_map no need to change.",
                     session_typ
                 );
@@ -337,7 +340,7 @@ impl SessionManager {
     ) -> impl Future<Output = ()> {
         let active_sessions = self.active_sessions.clone();
         async move {
-            tracing::info!(
+            info!(
                 "Waiting {} secs for connections to close. You can press Ctrl + C again to force shutdown.",
                 timeout_secs
             );
@@ -356,7 +359,7 @@ impl SessionManager {
                 };
             }
 
-            tracing::info!("Will shutdown forcefully.");
+            info!("Will shutdown forcefully.");
             active_sessions
                 .read()
                 .values()
@@ -384,7 +387,7 @@ impl SessionManager {
         match active_sessions {
             0 => true,
             _ => {
-                tracing::info!("Waiting for {} connections to close.", active_sessions);
+                info!("Waiting for {} connections to close.", active_sessions);
                 false
             }
         }
@@ -448,10 +451,6 @@ impl SessionManager {
         }
 
         Ok(())
-    }
-
-    pub fn get_query_logger(&self) -> Option<Arc<dyn tracing::Subscriber + Send + Sync>> {
-        self.query_logger.write().to_owned()
     }
 
     pub fn get_async_insert_queue(&self) -> Arc<RwLock<Option<Arc<AsyncInsertQueue>>>> {

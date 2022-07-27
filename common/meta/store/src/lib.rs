@@ -28,7 +28,7 @@ use common_meta_types::TxnReply;
 use common_meta_types::TxnRequest;
 use common_meta_types::UpsertKVReply;
 use common_meta_types::UpsertKVReq;
-use common_tracing::tracing;
+use tracing::info;
 
 #[derive(Clone)]
 pub struct MetaStoreProvider {
@@ -100,7 +100,7 @@ impl MetaStoreProvider {
 
     pub async fn try_get_meta_store(&self) -> Result<MetaStore> {
         if self.rpc_conf.local_mode() {
-            tracing::info!(
+            info!(
                 conf = debug(&self.rpc_conf),
                 "use embedded meta, data will be removed when process exits"
             );
@@ -109,7 +109,7 @@ impl MetaStoreProvider {
             let meta_store = MetaEmbedded::get_meta().await?;
             Ok(MetaStore::L(meta_store))
         } else {
-            tracing::info!(conf = debug(&self.rpc_conf), "use remote meta");
+            info!(conf = debug(&self.rpc_conf), "use remote meta");
             let client = MetaGrpcClient::try_new(&self.rpc_conf)?;
             Ok(MetaStore::R(client))
         }

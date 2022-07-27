@@ -18,7 +18,6 @@ use common_exception::Result;
 use common_meta_types::UserIdentity;
 use common_planners::DropUserPlan;
 use common_planners::PlanNode;
-use common_tracing::tracing;
 
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;

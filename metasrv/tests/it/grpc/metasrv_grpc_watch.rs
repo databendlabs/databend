@@ -35,7 +35,6 @@ use common_meta_types::TxnDeleteRequest;
 use common_meta_types::TxnOp;
 use common_meta_types::TxnPutRequest;
 use common_meta_types::UpsertKVReq;
-use common_tracing::tracing;
 
 use crate::init_meta_ut;
 

@@ -19,7 +19,6 @@ use common_exception::Result;
 use common_meta_app::schema::DatabaseMeta;
 use common_planners::CreateDatabasePlan;
 use common_planners::PlanNode;
-use common_tracing::tracing;
 use sqlparser::ast::ObjectName;
 
 use crate::sessions::QueryContext;

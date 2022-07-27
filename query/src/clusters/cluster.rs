@@ -38,7 +38,6 @@ use common_meta_api::KVApi;
 use common_meta_store::MetaStoreProvider;
 use common_meta_types::NodeInfo;
 use common_metrics::label_counter_with_val_and_labels;
-use common_tracing::tracing;
 use futures::future::select;
 use futures::future::Either;
 use futures::Future;
@@ -46,6 +45,8 @@ use futures::StreamExt;
 use metrics::gauge;
 use rand::thread_rng;
 use rand::Rng;
+use tracing::error;
+use tracing::warn;
 
 use crate::api::FlightClient;
 use crate::Config;
@@ -280,7 +281,7 @@ impl ClusterDiscovery {
             if before_node.flight_address.eq(&node_info.flight_address) {
                 let drop_invalid_node = self.api_provider.drop_node(before_node.id, None);
                 if let Err(cause) = drop_invalid_node.await {
-                    tracing::warn!("Drop invalid node failure: {:?}", cause);
+                    warn!("Drop invalid node failure: {:?}", cause);
                 }
             }
         }
@@ -292,7 +293,7 @@ impl ClusterDiscovery {
         let mut heartbeat = self.heartbeat.lock().await;
 
         if let Err(shutdown_failure) = heartbeat.shutdown().await {
-            tracing::warn!(
+            warn!(
                 "Cannot shutdown cluster heartbeat, cause {:?}",
                 shutdown_failure
             );
@@ -304,7 +305,7 @@ impl ClusterDiscovery {
         match futures::future::select(drop_node, signal_future).await {
             Either::Left((drop_node_result, _)) => {
                 if let Err(drop_node_failure) = drop_node_result {
-                    tracing::warn!(
+                    warn!(
                         "Cannot drop cluster node(while shutdown), cause {:?}",
                         drop_node_failure
                     );
@@ -416,7 +417,7 @@ impl ClusterHeartbeat {
                                 ],
                                 1,
                             );
-                            tracing::error!("Cluster cluster api heartbeat failure: {:?}", failure);
+                            error!("Cluster cluster api heartbeat failure: {:?}", failure);
                         }
                     }
                 }

@@ -21,7 +21,6 @@ use common_meta_types::UserPrivilegeType;
 use common_planners::CreateDatabasePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
-use common_tracing::tracing;
 
 use crate::interpreters::Interpreter;
 use crate::sessions::QueryContext;

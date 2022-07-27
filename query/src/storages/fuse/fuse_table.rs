@@ -38,7 +38,6 @@ use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
 use common_planners::TruncateTablePlan;
 use common_streams::SendableDataBlockStream;
-use common_tracing::tracing;
 use futures::StreamExt;
 use uuid::Uuid;
 

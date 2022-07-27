@@ -15,6 +15,8 @@
 use std::backtrace::Backtrace;
 use std::panic::PanicInfo;
 
+use tracing::error;
+
 pub fn set_panic_hook() {
     // Set a panic hook that records the panic as a `tracing` event at the
     // `ERROR` verbosity level.
@@ -31,7 +33,7 @@ pub fn log_panic(panic: &PanicInfo) {
     let backtrace = Backtrace::force_capture();
     let backtrace = format!("{:?}", backtrace);
     if let Some(location) = panic.location() {
-        tracing::error!(
+        error!(
             message = %panic,
             backtrace = %backtrace,
             panic.file = location.file(),
@@ -39,6 +41,6 @@ pub fn log_panic(panic: &PanicInfo) {
             panic.column = location.column(),
         );
     } else {
-        tracing::error!(message = %panic, backtrace = %backtrace);
+        error!(message = %panic, backtrace = %backtrace);
     }
 }

@@ -124,14 +124,14 @@ impl PipelinePullingExecutor {
         move || {
             if let Err(cause) = executor.execute() {
                 if let Err(send_err) = state.sender.try_send(Err(cause)) {
-                    common_tracing::tracing::warn!("Send error {:?}", send_err);
+                    tracing::warn!("Send error {:?}", send_err);
                 }
 
                 return;
             }
 
             if let Err(send_err) = state.sender.try_send(Ok(None)) {
-                common_tracing::tracing::warn!("Send finish event error {:?}", send_err);
+                tracing::warn!("Send finish event error {:?}", send_err);
             }
         }
     }
@@ -178,7 +178,7 @@ impl PipelinePullingExecutor {
 impl Drop for PipelinePullingExecutor {
     fn drop(&mut self) {
         if let Err(cause) = self.finish() {
-            common_tracing::tracing::warn!("Executor finish is failure {:?}", cause);
+            tracing::warn!("Executor finish is failure {:?}", cause);
         }
     }
 }

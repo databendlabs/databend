@@ -23,7 +23,6 @@ use common_planners::DropTableClusterKeyPlan;
 use common_planners::PlanNode;
 use common_planners::RenameTableEntity;
 use common_planners::RenameTablePlan;
-use common_tracing::tracing;
 use sqlparser::ast::Expr;
 use sqlparser::ast::ObjectName;
 
