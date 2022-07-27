@@ -491,6 +491,7 @@ impl Default for LogConfig {
     }
 }
 
+#[allow(clippy::from_over_into)]
 impl Into<InnerLogConfig> for LogConfig {
     fn into(self) -> InnerLogConfig {
         let mut file: InnerFileLogConfig = self.file.into();
@@ -540,6 +541,7 @@ impl Default for FileLogConfig {
     }
 }
 
+#[allow(clippy::from_over_into)]
 impl Into<InnerFileLogConfig> for FileLogConfig {
     fn into(self) -> InnerFileLogConfig {
         InnerFileLogConfig {
@@ -577,6 +579,7 @@ impl Default for StderrLogConfig {
     }
 }
 
+#[allow(clippy::from_over_into)]
 impl Into<InnerStderrLogConfig> for StderrLogConfig {
     fn into(self) -> InnerStderrLogConfig {
         InnerStderrLogConfig {
