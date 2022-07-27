@@ -21,7 +21,6 @@ use nom::IResult;
 
 use super::statements::DfAlterView;
 use super::statements::DfCall;
-use super::statements::DfCopy;
 use super::statements::DfCreateUserStage;
 use super::statements::DfDescribeUserStage;
 use super::statements::DfDropUserStage;
@@ -148,9 +147,6 @@ pub enum DfStatement<'a> {
     DropRole(DfDropRole),
     ShowRoles(DfShowRoles),
 
-    // Copy
-    Copy(DfCopy),
-
     // Stage
     CreateStage(DfCreateUserStage),
     DropStage(DfDropUserStage),
@@ -179,9 +175,10 @@ pub enum DfStatement<'a> {
     // Engine
     ShowEngines(DfShowEngines),
 
-    // Presign only implemented in the new planner.
-    // We add a placeholder here, forword the query to new planner always.
+    // The following statements are just placeholders, we will forword the whole query to
+    // new planner always.
     Presign,
+    Copy,
 }
 
 /// Comment hints from SQL.

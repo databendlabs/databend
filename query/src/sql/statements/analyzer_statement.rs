@@ -183,7 +183,6 @@ impl<'a> AnalyzableStatement for DfStatement<'a> {
             DfStatement::RevokePrivilege(v) => v.analyze(ctx).await,
             DfStatement::RevokeRole(v) => v.analyze(ctx).await,
             DfStatement::DropUser(v) => v.analyze(ctx).await,
-            DfStatement::Copy(v) => v.analyze(ctx).await,
             DfStatement::Call(v) => v.analyze(ctx).await,
             DfStatement::ShowFunctions(v) => v.analyze(ctx).await,
             DfStatement::CreateUDF(v) => v.analyze(ctx).await,
@@ -202,6 +201,7 @@ impl<'a> AnalyzableStatement for DfStatement<'a> {
             DfStatement::ShowTablesStatus(v) => v.analyze(ctx).await,
             DfStatement::ShowStages(v) => v.analyze(ctx).await,
             DfStatement::RemoveStage(v) => v.analyze(ctx).await,
+            DfStatement::Copy => unreachable!("should be forward to new planner"),
             DfStatement::Presign => unreachable!("should be forward to new planner"),
         }
     }

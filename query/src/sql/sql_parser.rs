@@ -207,12 +207,7 @@ impl<'a> DfParser<'a> {
                         self.parser.next_token();
                         self.parse_revoke()
                     }
-                    Keyword::COPY => {
-                        *self = Self::new_with_dialect(self.sql, &SnowflakeDialect {})?;
-                        self.parser.next_token();
-
-                        self.parse_copy()
-                    }
+                    Keyword::COPY => self.parse_copy(),
                     Keyword::CALL => {
                         self.parser.next_token();
                         self.parse_call()

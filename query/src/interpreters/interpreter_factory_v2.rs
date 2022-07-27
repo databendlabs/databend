@@ -41,7 +41,7 @@ impl InterpreterFactoryV2 {
         matches!(
             stmt,
             DfStatement::Query(_)
-                | DfStatement::Copy(_)
+                | DfStatement::Copy
                 | DfStatement::Explain(_)
                 | DfStatement::CreateStage(_)
                 | DfStatement::ShowStages(_)
