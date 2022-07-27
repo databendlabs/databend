@@ -504,6 +504,7 @@ async fn test_system_tables() -> Result<()> {
     let skipped = vec![
         "credits", // slow for ci (> 1s) and maybe flaky
         "metrics", // QueryError: "Prometheus recorder is not initialized yet"
+        "tracing", // Could be very large.
     ];
     for table_name in table_names {
         if skipped.contains(&table_name.as_str()) {
