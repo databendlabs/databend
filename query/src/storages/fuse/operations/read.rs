@@ -24,7 +24,6 @@ use common_exception::Result;
 use common_planners::Extras;
 use common_planners::PartInfoPtr;
 use common_planners::ReadDataSourcePlan;
-use tracing::warn;
 
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::Event;

@@ -18,7 +18,6 @@ use common_exception::Result;
 use common_planners::AlterViewPlan;
 use common_planners::PlanNode;
 use sqlparser::ast::ObjectName;
-use tracing::debug;
 
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;

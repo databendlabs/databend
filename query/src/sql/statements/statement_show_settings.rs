@@ -18,7 +18,6 @@ use common_exception::Result;
 use common_planners::PlanNode;
 use common_planners::ShowPlan;
 use common_planners::ShowSettingsPlan;
-use tracing::debug;
 
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;

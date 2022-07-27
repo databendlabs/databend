@@ -19,7 +19,6 @@ use common_planners::OptimizeTableAction;
 use common_planners::OptimizeTablePlan;
 use common_planners::PlanNode;
 use sqlparser::ast::ObjectName;
-use tracing::debug;
 
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;

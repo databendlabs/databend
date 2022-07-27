@@ -17,7 +17,6 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_planners::CallPlan;
 use common_planners::PlanNode;
-use tracing::debug;
 
 use super::AnalyzableStatement;
 use crate::sessions::QueryContext;

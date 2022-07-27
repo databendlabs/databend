@@ -23,7 +23,6 @@ use common_meta_types::StageType;
 use common_meta_types::UserStageInfo;
 use common_planners::CreateUserStagePlan;
 use common_planners::PlanNode;
-use tracing::debug;
 
 use super::parse_copy_file_format_options;
 use super::parse_uri_location;

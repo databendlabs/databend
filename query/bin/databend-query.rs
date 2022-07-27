@@ -35,6 +35,7 @@ use databend_query::servers::ShutdownHandle;
 use databend_query::sessions::SessionManager;
 use databend_query::Config;
 use databend_query::QUERY_SEMVER;
+use tracing::info;
 
 #[databend_main]
 async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<()> {
@@ -74,8 +75,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
         sentry::configure_scope(|scope| scope.set_tag("address", flight_addr));
     }
 
-    // let _guards = init_tracing_with_file(
-    let _guards = init_global_tracing(app_name.as_str(), conf.log);
+    let _guards = init_logging(app_name.as_str(), &conf.log);
 
     init_default_metrics_recorder();
 

@@ -30,7 +30,6 @@ use sqlparser::ast::ColumnDef;
 use sqlparser::ast::ColumnOption;
 use sqlparser::ast::Expr;
 use sqlparser::ast::ObjectName;
-use tracing::debug;
 
 use super::analyzer_expr::ExpressionAnalyzer;
 use crate::sessions::QueryContext;

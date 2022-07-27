@@ -21,7 +21,6 @@ use common_planners::SettingPlan;
 use common_planners::VarValue;
 use sqlparser::ast::Ident;
 use sqlparser::ast::SetVariableValue;
-use tracing::debug;
 
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;

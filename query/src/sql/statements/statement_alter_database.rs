@@ -19,7 +19,6 @@ use common_planners::PlanNode;
 use common_planners::RenameDatabaseEntity;
 use common_planners::RenameDatabasePlan;
 use sqlparser::ast::ObjectName;
-use tracing::debug;
 
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;

@@ -23,7 +23,6 @@ use common_planners::Expression;
 use common_planners::PlanNode;
 use sqlparser::ast::Expr;
 use sqlparser::ast::ObjectName;
-use tracing::debug;
 
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;

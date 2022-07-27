@@ -25,7 +25,6 @@ use common_planners::RenameTableEntity;
 use common_planners::RenameTablePlan;
 use sqlparser::ast::Expr;
 use sqlparser::ast::ObjectName;
-use tracing::debug;
 
 use super::analyzer_expr::ExpressionAnalyzer;
 use crate::sessions::QueryContext;

@@ -18,7 +18,6 @@ use common_exception::Result;
 use common_meta_types::UserDefinedFunction;
 use common_planners::AlterUserUDFPlan;
 use common_planners::PlanNode;
-use tracing::debug;
 
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;

@@ -20,7 +20,6 @@ use common_meta_app::schema::DatabaseMeta;
 use common_planners::CreateDatabasePlan;
 use common_planners::PlanNode;
 use sqlparser::ast::ObjectName;
-use tracing::debug;
 
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
