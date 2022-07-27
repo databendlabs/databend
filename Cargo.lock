@@ -2378,6 +2378,7 @@ dependencies = [
  "toml",
  "tonic",
  "tracing",
+ "tracing-appender",
  "twox-hash",
  "typetag",
  "url",

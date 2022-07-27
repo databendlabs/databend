@@ -21,7 +21,6 @@ use common_macros::databend_main;
 use common_meta_embedded::MetaEmbedded;
 use common_meta_grpc::MIN_METASRV_SEMVER;
 use common_metrics::init_default_metrics_recorder;
-use common_tracing::init_logging;
 use common_tracing::set_panic_hook;
 use databend_query::api::HttpService;
 use databend_query::api::RpcService;
@@ -51,7 +50,6 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
     let tenant = conf.query.tenant_id.clone();
     let cluster_id = conf.query.cluster_id.clone();
     let flight_addr = conf.query.flight_api_address.clone();
-    let app_name = format!("databend-query-{}-{}", &tenant, &cluster_id);
 
     let mut _sentry_guard = None;
     let bend_sentry_env = env::var("DATABEND_SENTRY_DSN").unwrap_or_else(|_| "".to_string());
@@ -75,15 +73,13 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
         sentry::configure_scope(|scope| scope.set_tag("address", flight_addr));
     }
 
-    let _guards = init_logging(app_name.as_str(), &conf.log);
-
     init_default_metrics_recorder();
-
     set_panic_hook();
-    info!("Databend Query start with config: {:?}", conf);
 
     let session_manager = SessionManager::from_conf(conf.clone()).await?;
     let mut shutdown_handle = ShutdownHandle::create(session_manager.clone());
+
+    info!("Databend Query start with config: {:?}", conf);
 
     // MySQL handler.
     {

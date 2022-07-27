@@ -35,8 +35,6 @@ use databend_query::Config;
 use crate::tests::SessionManagerBuilder;
 
 pub async fn create_query_context() -> Result<Arc<QueryContext>> {
-    common_tracing::init_logging("query_unittests", &common_tracing::Config::new_testing());
-
     let sessions = SessionManagerBuilder::create().build()?;
     create_query_context_with_session(sessions).await
 }

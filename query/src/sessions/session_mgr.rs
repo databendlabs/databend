@@ -28,6 +28,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_metrics::label_counter;
 use common_storage::init_operator;
+use common_tracing::init_logging;
 use common_users::RoleCacheMgr;
 use common_users::UserApiProvider;
 use futures::future::Either;
@@ -36,6 +37,7 @@ use opendal::Operator;
 use parking_lot::RwLock;
 use tracing::debug;
 use tracing::info;
+use tracing_appender::non_blocking::WorkerGuard;
 
 use crate::api::DataExchangeManager;
 use crate::catalogs::CatalogManager;
@@ -71,10 +73,22 @@ pub struct SessionManager {
     pub(crate) mysql_conn_map: Arc<RwLock<HashMap<Option<u32>, String>>>,
     pub(in crate::sessions) mysql_basic_conn_id: AtomicU32,
     async_insert_queue: Arc<RwLock<Option<Arc<AsyncInsertQueue>>>>,
+
+    /// log_guard preserve the nonblocking logger's guards so that our logger
+    /// can flushes spans/events on a drop
+    ///
+    /// This field should never be used except in `drop`.
+    _log_guards: Vec<WorkerGuard>,
 }
 
 impl SessionManager {
     pub async fn from_conf(conf: Config) -> Result<Arc<SessionManager>> {
+        let app_name = format!(
+            "databend-query-{}-{}",
+            conf.query.tenant_id, conf.query.cluster_id
+        );
+        let _log_guards = init_logging(app_name.as_str(), &conf.log);
+
         let catalogs = Arc::new(CatalogManager::try_new(&conf).await?);
         let storage_cache_manager = Arc::new(CacheManager::init(&conf.query));
 
@@ -136,6 +150,7 @@ impl SessionManager {
             mysql_conn_map,
             mysql_basic_conn_id: AtomicU32::new(9_u32.to_le() as u32),
             async_insert_queue,
+            _log_guards,
         }))
     }
 
