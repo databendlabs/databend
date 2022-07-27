@@ -2,7 +2,6 @@
 title: Tutorials
 ---
 
-## Deployment
 These tutorials are intended to help you get started with Databend:
 
 ## Deploying Databend
