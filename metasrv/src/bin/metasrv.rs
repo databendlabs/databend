@@ -119,7 +119,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
 
     // Print information to users.
     println!("Databend Metasrv");
-    println!("");
+    println!();
     println!("Version: {}", METASRV_COMMIT_VERSION.as_str());
     println!("Log:");
     println!("    File: {}", conf.log.file);
@@ -135,7 +135,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
             format!("join {:#?}", conf.raft_config.join)
         }
     );
-    println!("");
+    println!();
     println!("HTTP API");
     println!("   listened at {}", conf.admin_api_address);
     println!("gRPC API");

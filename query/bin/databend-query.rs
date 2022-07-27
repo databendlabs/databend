@@ -202,7 +202,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
 
     // Print information to users.
     println!("Databend Query");
-    println!("");
+    println!();
     println!("Version: {}", *databend_query::DATABEND_COMMIT_VERSION);
     println!("Log:");
     println!("    File: {}", conf.log.file);
@@ -218,7 +218,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
         }
     );
     println!("Storage: {}", conf.storage.params);
-    println!("");
+    println!();
     println!("MySQL");
     println!(
         "    listened at {}:{}",
