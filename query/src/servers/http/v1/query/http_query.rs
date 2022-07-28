@@ -42,7 +42,6 @@ use crate::sessions::TableContext;
 use crate::storages::result::block_buffer::BlockBuffer;
 
 #[derive(Deserialize, Debug)]
-#[serde(deny_unknown_fields)]
 pub struct HttpQueryRequest {
     pub session_id: Option<String>,
     pub session_state: Option<HttpSessionConf>,
@@ -101,7 +100,6 @@ impl PaginationConf {
 }
 
 #[derive(Deserialize, Serialize, Debug, Default, PartialEq, Eq, Clone)]
-#[serde(deny_unknown_fields)]
 pub struct HttpSessionConf {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub database: Option<String>,
