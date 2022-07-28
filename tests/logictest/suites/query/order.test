@@ -1,0 +1,9 @@
+statement ok
+set enable_planner_v2 = 1;
+
+statement error
+select number from numbers(10) as a order by b.number;
+
+statement error
+select number from (select * from numbers(10) as b) as a order by b.number;
+

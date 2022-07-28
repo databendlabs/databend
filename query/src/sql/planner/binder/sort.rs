@@ -78,7 +78,10 @@ impl<'a> Binder {
                     // We first search the identifier in select list
                     let mut found = false;
                     for item in projections.iter() {
-                        if item.column_name == ident.name {
+                        if item.column_name == ident.name
+                            && table_name.is_none()
+                            && database_name.is_none()
+                        {
                             order_items.push(OrderItem {
                                 expr: order.clone(),
                                 index: item.index,
