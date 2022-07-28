@@ -18,6 +18,7 @@ use common_datablocks::DataBlock;
 use common_datavalues::TypeDeserializerImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_io::prelude::FileSplit;
 use common_io::prelude::MemoryReader;
 use common_io::prelude::NestedCheckpointReader;
 
@@ -43,9 +44,9 @@ pub trait InputFormat: Send + Sync {
 
     fn deserialize_data(&self, state: &mut Box<dyn InputState>) -> Result<Vec<DataBlock>>;
 
-    fn read_buf(&self, buf: &[u8], state: &mut Box<dyn InputState>) -> Result<usize>;
+    fn deserialize_complete_split(&self, split: FileSplit) -> Result<Vec<DataBlock>>;
 
-    fn set_buf(&self, buf: Vec<u8>, state: &mut Box<dyn InputState>);
+    fn read_buf(&self, buf: &[u8], state: &mut Box<dyn InputState>) -> Result<(usize, bool)>;
 
     fn take_buf(&self, state: &mut Box<dyn InputState>) -> Vec<u8>;
 
@@ -66,6 +67,8 @@ pub trait InputFormat: Send + Sync {
     }
 
     fn read_row_num(&self, _state: &mut Box<dyn InputState>) -> Result<usize> {
-        Err(ErrorCode::UnImplement("Unimplement error"))
+        Ok(0)
     }
 }
+
+trait RowBasedInputFormat: InputFormat {}

@@ -1,0 +1,43 @@
+statement ok
+DROP DATABASE IF EXISTS db_09_18;
+
+statement ok
+CREATE DATABASE db_09_18;
+
+statement ok
+USE db_09_18;
+
+statement ok
+CREATE TABLE t(c1 int, c2 string);
+
+statement ok
+INSERT INTO t VALUES(1, "a");
+
+statement ok
+INSERT INTO t VALUES(2, "b");
+
+statement ok
+INSERT INTO t VALUES(3, "c");
+
+statement query T
+explain select * from t where c1 = 1;
+
+----
+Projection: c1:Int32, c2:String
+  Filter: (c1 = 1)
+    ReadDataSource: scan schema: [c1:Int32, c2:String], statistics: [read_rows: 1, read_bytes: 55, partitions_scanned: 1, partitions_total: 3], push_downs: [projections: [0, 1], filters: [(c1 = 1)]]
+
+statement query T
+explain select * from t where c2 > 'b';
+
+----
+Projection: c1:Int32, c2:String
+  Filter: (c2 > b)
+    ReadDataSource: scan schema: [c1:Int32, c2:String], statistics: [read_rows: 1, read_bytes: 55, partitions_scanned: 1, partitions_total: 3], push_downs: [projections: [0, 1], filters: [(c2 > b)]]
+
+statement ok
+DROP TABLE t;
+
+statement ok
+DROP DATABASE db_09_18;
+
