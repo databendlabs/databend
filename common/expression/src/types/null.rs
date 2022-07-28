@@ -22,6 +22,7 @@ use crate::types::GenericMap;
 use crate::types::ValueType;
 use crate::values::Column;
 use crate::values::Scalar;
+use crate::ScalarRef;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NullType;
@@ -31,6 +32,8 @@ impl ValueType for NullType {
     type ScalarRef<'a> = ();
     type Column = usize;
     type Domain = ();
+    type ColumnIterator<'a> = std::iter::Take<std::iter::Repeat<()>>;
+    type ColumnBuilder = usize;
 
     fn to_owned_scalar<'a>(scalar: Self::ScalarRef<'a>) -> Self::Scalar {
         scalar
@@ -39,19 +42,10 @@ impl ValueType for NullType {
     fn to_scalar_ref<'a>(scalar: &'a Self::Scalar) -> Self::ScalarRef<'a> {
         *scalar
     }
-}
 
-impl ArgType for NullType {
-    type ColumnIterator<'a> = std::iter::Take<std::iter::Repeat<()>>;
-    type ColumnBuilder = usize;
-
-    fn data_type() -> DataType {
-        DataType::Null
-    }
-
-    fn try_downcast_scalar<'a>(scalar: &'a Scalar) -> Option<Self::ScalarRef<'a>> {
+    fn try_downcast_scalar<'a>(scalar: &'a ScalarRef) -> Option<Self::ScalarRef<'a>> {
         match scalar {
-            Scalar::Null => Some(()),
+            ScalarRef::Null => Some(()),
             _ => None,
         }
     }
@@ -88,8 +82,6 @@ impl ArgType for NullType {
         })
     }
 
-    fn full_domain(_: &GenericMap) -> Self::Domain {}
-
     fn column_len<'a>(len: &'a Self::Column) -> usize {
         *len
     }
@@ -105,14 +97,6 @@ impl ArgType for NullType {
 
     fn iter_column<'a>(len: &'a Self::Column) -> Self::ColumnIterator<'a> {
         std::iter::repeat(()).take(*len)
-    }
-
-    fn column_from_iter(iter: impl Iterator<Item = Self::Scalar>, _: &GenericMap) -> Self::Column {
-        iter.count()
-    }
-
-    fn create_builder(_capacity: usize, _generics: &GenericMap) -> Self::ColumnBuilder {
-        0
     }
 
     fn column_to_builder(len: Self::Column) -> Self::ColumnBuilder {
@@ -141,5 +125,21 @@ impl ArgType for NullType {
 
     fn build_scalar(len: Self::ColumnBuilder) -> Self::Scalar {
         assert_eq!(len, 1);
+    }
+}
+
+impl ArgType for NullType {
+    fn data_type() -> DataType {
+        DataType::Null
+    }
+
+    fn full_domain(_: &GenericMap) -> Self::Domain {}
+
+    fn create_builder(_capacity: usize, _generics: &GenericMap) -> Self::ColumnBuilder {
+        0
+    }
+
+    fn column_from_iter(iter: impl Iterator<Item = Self::Scalar>, _: &GenericMap) -> Self::Column {
+        iter.count()
     }
 }

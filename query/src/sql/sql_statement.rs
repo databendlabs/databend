@@ -21,15 +21,9 @@ use nom::IResult;
 
 use super::statements::DfAlterView;
 use super::statements::DfCall;
-use super::statements::DfCopy;
-use super::statements::DfCreateUserStage;
-use super::statements::DfDescribeUserStage;
-use super::statements::DfDropUserStage;
 use super::statements::DfDropView;
 use super::statements::DfGrantRoleStatement;
-use super::statements::DfList;
 use super::statements::DfRevokeRoleStatement;
-use super::statements::DfShowStages;
 use super::statements::DfUndropDatabase;
 use crate::sql::statements::DfAlterDatabase;
 use crate::sql::statements::DfAlterTable;
@@ -55,7 +49,6 @@ use crate::sql::statements::DfInsertStatement;
 use crate::sql::statements::DfKillStatement;
 use crate::sql::statements::DfOptimizeTable;
 use crate::sql::statements::DfQueryStatement;
-use crate::sql::statements::DfRemoveStage;
 use crate::sql::statements::DfRenameTable;
 use crate::sql::statements::DfRevokePrivilegeStatement;
 use crate::sql::statements::DfSetVariable;
@@ -148,17 +141,6 @@ pub enum DfStatement<'a> {
     DropRole(DfDropRole),
     ShowRoles(DfShowRoles),
 
-    // Copy
-    Copy(DfCopy),
-
-    // Stage
-    CreateStage(DfCreateUserStage),
-    DropStage(DfDropUserStage),
-    DescribeStage(DfDescribeUserStage),
-    RemoveStage(DfRemoveStage),
-    List(DfList),
-    ShowStages(DfShowStages),
-
     // Call
     Call(DfCall),
 
@@ -179,9 +161,16 @@ pub enum DfStatement<'a> {
     // Engine
     ShowEngines(DfShowEngines),
 
-    // Presign only implemented in the new planner.
-    // We add a placeholder here, forword the query to new planner always.
+    // The following statements are just placeholders, we will forword the whole query to
+    // new planner always.
     Presign,
+    Copy,
+    CreateStage,
+    DropStage,
+    DescribeStage,
+    RemoveStage,
+    List,
+    ShowStages,
 }
 
 /// Comment hints from SQL.

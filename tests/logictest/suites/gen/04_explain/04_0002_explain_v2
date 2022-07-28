@@ -25,8 +25,8 @@ statement query T
 explain select t1.a from t1 where a > 0;
 
 ----
-Project: [a]
-└── Filter: [t1.a > 0]
+Project: [a (#0)]
+└── Filter: [t1.a (#0) > 0]
     └── Scan: default.default.t1
 
 onlyif mysql
@@ -34,8 +34,8 @@ statement query T
 explain select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a and t2.a > 5 and t1.a > 1);
 
 ----
-Filter: [(t1.a > 3) OR ((t2.a > 5) AND (t1.a > 1))]
-└── HashJoin: INNER, build keys: [t2.a], probe keys: [t1.a], join filters: []
+Filter: [(t1.a (#0) > 3) OR ((t2.a (#2) > 5) AND (t1.a (#0) > 1))]
+└── HashJoin: INNER, build keys: [t2.a (#2)], probe keys: [t1.a (#0)], join filters: []
     ├── Scan: default.default.t1
     └── Scan: default.default.t2
 
@@ -44,7 +44,7 @@ statement query T
 explain select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a);
 
 ----
-HashJoin: INNER, build keys: [t2.a], probe keys: [t1.a], join filters: []
+HashJoin: INNER, build keys: [t2.a (#2)], probe keys: [t1.a (#0)], join filters: []
 ├── Scan: default.default.t1
 └── Scan: default.default.t2
 
