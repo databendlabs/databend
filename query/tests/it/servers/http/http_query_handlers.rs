@@ -32,7 +32,6 @@ use databend_query::servers::http::v1::make_page_uri;
 use databend_query::servers::http::v1::make_state_uri;
 use databend_query::servers::http::v1::query_route;
 use databend_query::servers::http::v1::ExecuteStateKind;
-use databend_query::servers::http::v1::HttpSession;
 use databend_query::servers::http::v1::HttpSessionConf;
 use databend_query::servers::http::v1::QueryResponse;
 use databend_query::servers::HttpHandler;
@@ -386,32 +385,6 @@ async fn test_pagination_v1() -> Result<()> {
 #[tokio::test]
 async fn test_pagination_v2() -> Result<()> {
     test_pagination(1).await
-}
-
-#[test]
-fn test_http_session_serde() {
-    {
-        let json = r#"{"id": "abc"}"#;
-        assert_eq!(
-            serde_json::from_str::<HttpSession>(json).unwrap(),
-            HttpSession::Old {
-                id: "abc".to_string()
-            }
-        );
-    }
-
-    {
-        let json = r#"{}"#;
-        assert_eq!(
-            serde_json::from_str::<HttpSession>(json).unwrap(),
-            HttpSession::New(Default::default())
-        );
-    }
-
-    {
-        let json = r#"{"unexpected": ""}"#;
-        assert!(serde_json::from_str::<HttpSession>(json).is_err());
-    }
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]

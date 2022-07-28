@@ -130,20 +130,6 @@ impl HttpSessionConf {
     }
 }
 
-#[derive(Deserialize, Debug, PartialEq, Eq)]
-#[serde(untagged)]
-pub enum HttpSession {
-    // keep New before old, so it deserialize to New when empty
-    New(HttpSessionConf),
-    Old { id: String },
-}
-
-impl Default for HttpSession {
-    fn default() -> Self {
-        HttpSession::New(Default::default())
-    }
-}
-
 #[derive(Debug, Clone)]
 pub struct ResponseState {
     pub running_time_ms: f64,
