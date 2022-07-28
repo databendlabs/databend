@@ -1,18 +1,18 @@
 statement query B label(http)
 SELECT 1::BOOLEAN;
 
-----  
+----
 1
 
-----  http
+---- http
 true
 
 statement query B label(http)
 SELECT 1::BOOL;
 
-----  
+----
 1
 
-----  http
+---- http
 true
 

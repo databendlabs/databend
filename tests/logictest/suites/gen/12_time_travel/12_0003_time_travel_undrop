@@ -13,41 +13,17 @@ CREATE TABLE t(c1 int);
 statement ok
 DROP TABLE t;
 
-skipif clickhouse
-statement query T 
-select "show tables should give empty list, if all the tables droppped";
-
-----  
-show tables should give empty list, if all the tables droppped
-
 statement ok
 SHOW TABLES;
-
-skipif clickhouse
-statement query T 
-select "after undrop, table should appear";
-
-----  
-after undrop, table should appear
 
 statement ok
 UNDROP TABLE t;
 
-statement query T label(http)
+statement query T
 SHOW TABLES;
 
-----  
+----
 t
-
-----  http
-t
-
-skipif clickhouse
-statement query T 
-select "after undrop, data should appear";
-
-----  
-after undrop, data should appear
 
 statement ok
 insert into t values(1), (2);
@@ -58,15 +34,12 @@ DROP TABLE t;
 statement ok
 UNDROP TABLE t;
 
-statement ok
+statement query I
 select * from t;
 
-skipif clickhouse
-statement query T 
-select "Tables of same name";
-
-----  
-Tables of same name
+----
+1
+2
 
 statement ok
 DROP TABLE t;
@@ -83,15 +56,11 @@ DROP TABLE t;
 statement ok
 UNDROP TABLE t;
 
-skipif clickhouse
-statement query T 
-select "-- the latest t should be recovered, which has 1 row";
-
-----  
--- the latest t should be recovered, which has 1 row
-
-statement ok
+statement query I
 SELECT count(1) FROM t;
+
+----
+1
 
 statement ok
 ALTER TABLE t RENAME TO t1;
@@ -99,19 +68,42 @@ ALTER TABLE t RENAME TO t1;
 statement ok
 UNDROP TABLE t;
 
-skipif clickhouse
-statement query T 
-select "-- the first t should be recovered, which has 2 row";
-
-----  
--- the first t should be recovered, which has 2 row
-
-statement ok
+statement query I
 SELECT count(1) FROM t;
+
+----
+2
 
 statement ok
 DROP TABLE t;
 
 statement ok
 DROP database db_12_0003;
+
+statement ok
+UNDROP database db_12_0003;
+
+statement ok
+USE db_12_0003;
+
+statement query T
+SHOW TABLES;
+
+----
+t1
+
+statement query I
+SELECT count(1) FROM t1;
+
+----
+1
+
+statement ok
+UNDROP TABLE t;
+
+statement query I
+SELECT count(1) FROM t;
+
+----
+2
 
