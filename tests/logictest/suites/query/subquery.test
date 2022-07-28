@@ -583,7 +583,28 @@ ORDER BY c.c_id, o.o_id
 5  NULL  NULL
 6  90    WA
 
+onlyif mysql
+statement query IT
+SELECT
+    c_id,
+    (SELECT count(*) FROM o WHERE o.c_id=c.c_id)
+FROM c
+ORDER BY c_id;
 
+----
+1  3
+2  3
+3  0
+4  2
+5  0
+6  1
+
+onlyif mysql
+statement query I
+SELECT max((SELECT count(*) FROM o WHERE o.c_id=c.c_id)) FROM c;
+
+----
+3
 
 onlyif mysql
 statement ok
