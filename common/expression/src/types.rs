@@ -15,6 +15,7 @@
 pub mod any;
 pub mod array;
 pub mod boolean;
+pub mod datetime;
 pub mod empty_array;
 pub mod generic;
 pub mod map;
@@ -34,6 +35,9 @@ use serde::Serialize;
 pub use self::any::AnyType;
 pub use self::array::ArrayType;
 pub use self::boolean::BooleanType;
+pub use self::datetime::DateType;
+pub use self::datetime::IntervalType;
+pub use self::datetime::TimestampType;
 pub use self::empty_array::EmptyArrayType;
 pub use self::generic::GenericType;
 pub use self::map::MapType;

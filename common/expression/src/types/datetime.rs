@@ -13,24 +13,16 @@
 // limitations under the License.
 
 use std::fmt::Debug;
-use std::marker::PhantomData;
-use std::ops::Range;
 
 use common_arrow::arrow::buffer::Buffer;
-use common_arrow::arrow::types::NativeType;
 
 use crate::property::Domain;
-use crate::property::FloatDomain;
 use crate::property::IntDomain;
-use crate::property::UIntDomain;
-use crate::types::ArgType;
 use crate::types::DataType;
-use crate::types::GenericMap;
-use crate::types::ValueType;
-use crate::util::buffer_into_mut;
 use crate::values::Column;
 use crate::values::Scalar;
 use crate::ScalarRef;
+use crate::types::number::Number;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DateType;
@@ -86,7 +78,7 @@ impl Number for IntervalType {
     type Domain = IntDomain;
 
     fn data_type() -> DataType {
-        DataType::Interal
+        DataType::Interval
     }
 
     fn try_downcast_scalar(scalar: &ScalarRef) -> Option<Self::Storage> {
