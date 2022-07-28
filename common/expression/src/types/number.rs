@@ -430,6 +430,7 @@ impl Number for i32 {
         }
     }
 }
+
 impl Number for i64 {
     type Storage = i64;
     type Domain = IntDomain;

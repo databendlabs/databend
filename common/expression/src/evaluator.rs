@@ -269,7 +269,7 @@ impl Evaluator {
                 // number types
                 with_number_type!(SRC_TYPE, match &col {
                     Column::SRC_TYPE(col) => {
-                        with_number_type!(DEST_TYPE, match dest_ty {
+                        with_number_type!(DEST_TYPE, match dest_ty.normalize_datetime() {
                             DataType::DEST_TYPE => {
                                 let src_info = DataType::SRC_TYPE.number_type_info().unwrap();
                                 let dest_info = DataType::DEST_TYPE.number_type_info().unwrap();
@@ -386,7 +386,7 @@ impl Evaluator {
                 // number types
                 with_number_type!(SRC_TYPE, match &col {
                     Column::SRC_TYPE(col) => {
-                        with_number_type!(DEST_TYPE, match dest_ty {
+                        with_number_type!(DEST_TYPE, match dest_ty.normalize_datetime() {
                             DataType::DEST_TYPE => {
                                 let src_info = DataType::SRC_TYPE.number_type_info().unwrap();
                                 let dest_info = DataType::DEST_TYPE.number_type_info().unwrap();

@@ -62,9 +62,9 @@ pub enum DataType {
     Int64,
     Float32,
     Float64,
-    // TODO: Implement them
-    // Timestamp
-    // Interval,
+    Date,
+    Interval,
+    Timestamp,
     Null,
     Nullable(Box<DataType>),
     EmptyArray,
@@ -239,6 +239,15 @@ impl DataType {
                 bit_width: 64,
             }),
             _ => None,
+        }
+    }
+
+    pub fn normalize_datetime(&self) -> Self {
+        match self {
+            DataType::Date => DataType::Int32,
+            DataType::Interval => DataType::Int64,
+            DataType::Timestamp => DataType::Int64,
+            other => other.clone(),
         }
     }
 }
