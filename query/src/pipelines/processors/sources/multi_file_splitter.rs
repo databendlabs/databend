@@ -21,6 +21,7 @@ use common_base::base::ProgressValues;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_formats::InputFormat;
+use common_io::prelude::FileSplit;
 use common_io::prelude::FormatSettings;
 use common_meta_types::StageFileCompression;
 use common_storage::init_operator;
@@ -42,7 +43,7 @@ pub struct MultiFileSplitter {
     current_file: Option<FileSplitter>,
     output: Arc<OutputPort>,
     scan_progress: Arc<Progress>,
-    output_splits: VecDeque<Vec<u8>>,
+    output_splits: VecDeque<FileSplit>,
     input_format: Arc<dyn InputFormat>,
     format_settings: FormatSettings,
     files: Arc<Mutex<VecDeque<String>>>,
@@ -97,6 +98,7 @@ impl MultiFileSplitter {
         let reader = object.reader().await?;
         self.current_file = Some(FileSplitter::create(
             reader,
+            Some(path.to_string()),
             self.input_format.clone(),
             self.format_settings.clone(),
             self.get_compression_algo(path)?,
@@ -148,7 +150,7 @@ impl Processor for MultiFileSplitter {
         }
 
         if let Some(split) = self.output_splits.pop_front() {
-            self.output.push_buf(Ok(split));
+            self.output.push_split(Ok(split));
             return Ok(Event::NeedConsume);
         }
 

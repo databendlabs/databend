@@ -158,7 +158,7 @@ impl MultipartWorker for ParallelMultipartWorker {
                                         let read_size =
                                             match self.input_format.read_buf(buf_slice, &mut state)
                                             {
-                                                Ok(read_size) => read_size,
+                                                Ok((read_size, _)) => read_size,
                                                 Err(cause) => {
                                                     Self::send(&tx, Err(cause)).await;
                                                     break 'outer;

@@ -283,14 +283,13 @@ impl Processor for SequentialInputFormatSource {
                 }
 
                 while !data_slice.is_empty() {
-                    let len = data_slice.len();
-                    let read_size = self
+                    let (read_size, is_full) = self
                         .input_format
                         .read_buf(data_slice, &mut self.input_state)?;
 
                     data_slice = &data_slice[read_size..];
 
-                    if read_size < len {
+                    if is_full {
                         let state = &mut self.input_state;
                         let mut blocks = self.input_format.deserialize_data(state)?;
 
