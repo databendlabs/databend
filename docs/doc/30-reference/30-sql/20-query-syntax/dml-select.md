@@ -181,7 +181,7 @@ INSERT INTO t_null VALUES (NULL);
 INSERT INTO t_null VALUES (NULL);
 
 --Databend considers NULL values larger than any non-NULL values. 
---The NUll values appear last in the following example that sorts the results in ascending order:
+--The NULL values appear last in the following example that sorts the results in ascending order:
 
 SELECT number FROM t_null order by number ASC;
 +--------+
@@ -207,7 +207,7 @@ SELECT number FROM t_null order by number ASC nulls first;
 |      3 |
 +--------+
 
--- Use the NULLS LAST option to make the NULL values appear last in a descending order:
+-- Use the NULLS LAST option to make the NULL values appear last in descending order:
 
 SELECT number FROM t_null order by number DESC nulls last;
 +--------+
