@@ -30,7 +30,6 @@ use super::bloom_filter_predicate;
 use crate::sessions::TableContext;
 use crate::storages::fuse::io::MetaReaders;
 use crate::storages::fuse::pruning::limiter;
-use crate::storages::fuse::pruning::limiter::Limiter;
 use crate::storages::fuse::pruning::range_filter_predicate;
 
 pub struct BlockPruner {

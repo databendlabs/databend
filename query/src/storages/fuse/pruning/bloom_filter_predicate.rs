@@ -151,7 +151,7 @@ pub fn new<'a>(
     filter_expr: Option<&'a Expression>,
     schema: &'a DataSchemaRef,
     dal: &'a Operator,
-) -> Box<dyn BoolFilterPredicate + Send + Sync> {
+) -> Box<dyn BoolFilterPredicate + Send + Sync + 'a> {
     if let Some(expr) = filter_expr {
         let filter_block_cols = column_names_of_expression(expr);
         Box::new(BlockBloomFilterPredicate::new(
