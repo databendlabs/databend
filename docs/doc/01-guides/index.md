@@ -40,11 +40,15 @@ These tutorials are intended to help you get started with Databend:
 * [How to Grant Role to a User](../30-reference/30-sql/00-ddl/30-user/20-grant-role.md)
 * [How to Revoke Role from a User](../30-reference/30-sql/00-ddl/30-user/21-revoke-role.md)
 
-## Managing Tables
+## Managing Databases
 
 * [How to Create a Database](../30-reference/30-sql/00-ddl/10-database/ddl-create-database.md)
 * [How to Drop a Database](../30-reference/30-sql/00-ddl/10-database/ddl-drop-database.md)
+
+## Managing Tables
+
 * [How to Create a Table](../30-reference/30-sql/00-ddl/20-table/10-ddl-create-table.md)
+* [How to Drop a Table](../30-reference/30-sql/00-ddl/20-table/20-ddl-drop-table.md)
 * [How to Rename a Table](../30-reference/30-sql/00-ddl/20-table/30-ddl-rename-table.md)
 * [How to Truncate a Table](../30-reference/30-sql/00-ddl/20-table/40-ddl-truncate-table.md)
 
@@ -60,7 +64,7 @@ These tutorials are intended to help you get started with Databend:
 * [How to Drop a User-Defined Function](../30-reference/30-sql/00-ddl/50-udf/ddl-drop-function.md)
 * [How to Alter a User-Defined Function](../30-reference/30-sql/00-ddl/50-udf/ddl-alter-function.md)
 
-## Backing Up with Databend
+## Backup & Restore
 
 * [How to Back Up Meta Data](../50-manage/00-metasrv/30-metasrv-backup-restore.md)
 * [How to Back Up Databases](../50-manage/10-backup-restore/10-backup-and-restore-schema.md)
