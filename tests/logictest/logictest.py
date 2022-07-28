@@ -347,7 +347,7 @@ class SuiteRunner(object):
         actual = safe_execute(lambda: self.execute_ok(statement.text),
                               statement)
         if actual is not None:
-            raise LogicError(message=str(statement), expected="statement ok must get success response, not error code in response")
+            raise LogicError(message=str(statement), expected="expect success response, but got: %s" % actual)
 
     def assert_query_equal(self, f, resultset, statement):
         # use join after split instead of strip
