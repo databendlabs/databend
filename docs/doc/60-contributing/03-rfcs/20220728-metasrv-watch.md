@@ -7,7 +7,7 @@ description:
 Metasrv uses GRPC stream to watch the key changes, users can add a watch key through `KVApi`, and the `WatchRequest` parameters include:
 
 * key: the key to register for watching.
-* key_end: `key_end`` is the end of the range [key, key_end) to watch.
+* key_end: `key_end` is the end of the range [key, key_end) to watch.
 If key_end is None, then watch only key. If want to watch prefix of key, use`get_start_and_end_of_prefix` to generate [key, key_end).
 * filter_type: the filter type of the watch key change events, which is one of the following:
   * ALL: receives all kinds of update events.
