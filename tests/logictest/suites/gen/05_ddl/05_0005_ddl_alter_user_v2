@@ -41,7 +41,10 @@ statement ok
 ALTER USER 'test-i@localhost' IDENTIFIED WITH sha256_password BY 'new-password';
 
 statement ok
-ALTER USER 'test-i'@'localhost' WITH DEFAULT_ROLE = 'role1';
+ALTER USER 'test-h'@'localhost' WITH DEFAULT_ROLE = 'role1';
+
+statement query I
+SELECT * FROM system.users;
 
 statement ok
 DROP USER IF EXISTS 'test-e'@'localhost';
