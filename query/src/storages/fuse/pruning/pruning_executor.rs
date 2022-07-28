@@ -26,12 +26,12 @@ use common_tracing::tracing;
 use futures::StreamExt;
 use futures::TryStreamExt;
 
-use super::bloom_filter_predicate;
+use super::bloom_pruner;
 use crate::sessions::TableContext;
 use crate::storages::fuse::io::MetaReaders;
-use crate::storages::fuse::pruning::bloom_filter_predicate::NonPruner;
+use crate::storages::fuse::pruning::bloom_pruner::NonPruner;
 use crate::storages::fuse::pruning::limiter;
-use crate::storages::fuse::pruning::range_filter_predicate;
+use crate::storages::fuse::pruning::range_pruner;
 
 pub struct BlockPruner {
     table_snapshot: Arc<TableSnapshot>,
@@ -44,7 +44,8 @@ impl BlockPruner {
         Self { table_snapshot }
     }
 
-    #[tracing::instrument(level = "debug", name="block_pruner_apply", skip(self, schema, ctx), fields(ctx.id = ctx.get_id().as_str()))]
+    // prune blocks by utilizing min_max index and bloom filter, according to the pushdowns
+    #[tracing::instrument(level = "debug", skip(self, schema, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     pub async fn prune(
         &self,
         ctx: &Arc<dyn TableContext>,
@@ -70,25 +71,21 @@ impl BlockPruner {
             return Self::all_the_blocks(segment_locs, ctx.as_ref()).await;
         }
 
-        // prepare the limiter. in case that limit is none, an unlimited limiter will be constructed
+        // prepare the limiter. in case that limit is none, an unlimited limiter will be returned
         let limiter = limiter::new_limiter(limit);
 
         // prepare the range filter.
-        // if filter_expression is none, an dummy pruner will be constructed, which prunes nothing
+        // if filter_expression is none, an dummy pruner will be returned, which prunes nothing
         let range_filter_pruner =
-            range_filter_predicate::new_range_filter_predicate(ctx, filter_expression, &schema)?;
+            range_pruner::new_range_filter_pruner(ctx, filter_expression, &schema)?;
 
-        // prepare the bloom filter
         let dal = ctx.get_storage_operator()?;
         let enable_bloom_index = ctx.get_settings().get_enable_bloom_filter_index()?;
         let bloom_filter_pruner = if enable_bloom_index != 0 {
-            bloom_filter_predicate::new_bloom_filter_predicate(
-                ctx,
-                filter_expression,
-                &schema,
-                &dal,
-            )?
+            // prepare the bloom filter, if filter_expression is none, an dummy pruner will be returned
+            bloom_pruner::new_bloom_filter_pruner(ctx, filter_expression, &schema, &dal)?
         } else {
+            // toggle off bloom filter according the session settings
             Box::new(NonPruner)
         };
 
@@ -110,14 +107,17 @@ impl BlockPruner {
                 let segment_reader = MetaReaders::segment_info_reader(ctx.as_ref());
                 let segment_info = segment_reader.read(seg_loc, None, version).await?;
                 let mut result = Vec::with_capacity(segment_info.blocks.len());
-                if range_filter_pruner(&segment_info.summary.col_stats)? {
+                // prune segment using range filter
+                if range_filter_pruner.should_keep(&segment_info.summary.col_stats) {
                     for block_meta in &segment_info.blocks {
-                        if range_filter_pruner(&block_meta.col_stats)?
+                        // prune block using range filter, and bloom filter if necessary
+                        if range_filter_pruner.should_keep(&block_meta.col_stats)
                             && bloom_filter_pruner
-                                .eval(block_meta.location.0.as_str())
-                                .await?
+                                .should_keep(block_meta.location.0.as_str())
+                                .await
                         {
                             result.push((idx, block_meta.clone()));
+                            // doc here
                             if !limiter.within_limit(block_meta.row_count as usize) {
                                 break;
                             }
@@ -156,9 +156,3 @@ impl BlockPruner {
         Ok(block_metas.into_iter().flatten().collect::<Vec<_>>())
     }
 }
-
-// TODO unit test cases:
-// 0. normal case
-// 1. col has no bloom index
-// 1.1. error handling -> should not break the execution
-// 1.2. (c1 = x and  c2_no_bloom_idx = b) should work, if bloom indicates that x not exists

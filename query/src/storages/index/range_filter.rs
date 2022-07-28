@@ -30,6 +30,7 @@ use common_planners::Expression;
 use common_planners::ExpressionMonotonicityVisitor;
 use common_planners::Expressions;
 use common_planners::RequireColumnsVisitor;
+use common_tracing::tracing;
 
 use crate::pipelines::processors::transforms::ExpressionExecutor;
 use crate::sessions::TableContext;
@@ -84,6 +85,7 @@ impl RangeFilter {
         })
     }
 
+    #[tracing::instrument(level = "debug", name = "range_filter_eval", skip_all)]
     pub fn eval(&self, stats: &StatisticsOfColumns) -> Result<bool> {
         let mut columns = Vec::with_capacity(self.stat_columns.len());
         for col in self.stat_columns.iter() {

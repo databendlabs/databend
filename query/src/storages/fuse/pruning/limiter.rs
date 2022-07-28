@@ -30,13 +30,14 @@ impl Limiter for Unlimited {
 impl Limiter for AtomicUsize {
     fn within_limit(&self, n: usize) -> bool {
         let o = self.fetch_sub(n, Ordering::Relaxed);
-        o < n
+        o > n
     }
 }
 
-pub fn new_limiter(limit: Option<usize>) -> Box<dyn Limiter + Send + Sync> {
+pub type LimiterPruner = Box<dyn Limiter + Send + Sync>;
+pub fn new_limiter(limit: Option<usize>) -> LimiterPruner {
     match limit {
-        Some(size) if size > 0 => Box::new(AtomicUsize::new(size)),
+        Some(size) => Box::new(AtomicUsize::new(size)),
         _ => Box::new(Unlimited),
     }
 }

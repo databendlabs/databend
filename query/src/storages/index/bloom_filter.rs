@@ -74,9 +74,12 @@ pub struct BloomFilterIndexer {
     pub ctx: Arc<dyn TableContext>,
 }
 
-// TODO teaks the default max_num_bits value according to default value of block size?
-const BLOOM_FILTER_MAX_NUM_BITS: usize = 2048000;
+// const BLOOM_FILTER_MAX_NUM_BITS: usize = 2048000; // 64000 * size_of(u32)
+
+// with this setting, about 1.25MB per column, for NDV 1M
+const BLOOM_FILTER_MAX_NUM_BITS: usize = 10240000; // 320000 * size_of(u32)
 const BLOOM_FILTER_DEFAULT_FALSE_POSITIVE_RATE: f64 = 0.01;
+
 const BLOOM_FILTER_SEED_GEN_A: u64 = 845897321;
 const BLOOM_FILTER_SEED_GEN_B: u64 = 217728422;
 

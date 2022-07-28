@@ -18,6 +18,7 @@ pub mod retry;
 mod write;
 
 pub use locations::TableMetaLocationGenerator;
+pub use read::load_bloom_filter_by_columns;
 pub use read::BlockReader;
 pub use read::MetaReaders;
 pub use read::SegmentInfoReader;
