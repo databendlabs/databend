@@ -45,7 +45,7 @@ you are expected to get JSON like this (formatted):
 {
   "id": "3cd25ab7-c3a4-42ce-9e02-e1b354d91f06",
   "session_id": "8d3a737d-2f6c-4df7-ba44-6dfc818255ce",
-  "session_state": {},
+  "session": {},
   "schema": {
     "fields": [
       {
@@ -101,7 +101,7 @@ QueryRequest
 |---------------|--------------|----------|---------|--------------------------------------------------|
 | sql           | string       | Yes      |         | the sql to execute                               |
 | session_id    | string       | No       |         | used only when reuse server-side session         |
-| session_state | SessionState | No       |         |                                                  |
+| session | SessionState | No       |         |                                                  |
 | pagination    | Pagination   | No       |         | a uniq query_id for this POST request            |
 | string_fields | bool         | No       | false   | all field value in data is represented in string |
 
@@ -138,7 +138,7 @@ QueryResponse:
 | schema        | Schema       | the schema of the results                |
 | affect        | Affect       | the affect of some queries               |
 | session_id    | String       |                                          |
-| session_state | SessionState |                                          |
+| session | SessionState |                                          |
 
 Schema:
 
@@ -226,13 +226,13 @@ finished, even before the result data is fetched by client.
 To use SQLs like `set` and `use` which change context for the following SQLs, we need session support, there are 2 choices:
 
 #### server-side session
- For the first `QueryRequest` which start a session: set `QueryRequest.session_state.keep_server_session_secs` to positive int like 10. 
+ For the first `QueryRequest` which start a session: set `QueryRequest.session.keep_server_session_secs` to positive int like 10. 
  remember the returned `QueryResponse.session_id`.
 
 ```json
 {
   "sql": "...;", 
-  "session_state": {
+  "session": {
     "keep_server_session_secs": 100
   } 
 }
@@ -252,15 +252,15 @@ use the `QueryResponse.session_id ` for `QueryRequest.session.id`.
 the handler will return info about changed setting or current db in the  `affect` field,
 client can remember these changes and put them in the session field in the following requests.
 
-when use client side session,  response will contain `session_state` field, which is `session` field in request together with the affect applied to it.
-Only use `session_state` field in next_url, and when the `state` field is "Succeeded"
+when use client side session,  response will contain `session` field, which is `session` field in request together with the affect applied to it.
+Only use `session` field in next_url, and when the `state` field is "Succeeded"
 
 set statement:
 
 ```json
 {
   "sql": "set max_threads=1;",
-  "session_state": {
+  "session": {
     "database": "db1",
     "settings": {
       "max_threads": "6"
@@ -277,7 +277,7 @@ set statement:
     "value": "1",
     "is_global": false
   },
-  "session_state": {
+  "session": {
     "database": "db1",
     "settings": {
       "max_threads": "1"
@@ -290,7 +290,7 @@ use statement:
 
 ```json
 {"sql": "use db2",
-  "session_state": {
+  "session": {
     "database": "db1",
     "settings": {
       "max_threads": "6"
@@ -305,7 +305,7 @@ use statement:
     "type": "UseDB",
     "name": "db2"
   },
-  "session_state": {
+  "session": {
     "database": "db2",
     "settings": {
       "max_threads": "1"

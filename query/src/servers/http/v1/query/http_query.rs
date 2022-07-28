@@ -44,7 +44,7 @@ use crate::storages::result::block_buffer::BlockBuffer;
 #[derive(Deserialize, Debug)]
 pub struct HttpQueryRequest {
     pub session_id: Option<String>,
-    pub session_state: Option<HttpSessionConf>,
+    pub session: Option<HttpSessionConf>,
     pub sql: String,
     #[serde(default)]
     pub pagination: PaginationConf,
@@ -156,7 +156,7 @@ pub struct ResponseState {
 pub struct HttpQueryResponseInternal {
     pub data: Option<ResponseData>,
     pub session_id: String,
-    pub session_state: Option<HttpSessionConf>,
+    pub session: Option<HttpSessionConf>,
     pub state: ResponseState,
 }
 
@@ -208,7 +208,7 @@ impl HttpQuery {
             ctx.get_session(SessionType::HTTPQuery)
         };
 
-        if let Some(session_conf) = &request.session_state {
+        if let Some(session_conf) = &request.session {
             if let Some(db) = &session_conf.database {
                 session.set_current_database(db.clone());
             }
@@ -262,7 +262,7 @@ impl HttpQuery {
     pub async fn get_response_page(&self, page_no: usize) -> Result<HttpQueryResponseInternal> {
         let data = Some(self.get_page(page_no).await?);
         let state = self.get_state().await;
-        let session_conf = if let Some(conf) = &self.request.session_state {
+        let session_conf = if let Some(conf) = &self.request.session {
             if let Some(affect) = &state.affect {
                 Some(conf.clone().apply_affect(affect))
             } else {
@@ -274,7 +274,7 @@ impl HttpQuery {
         Ok(HttpQueryResponseInternal {
             data,
             state,
-            session_state: session_conf,
+            session: session_conf,
             session_id: self.session_id.clone(),
         })
     }
@@ -284,7 +284,7 @@ impl HttpQuery {
             data: None,
             session_id: self.session_id.clone(),
             state: self.get_state().await,
-            session_state: None,
+            session: None,
         }
     }
 
