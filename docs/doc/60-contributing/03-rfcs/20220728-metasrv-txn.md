@@ -1,20 +1,20 @@
 ---
-title: Transaction support in MetaService
+title: Transaction support in databend-meta
 description: 
-  Transaction support in MetaService
+  Transaction support in databend-meta
 ---
 
-MetaService support transaction with `KVApi`, transaction parameters are:
+Databend-meta support transaction with `KVApi`, transaction parameters are:
 
-* condition: `condition` is a list of predicates. If all of them success, the `if_then` will be executed, otherwise `else_then` op will be executed.
-* if_then: `if_then` is a list of operations will be executed when all condition evaluates to true.
-* else_then: `else_then` is a list of operations will be executed when not all condition evaluates to true.
+* condition: `condition` is a list of predicates. If all of them succeed, the `if_then` will be executed, otherwise `else_then` op will be executed.
+* if_then: `if_then` is a list of operations that will be executed when all condition evaluates to be true.
+* else_then: `else_then` is a list of operations that will be executed when not all condition evaluates to be true.
 
 The `condition` is a list of `TxnCondition`, which includes these fields:
 
-* key: String format key to compared with.
-* target: The target of key value to be compared with, it can be the last success upsert operation sequence number of the key, or the bytes value of the key.
-* expected: The expected result of condition, result includes `EQ`, `GT`, etc.
+* key: String format key to compare with.
+* target: The target of key value to be compared with, can be the last success upsert operation sequence number of the key, or the bytes value of the key.
+* expected: The expected result of condition, the result includes `EQ`, `GT`, etc.
 
 The `is_then` and `else_then` is a list of `TxnOp`, which is one of these types:
 
