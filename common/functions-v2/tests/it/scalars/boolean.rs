@@ -14,6 +14,7 @@
 
 use std::io::Write;
 
+use common_expression::types::nullable::NullableColumn;
 use common_expression::types::DataType;
 use common_expression::Column;
 use goldenfile::Mint;
@@ -48,18 +49,18 @@ fn test_not(file: &mut impl Write) {
     run_ast(file, "NOT a", &[(
         "a",
         DataType::Nullable(Box::new(DataType::Boolean)),
-        Column::Nullable {
-            column: Box::new(Column::Boolean(vec![true, false, true].into())),
+        Column::Nullable(Box::new(NullableColumn {
+            column: Column::Boolean(vec![true, false, true].into()),
             validity: vec![false, true, false].into(),
-        },
+        })),
     )]);
     run_ast(file, "NOT a", &[(
         "a",
         DataType::Nullable(Box::new(DataType::Boolean)),
-        Column::Nullable {
-            column: Box::new(Column::Boolean(vec![false, false, false].into())),
+        Column::Nullable(Box::new(NullableColumn {
+            column: Column::Boolean(vec![false, false, false].into()),
             validity: vec![true, true, false].into(),
-        },
+        })),
     )]);
 }
 
