@@ -326,6 +326,7 @@ impl PhysicalScalarBuilder {
                 return_type: *func.return_type.clone(),
             }),
             Scalar::CastExpr(cast) => Ok(PhysicalScalar::Cast {
+                is_try: cast.is_try,
                 input: Box::new(self.build(&cast.argument)?),
                 target: *cast.target_type.clone(),
             }),

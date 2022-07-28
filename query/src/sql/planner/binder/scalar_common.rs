@@ -88,6 +88,7 @@ pub fn split_equivalent_predicate(scalar: &Scalar) -> Option<(Scalar, Scalar)> {
 pub fn wrap_cast_if_needed(scalar: Scalar, target_type: &DataTypeImpl) -> Scalar {
     if scalar.data_type() != *target_type {
         let cast = CastExpr {
+            is_try: true,
             from_type: Box::new(scalar.data_type()),
             argument: Box::new(scalar),
             target_type: Box::new(target_type.clone()),

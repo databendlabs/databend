@@ -390,6 +390,7 @@ impl<'a> Binder {
                     }))
                 }
                 Scalar::CastExpr(CastExpr {
+                    is_try,
                     argument,
                     from_type,
                     target_type,
@@ -397,6 +398,7 @@ impl<'a> Binder {
                     let argument =
                         Box::new(self.rewrite_scalar_with_replacement(argument, replacement_fn)?);
                     Ok(Scalar::CastExpr(CastExpr {
+                        is_try: *is_try,
                         argument,
                         from_type: from_type.clone(),
                         target_type: target_type.clone(),

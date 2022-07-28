@@ -221,6 +221,7 @@ impl SubqueryRewriter {
                 let (scalar, s_expr) = self.try_rewrite_subquery(&cast.argument, s_expr, false)?;
                 Ok((
                     CastExpr {
+                        is_try: cast.is_try,
                         argument: Box::new(scalar),
                         from_type: cast.from_type.clone(),
                         target_type: cast.target_type.clone(),

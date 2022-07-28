@@ -495,6 +495,7 @@ impl ScalarExpr for FunctionCall {
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct CastExpr {
+    pub is_try: bool,
     pub argument: Box<Scalar>,
     pub from_type: Box<DataTypeImpl>,
     pub target_type: Box<DataTypeImpl>,

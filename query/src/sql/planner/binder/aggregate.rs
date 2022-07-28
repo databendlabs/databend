@@ -130,6 +130,7 @@ impl<'a> AggregateRewriter<'a> {
                 .into())
             }
             Scalar::CastExpr(cast) => Ok(CastExpr {
+                is_try: cast.is_try,
                 argument: Box::new(self.visit(&cast.argument)?),
                 from_type: cast.from_type.clone(),
                 target_type: cast.target_type.clone(),

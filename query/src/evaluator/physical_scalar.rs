@@ -54,9 +54,17 @@ impl Evaluator {
                     .collect::<Result<_>>()?;
                 Ok(EvalNode::Function { func, args })
             }
-            PhysicalScalar::Cast { target, input } => {
+            PhysicalScalar::Cast {
+                is_try,
+                target,
+                input,
+            } => {
                 let from = input.data_type();
-                let cast_func = CastFunction::create("", target.name().as_str(), from)?;
+                let cast_func = if *is_try {
+                    CastFunction::create_try("", target.name().as_str(), from)?
+                } else {
+                    CastFunction::create("", target.name().as_str(), from)?
+                };
                 Ok(EvalNode::Function {
                     func: cast_func,
                     args: vec![Self::eval_physical_scalar(input)?],

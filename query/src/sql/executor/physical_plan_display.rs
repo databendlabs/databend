@@ -105,8 +105,16 @@ impl Display for PhysicalScalar {
                     .collect::<Vec<String>>()
                     .join(", ")
             ),
-            PhysicalScalar::Cast { input, target } => {
-                write!(f, "CAST({} AS {})", input, format_data_type_sql(target))
+            PhysicalScalar::Cast {
+                is_try,
+                input,
+                target,
+            } => {
+                if *is_try {
+                    write!(f, "TRY_CAST({} AS {})", input, format_data_type_sql(target))
+                } else {
+                    write!(f, "CAST({} AS {})", input, format_data_type_sql(target))
+                }
             }
         }
     }

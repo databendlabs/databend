@@ -720,6 +720,7 @@ impl SubqueryRewriter {
             Scalar::CastExpr(cast_expr) => {
                 let scalar = self.flatten_scalar(&cast_expr.argument, correlated_columns)?;
                 Ok(Scalar::CastExpr(CastExpr {
+                    is_try: cast_expr.is_try,
                     argument: Box::new(scalar),
                     from_type: cast_expr.from_type.clone(),
                     target_type: cast_expr.target_type.clone(),

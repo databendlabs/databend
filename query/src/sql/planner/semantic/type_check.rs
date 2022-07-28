@@ -382,6 +382,7 @@ impl<'a> TypeChecker<'a> {
                     CastFunction::create("", target_type.to_string().as_str(), data_type.clone())?;
                 Box::new((
                     CastExpr {
+                        is_try: false,
                         argument: Box::new(scalar),
                         from_type: Box::new(data_type),
                         target_type: Box::new(cast_func.return_type()),
@@ -657,6 +658,7 @@ impl<'a> TypeChecker<'a> {
                 .map_err(|e| ErrorCode::SemanticError(span.display_error(e.message())))?;
                 Box::new((
                     CastExpr {
+                        is_try: true,
                         argument: Box::new(scalar),
                         from_type: Box::new(data_type),
                         target_type: Box::new(cast_func.return_type()),

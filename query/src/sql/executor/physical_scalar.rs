@@ -34,6 +34,7 @@ pub enum PhysicalScalar {
         return_type: DataTypeImpl,
     },
     Cast {
+        is_try: bool,
         input: Box<PhysicalScalar>,
         target: DataTypeImpl,
     },
