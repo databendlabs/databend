@@ -43,20 +43,8 @@ use crate::sql::DfStatement;
 
 impl<'a> DfParser<'a> {
     pub(crate) fn parse_create_user(&mut self) -> Result<DfStatement<'a>, ParserError> {
-        let if_not_exists =
-            self.parser
-                .parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
-        let (username, hostname) = self.parse_principal_name_and_host()?;
-        let with_options = self.parse_user_options()?;
-        let auth_option = self.parse_auth_option()?;
-
-        let create = DfCreateUser {
-            if_not_exists,
-            user: UserIdentity { username, hostname },
-            auth_option,
-            with_options,
-        };
-        Ok(DfStatement::CreateUser(create))
+        // skip to the planner v2 syntax
+        self.skip_all(DfStatement::CreateUser(DfCreateUser::default()))
     }
 
     pub(crate) fn parse_alter_user(&mut self) -> Result<DfStatement<'a>, ParserError> {

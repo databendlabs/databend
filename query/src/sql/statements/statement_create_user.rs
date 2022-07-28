@@ -84,7 +84,7 @@ impl DfUserWithOption {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct DfCreateUser {
     pub if_not_exists: bool,
     pub user: UserIdentity,
