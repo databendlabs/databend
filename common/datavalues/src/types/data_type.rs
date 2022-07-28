@@ -17,6 +17,7 @@ use std::collections::BTreeMap;
 
 use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_arrow::arrow::datatypes::Field as ArrowField;
+use common_arrow::arrow::datatypes::TimeUnit;
 use common_exception::Result;
 use dyn_clone::DynClone;
 use enum_dispatch::enum_dispatch;
@@ -176,7 +177,7 @@ pub fn from_arrow_type(dt: &ArrowType) -> DataTypeImpl {
         ArrowType::Float64 => DataTypeImpl::Float64(Float64Type::default()),
 
         // TODO support other list
-        ArrowType::LargeList(f) => {
+        ArrowType::List(f) | ArrowType::LargeList(f) | ArrowType::FixedSizeList(f, _) => {
             let inner = from_arrow_field(f);
             DataTypeImpl::Array(ArrayType::create(inner))
         }
@@ -185,14 +186,27 @@ pub fn from_arrow_type(dt: &ArrowType) -> DataTypeImpl {
             DataTypeImpl::String(StringType::default())
         }
 
-        ArrowType::Timestamp(_, _) => DataTypeImpl::Timestamp(TimestampType::create(0)),
+        ArrowType::Timestamp(TimeUnit::Second, _) => {
+            DataTypeImpl::Timestamp(TimestampType::create(0))
+        }
+        ArrowType::Timestamp(TimeUnit::Millisecond, _) => {
+            DataTypeImpl::Timestamp(TimestampType::create(3))
+        }
+        ArrowType::Timestamp(TimeUnit::Microsecond, _) => {
+            DataTypeImpl::Timestamp(TimestampType::create(6))
+        }
+        // At most precision is 6
+        ArrowType::Timestamp(TimeUnit::Nanosecond, _) => {
+            DataTypeImpl::Timestamp(TimestampType::create(6))
+        }
+
         ArrowType::Date32 | ArrowType::Date64 => DataTypeImpl::Date(DateType::default()),
 
         ArrowType::Struct(fields) => {
             let names = fields.iter().map(|f| f.name.clone()).collect();
             let types = fields.iter().map(from_arrow_field).collect();
 
-            DataTypeImpl::Struct(StructType::create(names, types))
+            DataTypeImpl::Struct(StructType::create(Some(names), types))
         }
         ArrowType::Extension(custom_name, _, _) => match custom_name.as_str() {
             "Variant" => DataTypeImpl::Variant(VariantType::default()),
@@ -213,6 +227,8 @@ pub fn from_arrow_field(f: &ArrowField) -> DataTypeImpl {
         let metadata = f.metadata.get(ARROW_EXTENSION_META).cloned();
         match custom_name.as_str() {
             "Date" => return DateType::new_impl(),
+
+            // OLD COMPATIBLE Behavior
             "Timestamp" => match metadata {
                 Some(meta) => {
                     let mut chars = meta.chars();
@@ -225,6 +241,16 @@ pub fn from_arrow_field(f: &ArrowField) -> DataTypeImpl {
             "Variant" => return VariantType::new_impl(),
             "VariantArray" => return VariantArrayType::new_impl(),
             "VariantObject" => return VariantObjectType::new_impl(),
+            "Tuple" => {
+                let dt = f.data_type();
+                match dt {
+                    ArrowType::Struct(fields) => {
+                        let types = fields.iter().map(from_arrow_field).collect();
+                        return DataTypeImpl::Struct(StructType::create(None, types));
+                    }
+                    _ => unreachable!(),
+                }
+            }
             _ => {}
         }
     }

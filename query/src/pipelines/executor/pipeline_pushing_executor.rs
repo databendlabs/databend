@@ -31,6 +31,7 @@ use crate::pipelines::processors::SyncSourcer;
 use crate::pipelines::Pipeline;
 use crate::pipelines::SourcePipeBuilder;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 
 struct State {
     finished: AtomicBool,
@@ -163,12 +164,12 @@ impl Drop for PipelinePushingExecutor {
             && !self.state.has_throw_error.load(Ordering::Relaxed)
         {
             if let Err(cause) = self.finish() {
-                common_tracing::tracing::warn!("Executor finish is failure {:?}", cause);
+                tracing::warn!("Executor finish is failure {:?}", cause);
             }
         }
 
         if let Err(cause) = self.sender.send(None) {
-            common_tracing::tracing::warn!("Executor send last data is failure {:?}", cause);
+            tracing::warn!("Executor send last data is failure {:?}", cause);
         }
     }
 }

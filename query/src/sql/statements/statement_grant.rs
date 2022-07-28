@@ -21,9 +21,9 @@ use common_meta_types::UserPrivilegeSet;
 use common_planners::GrantPrivilegePlan;
 use common_planners::GrantRolePlan;
 use common_planners::PlanNode;
-use common_tracing::tracing;
 
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
 

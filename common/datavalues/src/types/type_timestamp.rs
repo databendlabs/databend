@@ -12,20 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::TimeZone;
 use chrono::Utc;
 use common_arrow::arrow::datatypes::DataType as ArrowType;
+use common_arrow::arrow::datatypes::TimeUnit;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use rand::prelude::*;
 
 use super::data_type::DataType;
-use super::data_type::ARROW_EXTENSION_META;
-use super::data_type::ARROW_EXTENSION_NAME;
 use super::type_id::TypeID;
 use crate::prelude::*;
 use crate::serializations::TimestampSerializer;
@@ -110,7 +108,7 @@ impl DataType for TimestampType {
             3 => &["DateTime(3)"],
             4 => &["DateTime(4)"],
             5 => &["DateTime(5)"],
-            6 => &["Timestamp", "DateTime"],
+            6 => &["Timestamp", "DateTime", "DateTime(6)"],
             _ => &[],
         }
     }
@@ -140,20 +138,15 @@ impl DataType for TimestampType {
         Ok(Series::from_data(&value))
     }
 
+    // To avoid the overhead of precision conversion, we store Microsecond for all precisions.
     fn arrow_type(&self) -> ArrowType {
-        ArrowType::Int64
-    }
-
-    fn custom_arrow_meta(&self) -> Option<BTreeMap<String, String>> {
-        let mut mp = BTreeMap::new();
-        mp.insert(ARROW_EXTENSION_NAME.to_string(), "Timestamp".to_string());
-        mp.insert(ARROW_EXTENSION_META.to_string(), self.precision.to_string());
-        Some(mp)
+        ArrowType::Timestamp(TimeUnit::Microsecond, None)
     }
 
     fn create_serializer_inner<'a>(&self, col: &'a ColumnRef) -> Result<TypeSerializerImpl<'a>> {
         Ok(TimestampSerializer::<'a>::try_create(self.precision, col)?.into())
     }
+
     fn create_deserializer(&self, capacity: usize) -> TypeDeserializerImpl {
         TimestampDeserializer {
             builder: MutablePrimitiveColumn::<i64>::with_capacity(capacity),

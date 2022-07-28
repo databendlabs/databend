@@ -19,14 +19,15 @@ use std::iter::Iterator;
 use common_base::base::tokio;
 use common_datavalues::DataValue;
 use common_exception::Result;
+use common_fuse_meta::meta::BlockMeta;
+use common_fuse_meta::meta::ColumnMeta;
+use common_fuse_meta::meta::ColumnStatistics;
 use common_planners::Extras;
 use databend_query::catalogs::CATALOG_DEFAULT;
 use databend_query::interpreters::CreateTableInterpreter;
 use databend_query::interpreters::Interpreter;
-use databend_query::storages::fuse::meta::BlockMeta;
-use databend_query::storages::fuse::meta::ColumnMeta;
+use databend_query::storages::fuse::ColumnLeaf;
 use databend_query::storages::fuse::FuseTable;
-use databend_query::storages::index::ColumnStatistics;
 use futures::TryStreamExt;
 
 use crate::storages::fuse::table_test_fixture::TestFixture;
@@ -48,6 +49,12 @@ fn test_to_partitions() -> Result<()> {
         offset: 0,
         len: col_size as u64,
         num_values: 0,
+    };
+
+    let col_leaves_gen = |col_id| ColumnLeaf {
+        name: "".to_string(),
+        leaf_ids: vec![col_id],
+        children: None,
     };
 
     // generates fake data.
@@ -83,9 +90,15 @@ fn test_to_partitions() -> Result<()> {
         .map(|_| block_meta.clone())
         .collect::<Vec<_>>();
 
+    let column_leaves = (0..num_of_col)
+        .into_iter()
+        .map(col_leaves_gen)
+        .collect::<Vec<_>>();
+
     // CASE I:  no projection
-    let (s, _) = FuseTable::to_partitions(&blocks_metas, None);
-    let expected_block_size: u64 = cols_metas.iter().map(|(_, col_stats)| col_stats.len).sum();
+    let (s, parts) = FuseTable::to_partitions(&blocks_metas, &column_leaves, None);
+    assert_eq!(parts.len(), num_of_block as usize);
+    let expected_block_size: u64 = cols_metas.iter().map(|(_, col_meta)| col_meta.len).sum();
     assert_eq!(expected_block_size * num_of_block, s.read_bytes as u64);
 
     // CASE II: col pruning
@@ -99,7 +112,7 @@ fn test_to_partitions() -> Result<()> {
     let expected_block_size: u64 = cols_metas
         .iter()
         .filter(|(cid, _)| proj.contains(&(**cid as usize)))
-        .map(|(_, col_stats)| col_stats.len)
+        .map(|(_, col_meta)| col_meta.len)
         .sum();
 
     // kick off
@@ -109,8 +122,11 @@ fn test_to_partitions() -> Result<()> {
         limit: None,
         order_by: vec![],
     });
-    let (stats, _) = FuseTable::to_partitions(&blocks_metas, push_down);
+
+    let (stats, parts) = FuseTable::to_partitions(&blocks_metas, &column_leaves, push_down);
+    assert_eq!(parts.len(), num_of_block as usize);
     assert_eq!(expected_block_size * num_of_block, stats.read_bytes as u64);
+
     Ok(())
 }
 

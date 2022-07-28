@@ -13,41 +13,26 @@
 // limitations under the License.
 
 mod builder;
+mod enforcer;
 
 use std::collections::HashSet;
 
 pub use builder::RelExpr;
+pub use enforcer::require_property;
 
 use crate::sql::common::IndexType;
+use crate::sql::plans::Scalar;
 
 pub type ColumnSet = HashSet<IndexType>;
 
-pub struct NamedColumn {
-    pub index: IndexType,
-    pub name: String,
-}
-
 #[derive(Default, Clone)]
 pub struct RequiredProperty {
-    required_columns: ColumnSet,
+    pub distribution: Distribution,
 }
 
 impl RequiredProperty {
-    pub fn create(required_columns: ColumnSet) -> Self {
-        RequiredProperty { required_columns }
-    }
-
-    pub fn required_columns(&self) -> &ColumnSet {
-        &self.required_columns
-    }
-
-    pub fn provided_by(
-        &self,
-        relational_prop: &RelationalProperty,
-        _physical_prop: &PhysicalProperty,
-    ) -> bool {
-        self.required_columns()
-            .is_subset(&relational_prop.output_columns)
+    pub fn satisfied_by(&self, physical: &PhysicalProperty) -> bool {
+        self.distribution.satisfied_by(&physical.distribution)
     }
 }
 
@@ -58,4 +43,39 @@ pub struct RelationalProperty {
 }
 
 #[derive(Default, Clone)]
-pub struct PhysicalProperty {}
+pub struct PhysicalProperty {
+    pub distribution: Distribution,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Distribution {
+    Any,
+    Random,
+    Serial,
+    Broadcast,
+    Hash(Vec<Scalar>),
+}
+
+impl Default for Distribution {
+    // Only used for `RequiredProperty`
+    fn default() -> Self {
+        Self::Any
+    }
+}
+
+impl Distribution {
+    /// Check if required distribution is satisfied by given distribution.
+    pub fn satisfied_by(&self, distribution: &Distribution) -> bool {
+        // (required, delivered)
+        match (&self, distribution) {
+            (Distribution::Any, _)
+            | (Distribution::Random, _)
+            | (Distribution::Serial, Distribution::Serial)
+            | (Distribution::Broadcast, Distribution::Broadcast) => true,
+            (Distribution::Hash(ref keys), Distribution::Hash(ref other_keys)) => keys
+                .iter()
+                .all(|key| other_keys.iter().any(|other_key| key == other_key)),
+            _ => false,
+        }
+    }
+}

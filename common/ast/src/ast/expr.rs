@@ -259,12 +259,30 @@ pub enum TypeName {
     Float32,
     Float64,
     Date,
-    DateTime { precision: Option<u64> },
-    Timestamp,
+    Timestamp {
+        precision: Option<u64>,
+    },
     String,
-    Array { item_type: Option<Box<TypeName>> },
+    Array {
+        item_type: Option<Box<TypeName>>,
+    },
+    Tuple {
+        fields_name: Option<Vec<String>>,
+        fields_type: Vec<TypeName>,
+    },
     Object,
     Variant,
+    Nullable(Box<TypeName>),
+}
+
+impl TypeName {
+    pub fn wrap_nullable(self) -> Self {
+        if !matches!(&self, &Self::Nullable(_)) {
+            Self::Nullable(Box::new(self))
+        } else {
+            self
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -514,14 +532,11 @@ impl Display for TypeName {
             TypeName::Date => {
                 write!(f, "DATE")?;
             }
-            TypeName::DateTime { precision } => {
-                write!(f, "DATETIME")?;
+            TypeName::Timestamp { precision } => {
+                write!(f, "Timestamp")?;
                 if let Some(precision) = precision {
                     write!(f, "({})", *precision)?;
                 }
-            }
-            TypeName::Timestamp => {
-                write!(f, "TIMESTAMP")?;
             }
             TypeName::String => {
                 write!(f, "STRING")?;
@@ -532,11 +547,42 @@ impl Display for TypeName {
                     write!(f, "({})", *item_type)?;
                 }
             }
+            TypeName::Tuple {
+                fields_name,
+                fields_type,
+            } => {
+                write!(f, "TUPLE(")?;
+                let mut first = true;
+                match fields_name {
+                    Some(fields_name) => {
+                        for (name, ty) in fields_name.iter().zip(fields_type.iter()) {
+                            if !first {
+                                write!(f, ", ")?;
+                            }
+                            first = false;
+                            write!(f, "{} {}", name, ty)?;
+                        }
+                    }
+                    None => {
+                        for ty in fields_type.iter() {
+                            if !first {
+                                write!(f, ", ")?;
+                            }
+                            first = false;
+                            write!(f, "{}", ty)?;
+                        }
+                    }
+                }
+                write!(f, ")")?;
+            }
             TypeName::Object => {
                 write!(f, "OBJECT")?;
             }
             TypeName::Variant => {
                 write!(f, "VARIANT")?;
+            }
+            TypeName::Nullable(ty) => {
+                write!(f, "{} NULL", ty)?;
             }
         }
         Ok(())
@@ -774,7 +820,7 @@ impl<'a> Display for Expr<'a> {
                 write!(f, " END")?;
             }
             Expr::Exists { subquery, .. } => {
-                write!(f, "EXITS ({subquery})")?;
+                write!(f, "EXISTS ({subquery})")?;
             }
             Expr::Subquery {
                 subquery, modifier, ..

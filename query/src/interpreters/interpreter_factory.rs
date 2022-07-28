@@ -19,19 +19,14 @@ use common_exception::Result;
 use common_planners::PlanNode;
 use common_planners::ShowPlan;
 
-use super::interpreter_user_stage_describe::DescribeUserStageInterpreter;
-use super::interpreter_user_stage_drop::DropUserStageInterpreter;
 use super::AlterViewInterpreter;
-use super::CreateUserStageInterpreter;
-use super::ListInterpreter;
-use super::ShowStagesInterpreter;
+use super::ShowDatabasesInterpreter;
 use crate::interpreters::interpreter_show_engines::ShowEnginesInterpreter;
 use crate::interpreters::interpreter_table_rename::RenameTableInterpreter;
 use crate::interpreters::AlterTableClusterKeyInterpreter;
 use crate::interpreters::AlterUserInterpreter;
 use crate::interpreters::AlterUserUDFInterpreter;
 use crate::interpreters::CallInterpreter;
-use crate::interpreters::CopyInterpreter;
 use crate::interpreters::CreateDatabaseInterpreter;
 use crate::interpreters::CreateRoleInterpreter;
 use crate::interpreters::CreateTableInterpreter;
@@ -58,7 +53,6 @@ use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::interpreters::KillInterpreter;
 use crate::interpreters::OptimizeTableInterpreter;
-use crate::interpreters::RemoveUserStageInterpreter;
 use crate::interpreters::RenameDatabaseInterpreter;
 use crate::interpreters::RevokePrivilegeInterpreter;
 use crate::interpreters::RevokeRoleInterpreter;
@@ -66,7 +60,6 @@ use crate::interpreters::SelectInterpreter;
 use crate::interpreters::SettingInterpreter;
 use crate::interpreters::ShowCreateDatabaseInterpreter;
 use crate::interpreters::ShowCreateTableInterpreter;
-use crate::interpreters::ShowDatabasesInterpreter;
 use crate::interpreters::ShowFunctionsInterpreter;
 use crate::interpreters::ShowGrantsInterpreter;
 use crate::interpreters::ShowMetricsInterpreter;
@@ -102,8 +95,8 @@ impl InterpreterFactory {
             PlanNode::Explain(v) => Ok(Arc::new(ExplainInterpreter::try_create(ctx, v)?)),
             PlanNode::Insert(v) => Ok(Arc::new(InsertInterpreter::try_create(ctx, v, false)?)),
             PlanNode::Delete(v) => Ok(Arc::new(DeleteInterpreter::try_create(ctx, v)?)),
-            PlanNode::Copy(v) => Ok(Arc::new(CopyInterpreter::try_create(ctx, v)?)),
             PlanNode::Call(v) => Ok(Arc::new(CallInterpreter::try_create(ctx, v)?)),
+
             PlanNode::Show(ShowPlan::ShowDatabases(v)) => {
                 Ok(Arc::new(ShowDatabasesInterpreter::try_create(ctx, v)?))
             }
@@ -136,9 +129,6 @@ impl InterpreterFactory {
             }
             PlanNode::Show(ShowPlan::ShowRoles(_)) => {
                 Ok(Arc::new(ShowRolesInterpreter::try_create(ctx)?))
-            }
-            PlanNode::Show(ShowPlan::ShowStages) => {
-                Ok(Arc::new(ShowStagesInterpreter::try_create(ctx)?))
             }
 
             // Database related transforms.
@@ -206,20 +196,6 @@ impl InterpreterFactory {
             PlanNode::DropUserUDF(v) => Ok(Arc::new(DropUserUDFInterpreter::try_create(ctx, v)?)),
             PlanNode::AlterUserUDF(v) => Ok(Arc::new(AlterUserUDFInterpreter::try_create(ctx, v)?)),
 
-            // Stage related transforms
-            PlanNode::CreateUserStage(v) => {
-                Ok(Arc::new(CreateUserStageInterpreter::try_create(ctx, v)?))
-            }
-            PlanNode::DropUserStage(v) => {
-                Ok(Arc::new(DropUserStageInterpreter::try_create(ctx, v)?))
-            }
-            PlanNode::DescribeUserStage(v) => {
-                Ok(Arc::new(DescribeUserStageInterpreter::try_create(ctx, v)?))
-            }
-            PlanNode::RemoveUserStage(v) => {
-                Ok(Arc::new(RemoveUserStageInterpreter::try_create(ctx, v)?))
-            }
-
             // cluster key.
             PlanNode::AlterTableClusterKey(v) => Ok(Arc::new(
                 AlterTableClusterKeyInterpreter::try_create(ctx, v)?,
@@ -229,14 +205,13 @@ impl InterpreterFactory {
             )),
 
             // others
-            PlanNode::List(v) => Ok(Arc::new(ListInterpreter::try_create(ctx, v)?)),
             PlanNode::UseDatabase(v) => Ok(Arc::new(UseDatabaseInterpreter::try_create(ctx, v)?)),
             PlanNode::Kill(v) => Ok(Arc::new(KillInterpreter::try_create(ctx, v)?)),
             PlanNode::SetVariable(v) => Ok(Arc::new(SettingInterpreter::try_create(ctx, v)?)),
             PlanNode::Empty(v) => Ok(Arc::new(EmptyInterpreter::try_create(ctx, v)?)),
 
             _ => Err(ErrorCode::UnknownTypeOfQuery(format!(
-                "Can't get the interpreter by plan:{}",
+                "Can't get the interpreter by plan: {}",
                 plan.name()
             ))),
         }

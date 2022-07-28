@@ -2,19 +2,17 @@ from abc import ABC
 
 import logictest
 import http_connector
-from log import log
 
 
 class TestHttp(logictest.SuiteRunner, ABC):
 
-    def __init__(self, kind, pattern):
-        super().__init__(kind, pattern)
+    def __init__(self, kind, args):
+        super().__init__(kind, args)
         self._http = None
 
     def get_connection(self):
         if self._http is None:
-            self._http = http_connector.HttpConnector()
-            self._http.connect(**self.driver)
+            self._http = http_connector.HttpConnector(**self.driver)
         return self._http
 
     def reset_connection(self):

@@ -1,13 +1,13 @@
 statement ok
-drop role if exists 'test';
-
-statement ok
 CREATE ROLE 'test';
 
-skipif clickhouse
 statement query TI 
 SHOW ROLES;
 
 ----
 account_admin 0
 test 0
+
+statement ok
+DROP ROLE 'test';
+

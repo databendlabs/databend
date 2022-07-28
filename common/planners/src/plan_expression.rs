@@ -292,7 +292,7 @@ impl Expression {
                     .map(|f| f.data_type().to_owned())
                     .collect();
 
-                DataTypeImpl::Struct(StructType::create(names, types))
+                DataTypeImpl::Struct(StructType::create(Some(names), types))
             }
         }
     }
@@ -314,7 +314,7 @@ impl Expression {
                     .map(|f| f.data_type().to_owned())
                     .collect();
 
-                DataTypeImpl::Struct(StructType::create(names, types))
+                DataTypeImpl::Struct(StructType::create(Some(names), types))
             }
         }
     }

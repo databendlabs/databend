@@ -50,7 +50,7 @@ statement ok
 insert into s1 select number, number + 1 from numbers(10000);
 
 statement ok
-create table d1(n String, a UInt8 not null, b Int16 default a + 3, c String default 'c');
+create table d1(n String, a UInt8 not null, b Int16 default 4, c String default 'c');
 
 statement ok
 insert into d1(a) values (1);

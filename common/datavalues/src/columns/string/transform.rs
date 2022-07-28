@@ -27,7 +27,7 @@ impl StringColumn {
     where
         F: FnMut(&[u8], &mut [u8]) -> Result<usize>,
     {
-        let mut values: Vec<u8> = Vec::with_capacity(estimate_bytes);
+        let mut values: Vec<u8> = vec![0u8; estimate_bytes];
         let mut offsets: Vec<i64> = Vec::with_capacity(from.len() + 1);
         offsets.push(0);
 

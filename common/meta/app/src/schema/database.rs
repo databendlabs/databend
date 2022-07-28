@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::fmt;
 use std::fmt::Display;
 use std::fmt::Formatter;
@@ -91,6 +92,8 @@ pub struct DatabaseMeta {
 
     // if used in CreateDatabaseReq, this field MUST set to None.
     pub drop_on: Option<DateTime<Utc>>,
+    // shared by share_id
+    pub shared_by: BTreeSet<u64>,
 }
 
 impl Default for DatabaseMeta {
@@ -103,6 +106,7 @@ impl Default for DatabaseMeta {
             updated_on: Utc::now(),
             comment: "".to_string(),
             drop_on: None,
+            shared_by: BTreeSet::new(),
         }
     }
 }

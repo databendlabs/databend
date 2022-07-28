@@ -19,14 +19,13 @@ use common_meta_types::GrantObject;
 use common_meta_types::UserGrantSet;
 use common_meta_types::UserOptionFlag;
 use databend_query::interpreters::*;
+use databend_query::sessions::TableContext;
 use databend_query::sql::PlanParser;
 use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_call_interpreter() -> Result<()> {
-    common_tracing::init_default_ut_tracing();
-
     let ctx = crate::tests::create_query_context().await?;
 
     let plan = PlanParser::parse(ctx.clone(), "call system$test()").await?;
@@ -43,8 +42,6 @@ async fn test_call_interpreter() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_call_fuse_snapshot_interpreter() -> Result<()> {
-    common_tracing::init_default_ut_tracing();
-
     let ctx = crate::tests::create_query_context().await?;
 
     // NumberArgumentsNotMatch
@@ -108,8 +105,6 @@ async fn test_call_fuse_snapshot_interpreter() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_call_clustering_information_interpreter() -> Result<()> {
-    common_tracing::init_default_ut_tracing();
-
     let ctx = crate::tests::create_query_context().await?;
 
     // NumberArgumentsNotMatch
@@ -178,7 +173,7 @@ async fn test_call_clustering_information_interpreter() -> Result<()> {
         let res = executor.execute(None).await;
         assert_eq!(res.is_err(), true);
         let expect =
-            "Code: 1070, displayText = Invalid clustering keys or table a is not clustered.";
+            "Code: 1081, displayText = Invalid clustering keys or table a is not clustered.";
         assert_eq!(expect, res.err().unwrap().to_string());
     }
 
@@ -209,7 +204,6 @@ async fn test_call_clustering_information_interpreter() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_call_bootstrap_tenant_interpreter() -> Result<()> {
-    common_tracing::init_default_ut_tracing();
     let ctx = crate::tests::create_query_context().await?;
 
     // NumberArgumentsNotMatch
@@ -293,7 +287,6 @@ async fn test_call_bootstrap_tenant_interpreter() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_call_tenant_quota_interpreter() -> Result<()> {
-    common_tracing::init_default_ut_tracing();
     let ctx = crate::tests::create_query_context().await?;
 
     // Access denied
@@ -416,8 +409,6 @@ async fn test_call_tenant_quota_interpreter() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_call_stats_tenant_tables_interpreter() -> Result<()> {
-    common_tracing::init_default_ut_tracing();
-
     let ctx = crate::tests::create_query_context().await?;
 
     // NumberArgumentsNotMatch

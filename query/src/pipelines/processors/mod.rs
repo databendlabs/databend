@@ -12,33 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod port;
-pub mod processor;
-
-mod port_trigger;
-mod resize_processor;
+pub use common_pipeline::processors::*;
 mod sinks;
 mod sources;
 pub(crate) mod transforms;
 
-pub use port::connect;
-pub use port_trigger::DirectedEdge;
-pub use port_trigger::UpdateList;
-pub use port_trigger::UpdateTrigger;
-pub use processor::Processor;
-pub use processor::Processors;
-pub use resize_processor::ResizeProcessor;
 pub use sinks::AsyncSink;
 pub use sinks::AsyncSinker;
 pub use sinks::EmptySink;
 pub use sinks::Sink;
 pub use sinks::Sinker;
+pub use sinks::SubqueryReceiveSink;
 pub use sinks::SyncSenderSink;
 pub use sources::AsyncSource;
 pub use sources::AsyncSourcer;
 pub use sources::BlocksSource;
 pub use sources::Deserializer;
 pub use sources::EmptySource;
+pub use sources::FileSplitter;
+pub use sources::FileSplitterState;
 pub use sources::MultiFileSplitter;
 pub use sources::OperatorInfo;
 pub use sources::StreamSource;
@@ -51,6 +43,7 @@ pub use transforms::AggregatorParams;
 pub use transforms::AggregatorTransformParams;
 pub use transforms::BlockCompactor;
 pub use transforms::ExpressionTransform;
+pub use transforms::HashJoinDesc;
 pub use transforms::HashJoinState;
 pub use transforms::HashTable;
 pub use transforms::JoinHashTable;
@@ -66,10 +59,8 @@ pub use transforms::ProjectionTransform;
 pub use transforms::SerializerHashTable;
 pub use transforms::SinkBuildHashTable;
 pub use transforms::SortMergeCompactor;
-pub use transforms::SubQueriesPuller;
 pub use transforms::TransformAddOn;
 pub use transforms::TransformAggregator;
-pub use transforms::TransformApply;
 pub use transforms::TransformBlockCompact;
 pub use transforms::TransformCastSchema;
 pub use transforms::TransformCompact;
@@ -80,6 +71,5 @@ pub use transforms::TransformHashJoinProbe;
 pub use transforms::TransformHaving;
 pub use transforms::TransformLimit;
 pub use transforms::TransformLimitBy;
-pub use transforms::TransformMax1Row;
 pub use transforms::TransformSortMerge;
 pub use transforms::TransformSortPartial;

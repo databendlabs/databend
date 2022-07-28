@@ -23,25 +23,25 @@ use common_base::base::ProgressValues;
 use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_fuse_meta::meta::ClusterKey;
+use common_fuse_meta::meta::Location;
+use common_fuse_meta::meta::SegmentInfo;
+use common_fuse_meta::meta::Statistics;
+use common_fuse_meta::meta::TableSnapshot;
+use common_fuse_meta::meta::Versioned;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableStatistics;
 use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_types::MatchSeq;
-use common_tracing::tracing;
-use common_tracing::tracing::info;
-use common_tracing::tracing::warn;
+use tracing::debug;
+use tracing::info;
+use tracing::warn;
 use uuid::Uuid;
 
-use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::sql::OPT_KEY_LEGACY_SNAPSHOT_LOC;
 use crate::sql::OPT_KEY_SNAPSHOT_LOCATION;
-use crate::storages::fuse::meta::ClusterKey;
-use crate::storages::fuse::meta::Location;
-use crate::storages::fuse::meta::SegmentInfo;
-use crate::storages::fuse::meta::Statistics;
-use crate::storages::fuse::meta::TableSnapshot;
-use crate::storages::fuse::meta::Versioned;
 use crate::storages::fuse::operations::AppendOperationLogEntry;
 use crate::storages::fuse::operations::TableOperationLog;
 use crate::storages::fuse::statistics;
@@ -55,7 +55,7 @@ const OCC_DEFAULT_BACKOFF_MAX_ELAPSED_MS: Duration = Duration::from_millis(120 *
 impl FuseTable {
     pub async fn do_commit(
         &self,
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn TableContext>,
         catalog_name: impl AsRef<str>,
         operation_log: TableOperationLog,
         overwrite: bool,
@@ -99,12 +99,12 @@ impl FuseTable {
                     break {
                         if transient {
                             // Removes historical data, if table is transient
-                            tracing::warn!(
+                            warn!(
                                 "transient table detected, purging historical data. ({})",
                                 tbl.table_info.ident
                             );
 
-                            let latest = tbl.latest(&ctx, catalog_name).await?;
+                            let latest = tbl.latest(ctx.as_ref(), catalog_name).await?;
                             tbl = FuseTable::try_from_table(latest.as_ref())?;
 
                             let keep_last_snapshot = true;
@@ -126,20 +126,20 @@ impl FuseTable {
                 {
                     Some(d) => {
                         let name = tbl.table_info.name.clone();
-                        tracing::debug!(
+                        debug!(
                             "got error TableVersionMismatched, tx will be retried {} ms later. table name {}, identity {}",
                             d.as_millis(),
                             name.as_str(),
                             tbl.table_info.ident
                         );
                         common_base::base::tokio::time::sleep(d).await;
-                        latest = tbl.latest(&ctx, catalog_name).await?;
+                        latest = tbl.latest(ctx.as_ref(), catalog_name).await?;
                         tbl = FuseTable::try_from_table(latest.as_ref())?;
                         retry_times += 1;
                         continue;
                     }
                     None => {
-                        tracing::info!("aborting operations");
+                        info!("aborting operations");
                         let _ = self::utils::abort_operations(ctx.as_ref(), operation_log).await;
                         break Err(ErrorCode::OCCRetryFailure(format!(
                             "can not fulfill the tx after retries({} times, {} ms), aborted. table name {}, identity {}",
@@ -160,7 +160,7 @@ impl FuseTable {
     #[inline]
     pub async fn try_commit(
         &self,
-        ctx: &QueryContext,
+        ctx: &dyn TableContext,
         catalog_name: &str,
         operation_log: &TableOperationLog,
         overwrite: bool,
@@ -252,7 +252,7 @@ impl FuseTable {
     }
 
     pub async fn commit_to_meta_server(
-        ctx: &QueryContext,
+        ctx: &dyn TableContext,
         catalog_name: &str,
         table_info: &TableInfo,
         new_snapshot_location: String,
@@ -318,7 +318,7 @@ impl FuseTable {
         Ok((seg_locs, s))
     }
 
-    async fn latest(&self, ctx: &QueryContext, catalog_name: &str) -> Result<Arc<dyn Table>> {
+    async fn latest(&self, ctx: &dyn TableContext, catalog_name: &str) -> Result<Arc<dyn Table>> {
         let name = self.table_info.name.clone();
         let tid = self.table_info.ident.table_id;
         let catalog = ctx.get_catalog(catalog_name)?;
@@ -337,9 +337,10 @@ mod utils {
     use std::collections::BTreeMap;
 
     use super::*;
+    use crate::sessions::TableContext;
     #[inline]
     pub async fn abort_operations(
-        ctx: &QueryContext,
+        ctx: &dyn TableContext,
         operation_log: TableOperationLog,
     ) -> Result<()> {
         let operator = ctx.get_storage_operator()?;

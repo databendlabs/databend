@@ -24,9 +24,9 @@ use common_planners::CreateUserStagePlan;
 use common_planners::ListPlan;
 use common_planners::RemoveUserStagePlan;
 use common_storage::parse_uri_location;
-use common_storage::StorageParams;
 use common_storage::UriLocation;
 
+use crate::sessions::TableContext;
 use crate::sql::binder::Binder;
 use crate::sql::plans::Plan;
 use crate::sql::statements::parse_copy_file_format_options;
@@ -86,7 +86,7 @@ impl<'a> Binder {
                 ..Default::default()
             },
             Some(uri) => {
-                let mut uri = UriLocation {
+                let uri = UriLocation {
                     protocol: uri.protocol.clone(),
                     name: uri.name.clone(),
                     path: uri.path.clone(),
@@ -97,12 +97,12 @@ impl<'a> Binder {
                 // with before which always use the same endpoint with config.
                 //
                 // TODO: remove me while removing old planner
-                if self.ctx.get_settings().get_enable_planner_v2()? == 0 {
-                    if let StorageParams::S3(v) = self.ctx.get_config().storage.params {
-                        uri.connection
-                            .insert("endpoint_url".to_string(), v.endpoint_url);
-                    }
-                }
+                // if self.ctx.get_settings().get_enable_planner_v2()? == 0 {
+                //     if let StorageParams::S3(v) = self.ctx.get_config().storage.params {
+                //         uri.connection
+                //             .insert("endpoint_url".to_string(), v.endpoint_url);
+                //     }
+                // }
 
                 let (stage_storage, path) = parse_uri_location(&uri)?;
 

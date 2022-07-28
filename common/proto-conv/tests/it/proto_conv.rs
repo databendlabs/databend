@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::fmt::Debug;
 use std::sync::Arc;
 
@@ -24,11 +25,23 @@ use common_meta_app::share;
 use common_proto_conv::FromToProto;
 use common_proto_conv::Incompatible;
 use common_protos::pb;
-use enumflags2::BitFlags;
 use maplit::btreemap;
 
 fn s(ss: impl ToString) -> String {
     ss.to_string()
+}
+
+fn new_db_meta_v1() -> mt::DatabaseMeta {
+    mt::DatabaseMeta {
+        engine: "44".to_string(),
+        engine_options: btreemap! {s("abc") => s("def")},
+        options: btreemap! {s("xyz") => s("foo")},
+        created_on: Utc.ymd(2014, 11, 28).and_hms(12, 0, 9),
+        updated_on: Utc.ymd(2014, 11, 29).and_hms(12, 0, 9),
+        comment: "foo bar".to_string(),
+        drop_on: None,
+        shared_by: BTreeSet::new(),
+    }
 }
 
 fn new_db_meta() -> mt::DatabaseMeta {
@@ -40,22 +53,23 @@ fn new_db_meta() -> mt::DatabaseMeta {
         updated_on: Utc.ymd(2014, 11, 29).and_hms(12, 0, 9),
         comment: "foo bar".to_string(),
         drop_on: None,
+        shared_by: BTreeSet::from_iter(vec![1].into_iter()),
     }
 }
 
 fn new_share_meta() -> share::ShareMeta {
+    let now = Utc.ymd(2014, 11, 28).and_hms(12, 0, 9);
+
     let db_entry = share::ShareGrantEntry::new(
         share::ShareGrantObject::Database(1),
-        BitFlags::<share::ShareGrantObjectPrivilege, u64>::from_flag(
-            share::ShareGrantObjectPrivilege::Usage,
-        ),
+        share::ShareGrantObjectPrivilege::Usage,
+        now,
     );
     let mut entries = BTreeMap::new();
     for entry in vec![share::ShareGrantEntry::new(
         share::ShareGrantObject::Table(19),
-        BitFlags::<share::ShareGrantObjectPrivilege, u64>::from_flag(
-            share::ShareGrantObjectPrivilege::Select,
-        ),
+        share::ShareGrantObjectPrivilege::Select,
+        now,
     )] {
         entries.insert(entry.to_string().clone(), entry);
     }
@@ -63,10 +77,19 @@ fn new_share_meta() -> share::ShareMeta {
     share::ShareMeta {
         database: Some(db_entry),
         entries,
-        accounts: vec![s("a"), s("b")],
+        accounts: BTreeSet::from_iter(vec![s("a"), s("b")].into_iter()),
         comment: Some(s("comment")),
         share_on: Utc.ymd(2014, 11, 28).and_hms(12, 0, 9),
         update_on: Some(Utc.ymd(2014, 11, 29).and_hms(12, 0, 9)),
+    }
+}
+
+fn new_share_account_meta() -> share::ShareAccountMeta {
+    share::ShareAccountMeta {
+        account: s("account"),
+        share_id: 4,
+        share_on: Utc.ymd(2014, 11, 28).and_hms(12, 0, 9),
+        accept_on: Some(Utc.ymd(2014, 11, 29).and_hms(12, 0, 9)),
     }
 }
 
@@ -97,7 +120,7 @@ fn new_table_meta() -> mt::TableMeta {
                 dv::DataField::new(
                     "struct",
                     dv::StructType::create(
-                        vec![s("foo"), s("bar")],
+                        Some(vec![s("foo"), s("bar")]),
                         vec![
                             dv::BooleanType::default().into(),
                             dv::StringType::default().into(),
@@ -146,6 +169,15 @@ fn test_pb_from_to() -> anyhow::Result<()> {
     let got = mt::TableMeta::from_pb(p)?;
     assert_eq!(tbl, got);
 
+    let share = new_share_meta();
+    let p = share.to_pb()?;
+    let got = share::ShareMeta::from_pb(p)?;
+    assert_eq!(share, got);
+
+    let share_account_meta = new_share_account_meta();
+    let p = share_account_meta.to_pb()?;
+    let got = share::ShareAccountMeta::from_pb(p)?;
+    assert_eq!(share_account_meta, got);
     Ok(())
 }
 
@@ -216,6 +248,17 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
         println!("share:{:?}", buf);
     }
 
+    // ShareAccountMeta
+    {
+        let share_account_meta = new_share_account_meta();
+
+        let p = share_account_meta.to_pb()?;
+
+        let mut buf = vec![];
+        common_protos::prost::Message::encode(&p, &mut buf)?;
+        println!("share account:{:?}", buf);
+    }
+
     Ok(())
 }
 
@@ -235,6 +278,22 @@ fn test_load_old() -> anyhow::Result<()> {
 
         let p: pb::DatabaseMeta =
             common_protos::prost::Message::decode(db_meta_v1.as_slice()).map_err(print_err)?;
+
+        let got = mt::DatabaseMeta::from_pb(p).map_err(print_err)?;
+
+        let want = new_db_meta_v1();
+        assert_eq!(want, got);
+
+        let db_meta_v2: Vec<u8> = vec![
+            34, 10, 10, 3, 120, 121, 122, 18, 3, 102, 111, 111, 42, 2, 52, 52, 50, 10, 10, 3, 97,
+            98, 99, 18, 3, 100, 101, 102, 162, 1, 23, 50, 48, 49, 52, 45, 49, 49, 45, 50, 56, 32,
+            49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 170, 1, 23, 50, 48, 49, 52, 45, 49, 49,
+            45, 50, 57, 32, 49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 178, 1, 7, 102, 111,
+            111, 32, 98, 97, 114, 194, 1, 1, 1, 160, 6, 2, 168, 6, 1,
+        ];
+
+        let p: pb::DatabaseMeta =
+            common_protos::prost::Message::decode(db_meta_v2.as_slice()).map_err(print_err)?;
 
         let got = mt::DatabaseMeta::from_pb(p).map_err(print_err)?;
 
@@ -300,17 +359,37 @@ fn test_load_old() -> anyhow::Result<()> {
     // ShareMeta is loadable
     {
         let share_meta_v2: Vec<u8> = vec![
-            10, 18, 10, 8, 8, 1, 160, 6, 2, 168, 6, 1, 16, 1, 160, 6, 2, 168, 6, 1, 18, 18, 10, 8,
-            16, 19, 160, 6, 2, 168, 6, 1, 16, 4, 160, 6, 2, 168, 6, 1, 26, 1, 97, 26, 1, 98, 34, 7,
-            99, 111, 109, 109, 101, 110, 116, 42, 23, 50, 48, 49, 52, 45, 49, 49, 45, 50, 56, 32,
-            49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 50, 23, 50, 48, 49, 52, 45, 49, 49, 45,
-            50, 57, 32, 49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 160, 6, 2, 168, 6, 1,
+            10, 43, 10, 8, 8, 1, 160, 6, 2, 168, 6, 1, 16, 1, 26, 23, 50, 48, 49, 52, 45, 49, 49,
+            45, 50, 56, 32, 49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 160, 6, 2, 168, 6, 1,
+            18, 43, 10, 8, 16, 19, 160, 6, 2, 168, 6, 1, 16, 4, 26, 23, 50, 48, 49, 52, 45, 49, 49,
+            45, 50, 56, 32, 49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 160, 6, 2, 168, 6, 1,
+            26, 1, 97, 26, 1, 98, 34, 7, 99, 111, 109, 109, 101, 110, 116, 42, 23, 50, 48, 49, 52,
+            45, 49, 49, 45, 50, 56, 32, 49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 50, 23, 50,
+            48, 49, 52, 45, 49, 49, 45, 50, 57, 32, 49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84, 67,
+            160, 6, 2, 168, 6, 1,
         ];
         let p: pb::ShareMeta =
             common_protos::prost::Message::decode(share_meta_v2.as_slice()).map_err(print_err)?;
 
         let got = share::ShareMeta::from_pb(p).map_err(print_err)?;
         let want = new_share_meta();
+        assert_eq!(want, got);
+    }
+
+    // ShareAccountMeta is loadable
+    {
+        let share_account_meta_v2: Vec<u8> = vec![
+            10, 7, 97, 99, 99, 111, 117, 110, 116, 16, 4, 26, 23, 50, 48, 49, 52, 45, 49, 49, 45,
+            50, 56, 32, 49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 34, 23, 50, 48, 49, 52, 45,
+            49, 49, 45, 50, 57, 32, 49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 160, 6, 2, 168,
+            6, 1,
+        ];
+        let p: pb::ShareAccountMeta =
+            common_protos::prost::Message::decode(share_account_meta_v2.as_slice())
+                .map_err(print_err)?;
+
+        let got = share::ShareAccountMeta::from_pb(p).map_err(print_err)?;
+        let want = new_share_account_meta();
         assert_eq!(want, got);
     }
 

@@ -262,7 +262,6 @@ CreateTable(
                             span: Ident(32..33),
                         },
                         data_type: Int32,
-                        nullable: false,
                         default_expr: Some(
                             Literal {
                                 span: [
@@ -282,17 +281,16 @@ CreateTable(
                             span: Ident(62..63),
                         },
                         data_type: String,
-                        nullable: false,
                         default_expr: None,
                         comment: None,
                     },
                 ],
             ),
         ),
-        table_options: [],
+        engine: None,
         cluster_by: [],
+        table_options: {},
         as_query: None,
-        comment: None,
         transient: false,
     },
 )
@@ -329,7 +327,6 @@ CreateTable(
                             span: Ident(32..33),
                         },
                         data_type: Int32,
-                        nullable: false,
                         default_expr: Some(
                             Literal {
                                 span: [
@@ -349,15 +346,15 @@ CreateTable(
                             span: Ident(62..63),
                         },
                         data_type: String,
-                        nullable: false,
                         default_expr: None,
                         comment: None,
                     },
                 ],
             ),
         ),
-        table_options: [],
+        engine: None,
         cluster_by: [],
+        table_options: {},
         as_query: Some(
             Query {
                 span: [
@@ -409,7 +406,79 @@ CreateTable(
                 format: None,
             },
         ),
-        comment: None,
+        transient: false,
+    },
+)
+
+
+---------- Input ----------
+create table if not exists a.b (c tuple(m integer, n string), d tuple(integer, string));
+---------- Output ---------
+CREATE TABLE IF NOT EXISTS a.b (c TUPLE(m Int32, n STRING) NOT NULL, d TUPLE(Int32, STRING) NOT NULL)
+---------- AST ------------
+CreateTable(
+    CreateTableStmt {
+        if_not_exists: true,
+        catalog: None,
+        database: Some(
+            Identifier {
+                name: "a",
+                quote: None,
+                span: Ident(27..28),
+            },
+        ),
+        table: Identifier {
+            name: "b",
+            quote: None,
+            span: Ident(29..30),
+        },
+        source: Some(
+            Columns(
+                [
+                    ColumnDefinition {
+                        name: Identifier {
+                            name: "c",
+                            quote: None,
+                            span: Ident(32..33),
+                        },
+                        data_type: Tuple {
+                            fields_name: Some(
+                                [
+                                    "m",
+                                    "n",
+                                ],
+                            ),
+                            fields_type: [
+                                Int32,
+                                String,
+                            ],
+                        },
+                        default_expr: None,
+                        comment: None,
+                    },
+                    ColumnDefinition {
+                        name: Identifier {
+                            name: "d",
+                            quote: None,
+                            span: Ident(62..63),
+                        },
+                        data_type: Tuple {
+                            fields_name: None,
+                            fields_type: [
+                                Int32,
+                                String,
+                            ],
+                        },
+                        default_expr: None,
+                        comment: None,
+                    },
+                ],
+            ),
+        ),
+        engine: None,
+        cluster_by: [],
+        table_options: {},
+        as_query: None,
         transient: false,
     },
 )
@@ -453,10 +522,10 @@ CreateTable(
                 },
             },
         ),
-        table_options: [],
+        engine: None,
         cluster_by: [],
+        table_options: {},
         as_query: None,
-        comment: None,
         transient: false,
     },
 )
@@ -465,7 +534,7 @@ CreateTable(
 ---------- Input ----------
 create table t like t2 engine = memory;
 ---------- Output ---------
-CREATE TABLE t LIKE t2ENGINE = MEMORY
+CREATE TABLE t LIKE t2 ENGINE=MEMORY
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
@@ -488,14 +557,12 @@ CreateTable(
                 },
             },
         ),
-        table_options: [
-            Engine(
-                Memory,
-            ),
-        ],
+        engine: Some(
+            Memory,
+        ),
         cluster_by: [],
+        table_options: {},
         as_query: None,
-        comment: None,
         transient: false,
     },
 )
@@ -750,7 +817,7 @@ DropDatabase(
 ---------- Input ----------
 create table c(a DateTime null, b DateTime(3));
 ---------- Output ---------
-CREATE TABLE c (a DATETIME NULL, b DATETIME(3) NOT NULL)
+CREATE TABLE c (a Timestamp NULL, b Timestamp(3) NOT NULL)
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
@@ -771,10 +838,11 @@ CreateTable(
                             quote: None,
                             span: Ident(15..16),
                         },
-                        data_type: DateTime {
-                            precision: None,
-                        },
-                        nullable: true,
+                        data_type: Nullable(
+                            Timestamp {
+                                precision: None,
+                            },
+                        ),
                         default_expr: None,
                         comment: None,
                     },
@@ -784,22 +852,21 @@ CreateTable(
                             quote: None,
                             span: Ident(32..33),
                         },
-                        data_type: DateTime {
+                        data_type: Timestamp {
                             precision: Some(
                                 3,
                             ),
                         },
-                        nullable: false,
                         default_expr: None,
                         comment: None,
                     },
                 ],
             ),
         ),
-        table_options: [],
+        engine: None,
         cluster_by: [],
+        table_options: {},
         as_query: None,
-        comment: None,
         transient: false,
     },
 )
@@ -1213,8 +1280,9 @@ CreateTable(
                             quote: None,
                             span: Ident(15..17),
                         },
-                        data_type: Int32,
-                        nullable: true,
+                        data_type: Nullable(
+                            Int32,
+                        ),
                         default_expr: None,
                         comment: None,
                     },
@@ -1224,8 +1292,9 @@ CreateTable(
                             quote: None,
                             span: Ident(28..30),
                         },
-                        data_type: Int64,
-                        nullable: true,
+                        data_type: Nullable(
+                            Int64,
+                        ),
                         default_expr: None,
                         comment: None,
                     },
@@ -1235,18 +1304,19 @@ CreateTable(
                             quote: None,
                             span: Ident(44..46),
                         },
-                        data_type: String,
-                        nullable: true,
+                        data_type: Nullable(
+                            String,
+                        ),
                         default_expr: None,
                         comment: None,
                     },
                 ],
             ),
         ),
-        table_options: [],
+        engine: None,
         cluster_by: [],
+        table_options: {},
         as_query: None,
-        comment: None,
         transient: false,
     },
 )
@@ -1277,7 +1347,6 @@ CreateTable(
                             span: Ident(15..17),
                         },
                         data_type: Int32,
-                        nullable: false,
                         default_expr: None,
                         comment: None,
                     },
@@ -1288,7 +1357,6 @@ CreateTable(
                             span: Ident(32..34),
                         },
                         data_type: Int64,
-                        nullable: false,
                         default_expr: None,
                         comment: None,
                     },
@@ -1299,17 +1367,16 @@ CreateTable(
                             span: Ident(52..54),
                         },
                         data_type: String,
-                        nullable: false,
                         default_expr: None,
                         comment: None,
                     },
                 ],
             ),
         ),
-        table_options: [],
+        engine: None,
         cluster_by: [],
+        table_options: {},
         as_query: None,
-        comment: None,
         transient: false,
     },
 )
@@ -1340,7 +1407,6 @@ CreateTable(
                             span: Ident(15..17),
                         },
                         data_type: Int32,
-                        nullable: false,
                         default_expr: Some(
                             Literal {
                                 span: [
@@ -1356,10 +1422,10 @@ CreateTable(
                 ],
             ),
         ),
-        table_options: [],
+        engine: None,
         cluster_by: [],
+        table_options: {},
         as_query: None,
-        comment: None,
         transient: false,
     },
 )
@@ -4700,7 +4766,7 @@ AlterDatabase(
 ---------- Input ----------
 CREATE TABLE t (a INT COMMENT 'col comment') COMMENT='table comment';
 ---------- Output ---------
-CREATE TABLE t (a Int32 NOT NULL COMMENT 'col comment')COMMENT = table comment
+CREATE TABLE t (a Int32 NOT NULL COMMENT 'col comment')comment='table comment'
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
@@ -4722,7 +4788,6 @@ CreateTable(
                             span: Ident(16..17),
                         },
                         data_type: Int32,
-                        nullable: false,
                         default_expr: None,
                         comment: Some(
                             "col comment",
@@ -4731,14 +4796,12 @@ CreateTable(
                 ],
             ),
         ),
-        table_options: [
-            Comment(
-                "table comment",
-            ),
-        ],
+        engine: None,
         cluster_by: [],
+        table_options: {
+            "comment": "table comment",
+        },
         as_query: None,
-        comment: None,
         transient: false,
     },
 )

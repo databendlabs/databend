@@ -17,16 +17,16 @@ use common_arrow::parquet::metadata::ThriftFileMetaData;
 use common_datablocks::serialize_data_blocks;
 use common_datablocks::DataBlock;
 use common_exception::Result;
-use common_tracing::tracing::warn;
+use common_fuse_meta::meta::BlockMeta;
+use common_fuse_meta::meta::Versioned;
 use opendal::Operator;
+use tracing::warn;
 
 use crate::storages::fuse::io::retry;
 use crate::storages::fuse::io::retry::Retryable;
 use crate::storages::fuse::io::TableMetaLocationGenerator;
-use crate::storages::fuse::meta::BlockMeta;
-use crate::storages::fuse::meta::Versioned;
 use crate::storages::fuse::operations::util;
-use crate::storages::fuse::statistics::accumulator;
+use crate::storages::fuse::statistics::gen_columns_statistics;
 
 pub struct BlockWriter<'a> {
     location_generator: &'a TableMetaLocationGenerator,
@@ -48,7 +48,7 @@ impl<'a> BlockWriter<'a> {
         let data_accessor = &self.data_accessor;
         let row_count = block.num_rows() as u64;
         let block_size = block.memory_size() as u64;
-        let col_stats = accumulator::columns_statistics(&block)?;
+        let col_stats = gen_columns_statistics(&block)?;
         let (file_size, file_meta_data) = write_block(block, data_accessor, &location).await?;
         let col_metas = util::column_metas(&file_meta_data)?;
         let cluster_stats = None; // TODO confirm this with zhyass

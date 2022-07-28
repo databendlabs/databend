@@ -12,7 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::Display;
+
 use anyerror::AnyError;
+use common_meta_app::schema::DatabaseNameIdent;
+use common_meta_app::schema::TableNameIdent;
+use common_meta_types::app_error::AppError;
+use common_meta_types::app_error::UnknownDatabase;
+use common_meta_types::app_error::UnknownTable;
 use common_meta_types::txn_condition::Target;
 use common_meta_types::txn_op::Request;
 use common_meta_types::ConditionResult;
@@ -27,6 +34,7 @@ use common_meta_types::TxnPutRequest;
 use common_meta_types::TxnRequest;
 use common_meta_types::UpsertKVReq;
 use common_proto_conv::FromToProto;
+use tracing::debug;
 
 use crate::KVApi;
 use crate::KVApiKey;
@@ -42,7 +50,7 @@ pub const TXN_MAX_RETRY_TIMES: u32 = 10;
 /// It returns (seq, `u64` value).
 /// If not found, (0,0) is returned.
 pub async fn get_u64_value<T: KVApiKey>(
-    kv_api: &impl KVApi,
+    kv_api: &(impl KVApi + ?Sized),
     key: &T,
 ) -> Result<(u64, u64), MetaError> {
     let res = kv_api.get_kv(&key.to_key()).await?;
@@ -58,7 +66,7 @@ pub async fn get_u64_value<T: KVApiKey>(
 ///
 /// It returns seq number and the data.
 pub async fn get_struct_value<K, PB, T>(
-    kv_api: &impl KVApi,
+    kv_api: &(impl KVApi + ?Sized),
     k: &K,
 ) -> Result<(u64, Option<T>), MetaError>
 where
@@ -165,5 +173,46 @@ pub fn txn_op_del(key: &impl KVApiKey) -> TxnOp {
             key: key.to_key(),
             prev_value: true,
         })),
+    }
+}
+
+/// Return OK if a db_id or db_meta exists by checking the seq.
+///
+/// Otherwise returns UnknownDatabase error
+pub fn db_has_to_exist(
+    seq: u64,
+    db_name_ident: &DatabaseNameIdent,
+    msg: impl Display,
+) -> Result<(), MetaError> {
+    if seq == 0 {
+        debug!(seq, ?db_name_ident, "db does not exist");
+
+        Err(MetaError::AppError(AppError::UnknownDatabase(
+            UnknownDatabase::new(
+                &db_name_ident.db_name,
+                format!("{}: {}", msg, db_name_ident),
+            ),
+        )))
+    } else {
+        Ok(())
+    }
+}
+
+/// Return OK if a table_id or table_meta exists by checking the seq.
+///
+/// Otherwise returns UnknownTable error
+pub fn table_has_to_exist(
+    seq: u64,
+    name_ident: &TableNameIdent,
+    ctx: impl Display,
+) -> Result<(), MetaError> {
+    if seq == 0 {
+        debug!(seq, ?name_ident, "does not exist");
+
+        Err(MetaError::AppError(AppError::UnknownTable(
+            UnknownTable::new(&name_ident.table_name, format!("{}: {}", ctx, name_ident)),
+        )))
+    } else {
+        Ok(())
     }
 }

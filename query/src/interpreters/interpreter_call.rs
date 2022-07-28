@@ -18,11 +18,11 @@ use common_exception::Result;
 use common_planners::CallPlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
-use common_tracing::tracing;
 
 use super::Interpreter;
 use crate::procedures::ProcedureFactory;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 
 pub struct CallInterpreter {
     ctx: Arc<QueryContext>,

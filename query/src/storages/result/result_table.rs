@@ -18,6 +18,7 @@ use std::sync::Arc;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_fuse_meta::meta::SegmentInfo;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 use common_meta_types::UserIdentity;
@@ -32,9 +33,8 @@ use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::TransformLimit;
 use crate::pipelines::Pipeline;
 use crate::pipelines::SourcePipeBuilder;
-use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::storages::fuse::io::BlockReader;
-use crate::storages::fuse::meta::SegmentInfo;
 use crate::storages::fuse::FuseTable;
 use crate::storages::result::result_locations::ResultLocations;
 use crate::storages::result::result_table_source::ResultTableSource;
@@ -84,7 +84,7 @@ pub struct ResultTable {
 }
 
 impl ResultTable {
-    pub async fn try_get(ctx: Arc<QueryContext>, query_id: &str) -> Result<Arc<ResultTable>> {
+    pub async fn try_get(ctx: Arc<dyn TableContext>, query_id: &str) -> Result<Arc<ResultTable>> {
         let locations = ResultLocations::new(query_id);
         let data_accessor = ctx.get_storage_operator()?;
         let location = locations.get_meta_location();
@@ -116,7 +116,7 @@ impl ResultTable {
     #[allow(unused)]
     fn create_block_reader(
         &self,
-        ctx: &Arc<QueryContext>,
+        ctx: &Arc<dyn TableContext>,
         _push_downs: &Option<Extras>,
     ) -> Result<Arc<BlockReader>> {
         let projection = (0..self.get_table_info().schema().fields().len())
@@ -141,7 +141,7 @@ impl Table for ResultTable {
 
     async fn read_partitions(
         &self,
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn TableContext>,
         push_downs: Option<Extras>,
     ) -> Result<(Statistics, Partitions)> {
         let data_accessor = ctx.get_storage_operator()?;
@@ -160,7 +160,7 @@ impl Table for ResultTable {
 
     fn read2(
         &self,
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn TableContext>,
         plan: &ReadDataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {

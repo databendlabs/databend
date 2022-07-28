@@ -17,16 +17,19 @@ use common_exception::Result;
 use crate::sql::optimizer::ColumnSet;
 use crate::sql::optimizer::RelExpr;
 use crate::sql::optimizer::RelationalProperty;
-use crate::sql::plans::LogicalPlan;
+use crate::sql::plans::LogicalOperator;
 use crate::sql::plans::Operator;
-use crate::sql::plans::PhysicalPlan;
+use crate::sql::plans::PhysicalOperator;
 use crate::sql::plans::RelOp;
+use crate::sql::plans::Scalar;
 use crate::sql::IndexType;
 
 #[derive(Clone, Debug)]
 pub struct LogicalGet {
     pub table_index: IndexType,
     pub columns: ColumnSet,
+
+    pub push_down_predicates: Option<Vec<Scalar>>,
 }
 
 impl Operator for LogicalGet {
@@ -42,16 +45,16 @@ impl Operator for LogicalGet {
         true
     }
 
-    fn as_logical(&self) -> Option<&dyn LogicalPlan> {
+    fn as_logical(&self) -> Option<&dyn LogicalOperator> {
         Some(self)
     }
 
-    fn as_physical(&self) -> Option<&dyn PhysicalPlan> {
+    fn as_physical(&self) -> Option<&dyn PhysicalOperator> {
         None
     }
 }
 
-impl LogicalPlan for LogicalGet {
+impl LogicalOperator for LogicalGet {
     fn derive_relational_prop<'a>(&self, _rel_expr: &RelExpr<'a>) -> Result<RelationalProperty> {
         Ok(RelationalProperty {
             output_columns: self.columns.clone(),

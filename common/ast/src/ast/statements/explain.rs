@@ -17,4 +17,5 @@ pub enum ExplainKind {
     Syntax,
     Graph,
     Pipeline,
+    Fragments,
 }

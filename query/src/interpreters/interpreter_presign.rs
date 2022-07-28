@@ -20,17 +20,17 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
-use common_tracing::tracing;
 use serde_json::Value;
 
 use crate::interpreters::Interpreter;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::sql::plans::PresignAction;
 use crate::sql::plans::PresignPlan;
 use crate::storages::stage::StageSourceHelper;
 
 pub struct PresignInterpreter {
-    ctx: Arc<QueryContext>,
+    ctx: Arc<dyn TableContext>,
     plan: PresignPlan,
 }
 

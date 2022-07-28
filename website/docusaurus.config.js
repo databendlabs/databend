@@ -22,13 +22,10 @@ const config = {
 
     i18n: {
         defaultLocale: 'en-US',
-        locales: ['en-US', 'zh-CN'],
+        locales: ['en-US'],
         localeConfigs: {
             'en-US': {
                 label: 'English',
-            },
-            'zh-CN': {
-                label: '简体中文',
             },
         },
     },
@@ -113,17 +110,7 @@ const config = {
                         href: 'https://github.com/datafuselabs/databend',
                         label: 'GitHub',
                         position: 'right',
-                    },
-                    {
-                        type: 'localeDropdown',
-                        position: 'right',
-                        dropdownItemsAfter: [
-                            {
-                                to: 'https://databend.crowdin.com/databend',
-                                label: 'Help Us Translate',
-                            },
-                        ],
-                    },
+                    }
                 ],
             },
             footer: {
@@ -187,6 +174,7 @@ const config = {
             prism: {
                 theme: lightCodeTheme,
                 darkTheme: darkCodeTheme,
+                additionalLanguages: ['toml', 'rust'],
             },
             algolia: {
                 appId: 'RL7MS9PKE8',

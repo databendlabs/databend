@@ -23,7 +23,6 @@ use common_datavalues::TypeDeserializerImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::position2;
-use common_io::prelude::position4;
 use common_io::prelude::BufferReadExt;
 use common_io::prelude::FormatSettings;
 use common_io::prelude::MemoryReader;
@@ -36,7 +35,6 @@ use crate::InputFormat;
 use crate::InputState;
 
 pub struct TsvInputState {
-    pub quotes: u8,
     pub memory: Vec<u8>,
     pub accepted_rows: usize,
     pub accepted_bytes: usize,
@@ -112,28 +110,14 @@ impl TsvInputFormat {
         }))
     }
 
-    fn find_quotes(buf: &[u8], pos: usize, state: &mut TsvInputState) -> usize {
-        let index = pos + position2::<true, b'"', b'\''>(&buf[pos..]);
-
-        if index != buf.len() {
-            state.quotes = 0;
-            return index + 1;
-        }
-
-        buf.len()
-    }
-
     fn find_delimiter(&self, buf: &[u8], pos: usize, state: &mut TsvInputState) -> usize {
-        let position = pos + position4::<true, b'"', b'\'', b'\r', b'\n'>(&buf[pos..]);
+        let position = pos + position2::<true, b'\r', b'\n'>(&buf[pos..]);
 
         if position != buf.len() {
-            if buf[position] == b'"' || buf[position] == b'\'' {
-                state.quotes = buf[position];
-                return position + 1;
-            } else if buf[position] == b'\r' {
+            if buf[position] == b'\r' {
                 return self.accept_row::<b'\n'>(buf, pos, state, position);
             } else if buf[position] == b'\n' {
-                return self.accept_row::<b'\r'>(buf, pos, state, position);
+                return self.accept_row::<0>(buf, pos, state, position);
             }
         }
         buf.len()
@@ -175,7 +159,6 @@ impl InputFormat for TsvInputFormat {
 
     fn create_state(&self) -> Box<dyn InputState> {
         Box::new(TsvInputState {
-            quotes: 0,
             memory: vec![],
             accepted_rows: 0,
             accepted_bytes: 0,
@@ -287,10 +270,7 @@ impl InputFormat for TsvInputFormat {
 
         state.need_more_data = true;
         while index < buf.len() && state.need_more_data {
-            index = match state.quotes != 0 {
-                true => Self::find_quotes(buf, index, state),
-                false => self.find_delimiter(buf, index, state),
-            }
+            index = self.find_delimiter(buf, index, state);
         }
 
         state.memory.extend_from_slice(&buf[0..index]);
@@ -319,11 +299,7 @@ impl InputFormat for TsvInputFormat {
             let state = state.as_any().downcast_mut::<TsvInputState>().unwrap();
 
             while index < buf.len() {
-                index = match state.quotes != 0 {
-                    true => Self::find_quotes(buf, index, state),
-                    false => self.find_delimiter(buf, index, state),
-                };
-
+                index = self.find_delimiter(buf, index, state);
                 if state.accepted_rows == rows_to_skip {
                     return Ok(index);
                 }

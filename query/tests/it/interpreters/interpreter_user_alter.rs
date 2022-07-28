@@ -19,14 +19,13 @@ use common_meta_types::PasswordHashMethod;
 use common_meta_types::UserInfo;
 use common_meta_types::UserOptionFlag;
 use databend_query::interpreters::*;
+use databend_query::sessions::TableContext;
 use databend_query::sql::*;
 use futures::stream::StreamExt;
 use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_alter_user_interpreter() -> Result<()> {
-    common_tracing::init_default_ut_tracing();
-
     let ctx = crate::tests::create_query_context().await?;
     let tenant = "test";
     let name = "test";

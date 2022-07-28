@@ -26,20 +26,20 @@ use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::Event;
 use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::Processor;
-use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::storages::fuse::io::BlockReader;
 use crate::storages::result::result_table_source::State::Generated;
 
 enum State {
     ReadData(PartInfoPtr),
-    Deserialize(PartInfoPtr, Vec<Vec<u8>>),
+    Deserialize(PartInfoPtr, Vec<(usize, Vec<u8>)>),
     Generated(Option<PartInfoPtr>, DataBlock),
     Finish,
 }
 
 pub struct ResultTableSource {
     state: State,
-    ctx: Arc<QueryContext>,
+    ctx: Arc<dyn TableContext>,
     scan_progress: Arc<Progress>,
     block_reader: Arc<BlockReader>,
     output: Arc<OutputPort>,
@@ -47,7 +47,7 @@ pub struct ResultTableSource {
 
 impl ResultTableSource {
     pub fn create(
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
         block_reader: Arc<BlockReader>,
     ) -> Result<ProcessorPtr> {

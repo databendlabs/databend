@@ -5,7 +5,9 @@ members = [
     "common/base",
     "common/building",
     "common/cache",
+    "common/catalog",
     "common/codegen",
+    "common/config",
     "common/contexts",
     "common/datablocks",
     "common/datavalues",
@@ -13,6 +15,7 @@ members = [
     "common/expression",
     "common/formats",
     "common/functions",
+    "common/functions-v2",
     "common/grpc",
     "common/hashtable",
     "common/hive-meta-store",
@@ -35,22 +38,22 @@ members = [
     "common/tracing",
     "common/users",
     "common/storage",
-
+    "common/fuse-meta",
     # Query
     "query",
-
     # Meta
     "metasrv",
-
     # Tools
-    "tools/fuzz",
     "tools/metabench",
     "tools/metactl",
-
     # Hack
     # This crate is used to hack our cargo.lock to resovle CVEs and so on.
     "common/dep-hack",
 ]
+
+# cargo can't build fuzz targets with afl
+# split `fuzz` into seperate workspace can help resolve this.
+exclude = ["tools/fuzz"]
 
 [profile.release]
 debug = 1

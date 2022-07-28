@@ -22,11 +22,12 @@ use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Expression;
-use common_tracing::tracing;
+use tracing::info;
 
 use crate::pipelines::processors::transforms::ExpressionExecutor;
 use crate::sessions::QueryContext;
 use crate::storages::index::IndexSchemaVersion;
+use crate::storages::index::SupportedType;
 
 /// BloomFilterExprEvalResult represents the evaluation result of an expression by bloom filter.
 ///
@@ -371,11 +372,9 @@ impl BloomFilter {
         let power_of_ln2 = core::f32::consts::LN_2 as f64 * core::f32::consts::LN_2 as f64;
         let m = -(num_items as f64 * false_positive_rate.ln()) / power_of_ln2;
         let num_bits = m.ceil() as usize;
-        tracing::info!(
+        info!(
             "Bloom filter calculate optimal bits, num_bits: {}, num_items: {}, false_positive_rate: {}",
-            num_bits,
-            num_items,
-            false_positive_rate
+            num_bits, num_items, false_positive_rate
         );
         num_bits
     }
@@ -389,7 +388,7 @@ impl BloomFilter {
     pub fn optimal_num_hashes(num_items: u64, num_bits: u64) -> usize {
         let k = num_bits as f64 / num_items as f64 * core::f32::consts::LN_2 as f64;
         let num_hashes = std::cmp::max(2, k.ceil() as usize); // at least two hashes
-        tracing::info!(
+        info!(
             "Bloom filter calculate optimal hashes, num_hashes: {}",
             num_hashes
         );
@@ -427,39 +426,6 @@ impl BloomFilter {
     #[must_use]
     pub fn clone_empty(&self) -> Self {
         Self::with_size(self.num_bits(), self.num_hashes(), self.seed)
-    }
-
-    /// Returns whether the data type is supported by bloom filter.
-    ///
-    /// The supported types are most same as Databricks:
-    /// https://docs.microsoft.com/en-us/azure/databricks/delta/optimizations/bloom-filters
-    ///
-    /// "Bloom filters support columns with the following (input) data types: byte, short, int,
-    /// long, float, double, date, timestamp, and string."
-    ///
-    /// Nulls are not added to the Bloom
-    /// filter, so any null related filter requires reading the data file. "
-    pub fn is_supported_type(data_type: &DataTypeImpl) -> bool {
-        // we support nullable column but Nulls are not added into the bloom filter.
-        let inner_type = remove_nullable(data_type);
-        let data_type_id = inner_type.data_type_id();
-        matches!(
-            data_type_id,
-            TypeID::UInt8
-                | TypeID::UInt16
-                | TypeID::UInt32
-                | TypeID::UInt64
-                | TypeID::Int8
-                | TypeID::Int16
-                | TypeID::Int32
-                | TypeID::Int64
-                | TypeID::Float32
-                | TypeID::Float64
-                | TypeID::Date
-                | TypeID::Timestamp
-                | TypeID::Interval
-                | TypeID::String
-        )
     }
 
     #[inline(always)]
@@ -680,3 +646,5 @@ impl BloomFilter {
         }
     }
 }
+
+impl SupportedType for BloomFilter {}

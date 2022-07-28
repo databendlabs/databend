@@ -83,7 +83,6 @@ impl Processor for ExchangeShuffleSource {
         }
 
         if let Some(data_block) = self.remote_data_block.take() {
-            // println!("receive remote data block {:?}", data_block);
             self.output.push_data(Ok(data_block));
             return Ok(Event::NeedConsume);
         }
@@ -100,7 +99,9 @@ impl Processor for ExchangeShuffleSource {
                     Ok(Event::Sync)
                 }
             };
-        } else if let Ok(flight_data) = self.rx.try_recv() {
+        }
+
+        if let Ok(flight_data) = self.rx.try_recv() {
             self.remote_flight_data = Some(flight_data?);
             return Ok(Event::Sync);
         }

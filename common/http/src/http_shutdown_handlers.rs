@@ -19,7 +19,6 @@ use common_base::base::tokio::sync::oneshot;
 use common_base::base::tokio::task::JoinHandle;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_tracing::tracing;
 use futures::future::Either;
 use futures::FutureExt;
 use poem::listener::Acceptor;
@@ -29,6 +28,8 @@ use poem::listener::Listener;
 use poem::listener::RustlsConfig;
 use poem::listener::TcpListener;
 use poem::Endpoint;
+use tracing::error;
+use tracing::info;
 
 pub struct HttpShutdownHandler {
     service_name: String,
@@ -93,17 +94,16 @@ impl HttpShutdownHandler {
     /// Shutdown in graceful mode and returns a join handle.
     /// To force shutdown: call the `abort()` method of the returned handle.
     fn send_stop_signal(&mut self) -> JoinHandle<std::io::Result<()>> {
-        tracing::info!("{}: graceful stop", self.service_name);
+        info!("{}: graceful stop", self.service_name);
 
         if let Some(abort_handle) = self.abort_handle.take() {
-            tracing::info!("{}: send signal to abort_handle", self.service_name);
+            info!("{}: send signal to abort_handle", self.service_name);
 
             let res = abort_handle.send(());
 
-            tracing::info!(
+            info!(
                 "Done: {}: send signal to abort_handle, res: {:?}",
-                self.service_name,
-                res
+                self.service_name, res
             );
         }
 
@@ -121,25 +121,24 @@ impl HttpShutdownHandler {
 
             match futures::future::select(f, h).await {
                 Either::Left((_x, h)) => {
-                    tracing::info!("{}: received force shutdown signal", self.service_name);
+                    info!("{}: received force shutdown signal", self.service_name);
                     h.abort();
                 }
                 Either::Right((_, _)) => {
-                    tracing::info!("Done: {}: graceful shutdown", self.service_name);
+                    info!("Done: {}: graceful shutdown", self.service_name);
                 }
             }
         } else {
-            tracing::info!(
+            info!(
                 "{}: force is None, wait for join handle for ever",
                 self.service_name
             );
 
             let res = join_handle.await;
 
-            tracing::info!(
+            info!(
                 "Done: {}: waiting for join handle for ever, res: {:?}",
-                self.service_name,
-                res
+                self.service_name, res
             );
         }
         Ok(())
@@ -152,10 +151,9 @@ impl HttpShutdownHandler {
             }
             if let Some(join_handle) = self.join_handle.take() {
                 if let Err(error) = join_handle.await {
-                    tracing::error!(
+                    error!(
                         "Unexpected error during shutdown Http Server {}. cause {}",
-                        self.service_name,
-                        error
+                        self.service_name, error
                     );
                 }
             }

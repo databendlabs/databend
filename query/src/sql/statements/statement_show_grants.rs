@@ -19,9 +19,9 @@ use common_meta_types::PrincipalIdentity;
 use common_planners::PlanNode;
 use common_planners::ShowGrantsPlan;
 use common_planners::ShowPlan;
-use common_tracing::tracing;
 
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
 

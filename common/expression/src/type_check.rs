@@ -49,6 +49,39 @@ pub fn check(ast: &RawExpr, fn_registry: &FunctionRegistry) -> Result<(Expr, Dat
             },
             data_type.clone(),
         )),
+        RawExpr::Cast {
+            span,
+            expr,
+            dest_type,
+        } => {
+            let (expr, _) = check(expr, fn_registry)?;
+            Ok((
+                Expr::Cast {
+                    span: span.clone(),
+                    expr: Box::new(expr),
+                    dest_type: dest_type.clone(),
+                },
+                dest_type.clone(),
+            ))
+        }
+        RawExpr::TryCast {
+            span,
+            expr,
+            dest_type,
+        } => {
+            let (expr, _) = check(expr, fn_registry)?;
+
+            let dest_type = wrap_nullable_for_try_cast(span.clone(), dest_type)?;
+
+            Ok((
+                Expr::TryCast {
+                    span: span.clone(),
+                    expr: Box::new(expr),
+                    dest_type: dest_type.clone(),
+                },
+                dest_type,
+            ))
+        }
         RawExpr::FunctionCall {
             span,
             name,
@@ -78,13 +111,36 @@ pub fn check(ast: &RawExpr, fn_registry: &FunctionRegistry) -> Result<(Expr, Dat
     }
 }
 
+fn wrap_nullable_for_try_cast(span: Span, ty: &DataType) -> Result<DataType> {
+    match ty {
+        DataType::Null => Err((span, "TRY_CAST() to NULL is not supported".to_string())),
+        DataType::Nullable(_) => Ok(ty.clone()),
+        DataType::Array(inner_ty) => Ok(DataType::Nullable(Box::new(DataType::Array(Box::new(
+            wrap_nullable_for_try_cast(span, inner_ty)?,
+        ))))),
+        DataType::Tuple(fields_ty) => Ok(DataType::Nullable(Box::new(DataType::Tuple(
+            fields_ty
+                .iter()
+                .map(|ty| wrap_nullable_for_try_cast(span.clone(), ty))
+                .collect::<Result<Vec<_>>>()?,
+        )))),
+        _ => Ok(DataType::Nullable(Box::new(ty.clone()))),
+    }
+}
+
 pub fn check_literal(literal: &Literal) -> DataType {
     match literal {
         Literal::Null => DataType::Null,
         Literal::Int8(_) => DataType::Int8,
         Literal::Int16(_) => DataType::Int16,
+        Literal::Int32(_) => DataType::Int32,
+        Literal::Int64(_) => DataType::Int64,
         Literal::UInt8(_) => DataType::UInt8,
         Literal::UInt16(_) => DataType::UInt16,
+        Literal::UInt32(_) => DataType::UInt32,
+        Literal::UInt64(_) => DataType::UInt64,
+        Literal::Float32(_) => DataType::Float32,
+        Literal::Float64(_) => DataType::Float64,
         Literal::Boolean(_) => DataType::Boolean,
         Literal::String(_) => DataType::String,
     }
@@ -282,7 +338,7 @@ pub fn unify(src_ty: &DataType, dest_ty: &DataType) -> Result<Subsitution> {
                 .unwrap_or_else(Subsitution::empty);
             Ok(subst)
         }
-        (src_ty, dest_ty) if can_cast_to(src_ty, dest_ty) => Ok(Subsitution::empty()),
+        (src_ty, dest_ty) if can_auto_cast_to(src_ty, dest_ty) => Ok(Subsitution::empty()),
         _ => Err((
             None,
             (format!("unable to unify `{}` with `{}`", src_ty, dest_ty)),
@@ -290,19 +346,22 @@ pub fn unify(src_ty: &DataType, dest_ty: &DataType) -> Result<Subsitution> {
     }
 }
 
-// TODO: should support fallable casts
-pub fn can_cast_to(src_ty: &DataType, dest_ty: &DataType) -> bool {
+pub fn can_auto_cast_to(src_ty: &DataType, dest_ty: &DataType) -> bool {
     match (src_ty, dest_ty) {
         (src_ty, dest_ty) if src_ty == dest_ty => true,
         (DataType::Null, DataType::Nullable(_)) => true,
         (DataType::EmptyArray, DataType::Array(_)) => true,
-        (DataType::Nullable(src_ty), DataType::Nullable(dest_ty)) => can_cast_to(src_ty, dest_ty),
-        (src_ty, DataType::Nullable(dest_ty)) => can_cast_to(src_ty, dest_ty),
-        (DataType::Array(src_ty), DataType::Array(dest_ty)) => can_cast_to(src_ty, dest_ty),
-        (DataType::UInt8, DataType::UInt16)
-        | (DataType::Int8, DataType::Int16)
-        | (DataType::UInt8, DataType::Int16) => true,
-        _ => false,
+        (DataType::Nullable(src_ty), DataType::Nullable(dest_ty)) => {
+            can_auto_cast_to(src_ty, dest_ty)
+        }
+        (src_ty, DataType::Nullable(dest_ty)) => can_auto_cast_to(src_ty, dest_ty),
+        (DataType::Array(src_ty), DataType::Array(dest_ty)) => can_auto_cast_to(src_ty, dest_ty),
+        (src_ty, dest_ty) => match (src_ty.number_type_info(), dest_ty.number_type_info()) {
+            (Some(src_num_info), Some(dest_num_info)) => {
+                src_num_info.can_lossless_cast_to(dest_num_info)
+            }
+            _ => false,
+        },
     }
 }
 
@@ -322,15 +381,11 @@ pub fn common_super_type(ty1: DataType, ty2: DataType) -> Option<DataType> {
         (DataType::Array(box ty1), DataType::Array(box ty2)) => {
             Some(DataType::Array(Box::new(common_super_type(ty1, ty2)?)))
         }
-        (DataType::UInt8, DataType::UInt16) | (DataType::UInt16, DataType::UInt8) => {
-            Some(DataType::UInt16)
-        }
-        (DataType::Int8, DataType::Int16) | (DataType::Int16, DataType::Int8) => {
-            Some(DataType::Int16)
-        }
-        (DataType::Int16, DataType::UInt8) | (DataType::UInt8, DataType::Int16) => {
-            Some(DataType::Int16)
-        }
-        _ => None,
+        (ty1, ty2) => match (ty1.number_type_info(), ty2.number_type_info()) {
+            (Some(num_info_1), Some(num_info_2)) => num_info_1
+                .lossless_super_type(num_info_2)
+                .map(DataType::new_number),
+            _ => None,
+        },
     }
 }

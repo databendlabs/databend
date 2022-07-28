@@ -138,19 +138,69 @@ For information about how to manage buckets and Access Keys for your cloud objec
 ### Downloading Databend
 a. Create a folder named `databend` in the directory `/usr/local`.
 
-b. Download and extract the latest Databend package for your platform from https://github.com/datafuselabs/databend/releases.
+b. Download and extract the latest Databend release for your platform from [Github Release](https://github.com/datafuselabs/databend/releases):
 
-c. Move the extracted folders `bin` and `etc` to the folder `/usr/local/databend`.
+<Tabs groupId="operating-systems">
+<TabItem value="linux" label="Linux">
+
+```shell
+curl -LJO https://github.com/datafuselabs/databend/releases/download/${version}/databend-${version}-x86_64-unknown-linux-musl.tar.gz
+```
+
+</TabItem>
+<TabItem value="mac" label="MacOS">
+
+```shell
+curl -LJO https://github.com/datafuselabs/databend/releases/download/${version}/databend-${version}-aarch64-apple-darwin.tar.gz
+```
+
+</TabItem>
+
+<TabItem value="arm" label="Linux Arm">
+
+```shell
+curl -LJO https://github.com/datafuselabs/databend/releases/download/${version}/databend-${version}-aarch64-unknown-linux-musl.tar.gz
+```
+
+</TabItem>
+</Tabs>
+
+<Tabs groupId="operating-systems">
+<TabItem value="linux" label="Linux">
+
+```shell
+tar xzvf databend-${version}-x86_64-unknown-linux-musl.tar.gz
+```
+
+</TabItem>
+<TabItem value="mac" label="MacOS">
+
+```shell
+tar xzvf databend-${version}-aarch64-apple-darwin.tar.gz
+```
+
+</TabItem>
+
+<TabItem value="arm" label="Linux Arm">
+
+```shell
+tar xzvf databend-${version}-aarch64-unknown-linux-musl.tar.gz
+```
+
+</TabItem>
+</Tabs>
+
+c. Move the extracted folders `bin` and `configs` to the folder `/usr/local/databend`.
 
 ### Deploying a Meta Node
-a. Open the file `databend-meta-node.toml` in the folder `/usr/local/databend/etc`, and replace `0.0.0.0` with `127.0.0.1` within the whole file.
+a. Open the file `databend-meta.toml` in the folder `/usr/local/databend/configs`, and replace `127.0.0.1` with `0.0.0.0` within the whole file.
 
 b. Open a terminal window and navigate to the folder `/usr/local/databend/bin`.
 
 c. Run the following command to start the Meta node:
 
 ```shell
-./databend-meta -c ../etc/databend-meta.toml > meta.log 2>&1 &
+./databend-meta -c ../configs/databend-meta.toml > meta.log 2>&1 &
 ```
 
 d. Run the following command to check if the Meta node was started successfully:
@@ -160,9 +210,9 @@ curl -I  http://127.0.0.1:28101/v1/health
 ```
 
 ### Deploying a Query Node
-a. Open the file `databend-query-node.toml` in the folder `/usr/local/databend/etc`, and replace `0.0.0.0` with `127.0.0.1` within the whole file.
+a. Open the file `databend-query.toml` in the folder `/usr/local/databend/configs`, and replace `127.0.0.1` with `0.0.0.0` within the whole file.
 
-b. In the file `databend-query-node.toml`, set the parameter `type` in [storage] block to `s3` if you're using a S3 compatible object storage, or `azblob` if you're using Azure Blob storage.
+b. In the file `databend-query.toml`, set the parameter `type` in [storage] block to `s3` if you're using a S3 compatible object storage, or `azblob` if you're using Azure Blob storage.
 
 ```toml
 [storage]
@@ -170,7 +220,7 @@ b. In the file `databend-query-node.toml`, set the parameter `type` in [storage]
 type = "s3"
 ```
 
-c. Comment out the [storage.fs] block first, and then uncomment the [storage.s3] block if you're using a S3 compatible object storage, or uncomment the [storage.azblob] block if you're using Azure Blob storage.
+c. Comment out the `[storage.fs]` block first, and then uncomment the `[storage.s3]` block if you're using a S3 compatible object storage, or uncomment the `[storage.azblob]` block if you're using Azure Blob storage.
 
 ```toml
 # Set a local folder to store your data.
@@ -278,7 +328,7 @@ e. Open a terminal window and navigate to the folder `/usr/local/databend/bin`.
 f. Run the following command to start the Query node:
 
 ```shell
-./databend-query -c ../etc/databend-query.toml > query.log 2>&1 &
+./databend-query -c ../configs/databend-query.toml > query.log 2>&1 &
 ```
 
 g. Run the following command to check if the Query node was started successfully:
@@ -287,11 +337,30 @@ curl -I  http://127.0.0.1:8081/v1/health
 ```
 
 ### Verifying Deployment
-In this section, we will run MySQL queries from a SQL client installed on your local machine.
 
-a. Create a connection to 127.0.0.1 from your SQL client. In the connection, set the port to `3307`, and set the username to `root`.
+In this section, we will run some queries against Databend to verify the deployment.
 
-b. Run the following commands to check if the query is successful:
+a. Download and install a MySQL client on your local machine.
+
+b. Create a connection to 127.0.0.1 from your SQL client. In the connection, set the port to `3307`, and set the username to `root`.
+
+:::tip
+
+**Create new users**. The `root` user only works when you access Databend from localhost. You will need to create new users and grant proper privileges first to connect to Databend remotely. For example, 
+
+```sql
+-- Create a user named "eric" with the password "databend"
+CREATE USER eric IDENTIFIED BY 'databend';
+
+-- Grant the ALL privilege on all existing tables in the default database to the user eric:
+GRANT ALL ON default.* TO eric;
+```
+
+For more information about creating new users, see [CREATE USER](../30-reference/30-sql/00-ddl/30-user/01-user-create-user.md).
+
+:::
+
+c. Run the following commands and check if the query is successful:
 
 ```sql
 CREATE TABLE t1(a int);
@@ -300,3 +369,4 @@ INSERT INTO t1 VALUES(1), (2);
 
 SELECT * FROM t1;
 ```
+<GetLatest/>

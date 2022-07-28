@@ -18,10 +18,10 @@ use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_planners::PlanNode;
 use common_planners::ShowCreateTablePlan;
-use common_tracing::tracing;
 use sqlparser::ast::ObjectName;
 
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
 

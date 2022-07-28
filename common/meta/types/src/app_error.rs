@@ -283,6 +283,60 @@ impl ShareAlreadyExists {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[error("ShareAccountAlreadyExists: {share_name} while {context}")]
+pub struct ShareAccountAlreadyExists {
+    share_name: String,
+    account: String,
+    context: String,
+}
+
+impl ShareAccountAlreadyExists {
+    pub fn new(
+        share_name: impl Into<String>,
+        account: impl Into<String>,
+        context: impl Into<String>,
+    ) -> Self {
+        Self {
+            share_name: share_name.into(),
+            account: account.into(),
+            context: context.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[error("UnknownShareAccount: {account} {share_id} while {context}")]
+pub struct UnknownShareAccount {
+    account: String,
+    share_id: u64,
+    context: String,
+}
+
+impl UnknownShareAccount {
+    pub fn new(account: impl Into<String>, share_id: u64, context: impl Into<String>) -> Self {
+        Self {
+            account: account.into(),
+            share_id,
+            context: context.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[error("WrongShareObject: {obj_name} does not belong to the database that is being shared")]
+pub struct WrongShareObject {
+    obj_name: String,
+}
+
+impl WrongShareObject {
+    pub fn new(obj_name: impl Into<String>) -> Self {
+        Self {
+            obj_name: obj_name.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
 #[error("UnknownShare: {share_name} while {context}")]
 pub struct UnknownShare {
     share_name: String,
@@ -381,9 +435,6 @@ pub enum AppError {
     UnknownTableId(#[from] UnknownTableId),
 
     #[error(transparent)]
-    UnknownShareId(#[from] UnknownShareId),
-
-    #[error(transparent)]
     TxnRetryMaxTimes(#[from] TxnRetryMaxTimes),
 
     // share api errors
@@ -392,6 +443,18 @@ pub enum AppError {
 
     #[error(transparent)]
     UnknownShare(#[from] UnknownShare),
+
+    #[error(transparent)]
+    UnknownShareId(#[from] UnknownShareId),
+
+    #[error(transparent)]
+    ShareAccountAlreadyExists(#[from] ShareAccountAlreadyExists),
+
+    #[error(transparent)]
+    UnknownShareAccount(#[from] UnknownShareAccount),
+
+    #[error(transparent)]
+    WrongShareObject(#[from] WrongShareObject),
 }
 
 impl AppErrorMessage for UnknownDatabase {
@@ -472,6 +535,33 @@ impl AppErrorMessage for UnknownShareId {
     }
 }
 
+impl AppErrorMessage for ShareAccountAlreadyExists {
+    fn message(&self) -> String {
+        format!(
+            "Share account for ({},{}) already exists",
+            self.share_name, self.account
+        )
+    }
+}
+
+impl AppErrorMessage for UnknownShareAccount {
+    fn message(&self) -> String {
+        format!(
+            "Unknown share account for ({},{})",
+            self.account, self.share_id
+        )
+    }
+}
+
+impl AppErrorMessage for WrongShareObject {
+    fn message(&self) -> String {
+        format!(
+            " {} does not belong to the database that is being shared",
+            self.obj_name
+        )
+    }
+}
+
 impl AppErrorMessage for TxnRetryMaxTimes {
     fn message(&self) -> String {
         format!(
@@ -541,6 +631,11 @@ impl From<AppError> for ErrorCode {
             AppError::ShareAlreadyExists(err) => ErrorCode::ShareAlreadyExists(err.message()),
             AppError::UnknownShare(err) => ErrorCode::UnknownShare(err.message()),
             AppError::UnknownShareId(err) => ErrorCode::UnknownShareId(err.message()),
+            AppError::ShareAccountAlreadyExists(err) => {
+                ErrorCode::ShareAccountAlreadyExists(err.message())
+            }
+            AppError::UnknownShareAccount(err) => ErrorCode::UnknownShareAccount(err.message()),
+            AppError::WrongShareObject(err) => ErrorCode::WrongShareObject(err.message()),
             AppError::TxnRetryMaxTimes(err) => ErrorCode::TxnRetryMaxTimes(err.message()),
         }
     }

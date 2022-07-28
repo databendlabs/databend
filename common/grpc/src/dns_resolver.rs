@@ -26,7 +26,6 @@ use common_base::base::tokio;
 use common_base::base::tokio::task::JoinHandle;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_tracing::tracing;
 use hyper::client::connect::dns::Name;
 use hyper::client::HttpConnector;
 use hyper::service::Service;
@@ -38,6 +37,7 @@ use tonic::transport::Certificate;
 use tonic::transport::Channel;
 use tonic::transport::ClientTlsConfig;
 use tonic::transport::Endpoint;
+use tracing::info;
 use trust_dns_resolver::TokioAsyncResolver;
 
 use crate::RpcClientTlsConfig;
@@ -177,7 +177,7 @@ impl ConnectionFactory {
                 let builder = Channel::builder(uri);
 
                 let mut endpoint = if let Some(conf) = rpc_client_config {
-                    tracing::info!("tls rpc enabled");
+                    info!("tls rpc enabled");
                     let client_tls_config = Self::client_tls_config(&conf).map_err(|e| {
                         GrpcConnectionError::TLSConfigError {
                             action: "loading".to_string(),

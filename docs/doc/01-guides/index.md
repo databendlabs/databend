@@ -58,6 +58,7 @@ title: Guides
 ## Load Data
 
 * [How to Load Data From Local File System](../21-load-data/00-local.md)
+* [How to Load Data From Remote Files](../21-load-data/04-remote.md)
 * [How to Load Data From Amazon S3](../21-load-data/01-s3.md)
 * [How to Load Data From Databend Stages](../21-load-data/02-stage.md)
 * [How to Load Data From MySQL](../21-load-data/03-mysql.md)

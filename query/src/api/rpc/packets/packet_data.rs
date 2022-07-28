@@ -39,6 +39,7 @@ use futures::Stream;
 use futures::StreamExt;
 
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 
 pub enum FragmentData {
     End(usize),

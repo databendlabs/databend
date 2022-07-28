@@ -25,8 +25,10 @@ common-tracing = { path = "../../tracing" }
 anyerror = "0.1.6"
 anyhow = "1.0.58"
 async-trait = "0.1.56"
+enumflags2 = { version = "0.7.5", features = ["serde"] }
 maplit = "1.0.2"
 serde = { version = "1.0.137", features = ["derive"] }
 serde_json = "1.0.81"
 thiserror = "1.0.31"
 tonic = { version = "0.7.2", features = ["transport", "codegen", "prost", "tls-roots", "tls"] }
+tracing = "0.1.35"

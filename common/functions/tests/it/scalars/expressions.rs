@@ -148,8 +148,11 @@ fn test_cast_variant_function() -> Result<()> {
                     Series::from_data(vec![18691i32, 18924]),
                     DataField::new("dummy_1", DateType::new_impl()),
                 )],
-                expect: Arc::new(NullColumn::new(2)),
-                error: "Expression type does not match column data type, expecting VARIANT but got Date",
+                expect: Series::from_data(vec![
+                    VariantValue::from(json!(18691)),
+                    VariantValue::from(json!(18924)),
+                ]),
+                error: "",
             },
         ),
         (

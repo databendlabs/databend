@@ -23,12 +23,18 @@ use common_exception::Result;
 use once_cell::sync::Lazy;
 
 use super::rule::RuleID;
+use super::util::validate_distributed_query;
 use crate::sessions::QueryContext;
 use crate::sql::optimizer::heuristic::decorrelate::decorrelate_subquery;
 use crate::sql::optimizer::heuristic::implement::HeuristicImplementor;
 pub use crate::sql::optimizer::heuristic::rule_list::RuleList;
+use crate::sql::optimizer::property::require_property;
 use crate::sql::optimizer::rule::TransformState;
+use crate::sql::optimizer::Distribution;
+use crate::sql::optimizer::RelExpr;
+use crate::sql::optimizer::RequiredProperty;
 use crate::sql::optimizer::SExpr;
+use crate::sql::plans::Exchange;
 use crate::sql::MetadataRef;
 
 pub static DEFAULT_REWRITE_RULES: Lazy<Vec<RuleID>> = Lazy::new(|| {
@@ -44,7 +50,7 @@ pub static DEFAULT_REWRITE_RULES: Lazy<Vec<RuleID>> = Lazy::new(|| {
         RuleID::PushDownFilterEvalScalar,
         RuleID::PushDownFilterProject,
         RuleID::PushDownFilterJoin,
-        RuleID::PushDownFilterCrossApply,
+        RuleID::SplitAggregate,
     ]
 });
 
@@ -56,16 +62,24 @@ pub struct HeuristicOptimizer {
 
     _ctx: Arc<QueryContext>,
     metadata: MetadataRef,
+
+    enable_distributed_optimization: bool,
 }
 
 impl HeuristicOptimizer {
-    pub fn new(ctx: Arc<QueryContext>, metadata: MetadataRef, rules: RuleList) -> Self {
+    pub fn new(
+        ctx: Arc<QueryContext>,
+        metadata: MetadataRef,
+        rules: RuleList,
+        enable_distributed_optimization: bool,
+    ) -> Self {
         HeuristicOptimizer {
             rules,
             implementor: HeuristicImplementor::new(),
 
             _ctx: ctx,
             metadata,
+            enable_distributed_optimization,
         }
     }
 
@@ -82,7 +96,24 @@ impl HeuristicOptimizer {
         let pre_optimized = self.pre_optimize(s_expr)?;
         let optimized = self.optimize_expression(&pre_optimized)?;
         let post_optimized = self.post_optimize(optimized)?;
-        let result = self.implement_expression(&post_optimized)?;
+        let mut result = self.implement_expression(&post_optimized)?;
+
+        if self.enable_distributed_optimization && validate_distributed_query(&result) {
+            let required = RequiredProperty {
+                distribution: Distribution::Any,
+            };
+            result = require_property(&required, &result)?;
+            let rel_expr = RelExpr::with_s_expr(&result);
+            let physical_prop = rel_expr.derive_physical_prop()?;
+            let root_required = RequiredProperty {
+                distribution: Distribution::Serial,
+            };
+            if !root_required.satisfied_by(&physical_prop) {
+                // Manually enforce serial distribution.
+                result = SExpr::create_unary(Exchange::Merge.into(), result);
+            }
+        }
+
         Ok(result)
     }
 

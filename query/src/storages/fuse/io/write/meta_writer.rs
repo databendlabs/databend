@@ -13,9 +13,9 @@
 // limitations under the License.
 
 use common_exception::Result;
-use common_tracing::tracing::warn;
 use opendal::Operator;
 use serde::Serialize;
+use tracing::warn;
 
 use crate::storages::fuse::io::retry;
 use crate::storages::fuse::io::retry::Retryable;

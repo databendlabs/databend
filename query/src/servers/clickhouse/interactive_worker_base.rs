@@ -30,9 +30,8 @@ use common_exception::Result;
 use common_exception::ToErrorCode;
 use common_planners::InsertPlan;
 use common_planners::PlanNode;
-use common_tracing::tracing;
 use futures::channel::mpsc;
-use futures::channel::mpsc::UnboundedReceiver;
+use futures::channel::mpsc::Receiver;
 use futures::SinkExt;
 use futures::StreamExt;
 use metrics::histogram;
@@ -40,6 +39,9 @@ use opensrv_clickhouse::types::Block as ClickHouseBlock;
 use opensrv_clickhouse::CHContext;
 use tokio_stream::wrappers::IntervalStream;
 use tokio_stream::wrappers::ReceiverStream;
+use tracing::debug;
+use tracing::error;
+use tracing::warn;
 
 use super::writers::from_clickhouse_block;
 use crate::interpreters::InterpreterFactory;
@@ -49,6 +51,7 @@ use crate::pipelines::processors::SyncReceiverCkSource;
 use crate::pipelines::SourcePipeBuilder;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionRef;
+use crate::sessions::TableContext;
 use crate::sql::PlanParser;
 
 pub struct InteractiveWorkerBase;
@@ -64,9 +67,9 @@ impl InteractiveWorkerBase {
     pub async fn do_query(
         ch_ctx: &mut CHContext,
         session: SessionRef,
-    ) -> Result<UnboundedReceiver<BlockItem>> {
+    ) -> Result<Receiver<BlockItem>> {
         let query = &ch_ctx.state.query;
-        tracing::debug!("{}", query);
+        debug!("{}", query);
 
         let ctx = session.create_query_context().await?;
         ctx.attach_query_str(query);
@@ -99,9 +102,9 @@ impl InteractiveWorkerBase {
         insert: InsertPlan,
         ch_ctx: &mut CHContext,
         ctx: Arc<QueryContext>,
-    ) -> Result<UnboundedReceiver<BlockItem>> {
+    ) -> Result<Receiver<BlockItem>> {
         let sample_block = DataBlock::empty_with_schema(insert.schema());
-        let (sender, rec) = channel(4);
+        let (sender, rec) = channel(2);
         ch_ctx.state.out = Some(sender);
 
         let sc = sample_block.schema().clone();
@@ -126,9 +129,10 @@ impl InteractiveWorkerBase {
 
         let _ = interpreter
             .set_source_pipe_builder(Option::from(source_pipe_builder))
-            .map_err(|e| tracing::error!("interpreter.set_source_pipe_builder.error: {:?}", e));
+            .map_err(|e| error!("interpreter.set_source_pipe_builder.error: {:?}", e));
 
-        let (mut tx, rx) = mpsc::unbounded();
+        let (mut tx, rx) = mpsc::channel(2);
+
         tx.send(BlockItem::InsertSample(sample_block)).await.ok();
 
         // the data is coming in async mode
@@ -150,7 +154,7 @@ impl InteractiveWorkerBase {
     pub async fn process_select_query(
         plan: PlanNode,
         ctx: Arc<QueryContext>,
-    ) -> Result<UnboundedReceiver<BlockItem>> {
+    ) -> Result<Receiver<BlockItem>> {
         let start = Instant::now();
         let interpreter = InterpreterFactory::get(ctx.clone(), plan)?;
         let name = interpreter.name().to_string();
@@ -163,7 +167,7 @@ impl InteractiveWorkerBase {
         let cancel = Arc::new(AtomicBool::new(false));
         let cancel_clone = cancel.clone();
 
-        let (tx, rx) = mpsc::unbounded();
+        let (tx, rx) = mpsc::channel(2);
         let mut data_tx = tx.clone();
         let mut progress_tx = tx;
 
@@ -178,11 +182,14 @@ impl InteractiveWorkerBase {
                     rows: cur_progress_values.rows - prev_progress_values.rows,
                     bytes: cur_progress_values.bytes - prev_progress_values.bytes,
                 };
-                prev_progress_values = cur_progress_values;
-                progress_tx
-                    .send(BlockItem::ProgressTicker(diff_progress_values))
-                    .await
-                    .ok();
+
+                if diff_progress_values.rows > 0 {
+                    prev_progress_values = cur_progress_values;
+                    progress_tx
+                        .send(BlockItem::ProgressTicker(diff_progress_values))
+                        .await
+                        .ok();
+                }
             }
         });
 
@@ -191,51 +198,50 @@ impl InteractiveWorkerBase {
             let _ = interpreter
                 .start()
                 .await
-                .map_err(|e| tracing::error!("interpreter.start.error: {:?}", e));
+                .map_err(|e| error!("interpreter.start.error: {:?}", e));
 
             // Execute and read stream data.
-            match interpreter.execute(None).await {
+            let data_stream = interpreter.execute(None);
+            let mut data_stream = match data_stream.await {
+                Ok(stream) => stream,
                 Err(e) => {
                     cancel_clone.store(true, Ordering::Relaxed);
-                    Err(e)
+                    return Err(e);
                 }
-                Ok(mut data_stream) => {
-                    'worker: loop {
-                        match data_stream.next().await {
-                            None => {
-                                break 'worker;
-                            }
-                            Some(Ok(data)) => {
-                                if let Err(cause) = data_tx.send(BlockItem::Block(Ok(data))).await {
-                                    tracing::warn!(
-                                        "Cannot send data to channel, cause: {:?}",
-                                        cause
-                                    );
-                                    break 'worker;
-                                }
-                            }
-                            Some(Err(error_code)) => {
-                                if let Err(cause) =
-                                    data_tx.send(BlockItem::Block(Err(error_code))).await
-                                {
-                                    tracing::warn!(
-                                        "Cannot send data to channel, cause: {:?}",
-                                        cause
-                                    );
-                                }
+            };
+
+            tokio::spawn(async move {
+                'worker: loop {
+                    match data_stream.next().await {
+                        None => {
+                            break 'worker;
+                        }
+                        Some(Ok(data)) => {
+                            if let Err(cause) = data_tx.send(BlockItem::Block(Ok(data))).await {
+                                warn!("Cannot send data to channel, cause: {:?}", cause);
                                 break 'worker;
                             }
                         }
+                        Some(Err(error_code)) => {
+                            if let Err(cause) =
+                                data_tx.send(BlockItem::Block(Err(error_code))).await
+                            {
+                                warn!("Cannot send data to channel, cause: {:?}", cause);
+                            }
+                            break 'worker;
+                        }
                     }
-
-                    let _ = interpreter
-                        .finish()
-                        .await
-                        .map_err(|e| tracing::error!("interpreter.finish.error: {:?}", e));
-                    cancel_clone.store(true, Ordering::Relaxed);
-                    Ok::<(), ErrorCode>(())
                 }
-            }
+
+                let _ = interpreter
+                    .finish()
+                    .await
+                    .map_err(|e| error!("interpreter.finish.error: {:?}", e));
+                cancel_clone.store(true, Ordering::Relaxed);
+                Ok::<(), ErrorCode>(())
+            });
+
+            Ok(())
         })?;
         let query_result = query_result.await.map_err_to_code(
             ErrorCode::TokioError,

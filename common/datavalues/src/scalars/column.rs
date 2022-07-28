@@ -112,7 +112,7 @@ pub enum ColumnMeta {
         inner_type: DataTypeImpl,
     },
     Struct {
-        inner_names: Vec<String>,
+        inner_names: Option<Vec<String>>,
         inner_types: Vec<DataTypeImpl>,
     },
 }

@@ -137,7 +137,7 @@ fn databend_eq_simd(lhs: &ColumnRef, rhs: &ColumnRef) -> Result<ColumnRef> {
 }
 
 fn cast(column: &ColumnRef, data_type: &DataTypeImpl) -> Result<ColumnRef> {
-    let arrow_array = column.as_arrow_array();
+    let arrow_array = column.as_arrow_array(column.data_type());
     let arrow_options = ArrowOption {
         wrapped: true,
         partial: false,

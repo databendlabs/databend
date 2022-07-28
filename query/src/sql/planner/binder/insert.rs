@@ -39,14 +39,17 @@ use common_io::prelude::*;
 use common_planners::Expression;
 use common_streams::NDJsonSourceBuilder;
 use common_streams::Source;
-use common_tracing::tracing;
+use tracing::debug;
 
 use crate::pipelines::processors::transforms::ExpressionExecutor;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::sql::binder::Binder;
 use crate::sql::binder::ScalarBinder;
-use crate::sql::exec::ExpressionBuilder;
+use crate::sql::executor::ExpressionBuilderWithRenaming;
 use crate::sql::optimizer::optimize;
+use crate::sql::optimizer::OptimizerConfig;
+use crate::sql::optimizer::OptimizerContext;
 use crate::sql::plans::Insert;
 use crate::sql::plans::InsertInputSource;
 use crate::sql::plans::InsertValueBlock;
@@ -111,7 +114,9 @@ impl<'a> Binder {
             InsertSource::Select { query } => {
                 let statement = Statement::Query(query);
                 let select_plan = self.bind_statement(bind_context, &statement).await?;
-                let optimized_plan = optimize(self.ctx.clone(), select_plan)?;
+                // Don't enable distributed optimization for `INSERT INTO ... SELECT ...` for now
+                let opt_ctx = Arc::new(OptimizerContext::new(OptimizerConfig::default()));
+                let optimized_plan = optimize(self.ctx.clone(), opt_ctx, select_plan)?;
                 Ok(InsertInputSource::SelectPlan(Box::new(optimized_plan)))
             }
         };
@@ -153,7 +158,7 @@ impl<'a> Binder {
         schema: DataSchemaRef,
     ) -> Result<InsertInputSource> {
         let stream_str = stream_str.trim_start();
-        tracing::debug!("{:?}", stream_str);
+        debug!("{:?}", stream_str);
         let settings = self.ctx.get_format_settings()?;
         // TODO migrate format into format factory
         let format = format.map(|v| v.to_uppercase());
@@ -355,6 +360,7 @@ pub fn skip_to_next_row<R: BufferRead>(
     let _ = reader.ignore_white_spaces()?;
 
     let mut quoted = false;
+    let mut escaped = false;
 
     while balance > 0 {
         let buffer = reader.fill_buf()?;
@@ -372,8 +378,15 @@ pub fn skip_to_next_row<R: BufferRead>(
             let c = buffer[it];
             reader.consume(it + 1);
 
+            if it == 0 && escaped {
+                escaped = false;
+                continue;
+            }
+            escaped = false;
+
             match c {
                 b'\\' => {
+                    escaped = true;
                     continue;
                 }
                 b'\'' => {
@@ -393,6 +406,7 @@ pub fn skip_to_next_row<R: BufferRead>(
                 _ => {}
             }
         } else {
+            escaped = false;
             reader.consume(size);
         }
     }
@@ -415,7 +429,7 @@ async fn exprs_to_datavalue<'a>(
     for (i, expr) in exprs.iter().enumerate() {
         let mut scalar_binder = ScalarBinder::new(bind_context, ctx.clone(), metadata.clone());
         let scalar = scalar_binder.bind(expr).await?.0;
-        let expression_builder = ExpressionBuilder::create(metadata.clone());
+        let expression_builder = ExpressionBuilderWithRenaming::create(metadata.clone());
         let expr = expression_builder.build(&scalar)?;
         let expr = if &expr.to_data_type(schema)? != schema.field(i).data_type() {
             Expression::Cast {

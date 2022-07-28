@@ -22,9 +22,9 @@ use common_meta_types::UserOption;
 use common_meta_types::UserOptionFlag;
 use common_planners::CreateUserPlan;
 use common_planners::PlanNode;
-use common_tracing::tracing;
 
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
 

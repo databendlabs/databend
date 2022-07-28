@@ -79,6 +79,9 @@ impl RowSpace {
 
     pub fn gather(&self, row_ptrs: &[RowPtr]) -> Result<DataBlock> {
         let data_blocks = self.datablocks();
+        let num_rows = data_blocks
+            .iter()
+            .fold(0, |acc, block| acc + block.num_rows());
         let mut indices = Vec::with_capacity(row_ptrs.len());
 
         for row_ptr in row_ptrs.iter() {
@@ -89,7 +92,7 @@ impl RowSpace {
             ));
         }
 
-        if !data_blocks.is_empty() {
+        if !data_blocks.is_empty() && num_rows != 0 {
             let data_block =
                 DataBlock::block_take_by_chunk_indices(&data_blocks, indices.as_slice())?;
             Ok(data_block)

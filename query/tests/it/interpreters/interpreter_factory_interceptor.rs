@@ -15,13 +15,13 @@
 use common_base::base::tokio;
 use common_exception::Result;
 use databend_query::interpreters::*;
+use databend_query::sessions::TableContext;
 use databend_query::sql::*;
 use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_interpreter_interceptor() -> Result<()> {
-    common_tracing::init_default_ut_tracing();
     let ctx = crate::tests::create_query_context().await?;
     {
         let query = "select number from numbers_mt(100) where number > 90";
@@ -79,7 +79,6 @@ async fn test_interpreter_interceptor() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_interpreter_interceptor_for_insert() -> Result<()> {
-    common_tracing::init_default_ut_tracing();
     let ctx = crate::tests::create_query_context().await?;
     {
         let query = "create table t as select number from numbers_mt(1)";

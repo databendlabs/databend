@@ -19,6 +19,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::AggregatorFinalPlan;
 use common_planners::AggregatorPartialPlan;
+use common_planners::BroadcastPlan;
 use common_planners::ExpressionPlan;
 use common_planners::FilterPlan;
 use common_planners::HavingPlan;
@@ -31,17 +32,20 @@ use common_planners::SelectPlan;
 use common_planners::SinkPlan;
 use common_planners::SortPlan;
 use common_planners::StagePlan;
+use common_planners::SubQueriesSetPlan;
 use common_planners::WindowFuncPlan;
 
 use crate::interpreters::fragments::partition_state::PartitionState;
 use crate::interpreters::fragments::query_fragment_actions::QueryFragmentsActions;
+use crate::interpreters::fragments::query_fragment_broadcast::BroadcastQueryFragment;
 use crate::interpreters::fragments::query_fragment_read_source::ReadDatasourceQueryFragment;
 use crate::interpreters::fragments::query_fragment_stage::StageQueryFragment;
+use crate::interpreters::fragments::query_fragment_subqueries::SubQueriesFragment;
 use crate::sessions::QueryContext;
 
 // A fragment of query, the smallest execution unit of a distributed query
 pub trait QueryFragment: Debug + Sync + Send {
-    fn distribute_query(&self) -> Result<bool>;
+    fn is_distributed_query(&self) -> Result<bool>;
 
     fn get_out_partition(&self) -> Result<PartitionState>;
 
@@ -58,16 +62,20 @@ impl QueryFragmentsBuilder {
     }
 }
 
-struct BuilderVisitor {
+pub struct BuilderVisitor {
     ctx: Arc<QueryContext>,
 }
 
 impl BuilderVisitor {
+    pub fn create(ctx: Arc<QueryContext>) -> BuilderVisitor {
+        BuilderVisitor { ctx }
+    }
+
     pub fn visit(&self, plan: &PlanNode) -> Result<Box<dyn QueryFragment>> {
         match plan {
             PlanNode::Stage(node) => self.visit_stage(node),
             PlanNode::Select(node) => self.visit_select(node),
-            // PlanNode::Broadcast(node) => self.visit_broadcast(node),
+            PlanNode::Broadcast(node) => self.visit_broadcast(node),
             PlanNode::AggregatorFinal(node) => self.visit_aggr_final(node),
             PlanNode::AggregatorPartial(node) => self.visit_aggr_part(node),
             // PlanNode::Empty(plan) => self.visit_empty(plan, tasks),
@@ -81,6 +89,7 @@ impl BuilderVisitor {
             PlanNode::Having(node) => self.visit_having(node),
             PlanNode::Expression(node) => self.visit_expression(node),
             PlanNode::WindowFunc(node) => self.visit_window_func(node),
+            PlanNode::SubQueryExpression(node) => self.visit_subquery_expr(node),
             _ => Err(ErrorCode::UnknownPlan("Unknown plan type")),
         }
     }
@@ -139,5 +148,14 @@ impl BuilderVisitor {
 
     fn visit_read_data_source(&self, node: &ReadDataSourcePlan) -> Result<Box<dyn QueryFragment>> {
         ReadDatasourceQueryFragment::create(self.ctx.clone(), node)
+    }
+
+    fn visit_broadcast(&self, node: &BroadcastPlan) -> Result<Box<dyn QueryFragment>> {
+        BroadcastQueryFragment::create(self.ctx.clone(), node, self.visit(&node.input)?)
+    }
+
+    fn visit_subquery_expr(&self, node: &SubQueriesSetPlan) -> Result<Box<dyn QueryFragment>> {
+        let input = self.visit(&node.input)?;
+        SubQueriesFragment::create(self.ctx.clone(), node, input)
     }
 }

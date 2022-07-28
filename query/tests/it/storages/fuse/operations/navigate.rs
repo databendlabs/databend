@@ -49,7 +49,10 @@ async fn test_fuse_navigate() -> Result<()> {
     fixture.create_default_table().await?;
 
     // 1.1 first commit
-    let qry = format!("insert into '{}'.'{}' values (1), (2) ", db, tbl);
+    let qry = format!(
+        "insert into '{}'.'{}' values (1, (2, 3)), (2, (4, 6)) ",
+        db, tbl
+    );
     execute_query(ctx.clone(), qry.as_str())
         .await?
         .try_collect::<Vec<DataBlock>>()
@@ -65,7 +68,7 @@ async fn test_fuse_navigate() -> Result<()> {
     tokio::time::sleep(Duration::from_millis(2)).await;
 
     // 1.2 second commit
-    let qry = format!("insert into '{}'.'{}' values (3) ", db, tbl);
+    let qry = format!("insert into '{}'.'{}' values (3, (6, 9)) ", db, tbl);
     execute_query(ctx.clone(), qry.as_str())
         .await?
         .try_collect::<Vec<DataBlock>>()
@@ -100,7 +103,9 @@ async fn test_fuse_navigate() -> Result<()> {
         .unwrap()
         .sub(chrono::Duration::milliseconds(1));
     // navigate from the instant that is just one ms before the timestamp of the latest snapshot
-    let tbl = fuse_table.navigate_to_time_point(&ctx, instant).await?;
+    let tbl = fuse_table
+        .navigate_to_time_point(ctx.as_ref(), instant)
+        .await?;
 
     // check we got the snapshot of the first insertion
     assert_eq!(first_snapshot, tbl.snapshot_loc().unwrap());
@@ -112,7 +117,9 @@ async fn test_fuse_navigate() -> Result<()> {
         .unwrap()
         .sub(chrono::Duration::milliseconds(1));
     // navigate from the instant that is just one ms before the timestamp of the last insertion
-    let res = fuse_table.navigate_to_time_point(&ctx, instant).await;
+    let res = fuse_table
+        .navigate_to_time_point(ctx.as_ref(), instant)
+        .await;
     match res {
         Ok(_) => panic!("historical data should not exist"),
         Err(e) => assert_eq!(e.code(), ErrorCode::table_historical_data_not_found_code()),
@@ -129,7 +136,7 @@ async fn test_fuse_historical_table_is_read_only() -> Result<()> {
     let ctx = fixture.ctx();
     fixture.create_default_table().await?;
 
-    let qry = format!("insert into '{}'.'{}' values (1)", db, tbl);
+    let qry = format!("insert into '{}'.'{}' values (1, (2, 3))", db, tbl);
     execute_query(ctx.clone(), qry.as_str())
         .await?
         .try_collect::<Vec<DataBlock>>()
@@ -151,7 +158,9 @@ async fn test_fuse_historical_table_is_read_only() -> Result<()> {
         .timestamp
         .unwrap()
         .add(chrono::Duration::milliseconds(1));
-    let tbl = fuse_table.navigate_to_time_point(&ctx, instant).await?;
+    let tbl = fuse_table
+        .navigate_to_time_point(ctx.as_ref(), instant)
+        .await?;
 
     // check append2
     let res = tbl.append2(ctx.clone(), &mut Pipeline::create());

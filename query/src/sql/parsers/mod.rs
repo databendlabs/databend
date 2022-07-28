@@ -13,7 +13,6 @@
 // limitations under the License.
 
 mod parser_call;
-mod parser_copy;
 mod parser_database;
 mod parser_delete;
 mod parser_exists;
@@ -24,7 +23,6 @@ mod parser_optimize;
 mod parser_query;
 mod parser_set;
 mod parser_show;
-mod parser_stage;
 mod parser_table;
 mod parser_udf;
 mod parser_use;

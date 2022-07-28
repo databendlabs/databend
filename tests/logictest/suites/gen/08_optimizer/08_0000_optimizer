@@ -33,6 +33,9 @@ SELECT 'projection push down: push (name and value) to read datasource';
 projection push down: push (name and value) to read datasource
 
 statement ok
+drop table if exists a;
+
+statement ok
 create table a (a int, b int, c int) Engine = Fuse;
 
 statement query T 

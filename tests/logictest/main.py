@@ -6,36 +6,73 @@ from mysql_runner import TestMySQL
 from http_runner import TestHttp
 from clickhouse_runner import TestClickhouse
 
+from statistics import global_statistics
+from argparse import ArgumentParser
 from config import mysql_config, http_config, clickhouse_config
 
-import fire
 
-
-def run(pattern=".*"):
+def run(args):
     """
     Run tests
     """
-    disable_mysql_test = os.getenv("DISABLE_MYSQL_LOGIC_TEST")
-    if disable_mysql_test is None:
-        mysql_test = TestMySQL("mysql", pattern)
+    if not args.disable_mysql_test:
+        mysql_test = TestMySQL("mysql", args)
         mysql_test.set_driver(mysql_config)
         mysql_test.set_label("mysql")
         mysql_test.run_sql_suite()
 
-    disable_http_test = os.getenv("DISABLE_HTTP_LOGIC_TEST")
-    if disable_http_test is None:
-        http = TestHttp("http", pattern)
+    if not args.disable_http_test:
+        http = TestHttp("http", args)
         http.set_driver(http_config)
         http.set_label("http")
         http.run_sql_suite()
 
-    disable_ch_test = os.getenv("DISABLE_CLICKHOUSE_LOGIC_TEST")
-    if disable_ch_test is None:
-        http = TestClickhouse("clickhouse", pattern)
+    if not args.disable_clickhouse_test:
+        http = TestClickhouse("clickhouse", args)
         http.set_driver(clickhouse_config)
         http.set_label("clickhouse")
         http.run_sql_suite()
 
+    global_statistics.check_and_exit()
+
 
 if __name__ == '__main__':
-    fire.Fire(run)
+    parser = ArgumentParser(description='databend sqlogical tests')
+    parser.add_argument('--disable-mysql-test',
+                        action='store_true',
+                        default=os.environ.get('DISABLE_MYSQL_LOGIC_TEST'),
+                        help='Disable mysql handler test')
+    parser.add_argument('--disable-http-test',
+                        action='store_true',
+                        default=os.environ.get('DISABLE_HTTP_LOGIC_TEST'),
+                        help='Disable http handler test')
+    parser.add_argument('--disable-clickhouse-test',
+                        action='store_true',
+                        default=os.environ.get('DISABLE_CLICKHOUSE_LOGIC_TEST'),
+                        help='Disable clickhouse handler test')
+    parser.add_argument('pattern',
+                        nargs='*',
+                        help='Optional test case name regex')
+
+    parser.add_argument(
+        '--test-runs',
+        default=1,
+        nargs='?',
+        type=int,
+        help='Run each test many times (useful for e.g. flaky check)')
+
+    parser.add_argument('--skip',
+                        nargs='+',
+                        default=os.environ.get('SKIP_TEST_FILES'),
+                        help="Skip these tests via case name regex")
+
+    parser.add_argument('--skip-dir',
+                        nargs='+',
+                        help="Skip all these tests in the dir")
+
+    parser.add_argument('--run-dir',
+                        nargs='+',
+                        help="Only run these tests in the dir")
+
+    args = parser.parse_args()
+    run(args)

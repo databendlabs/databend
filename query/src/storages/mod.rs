@@ -24,21 +24,20 @@ pub mod null;
 pub mod random;
 pub mod result;
 pub mod stage;
-pub mod system;
-pub mod view;
-
 mod storage_context;
 mod storage_factory;
 mod storage_table;
 mod storage_table_read_plan;
 mod storage_table_read_wrap;
+pub mod system;
+pub mod view;
 
+pub use common_catalog::table::NavigationPoint;
+pub use common_catalog::table::TableStatistics;
 pub use storage_context::StorageContext;
 pub use storage_factory::StorageCreator;
 pub use storage_factory::StorageDescription;
 pub use storage_factory::StorageFactory;
-pub use storage_table::NavigationPoint;
 pub use storage_table::Table;
-pub use storage_table::TableStatistics;
 pub use storage_table_read_plan::ToReadDataSourcePlan;
 pub use storage_table_read_wrap::TableStreamReadWrap;

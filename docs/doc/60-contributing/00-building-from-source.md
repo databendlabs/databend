@@ -14,7 +14,7 @@ Note that at least 16GB of RAM is required to build from source and run tests.
 ### Install prerequisites
 
 Databend is written in Rust, to build Databend from scratch you will need to install the following tools:
-* **Git**
+* **Git, cmake**
 * **Rust** Install with [rustup](https://rustup.rs/)
 
 ### Get the Databend code

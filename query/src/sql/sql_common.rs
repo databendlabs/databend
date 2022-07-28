@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
+
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -78,6 +80,28 @@ impl SQLCommon {
                     Ok(ArrayType::new_impl(inner_data_type))
                 }
             }
+            SQLDataType::Tuple(names, sql_types) => {
+                let mut inner_data_types = Vec::with_capacity(sql_types.len());
+                for sql_type in sql_types {
+                    let inner_data_type = Self::make_data_type(sql_type)?;
+                    inner_data_types.push(inner_data_type);
+                }
+                match names {
+                    Some(names) => {
+                        let mut names_set = HashSet::with_capacity(names.len());
+                        for name in names.iter() {
+                            if !names_set.insert(name.value.clone()) {
+                                return Result::Err(ErrorCode::IllegalDataType(
+                                    "The names of tuple elements must be unique",
+                                ));
+                            }
+                        }
+                        let inner_names = names.iter().map(|v| v.value.clone()).collect::<Vec<_>>();
+                        Ok(StructType::new_impl(Some(inner_names), inner_data_types))
+                    }
+                    None => Ok(StructType::new_impl(None, inner_data_types)),
+                }
+            }
 
             // Custom types for databend:
             // Custom(ObjectName([Ident { value: "uint8", quote_style: None }])
@@ -89,7 +113,7 @@ impl SQLCommon {
                     name => {
                         let factory = TypeFactory::instance();
                         let data_type = factory.get(name)?;
-                        Ok(data_type.clone())
+                        Ok(data_type)
                     }
                 }
             }

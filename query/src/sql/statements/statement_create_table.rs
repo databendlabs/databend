@@ -26,7 +26,6 @@ use common_planners::validate_clustering;
 use common_planners::validate_expression;
 use common_planners::CreateTablePlan;
 use common_planners::PlanNode;
-use common_tracing::tracing;
 use sqlparser::ast::ColumnDef;
 use sqlparser::ast::ColumnOption;
 use sqlparser::ast::Expr;
@@ -34,6 +33,7 @@ use sqlparser::ast::ObjectName;
 
 use super::analyzer_expr::ExpressionAnalyzer;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::sql::is_reserved_opt_key;
 use crate::sql::statements::resolve_table;
 use crate::sql::statements::AnalyzableStatement;

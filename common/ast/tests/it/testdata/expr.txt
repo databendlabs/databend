@@ -55,7 +55,7 @@ char(208, 191, 209)
 ---------- AST ------------
 FunctionCall {
     span: [
-        Ident(0..4),
+        CHAR(0..4),
         LParen(4..5),
         MySQLLiteralHex(5..9),
         Comma(9..10),
@@ -68,7 +68,7 @@ FunctionCall {
     name: Identifier {
         name: "char",
         quote: None,
-        span: Ident(0..4),
+        span: CHAR(0..4),
     },
     args: [
         Literal {
@@ -1400,6 +1400,51 @@ TryCast {
         },
     },
     target_type: UInt64,
+}
+
+
+---------- Input ----------
+TRY_CAST(col1 AS TUPLE(BIGINT UNSIGNED NULL, BOOLEAN))
+---------- Output ---------
+TRY_CAST(col1 AS TUPLE(UInt64 NULL, BOOLEAN))
+---------- AST ------------
+TryCast {
+    span: [
+        TRY_CAST(0..8),
+        LParen(8..9),
+        Ident(9..13),
+        AS(14..16),
+        TUPLE(17..22),
+        LParen(22..23),
+        BIGINT(23..29),
+        UNSIGNED(30..38),
+        NULL(39..43),
+        Comma(43..44),
+        BOOLEAN(45..52),
+        RParen(52..53),
+        RParen(53..54),
+    ],
+    expr: ColumnRef {
+        span: [
+            Ident(9..13),
+        ],
+        database: None,
+        table: None,
+        column: Identifier {
+            name: "col1",
+            quote: None,
+            span: Ident(9..13),
+        },
+    },
+    target_type: Tuple {
+        fields_name: None,
+        fields_type: [
+            Nullable(
+                UInt64,
+            ),
+            Boolean,
+        ],
+    },
 }
 
 

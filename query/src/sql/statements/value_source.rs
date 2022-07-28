@@ -34,6 +34,7 @@ use sqlparser::tokenizer::Tokenizer;
 use crate::pipelines::processors::transforms::ExpressionExecutor;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionType;
+use crate::sessions::TableContext;
 use crate::sql::statements::ExpressionAnalyzer;
 
 pub struct ValueSource {
@@ -184,7 +185,7 @@ pub fn skip_to_next_row<R: BufferRead>(
             let c = buffer[it];
             reader.consume(it + 1);
 
-            if it == 0 && escaped && c == b'\'' {
+            if it == 0 && escaped {
                 escaped = false;
                 continue;
             }
@@ -212,6 +213,7 @@ pub fn skip_to_next_row<R: BufferRead>(
                 _ => {}
             }
         } else {
+            escaped = false;
             reader.consume(size);
         }
     }

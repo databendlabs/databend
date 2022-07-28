@@ -23,11 +23,12 @@ use common_meta_types::GrantObject;
 use common_meta_types::StageFile;
 use common_meta_types::StageType;
 use common_meta_types::UserStageInfo;
-use common_tracing::tracing::warn;
 use futures::TryStreamExt;
 use regex::Regex;
+use tracing::warn;
 
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::storages::stage::StageSourceHelper;
 
 pub async fn validate_grant_object_exists(
@@ -90,7 +91,8 @@ pub async fn list_files_from_dal(
     path: &str,
     pattern: &str,
 ) -> Result<Vec<StageFile>> {
-    let op = StageSourceHelper::get_op(ctx, stage).await?;
+    let rename_me_qry_ctx: Arc<dyn TableContext> = ctx.clone();
+    let op = StageSourceHelper::get_op(&rename_me_qry_ctx, stage).await?;
     let mut files = Vec::new();
 
     // - If the path itself is a dir, return directly.

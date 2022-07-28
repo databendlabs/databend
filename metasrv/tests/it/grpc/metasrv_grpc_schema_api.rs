@@ -19,7 +19,7 @@ use std::sync::Mutex;
 
 use common_base::base::tokio;
 use common_meta_api::SchemaApiTestSuite;
-use common_tracing::tracing;
+use common_meta_api::ShareApiTestSuite;
 
 use crate::init_meta_ut;
 use crate::tests::service::MetaSrvBuilder;
@@ -30,7 +30,8 @@ async fn test_meta_grpc_client_single() -> anyhow::Result<()> {
         test_contexts: Arc::new(Mutex::new(vec![])),
     };
 
-    SchemaApiTestSuite::test_single_node(builder).await?;
+    SchemaApiTestSuite::test_single_node(builder.clone()).await?;
+    ShareApiTestSuite::test_single_node_share(builder).await?;
 
     Ok(())
 }

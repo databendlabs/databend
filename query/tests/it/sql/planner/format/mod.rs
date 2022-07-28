@@ -149,6 +149,7 @@ fn test_format() {
             other_conditions: vec![],
             join_type: JoinType::Inner,
             marker_index: None,
+            from_correlated_subquery: false,
         }
         .into(),
         SExpr::create_unary(
@@ -167,6 +168,7 @@ fn test_format() {
                 PhysicalScan {
                     table_index: tab1,
                     columns: Default::default(),
+                    push_down_predicates: None,
                 }
                 .into(),
             ),
@@ -175,6 +177,7 @@ fn test_format() {
             PhysicalScan {
                 table_index: tab1,
                 columns: Default::default(),
+                push_down_predicates: None,
             }
             .into(),
         ),
@@ -184,14 +187,14 @@ fn test_format() {
 
     let tree = s_expr.to_format_tree(&metadata_ref);
     let result = tree.format_indent().unwrap();
-    let expect = r#"HashJoin: INNER, build keys: [plus(col1, 123)], probe keys: [col2], join filters: []
+    let expect = r#"HashJoin: INNER, build keys: [plus(col1 (#0), 123)], probe keys: [col2 (#1)], join filters: []
     Filter: [true]
         Scan: catalog.database.table
     Scan: catalog.database.table
 "#;
     assert_eq!(result.as_str(), expect);
     let pretty_result = tree.format_pretty().unwrap();
-    let pretty_expect = r#"HashJoin: INNER, build keys: [plus(col1, 123)], probe keys: [col2], join filters: []
+    let pretty_expect = r#"HashJoin: INNER, build keys: [plus(col1 (#0), 123)], probe keys: [col2 (#1)], join filters: []
 ├── Filter: [true]
 │   └── Scan: catalog.database.table
 └── Scan: catalog.database.table

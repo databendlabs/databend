@@ -36,7 +36,7 @@ select sum(cast(a as uint64)), sum(cast(b as uint64)) from s1;
 
 
 -- default
-create table d1(n String, a UInt8 not null, b Int16 default a + 3, c String default 'c');
+create table d1(n String, a UInt8 not null, b Int16 default 4, c String default 'c');
 insert into d1(a) values (1);
 insert into d1(b) values (2);
 -- https://github.com/datafuselabs/databend/issues/3636

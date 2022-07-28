@@ -16,6 +16,7 @@
 //! Everytime update anything in this file, update the `VER` and let the tests pass.
 
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 
 use common_datavalues::chrono::DateTime;
 use common_datavalues::chrono::Utc;
@@ -94,12 +95,17 @@ impl FromToProto<pb::ShareGrantEntry> for mt::ShareGrantEntry {
 
         let privileges = BitFlags::<mt::ShareGrantObjectPrivilege, u64>::from_bits(p.privileges);
         match privileges {
-            Ok(privileges) => Ok(mt::ShareGrantEntry::new(
-                mt::ShareGrantObject::from_pb(p.object.ok_or_else(|| Incompatible {
+            Ok(privileges) => Ok(mt::ShareGrantEntry {
+                object: mt::ShareGrantObject::from_pb(p.object.ok_or_else(|| Incompatible {
                     reason: "ShareGrantEntry.object can not be None".to_string(),
                 })?)?,
                 privileges,
-            )),
+                grant_on: DateTime::<Utc>::from_pb(p.grant_on)?,
+                update_on: match p.update_on {
+                    Some(t) => Some(DateTime::<Utc>::from_pb(t)?),
+                    None => None,
+                },
+            }),
             Err(e) => Err(Incompatible {
                 reason: format!("UserPrivilegeType error: {}", e),
             }),
@@ -112,6 +118,11 @@ impl FromToProto<pb::ShareGrantEntry> for mt::ShareGrantEntry {
             min_compatible: MIN_COMPATIBLE_VER,
             object: Some(self.object().to_pb()?),
             privileges: self.privileges().bits(),
+            grant_on: self.grant_on.to_pb()?,
+            update_on: match &self.update_on {
+                Some(t) => Some(t.to_pb()?),
+                None => None,
+            },
         })
     }
 }
@@ -132,7 +143,7 @@ impl FromToProto<pb::ShareMeta> for mt::ShareMeta {
             },
             entries,
             comment: p.comment.clone(),
-            accounts: p.accounts.clone(),
+            accounts: BTreeSet::from_iter(p.accounts.clone().into_iter()),
             share_on: DateTime::<Utc>::from_pb(p.share_on)?,
             update_on: match p.update_on {
                 Some(t) => Some(DateTime::<Utc>::from_pb(t)?),
@@ -155,10 +166,42 @@ impl FromToProto<pb::ShareMeta> for mt::ShareMeta {
                 None => None,
             },
             entries,
-            accounts: self.accounts.clone(),
+            accounts: Vec::from_iter(self.accounts.clone().into_iter()),
             comment: self.comment.clone(),
             share_on: self.share_on.to_pb()?,
             update_on: match &self.update_on {
+                Some(t) => Some(t.to_pb()?),
+                None => None,
+            },
+        })
+    }
+}
+
+impl FromToProto<pb::ShareAccountMeta> for mt::ShareAccountMeta {
+    fn from_pb(p: pb::ShareAccountMeta) -> Result<Self, Incompatible>
+    where Self: Sized {
+        check_ver(p.ver, p.min_compatible)?;
+
+        Ok(mt::ShareAccountMeta {
+            account: p.account.clone(),
+            share_id: p.share_id,
+            share_on: DateTime::<Utc>::from_pb(p.share_on)?,
+            accept_on: match p.accept_on {
+                Some(t) => Some(DateTime::<Utc>::from_pb(t)?),
+                None => None,
+            },
+        })
+    }
+
+    fn to_pb(&self) -> Result<pb::ShareAccountMeta, Incompatible> {
+        Ok(pb::ShareAccountMeta {
+            ver: VER,
+            min_compatible: MIN_COMPATIBLE_VER,
+
+            account: self.account.clone(),
+            share_id: self.share_id,
+            share_on: self.share_on.to_pb()?,
+            accept_on: match &self.accept_on {
                 Some(t) => Some(t.to_pb()?),
                 None => None,
             },

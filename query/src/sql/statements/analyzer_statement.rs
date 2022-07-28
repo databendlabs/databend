@@ -183,7 +183,6 @@ impl<'a> AnalyzableStatement for DfStatement<'a> {
             DfStatement::RevokePrivilege(v) => v.analyze(ctx).await,
             DfStatement::RevokeRole(v) => v.analyze(ctx).await,
             DfStatement::DropUser(v) => v.analyze(ctx).await,
-            DfStatement::Copy(v) => v.analyze(ctx).await,
             DfStatement::Call(v) => v.analyze(ctx).await,
             DfStatement::ShowFunctions(v) => v.analyze(ctx).await,
             DfStatement::CreateUDF(v) => v.analyze(ctx).await,
@@ -192,16 +191,14 @@ impl<'a> AnalyzableStatement for DfStatement<'a> {
             DfStatement::CreateRole(v) => v.analyze(ctx).await,
             DfStatement::DropRole(v) => v.analyze(ctx).await,
             DfStatement::ShowEngines(v) => v.analyze(ctx).await,
-            DfStatement::CreateStage(v) => v.analyze(ctx).await,
-            DfStatement::DropStage(v) => v.analyze(ctx).await,
-            DfStatement::DescribeStage(v) => v.analyze(ctx).await,
-            DfStatement::List(v) => v.analyze(ctx).await,
             DfStatement::CreateView(v) => v.analyze(ctx).await,
             DfStatement::AlterView(v) => v.analyze(ctx).await,
             DfStatement::DropView(v) => v.analyze(ctx).await,
             DfStatement::ShowTablesStatus(v) => v.analyze(ctx).await,
-            DfStatement::ShowStages(v) => v.analyze(ctx).await,
-            DfStatement::RemoveStage(v) => v.analyze(ctx).await,
+            // We will not add new statements in old planner anymore.
+            // It's safe to capture all remaining statements and
+            // forward them to the new planner.
+            v => unreachable!("{v:?} should be forward to new planner"),
         }
     }
 }

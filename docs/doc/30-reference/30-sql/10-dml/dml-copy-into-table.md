@@ -1,8 +1,8 @@
 ---
-title: 'COPY INTO <table>'
-sidebar_label: 'COPY INTO <table>'
+title: 'COPY INTO <table> FROM STAGED FILES'
+sidebar_label: 'COPY INTO <table> FROM STAGED FILES'
 description:
-  'Load Data using COPY INTO <table>'
+  'Loads data from staged files'
 ---
 
 `COPY` moves data between Databend tables and object storage systems (AWS S3 compatible object storage services and Azure Blob storage).
@@ -12,6 +12,8 @@ This command loads data into a table from files staged in one of the following l
 * Named internal stage, files can be staged using the [PUT to Stage](../../00-api/10-put-to-stage.md).
 * Named external stage that references an external location (AWS S3 compatible object storage services and Azure Blob storage).
 * External location. This includes AWS S3 compatible object storage services and Azure Blob storage.
+
+`COPY` can also load data into a table from one or more remote files by their URL. See [COPY INTO \<table\> FROM REMOTE FILES](dml-copy-into-table-url.md).
 
 ## Syntax
 
@@ -165,11 +167,11 @@ Then, PUT a local file to `my_internal_s1` stage with [PUT to Stage](../../00-ap
 curl  -H "stage_name:my_internal_s1" -F "upload=@books.parquet" -XPUT "http://localhost:8081/v1/upload_to_stage"
 ```
 
-Final, copy the file into `mytable` from the `my_internal_s1` named internal stage:
+Finally, copy the file into `mytable` from the `my_internal_s1` named internal stage:
 
 ```sql
 LIST @my_internal_s1;
-COPY INTO mytable FROM '@my_internal_s1' pattern = 'books.*parquet' file_format = (type = 'PARQUET');
+COPY INTO mytable FROM @my_internal_s1 pattern = 'books.*parquet' file_format = (type = 'PARQUET');
 ```
 
 ### Loading Files from External Stage
@@ -183,7 +185,7 @@ CREATE STAGE my_external_s1 url = 's3://testbucket/admin/data/' credentials=(aws
 Then, copy the file into `mytable` from the `my_external_s1` named external stage:
 
 ```sql
-COPY INTO mytable FROM '@my_external_s1' pattern = 'books.*parquet' file_format = (type = 'PARQUET');
+COPY INTO mytable FROM @my_external_s1 pattern = 'books.*parquet' file_format = (type = 'PARQUET');
 ```
 
 ### Loading Files Directly from External Location

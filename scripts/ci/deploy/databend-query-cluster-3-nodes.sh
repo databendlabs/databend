@@ -35,19 +35,19 @@ nohup ./target/${BUILD_PROFILE}/databend-meta -c scripts/ci/deploy/config/databe
 python3 scripts/ci/wait_tcp.py --timeout 5 --port 28302
 
 echo 'Start databend-query node-1'
-nohup target/${BUILD_PROFILE}/databend-query -c scripts/ci/deploy/config/databend-query-node-1.toml &
+env "RUST_BACKTRACE=1" nohup target/${BUILD_PROFILE}/databend-query -c scripts/ci/deploy/config/databend-query-node-1.toml &
 
 echo "Waiting on node-1..."
 python3 scripts/ci/wait_tcp.py --timeout 5 --port 9091
 
 echo 'Start databend-query node-2'
-nohup target/${BUILD_PROFILE}/databend-query -c scripts/ci/deploy/config/databend-query-node-2.toml &
+env "RUST_BACKTRACE=1" nohup target/${BUILD_PROFILE}/databend-query -c scripts/ci/deploy/config/databend-query-node-2.toml &
 
 echo "Waiting on node-2..."
 python3 scripts/ci/wait_tcp.py --timeout 5 --port 9092
 
 echo 'Start databend-query node-3'
-nohup target/${BUILD_PROFILE}/databend-query -c scripts/ci/deploy/config/databend-query-node-3.toml &
+env "RUST_BACKTRACE=1" nohup target/${BUILD_PROFILE}/databend-query -c scripts/ci/deploy/config/databend-query-node-3.toml &
 
 echo "Waiting on node-3..."
 python3 scripts/ci/wait_tcp.py --timeout 5 --port 9093

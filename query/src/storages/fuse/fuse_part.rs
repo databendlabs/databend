@@ -16,12 +16,13 @@ use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use common_arrow::parquet::metadata::SchemaDescriptor;
+use common_arrow::parquet::schema::types::ParquetType;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_fuse_meta::meta::Compression;
 use common_planners::PartInfo;
 use common_planners::PartInfoPtr;
-
-use crate::storages::fuse::meta::Compression;
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct ColumnMeta {
@@ -88,6 +89,66 @@ impl FusePartInfo {
             None => Err(ErrorCode::LogicalError(
                 "Cannot downcast from PartInfo to FusePartInfo.",
             )),
+        }
+    }
+}
+
+/// `ColumnLeaf` contains all the leaf column ids of the column.
+/// For the nested types, it may contain more than one leaf column.
+#[derive(Debug, Clone)]
+pub struct ColumnLeaf {
+    pub name: String,
+    // `leaf_ids` is the indices of all the leaf columns in DFS order,
+    // through which we can find the meta information of the leaf columns.
+    pub leaf_ids: Vec<usize>,
+    // Optional children column for nested types.
+    pub children: Option<Vec<ColumnLeaf>>,
+}
+
+impl ColumnLeaf {
+    pub fn new(name: String, leaf_ids: Vec<usize>, children: Option<Vec<ColumnLeaf>>) -> Self {
+        Self {
+            name,
+            leaf_ids,
+            children,
+        }
+    }
+}
+
+pub fn build_column_leaves(schema: &SchemaDescriptor) -> Vec<ColumnLeaf> {
+    let mut leaf_id = 0;
+    let mut column_leaves = Vec::with_capacity(schema.fields().len());
+
+    for field in schema.fields() {
+        let column_leaf = traverse_fields_dfs(field, &mut leaf_id);
+        column_leaves.push(column_leaf);
+    }
+
+    column_leaves.to_vec()
+}
+
+fn traverse_fields_dfs(field: &ParquetType, leaf_id: &mut usize) -> ColumnLeaf {
+    match field {
+        ParquetType::PrimitiveType(ty) => {
+            let column_leaf = ColumnLeaf::new(ty.field_info.name.clone(), vec![*leaf_id], None);
+            *leaf_id += 1;
+            column_leaf
+        }
+        ParquetType::GroupType {
+            field_info, fields, ..
+        } => {
+            let mut child_column_leaves = Vec::with_capacity(fields.len());
+            let mut child_leaf_ids = Vec::with_capacity(fields.len());
+            for field in fields {
+                let child_column_leaf = traverse_fields_dfs(field, leaf_id);
+                child_leaf_ids.extend(child_column_leaf.leaf_ids.clone());
+                child_column_leaves.push(child_column_leaf);
+            }
+            ColumnLeaf::new(
+                field_info.name.clone(),
+                child_leaf_ids,
+                Some(child_column_leaves),
+            )
         }
     }
 }

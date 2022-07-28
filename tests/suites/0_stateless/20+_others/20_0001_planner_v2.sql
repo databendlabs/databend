@@ -42,19 +42,19 @@ select parse_json('{"k1": {"k2": [0, 1, 2]}}'):k1.k2[2];
 select '====AGGREGATOR====';
 create table t(a int, b int);
 insert into t values(1, 2), (2, 3), (3, 4);
-select sum(a) + 1 from t group by a;
-select sum(a) from t group by a;
+select sum(a) + 1 from t group by a order by a;
+select sum(a) from t group by a order by a;
 select sum(a) from t;
-select count(a) from t group by a;
+select count(a) from t group by a order by a;
 select count(a) from t;
 select count() from t;
-select count() from t group by a;
+select count() from t group by a order by a;
 select count(1) from t;
-select count(1) from t group by a;
+select count(1) from t group by a order by a;
 select count(*) from t;
-select sum(a) from t group by a having sum(a) > 1;
-select sum(a+1) from t group by a+1 having sum(a+1) = 2;
-select sum(a+1) from t group by a+1, b having sum(a+1) > 3;
+select sum(a) as sum from t group by a having sum(a) > 1 order by sum;
+select sum(a+1) as sum from t group by a+1 having sum(a+1) = 2 order by sum;
+select sum(a+1) as sum from t group by a+1, b having sum(a+1) > 3 order by sum;
 drop table t;
 
 select 1, sum(number) from numbers_mt(1000000);
@@ -120,14 +120,14 @@ insert into t1 values(1.0),(2.0),(3.0);
 create table t2(c smallint unsigned null);
 insert into t2 values(1),(2),(null);
 
-select * from t inner join t1 on t.a = t1.b;
-select * from t inner join t2 on t.a = t2.c;
-select * from t inner join t2 on t.a = t2.c + 1;
-select * from t inner join t2 on t.a = t2.c + 1 and t.a - 1 = t2.c;
-select * from t1 inner join t on t.a = t1.b;
-select * from t2 inner join t on t.a = t2.c;
-select * from t2 inner join t on t.a = t2.c + 1;
-select * from t2 inner join t on t.a = t2.c + 1 and t.a - 1 = t2.c;
+select * from t inner join t1 on t.a = t1.b order by a, b;
+select * from t inner join t2 on t.a = t2.c order by a, c;
+select * from t inner join t2 on t.a = t2.c + 1 order by a, c;
+select * from t inner join t2 on t.a = t2.c + 1 and t.a - 1 = t2.c order by a, c;
+select * from t1 inner join t on t.a = t1.b order by a, b;
+select * from t2 inner join t on t.a = t2.c order by a, c;
+select * from t2 inner join t on t.a = t2.c + 1 order by a, c;
+select * from t2 inner join t on t.a = t2.c + 1 and t.a - 1 = t2.c order by a, c;
 select count(*) from numbers(1000) as t inner join numbers(1000) as t1 on t.number = t1.number;
 
 select t.number from numbers(10000) as t inner join numbers(1000) as t1 on t.number % 1000 = t1.number order by number limit 5;
@@ -142,6 +142,10 @@ create table t3(a int, b int);
 insert into t3 values(1,2),(2,3);
 select * from t3 order by 2 desc;
 select a from t3 order by 1 desc;
+select a from t3 order by t3.a + 1;
+select number from numbers(3) order by number + 1;
+select number + 3 as c from numbers(3) order by c + 1, -number;
+select number, avg(number) c from numbers(3) group by number order by c + 1, number + 1;
 drop table t;
 drop table t1;
 drop table t2;
@@ -188,6 +192,7 @@ select count_if(a = '1'), count_if(a = '2'), count_if(a = '3'), count_if(a is nu
 );
 select case when number >= 2 then 'ge2' WHEN number >= 1 then 'ge1' ELSE null end from numbers(3);
 select case when 1 = 3 then null when 1 = 2 then 20.0 when 1 = 1 then 1 ELSE null END;
+select case when number > 1 then 1 when number < 1 then 2 else 1 end from numbers(2) where false;
 
 select COALESCE(NULL, NULL, 1, 2);
 -- subquery in from
@@ -217,10 +222,10 @@ insert into t1 values(7, 8), (3, 4), (5, 6);
 drop table if exists t2;
 create table t2(a int, d int);
 insert into t2 values(1, 2), (3, 4), (5, 6);
-select * from t1 join t2 using(a);
-select t1.a from t1 join t2 using(a);
-select t2.d from t1 join t2 using(a);
-select * from t1 natural join t2;
+select * from t1 join t2 using(a) order by t1.a, t2.a;
+select t1.a from t1 join t2 using(a) order by t1.a, t2.a;
+select t2.d from t1 join t2 using(a) order by t1.a, t2.a;
+select * from t1 natural join t2 order by t1.a, t2.a;
 drop table t1;
 drop table t2;
 
@@ -230,7 +235,7 @@ create table t1(a int, b int);
 insert into t1 values(1, 2), (1, 3), (2, 4);
 create table t2(c int, d int);
 insert into t2 values(1, 2), (2, 6);
-select * from t2 inner join t1 on t1.a = t2.c;
+select * from t2 inner join t1 on t1.a = t2.c order by a, b, c, d;
 drop table t1;
 drop table t2;
 
@@ -258,17 +263,6 @@ select '====Correlated Subquery====';
 select * from numbers(10) as t where exists (select * from numbers(2) as t1 where t.number = t1.number);
 select (select number from numbers(10) as t1 where t.number = t1.number) from numbers(10) as t order by number;
 
--- explain
-select '===Explain===';
-create table t1(a int, b int);
-create table t2(a int, b int);
-explain select t1.a from t1 where a > 0;
-explain select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a and t2.a > 5 and t1.a > 1);
-explain select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a);
-select '===Explain Pipeline===';
-explain pipeline select t1.a from t1 join t2 on t1.a = t2.a;
-drop table t1;
-drop table t2;
 -- position function
 select '===Position Function===';
 SELECT POSITION('bar' IN 'foobarbar');
@@ -321,9 +315,9 @@ create table t1(a int, b int);
 create table t2(c int, d int);
 insert into t1 values(1, 2), (2, 3), (3 ,4), (2, 3);
 insert into t2 values(2,2), (3, 5), (7 ,8), (2, 3), (3, 4);
-select * from t1 intersect select * from t2;
+select * from t1 intersect select * from t2 order by t1.a, t1.b;
 select '====Except Distinct===';
-select * from t1 except select * from t2;
+select * from t1 except select * from t2 order by t1.a, t1.b;
 drop table t1;
 drop table t2;
 
@@ -399,5 +393,28 @@ select user(), currentuser(), current_user();
 -- Query has keyword
 SELECT '====WITH_KEYWORD====';
 SELECT database, table, name, type, default_kind as default_type, default_expression, comment FROM system.columns  WHERE database LIKE 'system'  AND table LIKE 'settings' ORDER BY name;
+
+-- Correlated subquery
+SELECT '====Correlated====';
+create table t1(a int null , b int null);
+insert into t1 values(1, 2), (2, 3), (null, 1);
+create table t2(a int null, b int null);
+insert into t2 values(3, 4), (2, 3), (null, 2);
+select t1.a, (select t2.a from t2 where t1.a > 1 and t2.a > 2) from t1;
+select t1.a from t1 where t1.a > (select t2.a from t2 where t1.a = t2.a );
+select t1.a from t1 where exists (select t2.a from t2 where t1.a = t2.a) or t1.b > 1;
+select t1.a from t1 where exists (select t2.a from t2 where t1.a = t2.a) and t1.b > 1;
+select t1.a from t1 where not exists (select t2.a from t2 where t1.a = t2.a) and t1.b > 1;
+select * from t1 where t1.a = any (select t2.a from t2 where t1.a = t2.a);
+select * from t1 where t1.a = any (select t2.a from t2 where t1.a > 1);
+select * from t1 where t1.a > any (select t2.a from t2 where t1.a > 1);
+
+-- Uncorrelated scalar subquery
+select t1.a, (select t2.a from t2 where t2.a > 2) from t1;
+select t1.a, (select t2.a from t2 where t2.a > 3) from t1;
+select t1.a from t1 where t1.a > (select t2.a from t2 where t2.a > 2);
+drop table t1;
+drop table t2;
+
 set enable_planner_v2 = 0;
 

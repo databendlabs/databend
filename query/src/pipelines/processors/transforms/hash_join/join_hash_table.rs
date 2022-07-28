@@ -18,12 +18,14 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 use common_arrow::arrow::bitmap::MutableBitmap;
+use common_base::base::tokio::sync::Notify;
 use common_datablocks::DataBlock;
 use common_datablocks::HashMethod;
 use common_datablocks::HashMethodFixedKeys;
 use common_datablocks::HashMethodKind;
 use common_datablocks::HashMethodSerializer;
 use common_datavalues::combine_validities_2;
+use common_datavalues::combine_validities_3;
 use common_datavalues::BooleanColumn;
 use common_datavalues::BooleanType;
 use common_datavalues::Column;
@@ -34,7 +36,6 @@ use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataTypeImpl;
-use common_datavalues::DataValue;
 use common_datavalues::NullableType;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -44,15 +45,14 @@ use primitive_types::U256;
 use primitive_types::U512;
 
 use super::ProbeState;
-use crate::common::EvalNode;
-use crate::common::Evaluator;
 use crate::pipelines::processors::transforms::group_by::keys_ref::KeysRef;
+use crate::pipelines::processors::transforms::hash_join::desc::HashJoinDesc;
 use crate::pipelines::processors::transforms::hash_join::row::RowPtr;
 use crate::pipelines::processors::transforms::hash_join::row::RowSpace;
 use crate::pipelines::processors::HashJoinState;
 use crate::sessions::QueryContext;
-use crate::sql::exec::ColumnID;
-use crate::sql::exec::PhysicalScalar;
+use crate::sessions::TableContext;
+use crate::sql::executor::PhysicalScalar;
 use crate::sql::planner::plans::JoinType;
 use crate::sql::plans::JoinType::Mark;
 use crate::sql::IndexType;
@@ -120,14 +120,6 @@ pub struct MarkJoinDesc {
     pub(crate) has_null: RwLock<bool>,
 }
 
-pub struct HashJoinDesc {
-    pub(crate) build_keys: Vec<EvalNode<ColumnID>>,
-    pub(crate) probe_keys: Vec<EvalNode<ColumnID>>,
-    pub(crate) join_type: JoinType,
-    pub(crate) other_predicate: Option<EvalNode<ColumnID>>,
-    pub(crate) marker_join_desc: MarkJoinDesc,
-}
-
 pub struct JoinHashTable {
     pub(crate) ctx: Arc<QueryContext>,
     /// Reference count
@@ -138,39 +130,19 @@ pub struct JoinHashTable {
     pub(crate) row_space: RowSpace,
     pub(crate) hash_join_desc: HashJoinDesc,
     pub(crate) row_ptrs: RwLock<Vec<RowPtr>>,
+    finished_notify: Arc<Notify>,
 }
 
 impl JoinHashTable {
     pub fn create_join_state(
         ctx: Arc<QueryContext>,
-        join_type: JoinType,
         build_keys: &[PhysicalScalar],
-        probe_keys: &[PhysicalScalar],
-        other_predicate: Option<&PhysicalScalar>,
         build_schema: DataSchemaRef,
-        marker_index: Option<IndexType>,
+        hash_join_desc: HashJoinDesc,
     ) -> Result<Arc<JoinHashTable>> {
         let hash_key_types: Vec<DataTypeImpl> =
             build_keys.iter().map(|expr| expr.data_type()).collect();
         let method = DataBlock::choose_hash_method_with_types(&hash_key_types)?;
-        let hash_join_desc = HashJoinDesc {
-            build_keys: build_keys
-                .iter()
-                .map(Evaluator::eval_physical_scalar)
-                .collect::<Result<_>>()?,
-            probe_keys: probe_keys
-                .iter()
-                .map(Evaluator::eval_physical_scalar)
-                .collect::<Result<_>>()?,
-            join_type,
-            other_predicate: other_predicate
-                .map(Evaluator::eval_physical_scalar)
-                .transpose()?,
-            marker_join_desc: MarkJoinDesc {
-                marker_index,
-                has_null: RwLock::new(false),
-            },
-        };
         Ok(match method {
             HashMethodKind::Serializer(_) => Arc::new(JoinHashTable::try_create(
                 ctx,
@@ -253,7 +225,9 @@ impl JoinHashTable {
         mut build_data_schema: DataSchemaRef,
         hash_join_desc: HashJoinDesc,
     ) -> Result<Self> {
-        if hash_join_desc.join_type == JoinType::Left {
+        if hash_join_desc.join_type == JoinType::Left
+            || hash_join_desc.join_type == JoinType::Single
+        {
             let mut nullable_field = Vec::with_capacity(build_data_schema.fields().len());
             for field in build_data_schema.fields().iter() {
                 nullable_field.push(DataField::new_nullable(
@@ -271,6 +245,7 @@ impl JoinHashTable {
             ctx,
             hash_table: RwLock::new(hash_table),
             row_ptrs: RwLock::new(vec![]),
+            finished_notify: Arc::new(Notify::new()),
         })
     }
 
@@ -370,10 +345,10 @@ impl JoinHashTable {
                     .hash_method
                     .build_keys_state(&probe_keys, input.num_rows())?;
                 let keys_iter = table.hash_method.build_keys_iter(&keys_state)?;
-                let keys_iter =
+                let keys_ref =
                     keys_iter.map(|key| KeysRef::create(key.as_ptr() as usize, key.len()));
 
-                self.result_blocks(&table.hash_table, probe_state, keys_iter, input)
+                self.result_blocks(&table.hash_table, probe_state, keys_ref, input)
             }
             HashTable::KeyU8HashTable(table) => {
                 let keys_state = table
@@ -428,6 +403,7 @@ impl JoinHashTable {
     }
 }
 
+#[async_trait::async_trait]
 impl HashJoinState for JoinHashTable {
     fn build(&self, input: DataBlock) -> Result<()> {
         let func_ctx = self.ctx.try_get_function_context()?;
@@ -442,9 +418,12 @@ impl HashJoinState for JoinHashTable {
 
     fn probe(&self, input: &DataBlock, probe_state: &mut ProbeState) -> Result<Vec<DataBlock>> {
         match self.hash_join_desc.join_type {
-            JoinType::Inner | JoinType::Semi | JoinType::Anti | JoinType::Left | JoinType::Mark => {
-                self.probe_join(input, probe_state)
-            }
+            JoinType::Inner
+            | JoinType::Semi
+            | JoinType::Anti
+            | JoinType::Left
+            | Mark
+            | JoinType::Single => self.probe_join(input, probe_state),
             JoinType::Cross => self.probe_cross_join(input, probe_state),
             _ => unimplemented!("{} is unimplemented", self.hash_join_desc.join_type),
         }
@@ -463,6 +442,7 @@ impl HashJoinState for JoinHashTable {
             self.finish()?;
             let mut is_finished = self.is_finished.lock().unwrap();
             *is_finished = true;
+            self.finished_notify.notify_waiters();
             Ok(())
         } else {
             Ok(())
@@ -504,24 +484,35 @@ impl HashJoinState for JoinHashTable {
         for chunk_index in 0..chunks.len() {
             let chunk = &mut chunks[chunk_index];
             let mut columns = Vec::with_capacity(chunk.cols.len());
-            let mut markers = if self.hash_join_desc.join_type == Mark
-                && self.hash_join_desc.other_predicate.is_some()
-            {
-                vec![Some(MarkerKind::False); chunk.num_rows()]
+            let markers = if self.hash_join_desc.join_type == Mark {
+                let mut markers = vec![Some(MarkerKind::False); chunk.num_rows()];
+                // Only all columns' values are NULL, we set the marker to Null.
+                if chunk.cols.iter().any(|c| c.is_nullable() || c.is_null()) {
+                    let mut valids = None;
+                    for col in chunk.cols.iter() {
+                        let (is_all_null, tmp_valids) = col.validity();
+                        if is_all_null {
+                            let mut m = MutableBitmap::with_capacity(chunk.num_rows());
+                            m.extend_constant(chunk.num_rows(), false);
+                            valids = Some(m.into());
+                            break;
+                        } else {
+                            valids = combine_validities_3(valids, tmp_valids.cloned());
+                        }
+                    }
+                    if let Some(v) = valids {
+                        for (idx, marker) in markers.iter_mut().enumerate() {
+                            if !v.get_bit(idx) {
+                                *marker = Some(MarkerKind::Null);
+                            }
+                        }
+                    }
+                }
+                markers
             } else {
                 vec![None; chunk.num_rows()]
             };
             for col in chunk.cols.iter() {
-                if self.hash_join_desc.join_type == Mark {
-                    assert_eq!(col.len(), markers.len());
-                    for (row_index, marker) in markers.iter_mut().enumerate() {
-                        if col.get(row_index) == DataValue::Null {
-                            *marker = Some(MarkerKind::Null);
-                        } else {
-                            *marker = Some(MarkerKind::False);
-                        }
-                    }
-                }
                 columns.push(col);
             }
             match (*self.hash_table.write()).borrow_mut() {
@@ -615,6 +606,14 @@ impl HashJoinState for JoinHashTable {
                 },
             }
         }
+        Ok(())
+    }
+
+    async fn wait_finish(&self) -> Result<()> {
+        if !self.is_finished()? {
+            self.finished_notify.notified().await;
+        }
+
         Ok(())
     }
 

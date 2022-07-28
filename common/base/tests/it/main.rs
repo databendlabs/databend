@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod derive;
-mod malloc_size;
 mod pool;
 mod progress;
 mod range_key_test;

@@ -22,8 +22,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
 use common_io::prelude::*;
-use common_tracing::tracing;
-use common_tracing::tracing::Instrument;
 use common_users::CertifiedInfo;
 use metrics::histogram;
 use opensrv_mysql::AsyncMysqlShim;
@@ -34,6 +32,9 @@ use opensrv_mysql::QueryResultWriter;
 use opensrv_mysql::StatementMetaWriter;
 use rand::RngCore;
 use tokio_stream::StreamExt;
+use tracing::error;
+use tracing::info;
+use tracing::Instrument;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
@@ -43,8 +44,10 @@ use crate::servers::mysql::writers::DFInitResultWriter;
 use crate::servers::mysql::writers::DFQueryResultWriter;
 use crate::servers::mysql::MySQLFederated;
 use crate::servers::mysql::MYSQL_VERSION;
+use crate::servers::utils::use_planner_v2;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionRef;
+use crate::sessions::TableContext;
 use crate::sql::DfParser;
 use crate::sql::PlanParser;
 use crate::sql::Planner;
@@ -55,7 +58,6 @@ struct InteractiveWorkerBase<W: std::io::Write> {
 }
 
 pub struct InteractiveWorker<W: std::io::Write> {
-    session: SessionRef,
     base: InteractiveWorkerBase<W>,
     version: String,
     salt: [u8; 20],
@@ -71,7 +73,7 @@ impl<W: std::io::Write + Send + Sync> AsyncMysqlShim<W> for InteractiveWorker<W>
     }
 
     fn connect_id(&self) -> u32 {
-        match self.session.get_mysql_conn_id() {
+        match self.base.session.get_mysql_conn_id() {
             Some(conn_id) => conn_id,
             None => {
                 // default conn id
@@ -107,14 +109,12 @@ impl<W: std::io::Write + Send + Sync> AsyncMysqlShim<W> for InteractiveWorker<W>
         match authenticate.await {
             Ok(res) => res,
             Err(failure) => {
-                tracing::error!(
+                error!(
                     "MySQL handler authenticate failed, \
                         user_name: {}, \
                         client_address: {}, \
                         failure_cause: {}",
-                    username,
-                    client_addr,
-                    failure
+                    username, client_addr, failure
                 );
                 false
             }
@@ -126,7 +126,7 @@ impl<W: std::io::Write + Send + Sync> AsyncMysqlShim<W> for InteractiveWorker<W>
         query: &'a str,
         writer: StatementMetaWriter<'a, W>,
     ) -> Result<()> {
-        if self.session.is_aborting() {
+        if self.base.session.is_aborting() {
             writer.error(
                 ErrorKind::ER_ABORTING_CONNECTION,
                 "Aborting this connection. because we are try aborting server.".as_bytes(),
@@ -146,7 +146,7 @@ impl<W: std::io::Write + Send + Sync> AsyncMysqlShim<W> for InteractiveWorker<W>
         param: ParamParser<'a>,
         writer: QueryResultWriter<'a, W>,
     ) -> Result<()> {
-        if self.session.is_aborting() {
+        if self.base.session.is_aborting() {
             writer.error(
                 ErrorKind::ER_ABORTING_CONNECTION,
                 "Aborting this connection. because we are try aborting server.".as_bytes(),
@@ -171,7 +171,7 @@ impl<W: std::io::Write + Send + Sync> AsyncMysqlShim<W> for InteractiveWorker<W>
         query: &'a str,
         writer: QueryResultWriter<'a, W>,
     ) -> Result<()> {
-        if self.session.is_aborting() {
+        if self.base.session.is_aborting() {
             writer.error(
                 ErrorKind::ER_ABORTING_CONNECTION,
                 "Aborting this connection. because we are try aborting server.".as_bytes(),
@@ -187,11 +187,7 @@ impl<W: std::io::Write + Send + Sync> AsyncMysqlShim<W> for InteractiveWorker<W>
         let instant = Instant::now();
         let blocks = self.base.do_query(query).await;
 
-        let format = self
-            .session
-            .get_shared_query_context()
-            .await?
-            .get_format_settings()?;
+        let format = self.base.session.get_format_settings()?;
         let mut write_result = writer.write(blocks, &format);
 
         if let Err(cause) = write_result {
@@ -212,7 +208,7 @@ impl<W: std::io::Write + Send + Sync> AsyncMysqlShim<W> for InteractiveWorker<W>
         database_name: &'a str,
         writer: InitWriter<'a, W>,
     ) -> Result<()> {
-        if self.session.is_aborting() {
+        if self.base.session.is_aborting() {
             writer.error(
                 ErrorKind::ER_ABORTING_CONNECTION,
                 "Aborting this connection. because we are try aborting server.".as_bytes(),
@@ -279,14 +275,14 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
     async fn do_query(&mut self, query: &str) -> Result<(Vec<DataBlock>, String)> {
         match self.federated_server_command_check(query) {
             Some(data_block) => {
-                tracing::info!("Federated query: {}", query);
+                info!("Federated query: {}", query);
                 if data_block.num_rows() > 0 {
-                    tracing::info!("Federated response: {:?}", data_block);
+                    info!("Federated response: {:?}", data_block);
                 }
                 Ok((vec![data_block], String::from("")))
             }
             None => {
-                tracing::info!("Normal query: {}", query);
+                info!("Normal query: {}", query);
                 let context = self.session.create_query_context().await?;
                 context.attach_query_str(query);
 
@@ -298,11 +294,7 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
                 let interpreter: Result<Arc<dyn Interpreter>>;
                 if let Ok((stmts, h)) = stmts_hints {
                     hints = h;
-                    interpreter = if settings.get_enable_new_processor_framework()? != 0
-                        && context.get_cluster().is_empty()
-                        && settings.get_enable_planner_v2()? != 0
-                        && stmts.get(0).map_or(false, InterpreterFactoryV2::check)
-                    {
+                    interpreter = if use_planner_v2(&settings, &stmts)? {
                         let mut planner = Planner::new(context.clone());
                         planner
                             .plan_sql(query)
@@ -384,7 +376,7 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
                 let _ = interpreter
                     .start()
                     .await
-                    .map_err(|e| tracing::error!("interpreter.start.error: {:?}", e));
+                    .map_err(|e| error!("interpreter.start.error: {:?}", e));
                 let data_stream = interpreter.execute(None).await?;
                 histogram!(
                     super::mysql_metrics::METRIC_INTERPRETER_USEDTIME,
@@ -397,7 +389,7 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
                 let _ = interpreter
                     .finish()
                     .await
-                    .map_err(|e| tracing::error!("interpreter.finish.error: {:?}", e));
+                    .map_err(|e| error!("interpreter.finish.error: {:?}", e));
 
                 Ok::<Vec<DataBlock>, ErrorCode>(query_result)
             }
@@ -459,7 +451,6 @@ impl<W: std::io::Write> InteractiveWorker<W> {
         }
 
         InteractiveWorker::<W> {
-            session: session.clone(),
             base: InteractiveWorkerBase::<W> {
                 session,
                 generic_hold: PhantomData::default(),

@@ -291,6 +291,8 @@ pub enum TokenKind {
     CONFIGRELOAD,
     #[token("CONNECTION", ignore(ascii_case))]
     CONNECTION,
+    #[token("CHAR", ignore(ascii_case))]
+    CHAR,
     #[token("COPY_OPTIONS", ignore(ascii_case))]
     COPY_OPTIONS,
     #[token("COPY", ignore(ascii_case))]
@@ -361,6 +363,8 @@ pub enum TokenKind {
     ENCRYPTION,
     #[token("ENGINE", ignore(ascii_case))]
     ENGINE,
+    #[token("ENGINES", ignore(ascii_case))]
+    ENGINES,
     #[token("EPOCH", ignore(ascii_case))]
     EPOCH,
     #[token("EXISTS", ignore(ascii_case))]
@@ -373,6 +377,8 @@ pub enum TokenKind {
     EXTRACT,
     #[token("FALSE", ignore(ascii_case))]
     FALSE,
+    #[token("FIELDS", ignore(ascii_case))]
+    FIELDS,
     #[token("FIELD_DELIMITER", ignore(ascii_case))]
     FIELD_DELIMITER,
     #[token("FILE_FORMAT", ignore(ascii_case))]
@@ -389,6 +395,8 @@ pub enum TokenKind {
     FOR,
     #[token("FORMAT", ignore(ascii_case))]
     FORMAT,
+    #[token("FRAGMENTS", ignore(ascii_case))]
+    FRAGMENTS,
     #[token("FROM", ignore(ascii_case))]
     FROM,
     #[token("FULL", ignore(ascii_case))]
@@ -639,6 +647,8 @@ pub enum TokenKind {
     TRUNCATE,
     #[token("TRY_CAST", ignore(ascii_case))]
     TRY_CAST,
+    #[token("TUPLE", ignore(ascii_case))]
+    TUPLE,
     #[token("TYPE", ignore(ascii_case))]
     TYPE,
     #[token("UNION", ignore(ascii_case))]

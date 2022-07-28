@@ -15,6 +15,7 @@
 use common_meta_raft_store::config::RaftConfig;
 use common_meta_types::MetaResult;
 use common_meta_types::Node;
+use common_tracing::Config as LogConfig;
 
 use super::outer_v0::Config as OuterV0Config;
 
@@ -27,8 +28,7 @@ pub struct Config {
     pub username: String,
     pub password: String,
     pub config_file: String,
-    pub log_level: String,
-    pub log_dir: String,
+    pub log: LogConfig,
     pub admin_api_address: String,
     pub admin_tls_server_cert: String,
     pub admin_tls_server_key: String,
@@ -49,8 +49,7 @@ impl Default for Config {
             username: "".to_string(),
             password: "".to_string(),
             config_file: "".to_string(),
-            log_level: "INFO".to_string(),
-            log_dir: "./.databend/logs".to_string(),
+            log: LogConfig::default(),
             admin_api_address: "127.0.0.1:28002".to_string(),
             admin_tls_server_cert: "".to_string(),
             admin_tls_server_key: "".to_string(),
@@ -63,7 +62,7 @@ impl Default for Config {
 }
 
 impl Config {
-    /// As requires by [RFC: Config Backward Compatibility](https://github.com/datafuselabs/databend/pull/5324), we will load user's config via wrapper [`OuterV0Config`] and than convert from [`OuterV0Config`] to [`Config`].
+    /// As requires by [RFC: Config Backward Compatibility](https://github.com/datafuselabs/databend/pull/5324), we will load user's config via wrapper [`OuterV0Config`] and then convert from [`OuterV0Config`] to [`Config`].
     ///
     /// In the future, we could have `ConfigV1` and `ConfigV2`.
     pub fn load() -> MetaResult<Self> {

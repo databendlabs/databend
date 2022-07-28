@@ -1139,41 +1139,92 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
             item_type: opt_item_type.map(|(_, opt_item_type, _)| Box::new(opt_item_type)),
         },
     );
+    let ty_tuple = map(
+        rule! { TUPLE ~ "(" ~ #comma_separated_list1(tuple_types) ~ ")" },
+        |(_, _, tuple_types, _)| {
+            let mut fields_name = Vec::with_capacity(tuple_types.len());
+            let mut fields_type = Vec::with_capacity(tuple_types.len());
+            for tuple_type in tuple_types {
+                if let Some(field_name) = tuple_type.0 {
+                    fields_name.push(field_name.name);
+                }
+                fields_type.push(tuple_type.1);
+            }
+            if fields_name.is_empty() {
+                TypeName::Tuple {
+                    fields_name: None,
+                    fields_type,
+                }
+            } else {
+                TypeName::Tuple {
+                    fields_name: Some(fields_name),
+                    fields_type,
+                }
+            }
+        },
+    );
     let ty_date = value(TypeName::Date, rule! { DATE });
     let ty_datetime = map(
-        rule! { DATETIME ~ ( "(" ~ #literal_u64 ~ ")" )? },
-        |(_, opt_precision)| TypeName::DateTime {
+        rule! { (DATETIME | TIMESTAMP) ~ ( "(" ~ #literal_u64 ~ ")" )? },
+        |(_, opt_precision)| TypeName::Timestamp {
             precision: opt_precision.map(|(_, precision, _)| precision),
         },
     );
-    let ty_timestamp = value(TypeName::Timestamp, rule! { TIMESTAMP });
     let ty_string = value(
         TypeName::String,
-        rule! { ( STRING | VARCHAR ) ~ ( "(" ~ #literal_u64 ~ ")" )? },
+        rule! { ( STRING | VARCHAR | CHAR ) ~ ( "(" ~ #literal_u64 ~ ")" )? },
     );
     let ty_object = value(TypeName::Object, rule! { OBJECT | MAP });
     let ty_variant = value(TypeName::Variant, rule! { VARIANT | JSON });
+    map(
+        rule! {
+            ( #ty_boolean
+            | #ty_uint8
+            | #ty_uint16
+            | #ty_uint32
+            | #ty_uint64
+            | #ty_int8
+            | #ty_int16
+            | #ty_int32
+            | #ty_int64
+            | #ty_float32
+            | #ty_float64
+            | #ty_array
+            | #ty_tuple
+            | #ty_date
+            | #ty_datetime
+            | #ty_string
+            | #ty_object
+            | #ty_variant
+            ) ~ NULL? : "type name"
+        },
+        |(ty, null_opt)| {
+            if null_opt.is_some() {
+                TypeName::Nullable(Box::new(ty))
+            } else {
+                ty
+            }
+        },
+    )(i)
+}
+
+pub fn tuple_types(i: Input) -> IResult<(Option<Identifier>, TypeName)> {
+    let tuple_types = map(
+        rule! {
+           #type_name
+        },
+        |type_name| (None, type_name),
+    );
+    let named_tuple_types = map(
+        rule! {
+           #ident ~ #type_name
+        },
+        |(name, type_name)| (Some(name), type_name),
+    );
 
     rule!(
-        ( #ty_boolean
-        | #ty_uint8
-        | #ty_uint16
-        | #ty_uint32
-        | #ty_uint64
-        | #ty_int8
-        | #ty_int16
-        | #ty_int32
-        | #ty_int64
-        | #ty_float32
-        | #ty_float64
-        | #ty_array
-        | #ty_date
-        | #ty_datetime
-        | #ty_timestamp
-        | #ty_string
-        | #ty_object
-        | #ty_variant
-        ) : "type name"
+        #tuple_types
+        | #named_tuple_types
     )(i)
 }
 

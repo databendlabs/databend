@@ -23,30 +23,34 @@ use std::sync::Arc;
 
 use comfy_table::Table;
 use common_ast::DisplayError;
-use common_expression::chunk::Chunk;
-use common_expression::evaluator::DomainCalculator;
-use common_expression::evaluator::Evaluator;
-use common_expression::function::vectorize_2_arg;
-use common_expression::function::Function;
-use common_expression::function::FunctionContext;
-use common_expression::function::FunctionRegistry;
-use common_expression::function::FunctionSignature;
-use common_expression::property::BooleanDomain;
-use common_expression::property::Domain;
-use common_expression::property::FunctionProperty;
-use common_expression::property::IntDomain;
-use common_expression::property::NullableDomain;
-use common_expression::property::StringDomain;
-use common_expression::property::UIntDomain;
 use common_expression::type_check;
+use common_expression::types::array::ArrayColumn;
+use common_expression::types::string::StringColumn;
 use common_expression::types::ArrayType;
 use common_expression::types::DataType;
 use common_expression::types::*;
-use common_expression::values::Column;
-use common_expression::values::ColumnBuilder;
-use common_expression::values::Scalar;
-use common_expression::values::Value;
-use common_expression::values::ValueRef;
+use common_expression::vectorize_2_arg;
+use common_expression::vectorize_with_writer_2_arg;
+use common_expression::BooleanDomain;
+use common_expression::Chunk;
+use common_expression::Column;
+use common_expression::ColumnBuilder;
+use common_expression::Domain;
+use common_expression::DomainCalculator;
+use common_expression::Evaluator;
+use common_expression::FloatDomain;
+use common_expression::Function;
+use common_expression::FunctionContext;
+use common_expression::FunctionProperty;
+use common_expression::FunctionRegistry;
+use common_expression::FunctionSignature;
+use common_expression::IntDomain;
+use common_expression::NullableDomain;
+use common_expression::RemoteExpr;
+use common_expression::Scalar;
+use common_expression::ScalarRef;
+use common_expression::Value;
+use common_expression::ValueRef;
 use goldenfile::Mint;
 use parser::parse_raw_expr;
 
@@ -55,15 +59,11 @@ pub fn test_pass() {
     let mut mint = Mint::new("tests/it/testdata");
     let mut file = mint.new_goldenfile("run-pass.txt").unwrap();
 
-    run_ast(&mut file, "bool_and(true, false)", &[]);
-    run_ast(&mut file, "bool_and(null, false)", &[]);
+    run_ast(&mut file, "true AND false", &[]);
+    run_ast(&mut file, "null AND false", &[]);
     run_ast(&mut file, "plus(a, 10)", &[(
         "a",
         DataType::Nullable(Box::new(DataType::UInt8)),
-        Domain::Nullable(NullableDomain {
-            has_null: true,
-            value: Some(Box::new(Domain::UInt(UIntDomain { min: 10, max: 12 }))),
-        }),
         Column::Nullable {
             column: Box::new(Column::UInt8(vec![10, 11, 12].into())),
             validity: vec![false, true, false].into(),
@@ -73,10 +73,6 @@ pub fn test_pass() {
         (
             "a",
             DataType::Nullable(Box::new(DataType::UInt8)),
-            Domain::Nullable(NullableDomain {
-                has_null: true,
-                value: Some(Box::new(Domain::UInt(UIntDomain { min: 10, max: 12 }))),
-            }),
             Column::Nullable {
                 column: Box::new(Column::UInt8(vec![10, 11, 12].into())),
                 validity: vec![false, true, false].into(),
@@ -85,10 +81,6 @@ pub fn test_pass() {
         (
             "b",
             DataType::Nullable(Box::new(DataType::UInt8)),
-            Domain::Nullable(NullableDomain {
-                has_null: true,
-                value: Some(Box::new(Domain::UInt(UIntDomain { min: 1, max: 3 }))),
-            }),
             Column::Nullable {
                 column: Box::new(Column::UInt8(vec![1, 2, 3].into())),
                 validity: vec![false, true, true].into(),
@@ -99,73 +91,278 @@ pub fn test_pass() {
         (
             "a",
             DataType::Nullable(Box::new(DataType::UInt8)),
-            Domain::Nullable(NullableDomain {
-                has_null: true,
-                value: Some(Box::new(Domain::UInt(UIntDomain { min: 10, max: 12 }))),
-            }),
             Column::Nullable {
                 column: Box::new(Column::UInt8(vec![10, 11, 12].into())),
                 validity: vec![false, true, false].into(),
             },
         ),
+        ("b", DataType::Null, Column::Null { len: 3 }),
+    ]);
+
+    run_ast(&mut file, "minus(a, 10)", &[(
+        "a",
+        DataType::Nullable(Box::new(DataType::UInt8)),
+        Column::Nullable {
+            column: Box::new(Column::UInt8(vec![10, 11, 12].into())),
+            validity: vec![false, true, false].into(),
+        },
+    )]);
+
+    run_ast(&mut file, "minus(a, b)", &[
+        (
+            "a",
+            DataType::Nullable(Box::new(DataType::UInt16)),
+            Column::Nullable {
+                column: Box::new(Column::UInt16(vec![10, 11, 12].into())),
+                validity: vec![false, true, false].into(),
+            },
+        ),
         (
             "b",
-            DataType::Null,
-            Domain::Nullable(NullableDomain {
-                has_null: true,
-                value: None,
-            }),
-            Column::Null { len: 3 },
+            DataType::Nullable(Box::new(DataType::Int16)),
+            Column::Nullable {
+                column: Box::new(Column::Int16(vec![1, 2, 3].into())),
+                validity: vec![false, true, true].into(),
+            },
         ),
     ]);
-    run_ast(&mut file, "bool_not(a)", &[(
+
+    run_ast(&mut file, "minus(a, b)", &[
+        (
+            "a",
+            DataType::Nullable(Box::new(DataType::UInt8)),
+            Column::Nullable {
+                column: Box::new(Column::UInt8(vec![10, 11, 12].into())),
+                validity: vec![false, true, false].into(),
+            },
+        ),
+        ("b", DataType::Null, Column::Null { len: 3 }),
+    ]);
+
+    run_ast(&mut file, "multiply(a, 10)", &[(
+        "a",
+        DataType::Nullable(Box::new(DataType::UInt8)),
+        Column::Nullable {
+            column: Box::new(Column::UInt8(vec![10, 11, 12].into())),
+            validity: vec![false, true, false].into(),
+        },
+    )]);
+
+    run_ast(&mut file, "multiply(a, b)", &[
+        (
+            "a",
+            DataType::Nullable(Box::new(DataType::UInt16)),
+            Column::Nullable {
+                column: Box::new(Column::UInt16(vec![10, 11, 12].into())),
+                validity: vec![false, true, false].into(),
+            },
+        ),
+        (
+            "b",
+            DataType::Nullable(Box::new(DataType::Int16)),
+            Column::Nullable {
+                column: Box::new(Column::Int16(vec![1, 2, 3].into())),
+                validity: vec![false, true, true].into(),
+            },
+        ),
+    ]);
+
+    run_ast(&mut file, "multiply(a, b)", &[
+        (
+            "a",
+            DataType::Nullable(Box::new(DataType::UInt32)),
+            Column::Nullable {
+                column: Box::new(Column::UInt32(vec![10, 11, 12].into())),
+                validity: vec![false, true, false].into(),
+            },
+        ),
+        (
+            "b",
+            DataType::Nullable(Box::new(DataType::Int32)),
+            Column::Nullable {
+                column: Box::new(Column::Int32(vec![1, 2, 3].into())),
+                validity: vec![false, true, true].into(),
+            },
+        ),
+    ]);
+
+    run_ast(&mut file, "multiply(a, b)", &[
+        (
+            "a",
+            DataType::Nullable(Box::new(DataType::UInt8)),
+            Column::Nullable {
+                column: Box::new(Column::UInt8(vec![10, 11, 12].into())),
+                validity: vec![false, true, false].into(),
+            },
+        ),
+        ("b", DataType::Null, Column::Null { len: 3 }),
+    ]);
+
+    run_ast(&mut file, "divide(a, 10)", &[(
+        "a",
+        DataType::Nullable(Box::new(DataType::UInt8)),
+        Column::Nullable {
+            column: Box::new(Column::UInt8(vec![10, 11, 12].into())),
+            validity: vec![false, true, false].into(),
+        },
+    )]);
+
+    run_ast(&mut file, "divide(a, b)", &[
+        (
+            "a",
+            DataType::Nullable(Box::new(DataType::UInt16)),
+            Column::Nullable {
+                column: Box::new(Column::UInt16(vec![10, 11, 12].into())),
+                validity: vec![false, true, false].into(),
+            },
+        ),
+        (
+            "b",
+            DataType::Nullable(Box::new(DataType::Int16)),
+            Column::Nullable {
+                column: Box::new(Column::Int16(vec![1, 2, 3].into())),
+                validity: vec![false, true, true].into(),
+            },
+        ),
+    ]);
+
+    run_ast(&mut file, "divide(a, b)", &[
+        (
+            "a",
+            DataType::Nullable(Box::new(DataType::UInt8)),
+            Column::Nullable {
+                column: Box::new(Column::UInt8(vec![10, 11, 12].into())),
+                validity: vec![false, true, false].into(),
+            },
+        ),
+        ("b", DataType::Null, Column::Null { len: 3 }),
+    ]);
+
+    run_ast(&mut file, "avg(a, 10)", &[(
+        "a",
+        DataType::Nullable(Box::new(DataType::UInt8)),
+        Column::Nullable {
+            column: Box::new(Column::UInt8(vec![10, 11, 12].into())),
+            validity: vec![false, true, false].into(),
+        },
+    )]);
+
+    run_ast(&mut file, "avg(a, b)", &[
+        (
+            "a",
+            DataType::Nullable(Box::new(DataType::UInt16)),
+            Column::Nullable {
+                column: Box::new(Column::UInt16(vec![10, 11, 12].into())),
+                validity: vec![false, true, false].into(),
+            },
+        ),
+        (
+            "b",
+            DataType::Nullable(Box::new(DataType::Int16)),
+            Column::Nullable {
+                column: Box::new(Column::Int16(vec![1, 2, 3].into())),
+                validity: vec![false, true, true].into(),
+            },
+        ),
+    ]);
+
+    run_ast(&mut file, "avg(a, b)", &[
+        (
+            "a",
+            DataType::Nullable(Box::new(DataType::UInt32)),
+            Column::Nullable {
+                column: Box::new(Column::UInt32(vec![10, 11, 12].into())),
+                validity: vec![false, true, false].into(),
+            },
+        ),
+        (
+            "b",
+            DataType::Nullable(Box::new(DataType::Int32)),
+            Column::Nullable {
+                column: Box::new(Column::Int32(vec![1, 2, 3].into())),
+                validity: vec![false, true, true].into(),
+            },
+        ),
+    ]);
+
+    run_ast(&mut file, "avg(a, b)", &[
+        (
+            "a",
+            DataType::Nullable(Box::new(DataType::Float32)),
+            Column::Nullable {
+                column: Box::new(Column::Float32(vec![10f32, 11f32, 12f32].into())),
+                validity: vec![false, true, false].into(),
+            },
+        ),
+        (
+            "b",
+            DataType::Nullable(Box::new(DataType::Int32)),
+            Column::Nullable {
+                column: Box::new(Column::Int32(vec![1, 2, 3].into())),
+                validity: vec![false, true, true].into(),
+            },
+        ),
+    ]);
+
+    run_ast(&mut file, "avg(a, b)", &[
+        (
+            "a",
+            DataType::Nullable(Box::new(DataType::Float32)),
+            Column::Nullable {
+                column: Box::new(Column::Float32(vec![10f32, 11f32, 12f32].into())),
+                validity: vec![false, true, false].into(),
+            },
+        ),
+        (
+            "b",
+            DataType::Nullable(Box::new(DataType::Float64)),
+            Column::Nullable {
+                column: Box::new(Column::Float64(vec![1f64, 2f64, 3f64].into())),
+                validity: vec![false, true, true].into(),
+            },
+        ),
+    ]);
+
+    run_ast(&mut file, "multiply(a, b)", &[
+        (
+            "a",
+            DataType::Nullable(Box::new(DataType::Int8)),
+            Column::Nullable {
+                column: Box::new(Column::UInt8(vec![10, 11, 12].into())),
+                validity: vec![false, true, false].into(),
+            },
+        ),
+        ("b", DataType::Null, Column::Null { len: 3 }),
+    ]);
+
+    run_ast(&mut file, "NOT a", &[(
         "a",
         DataType::Nullable(Box::new(DataType::Boolean)),
-        Domain::Nullable(NullableDomain {
-            has_null: true,
-            value: Some(Box::new(Domain::Boolean(BooleanDomain {
-                has_false: true,
-                has_true: true,
-            }))),
-        }),
         Column::Nullable {
             column: Box::new(Column::Boolean(vec![true, false, true].into())),
             validity: vec![false, true, false].into(),
         },
     )]);
-    run_ast(&mut file, "bool_not(a)", &[(
-        "a",
-        DataType::Null,
-        Domain::Nullable(NullableDomain {
-            has_null: true,
-            value: None,
-        }),
-        Column::Null { len: 5 },
-    )]);
-    run_ast(&mut file, "least(10, 20, 30, 40)", &[]);
+
+    run_ast(&mut file, "NOT a", &[("a", DataType::Null, Column::Null {
+        len: 5,
+    })]);
+    run_ast(&mut file, "least(10, CAST(20 as Int8), 30, 40)", &[]);
     run_ast(&mut file, "create_tuple(null, true)", &[]);
     run_ast(&mut file, "get_tuple(1)(create_tuple(a, b))", &[
         (
             "a",
             DataType::Int16,
-            Domain::Int(IntDomain { min: 0, max: 4 }),
             Column::Int16(vec![0, 1, 2, 3, 4].into()),
         ),
         (
             "b",
             DataType::Nullable(Box::new(DataType::String)),
-            Domain::Nullable(NullableDomain {
-                has_null: true,
-                value: Some(Box::new(Domain::String(StringDomain {
-                    min: "a".as_bytes().to_vec(),
-                    max: Some("e".as_bytes().to_vec()),
-                }))),
-            }),
             Column::Nullable {
-                column: Box::new(Column::String {
+                column: Box::new(Column::String(StringColumn {
                     data: "abcde".as_bytes().to_vec().into(),
                     offsets: vec![0, 1, 2, 3, 4, 5].into(),
-                }),
+                })),
                 validity: vec![true, true, false, false, false].into(),
             },
         ),
@@ -174,13 +371,6 @@ pub fn test_pass() {
         (
             "a",
             DataType::Nullable(Box::new(DataType::Boolean)),
-            Domain::Nullable(NullableDomain {
-                has_null: true,
-                value: Some(Box::new(Domain::Boolean(BooleanDomain {
-                    has_false: true,
-                    has_true: false,
-                }))),
-            }),
             Column::Nullable {
                 column: Box::new(Column::Boolean(vec![false; 5].into())),
                 validity: vec![true, true, false, false, false].into(),
@@ -189,18 +379,11 @@ pub fn test_pass() {
         (
             "b",
             DataType::Nullable(Box::new(DataType::String)),
-            Domain::Nullable(NullableDomain {
-                has_null: true,
-                value: Some(Box::new(Domain::String(StringDomain {
-                    min: "a".as_bytes().to_vec(),
-                    max: Some("e".as_bytes().to_vec()),
-                }))),
-            }),
             Column::Nullable {
-                column: Box::new(Column::String {
+                column: Box::new(Column::String(StringColumn {
                     data: "abcde".as_bytes().to_vec().into(),
                     offsets: vec![0, 1, 2, 3, 4, 5].into(),
-                }),
+                })),
                 validity: vec![true, true, false, false, false].into(),
             },
         ),
@@ -211,13 +394,11 @@ pub fn test_pass() {
         (
             "a",
             DataType::Int16,
-            Domain::Int(IntDomain { min: 0, max: 4 }),
             Column::Int16(vec![0, 1, 2, 3, 4].into()),
         ),
         (
             "b",
             DataType::Int16,
-            Domain::Int(IntDomain { min: 5, max: 9 }),
             Column::Int16(vec![5, 6, 7, 8, 9].into()),
         ),
     ]);
@@ -228,13 +409,11 @@ pub fn test_pass() {
             (
                 "a",
                 DataType::Int16,
-                Domain::Int(IntDomain { min: 0, max: 4 }),
                 Column::Int16(vec![0, 1, 2, 3, 4].into()),
             ),
             (
                 "b",
                 DataType::Int16,
-                Domain::Int(IntDomain { min: 5, max: 9 }),
                 Column::Int16(vec![5, 6, 7, 8, 9].into()),
             ),
         ],
@@ -243,16 +422,14 @@ pub fn test_pass() {
         (
             "a",
             DataType::Array(Box::new(DataType::Int16)),
-            Domain::Array(Some(Box::new(Domain::Int(IntDomain { min: 0, max: 99 })))),
-            Column::Array {
-                array: Box::new(Column::Int16((0..100).collect())),
+            Column::Array(Box::new(ArrayColumn {
+                values: Column::Int16((0..100).collect()),
                 offsets: vec![0, 20, 40, 60, 80, 100].into(),
-            },
+            })),
         ),
         (
             "b",
             DataType::UInt8,
-            Domain::UInt(UIntDomain { min: 0, max: 4 }),
             Column::UInt8(vec![0, 1, 2, 3, 4].into()),
         ),
     ]);
@@ -260,28 +437,119 @@ pub fn test_pass() {
         (
             "a",
             DataType::Array(Box::new(DataType::Array(Box::new(DataType::Int16)))),
-            Domain::Array(Some(Box::new(Domain::Array(Some(Box::new(Domain::Int(
-                IntDomain { min: 0, max: 99 },
-            ))))))),
-            Column::Array {
-                array: Box::new(Column::Array {
-                    array: Box::new(Column::Int16((0..100).collect())),
+            Column::Array(Box::new(ArrayColumn {
+                values: Column::Array(Box::new(ArrayColumn {
+                    values: Column::Int16((0..100).collect()),
                     offsets: vec![
                         0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90,
                         95, 100,
                     ]
                     .into(),
-                }),
+                })),
                 offsets: vec![0, 4, 8, 11, 15, 20].into(),
-            },
+            })),
         ),
         (
             "b",
             DataType::UInt8,
-            Domain::UInt(UIntDomain { min: 0, max: 4 }),
             Column::UInt8(vec![0, 1, 2, 3, 4].into()),
         ),
     ]);
+    run_ast(&mut file, "TRY_CAST(a AS UINT8)", &[(
+        "a",
+        DataType::UInt16,
+        Column::UInt16(vec![0, 64, 255, 512, 1024].into()),
+    )]);
+    run_ast(&mut file, "TRY_CAST(a AS UINT16)", &[(
+        "a",
+        DataType::Int16,
+        Column::Int16(vec![0, 1, 2, 3, -4].into()),
+    )]);
+    run_ast(&mut file, "TRY_CAST(a AS INT64)", &[(
+        "a",
+        DataType::Int16,
+        Column::Int16(vec![0, 1, 2, 3, -4].into()),
+    )]);
+    run_ast(
+        &mut file,
+        "create_tuple(TRY_CAST(a AS FLOAT32), TRY_CAST(a AS INT32), TRY_CAST(b AS FLOAT32), TRY_CAST(b AS INT32))",
+        &[
+            (
+                "a",
+                DataType::UInt64,
+                Column::UInt64(
+                    vec![
+                        0,
+                        1,
+                        u8::MAX as u64,
+                        u16::MAX as u64,
+                        u32::MAX as u64,
+                        u64::MAX,
+                    ]
+                    .into(),
+                ),
+            ),
+            (
+                "b",
+                DataType::Float64,
+                Column::Float64(
+                    vec![
+                        0.0,
+                        u32::MAX as f64,
+                        u64::MAX as f64,
+                        f64::MIN,
+                        f64::MAX,
+                        f64::INFINITY,
+                    ]
+                    .into(),
+                ),
+            ),
+        ],
+    );
+    run_ast(
+        &mut file,
+        "TRY_CAST(create_array(create_array(a, b), null, null) AS Array(Array(Int8)))",
+        &[
+            (
+                "a",
+                DataType::Int16,
+                Column::Int16(vec![0, 1, 2, 127, 255].into()),
+            ),
+            (
+                "b",
+                DataType::Int16,
+                Column::Int16(vec![0, -1, -127, -128, -129].into()),
+            ),
+        ],
+    );
+    run_ast(
+        &mut file,
+        "TRY_CAST(create_tuple(a, b, NULL) AS TUPLE(Int8, UInt8, Boolean NULL))",
+        &[
+            (
+                "a",
+                DataType::Int16,
+                Column::Int16(vec![0, 1, 2, 127, 256].into()),
+            ),
+            (
+                "b",
+                DataType::Int16,
+                Column::Int16(vec![0, 1, -127, -128, -129].into()),
+            ),
+        ],
+    );
+
+    run_ast(&mut file, "CAST(a AS INT16)", &[(
+        "a",
+        DataType::Float64,
+        Column::Float64(vec![0.0f64, 1.1, 2.2, 3.3, -4.4].into()),
+    )]);
+
+    run_ast(&mut file, "CAST(b AS INT16)", &[(
+        "b",
+        DataType::Int8,
+        Column::Int8(vec![0, 1, 2, 3, -4].into()),
+    )]);
 }
 
 #[test]
@@ -289,16 +557,11 @@ pub fn test_tyck_fail() {
     let mut mint = Mint::new("tests/it/testdata");
     let mut file = mint.new_goldenfile("tyck-fail.txt").unwrap();
 
-    run_ast(&mut file, "bool_and(true, 1)", &[]);
-    run_ast(&mut file, "bool_and()", &[]);
-    run_ast(&mut file, "bool_not(bool_not('a'))", &[]);
+    run_ast(&mut file, "true AND 1", &[]);
+    run_ast(&mut file, "NOT NOT 'a'", &[]);
     run_ast(&mut file, "least(1, 2, 3, a)", &[(
         "a",
         DataType::Boolean,
-        Domain::Boolean(BooleanDomain {
-            has_false: true,
-            has_true: false,
-        }),
         Column::Boolean(vec![false; 3].into()),
     )]);
     run_ast(&mut file, "create_array('a', 1)", &[]);
@@ -317,29 +580,37 @@ pub fn test_eval_fail() {
         (
             "a",
             DataType::Int16,
-            Domain::Int(IntDomain { min: 0, max: 4 }),
             Column::Int16(vec![0, 1, 2, 3, 4].into()),
         ),
         (
             "b",
             DataType::Int16,
-            Domain::Int(IntDomain { min: 5, max: 9 }),
             Column::Int16(vec![5, 6, 7, 8, 9].into()),
         ),
         (
             "idx",
             DataType::Int16,
-            Domain::Int(IntDomain { min: 0, max: 4 }),
             Column::Int16(vec![0, 1, 2, 3, 4].into()),
         ),
     ]);
+    run_ast(&mut file, "CAST(a AS UINT16)", &[(
+        "a",
+        DataType::Int16,
+        Column::Int16(vec![0, 1, 2, 3, -4].into()),
+    )]);
+
+    run_ast(&mut file, "CAST(c AS INT16)", &[(
+        "c",
+        DataType::Int64,
+        Column::Int64(vec![0, 11111111111, 2, 3, -4].into()),
+    )]);
 }
 
 fn builtin_functions() -> FunctionRegistry {
     let mut registry = FunctionRegistry::default();
 
     registry.register_2_arg::<BooleanType, BooleanType, BooleanType, _, _>(
-        "bool_and",
+        "and",
         FunctionProperty::default(),
         |lhs, rhs| {
             Some(BooleanDomain {
@@ -362,8 +633,46 @@ fn builtin_functions() -> FunctionRegistry {
         |lhs, rhs| lhs + rhs,
     );
 
+    registry.register_2_arg::<NumberType<i32>, NumberType<i32>, NumberType<i32>, _, _>(
+        "minus",
+        FunctionProperty::default(),
+        |lhs, rhs| {
+            Some(IntDomain {
+                min: lhs.min.checked_sub(rhs.max).unwrap_or(i32::MAX as i64),
+                max: lhs.max.checked_sub(rhs.min).unwrap_or(i32::MAX as i64),
+            })
+        },
+        |lhs, rhs| lhs - rhs,
+    );
+
+    registry.register_2_arg::<NumberType<i64>, NumberType<i64>, NumberType<i64>, _, _>(
+        "multiply",
+        FunctionProperty::default(),
+        |_, _| None,
+        |lhs, rhs| lhs * rhs,
+    );
+
+    registry.register_2_arg::<NumberType<f32>, NumberType<f32>, NumberType<f32>, _, _>(
+        "divide",
+        FunctionProperty::default(),
+        |_, _| None,
+        |lhs, rhs| lhs / rhs,
+    );
+
+    registry.register_2_arg::<NumberType<f64>, NumberType<f64>, NumberType<f64>, _, _>(
+        "avg",
+        FunctionProperty::default(),
+        |lhs, rhs| {
+            Some(FloatDomain {
+                min: (lhs.min + rhs.min) / 2.0,
+                max: (lhs.max + rhs.max) / 2.0,
+            })
+        },
+        |lhs, rhs| (lhs + rhs) / 2.0,
+    );
+
     registry.register_1_arg::<BooleanType, BooleanType, _, _>(
-        "bool_not",
+        "not",
         FunctionProperty::default(),
         |arg| {
             Some(BooleanDomain {
@@ -453,7 +762,7 @@ fn builtin_functions() -> FunctionRegistry {
                         for arg in args {
                             match arg {
                                 ValueRef::Scalar(scalar) => {
-                                    array_builder.push(scalar.as_ref());
+                                    array_builder.push(scalar.clone());
                                 }
                                 ValueRef::Column(col) => {
                                     array_builder.push(col.index(idx).unwrap());
@@ -464,17 +773,17 @@ fn builtin_functions() -> FunctionRegistry {
                     let offsets = once(0)
                         .chain((0..len).map(|row| (args.len() * (row + 1)) as u64))
                         .collect();
-                    Ok(Value::Column(Column::Array {
-                        array: Box::new(array_builder.build()),
+                    Ok(Value::Column(Column::Array(Box::new(ArrayColumn {
+                        values: array_builder.build(),
                         offsets,
-                    }))
+                    }))))
                 } else {
                     // All args are scalars, so we return a scalar as result
                     let mut array = ColumnBuilder::with_capacity(&generics[0], 0);
                     for arg in args {
                         match arg {
                             ValueRef::Scalar(scalar) => {
-                                array.push(scalar.as_ref());
+                                array.push(scalar.clone());
                             }
                             ValueRef::Column(_) => unreachable!(),
                         }
@@ -485,17 +794,18 @@ fn builtin_functions() -> FunctionRegistry {
         }))
     });
 
-    registry.register_with_writer_2_arg::<ArrayType<GenericType<0>>, NumberType<i16>, GenericType<0>,_, _>(
+    registry.register_passthrough_nullable_2_arg::<ArrayType<GenericType<0>>, NumberType<i16>, GenericType<0>,_, _>(
         "get",
         FunctionProperty::default(),
         |item_domain, _| Some(item_domain.clone()),
-        |array, idx, output| {
+        vectorize_with_writer_2_arg::<ArrayType<GenericType<0>>, NumberType<i16>, GenericType<0>>(
+            |array, idx, output| {
             let item = array
                 .index(idx as usize)
                 .ok_or_else(|| format!("index out of bounds: the len is {} but the index is {}", array.len(), idx))?;
             output.push(item);
             Ok(())
-        },
+        }),
     );
 
     registry.register_function_factory("create_tuple", |_, args_type| {
@@ -516,7 +826,7 @@ fn builtin_functions() -> FunctionRegistry {
                     let fields = args
                         .iter()
                         .map(|arg| match arg {
-                            ValueRef::Scalar(scalar) => scalar.as_ref().repeat(len).build(),
+                            ValueRef::Scalar(scalar) => scalar.clone().repeat(len).build(),
                             ValueRef::Column(col) => col.clone(),
                         })
                         .collect();
@@ -557,7 +867,7 @@ fn builtin_functions() -> FunctionRegistry {
                 args_domain[0].as_tuple().unwrap()[idx].clone()
             }),
             eval: Box::new(move |args, _| match &args[0] {
-                ValueRef::Scalar(Scalar::Tuple(fields)) => {
+                ValueRef::Scalar(ScalarRef::Tuple(fields)) => {
                     Ok(Value::Scalar(fields[idx].to_owned()))
                 }
                 ValueRef::Column(Column::Tuple { fields, .. }) => {
@@ -599,8 +909,8 @@ fn builtin_functions() -> FunctionRegistry {
                 })
             }),
             eval: Box::new(move |args, _| match &args[0] {
-                ValueRef::Scalar(Scalar::Null) => Ok(Value::Scalar(Scalar::Null)),
-                ValueRef::Scalar(Scalar::Tuple(fields)) => {
+                ValueRef::Scalar(ScalarRef::Null) => Ok(Value::Scalar(Scalar::Null)),
+                ValueRef::Scalar(ScalarRef::Tuple(fields)) => {
                     Ok(Value::Scalar(fields[idx].to_owned()))
                 }
                 ValueRef::Column(Column::Nullable {
@@ -618,44 +928,58 @@ fn builtin_functions() -> FunctionRegistry {
     registry
 }
 
-fn run_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType, Domain, Column)]) {
+fn run_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType, Column)]) {
     let result = try {
         let raw_expr = parse_raw_expr(
             text,
             &columns
                 .iter()
-                .map(|(name, ty, _, _)| (*name, ty.clone()))
+                .map(|(name, ty, _)| (*name, ty.clone()))
                 .collect::<Vec<_>>(),
         );
 
         let fn_registry = builtin_functions();
         let (expr, output_ty) = type_check::check(&raw_expr, &fn_registry)?;
 
-        let domain_calculator = DomainCalculator {
-            input_domains: columns
-                .iter()
-                .map(|(_, _, domain, _)| domain.clone())
-                .collect::<Vec<_>>(),
-        };
+        let remote_expr = RemoteExpr::from_expr(expr);
+        let expr = remote_expr.into_expr(&fn_registry).unwrap();
+
+        let input_domains = columns
+            .iter()
+            .map(|(_, _, col)| col.domain())
+            .collect::<Vec<_>>();
+
+        let domain_calculator = DomainCalculator::new(input_domains.clone());
         let output_domain = domain_calculator.calculate(&expr)?;
 
         let chunk = Chunk::new(
             columns
                 .iter()
-                .map(|(_, _, _, col)| col.clone())
+                .map(|(_, _, col)| col.clone())
                 .collect::<Vec<_>>(),
         );
+        chunk.columns().iter().for_each(|col| {
+            test_arrow_conversion(col);
+        });
+
         let evaluator = Evaluator {
             input_columns: chunk,
             context: FunctionContext::default(),
         };
         let result = evaluator.run(&expr)?;
 
-        (raw_expr, expr, output_ty, output_domain, result)
+        (
+            raw_expr,
+            expr,
+            input_domains,
+            output_ty,
+            output_domain,
+            result,
+        )
     };
 
     match result {
-        Ok((raw_expr, expr, output_ty, output_domain, result)) => {
+        Ok((raw_expr, expr, input_domains, output_ty, output_domain, result)) => {
             writeln!(file, "ast            : {text}").unwrap();
             writeln!(file, "raw expr       : {raw_expr}").unwrap();
             writeln!(file, "checked expr   : {expr}").unwrap();
@@ -667,27 +991,29 @@ fn run_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType, Domain
                     writeln!(file, "output         : {}", output_scalar.as_ref()).unwrap();
                 }
                 Value::Column(output_col) => {
+                    test_arrow_conversion(&output_col);
+
                     let mut table = Table::new();
                     table.load_preset("||--+-++|    ++++++");
 
                     let mut header = vec!["".to_string()];
-                    header.extend(columns.iter().map(|(name, _, _, _)| name.to_string()));
+                    header.extend(columns.iter().map(|(name, _, _)| name.to_string()));
                     header.push("Output".to_string());
                     table.set_header(header);
 
                     let mut type_row = vec!["Type".to_string()];
-                    type_row.extend(columns.iter().map(|(_, ty, _, _)| ty.to_string()));
+                    type_row.extend(columns.iter().map(|(_, ty, _)| ty.to_string()));
                     type_row.push(output_ty.to_string());
                     table.add_row(type_row);
 
                     let mut domain_row = vec!["Domain".to_string()];
-                    domain_row.extend(columns.iter().map(|(_, _, domain, _)| domain.to_string()));
+                    domain_row.extend(input_domains.iter().map(|domain| domain.to_string()));
                     domain_row.push(output_domain.to_string());
                     table.add_row(domain_row);
 
                     for i in 0..output_col.len() {
                         let mut row = vec![format!("Row {i}")];
-                        for (_, _, _, col) in columns.iter() {
+                        for (_, _, col) in columns.iter() {
                             let value = col.index(i).unwrap();
                             row.push(format!("{}", value));
                         }
@@ -702,7 +1028,7 @@ fn run_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType, Domain
 
                     table.set_header(&["Column", "Data"]);
 
-                    for (name, _, _, col) in columns.iter() {
+                    for (name, _, col) in columns.iter() {
                         table.add_row(&[name.to_string(), format!("{col:?}")]);
                     }
 
@@ -720,4 +1046,10 @@ fn run_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType, Domain
             writeln!(file, "error: {}\n", msg).unwrap();
         }
     }
+}
+
+fn test_arrow_conversion(col: &Column) {
+    let arrow_col = col.as_arrow();
+    let new_col = Column::from_arrow(&*arrow_col);
+    assert_eq!(col, &new_col, "arrow conversion went wrong");
 }

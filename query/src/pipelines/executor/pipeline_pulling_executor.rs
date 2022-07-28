@@ -31,6 +31,7 @@ use crate::pipelines::processors::Sink;
 use crate::pipelines::processors::Sinker;
 use crate::pipelines::Pipe;
 use crate::pipelines::Pipeline;
+use crate::pipelines::PipelineBuildResult;
 
 struct State {
     sender: SyncSender<Result<Option<DataBlock>>>,
@@ -88,6 +89,26 @@ impl PipelinePullingExecutor {
         })
     }
 
+    pub fn from_pipelines(
+        async_runtime: Arc<Runtime>,
+        query_need_abort: Arc<AtomicBool>,
+        build_res: PipelineBuildResult,
+    ) -> Result<PipelinePullingExecutor> {
+        let mut main_pipeline = build_res.main_pipeline;
+        let (sender, receiver) = std::sync::mpsc::sync_channel(main_pipeline.output_len());
+        let state = State::create(sender.clone());
+        Self::wrap_pipeline(&mut main_pipeline, sender)?;
+
+        let mut pipelines = build_res.sources_pipelines;
+        pipelines.push(main_pipeline);
+
+        Ok(PipelinePullingExecutor {
+            receiver,
+            state,
+            executor: PipelineExecutor::from_pipelines(async_runtime, query_need_abort, pipelines)?,
+        })
+    }
+
     pub fn start(&mut self) {
         let state = self.state.clone();
         let threads_executor = self.executor.clone();
@@ -103,14 +124,14 @@ impl PipelinePullingExecutor {
         move || {
             if let Err(cause) = executor.execute() {
                 if let Err(send_err) = state.sender.try_send(Err(cause)) {
-                    common_tracing::tracing::warn!("Send error {:?}", send_err);
+                    tracing::warn!("Send error {:?}", send_err);
                 }
 
                 return;
             }
 
             if let Err(send_err) = state.sender.try_send(Ok(None)) {
-                common_tracing::tracing::warn!("Send finish event error {:?}", send_err);
+                tracing::warn!("Send finish event error {:?}", send_err);
             }
         }
     }
@@ -157,7 +178,7 @@ impl PipelinePullingExecutor {
 impl Drop for PipelinePullingExecutor {
     fn drop(&mut self) {
         if let Err(cause) = self.finish() {
-            common_tracing::tracing::warn!("Executor finish is failure {:?}", cause);
+            tracing::warn!("Executor finish is failure {:?}", cause);
         }
     }
 }

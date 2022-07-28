@@ -17,6 +17,8 @@ use std::sync::Arc;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_fuse_meta::meta::SegmentInfo;
+use common_fuse_meta::meta::Statistics;
 use common_planners::Expression;
 use common_streams::SendableDataBlockStream;
 use futures::stream::try_unfold;
@@ -27,12 +29,10 @@ use opendal::Operator;
 
 use super::block_writer;
 use crate::pipelines::processors::transforms::ExpressionExecutor;
-use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::storages::fuse::io::TableMetaLocationGenerator;
-use crate::storages::fuse::meta::SegmentInfo;
-use crate::storages::fuse::meta::Statistics;
 use crate::storages::fuse::operations::column_metas;
-use crate::storages::fuse::statistics::accumulator::BlockStatistics;
+use crate::storages::fuse::statistics::BlockStatistics;
 use crate::storages::fuse::statistics::StatisticsAccumulator;
 use crate::storages::index::ClusterKeyInfo;
 
@@ -46,12 +46,12 @@ pub struct BlockStreamWriter {
     statistics_accumulator: Option<StatisticsAccumulator>,
     meta_locations: TableMetaLocationGenerator,
     cluster_key_info: Option<ClusterKeyInfo>,
-    ctx: Arc<QueryContext>,
+    ctx: Arc<dyn TableContext>,
 }
 
 impl BlockStreamWriter {
     pub async fn write_block_stream(
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn TableContext>,
         block_stream: SendableDataBlockStream,
         row_per_block: usize,
         block_per_segment: usize,
@@ -86,7 +86,7 @@ impl BlockStreamWriter {
     pub fn try_create(
         num_block_threshold: usize,
         meta_locations: TableMetaLocationGenerator,
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn TableContext>,
         cluster_key_info: Option<ClusterKeyInfo>,
     ) -> Result<Self> {
         let data_accessor = ctx.get_storage_operator()?;

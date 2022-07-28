@@ -30,7 +30,6 @@ use common_arrow::arrow_format::flight::data::Result as FlightResult;
 use common_arrow::arrow_format::flight::data::SchemaResult;
 use common_arrow::arrow_format::flight::data::Ticket;
 use common_arrow::arrow_format::flight::service::flight_service_server::FlightService;
-use common_tracing::tracing;
 use tokio_stream::Stream;
 use tonic::Request;
 use tonic::Response as RawResponse;
@@ -160,7 +159,7 @@ impl FlightService for DatabendQueryFlightService {
     }
 
     async fn do_exchange(&self, _: StreamReq<FlightData>) -> Response<Self::DoExchangeStream> {
-        Result::Err(Status::unimplemented(
+        Err(Status::unimplemented(
             "DatabendQuery does not implement do_exchange.",
         ))
     }
@@ -191,6 +190,7 @@ impl FlightService for DatabendQueryFlightService {
                 let exchange_manager = self.sessions.get_data_exchange_manager();
                 exchange_manager
                     .init_query_fragments_plan(&ctx, &init_query_fragments_plan.executor_packet)?;
+
                 FlightResult { body: vec![] }
             }
             FlightAction::InitNodesChannel(init_nodes_channel) => {
@@ -199,11 +199,13 @@ impl FlightService for DatabendQueryFlightService {
                 exchange_manager
                     .init_nodes_channel(publisher_packet)
                     .await?;
+
                 FlightResult { body: vec![] }
             }
             FlightAction::ExecutePartialQuery(query_id) => {
                 let exchange_manager = self.sessions.get_data_exchange_manager();
                 exchange_manager.execute_partial_query(query_id)?;
+
                 FlightResult { body: vec![] }
             }
         };

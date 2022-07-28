@@ -22,6 +22,7 @@ use crate::interpreters::ProcessorExecutorStream;
 use crate::pipelines::executor::PipelinePullingExecutor;
 use crate::pipelines::Pipeline;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::storages::Table;
 
 #[async_trait::async_trait]

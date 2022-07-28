@@ -15,11 +15,11 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use common_tracing::tracing;
 use metrics::histogram;
 use opensrv_clickhouse::connection::Connection;
 use opensrv_clickhouse::CHContext;
 use opensrv_clickhouse::ClickHouseSession;
+use tracing::error;
 
 use crate::auth::Credential;
 use crate::servers::clickhouse::interactive_worker_base::InteractiveWorkerBase;
@@ -50,12 +50,10 @@ impl ClickHouseSession for InteractiveWorker {
 
         let session = self.session.clone();
         let get_query_result = InteractiveWorkerBase::do_query(ctx, session);
-        let query_ctx = self
+        let format = self
             .session
-            .get_shared_query_context()
-            .await
+            .get_format_settings()
             .map_err(to_clickhouse_err)?;
-        let format = query_ctx.get_format_settings().map_err(to_clickhouse_err)?;
         if let Err(cause) = query_writer.write(get_query_result.await, &format).await {
             let new_error = cause.add_message(&ctx.state.query);
             return Err(to_clickhouse_err(new_error));
@@ -124,28 +122,24 @@ impl ClickHouseSession for InteractiveWorker {
                 match user_info_auth {
                     Ok(_) => true,
                     Err(failure) => {
-                        tracing::error!(
+                        error!(
                             "ClickHouse handler authenticate failed, \
                              user: {}, \
                              client_address: {}, \
                              cause: {:?}",
-                            user,
-                            client_addr,
-                            failure
+                            user, client_addr, failure
                         );
                         false
                     }
                 }
             }
             Err(e) => {
-                tracing::error!(
+                error!(
                     "ClickHouse handler authenticate failed, \
                      user: {}, \
                      client_address: {}, \
                      cause: {:?}",
-                    user,
-                    client_addr,
-                    e
+                    user, client_addr, e
                 );
                 false
             }

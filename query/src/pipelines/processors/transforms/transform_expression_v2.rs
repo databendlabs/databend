@@ -19,13 +19,13 @@ use common_datavalues::DataField;
 use common_exception::Result;
 use common_functions::scalars::FunctionContext;
 
-use crate::common::EvalNode;
+use crate::evaluator::EvalNode;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::transforms::transform::Transform;
 use crate::pipelines::processors::transforms::transform::Transformer;
-use crate::sql::exec::ColumnID;
+use crate::sql::executor::ColumnID;
 
 pub struct ExpressionTransformV2 {
     expressions: Vec<(EvalNode<ColumnID>, String)>,

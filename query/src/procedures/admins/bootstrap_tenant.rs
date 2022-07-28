@@ -21,11 +21,12 @@ use common_meta_types::GrantObject;
 use common_meta_types::RoleInfo;
 use common_meta_types::UserOptionFlag;
 use common_meta_types::UserPrivilegeSet;
-use common_tracing::tracing;
+use tracing::info;
 
 use crate::procedures::Procedure;
 use crate::procedures::ProcedureFeatures;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 
 pub struct BootstrapTenantProcedure {}
 
@@ -54,7 +55,7 @@ impl Procedure for BootstrapTenantProcedure {
         let tenant = args[0].clone();
         let user_mgr = ctx.get_user_manager();
 
-        tracing::info!("BootstrapTenantWithAccountAdminRole: tenant={}", tenant);
+        info!("BootstrapTenantWithAccountAdminRole: tenant={}", tenant);
 
         // Create account admin role.
         let mut account_admin_role = RoleInfo::new("account_admin");
