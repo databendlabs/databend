@@ -118,7 +118,10 @@ impl AuthMgr {
         let tenant = session.get_current_tenant();
 
         // take `sub` field in the claims as user name
-        let user_name = claims.sub.clone().unwrap();
+        let user_name = claims
+            .sub
+            .clone()
+            .ok_or_else(|| ErrorCode::AuthenticateFailure("sub not found in claims"))?;
 
         // set user auth_role if claims contain extra.role
         if let Some(ref auth_role) = claims.extra.role {
