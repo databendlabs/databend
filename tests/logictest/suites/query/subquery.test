@@ -584,7 +584,7 @@ ORDER BY c.c_id, o.o_id
 6  90    WA
 
 onlyif mysql
-statement query IT
+statement query II
 SELECT
     c_id,
     (SELECT count(*) FROM o WHERE o.c_id=c.c_id)
@@ -605,6 +605,22 @@ SELECT max((SELECT count(*) FROM o WHERE o.c_id=c.c_id)) FROM c;
 
 ----
 3
+
+onlyif mysql
+statement query IT
+SELECT
+    c.c_id,
+    (SELECT ship FROM o WHERE o.c_id=c.c_id ORDER BY ship LIMIT 1) IS NOT NULL
+FROM c
+ORDER BY c.c_id
+
+----
+1  1
+2  0
+3  0
+4  0
+5  0
+6  0
 
 onlyif mysql
 statement ok
