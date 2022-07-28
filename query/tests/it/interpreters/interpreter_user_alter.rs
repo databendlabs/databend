@@ -96,22 +96,5 @@ async fn test_alter_user_interpreter() -> Result<()> {
         assert!(!user_info.has_option_flag(UserOptionFlag::TenantSetting));
     }
 
-    // alter user with default_role
-    {
-        let test_query = format!(
-            "ALTER USER '{}'@'{}' WITH DEFAULT_ROLE = 'role1'",
-            name, hostname
-        );
-        let plan = PlanParser::parse(ctx.clone(), &test_query).await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        assert_eq!(executor.name(), "AlterUserInterpreter");
-        executor.execute(None).await?;
-        let user_info = user_mgr.get_user(tenant, user_info.identity()).await?;
-        assert_eq!(
-            user_info.option.default_role().clone(),
-            Some("role1".to_string())
-        );
-    }
-
     Ok(())
 }
