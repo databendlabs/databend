@@ -34,6 +34,7 @@ use common_datavalues::DataSchemaRef;
 use common_datavalues::DataTypeImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_io::prelude::FileSplit;
 use common_io::prelude::FormatSettings;
 use similar_asserts::Diff;
 
@@ -114,11 +115,20 @@ impl InputFormat for ParquetInputFormat {
     fn deserialize_data(&self, state: &mut Box<dyn InputState>) -> Result<Vec<DataBlock>> {
         let mut state = std::mem::replace(state, self.create_state());
         let state = state.as_any().downcast_mut::<ParquetInputState>().unwrap();
-
-        if state.memory.is_empty() {
+        let memory = std::mem::take(&mut state.memory);
+        if memory.is_empty() {
             return Ok(vec![]);
         }
-        let mut cursor = Cursor::new(&state.memory);
+        self.deserialize_complete_split(FileSplit {
+            path: None,
+            start_offset: 0,
+            start_row: 0,
+            buf: memory,
+        })
+    }
+
+    fn deserialize_complete_split(&self, split: FileSplit) -> Result<Vec<DataBlock>> {
+        let mut cursor = Cursor::new(&split.buf);
         let parquet_metadata = Self::read_meta_data(&mut cursor)?;
         let infer_schema = read::infer_schema(&parquet_metadata)?;
         let actually_schema = DataSchema::from(&infer_schema);
@@ -170,15 +180,10 @@ impl InputFormat for ParquetInputFormat {
         Ok(data_blocks)
     }
 
-    fn read_buf(&self, buf: &[u8], state: &mut Box<dyn InputState>) -> Result<usize> {
+    fn read_buf(&self, buf: &[u8], state: &mut Box<dyn InputState>) -> Result<(usize, bool)> {
         let state = state.as_any().downcast_mut::<ParquetInputState>().unwrap();
         state.memory.extend_from_slice(buf);
-        Ok(buf.len())
-    }
-
-    fn set_buf(&self, buf: Vec<u8>, state: &mut Box<dyn InputState>) {
-        let state = state.as_any().downcast_mut::<ParquetInputState>().unwrap();
-        state.memory = buf;
+        Ok((buf.len(), false))
     }
 
     fn take_buf(&self, state: &mut Box<dyn InputState>) -> Vec<u8> {
