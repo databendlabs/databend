@@ -118,7 +118,10 @@ impl ClickHouseSession for InteractiveWorker {
         let ctx = self.session.create_query_context().await;
         match ctx {
             Ok(c) => {
-                let user_info_auth = c.get_auth_manager().auth(&c, &credential).await;
+                let user_info_auth = c
+                    .get_auth_manager()
+                    .auth(c.get_current_session(), &credential)
+                    .await;
                 match user_info_auth {
                     Ok(_) => true,
                     Err(failure) => {
