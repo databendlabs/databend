@@ -1,9 +1,41 @@
 statement ok
 set enable_planner_v2 = 1;
 
+statement ok
+create table order_test(a int null);
+
+statement ok
+insert into order_test values(1),(2),(null);
+
+statement query I
+select * from order_test order by a;
+
+----
+1
+2
+NULL
+
+statement query I
+select * from order_test order by a desc;
+
+----
+2
+1
+NULL
+
+statement query I
+select * from order_test order by a nulls first;
+
+----
+NULL
+1
+2
+
 statement error
 select number from numbers(10) as a order by b.number;
 
 statement error
 select number from (select * from numbers(10) as b) as a order by b.number;
 
+statement ok
+drop table order_test;

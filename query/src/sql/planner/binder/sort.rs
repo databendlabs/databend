@@ -232,8 +232,8 @@ impl<'a> Binder {
             }
             let order_by_item = SortItem {
                 index: order.index,
-                asc: order.expr.asc,
-                nulls_first: order.expr.nulls_first,
+                asc: order.expr.asc.unwrap_or(true),
+                nulls_first: order.expr.nulls_first.unwrap_or(false),
             };
             order_by_items.push(order_by_item);
         }
@@ -269,8 +269,8 @@ impl<'a> Binder {
                         Scalar::BoundColumnRef(BoundColumnRef { column }) => {
                             let order_by_item = SortItem {
                                 index: column.index,
-                                asc: order.asc,
-                                nulls_first: order.nulls_first,
+                                asc: order.asc.unwrap_or(true),
+                                nulls_first: order.nulls_first.unwrap_or(false),
                             };
                             order_by_items.push(order_by_item);
                         }
