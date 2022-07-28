@@ -100,6 +100,7 @@ fn test_statement() {
         r#"CREATE TABLE t(c1 int null, c2 bigint null, c3 varchar null);"#,
         r#"CREATE TABLE t(c1 int not null, c2 bigint not null, c3 varchar not null);"#,
         r#"CREATE TABLE t(c1 int default 1);"#,
+        r#"ALTER USER u1 IDENTIFIED BY '123456';"#,
         r#"DROP database if exists db1;"#,
         r#"select distinct a, count(*) from t where a = 1 and b - 1 < a group by a having a = 1;"#,
         r#"select * from t4;"#,
