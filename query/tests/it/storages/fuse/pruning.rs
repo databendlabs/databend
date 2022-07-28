@@ -51,7 +51,7 @@ async fn apply_block_pruning(
 ) -> Result<Vec<BlockMeta>> {
     let ctx: Arc<dyn TableContext> = ctx;
     BlockPruner::new(table_snapshot)
-        .apply(&ctx, schema, push_down)
+        .prune(&ctx, schema, push_down)
         .await
         .map(|v| v.into_iter().map(|(_, v)| v).collect())
 }

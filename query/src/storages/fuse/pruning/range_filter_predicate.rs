@@ -25,7 +25,7 @@ use crate::storages::index::RangeFilter;
 pub type RangeFilterPredicate =
     Box<dyn Fn(&StatisticsOfColumns) -> Result<bool> + Send + Sync + Unpin>;
 
-pub fn new(
+pub fn new_range_filter_predicate(
     ctx: &Arc<dyn TableContext>,
     filter_expr: Option<&Expression>,
     schema: &DataSchemaRef,

@@ -53,7 +53,7 @@ impl FuseTable {
                 let column_leaves = build_column_leaves(&parquet_schema_descriptor);
 
                 let block_metas = BlockPruner::new(snapshot.clone())
-                    .apply(&ctx, schema, &push_downs)
+                    .prune(&ctx, schema, &push_downs)
                     .await?
                     .into_iter()
                     .map(|(_, v)| v)

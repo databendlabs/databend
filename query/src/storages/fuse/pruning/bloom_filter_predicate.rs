@@ -12,13 +12,16 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
-use common_planners::find_column_exprs;
+use common_exception::Result;
 use common_planners::Expression;
+use common_planners::ExpressionVisitor;
+use common_planners::Recursion;
 use common_tracing::tracing;
 use opendal::Operator;
 
@@ -28,11 +31,22 @@ use crate::storages::index::BloomFilterIndexer;
 
 #[async_trait::async_trait]
 pub trait BoolFilterPredicate {
-    async fn eval(&self, block_bloom_filter_path: &str) -> common_exception::Result<bool>;
+    async fn eval(&self, bloom_filter_block_path: &str) -> Result<bool>;
+}
+
+pub(crate) struct NonPruner;
+
+#[async_trait::async_trait]
+impl BoolFilterPredicate for NonPruner {
+    async fn eval(&self, _loc: &str) -> common_exception::Result<bool> {
+        Ok(true)
+    }
 }
 
 pub struct BlockBloomFilterPredicate<'a> {
+    // columns that should be loaded from bloom filter block
     cols: Vec<String>,
+    // the expression that would be evaluate
     expr: &'a Expression,
     dal: &'a Operator,
     schema: &'a DataSchemaRef,
@@ -72,15 +86,7 @@ impl BoolFilterPredicate for BlockBloomFilterPredicate<'_> {
     }
 }
 
-pub(crate) struct NonPruner;
-
-#[async_trait::async_trait]
-impl BoolFilterPredicate for NonPruner {
-    async fn eval(&self, _loc: &str) -> common_exception::Result<bool> {
-        Ok(true)
-    }
-}
-
+#[tracing::instrument(level = "debug", skip_all)]
 pub async fn filter_block_by_bloom_index(
     ctx: &Arc<dyn TableContext>,
     dal: Operator,
@@ -100,9 +106,9 @@ pub async fn filter_block_by_bloom_index(
 #[tracing::instrument(level = "debug", skip(dal))]
 async fn load_bloom_filter_by_columns(
     dal: Operator,
-    projection: &[String],
-    location: &str,
-) -> common_exception::Result<DataBlock> {
+    columns: &[String],
+    path: &str,
+) -> Result<DataBlock> {
     use common_arrow::arrow::io::parquet::read::read_columns_many_async;
     use common_arrow::arrow::io::parquet::read::read_metadata_async;
     use common_arrow::arrow::io::parquet::read::RowGroupDeserializer;
@@ -110,13 +116,12 @@ async fn load_bloom_filter_by_columns(
     use common_datavalues::DataSchema;
     use common_datavalues::ToDataType;
     use common_datavalues::Vu8;
-    let object = dal.object(location);
+    let object = dal.object(path);
     let mut reader = object.seekable_reader(0..);
     let file_meta = read_metadata_async(&mut reader).await?;
     let row_groups = file_meta.row_groups;
 
-    // TODO filter out columns that not in the bloom block
-    let fields = projection
+    let fields = columns
         .iter()
         .map(|name| DataField::new(name, Vu8::to_data_type()))
         .collect::<Vec<_>>();
@@ -135,33 +140,67 @@ async fn load_bloom_filter_by_columns(
         let chunk = next_item?;
         DataBlock::from_chunk(&schema, &chunk)
     } else {
+        tracing::warn!("found empty filter block. path {}", path);
         Ok(DataBlock::empty_with_schema(schema))
     }
 }
 
-pub fn column_names_of_expression(filter_expr: &Expression) -> Vec<String> {
-    find_column_exprs(&[filter_expr.clone()])
-        .iter()
-        .map(|e| BloomFilterIndexer::to_bloom_column_name(&e.column_name()))
-        .collect::<Vec<_>>()
+pub fn columns_names_of_eq_expressions(filter_expr: &Expression) -> Result<Vec<String>> {
+    struct EqVisitor {
+        columns: HashSet<String>,
+    }
+    impl ExpressionVisitor for EqVisitor {
+        fn pre_visit(mut self, expr: &Expression) -> Result<Recursion<Self>> {
+            match expr {
+                Expression::BinaryExpression { left, op, right } if op.as_str() == "=" => {
+                    match (left.as_ref(), right.as_ref()) {
+                        (Expression::Column(column), Expression::Literal { .. })
+                        | (Expression::Literal { .. }, Expression::Column(column)) => {
+                            self.columns.insert(column.clone());
+                            Ok(Recursion::Stop(self))
+                        }
+                        _ => Ok(Recursion::Continue(self)),
+                    }
+                }
+                _ => Ok(Recursion::Continue(self)),
+            }
+        }
+    }
+
+    let visitor = EqVisitor {
+        columns: HashSet::new(),
+    };
+
+    filter_expr
+        .accept(visitor)
+        .map(|r| r.columns.into_iter().collect())
 }
 
-pub fn new<'a>(
+pub fn new_bloom_filter_predicate<'a>(
     ctx: &'a Arc<dyn TableContext>,
     filter_expr: Option<&'a Expression>,
     schema: &'a DataSchemaRef,
     dal: &'a Operator,
-) -> Box<dyn BoolFilterPredicate + Send + Sync + 'a> {
+) -> Result<Box<dyn BoolFilterPredicate + Send + Sync + 'a>> {
     if let Some(expr) = filter_expr {
-        let filter_block_cols = column_names_of_expression(expr);
-        Box::new(BlockBloomFilterPredicate::new(
-            filter_block_cols,
-            expr,
-            &dal,
-            &schema,
-            ctx,
-        ))
-    } else {
-        Box::new(NonPruner)
+        // check if there were point queries
+        let point_query_cols = columns_names_of_eq_expressions(expr)?;
+        if !point_query_cols.is_empty() {
+            // convert bloom filter column names
+            let filter_block_cols = point_query_cols
+                .into_iter()
+                .map(|n| BloomFilterIndexer::to_bloom_column_name(&n))
+                .collect();
+            return Ok(Box::new(BlockBloomFilterPredicate::new(
+                filter_block_cols,
+                expr,
+                &dal,
+                &schema,
+                ctx,
+            )));
+        } else {
+            tracing::debug!("no point filters found, using NonPruner");
+        }
     }
+    Ok(Box::new(NonPruner))
 }

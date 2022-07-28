@@ -201,6 +201,15 @@ impl Settings {
                 level: ScopeLevel::Session,
                 desc: "The timeout in seconds for waiting for processing of async insert, default value: 100",
             },
+            SettingValue {
+                default_value: DataValue::UInt64(0),
+                user_setting: UserSetting::create(
+                    "enable_bloom_filter_index",
+                    DataValue::UInt64(0),
+                ),
+                level: ScopeLevel::Session,
+                desc: "Enable bloom filter index (if applicable for the underlying table engine) by setting this variable to 1, default value: 0",
+            },
         ];
 
         let settings = Arc::new(RwLock::new(HashMap::default()));
@@ -341,6 +350,16 @@ impl Settings {
 
     pub fn set_enable_async_insert(&self, val: u64) -> Result<()> {
         let key = "enable_async_insert";
+        self.try_set_u64(key, val, false)
+    }
+
+    pub fn get_enable_bloom_filter_index(&self) -> Result<u64> {
+        let key = "enable_bloom_filter_index";
+        self.try_get_u64(key)
+    }
+
+    pub fn set_enable_bloom_filter_index(&self, val: u64) -> Result<()> {
+        let key = "enable_bloom_filter_index";
         self.try_set_u64(key, val, false)
     }
 

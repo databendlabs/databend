@@ -29,6 +29,7 @@ use futures::TryStreamExt;
 use super::bloom_filter_predicate;
 use crate::sessions::TableContext;
 use crate::storages::fuse::io::MetaReaders;
+use crate::storages::fuse::pruning::bloom_filter_predicate::NonPruner;
 use crate::storages::fuse::pruning::limiter;
 use crate::storages::fuse::pruning::range_filter_predicate;
 
@@ -44,7 +45,7 @@ impl BlockPruner {
     }
 
     #[tracing::instrument(level = "debug", name="block_pruner_apply", skip(self, schema, ctx), fields(ctx.id = ctx.get_id().as_str()))]
-    pub async fn apply(
+    pub async fn prune(
         &self,
         ctx: &Arc<dyn TableContext>,
         schema: DataSchemaRef,
@@ -62,22 +63,34 @@ impl BlockPruner {
             .filter(|p| p.order_by.is_empty())
             .and_then(|p| p.limit);
 
-        let filter_expr = push_down.as_ref().and_then(|extra| extra.filters.get(0));
+        let filter_expression = push_down.as_ref().and_then(|extra| extra.filters.get(0));
 
         // shortcut, just returns all the blocks
-        if limit.is_none() && filter_expr.is_none() {
+        if limit.is_none() && filter_expression.is_none() {
             return Self::all_the_blocks(segment_locs, ctx.as_ref()).await;
         }
 
-        // prepare the limiter
+        // prepare the limiter. in case that limit is none, an unlimited limiter will be constructed
         let limiter = limiter::new_limiter(limit);
 
-        // prepare the min/max pruner
-        let range_filter_pruner = range_filter_predicate::new(ctx, filter_expr, &schema)?;
+        // prepare the range filter.
+        // if filter_expression is none, an dummy pruner will be constructed, which prunes nothing
+        let range_filter_pruner =
+            range_filter_predicate::new_range_filter_predicate(ctx, filter_expression, &schema)?;
 
+        // prepare the bloom filter
         let dal = ctx.get_storage_operator()?;
-
-        let bloom_filter_pruner = bloom_filter_predicate::new(ctx, filter_expr, &schema, &dal);
+        let enable_bloom_index = ctx.get_settings().get_enable_bloom_filter_index()?;
+        let bloom_filter_pruner = if enable_bloom_index != 0 {
+            bloom_filter_predicate::new_bloom_filter_predicate(
+                ctx,
+                filter_expression,
+                &schema,
+                &dal,
+            )?
+        } else {
+            Box::new(NonPruner)
+        };
 
         let segment_num = segment_locs.len();
 
