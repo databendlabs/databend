@@ -24,9 +24,7 @@ use sqlparser::keywords::Keyword;
 use sqlparser::parser::ParserError;
 use sqlparser::tokenizer::Token;
 
-use crate::parser_err;
 use crate::sql::statements::DfAlterUser;
-use crate::sql::statements::DfAuthOption;
 use crate::sql::statements::DfCreateRole;
 use crate::sql::statements::DfCreateUser;
 use crate::sql::statements::DfDropRole;
@@ -37,7 +35,6 @@ use crate::sql::statements::DfGrantRoleStatement;
 use crate::sql::statements::DfRevokePrivilegeStatement;
 use crate::sql::statements::DfRevokeRoleStatement;
 use crate::sql::statements::DfShowGrants;
-use crate::sql::statements::DfUserWithOption;
 use crate::sql::DfParser;
 use crate::sql::DfStatement;
 
@@ -240,60 +237,6 @@ impl<'a> DfParser<'a> {
         self.parser
             .parse_identifier()
             .or_else(|_| self.expected("identifier or *", token))
-    }
-
-    fn parse_user_options(&mut self) -> Result<Vec<DfUserWithOption>, ParserError> {
-        let mut user_options = vec![];
-        if !self.parser.parse_keyword(Keyword::WITH) {
-            return Ok(user_options);
-        }
-        loop {
-            match self.parser.peek_token().to_string().as_str().try_into() {
-                Ok(option) => user_options.push(option),
-                Err(_) => {
-                    return self.expected("user option", self.parser.peek_token());
-                }
-            }
-            self.parser.next_token();
-            if !self.parser.consume_token(&Token::Comma) {
-                break;
-            }
-        }
-        Ok(user_options)
-    }
-
-    fn parse_auth_option(&mut self) -> Result<DfAuthOption, ParserError> {
-        let exist_not = self.parser.parse_keyword(Keyword::NOT);
-        let exist_identified = self.consume_token("IDENTIFIED");
-
-        if exist_not {
-            if !exist_identified {
-                parser_err!("expect IDENTIFIED after NOT")
-            } else {
-                Ok(DfAuthOption::no_password())
-            }
-        } else if !exist_identified {
-            Ok(DfAuthOption::default())
-        } else {
-            let arg_with = if self.consume_token("WITH") {
-                Some(self.parser.parse_literal_string()?)
-            } else {
-                None
-            };
-            if arg_with == Some("no_password".to_string()) {
-                Ok(DfAuthOption::no_password())
-            } else {
-                let auth_string = if self.parser.parse_keyword(Keyword::BY) {
-                    Some(self.parser.parse_literal_string()?)
-                } else {
-                    None
-                };
-                Ok(DfAuthOption {
-                    auth_type: arg_with,
-                    by_value: auth_string,
-                })
-            }
-        }
     }
 
     fn parse_privileges(&mut self) -> Result<UserPrivilegeSet, ParserError> {
