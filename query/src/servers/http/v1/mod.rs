@@ -34,7 +34,6 @@ pub use query::ExecuteStateKind;
 pub use query::HttpQueryContext;
 pub use query::HttpQueryHandle;
 pub use query::HttpQueryManager;
-pub use query::HttpSession;
 pub use query::HttpSessionConf;
 pub use stage::upload_to_stage;
 pub use stage::UploadToStageResponse;
