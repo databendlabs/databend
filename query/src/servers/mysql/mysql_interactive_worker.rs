@@ -24,6 +24,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
 use common_io::prelude::*;
+use common_planners::PlanNode;
 use common_tracing::tracing;
 use common_tracing::tracing::Instrument;
 use common_users::CertifiedInfo;
@@ -49,32 +50,35 @@ use crate::servers::utils::use_planner_v2;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionRef;
 use crate::sessions::TableContext;
+use crate::sql::plans::Plan;
 use crate::sql::DfParser;
 use crate::sql::DfStatement;
 use crate::sql::PlanParser;
 use crate::sql::Planner;
 
-fn is_result_set(stmt: &DfStatement) -> bool {
+fn is_result_set_by_plan(plan: &Plan) -> bool {
     matches!(
-        stmt,
-        DfStatement::Query(_)
-            | DfStatement::Explain(_)
-            | DfStatement::ShowDatabases(_)
-            | DfStatement::ShowCreateDatabase(_)
-            | DfStatement::ShowTables(_)
-            | DfStatement::ShowCreateTable(_)
-            | DfStatement::ShowTablesStatus(_)
-            | DfStatement::DescribeTable(_)
-            | DfStatement::ShowSettings(_)
-            | DfStatement::ShowProcessList(_)
-            | DfStatement::ShowMetrics(_)
-            | DfStatement::ShowFunctions(_)
-            | DfStatement::ShowUsers(_)
-            | DfStatement::ShowRoles(_)
-            | DfStatement::DescribeStage(_)
-            | DfStatement::ShowStages(_)
-            | DfStatement::ShowGrants(_)
-            | DfStatement::ShowEngines(_)
+        plan,
+        Plan::Query { .. }
+            | Plan::Explain { .. }
+            | Plan::ShowCreateDatabase(_)
+            | Plan::ShowCreateTable(_)
+            | Plan::DescribeTable(_)
+            | Plan::ShowGrants(_)
+            | Plan::DescribeStage(_)
+    )
+}
+
+fn is_result_set_by_plan_node(plan: &PlanNode) -> bool {
+    matches!(
+        plan,
+        PlanNode::Explain(_)
+            | PlanNode::Select(_)
+            | PlanNode::Show(_)
+            | PlanNode::ShowCreateDatabase(_)
+            | PlanNode::DescribeTable(_)
+            | PlanNode::ShowCreateTable(_)
+            | PlanNode::DescribeUserStage(_)
     )
 }
 
@@ -322,28 +326,28 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
 
                 let stmts_hints =
                     DfParser::parse_sql(query, context.get_current_session().get_type());
-                let is_result_set = is_result_set(stmts_hints.clone()?.0.get(0).unwrap());
                 let mut hints = vec![];
+                let is_result_set: bool;
                 let interpreter: Result<Arc<dyn Interpreter>>;
                 if let Ok((stmts, h)) = stmts_hints {
                     hints = h;
                     interpreter = if use_planner_v2(&settings, &stmts)? {
                         let mut planner = Planner::new(context.clone());
-                        planner
-                            .plan_sql(query)
-                            .await
-                            .and_then(|v| InterpreterFactoryV2::get(context.clone(), &v.0))
+                        let (plan, _, _) = planner.plan_sql(query).await?;
+                        is_result_set = is_result_set_by_plan(&plan);
+                        InterpreterFactoryV2::get(context.clone(), &plan)
                     } else {
                         let (plan, _) = PlanParser::parse_with_hint(query, context.clone()).await;
-                        plan.and_then(|v| InterpreterFactory::get(context.clone(), v))
+                        let plan = plan?;
+                        is_result_set = is_result_set_by_plan_node(&plan);
+                        InterpreterFactory::get(context.clone(), plan)
                     };
                 } else if settings.get_enable_planner_v2()? != 0 {
                     // If old parser failed, try new planner
                     let mut planner = Planner::new(context.clone());
-                    interpreter = planner
-                        .plan_sql(query)
-                        .await
-                        .and_then(|v| InterpreterFactoryV2::get(context.clone(), &v.0));
+                    let (plan, _, _) = planner.plan_sql(query).await?;
+                    is_result_set = is_result_set_by_plan(&plan);
+                    interpreter = InterpreterFactoryV2::get(context.clone(), &plan);
                 } else {
                     return Err(stmts_hints
                         .err()
