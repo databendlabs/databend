@@ -13,8 +13,17 @@ CREATE TABLE t(tiny TINYINT, tiny_unsigned TINYINT UNSIGNED);
 statement ok
 INSERT INTO t VALUES (-1, -1);
 
-statement ok
+statement query II
 SELECT * FROM t;
+
+----
+-1 255
+
+statement query I
+SELECT sum(tiny) FROM t GROUP BY tiny;
+
+----
+-1
 
 statement ok
 TRUNCATE TABLE t;
@@ -22,11 +31,23 @@ TRUNCATE TABLE t;
 statement ok
 INSERT INTO t VALUES (-129, -1);
 
+statement query II
+SELECT * FROM t;
+
+----
+127 255
+
 statement ok
 TRUNCATE TABLE t;
 
 statement ok
 INSERT INTO t VALUES (128, 256);
+
+statement query II
+SELECT * FROM t;
+
+----
+-128 0
 
 statement ok
 DROP DATABASE data_type;
