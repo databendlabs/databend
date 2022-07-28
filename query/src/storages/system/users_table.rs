@@ -52,12 +52,22 @@ impl AsyncSystemTable for UsersTable {
             .iter()
             .map(|x| x.auth_info.get_auth_string())
             .collect();
+        let default_roles: Vec<String> = users
+            .iter()
+            .map(|x| {
+                x.option
+                    .default_role()
+                    .clone()
+                    .unwrap_or_else(|| "".to_string())
+            })
+            .collect();
 
         Ok(DataBlock::create(self.table_info.schema(), vec![
             Series::from_data(names),
             Series::from_data(hostnames),
             Series::from_data(auth_types),
             Series::from_data(auth_strings),
+            Series::from_data(default_roles),
         ]))
     }
 }
@@ -69,6 +79,7 @@ impl UsersTable {
             DataField::new("hostname", Vu8::to_data_type()),
             DataField::new("auth_type", Vu8::to_data_type()),
             DataField::new("auth_string", Vu8::to_data_type()),
+            DataField::new("default_role", Vu8::to_data_type()),
         ]);
 
         let table_info = TableInfo {

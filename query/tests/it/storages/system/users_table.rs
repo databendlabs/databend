@@ -58,7 +58,7 @@ async fn test_users_table() -> Result<()> {
                 hostname: "%".to_string(),
                 grants: UserGrantSet::empty(),
                 quota: UserQuota::no_limit(),
-                option: UserOption::default(),
+                option: UserOption::default().with_default_role(Some("role1".to_string())),
             },
             false,
         )
@@ -70,15 +70,15 @@ async fn test_users_table() -> Result<()> {
     let stream = table.read(ctx, &source_plan).await?;
     let result = stream.try_collect::<Vec<_>>().await?;
     let block = &result[0];
-    assert_eq!(block.num_columns(), 4);
+    assert_eq!(block.num_columns(), 5);
 
     let expected = vec![
-        "+-------+-----------+-----------------+------------------------------------------------------------------+",
-        "| name  | hostname  | auth_type       | auth_string                                                      |",
-        "+-------+-----------+-----------------+------------------------------------------------------------------+",
-        "| test  | localhost | no_password     |                                                                  |",
-        "| test1 | %         | sha256_password | 15e2b0d3c33891ebb0f1ef609ec419420c20e320ce94c65fbc8c3312448eb225 |",
-        "+-------+-----------+-----------------+------------------------------------------------------------------+",
+        "+-------+-----------+-----------------+------------------------------------------------------------------+--------------+",
+        "| name  | hostname  | auth_type       | auth_string                                                      | default_role |",
+        "+-------+-----------+-----------------+------------------------------------------------------------------+--------------+",
+        "| test  | localhost | no_password     |                                                                  |              |",
+        "| test1 | %         | sha256_password | 15e2b0d3c33891ebb0f1ef609ec419420c20e320ce94c65fbc8c3312448eb225 | role1        |",
+        "+-------+-----------+-----------------+------------------------------------------------------------------+--------------+",
     ];
     common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
     Ok(())
