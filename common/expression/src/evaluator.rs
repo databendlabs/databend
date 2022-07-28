@@ -32,6 +32,7 @@ use crate::property::StringDomain;
 use crate::property::UIntDomain;
 use crate::types::any::AnyType;
 use crate::types::array::ArrayColumn;
+use crate::types::nullable::NullableColumn;
 use crate::types::DataType;
 use crate::util::constant_bitmap;
 use crate::values::Column;
@@ -225,19 +226,19 @@ impl Evaluator {
                 }
                 Ok(builder.build())
             }
-            (Column::Nullable { column, validity }, DataType::Nullable(dest_ty)) => {
-                let column = self.run_cast_column(span, *column, dest_ty)?;
-                Ok(Column::Nullable {
-                    column: Box::new(column),
-                    validity,
-                })
+            (Column::Nullable(box col), DataType::Nullable(dest_ty)) => {
+                let column = self.run_cast_column(span, col.column, dest_ty)?;
+                Ok(Column::Nullable(Box::new(NullableColumn {
+                    column,
+                    validity: col.validity,
+                })))
             }
             (col, DataType::Nullable(dest_ty)) => {
                 let column = self.run_cast_column(span, col, dest_ty)?;
-                Ok(Column::Nullable {
+                Ok(Column::Nullable(Box::new(NullableColumn {
                     validity: constant_bitmap(true, column.len()).into(),
-                    column: Box::new(column),
-                })
+                    column,
+                })))
             }
             (Column::Array(col), DataType::Array(dest_ty)) => {
                 let values = self.run_cast_column(span, col.values, dest_ty)?;
@@ -332,15 +333,15 @@ impl Evaluator {
                 }
                 builder.build()
             }
-            (Column::Nullable { column, validity }, _) => {
-                let (new_col, new_validity) = self
-                    .run_try_cast_column(span, *column, dest_type)
+            (Column::Nullable(box col), _) => {
+                let new_col = *self
+                    .run_try_cast_column(span, col.column, dest_type)
                     .into_nullable()
                     .unwrap();
-                Column::Nullable {
-                    column: new_col,
-                    validity: bitmap::or(&validity, &new_validity),
-                }
+                Column::Nullable(Box::new(NullableColumn {
+                    column: new_col.column,
+                    validity: bitmap::or(&col.validity, &new_col.validity),
+                }))
             }
             (Column::Array(col), DataType::Array(dest_ty)) => {
                 let new_values = self.run_try_cast_column(span, col.values, dest_ty);
@@ -348,10 +349,10 @@ impl Evaluator {
                     values: new_values,
                     offsets: col.offsets,
                 }));
-                Column::Nullable {
+                Column::Nullable(Box::new(NullableColumn {
                     validity: constant_bitmap(true, new_col.len()).into(),
-                    column: Box::new(new_col),
-                }
+                    column: new_col,
+                }))
             }
             (Column::Tuple { fields, len }, DataType::Tuple(fields_ty)) => {
                 let new_fields = fields
@@ -365,19 +366,21 @@ impl Evaluator {
                     fields: new_fields,
                     len,
                 };
-                Column::Nullable {
+                Column::Nullable(Box::new(NullableColumn {
                     validity: constant_bitmap(true, len).into(),
-                    column: Box::new(new_col),
-                }
+                    column: new_col,
+                }))
             }
 
             // identical types
-            (col @ Column::Boolean(_), DataType::Boolean)
-            | (col @ Column::String { .. }, DataType::String)
-            | (col @ Column::EmptyArray { .. }, DataType::EmptyArray) => Column::Nullable {
-                validity: constant_bitmap(true, col.len()).into(),
-                column: Box::new(col),
-            },
+            (column @ Column::Boolean(_), DataType::Boolean)
+            | (column @ Column::String { .. }, DataType::String)
+            | (column @ Column::EmptyArray { .. }, DataType::EmptyArray) => {
+                Column::Nullable(Box::new(NullableColumn {
+                    validity: constant_bitmap(true, column.len()).into(),
+                    column,
+                }))
+            }
 
             (col, dest_ty) => {
                 // number types
@@ -389,10 +392,10 @@ impl Evaluator {
                                 let dest_info = DataType::DEST_TYPE.number_type_info().unwrap();
                                 if src_info.can_lossless_cast_to(dest_info) {
                                     let new_col = col.iter().map(|x| *x as _).collect::<Vec<_>>();
-                                    return Column::Nullable {
+                                    return Column::Nullable(Box::new(NullableColumn {
                                         validity: constant_bitmap(true, new_col.len()).into(),
-                                        column: Box::new(Column::DEST_TYPE(new_col.into())),
-                                    };
+                                        column: Column::DEST_TYPE(new_col.into()),
+                                    }));
                                 } else {
                                     let mut new_col = Vec::with_capacity(col.len());
                                     let mut validity = MutableBitmap::with_capacity(col.len());
@@ -405,10 +408,10 @@ impl Evaluator {
                                             validity.push(false);
                                         }
                                     }
-                                    return Column::Nullable {
+                                    return Column::Nullable(Box::new(NullableColumn {
                                         validity: validity.into(),
-                                        column: Box::new(Column::DEST_TYPE(new_col.into())),
-                                    };
+                                        column: Column::DEST_TYPE(new_col.into()),
+                                    }));
                                 }
                             }
                             _ => (),
