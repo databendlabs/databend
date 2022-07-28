@@ -101,7 +101,7 @@ QueryRequest
 |---------------|--------------|----------|---------|--------------------------------------------------|
 | sql           | string       | Yes      |         | the sql to execute                               |
 | session_id    | string       | No       |         | used only when reuse server-side session         |
-| session | SessionState | No       |         |                                                  |
+| session       | SessionState | No       |         |                                                  |
 | pagination    | Pagination   | No       |         | a uniq query_id for this POST request            |
 | string_fields | bool         | No       | false   | all field value in data is represented in string |
 
@@ -129,16 +129,16 @@ PaginationConf: critical conditions for each HTTP request to return (before all 
 
 QueryResponse:
 
-| field         | type         | description                              |
-|---------------|--------------|------------------------------------------|
-| state         | string       | choices: "Running","Failed", "Succeeded" |
-| error         | QueryError   | error of the sql parsing or execution    |
-| id            | string       | a uniq query_id for this POST request    |
-| data          | array        | each item is a row of results            |
-| schema        | Schema       | the schema of the results                |
-| affect        | Affect       | the affect of some queries               |
-| session_id    | String       |                                          |
-| session | SessionState |                                          |
+| field      | type         | description                              |
+|------------|--------------|------------------------------------------|
+| state      | string       | choices: "Running","Failed", "Succeeded" |
+| error      | QueryError   | error of the sql parsing or execution    |
+| id         | string       | a uniq query_id for this POST request    |
+| data       | array        | each item is a row of results            |
+| schema     | Schema       | the schema of the results                |
+| affect     | Affect       | the affect of some queries               |
+| session_id | String       |                                          |
+| session    | SessionState |                                          |
 
 Schema:
 
