@@ -107,3 +107,5 @@ SELECT count(1) FROM t;
 ----
 2
 
+statement ok
+DROP database db_12_0003;
