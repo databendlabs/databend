@@ -9,7 +9,7 @@ cat $CURDIR/../ddl/hits.sql | $MYSQL_CLIENT_CONNECT
 
 hits_statements=(
   ## load data
-  "COPY INTO hits FROM 's3://repo.databend.rs/dataset/stateful/hits_1m.tsv.gz' credentials=(aws_key_id='${REPO_AWS_ACCESS_KEY_ID}' aws_secret_key='${REPO_AWS_SECRET_ACCESS_KEY}') FILE_FORMAT = ( type = 'CSV' field_delimiter = '\t' compression = 'gzip' record_delimiter = '\n' skip_header = 1 );"
+  "COPY INTO hits FROM 'https://repo.databend.rs/dataset/stateful/hits_1m.tsv.gz' FILE_FORMAT = ( type = 'CSV' field_delimiter = '\t' compression = 'gzip' record_delimiter = '\n' skip_header = 1 );"
   ## run test
   "SELECT COUNT(*) FROM hits;"
   "SELECT COUNT(*) FROM hits WHERE AdvEngineID <> 0;"

@@ -9,7 +9,7 @@ cat $CURDIR/../ddl/ontime.sql | sed 's/ontime/ontime_mini/g' | $MYSQL_CLIENT_CON
 
 ontime_statements=(
   ## Load data
-  "COPY INTO ontime_mini FROM 's3://repo.databend.rs/dataset/stateful/ontime_2006_100000.csv' credentials=(aws_key_id='${REPO_AWS_ACCESS_KEY_ID}' aws_secret_key='${REPO_AWS_SECRET_ACCESS_KEY}') FILE_FORMAT = ( type = 'CSV' field_delimiter = ',' record_delimiter = '\n' skip_header = 1 );"
+  "COPY INTO ontime_mini FROM 'https://repo.databend.rs/dataset/stateful/ontime_2006_100000.csv' FILE_FORMAT = ( type = 'CSV' field_delimiter = ',' record_delimiter = '\n' skip_header = 1 );"
   ## run test
   "SELECT DayOfWeek, count(*) AS c FROM ontime_mini WHERE (Year >= 2000) AND (Year <= 2008) GROUP BY DayOfWeek ORDER BY c DESC;"
   "SELECT DayOfWeek, count(*) AS c FROM ontime_mini WHERE (DepDelay > 10) AND (Year >= 2000) AND (Year <= 2008) GROUP BY DayOfWeek ORDER BY c DESC;"
