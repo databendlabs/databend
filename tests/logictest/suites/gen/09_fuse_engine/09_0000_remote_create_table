@@ -10,8 +10,11 @@ USE db1;
 statement ok
 CREATE TABLE IF NOT EXISTS t1(a int, b varchar) Engine = fuse cluster by(a);
 
-statement query skipped TTTTTTIIII 
+statement query skipped TTTTTTIIII
 SELECT * FROM system.tables WHERE database='db1';
+
+----
+db1 t1 FUSE (a) 2022-07-27 09:45:21.631 +0000 NULL 0 0 0 NULL
 
 statement ok
 DROP TABLE t1;

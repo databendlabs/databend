@@ -19,19 +19,19 @@ insert into t values (6);
 statement ok
 insert into t values (7);
 
-statement query I 
+statement query I
 select count(*) from fuse_snapshot('db_09_0007', 't');
 
-----  
+----
 3
 
 statement ok
 truncate table `t` purge;
 
-statement query I 
+statement query I
 select count(*) from fuse_snapshot('db_09_0007', 't');
 
-----  
+----
 1
 
 statement ok

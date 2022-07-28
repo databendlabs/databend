@@ -24,6 +24,9 @@ statement ok
 TRUNCATE TABLE t;
 
 statement ok
+SELECT * FROM t;
+
+statement ok
 DROP TABLE t;
 
 statement error 1025
