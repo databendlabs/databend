@@ -62,24 +62,9 @@ evaluation (internal):
 ast            : plus(a, b)
 raw expr       : plus(ColumnRef(0)::UInt8 NULL, ColumnRef(1)::NULL)
 checked expr   : plus<Int16 NULL, NULL>(CAST(ColumnRef(0) AS Int16 NULL), ColumnRef(1))
-evaluation:
-+--------+--------------------+--------+--------+
-|        | a                  | b      | Output |
-+--------+--------------------+--------+--------+
-| Type   | UInt8 NULL         | NULL   | NULL   |
-| Domain | {10..=12} ∪ {NULL} | {NULL} | {NULL} |
-| Row 0  | NULL               | NULL   | NULL   |
-| Row 1  | 11                 | NULL   | NULL   |
-| Row 2  | NULL               | NULL   | NULL   |
-+--------+--------------------+--------+--------+
-evaluation (internal):
-+--------+------------------------------------------------------------------+
-| Column | Data                                                             |
-+--------+------------------------------------------------------------------+
-| a      | Nullable { column: UInt8([10, 11, 12]), validity: [0b_____010] } |
-| b      | Null { len: 3 }                                                  |
-| Output | Null { len: 3 }                                                  |
-+--------+------------------------------------------------------------------+
+output type    : NULL
+output domain  : {NULL}
+output         : NULL
 
 
 ast            : minus(a, 10)
@@ -130,24 +115,9 @@ evaluation (internal):
 ast            : minus(a, b)
 raw expr       : minus(ColumnRef(0)::UInt8 NULL, ColumnRef(1)::NULL)
 checked expr   : minus<Int32 NULL, NULL>(CAST(ColumnRef(0) AS Int32 NULL), ColumnRef(1))
-evaluation:
-+--------+--------------------+--------+--------+
-|        | a                  | b      | Output |
-+--------+--------------------+--------+--------+
-| Type   | UInt8 NULL         | NULL   | NULL   |
-| Domain | {10..=12} ∪ {NULL} | {NULL} | {NULL} |
-| Row 0  | NULL               | NULL   | NULL   |
-| Row 1  | 11                 | NULL   | NULL   |
-| Row 2  | NULL               | NULL   | NULL   |
-+--------+--------------------+--------+--------+
-evaluation (internal):
-+--------+------------------------------------------------------------------+
-| Column | Data                                                             |
-+--------+------------------------------------------------------------------+
-| a      | Nullable { column: UInt8([10, 11, 12]), validity: [0b_____010] } |
-| b      | Null { len: 3 }                                                  |
-| Output | Null { len: 3 }                                                  |
-+--------+------------------------------------------------------------------+
+output type    : NULL
+output domain  : {NULL}
+output         : NULL
 
 
 ast            : multiply(a, 10)
@@ -221,24 +191,9 @@ evaluation (internal):
 ast            : multiply(a, b)
 raw expr       : multiply(ColumnRef(0)::UInt8 NULL, ColumnRef(1)::NULL)
 checked expr   : multiply<Int64 NULL, NULL>(CAST(ColumnRef(0) AS Int64 NULL), ColumnRef(1))
-evaluation:
-+--------+--------------------+--------+--------+
-|        | a                  | b      | Output |
-+--------+--------------------+--------+--------+
-| Type   | UInt8 NULL         | NULL   | NULL   |
-| Domain | {10..=12} ∪ {NULL} | {NULL} | {NULL} |
-| Row 0  | NULL               | NULL   | NULL   |
-| Row 1  | 11                 | NULL   | NULL   |
-| Row 2  | NULL               | NULL   | NULL   |
-+--------+--------------------+--------+--------+
-evaluation (internal):
-+--------+------------------------------------------------------------------+
-| Column | Data                                                             |
-+--------+------------------------------------------------------------------+
-| a      | Nullable { column: UInt8([10, 11, 12]), validity: [0b_____010] } |
-| b      | Null { len: 3 }                                                  |
-| Output | Null { len: 3 }                                                  |
-+--------+------------------------------------------------------------------+
+output type    : NULL
+output domain  : {NULL}
+output         : NULL
 
 
 ast            : divide(a, 10)
@@ -289,24 +244,9 @@ evaluation (internal):
 ast            : divide(a, b)
 raw expr       : divide(ColumnRef(0)::UInt8 NULL, ColumnRef(1)::NULL)
 checked expr   : divide<Float32 NULL, NULL>(CAST(ColumnRef(0) AS Float32 NULL), ColumnRef(1))
-evaluation:
-+--------+--------------------+--------+--------+
-|        | a                  | b      | Output |
-+--------+--------------------+--------+--------+
-| Type   | UInt8 NULL         | NULL   | NULL   |
-| Domain | {10..=12} ∪ {NULL} | {NULL} | {NULL} |
-| Row 0  | NULL               | NULL   | NULL   |
-| Row 1  | 11                 | NULL   | NULL   |
-| Row 2  | NULL               | NULL   | NULL   |
-+--------+--------------------+--------+--------+
-evaluation (internal):
-+--------+------------------------------------------------------------------+
-| Column | Data                                                             |
-+--------+------------------------------------------------------------------+
-| a      | Nullable { column: UInt8([10, 11, 12]), validity: [0b_____010] } |
-| b      | Null { len: 3 }                                                  |
-| Output | Null { len: 3 }                                                  |
-+--------+------------------------------------------------------------------+
+output type    : NULL
+output domain  : {NULL}
+output         : NULL
 
 
 ast            : avg(a, 10)
@@ -426,24 +366,9 @@ evaluation (internal):
 ast            : multiply(a, b)
 raw expr       : multiply(ColumnRef(0)::Int8 NULL, ColumnRef(1)::NULL)
 checked expr   : multiply<Int64 NULL, NULL>(CAST(ColumnRef(0) AS Int64 NULL), ColumnRef(1))
-evaluation:
-+--------+--------------------+--------+--------+
-|        | a                  | b      | Output |
-+--------+--------------------+--------+--------+
-| Type   | Int8 NULL          | NULL   | NULL   |
-| Domain | {10..=12} ∪ {NULL} | {NULL} | {NULL} |
-| Row 0  | NULL               | NULL   | NULL   |
-| Row 1  | 11                 | NULL   | NULL   |
-| Row 2  | NULL               | NULL   | NULL   |
-+--------+--------------------+--------+--------+
-evaluation (internal):
-+--------+------------------------------------------------------------------+
-| Column | Data                                                             |
-+--------+------------------------------------------------------------------+
-| a      | Nullable { column: UInt8([10, 11, 12]), validity: [0b_____010] } |
-| b      | Null { len: 3 }                                                  |
-| Output | Null { len: 3 }                                                  |
-+--------+------------------------------------------------------------------+
+output type    : NULL
+output domain  : {NULL}
+output         : NULL
 
 
 ast            : NOT a
@@ -471,25 +396,9 @@ evaluation (internal):
 ast            : NOT a
 raw expr       : not(ColumnRef(0)::NULL)
 checked expr   : not<NULL>(ColumnRef(0))
-evaluation:
-+--------+--------+--------+
-|        | a      | Output |
-+--------+--------+--------+
-| Type   | NULL   | NULL   |
-| Domain | {NULL} | {NULL} |
-| Row 0  | NULL   | NULL   |
-| Row 1  | NULL   | NULL   |
-| Row 2  | NULL   | NULL   |
-| Row 3  | NULL   | NULL   |
-| Row 4  | NULL   | NULL   |
-+--------+--------+--------+
-evaluation (internal):
-+--------+-----------------+
-| Column | Data            |
-+--------+-----------------+
-| a      | Null { len: 5 } |
-| Output | Null { len: 5 } |
-+--------+-----------------+
+output type    : NULL
+output domain  : {NULL}
+output         : NULL
 
 
 ast            : least(10, CAST(20 as Int8), 30, 40)

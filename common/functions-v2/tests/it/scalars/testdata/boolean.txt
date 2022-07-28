@@ -17,25 +17,9 @@ output         : NULL
 ast            : NOT a
 raw expr       : not(ColumnRef(0)::NULL)
 checked expr   : not<NULL>(ColumnRef(0))
-evaluation:
-+--------+--------+--------+
-|        | a      | Output |
-+--------+--------+--------+
-| Type   | NULL   | NULL   |
-| Domain | {NULL} | {NULL} |
-| Row 0  | NULL   | NULL   |
-| Row 1  | NULL   | NULL   |
-| Row 2  | NULL   | NULL   |
-| Row 3  | NULL   | NULL   |
-| Row 4  | NULL   | NULL   |
-+--------+--------+--------+
-evaluation (internal):
-+--------+-----------------+
-| Column | Data            |
-+--------+-----------------+
-| a      | Null { len: 5 } |
-| Output | Null { len: 5 } |
-+--------+-----------------+
+output type    : NULL
+output domain  : {NULL}
+output         : NULL
 
 
 ast            : NOT a
