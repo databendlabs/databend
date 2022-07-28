@@ -69,7 +69,7 @@ Databend uses the latest techniques in vectorized query processing to allow you 
  
 ## Architecture
 
-![Databend Architecture](https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/arch/datafuse-arch-20210817.svg)
+![Databend Architecture](https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/arch/databend-arch-20220728.svg)
 
 ## Try Databend
 
