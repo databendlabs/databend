@@ -1,4 +1,7 @@
 statement ok
+set enable_planner_v2 = 1;
+
+statement ok
 DROP DATABASE IF EXISTS db_09_0005;
 
 statement ok
@@ -36,6 +39,12 @@ insert into t(id) select * from numbers(113);
 
 statement ok
 insert into t(id) select * from numbers(20000);
+
+statement query T
+select 'checking count: count(*) = (112 + 113 + 20000)';
+
+----
+checking count: count(*) = (112 + 113 + 20000)
 
 statement query B label(http)
 select count(*) = (112 + 113 + 20000) from t;
@@ -81,4 +90,7 @@ DROP TABLE t;
 
 statement ok
 DROP DATABASE db_09_0005;
+
+statement ok
+set enable_planner_v2 = 0;
 

@@ -23,6 +23,7 @@ use crate::sql::plans::BoundColumnRef;
 use crate::sql::plans::CastExpr;
 use crate::sql::plans::ComparisonExpr;
 use crate::sql::plans::ComparisonOp;
+use crate::sql::plans::FunctionCall;
 use crate::sql::plans::OrExpr;
 use crate::sql::plans::Scalar;
 use crate::sql::plans::ScalarExpr;
@@ -172,6 +173,9 @@ pub fn contain_subquery(scalar: &Scalar) -> bool {
         }
         Scalar::OrExpr(OrExpr { left, right, .. }) => {
             contain_subquery(left) || contain_subquery(right)
+        }
+        Scalar::FunctionCall(FunctionCall { arguments, .. }) => {
+            arguments.iter().any(contain_subquery)
         }
         _ => false,
     }

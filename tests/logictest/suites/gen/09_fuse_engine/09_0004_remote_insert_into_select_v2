@@ -1,4 +1,7 @@
 statement ok
+set enable_planner_v2 = 1;
+
+statement ok
 DROP DATABASE IF EXISTS db_09_004;
 
 statement ok
@@ -89,33 +92,6 @@ select sum(cast(a as uint64)), sum(cast(b as uint64)) from s1;
 49995000 50005000
 
 statement ok
-create table d1(n String, a UInt8 not null, b Int16 default 4, c String default 'c');
-
-statement ok
-insert into d1(a) values (1);
-
-statement ok
-insert into d1(b) values (2);
-
-statement ok
-insert into d1(b) select b from d1;
-
-statement query TIIT label(http)
-select * from d1 order by a, b;
-
-----
- 0 2 c
- 0 2 c
- 0 4 c
- 1 4 c
-
----- http
-0 2 c
-0 2 c
-0 4 c
-1 4 c
-
-statement ok
 DROP TABLE t1;
 
 statement ok
@@ -134,8 +110,8 @@ statement ok
 DROP TABLE s1;
 
 statement ok
-DROP TABLE d1;
+DROP DATABASE db_09_004;
 
 statement ok
-DROP DATABASE db_09_004;
+set enable_planner_v2 = 0;
 

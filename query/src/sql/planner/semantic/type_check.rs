@@ -48,6 +48,7 @@ use common_functions::is_builtin_function;
 use common_functions::scalars::CastFunction;
 use common_functions::scalars::FunctionFactory;
 use common_functions::scalars::TupleFunction;
+use common_planners::validate_function_arg;
 
 use crate::evaluator::Evaluator;
 use crate::sessions::QueryContext;
@@ -852,6 +853,16 @@ impl<'a> TypeChecker<'a> {
 
         let arg_types_ref: Vec<&DataTypeImpl> = arg_types.iter().collect();
 
+        // Validate function arguments.
+        // TODO(leiysky): should be done in `FunctionFactory::get`.
+        let feature = FunctionFactory::instance().get_features(func_name)?;
+        validate_function_arg(
+            func_name,
+            arguments.len(),
+            feature.variadic_arguments,
+            feature.num_arguments,
+        )?;
+
         let func = FunctionFactory::instance()
             .get(func_name, &arg_types_ref)
             .map_err(|e| ErrorCode::SemanticError(span.display_error(e.message())))?;
@@ -1206,7 +1217,7 @@ impl<'a> TypeChecker<'a> {
                     &[date],
                     Some(TimestampType::new_impl(0)),
                 )
-                .await
+                    .await
             }
             IntervalKind::Month => {
                 self.resolve_function(
@@ -1215,7 +1226,7 @@ impl<'a> TypeChecker<'a> {
                     &[date],
                     Some(TimestampType::new_impl(0)),
                 )
-                .await
+                    .await
             }
             IntervalKind::Day => {
                 self.resolve_function(
@@ -1224,7 +1235,7 @@ impl<'a> TypeChecker<'a> {
                     &[date],
                     Some(TimestampType::new_impl(0)),
                 )
-                .await
+                    .await
             }
             IntervalKind::Hour => {
                 self.resolve_function(
@@ -1233,7 +1244,7 @@ impl<'a> TypeChecker<'a> {
                     &[date],
                     Some(TimestampType::new_impl(0)),
                 )
-                .await
+                    .await
             }
             IntervalKind::Minute => {
                 self.resolve_function(
@@ -1242,7 +1253,7 @@ impl<'a> TypeChecker<'a> {
                     &[date],
                     Some(TimestampType::new_impl(0)),
                 )
-                .await
+                    .await
             }
             IntervalKind::Second => {
                 self.resolve_function(
@@ -1251,7 +1262,7 @@ impl<'a> TypeChecker<'a> {
                     &[date],
                     Some(TimestampType::new_impl(0)),
                 )
-                .await
+                    .await
             }
             _ => Err(ErrorCode::SemanticError(span.display_error("Only these interval types are currently supported: [year, month, day, hour, minute, second]".to_string()))),
         }
