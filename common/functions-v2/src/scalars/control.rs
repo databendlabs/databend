@@ -23,7 +23,7 @@ use common_expression::Function;
 use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
 use common_expression::FunctionSignature;
-use common_expression::Scalar;
+use common_expression::ScalarRef;
 use common_expression::Value;
 use common_expression::ValueRef;
 
@@ -123,7 +123,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                     let result_idx = (0..args.len() - 1)
                         .step_by(2)
                         .find(|&cond_idx| match &args[cond_idx] {
-                            ValueRef::Scalar(Scalar::Boolean(cond)) => *cond,
+                            ValueRef::Scalar(ScalarRef::Boolean(cond)) => *cond,
                             ValueRef::Column(Column::Boolean(cond_col)) => {
                                 cond_col.get(row_idx).unwrap()
                             }
@@ -140,7 +140,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
                     match &args[result_idx] {
                         ValueRef::Scalar(scalar) => {
-                            output_builder.push(scalar.as_ref());
+                            output_builder.push(scalar.clone());
                         }
                         ValueRef::Column(col) => {
                             output_builder.push(col.index(row_idx).unwrap());
