@@ -19,7 +19,6 @@ use common_exception::Result;
 use common_planners::DescribeUserStagePlan;
 use common_planners::PlanNode;
 use common_streams::SendableDataBlockStream;
-use common_tracing::tracing;
 
 use super::SelectInterpreter;
 use crate::interpreters::Interpreter;

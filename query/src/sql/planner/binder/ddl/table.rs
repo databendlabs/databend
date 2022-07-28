@@ -33,7 +33,7 @@ use common_exception::Result;
 use common_meta_app::schema::TableMeta;
 use common_planners::OptimizeTableAction;
 use common_planners::*;
-use common_tracing::tracing;
+use tracing::debug;
 
 use crate::catalogs::DatabaseCatalog;
 use crate::sessions::TableContext;
@@ -181,7 +181,7 @@ impl<'a> Binder {
                 select_builder.build()
             }
         };
-        tracing::debug!("show tables rewrite to: {:?}", query);
+        debug!("show tables rewrite to: {:?}", query);
         let tokens = tokenize_sql(query.as_str())?;
         let backtrace = Backtrace::new();
         let (stmt, _) = parse_sql(&tokens, &backtrace)?;

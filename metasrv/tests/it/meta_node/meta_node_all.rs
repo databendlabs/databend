@@ -36,7 +36,6 @@ use common_meta_types::NodeId;
 use common_meta_types::Operation;
 use common_meta_types::RetryableError;
 use common_meta_types::SeqV;
-use common_tracing::tracing;
 use databend_meta::configs;
 use databend_meta::meta_service::meta_leader::MetaLeader;
 use databend_meta::meta_service::ForwardRequest;
@@ -47,6 +46,7 @@ use databend_meta::meta_service::MetaNode;
 use databend_meta::Opened;
 use maplit::btreeset;
 use pretty_assertions::assert_eq;
+use tracing::info;
 
 use crate::init_meta_ut;
 use crate::tests::service::MetaSrvTestContext;
@@ -83,11 +83,11 @@ async fn test_meta_node_graceful_shutdown() -> anyhow::Result<()> {
     loop {
         let r = rx0.changed().await;
         if r.is_err() {
-            tracing::info!("done!!!");
+            info!("done!!!");
             break;
         }
 
-        tracing::info!("st: {:?}", rx0.borrow());
+        info!("st: {:?}", rx0.borrow());
     }
     assert!(rx0.changed().await.is_err());
     Ok(())
@@ -206,14 +206,14 @@ async fn test_meta_node_snapshot_replication() -> anyhow::Result<()> {
     }
     log_index += n_req;
 
-    tracing::info!("--- check the log is locally applied");
+    info!("--- check the log is locally applied");
 
     mn.raft
         .wait(timeout())
         .log(Some(log_index), "applied on leader")
         .await?;
 
-    tracing::info!("--- check the snapshot is created");
+    info!("--- check the snapshot is created");
 
     mn.raft
         .wait(timeout())
@@ -223,7 +223,7 @@ async fn test_meta_node_snapshot_replication() -> anyhow::Result<()> {
         )
         .await?;
 
-    tracing::info!("--- start a non_voter to receive snapshot replication");
+    info!("--- start a non_voter to receive snapshot replication");
 
     let (_, tc1) = start_meta_node_non_voter(mn.clone(), 1).await?;
     log_index += 1;
@@ -274,7 +274,7 @@ async fn test_meta_node_join() -> anyhow::Result<()> {
     let tc0 = tcs.remove(0);
     let tc1 = tcs.remove(0);
 
-    tracing::info!("--- bring up non-voter 2");
+    info!("--- bring up non-voter 2");
 
     let node_id = 2;
     let tc2 = MetaSrvTestContext::new(node_id);
@@ -288,7 +288,7 @@ async fn test_meta_node_join() -> anyhow::Result<()> {
     )
     .await?;
 
-    tracing::info!("--- join non-voter 2 to cluster by leader");
+    info!("--- join non-voter 2 to cluster by leader");
 
     let leader_id = all[0].get_leader().await;
     let leader = all[leader_id as usize].clone();
@@ -303,7 +303,7 @@ async fn test_meta_node_join() -> anyhow::Result<()> {
 
     all.push(mn2.clone());
 
-    tracing::info!("--- check all nodes has node-3 joined");
+    info!("--- check all nodes has node-3 joined");
     {
         for mn in all.iter() {
             mn.raft
@@ -313,7 +313,7 @@ async fn test_meta_node_join() -> anyhow::Result<()> {
         }
     }
 
-    tracing::info!("--- bring up non-voter 3");
+    info!("--- bring up non-voter 3");
 
     let node_id = 3;
     let tc3 = MetaSrvTestContext::new(node_id);
@@ -326,7 +326,7 @@ async fn test_meta_node_join() -> anyhow::Result<()> {
     )
     .await?;
 
-    tracing::info!("--- join node-3 by sending rpc `join` to a non-leader");
+    info!("--- join node-3 by sending rpc `join` to a non-leader");
     {
         let to_addr = tc1.config.raft_config.raft_api_addr().await?;
 
@@ -340,7 +340,7 @@ async fn test_meta_node_join() -> anyhow::Result<()> {
         client.forward(admin_req).await?;
     }
 
-    tracing::info!("--- check all nodes has node-3 joined");
+    info!("--- check all nodes has node-3 joined");
 
     all.push(mn3.clone());
     for mn in all.iter() {
@@ -353,13 +353,13 @@ async fn test_meta_node_join() -> anyhow::Result<()> {
             .await?;
     }
 
-    tracing::info!("--- stop all meta node");
+    info!("--- stop all meta node");
 
     for mn in all.drain(..) {
         mn.stop().await?;
     }
 
-    tracing::info!("--- re-open all meta node");
+    info!("--- re-open all meta node");
 
     let mn0 = MetaNode::open_create_boot(
         &tc0.config.raft_config,
@@ -396,7 +396,7 @@ async fn test_meta_node_join() -> anyhow::Result<()> {
 
     let all = vec![mn0, mn1, mn2, mn3];
 
-    tracing::info!("--- check reopened memberships");
+    info!("--- check reopened memberships");
 
     for mn in all.iter() {
         mn.raft
@@ -425,14 +425,14 @@ async fn test_meta_node_leave() -> anyhow::Result<()> {
     let admin_req = leave_req(leave_node_id, 0);
     leader.handle_forwardable_request(admin_req).await?;
 
-    tracing::info!("--- stop all meta node");
+    info!("--- stop all meta node");
 
     for mn in all.drain(..) {
         mn.stop().await?;
     }
 
     // restart the cluster and check membership
-    tracing::info!("--- re-open all meta node");
+    info!("--- re-open all meta node");
 
     let tc0 = &tcs[0];
     let tc2 = &tcs[2];
@@ -456,7 +456,7 @@ async fn test_meta_node_leave() -> anyhow::Result<()> {
 
     let all = vec![mn0, mn2];
 
-    tracing::info!("--- check reopened memberships");
+    info!("--- check reopened memberships");
 
     for mn in all.iter() {
         mn.raft
@@ -478,7 +478,7 @@ async fn test_meta_node_join_rejoin() -> anyhow::Result<()> {
     let mut all = test_context_nodes(&tcs);
     let _tc0 = tcs.remove(0);
 
-    tracing::info!("--- bring up non-voter 1");
+    info!("--- bring up non-voter 1");
 
     let node_id = 1;
     let tc1 = MetaSrvTestContext::new(node_id);
@@ -492,7 +492,7 @@ async fn test_meta_node_join_rejoin() -> anyhow::Result<()> {
     )
     .await?;
 
-    tracing::info!("--- join non-voter 1 to cluster");
+    info!("--- join non-voter 1 to cluster");
 
     let leader_id = all[0].get_leader().await;
     let leader = all[leader_id as usize].clone();
@@ -506,7 +506,7 @@ async fn test_meta_node_join_rejoin() -> anyhow::Result<()> {
 
     all.push(mn1.clone());
 
-    tracing::info!("--- check all nodes has node-1 joined");
+    info!("--- check all nodes has node-1 joined");
     {
         for mn in all.iter() {
             mn.raft
@@ -516,7 +516,7 @@ async fn test_meta_node_join_rejoin() -> anyhow::Result<()> {
         }
     }
 
-    tracing::info!("--- bring up non-voter 3");
+    info!("--- bring up non-voter 3");
 
     let node_id = 2;
     let tc2 = MetaSrvTestContext::new(node_id);
@@ -530,7 +530,7 @@ async fn test_meta_node_join_rejoin() -> anyhow::Result<()> {
     )
     .await?;
 
-    tracing::info!("--- join node-2 by sending rpc `join` to a non-leader");
+    info!("--- join node-2 by sending rpc `join` to a non-leader");
     {
         let req = join_req(
             node_id,
@@ -540,7 +540,7 @@ async fn test_meta_node_join_rejoin() -> anyhow::Result<()> {
         );
         leader.handle_forwardable_request(req).await?;
     }
-    tracing::info!("--- join node-2 again");
+    info!("--- join node-2 again");
     {
         let req = join_req(
             node_id,
@@ -553,7 +553,7 @@ async fn test_meta_node_join_rejoin() -> anyhow::Result<()> {
 
     all.push(mn2.clone());
 
-    tracing::info!("--- check all nodes has node-3 joined");
+    info!("--- check all nodes has node-3 joined");
 
     for mn in all.iter() {
         mn.raft
@@ -589,14 +589,14 @@ async fn test_meta_node_restart() -> anyhow::Result<()> {
     assert_upsert_kv_synced(meta_nodes.clone(), "key1").await?;
 
     // stop
-    tracing::info!("shutting down all");
+    info!("shutting down all");
 
     let n = mn0.stop().await?;
     assert_eq!(3, n);
     let n = mn1.stop().await?;
     assert_eq!(3, n);
 
-    tracing::info!("restart all");
+    info!("restart all");
 
     // restart
     let config = configs::Config::default();
@@ -674,7 +674,7 @@ async fn test_meta_node_restart_single_node() -> anyhow::Result<()> {
         leader.stop().await?;
     }
 
-    tracing::info!("--- reopen MetaNode");
+    info!("--- reopen MetaNode");
 
     let raft_conf = &tc.config.raft_config;
 
@@ -687,20 +687,20 @@ async fn test_meta_node_restart_single_node() -> anyhow::Result<()> {
     wait_for_state(&leader, State::Leader).await?;
     wait_for_log(&leader, log_index as u64).await?;
 
-    tracing::info!("--- check hard state");
+    info!("--- check hard state");
     {
         let hs = leader.sto.raft_state.read_hard_state()?;
         assert_eq!(want_hs, hs);
     }
 
-    tracing::info!("--- check logs");
+    info!("--- check logs");
     {
         let logs = leader.sto.log.range_values(..)?;
-        tracing::info!("logs: {:?}", logs);
+        info!("logs: {:?}", logs);
         assert_eq!(log_index as usize + 1, logs.len());
     }
 
-    tracing::info!("--- check state machine: nodes");
+    info!("--- check state machine: nodes");
     {
         let node = leader.sto.get_node(&0).await?.unwrap();
         assert_eq!(
@@ -772,7 +772,7 @@ pub(crate) async fn start_meta_node_cluster(
         log_index += 2;
     }
 
-    tracing::info!("--- check node roles");
+    info!("--- check node roles");
     {
         wait_for_state(&leader, State::Leader).await?;
 
@@ -788,7 +788,7 @@ pub(crate) async fn start_meta_node_cluster(
         }
     }
 
-    tracing::info!("--- check node logs");
+    info!("--- check node logs");
     {
         for tc in &test_contexts {
             wait_for_log(&tc.meta_node(), log_index).await?;
@@ -905,7 +905,7 @@ async fn assert_upsert_kv_synced(meta_nodes: Vec<Arc<MetaNode>>, key: &str) -> a
     let leader = meta_nodes[leader_id as usize].clone();
 
     let last_applied = leader.raft.metrics().borrow().last_applied;
-    tracing::info!("leader: last_applied={:?}", last_applied);
+    info!("leader: last_applied={:?}", last_applied);
     {
         leader
             .as_leader()

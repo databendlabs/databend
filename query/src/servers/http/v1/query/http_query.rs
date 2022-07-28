@@ -23,6 +23,7 @@ use common_base::base::tokio::sync::RwLock;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use serde::Deserialize;
+use serde::Serialize;
 
 use super::HttpQueryContext;
 use crate::servers::http::v1::query::execute_state::Progresses;
@@ -43,8 +44,8 @@ use crate::storages::result::block_buffer::BlockBuffer;
 #[derive(Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct HttpQueryRequest {
-    #[serde(default)]
-    pub session: HttpSession,
+    pub session_id: Option<String>,
+    pub session_state: Option<HttpSessionConf>,
     pub sql: String,
     #[serde(default)]
     pub pagination: PaginationConf,
@@ -99,12 +100,36 @@ impl PaginationConf {
     }
 }
 
-#[derive(Deserialize, Debug, Default, PartialEq, Eq)]
+#[derive(Deserialize, Serialize, Debug, Default, PartialEq, Eq, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct HttpSessionConf {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub database: Option<String>,
-    pub max_idle_time: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub keep_server_session_secs: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub settings: Option<BTreeMap<String, String>>,
+}
+
+impl HttpSessionConf {
+    fn apply_affect(&self, affect: &QueryAffect) -> HttpSessionConf {
+        let mut ret = self.clone();
+        match affect {
+            QueryAffect::UseDB { name } => {
+                ret.database = Some(name.to_string());
+            }
+            QueryAffect::ChangeSetting {
+                key,
+                value,
+                is_global: _,
+            } => {
+                let settings = ret.settings.get_or_insert_default();
+                settings.insert(key.to_string(), value.to_string());
+            }
+            _ => {}
+        }
+        ret
+    }
 }
 
 #[derive(Deserialize, Debug, PartialEq, Eq)]
@@ -133,13 +158,13 @@ pub struct ResponseState {
 pub struct HttpQueryResponseInternal {
     pub data: Option<ResponseData>,
     pub session_id: String,
+    pub session_state: Option<HttpSessionConf>,
     pub state: ResponseState,
 }
 
 pub struct HttpQuery {
     pub(crate) id: String,
     pub(crate) session_id: String,
-
     request: HttpQueryRequest,
     state: Arc<RwLock<Executor>>,
     data: Arc<TokioMutex<PageManager>>,
@@ -154,55 +179,56 @@ impl HttpQuery {
         config: HttpQueryConfig,
     ) -> Result<Arc<HttpQuery>> {
         let http_query_manager = ctx.session_mgr.get_http_query_manager();
-        let session = match &request.session {
-            HttpSession::New(session_conf) => {
-                let session = ctx.get_session(SessionType::HTTPQuery);
-                if let Some(db) = &session_conf.database {
-                    session.set_current_database(db.clone());
-                }
-                if let Some(conf_settings) = &session_conf.settings {
-                    let settings = session.get_settings();
-                    for (k, v) in conf_settings {
-                        settings.set_settings(k.to_string(), v.to_string(), false)?;
-                    }
-                }
-                if let Some(secs) = session_conf.max_idle_time {
-                    if secs > 0 {
-                        http_query_manager
-                            .add_session(session.clone(), Duration::from_secs(secs))
-                            .await;
-                    }
-                }
-                session
-            }
-            HttpSession::Old { id } => {
-                let session = http_query_manager.get_session(id).await.ok_or_else(|| {
-                    ErrorCode::UnknownSession(format!("unknown session-id {}, maybe expired", id))
-                })?;
-                let mut n = 1;
-                while let ExpiringState::InUse(query_id) = session.expire_state() {
-                    if let Some(last_query) = &http_query_manager.get_query(&query_id).await {
-                        if last_query.get_state().await.state == ExecuteStateKind::Running {
-                            return Err(ErrorCode::BadArguments(
-                                "last query on the session not finished",
-                            ));
-                        } else {
-                            http_query_manager.remove_query(&query_id).await;
-                        }
-                    }
-                    // wait for Arc<QueryContextShared> to drop and detach itself from session
-                    // should not take too long
-                    tokio::time::sleep(Duration::from_millis(1)).await;
-                    n += 1;
-                    if n > 10 {
-                        return Err(ErrorCode::UnexpectedError(
-                            "last query stop but not released",
+
+        let session = if let Some(id) = &request.session_id {
+            let session = http_query_manager.get_session(id).await.ok_or_else(|| {
+                ErrorCode::UnknownSession(format!("unknown session-id {}, maybe expired", id))
+            })?;
+            let mut n = 1;
+            while let ExpiringState::InUse(query_id) = session.expire_state() {
+                if let Some(last_query) = &http_query_manager.get_query(&query_id).await {
+                    if last_query.get_state().await.state == ExecuteStateKind::Running {
+                        return Err(ErrorCode::BadArguments(
+                            "last query on the session not finished",
                         ));
+                    } else {
+                        http_query_manager.remove_query(&query_id).await;
                     }
                 }
-                session
+                // wait for Arc<QueryContextShared> to drop and detach itself from session
+                // should not take too long
+                tokio::time::sleep(Duration::from_millis(1)).await;
+                n += 1;
+                if n > 10 {
+                    return Err(ErrorCode::UnexpectedError(
+                        "last query stop but not released",
+                    ));
+                }
+            }
+            session
+        } else {
+            ctx.get_session(SessionType::HTTPQuery)
+        };
+
+        if let Some(session_conf) = &request.session_state {
+            if let Some(db) = &session_conf.database {
+                session.set_current_database(db.clone());
+            }
+            if let Some(conf_settings) = &session_conf.settings {
+                let settings = session.get_settings();
+                for (k, v) in conf_settings {
+                    settings.set_settings(k.to_string(), v.to_string(), false)?;
+                }
+            }
+            if let Some(secs) = session_conf.keep_server_session_secs {
+                if secs > 0 && request.session_id.is_none() {
+                    http_query_manager
+                        .add_session(session.clone(), Duration::from_secs(secs))
+                        .await;
+                }
             }
         };
+
         let session_id = session.get_id().clone();
 
         let ctx = session.create_query_context().await?;
@@ -236,10 +262,22 @@ impl HttpQuery {
     }
 
     pub async fn get_response_page(&self, page_no: usize) -> Result<HttpQueryResponseInternal> {
+        let data = Some(self.get_page(page_no).await?);
+        let state = self.get_state().await;
+        let session_conf = if let Some(conf) = &self.request.session_state {
+            if let Some(affect) = &state.affect {
+                Some(conf.clone().apply_affect(affect))
+            } else {
+                Some(conf.clone())
+            }
+        } else {
+            None
+        };
         Ok(HttpQueryResponseInternal {
-            data: Some(self.get_page(page_no).await?),
+            data,
+            state,
+            session_state: session_conf,
             session_id: self.session_id.clone(),
-            state: self.get_state().await,
         })
     }
 
@@ -248,6 +286,7 @@ impl HttpQuery {
             data: None,
             session_id: self.session_id.clone(),
             state: self.get_state().await,
+            session_state: None,
         }
     }
 

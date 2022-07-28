@@ -1,18 +1,18 @@
 ===Explain===
 Exchange(Merge)
-└── Project: [a]
-    └── Filter: [t1.a > 0]
+└── Project: [a (#0)]
+    └── Filter: [t1.a (#0) > 0]
         └── Scan: default.default.t1
 Exchange(Merge)
-└── Filter: [(t1.a > 3) OR ((t2.a > 5) AND (t1.a > 1))]
-    └── HashJoin: INNER, build keys: [t2.a], probe keys: [t1.a], join filters: []
-        ├── Exchange(Hash): keys: [t1.a]
+└── Filter: [(t1.a (#0) > 3) OR ((t2.a (#2) > 5) AND (t1.a (#0) > 1))]
+    └── HashJoin: INNER, build keys: [t2.a (#2)], probe keys: [t1.a (#0)], join filters: []
+        ├── Exchange(Hash): keys: [t1.a (#0)]
         │   └── Scan: default.default.t1
-        └── Exchange(Hash): keys: [t2.a]
+        └── Exchange(Hash): keys: [t2.a (#2)]
             └── Scan: default.default.t2
 Exchange(Merge)
-└── HashJoin: INNER, build keys: [t2.a], probe keys: [t1.a], join filters: []
-    ├── Exchange(Hash): keys: [t1.a]
+└── HashJoin: INNER, build keys: [t2.a (#2)], probe keys: [t1.a (#0)], join filters: []
+    ├── Exchange(Hash): keys: [t1.a (#0)]
     │   └── Scan: default.default.t1
-    └── Exchange(Hash): keys: [t2.a]
+    └── Exchange(Hash): keys: [t2.a (#2)]
         └── Scan: default.default.t2

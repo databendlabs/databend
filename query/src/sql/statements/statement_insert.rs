@@ -29,13 +29,13 @@ use common_planners::InsertValueBlock;
 use common_planners::PlanNode;
 use common_streams::NDJsonSourceBuilder;
 use common_streams::Source;
-use common_tracing::tracing;
 use sqlparser::ast::Expr;
 use sqlparser::ast::Ident;
 use sqlparser::ast::ObjectName;
 use sqlparser::ast::OnInsert;
 use sqlparser::ast::Query;
 use sqlparser::ast::SqliteOnConflict;
+use tracing::debug;
 
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
@@ -167,7 +167,7 @@ impl<'a> DfInsertStatement<'a> {
         format: Option<String>,
     ) -> Result<InsertInputSource> {
         let stream_str = stream_str.trim_start();
-        tracing::debug!("{:?}", stream_str);
+        debug!("{:?}", stream_str);
         let settings = ctx.get_format_settings()?;
         // TODO migrate format into format factory
         let format = format.map(|v| v.to_uppercase());

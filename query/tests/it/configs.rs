@@ -77,6 +77,15 @@ level = "INFO"
 dir = "./.databend/logs"
 query_enabled = false
 
+[log.file]
+on = true
+level = "INFO"
+dir = "./.databend/logs"
+
+[log.stderr]
+on = false
+level = "INFO"
+
 [meta]
 embedded_dir = "./.databend/meta_embedded"
 address = ""

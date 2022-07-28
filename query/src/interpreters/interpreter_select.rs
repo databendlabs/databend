@@ -20,7 +20,6 @@ use common_exception::Result;
 use common_planners::PlanNode;
 use common_planners::SelectPlan;
 use common_streams::SendableDataBlockStream;
-use common_tracing::tracing;
 
 use crate::clusters::ClusterHelper;
 use crate::interpreters::plan_schedulers;

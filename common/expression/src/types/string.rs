@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::iter::once;
 use std::ops::Range;
 
 use common_arrow::arrow::buffer::Buffer;
@@ -26,7 +27,9 @@ use crate::types::ValueType;
 use crate::util::buffer_into_mut;
 use crate::values::Column;
 use crate::values::Scalar;
+use crate::ScalarRef;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StringType;
 
 impl ValueType for StringType {
@@ -34,6 +37,8 @@ impl ValueType for StringType {
     type ScalarRef<'a> = &'a [u8];
     type Column = StringColumn;
     type Domain = StringDomain;
+    type ColumnIterator<'a> = StringIterator<'a>;
+    type ColumnBuilder = StringColumnBuilder;
 
     fn to_owned_scalar<'a>(scalar: Self::ScalarRef<'a>) -> Self::Scalar {
         scalar.to_vec()
@@ -42,18 +47,9 @@ impl ValueType for StringType {
     fn to_scalar_ref<'a>(scalar: &'a Self::Scalar) -> Self::ScalarRef<'a> {
         scalar
     }
-}
 
-impl ArgType for StringType {
-    type ColumnIterator<'a> = StringIterator<'a>;
-    type ColumnBuilder = StringColumnBuilder;
-
-    fn data_type() -> DataType {
-        DataType::String
-    }
-
-    fn try_downcast_scalar<'a>(scalar: &'a Scalar) -> Option<Self::ScalarRef<'a>> {
-        scalar.as_string().map(Vec::as_slice)
+    fn try_downcast_scalar<'a>(scalar: &'a ScalarRef) -> Option<Self::ScalarRef<'a>> {
+        scalar.as_string().cloned()
     }
 
     fn try_downcast_column<'a>(col: &'a Column) -> Option<Self::Column> {
@@ -76,13 +72,6 @@ impl ArgType for StringType {
         Domain::String(domain)
     }
 
-    fn full_domain(_: &GenericMap) -> Self::Domain {
-        StringDomain {
-            min: vec![],
-            max: None,
-        }
-    }
-
     fn column_len<'a>(col: &'a Self::Column) -> usize {
         col.len()
     }
@@ -97,10 +86,6 @@ impl ArgType for StringType {
 
     fn iter_column<'a>(col: &'a Self::Column) -> Self::ColumnIterator<'a> {
         col.iter()
-    }
-
-    fn create_builder(capacity: usize, _: &GenericMap) -> Self::ColumnBuilder {
-        StringColumnBuilder::with_capacity(capacity, 0)
     }
 
     fn column_to_builder(col: Self::Column) -> Self::ColumnBuilder {
@@ -130,6 +115,23 @@ impl ArgType for StringType {
 
     fn build_scalar(builder: Self::ColumnBuilder) -> Self::Scalar {
         builder.build_scalar()
+    }
+}
+
+impl ArgType for StringType {
+    fn data_type() -> DataType {
+        DataType::String
+    }
+
+    fn full_domain(_: &GenericMap) -> Self::Domain {
+        StringDomain {
+            min: vec![],
+            max: None,
+        }
+    }
+
+    fn create_builder(capacity: usize, _: &GenericMap) -> Self::ColumnBuilder {
+        StringColumnBuilder::with_capacity(capacity, 0)
     }
 }
 
@@ -213,6 +215,18 @@ impl StringColumnBuilder {
             data: buffer_into_mut(col.data),
             offsets: col.offsets.to_vec(),
         }
+    }
+
+    pub fn repeat(scalar: &[u8], n: usize) -> Self {
+        let len = scalar.len();
+        let mut data = Vec::with_capacity(len * n);
+        for _ in 0..n {
+            data.extend_from_slice(scalar);
+        }
+        let offsets = once(0)
+            .chain((0..n).map(|i| (len * (i + 1)) as u64))
+            .collect();
+        StringColumnBuilder { data, offsets }
     }
 
     pub fn len(&self) -> usize {

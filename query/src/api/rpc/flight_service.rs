@@ -30,7 +30,6 @@ use common_arrow::arrow_format::flight::data::Result as FlightResult;
 use common_arrow::arrow_format::flight::data::SchemaResult;
 use common_arrow::arrow_format::flight::data::Ticket;
 use common_arrow::arrow_format::flight::service::flight_service_server::FlightService;
-use common_tracing::tracing;
 use tokio_stream::Stream;
 use tonic::Request;
 use tonic::Response as RawResponse;

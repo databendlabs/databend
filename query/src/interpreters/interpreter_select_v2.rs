@@ -18,7 +18,6 @@ use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_streams::SendableDataBlockStream;
-use common_tracing::tracing;
 
 use super::plan_schedulers::schedule_query_v2;
 use crate::clusters::ClusterHelper;

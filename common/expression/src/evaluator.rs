@@ -31,6 +31,7 @@ use crate::property::NullableDomain;
 use crate::property::StringDomain;
 use crate::property::UIntDomain;
 use crate::types::any::AnyType;
+use crate::types::array::ArrayColumn;
 use crate::types::DataType;
 use crate::util::constant_bitmap;
 use crate::values::Column;
@@ -238,12 +239,12 @@ impl Evaluator {
                     column: Box::new(column),
                 })
             }
-            (Column::Array { array, offsets }, DataType::Array(dest_ty)) => {
-                let array = self.run_cast_column(span, *array, dest_ty)?;
-                Ok(Column::Array {
-                    array: Box::new(array),
-                    offsets,
-                })
+            (Column::Array(col), DataType::Array(dest_ty)) => {
+                let values = self.run_cast_column(span, col.values, dest_ty)?;
+                Ok(Column::Array(Box::new(ArrayColumn {
+                    values,
+                    offsets: col.offsets,
+                })))
             }
             (Column::Tuple { fields, len }, DataType::Tuple(fields_ty)) => {
                 let new_fields = fields
@@ -341,12 +342,12 @@ impl Evaluator {
                     validity: bitmap::or(&validity, &new_validity),
                 }
             }
-            (Column::Array { array, offsets }, DataType::Array(dest_ty)) => {
-                let new_array = self.run_try_cast_column(span, *array, dest_ty);
-                let new_col = Column::Array {
-                    array: Box::new(new_array),
-                    offsets,
-                };
+            (Column::Array(col), DataType::Array(dest_ty)) => {
+                let new_values = self.run_try_cast_column(span, col.values, dest_ty);
+                let new_col = Column::Array(Box::new(ArrayColumn {
+                    values: new_values,
+                    offsets: col.offsets,
+                }));
                 Column::Nullable {
                     validity: constant_bitmap(true, new_col.len()).into(),
                     column: Box::new(new_col),

@@ -20,7 +20,6 @@ use common_grpc::RpcClientTlsConfig;
 use common_meta_api::KVApi;
 use common_meta_api::SchemaApi;
 use common_meta_grpc::MetaGrpcClient;
-use common_tracing::tracing;
 use pretty_assertions::assert_eq;
 
 use crate::init_meta_ut;
