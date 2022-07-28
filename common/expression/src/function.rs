@@ -237,7 +237,7 @@ impl FunctionRegistry {
             name,
             property.clone(),
             |_| None,
-            vectorize_1_arg::<NullType, NullType>(|_| ()),
+            |_, _| Ok(Value::Scalar(())),
         );
 
         self.register_1_arg_core::<I1, O, _, _>(name, property.clone(), calc_domain, func);
@@ -329,19 +329,19 @@ impl FunctionRegistry {
             name,
             property.clone(),
             |_, _| None,
-            vectorize_2_arg::<NullableType<I1>, NullType, NullType>(|_, _| ()),
+            |_, _, _| Ok(Value::Scalar(())),
         );
         self.register_2_arg_core::<NullType, NullableType<I2>, NullType, _, _>(
             name,
             property.clone(),
             |_, _| None,
-            vectorize_2_arg::<NullType, NullableType<I2>, NullType>(|_, _| ()),
+            |_, _, _| Ok(Value::Scalar(())),
         );
         self.register_2_arg_core::<NullType, NullType, NullType, _, _>(
             name,
             property.clone(),
             |_, _| None,
-            vectorize_2_arg::<NullType, NullType, NullType>(|_, _| ()),
+            |_, _, _| Ok(Value::Scalar(())),
         );
 
         self.register_2_arg_core::<I1, I2, O, _, _>(name, property.clone(), calc_domain, func);
