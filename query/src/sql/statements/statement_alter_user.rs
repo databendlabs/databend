@@ -26,7 +26,7 @@ use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
 use crate::sql::statements::DfUserWithOption;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct DfAlterUser {
     pub if_current_user: bool,
     pub user: UserIdentity,

@@ -60,36 +60,8 @@ impl<'a> DfParser<'a> {
     }
 
     pub(crate) fn parse_alter_user(&mut self) -> Result<DfStatement<'a>, ParserError> {
-        let if_current_user = self.consume_token("USER")
-            && self.parser.expect_token(&Token::LParen).is_ok()
-            && self.parser.expect_token(&Token::RParen).is_ok();
-
-        let (username, hostname) = if !if_current_user {
-            self.parse_principal_name_and_host()?
-        } else {
-            ("".to_string(), "".to_string())
-        };
-
-        let with_options = self.parse_user_options()?;
-        let auth_option = match self.parser.peek_token() {
-            Token::Word(w) => match w.keyword {
-                Keyword::NOT | Keyword::IDENTIFIED => Some(self.parse_auth_option()?),
-                _ => {
-                    return self.expected("IDENTIFIED or NOT IDENTIFIED", self.parser.peek_token());
-                }
-            },
-            Token::EOF => None,
-            unexpected => return self.expected("IDENTIFIED or NOT IDENTIFIED", unexpected),
-        };
-
-        let alter = DfAlterUser {
-            if_current_user,
-            user: UserIdentity { username, hostname },
-            auth_option,
-            with_options,
-        };
-
-        Ok(DfStatement::AlterUser(alter))
+        // skip to the planner v2 syntax
+        self.skip_all(DfStatement::AlterUser(DfAlterUser::default()))
     }
 
     pub(crate) fn parse_drop_user(&mut self) -> Result<DfStatement<'a>, ParserError> {
