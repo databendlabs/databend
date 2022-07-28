@@ -11,7 +11,6 @@
 //  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
-//
 
 use std::any::Any;
 use std::convert::TryFrom;
@@ -38,7 +37,6 @@ use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
 use common_planners::TruncateTablePlan;
 use common_streams::SendableDataBlockStream;
-use common_tracing::tracing;
 use futures::StreamExt;
 use uuid::Uuid;
 

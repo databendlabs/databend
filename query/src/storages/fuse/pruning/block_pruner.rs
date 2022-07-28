@@ -11,7 +11,6 @@
 //  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
-//
 
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
@@ -25,7 +24,6 @@ use common_fuse_meta::meta::SegmentInfo;
 use common_fuse_meta::meta::StatisticsOfColumns;
 use common_fuse_meta::meta::TableSnapshot;
 use common_planners::Extras;
-use common_tracing::tracing;
 use futures::StreamExt;
 use futures::TryStreamExt;
 

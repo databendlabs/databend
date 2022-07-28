@@ -17,7 +17,6 @@ use std::str::FromStr;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_formats::output_format::OutputFormatType;
-use common_tracing::tracing;
 use poem::error::BadRequest;
 use poem::error::Error as PoemError;
 use poem::error::InternalServerError;
@@ -35,12 +34,15 @@ use poem::Route;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value as JsonValue;
+use tracing::error;
+use tracing::info;
 
 use super::query::ExecuteStateKind;
 use super::query::HttpQueryRequest;
 use super::query::HttpQueryResponseInternal;
 use crate::servers::http::v1::query::Progresses;
 use crate::servers::http::v1::HttpQueryContext;
+use crate::servers::http::v1::HttpSessionConf;
 use crate::servers::http::v1::JsonBlock;
 use crate::sessions::QueryAffect;
 use crate::sessions::SessionType;
@@ -88,6 +90,7 @@ pub struct QueryStats {
 pub struct QueryResponse {
     pub id: String,
     pub session_id: Option<String>,
+    pub session_state: Option<HttpSessionConf>,
     pub schema: Option<DataSchemaRef>,
     pub data: Vec<Vec<JsonValue>>,
     pub state: ExecuteStateKind,
@@ -122,6 +125,7 @@ impl QueryResponse {
             state: state.state,
             schema: Some(schema),
             session_id: Some(session_id),
+            session_state: r.session_state,
             stats,
             affect: state.affect,
             id: id.clone(),
@@ -142,6 +146,7 @@ impl QueryResponse {
             data: vec![],
             schema: None,
             session_id: None,
+            session_state: None,
             next_uri: None,
             stats_uri: None,
             final_uri: None,
@@ -223,7 +228,7 @@ pub(crate) async fn query_handler(
     ctx: &HttpQueryContext,
     Json(req): Json<HttpQueryRequest>,
 ) -> PoemResult<Json<QueryResponse>> {
-    tracing::info!("receive http query: {:?}", req);
+    info!("receive http query: {:?}", req);
     let http_query_manager = ctx.session_mgr.get_http_query_manager();
     let query = http_query_manager.try_create_query(ctx, req).await;
 
@@ -240,7 +245,7 @@ pub(crate) async fn query_handler(
             )))
         }
         Err(e) => {
-            tracing::error!("Fail to start sql, Error: {:?}", e);
+            error!("Fail to start sql, Error: {:?}", e);
             Ok(Json(QueryResponse::fail_to_start_sql(&e)))
         }
     }

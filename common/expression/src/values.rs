@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::iter::once;
 use std::ops::Range;
 
 use common_arrow::arrow::bitmap::Bitmap;
@@ -30,6 +29,8 @@ use crate::property::IntDomain;
 use crate::property::NullableDomain;
 use crate::property::StringDomain;
 use crate::property::UIntDomain;
+use crate::types::array::ArrayColumn;
+use crate::types::array::ArrayColumnBuilder;
 use crate::types::string::StringColumn;
 use crate::types::string::StringColumnBuilder;
 use crate::types::*;
@@ -112,10 +113,7 @@ pub enum Column {
     Float64(Buffer<f64>),
     Boolean(Bitmap),
     String(StringColumn),
-    Array {
-        array: Box<Column>,
-        offsets: Buffer<u64>,
-    },
+    Array(Box<ArrayColumn<AnyType>>),
     Nullable {
         column: Box<Column>,
         validity: Bitmap,
@@ -146,10 +144,7 @@ pub enum ColumnBuilder {
     Float64(Vec<f64>),
     Boolean(MutableBitmap),
     String(StringColumnBuilder),
-    Array {
-        array: Box<ColumnBuilder>,
-        offsets: Vec<u64>,
-    },
+    Array(Box<ArrayColumnBuilder<AnyType>>),
     Nullable {
         column: Box<ColumnBuilder>,
         validity: MutableBitmap,
@@ -188,7 +183,7 @@ impl<T: ArgType> Value<T> {
 }
 
 impl<'a> ValueRef<'a, AnyType> {
-    pub fn try_downcast<'b, T: ArgType>(&'b self) -> Option<ValueRef<'a, T>> {
+    pub fn try_downcast<T: ArgType>(&self) -> Option<ValueRef<'_, T>> {
         Some(match self {
             ValueRef::Scalar(scalar) => ValueRef::Scalar(T::try_downcast_scalar(scalar)?),
             ValueRef::Column(col) => ValueRef::Column(T::try_downcast_column(col)?),
@@ -267,31 +262,9 @@ impl<'a> ScalarRef<'a> {
             ScalarRef::Float32(i) => ColumnBuilder::Float32(vec![*i; n]),
             ScalarRef::Float64(i) => ColumnBuilder::Float64(vec![*i; n]),
             ScalarRef::Boolean(b) => ColumnBuilder::Boolean(constant_bitmap(*b, n)),
-            ScalarRef::String(s) => {
-                let len = s.len();
-                let mut data = Vec::with_capacity(len * n);
-                for _ in 0..n {
-                    data.extend_from_slice(s);
-                }
-                let offsets = once(0)
-                    .chain((0..n).map(|i| (len * (i + 1)) as u64))
-                    .collect();
-                ColumnBuilder::String(StringColumnBuilder { data, offsets })
-            }
+            ScalarRef::String(s) => ColumnBuilder::String(StringColumnBuilder::repeat(s, n)),
             ScalarRef::Array(col) => {
-                let col = ColumnBuilder::from_column(col.clone());
-                let len = col.len();
-                let mut builder = col.clone();
-                for _ in 1..n {
-                    builder.append(&col);
-                }
-                let offsets = once(0)
-                    .chain((0..n).map(|i| (len * (i + 1)) as u64))
-                    .collect();
-                ColumnBuilder::Array {
-                    array: Box::new(builder),
-                    offsets,
-                }
+                ColumnBuilder::Array(Box::new(ArrayColumnBuilder::repeat(col, n)))
             }
             ScalarRef::Tuple(fields) => ColumnBuilder::Tuple {
                 fields: fields.iter().map(|field| field.repeat(n)).collect(),
@@ -318,7 +291,7 @@ impl Column {
             Column::Float64(col) => col.len(),
             Column::Boolean(col) => col.len(),
             Column::String(col) => col.len(),
-            Column::Array { array: _, offsets } => offsets.len() - 1,
+            Column::Array(col) => col.len(),
             Column::Nullable {
                 column: _,
                 validity,
@@ -343,15 +316,7 @@ impl Column {
             Column::Float64(col) => Some(ScalarRef::Float64(col.get(index).cloned()?)),
             Column::Boolean(col) => Some(ScalarRef::Boolean(col.get(index)?)),
             Column::String(col) => col.index(index).map(ScalarRef::String),
-            Column::Array { array, offsets } => {
-                if offsets.len() > index + 1 {
-                    Some(ScalarRef::Array(array.slice(
-                        (offsets[index] as usize)..(offsets[index + 1] as usize),
-                    )))
-                } else {
-                    None
-                }
-            }
+            Column::Array(col) => Some(ScalarRef::Array(col.index(index)?)),
             Column::Nullable { column, validity } => Some(if validity.get(index)? {
                 column.index(index).unwrap()
             } else {
@@ -414,15 +379,7 @@ impl Column {
                 Column::Boolean(col.clone().slice(range.start, range.end - range.start))
             }
             Column::String(col) => Column::String(col.slice(range)),
-            Column::Array { array, offsets } => {
-                let offsets = offsets
-                    .clone()
-                    .slice(range.start, range.end - range.start + 1);
-                Column::Array {
-                    array: array.clone(),
-                    offsets,
-                }
-            }
+            Column::Array(col) => Column::Array(Box::new(col.slice(range))),
             Column::Nullable { column, validity } => {
                 let validity = validity.clone().slice(range.start, range.end - range.start);
                 Column::Nullable {
@@ -554,8 +511,8 @@ impl Column {
                     max: Some(max.to_vec()),
                 })
             }
-            Column::Array { array, .. } => {
-                let inner_domain = array.domain();
+            Column::Array(col) => {
+                let inner_domain = col.values.domain();
                 Domain::Array(Some(Box::new(inner_domain)))
             }
             Column::Nullable { column, validity } => {
@@ -595,19 +552,17 @@ impl Column {
             Column::Float64(_) => ArrowDataType::Float64,
             Column::Boolean(_) => ArrowDataType::Boolean,
             Column::String { .. } => ArrowDataType::LargeBinary,
-            Column::Array {
-                array: box Column::Nullable { column, .. },
+            Column::Array(box ArrayColumn {
+                values: Column::Nullable { column, .. },
                 ..
-            } => ArrowDataType::LargeList(Box::new(Field::new(
+            }) => ArrowDataType::LargeList(Box::new(Field::new(
                 "list".to_string(),
                 column.arrow_type(),
                 true,
             ))),
-            Column::Array { array, .. } => ArrowDataType::LargeList(Box::new(Field::new(
-                "list".to_string(),
-                array.arrow_type(),
-                false,
-            ))),
+            Column::Array(box ArrayColumn { values, .. }) => ArrowDataType::LargeList(Box::new(
+                Field::new("list".to_string(), values.arrow_type(), false),
+            )),
             Column::Nullable { column, .. } => column.arrow_type(),
             Column::Tuple { fields, .. } => {
                 let arrow_fields = fields
@@ -717,11 +672,11 @@ impl Column {
                     None,
                 ))
             }
-            Column::Array { array, offsets } => {
+            Column::Array(col) => {
                 Box::new(common_arrow::arrow::array::ListArray::<i64>::from_data(
                     self.arrow_type(),
-                    offsets.iter().map(|offset| *offset as i64).collect(),
-                    array.as_arrow(),
+                    col.offsets.iter().map(|offset| *offset as i64).collect(),
+                    col.values.as_arrow(),
                     None,
                 ))
             }
@@ -901,20 +856,20 @@ impl Column {
                 })
             }
             ArrowDataType::LargeList(_) => {
-                let arrow_col = arrow_col
+                let values_col = arrow_col
                     .as_any()
                     .downcast_ref::<common_arrow::arrow::array::ListArray<i64>>()
                     .expect("fail to read from arrow: array should be `ListArray<i64>`");
-                let array = Column::from_arrow(&**arrow_col.values());
-                let offsets = arrow_col
+                let values = Column::from_arrow(&**values_col.values());
+                let offsets = values_col
                     .offsets()
                     .iter()
                     .map(|x| *x as u64)
                     .collect::<Vec<_>>();
-                Column::Array {
-                    array: Box::new(array),
+                Column::Array(Box::new(ArrayColumn {
+                    values,
                     offsets: offsets.into(),
-                }
+                }))
             }
             ArrowDataType::Struct(_) => {
                 let arrow_col = arrow_col
@@ -962,10 +917,9 @@ impl ColumnBuilder {
             Column::Float64(col) => ColumnBuilder::Float64(buffer_into_mut(col)),
             Column::Boolean(col) => ColumnBuilder::Boolean(bitmap_into_mut(col)),
             Column::String(col) => ColumnBuilder::String(StringColumnBuilder::from_column(col)),
-            Column::Array { array, offsets } => ColumnBuilder::Array {
-                array: Box::new(ColumnBuilder::from_column(*array)),
-                offsets: offsets.to_vec(),
-            },
+            Column::Array(col) => {
+                ColumnBuilder::Array(Box::new(ArrayColumnBuilder::from_column(*col)))
+            }
             Column::Nullable { column, validity } => ColumnBuilder::Nullable {
                 column: Box::new(ColumnBuilder::from_column(*column)),
                 validity: bitmap_into_mut(validity),
@@ -996,7 +950,7 @@ impl ColumnBuilder {
             ColumnBuilder::Float64(col) => col.len(),
             ColumnBuilder::Boolean(col) => col.len(),
             ColumnBuilder::String(col) => col.len(),
-            ColumnBuilder::Array { array: _, offsets } => offsets.len() - 1,
+            ColumnBuilder::Array(col) => col.len(),
             ColumnBuilder::Nullable {
                 column: _,
                 validity,
@@ -1030,11 +984,18 @@ impl ColumnBuilder {
             DataType::Array(ty) => {
                 let mut offsets = Vec::with_capacity(capacity + 1);
                 offsets.push(0);
-                ColumnBuilder::Array {
-                    array: Box::new(Self::with_capacity(ty, 0)),
+                ColumnBuilder::Array(Box::new(ArrayColumnBuilder {
+                    builder: Self::with_capacity(ty, 0),
                     offsets,
-                }
+                }))
             }
+            DataType::Map(ty) => Self::with_capacity(
+                &DataType::Array(Box::new(DataType::Tuple(vec![
+                    DataType::String,
+                    (**ty).clone(),
+                ]))),
+                capacity,
+            ),
             DataType::Tuple(fields) => ColumnBuilder::Tuple {
                 fields: fields
                     .iter()
@@ -1067,9 +1028,8 @@ impl ColumnBuilder {
                 col.put_slice(value);
                 col.commit_row();
             }
-            (ColumnBuilder::Array { array, offsets }, ScalarRef::Array(value)) => {
-                array.append(&ColumnBuilder::from_column(value));
-                offsets.push(array.len() as u64);
+            (ColumnBuilder::Array(col), ScalarRef::Array(value)) => {
+                col.push(value);
             }
             (ColumnBuilder::Nullable { column, validity }, ScalarRef::Null) => {
                 column.push_default();
@@ -1105,12 +1065,8 @@ impl ColumnBuilder {
             ColumnBuilder::Float32(col) => col.push(0f32),
             ColumnBuilder::Float64(col) => col.push(0f64),
             ColumnBuilder::Boolean(col) => col.push(false),
-            ColumnBuilder::String(col) => {
-                col.commit_row();
-            }
-            ColumnBuilder::Array { array, offsets } => {
-                offsets.push(array.len() as u64);
-            }
+            ColumnBuilder::String(col) => col.commit_row(),
+            ColumnBuilder::Array(col) => col.push_default(),
             ColumnBuilder::Nullable { column, validity } => {
                 column.push_default();
                 validity.push(false);
@@ -1150,16 +1106,8 @@ impl ColumnBuilder {
             (ColumnBuilder::String(builder), ColumnBuilder::String(other_builder)) => {
                 builder.append(other_builder);
             }
-            (
-                ColumnBuilder::Array { array, offsets },
-                ColumnBuilder::Array {
-                    array: other_array,
-                    offsets: other_offsets,
-                },
-            ) => {
-                array.append(other_array);
-                let start = offsets.last().cloned().unwrap();
-                offsets.extend(other_offsets.iter().skip(1).map(|offset| start + offset));
+            (ColumnBuilder::Array(builder), ColumnBuilder::Array(other_builder)) => {
+                builder.append(other_builder);
             }
             (
                 ColumnBuilder::Nullable { column, validity },
@@ -1204,10 +1152,7 @@ impl ColumnBuilder {
             ColumnBuilder::Float64(builder) => Column::Float64(builder.into()),
             ColumnBuilder::Boolean(builder) => Column::Boolean(builder.into()),
             ColumnBuilder::String(builder) => Column::String(builder.build()),
-            ColumnBuilder::Array { array, offsets } => Column::Array {
-                array: Box::new(array.build()),
-                offsets: offsets.into(),
-            },
+            ColumnBuilder::Array(builder) => Column::Array(Box::new(builder.build())),
             ColumnBuilder::Nullable { column, validity } => Column::Nullable {
                 column: Box::new(column.build()),
                 validity: validity.into(),
@@ -1236,11 +1181,7 @@ impl ColumnBuilder {
             ColumnBuilder::Float64(builder) => Scalar::Float64(builder[0]),
             ColumnBuilder::Boolean(builder) => Scalar::Boolean(builder.get(0)),
             ColumnBuilder::String(builder) => Scalar::String(builder.build_scalar()),
-            ColumnBuilder::Array { array, offsets } => Scalar::Array(
-                array
-                    .build()
-                    .slice((offsets[0] as usize)..(offsets[1] as usize)),
-            ),
+            ColumnBuilder::Array(builder) => Scalar::Array(builder.build_scalar()),
             ColumnBuilder::Nullable { column, validity } => {
                 if validity.get(0) {
                     column.build_scalar()

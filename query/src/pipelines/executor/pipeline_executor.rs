@@ -22,7 +22,7 @@ use common_base::base::Runtime;
 use common_base::base::Thread;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_tracing::tracing;
+use tracing::warn;
 
 use crate::pipelines::executor::executor_condvar::WorkersCondvar;
 use crate::pipelines::executor::executor_graph::RunningGraph;
@@ -253,7 +253,7 @@ impl PipelineExecutor {
 impl Drop for PipelineExecutor {
     fn drop(&mut self) {
         if let Err(cause) = self.finish() {
-            tracing::warn!("Catch error when drop pipeline executor {:?}", cause);
+            warn!("Catch error when drop pipeline executor {:?}", cause);
         }
     }
 }

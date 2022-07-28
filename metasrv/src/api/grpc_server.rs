@@ -26,12 +26,12 @@ use common_meta_types::protobuf::FILE_DESCRIPTOR_SET;
 use common_meta_types::MetaError;
 use common_meta_types::MetaNetworkError;
 use common_meta_types::MetaResult;
-use common_tracing::tracing;
-use common_tracing::tracing::Instrument;
 use futures::future::Either;
 use tonic::transport::Identity;
 use tonic::transport::Server;
 use tonic::transport::ServerTlsConfig;
+use tracing::info;
+use tracing::Instrument;
 
 use crate::api::grpc::grpc_service::MetaServiceImpl;
 use crate::configs::Config;
@@ -82,7 +82,7 @@ impl GrpcServer {
             .map_err(|e| MetaNetworkError::TLSConfigError(AnyError::new(&e)))?;
 
         let mut builder = if let Some(tls_conf) = tls_conf {
-            tracing::info!("gRPC TLS enabled");
+            info!("gRPC TLS enabled");
             builder
                 .tls_config(tls_conf)
                 .map_err(|e| MetaNetworkError::TLSConfigError(AnyError::new(&e)))?
@@ -99,7 +99,7 @@ impl GrpcServer {
             }
         };
 
-        tracing::info!("gRPC addr: {}", addr);
+        info!("gRPC addr: {}", addr);
 
         let grpc_impl = MetaServiceImpl::create(meta_node.clone());
         let grpc_srv = MetaServiceServer::new(grpc_impl);
@@ -111,9 +111,9 @@ impl GrpcServer {
                     .add_service(grpc_srv)
                     .serve_with_shutdown(addr, async move {
                         let _ = started_tx.send(());
-                        tracing::info!("metasrv starts to wait for stop signal: {}", addr);
+                        info!("metasrv starts to wait for stop signal: {}", addr);
                         let _ = stop_rx.await;
-                        tracing::info!("metasrv receives stop signal: {}", addr);
+                        info!("metasrv receives stop signal: {}", addr);
                     })
                     .await;
 
@@ -121,13 +121,12 @@ impl GrpcServer {
 
                 let _ = meta_node.stop().await;
                 let send_fin_res = fin_tx.send(());
-                tracing::info!(
+                info!(
                     "metasrv sending signal of finishing shutdown {}, res: {:?}",
-                    addr,
-                    send_fin_res
+                    addr, send_fin_res
                 );
 
-                tracing::info!("metasrv returned res: {:?}", res);
+                info!("metasrv returned res: {:?}", res);
             }
             .instrument(tracing::debug_span!("spawn-grpc")),
         );
@@ -158,28 +157,28 @@ impl GrpcServer {
 
                 match futures::future::select(f, j).await {
                     Either::Left((_x, j)) => {
-                        tracing::info!("received force shutdown signal");
+                        info!("received force shutdown signal");
                         j.abort();
                     }
                     Either::Right(_) => {
-                        tracing::info!("Done: graceful shutdown");
+                        info!("Done: graceful shutdown");
                     }
                 }
             } else {
-                tracing::info!("no force signal, block waiting for join handle for ever");
+                info!("no force signal, block waiting for join handle for ever");
                 j.await.map_err(|e| {
                     MetaError::StartMetaServiceError(format!("metasrv join handle error: {}", e))
                 })?;
-                tracing::info!("Done: waiting for join handle for ever");
+                info!("Done: waiting for join handle for ever");
             }
         }
 
         if let Some(rx) = self.fin_rx.take() {
-            tracing::info!("block waiting for fin_rx");
+            info!("block waiting for fin_rx");
             rx.await.map_err(|e| {
                 MetaError::StartMetaServiceError(format!("metasrv fin_rx recv error: {}", e))
             })?;
-            tracing::info!("Done: block waiting for fin_rx");
+            info!("Done: block waiting for fin_rx");
         }
         Ok(())
     }
@@ -201,9 +200,9 @@ impl GrpcServer {
 #[tonic::async_trait]
 impl Stoppable for GrpcServer {
     async fn start(&mut self) -> common_exception::Result<()> {
-        tracing::info!("GrpcServer::start");
+        info!("GrpcServer::start");
         self.do_start().await?;
-        tracing::info!("Done GrpcServer::start");
+        info!("Done GrpcServer::start");
         Ok(())
     }
 
@@ -211,9 +210,9 @@ impl Stoppable for GrpcServer {
         &mut self,
         force: Option<tokio::sync::broadcast::Receiver<()>>,
     ) -> common_exception::Result<()> {
-        tracing::info!("GrpcServer::stop");
+        info!("GrpcServer::stop");
         self.do_stop(force).await?;
-        tracing::info!("Done GrpcServer::stop");
+        info!("Done GrpcServer::stop");
         Ok(())
     }
 }

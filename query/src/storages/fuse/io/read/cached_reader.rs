@@ -11,7 +11,6 @@
 //  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
-//
 
 use std::sync::Arc;
 
@@ -21,7 +20,7 @@ use common_exception::Result;
 use common_fuse_meta::caches::CacheDeferMetrics;
 use common_fuse_meta::caches::MemoryCache;
 use common_fuse_meta::caches::TenantLabel;
-use common_tracing::tracing::log::warn;
+use tracing::warn;
 
 use crate::storages::fuse::io::retry;
 use crate::storages::fuse::io::retry::Retryable;

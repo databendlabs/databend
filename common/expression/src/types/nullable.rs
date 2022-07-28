@@ -28,7 +28,9 @@ use crate::types::ValueType;
 use crate::util::bitmap_into_mut;
 use crate::values::Column;
 use crate::values::Scalar;
+use crate::ScalarRef;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NullableType<T: ValueType>(PhantomData<T>);
 
 impl<T: ValueType> ValueType for NullableType<T> {
@@ -36,6 +38,8 @@ impl<T: ValueType> ValueType for NullableType<T> {
     type ScalarRef<'a> = Option<T::ScalarRef<'a>>;
     type Column = (T::Column, Bitmap);
     type Domain = NullableDomain<T>;
+    type ColumnIterator<'a> = NullableIterator<'a, T>;
+    type ColumnBuilder = (T::ColumnBuilder, MutableBitmap);
 
     fn to_owned_scalar<'a>(scalar: Self::ScalarRef<'a>) -> Self::Scalar {
         scalar.map(T::to_owned_scalar)
@@ -44,19 +48,10 @@ impl<T: ValueType> ValueType for NullableType<T> {
     fn to_scalar_ref<'a>(scalar: &'a Self::Scalar) -> Self::ScalarRef<'a> {
         scalar.as_ref().map(T::to_scalar_ref)
     }
-}
 
-impl<T: ArgType> ArgType for NullableType<T> {
-    type ColumnIterator<'a> = NullableIterator<'a, T>;
-    type ColumnBuilder = (T::ColumnBuilder, MutableBitmap);
-
-    fn data_type() -> DataType {
-        DataType::Nullable(Box::new(T::data_type()))
-    }
-
-    fn try_downcast_scalar<'a>(scalar: &'a Scalar) -> Option<Self::ScalarRef<'a>> {
+    fn try_downcast_scalar<'a>(scalar: &'a ScalarRef) -> Option<Self::ScalarRef<'a>> {
         match scalar {
-            Scalar::Null => Some(None),
+            ScalarRef::Null => Some(None),
             scalar => Some(Some(T::try_downcast_scalar(scalar)?)),
         }
     }
@@ -104,13 +99,6 @@ impl<T: ArgType> ArgType for NullableType<T> {
         })
     }
 
-    fn full_domain(generics: &GenericMap) -> Self::Domain {
-        NullableDomain {
-            has_null: true,
-            value: Some(Box::new(T::full_domain(generics))),
-        }
-    }
-
     fn column_len<'a>((_, validity): &'a Self::Column) -> usize {
         validity.len()
     }
@@ -136,13 +124,6 @@ impl<T: ArgType> ArgType for NullableType<T> {
             iter: T::iter_column(col),
             validity: validity.iter(),
         }
-    }
-
-    fn create_builder(capacity: usize, generics: &GenericMap) -> Self::ColumnBuilder {
-        (
-            T::create_builder(capacity, generics),
-            MutableBitmap::with_capacity(capacity),
-        )
     }
 
     fn column_to_builder((col, validity): Self::Column) -> Self::ColumnBuilder {
@@ -194,12 +175,32 @@ impl<T: ArgType> ArgType for NullableType<T> {
     }
 }
 
-pub struct NullableIterator<'a, T: ArgType> {
+impl<T: ArgType> ArgType for NullableType<T> {
+    fn data_type() -> DataType {
+        DataType::Nullable(Box::new(T::data_type()))
+    }
+
+    fn full_domain(generics: &GenericMap) -> Self::Domain {
+        NullableDomain {
+            has_null: true,
+            value: Some(Box::new(T::full_domain(generics))),
+        }
+    }
+
+    fn create_builder(capacity: usize, generics: &GenericMap) -> Self::ColumnBuilder {
+        (
+            T::create_builder(capacity, generics),
+            MutableBitmap::with_capacity(capacity),
+        )
+    }
+}
+
+pub struct NullableIterator<'a, T: ValueType> {
     iter: T::ColumnIterator<'a>,
     validity: common_arrow::arrow::bitmap::utils::BitmapIter<'a>,
 }
 
-impl<'a, T: ArgType> Iterator for NullableIterator<'a, T> {
+impl<'a, T: ValueType> Iterator for NullableIterator<'a, T> {
     type Item = Option<T::ScalarRef<'a>>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -216,4 +217,4 @@ impl<'a, T: ArgType> Iterator for NullableIterator<'a, T> {
     }
 }
 
-unsafe impl<'a, T: ArgType> TrustedLen for NullableIterator<'a, T> {}
+unsafe impl<'a, T: ValueType> TrustedLen for NullableIterator<'a, T> {}

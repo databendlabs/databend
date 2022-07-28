@@ -20,8 +20,9 @@ use common_meta_types::MetaError;
 use common_meta_types::MetaResult;
 use common_meta_types::MetaStorageResult;
 use common_meta_types::NodeId;
-use common_tracing::tracing;
 use openraft::storage::HardState;
+use tracing::debug;
+use tracing::info;
 
 use crate::config::RaftConfig;
 use crate::sled_key_spaces::RaftStateKV;
@@ -64,8 +65,8 @@ impl RaftState {
         open: Option<()>,
         create: Option<()>,
     ) -> MetaResult<RaftState> {
-        tracing::info!(?config);
-        tracing::info!("open: {:?}, create: {:?}", open, create);
+        info!(?config);
+        info!("open: {:?}, create: {:?}", open, create);
 
         let tree_name = config.tree_name(TREE_RAFT_STATE);
         let inner = SledTree::open(db, &tree_name, config.is_sync())?;
@@ -73,7 +74,7 @@ impl RaftState {
         let state = inner.key_space::<RaftStateKV>();
         let curr_id = state.get(&RaftStateKey::Id)?.map(NodeId::from);
 
-        tracing::debug!("get curr_id: {:?}", curr_id);
+        debug!("get curr_id: {:?}", curr_id);
 
         let (id, is_open) = if let Some(curr_id) = curr_id {
             match (open, create) {

@@ -1,9 +1,0 @@
--- insert 3 blocks
--- check pruning, by col c1 
-Projection: c1:Int32, c2:String
-  Filter: (c1 = 1)
-    ReadDataSource: scan schema: [c1:Int32, c2:String], statistics: [read_rows: 1, read_bytes: 55, partitions_scanned: 1, partitions_total: 3], push_downs: [projections: [0, 1], filters: [(c1 = 1)]]
--- check pruning, by col c2 
-Projection: c1:Int32, c2:String
-  Filter: (c2 > b)
-    ReadDataSource: scan schema: [c1:Int32, c2:String], statistics: [read_rows: 1, read_bytes: 55, partitions_scanned: 1, partitions_total: 3], push_downs: [projections: [0, 1], filters: [(c2 > b)]]

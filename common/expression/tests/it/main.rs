@@ -24,6 +24,7 @@ use std::sync::Arc;
 use comfy_table::Table;
 use common_ast::DisplayError;
 use common_expression::type_check;
+use common_expression::types::array::ArrayColumn;
 use common_expression::types::string::StringColumn;
 use common_expression::types::ArrayType;
 use common_expression::types::DataType;
@@ -47,6 +48,7 @@ use common_expression::IntDomain;
 use common_expression::NullableDomain;
 use common_expression::RemoteExpr;
 use common_expression::Scalar;
+use common_expression::ScalarRef;
 use common_expression::Value;
 use common_expression::ValueRef;
 use goldenfile::Mint;
@@ -420,10 +422,10 @@ pub fn test_pass() {
         (
             "a",
             DataType::Array(Box::new(DataType::Int16)),
-            Column::Array {
-                array: Box::new(Column::Int16((0..100).collect())),
+            Column::Array(Box::new(ArrayColumn {
+                values: Column::Int16((0..100).collect()),
                 offsets: vec![0, 20, 40, 60, 80, 100].into(),
-            },
+            })),
         ),
         (
             "b",
@@ -435,17 +437,17 @@ pub fn test_pass() {
         (
             "a",
             DataType::Array(Box::new(DataType::Array(Box::new(DataType::Int16)))),
-            Column::Array {
-                array: Box::new(Column::Array {
-                    array: Box::new(Column::Int16((0..100).collect())),
+            Column::Array(Box::new(ArrayColumn {
+                values: Column::Array(Box::new(ArrayColumn {
+                    values: Column::Int16((0..100).collect()),
                     offsets: vec![
                         0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90,
                         95, 100,
                     ]
                     .into(),
-                }),
+                })),
                 offsets: vec![0, 4, 8, 11, 15, 20].into(),
-            },
+            })),
         ),
         (
             "b",
@@ -760,7 +762,7 @@ fn builtin_functions() -> FunctionRegistry {
                         for arg in args {
                             match arg {
                                 ValueRef::Scalar(scalar) => {
-                                    array_builder.push(scalar.as_ref());
+                                    array_builder.push(scalar.clone());
                                 }
                                 ValueRef::Column(col) => {
                                     array_builder.push(col.index(idx).unwrap());
@@ -771,17 +773,17 @@ fn builtin_functions() -> FunctionRegistry {
                     let offsets = once(0)
                         .chain((0..len).map(|row| (args.len() * (row + 1)) as u64))
                         .collect();
-                    Ok(Value::Column(Column::Array {
-                        array: Box::new(array_builder.build()),
+                    Ok(Value::Column(Column::Array(Box::new(ArrayColumn {
+                        values: array_builder.build(),
                         offsets,
-                    }))
+                    }))))
                 } else {
                     // All args are scalars, so we return a scalar as result
                     let mut array = ColumnBuilder::with_capacity(&generics[0], 0);
                     for arg in args {
                         match arg {
                             ValueRef::Scalar(scalar) => {
-                                array.push(scalar.as_ref());
+                                array.push(scalar.clone());
                             }
                             ValueRef::Column(_) => unreachable!(),
                         }
@@ -824,7 +826,7 @@ fn builtin_functions() -> FunctionRegistry {
                     let fields = args
                         .iter()
                         .map(|arg| match arg {
-                            ValueRef::Scalar(scalar) => scalar.as_ref().repeat(len).build(),
+                            ValueRef::Scalar(scalar) => scalar.clone().repeat(len).build(),
                             ValueRef::Column(col) => col.clone(),
                         })
                         .collect();
@@ -865,7 +867,7 @@ fn builtin_functions() -> FunctionRegistry {
                 args_domain[0].as_tuple().unwrap()[idx].clone()
             }),
             eval: Box::new(move |args, _| match &args[0] {
-                ValueRef::Scalar(Scalar::Tuple(fields)) => {
+                ValueRef::Scalar(ScalarRef::Tuple(fields)) => {
                     Ok(Value::Scalar(fields[idx].to_owned()))
                 }
                 ValueRef::Column(Column::Tuple { fields, .. }) => {
@@ -907,8 +909,8 @@ fn builtin_functions() -> FunctionRegistry {
                 })
             }),
             eval: Box::new(move |args, _| match &args[0] {
-                ValueRef::Scalar(Scalar::Null) => Ok(Value::Scalar(Scalar::Null)),
-                ValueRef::Scalar(Scalar::Tuple(fields)) => {
+                ValueRef::Scalar(ScalarRef::Null) => Ok(Value::Scalar(Scalar::Null)),
+                ValueRef::Scalar(ScalarRef::Tuple(fields)) => {
                     Ok(Value::Scalar(fields[idx].to_owned()))
                 }
                 ValueRef::Column(Column::Nullable {

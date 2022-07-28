@@ -21,9 +21,9 @@ use common_meta_types::protobuf::Empty;
 use common_meta_types::MatchSeq;
 use common_meta_types::Operation;
 use common_meta_types::UpsertKVReq;
-use common_tracing::tracing;
 use regex::Regex;
 use tokio_stream::StreamExt;
+use tracing::info;
 
 use crate::init_meta_ut;
 
@@ -44,7 +44,7 @@ async fn test_export() -> anyhow::Result<()> {
         None,
     )?;
 
-    tracing::info!("--- upsert kv");
+    info!("--- upsert kv");
     {
         for k in ["foo", "bar", "wow"] {
             client

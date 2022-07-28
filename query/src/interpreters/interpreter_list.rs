@@ -21,7 +21,6 @@ use common_exception::Result;
 use common_planners::ListPlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
-use common_tracing::tracing;
 
 use crate::interpreters::interpreter_common::list_files;
 use crate::interpreters::Interpreter;

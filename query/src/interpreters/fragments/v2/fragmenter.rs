@@ -122,6 +122,35 @@ impl Fragmenter {
 }
 
 impl PhysicalPlanReplacer for Fragmenter {
+    fn replace_table_scan(&mut self, plan: &TableScan) -> Result<PhysicalPlan> {
+        self.visiting_source_pipeline = true;
+
+        Ok(PhysicalPlan::TableScan(plan.clone()))
+    }
+
+    fn replace_hash_join(&mut self, plan: &HashJoin) -> Result<PhysicalPlan> {
+        let mut fragments = vec![];
+        let probe_input = self.replace(plan.probe.as_ref())?;
+
+        // Consume current fragments to prevent them being consumed by `build_input`.
+        fragments.append(&mut self.fragments);
+        let build_input = self.replace(plan.build.as_ref())?;
+
+        fragments.append(&mut self.fragments);
+        self.fragments = fragments;
+
+        Ok(PhysicalPlan::HashJoin(HashJoin {
+            build: Box::new(build_input),
+            probe: Box::new(probe_input),
+            build_keys: plan.build_keys.clone(),
+            probe_keys: plan.probe_keys.clone(),
+            other_conditions: plan.other_conditions.clone(),
+            join_type: plan.join_type.clone(),
+            marker_index: plan.marker_index,
+            from_correlated_subquery: plan.from_correlated_subquery,
+        }))
+    }
+
     fn replace_exchange(&mut self, plan: &Exchange) -> Result<PhysicalPlan> {
         // Recursively rewrite input
         let input = self.replace(plan.input.as_ref())?;
@@ -178,34 +207,5 @@ impl PhysicalPlanReplacer for Fragmenter {
 
             source_fragment_id,
         }))
-    }
-
-    fn replace_hash_join(&mut self, plan: &HashJoin) -> Result<PhysicalPlan> {
-        let mut fragments = vec![];
-        let probe_input = self.replace(plan.probe.as_ref())?;
-
-        // Consume current fragments to prevent them being consumed by `build_input`.
-        fragments.append(&mut self.fragments);
-        let build_input = self.replace(plan.build.as_ref())?;
-
-        fragments.append(&mut self.fragments);
-        self.fragments = fragments;
-
-        Ok(PhysicalPlan::HashJoin(HashJoin {
-            build: Box::new(build_input),
-            probe: Box::new(probe_input),
-            build_keys: plan.build_keys.clone(),
-            probe_keys: plan.probe_keys.clone(),
-            other_conditions: plan.other_conditions.clone(),
-            join_type: plan.join_type.clone(),
-            marker_index: plan.marker_index,
-            from_correlated_subquery: plan.from_correlated_subquery,
-        }))
-    }
-
-    fn replace_table_scan(&mut self, plan: &TableScan) -> Result<PhysicalPlan> {
-        self.visiting_source_pipeline = true;
-
-        Ok(PhysicalPlan::TableScan(plan.clone()))
     }
 }

@@ -22,8 +22,8 @@ use common_meta_types::LogEntry;
 use common_meta_types::LogId;
 use common_meta_types::LogIndex;
 use common_meta_types::MetaStorageResult;
-use common_tracing::tracing;
 use openraft::raft::Entry;
+use tracing::info;
 
 use crate::config::RaftConfig;
 use crate::sled_key_spaces::LogMeta;
@@ -43,7 +43,7 @@ impl RaftLog {
     /// Open RaftLog
     #[tracing::instrument(level = "debug", skip(db,config), fields(config_id=%config.config_id))]
     pub async fn open(db: &sled::Db, config: &RaftConfig) -> MetaStorageResult<RaftLog> {
-        tracing::info!(?config);
+        info!(?config);
 
         let tree_name = config.tree_name(TREE_RAFT_LOG);
         let inner = SledTree::open(db, &tree_name, config.is_sync())?;

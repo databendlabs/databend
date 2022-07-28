@@ -18,7 +18,6 @@ common-datablocks = { path = "../datablocks" }
 common-datavalues = { path = "../datavalues" }
 common-exception = { path = "../exception" }
 common-io = { path = "../io" }
-common-tracing = { path = "../tracing" }
 
 # Github dependencies
 

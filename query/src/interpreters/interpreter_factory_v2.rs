@@ -41,14 +41,14 @@ impl InterpreterFactoryV2 {
         matches!(
             stmt,
             DfStatement::Query(_)
-                | DfStatement::Copy(_)
+                | DfStatement::Copy
                 | DfStatement::Explain(_)
-                | DfStatement::CreateStage(_)
-                | DfStatement::ShowStages(_)
-                | DfStatement::DescribeStage(_)
-                | DfStatement::List(_)
-                | DfStatement::DropStage(_)
-                | DfStatement::RemoveStage(_)
+                | DfStatement::CreateStage
+                | DfStatement::ShowStages
+                | DfStatement::DescribeStage
+                | DfStatement::List
+                | DfStatement::DropStage
+                | DfStatement::RemoveStage
                 | DfStatement::ShowDatabases(_)
                 | DfStatement::ShowCreateDatabase(_)
                 | DfStatement::ShowTables(_)

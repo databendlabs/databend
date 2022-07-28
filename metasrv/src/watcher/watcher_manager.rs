@@ -11,7 +11,6 @@
 //  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
-//
 use core::ops::Range;
 
 use common_base::base::tokio;
@@ -26,9 +25,10 @@ use common_meta_types::protobuf::WatchRequest;
 use common_meta_types::protobuf::WatchResponse;
 use common_meta_types::PbSeqV;
 use common_meta_types::SeqV;
-use common_tracing::tracing;
 use prost::Message;
 use tonic::Status;
+use tracing::info;
+use tracing::warn;
 
 use super::WatcherStream;
 use crate::metrics::incr_meta_metrics_meta_sent_bytes;
@@ -111,7 +111,7 @@ impl WatcherManagerCore {
                     }
                 }
             } else {
-                tracing::info!("watcher manager has been shutdown");
+                info!("watcher manager has been shutdown");
                 break;
             }
         }
@@ -160,10 +160,9 @@ impl WatcherManagerCore {
             incr_meta_metrics_meta_sent_bytes(resp.encoded_len() as u64);
 
             if let Err(err) = stream.send(resp).await {
-                tracing::warn!(
+                warn!(
                     "close watcher stream {:?} cause send err: {:?}",
-                    watcher_id,
-                    err
+                    watcher_id, err
                 );
                 remove_range_keys.push(RangeMapKey::new(
                     stream.key.clone()..stream.key_end.clone(),
@@ -179,7 +178,7 @@ impl WatcherManagerCore {
 
     #[tracing::instrument(level = "debug", skip(self))]
     pub async fn create_watcher_stream(&mut self, create: WatchRequest, tx: WatcherStreamSender) {
-        tracing::info!("create_watcher_stream: {:?}", create);
+        info!("create_watcher_stream: {:?}", create);
 
         let range = match WatcherManagerCore::get_range_key(create.key.clone(), &create.key_end) {
             Ok(range) => range,

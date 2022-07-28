@@ -17,6 +17,7 @@ pub mod array;
 pub mod boolean;
 pub mod empty_array;
 pub mod generic;
+pub mod map;
 pub mod null;
 pub mod nullable;
 pub mod number;
@@ -35,6 +36,7 @@ pub use self::array::ArrayType;
 pub use self::boolean::BooleanType;
 pub use self::empty_array::EmptyArrayType;
 pub use self::generic::GenericType;
+pub use self::map::MapType;
 pub use self::null::NullType;
 pub use self::nullable::NullableType;
 pub use self::number::NumberType;
@@ -42,6 +44,7 @@ pub use self::string::StringType;
 use crate::property::Domain;
 use crate::values::Column;
 use crate::values::Scalar;
+use crate::ScalarRef;
 
 pub type GenericMap<'a> = [DataType];
 
@@ -66,39 +69,47 @@ pub enum DataType {
     Nullable(Box<DataType>),
     EmptyArray,
     Array(Box<DataType>),
+    Map(Box<DataType>),
     Tuple(Vec<DataType>),
     Generic(usize),
 }
 
-pub trait ValueType: Sized + 'static {
+pub trait ValueType: Debug + Clone + PartialEq + Sized + 'static {
     type Scalar: Debug + Clone;
     type ScalarRef<'a>: Debug + Clone;
     type Column: Debug + Clone;
     type Domain: Debug + Clone + PartialEq;
+    type ColumnIterator<'a>: Iterator<Item = Self::ScalarRef<'a>> + TrustedLen;
+    type ColumnBuilder: Clone;
 
     fn to_owned_scalar<'a>(scalar: Self::ScalarRef<'a>) -> Self::Scalar;
     fn to_scalar_ref<'a>(scalar: &'a Self::Scalar) -> Self::ScalarRef<'a>;
-}
 
-pub trait ArgType: ValueType {
-    type ColumnIterator<'a>: Iterator<Item = Self::ScalarRef<'a>> + TrustedLen;
-    type ColumnBuilder;
-
-    fn data_type() -> DataType;
-
-    fn try_downcast_scalar<'a>(scalar: &'a Scalar) -> Option<Self::ScalarRef<'a>>;
+    fn try_downcast_scalar<'a>(scalar: &'a ScalarRef) -> Option<Self::ScalarRef<'a>>;
     fn try_downcast_column<'a>(col: &'a Column) -> Option<Self::Column>;
     fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain>;
     fn upcast_scalar(scalar: Self::Scalar) -> Scalar;
     fn upcast_column(col: Self::Column) -> Column;
     fn upcast_domain(domain: Self::Domain) -> Domain;
 
-    fn full_domain(generics: &GenericMap) -> Self::Domain;
-
     fn column_len<'a>(col: &'a Self::Column) -> usize;
     fn index_column<'a>(col: &'a Self::Column, index: usize) -> Option<Self::ScalarRef<'a>>;
     fn slice_column<'a>(col: &'a Self::Column, range: Range<usize>) -> Self::Column;
     fn iter_column<'a>(col: &'a Self::Column) -> Self::ColumnIterator<'a>;
+
+    fn column_to_builder(col: Self::Column) -> Self::ColumnBuilder;
+    fn builder_len(builder: &Self::ColumnBuilder) -> usize;
+    fn push_item(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>);
+    fn push_default(builder: &mut Self::ColumnBuilder);
+    fn append_builder(builder: &mut Self::ColumnBuilder, other_builder: &Self::ColumnBuilder);
+    fn build_column(builder: Self::ColumnBuilder) -> Self::Column;
+    fn build_scalar(builder: Self::ColumnBuilder) -> Self::Scalar;
+}
+
+pub trait ArgType: ValueType {
+    fn data_type() -> DataType;
+    fn full_domain(generics: &GenericMap) -> Self::Domain;
+    fn create_builder(capacity: usize, generics: &GenericMap) -> Self::ColumnBuilder;
     fn column_from_iter(
         iter: impl Iterator<Item = Self::Scalar>,
         generics: &GenericMap,
@@ -109,15 +120,6 @@ pub trait ArgType: ValueType {
         }
         Self::build_column(col)
     }
-
-    fn create_builder(capacity: usize, generics: &GenericMap) -> Self::ColumnBuilder;
-    fn column_to_builder(col: Self::Column) -> Self::ColumnBuilder;
-    fn builder_len(builder: &Self::ColumnBuilder) -> usize;
-    fn push_item(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>);
-    fn push_default(builder: &mut Self::ColumnBuilder);
-    fn append_builder(builder: &mut Self::ColumnBuilder, other_builder: &Self::ColumnBuilder);
-    fn build_column(builder: Self::ColumnBuilder) -> Self::Column;
-    fn build_scalar(builder: Self::ColumnBuilder) -> Self::Scalar;
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
