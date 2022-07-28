@@ -875,6 +875,7 @@ async fn test_auth_jwt_with_create_user() -> Result<()> {
         nonce: None,
         custom: CustomClaims {
             tenant_id: None,
+            role: None,
             ensure_user: Some(EnsureUser::default()),
         },
     };
