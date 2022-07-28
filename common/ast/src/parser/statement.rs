@@ -458,7 +458,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             CREATE ~ USER ~ ( IF ~ NOT ~ EXISTS )?
             ~ #user_identity
             ~ IDENTIFIED ~ ( WITH ~ ^#auth_type )? ~ ( BY ~ ^#literal_string )?
-            ~ ( WITH ~ ^#user_option+ )?
+            ~ ( WITH ~ ^#comma_separated_list1(user_option))?
         },
         |(_, _, opt_if_not_exists, user, _, opt_auth_type, opt_password, opt_user_option)| {
             Statement::CreateUser(CreateUserStmt {
@@ -478,7 +478,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         rule! {
             ALTER ~ USER ~ ( #map(rule! { USER ~ "(" ~ ")" }, |_| None) | #map(user_identity, Some) )
             ~ ( IDENTIFIED ~ ( WITH ~ ^#auth_type )? ~ ( BY ~ ^#literal_string )? )?
-            ~ ( WITH ~ ^#user_option+ )?
+            ~ ( WITH ~ ^#comma_separated_list1(user_option) )?
         },
         |(_, _, user, opt_auth_option, opt_user_option)| {
             Statement::AlterUser(AlterUserStmt {
@@ -785,8 +785,8 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         ),
         rule!(
             #show_users : "`SHOW USERS`"
-            | #create_user : "`CREATE USER [IF NOT EXISTS] '<username>'@'hostname' IDENTIFIED [WITH <auth_type>] [BY <password>] [WITH <user_option> ...]`"
-            | #alter_user : "`ALTER USER ('<username>'@'hostname' | USER()) [IDENTIFIED [WITH <auth_type>] [BY <password>]] [WITH <user_option> ...]`"
+            | #create_user : "`CREATE USER [IF NOT EXISTS] '<username>'@'hostname' IDENTIFIED [WITH <auth_type>] [BY <password>] [WITH <user_option>, ...]`"
+            | #alter_user : "`ALTER USER ('<username>'@'hostname' | USER()) [IDENTIFIED [WITH <auth_type>] [BY <password>]] [WITH <user_option>, ...]`"
             | #drop_user : "`DROP USER [IF EXISTS] '<username>'@'hostname'`"
             | #show_roles : "`SHOW ROLES`"
             | #create_role : "`CREATE ROLE [IF NOT EXISTS] '<role_name>']`"

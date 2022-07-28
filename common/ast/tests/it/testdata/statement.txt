@@ -1458,6 +1458,85 @@ AlterUser(
 
 
 ---------- Input ----------
+ALTER USER u1 WITH DEFAULT_ROLE = 'role1';
+---------- Output ---------
+ALTER USER 'u1'@'%' WITH DEFAULT_ROLE = 'role1'
+---------- AST ------------
+AlterUser(
+    AlterUserStmt {
+        user: Some(
+            UserIdentity {
+                username: "u1",
+                hostname: "%",
+            },
+        ),
+        auth_option: None,
+        user_options: [
+            DefaultRole(
+                "role1",
+            ),
+        ],
+    },
+)
+
+
+---------- Input ----------
+ALTER USER u1 WITH DEFAULT_ROLE = 'role1', TENANTSETTING;
+---------- Output ---------
+ALTER USER 'u1'@'%' WITH DEFAULT_ROLE = 'role1' TENANTSETTING
+---------- AST ------------
+AlterUser(
+    AlterUserStmt {
+        user: Some(
+            UserIdentity {
+                username: "u1",
+                hostname: "%",
+            },
+        ),
+        auth_option: None,
+        user_options: [
+            DefaultRole(
+                "role1",
+            ),
+            TenantSetting(
+                true,
+            ),
+        ],
+    },
+)
+
+
+---------- Input ----------
+CREATE USER u1 IDENTIFIED BY '123456' WITH DEFAULT_ROLE='role123', TENANTSETTING
+---------- Output ---------
+CREATE USER 'u1'@'%' IDENTIFIED BY '123456' WITH DEFAULT_ROLE = 'role123' TENANTSETTING
+---------- AST ------------
+CreateUser(
+    CreateUserStmt {
+        if_not_exists: false,
+        user: UserIdentity {
+            username: "u1",
+            hostname: "%",
+        },
+        auth_option: AuthOption {
+            auth_type: None,
+            password: Some(
+                "123456",
+            ),
+        },
+        user_options: [
+            DefaultRole(
+                "role123",
+            ),
+            TenantSetting(
+                true,
+            ),
+        ],
+    },
+)
+
+
+---------- Input ----------
 DROP database if exists db1;
 ---------- Output ---------
 DROP DATABASE IF EXISTS db1
