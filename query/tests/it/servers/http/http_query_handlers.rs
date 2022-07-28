@@ -417,7 +417,8 @@ fn test_http_session_serde() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_http_session() -> Result<()> {
     let ep = create_endpoint();
-    let json = serde_json::json!({"sql":  "use system", "session": {"keep_server_session_secs": 10}});
+    let json =
+        serde_json::json!({"sql":  "use system", "session": {"keep_server_session_secs": 10}});
 
     let (status, result) = post_json_to_endpoint(&ep, &json).await?;
     assert_eq!(status, StatusCode::OK);
