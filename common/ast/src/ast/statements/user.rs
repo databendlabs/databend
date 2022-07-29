@@ -42,8 +42,8 @@ impl Display for CreateUserStmt {
         write!(f, " {}", self.auth_option)?;
         if !self.user_options.is_empty() {
             write!(f, " WITH")?;
-            for role_option in &self.user_options {
-                write!(f, " {role_option}")?;
+            for user_option in &self.user_options {
+                write!(f, " {user_option}")?;
             }
         }
 
