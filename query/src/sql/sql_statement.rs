@@ -73,104 +73,45 @@ use crate::sql::statements::DfUseDatabase;
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq)]
 pub enum DfStatement<'a> {
-    // ANSI SQL AST node
     Query(Box<DfQueryStatement>),
     Explain(DfExplain<'a>),
-
-    // Databases.
-    ShowDatabases(DfShowDatabases),
-    ShowCreateDatabase(DfShowCreateDatabase),
-    CreateDatabase(DfCreateDatabase),
-    DropDatabase(DfDropDatabase),
-    UseDatabase(DfUseDatabase),
-    AlterDatabase(DfAlterDatabase),
-
-    // Tables.
-    ShowTables(DfShowTables),
-    ShowCreateTable(DfShowCreateTable),
-    ShowTablesStatus(DfShowTablesStatus),
-    CreateTable(DfCreateTable),
-    DescribeTable(DfDescribeTable),
-    DropTable(DfDropTable),
-    UndropTable(DfUndropTable),
-    UndropDatabase(DfUndropDatabase),
-    AlterTable(DfAlterTable),
-    TruncateTable(DfTruncateTable),
-    OptimizeTable(DfOptimizeTable),
-    ExistsTable(DfExistsTable),
-    RenameTable(DfRenameTable),
-
-    // Views.
-    CreateView(DfCreateView),
-    // TODO(veeupup) make alter and delete view done
-    AlterView(DfAlterView),
-    DropView(DfDropView),
-
-    // Settings.
-    ShowSettings(DfShowSettings),
-
-    // ProcessList
-    ShowProcessList(DfShowProcessList),
-
-    // Metrics
-    ShowMetrics(DfShowMetrics),
-
-    // Functions
-    ShowFunctions(DfShowFunctions),
-
-    // Kill
-    KillStatement(DfKillStatement),
-
-    // Set
-    SetVariable(DfSetVariable),
-
-    // Insert
     InsertQuery(DfInsertStatement<'a>),
-
-    // Delete
     Delete(Box<DfDeleteStatement>),
 
-    // User
-    CreateUser(DfCreateUser),
-    AlterUser(DfAlterUser),
-    ShowUsers(DfShowUsers),
-    DropUser(DfDropUser),
-
-    // Role
-    CreateRole(DfCreateRole),
-    DropRole(DfDropRole),
-    ShowRoles(DfShowRoles),
-
-    // Call
-    Call(DfCall),
-
-    // Grant
-    GrantPrivilege(DfGrantPrivilegeStatement),
-    GrantRole(DfGrantRoleStatement),
-    ShowGrants(DfShowGrants),
-
-    // Revoke
-    RevokePrivilege(DfRevokePrivilegeStatement),
-    RevokeRole(DfRevokeRoleStatement),
-
-    // UDF
-    CreateUDF(DfCreateUDF),
-    DropUDF(DfDropUDF),
-    AlterUDF(DfAlterUDF),
-
-    // Engine
-    ShowEngines(DfShowEngines),
-
-    // The following statements are just placeholders, we will forword the whole query to
-    // new planner always.
-    Presign,
-    Copy,
-    CreateStage,
-    DropStage,
-    DescribeStage,
-    RemoveStage,
-    List,
-    ShowStages,
+    // “See You Again” is a tribute to the late Furious actor Paul Walker
+    // who died tragically in November of 2013 after his car crashed and
+    // burst into flames in Valencia, CA.
+    // The first verse is from the perspective of Vin Diesel and
+    // the Furious 7 cast members, while the second is from Paul Walker.
+    //
+    // It's been a long day without you, my friend
+    // And I'll tell you all about it when I see you again
+    // We've come a long way from where we began
+    // Oh, I'll tell you all about it when I see you again
+    // When I see you again
+    //
+    // It's been a long day without you, my friend
+    // And I'll tell you all about it when I see you again
+    // We've come a long way from where we began
+    // Oh, I'll tell you all about it when I see you again
+    // When I see you again
+    // Oh-oh-oh-oh, oh-oh-oh, oh-oh-oh-oh (Uh)
+    // Yeah yeah (Yeah)
+    // Ooh-ooh-ooh-ooh-ooh, ooh-ooh-ooh-ooh
+    // Ooh-ooh-ooh-ooh-ooh, ooh-ooh-ooh-ooh-ooh (Yo)
+    // When I see you again (Yo, uh)
+    // Oh-oh-oh-oh, oh-oh-oh, oh-oh-oh-oh
+    // See you again, yeah, yeah, oh-oh (Yo, yo)
+    // Ooh-ooh-ooh-ooh-ooh, ooh-ooh-ooh-ooh
+    // Ooh-ooh-ooh-ooh-ooh, ooh-ooh-ooh-ooh-ooh (Uh-huh, yup)
+    // When I see you again
+    //
+    // We dedicate this song to the old planner.
+    // It's been fun with you, but it's time for us to depart, see you again!
+    //
+    // While reading `SeeYouAgain`, we will forward the entire query to the new
+    // planner directly.
+    SeeYouAgain,
 }
 
 /// Comment hints from SQL.
