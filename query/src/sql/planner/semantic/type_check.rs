@@ -1410,17 +1410,17 @@ impl<'a> TypeChecker<'a> {
             ("trim_both", trim_scalar)
         };
 
-        let box (trim_source, _) = self.resolve(expr, Some(StringType::new_impl())).await?;
+        let box (trim_source, source_type) = self.resolve(expr, None).await?;
         let args = vec![trim_source, trim_scalar];
         let func = FunctionFactory::instance()
-            .get(func_name, &[&StringType::new_impl(); 2])
+            .get(func_name, &[&source_type, &StringType::new_impl()])
             .map_err(|e| ErrorCode::SemanticError(span.display_error(e.message())))?;
 
         Ok(Box::new((
             FunctionCall {
                 arguments: args,
                 func_name: func_name.to_string(),
-                arg_types: vec![StringType::new_impl(); 2],
+                arg_types: vec![source_type, StringType::new_impl()],
                 return_type: Box::new(func.return_type()),
             }
             .into(),
