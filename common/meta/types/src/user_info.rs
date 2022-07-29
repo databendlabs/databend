@@ -129,8 +129,8 @@ impl UserOption {
         &self.flags
     }
 
-    pub fn default_role(&self) -> &Option<String> {
-        &self.default_role
+    pub fn default_role(&self) -> Option<&String> {
+        self.default_role.as_ref()
     }
 
     pub fn set_default_role(&mut self, default_role: Option<String>) {

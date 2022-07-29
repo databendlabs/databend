@@ -96,7 +96,7 @@ impl FromToProto<pb::UserOption> for mt::UserOption {
             ver: VER,
             min_compatible: MIN_COMPATIBLE_VER,
             flags: self.flags().bits(),
-            default_role: self.default_role().clone(),
+            default_role: self.default_role().cloned(),
         })
     }
 }

@@ -57,7 +57,7 @@ impl AsyncSystemTable for UsersTable {
             .map(|x| {
                 x.option
                     .default_role()
-                    .clone()
+                    .cloned()
                     .unwrap_or_else(|| "".to_string())
             })
             .collect();
