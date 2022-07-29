@@ -60,65 +60,23 @@ async fn test_grant_privilege_interpreter() -> Result<()> {
         expected_err: Option<&'static str>,
     }
 
-    let tests: Vec<Test> = vec![
-        Test {
-            name: "grant create user to global",
-            query: format!("GRANT CREATE USER ON *.* TO '{}'@'{}'", name, hostname),
-            principal_identity: Some(PrincipalIdentity::user(
-                name.to_string(),
-                hostname.to_string(),
-            )),
-            expected_grants: Some({
-                let mut grants = UserGrantSet::empty();
-                grants.grant_privileges(
-                    &GrantObject::Global,
-                    vec![UserPrivilegeType::CreateUser].into(),
-                );
-                grants
-            }),
-            expected_err: None,
-        },
-        Test {
-            name: "grant create user to global for role",
-            query: "GRANT CREATE USER ON *.* TO ROLE 'role1'".to_string(),
-            principal_identity: Some(PrincipalIdentity::role("role1".to_string())),
-            expected_grants: Some({
-                let mut grants = UserGrantSet::empty();
-                grants.grant_privileges(
-                    &GrantObject::Global,
-                    vec![UserPrivilegeType::CreateUser].into(),
-                );
-                grants
-            }),
-            expected_err: None,
-        },
-        Test {
-            name: "grant create user to current database and expect err",
-            query: format!("GRANT CREATE USER ON * TO '{}'@'{}'", name, hostname),
-            principal_identity: None,
-            expected_grants: None,
-            expected_err: Some(
-                "Code: 1061, displayText = Illegal GRANT/REVOKE command; please consult the manual to see which privileges can be used.",
-            ),
-        },
-        Test {
-            name: "grant all on global",
-            query: format!("GRANT ALL ON *.* TO '{}'@'{}'", name, hostname),
-            principal_identity: Some(PrincipalIdentity::user(
-                name.to_string(),
-                hostname.to_string(),
-            )),
-            expected_grants: Some({
-                let mut grants = UserGrantSet::empty();
-                grants.grant_privileges(
-                    &GrantObject::Global,
-                    GrantObject::Global.available_privileges(),
-                );
-                grants
-            }),
-            expected_err: None,
-        },
-    ];
+    let tests: Vec<Test> = vec![Test {
+        name: "grant all on global",
+        query: format!("GRANT ALL ON *.* TO '{}'@'{}'", name, hostname),
+        principal_identity: Some(PrincipalIdentity::user(
+            name.to_string(),
+            hostname.to_string(),
+        )),
+        expected_grants: Some({
+            let mut grants = UserGrantSet::empty();
+            grants.grant_privileges(
+                &GrantObject::Global,
+                GrantObject::Global.available_privileges(),
+            );
+            grants
+        }),
+        expected_err: None,
+    }];
 
     for tt in tests {
         let (plan, _, _) = planner.plan_sql(&tt.query).await?;
