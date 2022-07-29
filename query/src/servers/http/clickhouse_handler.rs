@@ -154,6 +154,7 @@ async fn execute_v2(
             .finish()
             .await
             .map_err(|e| error!("interpreter.finish error: {:?} ", e));
+        // to hold session ref until stream is all consumed
         let _ = session.get_id();
     };
 
@@ -215,6 +216,7 @@ async fn execute(
             .finish()
             .await
             .map_err(|e| error!("interpreter.finish error: {:?}", e));
+        // to hold session ref until stream is all consumed
         let _ = session.get_id();
     };
 
