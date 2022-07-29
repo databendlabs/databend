@@ -23,6 +23,7 @@ use pretty_assertions::assert_eq;
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_drop_udf_interpreter() -> Result<()> {
     let ctx = crate::tests::create_query_context().await?;
+    let mut planner = Planner::new(ctx.clone());
     let tenant = ctx.get_tenant();
 
     static CREATE_UDF: &str = "CREATE FUNCTION IF NOT EXISTS isnotempty AS (p) -> not(is_null(p)) DESC = 'This is a description'";
@@ -31,8 +32,8 @@ async fn test_drop_udf_interpreter() -> Result<()> {
     static DROP_UDF: &str = "DROP FUNCTION isnotempty";
 
     {
-        let plan = PlanParser::parse(ctx.clone(), CREATE_UDF).await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let (plan, _, _) = planner.plan_sql(CREATE_UDF).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         let mut stream = executor.execute(None).await?;
         while let Some(_block) = stream.next().await {}
         let udf = ctx
@@ -47,32 +48,32 @@ async fn test_drop_udf_interpreter() -> Result<()> {
     }
 
     {
-        let plan = PlanParser::parse(ctx.clone(), DROP_UDF).await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let (plan, _, _) = planner.plan_sql(DROP_UDF).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         assert_eq!(executor.name(), "DropUserUDFInterpreter");
         let res = executor.execute(None).await;
         assert!(res.is_ok());
     }
 
     {
-        let plan = PlanParser::parse(ctx.clone(), DROP_UDF_IF_EXISTS).await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let (plan, _, _) = planner.plan_sql(DROP_UDF_IF_EXISTS).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         assert_eq!(executor.name(), "DropUserUDFInterpreter");
         let res = executor.execute(None).await;
         assert!(res.is_ok());
     }
 
     {
-        let plan = PlanParser::parse(ctx.clone(), DROP_UDF).await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let (plan, _, _) = planner.plan_sql(DROP_UDF).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         assert_eq!(executor.name(), "DropUserUDFInterpreter");
         let res = executor.execute(None).await;
         assert!(res.is_err());
     }
 
     {
-        let plan = PlanParser::parse(ctx.clone(), CREATE_UDF).await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let (plan, _, _) = planner.plan_sql(CREATE_UDF).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         assert_eq!(executor.name(), "CreateUserUDFInterpreter");
         let mut stream = executor.execute(None).await?;
         while let Some(_block) = stream.next().await {}

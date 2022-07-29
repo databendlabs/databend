@@ -23,6 +23,7 @@ use pretty_assertions::assert_eq;
 #[tokio::test]
 async fn interpreter_show_create_table_test() -> Result<()> {
     let ctx = crate::tests::create_query_context().await?;
+    let mut planner = Planner::new(ctx.clone());
 
     struct Case<'a> {
         create_stmt: Vec<&'a str>,
@@ -75,13 +76,13 @@ async fn interpreter_show_create_table_test() -> Result<()> {
 
     for case in cases {
         for stmt in case.create_stmt {
-            let plan = PlanParser::parse(ctx.clone(), stmt).await?;
-            let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+            let (plan, _, _) = planner.plan_sql(stmt).await?;
+            let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
             let _ = executor.execute(None).await?;
         }
-        let plan = PlanParser::parse(ctx.clone(), case.show_stmt).await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        assert_eq!(executor.name(), "ShowCreateTableInterpreter");
+        let (plan, _, _) = planner.plan_sql(case.show_stmt).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        assert_eq!(executor.name(), "SelectInterpreterV2");
         let result = executor
             .execute(None)
             .await?
@@ -96,6 +97,7 @@ async fn interpreter_show_create_table_test() -> Result<()> {
 #[tokio::test]
 async fn interpreter_show_create_table_with_comments_test() -> Result<()> {
     let ctx = crate::tests::create_query_context().await?;
+    let mut planner = Planner::new(ctx.clone());
 
     struct Case<'a> {
         create_stmt: Vec<&'a str>,
@@ -158,10 +160,9 @@ async fn interpreter_show_create_table_with_comments_test() -> Result<()> {
             let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
             let _ = executor.execute(None).await?;
         }
-        // show table in the old planner because the new planner doesn't support it yet.
-        let plan = PlanParser::parse(ctx.clone(), case.show_stmt).await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        assert_eq!(executor.name(), "ShowCreateTableInterpreter");
+        let (plan, _, _) = planner.plan_sql(case.show_stmt).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        assert_eq!(executor.name(), "SelectInterpreterV2");
         let result = executor
             .execute(None)
             .await?

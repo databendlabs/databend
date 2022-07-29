@@ -16,18 +16,21 @@ use common_base::base::tokio;
 use common_exception::Result;
 use databend_query::interpreters::*;
 use databend_query::sql::PlanParser;
+use databend_query::sql::Planner;
 use futures::stream::StreamExt;
 use pretty_assertions::assert_eq;
 
 #[tokio::test]
 async fn test_use_interpreter() -> Result<()> {
     let ctx = crate::tests::create_query_context().await?;
+    let mut planner = Planner::new(ctx.clone());
 
-    let plan = PlanParser::parse(ctx.clone(), "USE default").await?;
-    let interpreter = InterpreterFactory::get(ctx, plan)?;
-    assert_eq!(interpreter.name(), "UseDatabaseInterpreter");
+    let query = "USE default";
+    let (plan, _, _) = planner.plan_sql(query).await?;
+    let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+    assert_eq!(executor.name(), "UseDatabaseInterpreter");
 
-    let mut stream = interpreter.execute(None).await?;
+    let mut stream = executor.execute(None).await?;
     while let Some(_block) = stream.next().await {}
 
     Ok(())
@@ -36,11 +39,13 @@ async fn test_use_interpreter() -> Result<()> {
 #[tokio::test]
 async fn test_use_database_interpreter_error() -> Result<()> {
     let ctx = crate::tests::create_query_context().await?;
+    let mut planner = Planner::new(ctx.clone());
 
-    let plan = PlanParser::parse(ctx.clone(), "USE xx").await?;
-    let interpreter = InterpreterFactory::get(ctx, plan)?;
+    let query = "USE xx";
+    let (plan, _, _) = planner.plan_sql(query).await?;
+    let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
 
-    if let Err(e) = interpreter.execute(None).await {
+    if let Err(e) = executor.execute(None).await {
         let expect = "Code: 1003, displayText = Cannot USE 'xx', because the 'xx' doesn't exist.";
         assert_eq!(expect, e.to_string());
     }

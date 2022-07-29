@@ -16,12 +16,14 @@ use common_base::base::tokio;
 use common_exception::Result;
 use databend_query::interpreters::*;
 use databend_query::sql::PlanParser;
+use databend_query::sql::Planner;
 use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
 
 #[tokio::test]
 async fn interpreter_describe_table_test() -> Result<()> {
     let ctx = crate::tests::create_query_context().await?;
+    let mut planner = Planner::new(ctx.clone());
 
     // Create table.
     {
@@ -31,16 +33,17 @@ async fn interpreter_describe_table_test() -> Result<()> {
             ) Engine = Null\
         ";
 
-        let plan = PlanParser::parse(ctx.clone(), query).await?;
-        let interpreter = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        let _ = interpreter.execute(None).await?;
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let _ = executor.execute(None).await?;
     }
 
     // describe table.
     {
-        let plan = PlanParser::parse(ctx.clone(), "DESCRIBE a").await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        assert_eq!(executor.name(), "DescribeTableInterpreter");
+        let query = "DESCRIBE a";
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        assert_eq!(executor.name(), "SelectInterpreterV2");
 
         let stream = executor.execute(None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
@@ -60,9 +63,10 @@ async fn interpreter_describe_table_test() -> Result<()> {
 
     // `show fields from ` is same as `describe` table.
     {
-        let plan = PlanParser::parse(ctx.clone(), "show fields from a").await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        assert_eq!(executor.name(), "DescribeTableInterpreter");
+        let query = "show fields from a";
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        assert_eq!(executor.name(), "SelectInterpreterV2");
 
         let stream = executor.execute(None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;

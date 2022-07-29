@@ -30,7 +30,7 @@ async fn test_show_databases_interpreter() -> Result<()> {
         let query = "show databases";
         let (plan, _, _) = planner.plan_sql(query).await?;
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
-        assert_eq!(executor.name(), "ShowDatabasesInterpreter");
+        assert_eq!(executor.name(), "SelectInterpreterV2");
         let stream = executor.execute(None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
