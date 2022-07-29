@@ -86,7 +86,7 @@ async fn test_show_grant_interpreter() -> Result<()> {
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
             "+-----------------------------------------------+",
-            "| Grants                                        |",
+            "| grants                                        |",
             "+-----------------------------------------------+",
             "| GRANT SELECT ON 'default'.'mydb'.* TO 'role2' |",
             "+-----------------------------------------------+",
@@ -112,7 +112,7 @@ async fn test_show_grant_interpreter() -> Result<()> {
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
             "+----------------------------------------------------------+",
-            "| Grants                                                   |",
+            "| grants                                                   |",
             "+----------------------------------------------------------+",
             "| GRANT SELECT ON 'default'.'mydb'.* TO 'test'@'localhost' |",
             "+----------------------------------------------------------+",
@@ -140,7 +140,7 @@ async fn test_show_grant_interpreter() -> Result<()> {
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
             "+-----------------------------------------------------------------+",
-            "| Grants                                                          |",
+            "| grants                                                          |",
             "+-----------------------------------------------------------------+",
             "| GRANT CREATE,SELECT ON 'default'.'mydb'.* TO 'test'@'localhost' |",
             "+-----------------------------------------------------------------+",
@@ -161,7 +161,7 @@ async fn test_show_grant_interpreter() -> Result<()> {
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
             "+-----------------------------------------------+",
-            "| Grants                                        |",
+            "| grants                                        |",
             "+-----------------------------------------------+",
             "| GRANT SELECT ON 'default'.'mydb'.* TO 'role1' |",
             "+-----------------------------------------------+",
@@ -186,7 +186,7 @@ async fn test_show_grant_interpreter() -> Result<()> {
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
             "+------------------------------------------------+",
-            "| Grants                                         |",
+            "| grants                                         |",
             "+------------------------------------------------+",
             "| GRANT CREATE ON 'default'.'mydb1'.* TO 'role1' |",
             "| GRANT SELECT ON 'default'.'mydb'.* TO 'role1'  |",

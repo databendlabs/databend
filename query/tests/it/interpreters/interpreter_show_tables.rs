@@ -68,7 +68,7 @@ async fn test_show_tables_interpreter() -> Result<()> {
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
             "+---------------+",
-            "| Tables_in_db1 |",
+            "| tables_in_db1 |",
             "+---------------+",
             "| bend          |",
             "| data          |",
@@ -87,7 +87,7 @@ async fn test_show_tables_interpreter() -> Result<()> {
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
             "+---------------+",
-            "| Tables_in_db1 |",
+            "| tables_in_db1 |",
             "+---------------+",
             "| data          |",
             "+---------------+",
@@ -105,7 +105,7 @@ async fn test_show_tables_interpreter() -> Result<()> {
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
             "+---------------+",
-            "| Tables_in_db1 |",
+            "| tables_in_db1 |",
             "+---------------+",
             "| bend          |",
             "+---------------+",
@@ -123,7 +123,7 @@ async fn test_show_tables_interpreter() -> Result<()> {
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
             "+---------------+",
-            "| Tables_in_db1 |",
+            "| tables_in_db1 |",
             "+---------------+",
             "| bend          |",
             "| data          |",
@@ -143,7 +143,7 @@ async fn test_show_tables_interpreter() -> Result<()> {
 
         let expected = vec![
             "+---------------+",
-            "| Tables_in_db1 |",
+            "| tables_in_db1 |",
             "+---------------+",
             "| bend          |",
             "| data          |",

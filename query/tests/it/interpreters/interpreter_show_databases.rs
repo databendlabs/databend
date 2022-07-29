@@ -35,7 +35,7 @@ async fn test_show_databases_interpreter() -> Result<()> {
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
             "+--------------------+",
-            "| Database           |",
+            "| database           |",
             "+--------------------+",
             "| INFORMATION_SCHEMA |",
             "| default            |",
@@ -54,7 +54,7 @@ async fn test_show_databases_interpreter() -> Result<()> {
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
             "+----------+",
-            "| Database |",
+            "| database |",
             "+----------+",
             "| system   |",
             "+----------+",
