@@ -47,7 +47,7 @@ async fn test_show_grant_interpreter() -> Result<()> {
         let query = "SHOW GRANTS FOR 'test'@'localhost'";
         let (plan, _, _) = planner.plan_sql(query).await?;
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
-        assert_eq!(executor.name(), "SelectInterpreterV2");
+        assert_eq!(executor.name(), "ShowGrantsInterpreter");
 
         let stream = executor.execute(None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
@@ -59,7 +59,7 @@ async fn test_show_grant_interpreter() -> Result<()> {
         let query = "SHOW GRANTS FOR ROLE 'role1'";
         let (plan, _, _) = planner.plan_sql(query).await?;
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
-        assert_eq!(executor.name(), "SelectInterpreterV2");
+        assert_eq!(executor.name(), "ShowGrantsInterpreter");
 
         let stream = executor.execute(None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
@@ -86,7 +86,7 @@ async fn test_show_grant_interpreter() -> Result<()> {
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
             "+-----------------------------------------------+",
-            "| grants                                        |",
+            "| Grants                                        |",
             "+-----------------------------------------------+",
             "| GRANT SELECT ON 'default'.'mydb'.* TO 'role2' |",
             "+-----------------------------------------------+",
@@ -112,7 +112,7 @@ async fn test_show_grant_interpreter() -> Result<()> {
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
             "+----------------------------------------------------------+",
-            "| grants                                                   |",
+            "| Grants                                                   |",
             "+----------------------------------------------------------+",
             "| GRANT SELECT ON 'default'.'mydb'.* TO 'test'@'localhost' |",
             "+----------------------------------------------------------+",
@@ -140,7 +140,7 @@ async fn test_show_grant_interpreter() -> Result<()> {
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
             "+-----------------------------------------------------------------+",
-            "| grants                                                          |",
+            "| Grants                                                          |",
             "+-----------------------------------------------------------------+",
             "| GRANT CREATE,SELECT ON 'default'.'mydb'.* TO 'test'@'localhost' |",
             "+-----------------------------------------------------------------+",
@@ -161,7 +161,7 @@ async fn test_show_grant_interpreter() -> Result<()> {
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
             "+-----------------------------------------------+",
-            "| grants                                        |",
+            "| Grants                                        |",
             "+-----------------------------------------------+",
             "| GRANT SELECT ON 'default'.'mydb'.* TO 'role1' |",
             "+-----------------------------------------------+",
@@ -186,7 +186,7 @@ async fn test_show_grant_interpreter() -> Result<()> {
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
             "+------------------------------------------------+",
-            "| grants                                         |",
+            "| Grants                                         |",
             "+------------------------------------------------+",
             "| GRANT CREATE ON 'default'.'mydb1'.* TO 'role1' |",
             "| GRANT SELECT ON 'default'.'mydb'.* TO 'role1'  |",

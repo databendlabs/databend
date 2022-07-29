@@ -82,7 +82,7 @@ async fn interpreter_show_create_table_test() -> Result<()> {
         }
         let (plan, _, _) = planner.plan_sql(case.show_stmt).await?;
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
-        assert_eq!(executor.name(), "SelectInterpreterV2");
+        assert_eq!(executor.name(), "ShowCreateTableInterpreter");
         let result = executor
             .execute(None)
             .await?
@@ -162,7 +162,7 @@ async fn interpreter_show_create_table_with_comments_test() -> Result<()> {
         }
         let (plan, _, _) = planner.plan_sql(case.show_stmt).await?;
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
-        assert_eq!(executor.name(), "SelectInterpreterV2");
+        assert_eq!(executor.name(), "ShowCreateTableInterpreter");
         let result = executor
             .execute(None)
             .await?

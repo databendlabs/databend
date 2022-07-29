@@ -35,7 +35,7 @@ async fn test_show_engines_interpreter() -> Result<()> {
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
             "+--------+-----------------------------+",
-            "| engine | comment                     |",
+            "| Engine | Comment                     |",
             "+--------+-----------------------------+",
             "| FUSE   | FUSE Storage Engine         |",
             "| GITHUB | GITHUB Storage Engine       |",

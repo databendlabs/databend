@@ -40,7 +40,7 @@ async fn test_alter_udf_interpreter() -> Result<()> {
 
         assert_eq!(udf.name, "isnotempty");
         assert_eq!(udf.parameters, vec!["p".to_string()]);
-        assert_eq!(udf.definition, "not(is_null(p))");
+        assert_eq!(udf.definition, "NOT is_null(p)");
         assert_eq!(udf.description, "This is a description")
     }
 
