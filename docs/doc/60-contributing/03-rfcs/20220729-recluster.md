@@ -20,7 +20,7 @@ The cost of performing full table sorting is very expensive, especially for the 
 
 To avoid churning on the same piece of data many times, we divides the blocks into different levels like LSM trees. The recluster is similar to the LSM compact operation. The `level` represents the number of times the data in that block has been clustered. The recluster operation is performed on the same level.
 
-```
+```rust
 pub struct ClusterStatistics {
     ... ...
     pub level: i32,
@@ -51,7 +51,7 @@ The optimize statement should be triggered by DML on the table.
 
 The initial level of newly incoming data is 0. We focus on the newer data first, in other words the selection operations are preferentially performed on level 0. The advantage of doing this is to reduce write amplification.
 
-1. Calculate the depth of each point and the overlaps of the block, and summarize to get avg_depth. The algorithm has already been reflected in [clustering_information.rs](https://github.com/datafuselabs/databend/blob/main/query/src/storages/fuse/table_functions/clustering_informations/clustering_information.rs#L109-L191), and will not be repeated here. The ideal result for avg_depth is 1. In order to achieve roughly ordering, consider defining a threshold or a ratio (threshold = blocks_num * ratio). As long as avg_depth is not greater than this threshold, the blocks at this level can be considered well-clustered, then we perform block selection on the next level.
+1. Calculate the depth of each point and the overlaps of the block, and summarize to get avg_depth. The algorithm has already been reflected in [system$clustering_information](https://github.com/datafuselabs/databend/pull/5426), and will not be repeated here. The ideal result for avg_depth is 1. In order to achieve roughly ordering, consider defining a threshold or a ratio (threshold = blocks_num * ratio). As long as avg_depth is not greater than this threshold, the blocks at this level can be considered well-clustered, then we perform block selection on the next level.
 
 2. Select the point range (one or more) with the highest depth, and select the blocks covered by the range as a set of objects for the next block-merge. If there is more than one range with the highest depth, there may be multiple sets of blocks that can be parallelized during block-merge.
 
@@ -68,6 +68,6 @@ Tip:
 
 Sort and merge the collected blocks. After the merged block exceeds a certain threshold (1000_000 rows), it will be divided into multiple blocks. The newly generated block is put into the next level.
 
-Organize the blocks and generate new segments and snapshot, and finally update table meta. If there is a new DML execution during this period, the current processing flow will fail to commit and return an error. We need to consider the specific processing flow later.
+Organize the blocks and generate new segments and snapshot, and finally update table meta. If there is a new DML execution during this period, the current workflow will fail to commit and return an error. We need to consider the specific processing flow later.
 
 The selection and merge operation is repeated until the table is well clustered enough.
