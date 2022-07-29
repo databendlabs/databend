@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_exception::Result;
+use common_io::prelude::FileSplit;
 
 use crate::processors::UpdateTrigger;
 use crate::unsafe_cell_wrap::UnSafeCellWrap;
@@ -32,7 +33,7 @@ const UNSET_FLAGS_MASK: usize = !FLAGS_MASK;
 #[repr(align(8))]
 pub enum SharedData {
     Data(Result<DataBlock>),
-    Buf(Result<Vec<u8>>),
+    FilePartition(Result<FileSplit>),
 }
 
 pub struct SharedStatus {
@@ -183,15 +184,15 @@ impl InputPort {
     }
 
     #[inline(always)]
-    pub fn pull_buffer(&self) -> Option<Result<Vec<u8>>> {
+    pub fn pull_file_partition(&self) -> Option<Result<FileSplit>> {
         unsafe {
             UpdateTrigger::update_input(&self.update_trigger);
             let unset_flags = HAS_DATA | NEED_DATA;
             match self.shared.swap(std::ptr::null_mut(), 0, unset_flags) {
                 address if address.is_null() => None,
                 address => {
-                    if let SharedData::Buf(buf) = *Box::from_raw(address) {
-                        Some(buf)
+                    if let SharedData::FilePartition(part) = *Box::from_raw(address) {
+                        Some(part)
                     } else {
                         unreachable!()
                     }
@@ -239,11 +240,11 @@ impl OutputPort {
     }
 
     #[inline(always)]
-    pub fn push_buf(&self, data: Result<Vec<u8>>) {
+    pub fn push_split(&self, data: Result<FileSplit>) {
         unsafe {
             UpdateTrigger::update_output(&self.update_trigger);
 
-            let data = Box::into_raw(Box::new(SharedData::Buf(data)));
+            let data = Box::into_raw(Box::new(SharedData::FilePartition(data)));
             self.shared.swap(data, HAS_DATA, HAS_DATA);
         }
     }

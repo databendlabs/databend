@@ -33,8 +33,8 @@ pub struct Sort {
 #[derive(Clone, Debug)]
 pub struct SortItem {
     pub index: IndexType,
-    pub asc: Option<bool>,
-    pub nulls_first: Option<bool>,
+    pub asc: bool,
+    pub nulls_first: bool,
 }
 
 impl Operator for Sort {

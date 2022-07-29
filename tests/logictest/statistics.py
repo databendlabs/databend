@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: UTF-8 -*-
 
+
 class LogicTestStatistics():
 
     def __init__(self) -> None:
@@ -23,10 +24,10 @@ class LogicTestStatistics():
             "statement": statement,
             "time_cost": time_cost,
         })
-        
+
     def __str__(self):
         failure_output = f"Following failed statements:\n"
-        self.total_failed = 0 
+        self.total_failed = 0
         for runner in self._failed_map:
             for suite in self._failed_map[runner]:
                 for err in self._failed_map[runner][suite]:
@@ -39,11 +40,11 @@ class LogicTestStatistics():
         summary_output = f"Logic Test Summary\n"
         runner_list = list()
         for runner in self._perf_map:
-            runner_list.append(runner)        
+            runner_list.append(runner)
             statement_cost = 0
-            statement_count = 0 
-            suite_count = 0 
-            suite_cost = 0 
+            statement_count = 0
+            suite_count = 0
+            suite_cost = 0
             for suite in self._perf_map[runner]:
                 suite_count += 1
                 for result in self._perf_map[runner][suite]:
@@ -61,5 +62,6 @@ class LogicTestStatistics():
             exit(2)
         else:
             exit(0)
+
 
 global_statistics = LogicTestStatistics()

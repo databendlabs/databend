@@ -212,7 +212,9 @@ def parse_cases(sql_file):
             # ok statement
             try:
                 # insert,drop,create does not need to execute by different handlers
-                if str.lower(statement).split()[0] not in ["insert", "drop", "create"]:
+                if str.lower(statement).split()[0] not in [
+                        "insert", "drop", "create"
+                ]:
                     http_client.query_with_session(statement)
                 mysql_client.execute(statement)
             except Exception as err:

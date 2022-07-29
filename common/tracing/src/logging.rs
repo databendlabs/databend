@@ -18,24 +18,14 @@ use std::io;
 use opentelemetry::global;
 use opentelemetry::sdk::propagation::TraceContextPropagator;
 use sentry_tracing::EventFilter;
-use tracing::Event;
 use tracing::Level;
-use tracing::Subscriber;
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_appender::rolling::RollingFileAppender;
 use tracing_appender::rolling::Rotation;
 use tracing_bunyan_formatter::BunyanFormattingLayer;
 use tracing_log::LogTracer;
 use tracing_subscriber::fmt;
-use tracing_subscriber::fmt::format::Writer;
-use tracing_subscriber::fmt::time::FormatTime;
-use tracing_subscriber::fmt::time::SystemTime;
-use tracing_subscriber::fmt::FmtContext;
-use tracing_subscriber::fmt::FormatEvent;
-use tracing_subscriber::fmt::FormatFields;
-use tracing_subscriber::fmt::FormattedFields;
 use tracing_subscriber::layer::SubscriberExt;
-use tracing_subscriber::registry::LookupSpan;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::Layer;
 use tracing_subscriber::Registry;
@@ -147,56 +137,4 @@ pub fn init_logging(name: &str, cfg: &Config) -> Vec<WorkerGuard> {
     let _ = tracing::subscriber::set_global_default(subscriber);
 
     guards
-}
-
-pub struct EventFormatter {}
-
-impl<S, N> FormatEvent<S, N> for EventFormatter
-where
-    S: Subscriber + for<'a> LookupSpan<'a>,
-    N: for<'writer> FormatFields<'writer> + 'static,
-{
-    fn format_event(
-        &self,
-        ctx: &FmtContext<'_, S, N>,
-        mut writer: Writer<'_>,
-        event: &Event<'_>,
-    ) -> std::fmt::Result {
-        let meta = event.metadata();
-
-        SystemTime {}.format_time(&mut writer)?;
-        writer.write_char(' ')?;
-
-        let fmt_level = meta.level().as_str();
-        write!(writer, "{:>5} ", fmt_level)?;
-
-        write!(writer, "{:0>15?} ", std::thread::current().name())?;
-        write!(writer, "{:0>2?} ", std::thread::current().id())?;
-
-        if let Some(scope) = ctx.event_scope() {
-            let mut seen = false;
-
-            for span in scope.from_root() {
-                write!(writer, "{}", span.metadata().name())?;
-                write!(writer, "#{:x}", span.id().into_u64())?;
-
-                seen = true;
-
-                let ext = span.extensions();
-                if let Some(fields) = &ext.get::<FormattedFields<N>>() {
-                    if !fields.is_empty() {
-                        write!(writer, "{{{}}}", fields)?;
-                    }
-                }
-                write!(writer, ":")?;
-            }
-
-            if seen {
-                writer.write_char(' ')?;
-            }
-        };
-
-        ctx.format_fields(writer.by_ref(), event)?;
-        writeln!(writer)
-    }
 }
