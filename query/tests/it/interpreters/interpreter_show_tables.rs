@@ -97,7 +97,7 @@ async fn test_show_tables_interpreter() -> Result<()> {
 
     // show tables != 'data'.
     {
-        let query = "show tables where Tables_in_db1 != 'data'";
+        let query = "show tables where name != 'data'";
         let (plan, _, _) = planner.plan_sql(query).await?;
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         assert_eq!(executor.name(), "SelectInterpreterV2");
@@ -121,26 +121,6 @@ async fn test_show_tables_interpreter() -> Result<()> {
         assert_eq!(executor.name(), "SelectInterpreterV2");
         let stream = executor.execute(None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
-        let expected = vec![
-            "+---------------+",
-            "| tables_in_db1 |",
-            "+---------------+",
-            "| bend          |",
-            "| data          |",
-            "+---------------+",
-        ];
-        common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
-    }
-
-    // show tables in db1.
-    {
-        let query = "show tables in db1";
-        let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
-        assert_eq!(executor.name(), "SelectInterpreterV2");
-        let stream = executor.execute(None).await?;
-        let result = stream.try_collect::<Vec<_>>().await?;
-
         let expected = vec![
             "+---------------+",
             "| tables_in_db1 |",
