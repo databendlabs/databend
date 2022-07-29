@@ -29,6 +29,29 @@ use common_io::prelude::FormatSettings;
 use opensrv_mysql::*;
 use tracing::error;
 
+pub struct QueryResult {
+    blocks: Vec<DataBlock>,
+    extra_info: String,
+    is_result_set: bool,
+    schema: DataSchemaRef,
+}
+
+impl QueryResult {
+    pub fn create(
+        blocks: Vec<DataBlock>,
+        extra_info: String,
+        is_result_set: bool,
+        schema: DataSchemaRef,
+    ) -> QueryResult {
+        QueryResult {
+            blocks,
+            extra_info,
+            is_result_set,
+            schema,
+        }
+    }
+}
+
 pub struct DFQueryResultWriter<'a, W: std::io::Write> {
     inner: Option<QueryResultWriter<'a, W>>,
 }
@@ -40,14 +63,12 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
 
     pub fn write(
         &mut self,
-        query_result: Result<(Vec<DataBlock>, String, bool, DataSchemaRef)>,
+        query_result: Result<QueryResult>,
         format: &FormatSettings,
     ) -> Result<()> {
         if let Some(writer) = self.inner.take() {
             match query_result {
-                Ok((blocks, extra_info, is_result_set, schema)) => {
-                    Self::ok(blocks, extra_info, is_result_set, schema, writer, format)?
-                }
+                Ok(query_result) => Self::ok(query_result, writer, format)?,
                 Err(error) => Self::err(&error, writer)?,
             }
         }
@@ -55,20 +76,19 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
     }
 
     fn ok(
-        blocks: Vec<DataBlock>,
-        extra_info: String,
-        is_result_set: bool,
-        schema: DataSchemaRef,
+        query_result: QueryResult,
         dataset_writer: QueryResultWriter<'a, W>,
         format: &FormatSettings,
     ) -> Result<()> {
         // XXX: num_columns == 0 may is error?
         let default_response = OkResponse {
-            info: extra_info,
+            info: query_result.extra_info,
             ..Default::default()
         };
 
-        if !is_result_set && (blocks.is_empty() || (blocks[0].num_columns() == 0)) {
+        if !query_result.is_result_set
+            && (query_result.blocks.is_empty() || (query_result.blocks[0].num_columns() == 0))
+        {
             dataset_writer.completed(default_response)?;
             return Ok(());
         }
@@ -117,12 +137,12 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
         }
 
         let tz = format.timezone;
-        match convert_schema(&schema) {
+        match convert_schema(&query_result.schema) {
             Err(error) => Self::err(&error, dataset_writer),
             Ok(columns) => {
                 let mut row_writer = dataset_writer.start(&columns)?;
 
-                for block in &blocks {
+                for block in &query_result.blocks {
                     match block.get_serializers() {
                         Ok(serializers) => {
                             let rows_size = block.column(0).len();

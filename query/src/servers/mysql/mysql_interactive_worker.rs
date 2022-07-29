@@ -18,7 +18,6 @@ use std::time::Instant;
 
 use common_base::base::TrySpawn;
 use common_datablocks::DataBlock;
-use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -45,6 +44,7 @@ use crate::interpreters::InterpreterFactoryV2;
 use crate::interpreters::InterpreterQueryLog;
 use crate::servers::mysql::writers::DFInitResultWriter;
 use crate::servers::mysql::writers::DFQueryResultWriter;
+use crate::servers::mysql::writers::QueryResult;
 use crate::servers::mysql::MySQLFederated;
 use crate::servers::mysql::MYSQL_VERSION;
 use crate::servers::utils::use_planner_v2;
@@ -304,10 +304,7 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    async fn do_query(
-        &mut self,
-        query: &str,
-    ) -> Result<(Vec<DataBlock>, String, bool, DataSchemaRef)> {
+    async fn do_query(&mut self, query: &str) -> Result<QueryResult> {
         match self.federated_server_command_check(query) {
             Some(data_block) => {
                 info!("Federated query: {}", query);
@@ -315,7 +312,12 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
                     info!("Federated response: {:?}", data_block);
                 }
                 let schema = data_block.schema().clone();
-                Ok((vec![data_block], String::from(""), false, schema))
+                Ok(QueryResult::create(
+                    vec![data_block],
+                    String::from(""),
+                    false,
+                    schema,
+                ))
             }
             None => {
                 info!("Normal query: {}", query);
@@ -367,7 +369,12 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
                         let (blocks, extra_info) =
                             Self::exec_query(interpreter.clone(), &context).await?;
                         let schema = interpreter.schema();
-                        Ok((blocks, extra_info, is_result_set, schema))
+                        Ok(QueryResult::create(
+                            blocks,
+                            extra_info,
+                            is_result_set,
+                            schema,
+                        ))
                     }
                     (Some(code), Ok(interpreter)) => {
                         let res = Self::exec_query(interpreter, &context).await;
@@ -384,7 +391,7 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
                                         e.code()
                                     )));
                                 }
-                                Ok((
+                                Ok(QueryResult::create(
                                     vec![DataBlock::empty()],
                                     String::from(""),
                                     false,
@@ -406,7 +413,7 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
                                 e.code()
                             )));
                         }
-                        Ok((
+                        Ok(QueryResult::create(
                             vec![DataBlock::empty()],
                             String::from(""),
                             false,
