@@ -1390,37 +1390,35 @@ impl<'a> TypeChecker<'a> {
         expr: &Expr<'_>,
         trim_where: &Option<(TrimWhere, Box<Expr<'_>>)>,
     ) -> Result<Box<(Scalar, DataTypeImpl)>> {
-        let (func_name, trim_scalar) = if let Some((trim_type, trim_expr)) = trim_where {
+        let (func_name, trim_scalar, trim_type) = if let Some((trim_type, trim_expr)) = trim_where {
             let func_name = match trim_type {
                 TrimWhere::Leading => "trim_leading",
                 TrimWhere::Trailing => "trim_trailing",
                 TrimWhere::Both => "trim_both",
             };
 
-            let box (trim_scalar, _) = self
-                .resolve(trim_expr, Some(StringType::new_impl()))
-                .await?;
-            (func_name, trim_scalar)
+            let box (trim_scalar, trim_type) = self.resolve(trim_expr, None).await?;
+            (func_name, trim_scalar, trim_type)
         } else {
             let trim_scalar = ConstantExpr {
                 value: DataValue::String(" ".as_bytes().to_vec()),
                 data_type: Box::new(StringType::new_impl()),
             }
             .into();
-            ("trim_both", trim_scalar)
+            ("trim_both", trim_scalar, StringType::new_impl())
         };
 
         let box (trim_source, source_type) = self.resolve(expr, None).await?;
         let args = vec![trim_source, trim_scalar];
         let func = FunctionFactory::instance()
-            .get(func_name, &[&source_type, &StringType::new_impl()])
+            .get(func_name, &[&source_type, &trim_type])
             .map_err(|e| ErrorCode::SemanticError(span.display_error(e.message())))?;
 
         Ok(Box::new((
             FunctionCall {
                 arguments: args,
                 func_name: func_name.to_string(),
-                arg_types: vec![source_type, StringType::new_impl()],
+                arg_types: vec![source_type, trim_type],
                 return_type: Box::new(func.return_type()),
             }
             .into(),
