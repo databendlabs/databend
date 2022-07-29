@@ -47,11 +47,8 @@ SELECT DISTINCT(id) FROM a.t ORDER BY a.t.id;
 statement error 1065
 SELECT DISTINCT(id) FROM a.t ORDER BY a.t.id2; 
 
-statement query I
+statement error
 SELECT SUM(id) as id2 FROM a.t ORDER BY a.t.id2;
-
-----
-3
 
 statement query I
 SELECT DISTINCT(id) as id2 FROM a.t ORDER BY a.t.id2;
