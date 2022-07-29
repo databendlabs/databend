@@ -28,9 +28,11 @@ use pretty_assertions::assert_eq;
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_call_interpreter() -> Result<()> {
     let ctx = crate::tests::create_query_context().await?;
+    let mut planner = Planner::new(ctx.clone());
 
-    let plan = PlanParser::parse(ctx.clone(), "call system$test()").await?;
-    let executor = InterpreterFactory::get(ctx, plan.clone())?;
+    let query = "call system$test()";
+    let (plan, _, _) = planner.plan_sql(query).await?;
+    let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
     assert_eq!(executor.name(), "CallInterpreter");
     let res = executor.execute(None).await;
     assert_eq!(res.is_err(), true);
@@ -44,11 +46,13 @@ async fn test_call_interpreter() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_call_fuse_snapshot_interpreter() -> Result<()> {
     let ctx = crate::tests::create_query_context().await?;
+    let mut planner = Planner::new(ctx.clone());
 
     // NumberArgumentsNotMatch
     {
-        let plan = PlanParser::parse(ctx.clone(), "call system$fuse_snapshot()").await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let query = "call system$fuse_snapshot()";
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         assert_eq!(executor.name(), "CallInterpreter");
         let res = executor.execute(None).await;
         assert_eq!(res.is_err(), true);
@@ -58,9 +62,9 @@ async fn test_call_fuse_snapshot_interpreter() -> Result<()> {
 
     // UnknownTable
     {
-        let plan =
-            PlanParser::parse(ctx.clone(), "call system$fuse_snapshot(default, test)").await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let query = "call system$fuse_snapshot(default, test)";
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         assert_eq!(executor.name(), "CallInterpreter");
         let res = executor.execute(None).await;
         assert_eq!(res.is_err(), true);
@@ -72,9 +76,9 @@ async fn test_call_fuse_snapshot_interpreter() -> Result<()> {
 
     // BadArguments
     {
-        let plan =
-            PlanParser::parse(ctx.clone(), "call system$fuse_snapshot(system, tables)").await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let query = "call system$fuse_snapshot(system, tables)";
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         assert_eq!(executor.name(), "CallInterpreter");
         let res = executor.execute(None).await;
         assert_eq!(res.is_err(), true);
@@ -89,15 +93,16 @@ async fn test_call_fuse_snapshot_interpreter() -> Result<()> {
             CREATE TABLE default.a(a bigint)\
         ";
 
-        let plan = PlanParser::parse(ctx.clone(), query).await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         let _ = executor.execute(None).await?;
     }
 
     // FuseHistory
     {
-        let plan = PlanParser::parse(ctx.clone(), "call system$fuse_snapshot(default, a)").await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let query = "call system$fuse_snapshot(default, a)";
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         let _ = executor.execute(None).await?;
     }
 
@@ -107,11 +112,13 @@ async fn test_call_fuse_snapshot_interpreter() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_call_clustering_information_interpreter() -> Result<()> {
     let ctx = crate::tests::create_query_context().await?;
+    let mut planner = Planner::new(ctx.clone());
 
     // NumberArgumentsNotMatch
     {
-        let plan = PlanParser::parse(ctx.clone(), "call system$clustering_information()").await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let query = "call system$clustering_information()";
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         assert_eq!(executor.name(), "CallInterpreter");
         let res = executor.execute(None).await;
         assert_eq!(res.is_err(), true);
@@ -121,12 +128,9 @@ async fn test_call_clustering_information_interpreter() -> Result<()> {
 
     // UnknownTable
     {
-        let plan = PlanParser::parse(
-            ctx.clone(),
-            "call system$clustering_information(default, test)",
-        )
-        .await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let query = "call system$clustering_information(default, test)";
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         assert_eq!(executor.name(), "CallInterpreter");
         let res = executor.execute(None).await;
         assert_eq!(res.is_err(), true);
@@ -138,12 +142,9 @@ async fn test_call_clustering_information_interpreter() -> Result<()> {
 
     // BadArguments
     {
-        let plan = PlanParser::parse(
-            ctx.clone(),
-            "call system$clustering_information(system, tables)",
-        )
-        .await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let query = "call system$clustering_information(system, tables)";
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         assert_eq!(executor.name(), "CallInterpreter");
         let res = executor.execute(None).await;
         assert_eq!(res.is_err(), true);
@@ -158,19 +159,16 @@ async fn test_call_clustering_information_interpreter() -> Result<()> {
             CREATE TABLE default.a(a bigint)\
         ";
 
-        let plan = PlanParser::parse(ctx.clone(), query).await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         let _ = executor.execute(None).await?;
     }
 
     // Unclustered.
     {
-        let plan = PlanParser::parse(
-            ctx.clone(),
-            "call system$clustering_information(default, a)",
-        )
-        .await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let query = "call system$clustering_information(default, a)";
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         let res = executor.execute(None).await;
         assert_eq!(res.is_err(), true);
         let expect =
@@ -184,19 +182,16 @@ async fn test_call_clustering_information_interpreter() -> Result<()> {
         CREATE TABLE default.b(a bigint) cluster by(a)\
     ";
 
-        let plan = PlanParser::parse(ctx.clone(), query).await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         let _ = executor.execute(None).await?;
     }
 
     // FuseHistory
     {
-        let plan = PlanParser::parse(
-            ctx.clone(),
-            "call system$clustering_information(default, b)",
-        )
-        .await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let query = "call system$clustering_information(default, b)";
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         let _ = executor.execute(None).await?;
     }
 
