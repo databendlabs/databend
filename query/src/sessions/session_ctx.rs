@@ -32,6 +32,7 @@ pub struct SessionContext {
     current_database: RwLock<String>,
     current_tenant: RwLock<String>,
     current_user: RwLock<Option<UserInfo>>,
+    auth_role: RwLock<Option<String>>,
     client_host: RwLock<Option<SocketAddr>>,
     io_shutdown_tx: RwLock<Option<Sender<Sender<()>>>>,
     query_context_shared: RwLock<Option<Arc<QueryContextShared>>>,
@@ -43,6 +44,7 @@ impl SessionContext {
             conf,
             abort: Default::default(),
             current_user: Default::default(),
+            auth_role: Default::default(),
             current_tenant: Default::default(),
             client_host: Default::default(),
             current_catalog: RwLock::new("default".to_string()),
@@ -111,6 +113,17 @@ impl SessionContext {
     pub fn set_current_user(&self, user: UserInfo) {
         let mut lock = self.current_user.write();
         *lock = Some(user);
+    }
+
+    // Get auth role. Auth role is the role granted by authenticator.
+    pub fn get_auth_role(&self) -> Option<String> {
+        let lock = self.auth_role.read();
+        lock.clone()
+    }
+
+    pub fn set_auth_role(&self, role: String) {
+        let mut lock = self.auth_role.write();
+        *lock = Some(role);
     }
 
     pub fn get_client_host(&self) -> Option<SocketAddr> {

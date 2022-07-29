@@ -28,6 +28,7 @@ pub use crate::buffer::BufferReader;
 pub use crate::buffer::CheckpointRead;
 pub use crate::buffer::MemoryReader;
 pub use crate::buffer::NestedCheckpointReader;
+pub use crate::file_split::*;
 pub use crate::format_settings::Compression;
 pub use crate::format_settings::FormatSettings;
 pub use crate::options_deserializer::OptionsDeserializer;

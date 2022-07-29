@@ -21,7 +21,9 @@ use common_arrow::arrow::datatypes::SchemaRef as ArrowSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+use crate::types::data_type::DataType;
 use crate::DataField;
+use crate::TypeDeserializerImpl;
 
 /// memory layout.
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, Default)]
@@ -153,6 +155,15 @@ impl DataSchema {
             .collect::<Vec<_>>();
 
         ArrowSchema::from(fields).with_metadata(self.metadata.clone())
+    }
+
+    pub fn create_deserializers(&self, capacity: usize) -> Vec<TypeDeserializerImpl> {
+        let mut deserializers = Vec::with_capacity(self.num_fields());
+        for field in self.fields() {
+            let data_type = field.data_type();
+            deserializers.push(data_type.create_deserializer(capacity));
+        }
+        deserializers
     }
 }
 

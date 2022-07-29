@@ -309,15 +309,18 @@ class SuiteRunner(object):
                     statement_list = list()
                     for state in get_statements(file_path, suite_name):
                         statement_list.append(state)
-                    
+
                     try:
                         self.batch_execute(statement_list)
                     except Exception as e:
-                        log.warning(f"Get exception when running suite {suite_name}")
-                        global_statistics.add_failed(self.kind, self.suite_now, e)
+                        log.warning(
+                            f"Get exception when running suite {suite_name}")
+                        global_statistics.add_failed(self.kind, self.suite_now,
+                                                     e)
                         continue
             else:
-                raise RuntimeError(f"batch_execute is not implement in runner {self.kind}")
+                raise RuntimeError(
+                    f"batch_execute is not implement in runner {self.kind}")
 
     def execute_statement(self, statement):
         if self.kind not in statement.runs_on:
@@ -339,15 +342,20 @@ class SuiteRunner(object):
         else:
             raise Exception("Unknown statement type")
         end = time.perf_counter()
-        time_cost = end-start
-        global_statistics.add_perf(self.kind, self.suite_now ,statement.text, time_cost)
+        time_cost = end - start
+        global_statistics.add_perf(self.kind, self.suite_now, statement.text,
+                                   time_cost)
 
     # expect the query just return ok
     def assert_execute_ok(self, statement):
         actual = safe_execute(lambda: self.execute_ok(statement.text),
                               statement)
         if actual is not None:
-            raise LogicError(message=str(statement), expected="statement ok must get success response, not error code in response")
+            raise LogicError(
+                message=str(statement),
+                expected=
+                "statement ok must get success response, not error code in response"
+            )
 
     def assert_query_equal(self, f, resultset, statement):
         # use join after split instead of strip
@@ -397,8 +405,10 @@ class SuiteRunner(object):
         match = re.search(statement.s_type.expect_error, actual.msg)
         if match is None:
             raise LogicError(
-                message=f"statement {str(statement)}, expect error regex {statement.s_type.expect_error}, found {actual}",
-                expected=f"statement error must get error message in expected string")
+                message=
+                f"statement {str(statement)}, expect error regex {statement.s_type.expect_error}, found {actual}",
+                expected=
+                f"statement error must get error message in expected string")
 
     def run_sql_suite(self):
         log.info(
