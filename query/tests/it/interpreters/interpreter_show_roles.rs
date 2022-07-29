@@ -25,7 +25,7 @@ async fn test_show_roles_interpreter() -> Result<()> {
     let mut planner = Planner::new(ctx.clone());
 
     {
-        let query = "CREATE ROLE test";
+        let query = "CREATE ROLE 'test'";
         let (plan, _, _) = planner.plan_sql(query).await?;
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         let _ = executor.execute(None).await?;
