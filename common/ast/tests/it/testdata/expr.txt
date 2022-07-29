@@ -51,11 +51,53 @@ Literal {
 ---------- Input ----------
 char(0xD0, 0xBF, 0xD1)
 ---------- Output ---------
-error: 
-  --> SQL:1:5
-  |
-1 | char(0xD0, 0xBF, 0xD1)
-  |     ^
+char(208, 191, 209)
+---------- AST ------------
+FunctionCall {
+    span: [
+        CHAR(0..4),
+        LParen(4..5),
+        MySQLLiteralHex(5..9),
+        Comma(9..10),
+        MySQLLiteralHex(11..15),
+        Comma(15..16),
+        MySQLLiteralHex(17..21),
+        RParen(21..22),
+    ],
+    distinct: false,
+    name: Identifier {
+        name: "char",
+        quote: None,
+        span: CHAR(0..4),
+    },
+    args: [
+        Literal {
+            span: [
+                MySQLLiteralHex(5..9),
+            ],
+            lit: Integer(
+                208,
+            ),
+        },
+        Literal {
+            span: [
+                MySQLLiteralHex(11..15),
+            ],
+            lit: Integer(
+                191,
+            ),
+        },
+        Literal {
+            span: [
+                MySQLLiteralHex(17..21),
+            ],
+            lit: Integer(
+                209,
+            ),
+        },
+    ],
+    params: [],
+}
 
 
 ---------- Input ----------
