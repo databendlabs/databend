@@ -74,7 +74,7 @@ SELECT * FROM a.t ORDER BY a.t.id DESC;
 2 2
 1 1
 
-statement error 1003
+statement error 1065
 SELECT * FROM a.t ORDER BY B.T.id DESC; 
 
 statement ok
