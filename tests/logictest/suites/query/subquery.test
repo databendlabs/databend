@@ -1,16 +1,18 @@
-onlyif mysql
 statement ok
 set enable_planner_v2 = 1;
 
-onlyif mysql
+statement ok
+DROP TABLE IF EXISTS c;
+
+statement ok
+DROP TABLE IF EXISTS o;
+
 statement ok
 CREATE TABLE c (c_id INT NULL, bill VARCHAR NULL);
 
-onlyif mysql
 statement ok
 CREATE TABLE o (o_id INT NULL, c_id INT NULL, ship VARCHAR NULL);
 
-onlyif mysql
 statement ok
 INSERT INTO c VALUES
     (1, 'CA'),
@@ -20,7 +22,6 @@ INSERT INTO c VALUES
     (5, NULL),
     (6, 'FL');
 
-onlyif mysql
 statement ok
 INSERT INTO o VALUES
     (10, 1, 'CA'), (20, 1, 'CA'), (30, 1, 'CA'),
@@ -30,7 +31,6 @@ INSERT INTO o VALUES
 
 # Subquery in WHERE clause
 
-onlyif mysql
 statement query IT
 SELECT * FROM c WHERE EXISTS(SELECT * FROM o WHERE o.c_id=c.c_id);
 
@@ -40,7 +40,6 @@ SELECT * FROM c WHERE EXISTS(SELECT * FROM o WHERE o.c_id=c.c_id);
 4  TX
 6  FL
 
-onlyif mysql
 statement query IT
 SELECT * FROM c WHERE NOT EXISTS(SELECT * FROM o WHERE o.c_id=c.c_id);
 
@@ -48,7 +47,6 @@ SELECT * FROM c WHERE NOT EXISTS(SELECT * FROM o WHERE o.c_id=c.c_id);
 3  MA
 5  NULL
 
-onlyif mysql
 statement query IT
 SELECT *
 FROM c
@@ -64,7 +62,6 @@ WHERE
 5  NULL
 6  FL
 
-onlyif mysql
 statement query IT
 SELECT * FROM c WHERE EXISTS(SELECT * FROM o WHERE o.c_id=c.c_id AND c.bill='TX');
 
@@ -72,14 +69,12 @@ SELECT * FROM c WHERE EXISTS(SELECT * FROM o WHERE o.c_id=c.c_id AND c.bill='TX'
 2  TX
 4  TX
 
-onlyif mysql
 statement query IT
 SELECT * FROM c WHERE 'WY' IN (SELECT ship FROM o WHERE o.c_id=c.c_id);
 
 ----
 4  TX
 
-onlyif mysql
 statement query IT
 SELECT *
 FROM c
@@ -91,7 +86,6 @@ WHERE
 4  TX
 6  FL
 
-onlyif mysql
 statement query IT
 SELECT *
 FROM c
@@ -102,7 +96,6 @@ WHERE
 ----
 1  CA
 
-onlyif mysql
 statement query IT
 SELECT * FROM c WHERE bill IN (SELECT ship FROM o WHERE o.c_id=c.c_id);
 
