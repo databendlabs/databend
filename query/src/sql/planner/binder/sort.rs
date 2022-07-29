@@ -79,21 +79,20 @@ impl<'a> Binder {
                     let mut found = false;
                     for item in projections.iter() {
                         let matched = match (
-                            (&item.database_name, &item.table_name),
                             (&database_name, &table_name),
+                            (&item.database_name, &item.table_name),
                         ) {
                             (
-                                (Some(target_database), Some(target_table)),
-                                (Some(source_database), Some(source_table)),
-                            ) if target_database == &source_database.name
-                                && target_table == &source_table.name
-                                && &ident.name == &item.column_name =>
+                                (Some(ident_database), Some(ident_table)),
+                                (Some(database), Some(table)),
+                            ) if &ident_database.name == database
+                                && &ident_table.name == table
+                                && ident.name == item.column_name =>
                             {
                                 true
                             }
-                            ((None, Some(target_table)), (_, Some(source_table)))
-                                if target_table == &source_table.name
-                                    && &ident.name == &item.column_name =>
+                            ((None, Some(ident_table)), (_, Some(table)))
+                                if &ident_table.name == table && ident.name == item.column_name =>
                             {
                                 true
                             }
