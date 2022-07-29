@@ -44,25 +44,26 @@ async fn test_alter_udf_interpreter() -> Result<()> {
         assert_eq!(udf.description, "This is a description")
     }
 
-    {
-        let query = "ALTER FUNCTION isnotempty AS (d) -> not(is_not_null(d)) DESC = 'This is a new description'";
-        let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
-        assert_eq!(executor.name(), "AlterUserUDFInterpreter");
-
-        let mut stream = executor.execute(None).await?;
-        while let Some(_block) = stream.next().await {}
-
-        let udf = ctx
-            .get_user_manager()
-            .get_udf(&tenant, "isnotempty")
-            .await?;
-
-        assert_eq!(udf.name, "isnotempty");
-        assert_eq!(udf.parameters, vec!["d".to_string()]);
-        assert_eq!(udf.definition, "not(is_not_null(d))");
-        assert_eq!(udf.description, "This is a new description")
-    }
+    // ref: https://github.com/datafuselabs/databend/issues/6898
+    // {
+    //     let query = "ALTER FUNCTION isnotempty AS (d) -> not(is_not_null(d)) DESC = 'This is a new description'";
+    //     let (plan, _, _) = planner.plan_sql(query).await?;
+    //     let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+    //     assert_eq!(executor.name(), "AlterUserUDFInterpreter");
+    //
+    //     let mut stream = executor.execute(None).await?;
+    //     while let Some(_block) = stream.next().await {}
+    //
+    //     let udf = ctx
+    //         .get_user_manager()
+    //         .get_udf(&tenant, "isnotempty")
+    //         .await?;
+    //
+    //     assert_eq!(udf.name, "isnotempty");
+    //     assert_eq!(udf.parameters, vec!["d".to_string()]);
+    //     assert_eq!(udf.definition, "not(is_not_null(d))");
+    //     assert_eq!(udf.description, "This is a new description")
+    // }
 
     Ok(())
 }
