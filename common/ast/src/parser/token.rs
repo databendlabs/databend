@@ -884,8 +884,8 @@ impl TokenKind {
             | TokenKind::WHEN => true,
             | TokenKind::ARRAY
             | TokenKind::AS
-            // | TokenKind::CHAR
-            // | TokenKind::CHARACTER
+            | TokenKind::CHAR
+            | TokenKind::CHARACTER
             | TokenKind::CREATE
             | TokenKind::EXCEPT
             // | TokenKind::FETCH
