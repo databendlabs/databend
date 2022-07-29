@@ -113,26 +113,6 @@ async fn test_show_tab_stat_interpreter() -> Result<()> {
         common_datablocks::assert_blocks_sorted_eq_with_regex(expected, result.as_slice());
     }
 
-    // show table status in db1.
-    {
-        let query = "show table status in db1";
-        let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
-        assert_eq!(executor.name(), "SelectInterpreterV2");
-        let stream = executor.execute(None).await?;
-        let result = stream.try_collect::<Vec<_>>().await?;
-
-        let expected = vec![
-            r"\+------\+--------\+---------\+------------\+------\+----------------\+-------------\+-----------------\+--------------\+-----------\+----------------\+-------------------------------\+-------------\+------------\+-----------\+----------\+---------\+",
-            r"\| name \| engine \| version \| row_format \| rows \| avg_row_length \| data_length \| max_data_length \| index_length \| data_free \| auto_increment \| create_time                   \| update_time \| check_time \| collation \| checksum \| comment \|",
-            r"\+------\+--------\+---------\+------------\+------\+----------------\+-------------\+-----------------\+--------------\+-----------\+----------------\+-------------------------------\+-------------\+------------\+-----------\+----------\+---------\+",
-            r"\| bend \| FUSE   \| 0       \| NULL       \| 0    \| NULL           \| 0           \| NULL            \| NULL         \| NULL      \| NULL           \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL        \| NULL       \| NULL      \| NULL     \|         \|",
-            r"\| data \| FUSE   \| 0       \| NULL       \| 0    \| NULL           \| 0           \| NULL            \| NULL         \| NULL      \| NULL           \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL        \| NULL       \| NULL      \| NULL     \|         \|",
-            r"\+------\+--------\+---------\+------------\+------\+----------------\+-------------\+-----------------\+--------------\+-----------\+----------------\+-------------------------------\+-------------\+------------\+-----------\+----------\+---------\+",
-        ];
-        common_datablocks::assert_blocks_sorted_eq_with_regex(expected, result.as_slice());
-    }
-
     // Teardown.
     {
         let query = "drop database db1";
