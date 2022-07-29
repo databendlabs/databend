@@ -87,9 +87,10 @@ async fn test_drop_udf_interpreter() -> Result<()> {
         assert_eq!(udf.definition, "NOT is_null(p)");
         assert_eq!(udf.description, "This is a description")
     }
+
     {
-        let plan = PlanParser::parse(ctx.clone(), DROP_UDF_IF_EXISTS).await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let (plan, _, _) = planner.plan_sql(DROP_UDF_IF_EXISTS).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         assert_eq!(executor.name(), "DropUserUDFInterpreter");
         let res = executor.execute(None).await;
         assert!(res.is_ok());
