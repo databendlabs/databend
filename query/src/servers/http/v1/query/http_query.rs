@@ -26,6 +26,7 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use super::HttpQueryContext;
+use crate::interpreters::InterpreterQueryLog;
 use crate::servers::http::v1::query::execute_state::Progresses;
 use crate::servers::http::v1::query::expirable::Expirable;
 use crate::servers::http::v1::query::expirable::ExpiringState;
@@ -220,25 +221,33 @@ impl HttpQuery {
 
         let block_buffer = BlockBuffer::new(request.pagination.max_rows_in_buffer);
         let state =
-            ExecuteState::try_create(&request, session, ctx.clone(), block_buffer.clone()).await?;
-        let format_settings = ctx.get_format_settings()?;
-        let data = Arc::new(TokioMutex::new(PageManager::new(
-            request.pagination.max_rows_per_page,
-            block_buffer,
-            request.string_fields,
-            format_settings,
-        )));
-        let query = HttpQuery {
-            id,
-            session_id,
-            request,
-            state,
-            data,
-            config,
-            expire_at: Arc::new(TokioMutex::new(None)),
-        };
-        let query = Arc::new(query);
-        Ok(query)
+            ExecuteState::try_create(&request, session, ctx.clone(), block_buffer.clone()).await;
+        match state {
+            Ok(state) => {
+                let format_settings = ctx.get_format_settings()?;
+                let data = Arc::new(TokioMutex::new(PageManager::new(
+                    request.pagination.max_rows_per_page,
+                    block_buffer,
+                    request.string_fields,
+                    format_settings,
+                )));
+                let query = HttpQuery {
+                    id,
+                    session_id,
+                    request,
+                    state,
+                    data,
+                    config,
+                    expire_at: Arc::new(TokioMutex::new(None)),
+                };
+                let query = Arc::new(query);
+                Ok(query)
+            }
+            Err(e) => {
+                InterpreterQueryLog::fail_to_start(ctx, e.clone()).await;
+                Err(e)
+            }
+        }
     }
 
     pub fn is_async(&self) -> bool {
