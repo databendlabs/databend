@@ -138,6 +138,7 @@ async fn execute_v2(
         }
     };
 
+    let session = ctx.get_current_session();
     let stream = stream! {
         yield compress_fn(prefix);
         while let Some(block) = data_stream.next().await {
@@ -152,7 +153,8 @@ async fn execute_v2(
         let _ = interpreter
             .finish()
             .await
-            .map_err(|e| error!("interpreter.finish error: {:?}", e));
+            .map_err(|e| error!("interpreter.finish error: {:?} ", e));
+        let _ = session.get_id();
     };
 
     Ok(Body::from_bytes_stream(stream).with_content_type(format.get_content_type()))
@@ -196,6 +198,7 @@ async fn execute(
             rb
         }
     };
+    let session = ctx.get_current_session();
     let stream = stream! {
         yield compress_fn(prefix);
         while let Some(block) = data_stream.next().await {
@@ -212,6 +215,7 @@ async fn execute(
             .finish()
             .await
             .map_err(|e| error!("interpreter.finish error: {:?}", e));
+        let _ = session.get_id();
     };
 
     Ok(Body::from_bytes_stream(stream).with_content_type(format.get_content_type()))
