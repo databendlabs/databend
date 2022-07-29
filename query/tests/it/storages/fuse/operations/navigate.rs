@@ -135,7 +135,7 @@ async fn test_fuse_historical_table_is_read_only() -> Result<()> {
     let ctx = fixture.ctx();
     fixture.create_default_table().await?;
 
-    let qry = format!("insert into '{}'.'{}' values (1, (2, 3))", db, tbl);
+    let qry = format!("insert into {}.{} values (1, (2, 3))", db, tbl);
     execute_query(ctx.clone(), qry.as_str())
         .await?
         .try_collect::<Vec<DataBlock>>()
