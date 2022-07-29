@@ -78,10 +78,29 @@ impl<'a> Binder {
                     // We first search the identifier in select list
                     let mut found = false;
                     for item in projections.iter() {
-                        if item.column_name == ident.name
-                            && table_name.is_none()
-                            && database_name.is_none()
-                        {
+                        let matched = match (
+                            (&item.database_name, &item.table_name),
+                            (&database_name, &table_name),
+                        ) {
+                            (
+                                (Some(target_database), Some(target_table)),
+                                (Some(source_database), Some(source_table)),
+                            ) if target_database == &source_database.name
+                                && target_table == &source_table.name
+                                && &ident.name == &item.column_name =>
+                            {
+                                true
+                            }
+                            ((None, Some(target_table)), (_, Some(source_table)))
+                                if target_table == &source_table.name
+                                    && &ident.name == &item.column_name =>
+                            {
+                                true
+                            }
+                            ((None, None), (_, _)) if ident.name == item.column_name => true,
+                            _ => false,
+                        };
+                        if matched {
                             order_items.push(OrderItem {
                                 expr: order.clone(),
                                 index: item.index,
