@@ -85,17 +85,17 @@ async fn test_fuse_snapshot_optimize_compact() -> Result<()> {
     }
 
     // optimize compact
-    let qry = format!("optimize table '{}'.'{}' compact", db, tbl);
+    let qry = format!("optimize table {}.{} compact", db, tbl);
     execute_command(fixture.ctx(), qry.as_str()).await?;
 
     // optimize compact should keep the histories
     // there should be 6 history items there, 5 for the above insertions, 1 for that compaction
     let expected = vec![
-        "+---------+",
-        "| count() |",
-        "+---------+",
-        "| 6       |",
-        "+---------+",
+        "+----------+",
+        "| COUNT(*) |",
+        "+----------+",
+        "| 6        |",
+        "+----------+",
     ];
     let qry = format!("select count(*) from fuse_snapshot('{}', '{}')", db, tbl);
 
