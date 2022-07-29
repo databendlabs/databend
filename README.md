@@ -2,7 +2,7 @@
 <div align="center">
  
 <h4 align="center">
-  <a href="https://databend.rs/doc/cloud">Databend Cloud (beta)</a>  |
+  <a href="https://databend.rs/doc/cloud">Databend Serverless Cloud (beta)</a>  |
   <a href="https://databend.rs/doc">Documentation</a>  |
   <a href="https://perf.databend.rs">Benchmarking</a>  |
   <a href="https://github.com/datafuselabs/databend/issues/4591">Roadmap (v0.8)</a>
@@ -74,7 +74,11 @@ Databend uses the latest techniques in vectorized query processing to allow you 
 
 ## Try Databend
 
-### Install Databend
+### 1. Databend Serverless Cloud
+
+The fastest way to try Databend, [Databend Cloud](https://databend.rs/doc/cloud/)
+
+### 2. Install Databend from Docker
 
 Prepare the image (once) from Docker Hub (this will download about 170 MB data):
 
@@ -86,15 +90,6 @@ To run Databend quickly:
 ```shell
 docker run --net=host  datafuselabs/databend
 ```
-
-### Connect to Databend
-
-[MySQL](https://databend.rs/doc/reference/api/mysql-handler) wire protocol on port `3307` 
-```shell
-mysql -h127.0.0.1 -uroot -P3307
-```
-
-Let's run some [benchmark queries](https://databend.rs/doc/performance/local-vector-performance).
 
 ## Getting Started
 
