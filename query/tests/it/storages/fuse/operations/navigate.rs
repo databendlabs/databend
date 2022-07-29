@@ -49,7 +49,7 @@ async fn test_fuse_navigate() -> Result<()> {
 
     // 1.1 first commit
     let qry = format!(
-        "insert into '{}'.'{}' values (1, (2, 3)), (2, (4, 6)) ",
+        "insert into {}.{} values (1, (2, 3)), (2, (4, 6)) ",
         db, tbl
     );
     execute_query(ctx.clone(), qry.as_str())
@@ -67,7 +67,7 @@ async fn test_fuse_navigate() -> Result<()> {
     tokio::time::sleep(Duration::from_millis(2)).await;
 
     // 1.2 second commit
-    let qry = format!("insert into '{}'.'{}' values (3, (6, 9)) ", db, tbl);
+    let qry = format!("insert into {}.{} values (3, (6, 9)) ", db, tbl);
     execute_query(ctx.clone(), qry.as_str())
         .await?
         .try_collect::<Vec<DataBlock>>()

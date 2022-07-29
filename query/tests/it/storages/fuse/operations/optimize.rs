@@ -45,7 +45,7 @@ async fn do_purge_test(case_name: &str, operation: &str) -> Result<()> {
     let fixture = TestFixture::new().await;
     let db = fixture.default_db_name();
     let tbl = fixture.default_table_name();
-    let qry = format!("optimize table '{}'.'{}' {}", db, tbl, operation);
+    let qry = format!("optimize table {}.{} {}", db, tbl, operation);
     // insert, and then insert overwrite (1 snapshot, 1 segment, 1 block for each insertion);
     insert_test_data(&qry, &fixture).await?;
     // there should be only 1 snapshot, 1 segment, 1 block left
