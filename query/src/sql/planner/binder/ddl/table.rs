@@ -813,7 +813,7 @@ impl<'a> Binder {
             let column = ColumnBinding {
                 database_name: None,
                 table_name: None,
-                column_name: field.name().clone(),
+                column_name: field.name().to_lowercase(),
                 // A dummy index is fine, since we won't actually evaluate the expression
                 index: 0,
                 data_type: Box::new(field.data_type().clone()),

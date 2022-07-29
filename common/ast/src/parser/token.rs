@@ -293,6 +293,8 @@ pub enum TokenKind {
     CONNECTION,
     #[token("CHAR", ignore(ascii_case))]
     CHAR,
+    #[token("CHARACTER", ignore(ascii_case))]
+    CHARACTER,
     #[token("COPY_OPTIONS", ignore(ascii_case))]
     COPY_OPTIONS,
     #[token("COPY", ignore(ascii_case))]
@@ -617,6 +619,8 @@ pub enum TokenKind {
     TABLE,
     #[token("TABLES", ignore(ascii_case))]
     TABLES,
+    #[token("TEXT", ignore(ascii_case))]
+    TEXT,
     #[token("TENANTSETTING", ignore(ascii_case))]
     TENANTSETTING,
     #[token("THEN", ignore(ascii_case))]
