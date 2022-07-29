@@ -98,65 +98,71 @@ Let's run some [benchmark queries](https://databend.rs/doc/performance/local-vec
 
 ## Getting Started
 
-### Deployment
+### Deploying Databend
 
 - [Understanding Deployment Modes](https://databend.rs/doc/deploy/understanding-deployment-modes)
 - [Deploying a Standalone Databend](https://databend.rs/doc/deploy/deploying-databend)
 - [Expanding a Standalone Databend](https://databend.rs/doc/deploy/expanding-to-a-databend-cluster)
 - [Databend Cloud (Beta)](https://databend.rs/doc/cloud)
  
-### Connect
+### Connecting to Databend
 
-- [How to Connect Databend With MySQL Client](https://databend.rs/doc/reference/api/mysql-handler)
-- [How to Connect Databend With ClickHouse Client](https://databend.rs/doc/reference/api/clickhouse-handler)
-- [How to Connect Databend With DBeaver SQL IDE](https://databend.rs/doc/integrations/gui-tool/dbeaver)
+- [How to Connect Databend with MySQL Client](https://databend.rs/doc/reference/api/mysql-handler)
+- [How to Connect Databend with ClickHouse Client](https://databend.rs/doc/reference/api/clickhouse-handler)
+- [How to Connect Databend with DBeaver SQL IDE](https://databend.rs/doc/integrations/gui-tool/dbeaver)
 - [How to Execute Queries in Python](https://databend.rs/doc/develop/python)
 - [How to Query Databend in Jupyter Notebooks](https://databend.rs/doc/integrations/gui-tool/jupyter)
 - [How to Execute Queries in Golang](https://databend.rs/doc/develop/golang)
-- [How to Work With Databend in Node.js](https://databend.rs/doc/develop/nodejs)
+- [How to Work with Databend in Node.js](https://databend.rs/doc/develop/nodejs)
 
+### Loading Data into Databend
 
-### Users
+- [How to Load Data from Local File System](https://databend.rs/doc/load-data/local)
+- [How to Load Data from Remote Files](https://databend.rs/doc/load-data/remote)
+- [How to Load Data from Amazon S3](https://databend.rs/doc/load-data/s3)
+- [How to Load Data from Databend Stages](https://databend.rs/doc/load-data/stage)
+- [How to Load Data from MySQL](https://databend.rs/doc/load-data/mysql)
+
+### Managing Users
 
 - [How to Create a User](https://databend.rs/doc/reference/sql/ddl/user/user-create-user)
 - [How to Grant Privileges to a User](https://databend.rs/doc/reference/sql/ddl/user/grant-privileges)
-- [How to Revoke Privileges From a User](https://databend.rs/doc/reference/sql/ddl/user/revoke-privileges)
+- [How to Revoke Privileges from a User](https://databend.rs/doc/reference/sql/ddl/user/revoke-privileges)
 - [How to Create a Role](https://databend.rs/doc/reference/sql/ddl/user/user-create-role)
 - [How to Grant Privileges to a Role](https://databend.rs/doc/reference/sql/ddl/user/grant-privileges)
 - [How to Grant Role to a User](https://databend.rs/doc/reference/sql/ddl/user/grant-role)
-- [How to Revoke Role From a User](https://databend.rs/doc/reference/sql/ddl/user/revoke-role)
+- [How to Revoke Role from a User](https://databend.rs/doc/reference/sql/ddl/user/revoke-role)
  
-### Tables
+### Managing Databases
 
 - [How to Create a Database](https://databend.rs/doc/reference/sql/ddl/database/ddl-create-database)
 - [How to Drop a Database](https://databend.rs/doc/reference/sql/ddl/database/ddl-drop-database)
+
+### Managing Tables
+
 - [How to Create a Table](https://databend.rs/doc/reference/sql/ddl/table/ddl-create-table)
 - [How to Drop a Table](https://databend.rs/doc/reference/sql/ddl/table/ddl-drop-table)
 - [How to Rename a Table](https://databend.rs/doc/reference/sql/ddl/table/ddl-rename-table)
 - [How to Truncate a Table](https://databend.rs/doc/reference/sql/ddl/table/ddl-truncate-table)
 
-### Views
+### Managing Views
 
 - [How to Create a View](https://databend.rs/doc/reference/sql/ddl/view/ddl-create-view)
 - [How to Drop a View](https://databend.rs/doc/reference/sql/ddl/view/ddl-drop-view)
 - [How to Alter a View](https://databend.rs/doc/reference/sql/ddl/view/ddl-alter-view)
 
-## User-Defined Functions
+### Managing User-Defined Functions
 
 - [How to Create a User-Defined Function](http://databend.rs/doc/reference/sql/ddl/udf/ddl-create-function)
 - [How to Drop a User-Defined Function](http://databend.rs/doc/reference/sql/ddl/udf/ddl-drop-function)
 - [How to Alter a User-Defined Function](http://databend.rs/doc/reference/sql/ddl/udf/ddl-alter-function)
 
- 
-### Load Data
+### Backup & Restore
 
-- [How to Load Data From Local File System](https://databend.rs/doc/load-data/local)
-- [How to Load Data From Remote Files](https://databend.rs/doc/load-data/remote)
-- [How to Load Data From Amazon S3](https://databend.rs/doc/load-data/s3)
-- [How to Load Data From Databend Stages](https://databend.rs/doc/load-data/stage)
-- [How to Load Data From MySQL](https://databend.rs/doc/load-data/mysql)
+* [How to Back Up Meta Data](https://databend.rs/doc/manage/metasrv/metasrv-backup-restore)
+* [How to Back Up Databases](https://databend.rs/doc/manage/backup-restore/backup-and-restore-schema)
 
-### Use Case
+### Use Cases
 
 - [Analyzing Github Repository With Databend](https://databend.rs/doc/learn/analyze-github-repo-with-databend)
 - [Analyzing Nginx Access Logs With Databend](https://databend.rs/doc/learn/analyze-nginx-logs-with-databend-and-vector)
