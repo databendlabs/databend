@@ -61,6 +61,7 @@ fn is_result_set_by_plan(plan: &Plan) -> bool {
         plan,
         Plan::Query { .. }
             | Plan::Explain { .. }
+            | Plan::Call(_)
             | Plan::ShowCreateDatabase(_)
             | Plan::ShowCreateTable(_)
             | Plan::DescribeTable(_)
@@ -74,6 +75,7 @@ fn is_result_set_by_plan_node(plan: &PlanNode) -> bool {
         plan,
         PlanNode::Explain(_)
             | PlanNode::Select(_)
+            | PlanNode::Call(_)
             | PlanNode::Show(_)
             | PlanNode::ShowCreateDatabase(_)
             | PlanNode::DescribeTable(_)
