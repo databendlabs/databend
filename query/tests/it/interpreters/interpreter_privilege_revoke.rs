@@ -24,7 +24,6 @@ use common_meta_types::UserPrivilegeSet;
 use common_meta_types::UserPrivilegeType;
 use databend_query::interpreters::*;
 use databend_query::sessions::TableContext;
-use databend_query::sql::PlanParser;
 use databend_query::sql::Planner;
 use futures::stream::StreamExt;
 use pretty_assertions::assert_eq;

@@ -47,7 +47,6 @@ use super::writers::from_clickhouse_block;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
 use crate::interpreters::InterpreterFactoryV2;
-use crate::interpreters::InterpreterQueryLog;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::SyncReceiverCkSource;
 use crate::pipelines::SourcePipeBuilder;

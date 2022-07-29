@@ -15,9 +15,7 @@
 use common_base::base::tokio;
 use common_exception::Result;
 use databend_query::interpreters::*;
-use databend_query::sql::PlanParser;
 use databend_query::sql::Planner;
-use futures::stream::StreamExt;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_create_table_interpreter() -> Result<()> {

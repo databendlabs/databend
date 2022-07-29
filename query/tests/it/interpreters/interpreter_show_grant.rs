@@ -20,10 +20,8 @@ use common_meta_types::UserIdentity;
 use common_meta_types::UserInfo;
 use common_meta_types::UserPrivilegeSet;
 use common_meta_types::UserPrivilegeType;
-use databend_query::interpreters::InterpreterFactory;
 use databend_query::interpreters::InterpreterFactoryV2;
 use databend_query::sessions::TableContext;
-use databend_query::sql::PlanParser;
 use databend_query::sql::Planner;
 use futures::TryStreamExt;
 

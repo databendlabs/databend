@@ -17,10 +17,8 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::RoleInfo;
 use common_meta_types::UserInfo;
-use databend_query::interpreters::InterpreterFactory;
 use databend_query::interpreters::InterpreterFactoryV2;
 use databend_query::sessions::TableContext;
-use databend_query::sql::PlanParser;
 use databend_query::sql::Planner;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]

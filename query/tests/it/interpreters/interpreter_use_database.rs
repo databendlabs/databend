@@ -15,7 +15,6 @@
 use common_base::base::tokio;
 use common_exception::Result;
 use databend_query::interpreters::*;
-use databend_query::sql::PlanParser;
 use databend_query::sql::Planner;
 use futures::stream::StreamExt;
 use pretty_assertions::assert_eq;

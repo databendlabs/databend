@@ -17,7 +17,6 @@ use common_exception::Result;
 use common_meta_types::AuthInfo;
 use common_meta_types::PasswordHashMethod;
 use common_meta_types::UserInfo;
-use common_meta_types::UserOptionFlag;
 use databend_query::interpreters::*;
 use databend_query::sessions::TableContext;
 use databend_query::sql::*;

@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use common_exception::Result;
-use databend_query::sessions::SessionType;
 use databend_query::sql::*;
 use pretty_assertions::assert_eq;
 

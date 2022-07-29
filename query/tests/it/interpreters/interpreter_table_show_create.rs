@@ -16,7 +16,6 @@ use common_base::base::tokio;
 use common_exception::Result;
 use databend_query::interpreters::*;
 use databend_query::sql::planner::Planner;
-use databend_query::sql::PlanParser;
 use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
 
@@ -97,7 +96,7 @@ async fn interpreter_show_create_table_test() -> Result<()> {
 #[tokio::test]
 async fn interpreter_show_create_table_with_comments_test() -> Result<()> {
     let ctx = crate::tests::create_query_context().await?;
-    let mut planner = Planner::new(ctx.clone());
+    let _planner = Planner::new(ctx.clone());
 
     struct Case<'a> {
         create_stmt: Vec<&'a str>,
