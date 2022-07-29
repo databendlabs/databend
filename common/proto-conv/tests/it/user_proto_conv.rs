@@ -32,7 +32,7 @@ fn s(ss: impl ToString) -> String {
 fn test_user_info() -> UserInfo {
     let option = mt::UserOption::default()
         .with_set_flag(mt::UserOptionFlag::TenantSetting)
-        .with_default_role(Some("role1".to_string()));
+        .with_default_role(None);
 
     mt::UserInfo {
         name: "test_user".to_string(),
@@ -115,13 +115,13 @@ fn test_user_incompatible() -> anyhow::Result<()> {
     {
         let user_info = test_user_info();
         let mut p = user_info.to_pb()?;
-        p.ver = 3;
-        p.min_compatible = 3;
+        p.ver = 4;
+        p.min_compatible = 4;
 
         let res = mt::UserInfo::from_pb(p);
         assert_eq!(
             Incompatible {
-                reason: s("executable ver=2 is smaller than the message min compatible ver: 3")
+                reason: s("executable ver=3 is smaller than the message min compatible ver: 4")
             },
             res.unwrap_err()
         );
@@ -130,13 +130,13 @@ fn test_user_incompatible() -> anyhow::Result<()> {
     {
         let user_stage_info = test_user_stage_info();
         let mut p = user_stage_info.to_pb()?;
-        p.ver = 3;
-        p.min_compatible = 3;
+        p.ver = 4;
+        p.min_compatible = 4;
 
         let res = mt::UserStageInfo::from_pb(p);
         assert_eq!(
             Incompatible {
-                reason: s("executable ver=2 is smaller than the message min compatible ver: 3")
+                reason: s("executable ver=3 is smaller than the message min compatible ver: 4")
             },
             res.unwrap_err()
         );
