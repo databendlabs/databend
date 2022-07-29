@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_arrow::parquet::metadata::FileMetaData;
 use common_base::base::tokio::sync::RwLock;
 use common_cache::Count;
 use common_cache::DefaultHashBuilder;
@@ -30,3 +31,5 @@ pub fn new_memory_cache<V>(capacity: u64) -> MemoryCache<V> {
 
 pub type SegmentInfoCache = MemoryCache<SegmentInfo>;
 pub type TableSnapshotCache = MemoryCache<TableSnapshot>;
+pub type BloomIndexCache = MemoryCache<Vec<u8>>;
+pub type BloomIndexMetaCache = MemoryCache<FileMetaData>;

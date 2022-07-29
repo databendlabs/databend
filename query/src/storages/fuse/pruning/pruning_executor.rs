@@ -37,7 +37,7 @@ pub struct BlockPruner {
     table_snapshot: Arc<TableSnapshot>,
 }
 
-const FUTURE_BUFFER_SIZE: usize = 10;
+const FUTURE_BUFFER_SIZE: usize = 40;
 
 impl BlockPruner {
     pub fn new(table_snapshot: Arc<TableSnapshot>) -> Self {

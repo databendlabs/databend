@@ -147,7 +147,8 @@ mod util {
 
         // load the relevant index columns
         let filter_block =
-            load_bloom_filter_by_columns(dal, bloom_index_col_names, &bloom_idx_location).await?;
+            load_bloom_filter_by_columns(ctx, dal, bloom_index_col_names, &bloom_idx_location)
+                .await?;
 
         // figure it out
         BloomFilterIndexer::from_bloom_block(schema.clone(), filter_block, ctx.clone())?

@@ -14,6 +14,8 @@
 
 use common_config::QueryConfig;
 
+use crate::caches::memory_cache::BloomIndexCache;
+use crate::caches::memory_cache::BloomIndexMetaCache;
 use crate::caches::new_memory_cache;
 use crate::caches::MemoryCache;
 use crate::caches::SegmentInfoCache;
@@ -23,6 +25,8 @@ use crate::caches::TableSnapshotCache;
 pub struct CacheManager {
     table_snapshot_cache: Option<TableSnapshotCache>,
     segment_info_cache: Option<SegmentInfoCache>,
+    bloom_index_cache: Option<BloomIndexCache>,
+    bloom_index_meta_cache: Option<BloomIndexMetaCache>,
     cluster_id: String,
     tenant_id: String,
 }
@@ -36,15 +40,21 @@ impl CacheManager {
             Self {
                 table_snapshot_cache: None,
                 segment_info_cache: None,
+                bloom_index_cache: None,
+                bloom_index_meta_cache: None,
                 cluster_id: config.cluster_id.clone(),
                 tenant_id: config.tenant_id.clone(),
             }
         } else {
             let table_snapshot_cache = Self::with_capacity(config.table_cache_snapshot_count);
             let segment_info_cache = Self::with_capacity(config.table_cache_segment_count);
+            let bloom_index_cache = Self::with_capacity(3000);
+            let bloom_index_meta_cache = Self::with_capacity(3000);
             Self {
                 table_snapshot_cache,
                 segment_info_cache,
+                bloom_index_cache,
+                bloom_index_meta_cache,
                 cluster_id: config.cluster_id.clone(),
                 tenant_id: config.tenant_id.clone(),
             }
@@ -57,6 +67,14 @@ impl CacheManager {
 
     pub fn get_table_segment_cache(&self) -> Option<SegmentInfoCache> {
         self.segment_info_cache.clone()
+    }
+
+    pub fn get_bloom_index_cache(&self) -> Option<BloomIndexCache> {
+        self.bloom_index_cache.clone()
+    }
+
+    pub fn get_bloom_index_meta_cache(&self) -> Option<BloomIndexMetaCache> {
+        self.bloom_index_meta_cache.clone()
     }
 
     pub fn get_tenant_id(&self) -> &str {
