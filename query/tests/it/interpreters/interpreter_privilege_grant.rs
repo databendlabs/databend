@@ -25,6 +25,7 @@ use common_meta_types::UserPrivilegeType;
 use databend_query::interpreters::*;
 use databend_query::sessions::TableContext;
 use databend_query::sql::PlanParser;
+use databend_query::sql::Planner;
 use futures::stream::StreamExt;
 use pretty_assertions::assert_eq;
 
@@ -32,6 +33,7 @@ use pretty_assertions::assert_eq;
 async fn test_grant_privilege_interpreter() -> Result<()> {
     let ctx = crate::tests::create_query_context().await?;
     let tenant = ctx.get_tenant();
+    let mut planner = Planner::new(ctx.clone());
 
     let name = "test";
     let hostname = "localhost";
@@ -119,8 +121,8 @@ async fn test_grant_privilege_interpreter() -> Result<()> {
     ];
 
     for tt in tests {
-        let plan = PlanParser::parse(ctx.clone(), &tt.query).await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let (plan, _, _) = planner.plan_sql(&tt.query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         assert_eq!(executor.name(), "GrantPrivilegeInterpreter");
         let r = match executor.execute(None).await {
             Err(err) => Err(err),

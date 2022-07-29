@@ -16,26 +16,30 @@ use common_base::base::tokio;
 use common_exception::Result;
 use databend_query::interpreters::*;
 use databend_query::sql::PlanParser;
+use databend_query::sql::Planner;
 use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_rename_database_interpreter() -> Result<()> {
     let ctx = crate::tests::create_query_context().await?;
+    let mut planner = Planner::new(ctx.clone());
 
     // Create DB
     {
         let query = "create database test1";
 
-        let plan = PlanParser::parse(ctx.clone(), query).await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         let _ = executor.execute(None).await?;
     }
 
     // Rename DB
     {
-        let plan = PlanParser::parse(ctx.clone(), "alter database test1 rename to test2").await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let query = "alter database test1 rename to test2";
+
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         assert_eq!(executor.name(), "RenameDatabaseInterpreter");
         let stream = executor.execute(None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
@@ -45,8 +49,9 @@ async fn test_rename_database_interpreter() -> Result<()> {
 
     // Drop DB
     {
-        let plan = PlanParser::parse(ctx.clone(), "drop database test2").await?;
-        let executor = InterpreterFactory::get(ctx, plan.clone())?;
+        let query = "drop database test2";
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         assert_eq!(executor.name(), "DropDatabaseInterpreter");
         let stream = executor.execute(None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;

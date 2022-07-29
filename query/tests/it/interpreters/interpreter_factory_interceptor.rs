@@ -80,11 +80,12 @@ async fn test_interpreter_interceptor() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_interpreter_interceptor_for_insert() -> Result<()> {
     let ctx = crate::tests::create_query_context().await?;
+    let mut planner = Planner::new(ctx.clone());
+
     {
         let query = "create table t as select number from numbers_mt(1)";
-        ctx.attach_query_str(query);
-        let plan = PlanParser::parse(ctx.clone(), query).await?;
-        let interpreter = InterpreterFactory::get(ctx.clone(), plan)?;
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let interpreter = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         interpreter.start().await?;
         let stream = interpreter.execute(None).await?;
         stream.try_collect::<Vec<_>>().await?;
