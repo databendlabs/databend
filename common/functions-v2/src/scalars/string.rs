@@ -133,6 +133,56 @@ pub fn register(registry: &mut FunctionRegistry) {
             },
         ),
     );
+
+    registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
+        "quote",
+        FunctionProperty::default(),
+        |_| None,
+        vectorize_string_to_string(
+            |col| col.data.len() * 2,
+            |val, writer| {
+                for ch in val {
+                    match ch {
+                        0 => writer.put_slice(&[b'\\', b'0']),
+                        b'\'' => writer.put_slice(&[b'\\', b'\'']),
+                        b'\"' => writer.put_slice(&[b'\\', b'\"']),
+                        8 => writer.put_slice(&[b'\\', b'b']),
+                        b'\n' => writer.put_slice(&[b'\\', b'n']),
+                        b'\r' => writer.put_slice(&[b'\\', b'r']),
+                        b'\t' => writer.put_slice(&[b'\\', b't']),
+                        b'\\' => writer.put_slice(&[b'\\', b'\\']),
+                        c => writer.put_u8(*c),
+                    }
+                }
+                writer.commit_row();
+                Ok(())
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
+        "reverse",
+        FunctionProperty::default(),
+        |_| None,
+        vectorize_string_to_string(
+            |col| col.data.len(),
+            |val, writer| {
+                let start = writer.data.len();
+                writer.put_slice(val);
+                let buf = &mut writer.data[start..];
+                buf.reverse();
+                writer.commit_row();
+                Ok(())
+            },
+        ),
+    );
+
+    registry.register_1_arg::<StringType, NumberType<u8>, _, _>(
+        "ascii",
+        FunctionProperty::default(),
+        |_| None,
+        |val| val[0],
+    );
 }
 
 // Vectorize string to string function with customer estimate_bytes.
@@ -152,6 +202,7 @@ fn vectorize_string_to_string(
             for val in col.iter() {
                 func(val, &mut builder)?;
             }
+
             Ok(Value::Column(builder.build()))
         }
     }

@@ -34,6 +34,9 @@ fn test_string() {
     test_char_length(file);
     test_to_base64(file);
     test_from_base64(file);
+    test_quote(file);
+    test_reverse(file);
+    test_ascii(file);
 }
 
 fn test_upper(file: &mut impl Write) {
@@ -104,11 +107,51 @@ fn test_to_base64(file: &mut impl Write) {
 fn test_from_base64(file: &mut impl Write) {
     run_ast(file, "from_base64('QWJj')", &[]);
     run_ast(file, "from_base64('MTIz')", &[]);
-    run_ast(file, "to_base64(Null)", &[]);
-    run_ast(file, "to_base64(a)", &[(
+    run_ast(file, "from_base64(Null)", &[]);
+    run_ast(file, "from_base64(a)", &[(
         "a",
         DataType::String,
         build_string_column(&["QWJj", "MTIz"]),
+    )])
+}
+
+fn test_quote(file: &mut impl Write) {
+    run_ast(file, "quote('a\0b')", &[]);
+    // run_ast(file, "quote('a\'b')", &[]);
+    run_ast(file, "quote('a\"b')", &[]);
+    run_ast(file, "quote('a\nb')", &[]);
+    run_ast(file, "quote('a\rb')", &[]);
+    run_ast(file, "quote('a\tb')", &[]);
+    run_ast(file, "quote('a\\b')", &[]);
+    run_ast(file, "quote(Null)", &[]);
+    run_ast(file, "quote(a)", &[(
+        "a",
+        DataType::String,
+        build_string_column(&["'a\0b'", "a\'b", "a\nb"]),
+    )])
+}
+
+fn test_reverse(file: &mut impl Write) {
+    run_ast(file, "reverse('abc')", &[]);
+    run_ast(file, "reverse('a')", &[]);
+    run_ast(file, "reverse('')", &[]);
+    run_ast(file, "reverse(Null)", &[]);
+    run_ast(file, "reverse(a)", &[(
+        "a",
+        DataType::String,
+        build_string_column(&["abc", "a", ""]),
+    )])
+}
+
+fn test_ascii(file: &mut impl Write) {
+    run_ast(file, "ascii('1')", &[]);
+    run_ast(file, "ascii('123')", &[]);
+    run_ast(file, "ascii('-1')", &[]);
+    run_ast(file, "ascii(Null)", &[]);
+    run_ast(file, "ascii(a)", &[(
+        "a",
+        DataType::String,
+        build_string_column(&["1", "123", "-1"]),
     )])
 }
 
