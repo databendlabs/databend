@@ -20,14 +20,16 @@ use common_meta_types::UserIdentity;
 use common_meta_types::UserInfo;
 use common_meta_types::UserPrivilegeSet;
 use common_meta_types::UserPrivilegeType;
-use databend_query::interpreters::InterpreterFactory;
+use databend_query::interpreters::InterpreterFactoryV2;
 use databend_query::sessions::TableContext;
-use databend_query::sql::PlanParser;
+use databend_query::sql::Planner;
 use futures::TryStreamExt;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_show_grant_interpreter() -> Result<()> {
     let ctx = crate::tests::create_query_context().await?;
+    let mut planner = Planner::new(ctx.clone());
+
     let tenant = ctx.get_tenant();
     let user_mgr = ctx.get_user_manager();
     let role_cache_mgr = ctx.get_role_cache_manager();
@@ -40,8 +42,9 @@ async fn test_show_grant_interpreter() -> Result<()> {
         .await?;
 
     {
-        let plan = PlanParser::parse(ctx.clone(), "SHOW GRANTS FOR 'test'@'localhost'").await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let query = "SHOW GRANTS FOR 'test'@'localhost'";
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         assert_eq!(executor.name(), "ShowGrantsInterpreter");
 
         let stream = executor.execute(None).await?;
@@ -51,8 +54,9 @@ async fn test_show_grant_interpreter() -> Result<()> {
     }
 
     {
-        let plan = PlanParser::parse(ctx.clone(), "SHOW GRANTS FOR ROLE 'role1'").await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let query = "SHOW GRANTS FOR ROLE 'role1'";
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         assert_eq!(executor.name(), "ShowGrantsInterpreter");
 
         let stream = executor.execute(None).await?;
@@ -72,8 +76,9 @@ async fn test_show_grant_interpreter() -> Result<()> {
     role_cache_mgr.invalidate_cache(&tenant);
 
     {
-        let plan = PlanParser::parse(ctx.clone(), "SHOW GRANTS FOR ROLE 'role2'").await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let query = "SHOW GRANTS FOR ROLE 'role2'";
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
 
         let stream = executor.execute(None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
@@ -97,8 +102,9 @@ async fn test_show_grant_interpreter() -> Result<()> {
     // role_cache_mgr.invalidate_cache(&tenant);
 
     {
-        let plan = PlanParser::parse(ctx.clone(), "SHOW GRANTS FOR 'test'@'localhost'").await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let query = "SHOW GRANTS FOR 'test'@'localhost'";
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
 
         let stream = executor.execute(None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
@@ -124,8 +130,9 @@ async fn test_show_grant_interpreter() -> Result<()> {
         .await?;
 
     {
-        let plan = PlanParser::parse(ctx.clone(), "SHOW GRANTS FOR 'test'@'localhost'").await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let query = "SHOW GRANTS FOR 'test'@'localhost'";
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
 
         let stream = executor.execute(None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
@@ -144,8 +151,9 @@ async fn test_show_grant_interpreter() -> Result<()> {
         .await?;
 
     {
-        let plan = PlanParser::parse(ctx.clone(), "SHOW GRANTS FOR ROLE 'role1'").await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let query = "SHOW GRANTS FOR ROLE 'role1'";
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
 
         let stream = executor.execute(None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
@@ -168,8 +176,9 @@ async fn test_show_grant_interpreter() -> Result<()> {
         )
         .await?;
     {
-        let plan = PlanParser::parse(ctx.clone(), "SHOW GRANTS FOR ROLE 'role1'").await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let query = "SHOW GRANTS FOR ROLE 'role1'";
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
 
         let stream = executor.execute(None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;

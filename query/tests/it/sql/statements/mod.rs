@@ -14,6 +14,5 @@
 
 mod query;
 mod statement_common;
-mod statement_create_table;
 mod statement_select;
 mod value_source;

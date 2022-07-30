@@ -260,10 +260,7 @@ pub async fn clickhouse_handler_get(
             .map_err(InternalServerError)?
             != 0
             && !stmts.is_empty()
-            && stmts.get(0).map_or(false, InterpreterFactoryV2::check)
-            || stmts
-                .get(0)
-                .map_or(false, InterpreterFactoryV2::enable_default))
+            || stmts.get(0).map_or(false, InterpreterFactoryV2::check))
     {
         let mut planner = Planner::new(context.clone());
         let (plan, _, fmt) = planner.plan_sql(&sql).await.map_err(BadRequest)?;
