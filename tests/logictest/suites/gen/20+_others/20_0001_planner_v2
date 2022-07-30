@@ -236,14 +236,13 @@ select 1, sum(number) from numbers_mt(1000000);
 1 499999500000
 
 
-statement query B label(http)
+statement query B
 select count(*) = count(1) from numbers(1000);
 
 ----
 1
 
----- http
-true
+
 
 
 statement query I
@@ -394,14 +393,13 @@ select count_distinct(number) from ( select number % 100 as number from numbers(
 100
 
 
-statement query B label(http)
+statement query B
 select sum_distinct(number) /  count_distinct(number) = avg_distinct(number) from ( select number % 100 as number from numbers(100000));
 
 ----
 1
 
----- http
-true
+
 
 
 statement query I
@@ -411,14 +409,13 @@ select sum_if(number, number >= 100000 - 1) from numbers(100000);
 99999
 
 
-statement query B label(http)
+statement query B
 select sum_if(number, number > 100) /  count_if(number,  number > 100) = avg_if(number,  number > 100) from numbers(100000);
 
 ----
 1
 
----- http
-true
+
 
 
 statement query I
@@ -1370,24 +1367,22 @@ statement ok
 CREATE FUNCTION notnull1 AS (p) -> not(is_null(p));
 
 
-statement query B label(http)
+statement query B
 SELECT notnull1(null);
 
 ----
 0
 
----- http
-false
 
 
-statement query B label(http)
+
+statement query B
 SELECT notnull1('null');
 
 ----
 1
 
----- http
-true
+
 
 
 statement ok
@@ -1550,7 +1545,7 @@ statement ok
 insert into n select  if (number % 3, null, number), if (number % 2, null, number) from numbers(10);
 
 
-statement query IBIB label(http)
+statement query IBIB
 select a + b, a and b, a - b, a or b as c from n order by c nulls first;
 
 ----
@@ -1564,18 +1559,6 @@ NULL NULL NULL 1
 12 1 0 1
 NULL NULL NULL 1
 NULL NULL NULL 1
-
----- http
-NULL NULL NULL NULL
-NULL NULL NULL NULL
-NULL NULL NULL NULL
-0 false 0 false
-NULL NULL NULL true
-NULL NULL NULL true
-NULL NULL NULL true
-12 true 0 true
-NULL NULL NULL true
-NULL NULL NULL true
 
 
 statement ok

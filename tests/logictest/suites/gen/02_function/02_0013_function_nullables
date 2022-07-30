@@ -7,7 +7,7 @@ CREATE TABLE nullable_test (a UInt32 null, b UInt32 null, c UInt32) Engine = Fus
 statement ok
 INSERT INTO nullable_test VALUES(1, Null, 1), (Null, 2, 2), (3, 3, 3);
 
-statement query IBIB label(http)
+statement query IBIB
 SELECT a, is_null(a), b, is_not_null(b) FROM nullable_test ORDER BY c ASC;
 
 ----
@@ -15,10 +15,6 @@ SELECT a, is_null(a), b, is_not_null(b) FROM nullable_test ORDER BY c ASC;
 NULL 1 2 1
 3 0 3 1
 
----- http
-1 false NULL false
-NULL true 2 true
-3 false 3 true
 
 statement query I
 SELECT a FROM nullable_test WHERE a is Not Null ORDER BY c;

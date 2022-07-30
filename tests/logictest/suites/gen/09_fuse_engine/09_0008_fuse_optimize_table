@@ -47,26 +47,24 @@ Projection: count():UInt64
     Expression: 3:UInt64 (Exact Statistics)
       ReadDataSource: scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1, partitions_scanned: 1, partitions_total: 1]
 
-statement query B label(http)
+statement query B
 select count(*)=4 from fuse_snapshot('db_09_0008', 't');
 
 ----
 1
 
----- http
-true
+
 
 statement ok
 optimize table `t` purge;
 
-statement query B label(http)
+statement query B
 select count(*)=1 from fuse_snapshot('db_09_0008', 't');
 
 ----
 1
 
----- http
-true
+
 
 statement query I
 select * from t order by a;
@@ -110,14 +108,13 @@ select * from t order by a;
 statement ok
 optimize table `t` all;
 
-statement query B label(http)
+statement query B
 select count(*)=1 from fuse_snapshot('db_09_0008', 't');
 
 ----
 1
 
----- http
-true
+
 
 statement query I
 select * from t order by a;
