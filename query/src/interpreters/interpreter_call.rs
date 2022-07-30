@@ -61,9 +61,10 @@ impl Interpreter for CallInterpreter {
 
         let name = plan.name.clone();
         let func = ProcedureFactory::instance().get(name)?;
+        let last_schema = func.schema();
         {
             let mut schema = self.schema.write().unwrap();
-            *schema = Some(func.schema());
+            *schema = Some(last_schema);
         }
         let blocks = func.eval(self.ctx.clone(), plan.args.clone()).await?;
         Ok(Box::pin(DataBlockStream::create(

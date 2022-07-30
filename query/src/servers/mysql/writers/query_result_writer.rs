@@ -86,8 +86,8 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
             ..Default::default()
         };
 
-        if !query_result.is_result_set
-            && (query_result.blocks.is_empty() || (query_result.blocks[0].num_columns() == 0))
+        if (!query_result.is_result_set && query_result.blocks.is_empty())
+            || (query_result.schema.num_fields() == 0)
         {
             dataset_writer.completed(default_response)?;
             return Ok(());
@@ -145,9 +145,6 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
                 for block in &query_result.blocks {
                     match block.get_serializers() {
                         Ok(serializers) => {
-                            if block.num_columns() == 0 {
-                                continue;
-                            }
                             let rows_size = block.column(0).len();
                             for row_index in 0..rows_size {
                                 for (col_index, serializer) in serializers.iter().enumerate() {
