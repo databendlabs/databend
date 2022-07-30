@@ -17,7 +17,6 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::PlanNode;
-use common_planners::ShowPlan;
 
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
