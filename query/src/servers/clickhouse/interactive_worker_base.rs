@@ -78,7 +78,7 @@ impl InteractiveWorkerBase {
         let ctx = session.create_query_context().await?;
         ctx.attach_query_str(query);
 
-        let (statements, _) = DfParser::parse_sql(query, ctx.get_current_session().get_type())?;
+        let statements = DfParser::parse_sql(query, ctx.get_current_session().get_type());
 
         if use_planner_v2(&ctx.get_settings(), &statements)? {
             let mut planner = Planner::new(ctx.clone());
@@ -88,6 +88,7 @@ impl InteractiveWorkerBase {
                 .and_then(|v| InterpreterFactoryV2::get(ctx.clone(), &v.0))?;
             Self::process_query(ctx, interpreter).await
         } else {
+            let statements = statements.unwrap().0;
             let plan = PlanParser::build_plan(statements, ctx.clone()).await?;
 
             match plan {

@@ -16,16 +16,16 @@ CREATE TABLE showtabstat.t3(c1 int) ENGINE = Null;
 statement ok
 USE showtabstat;
 
-skipif clickhouse
+
 statement ok 
 SHOW TABLE STATUS;
 
-skipif clickhouse
+
 statement ok 
 SHOW TABLE STATUS LIKE 't%';
 
 
-skipif clickhouse
+
 statement ok 
 SHOW TABLE STATUS LIKE 't2';
 
@@ -33,7 +33,7 @@ SHOW TABLE STATUS LIKE 't2';
 statement ok
 SHOW TABLE STATUS LIKE 't';
 
-skipif clickhouse
+
 statement ok 
 SHOW TABLE STATUS WHERE Name LIKE 't%';
 
@@ -50,7 +50,7 @@ SHOW TABLE STATUS WHERE Name = 't2' AND 1 = 1;
 statement ok
 USE default;
 
-skipif clickhouse
+
 statement ok 
 SHOW TABLE STATUS FROM showtabstat WHERE Name LIKE 't%';
 
@@ -58,25 +58,25 @@ SHOW TABLE STATUS FROM showtabstat WHERE Name LIKE 't%';
 statement ok
 SHOW TABLE STATUS FROM showtabstat WHERE Name = 't%' AND 1 = 0;
 
-skipif clickhouse
+
 statement ok 
 SHOW TABLE STATUS FROM showtabstat WHERE Name = 't2' OR 1 = 1;
 
-skipif clickhouse
+
 statement ok 
 SHOW TABLE STATUS FROM showtabstat WHERE Name = 't2' AND 1 = 1;
 
 statement ok
 CREATE TABLE showtabstat.t4(c1 int);
 
-skipif clickhouse
+
 statement ok
 SHOW TABLE STATUS FROM showtabstat WHERE Name = 't4';
  
 statement ok
 insert into showtabstat.t4 values(1);
 
-skipif clickhouse
+
 statement ok
 SHOW TABLE STATUS FROM showtabstat WHERE Name = 't4';
 

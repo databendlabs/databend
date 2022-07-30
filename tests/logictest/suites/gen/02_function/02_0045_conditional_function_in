@@ -33,104 +33,93 @@ SELECT NULL IN (1, 2, 3);
 ----
 NULL
 
-statement query B label(http)
+statement query B
 SELECT 1 IN (1, 2, NULL);
 
 ----
 1
 
----- http
-true
 
-statement query B label(http)
+
+statement query B
 SELECT 1 IN (2, 3, NULL);
 
 ----
 0
 
----- http
-false
 
-statement query B label(http)
+
+statement query B
 SELECT 1.1 IN (1.10, 2, 3.3, 1.1);
 
 ----
 1
 
----- http
-true
 
-statement query B label(http)
+
+statement query B
 select 1 in (1.2, 2);
 
 ----
 0
 
----- http
-false
 
-statement query B label(http)
+
+statement query B
 select 1 in (1.0, 2);
 
 ----
 1
 
----- http
-true
 
-statement query B label(http)
+
+statement query B
 select 'aa' in ('aa', 'bb', 'cc');
 
 ----
 1
 
----- http
-true
 
-statement query B label(http)
+
+statement query B
 select true in (true, false);
 
 ----
 1
 
----- http
-true
 
-statement query B label(http)
+
+statement query B
 select true in (NULL, false);
 
 ----
 0
 
----- http
-false
 
-statement query B label(http)
+
+statement query B
 SELECT to_date(18869) in (to_date(18869));
 
 ----
 1
 
----- http
-true
 
-statement query B label(http)
+
+statement query B
 SELECT to_date(18869) in ('2021-08-30');
 
 ----
 1
 
----- http
-true
 
-statement query B label(http)
+
+statement query B
 SELECT to_date(18869) in (to_date(18869), NULL);
 
 ----
 1
 
----- http
-true
+
 
 statement query T 
 SELECT NULL in ('2021-08-30');
@@ -165,13 +154,13 @@ CREATE TABLE t2(date DATE, datetime DATETIME null) Engine = Fuse;
 statement ok
 INSERT INTO t2 VALUES ('2022-04-23', '2022-04-23 01:48:19'), ('2022-04-24', NULL);
 
-statement query TT label(http)
+statement query TT
 SELECT * FROM t2 WHERE date in ('2022-04-23');
 
 ----
 2022-04-23 2022-04-23 01:48:19.000000
 
-statement query TT label(http)
+statement query TT
 SELECT * FROM t2 WHERE datetime in ('2022-04-23 01:48:19', NULL);
 
 ----

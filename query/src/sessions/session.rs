@@ -151,29 +151,25 @@ impl Session {
 
     pub fn get_format_settings(&self) -> Result<FormatSettings> {
         let settings = &self.session_settings;
-        let mut format = FormatSettings::default();
-        if let SessionType::HTTPQuery = self.get_type() {
-            format.false_bytes = vec![b'f', b'a', b'l', b's', b'e'];
-            format.true_bytes = vec![b't', b'r', b'u', b'e'];
-        }
-        {
-            format.record_delimiter = settings.get_record_delimiter()?;
-            format.field_delimiter = settings.get_field_delimiter()?;
-            format.empty_as_default = settings.get_empty_as_default()? > 0;
-            format.skip_header = settings.get_skip_header()?;
+        let mut format = FormatSettings {
+            record_delimiter: settings.get_record_delimiter()?,
+            field_delimiter: settings.get_field_delimiter()?,
+            empty_as_default: settings.get_empty_as_default()? > 0,
+            skip_header: settings.get_skip_header()?,
+            ..Default::default()
+        };
 
-            let tz = String::from_utf8(settings.get_timezone()?).map_err(|_| {
-                ErrorCode::LogicalError("Timezone has been checked and should be valid.")
-            })?;
-            format.timezone = tz.parse::<Tz>().map_err(|_| {
-                ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
-            })?;
+        let tz = String::from_utf8(settings.get_timezone()?).map_err(|_| {
+            ErrorCode::LogicalError("Timezone has been checked and should be valid.")
+        })?;
+        format.timezone = tz.parse::<Tz>().map_err(|_| {
+            ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
+        })?;
 
-            let compress = String::from_utf8(settings.get_compression()?).map_err(|_| {
-                ErrorCode::UnknownCompressionType("Compress type must be valid utf-8")
-            })?;
-            format.compression = compress.parse()?
-        }
+        let compress = String::from_utf8(settings.get_compression()?)
+            .map_err(|_| ErrorCode::UnknownCompressionType("Compress type must be valid utf-8"))?;
+        format.compression = compress.parse()?;
+
         Ok(format)
     }
 

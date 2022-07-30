@@ -46,14 +46,13 @@ select 'checking count: count(*) = (112 + 113 + 20000)';
 ----
 checking count: count(*) = (112 + 113 + 20000)
 
-statement query B label(http)
+statement query B
 select count(*) = (112 + 113 + 20000) from t;
 
 ----
 1
 
----- http
-true
+
 
 statement query I
 select sum(id) from t;

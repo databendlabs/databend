@@ -188,25 +188,31 @@ impl ExecuteState {
         let start_time = Instant::now();
         ctx.attach_query_str(sql);
 
-        let (stmts, _) = match DfParser::parse_sql(sql, ctx.get_current_session().get_type()) {
-            Ok(t) => t,
-            Err(e) => {
-                InterpreterQueryLog::fail_to_start(ctx, e.clone()).await;
-                return Err(e);
-            }
+        let stmts = DfParser::parse_sql(sql, ctx.get_current_session().get_type());
+        let settings = ctx.get_settings();
+        let is_v2 = use_planner_v2(&settings, &stmts)?;
+        let is_select = if let Ok((s, _)) = &stmts {
+            s.get(0)
+                .map_or(false, |stmt| matches!(stmt, DfStatement::Query(_)))
+        } else {
+            false
         };
 
-        let settings = ctx.get_settings();
-        if use_planner_v2(&settings, &stmts)?
-            && stmts
-                .get(0)
-                .map_or(false, |stmt| matches!(stmt, DfStatement::Query(_)))
-        {
+        let interpreter = if is_v2 {
             let mut planner = Planner::new(ctx.clone());
             let (plan, _, _) = planner.plan_sql(sql).await?;
-            let interpreter = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
-
-            // Write Start to query log table.
+            InterpreterFactoryV2::get(ctx.clone(), &plan)
+        } else {
+            let plan = match PlanParser::parse(ctx.clone(), sql).await {
+                Ok(p) => p,
+                Err(e) => {
+                    InterpreterQueryLog::fail_to_start(ctx, e.clone()).await;
+                    return Err(e);
+                }
+            };
+            InterpreterFactory::get(ctx.clone(), plan)
+        }?;
+        if is_v2 && is_select {
             let _ = interpreter
                 .start()
                 .await
@@ -227,20 +233,6 @@ impl ExecuteState {
             interpreter.execute(None).await?;
             Ok(executor)
         } else {
-            let interpreter = if stmts.get(0).map_or(false, InterpreterFactoryV2::check) {
-                let mut planner = Planner::new(ctx.clone());
-                let (plan, _, _) = planner.plan_sql(sql).await?;
-                InterpreterFactoryV2::get(ctx.clone(), &plan)
-            } else {
-                let plan = match PlanParser::parse(ctx.clone(), sql).await {
-                    Ok(p) => p,
-                    Err(e) => {
-                        InterpreterQueryLog::fail_to_start(ctx, e.clone()).await;
-                        return Err(e);
-                    }
-                };
-                InterpreterFactory::get(ctx.clone(), plan)
-            }?;
             // Write Start to query log table.
             let _ = interpreter
                 .start()

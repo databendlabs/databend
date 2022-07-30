@@ -18,21 +18,15 @@ SCHEMATA
 TABLES
 VIEWS
 
-statement query B label(http)
+statement query B
 select count(1) > 1 from information_schema.columns;
 
 ----
 1
 
-----  http
-true
 
-statement query B label(http)
+statement query B
 select count(1) > 1 from information_Schema.Columns;
 
 ----
 1
-
-----  http
-true
-
