@@ -49,7 +49,12 @@ impl Interpreter for CallInterpreter {
     }
 
     fn schema(&self) -> DataSchemaRef {
-        self.schema.read().unwrap().as_ref().unwrap().clone()
+        self.schema
+            .read()
+            .unwrap()
+            .as_ref()
+            .expect("schema has not been initialized before execution")
+            .clone()
     }
 
     #[tracing::instrument(level = "debug", name = "call_interpreter_execute", skip(self, _input_stream), fields(ctx.id = self.ctx.get_id().as_str()))]

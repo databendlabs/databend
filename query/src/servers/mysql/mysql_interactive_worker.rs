@@ -56,7 +56,7 @@ use crate::sql::DfParser;
 use crate::sql::PlanParser;
 use crate::sql::Planner;
 
-fn is_result_set_by_plan(plan: &Plan) -> bool {
+fn has_result_set_by_plan(plan: &Plan) -> bool {
     matches!(
         plan,
         Plan::Query { .. }
@@ -72,7 +72,7 @@ fn is_result_set_by_plan(plan: &Plan) -> bool {
     )
 }
 
-fn is_result_set_by_plan_node(plan: &PlanNode) -> bool {
+fn has_result_set_by_plan_node(plan: &PlanNode) -> bool {
     matches!(
         plan,
         PlanNode::Explain(_)
@@ -332,20 +332,20 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
                 let stmts_hints =
                     DfParser::parse_sql(query, context.get_current_session().get_type());
                 let mut hints = vec![];
-                let mut is_result_set = false;
+                let mut has_result_set = false;
                 let interpreter: Result<Arc<dyn Interpreter>>;
                 if let Ok((stmts, h)) = stmts_hints {
                     hints = h;
                     interpreter = if use_planner_v2(&settings, &stmts)? {
                         let mut planner = Planner::new(context.clone());
                         planner.plan_sql(query).await.and_then(|v| {
-                            is_result_set = is_result_set_by_plan(&v.0);
+                            has_result_set = has_result_set_by_plan(&v.0);
                             InterpreterFactoryV2::get(context.clone(), &v.0)
                         })
                     } else {
                         let (plan, _) = PlanParser::parse_with_hint(query, context.clone()).await;
                         plan.and_then(|v| {
-                            is_result_set = is_result_set_by_plan_node(&v);
+                            has_result_set = has_result_set_by_plan_node(&v);
                             InterpreterFactory::get(context.clone(), v)
                         })
                     };
@@ -353,7 +353,7 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
                     // If old parser failed, try new planner
                     let mut planner = Planner::new(context.clone());
                     interpreter = planner.plan_sql(query).await.and_then(|v| {
-                        is_result_set = is_result_set_by_plan(&v.0);
+                        has_result_set = has_result_set_by_plan(&v.0);
                         InterpreterFactoryV2::get(context.clone(), &v.0)
                     });
                 } else {
@@ -375,7 +375,7 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
                         Ok(QueryResult::create(
                             blocks,
                             extra_info,
-                            is_result_set,
+                            has_result_set,
                             schema,
                         ))
                     }
@@ -394,12 +394,7 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
                                         e.code()
                                     )));
                                 }
-                                Ok(QueryResult::create(
-                                    vec![DataBlock::empty()],
-                                    String::from(""),
-                                    false,
-                                    DataSchemaRefExt::create(vec![]),
-                                ))
+                                Ok(QueryResult::default())
                             }
                         }
                     }
@@ -416,12 +411,7 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
                                 e.code()
                             )));
                         }
-                        Ok(QueryResult::create(
-                            vec![DataBlock::empty()],
-                            String::from(""),
-                            false,
-                            DataSchemaRefExt::create(vec![]),
-                        ))
+                        Ok(QueryResult::default())
                     }
                 }
             }

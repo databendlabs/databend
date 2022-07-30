@@ -17,6 +17,7 @@ use common_datavalues::prelude::TypeID;
 use common_datavalues::remove_nullable;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
+use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_datavalues::DateConverter;
@@ -32,7 +33,7 @@ use tracing::error;
 pub struct QueryResult {
     blocks: Vec<DataBlock>,
     extra_info: String,
-    is_result_set: bool,
+    has_result_set: bool,
     schema: DataSchemaRef,
 }
 
@@ -40,14 +41,23 @@ impl QueryResult {
     pub fn create(
         blocks: Vec<DataBlock>,
         extra_info: String,
-        is_result_set: bool,
+        has_result_set: bool,
         schema: DataSchemaRef,
     ) -> QueryResult {
         QueryResult {
             blocks,
             extra_info,
-            is_result_set,
+            has_result_set,
             schema,
+        }
+    }
+
+    pub fn default() -> QueryResult {
+        QueryResult {
+            blocks: vec![DataBlock::empty()],
+            extra_info: String::from(""),
+            has_result_set: false,
+            schema: DataSchemaRefExt::create(vec![]),
         }
     }
 }
@@ -86,7 +96,7 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
             ..Default::default()
         };
 
-        if (!query_result.is_result_set && query_result.blocks.is_empty())
+        if (!query_result.has_result_set && query_result.blocks.is_empty())
             || (query_result.schema.num_fields() == 0)
         {
             dataset_writer.completed(default_response)?;
