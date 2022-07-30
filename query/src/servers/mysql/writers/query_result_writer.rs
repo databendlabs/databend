@@ -145,6 +145,9 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
                 for block in &query_result.blocks {
                     match block.get_serializers() {
                         Ok(serializers) => {
+                            if block.num_columns() == 0 {
+                                continue;
+                            }
                             let rows_size = block.column(0).len();
                             for row_index in 0..rows_size {
                                 for (col_index, serializer) in serializers.iter().enumerate() {
