@@ -181,7 +181,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "ascii",
         FunctionProperty::default(),
         |_| None,
-        |val| val[0],
+        |val| val.first().cloned().unwrap_or_default(),
     );
 }
 

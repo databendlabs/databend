@@ -148,11 +148,12 @@ fn test_ascii(file: &mut impl Write) {
     run_ast(file, "ascii('1')", &[]);
     run_ast(file, "ascii('123')", &[]);
     run_ast(file, "ascii('-1')", &[]);
+    run_ast(file, "ascii('')", &[]);
     run_ast(file, "ascii(Null)", &[]);
     run_ast(file, "ascii(a)", &[(
         "a",
         DataType::String,
-        build_string_column(&["1", "123", "-1"]),
+        build_string_column(&["1", "", "123", "-1"]),
     )])
 }
 
