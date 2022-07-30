@@ -22,10 +22,11 @@ use pretty_assertions::assert_eq;
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_create_user_interpreter() -> Result<()> {
     let ctx = crate::tests::create_query_context().await?;
+    let mut planner = Planner::new(ctx.clone());
 
     let query = "CREATE USER 'test'@'localhost' IDENTIFIED BY 'password'";
-    let plan = PlanParser::parse(ctx.clone(), query).await?;
-    let executor = InterpreterFactory::get(ctx, plan.clone())?;
+    let (plan, _, _) = planner.plan_sql(query).await?;
+    let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
     assert_eq!(executor.name(), "CreateUserInterpreter");
     let mut stream = executor.execute(None).await?;
     while let Some(_block) = stream.next().await {}

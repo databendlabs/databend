@@ -227,10 +227,7 @@ impl ExecuteState {
             interpreter.execute(None).await?;
             Ok(executor)
         } else {
-            let interpreter = if stmts
-                .get(0)
-                .map_or(false, InterpreterFactoryV2::enable_default)
-            {
+            let interpreter = if stmts.get(0).map_or(false, InterpreterFactoryV2::check) {
                 let mut planner = Planner::new(ctx.clone());
                 let (plan, _, _) = planner.plan_sql(sql).await?;
                 InterpreterFactoryV2::get(ctx.clone(), &plan)

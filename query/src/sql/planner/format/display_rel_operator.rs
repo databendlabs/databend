@@ -330,11 +330,7 @@ pub fn format_sort(
                 "{} (#{}) {}",
                 name,
                 item.index,
-                if item.asc.unwrap_or(false) {
-                    "ASC"
-                } else {
-                    "DESC"
-                }
+                if item.asc { "ASC" } else { "DESC" }
             )
         })
         .collect::<Vec<String>>()

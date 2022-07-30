@@ -24,8 +24,5 @@ pub fn use_planner_v2(
     stmts: &[DfStatement],
 ) -> common_exception::Result<bool> {
     Ok(settings.get_enable_planner_v2()? != 0
-        && stmts.get(0).map_or(false, InterpreterFactoryV2::check)
-        || stmts
-            .get(0)
-            .map_or(false, InterpreterFactoryV2::enable_default))
+        || stmts.get(0).map_or(false, InterpreterFactoryV2::check))
 }

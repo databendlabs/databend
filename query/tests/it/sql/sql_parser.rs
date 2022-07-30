@@ -13,46 +13,8 @@
 // limitations under the License.
 
 use common_exception::Result;
-use databend_query::sessions::SessionType;
 use databend_query::sql::*;
 use pretty_assertions::assert_eq;
-
-pub fn expect_parse_ok(sql: &str, expected: DfStatement) -> Result<()> {
-    let (statements, _) = DfParser::parse_sql(sql, SessionType::Dummy)?;
-    assert_eq!(
-        statements.len(),
-        1,
-        "Expected to parse exactly one statement"
-    );
-    assert_eq!(statements[0], expected);
-    Ok(())
-}
-
-pub fn expect_parse_err(sql: &str, expected: impl AsRef<str>) -> Result<()> {
-    let result = DfParser::parse_sql(sql, SessionType::Dummy);
-    let expected = expected.as_ref();
-    assert!(result.is_err(), "'{}' SHOULD BE '{}'", sql, expected);
-    assert_eq!(
-        result.unwrap_err().message(),
-        expected,
-        "'{}' SHOULD BE '{}'",
-        sql,
-        expected
-    );
-    Ok(())
-}
-
-pub fn expect_parse_err_contains(sql: &str, expected: String) -> Result<()> {
-    let result = DfParser::parse_sql(sql, SessionType::Dummy);
-    assert!(result.is_err(), "'{}' SHOULD CONTAINS '{}'", sql, expected);
-    assert!(
-        result.unwrap_err().message().contains(&expected),
-        "'{}' SHOULD CONTAINS '{}'",
-        sql,
-        expected
-    );
-    Ok(())
-}
 
 #[test]
 fn hint_test() -> Result<()> {
