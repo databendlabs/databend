@@ -50,7 +50,6 @@ mod interpreter_select;
 mod interpreter_select_v2;
 mod interpreter_setting;
 mod interpreter_show_databases;
-mod interpreter_show_engines;
 mod interpreter_show_functions;
 mod interpreter_show_grants;
 mod interpreter_show_metrics;

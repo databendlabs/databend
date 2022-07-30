@@ -16,69 +16,27 @@ use std::sync::Arc;
 
 use common_datavalues::DataSchemaRef;
 
-use crate::plan_table_undrop::UndropTablePlan;
 use crate::plan_window_func::WindowFuncPlan;
 use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
-use crate::AlterTableClusterKeyPlan;
-use crate::AlterUserPlan;
-use crate::AlterUserUDFPlan;
-use crate::AlterViewPlan;
 use crate::BroadcastPlan;
-use crate::CallPlan;
-use crate::CopyPlan;
-use crate::CreateDatabasePlan;
-use crate::CreateRolePlan;
-use crate::CreateTablePlan;
-use crate::CreateUserPlan;
-use crate::CreateUserStagePlan;
-use crate::CreateUserUDFPlan;
-use crate::CreateViewPlan;
 use crate::DeletePlan;
-use crate::DescribeTablePlan;
-use crate::DescribeUserStagePlan;
-use crate::DropDatabasePlan;
-use crate::DropRolePlan;
-use crate::DropTableClusterKeyPlan;
-use crate::DropTablePlan;
-use crate::DropUserPlan;
-use crate::DropUserStagePlan;
-use crate::DropUserUDFPlan;
-use crate::DropViewPlan;
 use crate::EmptyPlan;
-use crate::ExistsTablePlan;
 use crate::ExplainPlan;
 use crate::ExpressionPlan;
 use crate::FilterPlan;
-use crate::GrantPrivilegePlan;
-use crate::GrantRolePlan;
 use crate::HavingPlan;
 use crate::InsertPlan;
-use crate::KillPlan;
 use crate::LimitByPlan;
 use crate::LimitPlan;
-use crate::ListPlan;
-use crate::OptimizeTablePlan;
 use crate::ProjectionPlan;
 use crate::ReadDataSourcePlan;
 use crate::RemotePlan;
-use crate::RemoveUserStagePlan;
-use crate::RenameDatabasePlan;
-use crate::RenameTablePlan;
-use crate::RevokePrivilegePlan;
-use crate::RevokeRolePlan;
 use crate::SelectPlan;
-use crate::SettingPlan;
-use crate::ShowCreateDatabasePlan;
-use crate::ShowCreateTablePlan;
-use crate::ShowPlan;
 use crate::SinkPlan;
 use crate::SortPlan;
 use crate::StagePlan;
 use crate::SubQueriesSetPlan;
-use crate::TruncateTablePlan;
-use crate::UndropDatabasePlan;
-use crate::UseDatabasePlan;
 
 #[allow(clippy::large_enum_variant)]
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]
@@ -113,82 +71,6 @@ pub enum PlanNode {
 
     // Delete.
     Delete(DeletePlan),
-
-    // Copy.
-    Copy(CopyPlan),
-
-    // Call.
-    Call(CallPlan),
-
-    // List
-    List(ListPlan),
-
-    // Cluster key.
-    AlterTableClusterKey(AlterTableClusterKeyPlan),
-    DropTableClusterKey(DropTableClusterKeyPlan),
-
-    // Show.
-    Show(ShowPlan),
-
-    // Database.
-    CreateDatabase(CreateDatabasePlan),
-    DropDatabase(DropDatabasePlan),
-    UndropDatabase(UndropDatabasePlan),
-    RenameDatabase(RenameDatabasePlan),
-    ShowCreateDatabase(ShowCreateDatabasePlan),
-
-    // Table.
-    CreateTable(CreateTablePlan),
-    DropTable(DropTablePlan),
-    UndropTable(UndropTablePlan),
-    RenameTable(RenameTablePlan),
-    TruncateTable(TruncateTablePlan),
-    OptimizeTable(OptimizeTablePlan),
-    ExistsTable(ExistsTablePlan),
-    DescribeTable(DescribeTablePlan),
-    ShowCreateTable(ShowCreateTablePlan),
-
-    // View.
-    CreateView(CreateViewPlan),
-    DropView(DropViewPlan),
-    AlterView(AlterViewPlan),
-
-    // User.
-    CreateUser(CreateUserPlan),
-    AlterUser(AlterUserPlan),
-    DropUser(DropUserPlan),
-
-    // Grant.
-    GrantPrivilege(GrantPrivilegePlan),
-    GrantRole(GrantRolePlan),
-
-    // Revoke.
-    RevokePrivilege(RevokePrivilegePlan),
-    RevokeRole(RevokeRolePlan),
-
-    // Role.
-    CreateRole(CreateRolePlan),
-    DropRole(DropRolePlan),
-
-    // Stage.
-    CreateUserStage(CreateUserStagePlan),
-    DropUserStage(DropUserStagePlan),
-    DescribeUserStage(DescribeUserStagePlan),
-    RemoveUserStage(RemoveUserStagePlan),
-
-    // UDF.
-    CreateUserUDF(CreateUserUDFPlan),
-    DropUserUDF(DropUserUDFPlan),
-    AlterUserUDF(AlterUserUDFPlan),
-
-    // Use.
-    UseDatabase(UseDatabasePlan),
-
-    // Set.
-    SetVariable(SettingPlan),
-
-    // Kill.
-    Kill(KillPlan),
 }
 
 impl PlanNode {
@@ -225,82 +107,6 @@ impl PlanNode {
 
             // Delete.
             PlanNode::Delete(v) => v.schema(),
-
-            // Copy.
-            PlanNode::Copy(v) => v.schema(),
-
-            // Call.
-            PlanNode::Call(v) => v.schema(),
-
-            // Show.
-            PlanNode::Show(v) => v.schema(),
-
-            // Database.
-            PlanNode::CreateDatabase(v) => v.schema(),
-            PlanNode::DropDatabase(v) => v.schema(),
-            PlanNode::ShowCreateDatabase(v) => v.schema(),
-            PlanNode::RenameDatabase(v) => v.schema(),
-            PlanNode::UndropDatabase(v) => v.schema(),
-
-            // Table.
-            PlanNode::CreateTable(v) => v.schema(),
-            PlanNode::DropTable(v) => v.schema(),
-            PlanNode::UndropTable(v) => v.schema(),
-            PlanNode::RenameTable(v) => v.schema(),
-            PlanNode::TruncateTable(v) => v.schema(),
-            PlanNode::OptimizeTable(v) => v.schema(),
-            PlanNode::ExistsTable(v) => v.schema(),
-            PlanNode::DescribeTable(v) => v.schema(),
-            PlanNode::ShowCreateTable(v) => v.schema(),
-
-            // View.
-            PlanNode::CreateView(v) => v.schema(),
-            PlanNode::AlterView(v) => v.schema(),
-            PlanNode::DropView(v) => v.schema(),
-
-            // User.
-            PlanNode::CreateUser(v) => v.schema(),
-            PlanNode::AlterUser(v) => v.schema(),
-            PlanNode::DropUser(v) => v.schema(),
-
-            // Grant.
-            PlanNode::GrantPrivilege(v) => v.schema(),
-            PlanNode::GrantRole(v) => v.schema(),
-
-            // Revoke.
-            PlanNode::RevokePrivilege(v) => v.schema(),
-            PlanNode::RevokeRole(v) => v.schema(),
-
-            // Role.
-            PlanNode::CreateRole(v) => v.schema(),
-            PlanNode::DropRole(v) => v.schema(),
-
-            // Stage.
-            PlanNode::CreateUserStage(v) => v.schema(),
-            PlanNode::DropUserStage(v) => v.schema(),
-            PlanNode::DescribeUserStage(v) => v.schema(),
-            PlanNode::RemoveUserStage(v) => v.schema(),
-
-            // List
-            PlanNode::List(v) => v.schema(),
-
-            // UDF.
-            PlanNode::CreateUserUDF(v) => v.schema(),
-            PlanNode::DropUserUDF(v) => v.schema(),
-            PlanNode::AlterUserUDF(v) => v.schema(),
-
-            // Use.
-            PlanNode::UseDatabase(v) => v.schema(),
-
-            // Set.
-            PlanNode::SetVariable(v) => v.schema(),
-
-            // Kill.
-            PlanNode::Kill(v) => v.schema(),
-
-            // Cluster key.
-            PlanNode::AlterTableClusterKey(v) => v.schema(),
-            PlanNode::DropTableClusterKey(v) => v.schema(),
         }
     }
 
@@ -336,82 +142,6 @@ impl PlanNode {
 
             // Delete.
             PlanNode::Delete(_) => "DeletePlan",
-
-            // Copy.
-            PlanNode::Copy(_) => "CopyPlan",
-
-            // Call.
-            PlanNode::Call(_) => "CallPlan",
-
-            // Show.
-            PlanNode::Show(_) => "ShowPlan",
-
-            // Database.
-            PlanNode::CreateDatabase(_) => "CreateDatabasePlan",
-            PlanNode::DropDatabase(_) => "DropDatabasePlan",
-            PlanNode::ShowCreateDatabase(_) => "ShowCreateDatabasePlan",
-            PlanNode::RenameDatabase(_) => "RenameDatabase",
-            PlanNode::UndropDatabase(_) => "UndropDatabase",
-
-            // Table.
-            PlanNode::CreateTable(_) => "CreateTablePlan",
-            PlanNode::DropTable(_) => "DropTablePlan",
-            PlanNode::UndropTable(_) => "UndropTablePlan",
-            PlanNode::RenameTable(_) => "RenameTablePlan",
-            PlanNode::TruncateTable(_) => "TruncateTablePlan",
-            PlanNode::OptimizeTable(_) => "OptimizeTablePlan",
-            PlanNode::ExistsTable(_) => "ExistsTablePlan",
-            PlanNode::ShowCreateTable(_) => "ShowCreateTablePlan",
-            PlanNode::DescribeTable(_) => "DescribeTablePlan",
-
-            // View.
-            PlanNode::CreateView(_) => "CreateViewPlan",
-            PlanNode::AlterView(_) => "AlterViewPlan",
-            PlanNode::DropView(_) => "DropViewPlan",
-
-            // User.
-            PlanNode::CreateUser(_) => "CreateUser",
-            PlanNode::AlterUser(_) => "AlterUser",
-            PlanNode::DropUser(_) => "DropUser",
-
-            // Grant.
-            PlanNode::GrantPrivilege(_) => "GrantPrivilegePlan",
-            PlanNode::GrantRole(_) => "GrantRolePlan",
-
-            // Revoke.
-            PlanNode::RevokePrivilege(_) => "RevokePrivilegePlan",
-            PlanNode::RevokeRole(_) => "RevokeRolePlan",
-
-            // Role.
-            PlanNode::CreateRole(_) => "CreateRole",
-            PlanNode::DropRole(_) => "DropRole",
-
-            // Stage.
-            PlanNode::CreateUserStage(_) => "CreateUserStagePlan",
-            PlanNode::DropUserStage(_) => "DropUserStagePlan",
-            PlanNode::DescribeUserStage(_) => "DescribeUserStagePlan",
-            PlanNode::RemoveUserStage(_) => "RemoveUserStagePlan",
-
-            // List
-            PlanNode::List(_) => "ListPlan",
-
-            // UDF.
-            PlanNode::CreateUserUDF(_) => "CreateUserUDFPlan",
-            PlanNode::DropUserUDF(_) => "DropUserUDFPlan",
-            PlanNode::AlterUserUDF(_) => "AlterUserUDFPlan",
-
-            // Use.
-            PlanNode::UseDatabase(_) => "UseDatabasePlan",
-
-            // Set.
-            PlanNode::SetVariable(_) => "SetVariablePlan",
-
-            // Kill.
-            PlanNode::Kill(_) => "KillQuery",
-
-            // Cluster key.
-            PlanNode::AlterTableClusterKey(_) => "AlterTableClusterKeyPlan",
-            PlanNode::DropTableClusterKey(_) => "DropTableClusterKeyPlan",
         }
     }
 

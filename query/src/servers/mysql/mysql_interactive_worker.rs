@@ -72,18 +72,7 @@ fn has_result_set_by_plan(plan: &Plan) -> bool {
 }
 
 fn has_result_set_by_plan_node(plan: &PlanNode) -> bool {
-    matches!(
-        plan,
-        PlanNode::Explain(_)
-            | PlanNode::Select(_)
-            | PlanNode::Call(_)
-            | PlanNode::List(_)
-            | PlanNode::Show(_)
-            | PlanNode::ShowCreateDatabase(_)
-            | PlanNode::DescribeTable(_)
-            | PlanNode::ShowCreateTable(_)
-            | PlanNode::DescribeUserStage(_)
-    )
+    matches!(plan, PlanNode::Explain(_) | PlanNode::Select(_))
 }
 
 struct InteractiveWorkerBase<W: std::io::Write> {
