@@ -1,22 +1,22 @@
 ast            : upper('Abc')
-raw expr       : upper(Abc)
-checked expr   : upper<String>(Abc)
+raw expr       : upper("Abc")
+checked expr   : upper<String>("Abc")
 output type    : String
 output domain  : {""..}
 output         : ABC
 
 
 ast            : upper('Dobrý den')
-raw expr       : upper(Dobrý den)
-checked expr   : upper<String>(Dobrý den)
+raw expr       : upper("Dobrý den")
+checked expr   : upper<String>("Dobrý den")
 output type    : String
 output domain  : {""..}
 output         : DOBRÝ DEN
 
 
 ast            : upper('ß😀山')
-raw expr       : upper(ß😀山)
-checked expr   : upper<String>(ß😀山)
+raw expr       : upper("ß😀山")
+checked expr   : upper<String>("ß😀山")
 output type    : String
 output domain  : {""..}
 output         : SS😀山
@@ -53,24 +53,24 @@ evaluation (internal):
 
 
 ast            : lower('Abc')
-raw expr       : lower(Abc)
-checked expr   : lower<String>(Abc)
+raw expr       : lower("Abc")
+checked expr   : lower<String>("Abc")
 output type    : String
 output domain  : {""..}
 output         : abc
 
 
 ast            : lower('DOBRÝ DEN')
-raw expr       : lower(DOBRÝ DEN)
-checked expr   : lower<String>(DOBRÝ DEN)
+raw expr       : lower("DOBRÝ DEN")
+checked expr   : lower<String>("DOBRÝ DEN")
 output type    : String
 output domain  : {""..}
 output         : dobrý den
 
 
 ast            : lower('İ😀山')
-raw expr       : lower(İ😀山)
-checked expr   : lower<String>(İ😀山)
+raw expr       : lower("İ😀山")
+checked expr   : lower<String>("İ😀山")
 output type    : String
 output domain  : {""..}
 output         : i̇😀山
@@ -107,8 +107,8 @@ evaluation (internal):
 
 
 ast            : bit_length('latin')
-raw expr       : bit_length(latin)
-checked expr   : bit_length<String>(latin)
+raw expr       : bit_length("latin")
+checked expr   : bit_length<String>("latin")
 output type    : UInt64
 output domain  : {0..=18446744073709551615}
 output         : 40
@@ -145,8 +145,8 @@ evaluation (internal):
 
 
 ast            : octet_length('latin')
-raw expr       : octet_length(latin)
-checked expr   : octet_length<String>(latin)
+raw expr       : octet_length("latin")
+checked expr   : octet_length<String>("latin")
 output type    : UInt64
 output domain  : {0..=18446744073709551615}
 output         : 5
@@ -183,8 +183,8 @@ evaluation (internal):
 
 
 ast            : char_length('latin')
-raw expr       : char_length(latin)
-checked expr   : char_length<String>(latin)
+raw expr       : char_length("latin")
+checked expr   : char_length<String>("latin")
 output type    : UInt64
 output domain  : {0..=18446744073709551615}
 output         : 5
@@ -221,16 +221,16 @@ evaluation (internal):
 
 
 ast            : to_base64('Abc')
-raw expr       : to_base64(Abc)
-checked expr   : to_base64<String>(Abc)
+raw expr       : to_base64("Abc")
+checked expr   : to_base64<String>("Abc")
 output type    : String
 output domain  : {""..}
 output         : QWJj
 
 
 ast            : to_base64('123')
-raw expr       : to_base64(123)
-checked expr   : to_base64<String>(123)
+raw expr       : to_base64("123")
+checked expr   : to_base64<String>("123")
 output type    : String
 output domain  : {""..}
 output         : MTIz
@@ -266,16 +266,16 @@ evaluation (internal):
 
 
 ast            : from_base64('QWJj')
-raw expr       : from_base64(QWJj)
-checked expr   : from_base64<String>(QWJj)
+raw expr       : from_base64("QWJj")
+checked expr   : from_base64<String>("QWJj")
 output type    : String
 output domain  : {""..}
 output         : Abc
 
 
 ast            : from_base64('MTIz')
-raw expr       : from_base64(MTIz)
-checked expr   : from_base64<String>(MTIz)
+raw expr       : from_base64("MTIz")
+checked expr   : from_base64<String>("MTIz")
 output type    : String
 output domain  : {""..}
 output         : 123
