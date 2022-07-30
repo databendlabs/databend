@@ -66,6 +66,7 @@ fn is_result_set_by_plan(plan: &Plan) -> bool {
             | Plan::ShowCreateTable(_)
             | Plan::DescribeTable(_)
             | Plan::ShowGrants(_)
+            | Plan::ListStage(_)
             | Plan::DescribeStage(_)
     )
 }
@@ -76,6 +77,7 @@ fn is_result_set_by_plan_node(plan: &PlanNode) -> bool {
         PlanNode::Explain(_)
             | PlanNode::Select(_)
             | PlanNode::Call(_)
+            | PlanNode::List(_)
             | PlanNode::Show(_)
             | PlanNode::ShowCreateDatabase(_)
             | PlanNode::DescribeTable(_)
