@@ -19,6 +19,7 @@ use std::sync::Arc;
 use common_datablocks::DataBlock;
 use common_exception::Result;
 use common_formats::InputFormat;
+use common_io::prelude::FileSplit;
 
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
@@ -32,7 +33,7 @@ pub struct Deserializer {
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
 
-    input_data: Option<Vec<u8>>,
+    input_data: Option<FileSplit>,
     output_data: VecDeque<DataBlock>,
 }
 
@@ -78,10 +79,8 @@ impl Processor for Deserializer {
     }
 
     fn process(&mut self) -> Result<()> {
-        if let Some(buf) = self.input_data.take() {
-            let mut state = self.input_format.create_state();
-            self.input_format.set_buf(buf, &mut state);
-            let blocks = self.input_format.deserialize_data(&mut state)?;
+        if let Some(split) = self.input_data.take() {
+            let blocks = self.input_format.deserialize_complete_split(split)?;
             self.output_data = blocks.into();
         }
 
@@ -92,7 +91,7 @@ impl Processor for Deserializer {
 impl Deserializer {
     fn pull_data(&mut self) -> Result<Event> {
         if self.input.has_data() {
-            self.input_data = Some(self.input.pull_buffer().unwrap()?);
+            self.input_data = Some(self.input.pull_file_partition().unwrap()?);
             return Ok(Event::Sync);
         }
 

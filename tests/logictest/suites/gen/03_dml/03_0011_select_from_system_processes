@@ -1,4 +1,3 @@
-onlyif mysql
 statement query TT
 select state, database from system.processes;
 

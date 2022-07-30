@@ -14,6 +14,7 @@
 
 use std::io::Write;
 
+use common_expression::types::nullable::NullableColumn;
 use common_expression::types::DataType;
 use common_expression::Column;
 use goldenfile::Mint;
@@ -50,10 +51,10 @@ fn test_multi_if(file: &mut impl Write) {
         (
             "expr_else",
             DataType::Nullable(Box::new(DataType::Int64)),
-            Column::Nullable {
-                column: Box::new(Column::Int64(vec![5, 6, 7, 8].into())),
+            Column::Nullable(Box::new(NullableColumn {
+                column: Column::Int64(vec![5, 6, 7, 8].into()),
                 validity: vec![true, false, true, false].into(),
-            },
+            })),
         ),
     ]);
     run_ast(file, "multi_if(cond_a, expr_true, expr_else)", &[
@@ -70,10 +71,10 @@ fn test_multi_if(file: &mut impl Write) {
         (
             "expr_else",
             DataType::Nullable(Box::new(DataType::Int64)),
-            Column::Nullable {
-                column: Box::new(Column::Int64(vec![5, 6, 7, 8].into())),
+            Column::Nullable(Box::new(NullableColumn {
+                column: Column::Int64(vec![5, 6, 7, 8].into()),
                 validity: vec![true, true, false, false].into(),
-            },
+            })),
         ),
     ]);
     run_ast(
@@ -103,10 +104,10 @@ fn test_multi_if(file: &mut impl Write) {
             (
                 "expr_else",
                 DataType::Nullable(Box::new(DataType::Int64)),
-                Column::Nullable {
-                    column: Box::new(Column::Int64(vec![9, 10, 11, 12].into())),
+                Column::Nullable(Box::new(NullableColumn {
+                    column: Column::Int64(vec![9, 10, 11, 12].into()),
                     validity: vec![true, true, false, false].into(),
-                },
+                })),
             ),
         ],
     );

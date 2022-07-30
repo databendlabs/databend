@@ -131,7 +131,7 @@ class HttpConnector(object):
         log.debug(f"http sql: {parseSQL(statement)}")
         query_sql = {'sql': parseSQL(statement), "string_fields": True}
         if session is not None:
-            query_sql['session_state'] = session
+            query_sql['session'] = session
         log.debug(f"http headers {self.make_headers()}")
         response = requests.post(url,
                                  data=json.dumps(query_sql),
@@ -175,7 +175,7 @@ class HttpConnector(object):
                 else:
                     continue
             break
-        session = response['session_state']
+        session = response['session']
         if session:
             self._session = session
         if response['next_uri'] is not None:

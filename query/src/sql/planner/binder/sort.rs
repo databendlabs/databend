@@ -78,7 +78,28 @@ impl<'a> Binder {
                     // We first search the identifier in select list
                     let mut found = false;
                     for item in projections.iter() {
-                        if item.column_name == ident.name {
+                        let matched = match (
+                            (&database_name, &table_name),
+                            (&item.database_name, &item.table_name),
+                        ) {
+                            (
+                                (Some(ident_database), Some(ident_table)),
+                                (Some(database), Some(table)),
+                            ) if &ident_database.name == database
+                                && &ident_table.name == table
+                                && ident.name == item.column_name =>
+                            {
+                                true
+                            }
+                            ((None, Some(ident_table)), (_, Some(table)))
+                                if &ident_table.name == table && ident.name == item.column_name =>
+                            {
+                                true
+                            }
+                            ((None, None), (_, _)) if ident.name == item.column_name => true,
+                            _ => false,
+                        };
+                        if matched {
                             order_items.push(OrderItem {
                                 expr: order.clone(),
                                 index: item.index,
@@ -229,8 +250,8 @@ impl<'a> Binder {
             }
             let order_by_item = SortItem {
                 index: order.index,
-                asc: order.expr.asc,
-                nulls_first: order.expr.nulls_first,
+                asc: order.expr.asc.unwrap_or(true),
+                nulls_first: order.expr.nulls_first.unwrap_or(false),
             };
             order_by_items.push(order_by_item);
         }
@@ -266,8 +287,8 @@ impl<'a> Binder {
                         Scalar::BoundColumnRef(BoundColumnRef { column }) => {
                             let order_by_item = SortItem {
                                 index: column.index,
-                                asc: order.asc,
-                                nulls_first: order.nulls_first,
+                                asc: order.asc.unwrap_or(true),
+                                nulls_first: order.nulls_first.unwrap_or(false),
                             };
                             order_by_items.push(order_by_item);
                         }

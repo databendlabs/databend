@@ -126,7 +126,9 @@ impl<E> HTTPSessionEndpoint<E> {
             let tenant_id = tenant_id.to_str().unwrap().to_string();
             session.set_current_tenant(tenant_id);
         }
-        ctx.get_auth_manager().auth(&ctx, &credential).await?;
+        ctx.get_auth_manager()
+            .auth(ctx.get_current_session(), &credential)
+            .await?;
 
         Ok(HttpQueryContext::new(self.manager.clone(), session))
     }

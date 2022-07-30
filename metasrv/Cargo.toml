@@ -64,6 +64,8 @@ tokio-stream = "0.1.9"
 tonic = { version = "0.7.2", features = ["tls"] }
 tonic-reflection = "0.4.0"
 tracing = "0.1.35"
+tracing-appender = "0.2.2"
+tracing-subscriber = { version = "0.3.11", features = ["env-filter", "ansi"] }
 
 [dev-dependencies]
 common-meta-api = { path = "../common/meta/api" }

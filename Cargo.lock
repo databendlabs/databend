@@ -1599,6 +1599,7 @@ dependencies = [
  "common-datablocks",
  "common-datavalues",
  "common-exception",
+ "common-io",
  "futures",
  "futures-util",
  "itertools",
@@ -2207,6 +2208,8 @@ dependencies = [
  "tonic",
  "tonic-reflection",
  "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -2318,6 +2321,7 @@ dependencies = [
  "http",
  "itertools",
  "jwt-simple",
+ "jwtk",
  "lz4",
  "maplit",
  "metrics 0.19.0",

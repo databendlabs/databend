@@ -38,69 +38,7 @@ pub struct InterpreterFactoryV2;
 impl InterpreterFactoryV2 {
     /// Check if statement is supported by InterpreterFactoryV2
     pub fn check(stmt: &DfStatement) -> bool {
-        matches!(
-            stmt,
-            DfStatement::Query(_)
-                | DfStatement::Copy
-                | DfStatement::Explain(_)
-                | DfStatement::CreateStage
-                | DfStatement::ShowStages
-                | DfStatement::DescribeStage
-                | DfStatement::List
-                | DfStatement::DropStage
-                | DfStatement::RemoveStage
-                | DfStatement::ShowDatabases(_)
-                | DfStatement::ShowCreateDatabase(_)
-                | DfStatement::ShowTables(_)
-                | DfStatement::ShowCreateTable(_)
-                | DfStatement::DescribeTable(_)
-                | DfStatement::ShowTablesStatus(_)
-                | DfStatement::CreateTable(_)
-                | DfStatement::CreateView(_)
-                | DfStatement::AlterView(_)
-                | DfStatement::DropTable(_)
-                | DfStatement::UndropTable(_)
-                | DfStatement::AlterTable(_)
-                | DfStatement::RenameTable(_)
-                | DfStatement::TruncateTable(_)
-                | DfStatement::OptimizeTable(_)
-                | DfStatement::ExistsTable(_)
-                | DfStatement::DropView(_)
-                | DfStatement::ShowFunctions(_)
-                | DfStatement::ShowMetrics(_)
-                | DfStatement::ShowProcessList(_)
-                | DfStatement::ShowSettings(_)
-                | DfStatement::CreateDatabase(_)
-                | DfStatement::DropDatabase(_)
-                | DfStatement::InsertQuery(_)
-                | DfStatement::ShowUsers(_)
-                | DfStatement::CreateUser(_)
-                | DfStatement::ShowRoles(_)
-                | DfStatement::AlterDatabase(_)
-                | DfStatement::CreateUDF(_)
-                | DfStatement::DropUser(_)
-                | DfStatement::AlterUser(_)
-                | DfStatement::CreateRole(_)
-                | DfStatement::DropRole(_)
-                | DfStatement::GrantPrivilege(_)
-                | DfStatement::GrantRole(_)
-                | DfStatement::ShowGrants(_)
-                | DfStatement::RevokeRole(_)
-                | DfStatement::RevokePrivilege(_)
-                | DfStatement::Call(_)
-                | DfStatement::SetVariable(_)
-                | DfStatement::Delete(_)
-        )
-    }
-
-    pub fn enable_default(stmt: &DfStatement) -> bool {
-        !matches!(
-            stmt,
-            DfStatement::Query(_)
-                | DfStatement::Explain(_)
-                | DfStatement::InsertQuery(_)
-                | DfStatement::Delete(_)
-        )
+        matches!(stmt, DfStatement::SeeYouAgain)
     }
 
     pub fn get(ctx: Arc<QueryContext>, plan: &Plan) -> Result<InterpreterPtr> {
