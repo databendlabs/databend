@@ -116,19 +116,19 @@ fn test_from_base64(file: &mut impl Write) {
 }
 
 fn test_quote(file: &mut impl Write) {
-    run_ast(file, "quote('a\0b')", &[]);
+    run_ast(file, r#"quote('a\0b')"#, &[]);
     run_ast(file, r#"quote('a\'b')"#, &[]);
-    run_ast(file, "quote('a\"b')", &[]);
+    run_ast(file, r#"quote('a\"b')"#, &[]);
     run_ast(file, r#"quote('a\bb')"#, &[]);
-    run_ast(file, "quote('a\nb')", &[]);
-    run_ast(file, "quote('a\rb')", &[]);
-    run_ast(file, "quote('a\tb')", &[]);
-    run_ast(file, "quote('a\\b')", &[]);
+    run_ast(file, r#"quote('a\nb')"#, &[]);
+    run_ast(file, r#"quote('a\rb')"#, &[]);
+    run_ast(file, r#"quote('a\tb')"#, &[]);
+    run_ast(file, r#"quote('a\\b')"#, &[]);
     run_ast(file, "quote(Null)", &[]);
     run_ast(file, "quote(a)", &[(
         "a",
         DataType::String,
-        build_string_column(&["'a\0b'", "a\'b", "a\nb"]),
+        build_string_column(&[r#"a\0b"#, r#"a\'b"#, r#"a\nb"#]),
     )])
 }
 

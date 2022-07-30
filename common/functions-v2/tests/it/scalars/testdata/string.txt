@@ -310,7 +310,7 @@ evaluation (internal):
 +--------+---------------------------------------------------------------------------------------+
 
 
-ast            : quote('a b')
+ast            : quote('a\0b')
 raw expr       : quote(a b)
 checked expr   : quote<String>(a b)
 output type    : String
@@ -326,7 +326,7 @@ output domain  : {""..}
 output         : a\'b
 
 
-ast            : quote('a"b')
+ast            : quote('a\"b')
 raw expr       : quote(a"b)
 checked expr   : quote<String>(a"b)
 output type    : String
@@ -342,8 +342,7 @@ output domain  : {""..}
 output         : a\bb
 
 
-ast            : quote('a
-b')
+ast            : quote('a\nb')
 raw expr       : quote(a
 b)
 checked expr   : quote<String>(a
@@ -353,7 +352,7 @@ output domain  : {""..}
 output         : a\nb
 
 
-ast            : quote('ab')
+ast            : quote('a\rb')
 raw expr       : quote(ab)
 checked expr   : quote<String>(ab)
 output type    : String
@@ -361,7 +360,7 @@ output domain  : {""..}
 output         : a\rb
 
 
-ast            : quote('a	b')
+ast            : quote('a\tb')
 raw expr       : quote(a	b)
 checked expr   : quote<String>(a	b)
 output type    : String
@@ -369,12 +368,12 @@ output domain  : {""..}
 output         : a\tb
 
 
-ast            : quote('a\b')
-raw expr       : quote(a)
-checked expr   : quote<String>(a)
+ast            : quote('a\\b')
+raw expr       : quote(a\b)
+checked expr   : quote<String>(a\b)
 output type    : String
 output domain  : {""..}
-output         : a\b
+output         : a\\b
 
 
 ast            : quote(Null)
@@ -389,22 +388,21 @@ ast            : quote(a)
 raw expr       : quote(ColumnRef(0)::String)
 checked expr   : quote<String>(ColumnRef(0))
 evaluation:
-+--------+--------------------+----------+
-|        | a                  | Output   |
-+--------+--------------------+----------+
-| Type   | String             | String   |
-| Domain | {"'a\0b'"..="a'b"} | {""..}   |
-| Row 0  | 'a b'               | \'a\0b\' |
-| Row 1  | a'b                | a\'b     |
-| Row 2  | a                  | a\nb     |
-|        | b                  |          |
-+--------+--------------------+----------+
++--------+---------------------+--------+
+|        | a                   | Output |
++--------+---------------------+--------+
+| Type   | String              | String |
+| Domain | {"a\\'b"..="a\\nb"} | {""..} |
+| Row 0  | a\0b                | a\\0b  |
+| Row 1  | a\'b                | a\\\'b |
+| Row 2  | a\nb                | a\\nb  |
++--------+---------------------+--------+
 evaluation (internal):
 +--------+---------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                      |
 +--------+---------------------------------------------------------------------------------------------------------------------------+
-| a      | String(StringColumn { data: [39, 97, 0, 98, 39, 97, 39, 98, 97, 10, 98], offsets: [0, 5, 8, 11] })                        |
-| Output | String(StringColumn { data: [92, 39, 97, 92, 48, 98, 92, 39, 97, 92, 39, 98, 97, 92, 110, 98], offsets: [0, 8, 12, 16] }) |
+| a      | String(StringColumn { data: [97, 92, 48, 98, 97, 92, 39, 98, 97, 92, 110, 98], offsets: [0, 4, 8, 12] })                  |
+| Output | String(StringColumn { data: [97, 92, 92, 48, 98, 97, 92, 92, 92, 39, 98, 97, 92, 92, 110, 98], offsets: [0, 5, 11, 16] }) |
 +--------+---------------------------------------------------------------------------------------------------------------------------+
 
 
