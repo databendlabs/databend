@@ -68,6 +68,7 @@ fn is_result_set_by_plan(plan: &Plan) -> bool {
             | Plan::ShowGrants(_)
             | Plan::ListStage(_)
             | Plan::DescribeStage(_)
+            | Plan::Presign(_)
     )
 }
 
