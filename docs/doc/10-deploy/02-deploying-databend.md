@@ -390,7 +390,7 @@ bucket = "databend"
 
 # You can get the URL from the bucket detail page.
 # https://docsv3.qingcloud.com/storage/object-storage/intro/object-storage/#zone
-endpoint_url = "https://pek3b.qingstor.com"
+endpoint_url = "https://s3.pek3b.qingstor.com"
 
 # How to get access_key_id and secret_access_key:
 # https://docs.qingcloud.com/product/api/common/overview.html
