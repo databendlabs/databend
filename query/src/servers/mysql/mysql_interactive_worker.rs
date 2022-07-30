@@ -18,7 +18,6 @@ use std::time::Instant;
 
 use common_base::base::TrySpawn;
 use common_datablocks::DataBlock;
-use common_datavalues::DataSchemaRefExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
