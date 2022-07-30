@@ -13,19 +13,15 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::sync::atomic::AtomicBool;
-use std::sync::atomic::Ordering;
 use std::sync::atomic::Ordering::Acquire;
 use std::sync::Arc;
 
 use async_channel::Receiver;
-use common_base::base::tokio::sync::Notify;
 use common_base::base::tokio::task::JoinHandle;
 use common_base::base::Runtime;
 use common_base::base::TrySpawn;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use futures::future::Either;
 use parking_lot::Mutex;
 
 use crate::api::rpc::exchange::exchange_channel::FragmentReceiver;

@@ -20,7 +20,6 @@ use std::sync::Arc;
 
 use async_channel::Sender;
 use common_arrow::arrow_format::flight::data::FlightData;
-use common_base::base::tokio::sync::Notify;
 use common_base::base::tokio::task::JoinHandle;
 use common_base::base::Runtime;
 use common_base::base::Thread;
@@ -30,7 +29,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::PlanNode;
 use futures::StreamExt;
-use futures_util::future::Either;
 use parking_lot::Mutex;
 use parking_lot::ReentrantMutex;
 use tonic::Streaming;
