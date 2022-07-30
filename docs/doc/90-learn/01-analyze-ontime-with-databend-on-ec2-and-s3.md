@@ -53,9 +53,9 @@ curl -H "insert_sql:insert into ontime format CSV" -H "skip_header:0" -H "field_
 
 :::tip
 
-* http://<username>:<passowrd>@127.0.0.1:8000/v1/streaming_load
-    * `<username` is the user.
-    * `<passowrd>` is the user password.
+* `http://username:passowrd@127.0.0.1:8000/v1/streaming_load`
+    * `username` is the user.
+    * `password` is the user password.
     * `127.0.0.1` is `http_handler_host` value in your *databend-query.toml*
     * `8000` is `http_handler_port` value in your *databend-query.toml*
 :::
