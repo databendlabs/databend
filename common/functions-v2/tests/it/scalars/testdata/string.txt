@@ -605,3 +605,97 @@ evaluation (internal):
 +--------+----------------------------------------------------+
 
 
+ast            : ltrim('   abc   ')
+raw expr       : ltrim(   abc   )
+checked expr   : ltrim<String>(   abc   )
+output type    : String
+output domain  : {""..}
+output         : abc   
+
+
+ast            : ltrim('  ')
+raw expr       : ltrim(  )
+checked expr   : ltrim<String>(  )
+output type    : String
+output domain  : {""..}
+output         : 
+
+
+ast            : ltrim(NULL)
+raw expr       : ltrim(NULL)
+checked expr   : ltrim<NULL>(NULL)
+output type    : NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : ltrim(a)
+raw expr       : ltrim(ColumnRef(0)::String)
+checked expr   : ltrim<String>(ColumnRef(0))
+evaluation:
++--------+-----------------------+--------+
+|        | a                     | Output |
++--------+-----------------------+--------+
+| Type   | String                | String |
+| Domain | {"   abc"..="abc   "} | {""..} |
+| Row 0  | abc                   | abc    |
+| Row 1  |    abc                | abc    |
+| Row 2  |    abc                | abc    |
+| Row 3  | abc                   | abc    |
++--------+-----------------------+--------+
+evaluation (internal):
++--------+-------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                        |
++--------+-------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| a      | String(StringColumn { data: [97, 98, 99, 32, 32, 32, 97, 98, 99, 32, 32, 32, 97, 98, 99, 32, 32, 32, 97, 98, 99, 32, 32, 32], offsets: [0, 3, 9, 18, 24] }) |
+| Output | String(StringColumn { data: [97, 98, 99, 97, 98, 99, 97, 98, 99, 32, 32, 32, 97, 98, 99, 32, 32, 32], offsets: [0, 3, 6, 12, 18] })                         |
++--------+-------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : rtrim('   abc   ')
+raw expr       : rtrim(   abc   )
+checked expr   : rtrim<String>(   abc   )
+output type    : String
+output domain  : {""..}
+output         :    abc
+
+
+ast            : rtrim('  ')
+raw expr       : rtrim(  )
+checked expr   : rtrim<String>(  )
+output type    : String
+output domain  : {""..}
+output         : 
+
+
+ast            : rtrim(NULL)
+raw expr       : rtrim(NULL)
+checked expr   : rtrim<NULL>(NULL)
+output type    : NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : rtrim(a)
+raw expr       : rtrim(ColumnRef(0)::String)
+checked expr   : rtrim<String>(ColumnRef(0))
+evaluation:
++--------+-----------------------+--------+
+|        | a                     | Output |
++--------+-----------------------+--------+
+| Type   | String                | String |
+| Domain | {"   abc"..="abc   "} | {""..} |
+| Row 0  | abc                   | abc    |
+| Row 1  |    abc                |    abc |
+| Row 2  |    abc                |    abc |
+| Row 3  | abc                   | abc    |
++--------+-----------------------+--------+
+evaluation (internal):
++--------+-------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                        |
++--------+-------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| a      | String(StringColumn { data: [97, 98, 99, 32, 32, 32, 97, 98, 99, 32, 32, 32, 97, 98, 99, 32, 32, 32, 97, 98, 99, 32, 32, 32], offsets: [0, 3, 9, 18, 24] }) |
+| Output | String(StringColumn { data: [97, 98, 99, 32, 32, 32, 97, 98, 99, 32, 32, 32, 97, 98, 99, 97, 98, 99], offsets: [0, 3, 9, 15, 18] })                         |
++--------+-------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+

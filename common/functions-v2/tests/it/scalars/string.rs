@@ -37,6 +37,8 @@ fn test_string() {
     test_quote(file);
     test_reverse(file);
     test_ascii(file);
+    test_ltrim(file);
+    test_rtrim(file);
 }
 
 fn test_upper(file: &mut impl Write) {
@@ -167,7 +169,29 @@ fn test_ascii(file: &mut impl Write) {
         "b",
         DataType::String,
         build_string_column(&[""]),
-    )])
+    )]);
+}
+
+fn test_ltrim(file: &mut impl Write) {
+    run_ast(file, "ltrim('   abc   ')", &[]);
+    run_ast(file, "ltrim('  ')", &[]);
+    run_ast(file, "ltrim(NULL)", &[]);
+    run_ast(file, "ltrim(a)", &[(
+        "a",
+        DataType::String,
+        build_string_column(&["abc", "   abc", "   abc   ", "abc   "]),
+    )]);
+}
+
+fn test_rtrim(file: &mut impl Write) {
+    run_ast(file, "rtrim('   abc   ')", &[]);
+    run_ast(file, "rtrim('  ')", &[]);
+    run_ast(file, "rtrim(NULL)", &[]);
+    run_ast(file, "rtrim(a)", &[(
+        "a",
+        DataType::String,
+        build_string_column(&["abc", "   abc", "   abc   ", "abc   "]),
+    )]);
 }
 
 fn build_string_column(strings: &[&str]) -> Column {

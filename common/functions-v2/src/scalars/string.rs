@@ -193,6 +193,41 @@ pub fn register(registry: &mut FunctionRegistry) {
         },
         |val| val.first().cloned().unwrap_or_default(),
     );
+
+    // Trim functions
+    registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
+        "ltrim",
+        FunctionProperty::default(),
+        |_| None,
+        vectorize_string_to_string(
+            |_| 0,
+            |val, writer| {
+                let pos = val.iter().position(|ch| *ch != b' ' && *ch != b'\t');
+                if let Some(idx) = pos {
+                    writer.put_slice(&val.as_bytes()[idx..]);
+                }
+                writer.commit_row();
+                Ok(())
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
+        "rtrim",
+        FunctionProperty::default(),
+        |_| None,
+        vectorize_string_to_string(
+            |_| 0,
+            |val, writer| {
+                let pos = val.iter().rev().position(|ch| *ch != b' ' && *ch != b'\t');
+                if let Some(idx) = pos {
+                    writer.put_slice(&val.as_bytes()[..val.len() - idx]);
+                }
+                writer.commit_row();
+                Ok(())
+            },
+        ),
+    );
 }
 
 // Vectorize string to string function with customer estimate_bytes.
