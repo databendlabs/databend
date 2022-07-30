@@ -318,12 +318,28 @@ output domain  : {""..}
 output         : a\0b
 
 
+ast            : quote('a\'b')
+raw expr       : quote(a'b)
+checked expr   : quote<String>(a'b)
+output type    : String
+output domain  : {""..}
+output         : a\'b
+
+
 ast            : quote('a"b')
 raw expr       : quote(a"b)
 checked expr   : quote<String>(a"b)
 output type    : String
 output domain  : {""..}
 output         : a\"b
+
+
+ast            : quote('a\bb')
+raw expr       : quote(ab)
+checked expr   : quote<String>(ab)
+output type    : String
+output domain  : {""..}
+output         : a\bb
 
 
 ast            : quote('a

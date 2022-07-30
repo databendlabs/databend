@@ -117,8 +117,9 @@ fn test_from_base64(file: &mut impl Write) {
 
 fn test_quote(file: &mut impl Write) {
     run_ast(file, "quote('a\0b')", &[]);
-    // run_ast(file, "quote('a\'b')", &[]);
+    run_ast(file, r#"quote('a\'b')"#, &[]);
     run_ast(file, "quote('a\"b')", &[]);
+    run_ast(file, r#"quote('a\bb')"#, &[]);
     run_ast(file, "quote('a\nb')", &[]);
     run_ast(file, "quote('a\rb')", &[]);
     run_ast(file, "quote('a\tb')", &[]);
