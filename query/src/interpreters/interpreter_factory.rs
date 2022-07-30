@@ -21,7 +21,6 @@ use common_planners::ShowPlan;
 
 use super::AlterViewInterpreter;
 use super::ShowDatabasesInterpreter;
-use crate::interpreters::interpreter_show_engines::ShowEnginesInterpreter;
 use crate::interpreters::interpreter_table_rename::RenameTableInterpreter;
 use crate::interpreters::AlterTableClusterKeyInterpreter;
 use crate::interpreters::AlterUserInterpreter;
@@ -95,7 +94,7 @@ impl InterpreterFactory {
             PlanNode::Explain(v) => Ok(Arc::new(ExplainInterpreter::try_create(ctx, v)?)),
             PlanNode::Insert(v) => Ok(Arc::new(InsertInterpreter::try_create(ctx, v, false)?)),
             PlanNode::Delete(v) => Ok(Arc::new(DeleteInterpreter::try_create(ctx, v)?)),
-
+            PlanNode::Empty(v) => Ok(Arc::new(EmptyInterpreter::try_create(ctx, v)?)),
             _ => Err(ErrorCode::UnknownTypeOfQuery(format!(
                 "Can't get the interpreter by plan: {}",
                 plan.name()
