@@ -151,11 +151,13 @@ impl Session {
 
     pub fn get_format_settings(&self) -> Result<FormatSettings> {
         let settings = &self.session_settings;
-        let mut format = FormatSettings::default();
-        format.record_delimiter = settings.get_record_delimiter()?;
-        format.field_delimiter = settings.get_field_delimiter()?;
-        format.empty_as_default = settings.get_empty_as_default()? > 0;
-        format.skip_header = settings.get_skip_header()?;
+        let mut format = FormatSettings {
+            record_delimiter: settings.get_record_delimiter()?,
+            field_delimiter: settings.get_field_delimiter()?,
+            empty_as_default: settings.get_empty_as_default()? > 0,
+            skip_header: settings.get_skip_header()?,
+            ..Default::default()
+        };
 
         let tz = String::from_utf8(settings.get_timezone()?).map_err(|_| {
             ErrorCode::LogicalError("Timezone has been checked and should be valid.")
