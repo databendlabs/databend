@@ -45,7 +45,7 @@ pub fn run_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType, Co
         let fn_registry = builtin_functions();
         let (expr, output_ty) = type_check::check(&raw_expr, &fn_registry)?;
 
-        // Converting to and from `RemoteExpr` should be identical.
+        // Converting to and then back from `RemoteExpr` should not change anything.
         let remote_expr = RemoteExpr::from_expr(expr);
         let expr = remote_expr.into_expr(&fn_registry).unwrap();
 
