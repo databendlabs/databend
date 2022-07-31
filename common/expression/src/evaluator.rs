@@ -50,7 +50,7 @@ impl Evaluator {
     pub fn run(&self, expr: &Expr) -> Result<Value<AnyType>> {
         match expr {
             Expr::Literal { lit, .. } => Ok(Value::Scalar(self.run_lit(lit))),
-            Expr::ColumnRef { id, .. } => Ok(self.input_columns.values()[*id].clone()),
+            Expr::ColumnRef { id, .. } => Ok(self.input_columns.columns()[*id].clone()),
             Expr::FunctionCall {
                 span,
                 function,

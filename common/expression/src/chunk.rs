@@ -15,9 +15,9 @@
 use crate::types::AnyType;
 use crate::Value;
 
-/// Chunk is a lightweight container for a group of values.
+/// Chunk is a lightweight container for a group of columns.
 pub struct Chunk {
-    values: Vec<Value<AnyType>>,
+    columns: Vec<Value<AnyType>>,
     num_rows: usize,
     chunk_info: Option<Box<dyn ChunkInfo>>,
 }
@@ -26,17 +26,17 @@ pub struct Chunk {
 pub trait ChunkInfo {}
 
 impl Chunk {
-    pub fn new(values: Vec<Value<AnyType>>, num_rows: usize) -> Self {
-        Self::new_with_info(values, num_rows, None)
+    pub fn new(columns: Vec<Value<AnyType>>, num_rows: usize) -> Self {
+        Self::new_with_info(columns, num_rows, None)
     }
 
     pub fn new_with_info(
-        values: Vec<Value<AnyType>>,
+        columns: Vec<Value<AnyType>>,
         num_rows: usize,
         chunk_info: Option<Box<dyn ChunkInfo>>,
     ) -> Self {
         debug_assert!(
-            values
+            columns
                 .iter()
                 .filter(|value| match value {
                     Value::Scalar(_) => false,
@@ -46,21 +46,21 @@ impl Chunk {
                 == 0
         );
         Self {
-            values,
+            columns,
             num_rows,
             chunk_info,
         }
     }
 
-    pub fn values(&self) -> &[Value<AnyType>] {
-        &self.values
+    pub fn columns(&self) -> &[Value<AnyType>] {
+        &self.columns
     }
 
     pub fn num_rows(&self) -> usize {
         self.num_rows
     }
 
-    pub fn num_values(&self) -> usize {
-        self.values.len()
+    pub fn num_columns(&self) -> usize {
+        self.columns.len()
     }
 }
