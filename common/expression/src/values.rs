@@ -41,7 +41,7 @@ use crate::util::bitmap_into_mut;
 use crate::util::buffer_into_mut;
 use crate::util::constant_bitmap;
 
-#[derive(EnumAsInner)]
+#[derive(EnumAsInner, Clone)]
 pub enum Value<T: ValueType> {
     Scalar(T::Scalar),
     Column(T::Column),
@@ -177,6 +177,13 @@ impl<'a> ValueRef<'a, AnyType> {
             ValueRef::Scalar(scalar) => ValueRef::Scalar(T::try_downcast_scalar(scalar)?),
             ValueRef::Column(col) => ValueRef::Column(T::try_downcast_column(col)?),
         })
+    }
+
+    pub fn index(&self, index: usize) -> Option<ScalarRef<'_>> {
+        match self {
+            ValueRef::Scalar(scalar) => Some(scalar.clone()),
+            ValueRef::Column(col) => col.index(index),
+        }
     }
 }
 

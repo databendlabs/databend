@@ -12,29 +12,69 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use itertools::Itertools;
+use crate::types::AnyType;
+use crate::Value;
 
-use crate::values::Column;
-
+/// Chunk is a lightweight container for a group of values.
 pub struct Chunk {
-    columns: Vec<Column>,
+    values: Vec<Value<AnyType>>,
+    num_rows: usize,
+    chunk_info: Option<Box<dyn ChunkInfo>>,
 }
 
+/// ChunkInfo is extra information about a chunk, could be used during the pipeline transformation.
+pub trait ChunkInfo {}
+
 impl Chunk {
-    pub fn new(columns: Vec<Column>) -> Self {
-        debug_assert!(columns.iter().map(|col| col.len()).all_equal());
-        Self { columns }
+    pub fn new(values: Vec<Value<AnyType>>, num_rows: usize) -> Self {
+        debug_assert!(
+            values
+                .iter()
+                .filter(|value| match value {
+                    Value::Scalar(_) => false,
+                    Value::Column(c) => c.len() != num_rows,
+                })
+                .count()
+                == 0
+        );
+        Self {
+            values,
+            num_rows,
+            chunk_info: None,
+        }
     }
 
-    pub fn columns(&self) -> &[Column] {
-        &self.columns
+    pub fn new_with_info(
+        values: Vec<Value<AnyType>>,
+        num_rows: usize,
+        chunk_info: Option<Box<dyn ChunkInfo>>,
+    ) -> Self {
+        debug_assert!(
+            values
+                .iter()
+                .filter(|value| match value {
+                    Value::Scalar(_) => false,
+                    Value::Column(c) => c.len() != num_rows,
+                })
+                .count()
+                == 0
+        );
+        Self {
+            values,
+            num_rows,
+            chunk_info,
+        }
+    }
+
+    pub fn values(&self) -> &[Value<AnyType>] {
+        &self.values
     }
 
     pub fn num_rows(&self) -> usize {
-        self.columns.get(0).map(Column::len).unwrap_or(0)
+        self.num_rows
     }
 
-    pub fn num_columns(&self) -> usize {
-        self.columns.len()
+    pub fn num_values(&self) -> usize {
+        self.values.len()
     }
 }
