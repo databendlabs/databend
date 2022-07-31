@@ -699,3 +699,309 @@ evaluation (internal):
 +--------+-------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 
+ast            : trim_leading('aaaaabbbbb', 'a')
+raw expr       : trim_leading(aaaaabbbbb, a)
+checked expr   : trim_leading<String, String>(aaaaabbbbb, a)
+output type    : String
+output domain  : {""..}
+output         : bbbbb
+
+
+ast            : trim_leading('aaaaabbbbb', 'aa')
+raw expr       : trim_leading(aaaaabbbbb, aa)
+checked expr   : trim_leading<String, String>(aaaaabbbbb, aa)
+output type    : String
+output domain  : {""..}
+output         : abbbbb
+
+
+ast            : trim_leading('aaaaaaaaaa', 'a')
+raw expr       : trim_leading(aaaaaaaaaa, a)
+checked expr   : trim_leading<String, String>(aaaaaaaaaa, a)
+output type    : String
+output domain  : {""..}
+output         : 
+
+
+ast            : trim_leading('aaaaabbbbb', 'b')
+raw expr       : trim_leading(aaaaabbbbb, b)
+checked expr   : trim_leading<String, String>(aaaaabbbbb, b)
+output type    : String
+output domain  : {""..}
+output         : aaaaabbbbb
+
+
+ast            : trim_leading(NULL, 'a')
+raw expr       : trim_leading(NULL, a)
+checked expr   : trim_leading<NULL, String NULL>(NULL, CAST(a AS String NULL))
+output type    : NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : trim_leading('aaaaabbbbb', NULL)
+raw expr       : trim_leading(aaaaabbbbb, NULL)
+checked expr   : trim_leading<String NULL, NULL>(CAST(aaaaabbbbb AS String NULL), NULL)
+output type    : NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : trim_leading(a, 'a')
+raw expr       : trim_leading(ColumnRef(0)::String, a)
+checked expr   : trim_leading<String, String>(ColumnRef(0), a)
+evaluation:
++--------+-----------------------+-------------+--------+
+|        | a                     | b           | Output |
++--------+-----------------------+-------------+--------+
+| Type   | String                | String      | String |
+| Domain | {"aaaabb"..="ccccdd"} | {"a"..="c"} | {""..} |
+| Row 0  | aaaabb                | a           | bb     |
+| Row 1  | bbbbcc                | b           | bbbbcc |
+| Row 2  | ccccdd                | c           | ccccdd |
++--------+-----------------------+-------------+--------+
+evaluation (internal):
++--------+------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                               |
++--------+------------------------------------------------------------------------------------------------------------------------------------+
+| a      | String(StringColumn { data: [97, 97, 97, 97, 98, 98, 98, 98, 98, 98, 99, 99, 99, 99, 99, 99, 100, 100], offsets: [0, 6, 12, 18] }) |
+| b      | String(StringColumn { data: [97, 98, 99], offsets: [0, 1, 2, 3] })                                                                 |
+| Output | String(StringColumn { data: [98, 98, 98, 98, 98, 98, 99, 99, 99, 99, 99, 99, 100, 100], offsets: [0, 2, 8, 14] })                  |
++--------+------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : trim_leading(a, b)
+raw expr       : trim_leading(ColumnRef(0)::String, ColumnRef(1)::String)
+checked expr   : trim_leading<String, String>(ColumnRef(0), ColumnRef(1))
+evaluation:
++--------+-----------------------+-------------+--------+
+|        | a                     | b           | Output |
++--------+-----------------------+-------------+--------+
+| Type   | String                | String      | String |
+| Domain | {"aaaabb"..="ccccdd"} | {"a"..="c"} | {""..} |
+| Row 0  | aaaabb                | a           | bb     |
+| Row 1  | bbbbcc                | b           | cc     |
+| Row 2  | ccccdd                | c           | dd     |
++--------+-----------------------+-------------+--------+
+evaluation (internal):
++--------+------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                               |
++--------+------------------------------------------------------------------------------------------------------------------------------------+
+| a      | String(StringColumn { data: [97, 97, 97, 97, 98, 98, 98, 98, 98, 98, 99, 99, 99, 99, 99, 99, 100, 100], offsets: [0, 6, 12, 18] }) |
+| b      | String(StringColumn { data: [97, 98, 99], offsets: [0, 1, 2, 3] })                                                                 |
+| Output | String(StringColumn { data: [98, 98, 99, 99, 100, 100], offsets: [0, 2, 4, 6] })                                                   |
++--------+------------------------------------------------------------------------------------------------------------------------------------+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | trim_leading('aaaaabbbbb', b)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Unreachable
+
+
+
+ast            : trim_trailing('aaaaabbbbb', 'b')
+raw expr       : trim_trailing(aaaaabbbbb, b)
+checked expr   : trim_trailing<String, String>(aaaaabbbbb, b)
+output type    : String
+output domain  : {""..}
+output         : aaaaa
+
+
+ast            : trim_trailing('aaaaabbbbb', 'bb')
+raw expr       : trim_trailing(aaaaabbbbb, bb)
+checked expr   : trim_trailing<String, String>(aaaaabbbbb, bb)
+output type    : String
+output domain  : {""..}
+output         : aaaaab
+
+
+ast            : trim_trailing('aaaaaaaaaa', 'a')
+raw expr       : trim_trailing(aaaaaaaaaa, a)
+checked expr   : trim_trailing<String, String>(aaaaaaaaaa, a)
+output type    : String
+output domain  : {""..}
+output         : 
+
+
+ast            : trim_trailing('aaaaabbbbb', 'a')
+raw expr       : trim_trailing(aaaaabbbbb, a)
+checked expr   : trim_trailing<String, String>(aaaaabbbbb, a)
+output type    : String
+output domain  : {""..}
+output         : aaaaabbbbb
+
+
+ast            : trim_trailing(NULL, 'a')
+raw expr       : trim_trailing(NULL, a)
+checked expr   : trim_trailing<NULL, String NULL>(NULL, CAST(a AS String NULL))
+output type    : NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : trim_trailing('aaaaabbbbb', NULL)
+raw expr       : trim_trailing(aaaaabbbbb, NULL)
+checked expr   : trim_trailing<String NULL, NULL>(CAST(aaaaabbbbb AS String NULL), NULL)
+output type    : NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : trim_trailing(a, 'b')
+raw expr       : trim_trailing(ColumnRef(0)::String, b)
+checked expr   : trim_trailing<String, String>(ColumnRef(0), b)
+evaluation:
++--------+-----------------------+-------------+--------+
+|        | a                     | b           | Output |
++--------+-----------------------+-------------+--------+
+| Type   | String                | String      | String |
+| Domain | {"aaaabb"..="ccccdd"} | {"b"..="d"} | {""..} |
+| Row 0  | aaaabb                | b           | aaaa   |
+| Row 1  | bbbbcc                | c           | bbbbcc |
+| Row 2  | ccccdd                | d           | ccccdd |
++--------+-----------------------+-------------+--------+
+evaluation (internal):
++--------+------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                               |
++--------+------------------------------------------------------------------------------------------------------------------------------------+
+| a      | String(StringColumn { data: [97, 97, 97, 97, 98, 98, 98, 98, 98, 98, 99, 99, 99, 99, 99, 99, 100, 100], offsets: [0, 6, 12, 18] }) |
+| b      | String(StringColumn { data: [98, 99, 100], offsets: [0, 1, 2, 3] })                                                                |
+| Output | String(StringColumn { data: [97, 97, 97, 97, 98, 98, 98, 98, 99, 99, 99, 99, 99, 99, 100, 100], offsets: [0, 4, 10, 16] })         |
++--------+------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : trim_trailing(a, b)
+raw expr       : trim_trailing(ColumnRef(0)::String, ColumnRef(1)::String)
+checked expr   : trim_trailing<String, String>(ColumnRef(0), ColumnRef(1))
+evaluation:
++--------+-----------------------+-------------+--------+
+|        | a                     | b           | Output |
++--------+-----------------------+-------------+--------+
+| Type   | String                | String      | String |
+| Domain | {"aaaabb"..="ccccdd"} | {"b"..="d"} | {""..} |
+| Row 0  | aaaabb                | b           | aaaa   |
+| Row 1  | bbbbcc                | c           | bbbb   |
+| Row 2  | ccccdd                | d           | cccc   |
++--------+-----------------------+-------------+--------+
+evaluation (internal):
++--------+------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                               |
++--------+------------------------------------------------------------------------------------------------------------------------------------+
+| a      | String(StringColumn { data: [97, 97, 97, 97, 98, 98, 98, 98, 98, 98, 99, 99, 99, 99, 99, 99, 100, 100], offsets: [0, 6, 12, 18] }) |
+| b      | String(StringColumn { data: [98, 99, 100], offsets: [0, 1, 2, 3] })                                                                |
+| Output | String(StringColumn { data: [97, 97, 97, 97, 98, 98, 98, 98, 99, 99, 99, 99], offsets: [0, 4, 8, 12] })                            |
++--------+------------------------------------------------------------------------------------------------------------------------------------+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | trim_trailing('aaaaabbbbb', b)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Unreachable
+
+
+
+ast            : trim_both('aaabbaaa', 'a')
+raw expr       : trim_both(aaabbaaa, a)
+checked expr   : trim_both<String, String>(aaabbaaa, a)
+output type    : String
+output domain  : {""..}
+output         : bb
+
+
+ast            : trim_both('aaabbaaa', 'aa')
+raw expr       : trim_both(aaabbaaa, aa)
+checked expr   : trim_both<String, String>(aaabbaaa, aa)
+output type    : String
+output domain  : {""..}
+output         : abba
+
+
+ast            : trim_both('aaaaaaaa', 'a')
+raw expr       : trim_both(aaaaaaaa, a)
+checked expr   : trim_both<String, String>(aaaaaaaa, a)
+output type    : String
+output domain  : {""..}
+output         : 
+
+
+ast            : trim_both('aaabbaaa', 'b')
+raw expr       : trim_both(aaabbaaa, b)
+checked expr   : trim_both<String, String>(aaabbaaa, b)
+output type    : String
+output domain  : {""..}
+output         : aaabbaaa
+
+
+ast            : trim_both(NULL, 'a')
+raw expr       : trim_both(NULL, a)
+checked expr   : trim_both<NULL, String NULL>(NULL, CAST(a AS String NULL))
+output type    : NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : trim_both('aaaaaaaa', NULL)
+raw expr       : trim_both(aaaaaaaa, NULL)
+checked expr   : trim_both<String NULL, NULL>(CAST(aaaaaaaa AS String NULL), NULL)
+output type    : NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : trim_both(a, 'a')
+raw expr       : trim_both(ColumnRef(0)::String, a)
+checked expr   : trim_both<String, String>(ColumnRef(0), a)
+evaluation:
++--------+-----------------------+-------------+--------+
+|        | a                     | b           | Output |
++--------+-----------------------+-------------+--------+
+| Type   | String                | String      | String |
+| Domain | {"aabbaa"..="ccddcc"} | {"a"..="c"} | {""..} |
+| Row 0  | aabbaa                | a           | bb     |
+| Row 1  | bbccbb                | b           | bbccbb |
+| Row 2  | ccddcc                | c           | ccddcc |
++--------+-----------------------+-------------+--------+
+evaluation (internal):
++--------+------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                               |
++--------+------------------------------------------------------------------------------------------------------------------------------------+
+| a      | String(StringColumn { data: [97, 97, 98, 98, 97, 97, 98, 98, 99, 99, 98, 98, 99, 99, 100, 100, 99, 99], offsets: [0, 6, 12, 18] }) |
+| b      | String(StringColumn { data: [97, 98, 99], offsets: [0, 1, 2, 3] })                                                                 |
+| Output | String(StringColumn { data: [98, 98, 98, 98, 99, 99, 98, 98, 99, 99, 100, 100, 99, 99], offsets: [0, 2, 8, 14] })                  |
++--------+------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : trim_both(a, b)
+raw expr       : trim_both(ColumnRef(0)::String, ColumnRef(1)::String)
+checked expr   : trim_both<String, String>(ColumnRef(0), ColumnRef(1))
+evaluation:
++--------+-----------------------+-------------+--------+
+|        | a                     | b           | Output |
++--------+-----------------------+-------------+--------+
+| Type   | String                | String      | String |
+| Domain | {"aabbaa"..="ccddcc"} | {"a"..="c"} | {""..} |
+| Row 0  | aabbaa                | a           | bb     |
+| Row 1  | bbccbb                | b           | cc     |
+| Row 2  | ccddcc                | c           | dd     |
++--------+-----------------------+-------------+--------+
+evaluation (internal):
++--------+------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                               |
++--------+------------------------------------------------------------------------------------------------------------------------------------+
+| a      | String(StringColumn { data: [97, 97, 98, 98, 97, 97, 98, 98, 99, 99, 98, 98, 99, 99, 100, 100, 99, 99], offsets: [0, 6, 12, 18] }) |
+| b      | String(StringColumn { data: [97, 98, 99], offsets: [0, 1, 2, 3] })                                                                 |
+| Output | String(StringColumn { data: [98, 98, 99, 99, 100, 100], offsets: [0, 2, 4, 6] })                                                   |
++--------+------------------------------------------------------------------------------------------------------------------------------------+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | trim_both('aaabbaaa', b)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^ Unreachable
+
+
+

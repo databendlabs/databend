@@ -228,6 +228,86 @@ pub fn register(registry: &mut FunctionRegistry) {
             },
         ),
     );
+
+    registry.register_passthrough_nullable_2_arg::<StringType, StringType, StringType, _, _>(
+        "trim_leading",
+        FunctionProperty::default(),
+        |_, _| None,
+        vectorize_two_string_to_string_from_trim(
+            |_| 0,
+            |val, trim_str, writer| {
+                let chunk_size = trim_str.len();
+                let pos = val
+                    .chunks(chunk_size)
+                    .enumerate()
+                    .find(|(_, chunk)| *chunk != trim_str);
+                if let Some((idx, _)) = pos {
+                    writer.put_slice(&val.as_bytes()[idx * chunk_size..]);
+                }
+                writer.commit_row();
+                Ok(())
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<StringType, StringType, StringType, _, _>(
+        "trim_trailing",
+        FunctionProperty::default(),
+        |_, _| None,
+        vectorize_two_string_to_string_from_trim(
+            |_| 0,
+            |val, trim_str, writer| {
+                let chunk_size = trim_str.len();
+                let pos = val
+                    .rchunks(chunk_size)
+                    .enumerate()
+                    .find(|(_, chunk)| *chunk != trim_str);
+                if let Some((idx, _)) = pos {
+                    writer.put_slice(&val.as_bytes()[..val.len() - idx * chunk_size]);
+                }
+                writer.commit_row();
+                Ok(())
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<StringType, StringType, StringType, _, _>(
+        "trim_both",
+        FunctionProperty::default(),
+        |_, _| None,
+        vectorize_two_string_to_string_from_trim(
+            |_| 0,
+            |val, trim_str, writer| {
+                let chunk_size = trim_str.len();
+                let start_pos = val
+                    .chunks(chunk_size)
+                    .enumerate()
+                    .find(|(_, chunk)| chunk != &trim_str)
+                    .map(|(idx, _)| idx);
+
+                // Trim all
+                if start_pos.is_none() {
+                    writer.commit_row();
+                    return Ok(());
+                }
+
+                let end_pos = val
+                    .rchunks(chunk_size)
+                    .enumerate()
+                    .find(|(_, chunk)| chunk != &trim_str)
+                    .map(|(idx, _)| idx);
+
+                if let (Some(start_idx), Some(end_idx)) = (start_pos, end_pos) {
+                    writer.put_slice(
+                        &val.as_bytes()[start_idx * chunk_size..val.len() - end_idx * chunk_size],
+                    );
+                }
+
+                writer.commit_row();
+                Ok(())
+            },
+        ),
+    );
 }
 
 // Vectorize string to string function with customer estimate_bytes.
@@ -249,6 +329,51 @@ fn vectorize_string_to_string(
             }
 
             Ok(Value::Column(builder.build()))
+        }
+    }
+}
+
+// Vectorize (string, string) -> string function with customer estimate_bytes.
+// This function is only used for trim_[leading|trailing|both] function.
+// When arg1 is a scalar, arg2 must be a scalar.
+fn vectorize_two_string_to_string_from_trim(
+    estimate_bytes: impl Fn(&StringColumn) -> usize + Copy,
+    func: impl Fn(&[u8], &[u8], &mut StringColumnBuilder) -> Result<(), String> + Copy,
+) -> impl Fn(
+    ValueRef<StringType>,
+    ValueRef<StringType>,
+    &GenericMap,
+) -> Result<Value<StringType>, String>
++ Copy {
+    move |arg1, arg2, _| match (arg1, arg2) {
+        (ValueRef::Scalar(val), ValueRef::Scalar(trim_str)) => {
+            let mut builder = StringColumnBuilder::with_capacity(1, 0);
+            func(val, trim_str, &mut builder)?;
+            Ok(Value::Scalar(builder.build_scalar()))
+        }
+        (ValueRef::Column(col), ValueRef::Scalar(trim_str)) => {
+            let data_capacity = estimate_bytes(&col);
+            let mut builder = StringColumnBuilder::with_capacity(col.len(), data_capacity);
+            for val in col.iter() {
+                func(val, trim_str, &mut builder)?;
+            }
+            Ok(Value::Column(builder.build()))
+        }
+        (ValueRef::Column(col), ValueRef::Column(trim_str)) => {
+            let data_capacity = estimate_bytes(&col);
+            let mut builder = StringColumnBuilder::with_capacity(col.len(), data_capacity);
+            for (idx, val) in col.iter().enumerate() {
+                if let Some(trim_val) = trim_str.index(idx) {
+                    func(val, trim_val, &mut builder)?;
+                } else {
+                    return Err(format!("Column length mismatch at index {}", idx));
+                }
+            }
+            Ok(Value::Column(builder.build()))
+        }
+        (_, _) => {
+            // Unreacachable. If arg1 is a scalar, arg2 must be a scalar.
+            Err("Unreachable".to_string())
         }
     }
 }
