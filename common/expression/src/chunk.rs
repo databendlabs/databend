@@ -27,21 +27,7 @@ pub trait ChunkInfo {}
 
 impl Chunk {
     pub fn new(values: Vec<Value<AnyType>>, num_rows: usize) -> Self {
-        debug_assert!(
-            values
-                .iter()
-                .filter(|value| match value {
-                    Value::Scalar(_) => false,
-                    Value::Column(c) => c.len() != num_rows,
-                })
-                .count()
-                == 0
-        );
-        Self {
-            values,
-            num_rows,
-            chunk_info: None,
-        }
+        Self::new_with_info(values, num_rows, None)
     }
 
     pub fn new_with_info(
