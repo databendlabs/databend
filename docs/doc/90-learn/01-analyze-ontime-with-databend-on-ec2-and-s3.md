@@ -48,16 +48,16 @@ unzip t_ontime.csv.zip
 ```
 
 ```shell title='Load CSV files into Databend'
-ls *.csv|xargs -I{} echo  curl -H \"insert_sql:insert into ontime format CSV\" -H \"skip_header:0\" -H \"field_delimiter:\t\"  -F  \"upload=@{}\"  -XPUT http://user1:abc123@127.0.0.1:8081/v1/streaming_load |bash
+curl -H "insert_sql:insert into ontime format CSV" -H "skip_header:0" -H "field_delimiter:\t"  -F "upload=@t_ontime.csv"  -XPUT http://root:@127.0.0.1:8000/v1/streaming_load
 ```
 
 :::tip
 
-* http://user1:abc123@127.0.0.1:8081/v1/streaming_load
-    * `user1` is the user.
-    * `abc123` is the user password.
+* `http://username:passowrd@127.0.0.1:8000/v1/streaming_load`
+    * `username` is the user.
+    * `password` is the user password.
     * `127.0.0.1` is `http_handler_host` value in your *databend-query.toml*
-    * `8081` is `http_handler_port` value in your *databend-query.toml*
+    * `8000` is `http_handler_port` value in your *databend-query.toml*
 :::
 
 ## Step 3. Queries

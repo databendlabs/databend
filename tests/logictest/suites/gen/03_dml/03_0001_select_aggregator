@@ -4,14 +4,13 @@ select 1, sum(number) from numbers_mt(1000000);
 ----
 1 499999500000
 
-statement query B label(http)
+statement query B
 select count(*) = count(1) from numbers(1000);
 
 ----
 1
 
----- http
-true
+
 
 statement query I
 select count(1) from numbers(1000);

@@ -1,18 +1,16 @@
-statement query B label(http)
+statement query B
 SELECT 1::BOOLEAN;
 
 ----
 1
 
----- http
-true
 
-statement query B label(http)
+
+statement query B
 SELECT 1::BOOL;
 
 ----
 1
 
----- http
-true
+
 
