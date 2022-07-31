@@ -21,6 +21,8 @@ use common_arrow::arrow::trusted_len::TrustedLen;
 use enum_as_inner::EnumAsInner;
 use itertools::Itertools;
 use ordered_float::NotNan;
+use serde::Deserialize;
+use serde::Serialize;
 
 use crate::property::BooleanDomain;
 use crate::property::Domain;
@@ -53,7 +55,7 @@ pub enum ValueRef<'a, T: ValueType> {
     Column(T::Column),
 }
 
-#[derive(Debug, Clone, Default, EnumAsInner)]
+#[derive(Debug, Clone, Default, EnumAsInner, Serialize, Deserialize)]
 pub enum Scalar {
     #[default]
     Null,
@@ -70,6 +72,7 @@ pub enum Scalar {
     Float64(f64),
     Boolean(bool),
     String(Vec<u8>),
+    #[serde(skip)]
     Array(Column),
     Tuple(Vec<Scalar>),
 }

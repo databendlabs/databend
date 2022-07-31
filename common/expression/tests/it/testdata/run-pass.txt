@@ -16,7 +16,7 @@ output         : NULL
 
 ast            : plus(a, 10)
 raw expr       : plus(ColumnRef(0)::UInt8 NULL, 10_u8)
-checked expr   : plus<Int16 NULL, Int16 NULL>(CAST(ColumnRef(0) AS Int16 NULL), CAST(10_u8 AS Int16 NULL))
+checked expr   : plus<Int16 NULL, Int16 NULL>(CAST(ColumnRef(0) AS Int16 NULL), CAST(10 AS Int16 NULL))
 evaluation:
 +--------+--------------------+--------------------+
 |        | a                  | Output             |
@@ -69,7 +69,7 @@ output         : NULL
 
 ast            : minus(a, 10)
 raw expr       : minus(ColumnRef(0)::UInt8 NULL, 10_u8)
-checked expr   : minus<Int32 NULL, Int32 NULL>(CAST(ColumnRef(0) AS Int32 NULL), CAST(10_u8 AS Int32 NULL))
+checked expr   : minus<Int32 NULL, Int32 NULL>(CAST(ColumnRef(0) AS Int32 NULL), CAST(10 AS Int32 NULL))
 evaluation:
 +--------+--------------------+------------------+
 |        | a                  | Output           |
@@ -122,7 +122,7 @@ output         : NULL
 
 ast            : multiply(a, 10)
 raw expr       : multiply(ColumnRef(0)::UInt8 NULL, 10_u8)
-checked expr   : multiply<Int64 NULL, Int64 NULL>(CAST(ColumnRef(0) AS Int64 NULL), CAST(10_u8 AS Int64 NULL))
+checked expr   : multiply<Int64 NULL, Int64 NULL>(CAST(ColumnRef(0) AS Int64 NULL), CAST(10 AS Int64 NULL))
 evaluation:
 +--------+--------------------+-------------------------------------------------------+
 |        | a                  | Output                                                |
@@ -198,7 +198,7 @@ output         : NULL
 
 ast            : divide(a, 10)
 raw expr       : divide(ColumnRef(0)::UInt8 NULL, 10_u8)
-checked expr   : divide<Float32 NULL, Float32 NULL>(CAST(ColumnRef(0) AS Float32 NULL), CAST(10_u8 AS Float32 NULL))
+checked expr   : divide<Float32 NULL, Float32 NULL>(CAST(ColumnRef(0) AS Float32 NULL), CAST(10 AS Float32 NULL))
 evaluation:
 +--------+--------------------+-----------------------+
 |        | a                  | Output                |
@@ -251,7 +251,7 @@ output         : NULL
 
 ast            : avg(a, 10)
 raw expr       : avg(ColumnRef(0)::UInt8 NULL, 10_u8)
-checked expr   : avg<Float64 NULL, Float64 NULL>(CAST(ColumnRef(0) AS Float64 NULL), CAST(10_u8 AS Float64 NULL))
+checked expr   : avg<Float64 NULL, Float64 NULL>(CAST(ColumnRef(0) AS Float64 NULL), CAST(10 AS Float64 NULL))
 evaluation:
 +--------+--------------------+------------------------+
 |        | a                  | Output                 |
@@ -403,7 +403,7 @@ output         : NULL
 
 ast            : least(10, CAST(20 as Int8), 30, 40)
 raw expr       : least(10_u8, CAST(20_u8 AS Int8), 30_u8, 40_u8)
-checked expr   : least<Int16, Int16, Int16, Int16>(CAST(10_u8 AS Int16), CAST(CAST(20_u8 AS Int8) AS Int16), CAST(30_u8 AS Int16), CAST(40_u8 AS Int16))
+checked expr   : least<Int16, Int16, Int16, Int16>(CAST(10 AS Int16), CAST(CAST(20 AS Int8) AS Int16), CAST(30 AS Int16), CAST(40 AS Int16))
 output type    : Int16
 output domain  : {10..=10}
 output         : 10
@@ -426,8 +426,8 @@ evaluation:
 +--------+---------+----------------------+----------------------+
 | Type   | Int16   | String NULL          | String NULL          |
 | Domain | {0..=4} | {"a"..="e"} ∪ {NULL} | {"a"..="e"} ∪ {NULL} |
-| Row 0  | 0       | a                    | a                    |
-| Row 1  | 1       | b                    | b                    |
+| Row 0  | 0       | "a"                  | "a"                  |
+| Row 1  | 1       | "b"                  | "b"                  |
 | Row 2  | 2       | NULL                 | NULL                 |
 | Row 3  | 3       | NULL                 | NULL                 |
 | Row 4  | 4       | NULL                 | NULL                 |
@@ -451,8 +451,8 @@ evaluation:
 +--------+------------------+----------------------+----------------------+
 | Type   | Boolean NULL     | String NULL          | String NULL          |
 | Domain | {FALSE} ∪ {NULL} | {"a"..="e"} ∪ {NULL} | {"a"..="e"} ∪ {NULL} |
-| Row 0  | false            | a                    | a                    |
-| Row 1  | false            | b                    | b                    |
+| Row 0  | false            | "a"                  | "a"                  |
+| Row 1  | false            | "b"                  | "b"                  |
 | Row 2  | NULL             | NULL                 | NULL                 |
 | Row 3  | NULL             | NULL                 | NULL                 |
 | Row 4  | NULL             | NULL                 | NULL                 |

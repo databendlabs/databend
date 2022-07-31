@@ -92,7 +92,7 @@ impl<'a> Display for ScalarRef<'a> {
             ScalarRef::Float32(i) => write!(f, "{:?}", i),
             ScalarRef::Float64(i) => write!(f, "{:?}", i),
             ScalarRef::Boolean(b) => write!(f, "{}", b),
-            ScalarRef::String(s) => write!(f, "{}", String::from_utf8_lossy(s)),
+            ScalarRef::String(s) => write!(f, "{:?}", String::from_utf8_lossy(s)),
             ScalarRef::Array(col) => write!(f, "[{}]", col.iter().join(", ")),
             ScalarRef::Tuple(fields) => {
                 write!(
@@ -209,7 +209,7 @@ impl Display for DataType {
 impl Display for Expr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Expr::Literal { lit, .. } => write!(f, "{lit}"),
+            Expr::Constant { scalar, .. } => write!(f, "{}", scalar.as_ref()),
             Expr::ColumnRef { id, .. } => write!(f, "ColumnRef({id})"),
             Expr::Cast {
                 expr, dest_type, ..
