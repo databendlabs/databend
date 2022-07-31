@@ -954,7 +954,7 @@ fn run_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType, Column
         let output_domain = domain_calculator.calculate(&expr)?;
 
         let mut num_rows = 0;
-        if columns.len() > 0 {
+        if !columns.is_empty() {
             num_rows = columns[0].2.len();
         }
         let chunk = Chunk::new(

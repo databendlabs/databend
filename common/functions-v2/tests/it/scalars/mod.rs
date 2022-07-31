@@ -57,13 +57,19 @@ pub fn run_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType, Co
         let domain_calculator = DomainCalculator::new(input_domains.clone());
         let output_domain = domain_calculator.calculate(&expr)?;
 
+        let mut num_rows = 0;
+        if !columns.is_empty() {
+            num_rows = columns[0].2.len();
+        }
         let chunk = Chunk::new(
             columns
                 .iter()
-                .map(|(_, _, col)| col.clone())
+                .map(|(_, _, col)| Value::Column(col.clone()))
                 .collect::<Vec<_>>(),
+            num_rows,
         );
-        chunk.columns().iter().for_each(|col| {
+
+        columns.iter().for_each(|(_, _, col)| {
             test_arrow_conversion(col);
         });
 
