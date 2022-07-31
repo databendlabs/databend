@@ -117,17 +117,15 @@ impl<'a> Binder {
             )
             .await?;
 
-        if !from_context.aggregate_info.aggregate_functions.is_empty()
-            || !stmt.group_by.is_empty()
-            || stmt.having.is_some()
+        if !from_context.aggregate_info.aggregate_functions.is_empty() || !stmt.group_by.is_empty()
         {
             s_expr = self.bind_aggregate(&mut from_context, s_expr).await?;
+        }
 
-            if let Some((having, span)) = having {
-                s_expr = self
-                    .bind_having(&from_context, having, span, s_expr)
-                    .await?;
-            }
+        if let Some((having, span)) = having {
+            s_expr = self
+                .bind_having(&from_context, having, span, s_expr)
+                .await?;
         }
 
         if stmt.distinct {
