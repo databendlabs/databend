@@ -606,16 +606,16 @@ evaluation (internal):
 
 
 ast            : ltrim('   abc   ')
-raw expr       : ltrim(   abc   )
-checked expr   : ltrim<String>(   abc   )
+raw expr       : ltrim("   abc   ")
+checked expr   : ltrim<String>("   abc   ")
 output type    : String
 output domain  : {""..}
 output         : abc   
 
 
 ast            : ltrim('  ')
-raw expr       : ltrim(  )
-checked expr   : ltrim<String>(  )
+raw expr       : ltrim("  ")
+checked expr   : ltrim<String>("  ")
 output type    : String
 output domain  : {""..}
 output         : 
@@ -653,16 +653,16 @@ evaluation (internal):
 
 
 ast            : rtrim('   abc   ')
-raw expr       : rtrim(   abc   )
-checked expr   : rtrim<String>(   abc   )
+raw expr       : rtrim("   abc   ")
+checked expr   : rtrim<String>("   abc   ")
 output type    : String
 output domain  : {""..}
 output         :    abc
 
 
 ast            : rtrim('  ')
-raw expr       : rtrim(  )
-checked expr   : rtrim<String>(  )
+raw expr       : rtrim("  ")
+checked expr   : rtrim<String>("  ")
 output type    : String
 output domain  : {""..}
 output         : 
@@ -700,56 +700,56 @@ evaluation (internal):
 
 
 ast            : trim_leading('aaaaabbbbb', 'a')
-raw expr       : trim_leading(aaaaabbbbb, a)
-checked expr   : trim_leading<String, String>(aaaaabbbbb, a)
+raw expr       : trim_leading("aaaaabbbbb", "a")
+checked expr   : trim_leading<String, String>("aaaaabbbbb", "a")
 output type    : String
 output domain  : {""..}
 output         : bbbbb
 
 
 ast            : trim_leading('aaaaabbbbb', 'aa')
-raw expr       : trim_leading(aaaaabbbbb, aa)
-checked expr   : trim_leading<String, String>(aaaaabbbbb, aa)
+raw expr       : trim_leading("aaaaabbbbb", "aa")
+checked expr   : trim_leading<String, String>("aaaaabbbbb", "aa")
 output type    : String
 output domain  : {""..}
 output         : abbbbb
 
 
 ast            : trim_leading('aaaaaaaaaa', 'a')
-raw expr       : trim_leading(aaaaaaaaaa, a)
-checked expr   : trim_leading<String, String>(aaaaaaaaaa, a)
+raw expr       : trim_leading("aaaaaaaaaa", "a")
+checked expr   : trim_leading<String, String>("aaaaaaaaaa", "a")
 output type    : String
 output domain  : {""..}
 output         : 
 
 
 ast            : trim_leading('aaaaabbbbb', 'b')
-raw expr       : trim_leading(aaaaabbbbb, b)
-checked expr   : trim_leading<String, String>(aaaaabbbbb, b)
+raw expr       : trim_leading("aaaaabbbbb", "b")
+checked expr   : trim_leading<String, String>("aaaaabbbbb", "b")
 output type    : String
 output domain  : {""..}
 output         : aaaaabbbbb
 
 
 ast            : trim_leading(NULL, 'a')
-raw expr       : trim_leading(NULL, a)
-checked expr   : trim_leading<NULL, String NULL>(NULL, CAST(a AS String NULL))
+raw expr       : trim_leading(NULL, "a")
+checked expr   : trim_leading<NULL, String NULL>(NULL, CAST("a" AS String NULL))
 output type    : NULL
 output domain  : {NULL}
 output         : NULL
 
 
 ast            : trim_leading('aaaaabbbbb', NULL)
-raw expr       : trim_leading(aaaaabbbbb, NULL)
-checked expr   : trim_leading<String NULL, NULL>(CAST(aaaaabbbbb AS String NULL), NULL)
+raw expr       : trim_leading("aaaaabbbbb", NULL)
+checked expr   : trim_leading<String NULL, NULL>(CAST("aaaaabbbbb" AS String NULL), NULL)
 output type    : NULL
 output domain  : {NULL}
 output         : NULL
 
 
 ast            : trim_leading(a, 'a')
-raw expr       : trim_leading(ColumnRef(0)::String, a)
-checked expr   : trim_leading<String, String>(ColumnRef(0), a)
+raw expr       : trim_leading(ColumnRef(0)::String, "a")
+checked expr   : trim_leading<String, String>(ColumnRef(0), "a")
 evaluation:
 +--------+-----------------------+-------------+--------+
 |        | a                     | b           | Output |
@@ -802,56 +802,56 @@ error:
 
 
 ast            : trim_trailing('aaaaabbbbb', 'b')
-raw expr       : trim_trailing(aaaaabbbbb, b)
-checked expr   : trim_trailing<String, String>(aaaaabbbbb, b)
+raw expr       : trim_trailing("aaaaabbbbb", "b")
+checked expr   : trim_trailing<String, String>("aaaaabbbbb", "b")
 output type    : String
 output domain  : {""..}
 output         : aaaaa
 
 
 ast            : trim_trailing('aaaaabbbbb', 'bb')
-raw expr       : trim_trailing(aaaaabbbbb, bb)
-checked expr   : trim_trailing<String, String>(aaaaabbbbb, bb)
+raw expr       : trim_trailing("aaaaabbbbb", "bb")
+checked expr   : trim_trailing<String, String>("aaaaabbbbb", "bb")
 output type    : String
 output domain  : {""..}
 output         : aaaaab
 
 
 ast            : trim_trailing('aaaaaaaaaa', 'a')
-raw expr       : trim_trailing(aaaaaaaaaa, a)
-checked expr   : trim_trailing<String, String>(aaaaaaaaaa, a)
+raw expr       : trim_trailing("aaaaaaaaaa", "a")
+checked expr   : trim_trailing<String, String>("aaaaaaaaaa", "a")
 output type    : String
 output domain  : {""..}
 output         : 
 
 
 ast            : trim_trailing('aaaaabbbbb', 'a')
-raw expr       : trim_trailing(aaaaabbbbb, a)
-checked expr   : trim_trailing<String, String>(aaaaabbbbb, a)
+raw expr       : trim_trailing("aaaaabbbbb", "a")
+checked expr   : trim_trailing<String, String>("aaaaabbbbb", "a")
 output type    : String
 output domain  : {""..}
 output         : aaaaabbbbb
 
 
 ast            : trim_trailing(NULL, 'a')
-raw expr       : trim_trailing(NULL, a)
-checked expr   : trim_trailing<NULL, String NULL>(NULL, CAST(a AS String NULL))
+raw expr       : trim_trailing(NULL, "a")
+checked expr   : trim_trailing<NULL, String NULL>(NULL, CAST("a" AS String NULL))
 output type    : NULL
 output domain  : {NULL}
 output         : NULL
 
 
 ast            : trim_trailing('aaaaabbbbb', NULL)
-raw expr       : trim_trailing(aaaaabbbbb, NULL)
-checked expr   : trim_trailing<String NULL, NULL>(CAST(aaaaabbbbb AS String NULL), NULL)
+raw expr       : trim_trailing("aaaaabbbbb", NULL)
+checked expr   : trim_trailing<String NULL, NULL>(CAST("aaaaabbbbb" AS String NULL), NULL)
 output type    : NULL
 output domain  : {NULL}
 output         : NULL
 
 
 ast            : trim_trailing(a, 'b')
-raw expr       : trim_trailing(ColumnRef(0)::String, b)
-checked expr   : trim_trailing<String, String>(ColumnRef(0), b)
+raw expr       : trim_trailing(ColumnRef(0)::String, "b")
+checked expr   : trim_trailing<String, String>(ColumnRef(0), "b")
 evaluation:
 +--------+-----------------------+-------------+--------+
 |        | a                     | b           | Output |
@@ -904,56 +904,56 @@ error:
 
 
 ast            : trim_both('aaabbaaa', 'a')
-raw expr       : trim_both(aaabbaaa, a)
-checked expr   : trim_both<String, String>(aaabbaaa, a)
+raw expr       : trim_both("aaabbaaa", "a")
+checked expr   : trim_both<String, String>("aaabbaaa", "a")
 output type    : String
 output domain  : {""..}
 output         : bb
 
 
 ast            : trim_both('aaabbaaa', 'aa')
-raw expr       : trim_both(aaabbaaa, aa)
-checked expr   : trim_both<String, String>(aaabbaaa, aa)
+raw expr       : trim_both("aaabbaaa", "aa")
+checked expr   : trim_both<String, String>("aaabbaaa", "aa")
 output type    : String
 output domain  : {""..}
 output         : abba
 
 
 ast            : trim_both('aaaaaaaa', 'a')
-raw expr       : trim_both(aaaaaaaa, a)
-checked expr   : trim_both<String, String>(aaaaaaaa, a)
+raw expr       : trim_both("aaaaaaaa", "a")
+checked expr   : trim_both<String, String>("aaaaaaaa", "a")
 output type    : String
 output domain  : {""..}
 output         : 
 
 
 ast            : trim_both('aaabbaaa', 'b')
-raw expr       : trim_both(aaabbaaa, b)
-checked expr   : trim_both<String, String>(aaabbaaa, b)
+raw expr       : trim_both("aaabbaaa", "b")
+checked expr   : trim_both<String, String>("aaabbaaa", "b")
 output type    : String
 output domain  : {""..}
 output         : aaabbaaa
 
 
 ast            : trim_both(NULL, 'a')
-raw expr       : trim_both(NULL, a)
-checked expr   : trim_both<NULL, String NULL>(NULL, CAST(a AS String NULL))
+raw expr       : trim_both(NULL, "a")
+checked expr   : trim_both<NULL, String NULL>(NULL, CAST("a" AS String NULL))
 output type    : NULL
 output domain  : {NULL}
 output         : NULL
 
 
 ast            : trim_both('aaaaaaaa', NULL)
-raw expr       : trim_both(aaaaaaaa, NULL)
-checked expr   : trim_both<String NULL, NULL>(CAST(aaaaaaaa AS String NULL), NULL)
+raw expr       : trim_both("aaaaaaaa", NULL)
+checked expr   : trim_both<String NULL, NULL>(CAST("aaaaaaaa" AS String NULL), NULL)
 output type    : NULL
 output domain  : {NULL}
 output         : NULL
 
 
 ast            : trim_both(a, 'a')
-raw expr       : trim_both(ColumnRef(0)::String, a)
-checked expr   : trim_both<String, String>(ColumnRef(0), a)
+raw expr       : trim_both(ColumnRef(0)::String, "a")
+checked expr   : trim_both<String, String>(ColumnRef(0), "a")
 evaluation:
 +--------+-----------------------+-------------+--------+
 |        | a                     | b           | Output |
@@ -1006,16 +1006,16 @@ error:
 
 
 ast            : trim('   abc   ')
-raw expr       : trim(   abc   )
-checked expr   : trim<String>(   abc   )
+raw expr       : trim("   abc   ")
+checked expr   : trim<String>("   abc   ")
 output type    : String
 output domain  : {""..}
 output         : abc
 
 
 ast            : trim('  ')
-raw expr       : trim(  )
-checked expr   : trim<String>(  )
+raw expr       : trim("  ")
+checked expr   : trim<String>("  ")
 output type    : String
 output domain  : {""..}
 output         : 
@@ -1053,56 +1053,56 @@ evaluation (internal):
 
 
 ast            : trim(both 'a' from 'aaabbaaa')
-raw expr       : trim_both(aaabbaaa, a)
-checked expr   : trim_both<String, String>(aaabbaaa, a)
+raw expr       : trim_both("aaabbaaa", "a")
+checked expr   : trim_both<String, String>("aaabbaaa", "a")
 output type    : String
 output domain  : {""..}
 output         : bb
 
 
 ast            : trim(both 'aa' from 'aaabbaaa')
-raw expr       : trim_both(aaabbaaa, aa)
-checked expr   : trim_both<String, String>(aaabbaaa, aa)
+raw expr       : trim_both("aaabbaaa", "aa")
+checked expr   : trim_both<String, String>("aaabbaaa", "aa")
 output type    : String
 output domain  : {""..}
 output         : abba
 
 
 ast            : trim(both 'a' from 'aaaaaaaa')
-raw expr       : trim_both(aaaaaaaa, a)
-checked expr   : trim_both<String, String>(aaaaaaaa, a)
+raw expr       : trim_both("aaaaaaaa", "a")
+checked expr   : trim_both<String, String>("aaaaaaaa", "a")
 output type    : String
 output domain  : {""..}
 output         : 
 
 
 ast            : trim(both 'b' from 'aaabbaaa')
-raw expr       : trim_both(aaabbaaa, b)
-checked expr   : trim_both<String, String>(aaabbaaa, b)
+raw expr       : trim_both("aaabbaaa", "b")
+checked expr   : trim_both<String, String>("aaabbaaa", "b")
 output type    : String
 output domain  : {""..}
 output         : aaabbaaa
 
 
 ast            : trim(both 'a' from NULL)
-raw expr       : trim_both(NULL, a)
-checked expr   : trim_both<NULL, String NULL>(NULL, CAST(a AS String NULL))
+raw expr       : trim_both(NULL, "a")
+checked expr   : trim_both<NULL, String NULL>(NULL, CAST("a" AS String NULL))
 output type    : NULL
 output domain  : {NULL}
 output         : NULL
 
 
 ast            : trim(both NULL from 'aaaaaaaa')
-raw expr       : trim_both(aaaaaaaa, NULL)
-checked expr   : trim_both<String NULL, NULL>(CAST(aaaaaaaa AS String NULL), NULL)
+raw expr       : trim_both("aaaaaaaa", NULL)
+checked expr   : trim_both<String NULL, NULL>(CAST("aaaaaaaa" AS String NULL), NULL)
 output type    : NULL
 output domain  : {NULL}
 output         : NULL
 
 
 ast            : trim(both 'a' from a)
-raw expr       : trim_both(ColumnRef(0)::String, a)
-checked expr   : trim_both<String, String>(ColumnRef(0), a)
+raw expr       : trim_both(ColumnRef(0)::String, "a")
+checked expr   : trim_both<String, String>(ColumnRef(0), "a")
 evaluation:
 +--------+-----------------------+-------------+--------+
 |        | a                     | b           | Output |
@@ -1178,56 +1178,56 @@ error:
 
 
 ast            : trim(leading 'a' from 'aaabbaaa')
-raw expr       : trim_leading(aaabbaaa, a)
-checked expr   : trim_leading<String, String>(aaabbaaa, a)
+raw expr       : trim_leading("aaabbaaa", "a")
+checked expr   : trim_leading<String, String>("aaabbaaa", "a")
 output type    : String
 output domain  : {""..}
 output         : bbaaa
 
 
 ast            : trim(leading 'aa' from 'aaabbaaa')
-raw expr       : trim_leading(aaabbaaa, aa)
-checked expr   : trim_leading<String, String>(aaabbaaa, aa)
+raw expr       : trim_leading("aaabbaaa", "aa")
+checked expr   : trim_leading<String, String>("aaabbaaa", "aa")
 output type    : String
 output domain  : {""..}
 output         : abbaaa
 
 
 ast            : trim(leading 'a' from 'aaaaaaaa')
-raw expr       : trim_leading(aaaaaaaa, a)
-checked expr   : trim_leading<String, String>(aaaaaaaa, a)
+raw expr       : trim_leading("aaaaaaaa", "a")
+checked expr   : trim_leading<String, String>("aaaaaaaa", "a")
 output type    : String
 output domain  : {""..}
 output         : 
 
 
 ast            : trim(leading 'b' from 'aaabbaaa')
-raw expr       : trim_leading(aaabbaaa, b)
-checked expr   : trim_leading<String, String>(aaabbaaa, b)
+raw expr       : trim_leading("aaabbaaa", "b")
+checked expr   : trim_leading<String, String>("aaabbaaa", "b")
 output type    : String
 output domain  : {""..}
 output         : aaabbaaa
 
 
 ast            : trim(leading 'a' from NULL)
-raw expr       : trim_leading(NULL, a)
-checked expr   : trim_leading<NULL, String NULL>(NULL, CAST(a AS String NULL))
+raw expr       : trim_leading(NULL, "a")
+checked expr   : trim_leading<NULL, String NULL>(NULL, CAST("a" AS String NULL))
 output type    : NULL
 output domain  : {NULL}
 output         : NULL
 
 
 ast            : trim(leading NULL from 'aaaaaaaa')
-raw expr       : trim_leading(aaaaaaaa, NULL)
-checked expr   : trim_leading<String NULL, NULL>(CAST(aaaaaaaa AS String NULL), NULL)
+raw expr       : trim_leading("aaaaaaaa", NULL)
+checked expr   : trim_leading<String NULL, NULL>(CAST("aaaaaaaa" AS String NULL), NULL)
 output type    : NULL
 output domain  : {NULL}
 output         : NULL
 
 
 ast            : trim(leading 'a' from a)
-raw expr       : trim_leading(ColumnRef(0)::String, a)
-checked expr   : trim_leading<String, String>(ColumnRef(0), a)
+raw expr       : trim_leading(ColumnRef(0)::String, "a")
+checked expr   : trim_leading<String, String>(ColumnRef(0), "a")
 evaluation:
 +--------+-----------------------+-------------+--------+
 |        | a                     | b           | Output |
@@ -1303,56 +1303,56 @@ error:
 
 
 ast            : trim(trailing 'a' from 'aaabbaaa')
-raw expr       : trim_trailing(aaabbaaa, a)
-checked expr   : trim_trailing<String, String>(aaabbaaa, a)
+raw expr       : trim_trailing("aaabbaaa", "a")
+checked expr   : trim_trailing<String, String>("aaabbaaa", "a")
 output type    : String
 output domain  : {""..}
 output         : aaabb
 
 
 ast            : trim(trailing 'aa' from 'aaabbaaa')
-raw expr       : trim_trailing(aaabbaaa, aa)
-checked expr   : trim_trailing<String, String>(aaabbaaa, aa)
+raw expr       : trim_trailing("aaabbaaa", "aa")
+checked expr   : trim_trailing<String, String>("aaabbaaa", "aa")
 output type    : String
 output domain  : {""..}
 output         : aaabba
 
 
 ast            : trim(trailing 'a' from 'aaaaaaaa')
-raw expr       : trim_trailing(aaaaaaaa, a)
-checked expr   : trim_trailing<String, String>(aaaaaaaa, a)
+raw expr       : trim_trailing("aaaaaaaa", "a")
+checked expr   : trim_trailing<String, String>("aaaaaaaa", "a")
 output type    : String
 output domain  : {""..}
 output         : 
 
 
 ast            : trim(trailing 'b' from 'aaabbaaa')
-raw expr       : trim_trailing(aaabbaaa, b)
-checked expr   : trim_trailing<String, String>(aaabbaaa, b)
+raw expr       : trim_trailing("aaabbaaa", "b")
+checked expr   : trim_trailing<String, String>("aaabbaaa", "b")
 output type    : String
 output domain  : {""..}
 output         : aaabbaaa
 
 
 ast            : trim(trailing 'a' from NULL)
-raw expr       : trim_trailing(NULL, a)
-checked expr   : trim_trailing<NULL, String NULL>(NULL, CAST(a AS String NULL))
+raw expr       : trim_trailing(NULL, "a")
+checked expr   : trim_trailing<NULL, String NULL>(NULL, CAST("a" AS String NULL))
 output type    : NULL
 output domain  : {NULL}
 output         : NULL
 
 
 ast            : trim(trailing NULL from 'aaaaaaaa')
-raw expr       : trim_trailing(aaaaaaaa, NULL)
-checked expr   : trim_trailing<String NULL, NULL>(CAST(aaaaaaaa AS String NULL), NULL)
+raw expr       : trim_trailing("aaaaaaaa", NULL)
+checked expr   : trim_trailing<String NULL, NULL>(CAST("aaaaaaaa" AS String NULL), NULL)
 output type    : NULL
 output domain  : {NULL}
 output         : NULL
 
 
 ast            : trim(trailing 'a' from a)
-raw expr       : trim_trailing(ColumnRef(0)::String, a)
-checked expr   : trim_trailing<String, String>(ColumnRef(0), a)
+raw expr       : trim_trailing(ColumnRef(0)::String, "a")
+checked expr   : trim_trailing<String, String>(ColumnRef(0), "a")
 evaluation:
 +--------+-----------------------+-------------+--------+
 |        | a                     | b           | Output |
