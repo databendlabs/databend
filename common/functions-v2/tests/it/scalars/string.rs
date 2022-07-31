@@ -139,6 +139,9 @@ fn test_reverse(file: &mut impl Write) {
     run_ast(file, "reverse('abc')", &[]);
     run_ast(file, "reverse('a')", &[]);
     run_ast(file, "reverse('')", &[]);
+    run_ast(file, "reverse('你好')", &[]);
+    run_ast(file, "reverse('ß😀山')", &[]);
+    run_ast(file, "reverse('Dobrý den')", &[]);
     run_ast(file, "reverse(Null)", &[]);
     run_ast(file, "reverse(a)", &[(
         "a",

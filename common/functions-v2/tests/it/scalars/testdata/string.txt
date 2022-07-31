@@ -311,90 +311,88 @@ evaluation (internal):
 
 
 ast            : quote('a\0b')
-raw expr       : quote(a b)
-checked expr   : quote<String>(a b)
+raw expr       : quote("a\0b")
+checked expr   : quote<String>("a\0b")
 output type    : String
 output domain  : {""..}
 output         : a\0b
 
 
 ast            : quote('a\'b')
-raw expr       : quote(a'b)
-checked expr   : quote<String>(a'b)
+raw expr       : quote("a'b")
+checked expr   : quote<String>("a'b")
 output type    : String
 output domain  : {""..}
 output         : a\'b
 
 
 ast            : quote('a\"b')
-raw expr       : quote(a"b)
-checked expr   : quote<String>(a"b)
+raw expr       : quote("a\"b")
+checked expr   : quote<String>("a\"b")
 output type    : String
 output domain  : {""..}
 output         : a\"b
 
 
 ast            : quote('a\bb')
-raw expr       : quote(ab)
-checked expr   : quote<String>(ab)
+raw expr       : quote("a\u{8}b")
+checked expr   : quote<String>("a\u{8}b")
 output type    : String
 output domain  : {""..}
 output         : a\bb
 
 
 ast            : quote('a\nb')
-raw expr       : quote(a
-b)
-checked expr   : quote<String>(a
-b)
+raw expr       : quote("a\nb")
+checked expr   : quote<String>("a\nb")
 output type    : String
 output domain  : {""..}
 output         : a\nb
 
 
 ast            : quote('a\rb')
-raw expr       : quote(ab)
-checked expr   : quote<String>(ab)
+raw expr       : quote("a\rb")
+checked expr   : quote<String>("a\rb")
 output type    : String
 output domain  : {""..}
 output         : a\rb
 
 
 ast            : quote('a\tb')
-raw expr       : quote(a	b)
-checked expr   : quote<String>(a	b)
+raw expr       : quote("a\tb")
+checked expr   : quote<String>("a\tb")
 output type    : String
 output domain  : {""..}
 output         : a\tb
 
 
 ast            : quote('a\\b')
-raw expr       : quote(a\b)
-checked expr   : quote<String>(a\b)
+raw expr       : quote("a\\b")
+checked expr   : quote<String>("a\\b")
 output type    : String
 output domain  : {""..}
 output         : a\\b
 
 
 ast            : quote('你好')
-raw expr       : quote(你好)
-checked expr   : quote<String>(你好)
+raw expr       : quote("你好")
+checked expr   : quote<String>("你好")
 output type    : String
 output domain  : {""..}
 output         : 你好
 
 
 ast            : quote('ß😀山')
-raw expr       : quote(ß😀山)
-checked expr   : quote<String>(ß😀山)
+raw expr       : quote("ß😀山")
+checked expr   : quote<String>("ß😀山")
 output type    : String
 output domain  : {""..}
 output         : ß😀山
 
 
 ast            : quote('Dobrý den')
-raw expr       : quote(Dobrý den)
-checked expr   : quote<String>(Dobrý den)
+raw expr       : quote("Dobrý den")
+checked expr   : quote<String>("Dobrý den")
 output type    : String
 output domain  : {""..}
 output         : Dobrý den
@@ -431,27 +429,51 @@ evaluation (internal):
 
 
 ast            : reverse('abc')
-raw expr       : reverse(abc)
-checked expr   : reverse<String>(abc)
+raw expr       : reverse("abc")
+checked expr   : reverse<String>("abc")
 output type    : String
 output domain  : {""..}
 output         : cba
 
 
 ast            : reverse('a')
-raw expr       : reverse(a)
-checked expr   : reverse<String>(a)
+raw expr       : reverse("a")
+checked expr   : reverse<String>("a")
 output type    : String
 output domain  : {""..}
 output         : a
 
 
 ast            : reverse('')
-raw expr       : reverse()
-checked expr   : reverse<String>()
+raw expr       : reverse("")
+checked expr   : reverse<String>("")
 output type    : String
 output domain  : {""..}
 output         : 
+
+
+ast            : reverse('你好')
+raw expr       : reverse("你好")
+checked expr   : reverse<String>("你好")
+output type    : String
+output domain  : {""..}
+output         : ��堽�
+
+
+ast            : reverse('ß😀山')
+raw expr       : reverse("ß😀山")
+checked expr   : reverse<String>("ß😀山")
+output type    : String
+output domain  : {""..}
+output         : ��倘���
+
+
+ast            : reverse('Dobrý den')
+raw expr       : reverse("Dobrý den")
+checked expr   : reverse<String>("Dobrý den")
+output type    : String
+output domain  : {""..}
+output         : ned ��rboD
 
 
 ast            : reverse(Null)
@@ -485,48 +507,48 @@ evaluation (internal):
 
 
 ast            : ascii('1')
-raw expr       : ascii(1)
-checked expr   : ascii<String>(1)
+raw expr       : ascii("1")
+checked expr   : ascii<String>("1")
 output type    : UInt8
 output domain  : {49..=49}
 output         : 49
 
 
 ast            : ascii('123')
-raw expr       : ascii(123)
-checked expr   : ascii<String>(123)
+raw expr       : ascii("123")
+checked expr   : ascii<String>("123")
 output type    : UInt8
 output domain  : {49..=49}
 output         : 49
 
 
 ast            : ascii('-1')
-raw expr       : ascii(-1)
-checked expr   : ascii<String>(-1)
+raw expr       : ascii("-1")
+checked expr   : ascii<String>("-1")
 output type    : UInt8
 output domain  : {45..=45}
 output         : 45
 
 
 ast            : ascii('')
-raw expr       : ascii()
-checked expr   : ascii<String>()
+raw expr       : ascii("")
+checked expr   : ascii<String>("")
 output type    : UInt8
 output domain  : {0..=0}
 output         : 0
 
 
 ast            : ascii('你好')
-raw expr       : ascii(你好)
-checked expr   : ascii<String>(你好)
+raw expr       : ascii("你好")
+checked expr   : ascii<String>("你好")
 output type    : UInt8
 output domain  : {228..=228}
 output         : 228
 
 
 ast            : ascii('😀123')
-raw expr       : ascii(😀123)
-checked expr   : ascii<String>(😀123)
+raw expr       : ascii("😀123")
+checked expr   : ascii<String>("😀123")
 output type    : UInt8
 output domain  : {240..=240}
 output         : 240
