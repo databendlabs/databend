@@ -251,7 +251,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "trim_leading",
         FunctionProperty::default(),
         |_, _| None,
-        vectorize_two_string_to_string_from_trim(
+        vectorize_string_to_string_2_arg(
             |_| 0,
             |val, trim_str, writer| {
                 let chunk_size = trim_str.len();
@@ -272,7 +272,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "trim_trailing",
         FunctionProperty::default(),
         |_, _| None,
-        vectorize_two_string_to_string_from_trim(
+        vectorize_string_to_string_2_arg(
             |_| 0,
             |val, trim_str, writer| {
                 let chunk_size = trim_str.len();
@@ -293,7 +293,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "trim_both",
         FunctionProperty::default(),
         |_, _| None,
-        vectorize_two_string_to_string_from_trim(
+        vectorize_string_to_string_2_arg(
             |_| 0,
             |val, trim_str, writer| {
                 let chunk_size = trim_str.len();
@@ -352,9 +352,7 @@ fn vectorize_string_to_string(
 }
 
 // Vectorize (string, string) -> string function with customer estimate_bytes.
-// This function is only used for trim_[leading|trailing|both] function.
-// When arg1 is a scalar, arg2 must be a scalar.
-fn vectorize_two_string_to_string_from_trim(
+fn vectorize_string_to_string_2_arg(
     estimate_bytes: impl Fn(&StringColumn) -> usize + Copy,
     func: impl Fn(&[u8], &[u8], &mut StringColumnBuilder) -> Result<(), String> + Copy,
 ) -> impl Fn(
@@ -364,34 +362,35 @@ fn vectorize_two_string_to_string_from_trim(
 ) -> Result<Value<StringType>, String>
 + Copy {
     move |arg1, arg2, _| match (arg1, arg2) {
-        (ValueRef::Scalar(val), ValueRef::Scalar(trim_str)) => {
+        (ValueRef::Scalar(arg1), ValueRef::Scalar(arg2)) => {
             let mut builder = StringColumnBuilder::with_capacity(1, 0);
-            func(val, trim_str, &mut builder)?;
+            func(arg1, arg2, &mut builder)?;
             Ok(Value::Scalar(builder.build_scalar()))
         }
-        (ValueRef::Column(col), ValueRef::Scalar(trim_str)) => {
-            let data_capacity = estimate_bytes(&col);
-            let mut builder = StringColumnBuilder::with_capacity(col.len(), data_capacity);
-            for val in col.iter() {
-                func(val, trim_str, &mut builder)?;
+        (ValueRef::Scalar(arg1), ValueRef::Column(arg2)) => {
+            let data_capacity = estimate_bytes(&arg2);
+            let mut builder = StringColumnBuilder::with_capacity(arg2.len(), data_capacity);
+            for val in arg2.iter() {
+                func(arg1, val, &mut builder)?;
             }
             Ok(Value::Column(builder.build()))
         }
-        (ValueRef::Column(col), ValueRef::Column(trim_str)) => {
-            let data_capacity = estimate_bytes(&col);
-            let mut builder = StringColumnBuilder::with_capacity(col.len(), data_capacity);
-            for (idx, val) in col.iter().enumerate() {
-                if let Some(trim_val) = trim_str.index(idx) {
-                    func(val, trim_val, &mut builder)?;
-                } else {
-                    return Err(format!("Column length mismatch at index {}", idx));
-                }
+        (ValueRef::Column(arg1), ValueRef::Scalar(arg2)) => {
+            let data_capacity = estimate_bytes(&arg1);
+            let mut builder = StringColumnBuilder::with_capacity(arg1.len(), data_capacity);
+            for val in arg1.iter() {
+                func(val, arg2, &mut builder)?;
             }
             Ok(Value::Column(builder.build()))
         }
-        (_, _) => {
-            // Unreacachable. If arg1 is a scalar, arg2 must be a scalar.
-            Err("Unreachable".to_string())
+        (ValueRef::Column(arg1), ValueRef::Column(arg2)) => {
+            let data_capacity = estimate_bytes(&arg1);
+            let mut builder = StringColumnBuilder::with_capacity(arg1.len(), data_capacity);
+            let iter = arg1.iter().zip(arg2.iter());
+            for (val1, val2) in iter {
+                func(val1, val2, &mut builder)?;
+            }
+            Ok(Value::Column(builder.build()))
         }
     }
 }

@@ -217,7 +217,6 @@ fn test_trim_leading(file: &mut impl Write) {
 
     run_ast(file, "trim_leading(a, 'a')", &table);
     run_ast(file, "trim_leading(a, b)", &table);
-    run_ast(file, "trim_leading('aaaaabbbbb', b)", &table);
 }
 
 fn test_trim_trailing(file: &mut impl Write) {
@@ -239,7 +238,6 @@ fn test_trim_trailing(file: &mut impl Write) {
 
     run_ast(file, "trim_trailing(a, 'b')", &table);
     run_ast(file, "trim_trailing(a, b)", &table);
-    run_ast(file, "trim_trailing('aaaaabbbbb', b)", &table);
 }
 
 fn test_trim_both(file: &mut impl Write) {
@@ -261,7 +259,6 @@ fn test_trim_both(file: &mut impl Write) {
 
     run_ast(file, "trim_both(a, 'a')", &table);
     run_ast(file, "trim_both(a, b)", &table);
-    run_ast(file, "trim_both('aaabbaaa', b)", &table);
 }
 
 fn test_trim_with_from(file: &mut impl Write, trim_where: &str) {
@@ -320,11 +317,6 @@ fn test_trim_with_from(file: &mut impl Write, trim_where: &str) {
     run_ast(
         file,
         format!("trim({} a from a)", trim_where).as_str(),
-        &table,
-    );
-    run_ast(
-        file,
-        format!("trim({} a from 'a')", trim_where).as_str(),
         &table,
     );
 }

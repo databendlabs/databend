@@ -793,14 +793,6 @@ evaluation (internal):
 +--------+------------------------------------------------------------------------------------------------------------------------------------+
 
 
-error: 
-  --> SQL:1:1
-  |
-1 | trim_leading('aaaaabbbbb', b)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Unreachable
-
-
-
 ast            : trim_trailing('aaaaabbbbb', 'b')
 raw expr       : trim_trailing("aaaaabbbbb", "b")
 checked expr   : trim_trailing<String, String>("aaaaabbbbb", "b")
@@ -895,14 +887,6 @@ evaluation (internal):
 +--------+------------------------------------------------------------------------------------------------------------------------------------+
 
 
-error: 
-  --> SQL:1:1
-  |
-1 | trim_trailing('aaaaabbbbb', b)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Unreachable
-
-
-
 ast            : trim_both('aaabbaaa', 'a')
 raw expr       : trim_both("aaabbaaa", "a")
 checked expr   : trim_both<String, String>("aaabbaaa", "a")
@@ -995,14 +979,6 @@ evaluation (internal):
 | b      | String(StringColumn { data: [97, 98, 99], offsets: [0, 1, 2, 3] })                                                                 |
 | Output | String(StringColumn { data: [98, 98, 99, 99, 100, 100], offsets: [0, 2, 4, 6] })                                                   |
 +--------+------------------------------------------------------------------------------------------------------------------------------------+
-
-
-error: 
-  --> SQL:1:1
-  |
-1 | trim_both('aaabbaaa', b)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^ Unreachable
-
 
 
 ast            : trim('   abc   ')
@@ -1169,14 +1145,6 @@ evaluation (internal):
 +--------+------------------------------------------------------------------------------------------------------------------------------------+
 
 
-error: 
-  --> SQL:1:1
-  |
-1 | trim(both a from 'a')
-  | ^^^^^^^^^^^^^^^^^^^^^ Unreachable
-
-
-
 ast            : trim(leading 'a' from 'aaabbaaa')
 raw expr       : trim_leading("aaabbaaa", "a")
 checked expr   : trim_leading<String, String>("aaabbaaa", "a")
@@ -1294,14 +1262,6 @@ evaluation (internal):
 +--------+------------------------------------------------------------------------------------------------------------------------------------+
 
 
-error: 
-  --> SQL:1:1
-  |
-1 | trim(leading a from 'a')
-  | ^^^^^^^^^^^^^^^^^^^^^^^^ Unreachable
-
-
-
 ast            : trim(trailing 'a' from 'aaabbaaa')
 raw expr       : trim_trailing("aaabbaaa", "a")
 checked expr   : trim_trailing<String, String>("aaabbaaa", "a")
@@ -1417,13 +1377,5 @@ evaluation (internal):
 | b      | String(StringColumn { data: [97, 98, 99], offsets: [0, 1, 2, 3] })                                                                 |
 | Output | String(StringColumn { data: [], offsets: [0, 0, 0, 0] })                                                                           |
 +--------+------------------------------------------------------------------------------------------------------------------------------------+
-
-
-error: 
-  --> SQL:1:1
-  |
-1 | trim(trailing a from 'a')
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^ Unreachable
-
 
 
