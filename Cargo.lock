@@ -5421,9 +5421,9 @@ checksum = "60f6ce597ecdcc9a098e7fddacb1065093a3d66446fa16c675e7e71d1b5c28e6"
 
 [[package]]
 name = "portable-atomic"
-version = "0.3.5"
+version = "0.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1654896da79c77034c75be3b2866e7c6fa4ac820b727c2aa5bd146c9076fd16f"
+checksum = "08de264ca96f6608695b601d0203834ebae356fbd6338f55748f42e9fbb58a33"
 
 [[package]]
 name = "pprof"
