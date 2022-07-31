@@ -61,7 +61,7 @@ impl Display for Chunk {
         let mut table = Table::new();
         table.load_preset("||--+-++|    ++++++");
 
-        table.set_header((0..self.num_columns()).map(|idx| format!("Value {idx}")));
+        table.set_header((0..self.num_columns()).map(|idx| format!("Column {idx}")));
 
         for index in 0..self.num_rows() {
             let row: Vec<_> = self
