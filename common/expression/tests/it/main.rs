@@ -953,10 +953,7 @@ fn run_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType, Column
         let domain_calculator = DomainCalculator::new(input_domains.clone());
         let output_domain = domain_calculator.calculate(&expr)?;
 
-        let mut num_rows = 0;
-        if !columns.is_empty() {
-            num_rows = columns[0].2.len();
-        }
+        let num_rows = columns.iter(|col| col.2.len()).max().unwrap_or(0);
         let chunk = Chunk::new(
             columns
                 .iter()
