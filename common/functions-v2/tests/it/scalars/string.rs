@@ -124,6 +124,9 @@ fn test_quote(file: &mut impl Write) {
     run_ast(file, r#"quote('a\rb')"#, &[]);
     run_ast(file, r#"quote('a\tb')"#, &[]);
     run_ast(file, r#"quote('a\\b')"#, &[]);
+    run_ast(file, "quote('你好')", &[]);
+    run_ast(file, "quote('ß😀山')", &[]);
+    run_ast(file, "quote('Dobrý den')", &[]);
     run_ast(file, "quote(Null)", &[]);
     run_ast(file, "quote(a)", &[(
         "a",
@@ -149,11 +152,18 @@ fn test_ascii(file: &mut impl Write) {
     run_ast(file, "ascii('123')", &[]);
     run_ast(file, "ascii('-1')", &[]);
     run_ast(file, "ascii('')", &[]);
+    run_ast(file, "ascii('你好')", &[]);
+    run_ast(file, "ascii('😀123')", &[]);
     run_ast(file, "ascii(Null)", &[]);
     run_ast(file, "ascii(a)", &[(
         "a",
         DataType::String,
-        build_string_column(&["1", "", "123", "-1"]),
+        build_string_column(&["1", "123", "-1", "你好"]),
+    )]);
+    run_ast(file, "ascii(b)", &[(
+        "b",
+        DataType::String,
+        build_string_column(&[""]),
     )])
 }
 

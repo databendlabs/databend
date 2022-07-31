@@ -22,6 +22,7 @@ use common_expression::types::NumberType;
 use common_expression::types::StringType;
 use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
+use common_expression::UIntDomain;
 use common_expression::Value;
 use common_expression::ValueRef;
 
@@ -180,7 +181,16 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_1_arg::<StringType, NumberType<u8>, _, _>(
         "ascii",
         FunctionProperty::default(),
-        |_| None,
+        |domain| {
+            Some(UIntDomain {
+                min: domain.min.first().cloned().unwrap_or_default() as u64,
+                max: domain
+                    .max
+                    .as_ref()
+                    .map(|v| v.first().cloned().unwrap_or_default())
+                    .unwrap_or(u8::MAX) as u64,
+            })
+        },
         |val| val.first().cloned().unwrap_or_default(),
     );
 }

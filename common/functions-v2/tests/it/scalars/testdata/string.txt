@@ -376,6 +376,30 @@ output domain  : {""..}
 output         : a\\b
 
 
+ast            : quote('你好')
+raw expr       : quote(你好)
+checked expr   : quote<String>(你好)
+output type    : String
+output domain  : {""..}
+output         : 你好
+
+
+ast            : quote('ß😀山')
+raw expr       : quote(ß😀山)
+checked expr   : quote<String>(ß😀山)
+output type    : String
+output domain  : {""..}
+output         : ß😀山
+
+
+ast            : quote('Dobrý den')
+raw expr       : quote(Dobrý den)
+checked expr   : quote<String>(Dobrý den)
+output type    : String
+output domain  : {""..}
+output         : Dobrý den
+
+
 ast            : quote(Null)
 raw expr       : quote(NULL)
 checked expr   : quote<NULL>(NULL)
@@ -464,7 +488,7 @@ ast            : ascii('1')
 raw expr       : ascii(1)
 checked expr   : ascii<String>(1)
 output type    : UInt8
-output domain  : {0..=255}
+output domain  : {49..=49}
 output         : 49
 
 
@@ -472,7 +496,7 @@ ast            : ascii('123')
 raw expr       : ascii(123)
 checked expr   : ascii<String>(123)
 output type    : UInt8
-output domain  : {0..=255}
+output domain  : {49..=49}
 output         : 49
 
 
@@ -480,7 +504,7 @@ ast            : ascii('-1')
 raw expr       : ascii(-1)
 checked expr   : ascii<String>(-1)
 output type    : UInt8
-output domain  : {0..=255}
+output domain  : {45..=45}
 output         : 45
 
 
@@ -488,8 +512,24 @@ ast            : ascii('')
 raw expr       : ascii()
 checked expr   : ascii<String>()
 output type    : UInt8
-output domain  : {0..=255}
+output domain  : {0..=0}
 output         : 0
+
+
+ast            : ascii('你好')
+raw expr       : ascii(你好)
+checked expr   : ascii<String>(你好)
+output type    : UInt8
+output domain  : {228..=228}
+output         : 228
+
+
+ast            : ascii('😀123')
+raw expr       : ascii(😀123)
+checked expr   : ascii<String>(😀123)
+output type    : UInt8
+output domain  : {240..=240}
+output         : 240
 
 
 ast            : ascii(Null)
@@ -504,22 +544,42 @@ ast            : ascii(a)
 raw expr       : ascii(ColumnRef(0)::String)
 checked expr   : ascii<String>(ColumnRef(0))
 evaluation:
-+--------+--------------+-----------+
-|        | a            | Output    |
-+--------+--------------+-----------+
-| Type   | String       | UInt8     |
-| Domain | {""..="123"} | {0..=255} |
-| Row 0  | 1            | 49        |
-| Row 1  |              | 0         |
-| Row 2  | 123          | 49        |
-| Row 3  | -1           | 45        |
-+--------+--------------+-----------+
++--------+-----------------+------------+
+|        | a               | Output     |
++--------+-----------------+------------+
+| Type   | String          | UInt8      |
+| Domain | {"-1"..="你好"} | {45..=228} |
+| Row 0  | 1               | 49         |
+| Row 1  | 123             | 49         |
+| Row 2  | -1              | 45         |
+| Row 3  | 你好            | 228        |
++--------+-----------------+------------+
 evaluation (internal):
-+--------+-----------------------------------------------------------------------------------+
-| Column | Data                                                                              |
-+--------+-----------------------------------------------------------------------------------+
-| a      | String(StringColumn { data: [49, 49, 50, 51, 45, 49], offsets: [0, 1, 1, 4, 6] }) |
-| Output | UInt8([49, 0, 49, 45])                                                            |
-+--------+-----------------------------------------------------------------------------------+
++--------+------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                             |
++--------+------------------------------------------------------------------------------------------------------------------+
+| a      | String(StringColumn { data: [49, 49, 50, 51, 45, 49, 228, 189, 160, 229, 165, 189], offsets: [0, 1, 4, 6, 12] }) |
+| Output | UInt8([49, 49, 45, 228])                                                                                         |
++--------+------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : ascii(b)
+raw expr       : ascii(ColumnRef(0)::String)
+checked expr   : ascii<String>(ColumnRef(0))
+evaluation:
++--------+-----------+---------+
+|        | b         | Output  |
++--------+-----------+---------+
+| Type   | String    | UInt8   |
+| Domain | {""..=""} | {0..=0} |
+| Row 0  |           | 0       |
++--------+-----------+---------+
+evaluation (internal):
++--------+----------------------------------------------------+
+| Column | Data                                               |
++--------+----------------------------------------------------+
+| b      | String(StringColumn { data: [], offsets: [0, 0] }) |
+| Output | UInt8([0])                                         |
++--------+----------------------------------------------------+
 
 
