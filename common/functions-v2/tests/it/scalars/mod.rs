@@ -93,7 +93,7 @@ pub fn run_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType, Co
                 Value::Scalar(output_scalar) => {
                     writeln!(file, "output type    : {output_ty}").unwrap();
                     writeln!(file, "output domain  : {output_domain}").unwrap();
-                    writeln!(file, "output         : {:?}", output_scalar.as_ref()).unwrap();
+                    writeln!(file, "output         : {}", output_scalar.as_ref()).unwrap();
                 }
                 Value::Column(output_col) => {
                     test_arrow_conversion(&output_col);
