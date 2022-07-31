@@ -42,6 +42,7 @@ fn test_string() {
     test_trim_leading(file);
     test_trim_trailing(file);
     test_trim_both(file);
+    test_trim(file);
 }
 
 fn test_upper(file: &mut impl Write) {
@@ -261,6 +262,88 @@ fn test_trim_both(file: &mut impl Write) {
     run_ast(file, "trim_both(a, 'a')", &table);
     run_ast(file, "trim_both(a, b)", &table);
     run_ast(file, "trim_both('aaabbaaa', b)", &table);
+}
+
+fn test_trim_with_from(file: &mut impl Write, trim_where: &str) {
+    assert!(matches!(trim_where, "both" | "leading" | "trailing"));
+
+    run_ast(
+        file,
+        format!("trim({} 'a' from 'aaabbaaa')", trim_where).as_str(),
+        &[],
+    );
+    run_ast(
+        file,
+        format!("trim({} 'aa' from 'aaabbaaa')", trim_where).as_str(),
+        &[],
+    );
+    run_ast(
+        file,
+        format!("trim({} 'a' from 'aaaaaaaa')", trim_where).as_str(),
+        &[],
+    );
+    run_ast(
+        file,
+        format!("trim({} 'b' from 'aaabbaaa')", trim_where).as_str(),
+        &[],
+    );
+    run_ast(
+        file,
+        format!("trim({} 'a' from NULL)", trim_where).as_str(),
+        &[],
+    );
+    run_ast(
+        file,
+        format!("trim({} NULL from 'aaaaaaaa')", trim_where).as_str(),
+        &[],
+    );
+
+    let table = [
+        (
+            "a",
+            DataType::String,
+            build_string_column(&["aabbaa", "bbccbb", "ccddcc"]),
+        ),
+        ("b", DataType::String, build_string_column(&["a", "b", "c"])),
+    ];
+
+    run_ast(
+        file,
+        format!("trim({} 'a' from a)", trim_where).as_str(),
+        &table,
+    );
+    run_ast(
+        file,
+        format!("trim({} b from a)", trim_where).as_str(),
+        &table,
+    );
+    run_ast(
+        file,
+        format!("trim({} a from a)", trim_where).as_str(),
+        &table,
+    );
+    run_ast(
+        file,
+        format!("trim({} a from 'a')", trim_where).as_str(),
+        &table,
+    );
+}
+
+fn test_trim(file: &mut impl Write) {
+    // TRIM(<expr>)
+    run_ast(file, "trim('   abc   ')", &[]);
+    run_ast(file, "trim('  ')", &[]);
+    run_ast(file, "trim(NULL)", &[]);
+    run_ast(file, "trim(a)", &[(
+        "a",
+        DataType::String,
+        build_string_column(&["abc", "   abc", "   abc   ", "abc   "]),
+    )]);
+
+    // TRIM([[BOTH | LEADING | TRAILING] <expr> FROM] <expr>)
+    test_trim_with_from(file, "both");
+    test_trim_with_from(file, "leading");
+    test_trim_with_from(file, "trailing");
 }
 
 fn build_string_column(strings: &[&str]) -> Column {

@@ -229,6 +229,24 @@ pub fn register(registry: &mut FunctionRegistry) {
         ),
     );
 
+    registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
+        "trim",
+        FunctionProperty::default(),
+        |_| None,
+        vectorize_string_to_string(
+            |_| 0,
+            |val, writer| {
+                let start_pos = val.iter().position(|ch| *ch != b' ' && *ch != b'\t');
+                let end_pos = val.iter().rev().position(|ch| *ch != b' ' && *ch != b'\t');
+                if let (Some(start_idx), Some(end_idx)) = (start_pos, end_pos) {
+                    writer.put_slice(&val.as_bytes()[start_idx..val.len() - end_idx]);
+                }
+                writer.commit_row();
+                Ok(())
+            },
+        ),
+    );
+
     registry.register_passthrough_nullable_2_arg::<StringType, StringType, StringType, _, _>(
         "trim_leading",
         FunctionProperty::default(),
