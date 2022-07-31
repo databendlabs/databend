@@ -1,16 +1,18 @@
-onlyif mysql
 statement ok
 set enable_planner_v2 = 1;
 
-onlyif mysql
+statement ok
+DROP TABLE IF EXISTS c;
+
+statement ok
+DROP TABLE IF EXISTS o;
+
 statement ok
 CREATE TABLE c (c_id INT NULL, bill VARCHAR NULL);
 
-onlyif mysql
 statement ok
 CREATE TABLE o (o_id INT NULL, c_id INT NULL, ship VARCHAR NULL);
 
-onlyif mysql
 statement ok
 INSERT INTO c VALUES
     (1, 'CA'),
@@ -20,7 +22,6 @@ INSERT INTO c VALUES
     (5, NULL),
     (6, 'FL');
 
-onlyif mysql
 statement ok
 INSERT INTO o VALUES
     (10, 1, 'CA'), (20, 1, 'CA'), (30, 1, 'CA'),
@@ -30,7 +31,6 @@ INSERT INTO o VALUES
 
 # Subquery in WHERE clause
 
-onlyif mysql
 statement query IT
 SELECT * FROM c WHERE EXISTS(SELECT * FROM o WHERE o.c_id=c.c_id);
 
@@ -40,7 +40,6 @@ SELECT * FROM c WHERE EXISTS(SELECT * FROM o WHERE o.c_id=c.c_id);
 4  TX
 6  FL
 
-onlyif mysql
 statement query IT
 SELECT * FROM c WHERE NOT EXISTS(SELECT * FROM o WHERE o.c_id=c.c_id);
 
@@ -48,7 +47,6 @@ SELECT * FROM c WHERE NOT EXISTS(SELECT * FROM o WHERE o.c_id=c.c_id);
 3  MA
 5  NULL
 
-onlyif mysql
 statement query IT
 SELECT *
 FROM c
@@ -64,7 +62,6 @@ WHERE
 5  NULL
 6  FL
 
-onlyif mysql
 statement query IT
 SELECT * FROM c WHERE EXISTS(SELECT * FROM o WHERE o.c_id=c.c_id AND c.bill='TX');
 
@@ -72,14 +69,12 @@ SELECT * FROM c WHERE EXISTS(SELECT * FROM o WHERE o.c_id=c.c_id AND c.bill='TX'
 2  TX
 4  TX
 
-onlyif mysql
 statement query IT
 SELECT * FROM c WHERE 'WY' IN (SELECT ship FROM o WHERE o.c_id=c.c_id);
 
 ----
 4  TX
 
-onlyif mysql
 statement query IT
 SELECT *
 FROM c
@@ -91,7 +86,6 @@ WHERE
 4  TX
 6  FL
 
-onlyif mysql
 statement query IT
 SELECT *
 FROM c
@@ -102,7 +96,6 @@ WHERE
 ----
 1  CA
 
-onlyif mysql
 statement query IT
 SELECT * FROM c WHERE bill IN (SELECT ship FROM o WHERE o.c_id=c.c_id);
 
@@ -110,7 +103,7 @@ SELECT * FROM c WHERE bill IN (SELECT ship FROM o WHERE o.c_id=c.c_id);
 1  CA
 2  TX
 
-onlyif mysql
+
 statement query IT
 SELECT * FROM c WHERE bill = ALL(SELECT ship FROM o WHERE o.c_id=c.c_id);
 
@@ -119,7 +112,7 @@ SELECT * FROM c WHERE bill = ALL(SELECT ship FROM o WHERE o.c_id=c.c_id);
 3  MA
 5  NULL
 
-onlyif mysql
+
 statement query IT
 SELECT * FROM c WHERE bill < ANY(SELECT ship FROM o WHERE o.c_id=c.c_id);
 
@@ -127,14 +120,14 @@ SELECT * FROM c WHERE bill < ANY(SELECT ship FROM o WHERE o.c_id=c.c_id);
 4  TX
 6  FL
 
-onlyif mysql
+
 statement query IT
 SELECT * FROM c WHERE (bill < ANY(SELECT ship FROM o WHERE o.c_id=c.c_id)) IS NULL;
 
 ----
 2  TX
 
-onlyif mysql
+
 statement query IT
 SELECT * FROM c WHERE (bill < ANY(SELECT ship FROM o WHERE o.c_id=c.c_id)) IS NOT NULL;
 
@@ -145,21 +138,21 @@ SELECT * FROM c WHERE (bill < ANY(SELECT ship FROM o WHERE o.c_id=c.c_id)) IS NO
 5  NULL
 6  FL
 
-onlyif mysql
+
 statement query IT
 SELECT * FROM c WHERE bill > ANY(SELECT ship FROM o WHERE o.c_id=c.c_id);
 
 ----
 2  TX
 
-onlyif mysql
+
 statement query IT
 SELECT * FROM c WHERE (bill > ANY(SELECT ship FROM o WHERE o.c_id=c.c_id)) IS NULL;
 
 ----
 4  TX
 
-onlyif mysql
+
 statement query IT
 SELECT * FROM c WHERE (bill > ANY(SELECT ship FROM o WHERE o.c_id=c.c_id)) IS NOT NULL;
 
@@ -170,7 +163,7 @@ SELECT * FROM c WHERE (bill > ANY(SELECT ship FROM o WHERE o.c_id=c.c_id)) IS NO
 5  NULL
 6  FL
 
-onlyif mysql
+
 statement query IT
 SELECT * FROM c WHERE bill = ANY(SELECT ship FROM o);
 
@@ -179,7 +172,7 @@ SELECT * FROM c WHERE bill = ANY(SELECT ship FROM o);
 2  TX
 4  TX
 
-onlyif mysql
+
 statement query IT
 SELECT * FROM c WHERE bill = ANY(SELECT ship FROM o) OR bill IS NULL;
 
@@ -189,7 +182,7 @@ SELECT * FROM c WHERE bill = ANY(SELECT ship FROM o) OR bill IS NULL;
 4  TX
 5  NULL
 
-onlyif mysql
+
 statement query IT
 SELECT *
 FROM c
@@ -203,7 +196,7 @@ WHERE
 4  TX
 5  NULL
 
-onlyif mysql
+
 statement query IT
 SELECT *
 FROM c
@@ -214,7 +207,7 @@ WHERE
 ----
 1  CA
 
-onlyif mysql
+
 statement query IT
 SELECT * FROM c WHERE bill NOT IN (SELECT ship FROM o WHERE o.c_id=c.c_id);
 
@@ -223,7 +216,7 @@ SELECT * FROM c WHERE bill NOT IN (SELECT ship FROM o WHERE o.c_id=c.c_id);
 5  NULL
 6  FL
 
-onlyif mysql
+
 statement query IT
 SELECT * FROM c WHERE bill NOT IN (SELECT ship FROM o WHERE o.c_id=c.c_id AND ship IS NOT NULL);
 
@@ -233,7 +226,7 @@ SELECT * FROM c WHERE bill NOT IN (SELECT ship FROM o WHERE o.c_id=c.c_id AND sh
 5  NULL
 6  FL
 
-onlyif mysql
+
 statement query IT
 SELECT * FROM c WHERE bill NOT IN (SELECT ship FROM o WHERE o.c_id=c.c_id AND ship IS NULL);
 
@@ -243,7 +236,7 @@ SELECT * FROM c WHERE bill NOT IN (SELECT ship FROM o WHERE o.c_id=c.c_id AND sh
 5  NULL
 6  FL
 
-onlyif mysql
+
 statement query IT
 SELECT * FROM c WHERE (SELECT count(*) FROM o WHERE o.c_id=c.c_id) > 1;
 
@@ -252,7 +245,7 @@ SELECT * FROM c WHERE (SELECT count(*) FROM o WHERE o.c_id=c.c_id) > 1;
 2  TX
 4  TX
 
-onlyif mysql
+
 statement query IT
 SELECT * FROM c WHERE (SELECT count(ship) FROM o WHERE o.c_id=c.c_id) > 1;
 
@@ -260,7 +253,7 @@ SELECT * FROM c WHERE (SELECT count(ship) FROM o WHERE o.c_id=c.c_id) > 1;
 1  CA
 2  TX
 
-onlyif mysql
+
 statement query IT
 SELECT *
 FROM c
@@ -271,7 +264,7 @@ WHERE
 ----
 1  CA
 
-onlyif mysql
+
 statement query IT
 SELECT c_id, bill
 FROM c AS c2
@@ -287,13 +280,13 @@ WHERE EXISTS
 2  TX
 4  TX
 
-onlyif mysql
+
 statement ok
 SELECT *
 FROM c
 WHERE (SELECT o_id FROM o WHERE o.c_id=c.c_id AND ship='WY')=4;
 
-onlyif mysql
+
 statement query IT
 SELECT * FROM c WHERE c_id=(SELECT c_id FROM o WHERE ship='WA' AND bill='FL')
 
@@ -303,7 +296,7 @@ SELECT * FROM c WHERE c_id=(SELECT c_id FROM o WHERE ship='WA' AND bill='FL')
 
 # Subquery in SELECT clause
 
-onlyif mysql
+
 statement query IT
 SELECT c_id, EXISTS(SELECT * FROM o WHERE o.c_id=c.c_id) FROM c ORDER BY c_id;
 
@@ -315,7 +308,7 @@ SELECT c_id, EXISTS(SELECT * FROM o WHERE o.c_id=c.c_id) FROM c ORDER BY c_id;
 5  0
 6  1
 
-onlyif mysql
+
 statement query IT
 SELECT c_id, NOT EXISTS(SELECT * FROM o WHERE o.c_id=c.c_id) FROM c ORDER BY c_id;
 
@@ -327,7 +320,7 @@ SELECT c_id, NOT EXISTS(SELECT * FROM o WHERE o.c_id=c.c_id) FROM c ORDER BY c_i
 5  1
 6  0
 
-onlyif mysql
+
 statement query IT
 SELECT
     c_id,
@@ -344,7 +337,7 @@ ORDER BY c_id;
 5  1
 6  1
 
-onlyif mysql
+
 statement query IT
 SELECT c_id, EXISTS(SELECT * FROM o WHERE o.c_id=c.c_id AND c.bill='TX') FROM c ORDER BY c_id;
 
@@ -356,7 +349,7 @@ SELECT c_id, EXISTS(SELECT * FROM o WHERE o.c_id=c.c_id AND c.bill='TX') FROM c 
 5  0
 6  0
 
-onlyif mysql
+
 statement query IT
 SELECT c_id, 'WY' IN (SELECT ship FROM o WHERE o.c_id=c.c_id) FROM c ORDER BY c_id;
 
@@ -368,7 +361,7 @@ SELECT c_id, 'WY' IN (SELECT ship FROM o WHERE o.c_id=c.c_id) FROM c ORDER BY c_
 5  0
 6  0
 
-onlyif mysql
+
 statement query IT
 SELECT
     c_id,
@@ -385,7 +378,7 @@ ORDER BY c_id;
 5  0
 6  0
 
-onlyif mysql
+
 statement query IT
 SELECT c_id, bill = ALL(SELECT ship FROM o WHERE o.c_id=c.c_id) FROM c ORDER BY c_id;
 
@@ -397,7 +390,7 @@ SELECT c_id, bill = ALL(SELECT ship FROM o WHERE o.c_id=c.c_id) FROM c ORDER BY 
 5  1
 6  0
 
-onlyif mysql
+
 statement query IT
 SELECT c_id, bill NOT IN (SELECT ship FROM o WHERE o.c_id=c.c_id) FROM c ORDER BY c_id;
 
@@ -409,7 +402,7 @@ SELECT c_id, bill NOT IN (SELECT ship FROM o WHERE o.c_id=c.c_id) FROM c ORDER B
 5  1
 6  1
 
-onlyif mysql
+
 statement query IT
 SELECT c_id, bill NOT IN (SELECT ship FROM o WHERE o.c_id=c.c_id AND ship IS NOT NULL)
 FROM c
@@ -423,7 +416,7 @@ ORDER BY c_id;
 5  1
 6  1
 
-onlyif mysql
+
 statement query IT
 SELECT c_id, bill NOT IN (SELECT ship FROM o WHERE o.c_id=c.c_id AND ship IS NULL)
 FROM c
@@ -437,7 +430,7 @@ ORDER BY c_id;
 5  1
 6  1
 
-onlyif mysql
+
 statement query IT
 SELECT c_id, bill < ANY(SELECT ship FROM o WHERE o.c_id=c.c_id) FROM c ORDER BY c_id;
 
@@ -449,7 +442,7 @@ SELECT c_id, bill < ANY(SELECT ship FROM o WHERE o.c_id=c.c_id) FROM c ORDER BY 
 5  0
 6  1
 
-onlyif mysql
+
 statement query IT
 SELECT c_id, (bill < ANY(SELECT ship FROM o WHERE o.c_id=c.c_id)) IS NULL FROM c ORDER BY c_id;
 
@@ -461,7 +454,7 @@ SELECT c_id, (bill < ANY(SELECT ship FROM o WHERE o.c_id=c.c_id)) IS NULL FROM c
 5  0
 6  0
 
-onlyif mysql
+
 statement query IT
 SELECT c_id, (bill < ANY(SELECT ship FROM o WHERE o.c_id=c.c_id)) IS NOT NULL FROM c ORDER BY c_id;
 
@@ -473,7 +466,7 @@ SELECT c_id, (bill < ANY(SELECT ship FROM o WHERE o.c_id=c.c_id)) IS NOT NULL FR
 5  1
 6  1
 
-onlyif mysql
+
 statement query IT
 SELECT c_id, bill > ANY(SELECT ship FROM o WHERE o.c_id=c.c_id) FROM c ORDER BY c_id;
 
@@ -485,7 +478,7 @@ SELECT c_id, bill > ANY(SELECT ship FROM o WHERE o.c_id=c.c_id) FROM c ORDER BY 
 5  0
 6  0
 
-onlyif mysql
+
 statement query IT
 SELECT c_id, (bill > ANY(SELECT ship FROM o WHERE o.c_id=c.c_id)) IS NULL FROM c ORDER BY c_id;
 
@@ -497,7 +490,7 @@ SELECT c_id, (bill > ANY(SELECT ship FROM o WHERE o.c_id=c.c_id)) IS NULL FROM c
 5  0
 6  0
 
-onlyif mysql
+
 statement query IT
 SELECT c_id, (bill > ANY(SELECT ship FROM o WHERE o.c_id=c.c_id)) IS NOT NULL FROM c ORDER BY c_id;
 
@@ -509,7 +502,7 @@ SELECT c_id, (bill > ANY(SELECT ship FROM o WHERE o.c_id=c.c_id)) IS NOT NULL FR
 5  1
 6  1
 
-onlyif mysql
+
 statement query IT
 SELECT c_id, bill = ANY(SELECT ship FROM o WHERE ship IS NOT NULL) FROM c;
 
@@ -521,7 +514,7 @@ SELECT c_id, bill = ANY(SELECT ship FROM o WHERE ship IS NOT NULL) FROM c;
 5  NULL
 6  0
 
-onlyif mysql
+
 statement query IT
 SELECT
     c_id,
@@ -538,7 +531,7 @@ ORDER BY c_id;
 5  1
 6  0
 
-onlyif mysql
+
 statement query IT
 SELECT
     c_id,
@@ -555,7 +548,7 @@ ORDER BY c_id;
 5  0
 6  0
 
-onlyif mysql
+
 statement query IIT
 SELECT
     c.c_id,
@@ -583,7 +576,7 @@ ORDER BY c.c_id, o.o_id
 5  NULL  NULL
 6  90    WA
 
-onlyif mysql
+
 statement query II
 SELECT
     c_id,
@@ -599,14 +592,14 @@ ORDER BY c_id;
 5  0
 6  1
 
-onlyif mysql
+
 statement query I
 SELECT max((SELECT count(*) FROM o WHERE o.c_id=c.c_id)) FROM c;
 
 ----
 3
 
-onlyif mysql
+
 statement query IT
 SELECT
     c.c_id,
@@ -622,14 +615,14 @@ ORDER BY c.c_id
 5  0
 6  0
 
-onlyif mysql
+
 statement ok
 drop table o;
 
-onlyif mysql
+
 statement ok
 drop table c;
 
-onlyif mysql
+
 statement ok
 set enable_planner_v2 = 0;

@@ -67,12 +67,11 @@ impl Display for Chunk {
             let row: Vec<_> = self
                 .columns()
                 .iter()
-                .map(|col| col.index(index).unwrap().to_string())
+                .map(|val| val.as_ref().index(index).unwrap().to_string())
                 .map(Cell::new)
                 .collect();
             table.add_row(row);
         }
-
         write!(f, "{table}")
     }
 }
@@ -163,7 +162,7 @@ impl Display for Literal {
             Literal::Int16(val) => write!(f, "{val}_i16"),
             Literal::Int32(val) => write!(f, "{val}_i32"),
             Literal::Int64(val) => write!(f, "{val}_i64"),
-            Literal::String(val) => write!(f, "{}", String::from_utf8_lossy(val)),
+            Literal::String(val) => write!(f, "{:?}", String::from_utf8_lossy(val)),
         }
     }
 }

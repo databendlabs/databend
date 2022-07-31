@@ -138,6 +138,7 @@ async fn execute_v2(
         }
     };
 
+    let session = ctx.get_current_session();
     let stream = stream! {
         yield compress_fn(prefix);
         while let Some(block) = data_stream.next().await {
@@ -152,7 +153,9 @@ async fn execute_v2(
         let _ = interpreter
             .finish()
             .await
-            .map_err(|e| error!("interpreter.finish error: {:?}", e));
+            .map_err(|e| error!("interpreter.finish error: {:?} ", e));
+        // to hold session ref until stream is all consumed
+        let _ = session.get_id();
     };
 
     Ok(Body::from_bytes_stream(stream).with_content_type(format.get_content_type()))
@@ -196,6 +199,7 @@ async fn execute(
             rb
         }
     };
+    let session = ctx.get_current_session();
     let stream = stream! {
         yield compress_fn(prefix);
         while let Some(block) = data_stream.next().await {
@@ -212,6 +216,8 @@ async fn execute(
             .finish()
             .await
             .map_err(|e| error!("interpreter.finish error: {:?}", e));
+        // to hold session ref until stream is all consumed
+        let _ = session.get_id();
     };
 
     Ok(Body::from_bytes_stream(stream).with_content_type(format.get_content_type()))
@@ -243,22 +249,9 @@ pub async fn clickhouse_handler_get(
         return serialize_one_block(context.clone(), block, &sql, &params, default_format)
             .map_err(InternalServerError);
     }
-
-    let (stmts, _) = DfParser::parse_sql(sql.as_str(), context.get_current_session().get_type())
-        .unwrap_or_else(|_| (vec![], vec![]));
-
     let settings = context.get_settings();
-    if !context.get_config().query.management_mode
-        && (settings
-            .get_enable_planner_v2()
-            .map_err(InternalServerError)?
-            != 0
-            && !stmts.is_empty()
-            && stmts.get(0).map_or(false, InterpreterFactoryV2::check)
-            || stmts
-                .get(0)
-                .map_or(false, InterpreterFactoryV2::enable_default))
-    {
+    let stmts = DfParser::parse_sql(sql.as_str(), context.get_current_session().get_type());
+    if use_planner_v2(&settings, &stmts).map_err(InternalServerError)? {
         let mut planner = Planner::new(context.clone());
         let (plan, _, fmt) = planner.plan_sql(&sql).await.map_err(BadRequest)?;
         let format = get_format_with_default(fmt, default_format)?;
@@ -323,8 +316,7 @@ pub async fn clickhouse_handler_post(
             .map_err(InternalServerError);
     }
 
-    let (stmts, _) = DfParser::parse_sql(sql.as_str(), ctx.get_current_session().get_type())
-        .unwrap_or_else(|_| (vec![], vec![]));
+    let stmts = DfParser::parse_sql(sql.as_str(), ctx.get_current_session().get_type());
     if use_planner_v2(&settings, &stmts).map_err(InternalServerError)? {
         let mut planner = Planner::new(ctx.clone());
         let (plan, _, fmt) = planner.plan_sql(&sql).await.map_err(BadRequest)?;

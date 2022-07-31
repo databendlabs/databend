@@ -12,26 +12,52 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use itertools::Itertools;
+use crate::types::AnyType;
+use crate::Value;
 
-use crate::values::Column;
-
+/// Chunk is a lightweight container for a group of columns.
 pub struct Chunk {
-    columns: Vec<Column>,
+    columns: Vec<Value<AnyType>>,
+    num_rows: usize,
+    chunk_info: Option<Box<dyn ChunkInfo>>,
 }
 
+/// ChunkInfo is extra information about a chunk, could be used during the pipeline transformation.
+pub trait ChunkInfo {}
+
 impl Chunk {
-    pub fn new(columns: Vec<Column>) -> Self {
-        debug_assert!(columns.iter().map(|col| col.len()).all_equal());
-        Self { columns }
+    pub fn new(columns: Vec<Value<AnyType>>, num_rows: usize) -> Self {
+        Self::new_with_info(columns, num_rows, None)
     }
 
-    pub fn columns(&self) -> &[Column] {
+    pub fn new_with_info(
+        columns: Vec<Value<AnyType>>,
+        num_rows: usize,
+        chunk_info: Option<Box<dyn ChunkInfo>>,
+    ) -> Self {
+        debug_assert!(
+            columns
+                .iter()
+                .filter(|value| match value {
+                    Value::Scalar(_) => false,
+                    Value::Column(c) => c.len() != num_rows,
+                })
+                .count()
+                == 0
+        );
+        Self {
+            columns,
+            num_rows,
+            chunk_info,
+        }
+    }
+
+    pub fn columns(&self) -> &[Value<AnyType>] {
         &self.columns
     }
 
     pub fn num_rows(&self) -> usize {
-        self.columns.get(0).map(Column::len).unwrap_or(0)
+        self.num_rows
     }
 
     pub fn num_columns(&self) -> usize {

@@ -213,7 +213,7 @@ CREATE TABLE IF NOT EXISTS t11(id Int, arr Array(Bool)) Engine = Fuse;
 statement ok
 INSERT INTO t11 (id, arr) VALUES(1, [true, true]), (2, [false, false]), (3, [true, false]), (4, [false, true]);
 
-statement query IB label(http)
+statement query IB
 select * from t11;
 
 ----
@@ -222,13 +222,8 @@ select * from t11;
 3 [1, 0]
 4 [0, 1]
 
----- http
-1 [true, true]
-2 [false, false]
-3 [true, false]
-4 [false, true]
 
-statement query BB label(http)
+statement query BB
 select arr[0], arr[1] from t11;
 
 ----
@@ -237,8 +232,7 @@ select arr[0], arr[1] from t11;
 1 0
 0 1
 
----- http
-true true
+ true
 false false
 true false
 false true
