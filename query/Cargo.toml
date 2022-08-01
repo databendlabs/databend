@@ -66,7 +66,6 @@ common-users = { path = "../common/users" }
 
 # Github dependencies
 async-trait = { git = "https://github.com/datafuse-extras/async-trait", rev = "f0b0fd5" }
-bincode = { git = "https://github.com/datafuse-extras/bincode", rev = "fd3f9ff" }
 sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "7f246e3" }
 
 # Crates.io dependencies
@@ -78,6 +77,7 @@ async-stream = "0.3.3"
 backoff = { version = "0.4.0", features = ["futures", "tokio"] }
 backon = "0.0.2"
 base64 = "0.13.0"
+bincode = "2.0.0-rc.1"
 bit-vec = { version = "0.6.3", features = ["serde_std"] }
 bumpalo = "3.10.0"
 byteorder = "1.4.3"
