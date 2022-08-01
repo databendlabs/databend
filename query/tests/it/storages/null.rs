@@ -31,7 +31,7 @@ async fn test_null_table() -> Result<()> {
         DataField::new("a", u64::to_data_type()),
         DataField::new("b", u64::to_data_type()),
     ]);
-    let table = NullTable::try_create(crate::tests::create_storage_context()?, TableInfo {
+    let table = NullTable::try_create(crate::tests::create_storage_context().await?, TableInfo {
         desc: "'default'.'a'".into(),
         name: "a".into(),
         ident: Default::default(),
