@@ -56,6 +56,7 @@ use tracing::info;
 
 use crate::export::vec_kv_to_json;
 use crate::metrics::incr_meta_metrics_applying_snapshot;
+use crate::metrics::incr_raft_storage_fail;
 use crate::store::ToStorageError;
 use crate::Opened;
 
@@ -284,11 +285,20 @@ impl RaftStorage<LogEntry, AppliedState> for MetaRaftStore {
 
     #[tracing::instrument(level = "debug", skip(self, hs), fields(id=self.id))]
     async fn save_hard_state(&self, hs: &HardState) -> Result<(), StorageError> {
-        self.raft_state
+        match self
+            .raft_state
             .write_hard_state(hs)
             .await
-            .map_to_sto_err(ErrorSubject::HardState, ErrorVerb::Write)?;
-        Ok(())
+            .map_to_sto_err(ErrorSubject::HardState, ErrorVerb::Write)
+        {
+            Err(err) => {
+                return {
+                    incr_raft_storage_fail("save_hard_state", true);
+                    Err(err)
+                };
+            }
+            Ok(_) => return Ok(()),
+        }
     }
 
     #[tracing::instrument(level = "debug", skip(self), fields(id=self.id))]
@@ -296,34 +306,61 @@ impl RaftStorage<LogEntry, AppliedState> for MetaRaftStore {
         &self,
         range: RB,
     ) -> Result<Vec<Entry<LogEntry>>, StorageError> {
-        let entries = self
+        match self
             .log
             .range_values(range)
-            .map_to_sto_err(ErrorSubject::Logs, ErrorVerb::Read)?;
-
-        Ok(entries)
+            .map_to_sto_err(ErrorSubject::Logs, ErrorVerb::Read)
+        {
+            Ok(entries) => return Ok(entries),
+            Err(err) => {
+                incr_raft_storage_fail("try_get_log_entries", false);
+                Err(err)
+            }
+        }
     }
 
     #[tracing::instrument(level = "debug", skip(self), fields(id=self.id))]
     async fn delete_conflict_logs_since(&self, log_id: LogId) -> Result<(), StorageError> {
-        self.log
+        match self
+            .log
             .range_remove(log_id.index..)
             .await
-            .map_to_sto_err(ErrorSubject::Log(log_id), ErrorVerb::Delete)?;
-
-        Ok(())
+            .map_to_sto_err(ErrorSubject::Log(log_id), ErrorVerb::Delete)
+        {
+            Ok(_) => return Ok(()),
+            Err(err) => {
+                incr_raft_storage_fail("delete_conflict_logs_since", true);
+                Err(err)
+            }
+        }
     }
 
     #[tracing::instrument(level = "debug", skip(self), fields(id=self.id))]
     async fn purge_logs_upto(&self, log_id: LogId) -> Result<(), StorageError> {
-        self.log
+        match self
+            .log
             .set_last_purged(log_id)
             .await
-            .map_to_sto_err(ErrorSubject::Logs, ErrorVerb::Write)?;
-        self.log
+            .map_to_sto_err(ErrorSubject::Logs, ErrorVerb::Write)
+        {
+            Err(err) => {
+                incr_raft_storage_fail("purge_logs_upto", true);
+                return Err(err);
+            }
+            Ok(_) => {}
+        };
+        match self
+            .log
             .range_remove(..=log_id.index)
             .await
-            .map_to_sto_err(ErrorSubject::Log(log_id), ErrorVerb::Delete)?;
+            .map_to_sto_err(ErrorSubject::Log(log_id), ErrorVerb::Delete)
+        {
+            Err(err) => {
+                incr_raft_storage_fail("purge_logs_upto", true);
+                return Err(err);
+            }
+            Ok(_) => {}
+        }
 
         Ok(())
     }
@@ -332,11 +369,18 @@ impl RaftStorage<LogEntry, AppliedState> for MetaRaftStore {
     async fn append_to_log(&self, entries: &[&Entry<LogEntry>]) -> Result<(), StorageError> {
         // TODO(xp): replicated_to_log should not block. Do the actual work in another task.
         let entries = entries.iter().map(|x| (*x).clone()).collect::<Vec<_>>();
-        self.log
+        match self
+            .log
             .append(&entries)
             .await
-            .map_to_sto_err(ErrorSubject::Logs, ErrorVerb::Write)?;
-        Ok(())
+            .map_to_sto_err(ErrorSubject::Logs, ErrorVerb::Write)
+        {
+            Err(err) => {
+                incr_raft_storage_fail("append_to_log", true);
+                Err(err)
+            }
+            Ok(_) => return Ok(()),
+        }
     }
 
     #[tracing::instrument(level = "debug", skip(self, entries), fields(id=self.id))]
@@ -348,10 +392,17 @@ impl RaftStorage<LogEntry, AppliedState> for MetaRaftStore {
 
         let sm = self.state_machine.write().await;
         for entry in entries {
-            let r = sm
+            let r = match sm
                 .apply(*entry)
                 .await
-                .map_to_sto_err(ErrorSubject::Apply(entry.log_id), ErrorVerb::Write)?;
+                .map_to_sto_err(ErrorSubject::Apply(entry.log_id), ErrorVerb::Write)
+            {
+                Err(err) => {
+                    incr_raft_storage_fail("apply_to_state_machine", true);
+                    return Err(err);
+                }
+                Ok(r) => r,
+            };
             res.push(r);
         }
         Ok(res)
@@ -367,12 +418,19 @@ impl RaftStorage<LogEntry, AppliedState> for MetaRaftStore {
 
         // 1. Take a serialized snapshot
 
-        let (snap, last_applied_log, snapshot_id) = self
+        let (snap, last_applied_log, snapshot_id) = match self
             .state_machine
             .write()
             .await
             .build_snapshot()
-            .map_to_sto_err(ErrorSubject::StateMachine, ErrorVerb::Read)?;
+            .map_to_sto_err(ErrorSubject::StateMachine, ErrorVerb::Read)
+        {
+            Err(err) => {
+                incr_raft_storage_fail("build_snapshot", false);
+                return Err(err);
+            }
+            Ok(r) => r,
+        };
 
         let data = serde_json::to_vec(&snap)
             .map_err(MetaStorageError::from)
@@ -436,6 +494,7 @@ impl RaftStorage<LogEntry, AppliedState> for MetaRaftStore {
         match res {
             Ok(_) => {}
             Err(e) => {
+                incr_raft_storage_fail("install_snapshot", true);
                 error!("error: {:?} when install_snapshot", e);
             }
         };
@@ -474,23 +533,43 @@ impl RaftStorage<LogEntry, AppliedState> for MetaRaftStore {
 
     #[tracing::instrument(level = "debug", skip(self))]
     async fn read_hard_state(&self) -> Result<Option<HardState>, StorageError> {
-        let hard_state = self
+        match self
             .raft_state
             .read_hard_state()
-            .map_to_sto_err(ErrorSubject::HardState, ErrorVerb::Read)?;
-        Ok(hard_state)
+            .map_to_sto_err(ErrorSubject::HardState, ErrorVerb::Read)
+        {
+            Err(err) => {
+                incr_raft_storage_fail("read_hard_state", false);
+                return Err(err);
+            }
+            Ok(hard_state) => return Ok(hard_state),
+        }
     }
 
     async fn get_log_state(&self) -> Result<LogState, StorageError> {
-        let last_purged_log_id = self
+        let last_purged_log_id = match self
             .log
             .get_last_purged()
-            .map_to_sto_err(ErrorSubject::Logs, ErrorVerb::Read)?;
+            .map_to_sto_err(ErrorSubject::Logs, ErrorVerb::Read)
+        {
+            Err(err) => {
+                incr_raft_storage_fail("get_log_state", false);
+                return Err(err);
+            }
+            Ok(r) => r,
+        };
 
-        let last = self
+        let last = match self
             .log
             .last()
-            .map_to_sto_err(ErrorSubject::Logs, ErrorVerb::Read)?;
+            .map_to_sto_err(ErrorSubject::Logs, ErrorVerb::Read)
+        {
+            Err(err) => {
+                incr_raft_storage_fail("get_log_state", false);
+                return Err(err);
+            }
+            Ok(r) => r,
+        };
 
         let last_log_id = match last {
             None => last_purged_log_id,
@@ -507,12 +586,26 @@ impl RaftStorage<LogEntry, AppliedState> for MetaRaftStore {
         &self,
     ) -> Result<(Option<LogId>, Option<EffectiveMembership>), StorageError> {
         let sm = self.state_machine.read().await;
-        let last_applied = sm
+        let last_applied = match sm
             .get_last_applied()
-            .map_to_sto_err(ErrorSubject::StateMachine, ErrorVerb::Read)?;
-        let last_membership = sm
+            .map_to_sto_err(ErrorSubject::StateMachine, ErrorVerb::Read)
+        {
+            Err(err) => {
+                incr_raft_storage_fail("last_applied_state", false);
+                return Err(err);
+            }
+            Ok(r) => r,
+        };
+        let last_membership = match sm
             .get_membership()
-            .map_to_sto_err(ErrorSubject::StateMachine, ErrorVerb::Read)?;
+            .map_to_sto_err(ErrorSubject::StateMachine, ErrorVerb::Read)
+        {
+            Err(err) => {
+                incr_raft_storage_fail("last_applied_state", false);
+                return Err(err);
+            }
+            Ok(r) => r,
+        };
         Ok((last_applied, last_membership))
     }
 }

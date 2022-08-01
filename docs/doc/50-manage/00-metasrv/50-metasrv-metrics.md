@@ -60,6 +60,7 @@ These metrics describe the network status of raft nodes in the `metasrv`. All th
 | snapshot_sent_seconds   | Total latency distributions of snapshot sends.    | to(node id)                       | HistogramVec  |
 | snapshot_recv_success   | Total number of successful receive snapshot.      | from(remote address)              | IntCounterVec |
 | snapshot_recv_failures  | Total number of snapshot receive failures.        | from(remote address)              | IntCounterVec |
+
 | snapshot_recv_inflights | Total number of inflight snapshot receives.       | from(remote address)              | IntGaugeVec   |
 | snapshot_recv_seconds   | Total latency distributions of snapshot receives. | from(remote address)              | HistogramVec  |
 
@@ -75,10 +76,21 @@ These metrics describe the network status of raft nodes in the `metasrv`. All th
 
 `snapshot_recv_seconds` indicate the total latency distributions of snapshot receives.
 
+### Raft Storage
+
+These metrics describe the storage status of raft nodes in the `metasrv`. All these metrics are prefixed with `metasrv_raft_storage_`.
+
+| Name                    | Description                                       | Labels                            | Type          |
+| ----------------------- | ------------------------------------------------- | --------------------------------- | ------------- |
+| raft_store_write_failed            | Total number of raft store write failures.    | func(function name) | CounterVec      |
+| raft_store_read_failed            | Total number of raft store read failures.    | func(function name) | CounterVec      |
+
+`raft_store_write_failed` and `raft_store_read_failed` indicate the total number of raft store write and read failures.
+
 ### Meta Network
 
 These metrics describe the network status of meta service in the `metasrv`. All these metrics are prefixed with `metasrv_meta_network_`.
-
+i
 | Name             | Description                                            | Type       |
 | ---------------- | ------------------------------------------------------ | ---------- |
 | meta_sent_bytes  | Total number of sent bytes to meta grpc client.        | IntCounter |
