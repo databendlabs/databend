@@ -18,7 +18,6 @@ use std::io::Read;
 use common_base::base::tokio;
 use common_base::base::Stoppable;
 use common_exception::Result;
-use common_tracing::tracing;
 use databend_meta::api::HttpService;
 use databend_meta::configs::Config;
 use databend_meta::meta_service::MetaNode;

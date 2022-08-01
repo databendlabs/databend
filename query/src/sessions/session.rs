@@ -16,10 +16,10 @@ use std::net::SocketAddr;
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 
-use common_base::mem_allocator::malloc_size;
+use chrono_tz::Tz;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_macros::MallocSizeOf;
+use common_io::prelude::FormatSettings;
 use common_meta_types::GrantObject;
 use common_meta_types::UserInfo;
 use common_meta_types::UserPrivilegeType;
@@ -38,18 +38,13 @@ use crate::sessions::SessionType;
 use crate::sessions::Settings;
 use crate::Config;
 
-#[derive(MallocSizeOf)]
 pub struct Session {
     pub(in crate::sessions) id: String,
-    #[ignore_malloc_size_of = "insignificant"]
     pub(in crate::sessions) typ: RwLock<SessionType>,
-    #[ignore_malloc_size_of = "insignificant"]
     pub(in crate::sessions) session_mgr: Arc<SessionManager>,
     pub(in crate::sessions) ref_count: Arc<AtomicUsize>,
     pub(in crate::sessions) session_ctx: Arc<SessionContext>,
-    #[ignore_malloc_size_of = "insignificant"]
     session_settings: Settings,
-    #[ignore_malloc_size_of = "insignificant"]
     status: Arc<RwLock<SessionStatus>>,
     pub(in crate::sessions) mysql_connection_id: Option<u32>,
 }
@@ -64,7 +59,8 @@ impl Session {
     ) -> Result<Arc<Session>> {
         let session_ctx = Arc::new(SessionContext::try_create(conf.clone())?);
         let user_api = session_mgr.get_user_api_provider();
-        let session_settings = Settings::try_create(&conf, user_api, session_ctx.clone())?;
+        let session_settings =
+            Settings::try_create(&conf, user_api, session_ctx.get_current_tenant()).await?;
         let ref_count = Arc::new(AtomicUsize::new(0));
         let status = Arc::new(Default::default());
         Ok(Arc::new(Session {
@@ -153,6 +149,30 @@ impl Session {
         Ok(shared)
     }
 
+    pub fn get_format_settings(&self) -> Result<FormatSettings> {
+        let settings = &self.session_settings;
+        let mut format = FormatSettings {
+            record_delimiter: settings.get_record_delimiter()?,
+            field_delimiter: settings.get_field_delimiter()?,
+            empty_as_default: settings.get_empty_as_default()? > 0,
+            skip_header: settings.get_skip_header()?,
+            ..Default::default()
+        };
+
+        let tz = String::from_utf8(settings.get_timezone()?).map_err(|_| {
+            ErrorCode::LogicalError("Timezone has been checked and should be valid.")
+        })?;
+        format.timezone = tz.parse::<Tz>().map_err(|_| {
+            ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
+        })?;
+
+        let compress = String::from_utf8(settings.get_compression()?)
+            .map_err(|_| ErrorCode::UnknownCompressionType("Compress type must be valid utf-8"))?;
+        format.compression = compress.parse()?;
+
+        Ok(format)
+    }
+
     pub fn get_current_query_id(&self) -> Option<String> {
         self.session_ctx.get_current_query_id()
     }
@@ -201,6 +221,22 @@ impl Session {
         self.session_ctx.set_current_user(user);
     }
 
+    pub fn set_auth_role(self: &Arc<Self>, role: String) {
+        self.session_ctx.set_auth_role(role)
+    }
+
+    // returns all the roles the current session has, which includes the roles of
+    // the current user and the roles granted on the authentication phase.
+    pub fn get_all_roles(self: &Arc<Self>) -> Result<Vec<String>> {
+        let current_user = self.get_current_user()?;
+
+        let mut all_roles = current_user.grants.roles();
+        if let Some(auth_role) = self.session_ctx.get_auth_role() {
+            all_roles.push(auth_role);
+        }
+        Ok(all_roles)
+    }
+
     pub async fn validate_privilege(
         self: &Arc<Self>,
         object: &GrantObject,
@@ -212,13 +248,15 @@ impl Session {
             return Ok(());
         }
 
+        // TODO: take current role instead of all roles
+        let all_roles = self.get_all_roles()?;
         let tenant = self.get_current_tenant();
         let role_cache = self
             .get_shared_query_context()
             .await?
             .get_role_cache_manager();
         let role_verified = role_cache
-            .find_related_roles(&tenant, &current_user.grants.roles())
+            .find_related_roles(&tenant, &all_roles)
             .await?
             .iter()
             .any(|r| r.grants.verify_privilege(object, privilege));
@@ -256,7 +294,8 @@ impl Session {
     }
 
     pub fn get_memory_usage(self: &Arc<Self>) -> usize {
-        malloc_size(self)
+        // TODO(winter): use thread memory tracker
+        0
     }
 
     pub fn get_storage_operator(self: &Arc<Self>) -> Operator {

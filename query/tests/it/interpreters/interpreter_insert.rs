@@ -21,28 +21,29 @@ use futures::TryStreamExt;
 #[tokio::test]
 async fn test_insert_into_interpreter() -> Result<()> {
     let ctx = crate::tests::create_query_context().await?;
+    let mut planner = Planner::new(ctx.clone());
 
     // Create default value table.
     {
         let query = "create table default.default_value_table(a String, b String DEFAULT 'b') Engine = Memory";
-        let plan = PlanParser::parse(ctx.clone(), query).await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         let _ = executor.execute(None).await?;
     }
 
     // Create input table.
     {
         let query = "create table default.input_table(a String, b String, c String, d String, e String) Engine = Memory";
-        let plan = PlanParser::parse(ctx.clone(), query).await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         let _ = executor.execute(None).await?;
     }
 
     // Create output table.
     {
         let query = "create table default.output_table(a UInt8, b Int8, c UInt16, d Int16, e String) Engine = Memory";
-        let plan = PlanParser::parse(ctx.clone(), query).await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         let _ = executor.execute(None).await?;
     }
 
@@ -67,8 +68,8 @@ async fn test_insert_into_interpreter() -> Result<()> {
         // select.
         {
             let query = "select * from default.default_value_table";
-            let plan = PlanParser::parse(ctx.clone(), query).await?;
-            let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+            let (plan, _, _) = planner.plan_sql(query).await?;
+            let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
             let stream = executor.execute(None).await?;
             let result = stream.try_collect::<Vec<_>>().await?;
             let expected = vec![
@@ -103,8 +104,8 @@ async fn test_insert_into_interpreter() -> Result<()> {
     // select.
     {
         let query = "select * from default.output_table";
-        let plan = PlanParser::parse(ctx.clone(), query).await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         let stream = executor.execute(None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![

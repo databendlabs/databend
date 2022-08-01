@@ -16,8 +16,7 @@ class ClickhouseConnector():
                 user="root",
                 password="",
                 database=default_database):
-        self._uri = "clickhouse+http://{}:{}@{}:{}/{}".format(
-            user, password, host, port, database)
+        self._uri = f"clickhouse+http://{user}:{password}@{host}:{port}/{database}"
         log.debug(self._uri)
         e = environs.Env()
         self._additonal_headers = dict()
@@ -44,7 +43,8 @@ class ClickhouseConnector():
                 return sql  #  do nothing
 
         if self._session is None:
-            engine = create_engine(self._uri, connect_args=self._additonal_headers)
+            engine = create_engine(self._uri,
+                                   connect_args=self._additonal_headers)
             self._session = make_session(engine)
         log.debug(parseSQL(statement))
         return self._session.execute(parseSQL(statement))

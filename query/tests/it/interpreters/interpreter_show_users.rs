@@ -15,35 +15,37 @@
 use common_base::base::tokio;
 use common_exception::Result;
 use databend_query::interpreters::*;
-use databend_query::sql::PlanParser;
+use databend_query::sql::Planner;
 use futures::TryStreamExt;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_show_users_interpreter() -> Result<()> {
     let ctx = crate::tests::create_query_context().await?;
+    let mut planner = Planner::new(ctx.clone());
 
     {
         let query = "CREATE USER 'test'@'localhost' IDENTIFIED BY 'password'";
-        let plan = PlanParser::parse(ctx.clone(), query).await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         let _ = executor.execute(None).await?;
     }
 
     // show users.
     {
-        let plan = PlanParser::parse(ctx.clone(), "show users").await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        assert_eq!(executor.name(), "ShowUsersInterpreter");
+        let query = "show users";
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        assert_eq!(executor.name(), "SelectInterpreterV2");
 
         let stream = executor.execute(None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
-                "+------+-----------+----------------------+------------------------------------------+",
-                "| name | hostname  | auth_type            | auth_string                              |",
-                "+------+-----------+----------------------+------------------------------------------+",
-                "| test | localhost | double_sha1_password | 2470c0c06dee42fd1618bb99005adca2ec9d1e19 |",
-                "+------+-----------+----------------------+------------------------------------------+",
-            ];
+            "+------+-----------+----------------------+------------------------------------------+",
+            "| name | hostname  | auth_type            | auth_string                              |",
+            "+------+-----------+----------------------+------------------------------------------+",
+            "| test | localhost | double_sha1_password | 2470c0c06dee42fd1618bb99005adca2ec9d1e19 |",
+            "+------+-----------+----------------------+------------------------------------------+",
+        ];
         common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
     }
 

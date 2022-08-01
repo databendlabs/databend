@@ -35,11 +35,11 @@ pub enum HashTableKind<
 }
 
 impl<
-        Key: HashTableKeyable,
-        Entity: HashTableEntity<Key>,
-        SingleLevelGrower: HashTableGrower,
-        TwoLevelGrower: HashTableGrower,
-    > HashTableKind<Key, Entity, SingleLevelGrower, TwoLevelGrower>
+    Key: HashTableKeyable,
+    Entity: HashTableEntity<Key>,
+    SingleLevelGrower: HashTableGrower,
+    TwoLevelGrower: HashTableGrower,
+> HashTableKind<Key, Entity, SingleLevelGrower, TwoLevelGrower>
 {
     pub fn create_hash_table() -> Self {
         Self::HashTable(HashTable::create())

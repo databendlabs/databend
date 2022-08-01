@@ -14,6 +14,7 @@
 
 use std::ops::Range;
 
+use crate::property::Domain;
 use crate::types::ArgType;
 use crate::types::DataType;
 use crate::types::GenericMap;
@@ -24,12 +25,16 @@ use crate::values::ColumnIterator;
 use crate::values::Scalar;
 use crate::values::ScalarRef;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GenericType<const INDEX: usize>;
 
 impl<const INDEX: usize> ValueType for GenericType<INDEX> {
     type Scalar = Scalar;
     type ScalarRef<'a> = ScalarRef<'a>;
     type Column = Column;
+    type Domain = Domain;
+    type ColumnIterator<'a> = ColumnIterator<'a>;
+    type ColumnBuilder = ColumnBuilder;
 
     fn to_owned_scalar<'a>(scalar: Self::ScalarRef<'a>) -> Self::Scalar {
         scalar.to_owned()
@@ -38,22 +43,17 @@ impl<const INDEX: usize> ValueType for GenericType<INDEX> {
     fn to_scalar_ref<'a>(scalar: &'a Self::Scalar) -> Self::ScalarRef<'a> {
         scalar.as_ref()
     }
-}
 
-impl<const INDEX: usize> ArgType for GenericType<INDEX> {
-    type ColumnIterator<'a> = ColumnIterator<'a>;
-    type ColumnBuilder = ColumnBuilder;
-
-    fn data_type() -> DataType {
-        DataType::Generic(INDEX)
-    }
-
-    fn try_downcast_scalar<'a>(scalar: &'a Scalar) -> Option<Self::ScalarRef<'a>> {
-        Some(scalar.as_ref())
+    fn try_downcast_scalar<'a>(scalar: &'a ScalarRef) -> Option<Self::ScalarRef<'a>> {
+        Some(scalar.clone())
     }
 
     fn try_downcast_column<'a>(col: &'a Column) -> Option<Self::Column> {
         Some(col.clone())
+    }
+
+    fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
+        Some(domain.clone())
     }
 
     fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
@@ -64,11 +64,15 @@ impl<const INDEX: usize> ArgType for GenericType<INDEX> {
         col
     }
 
+    fn upcast_domain(domain: Self::Domain) -> Domain {
+        domain
+    }
+
     fn column_len<'a>(col: &'a Self::Column) -> usize {
         col.len()
     }
 
-    fn index_column<'a>(col: &'a Self::Column, index: usize) -> Self::ScalarRef<'a> {
+    fn index_column<'a>(col: &'a Self::Column, index: usize) -> Option<Self::ScalarRef<'a>> {
         col.index(index)
     }
 
@@ -78,10 +82,6 @@ impl<const INDEX: usize> ArgType for GenericType<INDEX> {
 
     fn iter_column<'a>(col: &'a Self::Column) -> Self::ColumnIterator<'a> {
         col.iter()
-    }
-
-    fn create_builder(capacity: usize, generics: &GenericMap) -> Self::ColumnBuilder {
-        ColumnBuilder::with_capacity(&generics[INDEX], capacity)
     }
 
     fn column_to_builder(col: Self::Column) -> Self::ColumnBuilder {
@@ -110,5 +110,19 @@ impl<const INDEX: usize> ArgType for GenericType<INDEX> {
 
     fn build_scalar(builder: Self::ColumnBuilder) -> Self::Scalar {
         builder.build_scalar()
+    }
+}
+
+impl<const INDEX: usize> ArgType for GenericType<INDEX> {
+    fn data_type() -> DataType {
+        DataType::Generic(INDEX)
+    }
+
+    fn full_domain(generics: &GenericMap) -> Self::Domain {
+        Domain::full(&generics[INDEX], generics)
+    }
+
+    fn create_builder(capacity: usize, generics: &GenericMap) -> Self::ColumnBuilder {
+        ColumnBuilder::with_capacity(&generics[INDEX], capacity)
     }
 }

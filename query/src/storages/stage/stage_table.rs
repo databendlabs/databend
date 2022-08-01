@@ -30,13 +30,14 @@ use common_planners::Statistics;
 use common_planners::TruncateTablePlan;
 use common_streams::SendableDataBlockStream;
 use parking_lot::Mutex;
+use tracing::info;
 
-use super::StageSource;
-use crate::pipelines::new::processors::port::OutputPort;
-use crate::pipelines::new::processors::TransformLimit;
-use crate::pipelines::new::NewPipeline;
-use crate::pipelines::new::SourcePipeBuilder;
-use crate::sessions::QueryContext;
+use super::StageSourceHelper;
+use crate::pipelines::processors::port::OutputPort;
+use crate::pipelines::processors::TransformLimit;
+use crate::pipelines::Pipeline;
+use crate::pipelines::SourcePipeBuilder;
+use crate::sessions::TableContext;
 use crate::storages::Table;
 
 pub struct StageTable {
@@ -70,7 +71,7 @@ impl Table for StageTable {
 
     async fn read_partitions(
         &self,
-        _ctx: Arc<QueryContext>,
+        _ctx: Arc<dyn TableContext>,
         _push_downs: Option<Extras>,
     ) -> Result<(Statistics, Partitions)> {
         Ok((Statistics::default(), vec![]))
@@ -78,9 +79,9 @@ impl Table for StageTable {
 
     fn read2(
         &self,
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn TableContext>,
         _plan: &ReadDataSourcePlan,
-        pipeline: &mut NewPipeline,
+        pipeline: &mut Pipeline,
     ) -> Result<()> {
         let settings = ctx.get_settings();
         let mut builder = SourcePipeBuilder::create();
@@ -92,21 +93,17 @@ impl Table for StageTable {
         }
         let files = Arc::new(Mutex::new(files_deque));
 
+        let stage_source = StageSourceHelper::try_create(ctx, schema, table_info.clone(), files)?;
+
         for _index in 0..settings.get_max_threads()? {
             let output = OutputPort::create();
-            builder.add_source(
-                output.clone(),
-                StageSource::try_create(
-                    ctx.clone(),
-                    output,
-                    schema.clone(),
-                    table_info.clone(),
-                    files.clone(),
-                )?,
-            );
+            builder.add_source(output.clone(), stage_source.get_splitter(output)?);
         }
-
         pipeline.add_pipe(builder.finalize());
+
+        pipeline.add_transform(|transform_input_port, transform_output_port| {
+            stage_source.get_deserializer(transform_input_port, transform_output_port)
+        })?;
 
         let limit = self.table_info.stage_info.copy_options.size_limit;
         if limit > 0 {
@@ -127,7 +124,7 @@ impl Table for StageTable {
     // TODO: support append2
     async fn append_data(
         &self,
-        _ctx: Arc<QueryContext>,
+        _ctx: Arc<dyn TableContext>,
         stream: SendableDataBlockStream,
     ) -> Result<SendableDataBlockStream> {
         Ok(Box::pin(stream))
@@ -135,7 +132,7 @@ impl Table for StageTable {
 
     async fn commit_insertion(
         &self,
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn TableContext>,
         _catalog_name: &str,
         operations: Vec<DataBlock>,
         _overwrite: bool,
@@ -145,20 +142,24 @@ impl Table for StageTable {
             self.table_info.stage_info.file_format_options.format
         );
         let path = format!(
-            "{}/{}.{}",
+            "{}{}.{}",
             self.table_info.path,
             uuid::Uuid::new_v4(),
             format_name.to_ascii_lowercase()
         );
+        info!(
+            "try commit stage table {} to file {path}",
+            self.table_info.stage_info.stage_name
+        );
 
-        let op = StageSource::get_op(&ctx, &self.table_info.stage_info).await?;
+        let op = StageSourceHelper::get_op(&ctx, &self.table_info.stage_info).await?;
 
         let fmt = OutputFormatType::from_str(format_name.as_str())?;
         let mut format_settings = ctx.get_format_settings()?;
 
         let format_options = &self.table_info.stage_info.file_format_options;
         {
-            format_settings.skip_header = format_options.skip_header > 0;
+            format_settings.skip_header = format_options.skip_header;
             if !format_options.field_delimiter.is_empty() {
                 format_settings.field_delimiter =
                     format_options.field_delimiter.as_bytes().to_vec();
@@ -194,7 +195,7 @@ impl Table for StageTable {
     // Truncate the stage file.
     async fn truncate(
         &self,
-        _ctx: Arc<QueryContext>,
+        _ctx: Arc<dyn TableContext>,
         _truncate_plan: TruncateTablePlan,
     ) -> Result<()> {
         Err(ErrorCode::UnImplement(

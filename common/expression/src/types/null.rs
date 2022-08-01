@@ -14,19 +14,26 @@
 
 use std::ops::Range;
 
+use crate::property::Domain;
+use crate::property::NullableDomain;
 use crate::types::ArgType;
 use crate::types::DataType;
 use crate::types::GenericMap;
 use crate::types::ValueType;
 use crate::values::Column;
 use crate::values::Scalar;
+use crate::ScalarRef;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NullType;
 
 impl ValueType for NullType {
     type Scalar = ();
     type ScalarRef<'a> = ();
     type Column = usize;
+    type Domain = ();
+    type ColumnIterator<'a> = std::iter::Take<std::iter::Repeat<()>>;
+    type ColumnBuilder = usize;
 
     fn to_owned_scalar<'a>(scalar: Self::ScalarRef<'a>) -> Self::Scalar {
         scalar
@@ -35,19 +42,10 @@ impl ValueType for NullType {
     fn to_scalar_ref<'a>(scalar: &'a Self::Scalar) -> Self::ScalarRef<'a> {
         *scalar
     }
-}
 
-impl ArgType for NullType {
-    type ColumnIterator<'a> = std::iter::Take<std::iter::Repeat<()>>;
-    type ColumnBuilder = usize;
-
-    fn data_type() -> DataType {
-        DataType::Null
-    }
-
-    fn try_downcast_scalar<'a>(scalar: &'a Scalar) -> Option<Self::ScalarRef<'a>> {
+    fn try_downcast_scalar<'a>(scalar: &'a ScalarRef) -> Option<Self::ScalarRef<'a>> {
         match scalar {
-            Scalar::Null => Some(()),
+            ScalarRef::Null => Some(()),
             _ => None,
         }
     }
@@ -55,6 +53,16 @@ impl ArgType for NullType {
     fn try_downcast_column<'a>(col: &'a Column) -> Option<Self::Column> {
         match col {
             Column::Null { len } => Some(*len),
+            _ => None,
+        }
+    }
+
+    fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
+        match domain {
+            Domain::Nullable(NullableDomain {
+                has_null: true,
+                value: None,
+            }) => Some(()),
             _ => None,
         }
     }
@@ -67,34 +75,28 @@ impl ArgType for NullType {
         Column::Null { len }
     }
 
+    fn upcast_domain(_: Self::Domain) -> Domain {
+        Domain::Nullable(NullableDomain {
+            has_null: true,
+            value: None,
+        })
+    }
+
     fn column_len<'a>(len: &'a Self::Column) -> usize {
         *len
     }
 
-    fn index_column<'a>(len: &'a Self::Column, index: usize) -> Self::ScalarRef<'a> {
-        if index >= *len {
-            panic!("index {index} out of 0..{len}");
-        }
+    fn index_column<'a>(len: &'a Self::Column, index: usize) -> Option<Self::ScalarRef<'a>> {
+        if index < *len { Some(()) } else { None }
     }
 
     fn slice_column<'a>(len: &'a Self::Column, range: Range<usize>) -> Self::Column {
-        if range.end <= *len {
-            range.end - range.start
-        } else {
-            panic!("range {range:?} out of 0..{len}");
-        }
+        assert!(range.start < *len, "range {range:?} out of 0..{len}");
+        range.end - range.start
     }
 
     fn iter_column<'a>(len: &'a Self::Column) -> Self::ColumnIterator<'a> {
         std::iter::repeat(()).take(*len)
-    }
-
-    fn column_from_iter(iter: impl Iterator<Item = Self::Scalar>, _: &GenericMap) -> Self::Column {
-        iter.count()
-    }
-
-    fn create_builder(_capacity: usize, _generics: &GenericMap) -> Self::ColumnBuilder {
-        0
     }
 
     fn column_to_builder(len: Self::Column) -> Self::ColumnBuilder {
@@ -123,5 +125,21 @@ impl ArgType for NullType {
 
     fn build_scalar(len: Self::ColumnBuilder) -> Self::Scalar {
         assert_eq!(len, 1);
+    }
+}
+
+impl ArgType for NullType {
+    fn data_type() -> DataType {
+        DataType::Null
+    }
+
+    fn full_domain(_: &GenericMap) -> Self::Domain {}
+
+    fn create_builder(_capacity: usize, _generics: &GenericMap) -> Self::ColumnBuilder {
+        0
+    }
+
+    fn column_from_iter(iter: impl Iterator<Item = Self::Scalar>, _: &GenericMap) -> Self::Column {
+        iter.count()
     }
 }

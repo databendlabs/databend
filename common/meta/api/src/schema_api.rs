@@ -11,7 +11,6 @@
 //  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
-//
 
 use std::sync::Arc;
 
@@ -117,18 +116,9 @@ pub trait SchemaApi: Send + Sync {
 
     // gc dropped {table|db} which out of retention time.
     async fn gc_dropped_data(&self, req: GCDroppedDataReq)
-        -> Result<GCDroppedDataReply, MetaError>;
+    -> Result<GCDroppedDataReply, MetaError>;
 
     async fn count_tables(&self, req: CountTablesReq) -> Result<CountTablesReply, MetaError>;
-
-    // TODO: Disabled temporarily: Consider move them to another trait such as `ShareApi` or else.
-    //       Since `share` has nothing really to do with database or table.
-    // // share
-    // async fn create_share(&self, req: CreateShareReq) -> Result<CreateShareReply, MetaError>;
-    //
-    // async fn drop_share(&self, req: DropShareReq) -> Result<DropShareReply, MetaError>;
-    //
-    // async fn get_share(&self, req: GetShareReq) -> Result<Arc<ShareInfo>, MetaError>;
 
     fn name(&self) -> String;
 }

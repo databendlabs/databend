@@ -14,20 +14,9 @@
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_macros::MallocSizeOf;
 
 #[derive(
-    serde::Serialize,
-    serde::Deserialize,
-    Debug,
-    Copy,
-    Clone,
-    PartialEq,
-    Eq,
-    Hash,
-    PartialOrd,
-    Ord,
-    MallocSizeOf,
+    serde::Serialize, serde::Deserialize, Debug, Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord,
 )]
 pub enum TypeID {
     Null,

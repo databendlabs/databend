@@ -16,14 +16,12 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use super::aggregate::Aggregate;
-use super::apply::CrossApply;
 use super::eval_scalar::EvalScalar;
 use super::filter::Filter;
 use super::hash_join::PhysicalHashJoin;
 use super::limit::Limit;
 use super::logical_get::LogicalGet;
 use super::logical_join::LogicalInnerJoin;
-use super::max_one_row::Max1Row;
 use super::pattern::PatternPlan;
 use super::physical_scan::PhysicalScan;
 use super::project::Project;
@@ -31,7 +29,8 @@ use super::sort::Sort;
 use crate::sql::optimizer::PhysicalProperty;
 use crate::sql::optimizer::RelExpr;
 use crate::sql::optimizer::RelationalProperty;
-use crate::sql::optimizer::SExpr;
+use crate::sql::optimizer::RequiredProperty;
+use crate::sql::plans::Exchange;
 
 pub trait Operator {
     fn rel_op(&self) -> RelOp;
@@ -44,17 +43,24 @@ pub trait Operator {
         false
     }
 
-    fn as_logical(&self) -> Option<&dyn LogicalPlan>;
+    fn as_logical(&self) -> Option<&dyn LogicalOperator>;
 
-    fn as_physical(&self) -> Option<&dyn PhysicalPlan>;
+    fn as_physical(&self) -> Option<&dyn PhysicalOperator>;
 }
 
-pub trait LogicalPlan {
+pub trait LogicalOperator {
     fn derive_relational_prop<'a>(&self, rel_expr: &RelExpr<'a>) -> Result<RelationalProperty>;
 }
 
-pub trait PhysicalPlan {
-    fn compute_physical_prop(&self, expression: &SExpr) -> PhysicalProperty;
+pub trait PhysicalOperator {
+    fn derive_physical_prop<'a>(&self, rel_expr: &RelExpr<'a>) -> Result<PhysicalProperty>;
+
+    fn compute_required_prop_child<'a>(
+        &self,
+        rel_expr: &RelExpr<'a>,
+        child_index: usize,
+        required: &RequiredProperty,
+    ) -> Result<RequiredProperty>;
 }
 
 /// Relational operator
@@ -75,8 +81,7 @@ pub enum RelOp {
     Aggregate,
     Sort,
     Limit,
-    CrossApply,
-    Max1Row,
+    Exchange,
 
     // Pattern
     Pattern,
@@ -97,8 +102,7 @@ pub enum RelOperator {
     Aggregate(Aggregate),
     Sort(Sort),
     Limit(Limit),
-    CrossApply(CrossApply),
-    Max1Row(Max1Row),
+    Exchange(Exchange),
 
     Pattern(PatternPlan),
 }
@@ -116,9 +120,8 @@ impl Operator for RelOperator {
             RelOperator::Aggregate(rel_op) => rel_op.rel_op(),
             RelOperator::Sort(rel_op) => rel_op.rel_op(),
             RelOperator::Limit(rel_op) => rel_op.rel_op(),
-            RelOperator::CrossApply(rel_op) => rel_op.rel_op(),
-            RelOperator::Max1Row(rel_op) => rel_op.rel_op(),
             RelOperator::Pattern(rel_op) => rel_op.rel_op(),
+            RelOperator::Exchange(rel_op) => rel_op.rel_op(),
         }
     }
 
@@ -134,9 +137,8 @@ impl Operator for RelOperator {
             RelOperator::Aggregate(rel_op) => rel_op.is_physical(),
             RelOperator::Sort(rel_op) => rel_op.is_physical(),
             RelOperator::Limit(rel_op) => rel_op.is_physical(),
-            RelOperator::CrossApply(rel_op) => rel_op.is_physical(),
-            RelOperator::Max1Row(rel_op) => rel_op.is_physical(),
             RelOperator::Pattern(rel_op) => rel_op.is_physical(),
+            RelOperator::Exchange(rel_op) => rel_op.is_physical(),
         }
     }
 
@@ -152,13 +154,12 @@ impl Operator for RelOperator {
             RelOperator::Aggregate(rel_op) => rel_op.is_logical(),
             RelOperator::Sort(rel_op) => rel_op.is_logical(),
             RelOperator::Limit(rel_op) => rel_op.is_logical(),
-            RelOperator::CrossApply(rel_op) => rel_op.is_logical(),
-            RelOperator::Max1Row(rel_op) => rel_op.is_logical(),
             RelOperator::Pattern(rel_op) => rel_op.is_logical(),
+            RelOperator::Exchange(rel_op) => rel_op.is_logical(),
         }
     }
 
-    fn as_logical(&self) -> Option<&dyn LogicalPlan> {
+    fn as_logical(&self) -> Option<&dyn LogicalOperator> {
         match self {
             RelOperator::LogicalGet(rel_op) => rel_op.as_logical(),
             RelOperator::LogicalInnerJoin(rel_op) => rel_op.as_logical(),
@@ -170,13 +171,12 @@ impl Operator for RelOperator {
             RelOperator::Aggregate(rel_op) => rel_op.as_logical(),
             RelOperator::Sort(rel_op) => rel_op.as_logical(),
             RelOperator::Limit(rel_op) => rel_op.as_logical(),
-            RelOperator::CrossApply(rel_op) => rel_op.as_logical(),
-            RelOperator::Max1Row(rel_op) => rel_op.as_logical(),
             RelOperator::Pattern(rel_op) => rel_op.as_logical(),
+            RelOperator::Exchange(rel_op) => rel_op.as_logical(),
         }
     }
 
-    fn as_physical(&self) -> Option<&dyn PhysicalPlan> {
+    fn as_physical(&self) -> Option<&dyn PhysicalOperator> {
         match self {
             RelOperator::LogicalGet(rel_op) => rel_op.as_physical(),
             RelOperator::LogicalInnerJoin(rel_op) => rel_op.as_physical(),
@@ -188,9 +188,8 @@ impl Operator for RelOperator {
             RelOperator::Aggregate(rel_op) => rel_op.as_physical(),
             RelOperator::Sort(rel_op) => rel_op.as_physical(),
             RelOperator::Limit(rel_op) => rel_op.as_physical(),
-            RelOperator::CrossApply(rel_op) => rel_op.as_physical(),
-            RelOperator::Max1Row(rel_op) => rel_op.as_physical(),
             RelOperator::Pattern(rel_op) => rel_op.as_physical(),
+            RelOperator::Exchange(rel_op) => rel_op.as_physical(),
         }
     }
 }
@@ -386,44 +385,6 @@ impl TryFrom<RelOperator> for Limit {
     }
 }
 
-impl From<CrossApply> for RelOperator {
-    fn from(v: CrossApply) -> Self {
-        Self::CrossApply(v)
-    }
-}
-
-impl TryFrom<RelOperator> for CrossApply {
-    type Error = ErrorCode;
-    fn try_from(value: RelOperator) -> Result<Self> {
-        if let RelOperator::CrossApply(value) = value {
-            Ok(value)
-        } else {
-            Err(ErrorCode::LogicalError(
-                "Cannot downcast RelOperator to CrossApply",
-            ))
-        }
-    }
-}
-
-impl From<Max1Row> for RelOperator {
-    fn from(v: Max1Row) -> Self {
-        Self::Max1Row(v)
-    }
-}
-
-impl TryFrom<RelOperator> for Max1Row {
-    type Error = ErrorCode;
-    fn try_from(value: RelOperator) -> Result<Self> {
-        if let RelOperator::Max1Row(value) = value {
-            Ok(value)
-        } else {
-            Err(ErrorCode::LogicalError(
-                "Cannot downcast RelOperator to Max1Row",
-            ))
-        }
-    }
-}
-
 impl From<PatternPlan> for RelOperator {
     fn from(v: PatternPlan) -> Self {
         Self::Pattern(v)
@@ -438,6 +399,25 @@ impl TryFrom<RelOperator> for PatternPlan {
         } else {
             Err(ErrorCode::LogicalError(
                 "Cannot downcast RelOperator to Pattern",
+            ))
+        }
+    }
+}
+
+impl From<Exchange> for RelOperator {
+    fn from(v: Exchange) -> Self {
+        Self::Exchange(v)
+    }
+}
+
+impl TryFrom<RelOperator> for Exchange {
+    type Error = ErrorCode;
+    fn try_from(value: RelOperator) -> Result<Self> {
+        if let RelOperator::Exchange(value) = value {
+            Ok(value)
+        } else {
+            Err(ErrorCode::LogicalError(
+                "Cannot downcast RelOperator to Exchange",
             ))
         }
     }

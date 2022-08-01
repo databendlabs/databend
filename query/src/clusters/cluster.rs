@@ -28,6 +28,7 @@ use common_base::base::DummySignalStream;
 use common_base::base::GlobalUniqName;
 use common_base::base::SignalStream;
 use common_base::base::SignalType;
+pub use common_catalog::cluster_info::Cluster;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_grpc::ConnectionFactory;
@@ -37,7 +38,6 @@ use common_meta_api::KVApi;
 use common_meta_store::MetaStoreProvider;
 use common_meta_types::NodeInfo;
 use common_metrics::label_counter_with_val_and_labels;
-use common_tracing::tracing;
 use futures::future::select;
 use futures::future::Either;
 use futures::Future;
@@ -45,6 +45,8 @@ use futures::StreamExt;
 use metrics::gauge;
 use rand::thread_rng;
 use rand::Rng;
+use tracing::error;
+use tracing::warn;
 
 use crate::api::FlightClient;
 use crate::Config;
@@ -56,6 +58,78 @@ pub struct ClusterDiscovery {
     cluster_id: String,
     tenant_id: String,
     flight_address: String,
+}
+
+// avoid leak FlightClient to common-xxx
+#[async_trait::async_trait]
+pub trait ClusterHelper {
+    fn create(nodes: Vec<Arc<NodeInfo>>, local_id: String) -> Arc<Cluster>;
+    fn empty() -> Arc<Cluster>;
+    fn is_empty(&self) -> bool;
+    fn is_local(&self, node: &NodeInfo) -> bool;
+    fn local_id(&self) -> String;
+    async fn create_node_conn(&self, name: &str, config: &Config) -> Result<FlightClient>;
+    fn get_nodes(&self) -> Vec<Arc<NodeInfo>>;
+}
+
+#[async_trait::async_trait]
+impl ClusterHelper for Cluster {
+    fn create(nodes: Vec<Arc<NodeInfo>>, local_id: String) -> Arc<Cluster> {
+        Arc::new(Cluster { local_id, nodes })
+    }
+
+    fn empty() -> Arc<Cluster> {
+        Arc::new(Cluster {
+            local_id: String::from(""),
+            nodes: Vec::new(),
+        })
+    }
+
+    fn is_empty(&self) -> bool {
+        self.nodes.len() <= 1
+    }
+
+    fn is_local(&self, node: &NodeInfo) -> bool {
+        node.id == self.local_id
+    }
+
+    fn local_id(&self) -> String {
+        self.local_id.clone()
+    }
+
+    async fn create_node_conn(&self, name: &str, config: &Config) -> Result<FlightClient> {
+        for node in &self.nodes {
+            if node.id == name {
+                return match config.tls_query_cli_enabled() {
+                    true => Ok(FlightClient::new(FlightServiceClient::new(
+                        ConnectionFactory::create_rpc_channel(
+                            node.flight_address.clone(),
+                            None,
+                            Some(config.query.to_rpc_client_tls_config()),
+                        )
+                        .await?,
+                    ))),
+                    false => Ok(FlightClient::new(FlightServiceClient::new(
+                        ConnectionFactory::create_rpc_channel(
+                            node.flight_address.clone(),
+                            None,
+                            None,
+                        )
+                        .await?,
+                    ))),
+                };
+            }
+        }
+
+        Err(ErrorCode::NotFoundClusterNode(format!(
+            "The node \"{}\" not found in the cluster",
+            name
+        )))
+    }
+
+    fn get_nodes(&self) -> Vec<Arc<NodeInfo>> {
+        self.nodes.to_vec()
+    }
 }
 
 impl ClusterDiscovery {
@@ -207,7 +281,7 @@ impl ClusterDiscovery {
             if before_node.flight_address.eq(&node_info.flight_address) {
                 let drop_invalid_node = self.api_provider.drop_node(before_node.id, None);
                 if let Err(cause) = drop_invalid_node.await {
-                    tracing::warn!("Drop invalid node failure: {:?}", cause);
+                    warn!("Drop invalid node failure: {:?}", cause);
                 }
             }
         }
@@ -219,7 +293,7 @@ impl ClusterDiscovery {
         let mut heartbeat = self.heartbeat.lock().await;
 
         if let Err(shutdown_failure) = heartbeat.shutdown().await {
-            tracing::warn!(
+            warn!(
                 "Cannot shutdown cluster heartbeat, cause {:?}",
                 shutdown_failure
             );
@@ -231,7 +305,7 @@ impl ClusterDiscovery {
         match futures::future::select(drop_node, signal_future).await {
             Either::Left((drop_node_result, _)) => {
                 if let Err(drop_node_failure) = drop_node_result {
-                    tracing::warn!(
+                    warn!(
                         "Cannot drop cluster node(while shutdown), cause {:?}",
                         drop_node_failure
                     );
@@ -263,70 +337,6 @@ impl ClusterDiscovery {
         let mut heartbeat = self.heartbeat.lock().await;
         heartbeat.start(node_info);
         Ok(())
-    }
-}
-
-pub struct Cluster {
-    local_id: String,
-    nodes: Vec<Arc<NodeInfo>>,
-}
-
-impl Cluster {
-    pub fn create(nodes: Vec<Arc<NodeInfo>>, local_id: String) -> Arc<Cluster> {
-        Arc::new(Cluster { local_id, nodes })
-    }
-
-    pub fn empty() -> Arc<Cluster> {
-        Arc::new(Cluster {
-            local_id: String::from(""),
-            nodes: Vec::new(),
-        })
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.nodes.len() <= 1
-    }
-
-    pub fn is_local(&self, node: &NodeInfo) -> bool {
-        node.id == self.local_id
-    }
-
-    pub fn local_id(&self) -> String {
-        self.local_id.clone()
-    }
-
-    pub async fn create_node_conn(&self, name: &str, config: &Config) -> Result<FlightClient> {
-        for node in &self.nodes {
-            if node.id == name {
-                return match config.tls_query_cli_enabled() {
-                    true => Ok(FlightClient::new(FlightServiceClient::new(
-                        ConnectionFactory::create_rpc_channel(
-                            node.flight_address.clone(),
-                            None,
-                            Some(config.query.to_rpc_client_tls_config()),
-                        )
-                        .await?,
-                    ))),
-                    false => Ok(FlightClient::new(FlightServiceClient::new(
-                        ConnectionFactory::create_rpc_channel(
-                            node.flight_address.clone(),
-                            None,
-                            None,
-                        )
-                        .await?,
-                    ))),
-                };
-            }
-        }
-
-        Err(ErrorCode::NotFoundClusterNode(format!(
-            "The node \"{}\" not found in the cluster",
-            name
-        )))
-    }
-
-    pub fn get_nodes(&self) -> Vec<Arc<NodeInfo>> {
-        self.nodes.to_vec()
     }
 }
 
@@ -407,7 +417,7 @@ impl ClusterHeartbeat {
                                 ],
                                 1,
                             );
-                            tracing::error!("Cluster cluster api heartbeat failure: {:?}", failure);
+                            error!("Cluster cluster api heartbeat failure: {:?}", failure);
                         }
                     }
                 }

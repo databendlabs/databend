@@ -93,7 +93,7 @@ impl FromToProto<pb::DataType> for dv::DataTypeImpl {
             None => {
                 return Err(Incompatible {
                     reason: "DataType is None".to_string(),
-                })
+                });
             }
             Some(x) => x,
         };
@@ -380,13 +380,22 @@ impl FromToProto<pb::Struct> for dv::StructType {
         for t in p.types.into_iter() {
             types.push(dv::DataTypeImpl::from_pb(t)?);
         }
-
-        Ok(dv::StructType::create(names, types))
+        if names.is_empty() {
+            Ok(dv::StructType::create(None, types))
+        } else {
+            debug_assert!(
+                names.len() == types.len(),
+                "Size of names must match size of types"
+            );
+            Ok(dv::StructType::create(Some(names), types))
+        }
     }
 
     fn to_pb(&self) -> Result<pb::Struct, Incompatible> {
-        let names = self.names().clone();
-
+        let names = match self.names() {
+            Some(names) => names.clone(),
+            None => Vec::new(),
+        };
         let mut types = Vec::with_capacity(self.types().len());
 
         for t in self.types().iter() {

@@ -23,10 +23,10 @@ use common_arrow::arrow_format::flight::data::FlightData;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 
-use crate::pipelines::new::processors::port::OutputPort;
-use crate::pipelines::new::processors::processor::Event;
-use crate::pipelines::new::processors::processor::ProcessorPtr;
-use crate::pipelines::new::processors::Processor;
+use crate::pipelines::processors::port::OutputPort;
+use crate::pipelines::processors::processor::Event;
+use crate::pipelines::processors::processor::ProcessorPtr;
+use crate::pipelines::processors::Processor;
 
 pub struct ExchangeMergeSource {
     output: Arc<OutputPort>,
@@ -55,7 +55,7 @@ impl ExchangeMergeSource {
 #[async_trait::async_trait]
 impl Processor for ExchangeMergeSource {
     fn name(&self) -> &'static str {
-        "ExchangeSubscriberSource"
+        "ExchangeMergeSource"
     }
 
     fn as_any(&mut self) -> &mut dyn Any {
@@ -72,7 +72,6 @@ impl Processor for ExchangeMergeSource {
         }
 
         if let Some(data_block) = self.remote_data_block.take() {
-            // println!("receive remote data block {:?}", data_block);
             self.output.push_data(Ok(data_block));
             return Ok(Event::NeedConsume);
         }
@@ -81,10 +80,12 @@ impl Processor for ExchangeMergeSource {
             return Ok(Event::Sync);
         }
 
-        match self.rx.is_closed() && self.rx.is_empty() {
-            true => Ok(Event::Finished),
-            false => Ok(Event::Async),
+        if self.rx.is_closed() && self.rx.is_empty() {
+            self.output.finish();
+            return Ok(Event::Finished);
         }
+
+        Ok(Event::Async)
     }
 
     fn process(&mut self) -> common_exception::Result<()> {

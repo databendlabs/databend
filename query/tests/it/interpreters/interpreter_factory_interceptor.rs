@@ -15,13 +15,13 @@
 use common_base::base::tokio;
 use common_exception::Result;
 use databend_query::interpreters::*;
+use databend_query::sessions::TableContext;
 use databend_query::sql::*;
 use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_interpreter_interceptor() -> Result<()> {
-    common_tracing::init_default_ut_tracing();
     let ctx = crate::tests::create_query_context().await?;
     {
         let query = "select number from numbers_mt(100) where number > 90";
@@ -79,13 +79,13 @@ async fn test_interpreter_interceptor() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_interpreter_interceptor_for_insert() -> Result<()> {
-    common_tracing::init_default_ut_tracing();
     let ctx = crate::tests::create_query_context().await?;
+    let mut planner = Planner::new(ctx.clone());
+
     {
         let query = "create table t as select number from numbers_mt(1)";
-        ctx.attach_query_str(query);
-        let plan = PlanParser::parse(ctx.clone(), query).await?;
-        let interpreter = InterpreterFactory::get(ctx.clone(), plan)?;
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let interpreter = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         interpreter.start().await?;
         let stream = interpreter.execute(None).await?;
         stream.try_collect::<Vec<_>>().await?;
@@ -102,12 +102,12 @@ async fn test_interpreter_interceptor_for_insert() -> Result<()> {
         let result = stream.try_collect::<Vec<_>>().await?;
 
         let expected = vec![
-            "+----------+--------------+-----------+-----------+------------+-----------------+--------------+---------------+-------------+--------------+-----------------+----------------------------------------------------+----------+--------------------------------+",
-            "| log_type | handler_type | cpu_usage | scan_rows | scan_bytes | scan_partitions | written_rows | written_bytes | result_rows | result_bytes | query_kind      | query_text                                         | sql_user | sql_user_quota                 |",
-            "+----------+--------------+-----------+-----------+------------+-----------------+--------------+---------------+-------------+--------------+-----------------+----------------------------------------------------+----------+--------------------------------+",
-            "| 1        | Dummy        | 8         | 0         | 0          | 0               | 0            | 0             | 0           | 0            | CreateTablePlan | create table t as select number from numbers_mt(1) | root     | UserQuota<cpu:0,mem:0,store:0> |",
-            "| 2        | Dummy        | 8         | 1         | 8          | 0               | 1            | 8             | 0           | 0            | CreateTablePlan | create table t as select number from numbers_mt(1) | root     | UserQuota<cpu:0,mem:0,store:0> |",
-            "+----------+--------------+-----------+-----------+------------+-----------------+--------------+---------------+-------------+--------------+-----------------+----------------------------------------------------+----------+--------------------------------+",
+            "+----------+--------------+-----------+-----------+------------+-----------------+--------------+---------------+-------------+--------------+-------------+------------+----------+--------------------------------+",
+            "| log_type | handler_type | cpu_usage | scan_rows | scan_bytes | scan_partitions | written_rows | written_bytes | result_rows | result_bytes | query_kind  | query_text | sql_user | sql_user_quota                 |",
+            "+----------+--------------+-----------+-----------+------------+-----------------+--------------+---------------+-------------+--------------+-------------+------------+----------+--------------------------------+",
+            "| 1        | Dummy        | 8         | 0         | 0          | 0               | 0            | 0             | 0           | 0            | CreateTable |            | root     | UserQuota<cpu:0,mem:0,store:0> |",
+            "| 2        | Dummy        | 8         | 1         | 8          | 0               | 1            | 8             | 0           | 0            | CreateTable |            | root     | UserQuota<cpu:0,mem:0,store:0> |",
+            "+----------+--------------+-----------+-----------+------------+-----------------+--------------+---------------+-------------+--------------+-------------+------------+----------+--------------------------------+",
         ];
         common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
     }

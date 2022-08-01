@@ -26,20 +26,35 @@ use common_planners::PlanNode;
 
 use crate::api::DataExchange;
 use crate::api::ExecutePartialQueryPacket;
+use crate::api::FragmentPayload;
 use crate::api::FragmentPlanPacket;
 use crate::api::InitNodesChannelPacket;
 use crate::api::QueryFragmentsPlanPacket;
+use crate::clusters::ClusterHelper;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
+use crate::sql::executor::PhysicalPlan;
 
 // Query plan fragment with executor name
+#[derive(Debug)]
 pub struct QueryFragmentAction {
-    pub node: PlanNode,
+    pub payload: FragmentPayload,
     pub executor: String,
 }
 
 impl QueryFragmentAction {
     pub fn create(executor: String, node: PlanNode) -> QueryFragmentAction {
-        QueryFragmentAction { node, executor }
+        QueryFragmentAction {
+            payload: FragmentPayload::PlanV1(node),
+            executor,
+        }
+    }
+
+    pub fn create_v2(executor: String, plan: PhysicalPlan) -> QueryFragmentAction {
+        QueryFragmentAction {
+            payload: FragmentPayload::PlanV2(plan),
+            executor,
+        }
     }
 }
 
@@ -48,7 +63,7 @@ pub struct QueryFragmentActions {
     pub fragment_id: usize,
     pub exchange_actions: bool,
     pub data_exchange: Option<DataExchange>,
-    fragment_actions: Vec<QueryFragmentAction>,
+    pub fragment_actions: Vec<QueryFragmentAction>,
 }
 
 impl QueryFragmentActions {
@@ -76,7 +91,7 @@ impl QueryFragmentActions {
     pub fn get_schema(&self) -> Result<DataSchemaRef> {
         let mut actions_schema = Vec::with_capacity(self.fragment_actions.len());
         for fragment_action in &self.fragment_actions {
-            actions_schema.push(fragment_action.node.schema());
+            actions_schema.push(fragment_action.payload.schema()?);
         }
 
         if actions_schema.is_empty() {
@@ -99,7 +114,7 @@ impl QueryFragmentActions {
 
 pub struct QueryFragmentsActions {
     ctx: Arc<QueryContext>,
-    fragments_actions: Vec<QueryFragmentActions>,
+    pub fragments_actions: Vec<QueryFragmentActions>,
 }
 
 impl QueryFragmentsActions {
@@ -130,8 +145,20 @@ impl QueryFragmentsActions {
         }
     }
 
+    pub fn pop_root_actions(&mut self) -> Option<QueryFragmentActions> {
+        self.fragments_actions.pop()
+    }
+
     pub fn add_fragment_actions(&mut self, actions: QueryFragmentActions) -> Result<()> {
         self.fragments_actions.push(actions);
+        Ok(())
+    }
+
+    pub fn add_fragments_actions(&mut self, actions: QueryFragmentsActions) -> Result<()> {
+        for fragment_actions in actions.fragments_actions.into_iter() {
+            self.fragments_actions.push(fragment_actions);
+        }
+
         Ok(())
     }
 
@@ -151,14 +178,14 @@ impl QueryFragmentsActions {
         let mut query_fragments_plan_packets = Vec::with_capacity(fragments_packets.len());
 
         let nodes_info = Self::nodes_info(&self.ctx);
-        let source_2_fragments = self.get_source_2_fragments();
+        let target_source_fragments = self.get_target_source_fragments();
 
         let cluster = self.ctx.get_cluster();
         for (executor, fragments) in fragments_packets.into_iter() {
             let query_id = self.ctx.get_id();
             let executors_info = nodes_info.clone();
 
-            let source_2_fragments = match source_2_fragments.get(&executor) {
+            let source_2_fragments = match target_source_fragments.get(&executor) {
                 None => HashMap::new(),
                 Some(source_2_fragments) => source_2_fragments.clone(),
             };
@@ -179,7 +206,7 @@ impl QueryFragmentsActions {
     pub fn get_init_nodes_channel_packets(&self) -> Result<Vec<InitNodesChannelPacket>> {
         let nodes_info = Self::nodes_info(&self.ctx);
         let mut init_nodes_channel_packets = Vec::with_capacity(nodes_info.len());
-        let connections_info = self.get_target_2_fragments();
+        let connections_info = self.get_source_target_fragments();
 
         let cluster = self.ctx.get_cluster();
         for node_id in nodes_info.keys() {
@@ -229,9 +256,9 @@ impl QueryFragmentsActions {
         Ok(execute_partial_query_packets)
     }
 
-    // map(source, map(target, vec(fragment_id)))
-    fn get_target_2_fragments(&self) -> HashMap<String, HashMap<String, Vec<usize>>> {
-        let mut target_2_fragments = HashMap::new();
+    /// map(source, map(target, vec(fragment_id)))
+    fn get_source_target_fragments(&self) -> HashMap<String, HashMap<String, Vec<usize>>> {
+        let mut source_target_fragments = HashMap::new();
         for fragment_actions in &self.fragments_actions {
             if let Some(exchange) = &fragment_actions.data_exchange {
                 let fragment_id = fragment_actions.fragment_id;
@@ -242,7 +269,7 @@ impl QueryFragmentsActions {
 
                     for destination in &destinations {
                         let target = destination.clone();
-                        match target_2_fragments.entry(source.clone()) {
+                        match source_target_fragments.entry(source.clone()) {
                             Entry::Vacant(v) => {
                                 let target_2_fragments = v.insert(HashMap::new());
                                 target_2_fragments.insert(target, vec![fragment_id]);
@@ -260,12 +287,12 @@ impl QueryFragmentsActions {
                 }
             }
         }
-        target_2_fragments
+        source_target_fragments
     }
 
-    // map(target, map(source, vec(fragment_id)))
-    fn get_source_2_fragments(&self) -> HashMap<String, HashMap<String, Vec<usize>>> {
-        let mut source_2_fragments = HashMap::new();
+    /// map(target, map(source, vec(fragment_id)))
+    fn get_target_source_fragments(&self) -> HashMap<String, HashMap<String, Vec<usize>>> {
+        let mut target_source_fragments = HashMap::new();
         for fragment_actions in &self.fragments_actions {
             if let Some(exchange) = &fragment_actions.data_exchange {
                 let fragment_id = fragment_actions.fragment_id;
@@ -276,10 +303,10 @@ impl QueryFragmentsActions {
 
                     for destination in &destinations {
                         let target = destination.clone();
-                        match source_2_fragments.entry(target) {
+                        match target_source_fragments.entry(target) {
                             Entry::Vacant(v) => {
-                                let target_2_fragments = v.insert(HashMap::new());
-                                target_2_fragments.insert(source.clone(), vec![fragment_id]);
+                                let source_2_fragments = v.insert(HashMap::new());
+                                source_2_fragments.insert(source.clone(), vec![fragment_id]);
                             }
                             Entry::Occupied(mut v) => match v.get_mut().entry(source.clone()) {
                                 Entry::Vacant(v) => {
@@ -294,7 +321,7 @@ impl QueryFragmentsActions {
                 }
             }
         }
-        source_2_fragments
+        target_source_fragments
     }
 
     fn nodes_info(ctx: &Arc<QueryContext>) -> HashMap<String, Arc<NodeInfo>> {
@@ -314,7 +341,7 @@ impl QueryFragmentsActions {
             for fragment_action in &fragment_actions.fragment_actions {
                 let fragment_packet = FragmentPlanPacket::create(
                     fragment_actions.fragment_id,
-                    fragment_action.node.clone(),
+                    fragment_action.payload.clone(),
                     fragment_actions.data_exchange.clone(),
                 );
 
@@ -337,15 +364,6 @@ impl Debug for QueryFragmentsActions {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("QueryFragmentsActions")
             .field("actions", &self.fragments_actions)
-            .finish()
-    }
-}
-
-impl Debug for QueryFragmentAction {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("QueryFragmentAction")
-            .field("node", &self.node)
-            .field("executor", &self.executor)
             .finish()
     }
 }

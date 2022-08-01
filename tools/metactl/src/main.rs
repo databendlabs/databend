@@ -22,7 +22,8 @@ use common_base::base::tokio;
 use common_meta_api::KVApi;
 use common_meta_grpc::MetaGrpcClient;
 use common_meta_raft_store::config::get_default_raft_advertise_host;
-use common_tracing::init_global_tracing;
+use common_tracing::init_logging;
+use common_tracing::Config as LogConfig;
 use databend_meta::version::METASRV_COMMIT_VERSION;
 use serde::Deserialize;
 use serde::Serialize;
@@ -188,7 +189,7 @@ impl Default for RaftConfig {
 async fn main() -> anyhow::Result<()> {
     let config = Config::parse();
 
-    let _guards = init_global_tracing("metactl", "./_metactl_log", &config.log_level, Some(false));
+    let _guards = init_logging("metactl", &LogConfig::default());
 
     eprintln!();
     eprintln!("███╗   ███╗███████╗████████╗ █████╗        ██████╗████████╗██╗     ");

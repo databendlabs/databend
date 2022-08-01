@@ -10,8 +10,11 @@ USE ss;
 statement ok
 CREATE TABLE t1(a INT);
 
-statement ok
+statement query TTTTT 
 SHOW FIELDS FROM t1;
+
+----
+a INT NO 0 
 
 statement ok
 DROP DATABASE IF EXISTS ss;

@@ -19,7 +19,7 @@ CREATE DATABASE ss2;
 statement query T 
 SHOW DATABASES like 'ss%';
 
-----  
+----
 ss
 ss1
 ss2
@@ -27,7 +27,7 @@ ss2
 statement query T 
 SHOW SCHEMAS like 'ss%';
 
-----  
+----
 ss
 ss1
 ss2

@@ -107,25 +107,25 @@ impl<'a> Binder {
             None
         };
 
-        let order_items = self.analyze_order_items(
-            &from_context,
-            &scalar_items,
-            &projections,
-            order_by,
-            stmt.distinct,
-        )?;
+        let order_items = self
+            .analyze_order_items(
+                &from_context,
+                &mut scalar_items,
+                &projections,
+                order_by,
+                stmt.distinct,
+            )
+            .await?;
 
-        if !from_context.aggregate_info.aggregate_functions.is_empty()
-            || !stmt.group_by.is_empty()
-            || stmt.having.is_some()
+        if !from_context.aggregate_info.aggregate_functions.is_empty() || !stmt.group_by.is_empty()
         {
             s_expr = self.bind_aggregate(&mut from_context, s_expr).await?;
+        }
 
-            if let Some((having, span)) = having {
-                s_expr = self
-                    .bind_having(&from_context, having, span, s_expr)
-                    .await?;
-            }
+        if let Some((having, span)) = having {
+            s_expr = self
+                .bind_having(&from_context, having, span, s_expr)
+                .await?;
         }
 
         if stmt.distinct {
@@ -286,7 +286,9 @@ impl<'a> Binder {
                 // Transfer Except to Anti join
                 self.bind_except(left_bind_context, right_bind_context, left_expr, right_expr)
             }
-            _ => Err(ErrorCode::UnImplement("Unsupported query type, currently, databend only support intersect distinct and except distinct")),
+            _ => Err(ErrorCode::UnImplement(
+                "Unsupported query type, currently, databend only support intersect distinct and except distinct",
+            )),
         }
     }
 

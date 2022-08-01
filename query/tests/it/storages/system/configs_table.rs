@@ -16,6 +16,7 @@ use common_base::base::tokio;
 use common_exception::Result;
 use common_storage::StorageParams;
 use common_storage::StorageS3Config;
+use databend_query::sessions::TableContext;
 use databend_query::storages::system::ConfigsTable;
 use databend_query::storages::TableStreamReadWrap;
 use databend_query::storages::ToReadDataSourcePlan;
@@ -46,11 +47,16 @@ async fn test_configs_table() -> Result<()> {
         "| group   | name                                 | value                     | description |",
         "+---------+--------------------------------------+---------------------------+-------------+",
         "| log     | dir                                  | ./.databend/logs          |             |",
-        "| log     | level                                | INFO                      |             |",
+        "| log     | file.dir                             | ./.databend/logs          |             |",
+        "| log     | file.level                           | DEBUG                     |             |",
+        "| log     | file.on                              | true                      |             |",
+        "| log     | level                                | DEBUG                     |             |",
         "| log     | query_enabled                        | false                     |             |",
+        "| log     | stderr.level                         | DEBUG                     |             |",
+        "| log     | stderr.on                            | true                      |             |",
         "| meta    | address                              |                           |             |",
-        "| meta    | client_timeout_in_second             | 10                        |             |",
         "| meta    | auto_sync_interval                   | 10                        |             |",
+        "| meta    | client_timeout_in_second             | 10                        |             |",
         "| meta    | embedded_dir                         | ./.databend/meta_embedded |             |",
         "| meta    | endpoints                            |                           |             |",
         "| meta    | password                             |                           |             |",
@@ -163,11 +169,16 @@ async fn test_configs_table_redact() -> Result<()> {
         "| group   | name                                 | value                     | description |",
         "+---------+--------------------------------------+---------------------------+-------------+",
         "| log     | dir                                  | ./.databend/logs          |             |",
-        "| log     | level                                | INFO                      |             |",
+        "| log     | file.dir                             | ./.databend/logs          |             |",
+        "| log     | file.level                           | DEBUG                     |             |",
+        "| log     | file.on                              | true                      |             |",
+        "| log     | level                                | DEBUG                     |             |",
         "| log     | query_enabled                        | false                     |             |",
+        "| log     | stderr.level                         | DEBUG                     |             |",
+        "| log     | stderr.on                            | true                      |             |",
         "| meta    | address                              |                           |             |",
-        "| meta    | client_timeout_in_second             | 10                        |             |",
         "| meta    | auto_sync_interval                   | 10                        |             |",
+        "| meta    | client_timeout_in_second             | 10                        |             |",
         "| meta    | embedded_dir                         | ./.databend/meta_embedded |             |",
         "| meta    | endpoints                            |                           |             |",
         "| meta    | password                             |                           |             |",

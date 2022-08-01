@@ -1,6 +1,6 @@
-statement query I 
+statement query I
 SELECT 65792;
 
-----  
+----
 65792
 

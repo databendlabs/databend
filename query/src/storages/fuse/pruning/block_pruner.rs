@@ -11,7 +11,6 @@
 //  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
-//
 
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
@@ -20,18 +19,17 @@ use std::sync::Arc;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_fuse_meta::meta::BlockMeta;
+use common_fuse_meta::meta::SegmentInfo;
+use common_fuse_meta::meta::StatisticsOfColumns;
+use common_fuse_meta::meta::TableSnapshot;
 use common_planners::Extras;
-use common_tracing::tracing;
 use futures::StreamExt;
 use futures::TryStreamExt;
 
-use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::storages::fuse::io::MetaReaders;
-use crate::storages::fuse::meta::BlockMeta;
-use crate::storages::fuse::meta::SegmentInfo;
-use crate::storages::fuse::meta::TableSnapshot;
 use crate::storages::index::RangeFilter;
-use crate::storages::index::StatisticsOfColumns;
 
 pub struct BlockPruner {
     table_snapshot: Arc<TableSnapshot>,
@@ -46,15 +44,14 @@ impl BlockPruner {
     #[tracing::instrument(level = "debug", name="block_pruner_apply", skip(self, schema, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     pub async fn apply(
         &self,
-        ctx: &QueryContext,
+        ctx: &Arc<dyn TableContext>,
         schema: DataSchemaRef,
         push_down: &Option<Extras>,
     ) -> Result<Vec<(usize, BlockMeta)>> {
         let block_pred: Pred = match push_down {
             Some(exprs) if !exprs.filters.is_empty() => {
                 // for the time being, we only handle the first expr
-                let range_filter =
-                    RangeFilter::try_create(Arc::new(ctx.clone()), &exprs.filters[0], schema)?;
+                let range_filter = RangeFilter::try_create(ctx.clone(), &exprs.filters[0], schema)?;
                 Box::new(move |v: &StatisticsOfColumns| range_filter.eval(v))
             }
             _ => Box::new(|_: &StatisticsOfColumns| Ok(true)),
@@ -95,7 +92,7 @@ impl BlockPruner {
                 let version = { u }.0; // use block expression to force moving
                 let idx = { idx }.0;
                 if accumulated_rows.load(Ordering::Acquire) < limit {
-                    let reader = MetaReaders::segment_info_reader(ctx);
+                    let reader = MetaReaders::segment_info_reader(ctx.as_ref());
                     let segment_info = reader.read(seg_loc, None, version).await?;
                     Ok::<_, ErrorCode>(
                         Self::filter_segment(

@@ -18,20 +18,21 @@ use common_meta_types::AuthInfo;
 use common_meta_types::PasswordHashMethod;
 use common_meta_types::UserInfo;
 use databend_query::interpreters::*;
+use databend_query::sessions::TableContext;
 use databend_query::sql::*;
 use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_drop_user_interpreter() -> Result<()> {
-    common_tracing::init_default_ut_tracing();
-
     let ctx = crate::tests::create_query_context().await?;
+    let mut planner = Planner::new(ctx.clone());
+
     let tenant = ctx.get_tenant();
 
     {
         let query = "DROP USER 'test'@'localhost'";
-        let plan = PlanParser::parse(ctx.clone(), query).await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         assert_eq!(executor.name(), "DropUserInterpreter");
         let ret = executor.execute(None).await;
         assert!(ret.is_err())
@@ -39,8 +40,8 @@ async fn test_drop_user_interpreter() -> Result<()> {
 
     {
         let query = "DROP USER IF EXISTS 'test'@'localhost'";
-        let plan = PlanParser::parse(ctx.clone(), query).await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         assert_eq!(executor.name(), "DropUserInterpreter");
         let ret = executor.execute(None).await;
         assert!(ret.is_ok())
@@ -66,8 +67,8 @@ async fn test_drop_user_interpreter() -> Result<()> {
         );
 
         let query = "DROP USER 'test'@'localhost'";
-        let plan = PlanParser::parse(ctx.clone(), query).await?;
-        let executor = InterpreterFactory::get(ctx, plan.clone())?;
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         assert_eq!(executor.name(), "DropUserInterpreter");
         executor.execute(None).await?;
     }

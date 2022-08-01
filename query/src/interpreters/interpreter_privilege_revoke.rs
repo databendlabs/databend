@@ -19,11 +19,11 @@ use common_meta_types::PrincipalIdentity;
 use common_planners::RevokePrivilegePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
-use common_tracing::tracing;
 
 use crate::interpreters::interpreter_common::validate_grant_object_exists;
 use crate::interpreters::Interpreter;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 
 #[derive(Debug)]
 pub struct RevokePrivilegeInterpreter {

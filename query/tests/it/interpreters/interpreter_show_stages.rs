@@ -15,19 +15,19 @@
 use common_base::base::tokio;
 use common_exception::Result;
 use databend_query::interpreters::*;
-use databend_query::sql::PlanParser;
+use databend_query::sql::Planner;
 use futures::StreamExt;
 use futures::TryStreamExt;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_show_stages_interpreter() -> Result<()> {
     let ctx = crate::tests::create_query_context().await?;
+    let mut planner = Planner::new(ctx.clone());
 
     {
-        let query =
-            "CREATE STAGE test url='s3://load/files/' credentials=(aws_key_id='1a2b3c' aws_secret_key='4x5y6z')";
-        let plan = PlanParser::parse(ctx.clone(), query).await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let query = "CREATE STAGE test url='s3://load/files/' credentials=(aws_key_id='1a2b3c' aws_secret_key='4x5y6z')";
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         assert_eq!(executor.name(), "CreateUserStageInterpreter");
         let mut stream = executor.execute(None).await?;
         while let Some(_block) = stream.next().await {}
@@ -35,9 +35,10 @@ async fn test_show_stages_interpreter() -> Result<()> {
 
     // show stages.
     {
-        let plan = PlanParser::parse(ctx.clone(), "show stages").await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        assert_eq!(executor.name(), "ShowStagesInterpreter");
+        let (plan, _, _) = planner.plan_sql("show stages").await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        // Show stage will be rewritten into query.
+        assert_eq!(executor.name(), "SelectInterpreterV2");
 
         let stream = executor.execute(None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;

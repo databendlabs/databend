@@ -19,165 +19,54 @@ use nom::character::complete::multispace0;
 use nom::character::complete::multispace1;
 use nom::IResult;
 
-use super::statements::DfAlterView;
-use super::statements::DfCall;
-use super::statements::DfCopy;
-use super::statements::DfCreateUserStage;
-use super::statements::DfDescribeUserStage;
-use super::statements::DfDropUserStage;
-use super::statements::DfDropView;
-use super::statements::DfGrantRoleStatement;
-use super::statements::DfList;
-use super::statements::DfRevokeRoleStatement;
-use super::statements::DfShowStages;
-use super::statements::DfUndropDatabase;
-use crate::sql::statements::DfAlterDatabase;
-use crate::sql::statements::DfAlterTable;
-use crate::sql::statements::DfAlterUDF;
-use crate::sql::statements::DfAlterUser;
-use crate::sql::statements::DfCreateDatabase;
-use crate::sql::statements::DfCreateRole;
-use crate::sql::statements::DfCreateTable;
-use crate::sql::statements::DfCreateUDF;
-use crate::sql::statements::DfCreateUser;
-use crate::sql::statements::DfCreateView;
 use crate::sql::statements::DfDeleteStatement;
-use crate::sql::statements::DfDescribeTable;
-use crate::sql::statements::DfDropDatabase;
-use crate::sql::statements::DfDropRole;
-use crate::sql::statements::DfDropTable;
-use crate::sql::statements::DfDropUDF;
-use crate::sql::statements::DfDropUser;
-use crate::sql::statements::DfExistsTable;
 use crate::sql::statements::DfExplain;
-use crate::sql::statements::DfGrantPrivilegeStatement;
 use crate::sql::statements::DfInsertStatement;
-use crate::sql::statements::DfKillStatement;
-use crate::sql::statements::DfOptimizeTable;
 use crate::sql::statements::DfQueryStatement;
-use crate::sql::statements::DfRemoveStage;
-use crate::sql::statements::DfRenameTable;
-use crate::sql::statements::DfRevokePrivilegeStatement;
-use crate::sql::statements::DfSetVariable;
-use crate::sql::statements::DfShowCreateDatabase;
-use crate::sql::statements::DfShowCreateTable;
-use crate::sql::statements::DfShowDatabases;
-use crate::sql::statements::DfShowEngines;
-use crate::sql::statements::DfShowFunctions;
-use crate::sql::statements::DfShowGrants;
-use crate::sql::statements::DfShowMetrics;
-use crate::sql::statements::DfShowProcessList;
-use crate::sql::statements::DfShowRoles;
-use crate::sql::statements::DfShowSettings;
-use crate::sql::statements::DfShowTables;
-use crate::sql::statements::DfShowTablesStatus;
-use crate::sql::statements::DfShowUsers;
-use crate::sql::statements::DfTruncateTable;
-use crate::sql::statements::DfUndropTable;
-use crate::sql::statements::DfUseDatabase;
 
 /// Tokens parsed by `DFParser` are converted into these values.
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq)]
 pub enum DfStatement<'a> {
-    // ANSI SQL AST node
     Query(Box<DfQueryStatement>),
     Explain(DfExplain<'a>),
-
-    // Databases.
-    ShowDatabases(DfShowDatabases),
-    ShowCreateDatabase(DfShowCreateDatabase),
-    CreateDatabase(DfCreateDatabase),
-    DropDatabase(DfDropDatabase),
-    UseDatabase(DfUseDatabase),
-    AlterDatabase(DfAlterDatabase),
-
-    // Tables.
-    ShowTables(DfShowTables),
-    ShowCreateTable(DfShowCreateTable),
-    ShowTablesStatus(DfShowTablesStatus),
-    CreateTable(DfCreateTable),
-    DescribeTable(DfDescribeTable),
-    DropTable(DfDropTable),
-    UndropTable(DfUndropTable),
-    UndropDatabase(DfUndropDatabase),
-    AlterTable(DfAlterTable),
-    TruncateTable(DfTruncateTable),
-    OptimizeTable(DfOptimizeTable),
-    ExistsTable(DfExistsTable),
-    RenameTable(DfRenameTable),
-
-    // Views.
-    CreateView(DfCreateView),
-    // TODO(veeupup) make alter and delete view done
-    AlterView(DfAlterView),
-    DropView(DfDropView),
-
-    // Settings.
-    ShowSettings(DfShowSettings),
-
-    // ProcessList
-    ShowProcessList(DfShowProcessList),
-
-    // Metrics
-    ShowMetrics(DfShowMetrics),
-
-    // Functions
-    ShowFunctions(DfShowFunctions),
-
-    // Kill
-    KillStatement(DfKillStatement),
-
-    // Set
-    SetVariable(DfSetVariable),
-
-    // Insert
     InsertQuery(DfInsertStatement<'a>),
-
-    // Delete
     Delete(Box<DfDeleteStatement>),
 
-    // User
-    CreateUser(DfCreateUser),
-    AlterUser(DfAlterUser),
-    ShowUsers(DfShowUsers),
-    DropUser(DfDropUser),
-
-    // Role
-    CreateRole(DfCreateRole),
-    DropRole(DfDropRole),
-    ShowRoles(DfShowRoles),
-
-    // Copy
-    Copy(DfCopy),
-
-    // Stage
-    CreateStage(DfCreateUserStage),
-    DropStage(DfDropUserStage),
-    DescribeStage(DfDescribeUserStage),
-    RemoveStage(DfRemoveStage),
-    List(DfList),
-    ShowStages(DfShowStages),
-
-    // Call
-    Call(DfCall),
-
-    // Grant
-    GrantPrivilege(DfGrantPrivilegeStatement),
-    GrantRole(DfGrantRoleStatement),
-    ShowGrants(DfShowGrants),
-
-    // Revoke
-    RevokePrivilege(DfRevokePrivilegeStatement),
-    RevokeRole(DfRevokeRoleStatement),
-
-    // UDF
-    CreateUDF(DfCreateUDF),
-    DropUDF(DfDropUDF),
-    AlterUDF(DfAlterUDF),
-
-    // Engine
-    ShowEngines(DfShowEngines),
+    // “See You Again” is a tribute to the late Furious actor Paul Walker
+    // who died tragically in November of 2013 after his car crashed and
+    // burst into flames in Valencia, CA.
+    // The first verse is from the perspective of Vin Diesel and
+    // the Furious 7 cast members, while the second is from Paul Walker.
+    //
+    // It's been a long day without you, my friend
+    // And I'll tell you all about it when I see you again
+    // We've come a long way from where we began
+    // Oh, I'll tell you all about it when I see you again
+    // When I see you again
+    //
+    // It's been a long day without you, my friend
+    // And I'll tell you all about it when I see you again
+    // We've come a long way from where we began
+    // Oh, I'll tell you all about it when I see you again
+    // When I see you again
+    // Oh-oh-oh-oh, oh-oh-oh, oh-oh-oh-oh (Uh)
+    // Yeah yeah (Yeah)
+    // Ooh-ooh-ooh-ooh-ooh, ooh-ooh-ooh-ooh
+    // Ooh-ooh-ooh-ooh-ooh, ooh-ooh-ooh-ooh-ooh (Yo)
+    // When I see you again (Yo, uh)
+    // Oh-oh-oh-oh, oh-oh-oh, oh-oh-oh-oh
+    // See you again, yeah, yeah, oh-oh (Yo, yo)
+    // Ooh-ooh-ooh-ooh-ooh, ooh-ooh-ooh-ooh
+    // Ooh-ooh-ooh-ooh-ooh, ooh-ooh-ooh-ooh-ooh (Uh-huh, yup)
+    // When I see you again
+    //
+    // We dedicate this song to the old planner.
+    // It's been fun with you, but it's time for us to depart, see you again!
+    //
+    // While reading `SeeYouAgain`, we will forward the entire query to the new
+    // planner directly.
+    SeeYouAgain,
 }
 
 /// Comment hints from SQL.

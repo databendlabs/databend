@@ -11,7 +11,6 @@
 //  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
-//
 
 use std::convert::TryFrom;
 use std::sync::Arc;
@@ -22,8 +21,7 @@ use common_datavalues::prelude::SeriesFrom;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
-
-use crate::storages::fuse::meta::SegmentInfo;
+use common_fuse_meta::meta::SegmentInfo;
 
 // currently, only support append,
 pub type TableOperationLog = Vec<AppendOperationLogEntry>;

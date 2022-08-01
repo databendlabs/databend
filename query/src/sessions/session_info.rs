@@ -12,32 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::net::SocketAddr;
 use std::sync::Arc;
 
 use common_base::base::ProgressValues;
+pub use common_catalog::table_context::ProcessInfo;
 use common_contexts::DalMetrics;
-use common_meta_types::UserInfo;
 
 use crate::sessions::Session;
 use crate::sessions::SessionContext;
 use crate::sessions::SessionType;
-use crate::sessions::Settings;
-
-pub struct ProcessInfo {
-    pub id: String,
-    pub typ: String,
-    pub state: String,
-    pub database: String,
-    pub user: Option<UserInfo>,
-    pub settings: Arc<Settings>,
-    pub client_address: Option<SocketAddr>,
-    pub session_extra_info: Option<String>,
-    pub memory_usage: i64,
-    pub dal_metrics: Option<DalMetrics>,
-    pub scan_progress_value: Option<ProgressValues>,
-    pub mysql_connection_id: Option<u32>,
-}
 
 impl Session {
     pub fn process_info(self: &Arc<Self>) -> ProcessInfo {

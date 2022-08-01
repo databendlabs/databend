@@ -25,7 +25,8 @@ pub struct FormatSettings {
     pub record_delimiter: Vec<u8>,
     pub field_delimiter: Vec<u8>,
     pub empty_as_default: bool,
-    pub skip_header: bool,
+    pub skip_header: u64,
+    pub size_limit: Option<usize>,
     pub compression: Compression,
     pub timezone: Tz,
     pub true_bytes: Vec<u8>,
@@ -38,6 +39,9 @@ pub struct FormatSettings {
     pub tsv_null_bytes: Vec<u8>,
     pub json_quote_denormals: bool,
     pub json_escape_forward_slashes: bool,
+
+    pub input_buffer_size: usize,
+    pub decompress_buffer_size: usize,
 }
 
 impl Default for FormatSettings {
@@ -46,7 +50,8 @@ impl Default for FormatSettings {
             record_delimiter: vec![b'\n'],
             field_delimiter: vec![b','],
             empty_as_default: false,
-            skip_header: false,
+            skip_header: 0,
+            size_limit: None,
             compression: Compression::None,
             timezone: "UTC".parse::<Tz>().unwrap(),
             true_bytes: vec![b'1'],
@@ -58,6 +63,8 @@ impl Default for FormatSettings {
             tsv_null_bytes: vec![b'\\', b'N'],
             json_quote_denormals: false,
             json_escape_forward_slashes: true,
+            input_buffer_size: 1024 * 1024,
+            decompress_buffer_size: 1024 * 1024,
         }
     }
 }

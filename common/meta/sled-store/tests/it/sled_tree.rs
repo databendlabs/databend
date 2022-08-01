@@ -19,10 +19,10 @@ use common_meta_types::LogEntry;
 use common_meta_types::LogId;
 use common_meta_types::LogIndex;
 use common_meta_types::SeqV;
-use common_tracing::tracing_futures::Instrument;
 use openraft::raft::Entry;
 use openraft::raft::EntryPayload;
 use testing::new_sled_test_context;
+use tracing::Instrument;
 
 use crate::init_sled_ut;
 use crate::testing;

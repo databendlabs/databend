@@ -20,17 +20,17 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
-use common_tracing::tracing;
 use serde_json::Value;
 
 use crate::interpreters::Interpreter;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::sql::plans::PresignAction;
 use crate::sql::plans::PresignPlan;
-use crate::storages::stage::StageSource;
+use crate::storages::stage::StageSourceHelper;
 
 pub struct PresignInterpreter {
-    ctx: Arc<QueryContext>,
+    ctx: Arc<dyn TableContext>,
     plan: PresignPlan,
 }
 
@@ -47,12 +47,16 @@ impl Interpreter for PresignInterpreter {
         "PresignInterpreter"
     }
 
+    fn schema(&self) -> DataSchemaRef {
+        self.plan.schema()
+    }
+
     #[tracing::instrument(level = "debug", name = "presign_interpreter_execute", skip(self, _input_stream), fields(ctx.id = self.ctx.get_id().as_str()))]
     async fn execute(
         &self,
         _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
-        let op = StageSource::get_op(&self.ctx, &self.plan.stage).await?;
+        let op = StageSourceHelper::get_op(&self.ctx, &self.plan.stage).await?;
         if !op.metadata().can_presign() {
             return Err(ErrorCode::StorageUnsupported(
                 "storage doesn't support presign operation",

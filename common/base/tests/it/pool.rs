@@ -19,7 +19,7 @@ use common_base::base::tokio;
 use common_base::base::GlobalSequence;
 use common_base::containers::ItemManager;
 use common_base::containers::Pool;
-use common_tracing::tracing;
+use tracing::info;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_pool() -> anyhow::Result<()> {
@@ -36,18 +36,18 @@ async fn test_pool() -> anyhow::Result<()> {
     let i5_1 = p.get(&5).await?;
     assert_eq!(2, i5_1.seq, "seq=2 valid for make");
 
-    tracing::info!("--- check() is called when reusing it. re-build() an new one");
+    info!("--- check() is called when reusing it. re-build() an new one");
     let i5_2 = p.get(&5).await?;
     assert_eq!(
         3, i5_2.seq,
         "seq=2 is dropped by check(), then make() a new item with seq=3"
     );
 
-    tracing::info!("--- check() is not called for new item");
+    info!("--- check() is not called for new item");
     let i6_1 = p.get(&6).await?;
     assert_eq!(4, i6_1.seq, "seq=4 is valid for make()");
 
-    tracing::info!("--- check() is called when reusing it. re-build() does not succeed");
+    info!("--- check() is called when reusing it. re-build() does not succeed");
     let i6_2 = p.get(&6).await;
     assert!(i6_2.is_err(), "seq>=4 can not reuse or make()");
 

@@ -23,8 +23,8 @@ use common_base::base::tokio;
 use common_base::base::tokio::task::JoinHandle;
 use common_exception::Result;
 use common_meta_types::RoleInfo;
-use common_tracing::tracing;
 use parking_lot::RwLock;
+use tracing::warn;
 
 use crate::UserApiProvider;
 
@@ -65,10 +65,9 @@ impl RoleCacheMgr {
                 for tenant in tenants {
                     match load_roles_data(&user_api, &tenant).await {
                         Err(err) => {
-                            tracing::warn!(
+                            warn!(
                                 "role_cache_mgr load roles data of tenant {} failed: {}",
-                                tenant,
-                                err,
+                                tenant, err,
                             )
                         }
                         Ok(data) => {

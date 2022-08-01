@@ -14,7 +14,8 @@
 
 pub mod block_filter;
 pub mod compact_mutator;
-pub mod mutations_collector;
+pub mod deletion_mutator;
 
 pub use block_filter::delete_from_block;
 pub use compact_mutator::CompactMutator;
+pub use deletion_mutator::DeletionMutator;

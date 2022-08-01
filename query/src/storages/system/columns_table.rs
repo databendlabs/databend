@@ -22,7 +22,7 @@ use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 
 use crate::catalogs::CATALOG_DEFAULT;
-use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::storages::system::table::AsyncOneBlockSystemTable;
 use crate::storages::system::table::AsyncSystemTable;
 use crate::storages::Table;
@@ -39,7 +39,7 @@ impl AsyncSystemTable for ColumnsTable {
         &self.table_info
     }
 
-    async fn get_full_data(&self, ctx: Arc<QueryContext>) -> Result<DataBlock> {
+    async fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
         let rows = self.dump_table_columns(ctx).await?;
         let mut names: Vec<Vec<u8>> = Vec::with_capacity(rows.len());
         let mut tables: Vec<Vec<u8>> = Vec::with_capacity(rows.len());
@@ -112,7 +112,7 @@ impl ColumnsTable {
 
     async fn dump_table_columns(
         &self,
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn TableContext>,
     ) -> Result<Vec<(String, String, DataField)>> {
         let tenant = ctx.get_tenant();
         let catalog = ctx.get_catalog(CATALOG_DEFAULT)?;

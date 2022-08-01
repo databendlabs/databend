@@ -1,16 +1,40 @@
-skipif clickhouse
+
 statement ok
 set enable_planner_v2 = 1;
 
-skipif clickhouse
+
+statement ok
+drop table if exists t;
+
+
+statement ok
+drop table if exists t1;
+
+
+statement ok
+drop table if exists t2;
+
+
 statement ok
 create table t(a int, b int);
 
-skipif clickhouse
+
 statement error 1065
 select aa from t;
 
-skipif clickhouse
+
 statement error 1065
 select *;
+
+
+statement ok
+create table t1(a int);
+
+
+statement ok
+create table t2(a int);
+
+onlyif mysql
+statement error 1065
+select a as b from t1 intersect select a as b from t2 order by a;
 

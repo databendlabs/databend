@@ -11,7 +11,6 @@
 //  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
-//
 
 use common_base::base::tokio;
 use common_datablocks::assert_blocks_sorted_eq;
@@ -22,6 +21,7 @@ use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 use common_planners::*;
 use databend_query::catalogs::CATALOG_DEFAULT;
+use databend_query::sessions::TableContext;
 use databend_query::storages::memory::MemoryTable;
 use databend_query::storages::TableStreamReadWrap;
 use databend_query::storages::ToReadDataSourcePlan;

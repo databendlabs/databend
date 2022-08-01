@@ -29,11 +29,11 @@ use common_meta_types::LogEntry;
 use common_meta_types::MatchSeq;
 use common_meta_types::Operation;
 use common_meta_types::SeqV;
-use common_tracing::tracing;
 use openraft::raft::Entry;
 use openraft::raft::EntryPayload;
 use openraft::LogId;
 use pretty_assertions::assert_eq;
+use tracing::info;
 
 use crate::init_raft_store_ut;
 use crate::testing::new_raft_test_context;
@@ -239,11 +239,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_upsert_get() -> anyhow::Res
             None => None,
             Some(ref w) => {
                 // trick: in this test all expired timestamps are all 0
-                if w.get_expire_at() < now {
-                    None
-                } else {
-                    want
-                }
+                if w.get_expire_at() < now { None } else { want }
             }
         };
 
@@ -272,7 +268,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_value_meta() -> anyhow::Res
 
     let key = "value_meta_foo".to_string();
 
-    tracing::info!("--- update meta of a nonexistent record");
+    info!("--- update meta of a nonexistent record");
 
     let resp = sm.sm_tree.txn(true, |t| {
         Ok(sm
@@ -297,7 +293,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_value_meta() -> anyhow::Res
         "update meta of None does nothing",
     );
 
-    tracing::info!("--- update meta of a existent record");
+    info!("--- update meta of a existent record");
 
     // add a record
     sm.sm_tree.txn(true, |t| {
@@ -335,7 +331,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_value_meta() -> anyhow::Res
             .unwrap())
     })?;
 
-    tracing::info!("--- read the original value and updated meta");
+    info!("--- read the original value and updated meta");
 
     let got = sm.get_kv(&key).await?;
     let got = got.unwrap();

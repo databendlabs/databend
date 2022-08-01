@@ -11,7 +11,6 @@
 //  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
-//
 
 use std::any::Any;
 use std::sync::Arc;
@@ -21,18 +20,19 @@ use common_datablocks::serialize_data_blocks;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_fuse_meta::meta::SegmentInfo;
+use common_fuse_meta::meta::Statistics as FuseMetaStatistics;
 use common_planners::PartInfoPtr;
 use opendal::Operator;
 
-use crate::pipelines::new::processors::port::InputPort;
-use crate::pipelines::new::processors::processor::Event;
-use crate::pipelines::new::processors::processor::ProcessorPtr;
-use crate::pipelines::new::processors::Processor;
+use crate::pipelines::processors::port::InputPort;
+use crate::pipelines::processors::processor::Event;
+use crate::pipelines::processors::processor::ProcessorPtr;
+use crate::pipelines::processors::Processor;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::storages::fuse::io::BlockReader;
-use crate::storages::fuse::meta::SegmentInfo;
-use crate::storages::fuse::meta::Statistics as FuseMetaStatistics;
-use crate::storages::fuse::statistics::accumulator::BlockStatistics;
+use crate::storages::fuse::statistics::BlockStatistics;
 use crate::storages::fuse::statistics::StatisticsAccumulator;
 use crate::storages::fuse::FuseTable;
 use crate::storages::result::block_buffer::BlockBuffer;

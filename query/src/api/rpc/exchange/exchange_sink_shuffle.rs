@@ -26,11 +26,11 @@ use crate::api::rpc::exchange::exchange_params::SerializeParams;
 use crate::api::rpc::exchange::exchange_params::ShuffleExchangeParams;
 use crate::api::rpc::packets::DataPacket;
 use crate::api::rpc::packets::FragmentData;
-use crate::pipelines::new::processors::port::InputPort;
-use crate::pipelines::new::processors::port::OutputPort;
-use crate::pipelines::new::processors::processor::Event;
-use crate::pipelines::new::processors::processor::ProcessorPtr;
-use crate::pipelines::new::processors::Processor;
+use crate::pipelines::processors::port::InputPort;
+use crate::pipelines::processors::port::OutputPort;
+use crate::pipelines::processors::processor::Event;
+use crate::pipelines::processors::processor::ProcessorPtr;
+use crate::pipelines::processors::Processor;
 use crate::sessions::QueryContext;
 
 struct OutputData {
@@ -125,7 +125,7 @@ impl<const HAS_OUTPUT: bool> ExchangePublisherSink<HAS_OUTPUT> {
 #[async_trait::async_trait]
 impl<const HAS_OUTPUT: bool> Processor for ExchangePublisherSink<HAS_OUTPUT> {
     fn name(&self) -> &'static str {
-        "ExchangePublisher"
+        "ExchangeShuffleSink"
     }
 
     fn as_any(&mut self) -> &mut dyn Any {

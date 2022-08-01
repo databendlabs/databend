@@ -32,6 +32,7 @@ use crate::interpreters::fragments::query_fragment_actions::QueryFragmentAction;
 use crate::interpreters::fragments::query_fragment_actions::QueryFragmentActions;
 use crate::interpreters::fragments::query_fragment_actions::QueryFragmentsActions;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 
 pub struct ReadDatasourceQueryFragment {
     ctx: Arc<QueryContext>,
@@ -77,7 +78,7 @@ impl ReadDatasourceQueryFragment {
 }
 
 impl QueryFragment for ReadDatasourceQueryFragment {
-    fn distribute_query(&self) -> Result<bool> {
+    fn is_distributed_query(&self) -> Result<bool> {
         let read_table = self
             .ctx
             .build_table_from_source_plan(&self.read_data_source)?;

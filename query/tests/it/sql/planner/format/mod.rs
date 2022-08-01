@@ -107,53 +107,60 @@ fn test_format() {
 
     let s_expr = SExpr::create_binary(
         PhysicalHashJoin {
-            build_keys: vec![FunctionCall {
-                func_name: "plus".to_string(),
-                arg_types: vec![],
-                arguments: vec![
-                    BoundColumnRef {
-                        column: ColumnBinding {
-                            database_name: None,
-                            table_name: None,
-                            column_name: "col1".to_string(),
-                            index: col1,
+            build_keys: vec![
+                FunctionCall {
+                    func_name: "plus".to_string(),
+                    arg_types: vec![],
+                    arguments: vec![
+                        BoundColumnRef {
+                            column: ColumnBinding {
+                                database_name: None,
+                                table_name: None,
+                                column_name: "col1".to_string(),
+                                index: col1,
+                                data_type: Box::new(BooleanType::new_impl()),
+                                visible_in_unqualified_wildcard: false,
+                            },
+                        }
+                        .into(),
+                        ConstantExpr {
+                            value: DataValue::UInt64(123),
                             data_type: Box::new(BooleanType::new_impl()),
-                            visible_in_unqualified_wildcard: false,
-                        },
-                    }
-                    .into(),
-                    ConstantExpr {
-                        value: DataValue::UInt64(123),
+                        }
+                        .into(),
+                    ],
+                    return_type: Box::new(BooleanType::new_impl()),
+                }
+                .into(),
+            ],
+            probe_keys: vec![
+                BoundColumnRef {
+                    column: ColumnBinding {
+                        database_name: None,
+                        table_name: None,
+                        column_name: "col2".to_string(),
+                        index: col2,
                         data_type: Box::new(BooleanType::new_impl()),
-                    }
-                    .into(),
-                ],
-                return_type: Box::new(BooleanType::new_impl()),
-            }
-            .into()],
-            probe_keys: vec![BoundColumnRef {
-                column: ColumnBinding {
-                    database_name: None,
-                    table_name: None,
-                    column_name: "col2".to_string(),
-                    index: col2,
-                    data_type: Box::new(BooleanType::new_impl()),
-                    visible_in_unqualified_wildcard: false,
-                },
-            }
-            .into()],
+                        visible_in_unqualified_wildcard: false,
+                    },
+                }
+                .into(),
+            ],
             other_conditions: vec![],
             join_type: JoinType::Inner,
             marker_index: None,
+            from_correlated_subquery: false,
         }
         .into(),
         SExpr::create_unary(
             Filter {
-                predicates: vec![ConstantExpr {
-                    value: DataValue::Boolean(true),
-                    data_type: Box::new(BooleanType::new_impl()),
-                }
-                .into()],
+                predicates: vec![
+                    ConstantExpr {
+                        value: DataValue::Boolean(true),
+                        data_type: Box::new(BooleanType::new_impl()),
+                    }
+                    .into(),
+                ],
                 is_having: false,
             }
             .into(),
@@ -161,6 +168,7 @@ fn test_format() {
                 PhysicalScan {
                     table_index: tab1,
                     columns: Default::default(),
+                    push_down_predicates: None,
                 }
                 .into(),
             ),
@@ -169,6 +177,7 @@ fn test_format() {
             PhysicalScan {
                 table_index: tab1,
                 columns: Default::default(),
+                push_down_predicates: None,
             }
             .into(),
         ),
@@ -178,14 +187,14 @@ fn test_format() {
 
     let tree = s_expr.to_format_tree(&metadata_ref);
     let result = tree.format_indent().unwrap();
-    let expect = r#"HashJoin: INNER, build keys: [plus(col1, 123)], probe keys: [col2], join filters: []
+    let expect = r#"HashJoin: INNER, build keys: [plus(col1 (#0), 123)], probe keys: [col2 (#1)], join filters: []
     Filter: [true]
         Scan: catalog.database.table
     Scan: catalog.database.table
 "#;
     assert_eq!(result.as_str(), expect);
     let pretty_result = tree.format_pretty().unwrap();
-    let pretty_expect = r#"HashJoin: INNER, build keys: [plus(col1, 123)], probe keys: [col2], join filters: []
+    let pretty_expect = r#"HashJoin: INNER, build keys: [plus(col1 (#0), 123)], probe keys: [col2 (#1)], join filters: []
 ├── Filter: [true]
 │   └── Scan: catalog.database.table
 └── Scan: catalog.database.table

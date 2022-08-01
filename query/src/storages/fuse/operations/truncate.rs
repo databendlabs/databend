@@ -11,27 +11,26 @@
 //  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
-//
 
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_fuse_meta::meta::TableSnapshot;
+use common_fuse_meta::meta::Versioned;
 use common_meta_app::schema::TableStatistics;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_types::MatchSeq;
 use uuid::Uuid;
 
-use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::sql::OPT_KEY_SNAPSHOT_LOCATION;
-use crate::storages::fuse::meta::TableSnapshot;
-use crate::storages::fuse::meta::Versioned;
 use crate::storages::fuse::FuseTable;
 
 impl FuseTable {
     #[inline]
     pub async fn do_truncate(
         &self,
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn TableContext>,
         purge: bool,
         catalog_name: &str,
     ) -> Result<()> {

@@ -33,7 +33,7 @@ pub struct EltFunction {
     result_type: DataTypeImpl,
 }
 
-//MySQL ELT() returns the string at the index number specified in the list of arguments. The first argument indicates the index of the string to be retrieved from the list of arguments.
+// MySQL ELT() returns the string at the index number specified in the list of arguments. The first argument indicates the index of the string to be retrieved from the list of arguments.
 // Note: According to Wikipedia ELT stands for Extract, Load, Transform (ELT), a data manipulation process
 
 impl EltFunction {

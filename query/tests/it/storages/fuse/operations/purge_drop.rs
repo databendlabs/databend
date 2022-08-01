@@ -11,7 +11,6 @@
 //  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
-//
 
 use common_base::base::tokio;
 use common_exception::Result;
@@ -32,7 +31,7 @@ async fn test_fuse_snapshot_truncate_in_drop_stmt() -> Result<()> {
     // ingests some test data
     append_sample_data(10, &fixture).await?;
     // let's Drop
-    let qry = format!("drop table '{}'.'{}'", db, tbl);
+    let qry = format!("drop table {}.{}", db, tbl);
     execute_command(ctx.clone(), qry.as_str()).await?;
     Ok(())
 }
@@ -48,7 +47,7 @@ async fn test_fuse_snapshot_truncate_in_drop_all_stmt() -> Result<()> {
     // ingests some test data
     append_sample_data(1, &fixture).await?;
     // let's Drop
-    let qry = format!("drop table '{}'.'{}' all", db, tbl);
+    let qry = format!("drop table {}.{} all", db, tbl);
     execute_command(ctx.clone(), qry.as_str()).await?;
 
     check_data_dir(

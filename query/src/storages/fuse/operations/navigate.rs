@@ -11,7 +11,6 @@
 //  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
-//
 
 use std::sync::Arc;
 
@@ -19,22 +18,22 @@ use chrono::DateTime;
 use chrono::Utc;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_fuse_meta::meta::TableSnapshot;
 use common_meta_app::schema::TableStatistics;
 use futures::TryStreamExt;
 
-use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::sql::OPT_KEY_SNAPSHOT_LOCATION;
 use crate::storages::fuse::io::MetaReaders;
-use crate::storages::fuse::meta::TableSnapshot;
 use crate::storages::fuse::FuseTable;
 
 impl FuseTable {
     pub async fn navigate_to_time_point(
         &self,
-        ctx: &Arc<QueryContext>,
+        ctx: &dyn TableContext,
         time_point: DateTime<Utc>,
     ) -> Result<Arc<FuseTable>> {
-        self.find(ctx.as_ref(), |snapshot| {
+        self.find(ctx, |snapshot| {
             if let Some(ts) = snapshot.timestamp {
                 ts <= time_point
             } else {
@@ -45,7 +44,7 @@ impl FuseTable {
     }
     pub async fn navigate_to_snapshot(
         &self,
-        ctx: &QueryContext,
+        ctx: &dyn TableContext,
         snapshot_id: &str,
     ) -> Result<Arc<FuseTable>> {
         self.find(ctx, |snapshot| {
@@ -59,7 +58,7 @@ impl FuseTable {
         .await
     }
 
-    pub async fn find<P>(&self, ctx: &QueryContext, mut pred: P) -> Result<Arc<FuseTable>>
+    pub async fn find<P>(&self, ctx: &dyn TableContext, mut pred: P) -> Result<Arc<FuseTable>>
     where P: FnMut(&TableSnapshot) -> bool {
         let snapshot_location = if let Some(loc) = self.snapshot_loc() {
             loc

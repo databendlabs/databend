@@ -53,10 +53,9 @@ pub struct AggregateFunctionDescription {
 
 #[derive(Debug, Clone, Default)]
 pub struct AggregateFunctionFeatures {
-    /** When the function is wrapped with Null combinator,
-     * should we return Nullable type with NULL when no values were aggregated
-     * or we should return non-Nullable type with default value (example: count, count_distinct).
-     */
+    /// When the function is wrapped with Null combinator,
+    /// should we return Nullable type with NULL when no values were aggregated
+    /// or we should return non-Nullable type with default value (example: count, count_distinct).
     pub(crate) returns_default_when_only_null: bool,
 
     // Function Category

@@ -24,11 +24,11 @@ use common_exception::Result;
 use common_planners::PartInfoPtr;
 
 use crate::catalogs::hive::hive_table_source::State::Generated;
-use crate::pipelines::new::processors::port::OutputPort;
-use crate::pipelines::new::processors::processor::Event;
-use crate::pipelines::new::processors::processor::ProcessorPtr;
-use crate::pipelines::new::processors::Processor;
-use crate::sessions::QueryContext;
+use crate::pipelines::processors::port::OutputPort;
+use crate::pipelines::processors::processor::Event;
+use crate::pipelines::processors::processor::ProcessorPtr;
+use crate::pipelines::processors::Processor;
+use crate::sessions::TableContext;
 use crate::storages::hive::HiveParquetBlockReader;
 
 enum State {
@@ -40,7 +40,7 @@ enum State {
 
 pub struct HiveTableSource {
     state: State,
-    ctx: Arc<QueryContext>,
+    ctx: Arc<dyn TableContext>,
     scan_progress: Arc<Progress>,
     block_reader: Arc<HiveParquetBlockReader>,
     output: Arc<OutputPort>,
@@ -48,7 +48,7 @@ pub struct HiveTableSource {
 
 impl HiveTableSource {
     pub fn create(
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
         block_reader: Arc<HiveParquetBlockReader>,
     ) -> Result<ProcessorPtr> {

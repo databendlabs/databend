@@ -20,9 +20,9 @@ use common_exception::Result;
 use super::ScalarExpr;
 use crate::sql::optimizer::RelExpr;
 use crate::sql::optimizer::RelationalProperty;
-use crate::sql::plans::LogicalPlan;
+use crate::sql::plans::LogicalOperator;
 use crate::sql::plans::Operator;
-use crate::sql::plans::PhysicalPlan;
+use crate::sql::plans::PhysicalOperator;
 use crate::sql::plans::RelOp;
 use crate::sql::plans::Scalar;
 use crate::sql::IndexType;
@@ -36,7 +36,10 @@ pub enum JoinType {
     Semi,
     Anti,
     Cross,
+    /// Mark Join is a special case of join that is used to process Any subquery and correlated Exists subquery.
     Mark,
+    /// Single Join is a special kind of join that is used to process correlated scalar subquery.
+    Single,
 }
 
 impl Display for JoinType {
@@ -66,6 +69,9 @@ impl Display for JoinType {
             JoinType::Mark => {
                 write!(f, "MARK")
             }
+            JoinType::Single => {
+                write!(f, "SINGLE")
+            }
         }
     }
 }
@@ -78,6 +84,7 @@ pub struct LogicalInnerJoin {
     pub join_type: JoinType,
     // marker_index is for MarkJoin only.
     pub marker_index: Option<IndexType>,
+    pub from_correlated_subquery: bool,
 }
 
 impl Operator for LogicalInnerJoin {
@@ -93,16 +100,16 @@ impl Operator for LogicalInnerJoin {
         true
     }
 
-    fn as_logical(&self) -> Option<&dyn LogicalPlan> {
+    fn as_logical(&self) -> Option<&dyn LogicalOperator> {
         Some(self)
     }
 
-    fn as_physical(&self) -> Option<&dyn PhysicalPlan> {
+    fn as_physical(&self) -> Option<&dyn PhysicalOperator> {
         None
     }
 }
 
-impl LogicalPlan for LogicalInnerJoin {
+impl LogicalOperator for LogicalInnerJoin {
     fn derive_relational_prop<'a>(&self, rel_expr: &RelExpr<'a>) -> Result<RelationalProperty> {
         let left_prop = rel_expr.derive_relational_prop_child(0)?;
         let right_prop = rel_expr.derive_relational_prop_child(1)?;

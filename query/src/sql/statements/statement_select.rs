@@ -23,15 +23,15 @@ use common_planners::find_aggregate_exprs;
 use common_planners::find_aggregate_exprs_in_expr;
 use common_planners::rebase_expr;
 use common_planners::Expression;
-use common_tracing::tracing;
-use common_tracing::tracing::log::debug;
 use sqlparser::ast::Expr;
 use sqlparser::ast::Offset;
 use sqlparser::ast::OrderByExpr;
 use sqlparser::ast::SelectItem;
 use sqlparser::ast::TableWithJoins;
+use tracing::debug;
 
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::sql::statements::analyzer_statement::QueryAnalyzeState;
 use crate::sql::statements::query::JoinedSchema;
 use crate::sql::statements::query::JoinedSchemaAnalyzer;
@@ -74,7 +74,7 @@ impl AnalyzableStatement for DfQueryStatement {
         QueryCollectPushDowns::collect_extras(&mut ir, &mut joined_schema, has_aggregation)?;
 
         let analyze_state = self.analyze_query(ir).await?;
-        tracing::debug!("analyze state is:\n{:?}", analyze_state);
+        debug!("analyze state is:\n{:?}", analyze_state);
 
         self.check_and_finalize(joined_schema, analyze_state, ctx)
             .await
@@ -222,7 +222,7 @@ impl DfQueryStatement {
                                 return Err(ErrorCode::LogicalError(format!(
                                     "Found non-sort expression {:?} while analyzing order by expressions of window expressions",
                                     order_by_expr
-                                )))
+                                )));
                             }
                         }
                     }
@@ -231,7 +231,7 @@ impl DfQueryStatement {
                     return Err(ErrorCode::LogicalError(format!(
                         "Found non-window expression {:?} while analyzing window expressions!",
                         expr
-                    )))
+                    )));
                 }
             }
         }

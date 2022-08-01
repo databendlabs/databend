@@ -18,28 +18,25 @@ use std::collections::HashMap;
 use common_ast::ast::Expr;
 use common_ast::ast::Literal;
 use common_ast::ast::SelectTarget;
-use common_ast::parser::token::Token;
 use common_ast::DisplayError;
 use common_datavalues::DataTypeImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use super::scalar_common::split_conjunctions;
 use crate::sql::binder::scalar::ScalarBinder;
 use crate::sql::binder::select::SelectList;
 use crate::sql::binder::Binder;
 use crate::sql::binder::ColumnBinding;
 use crate::sql::optimizer::SExpr;
 use crate::sql::planner::metadata::MetadataRef;
-use crate::sql::planner::semantic::GroupingChecker;
 use crate::sql::plans::Aggregate;
 use crate::sql::plans::AggregateFunction;
+use crate::sql::plans::AggregateMode;
 use crate::sql::plans::AndExpr;
 use crate::sql::plans::BoundColumnRef;
 use crate::sql::plans::CastExpr;
 use crate::sql::plans::ComparisonExpr;
 use crate::sql::plans::EvalScalar;
-use crate::sql::plans::Filter;
 use crate::sql::plans::FunctionCall;
 use crate::sql::plans::OrExpr;
 use crate::sql::plans::Scalar;
@@ -76,7 +73,7 @@ pub struct AggregateInfo {
     pub group_items_map: HashMap<String, usize>,
 }
 
-struct AggregateRewriter<'a> {
+pub(super) struct AggregateRewriter<'a> {
     pub bind_context: &'a mut BindContext,
     pub metadata: MetadataRef,
 }
@@ -232,20 +229,6 @@ impl<'a> Binder {
         Ok(())
     }
 
-    /// Analyze aggregates in having clause, this will rewrite aggregate functions.
-    /// See `AggregateRewriter` for more details.
-    pub(super) async fn analyze_aggregate_having(
-        &mut self,
-        bind_context: &mut BindContext,
-        having: &Expr<'a>,
-    ) -> Result<(Scalar, &'a [Token<'a>])> {
-        let mut scalar_binder =
-            ScalarBinder::new(bind_context, self.ctx.clone(), self.metadata.clone());
-        let (scalar, _) = scalar_binder.bind(having).await?;
-        let mut rewriter = AggregateRewriter::new(bind_context, self.metadata.clone());
-        Ok((rewriter.visit(&scalar)?, having.span()))
-    }
-
     /// We have supported three kinds of `group by` items:
     ///
     ///   - Index, a integral literal, e.g. `GROUP BY 1`. It choose the 1st item in select as
@@ -313,6 +296,7 @@ impl<'a> Binder {
         }
 
         let aggregate_plan = Aggregate {
+            mode: AggregateMode::Initial,
             group_items: bind_context.aggregate_info.group_items.clone(),
             aggregate_functions: bind_context.aggregate_info.aggregate_functions.clone(),
             from_distinct: false,
@@ -320,26 +304,6 @@ impl<'a> Binder {
         new_expr = SExpr::create_unary(aggregate_plan.into(), new_expr);
 
         Ok(new_expr)
-    }
-
-    pub(super) async fn bind_having(
-        &mut self,
-        bind_context: &BindContext,
-        having: Scalar,
-        span: &'a [Token<'a>],
-        child: SExpr,
-    ) -> Result<SExpr> {
-        let mut grouping_checker = GroupingChecker::new(bind_context);
-        let scalar = grouping_checker.resolve(&having, Some(span))?;
-
-        let predicates = split_conjunctions(&scalar);
-
-        let filter = Filter {
-            predicates,
-            is_having: true,
-        };
-
-        Ok(SExpr::create_unary(filter.into(), child))
     }
 
     async fn resolve_group_items(

@@ -15,6 +15,7 @@
 #![feature(backtrace)]
 
 pub mod api;
+pub mod cmd;
 pub mod configs;
 pub mod executor;
 pub mod export;

@@ -13,25 +13,32 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::sync::RwLock;
 
+use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 use common_planners::CallPlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
-use common_tracing::tracing;
 
 use super::Interpreter;
 use crate::procedures::ProcedureFactory;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 
 pub struct CallInterpreter {
     ctx: Arc<QueryContext>,
     plan: CallPlan,
+    schema: RwLock<Option<DataSchemaRef>>,
 }
 
 impl CallInterpreter {
     pub fn try_create(ctx: Arc<QueryContext>, plan: CallPlan) -> Result<Self> {
-        Ok(CallInterpreter { ctx, plan })
+        Ok(CallInterpreter {
+            ctx,
+            plan,
+            schema: RwLock::new(None),
+        })
     }
 }
 
@@ -39,6 +46,15 @@ impl CallInterpreter {
 impl Interpreter for CallInterpreter {
     fn name(&self) -> &str {
         "CallInterpreter"
+    }
+
+    fn schema(&self) -> DataSchemaRef {
+        self.schema
+            .read()
+            .unwrap()
+            .as_ref()
+            .expect("schema has not been initialized before execution")
+            .clone()
     }
 
     #[tracing::instrument(level = "debug", name = "call_interpreter_execute", skip(self, _input_stream), fields(ctx.id = self.ctx.get_id().as_str()))]
@@ -50,6 +66,11 @@ impl Interpreter for CallInterpreter {
 
         let name = plan.name.clone();
         let func = ProcedureFactory::instance().get(name)?;
+        let last_schema = func.schema();
+        {
+            let mut schema = self.schema.write().unwrap();
+            *schema = Some(last_schema);
+        }
         let blocks = func.eval(self.ctx.clone(), plan.args.clone()).await?;
         Ok(Box::pin(DataBlockStream::create(
             self.schema(),

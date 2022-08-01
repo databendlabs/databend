@@ -23,13 +23,14 @@ use common_base::base::Runtime;
 use common_base::base::TrySpawn;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_tracing::tracing;
 use futures::future::AbortHandle;
 use futures::future::AbortRegistration;
 use futures::future::Abortable;
 use futures::StreamExt;
 use opensrv_mysql::*;
 use tokio_stream::wrappers::TcpListenerStream;
+use tracing::error;
+use tracing::info;
 
 use crate::servers::mysql::mysql_session::MySQLConnection;
 use crate::servers::mysql::reject_connection::RejectConnection;
@@ -73,7 +74,7 @@ impl MySQLHandler {
             let sessions = sessions.clone();
             async move {
                 match accept_socket {
-                    Err(error) => tracing::error!("Broken session connection: {}", error),
+                    Err(error) => error!("Broken session connection: {}", error),
                     Ok(socket) => MySQLHandler::accept_socket(sessions, executor, socket),
                 };
             }
@@ -85,9 +86,9 @@ impl MySQLHandler {
             match sessions.create_session(SessionType::MySQL).await {
                 Err(error) => Self::reject_session(socket, error).await,
                 Ok(session) => {
-                    tracing::info!("MySQL connection coming: {:?}", socket.peer_addr());
+                    info!("MySQL connection coming: {:?}", socket.peer_addr());
                     if let Err(error) = MySQLConnection::run_on_stream(session, socket) {
-                        tracing::error!("Unexpected error occurred during query: {:?}", error);
+                        error!("Unexpected error occurred during query: {:?}", error);
                     };
                 }
             }
@@ -101,7 +102,7 @@ impl MySQLHandler {
         };
 
         if let Err(error) = RejectConnection::reject_mysql_connection(stream, kind, message).await {
-            tracing::error!(
+            error!(
                 "Unexpected error occurred during reject connection: {:?}",
                 error
             );
@@ -120,7 +121,7 @@ impl Server for MySQLHandler {
 
         if let Some(join_handle) = self.join_handle.take() {
             if let Err(error) = join_handle.await {
-                tracing::error!(
+                error!(
                     "Unexpected error during shutdown MySQLHandler. cause {}",
                     error
                 );

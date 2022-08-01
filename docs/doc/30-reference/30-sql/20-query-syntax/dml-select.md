@@ -17,7 +17,7 @@ SELECT
     [GROUP BY {{col_name | expr | col_alias | col_position}, ...
     | extended_grouping_expr}]
     [HAVING expr]
-    [ORDER BY {col_name | expr | col_alias | col_position} [ASC | DESC], ...]
+    [ORDER BY {col_name | expr | col_alias | col_position} [ASC | DESC], [ NULLS { FIRST | LAST }]
     [LIMIT row_count]
     [OFFSET row_count]
     ]
@@ -168,6 +168,57 @@ SELECT a FROM t1 ORDER BY 1 DESC;
 |    1 |
 +------+
 
+--Sort with the NULLS FIRST or LAST option.
+
+CREATE TABLE t_null (
+  number INTEGER
+);
+
+INSERT INTO t_null VALUES (1);
+INSERT INTO t_null VALUES (2);
+INSERT INTO t_null VALUES (3);
+INSERT INTO t_null VALUES (NULL);
+INSERT INTO t_null VALUES (NULL);
+
+--Databend considers NULL values larger than any non-NULL values. 
+--The NULL values appear last in the following example that sorts the results in ascending order:
+
+SELECT number FROM t_null order by number ASC;
++--------+
+| number |
++--------+
+|      1 |
+|      2 |
+|      3 |
+|   NULL |
+|   NULL |
++--------+
+
+-- To make the NULL values appear first in the preceding example, use the NULLS FIRST option:
+
+SELECT number FROM t_null order by number ASC nulls first;
++--------+
+| number |
++--------+
+|   NULL |
+|   NULL |
+|      1 |
+|      2 |
+|      3 |
++--------+
+
+-- Use the NULLS LAST option to make the NULL values appear last in descending order:
+
+SELECT number FROM t_null order by number DESC nulls last;
++--------+
+| number |
++--------+
+|      3 |
+|      2 |
+|      1 |
+|   NULL |
+|   NULL |
++--------+
 ```
 
 ## LIMIT Clause

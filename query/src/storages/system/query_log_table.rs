@@ -32,13 +32,13 @@ use common_streams::SendableDataBlockStream;
 use futures::StreamExt;
 use parking_lot::RwLock;
 
-use crate::pipelines::new::processors::port::OutputPort;
-use crate::pipelines::new::processors::processor::ProcessorPtr;
-use crate::pipelines::new::processors::SyncSource;
-use crate::pipelines::new::processors::SyncSourcer;
-use crate::pipelines::new::NewPipeline;
-use crate::pipelines::new::SourcePipeBuilder;
-use crate::sessions::QueryContext;
+use crate::pipelines::processors::port::OutputPort;
+use crate::pipelines::processors::processor::ProcessorPtr;
+use crate::pipelines::processors::SyncSource;
+use crate::pipelines::processors::SyncSourcer;
+use crate::pipelines::Pipeline;
+use crate::pipelines::SourcePipeBuilder;
+use crate::sessions::TableContext;
 use crate::storages::Table;
 
 pub struct QueryLogTable {
@@ -132,7 +132,7 @@ impl Table for QueryLogTable {
 
     async fn read_partitions(
         &self,
-        _ctx: Arc<QueryContext>,
+        _ctx: Arc<dyn TableContext>,
         _push_downs: Option<Extras>,
     ) -> Result<(Statistics, Partitions)> {
         Ok((Statistics::default(), vec![]))
@@ -140,9 +140,9 @@ impl Table for QueryLogTable {
 
     fn read2(
         &self,
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn TableContext>,
         _: &ReadDataSourcePlan,
-        pipeline: &mut NewPipeline,
+        pipeline: &mut Pipeline,
     ) -> Result<()> {
         // TODO: split data for multiple threads
         let output = OutputPort::create();
@@ -159,7 +159,7 @@ impl Table for QueryLogTable {
 
     async fn append_data(
         &self,
-        _ctx: Arc<QueryContext>,
+        _ctx: Arc<dyn TableContext>,
         mut stream: SendableDataBlockStream,
     ) -> Result<SendableDataBlockStream> {
         while let Some(block) = stream.next().await {
@@ -184,7 +184,7 @@ impl Table for QueryLogTable {
 
     async fn truncate(
         &self,
-        _ctx: Arc<QueryContext>,
+        _ctx: Arc<dyn TableContext>,
         _truncate_plan: TruncateTablePlan,
     ) -> Result<()> {
         let mut data = self.data.write();
@@ -199,7 +199,7 @@ struct QueryLogSource {
 
 impl QueryLogSource {
     pub fn create(
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
         data: &VecDeque<DataBlock>,
     ) -> Result<ProcessorPtr> {

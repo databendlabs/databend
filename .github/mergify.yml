@@ -15,26 +15,51 @@ queue_rules:
       - check-success=test_stateful_standalone_linux
       - check-success=test_sqllogic_standalone_linux
 
+  - name: docs_queue
+    conditions:
+      - "#approved-reviews-by>=1"
+
+      # Docs queue only requires Vercel passing.
+      - check-success=Vercel
+
 pull_request_rules:
   # Push PR into queue when it passes all checks
-  - name: put approved pr to queue
+  - name: Put into shared queue
     conditions:
       - "#approved-reviews-by>=2"
       - -draft
+      - label!=pr-doc
     actions:
       queue:
         name: shared_queue
 
-  # If there is a conflict in an approved PR, ping the author.
-  - name: ping author on conflicts
+  # Push docs PR into docs queue
+  - name: Put into docs queue
     conditions:
-      - conflict
+      - "#approved-reviews-by>=1"
       - -draft
-      - "#approved-reviews-by >= 2"
+      - label=pr-doc
+      - check-success=Vercel
     actions:
-      comment:
-        message: |
-          This pull request has merge conflicts that must be resolved before it can be merged. @{{author}} please update it 🙏.
+      queue:
+        name: docs_queue
+
+  # Check if PR has conflicts for merging
+  - name: Check PR conflicts
+    conditions:
+      - -conflict
+    actions:
+      post_check:
+        title: |
+          {% if check_succeed %}
+          PR doesn't have conflicts
+          {% else %}
+          PR has conflicts
+          {% endif %}
+        summary: |
+          {% if not check_succeed %}
+          Pull request has merge conflicts that must be resolved before it can be merged, please update it 🙏.
+          {% endif %}
 
   # Check if PR description contains CLA
   - name: Check PR description

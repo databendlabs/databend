@@ -21,18 +21,17 @@ use common_meta_types::PrincipalIdentity;
 use common_meta_types::RoleInfo;
 use common_meta_types::UserGrantSet;
 use common_meta_types::UserInfo;
-use common_meta_types::UserPrivilegeType;
 use databend_query::interpreters::*;
-use databend_query::sql::PlanParser;
+use databend_query::sessions::TableContext;
+use databend_query::sql::Planner;
 use futures::stream::StreamExt;
 use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_grant_privilege_interpreter() -> Result<()> {
-    common_tracing::init_default_ut_tracing();
-
     let ctx = crate::tests::create_query_context().await?;
     let tenant = ctx.get_tenant();
+    let mut planner = Planner::new(ctx.clone());
 
     let name = "test";
     let hostname = "localhost";
@@ -59,61 +58,27 @@ async fn test_grant_privilege_interpreter() -> Result<()> {
         expected_err: Option<&'static str>,
     }
 
-    let tests: Vec<Test> = vec![
-        Test {
-            name: "grant create user to global",
-            query: format!("GRANT CREATE USER ON *.* TO '{}'@'{}'", name, hostname),
-            principal_identity: Some(PrincipalIdentity::user(name.to_string(), hostname.to_string())),
-            expected_grants: Some({
-                let mut grants = UserGrantSet::empty();
-                grants.grant_privileges(
-                    &GrantObject::Global,
-                    vec![UserPrivilegeType::CreateUser].into(),
-                );
-                grants
-            }),
-            expected_err: None,
-        },
-        Test {
-            name: "grant create user to global for role",
-            query: "GRANT CREATE USER ON *.* TO ROLE 'role1'".to_string(),
-            principal_identity: Some(PrincipalIdentity::role("role1".to_string())),
-            expected_grants: Some({
-                let mut grants = UserGrantSet::empty();
-                grants.grant_privileges(
-                    &GrantObject::Global,
-                    vec![UserPrivilegeType::CreateUser].into(),
-                );
-                grants
-            }),
-            expected_err: None,
-        },
-        Test {
-            name: "grant create user to current database and expect err",
-            query: format!("GRANT CREATE USER ON * TO '{}'@'{}'", name, hostname),
-            principal_identity: None,
-            expected_grants: None,
-            expected_err: Some("Code: 1061, displayText = Illegal GRANT/REVOKE command; please consult the manual to see which privileges can be used."),
-        },
-        Test {
-            name: "grant all on global",
-            query: format!("GRANT ALL ON *.* TO '{}'@'{}'", name, hostname),
-            principal_identity: Some(PrincipalIdentity::user(name.to_string(), hostname.to_string())),
-            expected_grants: Some({
-                let mut grants = UserGrantSet::empty();
-                grants.grant_privileges(
-                    &GrantObject::Global,
-                    GrantObject::Global.available_privileges(),
-                );
-                grants
-            }),
-            expected_err: None,
-        },
-    ];
+    let tests: Vec<Test> = vec![Test {
+        name: "grant all on global",
+        query: format!("GRANT ALL ON *.* TO '{}'@'{}'", name, hostname),
+        principal_identity: Some(PrincipalIdentity::user(
+            name.to_string(),
+            hostname.to_string(),
+        )),
+        expected_grants: Some({
+            let mut grants = UserGrantSet::empty();
+            grants.grant_privileges(
+                &GrantObject::Global,
+                GrantObject::Global.available_privileges(),
+            );
+            grants
+        }),
+        expected_err: None,
+    }];
 
     for tt in tests {
-        let plan = PlanParser::parse(ctx.clone(), &tt.query).await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let (plan, _, _) = planner.plan_sql(&tt.query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         assert_eq!(executor.name(), "GrantPrivilegeInterpreter");
         let r = match executor.execute(None).await {
             Err(err) => Err(err),

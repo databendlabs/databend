@@ -11,7 +11,6 @@
 //  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
-//
 
 use std::ops::Not;
 use std::sync::Arc;
@@ -31,9 +30,10 @@ use sqlparser::parser::ParserError;
 use sqlparser::tokenizer::Token;
 use sqlparser::tokenizer::Tokenizer;
 
-use crate::pipelines::transforms::ExpressionExecutor;
+use crate::pipelines::processors::transforms::ExpressionExecutor;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionType;
+use crate::sessions::TableContext;
 use crate::sql::statements::ExpressionAnalyzer;
 
 pub struct ValueSource {
@@ -184,7 +184,7 @@ pub fn skip_to_next_row<R: BufferRead>(
             let c = buffer[it];
             reader.consume(it + 1);
 
-            if it == 0 && escaped && c == b'\'' {
+            if it == 0 && escaped {
                 escaped = false;
                 continue;
             }
@@ -212,6 +212,7 @@ pub fn skip_to_next_row<R: BufferRead>(
                 _ => {}
             }
         } else {
+            escaped = false;
             reader.consume(size);
         }
     }

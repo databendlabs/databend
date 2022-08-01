@@ -31,9 +31,23 @@ error:
 1 | create table a (c varch)
   | ------          - ^^^^^
   | |               | |
-  | |               | expected `BOOLEAN`, `BOOL`, `UINT8`, `TINYINT`, `UINT16`, `SMALLINT`, or 25 more ...
+  | |               | expected `BOOLEAN`, `BOOL`, `UINT8`, `TINYINT`, `UINT16`, `SMALLINT`, or 29 more ...
   | |               | while parsing type name
-  | |               while parsing `<column name> <type> [NOT NULL | NULL] [DEFAULT <default value>] [COMMENT '<comment>']`
+  | |               while parsing `<column name> <type> [DEFAULT <default value>] [COMMENT '<comment>']`
+  | while parsing `CREATE TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`
+
+
+---------- Input ----------
+create table a (c tuple())
+---------- Output ---------
+error: 
+  --> SQL:1:25
+  |
+1 | create table a (c tuple())
+  | ------          - ----- ^ expected `BOOLEAN`, `BOOL`, `UINT8`, `TINYINT`, `UINT16`, `SMALLINT`, or 31 more ...
+  | |               | |      
+  | |               | while parsing type name
+  | |               while parsing `<column name> <type> [DEFAULT <default value>] [COMMENT '<comment>']`
   | while parsing `CREATE TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`
 
 
@@ -195,9 +209,7 @@ error:
   --> SQL:1:27
   |
 1 | GRANT ROLE 'test' TO ROLE test-user;
-  | -----                     ^^^^ expected <QuotedString>
-  | |                          
-  | while parsing `GRANT { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } TO { [ROLE <role_name>] | [USER] <user> }`
+  |                           ^^^^ expected <QuotedString>, `@`, `FORMAT`, or `;`
 
 
 ---------- Input ----------
@@ -232,7 +244,7 @@ error:
   --> SQL:1:6
   |
 1 | SHOW GRANT FOR ROLE role1;
-  |      ^^^^^ expected `SETTINGS`, `STAGES`, `PROCESSLIST`, `METRICS`, `FUNCTIONS`, `DATABASES`, or 8 more ...
+  |      ^^^^^ expected `SETTINGS`, `STAGES`, `ENGINES`, `PROCESSLIST`, `METRICS`, `FUNCTIONS`, or 10 more ...
 
 
 ---------- Input ----------

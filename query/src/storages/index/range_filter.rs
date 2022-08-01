@@ -24,40 +24,15 @@ use common_exception::Result;
 use common_functions::scalars::check_pattern_type;
 use common_functions::scalars::FunctionFactory;
 use common_functions::scalars::PatternType;
+use common_fuse_meta::meta::StatisticsOfColumns;
 use common_planners::lit;
 use common_planners::Expression;
 use common_planners::ExpressionMonotonicityVisitor;
 use common_planners::Expressions;
 use common_planners::RequireColumnsVisitor;
 
-use crate::pipelines::transforms::ExpressionExecutor;
-use crate::sessions::QueryContext;
-
-pub type StatisticsOfColumns = HashMap<u32, ColumnStatistics>;
-
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, Eq, PartialEq)]
-pub struct ColumnStatistics {
-    pub min: DataValue,
-    pub max: DataValue,
-    // A non-backward compatible change has been introduced by [PR#6067](https://github.com/datafuselabs/databend/pull/6067/files#diff-20030750809780d6492d2fe215a8eb80294aa6a8a5af2cf1bebe17eb740cae35)
-    // , please also see [issue#6556](https://github.com/datafuselabs/databend/issues/6556)
-    // therefore, we alias `null_count` with `unset_bits`, to make subsequent versions backward compatible again
-    #[serde(alias = "unset_bits")]
-    pub null_count: u64,
-    pub in_memory_size: u64,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
-pub struct ClusterStatistics {
-    #[serde(default = "default_cluster_key_id")]
-    pub cluster_key_id: u32,
-    pub min: Vec<DataValue>,
-    pub max: Vec<DataValue>,
-}
-
-fn default_cluster_key_id() -> u32 {
-    0
-}
+use crate::pipelines::processors::transforms::ExpressionExecutor;
+use crate::sessions::TableContext;
 
 #[derive(Clone)]
 pub struct ClusterKeyInfo {
@@ -68,7 +43,7 @@ pub struct ClusterKeyInfo {
     pub data_schema: DataSchemaRef,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct RangeFilter {
     origin: DataSchemaRef,
     schema: DataSchemaRef,
@@ -78,7 +53,7 @@ pub struct RangeFilter {
 
 impl RangeFilter {
     pub fn try_create(
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn TableContext>,
         expr: &Expression,
         schema: DataSchemaRef,
     ) -> Result<Self> {
@@ -332,7 +307,7 @@ impl<'a> VerifiableExprBuilder<'a> {
                     (0, 0) => {
                         return Err(ErrorCode::UnknownException(
                             "Constant expression donot need to be handled",
-                        ))
+                        ));
                     }
                     (_, 0) => (vec![exprs[0].clone(), exprs[1].clone()], vec![lhs_cols], op),
                     (0, _) => {

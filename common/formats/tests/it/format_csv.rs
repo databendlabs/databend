@@ -55,7 +55,7 @@ fn test_accepted_multi_lines() -> Result<()> {
     let bytes = "first,second\nfirst,".as_bytes();
     assert_eq!(
         bytes.len(),
-        csv_input_format.read_buf(bytes, &mut csv_input_state)?
+        csv_input_format.read_buf(bytes, &mut csv_input_state)?.0
     );
     assert_eq!(
         bytes,
@@ -67,7 +67,7 @@ fn test_accepted_multi_lines() -> Result<()> {
     );
 
     let bytes = "second\nfirst,".as_bytes();
-    assert_eq!(7, csv_input_format.read_buf(bytes, &mut csv_input_state)?);
+    assert_eq!(7, csv_input_format.read_buf(bytes, &mut csv_input_state)?.0);
     assert_eq!(
         "first,second\nfirst,second\n".as_bytes(),
         csv_input_state
@@ -153,7 +153,7 @@ fn assert_complete_line(content: &str) -> Result<()> {
     let bytes = content.as_bytes();
     assert_eq!(
         bytes.len(),
-        csv_input_format.read_buf(bytes, &mut csv_input_state)?
+        csv_input_format.read_buf(bytes, &mut csv_input_state)?.0
     );
     assert_eq!(
         bytes,
@@ -181,7 +181,7 @@ fn assert_broken_line(content: &str, assert_size: usize) -> Result<()> {
     let bytes = content.as_bytes();
     assert_eq!(
         assert_size,
-        csv_input_format.read_buf(bytes, &mut csv_input_state)?
+        csv_input_format.read_buf(bytes, &mut csv_input_state)?.0
     );
     assert_eq!(
         &bytes[0..assert_size],

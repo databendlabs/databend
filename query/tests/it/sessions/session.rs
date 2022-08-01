@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use common_base::base::tokio;
-use common_base::mem_allocator::malloc_size;
 use common_exception::Result;
 use databend_query::sessions::Session;
 use databend_query::sessions::SessionManager;
@@ -53,13 +52,6 @@ async fn test_session() -> Result<()> {
         assert_eq!(actual, 3);
     }
 
-    // Malloc size.
-    {
-        let session_size = malloc_size(&session);
-        assert!(session_size > 1500);
-        assert_eq!(session_size, session.get_memory_usage());
-    }
-
     Ok(())
 }
 
@@ -95,15 +87,19 @@ async fn test_session_in_management_mode() -> Result<()> {
     {
         let leak_session = session_manager.create_session(SessionType::Dummy).await?;
         leak_id = leak_session.get_id();
-        assert!(session_manager
+        assert!(
+            session_manager
+                .get_session_by_id(leak_id.as_str())
+                .await
+                .is_some()
+        );
+    }
+    assert!(
+        session_manager
             .get_session_by_id(leak_id.as_str())
             .await
-            .is_some());
-    }
-    assert!(session_manager
-        .get_session_by_id(leak_id.as_str())
-        .await
-        .is_none());
+            .is_none()
+    );
 
     Ok(())
 }

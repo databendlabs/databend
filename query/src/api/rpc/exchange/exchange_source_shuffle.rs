@@ -24,11 +24,11 @@ use common_arrow::arrow_format::flight::data::FlightData;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 
-use crate::pipelines::new::processors::port::InputPort;
-use crate::pipelines::new::processors::port::OutputPort;
-use crate::pipelines::new::processors::processor::Event;
-use crate::pipelines::new::processors::processor::ProcessorPtr;
-use crate::pipelines::new::processors::Processor;
+use crate::pipelines::processors::port::InputPort;
+use crate::pipelines::processors::port::OutputPort;
+use crate::pipelines::processors::processor::Event;
+use crate::pipelines::processors::processor::ProcessorPtr;
+use crate::pipelines::processors::Processor;
 
 pub struct ExchangeShuffleSource {
     input: Arc<InputPort>,
@@ -83,7 +83,6 @@ impl Processor for ExchangeShuffleSource {
         }
 
         if let Some(data_block) = self.remote_data_block.take() {
-            // println!("receive remote data block {:?}", data_block);
             self.output.push_data(Ok(data_block));
             return Ok(Event::NeedConsume);
         }
@@ -100,7 +99,9 @@ impl Processor for ExchangeShuffleSource {
                     Ok(Event::Sync)
                 }
             };
-        } else if let Ok(flight_data) = self.rx.try_recv() {
+        }
+
+        if let Ok(flight_data) = self.rx.try_recv() {
             self.remote_flight_data = Some(flight_data?);
             return Ok(Event::Sync);
         }

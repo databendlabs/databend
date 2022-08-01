@@ -19,12 +19,12 @@ use common_exception::Result;
 use common_planners::DescribeUserStagePlan;
 use common_planners::PlanNode;
 use common_streams::SendableDataBlockStream;
-use common_tracing::tracing;
 
 use super::SelectInterpreter;
 use crate::interpreters::Interpreter;
 use crate::optimizers::Optimizers;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::sql::PlanParser;
 
 #[derive(Debug)]

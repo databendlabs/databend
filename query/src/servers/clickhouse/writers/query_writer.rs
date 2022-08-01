@@ -23,8 +23,7 @@ use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::FormatSettings;
-use common_tracing::tracing;
-use futures::channel::mpsc::UnboundedReceiver;
+use futures::channel::mpsc::Receiver;
 use futures::StreamExt;
 use opensrv_clickhouse::connection::Connection;
 use opensrv_clickhouse::errors::Error as CHError;
@@ -33,6 +32,7 @@ use opensrv_clickhouse::errors::ServerError;
 use opensrv_clickhouse::types::column::{self};
 use opensrv_clickhouse::types::Block;
 use opensrv_clickhouse::types::SqlType;
+use tracing::error;
 
 use crate::servers::clickhouse::interactive_worker_base::BlockItem;
 
@@ -51,7 +51,7 @@ impl<'a> QueryWriter<'a> {
 
     pub async fn write(
         &mut self,
-        receiver: Result<UnboundedReceiver<BlockItem>>,
+        receiver: Result<Receiver<BlockItem>>,
         format: &FormatSettings,
     ) -> Result<()> {
         match receiver {
@@ -81,7 +81,7 @@ impl<'a> QueryWriter<'a> {
     }
 
     async fn write_error(&mut self, error: ErrorCode) -> Result<()> {
-        tracing::error!("OnQuery Error: {:?}", error);
+        error!("OnQuery Error: {:?}", error);
         let clickhouse_err = to_clickhouse_err(error);
         match self.conn.write_error(&clickhouse_err).await {
             Ok(_) => Ok(()),
@@ -103,7 +103,7 @@ impl<'a> QueryWriter<'a> {
 
     async fn write_data(
         &mut self,
-        mut receiver: UnboundedReceiver<BlockItem>,
+        mut receiver: Receiver<BlockItem>,
         format: &FormatSettings,
     ) -> Result<()> {
         loop {

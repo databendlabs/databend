@@ -15,6 +15,7 @@
 use std::sync::Arc;
 use std::time::SystemTime;
 
+use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 use common_planners::PlanNode;
 use common_streams::ErrorStream;
@@ -26,8 +27,9 @@ use crate::interpreters::access::ManagementModeAccess;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::interpreters::InterpreterQueryLog;
-use crate::pipelines::new::SourcePipeBuilder;
+use crate::pipelines::SourcePipeBuilder;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 
 pub struct InterceptorInterpreter {
     ctx: Arc<QueryContext>,
@@ -60,6 +62,10 @@ impl InterceptorInterpreter {
 impl Interpreter for InterceptorInterpreter {
     fn name(&self) -> &str {
         self.inner.name()
+    }
+
+    fn schema(&self) -> DataSchemaRef {
+        self.inner.schema()
     }
 
     async fn execute(

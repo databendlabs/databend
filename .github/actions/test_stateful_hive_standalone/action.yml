@@ -48,7 +48,7 @@ runs:
     - name: Hive Create Table&Load Data
       shell: bash
       run: |
-        docker-compose -f "./docker/it-hive/hive-docker-compose.yml" exec -T hive-server bash -c "/opt/hive/bin/beeline -u jdbc:hive2://127.0.0.1:10000 -e 'CREATE TABLE t_1 (lo_orderkey integer, lo_orderpriority varchar(15)) stored as parquet;'"
+        docker-compose -f "./docker/it-hive/hive-docker-compose.yml" exec -T hive-server bash -c "/opt/hive/bin/beeline -u jdbc:hive2://127.0.0.1:10000 -e 'CREATE TABLE t_1 (id string, t_bool boolean, t_float float, t_double double, t_data date, t_array array<int>, t_array2 array<string>) stored as parquet;'"
         docker-compose -f "./docker/it-hive/hive-docker-compose.yml" exec -T hive-server bash -c "/opt/hive/bin/beeline -u jdbc:hive2://127.0.0.1:10000 -e 'load data local inpath \"/databend-data/t_1.parquet\" OVERWRITE into table t_1;'"
         mkdir -p .databend/stateless_test_data/user/hive/warehouse/t_1/
         cp tests/data/hive/t_1.parquet .databend/stateless_test_data/user/hive/warehouse/t_1/

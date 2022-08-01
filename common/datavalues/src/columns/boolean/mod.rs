@@ -86,8 +86,8 @@ impl Column for BooleanColumn {
         self.values.as_slice().0.len()
     }
 
-    fn as_arrow_array(&self) -> ArrayRef {
-        let array = BooleanArray::from_data(ArrowType::Boolean, self.values.clone(), None);
+    fn as_arrow_array(&self, logical_type: DataTypeImpl) -> ArrayRef {
+        let array = BooleanArray::from_data(logical_type.arrow_type(), self.values.clone(), None);
         Box::new(array)
     }
 

@@ -9,17 +9,17 @@ description:
 
 A Databend deployment includes two types of node, Meta and Query. The Meta node stores various types of metadata (such as database, table, cluster, and transaction) and manages user information (including authorization and authentication). The Query node takes care of queries. 
 
-When deploying Databend, you specify a deployment mode, standalone, or cluster. A standalone Databend allows for one Meta node and one Query node, and a Databend cluster can include multiple Meta and Query nodes to enhance the computing capability.
+When deploying Databend, you specify a deployment mode, standalone, or cluster. A standalone Databend allows for one Meta node and one Query node, and a Databend cluster can include multiple Meta(databend-meta) to archive high availability and Query(databend-query) nodes to enhance the computing capability.
 
 ### Supported Object Storage Solutions
 Databend works with self-hosted or cloud object storage solutions. You will need to prepare your own object storage before deploying Databend. The following is a list of compatible object storage solutions:
 - AWS S3 Compatible Services:
   - Amazon S3
   - MinIO
+  - Wasabi
   - SeaweedFS
   - Tencent COS
   - Alibaba OSS
-  - Wasabi
   - QingCloud QingStore
 - Azure Blob Storage
 
@@ -34,6 +34,7 @@ When you deploy Databend in standalone mode, you host a Meta node and a Query no
 ### Supported Environments
 You can deploy both the Meta and Query nodes on-premises server or in the cloud. Databend can be deployed on most public cloud platforms. This includes:
 - Amazon EC2
+- Azure VMs
 - Tencent Cloud
 - Alibaba Cloud
 
@@ -47,7 +48,11 @@ The following list provides recommended hardware specifications for the server r
 This topic describes the cluster deployment architecture and environments.
 
 ### Deployment Architecture
-When you deploy Databend in cluster mode, you set up multiple Meta and Query nodes, and host each node on separate machine. Please note that you must have a minimum of three Meta nodes in a cluster.
+When you deploy Databend in cluster mode, you set up multiple Meta and Query nodes, and host each node on separate machine. 
+
+:::note
+Please note that you must have a minimum of three Meta nodes in a cluster for High Availability to work.
+:::
 
 <img src="/img/deploy/deploy-cluster-arch.png"/>
 
@@ -58,6 +63,7 @@ When you deploy Databend in cluster mode, you launch up a Meta node first, and t
 ### Supported Environments
 You can deploy the Databend nodes to your on-premises servers or in the cloud. Databend can be deployed on most public cloud platforms. This includes:
 - Amazon EC2
+- Azure VMs
 - Tencent Cloud
 - Alibaba Cloud
 

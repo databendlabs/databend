@@ -11,13 +11,13 @@
 //  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
-//
 
 use common_base::base::tokio;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_planners::*;
 use databend_query::interpreters::InterpreterFactory;
+use databend_query::sessions::TableContext;
 use databend_query::sql::PlanParser;
 use databend_query::storages::TableStreamReadWrap;
 use databend_query::storages::ToReadDataSourcePlan;
@@ -78,14 +78,13 @@ async fn test_limit_push_down() -> Result<()> {
             Limit: 2\
             \n  Projection: number:UInt64\
             \n    ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 2, read_bytes: 16, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0], limit: 2]",
-            result:
-            vec![
-                    "+--------+",
-                    "| number |",
-                    "+--------+",
-                    "| 0      |",
-                    "| 1      |",
-                    "+--------+",
+            result: vec![
+                "+--------+",
+                "| number |",
+                "+--------+",
+                "| 0      |",
+                "| 1      |",
+                "+--------+",
             ],
         },
         Test {
@@ -96,14 +95,13 @@ async fn test_limit_push_down() -> Result<()> {
             \n  Projection: number:UInt64\
             \n    Filter: (number > 8)\
             \n      ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0], filters: [(number > 8)], limit: 2]",
-            result:
-                vec![
-                    "+--------+",
-                    "| number |",
-                    "+--------+",
-                    "| 9      |",
-                    "+--------+",
-                ],
+            result: vec![
+                "+--------+",
+                "| number |",
+                "+--------+",
+                "| 9      |",
+                "+--------+",
+            ],
         },
     ];
 

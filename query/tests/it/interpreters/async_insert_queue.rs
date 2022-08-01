@@ -26,6 +26,7 @@ use common_planners::PlanNode::Insert;
 use databend_query::interpreters::*;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::SessionManager;
+use databend_query::sessions::TableContext;
 use databend_query::sql::*;
 use futures::TryStreamExt;
 
@@ -77,12 +78,13 @@ pub async fn build_insert_plan(sql: &str, ctx: Arc<QueryContext>) -> Result<Inse
 async fn test_async_insert_queue() -> Result<()> {
     let (session_manager, queue) = build_async_insert_queue(None, None, None).await?;
     let ctx = crate::tests::create_query_context_with_session(session_manager.clone()).await?;
+    let mut planner = Planner::new(ctx.clone());
 
     // Create table
     {
         let query = "create table default.test(a int, b String) Engine = Memory;";
-        let plan = PlanParser::parse(ctx.clone(), query).await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         let _ = executor.execute(None).await?;
     }
 
@@ -187,12 +189,13 @@ async fn test_async_insert_queue() -> Result<()> {
 async fn test_async_insert_queue_max_data_size() -> Result<()> {
     let (session_manager, queue) = build_async_insert_queue(Some(1), None, None).await?;
     let ctx = crate::tests::create_query_context_with_session(session_manager.clone()).await?;
+    let mut planner = Planner::new(ctx.clone());
 
     // Create table
     {
         let query = "create table default.test(a int, b String) Engine = Memory;";
-        let plan = PlanParser::parse(ctx.clone(), query).await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         let _ = executor.execute(None).await?;
     }
 
@@ -229,12 +232,13 @@ async fn test_async_insert_queue_max_data_size() -> Result<()> {
 async fn test_async_insert_queue_busy_timeout() -> Result<()> {
     let (session_manager, queue) = build_async_insert_queue(None, Some(900), None).await?;
     let ctx = crate::tests::create_query_context_with_session(session_manager.clone()).await?;
+    let mut planner = Planner::new(ctx.clone());
 
     // Create table
     {
         let query = "create table default.test(a int, b String) Engine = Memory;";
-        let plan = PlanParser::parse(ctx.clone(), query).await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         let _ = executor.execute(None).await?;
     }
 
@@ -271,12 +275,13 @@ async fn test_async_insert_queue_busy_timeout() -> Result<()> {
 async fn test_async_insert_queue_stale_timeout() -> Result<()> {
     let (session_manager, queue) = build_async_insert_queue(None, Some(900), Some(300)).await?;
     let ctx = crate::tests::create_query_context_with_session(session_manager.clone()).await?;
+    let mut planner = Planner::new(ctx.clone());
 
     // Create table
     {
         let query = "create table default.test(a int, b String) Engine = Memory;";
-        let plan = PlanParser::parse(ctx.clone(), query).await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         let _ = executor.execute(None).await?;
     }
 
@@ -313,12 +318,13 @@ async fn test_async_insert_queue_stale_timeout() -> Result<()> {
 async fn test_async_insert_queue_wait_timeout() -> Result<()> {
     let (session_manager, queue) = build_async_insert_queue(None, Some(2000), None).await?;
     let ctx = crate::tests::create_query_context_with_session(session_manager.clone()).await?;
+    let mut planner = Planner::new(ctx.clone());
 
     // Create table
     {
         let query = "create table default.test(a int, b String) Engine = Memory;";
-        let plan = PlanParser::parse(ctx.clone(), query).await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         let _ = executor.execute(None).await?;
     }
 
@@ -354,12 +360,13 @@ async fn test_async_insert_queue_wait_timeout() -> Result<()> {
 async fn test_async_insert_queue_no_wait() -> Result<()> {
     let (session_manager, queue) = build_async_insert_queue(None, None, None).await?;
     let ctx = crate::tests::create_query_context_with_session(session_manager.clone()).await?;
+    let mut planner = Planner::new(ctx.clone());
 
     // Create table
     {
         let query = "create table default.test(a int, b String) Engine = Memory;";
-        let plan = PlanParser::parse(ctx.clone(), query).await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         let _ = executor.execute(None).await?;
     }
 

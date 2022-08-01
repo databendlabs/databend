@@ -30,6 +30,7 @@ use common_exception::Result;
 use common_planners::Expression;
 
 use crate::catalogs::CATALOG_DEFAULT;
+use crate::sessions::TableContext;
 use crate::sql::binder::scalar::ScalarBinder;
 use crate::sql::binder::Binder;
 use crate::sql::binder::ColumnBinding;
@@ -260,6 +261,7 @@ impl<'a> Binder {
                 LogicalGet {
                     table_index,
                     columns: columns.into_iter().map(|col| col.column_index).collect(),
+                    push_down_predicates: None,
                 }
                 .into(),
             ),

@@ -22,6 +22,7 @@ use common_planners::validate_function_arg;
 
 use crate::procedures::ProcedureFeatures;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 
 #[async_trait::async_trait]
 pub trait Procedure: Sync + Send {

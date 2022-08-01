@@ -17,6 +17,7 @@ use common_datavalues::prelude::TypeID;
 use common_datavalues::remove_nullable;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
+use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_datavalues::DateConverter;
@@ -26,8 +27,40 @@ use common_exception::Result;
 use common_exception::ABORT_QUERY;
 use common_exception::ABORT_SESSION;
 use common_io::prelude::FormatSettings;
-use common_tracing::tracing;
 use opensrv_mysql::*;
+use tracing::error;
+
+pub struct QueryResult {
+    blocks: Vec<DataBlock>,
+    extra_info: String,
+    has_result_set: bool,
+    schema: DataSchemaRef,
+}
+
+impl QueryResult {
+    pub fn create(
+        blocks: Vec<DataBlock>,
+        extra_info: String,
+        has_result_set: bool,
+        schema: DataSchemaRef,
+    ) -> QueryResult {
+        QueryResult {
+            blocks,
+            extra_info,
+            has_result_set,
+            schema,
+        }
+    }
+
+    pub fn default() -> QueryResult {
+        QueryResult {
+            blocks: vec![DataBlock::empty()],
+            extra_info: String::from(""),
+            has_result_set: false,
+            schema: DataSchemaRefExt::create(vec![]),
+        }
+    }
+}
 
 pub struct DFQueryResultWriter<'a, W: std::io::Write> {
     inner: Option<QueryResultWriter<'a, W>>,
@@ -40,12 +73,12 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
 
     pub fn write(
         &mut self,
-        query_result: Result<(Vec<DataBlock>, String)>,
+        query_result: Result<QueryResult>,
         format: &FormatSettings,
     ) -> Result<()> {
         if let Some(writer) = self.inner.take() {
             match query_result {
-                Ok((blocks, extra_info)) => Self::ok(blocks, extra_info, writer, format)?,
+                Ok(query_result) => Self::ok(query_result, writer, format)?,
                 Err(error) => Self::err(&error, writer)?,
             }
         }
@@ -53,18 +86,19 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
     }
 
     fn ok(
-        blocks: Vec<DataBlock>,
-        extra_info: String,
+        query_result: QueryResult,
         dataset_writer: QueryResultWriter<'a, W>,
         format: &FormatSettings,
     ) -> Result<()> {
         // XXX: num_columns == 0 may is error?
         let default_response = OkResponse {
-            info: extra_info,
+            info: query_result.extra_info,
             ..Default::default()
         };
 
-        if blocks.is_empty() || (blocks[0].num_columns() == 0) {
+        if (!query_result.has_result_set && query_result.blocks.is_empty())
+            || (query_result.schema.num_fields() == 0)
+        {
             dataset_writer.completed(default_response)?;
             return Ok(());
         }
@@ -112,14 +146,13 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
             schema.fields().iter().map(make_column_from_field).collect()
         }
 
-        let block = blocks[0].clone();
         let tz = format.timezone;
-        match convert_schema(block.schema()) {
+        match convert_schema(&query_result.schema) {
             Err(error) => Self::err(&error, dataset_writer),
             Ok(columns) => {
                 let mut row_writer = dataset_writer.start(&columns)?;
 
-                for block in &blocks {
+                for block in &query_result.blocks {
                     match block.get_serializers() {
                         Ok(serializers) => {
                             let rows_size = block.column(0).len();
@@ -184,7 +217,8 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
                                         (_, v) => {
                                             return Err(ErrorCode::BadDataValueType(format!(
                                                 "Unsupported column type:{:?}, expected type in schema: {:?}",
-                                                v.data_type(), data_type
+                                                v.data_type(),
+                                                data_type
                                             )));
                                         }
                                     }
@@ -210,7 +244,7 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
 
     fn err(error: &ErrorCode, writer: QueryResultWriter<'a, W>) -> Result<()> {
         if error.code() != ABORT_QUERY && error.code() != ABORT_SESSION {
-            tracing::error!("OnQuery Error: {:?}", error);
+            error!("OnQuery Error: {:?}", error);
             writer.error(ErrorKind::ER_UNKNOWN_ERROR, error.to_string().as_bytes())?;
         } else {
             writer.error(

@@ -15,20 +15,23 @@
 use std::sync::Arc;
 
 use common_datavalues::DataSchemaRef;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::PlanNode;
 use common_planners::SelectPlan;
 use common_streams::SendableDataBlockStream;
-use common_tracing::tracing;
 
+use crate::clusters::ClusterHelper;
 use crate::interpreters::plan_schedulers;
 use crate::interpreters::stream::ProcessorExecutorStream;
 use crate::interpreters::Interpreter;
 use crate::optimizers::Optimizers;
-use crate::pipelines::new::executor::PipelinePullingExecutor;
-use crate::pipelines::new::NewPipeline;
-use crate::pipelines::new::QueryPipelineBuilder;
+use crate::pipelines::executor::PipelinePullingExecutor;
+use crate::pipelines::Pipeline;
+use crate::pipelines::PipelineBuildResult;
+use crate::pipelines::QueryPipelineBuilder;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 
 /// SelectInterpreter struct which interprets SelectPlan
 pub struct SelectInterpreter {
@@ -48,6 +51,23 @@ impl SelectInterpreter {
             Optimizers::create(self.ctx.clone()),
             &self.select.input,
         )
+    }
+
+    async fn build_pipeline(&self) -> Result<PipelineBuildResult> {
+        match self.ctx.get_cluster().is_empty() {
+            true => {
+                let settings = self.ctx.get_settings();
+                let builder = QueryPipelineBuilder::create(self.ctx.clone());
+                let mut query_pipeline = builder.finalize(&self.rewrite_plan()?)?;
+                query_pipeline.set_max_threads(settings.get_max_threads()? as usize);
+                Ok(query_pipeline)
+            }
+            false => {
+                let ctx = self.ctx.clone();
+                let optimized_plan = self.rewrite_plan()?;
+                plan_schedulers::schedule_query_new(ctx, &optimized_plan).await
+            }
+        }
     }
 }
 
@@ -71,31 +91,25 @@ impl Interpreter for SelectInterpreter {
         &self,
         _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
-        let query_pipeline = self.create_new_pipeline().await?;
+        let build_res = self.build_pipeline().await?;
         let async_runtime = self.ctx.get_storage_runtime();
         let query_need_abort = self.ctx.query_need_abort();
-        let executor =
-            PipelinePullingExecutor::try_create(async_runtime, query_need_abort, query_pipeline)?;
-
-        Ok(Box::pin(ProcessorExecutorStream::create(executor)?))
+        Ok(Box::pin(ProcessorExecutorStream::create(
+            PipelinePullingExecutor::from_pipelines(async_runtime, query_need_abort, build_res)?,
+        )?))
     }
 
     /// This method will create a new pipeline
-    /// The QueryPipelineBuilder will use the optimized plan to generate a NewPipeline
-    async fn create_new_pipeline(&self) -> Result<NewPipeline> {
-        match self.ctx.get_cluster().is_empty() {
-            true => {
-                let settings = self.ctx.get_settings();
-                let builder = QueryPipelineBuilder::create(self.ctx.clone());
-                let mut query_pipeline = builder.finalize(&self.rewrite_plan()?)?;
-                query_pipeline.set_max_threads(settings.get_max_threads()? as usize);
-                Ok(query_pipeline)
-            }
-            false => {
-                let ctx = self.ctx.clone();
-                let optimized_plan = self.rewrite_plan()?;
-                plan_schedulers::schedule_query_new(ctx, &optimized_plan).await
-            }
+    /// The QueryPipelineBuilder will use the optimized plan to generate a Pipeline
+    async fn create_new_pipeline(&self) -> Result<Pipeline> {
+        let build_res = self.build_pipeline().await?;
+
+        if !build_res.sources_pipelines.is_empty() {
+            return Err(ErrorCode::IllegalPipelineState(
+                "Sources pipeline must be empty.",
+            ));
         }
+
+        Ok(build_res.main_pipeline)
     }
 }

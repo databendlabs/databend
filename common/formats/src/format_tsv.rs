@@ -13,17 +13,17 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
-use common_datavalues::DataType;
 use common_datavalues::TypeDeserializer;
 use common_datavalues::TypeDeserializerImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::position2;
-use common_io::prelude::position4;
 use common_io::prelude::BufferReadExt;
+use common_io::prelude::FileSplit;
 use common_io::prelude::FormatSettings;
 use common_io::prelude::MemoryReader;
 use common_io::prelude::NestedCheckpointReader;
@@ -35,7 +35,6 @@ use crate::InputFormat;
 use crate::InputState;
 
 pub struct TsvInputState {
-    pub quotes: u8,
     pub memory: Vec<u8>,
     pub accepted_rows: usize,
     pub accepted_bytes: usize,
@@ -97,12 +96,12 @@ impl TsvInputFormat {
         skip_rows: usize,
         min_accepted_rows: usize,
         min_accepted_bytes: usize,
-    ) -> Result<Box<dyn InputFormat>> {
+    ) -> Result<Arc<dyn InputFormat>> {
         settings.field_delimiter = vec![b'\t'];
         settings.record_delimiter = vec![b'\n'];
         settings.null_bytes = settings.tsv_null_bytes.clone();
 
-        Ok(Box::new(TsvInputFormat {
+        Ok(Arc::new(TsvInputFormat {
             schema,
             settings,
             skip_rows,
@@ -111,28 +110,14 @@ impl TsvInputFormat {
         }))
     }
 
-    fn find_quotes(buf: &[u8], pos: usize, state: &mut TsvInputState) -> usize {
-        let index = pos + position2::<true, b'"', b'\''>(&buf[pos..]);
-
-        if index != buf.len() {
-            state.quotes = 0;
-            return index + 1;
-        }
-
-        buf.len()
-    }
-
     fn find_delimiter(&self, buf: &[u8], pos: usize, state: &mut TsvInputState) -> usize {
-        let position = pos + position4::<true, b'"', b'\'', b'\r', b'\n'>(&buf[pos..]);
+        let position = pos + position2::<true, b'\r', b'\n'>(&buf[pos..]);
 
         if position != buf.len() {
-            if buf[position] == b'"' || buf[position] == b'\'' {
-                state.quotes = buf[position];
-                return position + 1;
-            } else if buf[position] == b'\r' {
+            if buf[position] == b'\r' {
                 return self.accept_row::<b'\n'>(buf, pos, state, position);
             } else if buf[position] == b'\n' {
-                return self.accept_row::<b'\r'>(buf, pos, state, position);
+                return self.accept_row::<0>(buf, pos, state, position);
             }
         }
         buf.len()
@@ -174,7 +159,6 @@ impl InputFormat for TsvInputFormat {
 
     fn create_state(&self) -> Box<dyn InputState> {
         Box::new(TsvInputState {
-            quotes: 0,
             memory: vec![],
             accepted_rows: 0,
             accepted_bytes: 0,
@@ -198,44 +182,15 @@ impl InputFormat for TsvInputFormat {
     }
 
     fn deserialize_data(&self, state: &mut Box<dyn InputState>) -> Result<Vec<DataBlock>> {
-        let mut deserializers = Vec::with_capacity(self.schema.num_fields());
-        for field in self.schema.fields() {
-            let data_type = field.data_type();
-            deserializers.push(data_type.create_deserializer(self.min_accepted_rows));
-        }
-
         let mut state = std::mem::replace(state, self.create_state());
         let state = state.as_any().downcast_mut::<TsvInputState>().unwrap();
         let memory = std::mem::take(&mut state.memory);
-        let memory_reader = MemoryReader::new(memory);
-        let mut checkpoint_reader = NestedCheckpointReader::new(memory_reader);
-
-        let mut row_index = 0;
-        while !checkpoint_reader.eof()? {
-            checkpoint_reader.push_checkpoint();
-            if let Err(err) = self.read_row(&mut checkpoint_reader, &mut deserializers, row_index) {
-                let checkpoint_buffer = checkpoint_reader.get_checkpoint_buffer_end();
-                let msg = self.get_diagnostic_info(
-                    checkpoint_buffer,
-                    &state.file_name,
-                    row_index + state.start_row_index,
-                    self.schema.clone(),
-                    self.min_accepted_rows,
-                    self.settings.clone(),
-                )?;
-                let err = err.add_message_back(msg);
-                return Err(err);
-            }
-            checkpoint_reader.pop_checkpoint();
-            row_index += 1;
-        }
-
-        let mut columns = Vec::with_capacity(deserializers.len());
-        for deserializer in &mut deserializers {
-            columns.push(deserializer.finish_to_column());
-        }
-
-        Ok(vec![DataBlock::create(self.schema.clone(), columns)])
+        self.deserialize_complete_split(FileSplit {
+            path: state.file_name.clone(),
+            start_offset: 0,
+            start_row: state.start_row_index,
+            buf: memory,
+        })
     }
 
     fn read_row(
@@ -274,7 +229,7 @@ impl InputFormat for TsvInputFormat {
         Ok(())
     }
 
-    fn read_buf(&self, buf: &[u8], state: &mut Box<dyn InputState>) -> Result<usize> {
+    fn read_buf(&self, buf: &[u8], state: &mut Box<dyn InputState>) -> Result<(usize, bool)> {
         let mut index = 0;
         let state = state.as_any().downcast_mut::<TsvInputState>().unwrap();
 
@@ -286,28 +241,33 @@ impl InputFormat for TsvInputFormat {
 
         state.need_more_data = true;
         while index < buf.len() && state.need_more_data {
-            index = match state.quotes != 0 {
-                true => Self::find_quotes(buf, index, state),
-                false => self.find_delimiter(buf, index, state),
-            }
+            index = self.find_delimiter(buf, index, state);
         }
 
         state.memory.extend_from_slice(&buf[0..index]);
-        Ok(index)
+        let finished = !state.need_more_data && state.ignore_if_first.is_none();
+        Ok((index, finished))
     }
 
-    fn skip_header(&self, buf: &[u8], state: &mut Box<dyn InputState>) -> Result<usize> {
-        if self.skip_rows > 0 {
+    fn take_buf(&self, state: &mut Box<dyn InputState>) -> Vec<u8> {
+        let state = state.as_any().downcast_mut::<TsvInputState>().unwrap();
+        std::mem::take(&mut state.memory)
+    }
+
+    fn skip_header(
+        &self,
+        buf: &[u8],
+        state: &mut Box<dyn InputState>,
+        force: usize,
+    ) -> Result<usize> {
+        let rows_to_skip = if force > 0 { force } else { self.skip_rows };
+        if rows_to_skip > 0 {
             let mut index = 0;
             let state = state.as_any().downcast_mut::<TsvInputState>().unwrap();
 
             while index < buf.len() {
-                index = match state.quotes != 0 {
-                    true => Self::find_quotes(buf, index, state),
-                    false => self.find_delimiter(buf, index, state),
-                };
-
-                if state.accepted_rows == self.skip_rows {
+                index = self.find_delimiter(buf, index, state);
+                if state.accepted_rows == rows_to_skip {
                     return Ok(index);
                 }
             }
@@ -318,6 +278,40 @@ impl InputFormat for TsvInputFormat {
     fn read_row_num(&self, state: &mut Box<dyn InputState>) -> Result<usize> {
         let state = state.as_any().downcast_mut::<TsvInputState>().unwrap();
         Ok(state.accepted_rows)
+    }
+
+    fn deserialize_complete_split(&self, split: FileSplit) -> Result<Vec<DataBlock>> {
+        let mut deserializers = self.schema.create_deserializers(self.min_accepted_rows);
+
+        let memory_reader = MemoryReader::new(split.buf);
+        let mut checkpoint_reader = NestedCheckpointReader::new(memory_reader);
+
+        let mut row_index = 0;
+        while !checkpoint_reader.eof()? {
+            checkpoint_reader.push_checkpoint();
+            if let Err(err) = self.read_row(&mut checkpoint_reader, &mut deserializers, row_index) {
+                let checkpoint_buffer = checkpoint_reader.get_checkpoint_buffer_end();
+                let msg = self.get_diagnostic_info(
+                    checkpoint_buffer,
+                    &split.path,
+                    row_index + split.start_row,
+                    self.schema.clone(),
+                    self.min_accepted_rows,
+                    self.settings.clone(),
+                )?;
+                let err = err.add_message_back(msg);
+                return Err(err);
+            }
+            checkpoint_reader.pop_checkpoint();
+            row_index += 1;
+        }
+
+        let mut columns = Vec::with_capacity(deserializers.len());
+        for deserializer in &mut deserializers {
+            columns.push(deserializer.finish_to_column());
+        }
+
+        Ok(vec![DataBlock::create(self.schema.clone(), columns)])
     }
 }
 

@@ -26,10 +26,10 @@ use crate::api::rpc::exchange::exchange_params::MergeExchangeParams;
 use crate::api::rpc::exchange::exchange_params::SerializeParams;
 use crate::api::rpc::packets::DataPacket;
 use crate::api::rpc::packets::FragmentData;
-use crate::pipelines::new::processors::port::InputPort;
-use crate::pipelines::new::processors::processor::Event;
-use crate::pipelines::new::processors::processor::ProcessorPtr;
-use crate::pipelines::new::processors::Processor;
+use crate::pipelines::processors::port::InputPort;
+use crate::pipelines::processors::processor::Event;
+use crate::pipelines::processors::processor::ProcessorPtr;
+use crate::pipelines::processors::Processor;
 use crate::sessions::QueryContext;
 
 pub struct ExchangeMergeSink {
@@ -90,7 +90,7 @@ impl ExchangeMergeSink {
 #[async_trait::async_trait]
 impl Processor for ExchangeMergeSink {
     fn name(&self) -> &'static str {
-        "ExchangeSink"
+        "ExchangeMergeSink"
     }
 
     fn as_any(&mut self) -> &mut dyn Any {

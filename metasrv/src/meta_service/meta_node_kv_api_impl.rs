@@ -29,7 +29,7 @@ use common_meta_types::TxnReply;
 use common_meta_types::TxnRequest;
 use common_meta_types::UpsertKVReply;
 use common_meta_types::UpsertKVReq;
-use common_tracing::tracing;
+use tracing::debug;
 
 use crate::meta_service::MetaNode;
 
@@ -96,7 +96,7 @@ impl KVApi for MetaNode {
 
     #[tracing::instrument(level = "debug", skip(self, txn))]
     async fn transaction(&self, txn: TxnRequest) -> Result<TxnReply, MetaError> {
-        tracing::debug!(txn = display(&txn), "MetaNode::transaction()");
+        debug!(txn = display(&txn), "MetaNode::transaction()");
         let ent = LogEntry {
             txid: None,
             cmd: Cmd::Transaction(txn),

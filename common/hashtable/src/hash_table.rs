@@ -38,18 +38,18 @@ pub struct HashTable<Key: HashTableKeyable, Entity: HashTableEntity<Key>, Grower
 }
 
 unsafe impl<
-        Key: HashTableKeyable + Send,
-        Entity: HashTableEntity<Key> + Send,
-        Grower: HashTableGrower,
-    > Send for HashTable<Key, Entity, Grower>
+    Key: HashTableKeyable + Send,
+    Entity: HashTableEntity<Key> + Send,
+    Grower: HashTableGrower,
+> Send for HashTable<Key, Entity, Grower>
 {
 }
 
 unsafe impl<
-        Key: HashTableKeyable + Sync,
-        Entity: HashTableEntity<Key> + Sync,
-        Grower: HashTableGrower,
-    > Sync for HashTable<Key, Entity, Grower>
+    Key: HashTableKeyable + Sync,
+    Entity: HashTableEntity<Key> + Sync,
+    Grower: HashTableGrower,
+> Sync for HashTable<Key, Entity, Grower>
 {
 }
 

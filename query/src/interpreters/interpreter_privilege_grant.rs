@@ -21,11 +21,11 @@ use common_meta_types::UserPrivilegeSet;
 use common_planners::GrantPrivilegePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
-use common_tracing::tracing;
 
 use crate::interpreters::interpreter_common::validate_grant_object_exists;
 use crate::interpreters::Interpreter;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 
 #[derive(Debug)]
 pub struct GrantPrivilegeInterpreter {
@@ -90,7 +90,9 @@ pub fn validate_grant_privileges(object: &GrantObject, privileges: UserPrivilege
         .iter()
         .all(|p| available_privileges.has_privilege(p));
     if !ok {
-        return Err(common_exception::ErrorCode::IllegalGrant("Illegal GRANT/REVOKE command; please consult the manual to see which privileges can be used"));
+        return Err(common_exception::ErrorCode::IllegalGrant(
+            "Illegal GRANT/REVOKE command; please consult the manual to see which privileges can be used",
+        ));
     }
     Ok(())
 }

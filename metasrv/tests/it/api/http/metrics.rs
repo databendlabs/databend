@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use common_base::base::tokio;
-use common_tracing::tracing;
 use databend_meta::api::http::v1::metrics::metrics_handler;
 use databend_meta::meta_service::MetaNode;
 use poem::get;

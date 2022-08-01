@@ -44,7 +44,10 @@ impl DataBlock {
     ) -> Result<DataBlock> {
         let order_columns = sort_columns_descriptions
             .iter()
-            .map(|f| Ok(block.try_column_by_name(&f.column_name)?.as_arrow_array()))
+            .map(|f| {
+                let c = block.try_column_by_name(&f.column_name)?;
+                Ok(c.as_arrow_array(c.data_type()))
+            })
             .collect::<Result<Vec<_>>>()?;
 
         let order_arrays = sort_columns_descriptions
@@ -84,10 +87,10 @@ impl DataBlock {
             .iter()
             .map(|f| {
                 let left = lhs.try_column_by_name(&f.column_name)?.clone();
-                let left = left.as_arrow_array();
+                let left = left.as_arrow_array(left.data_type());
 
                 let right = rhs.try_column_by_name(&f.column_name)?.clone();
-                let right = right.as_arrow_array();
+                let right = right.as_arrow_array(right.data_type());
 
                 Ok(vec![left, right])
             })

@@ -24,6 +24,7 @@ use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 
 pub struct ShowGrantsInterpreter {
     ctx: Arc<QueryContext>,
@@ -42,11 +43,14 @@ impl Interpreter for ShowGrantsInterpreter {
         "ShowGrantsInterpreter"
     }
 
+    fn schema(&self) -> DataSchemaRef {
+        self.plan.schema()
+    }
+
     async fn execute(
         &self,
         _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
-        let schema = DataSchemaRefExt::create(vec![DataField::new("Grants", Vu8::to_data_type())]);
         let tenant = self.ctx.get_tenant();
         let user_mgr = self.ctx.get_user_manager();
         let role_cache_mgr = self.ctx.get_role_cache_manager();
@@ -79,7 +83,11 @@ impl Interpreter for ShowGrantsInterpreter {
             .map(|e| format!("{} TO {}", e, identity).into_bytes())
             .collect::<Vec<_>>();
 
-        let block = DataBlock::create(schema.clone(), vec![Series::from_data(grant_list)]);
-        Ok(Box::pin(DataBlockStream::create(schema, None, vec![block])))
+        let block = DataBlock::create(self.plan.schema(), vec![Series::from_data(grant_list)]);
+        Ok(Box::pin(DataBlockStream::create(
+            self.plan.schema(),
+            None,
+            vec![block],
+        )))
     }
 }

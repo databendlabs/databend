@@ -48,9 +48,11 @@ use common_functions::is_builtin_function;
 use common_functions::scalars::CastFunction;
 use common_functions::scalars::FunctionFactory;
 use common_functions::scalars::TupleFunction;
+use common_planners::validate_function_arg;
 
-use crate::common::Evaluator;
+use crate::evaluator::Evaluator;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::sql::binder::wrap_cast_if_needed;
 use crate::sql::binder::Binder;
 use crate::sql::optimizer::RelExpr;
@@ -558,20 +560,28 @@ impl<'a> TypeChecker<'a> {
                 ))
             }
 
-            Expr::Exists { subquery, not, .. } => {
-                self.resolve_subquery(
-                    if *not {
-                        SubqueryType::NotExists
-                    } else {
-                        SubqueryType::Exists
-                    },
-                    subquery,
-                    true,
-                    None,
-                    None,
-                    None,
-                )
-                .await?
+            Expr::Exists {
+                subquery,
+                not,
+                span,
+                ..
+            } => {
+                if *not {
+                    return self
+                        .resolve_function(
+                            span,
+                            "not",
+                            &[&Expr::Exists {
+                                span: *span,
+                                not: false,
+                                subquery: subquery.clone(),
+                            }],
+                            None,
+                        )
+                        .await;
+                }
+                self.resolve_subquery(SubqueryType::Exists, subquery, true, None, None, None)
+                    .await?
             }
 
             Expr::Subquery { subquery, .. } => {
@@ -842,6 +852,16 @@ impl<'a> TypeChecker<'a> {
         }
 
         let arg_types_ref: Vec<&DataTypeImpl> = arg_types.iter().collect();
+
+        // Validate function arguments.
+        // TODO(leiysky): should be done in `FunctionFactory::get`.
+        let feature = FunctionFactory::instance().get_features(func_name)?;
+        validate_function_arg(
+            func_name,
+            arguments.len(),
+            feature.variadic_arguments,
+            feature.num_arguments,
+        )?;
 
         let func = FunctionFactory::instance()
             .get(func_name, &arg_types_ref)
@@ -1197,7 +1217,7 @@ impl<'a> TypeChecker<'a> {
                     &[date],
                     Some(TimestampType::new_impl(0)),
                 )
-                .await
+                    .await
             }
             IntervalKind::Month => {
                 self.resolve_function(
@@ -1206,7 +1226,7 @@ impl<'a> TypeChecker<'a> {
                     &[date],
                     Some(TimestampType::new_impl(0)),
                 )
-                .await
+                    .await
             }
             IntervalKind::Day => {
                 self.resolve_function(
@@ -1215,7 +1235,7 @@ impl<'a> TypeChecker<'a> {
                     &[date],
                     Some(TimestampType::new_impl(0)),
                 )
-                .await
+                    .await
             }
             IntervalKind::Hour => {
                 self.resolve_function(
@@ -1224,7 +1244,7 @@ impl<'a> TypeChecker<'a> {
                     &[date],
                     Some(TimestampType::new_impl(0)),
                 )
-                .await
+                    .await
             }
             IntervalKind::Minute => {
                 self.resolve_function(
@@ -1233,7 +1253,7 @@ impl<'a> TypeChecker<'a> {
                     &[date],
                     Some(TimestampType::new_impl(0)),
                 )
-                .await
+                    .await
             }
             IntervalKind::Second => {
                 self.resolve_function(
@@ -1242,7 +1262,7 @@ impl<'a> TypeChecker<'a> {
                     &[date],
                     Some(TimestampType::new_impl(0)),
                 )
-                .await
+                    .await
             }
             _ => Err(ErrorCode::SemanticError(span.display_error("Only these interval types are currently supported: [year, month, day, hour, minute, second]".to_string()))),
         }
@@ -1298,6 +1318,7 @@ impl<'a> TypeChecker<'a> {
             subquery: Box::new(s_expr),
             child_expr: child_scalar,
             compare_op,
+            index: None,
             data_type: data_type.clone(),
             allow_multi_rows,
             typ,
@@ -1369,37 +1390,35 @@ impl<'a> TypeChecker<'a> {
         expr: &Expr<'_>,
         trim_where: &Option<(TrimWhere, Box<Expr<'_>>)>,
     ) -> Result<Box<(Scalar, DataTypeImpl)>> {
-        let (func_name, trim_scalar) = if let Some((trim_type, trim_expr)) = trim_where {
+        let (func_name, trim_scalar, trim_type) = if let Some((trim_type, trim_expr)) = trim_where {
             let func_name = match trim_type {
                 TrimWhere::Leading => "trim_leading",
                 TrimWhere::Trailing => "trim_trailing",
                 TrimWhere::Both => "trim_both",
             };
 
-            let box (trim_scalar, _) = self
-                .resolve(trim_expr, Some(StringType::new_impl()))
-                .await?;
-            (func_name, trim_scalar)
+            let box (trim_scalar, trim_type) = self.resolve(trim_expr, None).await?;
+            (func_name, trim_scalar, trim_type)
         } else {
             let trim_scalar = ConstantExpr {
                 value: DataValue::String(" ".as_bytes().to_vec()),
                 data_type: Box::new(StringType::new_impl()),
             }
             .into();
-            ("trim_both", trim_scalar)
+            ("trim_both", trim_scalar, StringType::new_impl())
         };
 
-        let box (trim_source, _) = self.resolve(expr, Some(StringType::new_impl())).await?;
+        let box (trim_source, source_type) = self.resolve(expr, None).await?;
         let args = vec![trim_source, trim_scalar];
         let func = FunctionFactory::instance()
-            .get(func_name, &[&StringType::new_impl(); 2])
+            .get(func_name, &[&source_type, &trim_type])
             .map_err(|e| ErrorCode::SemanticError(span.display_error(e.message())))?;
 
         Ok(Box::new((
             FunctionCall {
                 arguments: args,
                 func_name: func_name.to_string(),
-                arg_types: vec![StringType::new_impl(); 2],
+                arg_types: vec![source_type, trim_type],
                 return_type: Box::new(func.return_type()),
             }
             .into(),

@@ -22,20 +22,28 @@ use common_ast::DisplayError;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+use crate::sessions::TableContext;
 use crate::sql::binder::scalar::ScalarBinder;
 use crate::sql::binder::select::SelectList;
 use crate::sql::binder::Binder;
 use crate::sql::binder::ColumnBinding;
 use crate::sql::optimizer::SExpr;
 use crate::sql::planner::semantic::GroupingChecker;
+use crate::sql::plans::AggregateFunction;
+use crate::sql::plans::AndExpr;
 use crate::sql::plans::BoundColumnRef;
+use crate::sql::plans::CastExpr;
+use crate::sql::plans::ComparisonExpr;
 use crate::sql::plans::EvalScalar;
+use crate::sql::plans::FunctionCall;
+use crate::sql::plans::OrExpr;
 use crate::sql::plans::Scalar;
 use crate::sql::plans::ScalarItem;
 use crate::sql::plans::Sort;
 use crate::sql::plans::SortItem;
 use crate::sql::BindContext;
 use crate::sql::IndexType;
+use crate::sql::ScalarExpr;
 
 pub struct OrderItems<'a> {
     items: Vec<OrderItem<'a>>,
@@ -45,91 +53,144 @@ pub struct OrderItem<'a> {
     pub expr: OrderByExpr<'a>,
     pub index: IndexType,
     pub name: String,
-    // True if item reference a alias scalar expression in select list
-    pub need_project: bool,
+    // True if item need to wrap EvalScalar plan.
+    pub need_eval_scalar: bool,
 }
 
 impl<'a> Binder {
-    pub(super) fn analyze_order_items(
+    pub(super) async fn analyze_order_items(
         &mut self,
         from_context: &BindContext,
-        scalar_items: &HashMap<IndexType, ScalarItem>,
+        scalar_items: &mut HashMap<IndexType, ScalarItem>,
         projections: &[ColumnBinding],
         order_by: &'a [OrderByExpr<'a>],
         distinct: bool,
     ) -> Result<OrderItems<'a>> {
         let mut order_items = Vec::with_capacity(order_by.len());
         for order in order_by {
-            if let Expr::ColumnRef {
-                database: ref database_name,
-                table: ref table_name,
-                column: ref ident,
-                ..
-            } = order.expr
-            {
-                // We first search the identifier in select list
-                let mut found = false;
-                for item in projections.iter() {
-                    if item.column_name == ident.name {
-                        order_items.push(OrderItem {
-                            expr: order.clone(),
-                            index: item.index,
-                            name: item.column_name.clone(),
-                            need_project: scalar_items.get(&item.index).map_or(
-                                false,
-                                |scalar_item| {
-                                    !matches!(&scalar_item.scalar, Scalar::BoundColumnRef(_))
-                                },
-                            ),
-                        });
-                        found = true;
-                        break;
+            match &order.expr {
+                Expr::ColumnRef {
+                    database: ref database_name,
+                    table: ref table_name,
+                    column: ref ident,
+                    ..
+                } => {
+                    // We first search the identifier in select list
+                    let mut found = false;
+                    for item in projections.iter() {
+                        let matched = match (
+                            (&database_name, &table_name),
+                            (&item.database_name, &item.table_name),
+                        ) {
+                            (
+                                (Some(ident_database), Some(ident_table)),
+                                (Some(database), Some(table)),
+                            ) if &ident_database.name == database
+                                && &ident_table.name == table
+                                && ident.name == item.column_name =>
+                            {
+                                true
+                            }
+                            ((None, Some(ident_table)), (_, Some(table)))
+                                if &ident_table.name == table && ident.name == item.column_name =>
+                            {
+                                true
+                            }
+                            ((None, None), (_, _)) if ident.name == item.column_name => true,
+                            _ => false,
+                        };
+                        if matched {
+                            order_items.push(OrderItem {
+                                expr: order.clone(),
+                                index: item.index,
+                                name: item.column_name.clone(),
+                                need_eval_scalar: scalar_items.get(&item.index).map_or(
+                                    false,
+                                    |scalar_item| {
+                                        !matches!(&scalar_item.scalar, Scalar::BoundColumnRef(_))
+                                    },
+                                ),
+                            });
+                            found = true;
+                            break;
+                        }
                     }
-                }
 
-                if found {
-                    continue;
-                }
-
-                // If there isn't a matched alias in select list, we will fallback to
-                // from clause.
-                let column = from_context.resolve_column(database_name.as_ref().map(|v| v.name.as_str()), table_name.as_ref().map(|v| v.name.as_str()), ident).and_then(|v| {
-                    if distinct {
-                        Err(ErrorCode::SemanticError(order.expr.span().display_error("for SELECT DISTINCT, ORDER BY expressions must appear in select list".to_string())))
-                    } else {
-                        Ok(v)
+                    if found {
+                        continue;
                     }
-                })?;
-                order_items.push(OrderItem {
-                    expr: order.clone(),
-                    name: column.column_name.clone(),
-                    index: column.index,
-                    need_project: false,
-                });
-            } else if let Expr::Literal {
-                lit: Literal::Integer(index),
-                ..
-            } = &order.expr
-            {
-                let index = *index as usize - 1;
-                if index >= projections.len() {
-                    return Err(ErrorCode::SemanticError(order.expr.span().display_error(
-                        format!("ORDER BY position {} is not in select list", index + 1),
-                    )));
+
+                    // If there isn't a matched alias in select list, we will fallback to
+                    // from clause.
+                    let column = from_context.resolve_column(database_name.as_ref().map(|v| v.name.as_str()), table_name.as_ref().map(|v| v.name.as_str()), ident).and_then(|v| {
+                        if distinct {
+                            Err(ErrorCode::SemanticError(order.expr.span().display_error("for SELECT DISTINCT, ORDER BY expressions must appear in select list".to_string())))
+                        } else {
+                            Ok(v)
+                        }
+                    })?;
+                    order_items.push(OrderItem {
+                        expr: order.clone(),
+                        name: column.column_name.clone(),
+                        index: column.index,
+                        need_eval_scalar: false,
+                    });
                 }
-                order_items.push(OrderItem {
-                    expr: order.clone(),
-                    name: projections[index].column_name.clone(),
-                    index: projections[index].index,
-                    need_project: false,
-                });
-            } else {
-                return Err(ErrorCode::SemanticError(
-                    order
-                        .expr
-                        .span()
-                        .display_error("can only order by column".to_string()),
-                ));
+                Expr::Literal {
+                    lit: Literal::Integer(index),
+                    ..
+                } => {
+                    let index = *index as usize - 1;
+                    if index >= projections.len() {
+                        return Err(ErrorCode::SemanticError(order.expr.span().display_error(
+                            format!("ORDER BY position {} is not in select list", index + 1),
+                        )));
+                    }
+                    order_items.push(OrderItem {
+                        expr: order.clone(),
+                        name: projections[index].column_name.clone(),
+                        index: projections[index].index,
+                        need_eval_scalar: false,
+                    });
+                }
+                _ => {
+                    let mut bind_context = from_context.clone();
+                    for column_binding in projections.iter() {
+                        if bind_context.columns.contains(column_binding) {
+                            continue;
+                        }
+                        bind_context.columns.push(column_binding.clone());
+                    }
+                    let mut scalar_binder =
+                        ScalarBinder::new(&bind_context, self.ctx.clone(), self.metadata.clone());
+                    let (bound_expr, _) = scalar_binder.bind(&order.expr).await?;
+                    let rewrite_scalar = self
+                        .rewrite_scalar_with_replacement(&bound_expr, &|nest_scalar| {
+                            if let Scalar::BoundColumnRef(BoundColumnRef { column }) = nest_scalar {
+                                if let Some(scalar_item) = scalar_items.get(&column.index) {
+                                    return Ok(Some(scalar_item.scalar.clone()));
+                                }
+                            }
+                            Ok(None)
+                        })
+                        .map_err(|e| ErrorCode::SemanticError(e.message()))?;
+                    let column_binding = self.create_column_binding(
+                        None,
+                        None,
+                        format!("{:#}", order.expr),
+                        rewrite_scalar.data_type(),
+                    );
+                    order_items.push(OrderItem {
+                        expr: order.clone(),
+                        name: column_binding.column_name.clone(),
+                        index: column_binding.index,
+                        need_eval_scalar: true,
+                    });
+                    scalar_items.insert(column_binding.index, ScalarItem {
+                        scalar: rewrite_scalar,
+                        index: column_binding.index,
+                    });
+                }
             }
         }
         Ok(OrderItems { items: order_items })
@@ -155,19 +216,6 @@ impl<'a> Binder {
                     .find(|item| item.alias == order.name)
                 {
                     group_checker.resolve(&scalar_item.scalar, None)?;
-                } else {
-                    group_checker.resolve(
-                        &BoundColumnRef {
-                            column: from_context
-                                .columns
-                                .iter()
-                                .find(|col| col.column_name == order.name)
-                                .cloned()
-                                .ok_or_else(|| ErrorCode::LogicalError("Invalid order by item"))?,
-                        }
-                        .into(),
-                        None,
-                    )?;
                 }
             }
             if let Expr::ColumnRef {
@@ -178,7 +226,7 @@ impl<'a> Binder {
             {
                 if let (Some(table_name), Some(database_name)) = (table_name, database_name) {
                     let catalog_name = self.ctx.get_current_catalog();
-                    let catalog = self.ctx.get_catalog(catalog_name)?;
+                    let catalog = self.ctx.get_catalog(catalog_name.as_str())?;
                     catalog
                         .get_table(
                             &self.ctx.get_tenant(),
@@ -188,7 +236,7 @@ impl<'a> Binder {
                         .await?;
                 }
             }
-            if order.need_project {
+            if order.need_eval_scalar {
                 if let Entry::Occupied(entry) = scalar_items.entry(order.index) {
                     let (index, item) = entry.remove_entry();
                     let mut scalar = item.scalar;
@@ -202,8 +250,8 @@ impl<'a> Binder {
             }
             let order_by_item = SortItem {
                 index: order.index,
-                asc: order.expr.asc,
-                nulls_first: order.expr.nulls_first,
+                asc: order.expr.asc.unwrap_or(true),
+                nulls_first: order.expr.nulls_first.unwrap_or(false),
             };
             order_by_items.push(order_by_item);
         }
@@ -239,8 +287,8 @@ impl<'a> Binder {
                         Scalar::BoundColumnRef(BoundColumnRef { column }) => {
                             let order_by_item = SortItem {
                                 index: column.index,
-                                asc: order.asc,
-                                nulls_first: order.nulls_first,
+                                asc: order.asc.unwrap_or(true),
+                                nulls_first: order.nulls_first.unwrap_or(false),
                             };
                             order_by_items.push(order_by_item);
                         }
@@ -263,5 +311,120 @@ impl<'a> Binder {
             items: order_by_items,
         };
         Ok(SExpr::create_unary(sort_plan.into(), child))
+    }
+
+    fn rewrite_scalar_with_replacement<F>(
+        &self,
+        original_scalar: &Scalar,
+        replacement_fn: &F,
+    ) -> Result<Scalar>
+    where
+        F: Fn(&Scalar) -> Result<Option<Scalar>>,
+    {
+        let replacement_opt = replacement_fn(original_scalar)?;
+        match replacement_opt {
+            Some(replacement) => Ok(replacement),
+            None => match original_scalar {
+                Scalar::AndExpr(AndExpr {
+                    left,
+                    right,
+                    return_type,
+                }) => {
+                    let left =
+                        Box::new(self.rewrite_scalar_with_replacement(left, replacement_fn)?);
+                    let right =
+                        Box::new(self.rewrite_scalar_with_replacement(right, replacement_fn)?);
+                    Ok(Scalar::AndExpr(AndExpr {
+                        left,
+                        right,
+                        return_type: return_type.clone(),
+                    }))
+                }
+                Scalar::OrExpr(OrExpr {
+                    left,
+                    right,
+                    return_type,
+                }) => {
+                    let left =
+                        Box::new(self.rewrite_scalar_with_replacement(left, replacement_fn)?);
+                    let right =
+                        Box::new(self.rewrite_scalar_with_replacement(right, replacement_fn)?);
+                    Ok(Scalar::OrExpr(OrExpr {
+                        left,
+                        right,
+                        return_type: return_type.clone(),
+                    }))
+                }
+                Scalar::ComparisonExpr(ComparisonExpr {
+                    op,
+                    left,
+                    right,
+                    return_type,
+                }) => {
+                    let left =
+                        Box::new(self.rewrite_scalar_with_replacement(left, replacement_fn)?);
+                    let right =
+                        Box::new(self.rewrite_scalar_with_replacement(right, replacement_fn)?);
+                    Ok(Scalar::ComparisonExpr(ComparisonExpr {
+                        op: op.clone(),
+                        left,
+                        right,
+                        return_type: return_type.clone(),
+                    }))
+                }
+                Scalar::AggregateFunction(AggregateFunction {
+                    display_name,
+                    func_name,
+                    distinct,
+                    params,
+                    args,
+                    return_type,
+                }) => {
+                    let args = args
+                        .iter()
+                        .map(|arg| self.rewrite_scalar_with_replacement(arg, replacement_fn))
+                        .collect::<Result<Vec<_>>>()?;
+                    Ok(Scalar::AggregateFunction(AggregateFunction {
+                        display_name: display_name.clone(),
+                        func_name: func_name.clone(),
+                        distinct: *distinct,
+                        params: params.clone(),
+                        args,
+                        return_type: return_type.clone(),
+                    }))
+                }
+                Scalar::FunctionCall(FunctionCall {
+                    arguments,
+                    func_name,
+                    arg_types,
+                    return_type,
+                }) => {
+                    let arguments = arguments
+                        .iter()
+                        .map(|arg| self.rewrite_scalar_with_replacement(arg, replacement_fn))
+                        .collect::<Result<Vec<_>>>()?;
+                    Ok(Scalar::FunctionCall(FunctionCall {
+                        arguments,
+                        func_name: func_name.clone(),
+                        arg_types: arg_types.clone(),
+                        return_type: return_type.clone(),
+                    }))
+                }
+                Scalar::CastExpr(CastExpr {
+                    argument,
+                    from_type,
+                    target_type,
+                }) => {
+                    let argument =
+                        Box::new(self.rewrite_scalar_with_replacement(argument, replacement_fn)?);
+                    Ok(Scalar::CastExpr(CastExpr {
+                        argument,
+                        from_type: from_type.clone(),
+                        target_type: target_type.clone(),
+                    }))
+                }
+                _ => Ok(original_scalar.clone()),
+            },
+        }
     }
 }

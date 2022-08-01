@@ -11,7 +11,6 @@
 //  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
-//
 
 use std::sync::Arc;
 
@@ -31,9 +30,10 @@ use common_streams::SendableDataBlockStream;
 use databend_query::catalogs::CATALOG_DEFAULT;
 use databend_query::interpreters::CreateTableInterpreter;
 use databend_query::interpreters::Interpreter;
-use databend_query::interpreters::InterpreterFactory;
+use databend_query::interpreters::InterpreterFactoryV2;
 use databend_query::sessions::QueryContext;
-use databend_query::sql::PlanParser;
+use databend_query::sessions::TableContext;
+use databend_query::sql::Planner;
 use databend_query::sql::OPT_KEY_DATABASE_ID;
 use databend_query::storages::fuse::table_functions::ClusteringInformationTable;
 use databend_query::storages::fuse::table_functions::FuseSnapshotTable;
@@ -119,7 +119,13 @@ impl TestFixture {
     }
 
     pub fn default_schema() -> DataSchemaRef {
-        DataSchemaRefExt::create(vec![DataField::new("id", i32::to_data_type())])
+        let tuple_inner_names = vec!["a".to_string(), "b".to_string()];
+        let tuple_inner_data_types = vec![i32::to_data_type(), i32::to_data_type()];
+        let tuple_data_type = StructType::new_impl(Some(tuple_inner_names), tuple_inner_data_types);
+        DataSchemaRefExt::create(vec![
+            DataField::new("id", i32::to_data_type()),
+            DataField::new("t", tuple_data_type),
+        ])
     }
 
     pub fn default_crate_table_plan(&self) -> CreateTablePlan {
@@ -166,13 +172,34 @@ impl TestFixture {
         (0..num_of_block)
             .into_iter()
             .map(|idx| {
-                let schema =
-                    DataSchemaRefExt::create(vec![DataField::new("id", i32::to_data_type())]);
-                Ok(DataBlock::create(schema, vec![Series::from_data(
+                let tuple_inner_names = vec!["a".to_string(), "b".to_string()];
+                let tuple_inner_data_types = vec![i32::to_data_type(), i32::to_data_type()];
+                let tuple_data_type =
+                    StructType::new_impl(Some(tuple_inner_names), tuple_inner_data_types);
+                let schema = DataSchemaRefExt::create(vec![
+                    DataField::new("id", i32::to_data_type()),
+                    DataField::new("t", tuple_data_type.clone()),
+                ]);
+                let column0 = Series::from_data(
                     std::iter::repeat_with(|| idx as i32 + start)
                         .take(rows_perf_block)
                         .collect::<Vec<i32>>(),
-                )]))
+                );
+                let column1 = Series::from_data(
+                    std::iter::repeat_with(|| (idx as i32 + start) * 2)
+                        .take(rows_perf_block)
+                        .collect::<Vec<i32>>(),
+                );
+                let column2 = Series::from_data(
+                    std::iter::repeat_with(|| (idx as i32 + start) * 3)
+                        .take(rows_perf_block)
+                        .collect::<Vec<i32>>(),
+                );
+                let tuple_inner_columns = vec![column1, column2];
+                let tuple_column =
+                    StructColumn::from_data(tuple_inner_columns, tuple_data_type).arc();
+
+                Ok(DataBlock::create(schema, vec![column0, tuple_column]))
             })
             .collect()
     }
@@ -306,10 +333,10 @@ pub async fn expects_ok(
 }
 
 pub async fn execute_query(ctx: Arc<QueryContext>, query: &str) -> Result<SendableDataBlockStream> {
-    let plan = PlanParser::parse(ctx.clone(), query).await?;
-    InterpreterFactory::get(ctx.clone(), plan)?
-        .execute(None)
-        .await
+    let mut planner = Planner::new(ctx.clone());
+    let (plan, _, _) = planner.plan_sql(query).await?;
+    let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+    executor.execute(None).await
 }
 
 pub async fn execute_command(ctx: Arc<QueryContext>, query: &str) -> Result<()> {

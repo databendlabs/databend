@@ -11,7 +11,6 @@
 //  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
-//
 
 use std::collections::BTreeMap;
 use std::convert::TryFrom;
@@ -53,11 +52,7 @@ impl TryFrom<&BTreeMap<String, String>> for HiveTableOptions {
         let partition_keys = options.get(PARTITION_KEYS);
         let partition_keys = if let Some(partition_keys) = partition_keys {
             let a: Vec<String> = partition_keys.split(' ').map(str::to_string).collect();
-            if !a.is_empty() {
-                Some(a)
-            } else {
-                None
-            }
+            if !a.is_empty() { Some(a) } else { None }
         } else {
             None
         };

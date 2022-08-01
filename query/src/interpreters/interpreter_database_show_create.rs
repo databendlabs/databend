@@ -24,6 +24,7 @@ use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 
 pub struct ShowCreateDatabaseInterpreter {
     ctx: Arc<QueryContext>,
@@ -40,6 +41,10 @@ impl ShowCreateDatabaseInterpreter {
 impl Interpreter for ShowCreateDatabaseInterpreter {
     fn name(&self) -> &str {
         "ShowCreateDatabaseInterpreter"
+    }
+
+    fn schema(&self) -> DataSchemaRef {
+        self.plan.schema()
     }
 
     async fn execute(

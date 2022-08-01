@@ -11,7 +11,6 @@
 //  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
-//
 
 use common_base::base::tokio;
 use common_exception::Result;
@@ -46,7 +45,7 @@ async fn do_purge_test(case_name: &str, operation: &str) -> Result<()> {
     let fixture = TestFixture::new().await;
     let db = fixture.default_db_name();
     let tbl = fixture.default_table_name();
-    let qry = format!("optimize table '{}'.'{}' {}", db, tbl, operation);
+    let qry = format!("optimize table {}.{} {}", db, tbl, operation);
     // insert, and then insert overwrite (1 snapshot, 1 segment, 1 block for each insertion);
     insert_test_data(&qry, &fixture).await?;
     // there should be only 1 snapshot, 1 segment, 1 block left
@@ -86,17 +85,17 @@ async fn test_fuse_snapshot_optimize_compact() -> Result<()> {
     }
 
     // optimize compact
-    let qry = format!("optimize table '{}'.'{}' compact", db, tbl);
+    let qry = format!("optimize table {}.{} compact", db, tbl);
     execute_command(fixture.ctx(), qry.as_str()).await?;
 
     // optimize compact should keep the histories
     // there should be 6 history items there, 5 for the above insertions, 1 for that compaction
     let expected = vec![
-        "+---------+",
-        "| count() |",
-        "+---------+",
-        "| 6       |",
-        "+---------+",
+        "+----------+",
+        "| COUNT(*) |",
+        "+----------+",
+        "| 6        |",
+        "+----------+",
     ];
     let qry = format!("select count(*) from fuse_snapshot('{}', '{}')", db, tbl);
 

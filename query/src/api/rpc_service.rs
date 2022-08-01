@@ -22,11 +22,11 @@ use common_base::base::tokio::net::TcpListener;
 use common_base::base::tokio::sync::Notify;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_tracing::tracing;
 use tokio_stream::wrappers::TcpListenerStream;
 use tonic::transport::Identity;
 use tonic::transport::Server;
 use tonic::transport::ServerTlsConfig;
+use tracing::info;
 
 use crate::api::rpc::DatabendQueryFlightService;
 use crate::servers::Server as DatabendQueryServer;
@@ -75,7 +75,7 @@ impl RpcService {
         let conf = self.sessions.get_conf();
         let builder = Server::builder();
         let mut builder = if conf.tls_rpc_server_enabled() {
-            tracing::info!("databend query tls rpc enabled");
+            info!("databend query tls rpc enabled");
             builder
                 .tls_config(Self::server_tls_config(&conf).await.map_err(|e| {
                     ErrorCode::TLSConfigurationFailure(format!(
@@ -93,7 +93,7 @@ impl RpcService {
             .add_service(FlightServiceServer::new(flight_api_service))
             .serve_with_incoming_shutdown(listener_stream, self.shutdown_notify());
 
-        common_base::base::tokio::spawn(server);
+        tokio::spawn(server);
         Ok(())
     }
 }

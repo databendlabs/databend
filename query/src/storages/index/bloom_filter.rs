@@ -22,11 +22,12 @@ use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Expression;
-use common_tracing::tracing;
+use tracing::info;
 
-use crate::pipelines::transforms::ExpressionExecutor;
+use crate::pipelines::processors::transforms::ExpressionExecutor;
 use crate::sessions::QueryContext;
 use crate::storages::index::IndexSchemaVersion;
+use crate::storages::index::SupportedType;
 
 /// BloomFilterExprEvalResult represents the evaluation result of an expression by bloom filter.
 ///
@@ -48,14 +49,14 @@ pub enum BloomFilterExprEvalResult {
 /// That is to say, it is legal to have a BloomFilterBlock with zero columns.
 ///
 /// For example, for the source data block as follows:
-///```
+/// ```
 ///         +---name--+--age--+
 ///         | "Alice" |  20   |
 ///         | "Bob"   |  30   |
 ///         +---------+-------+
 /// ```
 /// We will create bloom filter table as follows:
-///```
+/// ```
 ///         +---Bloom(name)--+--Bloom(age)--+
 ///         |  123456789abcd |  ac2345bcd   |
 ///         +----------------+--------------+
@@ -209,7 +210,7 @@ impl BloomFilterIndexer {
     ///
     /// Otherwise return either Unknown or NotApplicable.
     pub fn eval(&self, expr: &Expression) -> Result<BloomFilterExprEvalResult> {
-        //TODO: support multiple columns and other ops like 'in' ...
+        // TODO: support multiple columns and other ops like 'in' ...
         match expr {
             Expression::BinaryExpression { left, op, right } => match op.to_lowercase().as_str() {
                 "=" => self.eval_equivalent_expression(left, right),
@@ -371,7 +372,10 @@ impl BloomFilter {
         let power_of_ln2 = core::f32::consts::LN_2 as f64 * core::f32::consts::LN_2 as f64;
         let m = -(num_items as f64 * false_positive_rate.ln()) / power_of_ln2;
         let num_bits = m.ceil() as usize;
-        tracing::info!("Bloom filter calculate optimal bits, num_bits: {}, num_items: {}, false_positive_rate: {}", num_bits, num_items, false_positive_rate);
+        info!(
+            "Bloom filter calculate optimal bits, num_bits: {}, num_items: {}, false_positive_rate: {}",
+            num_bits, num_items, false_positive_rate
+        );
         num_bits
     }
 
@@ -384,7 +388,7 @@ impl BloomFilter {
     pub fn optimal_num_hashes(num_items: u64, num_bits: u64) -> usize {
         let k = num_bits as f64 / num_items as f64 * core::f32::consts::LN_2 as f64;
         let num_hashes = std::cmp::max(2, k.ceil() as usize); // at least two hashes
-        tracing::info!(
+        info!(
             "Bloom filter calculate optimal hashes, num_hashes: {}",
             num_hashes
         );
@@ -422,39 +426,6 @@ impl BloomFilter {
     #[must_use]
     pub fn clone_empty(&self) -> Self {
         Self::with_size(self.num_bits(), self.num_hashes(), self.seed)
-    }
-
-    /// Returns whether the data type is supported by bloom filter.
-    ///
-    /// The supported types are most same as Databricks:
-    /// https://docs.microsoft.com/en-us/azure/databricks/delta/optimizations/bloom-filters
-    ///
-    /// "Bloom filters support columns with the following (input) data types: byte, short, int,
-    /// long, float, double, date, timestamp, and string."
-    ///
-    /// Nulls are not added to the Bloom
-    /// filter, so any null related filter requires reading the data file. "
-    pub fn is_supported_type(data_type: &DataTypeImpl) -> bool {
-        // we support nullable column but Nulls are not added into the bloom filter.
-        let inner_type = remove_nullable(data_type);
-        let data_type_id = inner_type.data_type_id();
-        matches!(
-            data_type_id,
-            TypeID::UInt8
-                | TypeID::UInt16
-                | TypeID::UInt32
-                | TypeID::UInt64
-                | TypeID::Int8
-                | TypeID::Int16
-                | TypeID::Int32
-                | TypeID::Int64
-                | TypeID::Float32
-                | TypeID::Float64
-                | TypeID::Date
-                | TypeID::Timestamp
-                | TypeID::Interval
-                | TypeID::String
-        )
     }
 
     #[inline(always)]
@@ -622,8 +593,8 @@ impl BloomFilter {
     ///
     /// Example:
     /// ```
-    ///     let not_exist = BloomFilter::is_supported_type(data_type) && !bloom.find(data_value, data_type)?;
-    ///
+    /// let not_exist =
+    ///     BloomFilter::is_supported_type(data_type) && !bloom.find(data_value, data_type)?;
     /// ```
     pub fn find(&self, val: DataValue, typ: DataTypeImpl, ctx: Arc<QueryContext>) -> Result<bool> {
         if !Self::is_supported_type(&typ) {
@@ -655,7 +626,7 @@ impl BloomFilter {
 
     /// Serialize the bloom filter to byte vector.
     pub fn to_vec(&self) -> Result<Vec<u8>> {
-        match bincode::serialize(self) {
+        match bincode::serde::encode_to_vec(self, bincode::config::standard()) {
             Ok(v) => Ok(v),
             Err(e) => Err(ErrorCode::StorageOther(format!(
                 "bincode serialization error: {} ",
@@ -666,8 +637,8 @@ impl BloomFilter {
 
     /// Deserialize from a byte slice and return a bloom filter.
     pub fn from_vec(bytes: &[u8]) -> Result<Self> {
-        match bincode::deserialize::<BloomFilter>(bytes) {
-            Ok(bloom_filter) => Ok(bloom_filter),
+        match bincode::serde::decode_from_slice(bytes, bincode::config::standard()) {
+            Ok((bloom_filter, _)) => Ok(bloom_filter),
             Err(e) => Err(ErrorCode::StorageOther(format!(
                 "bincode deserialization error: {} ",
                 e
@@ -675,3 +646,5 @@ impl BloomFilter {
         }
     }
 }
+
+impl SupportedType for BloomFilter {}

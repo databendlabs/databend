@@ -30,10 +30,10 @@ use opendal::io_util::DecompressDecoder;
 use opendal::io_util::DecompressState;
 use poem::web::Multipart;
 
-use crate::pipelines::new::processors::port::OutputPort;
-use crate::pipelines::new::processors::processor::Event;
-use crate::pipelines::new::processors::processor::ProcessorPtr;
-use crate::pipelines::new::processors::Processor;
+use crate::pipelines::processors::port::OutputPort;
+use crate::pipelines::processors::processor::Event;
+use crate::pipelines::processors::processor::ProcessorPtr;
+use crate::pipelines::processors::Processor;
 use crate::servers::http::v1::multipart_format::MultipartWorker;
 
 pub struct SequentialMultipartWorker {
@@ -64,10 +64,7 @@ impl MultipartWorker for SequentialMultipartWorker {
                             ))))
                             .await
                         {
-                            common_tracing::tracing::warn!(
-                                "Multipart channel disconnect. {}",
-                                cause
-                            );
+                            tracing::warn!("Multipart channel disconnect. {}", cause);
 
                             break 'outer;
                         }
@@ -79,7 +76,7 @@ impl MultipartWorker for SequentialMultipartWorker {
                         let filename = field.file_name().unwrap_or("Unknown file name").to_string();
 
                         if let Err(cause) = tx.send(Ok(vec![])).await {
-                            common_tracing::tracing::warn!(
+                            tracing::warn!(
                                 "Multipart channel disconnect. {}, filename '{}'",
                                 cause,
                                 filename
@@ -105,7 +102,7 @@ impl MultipartWorker for SequentialMultipartWorker {
                                     }
 
                                     if let Err(cause) = tx.send(Ok(buf)).await {
-                                        common_tracing::tracing::warn!(
+                                        tracing::warn!(
                                             "Multipart channel disconnect. {}, filename: '{}'",
                                             cause,
                                             filename
@@ -123,7 +120,7 @@ impl MultipartWorker for SequentialMultipartWorker {
                                         ))))
                                         .await
                                     {
-                                        common_tracing::tracing::warn!(
+                                        tracing::warn!(
                                             "Multipart channel disconnect. {}, filename: '{}'",
                                             cause,
                                             filename
@@ -156,7 +153,7 @@ pub struct SequentialInputFormatSource {
     data_block: Vec<DataBlock>,
     scan_progress: Arc<Progress>,
     input_state: Box<dyn InputState>,
-    input_format: Box<dyn InputFormat>,
+    input_format: Arc<dyn InputFormat>,
     input_decompress: Option<DecompressDecoder>,
     data_receiver: Receiver<common_exception::Result<Vec<u8>>>,
 }
@@ -164,7 +161,7 @@ pub struct SequentialInputFormatSource {
 impl SequentialInputFormatSource {
     pub fn create(
         output: Arc<OutputPort>,
-        input_format: Box<dyn InputFormat>,
+        input_format: Arc<dyn InputFormat>,
         data_receiver: Receiver<Result<Vec<u8>>>,
         input_decompress: Option<DecompressDecoder>,
         scan_progress: Arc<Progress>,
@@ -273,9 +270,9 @@ impl Processor for SequentialInputFormatSource {
 
                 if !self.skipped_header {
                     let len = data_slice.len();
-                    let skip_size = self
-                        .input_format
-                        .skip_header(data_slice, &mut self.input_state)?;
+                    let skip_size =
+                        self.input_format
+                            .skip_header(data_slice, &mut self.input_state, 0)?;
 
                     data_slice = &data_slice[skip_size..];
 
@@ -286,14 +283,13 @@ impl Processor for SequentialInputFormatSource {
                 }
 
                 while !data_slice.is_empty() {
-                    let len = data_slice.len();
-                    let read_size = self
+                    let (read_size, is_full) = self
                         .input_format
                         .read_buf(data_slice, &mut self.input_state)?;
 
                     data_slice = &data_slice[read_size..];
 
-                    if read_size < len {
+                    if is_full {
                         let state = &mut self.input_state;
                         let mut blocks = self.input_format.deserialize_data(state)?;
 

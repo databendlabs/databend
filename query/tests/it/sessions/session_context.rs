@@ -11,7 +11,6 @@
 //  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
-//
 
 use std::net::SocketAddr;
 
@@ -19,6 +18,7 @@ use common_base::base::tokio;
 use common_exception::Result;
 use common_meta_types::UserInfo;
 use databend_query::clusters::Cluster;
+use databend_query::clusters::ClusterHelper;
 use databend_query::sessions::QueryContextShared;
 use databend_query::sessions::SessionContext;
 use databend_query::sessions::SessionType;

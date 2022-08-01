@@ -18,13 +18,13 @@ fmt:
 
 lint:
 	cargo fmt --all
-	cargo clippy --workspace --all-targets -- -D warnings
 	# Cargo.toml file formatter(make setup to install)
 	taplo fmt
 	# Python file formatter(make setup to install)
 	yapf -ri tests/
 	# Bash file formatter(make setup to install)
 	shfmt -l -w scripts/*
+	cargo clippy --workspace --all-targets -- -D warnings
 
 lint-yaml:
 	yamllint -f auto .
@@ -83,6 +83,9 @@ stateless-cluster-test-tls: build
 metactl-test:
 	bash ./tests/metactl/test-metactl.sh
 	bash ./tests/metactl/test-metactl-restore-new-cluster.sh
+
+meta-kvapi-test:
+	bash ./tests/meta-kvapi/test-meta-kvapi.sh
 
 meta-bench: build-release
 	bash ./scripts/benchmark/run-meta-benchmark.sh 10 1000

@@ -21,11 +21,11 @@ use common_exception::Result;
 use common_planners::DeletePlan;
 use common_planners::Expression;
 use common_planners::PlanNode;
-use common_tracing::tracing;
 use sqlparser::ast::Expr;
 use sqlparser::ast::ObjectName;
 
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::sql::statements::query::QueryASTIRVisitor;
 use crate::sql::statements::resolve_table;
 use crate::sql::statements::AnalyzableStatement;
@@ -90,7 +90,6 @@ impl AnalyzableStatement for DfDeleteStatement {
         let mut projection = vec![];
         let schema = tbl_info.meta.schema.as_ref();
         for col_name in require_columns {
-            // TODO refine this, performance & error message
             if let Some((idx, _)) = schema.column_with_name(col_name.as_str()) {
                 projection.push(idx);
             } else {

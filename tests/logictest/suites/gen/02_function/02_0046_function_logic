@@ -1,256 +1,234 @@
-statement query B label(http)
+statement query B
 SELECT true and false;
 
-----  
+----
 0
 
-----  http
-false
 
-statement query B label(http)
+
+statement query B
 SELECT true and true;
 
-----  
+----
 1
 
-----  http
-true
 
-statement query B label(http)
+
+statement query B
 SELECT false and false;
 
-----  
+----
 0
 
-----  http
-false
 
-statement query B label(http)
+
+statement query B
 SELECT 1 and 0;
 
-----  
+----
 0
 
-----  http
-false
 
-statement query B label(http)
+
+statement query B
 SELECT 1 and 1;
 
-----  
+----
 1
 
-----  http
-true
 
-statement query B 
+
+statement query B
 SELECT 1 and null;
 
-----  
+----
 NULL
 
-statement query B label(http)
+statement query B
 SELECT 0 and null;
 
-----  
+----
 0
 
-----  http
-false
 
-statement query B 
+
+statement query B
 SELECT null and null;
 
-----  
+----
 NULL
 
-statement query I 
+statement query I
 SELECT number from numbers(10) WHERE number > 5 AND number < 8 ORDER BY number;
 
-----  
+----
 6
 7
 
-statement query B label(http)
+statement query B
 SELECT true OR false;
 
-----  
+----
 1
 
-----  http
-true
 
-statement query B label(http)
+
+statement query B
 SELECT true OR true;
 
-----  
+----
 1
 
-----  http
-true
 
-statement query B label(http)
+
+statement query B
 SELECT false OR false;
 
-----  
+----
 0
 
-----  http
-false
 
-statement query B label(http)
+
+statement query B
 SELECT 1 OR 0;
 
-----  
+----
 1
 
-----  http
-true
 
-statement query B label(http)
+
+statement query B
 SELECT 1 OR 1;
 
-----  
+----
 1
 
-----  http
-true
 
-statement query B label(http)
+
+statement query B
 SELECT 0 OR 0;
 
-----  
+----
 0
 
-----  http
-false
 
-statement query B label(http)
+
+statement query B
 SELECT 1 OR null;
 
-----  
+----
 1
 
-----  http
-true
 
-statement query B 
+
+statement query B
 SELECT 0 OR null;
 
-----  
+----
 NULL
 
-statement query B label(http)
+statement query B
 SELECT null OR 1;
 
-----  
+----
 1
 
-----  http
-true
 
-statement query B 
+
+statement query B
 SELECT null OR null;
 
-----  
+----
 NULL
 
-statement query I 
+statement query I
 SELECT number from numbers(10) WHERE number > 7 OR number < 2 ORDER BY number;
 
-----  
+----
 0
 1
 8
 9
 
-statement query B label(http)
+statement query B
 SELECT true XOR true;
 
-----  
+----
 0
 
-----  http
-false
 
-statement query B label(http)
+
+statement query B
 SELECT false XOR false;
 
-----  
+----
 0
 
-----  http
-false
 
-statement query B label(http)
+
+statement query B
 SELECT true XOR false;
 
-----  
+----
 1
 
-----  http
-true
 
-statement query B label(http)
+
+statement query B
 SELECT false XOR true;
 
-----  
+----
 1
 
-----  http
-true
 
-statement query T 
+
+statement query T
 SELECT null XOR true;
 
-----  
+----
 NULL
 
-statement query T 
+statement query T
 SELECT false XOR null;
 
-----  
+----
 NULL
 
-statement query B label(http)
+statement query B
 SELECT not true;
 
-----  
+----
 0
 
-----  http
-false
 
-statement query B label(http)
+
+statement query B
 SELECT not false;
 
-----  
+----
 1
 
-----  http
-true
 
-statement query B label(http)
+
+statement query B
 SELECT not 1;
 
-----  
+----
 0
 
-----  http
-false
 
-statement query B label(http)
+
+statement query B
 SELECT not 0;
 
-----  
+----
 1
 
-----  http
-true
 
-statement query T 
+
+statement query T
 SELECT not null;
 
-----  
+----
 NULL
 

@@ -1,0 +1,165 @@
+// Copyright 2022 Datafuse Labs.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package databend_proto;
+
+import "metadata.proto";
+
+message DbIdTableName {
+  uint64 ver = 100;
+  uint64 min_compatible = 101;
+
+  uint64 db_id = 1;
+  string table_name = 2;
+}
+
+// Complete table info.
+message TableInfo {
+  uint64 ver = 100;
+  uint64 min_compatible = 101;
+
+  TableIdent ident = 1;
+
+  /// For a table it is `db_name.table_name`.
+  /// For a table function, it is `table_name(args)`
+  string desc = 2;
+
+  /// `name` is meant to be used with table-function.
+  /// Table-function is identified by `name`.
+  /// A table in the contrast, can only be identified by table-id.
+  string name = 3;
+
+  /// The essential information about a table definition.
+  ///
+  /// It is about what a table actually is.
+  /// `name`, `id` or `version` is not included in the table structure
+  /// definition.
+  TableMeta meta = 4;
+}
+
+// The identifier of a table by name. Names can be changed.
+// There is no guarantee that two get-table request by name will return the same
+// instance.
+message TableNameIdent {
+  uint64 ver = 100;
+  uint64 min_compatible = 101;
+
+  // The user this table belongs to.
+  string tenant = 1;
+
+  // The database this table belongs to.
+  string db_name = 2;
+
+  // The table name.
+  string table_name = 3;
+}
+
+// The identifier of a table.
+// `table_id` will never change. It can only be created or removed.
+// The `seq` indicates changes of the instance.
+// I.e., the tuple `(db_id, seq)` always identifies the same instance.
+message TableIdent {
+  uint64 ver = 100;
+  uint64 min_compatible = 101;
+
+  uint64 table_id = 1;
+
+  // The seq of TableMeta
+  uint64 seq = 2;
+}
+
+// TableMeta is a container of all non-identity information.
+message TableMeta {
+  uint64 ver = 100;
+  uint64 min_compatible = 101;
+
+  // Table schema, i.e., columns definition.
+  DataSchema schema = 1;
+
+  // Table engine.
+  string engine = 6;
+
+  // Database engine options, like github engine <token>.
+  map<string, string> engine_options = 7;
+
+  // Table options.
+  map<string, string> options = 5;
+
+  // Keys to sort rows in table.
+  optional string default_cluster_key = 9;
+
+  // The vector of cluster keys.
+  repeated string cluster_keys = 4;
+
+  // The default cluster keys id.
+  optional uint32 default_cluster_key_id = 8;
+
+  // The time table created.
+  string created_on = 20;
+
+  // The time table updated.
+  string updated_on = 21;
+
+  // Comment about this table.
+  string comment = 22;
+
+  // Statistics of this table.
+  optional TableStatistics statistics = 23;
+
+  // The time table droped.
+  optional string drop_on = 24;
+
+  // Comments of each field.
+  repeated string field_comments = 25;
+}
+
+// Save table name id list history.
+message TableIdList {
+  uint64 ver = 100;
+  uint64 min_compatible = 101;
+
+  repeated uint64 ids = 1;
+}
+
+// The statistics of a table
+message TableStatistics {
+
+  uint64 ver = 100;
+  uint64 min_compatible = 101;
+
+  // Number of rows
+  uint64 number_of_rows = 1;
+
+  // Size of data in bytes
+  uint64 data_bytes = 2;
+
+  // Size of compressed data in bytes
+  uint64 compressed_data_bytes = 3;
+
+  // Size of index data in bytes
+  uint64 index_data_bytes = 4;
+}
+
+message DatabaseIdTableName {
+  uint64 ver = 100;
+  uint64 min_compatible = 101;
+
+  // The db id this table belongs to
+  uint64 db_id = 1;
+
+  // Table name
+  string table_name = 2;
+}

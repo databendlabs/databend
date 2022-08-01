@@ -31,7 +31,7 @@ error:
 1 | CAST(col1 AS foo)
   | ----         ^^^
   | |            |
-  | |            expected `BOOLEAN`, `BOOL`, `UINT8`, `TINYINT`, `UINT16`, `SMALLINT`, or 25 more ...
+  | |            expected `BOOLEAN`, `BOOL`, `UINT8`, `TINYINT`, `UINT16`, `SMALLINT`, or 29 more ...
   | |            while parsing type name
   | while parsing `CAST(... AS ...)`
   | while parsing expression

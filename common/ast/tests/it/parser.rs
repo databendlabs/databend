@@ -74,6 +74,7 @@ fn test_statement() {
         r#"describe a format TabSeparatedWithNamesAndTypes;"#,
         r#"create table if not exists a.b (c integer not null default 1, b varchar);"#,
         r#"create table if not exists a.b (c integer default 1 not null, b varchar) as select * from t;"#,
+        r#"create table if not exists a.b (c tuple(m integer, n string), d tuple(integer, string));"#,
         r#"create table a.b like c.d;"#,
         r#"create table t like t2 engine = memory;"#,
         r#"truncate table a;"#,
@@ -225,6 +226,25 @@ fn test_statement() {
                     skip_header = 1
                 )
                 size_limit=10;"#,
+        r#"COPY INTO mytable
+                FROM @external_stage/path/to/file.csv
+                FILE_FORMAT = (
+                    type = 'CSV'
+                    field_delimiter = ','
+                    record_delimiter = '\n'
+                    skip_header = 1
+                )
+                size_limit=10;"#,
+        // We used to support COPY FROM a quoted at string
+        // r#"COPY INTO mytable
+        //         FROM '@external_stage/path/to/file.csv'
+        //         FILE_FORMAT = (
+        //             type = 'CSV'
+        //             field_delimiter = ','
+        //             record_delimiter = '\n'
+        //             skip_header = 1
+        //         )
+        //         size_limit=10;"#,
         r#"CALL system$test(a)"#,
         r#"CALL system$test('a')"#,
         r#"show settings like 'enable%'"#,
@@ -260,6 +280,7 @@ fn test_statement_error() {
         r#"create table a.b (c integer not null 1, b float(10))"#,
         r#"create table a (c float(10))"#,
         r#"create table a (c varch)"#,
+        r#"create table a (c tuple())"#,
         r#"drop table if a.b"#,
         r#"truncate table a.b.c.d"#,
         r#"truncate a"#,
@@ -396,6 +417,7 @@ fn test_expr() {
         r#"covar_samp(number, number)"#,
         r#"CAST(col1 AS BIGINT UNSIGNED)"#,
         r#"TRY_CAST(col1 AS BIGINT UNSIGNED)"#,
+        r#"TRY_CAST(col1 AS TUPLE(BIGINT UNSIGNED NULL, BOOLEAN))"#,
         r#"trim(leading 'abc' from 'def')"#,
         r#"extract(year from d)"#,
         r#"position('a' in str)"#,

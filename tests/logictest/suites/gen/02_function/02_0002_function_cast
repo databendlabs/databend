@@ -1,79 +1,79 @@
-statement query T 
+statement query T
 SELECT typeof(CAST(number AS float)) FROM numbers_mt(1);
 
-----  
+----
 FLOAT
 
-statement query T 
+statement query T
 SELECT typeof(CAST(number AS float32)) FROM numbers_mt(1);
 
-----  
+----
 FLOAT
 
-statement query T 
+statement query T
 SELECT typeof(CAST(number AS UInt64)) FROM numbers_mt(1);
 
-----  
+----
 BIGINT UNSIGNED
 
-statement query T 
+statement query T
 SELECT typeof(to_int8('8')) FROM numbers_mt(1);
 
-----  
+----
 TINYINT
 
-statement query T 
+statement query T
 SELECT typeof(to_int16('16')) FROM numbers_mt(1);
 
-----  
+----
 SMALLINT
 
-statement query T 
+statement query T
 SELECT typeof(to_int32('32')) FROM numbers_mt(1);
 
-----  
+----
 INT
 
-statement query T 
+statement query T
 SELECT typeof(to_int64('64')) FROM numbers_mt(1);
 
-----  
+----
 BIGINT
 
-statement query T 
+statement query T
 SELECT typeof(to_uint32('64')) FROM numbers_mt(1);
 
-----  
+----
 INT UNSIGNED
 
-statement query T 
+statement query T
 SELECT typeof(number::float) FROM numbers_mt(1);
 
-----  
+----
 FLOAT
 
-statement query T 
+statement query T
 SELECT typeof(number::float64) FROM numbers_mt(1);
 
-----  
+----
 DOUBLE
 
-statement query T 
+statement query T
 SELECT typeof(number::UInt64) FROM numbers_mt(1);
 
-----  
+----
 BIGINT UNSIGNED
 
-statement query F 
+statement query F
 SELECT CAST(1 + 1, Float64);
 
-----  
+----
 2.0
 
-statement query I 
+statement query I
 SELECT CAST(CAST(1 + 1 + 1, String) AS Int8);
 
-----  
+----
 3
 
 statement error 1010
@@ -85,23 +85,18 @@ SELECT CAST(Null as Varchar);
 statement error 1010
 SELECT CAST(Null as Boolean); 
 
-statement query B label(http)
+statement query B
 SELECT CAST('33' as signed) = 33;
 
-----  
+----
 1
 
-----  http
-true
-
-statement query B label(http)
+statement query B
 SELECT CAST('33' as unsigned) = 33;
 
-----  
+----
 1
 
-----  http
-true
 
 statement error 1010
 SELECT CAST('-33aa' as signed) = 33; 
@@ -118,193 +113,132 @@ SELECT CAST('aa' as unsigned) = 0;
 statement error 1010
 SELECT CAST('aa' as Float64) = 0; 
 
-statement query B label(http)
+statement query B
 SELECT '33'::signed = 33;
 
-----  
+----
 1
 
-----  http
-true
 
-statement query B label(http)
+statement query B
 SELECT '33'::unsigned = 33;
 
-----  
+----
 1
 
-----  http
-true
 
 statement error 1010
 SELECT '-33aa'::signed = 33; 
 
-statement query B label(http)
+statement query B
 SELECT 33::string = '33';
 
-----  
+----
 1
 
-----  http
-true
 
--- clickhouse sqlalchemy error with this sql
-skipif clickhouse
-statement query B label(http)
-select "truE"::boolean;
+statement query B
+select 'truE'::boolean;
 
-----  
+----
 1
 
-----  http
-true
+statement query B
+select not 'FalSe'::boolean;
 
--- clickhouse sqlalchemy error with this sql
-skipif clickhouse
-statement query B label(http)
-select not "FalSe"::boolean;
-
-----  
+----
 1
 
-----  http
-true
 
--- clickhouse sqlalchemy error with this sql
-skipif clickhouse
-statement query B label(http)
-select "false"::boolean = not "true"::boolean;
+statement query B
+select 'false'::boolean = not 'true'::boolean;
 
-----  
+----
 1
 
-----  http
-true
 
--- clickhouse sqlalchemy error with this sql
-skipif clickhouse
 statement error 1010
-select "FalSex"::boolean; 
+select 'FalSex'::boolean; 
 
-statement query T 
-SELECT '===DATE/DATETIME===';
-
-----  
-===DATE/DATETIME===
-
-statement query B label(http)
+statement query B
 SELECT  to_timestamp('2021-03-05 01:01:01') + 1 = to_timestamp('2021-03-05 01:01:01.000001');
 
-----  
+----
 1
 
-----  http
-true
-
-statement query B label(http)
+statement query B
 SELECT  to_date('2021-03-05') + 1 = to_date('2021-03-06');
 
-----  
+----
 1
 
-----  http
-true
-
-statement query B label(http)
+statement query B
 SELECT  to_varchar(to_date('2021-03-05') + 1) = '2021-03-06';
 
-----  
+----
 1
 
-----  http
-true
-
-statement query B label(http)
+statement query B
 SELECT to_timestamp(to_date('2021-03-05')) = to_timestamp('2021-03-05 00:00:00');
 
-----  
+----
 1
 
-----  http
-true
 
-statement query B label(http)
+statement query B
 SELECT to_date(to_timestamp('2021-03-05 01:00:00')) = to_date('2021-03-05');
 
-----  
+----
 1
 
-----  http
-true
 
-statement query B label(http)
+statement query B
 SELECT to_varchar(to_timestamp(1640019661000000)) = '2021-12-20 17:01:01.000000';
 
-----  
+----
 1
 
-----  http
-true
 
-statement query B label(http)
+statement query B
 SELECT to_date(to_timestamp(1640019661000000)) = to_date('2021-12-20');
 
-----  
+----
 1
 
-----  http
-true
 
-statement query B label(http)
+statement query B
 SELECT to_timestamp(to_timestamp(1640019661000000)) = to_timestamp('2021-12-20 17:01:01.000000');
 
-----  
+----
 1
 
-----  http
-true
 
-statement query T 
-SELECT '===Variant===';
-
-----  
-===Variant===
-
-statement query B label(http)
+statement query B
 SELECT parse_json(true)::boolean;
 
-----  
+----
 1
 
-----  http
-true
-
-statement query B label(http)
+statement query B
 SELECT parse_json(false)::boolean;
 
-----  
+----
 0
 
-----  http
-false
 
-statement query B label(http)
+statement query B
 SELECT parse_json('"true"')::boolean;
 
-----  
+----
 1
 
-----  http
-true
 
-statement query B label(http)
+statement query B
 SELECT parse_json('"false"')::boolean;
 
-----  
+----
 0
 
-----  http
-false
 
 statement error 1010
 SELECT parse_json('"test"')::boolean; 
@@ -315,148 +249,148 @@ SELECT parse_json(1)::boolean;
 statement error 1010
 SELECT parse_json('null')::boolean; 
 
-statement query I 
+statement query I
 SELECT parse_json(255)::uint8;
 
-----  
+----
 255
 
-statement query I 
+statement query I
 SELECT parse_json(65535)::uint16;
 
-----  
+----
 65535
 
-statement query I 
+statement query I
 SELECT parse_json(4294967295)::uint32;
 
-----  
+----
 4294967295
 
-statement query I 
+statement query I
 SELECT parse_json(18446744073709551615)::uint64;
 
-----  
+----
 18446744073709551615
 
-statement query I 
+statement query I
 SELECT parse_json(-128)::int8;
 
-----  
+----
 -128
 
-statement query I 
+statement query I
 SELECT parse_json(127)::int8;
 
-----  
+----
 127
 
-statement query I 
+statement query I
 SELECT parse_json(-32768)::int16;
 
-----  
+----
 -32768
 
-statement query I 
+statement query I
 SELECT parse_json(32767)::int16;
 
-----  
+----
 32767
 
-statement query I 
+statement query I
 SELECT parse_json(-2147483648)::int32;
 
-----  
+----
 -2147483648
 
-statement query I 
+statement query I
 SELECT parse_json(2147483647)::int32;
 
-----  
+----
 2147483647
 
-statement query I 
+statement query I
 SELECT parse_json(-9223372036854775808)::int64;
 
-----  
+----
 -9223372036854775808
 
-statement query I 
+statement query I
 SELECT parse_json(9223372036854775807)::int64;
 
-----  
+----
 9223372036854775807
 
-statement query I 
+statement query I
 SELECT parse_json('"255"')::uint8;
 
-----  
+----
 255
 
-statement query I 
+statement query I
 SELECT parse_json('"65535"')::uint16;
 
-----  
+----
 65535
 
-statement query I 
+statement query I
 SELECT parse_json('"4294967295"')::uint32;
 
-----  
+----
 4294967295
 
-statement query I 
+statement query I
 SELECT parse_json('"18446744073709551615"')::uint64;
 
-----  
+----
 18446744073709551615
 
-statement query I 
+statement query I
 SELECT parse_json('"-128"')::int8;
 
-----  
+----
 -128
 
-statement query I 
+statement query I
 SELECT parse_json('"127"')::int8;
 
-----  
+----
 127
 
-statement query I 
+statement query I
 SELECT parse_json('"-32768"')::int16;
 
-----  
+----
 -32768
 
-statement query I 
+statement query I
 SELECT parse_json('"32767"')::int16;
 
-----  
+----
 32767
 
-statement query I 
+statement query I
 SELECT parse_json('"-2147483648"')::int32;
 
-----  
+----
 -2147483648
 
-statement query I 
+statement query I
 SELECT parse_json('"2147483647"')::int32;
 
-----  
+----
 2147483647
 
-statement query I 
+statement query I
 SELECT parse_json('"-9223372036854775808"')::int64;
 
-----  
+----
 -9223372036854775808
 
-statement query I 
+statement query I
 SELECT parse_json('"9223372036854775807"')::int64;
 
-----  
+----
 9223372036854775807
 
 statement error 1010
@@ -471,25 +405,25 @@ SELECT parse_json('null')::int64;
 statement query F 
 SELECT parse_json(12.34)::float32;
 
-----  
+----
 12.34
 
-statement query F 
+statement query F
 SELECT parse_json(1234.5678)::float64;
 
-----  
+----
 1234.5678
 
-statement query F 
+statement query F
 SELECT parse_json('"12.34"')::float32;
 
-----  
+----
 12.34
 
-statement query F 
+statement query F
 SELECT parse_json('"1234.5678"')::float64;
 
-----  
+----
 1234.5678
 
 statement error 1010
@@ -501,16 +435,16 @@ SELECT parse_json('"test"')::float64;
 statement error 1010
 SELECT parse_json('null')::float64; 
 
-statement query T 
+statement query T
 SELECT parse_json('"2022-01-01"')::date;
 
-----  
+----
 2022-01-01
 
-statement query T 
+statement query T
 SELECT parse_json('"2022-01-01 01:01:01"')::datetime(0);
 
-----  
+----
 2022-01-01 01:01:01
 
 statement error 1010
@@ -522,19 +456,16 @@ SELECT parse_json('"test"')::datetime;
 statement error 1010
 SELECT parse_json('null')::datetime; 
 
-statement query T label(http)
+statement query T 
 SELECT parse_json('[1,2,3]')::array;
 
-----  
+----
 [1,2,3]
 
-----  http
-[1, 2, 3]
-
-statement query T 
+statement query T
 SELECT parse_json(1)::array;
 
-----  
+----
 [1]
 
 statement query T
@@ -546,7 +477,6 @@ SELECT parse_json('"ab"')::array;
 statement error 1010
 SELECT parse_json('null')::array; 
 
-skipif clickhouse
 statement query T
 SELECT parse_json('{"a":1,"b":2}')::object;
 
@@ -561,3 +491,4 @@ SELECT parse_json('[1,2,3]')::object;
 
 statement error 1010
 SELECT parse_json('null')::object; 
+

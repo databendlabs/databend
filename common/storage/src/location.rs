@@ -19,7 +19,9 @@ use std::io::Result;
 
 use anyhow::anyhow;
 use opendal::Scheme;
+use percent_encoding::percent_decode_str;
 
+use crate::config::StorageHttpConfig;
 use crate::config::STORAGE_S3_DEFAULT_ENDPOINT;
 use crate::StorageAzblobConfig;
 use crate::StorageParams;
@@ -63,23 +65,9 @@ pub fn parse_uri_location(l: &UriLocation) -> Result<(StorageParams, String)> {
             account_name: l
                 .connection
                 .get("account_name")
-                .ok_or_else(|| {
-                    Error::new(
-                        ErrorKind::InvalidInput,
-                        anyhow!("account_name is required for storage azblob"),
-                    )
-                })?
-                .to_string(),
-            account_key: l
-                .connection
-                .get("account_key")
-                .ok_or_else(|| {
-                    Error::new(
-                        ErrorKind::InvalidInput,
-                        anyhow!("account_name is required for storage azblob"),
-                    )
-                })?
-                .to_string(),
+                .cloned()
+                .unwrap_or_default(),
+            account_key: l.connection.get("account_key").cloned().unwrap_or_default(),
             root: root.to_string(),
         }),
         #[cfg(feature = "storage-hdfs")]
@@ -108,24 +96,14 @@ pub fn parse_uri_location(l: &UriLocation) -> Result<(StorageParams, String)> {
                 .connection
                 .get("access_key_id")
                 .or_else(|| l.connection.get("aws_key_id"))
-                .ok_or_else(|| {
-                    Error::new(
-                        ErrorKind::InvalidInput,
-                        anyhow!("access_key_id is required for storage s3"),
-                    )
-                })?
-                .to_string(),
+                .cloned()
+                .unwrap_or_default(),
             secret_access_key: l
                 .connection
                 .get("secret_access_key")
                 .or_else(|| l.connection.get("aws_secret_key"))
-                .ok_or_else(|| {
-                    Error::new(
-                        ErrorKind::InvalidInput,
-                        anyhow!("secret_access_key is required for storage s3"),
-                    )
-                })?
-                .to_string(),
+                .cloned()
+                .unwrap_or_default(),
             master_key: l.connection.get("master_key").cloned().unwrap_or_default(),
             root: root.to_string(),
             disable_credential_loader: true,
@@ -142,11 +120,30 @@ pub fn parse_uri_location(l: &UriLocation) -> Result<(StorageParams, String)> {
                     )
                 })?,
         }),
+        Scheme::Http => {
+            // Make sure path has been percent decoded before parse pattern.
+            let path = percent_decode_str(&l.path).decode_utf8_lossy();
+            let cfg = StorageHttpConfig {
+                endpoint_url: format!("{}://{}", l.protocol, l.name),
+                paths: globiter::Pattern::parse(&path)
+                    .map_err(|err| {
+                        Error::new(
+                            ErrorKind::InvalidInput,
+                            anyhow!("input path is not a valid glob: {err:?}"),
+                        )
+                    })?
+                    .iter()
+                    .collect(),
+            };
+
+            // HTTP is special that we don't support dir, always return / instead.
+            return Ok((StorageParams::Http(cfg), "/".to_string()));
+        }
         v => {
             return Err(Error::new(
                 ErrorKind::InvalidInput,
                 anyhow!("{v} is not allowed to be used as uri location"),
-            ))
+            ));
         }
     };
 

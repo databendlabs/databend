@@ -30,15 +30,16 @@ use common_planners::Extras;
 use common_planners::Partitions;
 use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
+use tracing::debug;
 use walkdir::WalkDir;
 
-use crate::pipelines::new::processors::port::OutputPort;
-use crate::pipelines::new::processors::processor::ProcessorPtr;
-use crate::pipelines::new::processors::SyncSource;
-use crate::pipelines::new::processors::SyncSourcer;
-use crate::pipelines::new::NewPipe;
-use crate::pipelines::new::NewPipeline;
-use crate::sessions::QueryContext;
+use crate::pipelines::processors::port::OutputPort;
+use crate::pipelines::processors::processor::ProcessorPtr;
+use crate::pipelines::processors::SyncSource;
+use crate::pipelines::processors::SyncSourcer;
+use crate::pipelines::Pipe;
+use crate::pipelines::Pipeline;
+use crate::sessions::TableContext;
 use crate::storages::system::tracing_table_stream::LogEntry;
 use crate::storages::Table;
 
@@ -74,8 +75,10 @@ impl TracingTable {
         TracingTable { table_info }
     }
 
-    fn log_files(ctx: Arc<QueryContext>) -> Result<VecDeque<String>> {
-        WalkDir::new(ctx.get_config().log.dir.as_str())
+    fn log_files(ctx: Arc<dyn TableContext>) -> Result<VecDeque<String>> {
+        debug!("list log files from {}", ctx.get_config().log.file.dir);
+
+        WalkDir::new(ctx.get_config().log.file.dir.as_str())
             .sort_by_key(|file| file.file_name().to_owned())
             .into_iter()
             .filter_map(|dir_entry| match dir_entry {
@@ -99,7 +102,7 @@ impl Table for TracingTable {
 
     async fn read_partitions(
         &self,
-        _ctx: Arc<QueryContext>,
+        _ctx: Arc<dyn TableContext>,
         _push_downs: Option<Extras>,
     ) -> Result<(Statistics, Partitions)> {
         Ok((Statistics::default(), vec![]))
@@ -107,18 +110,19 @@ impl Table for TracingTable {
 
     fn read2(
         &self,
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn TableContext>,
         _: &ReadDataSourcePlan,
-        pipeline: &mut NewPipeline,
+        pipeline: &mut Pipeline,
     ) -> Result<()> {
         let settings = ctx.get_settings();
 
         let output = OutputPort::create();
         let log_files = Self::log_files(ctx.clone())?;
+        debug!("listed log files: {:?}", log_files);
         let schema = self.table_info.schema();
         let max_block_size = settings.get_max_block_size()? as usize;
 
-        pipeline.add_pipe(NewPipe::SimplePipe {
+        pipeline.add_pipe(Pipe::SimplePipe {
             inputs_port: vec![],
             outputs_port: vec![output.clone()],
             processors: vec![TracingSource::create(
@@ -143,7 +147,7 @@ struct TracingSource {
 
 impl TracingSource {
     pub fn create(
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
         rows: usize,
         log_files: VecDeque<String>,

@@ -36,7 +36,7 @@ STATEMENT_ERROR = """statement error {error_id}
 
 """
 
-STATEMENT_QUERY = """statement query {query_options} {labels}
+STATEMENT_QUERY = """statement query {query_options_with_labels}
 {statement}
 
 {results}
@@ -44,7 +44,7 @@ STATEMENT_QUERY = """statement query {query_options} {labels}
 
 # results_string looks like, result is seperate by space.
 # 1 1 1
-RESULTS_TEMPLATE = """----  {label}
+RESULTS_TEMPLATE = """{label_separate}
 {results_string}"""
 
 
@@ -103,8 +103,7 @@ def get_all_cases():
 
 def parse_cases(sql_file):
     # New session every case file
-    http_client = HttpConnector()
-    http_client.connect(**http_config)
+    http_client = HttpConnector(**http_config)
     cnx = mysql.connector.connect(**mysql_config)
     mysql_client = cnx.cursor()
 
@@ -126,8 +125,8 @@ def parse_cases(sql_file):
                 ret = ret + row_string + "\n"
         except Exception as err:
             log.warning(
-                "SQL: {}  fetch no results, msg:{} ,check it manual.".format(
-                    sql, str(err)))
+                f"SQL: {sql}  fetch no results, msg:{str(err)} ,check it manual."
+            )
         return ret
 
     target_dir = os.path.dirname(
@@ -136,11 +135,10 @@ def parse_cases(sql_file):
     target_file = os.path.join(target_dir, case_name)
 
     if skip_exist and os.path.exists(target_file):
-        log.warning("skip case file {}, already exist.".format(target_file))
+        log.warning(f"skip case file {target_file}, already exist.")
         return
 
-    log.info("Write test case to path: {}, case name is {}".format(
-        target_dir, case_name))
+    log.info(f"Write test case to path: {target_dir}, case name is {case_name}")
 
     content_output = ""
     f = open(sql_file, encoding='UTF-8')
@@ -176,19 +174,19 @@ def parse_cases(sql_file):
                 query_options = http_client.get_query_option()
             except Exception as err:
                 exception_sqls.append(statement)
-                log.error("Exception SQL: {}".format(statement))
+                log.error(f"Exception SQL: {statement}")
                 continue
 
-            if query_options == "":
+            if query_options == "" or is_empty_line(http_results):
                 log.warning(
-                    "statement: {} type query could not get query_option change to ok statement"
-                    .format(statement))
+                    f"statement: {statement} type query could not get query_option change to ok statement"
+                )
                 content_output = content_output + STATEMENT_OK.format(
                     statement=statement)
                 continue
 
             mysql_results = mysql_fetch_results(statement)
-            labels = ""
+            query_options_with_labels = f"{query_options}"
 
             log.debug("sql: " + statement)
             log.debug("mysql return: " + mysql_results)
@@ -196,38 +194,32 @@ def parse_cases(sql_file):
 
             if http_results is not None and mysql_results != http_results:
                 case_results = RESULTS_TEMPLATE.format(
-                    results_string=mysql_results, label="mysql")
+                    results_string=mysql_results, label_separate="----")
 
                 case_results = case_results + "\n" + RESULTS_TEMPLATE.format(
-                    results_string=http_results, label="http")
+                    results_string=http_results, label_separate="---- http")
 
-                labels = "label(mysql,http)"
+                query_options_with_labels = f"{query_options} label(http)"
             else:
                 case_results = RESULTS_TEMPLATE.format(
-                    results_string=mysql_results, label="")
+                    results_string=mysql_results, label_separate="----")
 
             content_output = content_output + STATEMENT_QUERY.format(
-                query_options=query_options,
+                query_options_with_labels=query_options_with_labels,
                 statement=statement,
-                results=case_results,
-                labels=labels)
+                results=case_results)
         else:
             # ok statement
             try:
-                if str.lower(statement).startswith("use"):
-                    # use for sql session, ignore results
-                    database = get_database(statement).group("database")
-                    log.debug("use database {}".format(database))
-                    http_client.set_database(database)
-                # mysql excute for data
-                if str.lower(statement).startswith("drop"):
-                    http_client.set_database("default")
-                if str.lower(statement).startswith("set"):
+                # insert,drop,create does not need to execute by different handlers
+                if str.lower(statement).split()[0] not in [
+                        "insert", "drop", "create"
+                ]:
                     http_client.query_with_session(statement)
                 mysql_client.execute(statement)
             except Exception as err:
-                log.warning("statement {} excute error,msg {}".format(
-                    statement, str(err)))
+                log.warning(
+                    f"statement {statement} execute error,msg {str(err)}")
                 pass
 
             content_output = content_output + STATEMENT_OK.format(
@@ -255,15 +247,14 @@ def output():
 
 
 def main(pattern=".*"):
-    log.debug("Case filter regex pattern is {}".format(pattern))
+    log.debug(f"Case filter regex pattern is {pattern}")
     all_cases = get_all_cases()
 
     for file in all_cases:
         if not re.match(pattern, file):
-            log.debug("Test file {}  does not match pattern {}".format(
-                file, pattern))
+            log.debug(f"Test file {file}  does not match pattern {pattern}")
             continue
-        log.info("Test file {} match pattern {}".format(file, pattern))
+        log.info(f"Test file {file} match pattern {pattern}")
 
         # .result will be ignore
         if '.result' in file or '.result_filter' in file:
@@ -272,7 +263,7 @@ def main(pattern=".*"):
         # .py .sh will be ignore, need log
         if ".py" in file or ".sh" in file:
             manual_cases.append(file)
-            log.warning("test file {} will be ignore".format(file))
+            log.warning(f"test file {file} will be ignore")
             continue
 
         parse_cases(file)
@@ -283,6 +274,6 @@ def main(pattern=".*"):
 
 if __name__ == '__main__':
     log.info(
-        "Start generate sqllogictest suites from path: {} to path: {}".format(
-            suite_path, logictest_path))
+        f"Start generate sqllogictest suites from path: {suite_path} to path: {logictest_path}"
+    )
     fire.Fire(main)

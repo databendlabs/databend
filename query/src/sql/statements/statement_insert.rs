@@ -29,15 +29,16 @@ use common_planners::InsertValueBlock;
 use common_planners::PlanNode;
 use common_streams::NDJsonSourceBuilder;
 use common_streams::Source;
-use common_tracing::tracing;
 use sqlparser::ast::Expr;
 use sqlparser::ast::Ident;
 use sqlparser::ast::ObjectName;
 use sqlparser::ast::OnInsert;
 use sqlparser::ast::Query;
 use sqlparser::ast::SqliteOnConflict;
+use tracing::debug;
 
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
 use crate::sql::statements::DfQueryStatement;
@@ -166,7 +167,7 @@ impl<'a> DfInsertStatement<'a> {
         format: Option<String>,
     ) -> Result<InsertInputSource> {
         let stream_str = stream_str.trim_start();
-        tracing::debug!("{:?}", stream_str);
+        debug!("{:?}", stream_str);
         let settings = ctx.get_format_settings()?;
         // TODO migrate format into format factory
         let format = format.map(|v| v.to_uppercase());
@@ -198,7 +199,7 @@ impl<'a> DfInsertStatement<'a> {
 
                 let data_slice = stream_str.as_bytes();
                 let mut input_state = input_format.create_state();
-                let skip_size = input_format.skip_header(data_slice, &mut input_state)?;
+                let skip_size = input_format.skip_header(data_slice, &mut input_state, 0)?;
 
                 let _ = input_format.read_buf(&data_slice[skip_size..], &mut input_state)?;
                 let blocks = input_format.deserialize_data(&mut input_state)?;

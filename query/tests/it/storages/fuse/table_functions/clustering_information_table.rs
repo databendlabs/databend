@@ -11,7 +11,6 @@
 //  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
-//
 
 use common_base::base::tokio;
 use common_datablocks::DataBlock;
@@ -64,7 +63,7 @@ async fn test_clustering_information_table_read() -> Result<()> {
     }
 
     {
-        let qry = format!("insert into {}.{} values(1),(2)", db, tbl);
+        let qry = format!("insert into {}.{} values(1, (2, 3)),(2, (4, 6))", db, tbl);
         execute_query(ctx.clone(), qry.as_str()).await?;
         let expected = vec![
             "+-----------------+-------------------+----------------------------+------------------+---------------+-----------------------+",

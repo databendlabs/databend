@@ -15,22 +15,22 @@
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_fuse_meta::meta::TableSnapshot;
 use common_planners::DeletePlan;
 use common_planners::Expression;
 use common_planners::Extras;
-use common_tracing::tracing::debug;
+use tracing::debug;
 
-use crate::sessions::QueryContext;
-use crate::storages::fuse::meta::TableSnapshot;
+use crate::sessions::TableContext;
 use crate::storages::fuse::operations::mutation::delete_from_block;
-use crate::storages::fuse::operations::mutation::mutations_collector::Deletion;
-use crate::storages::fuse::operations::mutation::mutations_collector::DeletionCollector;
+use crate::storages::fuse::operations::mutation::deletion_mutator::Deletion;
+use crate::storages::fuse::operations::mutation::deletion_mutator::DeletionMutator;
 use crate::storages::fuse::pruning::BlockPruner;
 use crate::storages::fuse::FuseTable;
 use crate::storages::Table;
 
 impl FuseTable {
-    pub async fn do_delete(&self, ctx: Arc<QueryContext>, plan: &DeletePlan) -> Result<()> {
+    pub async fn do_delete(&self, ctx: Arc<dyn TableContext>, plan: &DeletePlan) -> Result<()> {
         let snapshot_opt = self.read_table_snapshot(ctx.as_ref()).await?;
 
         // check if table is empty
@@ -63,13 +63,13 @@ impl FuseTable {
 
     async fn delete_rows(
         &self,
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn TableContext>,
         snapshot: &Arc<TableSnapshot>,
         filter: &Expression,
         plan: &DeletePlan,
     ) -> Result<()> {
         let mut deletion_collector =
-            DeletionCollector::try_create(ctx.as_ref(), &self.meta_location_generator, snapshot)?;
+            DeletionMutator::try_create(ctx.as_ref(), &self.meta_location_generator, snapshot)?;
         let schema = self.table_info.schema();
         // TODO refine pruner
         let extras = Extras {
@@ -80,7 +80,7 @@ impl FuseTable {
         };
         let push_downs = Some(extras);
         let block_metas = BlockPruner::new(snapshot.clone())
-            .apply(ctx.as_ref(), schema, &push_downs)
+            .apply(&ctx, schema, &push_downs)
             .await?;
 
         // delete block one by one.
@@ -107,8 +107,8 @@ impl FuseTable {
 
     async fn commit_deletion(
         &self,
-        ctx: &QueryContext,
-        del_holder: DeletionCollector<'_>,
+        ctx: &dyn TableContext,
+        del_holder: DeletionMutator<'_>,
         catalog_name: &str,
     ) -> Result<()> {
         let (new_snapshot, loc) = del_holder.into_new_snapshot().await?;

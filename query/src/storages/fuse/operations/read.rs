@@ -11,7 +11,6 @@
 //  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
-//
 
 use std::any::Any;
 use std::sync::Arc;
@@ -25,13 +24,13 @@ use common_planners::Extras;
 use common_planners::PartInfoPtr;
 use common_planners::ReadDataSourcePlan;
 
-use crate::pipelines::new::processors::port::OutputPort;
-use crate::pipelines::new::processors::processor::Event;
-use crate::pipelines::new::processors::processor::ProcessorPtr;
-use crate::pipelines::new::processors::Processor;
-use crate::pipelines::new::NewPipeline;
-use crate::pipelines::new::SourcePipeBuilder;
-use crate::sessions::QueryContext;
+use crate::pipelines::processors::port::OutputPort;
+use crate::pipelines::processors::processor::Event;
+use crate::pipelines::processors::processor::ProcessorPtr;
+use crate::pipelines::processors::Processor;
+use crate::pipelines::Pipeline;
+use crate::pipelines::SourcePipeBuilder;
+use crate::sessions::TableContext;
 use crate::storages::fuse::io::BlockReader;
 use crate::storages::fuse::operations::read::State::Generated;
 use crate::storages::fuse::FuseTable;
@@ -39,7 +38,7 @@ use crate::storages::fuse::FuseTable;
 impl FuseTable {
     pub fn create_block_reader(
         &self,
-        ctx: &Arc<QueryContext>,
+        ctx: &Arc<dyn TableContext>,
         projection: Vec<usize>,
     ) -> Result<Arc<BlockReader>> {
         let operator = ctx.get_storage_operator()?;
@@ -64,9 +63,9 @@ impl FuseTable {
     #[inline]
     pub fn do_read2(
         &self,
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn TableContext>,
         plan: &ReadDataSourcePlan,
-        pipeline: &mut NewPipeline,
+        pipeline: &mut Pipeline,
     ) -> Result<()> {
         let block_reader =
             self.create_block_reader(&ctx, self.projection_of_push_downs(&plan.push_downs))?;
@@ -92,14 +91,14 @@ impl FuseTable {
 
 enum State {
     ReadData(PartInfoPtr),
-    Deserialize(PartInfoPtr, Vec<Vec<u8>>),
+    Deserialize(PartInfoPtr, Vec<(usize, Vec<u8>)>),
     Generated(Option<PartInfoPtr>, DataBlock),
     Finish,
 }
 
 struct FuseTableSource {
     state: State,
-    ctx: Arc<QueryContext>,
+    ctx: Arc<dyn TableContext>,
     scan_progress: Arc<Progress>,
     block_reader: Arc<BlockReader>,
     output: Arc<OutputPort>,
@@ -107,7 +106,7 @@ struct FuseTableSource {
 
 impl FuseTableSource {
     pub fn create(
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
         block_reader: Arc<BlockReader>,
     ) -> Result<ProcessorPtr> {

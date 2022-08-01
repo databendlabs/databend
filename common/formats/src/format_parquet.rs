@@ -14,11 +14,13 @@
 
 use std::any::Any;
 use std::io::Cursor;
+use std::sync::Arc;
 
 use common_arrow::arrow::array::Array;
 use common_arrow::arrow::chunk::Chunk;
 use common_arrow::arrow::datatypes::Field;
 use common_arrow::arrow::datatypes::Schema as ArrowSchema;
+use common_arrow::arrow::io::parquet::read;
 use common_arrow::arrow::io::parquet::read::read_columns_many;
 use common_arrow::arrow::io::parquet::read::ArrayIter;
 use common_arrow::arrow::io::parquet::read::RowGroupDeserializer;
@@ -26,10 +28,15 @@ use common_arrow::parquet::metadata::FileMetaData;
 use common_arrow::parquet::metadata::RowGroupMetaData;
 use common_arrow::parquet::read::read_metadata;
 use common_datablocks::DataBlock;
+use common_datavalues::remove_nullable;
+use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
+use common_datavalues::DataTypeImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_io::prelude::FileSplit;
 use common_io::prelude::FormatSettings;
+use similar_asserts::Diff;
 
 use crate::FormatFactory;
 use crate::InputFormat;
@@ -62,9 +69,9 @@ impl ParquetInputFormat {
         )
     }
 
-    pub fn try_create(_name: &str, schema: DataSchemaRef) -> Result<Box<dyn InputFormat>> {
+    pub fn try_create(_name: &str, schema: DataSchemaRef) -> Result<Arc<dyn InputFormat>> {
         let arrow_table_schema = schema.to_arrow();
-        Ok(Box::new(ParquetInputFormat {
+        Ok(Arc::new(ParquetInputFormat {
             schema,
             arrow_table_schema,
         }))
@@ -108,13 +115,58 @@ impl InputFormat for ParquetInputFormat {
     fn deserialize_data(&self, state: &mut Box<dyn InputState>) -> Result<Vec<DataBlock>> {
         let mut state = std::mem::replace(state, self.create_state());
         let state = state.as_any().downcast_mut::<ParquetInputState>().unwrap();
-
-        if state.memory.is_empty() {
+        let memory = std::mem::take(&mut state.memory);
+        if memory.is_empty() {
             return Ok(vec![]);
         }
+        self.deserialize_complete_split(FileSplit {
+            path: None,
+            start_offset: 0,
+            start_row: 0,
+            buf: memory,
+        })
+    }
 
-        let mut cursor = Cursor::new(&state.memory);
+    fn deserialize_complete_split(&self, split: FileSplit) -> Result<Vec<DataBlock>> {
+        let mut cursor = Cursor::new(&split.buf);
         let parquet_metadata = Self::read_meta_data(&mut cursor)?;
+        let infer_schema = read::infer_schema(&parquet_metadata)?;
+        let actually_schema = DataSchema::from(&infer_schema);
+
+        if actually_schema.num_fields() != self.schema.num_fields() {
+            return Err(ErrorCode::ParquetError(format!(
+                "schema field size mismatch, expected: {}, got: {} ",
+                actually_schema.num_fields(),
+                self.schema.num_fields()
+            )));
+        }
+
+        // we ignore the nullable sign to compare the schema
+        let fa: Vec<(&String, DataTypeImpl)> = self
+            .schema
+            .fields()
+            .iter()
+            .map(|f| (f.name(), remove_nullable(f.data_type())))
+            .collect();
+
+        let fb: Vec<(&String, DataTypeImpl)> = actually_schema
+            .fields()
+            .iter()
+            .map(|f| (f.name(), remove_nullable(f.data_type())))
+            .collect();
+
+        if fa != fb {
+            let diff = Diff::from_debug(
+                &self.schema,
+                &actually_schema,
+                "expected_schema",
+                "infer_schema",
+            );
+            return Err(ErrorCode::ParquetError(format!(
+                "parquet schema mismatch, differ: {}",
+                diff
+            )));
+        }
 
         let fields = &self.arrow_table_schema.fields;
         let mut data_blocks = Vec::with_capacity(parquet_metadata.row_groups.len());
@@ -128,13 +180,18 @@ impl InputFormat for ParquetInputFormat {
         Ok(data_blocks)
     }
 
-    fn read_buf(&self, buf: &[u8], state: &mut Box<dyn InputState>) -> Result<usize> {
+    fn read_buf(&self, buf: &[u8], state: &mut Box<dyn InputState>) -> Result<(usize, bool)> {
         let state = state.as_any().downcast_mut::<ParquetInputState>().unwrap();
         state.memory.extend_from_slice(buf);
-        Ok(buf.len())
+        Ok((buf.len(), false))
     }
 
-    fn skip_header(&self, _: &[u8], _: &mut Box<dyn InputState>) -> Result<usize> {
+    fn take_buf(&self, state: &mut Box<dyn InputState>) -> Vec<u8> {
+        let state = state.as_any().downcast_mut::<ParquetInputState>().unwrap();
+        std::mem::take(&mut state.memory)
+    }
+
+    fn skip_header(&self, _: &[u8], _: &mut Box<dyn InputState>, _: usize) -> Result<usize> {
         Ok(0)
     }
 }

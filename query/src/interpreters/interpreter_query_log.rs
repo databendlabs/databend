@@ -23,14 +23,16 @@ use common_datavalues::prelude::Series;
 use common_datavalues::prelude::SeriesFrom;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_tracing::tracing;
 use serde::Serialize;
 use serde::Serializer;
 use serde_json;
 use serde_repr::Serialize_repr;
+use tracing::error;
+use tracing::info;
 
 use crate::catalogs::CATALOG_DEFAULT;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 
 #[derive(Clone, Copy, Serialize_repr)]
 #[repr(u8)]
@@ -223,15 +225,7 @@ impl InterpreterQueryLog {
             .append_data(self.ctx.clone(), Box::pin(input_stream))
             .await?;
 
-        match self.ctx.get_query_logger() {
-            Some(logger) => {
-                let event_str = serde_json::to_string(event)?;
-                tracing::subscriber::with_default(logger, || {
-                    tracing::info!("{}", event_str);
-                });
-            }
-            None => {}
-        };
+        info!("{}", serde_json::to_string(event)?);
 
         Ok(())
     }
@@ -241,7 +235,7 @@ impl InterpreterQueryLog {
         InterpreterQueryLog::create(ctx, "".to_string())
             .log_start(SystemTime::now(), Some(err))
             .await
-            .unwrap_or_else(|e| tracing::error!("fail to write query_log {:?}", e));
+            .unwrap_or_else(|e| error!("fail to write query_log {:?}", e));
     }
 
     pub async fn log_start(&self, now: SystemTime, err: Option<ErrorCode>) -> Result<()> {

@@ -28,7 +28,6 @@ pub use execute_state::Progresses;
 pub use http_query::HttpQuery;
 pub use http_query::HttpQueryRequest;
 pub use http_query::HttpQueryResponseInternal;
-pub use http_query::HttpSession;
 pub use http_query::HttpSessionConf;
 pub use http_query::PaginationConf;
 pub use http_query::ResponseState;

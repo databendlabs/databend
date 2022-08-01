@@ -16,8 +16,8 @@ use std::time::Instant;
 
 use common_exception::Result;
 use common_planners::PlanNode;
-use common_tracing::tracing;
 use metrics::histogram;
+use tracing::debug;
 
 use crate::optimizers::optimizer_scatters::ScattersOptimizer;
 use crate::optimizers::ConstantFoldingOptimizer;
@@ -59,9 +59,9 @@ impl Optimizers {
         let start = Instant::now();
         let mut plan = plan.clone();
         for optimizer in self.inner.iter_mut() {
-            tracing::debug!("Before {} \n{:?}", optimizer.name(), plan);
+            debug!("Before {} \n{:?}", optimizer.name(), plan);
             plan = optimizer.optimize(&plan)?;
-            tracing::debug!("After {} \n{:?}", optimizer.name(), plan);
+            debug!("After {} \n{:?}", optimizer.name(), plan);
         }
         histogram!(super::metrics::METRIC_OPTIMIZE_USEDTIME, start.elapsed());
         Ok(plan)

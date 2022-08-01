@@ -148,8 +148,11 @@ fn test_cast_variant_function() -> Result<()> {
                     Series::from_data(vec![18691i32, 18924]),
                     DataField::new("dummy_1", DateType::new_impl()),
                 )],
-                expect: Arc::new(NullColumn::new(2)),
-                error: "Expression type does not match column data type, expecting VARIANT but got Date",
+                expect: Series::from_data(vec![
+                    VariantValue::from(json!(18691)),
+                    VariantValue::from(json!(18924)),
+                ]),
+                error: "",
             },
         ),
         (
@@ -160,7 +163,10 @@ fn test_cast_variant_function() -> Result<()> {
                     Series::from_data(vec![true, false]),
                     DataField::new("dummy_1", BooleanType::new_impl()),
                 )],
-                expect: Series::from_data(vec![VariantValue::from(json!(true)), VariantValue::from(json!(false))]),
+                expect: Series::from_data(vec![
+                    VariantValue::from(json!(true)),
+                    VariantValue::from(json!(false)),
+                ]),
                 error: "",
             },
         ),
@@ -172,7 +178,10 @@ fn test_cast_variant_function() -> Result<()> {
                     Series::from_data(vec![-128i8, 127]),
                     DataField::new("dummy_1", Int8Type::new_impl()),
                 )],
-                expect: Series::from_data(vec![VariantValue::from(json!(-128i8)), VariantValue::from(json!(127i8))]),
+                expect: Series::from_data(vec![
+                    VariantValue::from(json!(-128i8)),
+                    VariantValue::from(json!(127i8)),
+                ]),
                 error: "",
             },
         ),
@@ -184,7 +193,10 @@ fn test_cast_variant_function() -> Result<()> {
                     Series::from_data(vec![-32768i16, 32767]),
                     DataField::new("dummy_1", Int16Type::new_impl()),
                 )],
-                expect: Series::from_data(vec![VariantValue::from(json!(-32768i16)), VariantValue::from(json!(32767i16))]),
+                expect: Series::from_data(vec![
+                    VariantValue::from(json!(-32768i16)),
+                    VariantValue::from(json!(32767i16)),
+                ]),
                 error: "",
             },
         ),
@@ -196,7 +208,10 @@ fn test_cast_variant_function() -> Result<()> {
                     Series::from_data(vec![-2147483648i32, 2147483647]),
                     DataField::new("dummy_1", Int32Type::new_impl()),
                 )],
-                expect: Series::from_data(vec![VariantValue::from(json!(-2147483648i32)), VariantValue::from(json!(2147483647i32))]),
+                expect: Series::from_data(vec![
+                    VariantValue::from(json!(-2147483648i32)),
+                    VariantValue::from(json!(2147483647i32)),
+                ]),
                 error: "",
             },
         ),
@@ -205,10 +220,7 @@ fn test_cast_variant_function() -> Result<()> {
             ScalarFunctionWithFieldTest {
                 name: "cast-int64-to-variant-passed",
                 columns: vec![ColumnWithField::new(
-                    Series::from_data(vec![
-                        -9223372036854775808i64,
-                        9223372036854775807,
-                    ]),
+                    Series::from_data(vec![-9223372036854775808i64, 9223372036854775807]),
                     DataField::new("dummy_1", Int64Type::new_impl()),
                 )],
                 expect: Series::from_data(vec![
@@ -226,7 +238,10 @@ fn test_cast_variant_function() -> Result<()> {
                     Series::from_data(vec![0u8, 255]),
                     DataField::new("dummy_1", UInt8Type::new_impl()),
                 )],
-                expect: Series::from_data(vec![VariantValue::from(json!(0u8)), VariantValue::from(json!(255u8))]),
+                expect: Series::from_data(vec![
+                    VariantValue::from(json!(0u8)),
+                    VariantValue::from(json!(255u8)),
+                ]),
                 error: "",
             },
         ),
@@ -238,7 +253,10 @@ fn test_cast_variant_function() -> Result<()> {
                     Series::from_data(vec![0u16, 65535]),
                     DataField::new("dummy_1", UInt16Type::new_impl()),
                 )],
-                expect: Series::from_data(vec![VariantValue::from(json!(0u16)), VariantValue::from(json!(65535u16))]),
+                expect: Series::from_data(vec![
+                    VariantValue::from(json!(0u16)),
+                    VariantValue::from(json!(65535u16)),
+                ]),
                 error: "",
             },
         ),
@@ -250,7 +268,10 @@ fn test_cast_variant_function() -> Result<()> {
                     Series::from_data(vec![0u32, 4294967295]),
                     DataField::new("dummy_1", UInt32Type::new_impl()),
                 )],
-                expect: Series::from_data(vec![VariantValue::from(json!(0u32)), VariantValue::from(json!(4294967295u32))]),
+                expect: Series::from_data(vec![
+                    VariantValue::from(json!(0u32)),
+                    VariantValue::from(json!(4294967295u32)),
+                ]),
                 error: "",
             },
         ),
@@ -262,7 +283,10 @@ fn test_cast_variant_function() -> Result<()> {
                     Series::from_data(vec![0u64, 18446744073709551615]),
                     DataField::new("dummy_1", UInt64Type::new_impl()),
                 )],
-                expect: Series::from_data(vec![VariantValue::from(json!(0u64)), VariantValue::from(json!(18446744073709551615u64))]),
+                expect: Series::from_data(vec![
+                    VariantValue::from(json!(0u64)),
+                    VariantValue::from(json!(18446744073709551615u64)),
+                ]),
                 error: "",
             },
         ),
@@ -274,7 +298,10 @@ fn test_cast_variant_function() -> Result<()> {
                     Series::from_data(vec![0.12345679f32, 12.34]),
                     DataField::new("dummy_1", Float32Type::new_impl()),
                 )],
-                expect: Series::from_data(vec![VariantValue::from(json!(0.12345679f32)), VariantValue::from(json!(12.34f32))]),
+                expect: Series::from_data(vec![
+                    VariantValue::from(json!(0.12345679f32)),
+                    VariantValue::from(json!(12.34f32)),
+                ]),
                 error: "",
             },
         ),
@@ -283,8 +310,7 @@ fn test_cast_variant_function() -> Result<()> {
             ScalarFunctionWithFieldTest {
                 name: "cast-float64-to-variant-passed",
                 columns: vec![ColumnWithField::new(
-                    Series::from_data(vec![0.12345678912121212f64,
-                                           12.345678912, ]),
+                    Series::from_data(vec![0.12345678912121212f64, 12.345678912]),
                     DataField::new("dummy_1", Float64Type::new_impl()),
                 )],
                 expect: Series::from_data(vec![
@@ -299,10 +325,7 @@ fn test_cast_variant_function() -> Result<()> {
             ScalarFunctionWithFieldTest {
                 name: "cast-string-to-variant-error",
                 columns: vec![ColumnWithField::new(
-                    Series::from_data(vec![
-                        "abc",
-                        "123",
-                    ]),
+                    Series::from_data(vec!["abc", "123"]),
                     DataField::new("dummy_1", StringType::new_impl()),
                 )],
                 expect: Arc::new(NullColumn::new(2)),

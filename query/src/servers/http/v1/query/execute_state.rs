@@ -25,17 +25,15 @@ use common_datavalues::DataField;
 use common_datavalues::DataSchemaRefExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::PlanNode;
-use common_planners::PlanNode::Insert;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
-use common_tracing::tracing;
 use futures::future::AbortHandle;
 use futures::future::Abortable;
 use futures::StreamExt;
 use futures_util::FutureExt;
 use serde::Deserialize;
 use serde::Serialize;
+use tracing::error;
 use ExecuteState::*;
 
 use super::http_query::HttpQueryRequest;
@@ -43,15 +41,16 @@ use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
 use crate::interpreters::InterpreterFactoryV2;
 use crate::interpreters::InterpreterQueryLog;
-use crate::pipelines::new::executor::PipelineCompleteExecutor;
-use crate::pipelines::new::executor::PipelineExecutor;
-use crate::pipelines::new::processors::port::InputPort;
-use crate::pipelines::new::NewPipe;
-use crate::pipelines::new::NewPipeline;
+use crate::pipelines::executor::PipelineCompleteExecutor;
+use crate::pipelines::processors::port::InputPort;
+use crate::pipelines::Pipe;
+use crate::servers::utils::use_planner_v2;
+use crate::sessions::QueryAffect;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionRef;
-use crate::sql::exec::PhysicalPlan;
-use crate::sql::exec::PipelineBuilder;
+use crate::sessions::TableContext;
+use crate::sql::executor::PhysicalPlan;
+use crate::sql::executor::PipelineBuilder;
 use crate::sql::ColumnBinding;
 use crate::sql::DfParser;
 use crate::sql::DfStatement;
@@ -114,6 +113,7 @@ pub struct ExecuteRunning {
 
 pub struct ExecuteStopped {
     stats: Progresses,
+    affect: Option<QueryAffect>,
     reason: Result<()>,
     stop_time: Instant,
 }
@@ -128,6 +128,13 @@ impl Executor {
         match &self.state {
             Running(r) => Progresses::from_context(&r.ctx),
             Stopped(f) => f.stats.clone(),
+        }
+    }
+
+    pub(crate) fn get_affect(&self) -> Option<QueryAffect> {
+        match &self.state {
+            Running(r) => r.ctx.get_affect(),
+            Stopped(r) => r.affect.clone(),
         }
     }
 
@@ -150,11 +157,12 @@ impl Executor {
                 .interpreter
                 .finish()
                 .await
-                .map_err(|e| tracing::error!("interpreter.finish error: {:?}", e));
+                .map_err(|e| error!("interpreter.finish error: {:?}", e));
             guard.state = Stopped(ExecuteStopped {
                 stats: Progresses::from_context(&r.ctx),
                 reason: reason.clone(),
                 stop_time: Instant::now(),
+                affect: r.ctx.get_affect(),
             });
 
             if let Err(e) = reason {
@@ -162,7 +170,7 @@ impl Executor {
                     && e.code() != ErrorCode::aborted_query_code()
                 {
                     // query state can be pulled multi times, only log it once
-                    tracing::error!("Query Error: {:?}", e);
+                    error!("Query Error: {:?}", e);
                 }
             }
         };
@@ -180,30 +188,35 @@ impl ExecuteState {
         let start_time = Instant::now();
         ctx.attach_query_str(sql);
 
-        let (stmts, _) = match DfParser::parse_sql(sql, ctx.get_current_session().get_type()) {
-            Ok(t) => t,
-            Err(e) => {
-                InterpreterQueryLog::fail_to_start(ctx, e.clone()).await;
-                return Err(e);
-            }
+        let stmts = DfParser::parse_sql(sql, ctx.get_current_session().get_type());
+        let settings = ctx.get_settings();
+        let is_v2 = use_planner_v2(&settings, &stmts)?;
+        let is_select = if let Ok((s, _)) = &stmts {
+            s.get(0)
+                .map_or(false, |stmt| matches!(stmt, DfStatement::Query(_)))
+        } else {
+            false
         };
 
-        let settings = ctx.get_settings();
-        if settings.get_enable_new_processor_framework()? != 0
-            && !ctx.get_config().query.management_mode
-            && ctx.get_cluster().is_empty()
-            && settings.get_enable_planner_v2()? != 0
-            && matches!(stmts.get(0), Some(DfStatement::Query(_)))
-        {
+        let interpreter = if is_v2 {
             let mut planner = Planner::new(ctx.clone());
             let (plan, _, _) = planner.plan_sql(sql).await?;
-            let interpreter = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
-
-            // Write Start to query log table.
+            InterpreterFactoryV2::get(ctx.clone(), &plan)
+        } else {
+            let plan = match PlanParser::parse(ctx.clone(), sql).await {
+                Ok(p) => p,
+                Err(e) => {
+                    InterpreterQueryLog::fail_to_start(ctx, e.clone()).await;
+                    return Err(e);
+                }
+            };
+            InterpreterFactory::get(ctx.clone(), plan)
+        }?;
+        if is_v2 && is_select {
             let _ = interpreter
                 .start()
                 .await
-                .map_err(|e| tracing::error!("interpreter.start.error: {:?}", e));
+                .map_err(|e| error!("interpreter.start.error: {:?}", e));
             let running_state = ExecuteRunning {
                 session,
                 ctx: ctx.clone(),
@@ -218,23 +231,13 @@ impl ExecuteState {
                 block_buffer,
             });
             interpreter.execute(None).await?;
-
             Ok(executor)
         } else {
-            let plan = match PlanParser::parse(ctx.clone(), sql).await {
-                Ok(p) => p,
-                Err(e) => {
-                    InterpreterQueryLog::fail_to_start(ctx, e.clone()).await;
-                    return Err(e);
-                }
-            };
-
-            let interpreter = InterpreterFactory::get(ctx.clone(), plan.clone())?;
             // Write Start to query log table.
             let _ = interpreter
                 .start()
                 .await
-                .map_err(|e| tracing::error!("interpreter.start.error: {:?}", e));
+                .map_err(|e| error!("interpreter.start.error: {:?}", e));
 
             let running_state = ExecuteRunning {
                 session,
@@ -249,14 +252,9 @@ impl ExecuteState {
             let executor_clone = executor.clone();
             let ctx_clone = ctx.clone();
             let block_buffer_clone = block_buffer.clone();
+
             ctx.try_spawn(async move {
-                let res = execute(
-                    interpreter,
-                    ctx_clone,
-                    block_buffer,
-                    executor_clone.clone(),
-                    Arc::new(plan),
-                );
+                let res = execute(interpreter, ctx_clone, block_buffer, executor_clone.clone());
                 match AssertUnwindSafe(res).catch_unwind().await {
                     Ok(Err(err)) => {
                         Executor::stop(&executor_clone, Err(err), false).await;
@@ -285,54 +283,9 @@ async fn execute(
     ctx: Arc<QueryContext>,
     block_buffer: Arc<BlockBuffer>,
     executor: Arc<RwLock<Executor>>,
-    plan: Arc<PlanNode>,
 ) -> Result<()> {
-    let data_stream: Result<SendableDataBlockStream> = {
-        if ctx.get_settings().get_enable_async_insert()? != 0
-            && matches!(&*plan, PlanNode::Insert(_))
-        {
-            match &*plan {
-                Insert(insert_plan) => {
-                    let queue = ctx
-                        .get_current_session()
-                        .get_session_manager()
-                        .get_async_insert_queue()
-                        .read()
-                        .clone()
-                        .unwrap();
-                    queue
-                        .clone()
-                        .push(Arc::new(insert_plan.to_owned()), ctx.clone())
-                        .await?;
-
-                    let wait_for_async_insert = ctx.get_settings().get_wait_for_async_insert()?;
-                    let wait_for_async_insert_timeout =
-                        ctx.get_settings().get_wait_for_async_insert_timeout()?;
-
-                    if wait_for_async_insert == 1 {
-                        queue
-                            .clone()
-                            .wait_for_processing_insert(
-                                ctx.get_id(),
-                                Duration::from_secs(wait_for_async_insert_timeout),
-                            )
-                            .await?;
-                    }
-
-                    Ok(Box::pin(DataBlockStream::create(
-                        plan.schema(),
-                        None,
-                        vec![],
-                    )))
-                }
-                _ => unreachable!(),
-            }
-        } else {
-            interpreter.execute(None).await
-        }
-    };
-
-    let mut data_stream = ctx.try_create_abortable(data_stream?)?;
+    let data_stream = interpreter.execute(None).await?;
+    let mut data_stream = ctx.try_create_abortable(data_stream)?;
     let use_result_cache = !ctx.get_config().query.management_mode;
 
     match data_stream.next().await {
@@ -395,20 +348,20 @@ impl HttpQueryHandle {
         let executor = self.executor.clone();
         let block_buffer = self.block_buffer.clone();
         let last_schema = physical_plan.output_schema()?;
-        let mut pb = PipelineBuilder::new();
-        let mut root_pipeline = NewPipeline::create();
-        pb.build_pipeline(ctx.clone(), physical_plan, &mut root_pipeline)?;
-        pb.render_result_set(last_schema, result_columns, &mut root_pipeline)?;
 
-        let mut pipelines = pb.pipelines;
+        let pipeline_builder = PipelineBuilder::create(ctx.clone());
+        let mut build_res = pipeline_builder.finalize(physical_plan)?;
+
+        PipelineBuilder::render_result_set(
+            last_schema,
+            result_columns,
+            &mut build_res.main_pipeline,
+        )?;
+
         let async_runtime = ctx.get_storage_runtime();
+        build_res.set_max_threads(ctx.get_settings().get_max_threads()? as usize);
 
-        root_pipeline.set_max_threads(ctx.get_settings().get_max_threads()? as usize);
-        for pipeline in pipelines.iter_mut() {
-            pipeline.set_max_threads(ctx.get_settings().get_max_threads()? as usize);
-        }
-
-        root_pipeline.resize(1)?;
+        build_res.main_pipeline.resize(1)?;
         let input = InputPort::create();
 
         let schema = DataSchemaRefExt::create(
@@ -432,7 +385,8 @@ impl HttpQueryHandle {
             query_info,
             self.block_buffer,
         )?;
-        root_pipeline.add_pipe(NewPipe::SimplePipe {
+
+        build_res.main_pipeline.add_pipe(Pipe::SimplePipe {
             outputs_port: vec![],
             inputs_port: vec![input],
             processors: vec![sink],
@@ -442,18 +396,12 @@ impl HttpQueryHandle {
         let query_need_abort = ctx.query_need_abort();
 
         let run = move || -> Result<()> {
-            for pipeline in pipelines {
-                let executor = PipelineExecutor::create(
-                    async_runtime_clone.clone(),
-                    query_need_abort.clone(),
-                    pipeline,
-                )?;
-                executor.execute()?;
-            }
-            let pipeline_executor = PipelineCompleteExecutor::try_create(
+            let mut pipelines = build_res.sources_pipelines;
+            pipelines.push(build_res.main_pipeline);
+            let pipeline_executor = PipelineCompleteExecutor::from_pipelines(
                 async_runtime_clone,
-                query_need_abort.clone(),
-                root_pipeline,
+                query_need_abort,
+                pipelines,
             )?;
             pipeline_executor.execute()
         };

@@ -1,18 +1,15 @@
-statement query T 
+statement query T
 SELECT REVERSE(NULL);
 
-----  
+----
 NULL
 
-statement query T 
+statement ok
 SELECT REVERSE('');
 
-----  
-	
-
-statement query T 
+statement query T
 SELECT REVERSE('abc');
 
-----  
+----
 cba
 

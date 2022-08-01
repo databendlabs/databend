@@ -19,13 +19,11 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use chrono_tz::Tz;
 use common_base::base::Progress;
 use common_base::base::Runtime;
 use common_contexts::DalContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_io::prelude::FormatSettings;
 use common_meta_types::UserInfo;
 use common_planners::PlanNode;
 use common_users::RoleCacheMgr;
@@ -39,8 +37,8 @@ use crate::auth::AuthMgr;
 use crate::catalogs::CatalogManager;
 use crate::clusters::Cluster;
 use crate::servers::http::v1::HttpQueryHandle;
+use crate::sessions::query_affect::QueryAffect;
 use crate::sessions::Session;
-use crate::sessions::SessionType;
 use crate::sessions::Settings;
 use crate::sql::SQLCommon;
 use crate::storages::Table;
@@ -79,6 +77,7 @@ pub struct QueryContextShared {
     pub(in crate::sessions) dal_ctx: Arc<DalContext>,
     pub(in crate::sessions) user_manager: Arc<UserApiProvider>,
     pub(in crate::sessions) auth_manager: Arc<AuthMgr>,
+    pub(in crate::sessions) affect: Arc<Mutex<Option<QueryAffect>>>,
 
     pub(in crate::sessions) query_need_abort: Arc<AtomicBool>,
 }
@@ -112,6 +111,7 @@ impl QueryContextShared {
             user_manager: user_manager.clone(),
             auth_manager: Arc::new(AuthMgr::create(conf, user_manager.clone()).await?),
             query_need_abort: Arc::new(AtomicBool::new(false)),
+            affect: Arc::new(Mutex::new(None)),
         }))
     }
 
@@ -290,40 +290,22 @@ impl QueryContextShared {
         self.session.get_config()
     }
 
-    pub fn get_format_settings(&self) -> Result<FormatSettings> {
-        let settings = self.get_settings();
-        let mut format = FormatSettings::default();
-        if let SessionType::HTTPQuery = self.session.get_type() {
-            format.false_bytes = vec![b'f', b'a', b'l', b's', b'e'];
-            format.true_bytes = vec![b't', b'r', b'u', b'e'];
-        }
-        {
-            format.record_delimiter = settings.get_record_delimiter()?;
-            format.field_delimiter = settings.get_field_delimiter()?;
-            format.empty_as_default = settings.get_empty_as_default()? > 0;
-            format.skip_header = settings.get_skip_header()? > 0;
-
-            let tz = String::from_utf8(settings.get_timezone()?).map_err(|_| {
-                ErrorCode::LogicalError("Timezone has been checked and should be valid.")
-            })?;
-            format.timezone = tz.parse::<Tz>().map_err(|_| {
-                ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
-            })?;
-
-            let compress = String::from_utf8(settings.get_compression()?).map_err(|_| {
-                ErrorCode::UnknownCompressionType("Compress type must be valid utf-8")
-            })?;
-            format.compression = compress.parse()?
-        }
-        Ok(format)
-    }
-
     pub fn get_connection_id(&self) -> String {
         self.session.get_id()
     }
 
     pub async fn reload_config(&self) -> Result<()> {
         self.session.session_mgr.reload_config().await
+    }
+
+    pub fn get_affect(&self) -> Option<QueryAffect> {
+        let guard = self.affect.lock();
+        (*guard).clone()
+    }
+
+    pub fn set_affect(&self, affect: QueryAffect) {
+        let mut guard = self.affect.lock();
+        *guard = Some(affect);
     }
 }
 

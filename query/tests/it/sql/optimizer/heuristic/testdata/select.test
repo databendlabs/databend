@@ -5,28 +5,28 @@ Scan: default.system.numbers
 
 select * from (select * from numbers(1)) as t1 where number = 1
 ----
-Filter: [t1.number = 1]
+Filter: [t1.number (#0) = 1]
     Scan: default.system.numbers
 
 
 # `b = 1` can not be pushed down
 select * from (select number as a, number + 1 as b from numbers(1)) as t1 where a = 1 and b = 1
 ----
-Filter: [t1.a = 1, t1.b = 1]
-    EvalScalar: [+(numbers.number, 1)]
+Filter: [t1.a (#0) = 1, t1.b (#1) = 1]
+    EvalScalar: [+(numbers.number (#0), 1)]
         Scan: default.system.numbers
 
 
 select * from (select number as a, number + 1 as b from numbers(1)) as t1 where a = 1
 ----
-EvalScalar: [+(numbers.number, 1)]
-    Filter: [t1.a = 1]
+EvalScalar: [+(numbers.number (#0), 1)]
+    Filter: [t1.a (#0) = 1]
         Scan: default.system.numbers
 
 
 select * from numbers(1) where number = pow(1, 1 + 1)
 ----
-Filter: [numbers.number = 1]
+Filter: [numbers.number (#0) = 1]
     Scan: default.system.numbers
 
 
@@ -61,8 +61,13 @@ Scan: default.system.numbers
 
 select a from (select number as a, number+1 as b from numbers(1))
 ----
+<<<<<<< HEAD
 Project: [number]
     EvalScalar: []
+=======
+Project: [number (#0)]
+    EvalScalar: [+(numbers.number (#0), 1)]
+>>>>>>> main
         Scan: default.system.numbers
 
 

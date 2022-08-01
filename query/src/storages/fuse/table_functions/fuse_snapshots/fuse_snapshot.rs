@@ -17,19 +17,19 @@ use std::sync::Arc;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_fuse_meta::meta::TableSnapshot;
 
-use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::storages::fuse::io::MetaReaders;
-use crate::storages::fuse::meta::TableSnapshot;
 use crate::storages::fuse::FuseTable;
 
 pub struct FuseSnapshot<'a> {
-    pub ctx: Arc<QueryContext>,
+    pub ctx: Arc<dyn TableContext>,
     pub table: &'a FuseTable,
 }
 
 impl<'a> FuseSnapshot<'a> {
-    pub fn new(ctx: Arc<QueryContext>, table: &'a FuseTable) -> Self {
+    pub fn new(ctx: Arc<dyn TableContext>, table: &'a FuseTable) -> Self {
         Self { ctx, table }
     }
 

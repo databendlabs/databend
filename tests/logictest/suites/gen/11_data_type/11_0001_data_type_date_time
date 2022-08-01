@@ -1,0 +1,30 @@
+statement query T
+select '1022-05-16 03:25:02.868894'::TIMESTAMP;
+
+----
+1022-05-16 03:25:02.868894
+
+statement query T
+select '1022-05-16 03:25:02.000000'::TIMESTAMP;
+
+----
+1022-05-16 03:25:02.000000
+
+statement query T
+select '1000-01-01 03:25:02.868894'::TIMESTAMP;
+
+----
+1000-01-01 03:25:02.868894
+
+statement query T
+select '9999-05-06 03:25:02.868894'::TIMESTAMP;
+
+----
+9999-05-06 03:25:02.868894
+
+statement query T
+select '9999-12-12 03:25:02.868894'::TIMESTAMP;
+
+----
+9999-12-12 03:25:02.868894
+

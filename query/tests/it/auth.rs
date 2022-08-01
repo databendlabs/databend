@@ -20,6 +20,7 @@ use common_meta_types::UserIdentity;
 use common_users::CustomClaims;
 use common_users::EnsureUser;
 use databend_query::auth::Credential;
+use databend_query::sessions::TableContext;
 use jwt_simple::prelude::*;
 use wiremock::matchers::method;
 use wiremock::matchers::path;
@@ -64,7 +65,7 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
         let token = key_pair.sign(claims)?;
 
         let res = auth_mgr
-            .auth(&ctx, &Credential::Jwt {
+            .auth(ctx.get_current_session(), &Credential::Jwt {
                 token,
                 hostname: None,
             })
@@ -82,7 +83,7 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
         let token = key_pair.sign(claims)?;
 
         let res = auth_mgr
-            .auth(&ctx, &Credential::Jwt {
+            .auth(ctx.get_current_session(), &Credential::Jwt {
                 token,
                 hostname: None,
             })
@@ -102,7 +103,7 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
         let token = key_pair.sign(claims)?;
 
         let res = auth_mgr
-            .auth(&ctx, &Credential::Jwt {
+            .auth(ctx.get_current_session(), &Credential::Jwt {
                 token,
                 hostname: None,
             })
@@ -122,7 +123,7 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
         let token = key_pair.sign(claims)?;
 
         auth_mgr
-            .auth(&ctx, &Credential::Jwt {
+            .auth(ctx.get_current_session(), &Credential::Jwt {
                 token,
                 hostname: None,
             })
@@ -141,7 +142,7 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
         let token = key_pair.sign(claims)?;
 
         auth_mgr
-            .auth(&ctx, &Credential::Jwt {
+            .auth(ctx.get_current_session(), &Credential::Jwt {
                 token,
                 hostname: None,
             })
@@ -162,7 +163,7 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
         let token = key_pair.sign(claims)?;
 
         let res = auth_mgr
-            .auth(&ctx, &Credential::Jwt {
+            .auth(ctx.get_current_session(), &Credential::Jwt {
                 token,
                 hostname: None,
             })
@@ -176,6 +177,32 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
         assert_eq!(user_info.grants.roles()[0], role_name.to_string());
     }
 
+    // with create user and auth role
+    {
+        let user_name = "test-user2";
+        let role_name = "test-role";
+        let custom_claims = CustomClaims::new()
+            .with_ensure_user(EnsureUser {
+                roles: Some(vec![role_name.to_string()]),
+            })
+            .with_role("test-auth-role".to_string());
+        let claims = Claims::with_custom_claims(custom_claims, Duration::from_hours(2))
+            .with_subject(user_name.to_string());
+        let token = key_pair.sign(claims)?;
+
+        let res = auth_mgr
+            .auth(ctx.get_current_session(), &Credential::Jwt {
+                token,
+                hostname: None,
+            })
+            .await;
+        assert!(res.is_ok());
+
+        let roles = ctx.get_current_session().get_all_roles()?;
+        assert_eq!(roles.len(), 2);
+        assert!(roles.contains(&"test-auth-role".to_string()));
+    }
+
     // root auth from localhost
     {
         let user_name = "root";
@@ -184,7 +211,7 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
         let token = key_pair.sign(claims)?;
 
         let res = auth_mgr
-            .auth(&ctx, &Credential::Jwt {
+            .auth(ctx.get_current_session(), &Credential::Jwt {
                 token,
                 hostname: Some("localhost".to_string()),
             })
@@ -198,7 +225,7 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
         let token = key_pair.sign(claims)?;
 
         let res = auth_mgr
-            .auth(&ctx, &Credential::Jwt {
+            .auth(ctx.get_current_session(), &Credential::Jwt {
                 token,
                 hostname: Some("10.0.0.1".to_string()),
             })
@@ -228,7 +255,7 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
         let token = key_pair.sign(claims)?;
 
         auth_mgr
-            .auth(&ctx, &Credential::Jwt {
+            .auth(ctx.get_current_session(), &Credential::Jwt {
                 token,
                 hostname: None,
             })

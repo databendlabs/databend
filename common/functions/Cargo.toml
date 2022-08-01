@@ -8,7 +8,6 @@ edition = "2021"
 
 [lib]
 doctest = false
-test = false
 
 [dependencies] # In alphabetical order
 # Workspace dependencies
@@ -48,7 +47,7 @@ serde_json = "1.0.81"
 sha1 = "0.10.1"
 sha2 = "0.10.2"
 simdutf8 = "0.1.4"
-sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "269dffd" }
+sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "7f246e3" }
 strength_reduce = "0.2.3"
 twox-hash = "1.6.3"
 uuid = { version = "1.1.2", features = ["v4"] }
