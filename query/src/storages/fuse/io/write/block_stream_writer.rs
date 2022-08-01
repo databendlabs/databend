@@ -31,7 +31,6 @@ use super::block_writer;
 use crate::pipelines::processors::transforms::ExpressionExecutor;
 use crate::sessions::TableContext;
 use crate::storages::fuse::io::TableMetaLocationGenerator;
-use crate::storages::fuse::operations::column_metas;
 use crate::storages::fuse::statistics::BlockStatistics;
 use crate::storages::fuse::statistics::StatisticsAccumulator;
 use crate::storages::index::ClusterKeyInfo;
@@ -185,12 +184,14 @@ impl BlockStreamWriter {
         }
 
         let mut acc = self.statistics_accumulator.take().unwrap_or_default();
-        let partial_acc = acc.begin(&block, cluster_stats)?;
         let (location, _) = self.meta_locations.gen_block_location();
+        let block_statistics = BlockStatistics::from(&block, location.0.clone(), cluster_stats)?;
+
         let (file_size, file_meta_data) =
             block_writer::write_block(block, &self.data_accessor, &location.0).await?;
-        let col_metas = column_metas(&file_meta_data)?;
-        acc = partial_acc.end(file_size, location, col_metas, None);
+
+        acc.add_block(file_size, file_meta_data, block_statistics, None, 0)?;
+
         self.number_of_blocks_accumulated += 1;
         if self.number_of_blocks_accumulated >= self.num_block_threshold {
             let summary = acc.summary()?;
@@ -200,6 +201,7 @@ impl BlockStreamWriter {
                 uncompressed_byte_size: acc.in_memory_size,
                 compressed_byte_size: acc.file_size,
                 col_stats: summary,
+                index_size: acc.index_size,
             });
 
             // Reset state
@@ -252,6 +254,7 @@ impl Compactor<DataBlock, SegmentInfo> for BlockStreamWriter {
                     block_count: acc.summary_block_count,
                     uncompressed_byte_size: acc.in_memory_size,
                     compressed_byte_size: acc.file_size,
+                    index_size: acc.index_size,
                     col_stats: summary,
                 });
                 Ok(Some(seg))

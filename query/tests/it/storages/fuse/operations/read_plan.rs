@@ -83,6 +83,7 @@ fn test_to_partitions() -> Result<()> {
         cluster_stats,
         location,
         None,
+        0,
     );
 
     let blocks_metas = (0..num_of_block)

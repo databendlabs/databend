@@ -121,7 +121,7 @@ impl BlockPruner {
                                 {
                                     result.push((idx, block_meta.clone()));
                                     if !limiter.within_limit(block_meta.row_count as usize) {
-                                        break;
+                                        break; // TODO not enough, should break out the outer map
                                     }
                                 }
                             }

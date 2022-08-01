@@ -181,6 +181,10 @@ impl FuseTable {
             let res = reader.read(x, None, *ver).await?;
             for block_meta in &res.blocks {
                 if !root.contains(block_meta.location.0.as_str()) {
+                    if let Some(bloom_index_location) = &block_meta.bloom_filter_index_location {
+                        self.remove_location(&accessor, bloom_index_location.0.as_str())
+                            .await?;
+                    }
                     self.remove_location(&accessor, block_meta.location.0.as_str())
                         .await?;
                 }

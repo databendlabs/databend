@@ -59,6 +59,7 @@ impl<'a> BlockWriter<'a> {
             cluster_stats,
             location,
             None,
+            0,
         );
         Ok(block_meta)
     }

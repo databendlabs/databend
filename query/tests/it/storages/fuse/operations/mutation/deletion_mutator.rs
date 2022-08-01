@@ -64,6 +64,7 @@ async fn test_deletion_mutator_multiple_empty_segments() -> Result<()> {
             None,
             location.clone(),
             None,
+            0,
         );
         let segment = SegmentInfo::new(vec![test_block_meta], Statistics::default());
         Ok::<_, ErrorCode>((seg_writer.write_segment(segment).await?, location))

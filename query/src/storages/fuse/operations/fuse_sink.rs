@@ -43,8 +43,7 @@ use crate::storages::index::ClusterKeyInfo;
 
 struct BloomIndexState {
     data: Vec<u8>,
-    // TODO keep this in table meta
-    _size: u64,
+    size: u64,
     location: Location,
 }
 
@@ -174,7 +173,7 @@ impl Processor for FuseTableSink {
                     let location = self.meta_locations.block_bloom_index_location(&block_id);
                     let mut data = Vec::with_capacity(100 * 1024);
                     let index_block_schema = &bloom_index.bloom_schema;
-                    let (_size, _) = serialize_data_blocks_with_compression(
+                    let (size, _) = serialize_data_blocks_with_compression(
                         vec![index_block],
                         &index_block_schema,
                         &mut data,
@@ -182,7 +181,7 @@ impl Processor for FuseTableSink {
                     )?;
                     Some(BloomIndexState {
                         data,
-                        _size,
+                        size,
                         location,
                     })
                 } else {
@@ -213,6 +212,7 @@ impl Processor for FuseTableSink {
                     block_count: acc.summary_block_count,
                     uncompressed_byte_size: acc.in_memory_size,
                     compressed_byte_size: acc.file_size,
+                    index_size: acc.index_size,
                     col_stats,
                 });
 
@@ -257,11 +257,14 @@ impl Processor for FuseTableSink {
                     .await?;
                 }
 
+                let bloom_filter_index_size =
+                    bloom_index_state.as_ref().map(|s| s.size).unwrap_or(0);
                 self.accumulator.add_block(
                     size,
                     *meta_data,
                     block_statistics,
                     bloom_index_state.map(|s| s.location),
+                    bloom_filter_index_size,
                 )?;
 
                 if self.accumulator.summary_block_count >= self.num_block_threshold {

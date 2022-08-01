@@ -54,6 +54,9 @@ pub struct BlockMeta {
     /// location of bloom filter index
     pub bloom_filter_index_location: Option<Location>,
 
+    #[serde(default)]
+    pub bloom_filter_index_size: u64,
+
     /// Compression algo used to compress the columns of blocks
     ///
     /// If not specified, the legacy algo `Lz4` will be used.
@@ -74,6 +77,7 @@ impl BlockMeta {
         cluster_stats: Option<ClusterStatistics>,
         location: Location,
         bloom_filter_index_location: Option<Location>,
+        bloom_filter_index_size: u64,
     ) -> Self {
         Self {
             row_count,
@@ -84,6 +88,7 @@ impl BlockMeta {
             cluster_stats,
             location,
             bloom_filter_index_location,
+            bloom_filter_index_size,
             compression: Compression::Lz4Raw,
         }
     }
@@ -130,6 +135,7 @@ impl From<v0::BlockMeta> for BlockMeta {
             cluster_stats: None,
             location: (s.location.path, DataBlock::VERSION),
             bloom_filter_index_location: None,
+            bloom_filter_index_size: 0,
             compression: Compression::Lz4,
         }
     }

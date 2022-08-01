@@ -13,15 +13,19 @@
 //  limitations under the License.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
+use common_base::base::tokio;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_fuse_meta::meta::ColumnStatistics;
-use common_fuse_meta::meta::Versioned;
+use databend_query::storages::fuse::io::write_block;
 use databend_query::storages::fuse::statistics::accumulator;
 use databend_query::storages::fuse::statistics::gen_columns_statistics;
 use databend_query::storages::fuse::statistics::reducers;
 use databend_query::storages::fuse::statistics::BlockStatistics;
+use opendal::Accessor;
+use opendal::Operator;
 
 use crate::storages::fuse::table_test_fixture::TestFixture;
 
@@ -128,19 +132,22 @@ fn test_reduce_block_statistics_in_memory_size() -> common_exception::Result<()>
     Ok(())
 }
 
-#[test]
-fn test_ft_stats_accumulator() -> common_exception::Result<()> {
+#[tokio::test]
+async fn test_ft_stats_accumulator() -> common_exception::Result<()> {
     let blocks = TestFixture::gen_sample_blocks(10, 1);
     let mut stats_acc = accumulator::StatisticsAccumulator::new();
     let test_file_size = 1;
+
+    let mut builder = opendal::services::memory::Backend::build();
+    let accessor: Arc<dyn Accessor> = builder.finish().await?;
+    let operator = Operator::new(accessor);
+
     for item in blocks {
-        let block_acc = stats_acc.begin(&item?, None)?;
-        stats_acc = block_acc.end(
-            test_file_size,
-            ("".to_owned(), DataBlock::VERSION),
-            HashMap::new(),
-            None,
-        );
+        let block = item?;
+        let block_statistics = BlockStatistics::from(&block, "".to_owned(), None)?;
+        let (_file_size, file_meta_data) = write_block(block, &operator, "").await?;
+        // meta does not matter
+        stats_acc.add_block(test_file_size, file_meta_data, block_statistics, None, 0)?;
     }
     assert_eq!(10, stats_acc.blocks_statistics.len());
     // TODO more cases here pls

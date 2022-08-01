@@ -204,7 +204,7 @@ impl FuseTable {
             number_of_rows: new_snapshot.summary.row_count,
             data_bytes: new_snapshot.summary.uncompressed_byte_size,
             compressed_data_bytes: new_snapshot.summary.compressed_byte_size,
-            index_data_bytes: 0, // TODO we do not have it yet
+            index_data_bytes: new_snapshot.summary.index_size,
         };
 
         self.update_table_meta(ctx, catalog_name, &new_snapshot, &mut new_table_meta)
@@ -274,7 +274,7 @@ impl FuseTable {
             number_of_rows: stats.row_count,
             data_bytes: stats.uncompressed_byte_size,
             compressed_data_bytes: stats.compressed_byte_size,
-            index_data_bytes: 0, // TODO we do not have it yet
+            index_data_bytes: stats.index_size,
         };
 
         let req = UpdateTableMetaReq {
@@ -301,6 +301,7 @@ impl FuseTable {
                 acc.block_count += stats.block_count;
                 acc.uncompressed_byte_size += stats.uncompressed_byte_size;
                 acc.compressed_byte_size += stats.compressed_byte_size;
+                acc.index_size = stats.index_size;
                 acc.col_stats = if acc.col_stats.is_empty() {
                     stats.col_stats.clone()
                 } else {

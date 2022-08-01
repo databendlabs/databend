@@ -98,6 +98,7 @@ pub fn merge_statistics(l: &Statistics, r: &Statistics) -> Result<Statistics> {
         block_count: l.block_count + r.block_count,
         uncompressed_byte_size: l.uncompressed_byte_size + r.uncompressed_byte_size,
         compressed_byte_size: l.compressed_byte_size + r.compressed_byte_size,
+        index_size: l.index_size + r.index_size,
         col_stats: reduce_block_statistics(&[&l.col_stats, &r.col_stats])?,
     };
     Ok(s)
@@ -116,6 +117,7 @@ pub fn reduce_block_metas<T: Borrow<BlockMeta>>(block_metas: &[T]) -> Result<Sta
     let mut block_count: u64 = 0;
     let mut uncompressed_byte_size: u64 = 0;
     let mut compressed_byte_size: u64 = 0;
+    let mut index_size: u64 = 0;
 
     block_metas.iter().for_each(|b| {
         let b = b.borrow();
@@ -123,6 +125,7 @@ pub fn reduce_block_metas<T: Borrow<BlockMeta>>(block_metas: &[T]) -> Result<Sta
         block_count += 1;
         uncompressed_byte_size += b.block_size;
         compressed_byte_size += b.file_size;
+        index_size = b.bloom_filter_index_size;
     });
 
     let stats = block_metas
@@ -136,6 +139,7 @@ pub fn reduce_block_metas<T: Borrow<BlockMeta>>(block_metas: &[T]) -> Result<Sta
         block_count,
         uncompressed_byte_size,
         compressed_byte_size,
+        index_size,
         col_stats: merged_col_stats,
     })
 }

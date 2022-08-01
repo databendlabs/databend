@@ -12,23 +12,16 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use std::collections::HashMap;
-
 use common_arrow::parquet::metadata::ThriftFileMetaData;
 use common_datablocks::DataBlock;
 use common_exception::Result;
 use common_fuse_meta::meta::BlockMeta;
-use common_fuse_meta::meta::ClusterStatistics;
-use common_fuse_meta::meta::ColumnId;
-use common_fuse_meta::meta::ColumnMeta;
-use common_fuse_meta::meta::ColumnStatistics;
 use common_fuse_meta::meta::Location;
 use common_fuse_meta::meta::StatisticsOfColumns;
 use common_fuse_meta::meta::Versioned;
 
 use crate::storages::fuse::operations::column_metas;
 use crate::storages::fuse::statistics::block_statistics::BlockStatistics;
-use crate::storages::fuse::statistics::column_statistic;
 
 #[derive(Default)]
 pub struct StatisticsAccumulator {
@@ -38,33 +31,12 @@ pub struct StatisticsAccumulator {
     pub summary_block_count: u64,
     pub in_memory_size: u64,
     pub file_size: u64,
+    pub index_size: u64,
 }
 
 impl StatisticsAccumulator {
     pub fn new() -> Self {
         Default::default()
-    }
-
-    pub fn begin(
-        mut self,
-        block: &DataBlock,
-        cluster_stats: Option<ClusterStatistics>,
-    ) -> Result<PartiallyAccumulated> {
-        let row_count = block.num_rows() as u64;
-        let block_in_memory_size = block.memory_size() as u64;
-
-        self.summary_block_count += 1;
-        self.summary_row_count += row_count;
-        self.in_memory_size += block_in_memory_size;
-        let block_stats = column_statistic::gen_columns_statistics(block)?;
-        self.blocks_statistics.push(block_stats.clone());
-        Ok(PartiallyAccumulated {
-            accumulator: self,
-            block_row_count: block.num_rows() as u64,
-            block_size: block.memory_size() as u64,
-            block_columns_statistics: block_stats,
-            block_cluster_statistics: cluster_stats,
-        })
     }
 
     pub fn add_block(
@@ -73,8 +45,10 @@ impl StatisticsAccumulator {
         meta: ThriftFileMetaData,
         statistics: BlockStatistics,
         bloom_filter_index_location: Option<Location>,
+        bloom_filter_index_size: u64,
     ) -> Result<()> {
         self.file_size += file_size;
+        self.index_size += bloom_filter_index_size;
         self.summary_block_count += 1;
         self.in_memory_size += statistics.block_bytes_size;
         self.summary_row_count += statistics.block_rows_size;
@@ -97,6 +71,7 @@ impl StatisticsAccumulator {
             cluster_stats,
             data_location,
             bloom_filter_index_location,
+            bloom_filter_index_size,
         ));
 
         Ok(())
@@ -104,44 +79,5 @@ impl StatisticsAccumulator {
 
     pub fn summary(&self) -> Result<StatisticsOfColumns> {
         super::reduce_block_statistics(&self.blocks_statistics)
-    }
-}
-
-pub struct PartiallyAccumulated {
-    accumulator: StatisticsAccumulator,
-    block_row_count: u64,
-    block_size: u64,
-    block_columns_statistics: HashMap<ColumnId, ColumnStatistics>,
-    block_cluster_statistics: Option<ClusterStatistics>,
-}
-
-impl PartiallyAccumulated {
-    pub fn end(
-        mut self,
-        file_size: u64,
-        location: Location,
-        col_metas: HashMap<ColumnId, ColumnMeta>,
-        bloom_filter_index_location: Option<Location>,
-    ) -> StatisticsAccumulator {
-        let mut stats = &mut self.accumulator;
-        stats.file_size += file_size;
-
-        let row_count = self.block_row_count;
-        let block_size = self.block_size;
-        let col_stats = self.block_columns_statistics;
-        let cluster_stats = self.block_cluster_statistics;
-
-        let block_meta = BlockMeta::new(
-            row_count,
-            block_size,
-            file_size,
-            col_stats,
-            col_metas,
-            cluster_stats,
-            location,
-            bloom_filter_index_location,
-        );
-        stats.blocks_metas.push(block_meta);
-        self.accumulator
     }
 }
