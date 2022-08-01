@@ -219,7 +219,7 @@ select sum(a+1) as sum from t group by a+1 having sum(a+1) = 2 order by sum;
 
 
 statement query I
-select sum(a+1) as sum from t group by a+1, b having sum(a+1) > 3 order by sum;
+select sum(a+1) as SuM from t group by a+1, b having sum(a+1) > 3 order by sum, SUM + 1;
 
 ----
 4
