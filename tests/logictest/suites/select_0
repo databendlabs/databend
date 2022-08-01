@@ -13,7 +13,7 @@ create table if not exists t4(a float, b float, c varchar, d bool);
 statement ok
 insert into t4(a,b,c,d) values(1.0, 10.224, 'xxdsfs', false );
 
-statement query FFTB label(http)
+statement query FFTB
 select a,b,c,d from t4;
 
 ----  

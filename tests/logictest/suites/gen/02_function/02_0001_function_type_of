@@ -112,21 +112,16 @@ select 'UInt64 OP UInt64', typeof(65536 * 65536 + 65536 * 65536), typeof(65536 *
 ----
 UInt64 OP UInt64 BIGINT UNSIGNED BIGINT BIGINT UNSIGNED DOUBLE
 
-statement query B label(http)
+statement query B
 select typeof(now()) = 'DateTime';
 
 ----
 0
 
----- http
-false
-
-statement query B label(http)
+statement query B
 select typeof(today()) = 'Date';
 
 ----
 0
 
----- http
-false
 

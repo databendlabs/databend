@@ -100,7 +100,7 @@ insert into d1(b) values (2);
 statement ok
 insert into d1(b) select b from d1;
 
-statement query TIIT label(http)
+statement query TIIT
 select * from d1 order by a, b;
 
 ----

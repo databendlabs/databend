@@ -37,14 +37,13 @@ insert into t(id) select * from numbers(113);
 statement ok
 insert into t(id) select * from numbers(20000);
 
-statement query B label(http)
+statement query B
 select count(*) = (112 + 113 + 20000) from t;
 
 ----
 1
 
----- http
-true
+
 
 statement query I
 select sum(id) from t;

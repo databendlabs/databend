@@ -1,6 +1,6 @@
 ast            : multi_if(false, 1, false, 2, NULL)
 raw expr       : multi_if(false, 1_u8, false, 2_u8, NULL)
-checked expr   : multi_if<T0=UInt8 NULL><Boolean, T0, Boolean, T0, T0>(false, CAST(1_u8 AS UInt8 NULL), false, CAST(2_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL))
+checked expr   : multi_if<T0=UInt8 NULL><Boolean, T0, Boolean, T0, T0>(false, CAST(1 AS UInt8 NULL), false, CAST(2 AS UInt8 NULL), CAST(NULL AS UInt8 NULL))
 output type    : UInt8 NULL
 output domain  : {NULL}
 output         : NULL
@@ -8,7 +8,7 @@ output         : NULL
 
 ast            : multi_if(true, 1, false, 2, NULL)
 raw expr       : multi_if(true, 1_u8, false, 2_u8, NULL)
-checked expr   : multi_if<T0=UInt8 NULL><Boolean, T0, Boolean, T0, T0>(true, CAST(1_u8 AS UInt8 NULL), false, CAST(2_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL))
+checked expr   : multi_if<T0=UInt8 NULL><Boolean, T0, Boolean, T0, T0>(true, CAST(1 AS UInt8 NULL), false, CAST(2 AS UInt8 NULL), CAST(NULL AS UInt8 NULL))
 output type    : UInt8 NULL
 output domain  : {1..=1}
 output         : 1
@@ -16,7 +16,7 @@ output         : 1
 
 ast            : multi_if(false, 1, true, 2, NULL)
 raw expr       : multi_if(false, 1_u8, true, 2_u8, NULL)
-checked expr   : multi_if<T0=UInt8 NULL><Boolean, T0, Boolean, T0, T0>(false, CAST(1_u8 AS UInt8 NULL), true, CAST(2_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL))
+checked expr   : multi_if<T0=UInt8 NULL><Boolean, T0, Boolean, T0, T0>(false, CAST(1 AS UInt8 NULL), true, CAST(2 AS UInt8 NULL), CAST(NULL AS UInt8 NULL))
 output type    : UInt8 NULL
 output domain  : {2..=2}
 output         : 2
@@ -24,7 +24,7 @@ output         : 2
 
 ast            : multi_if(true, 1, true, 2, NULL)
 raw expr       : multi_if(true, 1_u8, true, 2_u8, NULL)
-checked expr   : multi_if<T0=UInt8 NULL><Boolean, T0, Boolean, T0, T0>(true, CAST(1_u8 AS UInt8 NULL), true, CAST(2_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL))
+checked expr   : multi_if<T0=UInt8 NULL><Boolean, T0, Boolean, T0, T0>(true, CAST(1 AS UInt8 NULL), true, CAST(2 AS UInt8 NULL), CAST(NULL AS UInt8 NULL))
 output type    : UInt8 NULL
 output domain  : {1..=1}
 output         : 1
@@ -32,7 +32,7 @@ output         : 1
 
 ast            : multi_if(true, 1, true, NULL, 2)
 raw expr       : multi_if(true, 1_u8, true, NULL, 2_u8)
-checked expr   : multi_if<T0=UInt8 NULL><Boolean, T0, Boolean, T0, T0>(true, CAST(1_u8 AS UInt8 NULL), true, CAST(NULL AS UInt8 NULL), CAST(2_u8 AS UInt8 NULL))
+checked expr   : multi_if<T0=UInt8 NULL><Boolean, T0, Boolean, T0, T0>(true, CAST(1 AS UInt8 NULL), true, CAST(NULL AS UInt8 NULL), CAST(2 AS UInt8 NULL))
 output type    : UInt8 NULL
 output domain  : {1..=1}
 output         : 1
@@ -40,7 +40,7 @@ output         : 1
 
 ast            : multi_if(true, 1, NULL)
 raw expr       : multi_if(true, 1_u8, NULL)
-checked expr   : multi_if<T0=UInt8 NULL><Boolean, T0, T0>(true, CAST(1_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL))
+checked expr   : multi_if<T0=UInt8 NULL><Boolean, T0, T0>(true, CAST(1 AS UInt8 NULL), CAST(NULL AS UInt8 NULL))
 output type    : UInt8 NULL
 output domain  : {1..=1}
 output         : 1
@@ -48,7 +48,7 @@ output         : 1
 
 ast            : multi_if(false, 1, NULL)
 raw expr       : multi_if(false, 1_u8, NULL)
-checked expr   : multi_if<T0=UInt8 NULL><Boolean, T0, T0>(false, CAST(1_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL))
+checked expr   : multi_if<T0=UInt8 NULL><Boolean, T0, T0>(false, CAST(1 AS UInt8 NULL), CAST(NULL AS UInt8 NULL))
 output type    : UInt8 NULL
 output domain  : {NULL}
 output         : NULL

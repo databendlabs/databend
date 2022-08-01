@@ -39,15 +39,14 @@ CREATE TABLE IF NOT EXISTS t2(a Boolean, b Timestamp, c Date) Engine = fuse;
 statement ok
 INSERT INTO t2 (a,b,c) values(true, '2021-09-07 21:38:35.000000', '2021-09-07'), (false, 1631050715000000, 18877);
 
-statement query BTT label(http)
+statement query BTT
 SELECT * FROM t2;
 
 ----
 1 2021-09-07 21:38:35.000000 2021-09-07
 0 2021-09-07 21:38:35.000000 2021-09-07
 
----- http
-true 2021-09-07 21:38:35.000000 2021-09-07
+ 2021-09-07 21:38:35.000000 2021-09-07
 false 2021-09-07 21:38:35.000000 2021-09-07
 
 statement ok

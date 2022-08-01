@@ -45,7 +45,7 @@ pub fn run_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType, Co
         let fn_registry = builtin_functions();
         let (expr, output_ty) = type_check::check(&raw_expr, &fn_registry)?;
 
-        // Converting to and from `RemoteExpr` should be identical.
+        // Converting to and then back from `RemoteExpr` should not change anything.
         let remote_expr = RemoteExpr::from_expr(expr);
         let expr = remote_expr.into_expr(&fn_registry).unwrap();
 
@@ -57,13 +57,16 @@ pub fn run_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType, Co
         let domain_calculator = DomainCalculator::new(input_domains.clone());
         let output_domain = domain_calculator.calculate(&expr)?;
 
+        let num_rows = columns.iter().map(|col| col.2.len()).max().unwrap_or(0);
         let chunk = Chunk::new(
             columns
                 .iter()
-                .map(|(_, _, col)| col.clone())
+                .map(|(_, _, col)| Value::Column(col.clone()))
                 .collect::<Vec<_>>(),
+            num_rows,
         );
-        chunk.columns().iter().for_each(|col| {
+
+        columns.iter().for_each(|(_, _, col)| {
             test_arrow_conversion(col);
         });
 
