@@ -17,8 +17,10 @@ use std::any::Any;
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use common_arrow::parquet::compression::CompressionOptions;
 use common_arrow::parquet::metadata::ThriftFileMetaData;
 use common_datablocks::serialize_data_blocks;
+use common_datablocks::serialize_data_blocks_with_compression;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -170,8 +172,12 @@ impl Processor for FuseTableSink {
                         TableMetaLocationGenerator::block_bloom_index_location(&block_location);
                     let mut data = Vec::with_capacity(100 * 1024);
                     let index_block_schema = &bloom_index.bloom_schema;
-                    let (_size, _) =
-                        serialize_data_blocks(vec![index_block], &index_block_schema, &mut data)?;
+                    let (_size, _) = serialize_data_blocks_with_compression(
+                        vec![index_block],
+                        &index_block_schema,
+                        &mut data,
+                        CompressionOptions::Uncompressed,
+                    )?;
                     BloomIndexState {
                         data,
                         _size,

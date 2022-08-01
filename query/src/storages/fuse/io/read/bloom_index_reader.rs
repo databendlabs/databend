@@ -77,14 +77,27 @@ pub async fn load_bloom_filter_by_columns(
             self.0.as_ref()
         }
     }
-
+    let columns = row_group.columns();
     tracing::debug_span!("build_array_iter").in_scope(|| {
         for (bytes, col_idx) in cols_data.into_iter() {
+            let compression_codec = columns[0]
+                .column_chunk()
+                .meta_data
+                .as_ref()
+                .ok_or_else(|| {
+                    ErrorCode::UnexpectedError(format!(" column meta is none, idx {}", col_idx))
+                })?
+                .codec;
+            let compression = Compression::try_from(compression_codec).map_err(|e| {
+                ErrorCode::ParquetError(format!("unrecognized compression. {} ", e))
+            })?;
+            let descriptor = file_meta.schema_descr.columns()[col_idx].descriptor.clone();
+
             let page_meta_data = PageMetaData {
                 column_start: 0,
                 num_values: num_values as i64,
-                compression: Compression::Lz4Raw, // compression for bloom filter might not be sensible
-                descriptor: file_meta.schema_descr.columns()[col_idx].descriptor.clone(),
+                compression,
+                descriptor,
             };
 
             let wrapped = Wrap(bytes);
@@ -98,14 +111,9 @@ pub async fn load_bloom_filter_by_columns(
             let decompressors = vec![decompressor];
             let types = vec![&column_descriptors[col_idx].descriptor.primitive_type];
             let field = arrow_schema.fields[col_idx].clone();
-            let arrays = tracing::debug_span!("iter_to_arrays").in_scope(
-                || column_iter_to_arrays(
-                        decompressors,
-                        types,
-                        field,
-                        Some(num_values),
-                    )
-            )?;
+            let arrays = tracing::debug_span!("iter_to_arrays").in_scope(|| {
+                column_iter_to_arrays(decompressors, types, field, Some(num_values))
+            })?;
             columns_array_iter.push(arrays);
         }
         Ok::<_, ErrorCode>(())
