@@ -15,6 +15,7 @@
 
 use std::sync::Arc;
 
+use common_base::base::TrySpawn;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -23,6 +24,7 @@ use common_fuse_meta::meta::Location;
 use common_fuse_meta::meta::TableSnapshot;
 use common_planners::Extras;
 use common_tracing::tracing;
+use common_tracing::tracing::Instrument;
 use futures::StreamExt;
 use futures::TryStreamExt;
 
@@ -32,6 +34,7 @@ use crate::storages::fuse::io::MetaReaders;
 use crate::storages::fuse::pruning::bloom_pruner::NonPruner;
 use crate::storages::fuse::pruning::limiter;
 use crate::storages::fuse::pruning::range_pruner;
+use crate::storages::fuse::pruning::range_pruner::RangeFilterPruner;
 
 pub struct BlockPruner {
     table_snapshot: Arc<TableSnapshot>,
@@ -72,65 +75,113 @@ impl BlockPruner {
         }
 
         // prepare the limiter. in case that limit is none, an unlimited limiter will be returned
-        let limiter = limiter::new_limiter(limit);
+        use super::limiter::Limiter;
+        let limiter: Arc<dyn Limiter + Send + Sync> = limiter::new_limiter(limit).into();
 
         // prepare the range filter.
         // if filter_expression is none, an dummy pruner will be returned, which prunes nothing
         let range_filter_pruner =
             range_pruner::new_range_filter_pruner(ctx, filter_expression, &schema)?;
 
+        let range_filter_pruner: Arc<dyn RangeFilterPruner + Send + Sync> =
+            range_filter_pruner.into();
+
         let dal = ctx.get_storage_operator()?;
         let enable_bloom_index = ctx.get_settings().get_enable_bloom_filter_index()?;
         let bloom_filter_pruner = if enable_bloom_index != 0 {
             // prepare the bloom filter, if filter_expression is none, an dummy pruner will be returned
-            bloom_pruner::new_bloom_filter_pruner(ctx, filter_expression, &schema, &dal)?
+            bloom_pruner::new_bloom_filter_pruner(ctx, filter_expression, &schema, dal)?
         } else {
             // toggle off bloom filter according the session settings
             Box::new(NonPruner)
         };
 
-        let segment_num = segment_locs.len();
+        let bloom_filter_pruner = Arc::new(bloom_filter_pruner);
 
-        struct NonCopy<T>(T);
-        // convert u64 (which is Copy) into NonCopy( struct which is !Copy)
-        // so that "async move" can be avoided in the latter async block
-        // See https://github.com/rust-lang/rust/issues/81653
-        let segments_with_idx = segment_locs
-            .into_iter()
-            .enumerate()
-            .map(|(idx, (loc, ver))| (NonCopy(idx), (loc, NonCopy(ver))));
+        let segments_with_idx = segment_locs.into_iter().enumerate();
 
-        let block_metas = futures::stream::iter(segments_with_idx)
-            .map(|(idx, (seg_loc, ver))| async {
-                let version = { ver }.0; // use block expression to force moving
-                let idx = { idx }.0;
-                let segment_reader = MetaReaders::segment_info_reader(ctx.as_ref());
-                let segment_info = segment_reader.read(seg_loc, None, version).await?;
-                let mut result = Vec::with_capacity(segment_info.blocks.len());
-                // prune segment using range filter
-                if range_filter_pruner.should_keep(&segment_info.summary.col_stats) {
-                    for block_meta in &segment_info.blocks {
-                        // prune block using range filter, and bloom filter if necessary
-                        if range_filter_pruner.should_keep(&block_meta.col_stats)
-                            && bloom_filter_pruner
-                                .should_keep(block_meta.location.0.as_str())
-                                .await
-                        {
-                            result.push((idx, block_meta.clone()));
-                            // doc here
-                            if !limiter.within_limit(block_meta.row_count as usize) {
-                                break;
+        let rt = ctx.get_storage_runtime();
+        let futs = segments_with_idx
+            .map(|(idx, (seg_loc, ver))| {
+                let ctx = ctx.clone();
+                let range_filter_pruner = range_filter_pruner.clone();
+                let bloom_filter_pruner = bloom_filter_pruner.clone();
+                let limiter = limiter.clone();
+                async move {
+                    let segment_reader = MetaReaders::segment_info_reader(ctx.as_ref());
+                    let segment_info = segment_reader.read(seg_loc, None, ver).await?;
+                    let mut result = Vec::with_capacity(segment_info.blocks.len());
+                    // prune segment using range filter
+                    if range_filter_pruner.should_keep(&segment_info.summary.col_stats) {
+                        for block_meta in &segment_info.blocks {
+                            // prune block using range filter, and bloom filter if necessary
+                            if range_filter_pruner.should_keep(&block_meta.col_stats)
+                                && bloom_filter_pruner
+                                    .should_keep(block_meta.location.0.as_str())
+                                    .await
+                            {
+                                result.push((idx, block_meta.clone()));
+                                if !limiter.within_limit(block_meta.row_count as usize) {
+                                    break;
+                                }
                             }
                         }
                     }
+                    Ok::<_, ErrorCode>(result)
                 }
-                Ok::<_, ErrorCode>(result)
+                .instrument(tracing::debug_span!("filter_segment_rt_storage"))
             })
-            .buffered(std::cmp::min(FUTURE_BUFFER_SIZE, segment_num))
-            .try_collect::<Vec<_>>()
-            .await?;
+            .map(|fut| rt.spawn(fut))
+            .collect::<Vec<_>>();
 
-        Ok(block_metas.into_iter().flatten().collect::<Vec<_>>())
+        let block_metas = futures::future::try_join_all(futs).await.unwrap();
+
+        Ok(block_metas
+            .into_iter()
+            .flatten()
+            .flatten()
+            .collect::<Vec<_>>())
+
+        // switching to storage runtime and explicit spawn
+        //
+        // let segment_num = segment_locs.len();
+        // struct NonCopy<T>(T);
+        //// convert u64 (which is Copy) into NonCopy( struct which is !Copy)
+        //// so that "async move" can be avoided in the latter async block
+        //// See https://github.com/rust-lang/rust/issues/81653
+        // let segments_with_idx = segment_locs
+        //    .into_iter()
+        //    .enumerate()
+        //    .map(|(idx, (loc, ver))| (NonCopy(idx), (loc, NonCopy(ver))));
+        // let block_metas = futures::stream::iter(segments_with_idx)
+        //    .map(|(idx, (seg_loc, ver))| async {
+        //        let version = { ver }.0; // use block expression to force moving
+        //        let idx = { idx }.0;
+        //        let segment_reader = MetaReaders::segment_info_reader(ctx.as_ref());
+        //        let segment_info = segment_reader.read(seg_loc, None, version).await?;
+        //        let mut result = Vec::with_capacity(segment_info.blocks.len());
+        //        // prune segment using range filter
+        //        if range_filter_pruner.should_keep(&segment_info.summary.col_stats) {
+        //            for block_meta in &segment_info.blocks {
+        //                // prune block using range filter, and bloom filter if necessary
+        //                if range_filter_pruner.should_keep(&block_meta.col_stats)
+        //                    && bloom_filter_pruner
+        //                        .should_keep(block_meta.location.0.as_str())
+        //                        .await
+        //                {
+        //                    result.push((idx, block_meta.clone()));
+        //                    // doc here
+        //                    if !limiter.within_limit(block_meta.row_count as usize) {
+        //                        break;
+        //                    }
+        //                }
+        //            }
+        //        }
+        //        Ok::<_, ErrorCode>(result)
+        //    })
+        //    .buffered(std::cmp::min(FUTURE_BUFFER_SIZE, segment_num))
+        //    .try_collect::<Vec<_>>()
+        //    .await?;
     }
 
     async fn all_the_blocks(

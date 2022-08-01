@@ -14,6 +14,7 @@
 //
 use common_base::base::tokio;
 use common_exception::Result;
+use databend_query::sessions::TableContext;
 
 use crate::storages::fuse::table_test_fixture::append_sample_data;
 use crate::storages::fuse::table_test_fixture::check_data_dir;
@@ -23,17 +24,29 @@ use crate::storages::fuse::table_test_fixture::TestFixture;
 
 #[tokio::test]
 async fn test_fuse_truncate_purge_stmt() -> Result<()> {
+    let mut enable_bloom_filter = 0;
+    test_fuse_truncate_purge(enable_bloom_filter).await?;
+
+    enable_bloom_filter = 1;
+    test_fuse_truncate_purge(enable_bloom_filter).await?;
+
+    Ok(())
+}
+
+async fn test_fuse_truncate_purge(enable_bloom_filter: u64) -> Result<()> {
     let fixture = TestFixture::new().await;
     let db = fixture.default_db_name();
     let tbl = fixture.default_table_name();
     let ctx = fixture.ctx();
     fixture.create_default_table().await?;
+    ctx.get_settings()
+        .set_enable_bloom_filter_index(enable_bloom_filter)?;
 
     // ingests some test data
     append_sample_data(1, &fixture).await?;
     append_sample_data(1, &fixture).await?;
 
-    // there should be some data there: 1 snapshot, 1 segment, 1 block
+    // there should be some data there: 2 snapshot, 2 segment, 2 block
     check_data_dir(&fixture, "truncate_purge", 2, 2, 2).await;
 
     // let's truncate

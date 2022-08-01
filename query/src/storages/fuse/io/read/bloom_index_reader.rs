@@ -34,17 +34,18 @@ use common_datavalues::Vu8;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_tracing::tracing;
+use common_tracing::tracing::Instrument;
 use futures_util::future::try_join_all;
 use opendal::Operator;
 
 #[tracing::instrument(level = "debug", skip_all)]
 pub async fn load_bloom_filter_by_columns(
-    ctx: &Arc<dyn TableContext>,
+    ctx: Arc<dyn TableContext>,
     dal: Operator,
     columns: &[String],
     path: &str,
 ) -> Result<DataBlock> {
-    let file_meta = read_index_meta(ctx, path, &dal).await?;
+    let file_meta = read_index_meta(&ctx, path, &dal).await?;
     let row_group = &file_meta.row_groups[0];
 
     let fields = columns
@@ -56,49 +57,75 @@ pub async fn load_bloom_filter_by_columns(
 
     let futs = columns
         .iter()
-        .map(|col_name| load_column_bytes(ctx, &file_meta, col_name, path, &dal))
+        .map(|col_name| load_column_bytes(&ctx, &file_meta, col_name, path, &dal))
         .collect::<Vec<_>>();
-    let cols_data = try_join_all(futs).await?;
+    let cols_data = try_join_all(futs)
+        .instrument(tracing::debug_span!("join_columns"))
+        .await?;
 
     let column_descriptors = file_meta.schema_descr.columns();
     let arrow_schema = infer_schema(&file_meta)?;
-    let mut columns_array_iter = vec![];
+    let mut columns_array_iter = Vec::with_capacity(cols_data.len());
     let num_values = row_group.num_rows();
-    for (bytes, col_idx) in cols_data {
-        let page_meta_data = PageMetaData {
-            column_start: 0, // PageReader does not care about this
-            num_values: num_values as i64,
-            compression: Compression::Lz4Raw, // compression for bloom filter might not be sensible
-            descriptor: file_meta.schema_descr.columns()[col_idx].descriptor.clone(),
-        };
-        let pages = PageReader::new_with_page_meta(
-            std::io::Cursor::new(bytes.as_ref().clone()), // heart breaking
-            page_meta_data,
-            Arc::new(|_, _| true),
-            vec![],
-        );
-        let decompressor = BasicDecompressor::new(pages, vec![]);
-        let decompressors = vec![decompressor];
-        let types = vec![&column_descriptors[col_idx].descriptor.primitive_type];
-        let field = arrow_schema.fields[col_idx].clone();
-        columns_array_iter.push(column_iter_to_arrays(
-            decompressors,
-            types,
-            field,
-            Some(num_values),
-        )?);
+
+    // wrapping around Arc<Vec<u8>>, so that bytes clone can be avoided
+    // later in the construction of PageReader
+    struct Wrap(Arc<Vec<u8>>);
+    impl AsRef<[u8]> for Wrap {
+        #[inline]
+        fn as_ref(&self) -> &[u8] {
+            self.0.as_ref()
+        }
     }
 
-    let mut deserializer = RowGroupDeserializer::new(columns_array_iter, num_values, None);
+    tracing::debug_span!("build_array_iter").in_scope(|| {
+        for (bytes, col_idx) in cols_data.into_iter() {
+            let page_meta_data = PageMetaData {
+                column_start: 0, // PageReader does not care about this
+                num_values: num_values as i64,
+                compression: Compression::Lz4Raw, // compression for bloom filter might not be sensible
+                descriptor: file_meta.schema_descr.columns()[col_idx].descriptor.clone(),
+            };
 
-    match deserializer.next() {
+            let wrapped = Wrap(bytes);
+            let page_reader = PageReader::new_with_page_meta(
+                std::io::Cursor::new(wrapped),
+                page_meta_data,
+                Arc::new(|_, _| true),
+                vec![],
+            );
+            let decompressor = BasicDecompressor::new(page_reader, vec![]);
+            let decompressors = vec![decompressor];
+            let types = vec![&column_descriptors[col_idx].descriptor.primitive_type];
+            let field = arrow_schema.fields[col_idx].clone();
+            let arrays = tracing::debug_span!("iter_to_arrays").in_scope(
+                || column_iter_to_arrays(
+                        decompressors,
+                        types,
+                        field,
+                        Some(num_values),
+                    )
+            )?;
+            columns_array_iter.push(arrays);
+        }
+        Ok::<_, ErrorCode>(())
+    })?;
+
+    let mut deserializer = RowGroupDeserializer::new(columns_array_iter, num_values, None);
+    let next = tracing::debug_span!("deserializer_next").in_scope(|| deserializer.next());
+
+    match next {
         None => Err(ErrorCode::ParquetError("fail to get a chunk")),
         Some(Err(cause)) => Err(ErrorCode::from(cause)),
-        Some(Ok(chunk)) => DataBlock::from_chunk(&schema, &chunk),
+        Some(Ok(chunk)) => {
+            let span = tracing::info_span!("from_chunk");
+            span.in_scope(|| DataBlock::from_chunk(&schema, &chunk))
+        }
     }
 }
 
 /// return bytes and index of the given column
+#[tracing::instrument(level = "debug", skip_all)]
 async fn load_column_bytes(
     ctx: &Arc<dyn TableContext>,
     file_meta: &FileMetaData,
@@ -134,6 +161,7 @@ async fn load_column_bytes(
     }
 }
 
+#[tracing::instrument(level = "debug", skip_all)]
 async fn read_index_meta(
     ctx: &Arc<dyn TableContext>,
     path: &str,
@@ -147,16 +175,19 @@ async fn read_index_meta(
         if let Some(file_meta) = cache.get(&cache_key) {
             Ok(file_meta.clone())
         } else {
+            eprintln!("cache missed");
             let file_meta = Arc::new(load_index_meta(dal, path).await?);
             cache.put(cache_key, file_meta.clone());
             Ok(file_meta)
         }
     } else {
+        eprintln!("cache not enabled");
         let file_meta = Arc::new(load_index_meta(dal, path).await?);
         Ok(file_meta)
     }
 }
 
+#[tracing::instrument(level = "debug", skip_all)]
 async fn load_index_meta(dal: &Operator, path: &str) -> Result<FileMetaData> {
     let object = dal.object(path);
     let mut reader = object.seekable_reader(0..);
@@ -164,6 +195,7 @@ async fn load_index_meta(dal: &Operator, path: &str) -> Result<FileMetaData> {
     Ok(file_meta)
 }
 
+#[tracing::instrument(level = "debug", skip_all)]
 async fn load_data(col_meta: &ColumnChunkMetaData, dal: &Operator, path: &str) -> Result<Vec<u8>> {
     let chunk_meta = col_meta.metadata();
     let chunk_offset = chunk_meta.data_page_offset as u64;

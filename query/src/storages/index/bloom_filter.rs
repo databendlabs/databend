@@ -111,6 +111,7 @@ impl BloomFilterIndexer {
     }
 
     /// Load a bloom filter directly from the source table's schema and the corresponding bloom parquet file.
+    #[tracing::instrument(level = "debug", skip_all)]
     pub fn from_bloom_block(
         source_table_schema: DataSchemaRef,
         bloom_block: DataBlock,
@@ -227,6 +228,7 @@ impl BloomFilterIndexer {
     /// This happens when the data doesn't show up in bloom filter.
     ///
     /// Otherwise return either Unknown or NotApplicable.
+    #[tracing::instrument(level = "debug", name = "bloom_filter_index_eval", skip_all)]
     pub fn eval(&self, expr: &Expression) -> Result<BloomFilterExprEvalResult> {
         // TODO: support multiple columns and other ops like 'in' ...
         match expr {

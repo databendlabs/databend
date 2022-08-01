@@ -50,9 +50,10 @@ impl RangeFilterPruner for RangeFilter {
 }
 
 pub fn new_range_filter_pruner<'a>(
-    ctx: &'a Arc<dyn TableContext>,
+    ctx: &Arc<dyn TableContext>,
     filter_expr: Option<&'a Expression>,
     schema: &'a DataSchemaRef,
+    // schema: DataSchemaRef,
 ) -> Result<Box<dyn RangeFilterPruner + Send + Sync>> {
     Ok(match filter_expr {
         Some(expr) => {

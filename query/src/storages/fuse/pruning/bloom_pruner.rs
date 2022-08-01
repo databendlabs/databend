@@ -44,25 +44,27 @@ impl BloomFilterPruner for NonPruner {
     }
 }
 
-struct BloomFilterIndexPruner<'a> {
-    ctx: &'a Arc<dyn TableContext>,
+struct BloomFilterIndexPruner {
+    ctx: Arc<dyn TableContext>,
     // columns that should be loaded from bloom filter block
     index_columns: Vec<String>,
     // the expression that would be evaluate
-    filter_expression: &'a Expression,
+    filter_expression: Expression,
     // the data accessor
-    dal: &'a Operator,
+    // dal: &'a Operator,
+    dal: Operator,
     // the schema of data being indexed
-    data_schema: &'a DataSchemaRef,
+    data_schema: DataSchemaRef,
 }
 
-impl<'a> BloomFilterIndexPruner<'a> {
+impl BloomFilterIndexPruner {
     pub fn new(
-        ctx: &'a Arc<dyn TableContext>,
+        ctx: Arc<dyn TableContext>,
         index_columns: Vec<String>,
-        filter_expression: &'a Expression,
-        dal: &'a Operator,
-        data_schema: &'a DataSchemaRef,
+        filter_expression: Expression,
+        // dal: &'a Operator,
+        dal: Operator,
+        data_schema: DataSchemaRef,
     ) -> Self {
         Self {
             ctx,
@@ -76,14 +78,14 @@ impl<'a> BloomFilterIndexPruner<'a> {
 
 use self::util::*;
 #[async_trait::async_trait]
-impl BloomFilterPruner for BloomFilterIndexPruner<'_> {
+impl BloomFilterPruner for BloomFilterIndexPruner {
     async fn should_keep(&self, loc: &str) -> bool {
         // load bloom filter index, and try pruning according to filter expression
         match filter_block_by_bloom_index(
-            self.ctx,
+            self.ctx.clone(),
             self.dal.clone(),
-            self.data_schema,
-            self.filter_expression,
+            &self.data_schema,
+            &self.filter_expression,
             &self.index_columns,
             loc,
         )
@@ -103,14 +105,15 @@ impl BloomFilterPruner for BloomFilterIndexPruner<'_> {
 /// if `filter_expr` is none, or is not applicable, e.g. have no point queries
 /// a [NonPruner] will be return, which prunes nothing.
 /// otherwise, a [BloomFilterIndexer] backed pruner will be return
-pub fn new_bloom_filter_pruner<'a>(
-    ctx: &'a Arc<dyn TableContext>,
-    filter_expr: Option<&'a Expression>,
-    schema: &'a DataSchemaRef,
-    dal: &'a Operator,
-) -> Result<Box<dyn BloomFilterPruner + Send + Sync + 'a>> {
+pub fn new_bloom_filter_pruner(
+    ctx: &Arc<dyn TableContext>,
+    filter_expr: Option<&Expression>,
+    schema: &DataSchemaRef,
+    // dal: &'a Operator,
+    dal: Operator,
+) -> Result<Box<dyn BloomFilterPruner + Send + Sync>> {
     if let Some(expr) = filter_expr {
-        // check if there were point queries
+        // check if there were applicable filter conditions
         let point_query_cols = columns_names_of_eq_expressions(expr)?;
         if !point_query_cols.is_empty() {
             // convert to bloom filter block's column names
@@ -119,11 +122,11 @@ pub fn new_bloom_filter_pruner<'a>(
                 .map(|n| BloomFilterIndexer::to_bloom_column_name(&n))
                 .collect();
             return Ok(Box::new(BloomFilterIndexPruner::new(
-                ctx,
+                ctx.clone(),
                 filter_block_cols,
-                expr,
+                expr.clone(),
                 dal,
-                schema,
+                schema.clone(),
             )));
         } else {
             tracing::debug!("no point filters found, using NonPruner");
@@ -136,7 +139,7 @@ mod util {
     use super::*;
     #[tracing::instrument(level = "debug", skip_all)]
     pub async fn filter_block_by_bloom_index(
-        ctx: &Arc<dyn TableContext>,
+        ctx: Arc<dyn TableContext>,
         dal: Operator,
         schema: &DataSchemaRef,
         filter_expr: &Expression,
@@ -146,12 +149,16 @@ mod util {
         let bloom_idx_location = TableMetaLocationGenerator::block_bloom_index_location(block_path);
 
         // load the relevant index columns
-        let filter_block =
-            load_bloom_filter_by_columns(ctx, dal, bloom_index_col_names, &bloom_idx_location)
-                .await?;
+        let filter_block = load_bloom_filter_by_columns(
+            ctx.clone(),
+            dal,
+            bloom_index_col_names,
+            &bloom_idx_location,
+        )
+        .await?;
 
         // figure it out
-        BloomFilterIndexer::from_bloom_block(schema.clone(), filter_block, ctx.clone())?
+        BloomFilterIndexer::from_bloom_block(schema.clone(), filter_block, ctx)?
             .maybe_true(filter_expr)
     }
 

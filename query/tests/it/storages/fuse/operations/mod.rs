@@ -18,4 +18,5 @@ mod mutation;
 mod navigate;
 mod optimize;
 mod purge_drop;
+mod purge_truncate;
 mod read_plan;
