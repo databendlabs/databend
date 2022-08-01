@@ -49,9 +49,20 @@ runs:
       shell: bash
       run: |
         docker-compose -f "./docker/it-hive/hive-docker-compose.yml" exec -T hive-server bash -c "/opt/hive/bin/beeline -u jdbc:hive2://127.0.0.1:10000 -e 'CREATE TABLE t_1 (id string, t_bool boolean, t_float float, t_double double, t_data date, t_array array<int>, t_array2 array<string>) stored as parquet;'"
-        docker-compose -f "./docker/it-hive/hive-docker-compose.yml" exec -T hive-server bash -c "/opt/hive/bin/beeline -u jdbc:hive2://127.0.0.1:10000 -e 'load data local inpath \"/databend-data/t_1.parquet\" OVERWRITE into table t_1;'"
-        mkdir -p .databend/stateless_test_data/user/hive/warehouse/t_1/
-        cp tests/data/hive/t_1.parquet .databend/stateless_test_data/user/hive/warehouse/t_1/
+        docker-compose -f "./docker/it-hive/hive-docker-compose.yml" exec -T hive-server bash -c "/opt/hive/bin/beeline -u jdbc:hive2://127.0.0.1:10000 -e 'load data local inpath \"/databend-data/t_1/t_1.parquet\" OVERWRITE into table t_1;'"
+        mkdir -p .databend/stateless_test_data/user/hive/warehouse/
+        cp -r tests/data/hive/t_1 .databend/stateless_test_data/user/hive/warehouse/
+
+    - name: Hive Create Partition Table&Load Data
+      shell: bash
+      run: |
+        docker-compose -f "./docker/it-hive/hive-docker-compose.yml" exec -T hive-server bash -c "/opt/hive/bin/beeline -u jdbc:hive2://127.0.0.1:10000 -e 'CREATE TABLE if not exists customer_p2 ( foo VARCHAR(25) , c_region2 VARCHAR(25) , c_nation2 VARCHAR(10)) partitioned by (c_region VARCHAR(12), c_nation VARCHAR(15)) stored as parquet;'"
+        docker-compose -f "./docker/it-hive/hive-docker-compose.yml" exec -T hive-server bash -c "/opt/hive/bin/beeline -u jdbc:hive2://127.0.0.1:10000 -e 'load data local inpath \"/databend-data/customer_p2/c_region=ASIA/c_nation=CHINA\" OVERWRITE into table customer_p2 partition(c_region = \"ASIA\", c_nation = \"CHINA\");'"
+        docker-compose -f "./docker/it-hive/hive-docker-compose.yml" exec -T hive-server bash -c "/opt/hive/bin/beeline -u jdbc:hive2://127.0.0.1:10000 -e 'load data local inpath \"/databend-data/customer_p2/c_region=ASIA/c_nation=JAPAN\" OVERWRITE into table customer_p2 partition(c_region = \"ASIA\", c_nation = \"JAPAN\");'"
+        docker-compose -f "./docker/it-hive/hive-docker-compose.yml" exec -T hive-server bash -c "/opt/hive/bin/beeline -u jdbc:hive2://127.0.0.1:10000 -e 'load data local inpath \"/databend-data/customer_p2/c_region=EUROPE/c_nation=FRANCE\" OVERWRITE into table customer_p2 partition(c_region = \"EUROPE\", c_nation = \"FRANCE\");'"
+        docker-compose -f "./docker/it-hive/hive-docker-compose.yml" exec -T hive-server bash -c "/opt/hive/bin/beeline -u jdbc:hive2://127.0.0.1:10000 -e 'load data local inpath \"/databend-data/customer_p2/c_region=EUROPE/c_nation=RUSSIA\" OVERWRITE into table customer_p2 partition(c_region = \"EUROPE\", c_nation = \"RUSSIA\");'"
+        docker-compose -f "./docker/it-hive/hive-docker-compose.yml" exec -T hive-server bash -c "/opt/hive/bin/beeline -u jdbc:hive2://127.0.0.1:10000 -e 'load data local inpath \"/databend-data/customer_p2/c_region=EUROPE/c_nation=GERMANY\" OVERWRITE into table customer_p2 partition(c_region = \"EUROPE\", c_nation = \"GERMANY\");'"
+        cp -r tests/data/hive/customer_p2 .databend/stateless_test_data/user/hive/warehouse/
 
     - name: Run Stateful Tests with Standalone mode
       shell: bash
