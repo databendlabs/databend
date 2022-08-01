@@ -610,7 +610,7 @@ raw expr       : ltrim("   abc   ")
 checked expr   : ltrim<String>("   abc   ")
 output type    : String
 output domain  : {""..}
-output         : abc   
+output         : "abc   "
 
 
 ast            : ltrim('  ')
@@ -618,7 +618,7 @@ raw expr       : ltrim("  ")
 checked expr   : ltrim<String>("  ")
 output type    : String
 output domain  : {""..}
-output         : 
+output         : ""
 
 
 ast            : ltrim(NULL)
@@ -633,16 +633,16 @@ ast            : ltrim(a)
 raw expr       : ltrim(ColumnRef(0)::String)
 checked expr   : ltrim<String>(ColumnRef(0))
 evaluation:
-+--------+-----------------------+--------+
-|        | a                     | Output |
-+--------+-----------------------+--------+
-| Type   | String                | String |
-| Domain | {"   abc"..="abc   "} | {""..} |
-| Row 0  | abc                   | abc    |
-| Row 1  |    abc                | abc    |
-| Row 2  |    abc                | abc    |
-| Row 3  | abc                   | abc    |
-+--------+-----------------------+--------+
++--------+-----------------------+----------+
+|        | a                     | Output   |
++--------+-----------------------+----------+
+| Type   | String                | String   |
+| Domain | {"   abc"..="abc   "} | {""..}   |
+| Row 0  | "abc"                 | "abc"    |
+| Row 1  | "   abc"              | "abc"    |
+| Row 2  | "   abc   "           | "abc   " |
+| Row 3  | "abc   "              | "abc   " |
++--------+-----------------------+----------+
 evaluation (internal):
 +--------+-------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                                        |
@@ -657,7 +657,7 @@ raw expr       : rtrim("   abc   ")
 checked expr   : rtrim<String>("   abc   ")
 output type    : String
 output domain  : {""..}
-output         :    abc
+output         : "   abc"
 
 
 ast            : rtrim('  ')
@@ -665,7 +665,7 @@ raw expr       : rtrim("  ")
 checked expr   : rtrim<String>("  ")
 output type    : String
 output domain  : {""..}
-output         : 
+output         : ""
 
 
 ast            : rtrim(NULL)
@@ -680,16 +680,16 @@ ast            : rtrim(a)
 raw expr       : rtrim(ColumnRef(0)::String)
 checked expr   : rtrim<String>(ColumnRef(0))
 evaluation:
-+--------+-----------------------+--------+
-|        | a                     | Output |
-+--------+-----------------------+--------+
-| Type   | String                | String |
-| Domain | {"   abc"..="abc   "} | {""..} |
-| Row 0  | abc                   | abc    |
-| Row 1  |    abc                |    abc |
-| Row 2  |    abc                |    abc |
-| Row 3  | abc                   | abc    |
-+--------+-----------------------+--------+
++--------+-----------------------+----------+
+|        | a                     | Output   |
++--------+-----------------------+----------+
+| Type   | String                | String   |
+| Domain | {"   abc"..="abc   "} | {""..}   |
+| Row 0  | "abc"                 | "abc"    |
+| Row 1  | "   abc"              | "   abc" |
+| Row 2  | "   abc   "           | "   abc" |
+| Row 3  | "abc   "              | "abc"    |
++--------+-----------------------+----------+
 evaluation (internal):
 +--------+-------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                                        |
@@ -704,7 +704,7 @@ raw expr       : trim_leading("aaaaabbbbb", "a")
 checked expr   : trim_leading<String, String>("aaaaabbbbb", "a")
 output type    : String
 output domain  : {""..}
-output         : bbbbb
+output         : "bbbbb"
 
 
 ast            : trim_leading('aaaaabbbbb', 'aa')
@@ -712,7 +712,7 @@ raw expr       : trim_leading("aaaaabbbbb", "aa")
 checked expr   : trim_leading<String, String>("aaaaabbbbb", "aa")
 output type    : String
 output domain  : {""..}
-output         : abbbbb
+output         : "abbbbb"
 
 
 ast            : trim_leading('aaaaaaaaaa', 'a')
@@ -720,7 +720,7 @@ raw expr       : trim_leading("aaaaaaaaaa", "a")
 checked expr   : trim_leading<String, String>("aaaaaaaaaa", "a")
 output type    : String
 output domain  : {""..}
-output         : 
+output         : ""
 
 
 ast            : trim_leading('aaaaabbbbb', 'b')
@@ -728,7 +728,7 @@ raw expr       : trim_leading("aaaaabbbbb", "b")
 checked expr   : trim_leading<String, String>("aaaaabbbbb", "b")
 output type    : String
 output domain  : {""..}
-output         : aaaaabbbbb
+output         : "aaaaabbbbb"
 
 
 ast            : trim_leading(NULL, 'a')
@@ -751,15 +751,15 @@ ast            : trim_leading(a, 'a')
 raw expr       : trim_leading(ColumnRef(0)::String, "a")
 checked expr   : trim_leading<String, String>(ColumnRef(0), "a")
 evaluation:
-+--------+-----------------------+-------------+--------+
-|        | a                     | b           | Output |
-+--------+-----------------------+-------------+--------+
-| Type   | String                | String      | String |
-| Domain | {"aaaabb"..="ccccdd"} | {"a"..="c"} | {""..} |
-| Row 0  | aaaabb                | a           | bb     |
-| Row 1  | bbbbcc                | b           | bbbbcc |
-| Row 2  | ccccdd                | c           | ccccdd |
-+--------+-----------------------+-------------+--------+
++--------+-----------------------+-------------+----------+
+|        | a                     | b           | Output   |
++--------+-----------------------+-------------+----------+
+| Type   | String                | String      | String   |
+| Domain | {"aaaabb"..="ccccdd"} | {"a"..="c"} | {""..}   |
+| Row 0  | "aaaabb"              | "a"         | "bb"     |
+| Row 1  | "bbbbcc"              | "b"         | "bbbbcc" |
+| Row 2  | "ccccdd"              | "c"         | "ccccdd" |
++--------+-----------------------+-------------+----------+
 evaluation (internal):
 +--------+------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                               |
@@ -779,9 +779,9 @@ evaluation:
 +--------+-----------------------+-------------+--------+
 | Type   | String                | String      | String |
 | Domain | {"aaaabb"..="ccccdd"} | {"a"..="c"} | {""..} |
-| Row 0  | aaaabb                | a           | bb     |
-| Row 1  | bbbbcc                | b           | cc     |
-| Row 2  | ccccdd                | c           | dd     |
+| Row 0  | "aaaabb"              | "a"         | "bb"   |
+| Row 1  | "bbbbcc"              | "b"         | "cc"   |
+| Row 2  | "ccccdd"              | "c"         | "dd"   |
 +--------+-----------------------+-------------+--------+
 evaluation (internal):
 +--------+------------------------------------------------------------------------------------------------------------------------------------+
@@ -798,7 +798,7 @@ raw expr       : trim_trailing("aaaaabbbbb", "b")
 checked expr   : trim_trailing<String, String>("aaaaabbbbb", "b")
 output type    : String
 output domain  : {""..}
-output         : aaaaa
+output         : "aaaaa"
 
 
 ast            : trim_trailing('aaaaabbbbb', 'bb')
@@ -806,7 +806,7 @@ raw expr       : trim_trailing("aaaaabbbbb", "bb")
 checked expr   : trim_trailing<String, String>("aaaaabbbbb", "bb")
 output type    : String
 output domain  : {""..}
-output         : aaaaab
+output         : "aaaaab"
 
 
 ast            : trim_trailing('aaaaaaaaaa', 'a')
@@ -814,7 +814,7 @@ raw expr       : trim_trailing("aaaaaaaaaa", "a")
 checked expr   : trim_trailing<String, String>("aaaaaaaaaa", "a")
 output type    : String
 output domain  : {""..}
-output         : 
+output         : ""
 
 
 ast            : trim_trailing('aaaaabbbbb', 'a')
@@ -822,7 +822,7 @@ raw expr       : trim_trailing("aaaaabbbbb", "a")
 checked expr   : trim_trailing<String, String>("aaaaabbbbb", "a")
 output type    : String
 output domain  : {""..}
-output         : aaaaabbbbb
+output         : "aaaaabbbbb"
 
 
 ast            : trim_trailing(NULL, 'a')
@@ -845,15 +845,15 @@ ast            : trim_trailing(a, 'b')
 raw expr       : trim_trailing(ColumnRef(0)::String, "b")
 checked expr   : trim_trailing<String, String>(ColumnRef(0), "b")
 evaluation:
-+--------+-----------------------+-------------+--------+
-|        | a                     | b           | Output |
-+--------+-----------------------+-------------+--------+
-| Type   | String                | String      | String |
-| Domain | {"aaaabb"..="ccccdd"} | {"b"..="d"} | {""..} |
-| Row 0  | aaaabb                | b           | aaaa   |
-| Row 1  | bbbbcc                | c           | bbbbcc |
-| Row 2  | ccccdd                | d           | ccccdd |
-+--------+-----------------------+-------------+--------+
++--------+-----------------------+-------------+----------+
+|        | a                     | b           | Output   |
++--------+-----------------------+-------------+----------+
+| Type   | String                | String      | String   |
+| Domain | {"aaaabb"..="ccccdd"} | {"b"..="d"} | {""..}   |
+| Row 0  | "aaaabb"              | "b"         | "aaaa"   |
+| Row 1  | "bbbbcc"              | "c"         | "bbbbcc" |
+| Row 2  | "ccccdd"              | "d"         | "ccccdd" |
++--------+-----------------------+-------------+----------+
 evaluation (internal):
 +--------+------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                               |
@@ -873,9 +873,9 @@ evaluation:
 +--------+-----------------------+-------------+--------+
 | Type   | String                | String      | String |
 | Domain | {"aaaabb"..="ccccdd"} | {"b"..="d"} | {""..} |
-| Row 0  | aaaabb                | b           | aaaa   |
-| Row 1  | bbbbcc                | c           | bbbb   |
-| Row 2  | ccccdd                | d           | cccc   |
+| Row 0  | "aaaabb"              | "b"         | "aaaa" |
+| Row 1  | "bbbbcc"              | "c"         | "bbbb" |
+| Row 2  | "ccccdd"              | "d"         | "cccc" |
 +--------+-----------------------+-------------+--------+
 evaluation (internal):
 +--------+------------------------------------------------------------------------------------------------------------------------------------+
@@ -892,7 +892,7 @@ raw expr       : trim_both("aaabbaaa", "a")
 checked expr   : trim_both<String, String>("aaabbaaa", "a")
 output type    : String
 output domain  : {""..}
-output         : bb
+output         : "bb"
 
 
 ast            : trim_both('aaabbaaa', 'aa')
@@ -900,7 +900,7 @@ raw expr       : trim_both("aaabbaaa", "aa")
 checked expr   : trim_both<String, String>("aaabbaaa", "aa")
 output type    : String
 output domain  : {""..}
-output         : abba
+output         : "abba"
 
 
 ast            : trim_both('aaaaaaaa', 'a')
@@ -908,7 +908,7 @@ raw expr       : trim_both("aaaaaaaa", "a")
 checked expr   : trim_both<String, String>("aaaaaaaa", "a")
 output type    : String
 output domain  : {""..}
-output         : 
+output         : ""
 
 
 ast            : trim_both('aaabbaaa', 'b')
@@ -916,7 +916,7 @@ raw expr       : trim_both("aaabbaaa", "b")
 checked expr   : trim_both<String, String>("aaabbaaa", "b")
 output type    : String
 output domain  : {""..}
-output         : aaabbaaa
+output         : "aaabbaaa"
 
 
 ast            : trim_both(NULL, 'a')
@@ -939,15 +939,15 @@ ast            : trim_both(a, 'a')
 raw expr       : trim_both(ColumnRef(0)::String, "a")
 checked expr   : trim_both<String, String>(ColumnRef(0), "a")
 evaluation:
-+--------+-----------------------+-------------+--------+
-|        | a                     | b           | Output |
-+--------+-----------------------+-------------+--------+
-| Type   | String                | String      | String |
-| Domain | {"aabbaa"..="ccddcc"} | {"a"..="c"} | {""..} |
-| Row 0  | aabbaa                | a           | bb     |
-| Row 1  | bbccbb                | b           | bbccbb |
-| Row 2  | ccddcc                | c           | ccddcc |
-+--------+-----------------------+-------------+--------+
++--------+-----------------------+-------------+----------+
+|        | a                     | b           | Output   |
++--------+-----------------------+-------------+----------+
+| Type   | String                | String      | String   |
+| Domain | {"aabbaa"..="ccddcc"} | {"a"..="c"} | {""..}   |
+| Row 0  | "aabbaa"              | "a"         | "bb"     |
+| Row 1  | "bbccbb"              | "b"         | "bbccbb" |
+| Row 2  | "ccddcc"              | "c"         | "ccddcc" |
++--------+-----------------------+-------------+----------+
 evaluation (internal):
 +--------+------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                               |
@@ -967,9 +967,9 @@ evaluation:
 +--------+-----------------------+-------------+--------+
 | Type   | String                | String      | String |
 | Domain | {"aabbaa"..="ccddcc"} | {"a"..="c"} | {""..} |
-| Row 0  | aabbaa                | a           | bb     |
-| Row 1  | bbccbb                | b           | cc     |
-| Row 2  | ccddcc                | c           | dd     |
+| Row 0  | "aabbaa"              | "a"         | "bb"   |
+| Row 1  | "bbccbb"              | "b"         | "cc"   |
+| Row 2  | "ccddcc"              | "c"         | "dd"   |
 +--------+-----------------------+-------------+--------+
 evaluation (internal):
 +--------+------------------------------------------------------------------------------------------------------------------------------------+
@@ -986,7 +986,7 @@ raw expr       : trim("   abc   ")
 checked expr   : trim<String>("   abc   ")
 output type    : String
 output domain  : {""..}
-output         : abc
+output         : "abc"
 
 
 ast            : trim('  ')
@@ -994,7 +994,7 @@ raw expr       : trim("  ")
 checked expr   : trim<String>("  ")
 output type    : String
 output domain  : {""..}
-output         : 
+output         : ""
 
 
 ast            : trim(NULL)
@@ -1014,10 +1014,10 @@ evaluation:
 +--------+-----------------------+--------+
 | Type   | String                | String |
 | Domain | {"   abc"..="abc   "} | {""..} |
-| Row 0  | abc                   | abc    |
-| Row 1  |    abc                | abc    |
-| Row 2  |    abc                | abc    |
-| Row 3  | abc                   | abc    |
+| Row 0  | "abc"                 | "abc"  |
+| Row 1  | "   abc"              | "abc"  |
+| Row 2  | "   abc   "           | "abc"  |
+| Row 3  | "abc   "              | "abc"  |
 +--------+-----------------------+--------+
 evaluation (internal):
 +--------+-------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -1033,7 +1033,7 @@ raw expr       : trim_both("aaabbaaa", "a")
 checked expr   : trim_both<String, String>("aaabbaaa", "a")
 output type    : String
 output domain  : {""..}
-output         : bb
+output         : "bb"
 
 
 ast            : trim(both 'aa' from 'aaabbaaa')
@@ -1041,7 +1041,7 @@ raw expr       : trim_both("aaabbaaa", "aa")
 checked expr   : trim_both<String, String>("aaabbaaa", "aa")
 output type    : String
 output domain  : {""..}
-output         : abba
+output         : "abba"
 
 
 ast            : trim(both 'a' from 'aaaaaaaa')
@@ -1049,7 +1049,7 @@ raw expr       : trim_both("aaaaaaaa", "a")
 checked expr   : trim_both<String, String>("aaaaaaaa", "a")
 output type    : String
 output domain  : {""..}
-output         : 
+output         : ""
 
 
 ast            : trim(both 'b' from 'aaabbaaa')
@@ -1057,7 +1057,7 @@ raw expr       : trim_both("aaabbaaa", "b")
 checked expr   : trim_both<String, String>("aaabbaaa", "b")
 output type    : String
 output domain  : {""..}
-output         : aaabbaaa
+output         : "aaabbaaa"
 
 
 ast            : trim(both 'a' from NULL)
@@ -1080,15 +1080,15 @@ ast            : trim(both 'a' from a)
 raw expr       : trim_both(ColumnRef(0)::String, "a")
 checked expr   : trim_both<String, String>(ColumnRef(0), "a")
 evaluation:
-+--------+-----------------------+-------------+--------+
-|        | a                     | b           | Output |
-+--------+-----------------------+-------------+--------+
-| Type   | String                | String      | String |
-| Domain | {"aabbaa"..="ccddcc"} | {"a"..="c"} | {""..} |
-| Row 0  | aabbaa                | a           | bb     |
-| Row 1  | bbccbb                | b           | bbccbb |
-| Row 2  | ccddcc                | c           | ccddcc |
-+--------+-----------------------+-------------+--------+
++--------+-----------------------+-------------+----------+
+|        | a                     | b           | Output   |
++--------+-----------------------+-------------+----------+
+| Type   | String                | String      | String   |
+| Domain | {"aabbaa"..="ccddcc"} | {"a"..="c"} | {""..}   |
+| Row 0  | "aabbaa"              | "a"         | "bb"     |
+| Row 1  | "bbccbb"              | "b"         | "bbccbb" |
+| Row 2  | "ccddcc"              | "c"         | "ccddcc" |
++--------+-----------------------+-------------+----------+
 evaluation (internal):
 +--------+------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                               |
@@ -1108,9 +1108,9 @@ evaluation:
 +--------+-----------------------+-------------+--------+
 | Type   | String                | String      | String |
 | Domain | {"aabbaa"..="ccddcc"} | {"a"..="c"} | {""..} |
-| Row 0  | aabbaa                | a           | bb     |
-| Row 1  | bbccbb                | b           | cc     |
-| Row 2  | ccddcc                | c           | dd     |
+| Row 0  | "aabbaa"              | "a"         | "bb"   |
+| Row 1  | "bbccbb"              | "b"         | "cc"   |
+| Row 2  | "ccddcc"              | "c"         | "dd"   |
 +--------+-----------------------+-------------+--------+
 evaluation (internal):
 +--------+------------------------------------------------------------------------------------------------------------------------------------+
@@ -1131,9 +1131,9 @@ evaluation:
 +--------+-----------------------+-------------+--------+
 | Type   | String                | String      | String |
 | Domain | {"aabbaa"..="ccddcc"} | {"a"..="c"} | {""..} |
-| Row 0  | aabbaa                | a           |        |
-| Row 1  | bbccbb                | b           |        |
-| Row 2  | ccddcc                | c           |        |
+| Row 0  | "aabbaa"              | "a"         | ""     |
+| Row 1  | "bbccbb"              | "b"         | ""     |
+| Row 2  | "ccddcc"              | "c"         | ""     |
 +--------+-----------------------+-------------+--------+
 evaluation (internal):
 +--------+------------------------------------------------------------------------------------------------------------------------------------+
@@ -1150,7 +1150,7 @@ raw expr       : trim_leading("aaabbaaa", "a")
 checked expr   : trim_leading<String, String>("aaabbaaa", "a")
 output type    : String
 output domain  : {""..}
-output         : bbaaa
+output         : "bbaaa"
 
 
 ast            : trim(leading 'aa' from 'aaabbaaa')
@@ -1158,7 +1158,7 @@ raw expr       : trim_leading("aaabbaaa", "aa")
 checked expr   : trim_leading<String, String>("aaabbaaa", "aa")
 output type    : String
 output domain  : {""..}
-output         : abbaaa
+output         : "abbaaa"
 
 
 ast            : trim(leading 'a' from 'aaaaaaaa')
@@ -1166,7 +1166,7 @@ raw expr       : trim_leading("aaaaaaaa", "a")
 checked expr   : trim_leading<String, String>("aaaaaaaa", "a")
 output type    : String
 output domain  : {""..}
-output         : 
+output         : ""
 
 
 ast            : trim(leading 'b' from 'aaabbaaa')
@@ -1174,7 +1174,7 @@ raw expr       : trim_leading("aaabbaaa", "b")
 checked expr   : trim_leading<String, String>("aaabbaaa", "b")
 output type    : String
 output domain  : {""..}
-output         : aaabbaaa
+output         : "aaabbaaa"
 
 
 ast            : trim(leading 'a' from NULL)
@@ -1197,15 +1197,15 @@ ast            : trim(leading 'a' from a)
 raw expr       : trim_leading(ColumnRef(0)::String, "a")
 checked expr   : trim_leading<String, String>(ColumnRef(0), "a")
 evaluation:
-+--------+-----------------------+-------------+--------+
-|        | a                     | b           | Output |
-+--------+-----------------------+-------------+--------+
-| Type   | String                | String      | String |
-| Domain | {"aabbaa"..="ccddcc"} | {"a"..="c"} | {""..} |
-| Row 0  | aabbaa                | a           | bbaa   |
-| Row 1  | bbccbb                | b           | bbccbb |
-| Row 2  | ccddcc                | c           | ccddcc |
-+--------+-----------------------+-------------+--------+
++--------+-----------------------+-------------+----------+
+|        | a                     | b           | Output   |
++--------+-----------------------+-------------+----------+
+| Type   | String                | String      | String   |
+| Domain | {"aabbaa"..="ccddcc"} | {"a"..="c"} | {""..}   |
+| Row 0  | "aabbaa"              | "a"         | "bbaa"   |
+| Row 1  | "bbccbb"              | "b"         | "bbccbb" |
+| Row 2  | "ccddcc"              | "c"         | "ccddcc" |
++--------+-----------------------+-------------+----------+
 evaluation (internal):
 +--------+------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                               |
@@ -1225,9 +1225,9 @@ evaluation:
 +--------+-----------------------+-------------+--------+
 | Type   | String                | String      | String |
 | Domain | {"aabbaa"..="ccddcc"} | {"a"..="c"} | {""..} |
-| Row 0  | aabbaa                | a           | bbaa   |
-| Row 1  | bbccbb                | b           | ccbb   |
-| Row 2  | ccddcc                | c           | ddcc   |
+| Row 0  | "aabbaa"              | "a"         | "bbaa" |
+| Row 1  | "bbccbb"              | "b"         | "ccbb" |
+| Row 2  | "ccddcc"              | "c"         | "ddcc" |
 +--------+-----------------------+-------------+--------+
 evaluation (internal):
 +--------+------------------------------------------------------------------------------------------------------------------------------------+
@@ -1248,9 +1248,9 @@ evaluation:
 +--------+-----------------------+-------------+--------+
 | Type   | String                | String      | String |
 | Domain | {"aabbaa"..="ccddcc"} | {"a"..="c"} | {""..} |
-| Row 0  | aabbaa                | a           |        |
-| Row 1  | bbccbb                | b           |        |
-| Row 2  | ccddcc                | c           |        |
+| Row 0  | "aabbaa"              | "a"         | ""     |
+| Row 1  | "bbccbb"              | "b"         | ""     |
+| Row 2  | "ccddcc"              | "c"         | ""     |
 +--------+-----------------------+-------------+--------+
 evaluation (internal):
 +--------+------------------------------------------------------------------------------------------------------------------------------------+
@@ -1267,7 +1267,7 @@ raw expr       : trim_trailing("aaabbaaa", "a")
 checked expr   : trim_trailing<String, String>("aaabbaaa", "a")
 output type    : String
 output domain  : {""..}
-output         : aaabb
+output         : "aaabb"
 
 
 ast            : trim(trailing 'aa' from 'aaabbaaa')
@@ -1275,7 +1275,7 @@ raw expr       : trim_trailing("aaabbaaa", "aa")
 checked expr   : trim_trailing<String, String>("aaabbaaa", "aa")
 output type    : String
 output domain  : {""..}
-output         : aaabba
+output         : "aaabba"
 
 
 ast            : trim(trailing 'a' from 'aaaaaaaa')
@@ -1283,7 +1283,7 @@ raw expr       : trim_trailing("aaaaaaaa", "a")
 checked expr   : trim_trailing<String, String>("aaaaaaaa", "a")
 output type    : String
 output domain  : {""..}
-output         : 
+output         : ""
 
 
 ast            : trim(trailing 'b' from 'aaabbaaa')
@@ -1291,7 +1291,7 @@ raw expr       : trim_trailing("aaabbaaa", "b")
 checked expr   : trim_trailing<String, String>("aaabbaaa", "b")
 output type    : String
 output domain  : {""..}
-output         : aaabbaaa
+output         : "aaabbaaa"
 
 
 ast            : trim(trailing 'a' from NULL)
@@ -1314,15 +1314,15 @@ ast            : trim(trailing 'a' from a)
 raw expr       : trim_trailing(ColumnRef(0)::String, "a")
 checked expr   : trim_trailing<String, String>(ColumnRef(0), "a")
 evaluation:
-+--------+-----------------------+-------------+--------+
-|        | a                     | b           | Output |
-+--------+-----------------------+-------------+--------+
-| Type   | String                | String      | String |
-| Domain | {"aabbaa"..="ccddcc"} | {"a"..="c"} | {""..} |
-| Row 0  | aabbaa                | a           | aabb   |
-| Row 1  | bbccbb                | b           | bbccbb |
-| Row 2  | ccddcc                | c           | ccddcc |
-+--------+-----------------------+-------------+--------+
++--------+-----------------------+-------------+----------+
+|        | a                     | b           | Output   |
++--------+-----------------------+-------------+----------+
+| Type   | String                | String      | String   |
+| Domain | {"aabbaa"..="ccddcc"} | {"a"..="c"} | {""..}   |
+| Row 0  | "aabbaa"              | "a"         | "aabb"   |
+| Row 1  | "bbccbb"              | "b"         | "bbccbb" |
+| Row 2  | "ccddcc"              | "c"         | "ccddcc" |
++--------+-----------------------+-------------+----------+
 evaluation (internal):
 +--------+------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                               |
@@ -1342,9 +1342,9 @@ evaluation:
 +--------+-----------------------+-------------+--------+
 | Type   | String                | String      | String |
 | Domain | {"aabbaa"..="ccddcc"} | {"a"..="c"} | {""..} |
-| Row 0  | aabbaa                | a           | aabb   |
-| Row 1  | bbccbb                | b           | bbcc   |
-| Row 2  | ccddcc                | c           | ccdd   |
+| Row 0  | "aabbaa"              | "a"         | "aabb" |
+| Row 1  | "bbccbb"              | "b"         | "bbcc" |
+| Row 2  | "ccddcc"              | "c"         | "ccdd" |
 +--------+-----------------------+-------------+--------+
 evaluation (internal):
 +--------+------------------------------------------------------------------------------------------------------------------------------------+
@@ -1365,9 +1365,9 @@ evaluation:
 +--------+-----------------------+-------------+--------+
 | Type   | String                | String      | String |
 | Domain | {"aabbaa"..="ccddcc"} | {"a"..="c"} | {""..} |
-| Row 0  | aabbaa                | a           |        |
-| Row 1  | bbccbb                | b           |        |
-| Row 2  | ccddcc                | c           |        |
+| Row 0  | "aabbaa"              | "a"         | ""     |
+| Row 1  | "bbccbb"              | "b"         | ""     |
+| Row 2  | "ccddcc"              | "c"         | ""     |
 +--------+-----------------------+-------------+--------+
 evaluation (internal):
 +--------+------------------------------------------------------------------------------------------------------------------------------------+
