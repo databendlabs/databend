@@ -102,7 +102,6 @@ fn test_format() {
         "catalog".to_string(),
         "database".to_string(),
         Arc::new(DummyTable::new("table".to_string())),
-        get_dummy_read_source(),
     );
 
     let s_expr = SExpr::create_binary(
@@ -189,15 +188,15 @@ fn test_format() {
     let result = tree.format_indent().unwrap();
     let expect = r#"HashJoin: INNER, build keys: [plus(col1 (#0), 123)], probe keys: [col2 (#1)], join filters: []
     Filter: [true]
-        Scan: catalog.database.table
-    Scan: catalog.database.table
+        Scan: catalog.database.table, columns: {}
+    Scan: catalog.database.table, columns: {}
 "#;
     assert_eq!(result.as_str(), expect);
     let pretty_result = tree.format_pretty().unwrap();
     let pretty_expect = r#"HashJoin: INNER, build keys: [plus(col1 (#0), 123)], probe keys: [col2 (#1)], join filters: []
 ├── Filter: [true]
-│   └── Scan: catalog.database.table
-└── Scan: catalog.database.table
+│   └── Scan: catalog.database.table, columns: {}
+└── Scan: catalog.database.table, columns: {}
 "#;
     assert_eq!(pretty_result.as_str(), pretty_expect);
 }

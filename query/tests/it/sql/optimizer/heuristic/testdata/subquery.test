@@ -5,9 +5,9 @@ Project: [number (#0)]
     Filter: [(3 (#3)) OR (t.number (#0) > 1)]
         HashJoin: MARK, build keys: [subquery_0 (#0)], probe keys: [subquery_2 (#2)], join filters: []
             HashJoin: INNER, build keys: [t1.number (#1)], probe keys: [subquery_2 (#2)], join filters: []
-                Scan: default.system.numbers
-                Scan: default.system.numbers
-            Scan: default.system.numbers
+                Scan: default.system.numbers, columns: {2}
+                Scan: default.system.numbers, columns: {1}
+            Scan: default.system.numbers, columns: {0}
 
 
 # Uncorrelated subquery
@@ -15,7 +15,7 @@ select t.number from numbers(1) as t where exists (select * from numbers(1) wher
 ----
 Project: [number (#0)]
     CrossJoin
-        Scan: default.system.numbers
+        Scan: default.system.numbers, columns: {0}
         Project: []
             Filter: [subquery_3 (#3)]
                 EvalScalar: [count(*) (#2) = 1]
@@ -23,6 +23,6 @@ Project: [number (#0)]
                         Aggregate(Partial): group items: [], aggregate functions: [count(*)]
                             Limit: [1], Offset: [0]
                                 Filter: [numbers.number (#1) = 0]
-                                    Scan: default.system.numbers
+                                    Scan: default.system.numbers, columns: {1}
 
 

@@ -231,8 +231,8 @@ pub fn format_physical_scan(
     let table = metadata.read().table(op.table_index).clone();
     write!(
         f,
-        "Scan: {}.{}.{}",
-        &table.catalog, &table.database, &table.name
+        "Scan: {}.{}.{}, columns: {:?}",
+        &table.catalog, &table.database, &table.name, op.columns
     )
 }
 

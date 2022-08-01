@@ -92,7 +92,8 @@ impl FuseTable {
             .filter(|p| p.order_by.is_empty())
             .and_then(|p| p.limit)
             .unwrap_or(usize::MAX);
-
+        
+        println!("push_down > {:?}", push_down );
         let (mut statistics, partitions) = match &push_down {
             None => Self::all_columns_partitions(blocks_metas, limit),
             Some(extras) => match &extras.projection {

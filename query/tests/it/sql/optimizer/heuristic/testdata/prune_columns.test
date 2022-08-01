@@ -7,7 +7,7 @@ Project: [number (#0)]
             EvalScalar: [numbers.a (#0)]
                 Project: [number (#0)]
                     EvalScalar: [numbers.number (#0)]
-                        Scan: default.system.numbers
+                        Scan: default.system.numbers, columns: {0}
 
 
 # Prune unused columns from Aggregate
@@ -19,7 +19,7 @@ Project: [number (#0)]
             EvalScalar: [group_item (#0)]
                 Aggregate(Initial): group items: [numbers.number (#0)], aggregate functions: []
                     EvalScalar: [numbers.number (#0)]
-                        Scan: default.system.numbers
+                        Scan: default.system.numbers, columns: {0}
 
 
 # Prune unused columns for simple plan nodes (Project, Filter, Aggregate...)
@@ -34,7 +34,7 @@ Limit: [1], Offset: [0]
                         EvalScalar: [group_item (#0)]
                             Aggregate(Initial): group items: [numbers.number (#0), numbers.number (#0), numbers.number (#0), numbers.number (#0)], aggregate functions: []
                                 EvalScalar: [numbers.number (#0), numbers.number (#0), numbers.number (#0), numbers.number (#0), numbers.number (#0)]
-                                    Scan: default.system.numbers
+                                    Scan: default.system.numbers, columns: {0}
 
 
 # Prune unused columns for join plan nodes (LogicalInnerJoin ...)
@@ -48,13 +48,13 @@ Project: [a (#1)]
                     CrossJoin
                         Project: [a (#1),b (#2),c (#3)]
                             EvalScalar: [+(numbers.number (#0), 1), +(numbers.number (#0), 1), +(numbers.number (#0), 1)]
-                                Scan: default.system.numbers
+                                Scan: default.system.numbers, columns: {0}
                         Project: [b (#11)]
                             EvalScalar: [+(numbers.number (#9), 1)]
-                                Scan: default.system.numbers
+                                Scan: default.system.numbers, columns: {9}
 
 
-# Prune unused columns for correlated query (CrossApply ...)
+# Prune unused columns for correlated query
 select t1.a from (select number + 1 as a, number + 1 as b from numbers(1)) as t1 where t1.a = (select count(*) from (select t2.a, t3.a from (select number + 1 as a, number + 1 as b, number + 1 as c, number + 1 as d from numbers(1)) as t2, (select number + 1 as a, number + 1 as b, number + 1 as c from numbers(1)) as t3 where t2.b = t3.b and t2.c = 1))
 ----
 Project: [a (#1)]
@@ -63,7 +63,7 @@ Project: [a (#1)]
             HashJoin: SINGLE, build keys: [], probe keys: [], join filters: []
                 Project: [a (#1)]
                     EvalScalar: [+(numbers.number (#0), 1)]
-                        Scan: default.system.numbers
+                        Scan: default.system.numbers, columns: {0}
                 Project: [COUNT(*) (#21)]
                     EvalScalar: [COUNT(*) (#22)]
                         Aggregate(Initial): group items: [], aggregate functions: [COUNT(*)]
@@ -73,18 +73,18 @@ Project: [a (#1)]
                                         CrossJoin
                                             Project: [b (#7),c (#8)]
                                                 EvalScalar: [+(numbers.number (#5), 1), +(numbers.number (#5), 1)]
-                                                    Scan: default.system.numbers
+                                                    Scan: default.system.numbers, columns: {5}
                                             Project: [b (#16)]
                                                 EvalScalar: [+(numbers.number (#14), 1)]
-                                                    Scan: default.system.numbers
+                                                    Scan: default.system.numbers, columns: {14}
 
 
-# Prune unused columns for order by
+# Prune unused columns with order by
 select name, is_aggregate from system.functions order by example
 ----
 Project: [name (#0),is_aggregate (#2)]
-    EvalScalar: [functions.is_aggregate (#2), functions.name (#0)]
+    EvalScalar: [functions.name (#0), functions.is_aggregate (#2)]
         Sort: [example (#7) ASC]
-            Scan: default.system.functions
+            Scan: default.system.functions, columns: {0, 7, 2}
 
 
