@@ -239,8 +239,8 @@ impl PhysicalPlanBuilder {
                     .items
                     .iter()
                     .map(|v| SortDesc {
-                        asc: v.asc.unwrap_or(true),
-                        nulls_first: v.nulls_first.unwrap_or_default(),
+                        asc: v.asc,
+                        nulls_first: v.nulls_first,
                         order_by: v.index.to_string(),
                     })
                     .collect(),

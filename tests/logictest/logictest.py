@@ -377,10 +377,13 @@ class SuiteRunner(object):
         try:
             f = format_value(actual, len(statement.s_type.query_type))
         except Exception:
-            raise LogicError(message = f"{statement} statement type is query but get no result", expected="query get result")
-        
+            raise LogicError(
+                message=f"{statement} statement type is query but get no result",
+                expected="query get result")
+
         if statement.results is None or len(statement.results) == 0:
-            raise LogicError(message=f"No result found {statement}", expected="query get result")
+            raise LogicError(message=f"No result found {statement}",
+                             expected="query get result")
         hasResult = False
         for resultset in statement.results:
             if resultset[0].group("label") is not None and resultset[0].group(
@@ -394,7 +397,8 @@ class SuiteRunner(object):
                     self.assert_query_equal(f, resultset, statement)
                     hasResult = True
         if not hasResult:
-            raise LogicError(message=f"No result found {statement}", expected="query get result")
+            raise LogicError(message=f"No result found {statement}",
+                             expected="query get result")
 
     # expect the query just return error
     def assert_execute_error(self, statement):

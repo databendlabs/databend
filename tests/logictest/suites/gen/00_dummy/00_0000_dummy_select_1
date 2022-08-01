@@ -13,25 +13,19 @@ SELECT 'a';
 ----
 a
 
-statement query B label(http)
+statement query B
 SELECT NOT(1=1);
 
 ----
 0
 
-----  http
-false
-
-statement query B label(http)
+statement query B
 SELECT NOT(1);
 
 ----
 0
 
-----  http
-false
-
-statement query B label(http)
+statement query B
 SELECT NOT(1=1) from numbers(3);
 
 ----
@@ -39,37 +33,26 @@ SELECT NOT(1=1) from numbers(3);
 0
 0
 
-----  http
-false
-false
-false
 
-statement query B label(http)
+statement query B
 SELECT TRUE;
 
 ----
 1
 
-----  http
-true
 
-statement query B label(http)
+statement query B
 SELECT FALSE;
 
 ----
 0
 
-----  http
-false
 
-statement query B label(http)
+statement query B
 SELECT NOT(TRUE);
 
 ----
 0
-
-----  http
-false
 
 statement query T 
 SELECT 'That\'s good.';

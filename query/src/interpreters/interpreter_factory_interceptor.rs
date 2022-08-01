@@ -15,6 +15,7 @@
 use std::sync::Arc;
 use std::time::SystemTime;
 
+use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 use common_planners::PlanNode;
 use common_streams::ErrorStream;
@@ -61,6 +62,10 @@ impl InterceptorInterpreter {
 impl Interpreter for InterceptorInterpreter {
     fn name(&self) -> &str {
         self.inner.name()
+    }
+
+    fn schema(&self) -> DataSchemaRef {
+        self.inner.schema()
     }
 
     async fn execute(

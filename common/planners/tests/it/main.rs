@@ -14,8 +14,6 @@
 
 mod plan_aggregator;
 mod plan_builder;
-mod plan_describe_table;
-mod plan_display;
 mod plan_explain;
 mod plan_expression;
 mod plan_expression_monotonicity;

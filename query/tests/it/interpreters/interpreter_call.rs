@@ -20,16 +20,18 @@ use common_meta_types::UserGrantSet;
 use common_meta_types::UserOptionFlag;
 use databend_query::interpreters::*;
 use databend_query::sessions::TableContext;
-use databend_query::sql::PlanParser;
+use databend_query::sql::Planner;
 use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_call_interpreter() -> Result<()> {
     let ctx = crate::tests::create_query_context().await?;
+    let mut planner = Planner::new(ctx.clone());
 
-    let plan = PlanParser::parse(ctx.clone(), "call system$test()").await?;
-    let executor = InterpreterFactory::get(ctx, plan.clone())?;
+    let query = "call system$test()";
+    let (plan, _, _) = planner.plan_sql(query).await?;
+    let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
     assert_eq!(executor.name(), "CallInterpreter");
     let res = executor.execute(None).await;
     assert_eq!(res.is_err(), true);
@@ -43,11 +45,13 @@ async fn test_call_interpreter() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_call_fuse_snapshot_interpreter() -> Result<()> {
     let ctx = crate::tests::create_query_context().await?;
+    let mut planner = Planner::new(ctx.clone());
 
     // NumberArgumentsNotMatch
     {
-        let plan = PlanParser::parse(ctx.clone(), "call system$fuse_snapshot()").await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let query = "call system$fuse_snapshot()";
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         assert_eq!(executor.name(), "CallInterpreter");
         let res = executor.execute(None).await;
         assert_eq!(res.is_err(), true);
@@ -57,9 +61,9 @@ async fn test_call_fuse_snapshot_interpreter() -> Result<()> {
 
     // UnknownTable
     {
-        let plan =
-            PlanParser::parse(ctx.clone(), "call system$fuse_snapshot(default, test)").await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let query = "call system$fuse_snapshot(default, test)";
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         assert_eq!(executor.name(), "CallInterpreter");
         let res = executor.execute(None).await;
         assert_eq!(res.is_err(), true);
@@ -71,9 +75,9 @@ async fn test_call_fuse_snapshot_interpreter() -> Result<()> {
 
     // BadArguments
     {
-        let plan =
-            PlanParser::parse(ctx.clone(), "call system$fuse_snapshot(system, tables)").await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let query = "call system$fuse_snapshot(system, tables)";
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         assert_eq!(executor.name(), "CallInterpreter");
         let res = executor.execute(None).await;
         assert_eq!(res.is_err(), true);
@@ -88,15 +92,16 @@ async fn test_call_fuse_snapshot_interpreter() -> Result<()> {
             CREATE TABLE default.a(a bigint)\
         ";
 
-        let plan = PlanParser::parse(ctx.clone(), query).await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         let _ = executor.execute(None).await?;
     }
 
     // FuseHistory
     {
-        let plan = PlanParser::parse(ctx.clone(), "call system$fuse_snapshot(default, a)").await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let query = "call system$fuse_snapshot(default, a)";
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         let _ = executor.execute(None).await?;
     }
 
@@ -106,11 +111,13 @@ async fn test_call_fuse_snapshot_interpreter() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_call_clustering_information_interpreter() -> Result<()> {
     let ctx = crate::tests::create_query_context().await?;
+    let mut planner = Planner::new(ctx.clone());
 
     // NumberArgumentsNotMatch
     {
-        let plan = PlanParser::parse(ctx.clone(), "call system$clustering_information()").await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let query = "call system$clustering_information()";
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         assert_eq!(executor.name(), "CallInterpreter");
         let res = executor.execute(None).await;
         assert_eq!(res.is_err(), true);
@@ -120,12 +127,9 @@ async fn test_call_clustering_information_interpreter() -> Result<()> {
 
     // UnknownTable
     {
-        let plan = PlanParser::parse(
-            ctx.clone(),
-            "call system$clustering_information(default, test)",
-        )
-        .await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let query = "call system$clustering_information(default, test)";
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         assert_eq!(executor.name(), "CallInterpreter");
         let res = executor.execute(None).await;
         assert_eq!(res.is_err(), true);
@@ -137,12 +141,9 @@ async fn test_call_clustering_information_interpreter() -> Result<()> {
 
     // BadArguments
     {
-        let plan = PlanParser::parse(
-            ctx.clone(),
-            "call system$clustering_information(system, tables)",
-        )
-        .await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let query = "call system$clustering_information(system, tables)";
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         assert_eq!(executor.name(), "CallInterpreter");
         let res = executor.execute(None).await;
         assert_eq!(res.is_err(), true);
@@ -157,19 +158,16 @@ async fn test_call_clustering_information_interpreter() -> Result<()> {
             CREATE TABLE default.a(a bigint)\
         ";
 
-        let plan = PlanParser::parse(ctx.clone(), query).await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         let _ = executor.execute(None).await?;
     }
 
     // Unclustered.
     {
-        let plan = PlanParser::parse(
-            ctx.clone(),
-            "call system$clustering_information(default, a)",
-        )
-        .await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let query = "call system$clustering_information(default, a)";
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         let res = executor.execute(None).await;
         assert_eq!(res.is_err(), true);
         let expect =
@@ -183,19 +181,16 @@ async fn test_call_clustering_information_interpreter() -> Result<()> {
         CREATE TABLE default.b(a bigint) cluster by(a)\
     ";
 
-        let plan = PlanParser::parse(ctx.clone(), query).await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         let _ = executor.execute(None).await?;
     }
 
     // FuseHistory
     {
-        let plan = PlanParser::parse(
-            ctx.clone(),
-            "call system$clustering_information(default, b)",
-        )
-        .await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let query = "call system$clustering_information(default, b)";
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         let _ = executor.execute(None).await?;
     }
 
@@ -205,11 +200,13 @@ async fn test_call_clustering_information_interpreter() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_call_bootstrap_tenant_interpreter() -> Result<()> {
     let ctx = crate::tests::create_query_context().await?;
+    let mut planner = Planner::new(ctx.clone());
 
     // NumberArgumentsNotMatch
     {
-        let plan = PlanParser::parse(ctx.clone(), "call admin$bootstrap_tenant()").await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let query = "call admin$bootstrap_tenant()";
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         let res = executor.execute(None).await;
         assert_eq!(res.is_err(), true);
         let expect = "Code: 1028, displayText = Function `BOOTSTRAP_TENANT` expect to have 1 arguments, but got 0.";
@@ -218,8 +215,9 @@ async fn test_call_bootstrap_tenant_interpreter() -> Result<()> {
 
     // Access denied
     {
-        let plan = PlanParser::parse(ctx.clone(), "call admin$bootstrap_tenant(tenant1)").await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let query = "call admin$bootstrap_tenant(tenant1)";
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         let res = executor.execute(None).await;
         assert_eq!(res.is_err(), true);
         let expect = "Code: 1062, displayText = Access denied: 'BOOTSTRAP_TENANT' only used in management-mode.";
@@ -233,8 +231,9 @@ async fn test_call_bootstrap_tenant_interpreter() -> Result<()> {
 
     // Management Mode, without user option
     {
-        let plan = PlanParser::parse(ctx.clone(), "call admin$bootstrap_tenant(tenant1)").await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let query = "call admin$bootstrap_tenant(tenant1)";
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         let res = executor.execute(None).await;
         assert_eq!(res.is_err(), true);
         let expect = "Code: 1063, displayText = Access denied: 'BOOTSTRAP_TENANT' requires user TENANTSETTING option flag.";
@@ -249,8 +248,9 @@ async fn test_call_bootstrap_tenant_interpreter() -> Result<()> {
 
     // Management Mode, with user option
     {
-        let plan = PlanParser::parse(ctx.clone(), "call admin$bootstrap_tenant(tenant1)").await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let query = "call admin$bootstrap_tenant(tenant1)";
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         executor.execute(None).await?;
 
         let user_mgr = ctx.get_user_manager();
@@ -267,8 +267,9 @@ async fn test_call_bootstrap_tenant_interpreter() -> Result<()> {
 
     // Idempotence on call bootstrap tenant
     {
-        let plan = PlanParser::parse(ctx.clone(), "call admin$bootstrap_tenant(tenant1)").await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let query = "call admin$bootstrap_tenant(tenant1)";
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         executor.execute(None).await?;
         let user_mgr = ctx.get_user_manager();
         // should create account admin role
@@ -288,11 +289,13 @@ async fn test_call_bootstrap_tenant_interpreter() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_call_tenant_quota_interpreter() -> Result<()> {
     let ctx = crate::tests::create_query_context().await?;
+    let mut planner = Planner::new(ctx.clone());
 
     // Access denied
     {
-        let plan = PlanParser::parse(ctx.clone(), "call admin$tenant_quota(tenant1)").await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let query = "call admin$tenant_quota(tenant1)";
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         let res = executor.execute(None).await;
         assert_eq!(res.is_err(), true);
         let expect =
@@ -311,8 +314,9 @@ async fn test_call_tenant_quota_interpreter() -> Result<()> {
 
     // current tenant
     {
-        let plan = PlanParser::parse(ctx.clone(), "call admin$tenant_quota()").await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let query = "call admin$tenant_quota()";
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         let stream = executor.execute(None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
@@ -327,8 +331,9 @@ async fn test_call_tenant_quota_interpreter() -> Result<()> {
 
     // query other tenant
     {
-        let plan = PlanParser::parse(ctx.clone(), "call admin$tenant_quota(tenant1)").await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let query = "call admin$tenant_quota(tenant1)";
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         let stream = executor.execute(None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
@@ -343,9 +348,9 @@ async fn test_call_tenant_quota_interpreter() -> Result<()> {
 
     // set other tenant quota
     {
-        let plan =
-            PlanParser::parse(ctx.clone(), "call admin$tenant_quota(tenant1, 7, 5, 3, 3)").await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let query = "call admin$tenant_quota(tenant1, 7, 5, 3, 3)";
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         let stream = executor.execute(None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
@@ -359,8 +364,9 @@ async fn test_call_tenant_quota_interpreter() -> Result<()> {
     }
 
     {
-        let plan = PlanParser::parse(ctx.clone(), "call admin$tenant_quota(tenant1, 8)").await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let query = "call admin$tenant_quota(tenant1, 8)";
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         let stream = executor.execute(None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
@@ -374,8 +380,9 @@ async fn test_call_tenant_quota_interpreter() -> Result<()> {
     }
 
     {
-        let plan = PlanParser::parse(ctx.clone(), "call admin$tenant_quota(tenant1)").await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let query = "call admin$tenant_quota(tenant1)";
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         let stream = executor.execute(None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
@@ -390,8 +397,9 @@ async fn test_call_tenant_quota_interpreter() -> Result<()> {
 
     // current tenant again
     {
-        let plan = PlanParser::parse(ctx.clone(), "call admin$tenant_quota()").await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let query = "call admin$tenant_quota()";
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         let stream = executor.execute(None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
@@ -410,11 +418,13 @@ async fn test_call_tenant_quota_interpreter() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_call_stats_tenant_tables_interpreter() -> Result<()> {
     let ctx = crate::tests::create_query_context().await?;
+    let mut planner = Planner::new(ctx.clone());
 
     // NumberArgumentsNotMatch
     {
-        let plan = PlanParser::parse(ctx.clone(), "call stats$tenant_tables()").await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let query = "call stats$tenant_tables()";
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         assert_eq!(executor.name(), "CallInterpreter");
         let res = executor.execute(None).await;
         assert_eq!(res.is_err(), true);
@@ -424,8 +434,9 @@ async fn test_call_stats_tenant_tables_interpreter() -> Result<()> {
 
     // Access denied
     {
-        let plan = PlanParser::parse(ctx.clone(), "call stats$tenant_tables(tenant1)").await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let query = "call stats$tenant_tables(tenant1)";
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         let res = executor.execute(None).await;
         assert_eq!(res.is_err(), true);
         let expect = "Code: 1062, displayText = Access denied: 'TENANT_TABLES' only used in management-mode.";
@@ -442,12 +453,9 @@ async fn test_call_stats_tenant_tables_interpreter() -> Result<()> {
     let ctx = crate::tests::create_query_context_with_config(conf.clone(), Some(user_info)).await?;
 
     {
-        let plan = PlanParser::parse(
-            ctx.clone(),
-            "call stats$tenant_tables(tenant1, tenant2, tenant3)",
-        )
-        .await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let query = "call stats$tenant_tables(tenant1, tenant2, tenant3)";
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         let stream = executor.execute(None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![

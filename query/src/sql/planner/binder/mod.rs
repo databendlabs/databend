@@ -49,6 +49,7 @@ mod copy;
 mod ddl;
 mod delete;
 mod distinct;
+mod having;
 mod insert;
 mod join;
 mod kill;

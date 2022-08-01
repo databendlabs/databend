@@ -28,93 +28,68 @@ SELECT try_cast(Null as Boolean);
 ----
 NULL
 
-statement query B label(http)
+statement query B
 SELECT try_cast('33' as signed) = 33;
 
 ----
 1
 
----- http
-true
-
-statement query B label(http)
+statement query B
 SELECT try_cast('33' as unsigned) = 33;
 
 ----
 1
 
----- http
-true
 
-statement query B label(http)
+statement query B
 SELECT try_cast('-33aa' as signed) is null;
 
 ----
 1
 
----- http
-true
-
-statement query B label(http)
+statement query B
 SELECT try_cast('33 aa' as unsigned) is null;
 
 ----
 1
 
----- http
-true
 
-statement query B label(http)
+statement query B
 SELECT try_cast('-33' as unsigned) is null;
 
 ----
 1
 
----- http
-true
 
-statement query B label(http)
+statement query B
 SELECT try_cast('aa' as unsigned) is null;
 
 ----
 1
 
----- http
-true
 
-statement query B label(http)
+statement query B
 SELECT try_cast('aa' as Float64) is null;
 
 ----
 1
 
----- http
-true
-
-statement query B label(http)
+statement query B
 SELECT try_cast(parse_json('null') as float64) is null;
 
 ----
 1
 
----- http
-true
 
-statement query B label(http)
+statement query B
 SELECT try_cast(parse_json('"test"') as int32) is null;
 
 ----
 1
 
----- http
-true
 
-statement query B label(http)
+statement query B
 SELECT try_cast(parse_json('123') as int32)  = 123;
 
 ----
 1
-
----- http
-true
-

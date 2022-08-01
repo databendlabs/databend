@@ -4,23 +4,21 @@ CREATE FUNCTION cal AS (a,b,c,d,e) -> a + c * (e / b) - d;
 statement ok
 CREATE FUNCTION notnull AS (p) -> not(is_null(p));
 
-statement query B label(http)
+statement query B
 SELECT notnull(null);
 
 ----
 0
 
----- http
-false
 
-statement query B label(http)
+
+statement query B
 SELECT notnull('null');
 
 ----
 1
 
----- http
-true
+
 
 statement query F
 SELECT cal(1, 2, 3, 4, 6);

@@ -30,10 +30,10 @@ use common_streams::SendableDataBlockStream;
 use databend_query::catalogs::CATALOG_DEFAULT;
 use databend_query::interpreters::CreateTableInterpreter;
 use databend_query::interpreters::Interpreter;
-use databend_query::interpreters::InterpreterFactory;
+use databend_query::interpreters::InterpreterFactoryV2;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContext;
-use databend_query::sql::PlanParser;
+use databend_query::sql::Planner;
 use databend_query::sql::OPT_KEY_DATABASE_ID;
 use databend_query::storages::fuse::table_functions::ClusteringInformationTable;
 use databend_query::storages::fuse::table_functions::FuseSnapshotTable;
@@ -333,10 +333,10 @@ pub async fn expects_ok(
 }
 
 pub async fn execute_query(ctx: Arc<QueryContext>, query: &str) -> Result<SendableDataBlockStream> {
-    let plan = PlanParser::parse(ctx.clone(), query).await?;
-    InterpreterFactory::get(ctx.clone(), plan)?
-        .execute(None)
-        .await
+    let mut planner = Planner::new(ctx.clone());
+    let (plan, _, _) = planner.plan_sql(query).await?;
+    let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+    executor.execute(None).await
 }
 
 pub async fn execute_command(ctx: Arc<QueryContext>, query: &str) -> Result<()> {

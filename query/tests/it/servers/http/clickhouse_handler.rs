@@ -52,7 +52,7 @@ async fn test_select() -> PoemResult<()> {
     {
         let (status, body) = server.get("bad sql").await;
         assert_eq!(status, StatusCode::BAD_REQUEST);
-        assert_error!(body, "sql parser error");
+        assert_error!(body, "Code: 1005");
     }
 
     {
@@ -64,7 +64,7 @@ async fn test_select() -> PoemResult<()> {
     {
         let (status, body) = server.post("", "bad sql").await;
         assert_eq!(status, StatusCode::BAD_REQUEST);
-        assert_error!(body, "sql parser error");
+        assert_error!(body, "Code: 1005");
     }
 
     {

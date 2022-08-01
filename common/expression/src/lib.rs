@@ -21,7 +21,9 @@
 #![allow(clippy::len_without_is_empty)]
 #![allow(clippy::needless_lifetimes)]
 
+#[allow(dead_code)]
 mod chunk;
+
 mod display;
 mod error;
 mod evaluator;

@@ -44,6 +44,10 @@ impl Interpreter for ExplainInterpreterV2 {
         "ExplainInterpreterV2"
     }
 
+    fn schema(&self) -> DataSchemaRef {
+        self.schema.clone()
+    }
+
     async fn execute(
         &self,
         _input_stream: Option<SendableDataBlockStream>,

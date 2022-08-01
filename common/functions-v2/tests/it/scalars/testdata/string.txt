@@ -1,25 +1,25 @@
 ast            : upper('Abc')
-raw expr       : upper(Abc)
-checked expr   : upper<String>(Abc)
+raw expr       : upper("Abc")
+checked expr   : upper<String>("Abc")
 output type    : String
 output domain  : {""..}
-output         : ABC
+output         : "ABC"
 
 
 ast            : upper('Dobrý den')
-raw expr       : upper(Dobrý den)
-checked expr   : upper<String>(Dobrý den)
+raw expr       : upper("Dobrý den")
+checked expr   : upper<String>("Dobrý den")
 output type    : String
 output domain  : {""..}
-output         : DOBRÝ DEN
+output         : "DOBRÝ DEN"
 
 
 ast            : upper('ß😀山')
-raw expr       : upper(ß😀山)
-checked expr   : upper<String>(ß😀山)
+raw expr       : upper("ß😀山")
+checked expr   : upper<String>("ß😀山")
 output type    : String
 output domain  : {""..}
-output         : SS😀山
+output         : "SS😀山"
 
 
 ast            : upper(NULL)
@@ -34,15 +34,15 @@ ast            : ucase(a)
 raw expr       : ucase(ColumnRef(0)::String)
 checked expr   : upper<String>(ColumnRef(0))
 evaluation:
-+--------+-------------------+-----------+
-|        | a                 | Output    |
-+--------+-------------------+-----------+
-| Type   | String            | String    |
-| Domain | {"Abc"..="ß😀山"} | {""..}    |
-| Row 0  | Abc               | ABC       |
-| Row 1  | Dobrý den         | DOBRÝ DEN |
-| Row 2  | ß😀山             | SS😀山    |
-+--------+-------------------+-----------+
++--------+-------------------+-------------+
+|        | a                 | Output      |
++--------+-------------------+-------------+
+| Type   | String            | String      |
+| Domain | {"Abc"..="ß😀山"} | {""..}      |
+| Row 0  | "Abc"             | "ABC"       |
+| Row 1  | "Dobrý den"       | "DOBRÝ DEN" |
+| Row 2  | "ß😀山"           | "SS😀山"    |
++--------+-------------------+-------------+
 evaluation (internal):
 +--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                                             |
@@ -53,27 +53,27 @@ evaluation (internal):
 
 
 ast            : lower('Abc')
-raw expr       : lower(Abc)
-checked expr   : lower<String>(Abc)
+raw expr       : lower("Abc")
+checked expr   : lower<String>("Abc")
 output type    : String
 output domain  : {""..}
-output         : abc
+output         : "abc"
 
 
 ast            : lower('DOBRÝ DEN')
-raw expr       : lower(DOBRÝ DEN)
-checked expr   : lower<String>(DOBRÝ DEN)
+raw expr       : lower("DOBRÝ DEN")
+checked expr   : lower<String>("DOBRÝ DEN")
 output type    : String
 output domain  : {""..}
-output         : dobrý den
+output         : "dobrý den"
 
 
 ast            : lower('İ😀山')
-raw expr       : lower(İ😀山)
-checked expr   : lower<String>(İ😀山)
+raw expr       : lower("İ😀山")
+checked expr   : lower<String>("İ😀山")
 output type    : String
 output domain  : {""..}
-output         : i̇😀山
+output         : "i\u{307}😀山"
 
 
 ast            : lower(NULL)
@@ -88,15 +88,15 @@ ast            : lcase(a)
 raw expr       : lcase(ColumnRef(0)::String)
 checked expr   : lower<String>(ColumnRef(0))
 evaluation:
-+--------+-------------------+-----------+
-|        | a                 | Output    |
-+--------+-------------------+-----------+
-| Type   | String            | String    |
-| Domain | {"Abc"..="İ😀山"} | {""..}    |
-| Row 0  | Abc               | abc       |
-| Row 1  | DOBRÝ DEN         | dobrý den |
-| Row 2  | İ😀山             | i̇😀山     |
-+--------+-------------------+-----------+
++--------+-------------------+----------------+
+|        | a                 | Output         |
++--------+-------------------+----------------+
+| Type   | String            | String         |
+| Domain | {"Abc"..="İ😀山"} | {""..}         |
+| Row 0  | "Abc"             | "abc"          |
+| Row 1  | "DOBRÝ DEN"       | "dobrý den"    |
+| Row 2  | "İ😀山"           | "i\u{307}😀山" |
++--------+-------------------+----------------+
 evaluation (internal):
 +--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                                                   |
@@ -107,8 +107,8 @@ evaluation (internal):
 
 
 ast            : bit_length('latin')
-raw expr       : bit_length(latin)
-checked expr   : bit_length<String>(latin)
+raw expr       : bit_length("latin")
+checked expr   : bit_length<String>("latin")
 output type    : UInt64
 output domain  : {0..=18446744073709551615}
 output         : 40
@@ -131,9 +131,9 @@ evaluation:
 +--------+-----------------------------------+----------------------------+
 | Type   | String                            | UInt64                     |
 | Domain | {"latin"..="кириллица and latin"} | {0..=18446744073709551615} |
-| Row 0  | latin                             | 40                         |
-| Row 1  | кириллица                         | 144                        |
-| Row 2  | кириллица and latin               | 224                        |
+| Row 0  | "latin"                           | 40                         |
+| Row 1  | "кириллица"                       | 144                        |
+| Row 2  | "кириллица and latin"             | 224                        |
 +--------+-----------------------------------+----------------------------+
 evaluation (internal):
 +--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -145,8 +145,8 @@ evaluation (internal):
 
 
 ast            : octet_length('latin')
-raw expr       : octet_length(latin)
-checked expr   : octet_length<String>(latin)
+raw expr       : octet_length("latin")
+checked expr   : octet_length<String>("latin")
 output type    : UInt64
 output domain  : {0..=18446744073709551615}
 output         : 5
@@ -169,9 +169,9 @@ evaluation:
 +--------+-----------------------------------+----------------------------+
 | Type   | String                            | UInt64                     |
 | Domain | {"latin"..="кириллица and latin"} | {0..=18446744073709551615} |
-| Row 0  | latin                             | 5                          |
-| Row 1  | кириллица                         | 18                         |
-| Row 2  | кириллица and latin               | 28                         |
+| Row 0  | "latin"                           | 5                          |
+| Row 1  | "кириллица"                       | 18                         |
+| Row 2  | "кириллица and latin"             | 28                         |
 +--------+-----------------------------------+----------------------------+
 evaluation (internal):
 +--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -183,8 +183,8 @@ evaluation (internal):
 
 
 ast            : char_length('latin')
-raw expr       : char_length(latin)
-checked expr   : char_length<String>(latin)
+raw expr       : char_length("latin")
+checked expr   : char_length<String>("latin")
 output type    : UInt64
 output domain  : {0..=18446744073709551615}
 output         : 5
@@ -207,9 +207,9 @@ evaluation:
 +--------+-----------------------------------+----------------------------+
 | Type   | String                            | UInt64                     |
 | Domain | {"latin"..="кириллица and latin"} | {0..=18446744073709551615} |
-| Row 0  | latin                             | 5                          |
-| Row 1  | кириллица                         | 9                          |
-| Row 2  | кириллица and latin               | 19                         |
+| Row 0  | "latin"                           | 5                          |
+| Row 1  | "кириллица"                       | 9                          |
+| Row 2  | "кириллица and latin"             | 19                         |
 +--------+-----------------------------------+----------------------------+
 evaluation (internal):
 +--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -221,19 +221,19 @@ evaluation (internal):
 
 
 ast            : to_base64('Abc')
-raw expr       : to_base64(Abc)
-checked expr   : to_base64<String>(Abc)
+raw expr       : to_base64("Abc")
+checked expr   : to_base64<String>("Abc")
 output type    : String
 output domain  : {""..}
-output         : QWJj
+output         : "QWJj"
 
 
 ast            : to_base64('123')
-raw expr       : to_base64(123)
-checked expr   : to_base64<String>(123)
+raw expr       : to_base64("123")
+checked expr   : to_base64<String>("123")
 output type    : String
 output domain  : {""..}
-output         : MTIz
+output         : "MTIz"
 
 
 ast            : to_base64(Null)
@@ -253,8 +253,8 @@ evaluation:
 +--------+-----------------+--------+
 | Type   | String          | String |
 | Domain | {"123"..="Abc"} | {""..} |
-| Row 0  | Abc             | QWJj   |
-| Row 1  | 123             | MTIz   |
+| Row 0  | "Abc"           | "QWJj" |
+| Row 1  | "123"           | "MTIz" |
 +--------+-----------------+--------+
 evaluation (internal):
 +--------+---------------------------------------------------------------------------------------+
@@ -266,47 +266,342 @@ evaluation (internal):
 
 
 ast            : from_base64('QWJj')
-raw expr       : from_base64(QWJj)
-checked expr   : from_base64<String>(QWJj)
+raw expr       : from_base64("QWJj")
+checked expr   : from_base64<String>("QWJj")
 output type    : String
 output domain  : {""..}
-output         : Abc
+output         : "Abc"
 
 
 ast            : from_base64('MTIz')
-raw expr       : from_base64(MTIz)
-checked expr   : from_base64<String>(MTIz)
+raw expr       : from_base64("MTIz")
+checked expr   : from_base64<String>("MTIz")
 output type    : String
 output domain  : {""..}
-output         : 123
+output         : "123"
 
 
-ast            : to_base64(Null)
-raw expr       : to_base64(NULL)
-checked expr   : to_base64<NULL>(NULL)
+ast            : from_base64(Null)
+raw expr       : from_base64(NULL)
+checked expr   : from_base64<NULL>(NULL)
 output type    : NULL
 output domain  : {NULL}
 output         : NULL
 
 
-ast            : to_base64(a)
-raw expr       : to_base64(ColumnRef(0)::String)
-checked expr   : to_base64<String>(ColumnRef(0))
+ast            : from_base64(a)
+raw expr       : from_base64(ColumnRef(0)::String)
+checked expr   : from_base64<String>(ColumnRef(0))
 evaluation:
-+--------+-------------------+----------+
-|        | a                 | Output   |
-+--------+-------------------+----------+
-| Type   | String            | String   |
-| Domain | {"MTIz"..="QWJj"} | {""..}   |
-| Row 0  | QWJj              | UVdKag== |
-| Row 1  | MTIz              | TVRJeg== |
-+--------+-------------------+----------+
++--------+-------------------+--------+
+|        | a                 | Output |
++--------+-------------------+--------+
+| Type   | String            | String |
+| Domain | {"MTIz"..="QWJj"} | {""..} |
+| Row 0  | "QWJj"            | "Abc"  |
+| Row 1  | "MTIz"            | "123"  |
++--------+-------------------+--------+
 evaluation (internal):
-+--------+--------------------------------------------------------------------------------------------------------------------------+
-| Column | Data                                                                                                                     |
-+--------+--------------------------------------------------------------------------------------------------------------------------+
-| a      | String(StringColumn { data: [81, 87, 74, 106, 77, 84, 73, 122], offsets: [0, 4, 8] })                                    |
-| Output | String(StringColumn { data: [85, 86, 100, 75, 97, 103, 61, 61, 84, 86, 82, 74, 101, 103, 61, 61], offsets: [0, 8, 16] }) |
-+--------+--------------------------------------------------------------------------------------------------------------------------+
++--------+---------------------------------------------------------------------------------------+
+| Column | Data                                                                                  |
++--------+---------------------------------------------------------------------------------------+
+| a      | String(StringColumn { data: [81, 87, 74, 106, 77, 84, 73, 122], offsets: [0, 4, 8] }) |
+| Output | String(StringColumn { data: [65, 98, 99, 49, 50, 51], offsets: [0, 3, 6] })           |
++--------+---------------------------------------------------------------------------------------+
+
+
+ast            : quote('a\0b')
+raw expr       : quote("a\0b")
+checked expr   : quote<String>("a\0b")
+output type    : String
+output domain  : {""..}
+output         : "a\\0b"
+
+
+ast            : quote('a\'b')
+raw expr       : quote("a'b")
+checked expr   : quote<String>("a'b")
+output type    : String
+output domain  : {""..}
+output         : "a\\'b"
+
+
+ast            : quote('a\"b')
+raw expr       : quote("a\"b")
+checked expr   : quote<String>("a\"b")
+output type    : String
+output domain  : {""..}
+output         : "a\\\"b"
+
+
+ast            : quote('a\bb')
+raw expr       : quote("a\u{8}b")
+checked expr   : quote<String>("a\u{8}b")
+output type    : String
+output domain  : {""..}
+output         : "a\\bb"
+
+
+ast            : quote('a\nb')
+raw expr       : quote("a\nb")
+checked expr   : quote<String>("a\nb")
+output type    : String
+output domain  : {""..}
+output         : "a\\nb"
+
+
+ast            : quote('a\rb')
+raw expr       : quote("a\rb")
+checked expr   : quote<String>("a\rb")
+output type    : String
+output domain  : {""..}
+output         : "a\\rb"
+
+
+ast            : quote('a\tb')
+raw expr       : quote("a\tb")
+checked expr   : quote<String>("a\tb")
+output type    : String
+output domain  : {""..}
+output         : "a\\tb"
+
+
+ast            : quote('a\\b')
+raw expr       : quote("a\\b")
+checked expr   : quote<String>("a\\b")
+output type    : String
+output domain  : {""..}
+output         : "a\\\\b"
+
+
+ast            : quote('你好')
+raw expr       : quote("你好")
+checked expr   : quote<String>("你好")
+output type    : String
+output domain  : {""..}
+output         : "你好"
+
+
+ast            : quote('ß😀山')
+raw expr       : quote("ß😀山")
+checked expr   : quote<String>("ß😀山")
+output type    : String
+output domain  : {""..}
+output         : "ß😀山"
+
+
+ast            : quote('Dobrý den')
+raw expr       : quote("Dobrý den")
+checked expr   : quote<String>("Dobrý den")
+output type    : String
+output domain  : {""..}
+output         : "Dobrý den"
+
+
+ast            : quote(Null)
+raw expr       : quote(NULL)
+checked expr   : quote<NULL>(NULL)
+output type    : NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : quote(a)
+raw expr       : quote(ColumnRef(0)::String)
+checked expr   : quote<String>(ColumnRef(0))
+evaluation:
++--------+---------------------+-------------+
+|        | a                   | Output      |
++--------+---------------------+-------------+
+| Type   | String              | String      |
+| Domain | {"a\\'b"..="a\\nb"} | {""..}      |
+| Row 0  | "a\\0b"             | "a\\\\0b"   |
+| Row 1  | "a\\'b"             | "a\\\\\\'b" |
+| Row 2  | "a\\nb"             | "a\\\\nb"   |
++--------+---------------------+-------------+
+evaluation (internal):
++--------+---------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                      |
++--------+---------------------------------------------------------------------------------------------------------------------------+
+| a      | String(StringColumn { data: [97, 92, 48, 98, 97, 92, 39, 98, 97, 92, 110, 98], offsets: [0, 4, 8, 12] })                  |
+| Output | String(StringColumn { data: [97, 92, 92, 48, 98, 97, 92, 92, 92, 39, 98, 97, 92, 92, 110, 98], offsets: [0, 5, 11, 16] }) |
++--------+---------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : reverse('abc')
+raw expr       : reverse("abc")
+checked expr   : reverse<String>("abc")
+output type    : String
+output domain  : {""..}
+output         : "cba"
+
+
+ast            : reverse('a')
+raw expr       : reverse("a")
+checked expr   : reverse<String>("a")
+output type    : String
+output domain  : {""..}
+output         : "a"
+
+
+ast            : reverse('')
+raw expr       : reverse("")
+checked expr   : reverse<String>("")
+output type    : String
+output domain  : {""..}
+output         : ""
+
+
+ast            : reverse('你好')
+raw expr       : reverse("你好")
+checked expr   : reverse<String>("你好")
+output type    : String
+output domain  : {""..}
+output         : "��堽�"
+
+
+ast            : reverse('ß😀山')
+raw expr       : reverse("ß😀山")
+checked expr   : reverse<String>("ß😀山")
+output type    : String
+output domain  : {""..}
+output         : "��倘���"
+
+
+ast            : reverse('Dobrý den')
+raw expr       : reverse("Dobrý den")
+checked expr   : reverse<String>("Dobrý den")
+output type    : String
+output domain  : {""..}
+output         : "ned ��rboD"
+
+
+ast            : reverse(Null)
+raw expr       : reverse(NULL)
+checked expr   : reverse<NULL>(NULL)
+output type    : NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : reverse(a)
+raw expr       : reverse(ColumnRef(0)::String)
+checked expr   : reverse<String>(ColumnRef(0))
+evaluation:
++--------+--------------+--------+
+|        | a            | Output |
++--------+--------------+--------+
+| Type   | String       | String |
+| Domain | {""..="abc"} | {""..} |
+| Row 0  | "abc"        | "cba"  |
+| Row 1  | "a"          | "a"    |
+| Row 2  | ""           | ""     |
++--------+--------------+--------+
+evaluation (internal):
++--------+------------------------------------------------------------------------+
+| Column | Data                                                                   |
++--------+------------------------------------------------------------------------+
+| a      | String(StringColumn { data: [97, 98, 99, 97], offsets: [0, 3, 4, 4] }) |
+| Output | String(StringColumn { data: [99, 98, 97, 97], offsets: [0, 3, 4, 4] }) |
++--------+------------------------------------------------------------------------+
+
+
+ast            : ascii('1')
+raw expr       : ascii("1")
+checked expr   : ascii<String>("1")
+output type    : UInt8
+output domain  : {49..=49}
+output         : 49
+
+
+ast            : ascii('123')
+raw expr       : ascii("123")
+checked expr   : ascii<String>("123")
+output type    : UInt8
+output domain  : {49..=49}
+output         : 49
+
+
+ast            : ascii('-1')
+raw expr       : ascii("-1")
+checked expr   : ascii<String>("-1")
+output type    : UInt8
+output domain  : {45..=45}
+output         : 45
+
+
+ast            : ascii('')
+raw expr       : ascii("")
+checked expr   : ascii<String>("")
+output type    : UInt8
+output domain  : {0..=0}
+output         : 0
+
+
+ast            : ascii('你好')
+raw expr       : ascii("你好")
+checked expr   : ascii<String>("你好")
+output type    : UInt8
+output domain  : {228..=228}
+output         : 228
+
+
+ast            : ascii('😀123')
+raw expr       : ascii("😀123")
+checked expr   : ascii<String>("😀123")
+output type    : UInt8
+output domain  : {240..=240}
+output         : 240
+
+
+ast            : ascii(Null)
+raw expr       : ascii(NULL)
+checked expr   : ascii<NULL>(NULL)
+output type    : NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : ascii(a)
+raw expr       : ascii(ColumnRef(0)::String)
+checked expr   : ascii<String>(ColumnRef(0))
+evaluation:
++--------+-----------------+------------+
+|        | a               | Output     |
++--------+-----------------+------------+
+| Type   | String          | UInt8      |
+| Domain | {"-1"..="你好"} | {45..=228} |
+| Row 0  | "1"             | 49         |
+| Row 1  | "123"           | 49         |
+| Row 2  | "-1"            | 45         |
+| Row 3  | "你好"          | 228        |
++--------+-----------------+------------+
+evaluation (internal):
++--------+------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                             |
++--------+------------------------------------------------------------------------------------------------------------------+
+| a      | String(StringColumn { data: [49, 49, 50, 51, 45, 49, 228, 189, 160, 229, 165, 189], offsets: [0, 1, 4, 6, 12] }) |
+| Output | UInt8([49, 49, 45, 228])                                                                                         |
++--------+------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : ascii(b)
+raw expr       : ascii(ColumnRef(0)::String)
+checked expr   : ascii<String>(ColumnRef(0))
+evaluation:
++--------+-----------+---------+
+|        | b         | Output  |
++--------+-----------+---------+
+| Type   | String    | UInt8   |
+| Domain | {""..=""} | {0..=0} |
+| Row 0  | ""        | 0       |
++--------+-----------+---------+
+evaluation (internal):
++--------+----------------------------------------------------+
+| Column | Data                                               |
++--------+----------------------------------------------------+
+| b      | String(StringColumn { data: [], offsets: [0, 0] }) |
+| Output | UInt8([0])                                         |
++--------+----------------------------------------------------+
 
 

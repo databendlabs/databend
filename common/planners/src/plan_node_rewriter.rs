@@ -23,72 +23,30 @@ use common_exception::Result;
 
 use crate::plan_broadcast::BroadcastPlan;
 use crate::plan_subqueries_set::SubQueriesSetPlan;
-use crate::plan_table_undrop::UndropTablePlan;
 use crate::plan_window_func::WindowFuncPlan;
 use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
-use crate::AlterTableClusterKeyPlan;
-use crate::AlterUserPlan;
-use crate::AlterUserUDFPlan;
-use crate::AlterViewPlan;
-use crate::CallPlan;
-use crate::CopyPlan;
-use crate::CreateDatabasePlan;
-use crate::CreateRolePlan;
-use crate::CreateTablePlan;
-use crate::CreateUserPlan;
-use crate::CreateUserStagePlan;
-use crate::CreateUserUDFPlan;
-use crate::CreateViewPlan;
 use crate::DeletePlan;
-use crate::DescribeTablePlan;
-use crate::DescribeUserStagePlan;
-use crate::DropDatabasePlan;
-use crate::DropRolePlan;
-use crate::DropTableClusterKeyPlan;
-use crate::DropTablePlan;
-use crate::DropUserPlan;
-use crate::DropUserStagePlan;
-use crate::DropUserUDFPlan;
-use crate::DropViewPlan;
 use crate::EmptyPlan;
-use crate::ExistsTablePlan;
 use crate::ExplainPlan;
 use crate::Expression;
 use crate::ExpressionPlan;
 use crate::ExpressionRewriter;
 use crate::Expressions;
 use crate::FilterPlan;
-use crate::GrantPrivilegePlan;
-use crate::GrantRolePlan;
 use crate::HavingPlan;
 use crate::InsertPlan;
-use crate::KillPlan;
 use crate::LimitByPlan;
 use crate::LimitPlan;
-use crate::ListPlan;
-use crate::OptimizeTablePlan;
 use crate::PlanBuilder;
 use crate::PlanNode;
 use crate::ProjectionPlan;
 use crate::ReadDataSourcePlan;
 use crate::RemotePlan;
-use crate::RemoveUserStagePlan;
-use crate::RenameDatabasePlan;
-use crate::RenameTablePlan;
-use crate::RevokePrivilegePlan;
-use crate::RevokeRolePlan;
 use crate::SelectPlan;
-use crate::SettingPlan;
-use crate::ShowCreateDatabasePlan;
-use crate::ShowCreateTablePlan;
-use crate::ShowPlan;
 use crate::SinkPlan;
 use crate::SortPlan;
 use crate::StagePlan;
-use crate::TruncateTablePlan;
-use crate::UndropDatabasePlan;
-use crate::UseDatabasePlan;
 
 /// `PlanRewriter` is a visitor that can help to rewrite `PlanNode`
 /// By default, a `PlanRewriter` will traverse the plan tree in pre-order and return rewritten plan tree.
@@ -142,79 +100,6 @@ pub trait PlanRewriter: Sized {
 
             // Delete.
             PlanNode::Delete(plan) => self.rewrite_delete_into(plan),
-
-            // Copy.
-            PlanNode::Copy(plan) => self.rewrite_copy(plan),
-
-            // Call.
-            PlanNode::Call(plan) => self.rewrite_call(plan),
-
-            // Show.
-            PlanNode::Show(plan) => self.rewrite_show(plan),
-
-            // Database.
-            PlanNode::CreateDatabase(plan) => self.rewrite_create_database(plan),
-            PlanNode::DropDatabase(plan) => self.rewrite_drop_database(plan),
-            PlanNode::ShowCreateDatabase(plan) => self.rewrite_show_create_database(plan),
-            PlanNode::RenameDatabase(plan) => self.rewrite_rename_database(plan),
-            PlanNode::UndropDatabase(plan) => self.rewrite_undrop_database(plan),
-            // Table.
-            PlanNode::CreateTable(plan) => self.rewrite_create_table(plan),
-            PlanNode::DropTable(plan) => self.rewrite_drop_table(plan),
-            PlanNode::UndropTable(plan) => self.rewrite_undrop_table(plan),
-            PlanNode::RenameTable(plan) => self.rewrite_rename_table(plan),
-            PlanNode::TruncateTable(plan) => self.rewrite_truncate_table(plan),
-            PlanNode::OptimizeTable(plan) => self.rewrite_optimize_table(plan),
-            PlanNode::ExistsTable(plan) => self.rewrite_exists_table(plan),
-            PlanNode::DescribeTable(plan) => self.rewrite_describe_table(plan),
-            PlanNode::ShowCreateTable(plan) => self.rewrite_show_create_table(plan),
-
-            // View.
-            PlanNode::CreateView(plan) => self.rewrite_create_view(plan),
-            PlanNode::AlterView(plan) => self.rewrite_alter_view(plan),
-            PlanNode::DropView(plan) => self.rewrite_drop_view(plan),
-
-            // User.
-            PlanNode::CreateUser(plan) => self.create_user(plan),
-            PlanNode::AlterUser(plan) => self.alter_user(plan),
-            PlanNode::DropUser(plan) => self.drop_user(plan),
-
-            // Grant.
-            PlanNode::GrantPrivilege(plan) => self.grant_privilege(plan),
-            PlanNode::GrantRole(plan) => self.grant_role(plan),
-
-            // Revoke.
-            PlanNode::RevokePrivilege(plan) => self.revoke_privilege(plan),
-            PlanNode::RevokeRole(plan) => self.revoke_role(plan),
-
-            // Role.
-            PlanNode::CreateRole(plan) => self.rewrite_create_role(plan),
-            PlanNode::DropRole(plan) => self.rewrite_drop_role(plan),
-
-            // Stage.
-            PlanNode::CreateUserStage(plan) => self.rewrite_create_user_stage(plan),
-            PlanNode::DropUserStage(plan) => self.rewrite_drop_user_stage(plan),
-            PlanNode::DescribeUserStage(plan) => self.rewrite_describe_user_stage(plan),
-            PlanNode::List(plan) => self.rewrite_list(plan),
-            PlanNode::RemoveUserStage(plan) => self.rewrite_remove_user_stage(plan),
-
-            // UDF.
-            PlanNode::CreateUserUDF(plan) => self.rewrite_create_user_udf(plan),
-            PlanNode::DropUserUDF(plan) => self.rewrite_drop_user_udf(plan),
-            PlanNode::AlterUserUDF(plan) => self.rewrite_alter_user_udf(plan),
-
-            // Use.
-            PlanNode::UseDatabase(plan) => self.rewrite_use_database(plan),
-
-            // Set.
-            PlanNode::SetVariable(plan) => self.rewrite_set_variable(plan),
-
-            // Kill.
-            PlanNode::Kill(plan) => self.rewrite_kill(plan),
-
-            // Cluster Key.
-            PlanNode::AlterTableClusterKey(plan) => self.rewrite_alter_table_cluster_key(plan),
-            PlanNode::DropTableClusterKey(plan) => self.rewrite_drop_table_cluster_key(plan),
         }
     }
 
@@ -377,77 +262,6 @@ pub trait PlanRewriter: Sized {
         }))
     }
 
-    fn rewrite_create_table(&mut self, plan: &CreateTablePlan) -> Result<PlanNode> {
-        Ok(PlanNode::CreateTable(plan.clone()))
-    }
-
-    fn rewrite_rename_table(&mut self, plan: &RenameTablePlan) -> Result<PlanNode> {
-        Ok(PlanNode::RenameTable(plan.clone()))
-    }
-    fn rewrite_rename_database(&mut self, plan: &RenameDatabasePlan) -> Result<PlanNode> {
-        Ok(PlanNode::RenameDatabase(plan.clone()))
-    }
-
-    fn rewrite_optimize_table(&mut self, plan: &OptimizeTablePlan) -> Result<PlanNode> {
-        Ok(PlanNode::OptimizeTable(plan.clone()))
-    }
-
-    fn rewrite_exists_table(&mut self, plan: &ExistsTablePlan) -> Result<PlanNode> {
-        Ok(PlanNode::ExistsTable(plan.clone()))
-    }
-
-    fn rewrite_create_view(&mut self, plan: &CreateViewPlan) -> Result<PlanNode> {
-        Ok(PlanNode::CreateView(plan.clone()))
-    }
-
-    fn rewrite_drop_view(&mut self, plan: &DropViewPlan) -> Result<PlanNode> {
-        Ok(PlanNode::DropView(plan.clone()))
-    }
-
-    fn rewrite_alter_view(&mut self, plan: &AlterViewPlan) -> Result<PlanNode> {
-        Ok(PlanNode::AlterView(plan.clone()))
-    }
-
-    fn rewrite_create_database(&mut self, plan: &CreateDatabasePlan) -> Result<PlanNode> {
-        Ok(PlanNode::CreateDatabase(plan.clone()))
-    }
-
-    fn rewrite_use_database(&mut self, plan: &UseDatabasePlan) -> Result<PlanNode> {
-        Ok(PlanNode::UseDatabase(plan.clone()))
-    }
-
-    fn rewrite_set_variable(&mut self, plan: &SettingPlan) -> Result<PlanNode> {
-        Ok(PlanNode::SetVariable(plan.clone()))
-    }
-
-    fn rewrite_describe_table(&mut self, plan: &DescribeTablePlan) -> Result<PlanNode> {
-        Ok(PlanNode::DescribeTable(plan.clone()))
-    }
-
-    fn rewrite_describe_user_stage(&mut self, plan: &DescribeUserStagePlan) -> Result<PlanNode> {
-        Ok(PlanNode::DescribeUserStage(plan.clone()))
-    }
-
-    fn rewrite_list(&mut self, plan: &ListPlan) -> Result<PlanNode> {
-        Ok(PlanNode::List(plan.clone()))
-    }
-
-    fn rewrite_drop_table(&mut self, plan: &DropTablePlan) -> Result<PlanNode> {
-        Ok(PlanNode::DropTable(plan.clone()))
-    }
-
-    fn rewrite_undrop_table(&mut self, plan: &UndropTablePlan) -> Result<PlanNode> {
-        Ok(PlanNode::UndropTable(plan.clone()))
-    }
-
-    fn rewrite_drop_database(&mut self, plan: &DropDatabasePlan) -> Result<PlanNode> {
-        Ok(PlanNode::DropDatabase(plan.clone()))
-    }
-
-    fn rewrite_undrop_database(&mut self, plan: &UndropDatabasePlan) -> Result<PlanNode> {
-        Ok(PlanNode::UndropDatabase(plan.clone()))
-    }
-
     fn rewrite_insert_into(&mut self, plan: &InsertPlan) -> Result<PlanNode> {
         Ok(PlanNode::Insert(plan.clone()))
     }
@@ -456,110 +270,8 @@ pub trait PlanRewriter: Sized {
         Ok(PlanNode::Delete(plan.clone()))
     }
 
-    fn rewrite_copy(&mut self, plan: &CopyPlan) -> Result<PlanNode> {
-        Ok(PlanNode::Copy(plan.clone()))
-    }
-
-    fn rewrite_call(&mut self, plan: &CallPlan) -> Result<PlanNode> {
-        Ok(PlanNode::Call(plan.clone()))
-    }
-
-    fn rewrite_show_create_table(&mut self, plan: &ShowCreateTablePlan) -> Result<PlanNode> {
-        Ok(PlanNode::ShowCreateTable(plan.clone()))
-    }
-
-    fn rewrite_truncate_table(&mut self, plan: &TruncateTablePlan) -> Result<PlanNode> {
-        Ok(PlanNode::TruncateTable(plan.clone()))
-    }
-
-    fn rewrite_kill(&mut self, plan: &KillPlan) -> Result<PlanNode> {
-        Ok(PlanNode::Kill(plan.clone()))
-    }
-
-    fn create_user(&mut self, plan: &CreateUserPlan) -> Result<PlanNode> {
-        Ok(PlanNode::CreateUser(plan.clone()))
-    }
-
-    fn alter_user(&mut self, plan: &AlterUserPlan) -> Result<PlanNode> {
-        Ok(PlanNode::AlterUser(plan.clone()))
-    }
-
-    fn drop_user(&mut self, plan: &DropUserPlan) -> Result<PlanNode> {
-        Ok(PlanNode::DropUser(plan.clone()))
-    }
-
-    fn rewrite_create_role(&mut self, plan: &CreateRolePlan) -> Result<PlanNode> {
-        Ok(PlanNode::CreateRole(plan.clone()))
-    }
-
-    fn rewrite_drop_role(&mut self, plan: &DropRolePlan) -> Result<PlanNode> {
-        Ok(PlanNode::DropRole(plan.clone()))
-    }
-
-    fn grant_privilege(&mut self, plan: &GrantPrivilegePlan) -> Result<PlanNode> {
-        Ok(PlanNode::GrantPrivilege(plan.clone()))
-    }
-
-    fn grant_role(&mut self, plan: &GrantRolePlan) -> Result<PlanNode> {
-        Ok(PlanNode::GrantRole(plan.clone()))
-    }
-
-    fn revoke_privilege(&mut self, plan: &RevokePrivilegePlan) -> Result<PlanNode> {
-        Ok(PlanNode::RevokePrivilege(plan.clone()))
-    }
-
-    fn revoke_role(&mut self, plan: &RevokeRolePlan) -> Result<PlanNode> {
-        Ok(PlanNode::RevokeRole(plan.clone()))
-    }
-
-    fn rewrite_create_user_stage(&mut self, plan: &CreateUserStagePlan) -> Result<PlanNode> {
-        Ok(PlanNode::CreateUserStage(plan.clone()))
-    }
-
-    fn rewrite_drop_user_stage(&mut self, plan: &DropUserStagePlan) -> Result<PlanNode> {
-        Ok(PlanNode::DropUserStage(plan.clone()))
-    }
-
     fn rewrite_sink(&mut self, plan: &SinkPlan) -> Result<PlanNode> {
         Ok(PlanNode::Sink(plan.clone()))
-    }
-
-    fn rewrite_show_create_database(&mut self, plan: &ShowCreateDatabasePlan) -> Result<PlanNode> {
-        Ok(PlanNode::ShowCreateDatabase(plan.clone()))
-    }
-
-    fn rewrite_show(&mut self, plan: &ShowPlan) -> Result<PlanNode> {
-        Ok(PlanNode::Show(plan.clone()))
-    }
-
-    fn rewrite_create_user_udf(&mut self, plan: &CreateUserUDFPlan) -> Result<PlanNode> {
-        Ok(PlanNode::CreateUserUDF(plan.clone()))
-    }
-
-    fn rewrite_drop_user_udf(&mut self, plan: &DropUserUDFPlan) -> Result<PlanNode> {
-        Ok(PlanNode::DropUserUDF(plan.clone()))
-    }
-
-    fn rewrite_alter_user_udf(&mut self, plan: &AlterUserUDFPlan) -> Result<PlanNode> {
-        Ok(PlanNode::AlterUserUDF(plan.clone()))
-    }
-
-    fn rewrite_remove_user_stage(&mut self, plan: &RemoveUserStagePlan) -> Result<PlanNode> {
-        Ok(PlanNode::RemoveUserStage(plan.clone()))
-    }
-
-    fn rewrite_alter_table_cluster_key(
-        &mut self,
-        plan: &AlterTableClusterKeyPlan,
-    ) -> Result<PlanNode> {
-        Ok(PlanNode::AlterTableClusterKey(plan.clone()))
-    }
-
-    fn rewrite_drop_table_cluster_key(
-        &mut self,
-        plan: &DropTableClusterKeyPlan,
-    ) -> Result<PlanNode> {
-        Ok(PlanNode::DropTableClusterKey(plan.clone()))
     }
 }
 
