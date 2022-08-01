@@ -102,8 +102,8 @@ where TablesTable<T>: HistoryAware
             let stats = tbl.statistics(ctx.clone()).await?;
             num_rows.push(stats.as_ref().and_then(|v| v.num_rows));
             data_size.push(stats.as_ref().and_then(|v| v.data_size));
-            data_compressed_size.push(stats.and_then(|v| v.data_size_compressed));
-            index_size.push(None);
+            data_compressed_size.push(stats.as_ref().and_then(|v| v.data_size_compressed));
+            index_size.push(stats.and_then(|v| v.index_size));
         }
 
         let databases: Vec<&[u8]> = database_tables.iter().map(|(d, _)| d.as_bytes()).collect();

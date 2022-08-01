@@ -415,7 +415,7 @@ impl Table for FuseTable {
             num_rows: Some(s.number_of_rows),
             data_size: Some(s.data_bytes),
             data_size_compressed: Some(s.compressed_data_bytes),
-            index_length: Some(s.index_data_bytes),
+            index_size: Some(s.index_data_bytes),
         }))
     }
 
