@@ -409,50 +409,6 @@ impl SessionManager {
         Ok(op)
     }
 
-    pub async fn reload_config(&self) -> Result<()> {
-        // TODO(xp): Potential race condition if fields are updated one by one.
-        //           These fields should all be got prepared then update in one atomic update.
-
-        let config = {
-            let mut config = self.conf.write();
-            let config_file = config.config_file.clone();
-            *config = Config::load()?;
-            config.config_file = config_file;
-            config.clone()
-        };
-
-        {
-            let catalogs = CatalogManager::try_new(&config).await?;
-            *self.catalogs.write() = Arc::new(catalogs);
-        }
-
-        *self.storage_cache_manager.write() = Arc::new(CacheManager::init(&config.query));
-
-        {
-            // NOTE: Magic happens here. We will add a layer upon original storage operator
-            // so that all underlying storage operations will send to storage runtime.
-            let operator = Self::init_storage_operator(&config)
-                .await?
-                .layer(DalRuntime::new(self.storage_runtime.inner()));
-            *self.storage_operator.write() = operator;
-        }
-
-        {
-            let discovery = ClusterDiscovery::create_global(config.clone()).await?;
-            *self.discovery.write() = discovery;
-        }
-
-        {
-            let x = UserApiProvider::create_global(config.meta.to_meta_grpc_client_conf()).await?;
-            *self.user_api_provider.write() = x.clone();
-
-            let role_cache_manager = RoleCacheMgr::new(x);
-            *self.role_cache_manager.write() = Arc::new(role_cache_manager);
-        }
-
-        Ok(())
-    }
-
     pub fn get_async_insert_queue(&self) -> Arc<RwLock<Option<Arc<AsyncInsertQueue>>>> {
         self.async_insert_queue.clone()
     }
