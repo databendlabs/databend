@@ -46,6 +46,7 @@ If and only if the node state is `Follower` or `Leader` , `node_is_health` is 1,
 ### Raft Network
 
 These metrics describe the network status of raft nodes in the `metasrv`. All these metrics are prefixed with `metasrv_raft_network_`.
+
 | Name                    | Description                                       | Labels                            | Type          |
 | ----------------------- | ------------------------------------------------- | --------------------------------- | ------------- |
 | active_peers            | Current number of active connections to peers.    | id(node id),address(peer address) | GaugeVec      |
@@ -88,6 +89,7 @@ These metrics describe the storage status of raft nodes in the `metasrv`. All th
 ### Meta Network
 
 These metrics describe the network status of meta service in the `metasrv`. All these metrics are prefixed with `metasrv_meta_network_`.
+
 | Name             | Description                                            | Type       |
 | ---------------- | ------------------------------------------------------ | ---------- |
 | meta_sent_bytes  | Total number of sent bytes to meta grpc client.        | IntCounter |
