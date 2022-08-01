@@ -27,17 +27,16 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
-use common_tracing::tracing;
 use futures::future::AbortHandle;
 use futures::future::Abortable;
 use futures::StreamExt;
 use futures_util::FutureExt;
 use serde::Deserialize;
 use serde::Serialize;
+use tracing::error;
 use ExecuteState::*;
 
 use super::http_query::HttpQueryRequest;
-use crate::clusters::ClusterHelper;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
 use crate::interpreters::InterpreterFactoryV2;
@@ -45,6 +44,7 @@ use crate::interpreters::InterpreterQueryLog;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::Pipe;
+use crate::servers::utils::use_planner_v2;
 use crate::sessions::QueryAffect;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionRef;
@@ -157,7 +157,7 @@ impl Executor {
                 .interpreter
                 .finish()
                 .await
-                .map_err(|e| tracing::error!("interpreter.finish error: {:?}", e));
+                .map_err(|e| error!("interpreter.finish error: {:?}", e));
             guard.state = Stopped(ExecuteStopped {
                 stats: Progresses::from_context(&r.ctx),
                 reason: reason.clone(),
@@ -170,7 +170,7 @@ impl Executor {
                     && e.code() != ErrorCode::aborted_query_code()
                 {
                     // query state can be pulled multi times, only log it once
-                    tracing::error!("Query Error: {:?}", e);
+                    error!("Query Error: {:?}", e);
                 }
             }
         };
@@ -188,28 +188,35 @@ impl ExecuteState {
         let start_time = Instant::now();
         ctx.attach_query_str(sql);
 
-        let (stmts, _) = match DfParser::parse_sql(sql, ctx.get_current_session().get_type()) {
-            Ok(t) => t,
-            Err(e) => {
-                InterpreterQueryLog::fail_to_start(ctx, e.clone()).await;
-                return Err(e);
-            }
+        let stmts = DfParser::parse_sql(sql, ctx.get_current_session().get_type());
+        let settings = ctx.get_settings();
+        let is_v2 = use_planner_v2(&settings, &stmts)?;
+        let is_select = if let Ok((s, _)) = &stmts {
+            s.get(0)
+                .map_or(false, |stmt| matches!(stmt, DfStatement::Query(_)))
+        } else {
+            false
         };
 
-        let settings = ctx.get_settings();
-        if !ctx.get_config().query.management_mode
-            && settings.get_enable_planner_v2()? != 0
-            && matches!(stmts.get(0), Some(DfStatement::Query(_)))
-        {
+        let interpreter = if is_v2 {
             let mut planner = Planner::new(ctx.clone());
             let (plan, _, _) = planner.plan_sql(sql).await?;
-            let interpreter = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
-
-            // Write Start to query log table.
+            InterpreterFactoryV2::get(ctx.clone(), &plan)
+        } else {
+            let plan = match PlanParser::parse(ctx.clone(), sql).await {
+                Ok(p) => p,
+                Err(e) => {
+                    InterpreterQueryLog::fail_to_start(ctx, e.clone()).await;
+                    return Err(e);
+                }
+            };
+            InterpreterFactory::get(ctx.clone(), plan)
+        }?;
+        if is_v2 && is_select {
             let _ = interpreter
                 .start()
                 .await
-                .map_err(|e| tracing::error!("interpreter.start.error: {:?}", e));
+                .map_err(|e| error!("interpreter.start.error: {:?}", e));
             let running_state = ExecuteRunning {
                 session,
                 ctx: ctx.clone(),
@@ -224,34 +231,13 @@ impl ExecuteState {
                 block_buffer,
             });
             interpreter.execute(None).await?;
-
             Ok(executor)
         } else {
-            let interpreter = if ctx.get_cluster().is_empty()
-                && stmts
-                    .get(0)
-                    .map_or(false, InterpreterFactoryV2::enable_default)
-            {
-                let mut planner = Planner::new(ctx.clone());
-                let (plan, _, _) = planner.plan_sql(sql).await?;
-                InterpreterFactoryV2::get(ctx.clone(), &plan)
-            } else {
-                let plan = match PlanParser::parse(ctx.clone(), sql).await {
-                    Ok(p) => p,
-                    Err(e) => {
-                        InterpreterQueryLog::fail_to_start(ctx, e.clone()).await;
-                        return Err(e);
-                    }
-                };
-
-                InterpreterFactory::get(ctx.clone(), plan)
-            }?;
-
             // Write Start to query log table.
             let _ = interpreter
                 .start()
                 .await
-                .map_err(|e| tracing::error!("interpreter.start.error: {:?}", e));
+                .map_err(|e| error!("interpreter.start.error: {:?}", e));
 
             let running_state = ExecuteRunning {
                 session,

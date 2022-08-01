@@ -77,8 +77,11 @@ impl<'a> Binder {
                 } => {
                     // We first search the identifier in select list
                     let mut found = false;
+                    let db = database_name.as_ref().map(|s| s.name.as_str());
+                    let table = table_name.as_ref().map(|s| s.name.as_str());
+
                     for item in projections.iter() {
-                        if item.column_name == ident.name {
+                        if BindContext::match_column_binding(db, table, ident, item) {
                             order_items.push(OrderItem {
                                 expr: order.clone(),
                                 index: item.index,
@@ -229,8 +232,8 @@ impl<'a> Binder {
             }
             let order_by_item = SortItem {
                 index: order.index,
-                asc: order.expr.asc,
-                nulls_first: order.expr.nulls_first,
+                asc: order.expr.asc.unwrap_or(true),
+                nulls_first: order.expr.nulls_first.unwrap_or(false),
             };
             order_by_items.push(order_by_item);
         }
@@ -266,8 +269,8 @@ impl<'a> Binder {
                         Scalar::BoundColumnRef(BoundColumnRef { column }) => {
                             let order_by_item = SortItem {
                                 index: column.index,
-                                asc: order.asc,
-                                nulls_first: order.nulls_first,
+                                asc: order.asc.unwrap_or(true),
+                                nulls_first: order.nulls_first.unwrap_or(false),
                             };
                             order_by_items.push(order_by_item);
                         }

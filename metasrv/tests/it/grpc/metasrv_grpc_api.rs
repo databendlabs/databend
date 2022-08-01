@@ -25,9 +25,10 @@ use common_meta_types::Operation;
 use common_meta_types::SeqV;
 use common_meta_types::UpsertKVReply;
 use common_meta_types::UpsertKVReq;
-use common_tracing::tracing;
 use pretty_assertions::assert_eq;
 use tokio::time::Duration;
+use tracing::debug;
+use tracing::info;
 
 use crate::init_meta_ut;
 use crate::tests::service::MetaSrvTestContext;
@@ -52,7 +53,7 @@ async fn test_restart() -> anyhow::Result<()> {
         None,
     )?;
 
-    tracing::info!("--- upsert kv");
+    info!("--- upsert kv");
     {
         let res = client
             .upsert_kv(UpsertKVReq::new(
@@ -63,7 +64,7 @@ async fn test_restart() -> anyhow::Result<()> {
             ))
             .await;
 
-        tracing::debug!("set kv res: {:?}", res);
+        debug!("set kv res: {:?}", res);
         let res = res?;
         assert_eq!(
             UpsertKVReply::new(
@@ -79,10 +80,10 @@ async fn test_restart() -> anyhow::Result<()> {
         );
     }
 
-    tracing::info!("--- get kv");
+    info!("--- get kv");
     {
         let res = client.get_kv("foo").await;
-        tracing::debug!("get kv res: {:?}", res);
+        debug!("get kv res: {:?}", res);
         let res = res?;
         assert_eq!(
             Some(SeqV {
@@ -95,7 +96,7 @@ async fn test_restart() -> anyhow::Result<()> {
         );
     }
 
-    tracing::info!("--- stop metasrv");
+    info!("--- stop metasrv");
     {
         let mut srv = tc.grpc_srv.take().unwrap();
         srv.stop(None).await?;
@@ -119,10 +120,10 @@ async fn test_restart() -> anyhow::Result<()> {
         None,
     )?;
 
-    tracing::info!("--- get kv");
+    info!("--- get kv");
     {
         let res = client.get_kv("foo").await;
-        tracing::debug!("get kv res: {:?}", res);
+        debug!("get kv res: {:?}", res);
         let res = res?;
         assert_eq!(
             Some(SeqV {
@@ -224,7 +225,7 @@ async fn test_join() -> anyhow::Result<()> {
 
     let clients = vec![client0, client1];
 
-    tracing::info!("--- upsert kv to every nodes");
+    info!("--- upsert kv to every nodes");
     {
         for (i, cli) in clients.iter().enumerate() {
             let k = format!("join-{}", i);
@@ -238,7 +239,7 @@ async fn test_join() -> anyhow::Result<()> {
                 ))
                 .await;
 
-            tracing::debug!("set kv res: {:?}", res);
+            debug!("set kv res: {:?}", res);
             let res = res?;
             assert_eq!(
                 UpsertKVReply::new(
@@ -258,14 +259,14 @@ async fn test_join() -> anyhow::Result<()> {
 
     tokio::time::sleep(Duration::from_millis(1000)).await;
 
-    tracing::info!("--- get every kv from every node");
+    info!("--- get every kv from every node");
     {
         for (icli, cli) in clients.iter().enumerate() {
             for i in 0..2 {
                 let k = format!("join-{}", i);
                 let res = cli.get_kv(k.as_str()).await;
 
-                tracing::debug!("get kv {} from {}-th node,res: {:?}", k, icli, res);
+                debug!("get kv {} from {}-th node,res: {:?}", k, icli, res);
                 let res = res?;
                 assert_eq!(k.into_bytes(), res.unwrap().data);
             }
@@ -313,7 +314,7 @@ async fn test_auto_sync_addr() -> anyhow::Result<()> {
 
     let addrs = HashSet::from([addr0, addr1, addr2]);
 
-    tracing::info!("--- upsert kv cluster");
+    info!("--- upsert kv cluster");
     {
         let k = "join-k".to_string();
 
@@ -326,7 +327,7 @@ async fn test_auto_sync_addr() -> anyhow::Result<()> {
             ))
             .await;
 
-        tracing::debug!("set kv res: {:?}", res);
+        debug!("set kv res: {:?}", res);
         let res = res?;
         assert_eq!(
             UpsertKVReply::new(
@@ -344,18 +345,18 @@ async fn test_auto_sync_addr() -> anyhow::Result<()> {
 
     tokio::time::sleep(Duration::from_millis(1000)).await;
 
-    tracing::info!("--- get kv from cluster");
+    info!("--- get kv from cluster");
     {
         let k = "join-k".to_string();
 
         let res = client.get_kv(k.as_str()).await;
 
-        tracing::debug!("get kv {} from cluster, res: {:?}", k, res);
+        debug!("get kv {} from cluster, res: {:?}", k, res);
         let res = res?;
         assert_eq!(k.into_bytes(), res.unwrap().data);
     }
 
-    tracing::info!("--- check endpoints are equal");
+    info!("--- check endpoints are equal");
     {
         tokio::time::sleep(Duration::from_secs(20)).await;
         let res = client.get_endpoints().await?;
@@ -364,7 +365,7 @@ async fn test_auto_sync_addr() -> anyhow::Result<()> {
         assert_eq!(addrs, res, "endpoints should be equal");
     }
 
-    tracing::info!("--- endpoints should changed when node is down");
+    info!("--- endpoints should changed when node is down");
     {
         let g = tc1.grpc_srv.as_ref().unwrap();
         let meta_node = g.get_meta_node();
@@ -386,7 +387,7 @@ async fn test_auto_sync_addr() -> anyhow::Result<()> {
                 )
                 .await?;
 
-            tracing::debug!("got leader, metrics: {metrics:?}");
+            debug!("got leader, metrics: {metrics:?}");
         }
         let res = client.get_endpoints().await?;
         let res: HashSet<String> = HashSet::from_iter(res.into_iter());
@@ -394,7 +395,7 @@ async fn test_auto_sync_addr() -> anyhow::Result<()> {
         assert_eq!(3, res.len());
     }
 
-    tracing::info!("--- endpoints should changed when add node");
+    info!("--- endpoints should changed when add node");
     {
         let mut tc3 = MetaSrvTestContext::new(3);
         tc3.config.raft_config.single = false;
@@ -414,7 +415,7 @@ async fn test_auto_sync_addr() -> anyhow::Result<()> {
             .metrics(|m| m.current_leader.is_some(), "a leader is observed")
             .await?;
 
-        tracing::debug!("got leader, metrics: {metrics:?}");
+        debug!("got leader, metrics: {metrics:?}");
 
         let addr3 = tc3.config.grpc_api_address.clone();
 
@@ -445,7 +446,7 @@ async fn test_auto_sync_addr() -> anyhow::Result<()> {
     }
 
     // TODO(ariesdevil): remove node from cluster then get endpoints
-    // tracing::info!("--- endpoints should changed after remove node");
+    // info!("--- endpoints should changed after remove node");
 
     Ok(())
 }

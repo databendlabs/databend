@@ -22,8 +22,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
 use common_io::prelude::*;
-use common_tracing::tracing;
-use common_tracing::tracing::Instrument;
+use common_planners::PlanNode;
 use common_users::CertifiedInfo;
 use metrics::histogram;
 use opensrv_mysql::AsyncMysqlShim;
@@ -34,6 +33,9 @@ use opensrv_mysql::QueryResultWriter;
 use opensrv_mysql::StatementMetaWriter;
 use rand::RngCore;
 use tokio_stream::StreamExt;
+use tracing::error;
+use tracing::info;
+use tracing::Instrument;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
@@ -41,14 +43,37 @@ use crate::interpreters::InterpreterFactoryV2;
 use crate::interpreters::InterpreterQueryLog;
 use crate::servers::mysql::writers::DFInitResultWriter;
 use crate::servers::mysql::writers::DFQueryResultWriter;
+use crate::servers::mysql::writers::QueryResult;
 use crate::servers::mysql::MySQLFederated;
 use crate::servers::mysql::MYSQL_VERSION;
+use crate::servers::utils::use_planner_v2;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionRef;
 use crate::sessions::TableContext;
+use crate::sql::plans::Plan;
 use crate::sql::DfParser;
 use crate::sql::PlanParser;
 use crate::sql::Planner;
+
+fn has_result_set_by_plan(plan: &Plan) -> bool {
+    matches!(
+        plan,
+        Plan::Query { .. }
+            | Plan::Explain { .. }
+            | Plan::Call(_)
+            | Plan::ShowCreateDatabase(_)
+            | Plan::ShowCreateTable(_)
+            | Plan::DescribeTable(_)
+            | Plan::ShowGrants(_)
+            | Plan::ListStage(_)
+            | Plan::DescribeStage(_)
+            | Plan::Presign(_)
+    )
+}
+
+fn has_result_set_by_plan_node(plan: &PlanNode) -> bool {
+    matches!(plan, PlanNode::Explain(_) | PlanNode::Select(_))
+}
 
 struct InteractiveWorkerBase<W: std::io::Write> {
     session: SessionRef,
@@ -107,14 +132,12 @@ impl<W: std::io::Write + Send + Sync> AsyncMysqlShim<W> for InteractiveWorker<W>
         match authenticate.await {
             Ok(res) => res,
             Err(failure) => {
-                tracing::error!(
+                error!(
                     "MySQL handler authenticate failed, \
                         user_name: {}, \
                         client_address: {}, \
                         failure_cause: {}",
-                    username,
-                    client_addr,
-                    failure
+                    username, client_addr, failure
                 );
                 false
             }
@@ -272,17 +295,23 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    async fn do_query(&mut self, query: &str) -> Result<(Vec<DataBlock>, String)> {
+    async fn do_query(&mut self, query: &str) -> Result<QueryResult> {
         match self.federated_server_command_check(query) {
             Some(data_block) => {
-                tracing::info!("Federated query: {}", query);
+                info!("Federated query: {}", query);
                 if data_block.num_rows() > 0 {
-                    tracing::info!("Federated response: {:?}", data_block);
+                    info!("Federated response: {:?}", data_block);
                 }
-                Ok((vec![data_block], String::from("")))
+                let schema = data_block.schema().clone();
+                Ok(QueryResult::create(
+                    vec![data_block],
+                    String::from(""),
+                    false,
+                    schema,
+                ))
             }
             None => {
-                tracing::info!("Normal query: {}", query);
+                info!("Normal query: {}", query);
                 let context = self.session.create_query_context().await?;
                 context.attach_query_str(query);
 
@@ -290,37 +319,24 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
 
                 let stmts_hints =
                     DfParser::parse_sql(query, context.get_current_session().get_type());
-                let mut hints = vec![];
-                let interpreter: Result<Arc<dyn Interpreter>>;
-                if let Ok((stmts, h)) = stmts_hints {
-                    hints = h;
-                    interpreter = if settings.get_enable_planner_v2()? != 0
-                        && stmts.get(0).map_or(false, InterpreterFactoryV2::check)
-                        || stmts
-                            .get(0)
-                            .map_or(false, InterpreterFactoryV2::enable_default)
-                    {
-                        let mut planner = Planner::new(context.clone());
-                        planner
-                            .plan_sql(query)
-                            .await
-                            .and_then(|v| InterpreterFactoryV2::get(context.clone(), &v.0))
-                    } else {
-                        let (plan, _) = PlanParser::parse_with_hint(query, context.clone()).await;
-                        plan.and_then(|v| InterpreterFactory::get(context.clone(), v))
-                    };
-                } else if settings.get_enable_planner_v2()? != 0 {
-                    // If old parser failed, try new planner
+                let hints = match &stmts_hints {
+                    Ok((_, h)) => h.clone(),
+                    Err(_) => vec![],
+                };
+                let mut has_result_set = false;
+                let interpreter = if use_planner_v2(&settings, &stmts_hints)? {
                     let mut planner = Planner::new(context.clone());
-                    interpreter = planner
-                        .plan_sql(query)
-                        .await
-                        .and_then(|v| InterpreterFactoryV2::get(context.clone(), &v.0));
+                    planner.plan_sql(query).await.and_then(|v| {
+                        has_result_set = has_result_set_by_plan(&v.0);
+                        InterpreterFactoryV2::get(context.clone(), &v.0)
+                    })
                 } else {
-                    return Err(stmts_hints
-                        .err()
-                        .ok_or_else(|| ErrorCode::LogicalError("stmts_hints must be error"))?);
-                }
+                    let (plan, _) = PlanParser::parse_with_hint(query, context.clone()).await;
+                    plan.and_then(|v| {
+                        has_result_set = has_result_set_by_plan_node(&v);
+                        InterpreterFactory::get(context.clone(), v)
+                    })
+                };
 
                 let hint = hints
                     .iter()
@@ -328,7 +344,17 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
                     .and_then(|x| x.error_code);
 
                 match (hint, interpreter) {
-                    (None, Ok(interpreter)) => Self::exec_query(interpreter, &context).await,
+                    (None, Ok(interpreter)) => {
+                        let (blocks, extra_info) =
+                            Self::exec_query(interpreter.clone(), &context).await?;
+                        let schema = interpreter.schema();
+                        Ok(QueryResult::create(
+                            blocks,
+                            extra_info,
+                            has_result_set,
+                            schema,
+                        ))
+                    }
                     (Some(code), Ok(interpreter)) => {
                         let res = Self::exec_query(interpreter, &context).await;
                         match res {
@@ -344,7 +370,7 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
                                         e.code()
                                     )));
                                 }
-                                Ok((vec![DataBlock::empty()], String::from("")))
+                                Ok(QueryResult::default())
                             }
                         }
                     }
@@ -361,7 +387,7 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
                                 e.code()
                             )));
                         }
-                        Ok((vec![DataBlock::empty()], String::from("")))
+                        Ok(QueryResult::default())
                     }
                 }
             }
@@ -381,7 +407,7 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
                 let _ = interpreter
                     .start()
                     .await
-                    .map_err(|e| tracing::error!("interpreter.start.error: {:?}", e));
+                    .map_err(|e| error!("interpreter.start.error: {:?}", e));
                 let data_stream = interpreter.execute(None).await?;
                 histogram!(
                     super::mysql_metrics::METRIC_INTERPRETER_USEDTIME,
@@ -394,7 +420,7 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
                 let _ = interpreter
                     .finish()
                     .await
-                    .map_err(|e| tracing::error!("interpreter.finish.error: {:?}", e));
+                    .map_err(|e| error!("interpreter.finish.error: {:?}", e));
 
                 Ok::<Vec<DataBlock>, ErrorCode>(query_result)
             }

@@ -21,9 +21,10 @@ To log in to your account, go to https://app.databend.com.
 
 ### Warehouses
 
-Virtual warehouses can be automatically suspended in case of no activities for a specific period.
+Serverless warehouses can be automatically suspended in case of no activities for a specific period.
 
 <img src="/img/cloud/databend_cloud_warehouse.png"/>
+
 
 ### Databases
 
@@ -48,6 +49,8 @@ Worksheets is a powerful SQL editor where you can run SQL queries. For example, 
 ### Connect to a Serverless Warehouse on Databend Cloud
 
 Databend Cloud provides a connection string for your applications to connect to it:
+<img src="/img/cloud/databend_cloud_warehouse_detail.png"/>
+<img src="/img/cloud/databend_cloud_warehouse_connect.png"/>
 
 ```shell
 https://<tenant>--<warehouse>.ch.aws-us-east-2.default.databend.com/

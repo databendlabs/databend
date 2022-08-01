@@ -19,7 +19,6 @@ use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 use common_fuse_meta::meta::StatisticsOfColumns;
 use common_planners::Expression;
-use common_tracing::tracing;
 
 use crate::storages::index::RangeFilter;
 

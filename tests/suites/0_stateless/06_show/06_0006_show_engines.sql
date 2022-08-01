@@ -1,2 +1,0 @@
-SHOW ENGINES;
-

@@ -20,7 +20,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
-use common_tracing::tracing;
 use serde_json::Value;
 
 use crate::interpreters::Interpreter;
@@ -46,6 +45,10 @@ impl PresignInterpreter {
 impl Interpreter for PresignInterpreter {
     fn name(&self) -> &str {
         "PresignInterpreter"
+    }
+
+    fn schema(&self) -> DataSchemaRef {
+        self.plan.schema()
     }
 
     #[tracing::instrument(level = "debug", name = "presign_interpreter_execute", skip(self, _input_stream), fields(ctx.id = self.ctx.get_id().as_str()))]

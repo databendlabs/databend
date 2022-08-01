@@ -11,7 +11,6 @@
 //  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
-//
 use common_base::base::tokio;
 use common_datablocks::DataBlock;
 use common_exception::Result;
@@ -65,7 +64,7 @@ async fn test_fuse_occ_retry() -> Result<()> {
         .await?;
 
     // let's check it out
-    let qry = format!("select * from '{}'.'{}' order by id ", db, tbl);
+    let qry = format!("select * from {}.{} order by id ", db, tbl);
     let blocks = execute_query(ctx.clone(), qry.as_str())
         .await?
         .try_collect::<Vec<DataBlock>>()

@@ -87,9 +87,15 @@ pub fn format_scalar(metadata: &MetadataRef, scalar: &Scalar) -> String {
     match scalar {
         Scalar::BoundColumnRef(column_ref) => {
             if let Some(table_name) = &column_ref.column.table_name {
-                format!("{}.{}", table_name, column_ref.column.column_name)
+                format!(
+                    "{}.{} (#{})",
+                    table_name, column_ref.column.column_name, column_ref.column.index
+                )
             } else {
-                column_ref.column.column_name.to_string()
+                format!(
+                    "{} (#{})",
+                    column_ref.column.column_name, column_ref.column.index
+                )
             }
         }
         Scalar::ConstantExpr(constant) => constant.value.to_string(),
@@ -239,7 +245,7 @@ pub fn format_project(
         .read()
         .columns()
         .iter()
-        .map(|entry| entry.name.clone())
+        .map(|entry| format!("{} (#{})", entry.name.clone(), entry.column_index))
         .collect::<Vec<String>>();
     // Sorted by column index to make display of Project stable
     let project_columns = op
@@ -321,13 +327,10 @@ pub fn format_sort(
         .map(|item| {
             let name = metadata.read().column(item.index).name.clone();
             format!(
-                "{} {}",
+                "{} (#{}) {}",
                 name,
-                if item.asc.unwrap_or(false) {
-                    "ASC"
-                } else {
-                    "DESC"
-                }
+                item.index,
+                if item.asc { "ASC" } else { "DESC" }
             )
         })
         .collect::<Vec<String>>()

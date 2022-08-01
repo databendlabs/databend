@@ -16,8 +16,8 @@ mod git;
 
 use std::path::Path;
 
-use common_tracing::tracing;
 use git2::Repository;
+use tracing::error;
 use vergen::vergen;
 use vergen::Config;
 use vergen::ShaKind;
@@ -79,7 +79,7 @@ pub fn add_env_credits_info() {
     {
         Ok(v) => v,
         Err(err) => {
-            tracing::error!("{:?}", err);
+            error!("{:?}", err);
             vec![]
         }
     };

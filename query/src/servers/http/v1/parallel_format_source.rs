@@ -58,7 +58,7 @@ impl ParallelMultipartWorker {
         data: Result<Box<dyn InputState>>,
     ) -> bool {
         if let Err(cause) = tx.send(data).await {
-            common_tracing::tracing::warn!("Multipart channel disconnect. {}", cause);
+            tracing::warn!("Multipart channel disconnect. {}", cause);
             return false;
         }
 
@@ -80,10 +80,7 @@ impl MultipartWorker for ParallelMultipartWorker {
                             ))))
                             .await
                         {
-                            common_tracing::tracing::warn!(
-                                "Multipart channel disconnect. {}",
-                                cause
-                            );
+                            tracing::warn!("Multipart channel disconnect. {}", cause);
 
                             break 'outer;
                         }
@@ -152,7 +149,7 @@ impl MultipartWorker for ParallelMultipartWorker {
                                                 ))))
                                                 .await
                                             {
-                                                common_tracing::tracing::warn!(
+                                                tracing::warn!(
                                                     "Multipart channel disconnect. {}",
                                                     cause
                                                 );
@@ -161,7 +158,7 @@ impl MultipartWorker for ParallelMultipartWorker {
                                         let read_size =
                                             match self.input_format.read_buf(buf_slice, &mut state)
                                             {
-                                                Ok(read_size) => read_size,
+                                                Ok((read_size, _)) => read_size,
                                                 Err(cause) => {
                                                     Self::send(&tx, Err(cause)).await;
                                                     break 'outer;
@@ -196,7 +193,7 @@ impl MultipartWorker for ParallelMultipartWorker {
                                         ))))
                                         .await
                                     {
-                                        common_tracing::tracing::warn!(
+                                        tracing::warn!(
                                             "Multipart channel disconnect. {}, filename: '{}'",
                                             cause,
                                             filename

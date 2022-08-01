@@ -11,7 +11,6 @@
 //  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
-//
 
 use common_base::base::tokio;
 use common_datablocks::assert_blocks_sorted_eq;
@@ -35,17 +34,18 @@ async fn test_memorytable() -> Result<()> {
         DataField::new("a", u32::to_data_type()),
         DataField::new("b", u64::to_data_type()),
     ]);
-    let table = MemoryTable::try_create(crate::tests::create_storage_context()?, TableInfo {
-        desc: "'default'.'a'".into(),
-        name: "a".into(),
-        ident: Default::default(),
-        meta: TableMeta {
-            schema: schema.clone(),
-            engine: "Memory".to_string(),
-            options: TableOptions::default(),
-            ..Default::default()
-        },
-    })?;
+    let table =
+        MemoryTable::try_create(crate::tests::create_storage_context().await?, TableInfo {
+            desc: "'default'.'a'".into(),
+            name: "a".into(),
+            ident: Default::default(),
+            meta: TableMeta {
+                schema: schema.clone(),
+                engine: "Memory".to_string(),
+                options: TableOptions::default(),
+                ..Default::default()
+            },
+        })?;
 
     // append data.
     {

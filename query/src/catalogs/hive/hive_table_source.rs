@@ -33,7 +33,7 @@ use crate::storages::hive::HiveParquetBlockReader;
 
 enum State {
     ReadData(PartInfoPtr),
-    Deserialize(FileMetaData, Vec<Vec<u8>>),
+    Deserialize(FileMetaData, Vec<Vec<u8>>, PartInfoPtr),
     Generated(Option<PartInfoPtr>, DataBlock),
     Finish,
 }
@@ -112,15 +112,15 @@ impl Processor for HiveTableSource {
         match self.state {
             State::Finish => Ok(Event::Finished),
             State::ReadData(_) => Ok(Event::Async),
-            State::Deserialize(_, _) => Ok(Event::Sync),
+            State::Deserialize(_, _, _) => Ok(Event::Sync),
             State::Generated(_, _) => Err(ErrorCode::LogicalError("It's a bug.")),
         }
     }
 
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Finish) {
-            State::Deserialize(meta, chunks) => {
-                let data_block = self.block_reader.deserialize(chunks, meta)?;
+            State::Deserialize(meta, chunks, part) => {
+                let data_block = self.block_reader.deserialize(chunks, meta, part.clone())?;
                 let mut partitions = self.ctx.try_get_partitions(1)?;
 
                 let progress_values = ProgressValues {
@@ -143,7 +143,7 @@ impl Processor for HiveTableSource {
         match std::mem::replace(&mut self.state, State::Finish) {
             State::ReadData(part) => {
                 let (meta, chunks) = self.block_reader.read_columns_data(part.clone()).await?;
-                self.state = State::Deserialize(meta, chunks);
+                self.state = State::Deserialize(meta, chunks, part);
                 Ok(())
             }
             _ => Err(ErrorCode::LogicalError("It's a bug.")),

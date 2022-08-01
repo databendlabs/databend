@@ -23,6 +23,7 @@ use common_exception::Result;
 
 use crate::sql::binder::wrap_cast_if_needed;
 use crate::sql::binder::JoinCondition;
+use crate::sql::optimizer::heuristic::subquery_rewriter::FlattenInfo;
 use crate::sql::optimizer::heuristic::subquery_rewriter::SubqueryRewriter;
 use crate::sql::optimizer::heuristic::subquery_rewriter::UnnestResult;
 use crate::sql::optimizer::ColumnSet;
@@ -269,12 +270,14 @@ impl SubqueryRewriter {
         &mut self,
         left: &SExpr,
         subquery: &SubqueryExpr,
+        flatten_info: &mut FlattenInfo,
         is_conjunctive_predicate: bool,
     ) -> Result<(SExpr, UnnestResult)> {
         match subquery.typ {
             SubqueryType::Scalar => {
                 let correlated_columns = subquery.outer_columns.clone();
-                let flatten_plan = self.flatten(&subquery.subquery, &correlated_columns)?;
+                let flatten_plan =
+                    self.flatten(&subquery.subquery, &correlated_columns, flatten_info)?;
                 // Construct single join
                 let mut left_conditions = Vec::with_capacity(correlated_columns.len());
                 let mut right_conditions = Vec::with_capacity(correlated_columns.len());
@@ -301,7 +304,8 @@ impl SubqueryRewriter {
                     }
                 }
                 let correlated_columns = subquery.outer_columns.clone();
-                let flatten_plan = self.flatten(&subquery.subquery, &correlated_columns)?;
+                let flatten_plan =
+                    self.flatten(&subquery.subquery, &correlated_columns, flatten_info)?;
                 // Construct mark join
                 let mut left_conditions = Vec::with_capacity(correlated_columns.len());
                 let mut right_conditions = Vec::with_capacity(correlated_columns.len());
@@ -310,12 +314,15 @@ impl SubqueryRewriter {
                     &mut left_conditions,
                     &mut right_conditions,
                 )?;
-                let mut metadata = self.metadata.write();
-                let marker_index = metadata.add_column(
-                    "marker".to_string(),
-                    NullableType::new_impl(BooleanType::new_impl()),
-                    None,
-                );
+                let marker_index = if let Some(idx) = subquery.index {
+                    idx
+                } else {
+                    self.metadata.write().add_column(
+                        "marker".to_string(),
+                        NullableType::new_impl(BooleanType::new_impl()),
+                        None,
+                    )
+                };
                 let join_plan = LogicalInnerJoin {
                     left_conditions,
                     right_conditions,
@@ -329,7 +336,8 @@ impl SubqueryRewriter {
             }
             SubqueryType::Any => {
                 let correlated_columns = subquery.outer_columns.clone();
-                let flatten_plan = self.flatten(&subquery.subquery, &correlated_columns)?;
+                let flatten_plan =
+                    self.flatten(&subquery.subquery, &correlated_columns, flatten_info)?;
                 let rel_expr = RelExpr::with_s_expr(&flatten_plan);
                 let mut left_conditions = Vec::with_capacity(correlated_columns.len());
                 let mut right_conditions = Vec::with_capacity(correlated_columns.len());
@@ -377,12 +385,15 @@ impl SubqueryRewriter {
                     right: Box::new(right_condition),
                     return_type: Box::new(NullableType::new_impl(BooleanType::new_impl())),
                 })];
-                let mut metadata = self.metadata.write();
-                let marker_index = metadata.add_column(
-                    "marker".to_string(),
-                    NullableType::new_impl(BooleanType::new_impl()),
-                    None,
-                );
+                let marker_index = if let Some(idx) = subquery.index {
+                    idx
+                } else {
+                    self.metadata.write().add_column(
+                        "marker".to_string(),
+                        NullableType::new_impl(BooleanType::new_impl()),
+                        None,
+                    )
+                };
                 let mark_join = LogicalInnerJoin {
                     left_conditions,
                     right_conditions,
@@ -401,7 +412,12 @@ impl SubqueryRewriter {
         }
     }
 
-    fn flatten(&mut self, plan: &SExpr, correlated_columns: &ColumnSet) -> Result<SExpr> {
+    fn flatten(
+        &mut self,
+        plan: &SExpr,
+        correlated_columns: &ColumnSet,
+        flatten_info: &mut FlattenInfo,
+    ) -> Result<SExpr> {
         let rel_expr = RelExpr::with_s_expr(plan);
         let prop = rel_expr.derive_relational_prop()?;
         if prop.outer_columns.is_empty() {
@@ -434,6 +450,7 @@ impl SubqueryRewriter {
                 LogicalGet {
                     table_index,
                     columns: self.derived_columns.values().cloned().collect(),
+                    push_down_predicates: None,
                 }
                 .into(),
             );
@@ -452,7 +469,8 @@ impl SubqueryRewriter {
 
         match plan.plan() {
             RelOperator::Project(project) => {
-                let flatten_plan = self.flatten(plan.child(0)?, correlated_columns)?;
+                let flatten_plan =
+                    self.flatten(plan.child(0)?, correlated_columns, flatten_info)?;
                 let mut columns = HashSet::with_capacity(project.columns.len());
                 for column_idx in project.columns.iter() {
                     let scalar = {
@@ -479,7 +497,8 @@ impl SubqueryRewriter {
                 ))
             }
             RelOperator::EvalScalar(eval_scalar) => {
-                let flatten_plan = self.flatten(plan.child(0)?, correlated_columns)?;
+                let flatten_plan =
+                    self.flatten(plan.child(0)?, correlated_columns, flatten_info)?;
                 let mut items = Vec::with_capacity(eval_scalar.items.len());
                 for item in eval_scalar.items.iter() {
                     let new_item = ScalarItem {
@@ -512,7 +531,8 @@ impl SubqueryRewriter {
                 ))
             }
             RelOperator::Filter(filter) => {
-                let flatten_plan = self.flatten(plan.child(0)?, correlated_columns)?;
+                let flatten_plan =
+                    self.flatten(plan.child(0)?, correlated_columns, flatten_info)?;
                 let mut predicates = Vec::with_capacity(filter.predicates.len());
                 for predicate in filter.predicates.iter() {
                     predicates.push(self.flatten_scalar(predicate, correlated_columns)?);
@@ -526,8 +546,10 @@ impl SubqueryRewriter {
             }
             RelOperator::LogicalInnerJoin(join) => {
                 // Currently, we don't support join conditions contain subquery
-                let left_flatten_plan = self.flatten(plan.child(0)?, correlated_columns)?;
-                let right_flatten_plan = self.flatten(plan.child(1)?, correlated_columns)?;
+                let left_flatten_plan =
+                    self.flatten(plan.child(0)?, correlated_columns, flatten_info)?;
+                let right_flatten_plan =
+                    self.flatten(plan.child(1)?, correlated_columns, flatten_info)?;
                 Ok(SExpr::create_binary(
                     LogicalInnerJoin {
                         left_conditions: join.left_conditions.clone(),
@@ -543,7 +565,8 @@ impl SubqueryRewriter {
                 ))
             }
             RelOperator::Aggregate(aggregate) => {
-                let flatten_plan = self.flatten(plan.child(0)?, correlated_columns)?;
+                let flatten_plan =
+                    self.flatten(plan.child(0)?, correlated_columns, flatten_info)?;
                 let mut group_items = Vec::with_capacity(aggregate.group_items.len());
                 for item in aggregate.group_items.iter() {
                     let scalar = self.flatten_scalar(&item.scalar, correlated_columns)?;
@@ -575,6 +598,13 @@ impl SubqueryRewriter {
                 let mut agg_items = Vec::with_capacity(aggregate.aggregate_functions.len());
                 for item in aggregate.aggregate_functions.iter() {
                     let scalar = self.flatten_scalar(&item.scalar, correlated_columns)?;
+                    if let Scalar::AggregateFunction(AggregateFunction { func_name, .. }) = &scalar
+                    {
+                        if func_name.eq_ignore_ascii_case("count") || func_name.eq("count_distinct")
+                        {
+                            flatten_info.from_count_func = true;
+                        }
+                    }
                     agg_items.push(ScalarItem {
                         scalar,
                         index: item.index,
@@ -593,7 +623,8 @@ impl SubqueryRewriter {
             }
             RelOperator::Sort(_) | RelOperator::Limit(_) => {
                 // Currently, we don't support sort and limit contain subquery.
-                let flatten_plan = self.flatten(plan.child(0)?, correlated_columns)?;
+                let flatten_plan =
+                    self.flatten(plan.child(0)?, correlated_columns, flatten_info)?;
                 Ok(SExpr::create_unary(plan.plan().clone(), flatten_plan))
             }
 

@@ -33,7 +33,7 @@ use common_exception::Result;
 use common_meta_app::schema::TableMeta;
 use common_planners::OptimizeTableAction;
 use common_planners::*;
-use common_tracing::tracing;
+use tracing::debug;
 
 use crate::catalogs::DatabaseCatalog;
 use crate::sessions::TableContext;
@@ -181,7 +181,7 @@ impl<'a> Binder {
                 select_builder.build()
             }
         };
-        tracing::debug!("show tables rewrite to: {:?}", query);
+        debug!("show tables rewrite to: {:?}", query);
         let tokens = tokenize_sql(query.as_str())?;
         let backtrace = Backtrace::new();
         let (stmt, _) = parse_sql(&tokens, &backtrace)?;
@@ -813,7 +813,7 @@ impl<'a> Binder {
             let column = ColumnBinding {
                 database_name: None,
                 table_name: None,
-                column_name: field.name().clone(),
+                column_name: field.name().to_lowercase(),
                 // A dummy index is fine, since we won't actually evaluate the expression
                 index: 0,
                 data_type: Box::new(field.data_type().clone()),

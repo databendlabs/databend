@@ -64,10 +64,7 @@ impl MultipartWorker for SequentialMultipartWorker {
                             ))))
                             .await
                         {
-                            common_tracing::tracing::warn!(
-                                "Multipart channel disconnect. {}",
-                                cause
-                            );
+                            tracing::warn!("Multipart channel disconnect. {}", cause);
 
                             break 'outer;
                         }
@@ -79,7 +76,7 @@ impl MultipartWorker for SequentialMultipartWorker {
                         let filename = field.file_name().unwrap_or("Unknown file name").to_string();
 
                         if let Err(cause) = tx.send(Ok(vec![])).await {
-                            common_tracing::tracing::warn!(
+                            tracing::warn!(
                                 "Multipart channel disconnect. {}, filename '{}'",
                                 cause,
                                 filename
@@ -105,7 +102,7 @@ impl MultipartWorker for SequentialMultipartWorker {
                                     }
 
                                     if let Err(cause) = tx.send(Ok(buf)).await {
-                                        common_tracing::tracing::warn!(
+                                        tracing::warn!(
                                             "Multipart channel disconnect. {}, filename: '{}'",
                                             cause,
                                             filename
@@ -123,7 +120,7 @@ impl MultipartWorker for SequentialMultipartWorker {
                                         ))))
                                         .await
                                     {
-                                        common_tracing::tracing::warn!(
+                                        tracing::warn!(
                                             "Multipart channel disconnect. {}, filename: '{}'",
                                             cause,
                                             filename
@@ -286,14 +283,13 @@ impl Processor for SequentialInputFormatSource {
                 }
 
                 while !data_slice.is_empty() {
-                    let len = data_slice.len();
-                    let read_size = self
+                    let (read_size, is_full) = self
                         .input_format
                         .read_buf(data_slice, &mut self.input_state)?;
 
                     data_slice = &data_slice[read_size..];
 
-                    if read_size < len {
+                    if is_full {
                         let state = &mut self.input_state;
                         let mut blocks = self.input_format.deserialize_data(state)?;
 

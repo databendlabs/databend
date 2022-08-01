@@ -24,7 +24,6 @@ use common_exception::ToErrorCode;
 use common_formats::output_format::OutputFormatType;
 use common_planners::PlanNode;
 use common_streams::SendableDataBlockStream;
-use common_tracing::tracing;
 use futures::StreamExt;
 use http::HeaderMap;
 use naive_cityhash::cityhash128;
@@ -42,8 +41,9 @@ use poem::IntoResponse;
 use poem::Route;
 use serde::Deserialize;
 use serde::Serialize;
+use tracing::error;
+use tracing::info;
 
-use crate::clusters::ClusterHelper;
 use crate::interpreters::InterpreterFactory;
 use crate::interpreters::InterpreterFactoryV2;
 use crate::pipelines::processors::port::OutputPort;
@@ -51,6 +51,7 @@ use crate::pipelines::processors::StreamSource;
 use crate::pipelines::SourcePipeBuilder;
 use crate::servers::clickhouse::CLickHouseFederated;
 use crate::servers::http::v1::HttpQueryContext;
+use crate::servers::utils::use_planner_v2;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionType;
 use crate::sessions::TableContext;
@@ -110,14 +111,14 @@ async fn execute_v2(
     let _ = interpreter
         .start()
         .await
-        .map_err(|e| tracing::error!("interpreter.start.error: {:?}", e));
+        .map_err(|e| error!("interpreter.start.error: {:?}", e));
     let output_port = OutputPort::create();
     let stream_source = StreamSource::create(ctx.clone(), None, output_port.clone())?;
     let mut source_pipe_builder = SourcePipeBuilder::create();
     source_pipe_builder.add_source(output_port, stream_source);
     let _ = interpreter
         .set_source_pipe_builder(Option::from(source_pipe_builder))
-        .map_err(|e| tracing::error!("interpreter.set_source_pipe_builder.error: {:?}", e));
+        .map_err(|e| error!("interpreter.set_source_pipe_builder.error: {:?}", e));
     let data_stream = interpreter.execute(None).await?;
 
     let mut data_stream = ctx.try_create_abortable(data_stream)?;
@@ -137,6 +138,7 @@ async fn execute_v2(
         }
     };
 
+    let session = ctx.get_current_session();
     let stream = stream! {
         yield compress_fn(prefix);
         while let Some(block) = data_stream.next().await {
@@ -151,7 +153,9 @@ async fn execute_v2(
         let _ = interpreter
             .finish()
             .await
-            .map_err(|e| tracing::error!("interpreter.finish error: {:?}", e));
+            .map_err(|e| error!("interpreter.finish error: {:?} ", e));
+        // to hold session ref until stream is all consumed
+        let _ = session.get_id();
     };
 
     Ok(Body::from_bytes_stream(stream).with_content_type(format.get_content_type()))
@@ -168,7 +172,7 @@ async fn execute(
     let _ = interpreter
         .start()
         .await
-        .map_err(|e| tracing::error!("interpreter.start.error: {:?}", e));
+        .map_err(|e| error!("interpreter.start.error: {:?}", e));
     let data_stream: SendableDataBlockStream = {
         let output_port = OutputPort::create();
         let stream_source = StreamSource::create(ctx.clone(), input_stream, output_port.clone())?;
@@ -176,7 +180,7 @@ async fn execute(
         source_pipe_builder.add_source(output_port, stream_source);
         let _ = interpreter
             .set_source_pipe_builder(Option::from(source_pipe_builder))
-            .map_err(|e| tracing::error!("interpreter.set_source_pipe_builder.error: {:?}", e));
+            .map_err(|e| error!("interpreter.set_source_pipe_builder.error: {:?}", e));
         interpreter.execute(None).await?
     };
 
@@ -195,6 +199,7 @@ async fn execute(
             rb
         }
     };
+    let session = ctx.get_current_session();
     let stream = stream! {
         yield compress_fn(prefix);
         while let Some(block) = data_stream.next().await {
@@ -210,7 +215,9 @@ async fn execute(
         let _ = interpreter
             .finish()
             .await
-            .map_err(|e| tracing::error!("interpreter.finish error: {:?}", e));
+            .map_err(|e| error!("interpreter.finish error: {:?}", e));
+        // to hold session ref until stream is all consumed
+        let _ = session.get_id();
     };
 
     Ok(Body::from_bytes_stream(stream).with_content_type(format.get_content_type()))
@@ -242,22 +249,9 @@ pub async fn clickhouse_handler_get(
         return serialize_one_block(context.clone(), block, &sql, &params, default_format)
             .map_err(InternalServerError);
     }
-
-    let (stmts, _) = DfParser::parse_sql(sql.as_str(), context.get_current_session().get_type())
-        .unwrap_or_else(|_| (vec![], vec![]));
-
     let settings = context.get_settings();
-    if !context.get_config().query.management_mode
-        && (settings
-            .get_enable_planner_v2()
-            .map_err(InternalServerError)?
-            != 0
-            && !stmts.is_empty()
-            && stmts.get(0).map_or(false, InterpreterFactoryV2::check)
-            || stmts
-                .get(0)
-                .map_or(false, InterpreterFactoryV2::enable_default))
-    {
+    let stmts = DfParser::parse_sql(sql.as_str(), context.get_current_session().get_type());
+    if use_planner_v2(&settings, &stmts).map_err(InternalServerError)? {
         let mut planner = Planner::new(context.clone());
         let (plan, _, fmt) = planner.plan_sql(&sql).await.map_err(BadRequest)?;
         let format = get_format_with_default(fmt, default_format)?;
@@ -315,27 +309,15 @@ pub async fn clickhouse_handler_post(
     } else {
         sql.to_string()
     };
-    tracing::info!("receive clickhouse http post, (query + body) = {}", &msg);
+    info!("receive clickhouse http post, (query + body) = {}", &msg);
 
     if let Some(block) = CLickHouseFederated::check(&sql) {
         return serialize_one_block(ctx.clone(), block, &sql, &params, default_format)
             .map_err(InternalServerError);
     }
 
-    let (stmts, _) = DfParser::parse_sql(sql.as_str(), ctx.get_current_session().get_type())
-        .unwrap_or_else(|_| (vec![], vec![]));
-    if !ctx.get_config().query.management_mode
-        && (ctx.get_cluster().is_empty()
-            && settings
-                .get_enable_planner_v2()
-                .map_err(InternalServerError)?
-                != 0
-            && !stmts.is_empty()
-            && stmts.get(0).map_or(false, InterpreterFactoryV2::check)
-            || stmts
-                .get(0)
-                .map_or(false, InterpreterFactoryV2::enable_default))
-    {
+    let stmts = DfParser::parse_sql(sql.as_str(), ctx.get_current_session().get_type());
+    if use_planner_v2(&settings, &stmts).map_err(InternalServerError)? {
         let mut planner = Planner::new(ctx.clone());
         let (plan, _, fmt) = planner.plan_sql(&sql).await.map_err(BadRequest)?;
         let format = get_format_with_default(fmt, default_format)?;

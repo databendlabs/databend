@@ -23,7 +23,7 @@ use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Expression;
-use common_tracing::tracing;
+use tracing::info;
 
 use crate::pipelines::processors::transforms::ExpressionExecutor;
 use crate::storages::index::IndexSchemaVersion;
@@ -392,11 +392,9 @@ impl BloomFilter {
         let power_of_ln2 = core::f32::consts::LN_2 as f64 * core::f32::consts::LN_2 as f64;
         let m = -(num_items as f64 * false_positive_rate.ln()) / power_of_ln2;
         let num_bits = m.ceil() as usize;
-        tracing::info!(
+        info!(
             "Bloom filter calculate optimal bits, num_bits: {}, num_items: {}, false_positive_rate: {}",
-            num_bits,
-            num_items,
-            false_positive_rate
+            num_bits, num_items, false_positive_rate
         );
         num_bits
     }
@@ -410,7 +408,7 @@ impl BloomFilter {
     pub fn optimal_num_hashes(num_items: u64, num_bits: u64) -> usize {
         let k = num_bits as f64 / num_items as f64 * core::f32::consts::LN_2 as f64;
         let num_hashes = std::cmp::max(2, k.ceil() as usize); // at least two hashes
-        tracing::info!(
+        info!(
             "Bloom filter calculate optimal hashes, num_hashes: {}",
             num_hashes
         );
@@ -653,7 +651,7 @@ impl BloomFilter {
 
     /// Serialize the bloom filter to byte vector.
     pub fn to_vec(&self) -> Result<Vec<u8>> {
-        match bincode::serialize(self) {
+        match bincode::serde::encode_to_vec(self, bincode::config::standard()) {
             Ok(v) => Ok(v),
             Err(e) => Err(ErrorCode::StorageOther(format!(
                 "bincode serialization error: {} ",
@@ -664,8 +662,8 @@ impl BloomFilter {
 
     /// Deserialize from a byte slice and return a bloom filter.
     pub fn from_vec(bytes: &[u8]) -> Result<Self> {
-        match bincode::deserialize::<BloomFilter>(bytes) {
-            Ok(bloom_filter) => Ok(bloom_filter),
+        match bincode::serde::decode_from_slice(bytes, bincode::config::standard()) {
+            Ok((bloom_filter, _)) => Ok(bloom_filter),
             Err(e) => Err(ErrorCode::StorageOther(format!(
                 "bincode deserialization error: {} ",
                 e

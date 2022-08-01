@@ -11,7 +11,6 @@
 //  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
-//
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -34,9 +33,9 @@ use common_meta_app::schema::TableStatistics;
 use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_types::MatchSeq;
-use common_tracing::tracing;
-use common_tracing::tracing::info;
-use common_tracing::tracing::warn;
+use tracing::debug;
+use tracing::info;
+use tracing::warn;
 use uuid::Uuid;
 
 use crate::sessions::TableContext;
@@ -96,7 +95,7 @@ impl FuseTable {
                     break {
                         if transient {
                             // Removes historical data, if table is transient
-                            tracing::warn!(
+                            warn!(
                                 "transient table detected, purging historical data. ({})",
                                 tbl.table_info.ident
                             );
@@ -123,7 +122,7 @@ impl FuseTable {
                 {
                     Some(d) => {
                         let name = tbl.table_info.name.clone();
-                        tracing::debug!(
+                        debug!(
                             "got error TableVersionMismatched, tx will be retried {} ms later. table name {}, identity {}",
                             d.as_millis(),
                             name.as_str(),
@@ -136,7 +135,7 @@ impl FuseTable {
                         continue;
                     }
                     None => {
-                        tracing::info!("aborting operations");
+                        info!("aborting operations");
                         let _ = self::utils::abort_operations(ctx.as_ref(), operation_log).await;
                         break Err(ErrorCode::OCCRetryFailure(format!(
                             "can not fulfill the tx after retries({} times, {} ms), aborted. table name {}, identity {}",

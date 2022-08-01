@@ -75,6 +75,17 @@ These metrics describe the network status of raft nodes in the `metasrv`. All th
 
 `snapshot_recv_seconds` indicate the total latency distributions of snapshot receives.
 
+### Raft Storage
+
+These metrics describe the storage status of raft nodes in the `metasrv`. All these metrics are prefixed with `metasrv_raft_storage_`.
+
+| Name                    | Description                                       | Labels                            | Type          |
+| ----------------------- | ------------------------------------------------- | --------------------------------- | ------------- |
+| raft_store_write_failed            | Total number of raft store write failures.    | func(function name) | CounterVec      |
+| raft_store_read_failed            | Total number of raft store read failures.    | func(function name) | CounterVec      |
+
+`raft_store_write_failed` and `raft_store_read_failed` indicate the total number of raft store write and read failures.
+
 ### Meta Network
 
 These metrics describe the network status of meta service in the `metasrv`. All these metrics are prefixed with `metasrv_meta_network_`.

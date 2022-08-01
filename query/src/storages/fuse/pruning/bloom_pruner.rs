@@ -21,7 +21,6 @@ use common_exception::Result;
 use common_planners::Expression;
 use common_planners::ExpressionVisitor;
 use common_planners::Recursion;
-use common_tracing::tracing;
 use opendal::Operator;
 
 use crate::storages::fuse::io::load_bloom_filter_by_columns;

@@ -78,7 +78,7 @@ impl PipelineCompleteExecutor {
 impl Drop for PipelineCompleteExecutor {
     fn drop(&mut self) {
         if let Err(cause) = self.finish() {
-            common_tracing::tracing::warn!("Executor finish is failure {:?}", cause);
+            tracing::warn!("Executor finish is failure {:?}", cause);
         }
     }
 }

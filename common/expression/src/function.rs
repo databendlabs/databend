@@ -22,6 +22,7 @@ use serde::Serialize;
 use crate::property::Domain;
 use crate::property::FunctionProperty;
 use crate::property::NullableDomain;
+use crate::types::nullable::NullableColumn;
 use crate::types::*;
 use crate::values::Value;
 use crate::values::ValueRef;
@@ -236,7 +237,7 @@ impl FunctionRegistry {
             name,
             property.clone(),
             |_| None,
-            vectorize_1_arg::<NullType, NullType>(|_| ()),
+            |_, _| Ok(Value::Scalar(())),
         );
 
         self.register_1_arg_core::<I1, O, _, _>(name, property.clone(), calc_domain, func);
@@ -328,19 +329,19 @@ impl FunctionRegistry {
             name,
             property.clone(),
             |_, _| None,
-            vectorize_2_arg::<NullableType<I1>, NullType, NullType>(|_, _| ()),
+            |_, _, _| Ok(Value::Scalar(())),
         );
         self.register_2_arg_core::<NullType, NullableType<I2>, NullType, _, _>(
             name,
             property.clone(),
             |_, _| None,
-            vectorize_2_arg::<NullType, NullableType<I2>, NullType>(|_, _| ()),
+            |_, _, _| Ok(Value::Scalar(())),
         );
         self.register_2_arg_core::<NullType, NullType, NullType, _, _>(
             name,
             property.clone(),
             |_, _| None,
-            vectorize_2_arg::<NullType, NullType, NullType>(|_, _| ()),
+            |_, _, _| Ok(Value::Scalar(())),
         );
 
         self.register_2_arg_core::<I1, I2, O, _, _>(name, property.clone(), calc_domain, func);
@@ -509,11 +510,14 @@ pub fn passthrough_nullable_1_arg<I1: ArgType, O: ArgType>(
                 .into_scalar()
                 .unwrap(),
         ))),
-        ValueRef::Column((col, validity)) => {
-            let col = func(ValueRef::Column(col), generics)?
+        ValueRef::Column(col) => {
+            let inner_col = func(ValueRef::Column(col.column), generics)?
                 .into_column()
                 .unwrap();
-            Ok(Value::Column((col, validity)))
+            Ok(Value::Column(NullableColumn {
+                column: inner_col,
+                validity: col.validity,
+            }))
         }
     }
 }
@@ -595,24 +599,42 @@ pub fn passthrough_nullable_2_arg<I1: ArgType, I2: ArgType, O: ArgType>(
                 .into_scalar()
                 .unwrap(),
         ))),
-        (ValueRef::Scalar(Some(arg1)), ValueRef::Column((arg2, arg2_validity))) => {
-            let col = func(ValueRef::Scalar(arg1), ValueRef::Column(arg2), generics)?
-                .into_column()
-                .unwrap();
-            Ok(Value::Column((col, arg2_validity)))
+        (ValueRef::Scalar(Some(arg1)), ValueRef::Column(arg2)) => {
+            let column = func(
+                ValueRef::Scalar(arg1),
+                ValueRef::Column(arg2.column),
+                generics,
+            )?
+            .into_column()
+            .unwrap();
+            Ok(Value::Column(NullableColumn {
+                column,
+                validity: arg2.validity,
+            }))
         }
-        (ValueRef::Column((arg1, arg1_validity)), ValueRef::Scalar(Some(arg2))) => {
-            let col = func(ValueRef::Column(arg1), ValueRef::Scalar(arg2), generics)?
-                .into_column()
-                .unwrap();
-            Ok(Value::Column((col, arg1_validity)))
+        (ValueRef::Column(arg1), ValueRef::Scalar(Some(arg2))) => {
+            let column = func(
+                ValueRef::Column(arg1.column),
+                ValueRef::Scalar(arg2),
+                generics,
+            )?
+            .into_column()
+            .unwrap();
+            Ok(Value::Column(NullableColumn {
+                column,
+                validity: arg1.validity,
+            }))
         }
-        (ValueRef::Column((arg1, arg1_validity)), ValueRef::Column((arg2, arg2_validity))) => {
-            let col = func(ValueRef::Column(arg1), ValueRef::Column(arg2), generics)?
-                .into_column()
-                .unwrap();
-            let validity = common_arrow::arrow::bitmap::and(&arg1_validity, &arg2_validity);
-            Ok(Value::Column((col, validity)))
+        (ValueRef::Column(arg1), ValueRef::Column(arg2)) => {
+            let column = func(
+                ValueRef::Column(arg1.column),
+                ValueRef::Column(arg2.column),
+                generics,
+            )?
+            .into_column()
+            .unwrap();
+            let validity = common_arrow::arrow::bitmap::and(&arg1.validity, &arg2.validity);
+            Ok(Value::Column(NullableColumn { column, validity }))
         }
     }
 }

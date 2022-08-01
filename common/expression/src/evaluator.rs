@@ -20,7 +20,6 @@ use num_traits::ToPrimitive;
 use crate::chunk::Chunk;
 use crate::error::Result;
 use crate::expression::Expr;
-use crate::expression::Literal;
 use crate::expression::Span;
 use crate::function::FunctionContext;
 use crate::property::BooleanDomain;
@@ -31,6 +30,8 @@ use crate::property::NullableDomain;
 use crate::property::StringDomain;
 use crate::property::UIntDomain;
 use crate::types::any::AnyType;
+use crate::types::array::ArrayColumn;
+use crate::types::nullable::NullableColumn;
 use crate::types::DataType;
 use crate::util::constant_bitmap;
 use crate::values::Column;
@@ -47,10 +48,8 @@ pub struct Evaluator {
 impl Evaluator {
     pub fn run(&self, expr: &Expr) -> Result<Value<AnyType>> {
         match expr {
-            Expr::Literal { lit, .. } => Ok(Value::Scalar(self.run_lit(lit))),
-            Expr::ColumnRef { id, .. } => {
-                Ok(Value::Column(self.input_columns.columns()[*id].clone()))
-            }
+            Expr::Constant { scalar, .. } => Ok(Value::Scalar(scalar.clone())),
+            Expr::ColumnRef { id, .. } => Ok(self.input_columns.columns()[*id].clone()),
             Expr::FunctionCall {
                 span,
                 function,
@@ -111,24 +110,6 @@ impl Evaluator {
                     ))),
                 }
             }
-        }
-    }
-
-    pub fn run_lit(&self, lit: &Literal) -> Scalar {
-        match lit {
-            Literal::Null => Scalar::Null,
-            Literal::Int8(val) => Scalar::Int8(*val),
-            Literal::Int16(val) => Scalar::Int16(*val),
-            Literal::Int32(val) => Scalar::Int32(*val),
-            Literal::Int64(val) => Scalar::Int64(*val),
-            Literal::UInt8(val) => Scalar::UInt8(*val),
-            Literal::UInt16(val) => Scalar::UInt16(*val),
-            Literal::UInt32(val) => Scalar::UInt32(*val),
-            Literal::UInt64(val) => Scalar::UInt64(*val),
-            Literal::Float32(val) => Scalar::Float32(*val),
-            Literal::Float64(val) => Scalar::Float64(*val),
-            Literal::Boolean(val) => Scalar::Boolean(*val),
-            Literal::String(val) => Scalar::String(val.clone()),
         }
     }
 
@@ -224,26 +205,26 @@ impl Evaluator {
                 }
                 Ok(builder.build())
             }
-            (Column::Nullable { column, validity }, DataType::Nullable(dest_ty)) => {
-                let column = self.run_cast_column(span, *column, dest_ty)?;
-                Ok(Column::Nullable {
-                    column: Box::new(column),
-                    validity,
-                })
+            (Column::Nullable(box col), DataType::Nullable(dest_ty)) => {
+                let column = self.run_cast_column(span, col.column, dest_ty)?;
+                Ok(Column::Nullable(Box::new(NullableColumn {
+                    column,
+                    validity: col.validity,
+                })))
             }
             (col, DataType::Nullable(dest_ty)) => {
                 let column = self.run_cast_column(span, col, dest_ty)?;
-                Ok(Column::Nullable {
+                Ok(Column::Nullable(Box::new(NullableColumn {
                     validity: constant_bitmap(true, column.len()).into(),
-                    column: Box::new(column),
-                })
+                    column,
+                })))
             }
-            (Column::Array { array, offsets }, DataType::Array(dest_ty)) => {
-                let array = self.run_cast_column(span, *array, dest_ty)?;
-                Ok(Column::Array {
-                    array: Box::new(array),
-                    offsets,
-                })
+            (Column::Array(col), DataType::Array(dest_ty)) => {
+                let values = self.run_cast_column(span, col.values, dest_ty)?;
+                Ok(Column::Array(Box::new(ArrayColumn {
+                    values,
+                    offsets: col.offsets,
+                })))
             }
             (Column::Tuple { fields, len }, DataType::Tuple(fields_ty)) => {
                 let new_fields = fields
@@ -331,26 +312,26 @@ impl Evaluator {
                 }
                 builder.build()
             }
-            (Column::Nullable { column, validity }, _) => {
-                let (new_col, new_validity) = self
-                    .run_try_cast_column(span, *column, dest_type)
+            (Column::Nullable(box col), _) => {
+                let new_col = *self
+                    .run_try_cast_column(span, col.column, dest_type)
                     .into_nullable()
                     .unwrap();
-                Column::Nullable {
-                    column: new_col,
-                    validity: bitmap::or(&validity, &new_validity),
-                }
+                Column::Nullable(Box::new(NullableColumn {
+                    column: new_col.column,
+                    validity: bitmap::or(&col.validity, &new_col.validity),
+                }))
             }
-            (Column::Array { array, offsets }, DataType::Array(dest_ty)) => {
-                let new_array = self.run_try_cast_column(span, *array, dest_ty);
-                let new_col = Column::Array {
-                    array: Box::new(new_array),
-                    offsets,
-                };
-                Column::Nullable {
+            (Column::Array(col), DataType::Array(dest_ty)) => {
+                let new_values = self.run_try_cast_column(span, col.values, dest_ty);
+                let new_col = Column::Array(Box::new(ArrayColumn {
+                    values: new_values,
+                    offsets: col.offsets,
+                }));
+                Column::Nullable(Box::new(NullableColumn {
                     validity: constant_bitmap(true, new_col.len()).into(),
-                    column: Box::new(new_col),
-                }
+                    column: new_col,
+                }))
             }
             (Column::Tuple { fields, len }, DataType::Tuple(fields_ty)) => {
                 let new_fields = fields
@@ -364,19 +345,21 @@ impl Evaluator {
                     fields: new_fields,
                     len,
                 };
-                Column::Nullable {
+                Column::Nullable(Box::new(NullableColumn {
                     validity: constant_bitmap(true, len).into(),
-                    column: Box::new(new_col),
-                }
+                    column: new_col,
+                }))
             }
 
             // identical types
-            (col @ Column::Boolean(_), DataType::Boolean)
-            | (col @ Column::String { .. }, DataType::String)
-            | (col @ Column::EmptyArray { .. }, DataType::EmptyArray) => Column::Nullable {
-                validity: constant_bitmap(true, col.len()).into(),
-                column: Box::new(col),
-            },
+            (column @ Column::Boolean(_), DataType::Boolean)
+            | (column @ Column::String { .. }, DataType::String)
+            | (column @ Column::EmptyArray { .. }, DataType::EmptyArray) => {
+                Column::Nullable(Box::new(NullableColumn {
+                    validity: constant_bitmap(true, column.len()).into(),
+                    column,
+                }))
+            }
 
             (col, dest_ty) => {
                 // number types
@@ -388,10 +371,10 @@ impl Evaluator {
                                 let dest_info = DataType::DEST_TYPE.number_type_info().unwrap();
                                 if src_info.can_lossless_cast_to(dest_info) {
                                     let new_col = col.iter().map(|x| *x as _).collect::<Vec<_>>();
-                                    return Column::Nullable {
+                                    return Column::Nullable(Box::new(NullableColumn {
                                         validity: constant_bitmap(true, new_col.len()).into(),
-                                        column: Box::new(Column::DEST_TYPE(new_col.into())),
-                                    };
+                                        column: Column::DEST_TYPE(new_col.into()),
+                                    }));
                                 } else {
                                     let mut new_col = Vec::with_capacity(col.len());
                                     let mut validity = MutableBitmap::with_capacity(col.len());
@@ -404,10 +387,10 @@ impl Evaluator {
                                             validity.push(false);
                                         }
                                     }
-                                    return Column::Nullable {
+                                    return Column::Nullable(Box::new(NullableColumn {
                                         validity: validity.into(),
-                                        column: Box::new(Column::DEST_TYPE(new_col.into())),
-                                    };
+                                        column: Column::DEST_TYPE(new_col.into()),
+                                    }));
                                 }
                             }
                             _ => (),
@@ -439,7 +422,7 @@ impl DomainCalculator {
 
     pub fn calculate(&self, expr: &Expr) -> Result<Domain> {
         match expr {
-            Expr::Literal { lit, .. } => Ok(self.calculate_literal(lit)),
+            Expr::Constant { scalar, .. } => Ok(self.calculate_constant(scalar)),
             Expr::ColumnRef { id, .. } => Ok(self.input_domains[*id].clone()),
             Expr::Cast {
                 span,
@@ -472,55 +455,63 @@ impl DomainCalculator {
         }
     }
 
-    pub fn calculate_literal(&self, lit: &Literal) -> Domain {
-        match lit {
-            Literal::Null => Domain::Nullable(NullableDomain {
+    pub fn calculate_constant(&self, scalar: &Scalar) -> Domain {
+        match scalar {
+            Scalar::Null => Domain::Nullable(NullableDomain {
                 has_null: true,
                 value: None,
             }),
-            Literal::Int8(i) => Domain::Int(IntDomain {
+            Scalar::EmptyArray => Domain::Array(None),
+            Scalar::Int8(i) => Domain::Int(IntDomain {
                 min: *i as i64,
                 max: *i as i64,
             }),
-            Literal::Int16(i) => Domain::Int(IntDomain {
+            Scalar::Int16(i) => Domain::Int(IntDomain {
                 min: *i as i64,
                 max: *i as i64,
             }),
-            Literal::Int32(i) => Domain::Int(IntDomain {
+            Scalar::Int32(i) => Domain::Int(IntDomain {
                 min: *i as i64,
                 max: *i as i64,
             }),
-            Literal::Int64(i) => Domain::Int(IntDomain { min: *i, max: *i }),
-            Literal::UInt8(i) => Domain::UInt(UIntDomain {
+            Scalar::Int64(i) => Domain::Int(IntDomain { min: *i, max: *i }),
+            Scalar::UInt8(i) => Domain::UInt(UIntDomain {
                 min: *i as u64,
                 max: *i as u64,
             }),
-            Literal::UInt16(i) => Domain::UInt(UIntDomain {
+            Scalar::UInt16(i) => Domain::UInt(UIntDomain {
                 min: *i as u64,
                 max: *i as u64,
             }),
-            Literal::UInt32(i) => Domain::UInt(UIntDomain {
+            Scalar::UInt32(i) => Domain::UInt(UIntDomain {
                 min: *i as u64,
                 max: *i as u64,
             }),
-            Literal::UInt64(i) => Domain::UInt(UIntDomain { min: *i, max: *i }),
-            Literal::Float32(i) => Domain::Float(FloatDomain {
+            Scalar::UInt64(i) => Domain::UInt(UIntDomain { min: *i, max: *i }),
+            Scalar::Float32(i) => Domain::Float(FloatDomain {
                 min: *i as f64,
                 max: *i as f64,
             }),
-            Literal::Float64(i) => Domain::Float(FloatDomain { min: *i, max: *i }),
-            Literal::Boolean(true) => Domain::Boolean(BooleanDomain {
+            Scalar::Float64(i) => Domain::Float(FloatDomain { min: *i, max: *i }),
+            Scalar::Boolean(true) => Domain::Boolean(BooleanDomain {
                 has_false: false,
                 has_true: true,
             }),
-            Literal::Boolean(false) => Domain::Boolean(BooleanDomain {
+            Scalar::Boolean(false) => Domain::Boolean(BooleanDomain {
                 has_false: true,
                 has_true: false,
             }),
-            Literal::String(s) => Domain::String(StringDomain {
+            Scalar::String(s) => Domain::String(StringDomain {
                 min: s.clone(),
                 max: Some(s.clone()),
             }),
+            Scalar::Array(array) => Domain::Array(Some(Box::new(array.domain()))),
+            Scalar::Tuple(fields) => Domain::Tuple(
+                fields
+                    .iter()
+                    .map(|field| self.calculate_constant(field))
+                    .collect(),
+            ),
         }
     }
 

@@ -193,7 +193,7 @@ tar xzvf databend-${version}-aarch64-unknown-linux-musl.tar.gz
 c. Move the extracted folders `bin` and `configs` to the folder `/usr/local/databend`.
 
 ### Deploying a Meta Node
-a. Open the file `databend-meta.toml` in the folder `/usr/local/databend/configs`, and replace `0.0.0.0` with `127.0.0.1` within the whole file.
+a. Open the file `databend-meta.toml` in the folder `/usr/local/databend/configs`, and replace `127.0.0.1` with `0.0.0.0` within the whole file.
 
 b. Open a terminal window and navigate to the folder `/usr/local/databend/bin`.
 
@@ -210,7 +210,7 @@ curl -I  http://127.0.0.1:28101/v1/health
 ```
 
 ### Deploying a Query Node
-a. Open the file `databend-query.toml` in the folder `/usr/local/databend/configs`, and replace `0.0.0.0` with `127.0.0.1` within the whole file.
+a. Open the file `databend-query.toml` in the folder `/usr/local/databend/configs`, and replace `127.0.0.1` with `0.0.0.0` within the whole file.
 
 b. In the file `databend-query.toml`, set the parameter `type` in [storage] block to `s3` if you're using a S3 compatible object storage, or `azblob` if you're using Azure Blob storage.
 
@@ -243,12 +243,17 @@ secret_access_key = "<your-account-key>"
 # account_key = "<your-account-key>"
 ```
 
-d. Set your values in the [storage.fs] or [storage.azblob] block. Please note that the field `endpoint_url` refers to the service URL of your storage region and varies depending on the object storage solution you use:
+d. Set your values in the `[storage.s3]` or `[storage.azblob]` block. Please note that the field `endpoint_url` refers to the service URL of your storage region and varies depending on the object storage solution you use:
 
 <Tabs groupId="operating-systems">
 <TabItem value="MinIO" label="MinIO">
 
 ```toml
+[storage]
+# s3
+type = "s3"
+
+[storage.s3]
 endpoint_url = "http://127.0.0.1:9900"
 access_key_id = "minioadmin"
 secret_access_key = "minioadmin"
@@ -259,65 +264,162 @@ secret_access_key = "minioadmin"
 <TabItem value="Amazon S3" label="Amazon S3">
 
 ```toml
+[storage]
+# s3
+type = "s3"
+
+[storage.s3]
+# https://docs.aws.amazon.com/AmazonS3/latest/userguide/create-bucket-overview.html
+bucket = "databend"
 endpoint_url = "https://s3.amazonaws.com"
+
+# How to get access_key_id and secret_access_key:
+# https://docs.aws.amazon.com/general/latest/gr/aws-sec-cred-types.html
+// highlight-next-line
+access_key_id = "<your-key-id>"
+// highlight-next-line
+secret_access_key = "<your-access-key>"
 ```
 
 </TabItem>
 
 <TabItem value="Tencent COS" label="Tencent COS">
 
-You can get the URL from the bucket detail page. 
-
-For example, 
 ```toml
+[storage]
+# s3
+type = "s3"
+
+[storage.s3]
+# How to create a bucket:
+# https://cloud.tencent.com/document/product/436/13309
+// highlight-next-line
+bucket = "databend-1253727613"
+
+# You can get the URL from the bucket detail page.
+// highlight-next-line
 endpoint_url = "https://cos.ap-beijing.myqcloud.com"
+
+# How to get access_key_id and secret_access_key:
+# https://cloud.tencent.com/document/product/436/68282
+// highlight-next-line
+access_key_id = "<your-key-id>"
+// highlight-next-line
+secret_access_key = "<your-access-key>"
 ```
+
+:::tip
+In this example COS region is `ap-beijing`.
+:::
 
 </TabItem>
 
 <TabItem value="Alibaba OSS" label="Alibaba OSS">
 
-Follow this format:
 ```shell
-https://<bucket-name>.<region-id>[-internal].aliyuncs.com
-```
+[storage]
+# s3
+type = "s3"
 
-For example, 
-```toml
+[storage.s3]
+# How to create a bucket:
+// highlight-next-line
+bucket = "databend"
+
+# You can get the URL from the bucket detail page.
+// highlight-next-line
+# https://help.aliyun.com/document_detail/31837.htm
+// highlight-next-line
+# https://<bucket-name>.<region-id>[-internal].aliyuncs.com
+// highlight-next-line
 endpoint_url = "https://databend.oss-cn-beijing-internal.aliyuncs.com"
+
+# How to get access_key_id and secret_access_key:
+# https://help.aliyun.com/document_detail/53045.htm
+// highlight-next-line
+access_key_id = "<your-key-id>"
+// highlight-next-line
+secret_access_key = "<your-access-key>"
 ```
 
-For information about the region ID, see https://help.aliyun.com/document_detail/31837.htm
+:::tip
+In this example OSS region id is `oss-cn-beijing-internal`.
+:::
 
 </TabItem>
 
 <TabItem value="Wasabi" label="Wasabi">
 
-To find out the service URL for your storage region, go to https://wasabi-support.zendesk.com/hc/en-us/articles/360015106031-What-are-the-service-URLs-for-Wasabi-s-different-regions-
-
-For example, 
 ```toml
+[storage]
+# s3
+type = "s3"
+
+[storage.s3]
+# How to create a bucket:
+// highlight-next-line
+bucket = "<your-bucket>"
+
+# You can get the URL from:
+# https://wasabi-support.zendesk.com/hc/en-us/articles/360015106031-What-are-the-service-URLs-for-Wasabi-s-different-regions-
+// highlight-next-line
 endpoint_url = "https://s3.us-east-2.wasabisys.com"
+
+# How to get access_key_id and secret_access_key:
+// highlight-next-line
+access_key_id = "<your-key-id>"
+// highlight-next-line
+secret_access_key = "<your-access-key>"
 ```
+
+:::tip
+In this example Wasabi region is `us-east-2`.
+:::
 
 </TabItem>
 
 <TabItem value="QingCloud QingStore" label="QingCloud QingStore">
 
-To find out the service URL for your storage region, go to https://docsv3.qingcloud.com/storage/object-storage/intro/object-storage/#zone
-
-For example, 
 ```toml
-endpoint_url = "https://pek3b.qingstor.com"
+[storage]
+# s3
+type = "s3"
+
+[storage.s3]
+bucket = "databend"
+
+# You can get the URL from the bucket detail page.
+# https://docsv3.qingcloud.com/storage/object-storage/intro/object-storage/#zone
+endpoint_url = "https://s3.pek3b.qingstor.com"
+
+# How to get access_key_id and secret_access_key:
+# https://docs.qingcloud.com/product/api/common/overview.html
+access_key_id = "<your-key-id>"
+secret_access_key = "<your-access-key>"
 ```
+
+:::tip
+In this example QingStore region is `pek3b`.
+:::
 
 </TabItem>
 
 <TabItem value="Azure Blob Storage" label="Azure Blob Storage">
 
-Follow this format:
-```shell
-https://<your-storage-account-name>.blob.core.windows.net
+```toml
+[storage]
+# azblob
+type = "azblob"
+
+[storage.azblob]
+endpoint_url = "https://<your-storage-account-name>.blob.core.windows.net"
+
+# https://docs.microsoft.com/en-us/azure/storage/blobs/storage-quickstart-blobs-portal#create-a-container
+container = "<your-azure-storage-container-name>"
+account_name = "<your-storage-account-name>"
+
+# https://docs.microsoft.com/en-us/azure/storage/common/storage-account-keys-manage?tabs=azure-portal#view-account-access-keys
+account_key = "<your-account-key>"
 ```
 
 </TabItem>
@@ -337,11 +439,30 @@ curl -I  http://127.0.0.1:8081/v1/health
 ```
 
 ### Verifying Deployment
-In this section, we will run MySQL queries from a SQL client installed on your local machine.
 
-a. Create a connection to 127.0.0.1 from your SQL client. In the connection, set the port to `3307`, and set the username to `root`.
+In this section, we will run some queries against Databend to verify the deployment.
 
-b. Run the following commands to check if the query is successful:
+a. Download and install a MySQL client on your local machine.
+
+b. Create a connection to 127.0.0.1 from your SQL client. In the connection, set the port to `3307`, and set the username to `root`.
+
+:::tip
+
+**Create new users**. The `root` user only works when you access Databend from localhost. You will need to create new users and grant proper privileges first to connect to Databend remotely. For example, 
+
+```sql
+-- Create a user named "eric" with the password "databend"
+CREATE USER eric IDENTIFIED BY 'databend';
+
+-- Grant the ALL privilege on all existing tables in the default database to the user eric:
+GRANT ALL ON default.* TO eric;
+```
+
+For more information about creating new users, see [CREATE USER](../30-reference/30-sql/00-ddl/30-user/01-user-create-user.md).
+
+:::
+
+c. Run the following commands and check if the query is successful:
 
 ```sql
 CREATE TABLE t1(a int);

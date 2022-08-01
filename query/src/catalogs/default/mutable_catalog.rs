@@ -11,8 +11,8 @@
 //  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
-//
 
+use std::any::Any;
 use std::sync::Arc;
 
 use common_exception::Result;
@@ -50,7 +50,7 @@ use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_store::MetaStoreProvider;
 use common_meta_types::MetaId;
-use common_tracing::tracing;
+use tracing::info;
 
 use super::catalog_context::CatalogContext;
 use crate::catalogs::catalog::Catalog;
@@ -144,6 +144,10 @@ impl MutableCatalog {
 
 #[async_trait::async_trait]
 impl Catalog for MutableCatalog {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
     async fn get_database(&self, tenant: &str, db_name: &str) -> Result<Arc<dyn Database>> {
         let db_info = self
             .ctx
@@ -172,10 +176,9 @@ impl Catalog for MutableCatalog {
     async fn create_database(&self, req: CreateDatabaseReq) -> Result<CreateDatabaseReply> {
         // Create database.
         let res = self.ctx.meta.create_database(req.clone()).await?;
-        tracing::info!(
+        info!(
             "db name: {}, engine: {}",
-            &req.name_ident.db_name,
-            &req.meta.engine
+            &req.name_ident.db_name, &req.meta.engine
         );
 
         // Initial the database after creating.

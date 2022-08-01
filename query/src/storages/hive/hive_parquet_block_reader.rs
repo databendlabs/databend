@@ -33,14 +33,15 @@ use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_planners::PartInfo;
 use common_planners::PartInfoPtr;
-use common_tracing::tracing;
-use common_tracing::tracing::warn;
 use futures::AsyncReadExt;
 use opendal::Object;
 use opendal::Operator;
+use tracing::warn;
 
 use crate::catalogs::hive::HivePartInfo;
+use crate::catalogs::hive::HivePartitionFiller;
 use crate::storages::fuse::io::retry;
 use crate::storages::fuse::io::retry::Retryable;
 
@@ -51,6 +52,7 @@ pub struct HiveParquetBlockReader {
     arrow_schema: Arc<Schema>,
     projected_schema: DataSchemaRef,
     parquet_schema_descriptor: SchemaDescriptor,
+    hive_partition_filler: Option<HivePartitionFiller>,
 }
 
 impl HiveParquetBlockReader {
@@ -58,6 +60,7 @@ impl HiveParquetBlockReader {
         operator: Operator,
         schema: DataSchemaRef,
         projection: Vec<usize>,
+        hive_partition_filler: Option<HivePartitionFiller>,
     ) -> Result<Arc<HiveParquetBlockReader>> {
         let projected_schema = DataSchemaRef::new(schema.project(&projection));
 
@@ -70,6 +73,7 @@ impl HiveParquetBlockReader {
             projected_schema,
             parquet_schema_descriptor,
             arrow_schema: Arc::new(arrow_schema),
+            hive_partition_filler,
         }))
     }
 
@@ -168,14 +172,25 @@ impl HiveParquetBlockReader {
     ) -> Result<(FileMetaData, Vec<Vec<u8>>)> {
         let part = HivePartInfo::from_part(&part)?;
 
-        let object = self.operator.object(&part.location);
+        let object = self.operator.object(&part.filename);
         let mut reader = object.seekable_reader(0..);
-        let meta = read_metadata_async(&mut reader).await?;
+        let meta = read_metadata_async(&mut reader).await;
+        let meta = match meta {
+            Ok(meta) => meta,
+            Err(err) => {
+                tracing::warn!("parquet failed,read_meta,{}", part.filename);
+                return Err(ErrorCode::ParquetError(format!(
+                    "read meta failed, {}, {:?}",
+                    part.filename, err
+                )));
+            }
+        };
 
         if meta.row_groups.is_empty() {
+            tracing::warn!("parquet failed,no rowgroup,{}", part.filename);
             return Err(ErrorCode::ParquetError(format!(
                 "no rowgroup in parquet file: {}",
-                part.location
+                part.filename
             )));
         }
 
@@ -192,7 +207,7 @@ impl HiveParquetBlockReader {
             let (start, len) = column_meta.byte_range();
 
             join_handlers.push(Self::read_column(
-                self.operator.object(&part.location),
+                self.operator.object(&part.filename),
                 start,
                 len,
                 semaphore.clone(),
@@ -202,7 +217,12 @@ impl HiveParquetBlockReader {
         Ok((meta, futures::future::try_join_all(join_handlers).await?))
     }
 
-    pub fn deserialize(&self, chunks: Vec<Vec<u8>>, meta: FileMetaData) -> Result<DataBlock> {
+    pub fn deserialize(
+        &self,
+        chunks: Vec<Vec<u8>>,
+        meta: FileMetaData,
+        part: Arc<Box<dyn PartInfo>>,
+    ) -> Result<DataBlock> {
         if self.projection.len() != chunks.len() {
             return Err(ErrorCode::LogicalError(
                 "Columns chunk len must be equals projections len.",
@@ -230,13 +250,28 @@ impl HiveParquetBlockReader {
         let mut deserializer =
             RowGroupDeserializer::new(columns_array_iter, row_group.num_rows(), None);
 
-        self.try_next_block(&mut deserializer)
+        let data_block = self.try_next_block(&mut deserializer);
+        if data_block.is_err() {
+            let part = part.as_any().downcast_ref::<HivePartInfo>().unwrap();
+            let err = data_block.err().unwrap();
+            tracing::warn!("parquet failed,deserialize,{}", part.filename);
+            return Err(ErrorCode::ParquetError(format!(
+                "deseriallize parquet failed, {}, {:?}",
+                part.filename, err
+            )));
+        }
+
+        match &self.hive_partition_filler {
+            Some(hive_partition_filler) => {
+                hive_partition_filler.fill_data(data_block?, part, row_group.num_rows())
+            }
+            None => data_block,
+        }
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
-    pub async fn read(&self, part: PartInfoPtr) -> Result<DataBlock> {
-        let (num_rows, columns_array_iter) = self.read_columns_data(part).await?;
-        self.deserialize(columns_array_iter, num_rows)
+    pub async fn read(&self, _part: PartInfoPtr) -> Result<DataBlock> {
+        Err(ErrorCode::UnImplement("depracated"))
     }
 
     fn try_next_block(&self, deserializer: &mut RowGroupDeserializer) -> Result<DataBlock> {

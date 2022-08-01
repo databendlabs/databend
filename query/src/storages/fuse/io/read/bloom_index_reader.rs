@@ -33,10 +33,9 @@ use common_datavalues::ToDataType;
 use common_datavalues::Vu8;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_tracing::tracing;
-use common_tracing::tracing::Instrument;
 use futures_util::future::try_join_all;
 use opendal::Operator;
+use tracing::Instrument;
 
 #[tracing::instrument(level = "debug", skip_all)]
 pub async fn load_bloom_filter_by_columns(

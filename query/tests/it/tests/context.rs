@@ -92,8 +92,8 @@ pub async fn create_query_context_with_config(
     Ok(context)
 }
 
-pub fn create_storage_context() -> Result<StorageContext> {
-    let meta_embedded = futures::executor::block_on(MetaEmbedded::new_temp()).unwrap();
+pub async fn create_storage_context() -> Result<StorageContext> {
+    let meta_embedded = MetaEmbedded::new_temp().await.unwrap();
 
     Ok(StorageContext {
         meta: Arc::new(meta_embedded),

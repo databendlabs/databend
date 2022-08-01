@@ -1,19 +1,19 @@
 statement query TT 
 SHOW CREATE DATABASE `system`;
 
-----  
+----
 system CREATE DATABASE `system` ENGINE=SYSTEM
 
 statement ok
 DROP DATABASE IF EXISTS `test`;
 
 statement ok
-CREATE DATABASE `test` ENGINE=DEFAULT
+CREATE DATABASE `test`;
 
 statement query TT 
 SHOW CREATE DATABASE `test`;
 
-----  
+----
 test CREATE DATABASE `test` ENGINE=DEFAULT
 
 statement ok
@@ -31,7 +31,7 @@ DROP DATABASE `test`;
 statement query TT 
 SHOW CREATE SCHEMA `system`;
 
-----  
+----
 system CREATE DATABASE `system` ENGINE=SYSTEM
 
 statement ok
@@ -43,8 +43,8 @@ CREATE SCHEMA `test`;
 statement query TT 
 SHOW CREATE SCHEMA `test`;
 
-----  
-test CREATE DATABASE `test`  ENGINE=DEFAULT
+----
+test CREATE DATABASE `test` ENGINE=DEFAULT
 
 statement ok
 DROP SCHEMA `test`;

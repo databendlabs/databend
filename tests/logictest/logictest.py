@@ -3,11 +3,12 @@ import collections
 import glob
 import os
 import re
+import time
 
 import six
-from hamcrest import assert_that, is_, none, is_not
 
 from log import log
+from statistics import global_statistics
 
 supports_labels = ['http', 'mysql', 'clickhouse']
 
@@ -98,7 +99,7 @@ class LogicError(Exception):
         self.expected = expected
 
     def __str__(self):
-        return f"Expected regex{self.expected}, Actual: {self.message}"
+        return f"Expected: {self.expected}\nMessage: {self.message}"
 
 
 class Statement:
@@ -249,7 +250,7 @@ def safe_execute(method, *info):
 @six.add_metaclass(abc.ABCMeta)
 class SuiteRunner(object):
 
-    def __init__(self, kind, pattern):
+    def __init__(self, kind, args):
         self.label = None
         self.retry_time = 3
         self.driver = None
@@ -258,49 +259,68 @@ class SuiteRunner(object):
         self.kind = kind
         self.show_query_on_execution = True
         self.on_error_return = False
-        self.pattern = pattern
+        self.dir = dir
+        self.args = args
 
     # return all files under the path
     # format: a list of file absolute path and name(relative path)
     def fetch_files(self):
-        skip_files = os.getenv("SKIP_TEST_FILES")
-        skip_tests = skip_files.split(",") if skip_files is not None else []
-        log.debug(f"Skip test file list {skip_tests}")
+        log.debug(f"Skip test file list {self.args.skip}")
+        skips = self.args.skip
+
+        if type(skips) is str:
+            skips = skips.split(",")
+
         for filename in glob.iglob(f'{self.path}/**', recursive=True):
             if os.path.isfile(filename):
-                if os.path.basename(filename) in skip_tests:
+                base_name = os.path.basename(filename)
+                dirs = os.path.dirname(filename).split('/')
+
+                if self.args.skip_dir and any(
+                        s in dirs for s in self.args.skip_dir):
+                    continue
+
+                if self.args.run_dir and not any(s in dirs
+                                                 for s in self.args.run_dir):
+                    continue
+
+                if self.args.skip and any(
+                    [re.search(r, base_name) for r in skips]):
                     log.info(f"Skip test file {filename}")
                     continue
 
-                if not self.pattern or any([
-                        re.search(r,
-                                  filename.split("/")[-1]) for r in self.pattern
-                ]):
+                if not self.args.pattern or any(
+                    [re.search(r, base_name) for r in self.args.pattern]):
                     self.statement_files.append(
                         (filename, os.path.relpath(filename, self.path)))
 
         self.statement_files.sort()
 
     def execute(self):
-        # batch execute use single session
-        if callable(getattr(self, "batch_execute")):
-            # case batch
-            for (file_path, suite_name) in self.statement_files:
-                log.info(
-                    f"Run query with the same session every suite file, suite file path:{file_path}"
-                )
-                statement_list = list()
-                for state in get_statements(file_path, suite_name):
-                    statement_list.append(state)
-                self.batch_execute(statement_list)
-        else:
-            # case one by one
-            for (file_path, suite_name) in self.statement_files:
-                log.info(
-                    f"Run query without session every statements, suite file path:{file_path}"
-                )
-                for state in get_statements(file_path, suite_name):
-                    self.execute_statement(state)
+        for i in range(0, self.args.test_runs):
+            # batch execute use single session
+            if callable(getattr(self, "batch_execute")):
+                # case batch
+                for (file_path, suite_name) in self.statement_files:
+                    self.suite_now = suite_name
+                    log.info(
+                        f"Run query with the same session every suite file, suite file path:{file_path}"
+                    )
+                    statement_list = list()
+                    for state in get_statements(file_path, suite_name):
+                        statement_list.append(state)
+
+                    try:
+                        self.batch_execute(statement_list)
+                    except Exception as e:
+                        log.warning(
+                            f"Get exception when running suite {suite_name}")
+                        global_statistics.add_failed(self.kind, self.suite_now,
+                                                     e)
+                        continue
+            else:
+                raise RuntimeError(
+                    f"batch_execute is not implement in runner {self.kind}")
 
     def execute_statement(self, statement):
         if self.kind not in statement.runs_on:
@@ -312,6 +332,7 @@ class SuiteRunner(object):
             log.debug(
                 f"executing statement, type {statement.s_type.type}\n{statement.text}\n"
             )
+        start = time.perf_counter()
         if statement.s_type.type == "query":
             self.assert_execute_query(statement)
         elif statement.s_type.type == "error":
@@ -320,27 +341,33 @@ class SuiteRunner(object):
             self.assert_execute_ok(statement)
         else:
             raise Exception("Unknown statement type")
+        end = time.perf_counter()
+        time_cost = end - start
+        global_statistics.add_perf(self.kind, self.suite_now, statement.text,
+                                   time_cost)
 
     # expect the query just return ok
     def assert_execute_ok(self, statement):
         actual = safe_execute(lambda: self.execute_ok(statement.text),
                               statement)
-        assert_that(
-            actual,
-            is_(none()),
-            str(statement),
-        )
+        if actual is not None:
+            raise LogicError(
+                message=str(statement),
+                expected=
+                "statement ok must get success response, not error code in response"
+            )
 
     def assert_query_equal(self, f, resultset, statement):
         # use join after split instead of strip
         compare_f = "".join(f.split())
         compare_result = "".join(resultset[2].split())
-        assert compare_f == compare_result, "\n\n------------ Error Statement details ------------\n"\
-                                            " Expected:\n{}\n Actual:\n{}\n Statement:{}\n Start " \
+        if compare_f != compare_result:
+            raise LogicError(message="\n Expected:\n{}\n Actual:\n{}\n Statement:{}\n Start " \
                                             "Line: {}, Result Label: {}".format(resultset[2].rstrip(),
                                                                                 f.rstrip(),
                                                                                 str(statement), resultset[1],
-                                                                                resultset[0].group("label"))
+                                                                                resultset[0].group("label")),
+                            expected="statement query must get result equal to expected")
 
     def assert_execute_query(self, statement):
         if statement.s_type.query_type == "skipped":
@@ -350,9 +377,13 @@ class SuiteRunner(object):
         try:
             f = format_value(actual, len(statement.s_type.query_type))
         except Exception:
-            assert f"{statement} statement type is query but get no result"
-        assert statement.results is not None and len(
-            statement.results) > 0, f"No result found {statement}"
+            raise LogicError(
+                message=f"{statement} statement type is query but get no result",
+                expected="query get result")
+
+        if statement.results is None or len(statement.results) == 0:
+            raise LogicError(message=f"No result found {statement}",
+                             expected="query get result")
         hasResult = False
         for resultset in statement.results:
             if resultset[0].group("label") is not None and resultset[0].group(
@@ -365,7 +396,9 @@ class SuiteRunner(object):
                         resultset[0].group("label")) == 0:
                     self.assert_query_equal(f, resultset, statement)
                     hasResult = True
-        assert hasResult, f"No result found {statement}"
+        if not hasResult:
+            raise LogicError(message=f"No result found {statement}",
+                             expected="query get result")
 
     # expect the query just return error
     def assert_execute_error(self, statement):
@@ -374,10 +407,12 @@ class SuiteRunner(object):
         if actual is None:
             raise Exception("Expected error but got none")
         match = re.search(statement.s_type.expect_error, actual.msg)
-        assert_that(
-            match, is_not(none()),
-            f"statement {str(statement)}, expect error regex {statement.s_type.expect_error}, found {actual}"
-        )
+        if match is None:
+            raise LogicError(
+                message=
+                f"statement {str(statement)}, expect error regex {statement.s_type.expect_error}, found {actual}",
+                expected=
+                f"statement error must get error message in expected string")
 
     def run_sql_suite(self):
         log.info(

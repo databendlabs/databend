@@ -14,8 +14,8 @@
 
 use common_exception::Result;
 use common_meta_app::schema::DatabaseInfo;
-use common_tracing::tracing;
 use octocrab::params;
+use tracing::error;
 
 use crate::databases::Database;
 use crate::databases::DatabaseContext;
@@ -83,7 +83,7 @@ impl Database for GithubDatabase {
                 table_type: "".to_string(),
             };
 
-            tracing::error!("creating {} related repo", &repo.name);
+            error!("creating {} related repo", &repo.name);
             // Create default db
             RepoInfoTable::create_table(storage_ctx.clone(), tenant, options.clone()).await?;
 

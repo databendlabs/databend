@@ -15,24 +15,26 @@
 use common_base::base::tokio;
 use common_exception::Result;
 use databend_query::interpreters::*;
-use databend_query::sql::PlanParser;
+use databend_query::sql::Planner;
 use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_show_databases_interpreter() -> Result<()> {
     let ctx = crate::tests::create_query_context().await?;
+    let mut planner = Planner::new(ctx.clone());
 
     // show databases.
     {
-        let plan = PlanParser::parse(ctx.clone(), "show databases").await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        assert_eq!(executor.name(), "ShowDatabasesInterpreter");
+        let query = "show databases";
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        assert_eq!(executor.name(), "SelectInterpreterV2");
         let stream = executor.execute(None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
             "+--------------------+",
-            "| Database           |",
+            "| database           |",
             "+--------------------+",
             "| INFORMATION_SCHEMA |",
             "| default            |",
@@ -44,13 +46,14 @@ async fn test_show_databases_interpreter() -> Result<()> {
 
     // show databases like.
     {
-        let plan = PlanParser::parse(ctx.clone(), "show databases like '%tem%'").await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let query = "show databases like '%tem%'";
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         let stream = executor.execute(None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
             "+----------+",
-            "| Database |",
+            "| database |",
             "+----------+",
             "| system   |",
             "+----------+",

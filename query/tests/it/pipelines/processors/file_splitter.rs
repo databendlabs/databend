@@ -22,6 +22,7 @@ use common_datavalues::DataSchema;
 use common_datavalues::StringType;
 use common_exception::Result;
 use common_formats::format_csv::CsvInputFormat;
+use common_io::prelude::FileSplit;
 use common_io::prelude::FormatSettings;
 use databend_query::pipelines::processors::FileSplitter;
 use databend_query::pipelines::processors::FileSplitterState;
@@ -48,18 +49,43 @@ v3,v4
         input_buffer_size: 1,
         ..Default::default()
     };
+    let path = Some("path".to_owned());
     let file_format =
         CsvInputFormat::try_create("", schema.clone(), Default::default(), 0, 1, 1024)?;
-    let mut splitter = FileSplitter::create(reader, file_format, format_settings, None);
+    let mut splitter =
+        FileSplitter::create(reader, path.clone(), file_format, format_settings, None);
 
     // run
-    let mut output_splits: VecDeque<Vec<u8>> = VecDeque::new();
+    let mut output_splits: VecDeque<FileSplit> = VecDeque::new();
     let mut progress = ProgressValues::default();
     while !matches!(splitter.state(), FileSplitterState::Finished) {
         splitter.async_process().await?;
         splitter.process(&mut output_splits, &mut progress)?;
     }
-    let exp = VecDeque::from(vec![b"v1,v2\nv3,v4\n".to_vec()]);
-    assert_eq!(output_splits, exp);
+    let start_offsets = vec![8, 14];
+    let bufs = vec![b"v1,v2\n", b"v3,v4\n"];
+    for (i, s) in output_splits.iter().enumerate() {
+        assert_eq!(
+            s.start_row,
+            i + 1,
+            "split {}={:?}",
+            i,
+            String::from_utf8(s.buf.clone())
+        );
+        assert_eq!(
+            s.start_offset,
+            start_offsets[i],
+            "split {}={:?}",
+            i,
+            String::from_utf8(s.buf.clone())
+        );
+        assert_eq!(
+            &s.buf,
+            &bufs[i][..],
+            "split {}={:?}",
+            i,
+            String::from_utf8(s.buf.clone())
+        );
+    }
     Ok(())
 }

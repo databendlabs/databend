@@ -10,7 +10,7 @@ pwd
 BUILD_PROFILE="${BUILD_PROFILE:-debug}"
 
 query_config_path="scripts/ci/deploy/config/databend-query-node-1.toml"
-query_test_path="tests/suites/0_stateless/05_ddl"
+query_test_path="tests/logictest"
 bend_repo_url="https://github.com/datafuselabs/databend"
 
 usage() {
@@ -186,16 +186,36 @@ run_test() {
 
     echo " === Run metasrv related test: 05_ddl"
 
+    # Only run test on mysql handler
+    export DISABLE_HTTP_LOGIC_TEST=true
+    export DISABLE_CLICKHOUSE_LOGIC_TEST=true
+
     if [ "$query_ver" = "current" ]; then
-        suite_path="tests/suites"
+        cd "$SCRIPT_PATH/../../tests/logictest" || exit
+        python3 main.py "_ddl_"
+        cd -
     else
         (
             # download suites into ./old_suite
             download_test_suite $query_ver
         )
-        suite_path="old_suite/tests/suites"
+        # logictest dir include all suites and scripts fit old query
+        cd "old_suite/tests/logictest" || exit
+
+        # old logic test use NoneType is only support by python3.10
+        sed -i "/^from types.*/d" http_runner.py
+        sed -i "/^from types.*/d" mysql_runner.py
+        sed -i "s/NoneType/type(None)/g" http_runner.py
+        sed -i "s/NoneType/type(None)/g" mysql_runner.py
+
+        # logictest pattern argument change after v0.7.140
+        # old logic test does not support pattern filter
+        mv suites/gen/05_ddl .
+        rm -fr suites/*
+        mv 05_ddl suites/
+        python3 main.py
+        cd -
     fi
-    ./tests/databend-test --suites "$suite_path" --mode 'standalone' --run-dir 0_stateless -- '^05_*'
 }
 
 # -- main --

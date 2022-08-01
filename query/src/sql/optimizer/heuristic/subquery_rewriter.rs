@@ -18,6 +18,7 @@ use common_datavalues::BooleanType;
 use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
 use common_datavalues::NullableType;
+use common_datavalues::UInt64Type;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::aggregates::AggregateFunctionFactory;
@@ -55,6 +56,10 @@ pub enum UnnestResult {
     SimpleJoin, // SemiJoin or AntiJoin
     MarkJoin { marker_index: IndexType },
     SingleJoin,
+}
+
+pub struct FlattenInfo {
+    pub from_count_func: bool,
 }
 
 /// Rewrite subquery into `Apply` operator
@@ -236,10 +241,18 @@ impl SubqueryRewriter {
                 let rel_expr = RelExpr::with_s_expr(&subquery.subquery);
                 let prop = rel_expr.derive_relational_prop()?;
                 let subquery_output_columns = prop.output_columns;
+                let mut flatten_info = FlattenInfo {
+                    from_count_func: false,
+                };
                 let (s_expr, result) = if prop.outer_columns.is_empty() {
                     self.try_rewrite_uncorrelated_subquery(s_expr, &subquery)?
                 } else {
-                    self.try_decorrelate_subquery(s_expr, &subquery, is_conjunctive_predicate)?
+                    self.try_decorrelate_subquery(
+                        s_expr,
+                        &subquery,
+                        &mut flatten_info,
+                        is_conjunctive_predicate,
+                    )?
                 };
 
                 // If we unnest the subquery into a simple join, then we can replace the
@@ -259,7 +272,7 @@ impl SubqueryRewriter {
                     RelExpr::with_s_expr(s_expr.child(1)?).derive_relational_prop()?
                 };
                 let (index, name) = if let UnnestResult::MarkJoin { marker_index } = result {
-                    (marker_index, "marker".to_string())
+                    (marker_index, marker_index.to_string())
                 } else if let UnnestResult::SingleJoin = result {
                     assert_eq!(subquery_output_columns.len(), 1);
                     let mut output_column = *subquery_output_columns.iter().take(1).next().unwrap();
@@ -285,19 +298,52 @@ impl SubqueryRewriter {
                             *subquery.data_type.clone(),
                         )))
                     }
+                } else if matches! {result, UnnestResult::MarkJoin {..}} {
+                    Box::new(DataTypeImpl::Nullable(NullableType::create(
+                        BooleanType::new_impl(),
+                    )))
                 } else {
                     subquery.data_type.clone()
                 };
-                let column_ref = ColumnBinding {
-                    database_name: None,
-                    table_name: None,
-                    column_name: name,
-                    index,
-                    data_type,
-                    visible_in_unqualified_wildcard: false,
+
+                let column_ref = Scalar::BoundColumnRef(BoundColumnRef {
+                    column: ColumnBinding {
+                        database_name: None,
+                        table_name: None,
+                        column_name: name,
+                        index,
+                        data_type,
+                        visible_in_unqualified_wildcard: false,
+                    },
+                });
+
+                let scalar = if flatten_info.from_count_func {
+                    // convert count aggregate function to multi_if function, if count() is null, then 0 else count()
+                    let is_null = Scalar::FunctionCall(FunctionCall {
+                        arguments: vec![column_ref.clone()],
+                        func_name: "is_null".to_string(),
+                        arg_types: vec![NullableType::new_impl(UInt64Type::new_impl())],
+                        return_type: Box::new(BooleanType::new_impl()),
+                    });
+                    let zero = Scalar::ConstantExpr(ConstantExpr {
+                        value: DataValue::UInt64(0),
+                        data_type: Box::new(UInt64Type::new_impl()),
+                    });
+                    Scalar::FunctionCall(FunctionCall {
+                        arguments: vec![is_null, zero, column_ref],
+                        func_name: "multi_if".to_string(),
+                        arg_types: vec![
+                            BooleanType::new_impl(),
+                            UInt64Type::new_impl(),
+                            UInt64Type::new_impl(),
+                        ],
+                        return_type: Box::new(UInt64Type::new_impl()),
+                    })
+                } else {
+                    column_ref
                 };
 
-                Ok((BoundColumnRef { column: column_ref }.into(), s_expr))
+                Ok((scalar, s_expr))
             }
         }
     }
@@ -464,11 +510,15 @@ impl SubqueryRewriter {
                 // If subquery contains NULL, the comparison result is TRUE or NULL.
                 // Such as t1.a => {1, 3, 4}, select t1.a in (1, 2, NULL) from t1; The sql will return {true, null, null}.
                 // If subquery doesn't contain NULL, the comparison result is FALSE, TRUE, or NULL.
-                let marker_index = self.metadata.write().add_column(
-                    "marker".to_string(),
-                    NullableType::new_impl(BooleanType::new_impl()),
-                    None,
-                );
+                let marker_index = if let Some(idx) = subquery.index {
+                    idx
+                } else {
+                    self.metadata.write().add_column(
+                        "marker".to_string(),
+                        NullableType::new_impl(BooleanType::new_impl()),
+                        None,
+                    )
+                };
                 // Consider the sql: select * from t1 where t1.a = any(select t2.a from t2);
                 // Will be transferred to:select t1.a, t2.a, marker_index from t2, t1 where t2.a = t1.a;
                 // Note that subquery is the left table, and it'll be the probe side.

@@ -34,15 +34,14 @@ use common_exception::Result;
 use common_fuse_meta::meta::BlockMeta;
 use common_fuse_meta::meta::Compression;
 use common_planners::PartInfoPtr;
-use common_tracing::tracing;
-use common_tracing::tracing::debug_span;
-use common_tracing::tracing::warn;
-use common_tracing::tracing::Instrument;
 use futures::AsyncReadExt;
 use futures::StreamExt;
 use futures::TryStreamExt;
 use opendal::Object;
 use opendal::Operator;
+use tracing::debug_span;
+use tracing::warn;
+use tracing::Instrument;
 
 use crate::storages::fuse::fuse_part::build_column_leaves;
 use crate::storages::fuse::fuse_part::ColumnLeaf;

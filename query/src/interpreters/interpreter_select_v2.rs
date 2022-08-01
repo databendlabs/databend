@@ -14,10 +14,10 @@
 
 use std::sync::Arc;
 
+use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_streams::SendableDataBlockStream;
-use common_tracing::tracing;
 
 use super::plan_schedulers::schedule_query_v2;
 use crate::clusters::ClusterHelper;
@@ -61,6 +61,10 @@ impl SelectInterpreterV2 {
 impl Interpreter for SelectInterpreterV2 {
     fn name(&self) -> &str {
         "SelectInterpreterV2"
+    }
+
+    fn schema(&self) -> DataSchemaRef {
+        self.bind_context.output_schema()
     }
 
     #[tracing::instrument(level = "debug", name = "select_interpreter_v2_execute", skip(self, _input_stream), fields(ctx.id = self.ctx.get_id().as_str()))]

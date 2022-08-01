@@ -23,6 +23,16 @@ use crate::evaluator::Evaluator;
 use crate::sql::executor::PhysicalScalar;
 
 impl Evaluator {
+    pub fn eval_physical_scalars<VectorID>(
+        physical_scalars: &[PhysicalScalar],
+    ) -> Result<Vec<EvalNode<VectorID>>>
+    where VectorID: From<String> {
+        physical_scalars
+            .iter()
+            .map(Evaluator::eval_physical_scalar::<VectorID>)
+            .collect::<Result<_>>()
+    }
+
     pub fn eval_physical_scalar<VectorID>(
         physical_scalar: &PhysicalScalar,
     ) -> Result<EvalNode<VectorID>>

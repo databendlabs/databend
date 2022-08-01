@@ -21,6 +21,8 @@
 #![feature(trusted_len)]
 #![feature(box_patterns)]
 #![feature(sync_unsafe_cell)]
+#![feature(option_get_or_insert_default)]
+#![feature(result_option_inspect)]
 
 pub mod api;
 pub mod auth;

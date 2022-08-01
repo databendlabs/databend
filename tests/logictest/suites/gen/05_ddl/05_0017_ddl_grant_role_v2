@@ -1,0 +1,48 @@
+statement ok
+SET enable_planner_v2 = 1;
+
+statement ok
+DROP ROLE IF EXISTS 'test';
+
+statement ok
+DROP ROLE IF EXISTS 'test-role';
+
+statement ok
+DROP USER IF EXISTS 'test-user';
+
+statement error 2204
+GRANT ROLE 'test' TO 'test-user'; 
+
+statement ok
+CREATE ROLE 'test';
+
+statement error 2201
+GRANT ROLE 'test' TO 'test-user'; 
+
+statement ok
+CREATE USER 'test-user' IDENTIFIED BY 'password';
+
+statement ok
+GRANT ROLE 'test' TO 'test-user';
+
+statement error 2204
+GRANT ROLE 'test' TO ROLE 'test-role'; 
+
+statement ok
+CREATE ROLE 'test-role';
+
+statement ok
+GRANT ROLE 'test' TO ROLE 'test-role';
+
+statement ok
+DROP ROLE 'test';
+
+statement ok
+DROP ROLE 'test-role';
+
+statement ok
+DROP USER 'test-user';
+
+statement ok
+SET enable_planner_v2 = 0;
+

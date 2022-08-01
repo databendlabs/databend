@@ -11,7 +11,6 @@
 //  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
-//
 
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -21,9 +20,9 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_fuse_meta::meta::Location;
 use common_fuse_meta::meta::SnapshotId;
-use common_tracing::tracing::warn;
 use futures::TryStreamExt;
 use opendal::Operator;
+use tracing::warn;
 
 use crate::sessions::TableContext;
 use crate::storages::fuse::io::MetaReaders;

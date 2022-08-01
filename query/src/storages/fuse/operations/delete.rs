@@ -19,7 +19,7 @@ use common_fuse_meta::meta::TableSnapshot;
 use common_planners::DeletePlan;
 use common_planners::Expression;
 use common_planners::Extras;
-use common_tracing::tracing::debug;
+use tracing::debug;
 
 use crate::sessions::TableContext;
 use crate::storages::fuse::operations::mutation::delete_from_block;

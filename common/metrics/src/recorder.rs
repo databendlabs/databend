@@ -15,7 +15,6 @@
 use std::sync::Arc;
 use std::sync::Once;
 
-use common_tracing::tracing;
 use metrics::counter;
 use metrics::decrement_gauge;
 use metrics::histogram;
@@ -24,6 +23,7 @@ use metrics_exporter_prometheus::PrometheusBuilder;
 use metrics_exporter_prometheus::PrometheusHandle;
 use once_cell::sync::Lazy;
 use parking_lot::RwLock;
+use tracing::warn;
 
 static PROMETHEUS_HANDLE: Lazy<Arc<RwLock<Option<PrometheusHandle>>>> =
     Lazy::new(|| Arc::new(RwLock::new(None)));
@@ -92,7 +92,7 @@ fn init_prometheus_recorder() {
     }
     match metrics::set_boxed_recorder(Box::new(recorder)) {
         Ok(_) => (),
-        Err(err) => tracing::warn!("Install prometheus recorder failed, cause: {}", err),
+        Err(err) => warn!("Install prometheus recorder failed, cause: {}", err),
     };
 }
 

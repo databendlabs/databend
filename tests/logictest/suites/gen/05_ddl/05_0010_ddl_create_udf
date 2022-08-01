@@ -1,10 +1,4 @@
 statement ok
-DROP FUNCTION IF EXISTS isnotempty;
-
-statement ok
-DROP FUNCTION IF EXISTS isnotempty_with_desc;
-
-statement ok
 CREATE FUNCTION isnotempty AS (p) -> not(is_null(p));
 
 statement ok
@@ -27,3 +21,4 @@ DROP FUNCTION isnotempty;
 
 statement ok
 DROP FUNCTION isnotempty_with_desc;
+

@@ -11,7 +11,6 @@
 //  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
-//
 
 use std::sync::Arc;
 
@@ -23,11 +22,10 @@ use common_fuse_meta::meta::BlockMeta;
 use common_fuse_meta::meta::Location;
 use common_fuse_meta::meta::TableSnapshot;
 use common_planners::Extras;
-use common_tracing::tracing;
-use common_tracing::tracing::Instrument;
 use futures::future;
 use futures::StreamExt;
 use futures::TryStreamExt;
+use tracing::Instrument;
 
 use super::bloom_pruner;
 use crate::sessions::TableContext;

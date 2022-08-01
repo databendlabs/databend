@@ -30,7 +30,6 @@ use common_planners::Expression;
 use common_planners::ExpressionMonotonicityVisitor;
 use common_planners::Expressions;
 use common_planners::RequireColumnsVisitor;
-use common_tracing::tracing;
 
 use crate::pipelines::processors::transforms::ExpressionExecutor;
 use crate::sessions::TableContext;
