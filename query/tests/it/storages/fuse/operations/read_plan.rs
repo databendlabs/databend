@@ -82,6 +82,7 @@ fn test_to_partitions() -> Result<()> {
         cols_metas.clone(),
         cluster_stats,
         location,
+        None,
     );
 
     let blocks_metas = (0..num_of_block)

@@ -112,15 +112,17 @@ impl BlockPruner {
                     // prune segment using range filter
                     if range_filter_pruner.should_keep(&segment_info.summary.col_stats) {
                         for block_meta in &segment_info.blocks {
-                            // prune block using range filter, and bloom filter if necessary
-                            if range_filter_pruner.should_keep(&block_meta.col_stats)
-                                && bloom_filter_pruner
-                                    .should_keep(block_meta.location.0.as_str())
+                            // prune block using range filter
+                            if range_filter_pruner.should_keep(&block_meta.col_stats) {
+                                // prune block using bloom filter
+                                if bloom_filter_pruner
+                                    .should_keep(&block_meta.bloom_filter_index_location)
                                     .await
-                            {
-                                result.push((idx, block_meta.clone()));
-                                if !limiter.within_limit(block_meta.row_count as usize) {
-                                    break;
+                                {
+                                    result.push((idx, block_meta.clone()));
+                                    if !limiter.within_limit(block_meta.row_count as usize) {
+                                        break;
+                                    }
                                 }
                             }
                         }

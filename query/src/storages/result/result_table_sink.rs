@@ -179,7 +179,7 @@ impl Processor for ResultTableSink {
                 let (size, meta_data) =
                     serialize_data_blocks(vec![block.clone()], &schema, &mut data)?;
                 self.accumulator
-                    .add_block(size, meta_data, block_statistics)?;
+                    .add_block(size, meta_data, block_statistics, None)?;
                 self.state = State::Serialized {
                     block,
                     data,

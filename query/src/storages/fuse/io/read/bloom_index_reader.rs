@@ -33,9 +33,40 @@ use common_datavalues::ToDataType;
 use common_datavalues::Vu8;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_fuse_meta::meta::BlockBloomFilterIndex;
+use common_fuse_meta::meta::BlockBloomFilterIndexVersion;
+use common_fuse_meta::meta::Location;
 use futures_util::future::try_join_all;
 use opendal::Operator;
 use tracing::Instrument;
+
+#[async_trait::async_trait]
+pub trait BlockBloomFilterIndexReader {
+    async fn read_bloom_filter_index(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        dal: Operator,
+        columns: &[String],
+    ) -> Result<BlockBloomFilterIndex>;
+}
+
+#[async_trait::async_trait]
+impl BlockBloomFilterIndexReader for Location {
+    async fn read_bloom_filter_index(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        dal: Operator,
+        columns: &[String],
+    ) -> Result<BlockBloomFilterIndex> {
+        let index_version = BlockBloomFilterIndexVersion::try_from(self.1)?;
+        match index_version {
+            BlockBloomFilterIndexVersion::V1(_) => {
+                let block = load_bloom_filter_by_columns(ctx, dal, columns, &self.0).await?;
+                Ok(BlockBloomFilterIndex::new(block))
+            }
+        }
+    }
+}
 
 #[tracing::instrument(level = "debug", skip_all)]
 pub async fn load_bloom_filter_by_columns(
@@ -45,6 +76,12 @@ pub async fn load_bloom_filter_by_columns(
     path: &str,
 ) -> Result<DataBlock> {
     let file_meta = read_index_meta(&ctx, path, &dal).await?;
+    if file_meta.row_groups.len() != 1 {
+        return Err(ErrorCode::StorageOther(format!(
+            "invalid v1 bloom index filter index, number of row group should be 1, but found {} row groups",
+            file_meta.row_groups.len()
+        )));
+    }
     let row_group = &file_meta.row_groups[0];
 
     let fields = columns
@@ -84,7 +121,7 @@ pub async fn load_bloom_filter_by_columns(
                 .meta_data
                 .as_ref()
                 .ok_or_else(|| {
-                    ErrorCode::UnexpectedError(format!(" column meta is none, idx {}", col_idx))
+                    ErrorCode::UnexpectedError(format!("column meta is none, idx {}", col_idx))
                 })?
                 .codec;
             let compression = Compression::try_from(compression_codec).map_err(|e| {
@@ -101,7 +138,7 @@ pub async fn load_bloom_filter_by_columns(
 
             let wrapped = Wrap(bytes);
             let page_reader = PageReader::new_with_page_meta(
-                std::io::Cursor::new(wrapped),
+                std::io::Cursor::new(wrapped), // we can not use &[u8] as Reader here, lifetime not valid
                 page_meta_data,
                 Arc::new(|_, _| true),
                 vec![],

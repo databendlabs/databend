@@ -21,6 +21,7 @@ mod versioned_reader;
 
 pub use block_reader::BlockReader;
 pub use bloom_index_reader::load_bloom_filter_by_columns;
+pub use bloom_index_reader::BlockBloomFilterIndexReader;
 pub use meta_readers::MetaReaders;
 pub use meta_readers::SegmentInfoReader;
 pub use meta_readers::TableSnapshotReader;

@@ -18,19 +18,19 @@ use std::sync::Arc;
 use common_catalog::table_context::TableContext;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
+use common_fuse_meta::meta::Location;
 use common_planners::Expression;
 use common_planners::ExpressionVisitor;
 use common_planners::Recursion;
 use opendal::Operator;
 
-use crate::storages::fuse::io::load_bloom_filter_by_columns;
-use crate::storages::fuse::io::TableMetaLocationGenerator;
+use crate::storages::fuse::io::BlockBloomFilterIndexReader;
 use crate::storages::index::BloomFilterIndexer;
 
 #[async_trait::async_trait]
 pub trait BloomFilterPruner {
     // returns ture, if target should NOT be pruned (false positive allowed)
-    async fn should_keep(&self, bloom_filter_block_path: &str) -> bool;
+    async fn should_keep(&self, index_location: &Option<Location>) -> bool;
 }
 
 /// dummy pruner that prunes nothing
@@ -38,7 +38,7 @@ pub(crate) struct NonPruner;
 
 #[async_trait::async_trait]
 impl BloomFilterPruner for NonPruner {
-    async fn should_keep(&self, _loc: &str) -> bool {
+    async fn should_keep(&self, _: &Option<Location>) -> bool {
         true
     }
 }
@@ -76,24 +76,28 @@ impl BloomFilterIndexPruner {
 use self::util::*;
 #[async_trait::async_trait]
 impl BloomFilterPruner for BloomFilterIndexPruner {
-    async fn should_keep(&self, loc: &str) -> bool {
-        // load bloom filter index, and try pruning according to filter expression
-        match filter_block_by_bloom_index(
-            self.ctx.clone(),
-            self.dal.clone(),
-            &self.data_schema,
-            &self.filter_expression,
-            &self.index_columns,
-            loc,
-        )
-        .await
-        {
-            Ok(v) => v,
-            Err(e) => {
-                // swallow exceptions intentionally, corrupted index should not prevent execution
-                tracing::warn!("failed to apply bloom filter, returning ture. {}", e);
-                true
+    async fn should_keep(&self, index_location: &Option<Location>) -> bool {
+        if let Some(loc) = index_location {
+            // load bloom filter index, and try pruning according to filter expression
+            match filter_block_by_bloom_index(
+                self.ctx.clone(),
+                self.dal.clone(),
+                &self.data_schema,
+                &self.filter_expression,
+                &self.index_columns,
+                loc,
+            )
+            .await
+            {
+                Ok(v) => v,
+                Err(e) => {
+                    // swallow exceptions intentionally, corrupted index should not prevent execution
+                    tracing::warn!("failed to apply bloom filter, returning ture. {}", e);
+                    true
+                }
             }
+        } else {
+            true
         }
     }
 }
@@ -140,21 +144,15 @@ mod util {
         schema: &DataSchemaRef,
         filter_expr: &Expression,
         bloom_index_col_names: &[String],
-        block_path: &str,
+        index_location: &Location,
     ) -> Result<bool> {
-        let bloom_idx_location = TableMetaLocationGenerator::block_bloom_index_location(block_path);
-
         // load the relevant index columns
-        let filter_block = load_bloom_filter_by_columns(
-            ctx.clone(),
-            dal,
-            bloom_index_col_names,
-            &bloom_idx_location,
-        )
-        .await?;
+        let bloom_filter_index = index_location
+            .read_bloom_filter_index(ctx.clone(), dal, bloom_index_col_names)
+            .await?;
 
         // figure it out
-        BloomFilterIndexer::from_bloom_block(schema.clone(), filter_block, ctx)?
+        BloomFilterIndexer::from_bloom_block(schema.clone(), bloom_filter_index.into_data(), ctx)?
             .maybe_true(filter_expr)
     }
 

@@ -109,7 +109,7 @@ impl ResultTableWriter {
                 e
             })?;
         self.accumulator
-            .add_block(size, meta_data, block_statistics)?;
+            .add_block(size, meta_data, block_statistics, None)?;
         Ok(self.get_last_part_info())
     }
 

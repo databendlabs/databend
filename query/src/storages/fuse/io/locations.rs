@@ -16,6 +16,8 @@ use std::marker::PhantomData;
 
 use common_datablocks::DataBlock;
 use common_exception::Result;
+use common_fuse_meta::meta::BlockBloomFilterIndex;
+use common_fuse_meta::meta::Location;
 use common_fuse_meta::meta::SegmentInfo;
 use common_fuse_meta::meta::SnapshotVersion;
 use common_fuse_meta::meta::Versioned;
@@ -42,20 +44,34 @@ impl TableMetaLocationGenerator {
         &self.prefix
     }
 
-    pub fn gen_block_location(&self) -> String {
-        let part_uuid = Uuid::new_v4().simple().to_string();
-        format!(
-            "{}/{}/{}_v{}.parquet",
-            &self.prefix,
-            FUSE_TBL_BLOCK_PREFIX,
+    pub fn gen_block_location(&self) -> (Location, Uuid) {
+        let part_uuid = Uuid::new_v4();
+        (
+            (
+                format!(
+                    "{}/{}/{}_v{}.parquet",
+                    &self.prefix,
+                    FUSE_TBL_BLOCK_PREFIX,
+                    part_uuid.as_simple(),
+                    DataBlock::VERSION,
+                ),
+                DataBlock::VERSION,
+            ),
             part_uuid,
-            DataBlock::VERSION,
         )
     }
 
-    // TODO refine this
-    pub fn block_bloom_index_location(block_location: &str) -> String {
-        format!("{}.bloom.parquet", &block_location)
+    pub fn block_bloom_index_location(&self, block_id: &Uuid) -> Location {
+        (
+            format!(
+                "{}/{}/{}_v{}.parquet",
+                &self.prefix,
+                FUSE_TBL_BLOCK_PREFIX,
+                block_id.as_simple(),
+                BlockBloomFilterIndex::VERSION,
+            ),
+            BlockBloomFilterIndex::VERSION,
+        )
     }
 
     pub fn gen_segment_info_location(&self) -> String where {

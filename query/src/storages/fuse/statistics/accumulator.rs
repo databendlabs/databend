@@ -22,6 +22,7 @@ use common_fuse_meta::meta::ClusterStatistics;
 use common_fuse_meta::meta::ColumnId;
 use common_fuse_meta::meta::ColumnMeta;
 use common_fuse_meta::meta::ColumnStatistics;
+use common_fuse_meta::meta::Location;
 use common_fuse_meta::meta::StatisticsOfColumns;
 use common_fuse_meta::meta::Versioned;
 
@@ -71,6 +72,7 @@ impl StatisticsAccumulator {
         file_size: u64,
         meta: ThriftFileMetaData,
         statistics: BlockStatistics,
+        bloom_filter_index_location: Option<Location>,
     ) -> Result<()> {
         self.file_size += file_size;
         self.summary_block_count += 1;
@@ -82,7 +84,7 @@ impl StatisticsAccumulator {
         let row_count = statistics.block_rows_size;
         let block_size = statistics.block_bytes_size;
         let col_stats = statistics.block_column_statistics.clone();
-        let location = (statistics.block_file_location, DataBlock::VERSION);
+        let data_location = (statistics.block_file_location, DataBlock::VERSION);
         let col_metas = column_metas(&meta)?;
         let cluster_stats = statistics.block_cluster_statistics;
 
@@ -93,7 +95,8 @@ impl StatisticsAccumulator {
             col_stats,
             col_metas,
             cluster_stats,
-            location,
+            data_location,
+            bloom_filter_index_location,
         ));
 
         Ok(())
@@ -116,8 +119,9 @@ impl PartiallyAccumulated {
     pub fn end(
         mut self,
         file_size: u64,
-        location: String,
+        location: Location,
         col_metas: HashMap<ColumnId, ColumnMeta>,
+        bloom_filter_index_location: Option<Location>,
     ) -> StatisticsAccumulator {
         let mut stats = &mut self.accumulator;
         stats.file_size += file_size;
@@ -126,7 +130,6 @@ impl PartiallyAccumulated {
         let block_size = self.block_size;
         let col_stats = self.block_columns_statistics;
         let cluster_stats = self.block_cluster_statistics;
-        let location = (location, DataBlock::VERSION);
 
         let block_meta = BlockMeta::new(
             row_count,
@@ -136,6 +139,7 @@ impl PartiallyAccumulated {
             col_metas,
             cluster_stats,
             location,
+            bloom_filter_index_location,
         );
         stats.blocks_metas.push(block_meta);
         self.accumulator

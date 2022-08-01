@@ -31,5 +31,9 @@ pub fn new_memory_cache<V>(capacity: u64) -> MemoryCache<V> {
 
 pub type SegmentInfoCache = MemoryCache<SegmentInfo>;
 pub type TableSnapshotCache = MemoryCache<TableSnapshot>;
+/// Cache bloom filter.
+/// Each cache item per column, per block
 pub type BloomIndexCache = MemoryCache<Vec<u8>>;
+/// FileMetaCache of bloom filter index data
+/// Each cache item per block
 pub type BloomIndexMetaCache = MemoryCache<FileMetaData>;

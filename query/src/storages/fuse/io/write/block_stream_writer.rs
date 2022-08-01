@@ -186,11 +186,11 @@ impl BlockStreamWriter {
 
         let mut acc = self.statistics_accumulator.take().unwrap_or_default();
         let partial_acc = acc.begin(&block, cluster_stats)?;
-        let location = self.meta_locations.gen_block_location();
+        let (location, _) = self.meta_locations.gen_block_location();
         let (file_size, file_meta_data) =
-            block_writer::write_block(block, &self.data_accessor, &location).await?;
+            block_writer::write_block(block, &self.data_accessor, &location.0).await?;
         let col_metas = column_metas(&file_meta_data)?;
-        acc = partial_acc.end(file_size, location, col_metas);
+        acc = partial_acc.end(file_size, location, col_metas, None);
         self.number_of_blocks_accumulated += 1;
         if self.number_of_blocks_accumulated >= self.num_block_threshold {
             let summary = acc.summary()?;

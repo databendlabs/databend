@@ -23,6 +23,7 @@ use common_datablocks::serialize_data_blocks_with_compression;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_fuse_meta::meta::Location;
 use common_fuse_meta::meta::SegmentInfo;
 use common_fuse_meta::meta::Statistics;
 use opendal::Operator;
@@ -44,7 +45,7 @@ struct BloomIndexState {
     data: Vec<u8>,
     // TODO keep this in table meta
     _size: u64,
-    location: String,
+    location: Location,
 }
 
 enum State {
@@ -55,7 +56,7 @@ enum State {
         size: u64,
         meta_data: Box<ThriftFileMetaData>,
         block_statistics: BlockStatistics,
-        bloom_index_state: BloomIndexState,
+        bloom_index_state: Option<BloomIndexState>,
     },
     GenerateSegment,
     SerializedSegment {
@@ -75,10 +76,11 @@ pub struct FuseTableSink {
     meta_locations: TableMetaLocationGenerator,
     accumulator: StatisticsAccumulator,
     cluster_key_info: Option<ClusterKeyInfo>,
+    bloom_filter_index_enabled: bool,
 }
 
 impl FuseTableSink {
-    pub fn create(
+    pub fn try_create(
         input: Arc<InputPort>,
         ctx: Arc<dyn TableContext>,
         num_block_threshold: usize,
@@ -86,6 +88,7 @@ impl FuseTableSink {
         meta_locations: TableMetaLocationGenerator,
         cluster_key_info: Option<ClusterKeyInfo>,
     ) -> Result<ProcessorPtr> {
+        let bloom_filter_index_enabled = ctx.get_settings().get_enable_bloom_filter_index()? != 0;
         Ok(ProcessorPtr::create(Box::new(FuseTableSink {
             ctx,
             input,
@@ -95,6 +98,7 @@ impl FuseTableSink {
             accumulator: Default::default(),
             num_block_threshold: num_block_threshold as u64,
             cluster_key_info,
+            bloom_filter_index_enabled,
         })))
     }
 }
@@ -161,14 +165,13 @@ impl Processor for FuseTableSink {
                     }
                 }
 
-                let block_location = self.meta_locations.gen_block_location();
+                let (block_location, block_id) = self.meta_locations.gen_block_location();
 
-                // write index
-                let bloom_index_state = {
+                let bloom_index_state = if self.bloom_filter_index_enabled {
+                    // write index
                     let bloom_index = BloomFilterIndexer::try_create(self.ctx.clone(), &[&block])?;
                     let index_block = bloom_index.bloom_block;
-                    let location =
-                        TableMetaLocationGenerator::block_bloom_index_location(&block_location);
+                    let location = self.meta_locations.block_bloom_index_location(&block_id);
                     let mut data = Vec::with_capacity(100 * 1024);
                     let index_block_schema = &bloom_index.bloom_schema;
                     let (_size, _) = serialize_data_blocks_with_compression(
@@ -177,15 +180,17 @@ impl Processor for FuseTableSink {
                         &mut data,
                         CompressionOptions::Uncompressed,
                     )?;
-                    BloomIndexState {
+                    Some(BloomIndexState {
                         data,
                         _size,
                         location,
-                    }
+                    })
+                } else {
+                    None
                 };
 
                 let block_statistics =
-                    BlockStatistics::from(&block, block_location, cluster_stats)?;
+                    BlockStatistics::from(&block, block_location.0, cluster_stats)?;
                 // we need a configuration of block size threshold here
                 let mut data = Vec::with_capacity(100 * 1024 * 1024);
                 let schema = block.schema().clone();
@@ -243,15 +248,22 @@ impl Processor for FuseTableSink {
                 .await?;
 
                 // write bloom filter index
-                io::write_data(
-                    &bloom_index_state.data,
-                    &self.data_accessor,
-                    &bloom_index_state.location,
-                )
-                .await?;
+                if let Some(index_state) = &bloom_index_state {
+                    io::write_data(
+                        &index_state.data,
+                        &self.data_accessor,
+                        &index_state.location.0,
+                    )
+                    .await?;
+                }
 
-                self.accumulator
-                    .add_block(size, *meta_data, block_statistics)?;
+                self.accumulator.add_block(
+                    size,
+                    *meta_data,
+                    block_statistics,
+                    bloom_index_state.map(|s| s.location),
+                )?;
+
                 if self.accumulator.summary_block_count >= self.num_block_threshold {
                     self.state = State::GenerateSegment;
                 }

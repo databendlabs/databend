@@ -17,6 +17,7 @@ use std::collections::HashMap;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_fuse_meta::meta::ColumnStatistics;
+use common_fuse_meta::meta::Versioned;
 use databend_query::storages::fuse::statistics::accumulator;
 use databend_query::storages::fuse::statistics::gen_columns_statistics;
 use databend_query::storages::fuse::statistics::reducers;
@@ -134,7 +135,12 @@ fn test_ft_stats_accumulator() -> common_exception::Result<()> {
     let test_file_size = 1;
     for item in blocks {
         let block_acc = stats_acc.begin(&item?, None)?;
-        stats_acc = block_acc.end(test_file_size, "".to_owned(), HashMap::new());
+        stats_acc = block_acc.end(
+            test_file_size,
+            ("".to_owned(), DataBlock::VERSION),
+            HashMap::new(),
+            None,
+        );
     }
     assert_eq!(10, stats_acc.blocks_statistics.len());
     // TODO more cases here pls

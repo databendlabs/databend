@@ -17,7 +17,6 @@ use common_datablocks::serialize_data_blocks;
 use common_datablocks::DataBlock;
 use common_exception::Result;
 use common_fuse_meta::meta::BlockMeta;
-use common_fuse_meta::meta::Versioned;
 use opendal::Operator;
 use tracing::warn;
 
@@ -43,15 +42,14 @@ impl<'a> BlockWriter<'a> {
         }
     }
     pub async fn write(&self, block: DataBlock) -> Result<BlockMeta> {
-        let location = self.location_generator.gen_block_location();
+        let (location, _) = self.location_generator.gen_block_location();
         let data_accessor = &self.data_accessor;
         let row_count = block.num_rows() as u64;
         let block_size = block.memory_size() as u64;
         let col_stats = gen_columns_statistics(&block)?;
-        let (file_size, file_meta_data) = write_block(block, data_accessor, &location).await?;
+        let (file_size, file_meta_data) = write_block(block, data_accessor, &location.0).await?;
         let col_metas = util::column_metas(&file_meta_data)?;
         let cluster_stats = None; // TODO confirm this with zhyass
-        let location = (location, DataBlock::VERSION);
         let block_meta = BlockMeta::new(
             row_count,
             block_size,
@@ -60,6 +58,7 @@ impl<'a> BlockWriter<'a> {
             col_metas,
             cluster_stats,
             location,
+            None,
         );
         Ok(block_meta)
     }
