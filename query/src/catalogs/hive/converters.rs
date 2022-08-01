@@ -69,7 +69,6 @@ pub fn try_into_table_info(
     hms_table: hms::Table,
     fields: Vec<hms::FieldSchema>,
 ) -> Result<TableInfo> {
-    let schema = Arc::new(try_into_schema(fields)?);
     let partition_keys = if let Some(partitions) = &hms_table.partition_keys {
         let r = partitions
             .iter()
@@ -79,6 +78,7 @@ pub fn try_into_table_info(
     } else {
         None
     };
+    let schema = Arc::new(try_into_schema(fields, partition_keys.clone())?);
 
     let location = if let Some(storage) = &hms_table.sd {
         storage
@@ -102,12 +102,18 @@ pub fn try_into_table_info(
         ..Default::default()
     };
 
+    let real_name = format!(
+        "{}.{}",
+        hms_table.db_name.clone().unwrap_or_default(),
+        hms_table.table_name.clone().unwrap_or_default()
+    );
+
     let table_info = TableInfo {
         ident: TableIdent {
             table_id: 0,
             seq: 0,
         },
-        desc: "".to_owned(),
+        desc: real_name,
         name: hms_table.table_name.unwrap_or_default(),
         meta,
     };
@@ -115,13 +121,20 @@ pub fn try_into_table_info(
     Ok(table_info)
 }
 
-fn try_into_schema(hive_fields: Vec<hms::FieldSchema>) -> Result<DataSchema> {
+fn try_into_schema(
+    hive_fields: Vec<hms::FieldSchema>,
+    partition_keys: Option<Vec<String>>,
+) -> Result<DataSchema> {
     let mut fields = Vec::new();
+    let partition_keys = partition_keys.unwrap_or_default();
     for field in hive_fields {
         let name = field.name.unwrap_or_default();
         let type_name = field.type_.unwrap_or_default();
-        let null_field = NullableType::new_impl(try_from_filed_type_name(type_name)?);
-        let field = DataField::new(&name, null_field);
+        let data_type = match partition_keys.contains(&name) {
+            true => try_from_filed_type_name(type_name)?,
+            false => NullableType::new_impl(try_from_filed_type_name(type_name)?),
+        };
+        let field = DataField::new(&name, data_type);
         fields.push(field);
     }
     Ok(DataSchema::new(fields))
