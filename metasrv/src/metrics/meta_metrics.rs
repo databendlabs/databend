@@ -32,6 +32,7 @@ use prometheus::Registry;
 pub const META_NAMESPACE: &str = "metasrv";
 pub const SERVER_SUBSYSTEM: &str = "server";
 pub const RAFT_NETWORK_SUBSYSTEM: &str = "raft_network";
+pub const RAFT_STORAGE_SUBSYSTEM: &str = "raft_storage";
 pub const META_NETWORK_SUBSYSTEM: &str = "meta_network";
 
 pub static REGISTRY: Lazy<Registry> = Lazy::new(Registry::new);
@@ -363,6 +364,32 @@ pub static META_SERVICE_FAILED: Lazy<IntCounter> = Lazy::new(|| {
     .expect("meta metric cannot be created")
 });
 
+pub static RAFT_STORAGE_WRITE_FAILED: Lazy<CounterVec> = Lazy::new(|| {
+    CounterVec::new(
+        Opts::new(
+            "raft_store_write_failed",
+            "Total number of raft store write failures.",
+        )
+        .namespace(META_NAMESPACE)
+        .subsystem(RAFT_STORAGE_SUBSYSTEM),
+        &["func"],
+    )
+    .expect("meta metric cannot be created")
+});
+
+pub static RAFT_STORAGE_READ_FAILED: Lazy<CounterVec> = Lazy::new(|| {
+    CounterVec::new(
+        Opts::new(
+            "raft_store_read_failed",
+            "Total number of raft store read failures.",
+        )
+        .namespace(META_NAMESPACE)
+        .subsystem(RAFT_STORAGE_SUBSYSTEM),
+        &["func"],
+    )
+    .expect("meta metric cannot be created")
+});
+
 pub fn init_meta_metrics_recorder() {
     static START: Once = Once::new();
     START.call_once(init_meta_recorder)
@@ -480,6 +507,14 @@ fn init_meta_recorder() {
 
     REGISTRY
         .register(Box::new(META_SERVICE_FAILED.clone()))
+        .expect("collector can be registered");
+
+    REGISTRY
+        .register(Box::new(RAFT_STORAGE_WRITE_FAILED.clone()))
+        .expect("collector can be registered");
+
+    REGISTRY
+        .register(Box::new(RAFT_STORAGE_READ_FAILED.clone()))
         .expect("collector can be registered");
 }
 
@@ -606,6 +641,14 @@ pub fn incr_meta_metrics_meta_request_result(success: bool) {
         META_SERVICE_SUCCESS.inc();
     } else {
         META_SERVICE_FAILED.inc();
+    }
+}
+
+pub fn incr_raft_storage_fail(func: &str, write: bool) {
+    if write {
+        RAFT_STORAGE_WRITE_FAILED.with_label_values(&[func]).inc();
+    } else {
+        RAFT_STORAGE_READ_FAILED.with_label_values(&[func]).inc();
     }
 }
 
