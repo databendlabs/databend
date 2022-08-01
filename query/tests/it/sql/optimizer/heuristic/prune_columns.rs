@@ -18,6 +18,7 @@ use goldenfile::Mint;
 
 use super::run_suites;
 use super::Suite;
+use super::run_test;
 use crate::tests::create_query_context;
 
 #[tokio::test]
@@ -50,11 +51,16 @@ pub async fn test_heuristic_optimizer_prune_columns() -> Result<()> {
             rules: vec![],
         },
         Suite {
-            comment: "# Prune unused columns for correlated query (CrossApply ...)".to_string(),
+            comment: "# Prune unused columns for correlated query".to_string(),
             query: "select t1.a from (select number + 1 as a, number + 1 as b from numbers(1)) as t1 where t1.a = (select count(*) from (select t2.a, t3.a from (select number + 1 as a, number + 1 as b, number + 1 as c, number + 1 as d from numbers(1)) as t2, (select number + 1 as a, number + 1 as b, number + 1 as c from numbers(1)) as t3 where t2.b = t3.b and t2.c = 1))".to_string(),
+            rules: vec![],
+        },
+        Suite {
+            comment: "# Prune unused columns with order by".to_string(),
+            query: "select name, is_aggregate from system.functions order by example".to_string(),
             rules: vec![],
         },
     ];
 
-    run_suites(ctx, &mut file, &suites).await
+    run_suites(ctx, &mut file, &suites, run_test).await
 }

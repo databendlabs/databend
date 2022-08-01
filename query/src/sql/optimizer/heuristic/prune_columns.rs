@@ -67,6 +67,7 @@ fn keep_required_columns(expr: &SExpr, mut required: ColumnSet) -> Result<SExpr>
             Ok(SExpr::create_leaf(RelOperator::LogicalGet(LogicalGet {
                 table_index: p.table_index,
                 columns: used,
+                push_down_predicates: p.push_down_predicates.clone(),
             })))
         }
         RelOperator::LogicalInnerJoin(p) => {
@@ -139,6 +140,7 @@ fn keep_required_columns(expr: &SExpr, mut required: ColumnSet) -> Result<SExpr>
                     group_items: p.group_items.clone(),
                     aggregate_functions: used,
                     from_distinct: p.from_distinct,
+                    mode: p.mode,
                 }),
                 keep_required_columns(expr.child(0)?, required)?,
             ))
@@ -154,20 +156,6 @@ fn keep_required_columns(expr: &SExpr, mut required: ColumnSet) -> Result<SExpr>
         }
         RelOperator::Limit(p) => Ok(SExpr::create_unary(
             RelOperator::Limit(p.clone()),
-            keep_required_columns(expr.child(0)?, required)?,
-        )),
-        RelOperator::CrossApply(p) => {
-            for c in &p.correlated_columns {
-                required.insert(*c);
-            }
-            Ok(SExpr::create_binary(
-                RelOperator::CrossApply(p.clone()),
-                keep_required_columns(expr.child(0)?, required.clone())?,
-                keep_required_columns(expr.child(1)?, required)?,
-            ))
-        }
-        RelOperator::Max1Row(p) => Ok(SExpr::create_unary(
-            RelOperator::Max1Row(p.clone()),
             keep_required_columns(expr.child(0)?, required)?,
         )),
 
