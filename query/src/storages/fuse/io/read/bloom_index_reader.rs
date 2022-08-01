@@ -81,7 +81,7 @@ pub async fn load_bloom_filter_by_columns(
     tracing::debug_span!("build_array_iter").in_scope(|| {
         for (bytes, col_idx) in cols_data.into_iter() {
             let page_meta_data = PageMetaData {
-                column_start: 0, // PageReader does not care about this
+                column_start: 0,
                 num_values: num_values as i64,
                 compression: Compression::Lz4Raw, // compression for bloom filter might not be sensible
                 descriptor: file_meta.schema_descr.columns()[col_idx].descriptor.clone(),
@@ -175,13 +175,11 @@ async fn read_index_meta(
         if let Some(file_meta) = cache.get(&cache_key) {
             Ok(file_meta.clone())
         } else {
-            eprintln!("cache missed");
             let file_meta = Arc::new(load_index_meta(dal, path).await?);
             cache.put(cache_key, file_meta.clone());
             Ok(file_meta)
         }
     } else {
-        eprintln!("cache not enabled");
         let file_meta = Arc::new(load_index_meta(dal, path).await?);
         Ok(file_meta)
     }

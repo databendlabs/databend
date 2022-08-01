@@ -25,6 +25,7 @@ use common_fuse_meta::meta::TableSnapshot;
 use common_planners::Extras;
 use common_tracing::tracing;
 use common_tracing::tracing::Instrument;
+use futures::future;
 use futures::StreamExt;
 use futures::TryStreamExt;
 
@@ -34,13 +35,12 @@ use crate::storages::fuse::io::MetaReaders;
 use crate::storages::fuse::pruning::bloom_pruner::NonPruner;
 use crate::storages::fuse::pruning::limiter;
 use crate::storages::fuse::pruning::range_pruner;
-use crate::storages::fuse::pruning::range_pruner::RangeFilterPruner;
 
 pub struct BlockPruner {
     table_snapshot: Arc<TableSnapshot>,
 }
 
-const FUTURE_BUFFER_SIZE: usize = 40;
+const FUTURE_BUFFER_SIZE: usize = 10;
 
 impl BlockPruner {
     pub fn new(table_snapshot: Arc<TableSnapshot>) -> Self {
@@ -75,16 +75,12 @@ impl BlockPruner {
         }
 
         // prepare the limiter. in case that limit is none, an unlimited limiter will be returned
-        use super::limiter::Limiter;
-        let limiter: Arc<dyn Limiter + Send + Sync> = limiter::new_limiter(limit).into();
+        let limiter = limiter::new_limiter(limit);
 
         // prepare the range filter.
         // if filter_expression is none, an dummy pruner will be returned, which prunes nothing
         let range_filter_pruner =
             range_pruner::new_range_filter_pruner(ctx, filter_expression, &schema)?;
-
-        let range_filter_pruner: Arc<dyn RangeFilterPruner + Send + Sync> =
-            range_filter_pruner.into();
 
         let dal = ctx.get_storage_operator()?;
         let enable_bloom_index = ctx.get_settings().get_enable_bloom_filter_index()?;
@@ -93,15 +89,19 @@ impl BlockPruner {
             bloom_pruner::new_bloom_filter_pruner(ctx, filter_expression, &schema, dal)?
         } else {
             // toggle off bloom filter according the session settings
-            Box::new(NonPruner)
+            Arc::new(NonPruner)
         };
-
-        let bloom_filter_pruner = Arc::new(bloom_filter_pruner);
 
         let segments_with_idx = segment_locs.into_iter().enumerate();
 
-        let rt = ctx.get_storage_runtime();
-        let futs = segments_with_idx
+        // To make the pruning process more parallel (not just concurrent), we explicitly spawn
+        // pruning tasks in (the multi-threaded) storage runtime.
+        //
+        // To simplify things, an optimistic way of error handling is taken: errors are handled
+        // at the "collect" phase. e.g. if anything goes wrong, we can not break the whole
+        // pruning task immediately , but only at the time that all tasks are done
+        let storage_runtime = ctx.get_storage_runtime();
+        let join_handlers = segments_with_idx
             .map(|(idx, (seg_loc, ver))| {
                 let ctx = ctx.clone();
                 let range_filter_pruner = range_filter_pruner.clone();
@@ -129,59 +129,19 @@ impl BlockPruner {
                     }
                     Ok::<_, ErrorCode>(result)
                 }
-                .instrument(tracing::debug_span!("filter_segment_rt_storage"))
+                .instrument(tracing::debug_span!("filter_segment_with_storage_rt"))
             })
-            .map(|fut| rt.spawn(fut))
+            .map(|fut| storage_runtime.spawn(fut))
             .collect::<Vec<_>>();
 
-        let block_metas = futures::future::try_join_all(futs).await.unwrap();
+        let block_metas = future::try_join_all(join_handlers)
+            .await
+            .map_err(|e| ErrorCode::StorageOther(format!("block pruning failure, {}", e)))?;
 
-        Ok(block_metas
-            .into_iter()
-            .flatten()
-            .flatten()
-            .collect::<Vec<_>>())
-
-        // switching to storage runtime and explicit spawn
-        //
-        // let segment_num = segment_locs.len();
-        // struct NonCopy<T>(T);
-        //// convert u64 (which is Copy) into NonCopy( struct which is !Copy)
-        //// so that "async move" can be avoided in the latter async block
-        //// See https://github.com/rust-lang/rust/issues/81653
-        // let segments_with_idx = segment_locs
-        //    .into_iter()
-        //    .enumerate()
-        //    .map(|(idx, (loc, ver))| (NonCopy(idx), (loc, NonCopy(ver))));
-        // let block_metas = futures::stream::iter(segments_with_idx)
-        //    .map(|(idx, (seg_loc, ver))| async {
-        //        let version = { ver }.0; // use block expression to force moving
-        //        let idx = { idx }.0;
-        //        let segment_reader = MetaReaders::segment_info_reader(ctx.as_ref());
-        //        let segment_info = segment_reader.read(seg_loc, None, version).await?;
-        //        let mut result = Vec::with_capacity(segment_info.blocks.len());
-        //        // prune segment using range filter
-        //        if range_filter_pruner.should_keep(&segment_info.summary.col_stats) {
-        //            for block_meta in &segment_info.blocks {
-        //                // prune block using range filter, and bloom filter if necessary
-        //                if range_filter_pruner.should_keep(&block_meta.col_stats)
-        //                    && bloom_filter_pruner
-        //                        .should_keep(block_meta.location.0.as_str())
-        //                        .await
-        //                {
-        //                    result.push((idx, block_meta.clone()));
-        //                    // doc here
-        //                    if !limiter.within_limit(block_meta.row_count as usize) {
-        //                        break;
-        //                    }
-        //                }
-        //            }
-        //        }
-        //        Ok::<_, ErrorCode>(result)
-        //    })
-        //    .buffered(std::cmp::min(FUTURE_BUFFER_SIZE, segment_num))
-        //    .try_collect::<Vec<_>>()
-        //    .await?;
+        tracing::debug_span!("collect_result").in_scope(|| {
+            let metas = block_metas.into_iter().collect::<Result<Vec<_>>>()?;
+            Ok::<_, ErrorCode>(metas.into_iter().flatten().collect())
+        })
     }
 
     async fn all_the_blocks(

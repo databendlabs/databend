@@ -51,7 +51,6 @@ struct BloomFilterIndexPruner {
     // the expression that would be evaluate
     filter_expression: Expression,
     // the data accessor
-    // dal: &'a Operator,
     dal: Operator,
     // the schema of data being indexed
     data_schema: DataSchemaRef,
@@ -62,7 +61,6 @@ impl BloomFilterIndexPruner {
         ctx: Arc<dyn TableContext>,
         index_columns: Vec<String>,
         filter_expression: Expression,
-        // dal: &'a Operator,
         dal: Operator,
         data_schema: DataSchemaRef,
     ) -> Self {
@@ -109,9 +107,8 @@ pub fn new_bloom_filter_pruner(
     ctx: &Arc<dyn TableContext>,
     filter_expr: Option<&Expression>,
     schema: &DataSchemaRef,
-    // dal: &'a Operator,
     dal: Operator,
-) -> Result<Box<dyn BloomFilterPruner + Send + Sync>> {
+) -> Result<Arc<dyn BloomFilterPruner + Send + Sync>> {
     if let Some(expr) = filter_expr {
         // check if there were applicable filter conditions
         let point_query_cols = columns_names_of_eq_expressions(expr)?;
@@ -121,7 +118,7 @@ pub fn new_bloom_filter_pruner(
                 .into_iter()
                 .map(|n| BloomFilterIndexer::to_bloom_column_name(&n))
                 .collect();
-            return Ok(Box::new(BloomFilterIndexPruner::new(
+            return Ok(Arc::new(BloomFilterIndexPruner::new(
                 ctx.clone(),
                 filter_block_cols,
                 expr.clone(),
@@ -132,7 +129,7 @@ pub fn new_bloom_filter_pruner(
             tracing::debug!("no point filters found, using NonPruner");
         }
     }
-    Ok(Box::new(NonPruner))
+    Ok(Arc::new(NonPruner))
 }
 
 mod util {

@@ -14,6 +14,7 @@
 
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
+use std::sync::Arc;
 
 pub trait Limiter {
     fn within_limit(&self, n: usize) -> bool;
@@ -34,10 +35,10 @@ impl Limiter for AtomicUsize {
     }
 }
 
-pub type LimiterPruner = Box<dyn Limiter + Send + Sync>;
+pub type LimiterPruner = Arc<dyn Limiter + Send + Sync>;
 pub fn new_limiter(limit: Option<usize>) -> LimiterPruner {
     match limit {
-        Some(size) => Box::new(AtomicUsize::new(size)),
-        _ => Box::new(Unlimited),
+        Some(size) => Arc::new(AtomicUsize::new(size)),
+        _ => Arc::new(Unlimited),
     }
 }
