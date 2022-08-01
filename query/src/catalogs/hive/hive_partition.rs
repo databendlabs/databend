@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
@@ -22,7 +23,10 @@ use common_planners::PartInfoPtr;
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Debug)]
 pub struct HivePartInfo {
-    pub location: String,
+    // file location, like /usr/hive/warehouse/ssb.db/customer.table/c_region=ASIA/c_nation=CHINA/f00.parquet
+    pub filename: String,
+    // partition values, like 'c_region=ASIA/c_nation=CHINA'
+    pub partitions: Option<String>,
 }
 
 #[typetag::serde(name = "hive")]
@@ -40,8 +44,17 @@ impl PartInfo for HivePartInfo {
 }
 
 impl HivePartInfo {
-    pub fn create(location: String) -> Arc<Box<dyn PartInfo>> {
-        Arc::new(Box::new(HivePartInfo { location }))
+    pub fn create(filename: String, partitions: Option<String>) -> Arc<Box<dyn PartInfo>> {
+        Arc::new(Box::new(HivePartInfo {
+            filename,
+            partitions,
+        }))
+    }
+
+    pub fn get_partition_map(&self) -> HashMap<String, String> {
+        self.partitions
+            .as_ref()
+            .map_or_else(HashMap::new, |s| parse_hive_partitions(s))
     }
 
     pub fn from_part(info: &PartInfoPtr) -> Result<&HivePartInfo> {
@@ -52,4 +65,15 @@ impl HivePartInfo {
             )),
         }
     }
+}
+
+// partitions like 'c_region=ASIA/c_nation=CHINA'
+pub fn parse_hive_partitions(partitions: &str) -> HashMap<String, String> {
+    let mut partition_map = HashMap::new();
+    let parts = partitions.split('/').collect::<Vec<_>>();
+    for part in parts {
+        let kv = part.split('=').collect::<Vec<_>>();
+        partition_map.insert(kv[0].to_string(), kv[1].to_string());
+    }
+    partition_map
 }

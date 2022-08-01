@@ -294,10 +294,6 @@ impl QueryContextShared {
         self.session.get_id()
     }
 
-    pub async fn reload_config(&self) -> Result<()> {
-        self.session.session_mgr.reload_config().await
-    }
-
     pub fn get_affect(&self) -> Option<QueryAffect> {
         let guard = self.affect.lock();
         (*guard).clone()

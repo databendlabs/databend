@@ -12,6 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::any::Any;
 use std::sync::Arc;
 
 use common_exception::Result;
@@ -143,6 +144,10 @@ impl MutableCatalog {
 
 #[async_trait::async_trait]
 impl Catalog for MutableCatalog {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
     async fn get_database(&self, tenant: &str, db_name: &str) -> Result<Arc<dyn Database>> {
         let db_info = self
             .ctx

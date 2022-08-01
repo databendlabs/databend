@@ -165,10 +165,6 @@ impl QueryContext {
         Ok(())
     }
 
-    pub async fn reload_config(&self) -> Result<()> {
-        self.shared.reload_config().await
-    }
-
     pub fn get_exchange_manager(&self) -> Arc<DataExchangeManager> {
         self.shared.session.session_mgr.get_data_exchange_manager()
     }
