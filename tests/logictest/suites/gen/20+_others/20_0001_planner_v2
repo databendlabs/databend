@@ -1098,6 +1098,20 @@ c
 
 skipif clickhouse
 statement query T
+select trim(leading ' ' from NULL);
+
+----
+NULL
+
+skipif clickhouse
+statement query T
+select trim(leading NULL from 'aaa');
+
+----
+NULL
+
+skipif clickhouse
+statement query T
 select trim(trailing ' ' from 'abc    ');
 
 ----
@@ -1119,6 +1133,20 @@ select trim(trailing 'ab' from 'cab');
 c
 
 skipif clickhouse
+statement query T
+select trim(trailing ' ' from NULL);
+
+----
+NULL
+
+skipif clickhouse
+statement query T
+select trim(trailing NULL from 'aaa');
+
+----
+NULL
+
+skipif clickhouse
 statement ok
 select trim(both 'ab' from 'abab');
 
@@ -1131,10 +1159,31 @@ c
 
 skipif clickhouse
 statement query T
+select trim(both ' ' from NULL);
+
+----
+NULL
+
+skipif clickhouse
+statement query T
+select trim(both NULL from 'aaa');
+
+----
+NULL
+
+skipif clickhouse
+statement query T
 select trim(' abc ');
 
 ----
 abc
+
+skipif clickhouse
+statement query T
+select trim(NULL);
+
+----
+NULL
 
 skipif clickhouse
 statement query I

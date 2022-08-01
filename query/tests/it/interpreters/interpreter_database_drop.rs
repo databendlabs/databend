@@ -15,16 +15,18 @@
 use common_base::base::tokio;
 use common_exception::Result;
 use databend_query::interpreters::*;
-use databend_query::sql::PlanParser;
+use databend_query::sql::Planner;
 use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
 
 #[tokio::test]
 async fn test_drop_database_interpreter() -> Result<()> {
     let ctx = crate::tests::create_query_context().await?;
+    let mut planner = Planner::new(ctx.clone());
 
-    let plan = PlanParser::parse(ctx.clone(), "drop database default").await?;
-    let executor = InterpreterFactory::get(ctx, plan.clone())?;
+    let query = "drop database default";
+    let (plan, _, _) = planner.plan_sql(query).await?;
+    let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
     assert_eq!(executor.name(), "DropDatabaseInterpreter");
     let stream = executor.execute(None).await?;
     let result = stream.try_collect::<Vec<_>>().await?;
