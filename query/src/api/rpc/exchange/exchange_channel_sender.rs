@@ -176,6 +176,10 @@ impl ExchangeSender {
                 };
             }
 
+            if !c_tx.is_closed() {
+                c_tx.send(DataPacket::FinishQuery).await.ok();
+            }
+
             while let Ok(recv_message) = f_rx.try_recv() {
                 if c_tx.send(recv_message).await.is_err() {
                     return;
@@ -331,7 +335,7 @@ impl ExchangeSender {
                     None,
                     Some(config.query.to_rpc_client_tls_config()),
                 )
-                .await?,
+                    .await?,
             ))),
             false => Ok(FlightClient::new(FlightServiceClient::new(
                 ConnectionFactory::create_rpc_channel(address.to_owned(), None, None).await?,

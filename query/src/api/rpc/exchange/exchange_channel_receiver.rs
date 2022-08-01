@@ -196,6 +196,7 @@ impl ExchangeReceiver {
             DataPacket::ErrorCode(error_code) => Err(error_code),
             DataPacket::Progress(progress_info) => progress_info.inc(&self.ctx),
             DataPacket::PrecommitBlock(precommit_block) => precommit_block.precommit(&self.ctx),
+            DataPacket::FinishQuery => unreachable!(),
         }
     }
 }
