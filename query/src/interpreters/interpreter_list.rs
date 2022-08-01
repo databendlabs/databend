@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
+use common_datavalues::DataSchemaRef;
 use common_datavalues::Series;
 use common_datavalues::SeriesFrom;
 use common_exception::Result;
@@ -42,6 +43,10 @@ impl ListInterpreter {
 impl Interpreter for ListInterpreter {
     fn name(&self) -> &str {
         "ListInterpreter"
+    }
+
+    fn schema(&self) -> DataSchemaRef {
+        self.plan.schema()
     }
 
     #[tracing::instrument(level = "debug", name = "list_interpreter_execute", skip(self, _input_stream), fields(ctx.id = self.ctx.get_id().as_str()))]

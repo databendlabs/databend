@@ -7,14 +7,11 @@ select * from numbers(100) where number > 95;
 98
 99
 
-statement query B label(http)
+statement query B
 select count(*) > 0 from system.query_log;
 
 ----
 1
-
-----  http
-true
 
 statement ok
 drop table if exists tbl_01_0002 all;

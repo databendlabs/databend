@@ -94,9 +94,37 @@ impl From<common_arrow::arrow::error::Error> for ErrorCode {
     }
 }
 
-impl From<Box<bincode::ErrorKind>> for ErrorCode {
-    fn from(error: Box<bincode::ErrorKind>) -> Self {
+impl From<bincode::error::EncodeError> for ErrorCode {
+    fn from(error: bincode::error::EncodeError) -> Self {
         ErrorCode::from_std_error(error)
+    }
+}
+
+impl From<bincode::error::DecodeError> for ErrorCode {
+    fn from(error: bincode::error::DecodeError) -> Self {
+        ErrorCode::from_std_error(error)
+    }
+}
+
+impl From<bincode::serde::EncodeError> for ErrorCode {
+    fn from(error: bincode::serde::EncodeError) -> Self {
+        ErrorCode::create(
+            1002,
+            format!("{error:?}"),
+            None,
+            Some(ErrorCodeBacktrace::Origin(Arc::new(Backtrace::capture()))),
+        )
+    }
+}
+
+impl From<bincode::serde::DecodeError> for ErrorCode {
+    fn from(error: bincode::serde::DecodeError) -> Self {
+        ErrorCode::create(
+            1002,
+            format!("{error:?}"),
+            None,
+            Some(ErrorCodeBacktrace::Origin(Arc::new(Backtrace::capture()))),
+        )
     }
 }
 

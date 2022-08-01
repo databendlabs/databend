@@ -47,6 +47,10 @@ impl Interpreter for PresignInterpreter {
         "PresignInterpreter"
     }
 
+    fn schema(&self) -> DataSchemaRef {
+        self.plan.schema()
+    }
+
     #[tracing::instrument(level = "debug", name = "presign_interpreter_execute", skip(self, _input_stream), fields(ctx.id = self.ctx.get_id().as_str()))]
     async fn execute(
         &self,

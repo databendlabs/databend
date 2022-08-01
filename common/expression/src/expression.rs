@@ -21,6 +21,7 @@ use crate::function::Function;
 use crate::function::FunctionID;
 use crate::function::FunctionRegistry;
 use crate::types::DataType;
+use crate::values::Scalar;
 
 pub type Span = Option<std::ops::Range<usize>>;
 
@@ -55,9 +56,9 @@ pub enum RawExpr {
 
 #[derive(Debug, Clone)]
 pub enum Expr {
-    Literal {
+    Constant {
         span: Span,
-        lit: Literal,
+        scalar: Scalar,
     },
     ColumnRef {
         span: Span,
@@ -84,9 +85,9 @@ pub enum Expr {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum RemoteExpr {
-    Literal {
+    Constant {
         span: Span,
-        lit: Literal,
+        scalar: Scalar,
     },
     ColumnRef {
         span: Span,
@@ -130,7 +131,7 @@ pub enum Literal {
 impl RemoteExpr {
     pub fn from_expr(expr: Expr) -> Self {
         match expr {
-            Expr::Literal { span, lit } => RemoteExpr::Literal { span, lit },
+            Expr::Constant { span, scalar } => RemoteExpr::Constant { span, scalar },
             Expr::ColumnRef { span, id } => RemoteExpr::ColumnRef { span, id },
             Expr::Cast {
                 span,
@@ -167,7 +168,7 @@ impl RemoteExpr {
 
     pub fn into_expr(self, fn_registry: &FunctionRegistry) -> Option<Expr> {
         Some(match self {
-            RemoteExpr::Literal { span, lit } => Expr::Literal { span, lit },
+            RemoteExpr::Constant { span, scalar } => Expr::Constant { span, scalar },
             RemoteExpr::ColumnRef { span, id } => Expr::ColumnRef { span, id },
             RemoteExpr::Cast {
                 span,

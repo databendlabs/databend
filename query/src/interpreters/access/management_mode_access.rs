@@ -17,7 +17,6 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::PlanNode;
-use common_planners::ShowPlan;
 
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
@@ -36,62 +35,7 @@ impl ManagementModeAccess {
         // Allows for management-mode.
         if self.ctx.get_config().query.management_mode {
             return match plan {
-                PlanNode::Empty(_)
-
-                // Show.
-                | PlanNode::Show(ShowPlan::ShowDatabases(_))
-                | PlanNode::Show(ShowPlan::ShowTables(_))
-                | PlanNode::Show(ShowPlan::ShowEngines(_))
-                | PlanNode::Show(ShowPlan::ShowFunctions(_))
-                | PlanNode::Show(ShowPlan::ShowGrants(_))
-                | PlanNode::Show(ShowPlan::ShowSettings(_))
-                | PlanNode::Show(ShowPlan::ShowUsers(_))
-                | PlanNode::Show(ShowPlan::ShowRoles(_))
-                | PlanNode::Show(ShowPlan::ShowStages)
-
-                // Database.
-                | PlanNode::CreateDatabase(_)
-                | PlanNode::ShowCreateDatabase(_)
-                | PlanNode::DropDatabase(_)
-
-                // Table.
-                | PlanNode::CreateTable(_)
-                | PlanNode::DropTable(_)
-                | PlanNode::DescribeTable(_)
-                | PlanNode::ShowCreateTable(_)
-
-                // User.
-                | PlanNode::CreateUser(_)
-                | PlanNode::DropUser(_)
-                | PlanNode::AlterUser(_)
-
-                // Role.
-                | PlanNode::CreateRole(_)
-                | PlanNode::DropRole(_)
-
-                // Privilege.
-                | PlanNode::GrantPrivilege(_)
-                | PlanNode::RevokePrivilege(_)
-                | PlanNode::GrantRole(_)
-                | PlanNode::RevokeRole(_)
-
-                // Stage.
-                | PlanNode::CreateUserStage(_)
-                | PlanNode::DropUserStage(_)
-                | PlanNode::DescribeUserStage(_)
-
-                | PlanNode::List(_)
-
-                // UDF.
-                | PlanNode::CreateUserUDF(_)
-                | PlanNode::DropUserUDF(_)
-                | PlanNode::AlterUserUDF(_)
-
-                // USE.
-                | PlanNode::UseDatabase(_)
-
-                // CALL
-                | PlanNode::Call(_) => Ok(()),
+                PlanNode::Empty(_) => Ok(()),
                 _ => Err(ErrorCode::ManagementModePermissionDenied(format!(
                     "Access denied for operation:{:?} in management-mode",
                     plan.name()

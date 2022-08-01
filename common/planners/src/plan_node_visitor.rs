@@ -16,69 +16,27 @@ use common_exception::Result;
 
 use crate::plan_broadcast::BroadcastPlan;
 use crate::plan_subqueries_set::SubQueriesSetPlan;
-use crate::plan_table_undrop::UndropTablePlan;
 use crate::plan_window_func::WindowFuncPlan;
 use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
-use crate::AlterTableClusterKeyPlan;
-use crate::AlterUserPlan;
-use crate::AlterUserUDFPlan;
-use crate::AlterViewPlan;
-use crate::CallPlan;
-use crate::CopyPlan;
-use crate::CreateDatabasePlan;
-use crate::CreateRolePlan;
-use crate::CreateTablePlan;
-use crate::CreateUserPlan;
-use crate::CreateUserStagePlan;
-use crate::CreateUserUDFPlan;
-use crate::CreateViewPlan;
 use crate::DeletePlan;
-use crate::DescribeTablePlan;
-use crate::DescribeUserStagePlan;
-use crate::DropDatabasePlan;
-use crate::DropRolePlan;
-use crate::DropTableClusterKeyPlan;
-use crate::DropTablePlan;
-use crate::DropUserPlan;
-use crate::DropUserStagePlan;
-use crate::DropUserUDFPlan;
-use crate::DropViewPlan;
 use crate::EmptyPlan;
-use crate::ExistsTablePlan;
 use crate::ExplainPlan;
 use crate::Expression;
 use crate::ExpressionPlan;
 use crate::FilterPlan;
-use crate::GrantPrivilegePlan;
-use crate::GrantRolePlan;
 use crate::HavingPlan;
 use crate::InsertPlan;
-use crate::KillPlan;
 use crate::LimitByPlan;
 use crate::LimitPlan;
-use crate::ListPlan;
-use crate::OptimizeTablePlan;
 use crate::PlanNode;
 use crate::ProjectionPlan;
 use crate::ReadDataSourcePlan;
 use crate::RemotePlan;
-use crate::RemoveUserStagePlan;
-use crate::RenameDatabasePlan;
-use crate::RenameTablePlan;
-use crate::RevokePrivilegePlan;
-use crate::RevokeRolePlan;
 use crate::SelectPlan;
-use crate::SettingPlan;
-use crate::ShowCreateDatabasePlan;
-use crate::ShowCreateTablePlan;
-use crate::ShowPlan;
 use crate::SinkPlan;
 use crate::SortPlan;
 use crate::StagePlan;
-use crate::TruncateTablePlan;
-use crate::UndropDatabasePlan;
-use crate::UseDatabasePlan;
 
 /// `PlanVisitor` implements visitor pattern(reference [syn](https://docs.rs/syn/1.0.72/syn/visit/trait.Visit.html)) for `PlanNode`.
 ///
@@ -154,79 +112,6 @@ pub trait PlanVisitor {
 
             // Insert.
             PlanNode::Delete(plan) => self.visit_delete_into(plan),
-
-            // Copy.
-            PlanNode::Copy(plan) => self.visit_copy(plan),
-
-            // Call.
-            PlanNode::Call(plan) => self.visit_call(plan),
-
-            // Show.
-            PlanNode::Show(plan) => self.visit_show(plan),
-
-            // Database.
-            PlanNode::CreateDatabase(plan) => self.visit_create_database(plan),
-            PlanNode::DropDatabase(plan) => self.visit_drop_database(plan),
-            PlanNode::ShowCreateDatabase(plan) => self.visit_show_create_database(plan),
-            PlanNode::RenameDatabase(plan) => self.visit_rename_database(plan),
-            PlanNode::UndropDatabase(plan) => self.visit_undrop_database(plan),
-            // Table.
-            PlanNode::CreateTable(plan) => self.visit_create_table(plan),
-            PlanNode::DropTable(plan) => self.visit_drop_table(plan),
-            PlanNode::UndropTable(plan) => self.visit_undrop_table(plan),
-            PlanNode::RenameTable(plan) => self.visit_rename_table(plan),
-            PlanNode::TruncateTable(plan) => self.visit_truncate_table(plan),
-            PlanNode::OptimizeTable(plan) => self.visit_optimize_table(plan),
-            PlanNode::ExistsTable(plan) => self.visit_exists_table(plan),
-            PlanNode::DescribeTable(plan) => self.visit_describe_table(plan),
-            PlanNode::ShowCreateTable(plan) => self.visit_show_create_table(plan),
-
-            // View.
-            PlanNode::CreateView(v) => self.visit_create_view(v),
-            PlanNode::AlterView(v) => self.visit_alter_view(v),
-            PlanNode::DropView(v) => self.visit_drop_view(v),
-
-            // User.
-            PlanNode::CreateUser(plan) => self.visit_create_user(plan),
-            PlanNode::AlterUser(plan) => self.visit_alter_user(plan),
-            PlanNode::DropUser(plan) => self.visit_drop_user(plan),
-
-            // Grant
-            PlanNode::GrantPrivilege(plan) => self.visit_grant_privilege(plan),
-            PlanNode::GrantRole(plan) => self.visit_grant_role(plan),
-
-            // Revoke
-            PlanNode::RevokePrivilege(plan) => self.visit_revoke_privilege(plan),
-            PlanNode::RevokeRole(plan) => self.visit_revoke_role(plan),
-
-            // Role.
-            PlanNode::CreateRole(plan) => self.visit_create_role(plan),
-            PlanNode::DropRole(plan) => self.visit_drop_role(plan),
-
-            // Stage.
-            PlanNode::CreateUserStage(plan) => self.visit_create_user_stage(plan),
-            PlanNode::DropUserStage(plan) => self.visit_drop_user_stage(plan),
-            PlanNode::DescribeUserStage(plan) => self.visit_describe_user_stage(plan),
-            PlanNode::List(plan) => self.visit_list(plan),
-            PlanNode::RemoveUserStage(plan) => self.visit_remove_user_stage(plan),
-
-            // UDF.
-            PlanNode::CreateUserUDF(plan) => self.visit_create_user_udf(plan),
-            PlanNode::DropUserUDF(plan) => self.visit_drop_user_udf(plan),
-            PlanNode::AlterUserUDF(plan) => self.visit_alter_user_udf(plan),
-
-            // Use.
-            PlanNode::UseDatabase(plan) => self.visit_use_database(plan),
-
-            // Set.
-            PlanNode::SetVariable(plan) => self.visit_set_variable(plan),
-
-            // Kill.
-            PlanNode::Kill(plan) => self.visit_kill_query(plan),
-
-            // Cluster Key.
-            PlanNode::AlterTableClusterKey(plan) => self.visit_alter_table_cluster_key(plan),
-            PlanNode::DropTableClusterKey(plan) => self.visit_drop_table_cluster_key(plan),
         }
     }
 
@@ -339,102 +224,6 @@ pub trait PlanVisitor {
         self.visit_plan_node(plan.input.as_ref())
     }
 
-    fn visit_create_database(&mut self, _: &CreateDatabasePlan) -> Result<()> {
-        Ok(())
-    }
-
-    fn visit_drop_database(&mut self, _: &DropDatabasePlan) -> Result<()> {
-        Ok(())
-    }
-
-    fn visit_rename_database(&mut self, _: &RenameDatabasePlan) -> Result<()> {
-        Ok(())
-    }
-
-    fn visit_create_table(&mut self, _: &CreateTablePlan) -> Result<()> {
-        Ok(())
-    }
-
-    fn visit_create_user(&mut self, _: &CreateUserPlan) -> Result<()> {
-        Ok(())
-    }
-
-    fn visit_alter_user(&mut self, _: &AlterUserPlan) -> Result<()> {
-        Ok(())
-    }
-
-    fn visit_drop_user(&mut self, _: &DropUserPlan) -> Result<()> {
-        Ok(())
-    }
-
-    fn visit_grant_privilege(&mut self, _: &GrantPrivilegePlan) -> Result<()> {
-        Ok(())
-    }
-
-    fn visit_grant_role(&mut self, _: &GrantRolePlan) -> Result<()> {
-        Ok(())
-    }
-
-    fn visit_revoke_privilege(&mut self, _: &RevokePrivilegePlan) -> Result<()> {
-        Ok(())
-    }
-
-    fn visit_revoke_role(&mut self, _: &RevokeRolePlan) -> Result<()> {
-        Ok(())
-    }
-
-    fn visit_create_role(&mut self, _: &CreateRolePlan) -> Result<()> {
-        Ok(())
-    }
-
-    fn visit_drop_role(&mut self, _: &DropRolePlan) -> Result<()> {
-        Ok(())
-    }
-
-    fn visit_describe_table(&mut self, _: &DescribeTablePlan) -> Result<()> {
-        Ok(())
-    }
-
-    fn visit_rename_table(&mut self, _: &RenameTablePlan) -> Result<()> {
-        Ok(())
-    }
-
-    fn visit_optimize_table(&mut self, _: &OptimizeTablePlan) -> Result<()> {
-        Ok(())
-    }
-
-    fn visit_exists_table(&mut self, _: &ExistsTablePlan) -> Result<()> {
-        Ok(())
-    }
-
-    fn visit_describe_user_stage(&mut self, _: &DescribeUserStagePlan) -> Result<()> {
-        Ok(())
-    }
-
-    fn visit_list(&mut self, _: &ListPlan) -> Result<()> {
-        Ok(())
-    }
-
-    fn visit_drop_table(&mut self, _: &DropTablePlan) -> Result<()> {
-        Ok(())
-    }
-
-    fn visit_undrop_table(&mut self, _: &UndropTablePlan) -> Result<()> {
-        Ok(())
-    }
-
-    fn visit_undrop_database(&mut self, _: &UndropDatabasePlan) -> Result<()> {
-        Ok(())
-    }
-
-    fn visit_use_database(&mut self, _: &UseDatabasePlan) -> Result<()> {
-        Ok(())
-    }
-
-    fn visit_set_variable(&mut self, _: &SettingPlan) -> Result<()> {
-        Ok(())
-    }
-
     fn visit_insert_into(&mut self, _: &InsertPlan) -> Result<()> {
         Ok(())
     }
@@ -442,79 +231,7 @@ pub trait PlanVisitor {
     fn visit_delete_into(&mut self, _: &DeletePlan) -> Result<()> {
         Ok(())
     }
-
-    fn visit_copy(&mut self, _: &CopyPlan) -> Result<()> {
-        Ok(())
-    }
-
-    fn visit_call(&mut self, _: &CallPlan) -> Result<()> {
-        Ok(())
-    }
-
-    fn visit_show_create_table(&mut self, _: &ShowCreateTablePlan) -> Result<()> {
-        Ok(())
-    }
-
-    fn visit_truncate_table(&mut self, _: &TruncateTablePlan) -> Result<()> {
-        Ok(())
-    }
-
-    fn visit_create_view(&mut self, _: &CreateViewPlan) -> Result<()> {
-        Ok(())
-    }
-
-    fn visit_drop_view(&mut self, _: &DropViewPlan) -> Result<()> {
-        Ok(())
-    }
-
-    fn visit_alter_view(&mut self, _: &AlterViewPlan) -> Result<()> {
-        Ok(())
-    }
-
-    fn visit_kill_query(&mut self, _: &KillPlan) -> Result<()> {
-        Ok(())
-    }
     fn visit_append(&mut self, _: &SinkPlan) -> Result<()> {
-        Ok(())
-    }
-
-    fn visit_create_user_stage(&mut self, _: &CreateUserStagePlan) -> Result<()> {
-        Ok(())
-    }
-
-    fn visit_drop_user_stage(&mut self, _: &DropUserStagePlan) -> Result<()> {
-        Ok(())
-    }
-
-    fn visit_show_create_database(&mut self, _: &ShowCreateDatabasePlan) -> Result<()> {
-        Ok(())
-    }
-
-    fn visit_show(&mut self, _: &ShowPlan) -> Result<()> {
-        Ok(())
-    }
-
-    fn visit_create_user_udf(&mut self, _: &CreateUserUDFPlan) -> Result<()> {
-        Ok(())
-    }
-
-    fn visit_drop_user_udf(&mut self, _: &DropUserUDFPlan) -> Result<()> {
-        Ok(())
-    }
-
-    fn visit_alter_user_udf(&mut self, _: &AlterUserUDFPlan) -> Result<()> {
-        Ok(())
-    }
-
-    fn visit_remove_user_stage(&mut self, _: &RemoveUserStagePlan) -> Result<()> {
-        Ok(())
-    }
-
-    fn visit_alter_table_cluster_key(&mut self, _: &AlterTableClusterKeyPlan) -> Result<()> {
-        Ok(())
-    }
-
-    fn visit_drop_table_cluster_key(&mut self, _: &DropTableClusterKeyPlan) -> Result<()> {
         Ok(())
     }
 }

@@ -1,10 +1,10 @@
 set enable_planner_v2 = 1;
 select
-            100.00 * sum(case
+    TRUNCATE(100.00 * sum(case
                              when p_type like 'PROMO%'
                                  then l_extendedprice * (1 - l_discount)
                              else 0
-            end) / sum(l_extendedprice * (1 - l_discount)) as promo_revenue
+            end) / sum(l_extendedprice * (1 - l_discount)), 5) as promo_revenue
 from
     lineitem,
     part

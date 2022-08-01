@@ -19,47 +19,43 @@ INSERT INTO t VALUES(3,4);
 statement ok
 delete from t where c1 > 3;
 
-statement query B label(http)
+statement query B
 select count(*) = 2 from t;
 
 ----
 1
 
----- http
-true
+
 
 statement ok
 delete from t where c1 = 1;
 
-statement query B label(http)
+statement query B
 select count(*) = 0 from t where c1 = 1;
 
 ----
 1
 
----- http
-true
 
-statement query B label(http)
+
+statement query B
 select count(*) = 1 from t where c1 <> 1;
 
 ----
 1
 
----- http
-true
+
 
 statement ok
 delete from t;
 
-statement query B label(http)
+statement query B
 select count(*) = 0 from t;
 
 ----
 1
 
----- http
-true
+
 
 statement ok
 drop table t all;
@@ -73,68 +69,62 @@ insert into t values (1),(2),(NULL);
 statement ok
 delete from t where 1 = 0;
 
-statement query B label(http)
+statement query B
 select count(*) = 3 from t;
 
 ----
 1
 
----- http
-true
+
 
 statement ok
 delete from t where c = 1;
 
-statement query B label(http)
+statement query B
 select count(*) = 2 from t;
 
 ----
 1
 
----- http
-true
 
-statement query B label(http)
+
+statement query B
 select count(*) = 1 from t where c IS NULL;
 
 ----
 1
 
----- http
-true
+
 
 statement ok
 delete from t where c IS NULL;
 
-statement query B label(http)
+statement query B
 select count(*) = 0 from t where c IS NULL;
 
 ----
 1
 
----- http
-true
 
-statement query B label(http)
+
+statement query B
 select count(*) = 1 from t where c IS NOT NULL;
 
 ----
 1
 
----- http
-true
+
 
 statement ok
 delete from t where 1 = 1;
 
-statement query B label(http)
+statement query B
 select count(*) = 0 from t;
 
 ----
 1
 
----- http
-true
+
 
 statement ok
 insert into t values (1),(2),(NULL);
@@ -142,14 +132,13 @@ insert into t values (1),(2),(NULL);
 statement ok
 delete from t where now();
 
-statement query B label(http)
+statement query B
 select count(*) = 0 from t;
 
 ----
 1
 
----- http
-true
+
 
 statement ok
 drop table t all;
