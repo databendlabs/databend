@@ -17,8 +17,8 @@ use common_exception::Result;
 use goldenfile::Mint;
 
 use super::run_suites;
-use super::Suite;
 use super::run_test;
+use super::Suite;
 use crate::tests::create_query_context;
 
 #[tokio::test]
