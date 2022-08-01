@@ -34,7 +34,7 @@ use crate::tests::create_catalog;
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_catalogs_get_database() -> Result<()> {
     let tenant = "test";
-    let catalog = create_catalog()?;
+    let catalog = create_catalog().await?;
 
     // get system database
     let database = catalog.get_database(tenant, "system").await?;
@@ -61,7 +61,7 @@ async fn test_catalogs_get_database() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_catalogs_database() -> Result<()> {
     let tenant = "admin";
-    let catalog = create_catalog()?;
+    let catalog = create_catalog().await?;
 
     let db_list = catalog.list_databases(tenant).await?;
     let db_count = db_list.len();
@@ -153,7 +153,7 @@ async fn test_catalogs_database() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_catalogs_table() -> Result<()> {
     let tenant = "test";
-    let catalog = create_catalog()?;
+    let catalog = create_catalog().await?;
 
     // Check system/default.
     {
