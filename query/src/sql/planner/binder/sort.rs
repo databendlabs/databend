@@ -77,29 +77,11 @@ impl<'a> Binder {
                 } => {
                     // We first search the identifier in select list
                     let mut found = false;
+                    let db = database_name.as_ref().map(|s| s.name.as_str());
+                    let table = table_name.as_ref().map(|s| s.name.as_str());
+
                     for item in projections.iter() {
-                        let matched = match (
-                            (&database_name, &table_name),
-                            (&item.database_name, &item.table_name),
-                        ) {
-                            (
-                                (Some(ident_database), Some(ident_table)),
-                                (Some(database), Some(table)),
-                            ) if &ident_database.name == database
-                                && &ident_table.name == table
-                                && ident.name == item.column_name =>
-                            {
-                                true
-                            }
-                            ((None, Some(ident_table)), (_, Some(table)))
-                                if &ident_table.name == table && ident.name == item.column_name =>
-                            {
-                                true
-                            }
-                            ((None, None), (_, _)) if ident.name == item.column_name => true,
-                            _ => false,
-                        };
-                        if matched {
+                        if BindContext::match_column_binding(db, table, ident, item) {
                             order_items.push(OrderItem {
                                 expr: order.clone(),
                                 index: item.index,
