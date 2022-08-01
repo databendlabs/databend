@@ -46,7 +46,6 @@ If and only if the node state is `Follower` or `Leader` , `node_is_health` is 1,
 ### Raft Network
 
 These metrics describe the network status of raft nodes in the `metasrv`. All these metrics are prefixed with `metasrv_raft_network_`.
-
 | Name                    | Description                                       | Labels                            | Type          |
 | ----------------------- | ------------------------------------------------- | --------------------------------- | ------------- |
 | active_peers            | Current number of active connections to peers.    | id(node id),address(peer address) | GaugeVec      |
@@ -60,7 +59,6 @@ These metrics describe the network status of raft nodes in the `metasrv`. All th
 | snapshot_sent_seconds   | Total latency distributions of snapshot sends.    | to(node id)                       | HistogramVec  |
 | snapshot_recv_success   | Total number of successful receive snapshot.      | from(remote address)              | IntCounterVec |
 | snapshot_recv_failures  | Total number of snapshot receive failures.        | from(remote address)              | IntCounterVec |
-
 | snapshot_recv_inflights | Total number of inflight snapshot receives.       | from(remote address)              | IntGaugeVec   |
 | snapshot_recv_seconds   | Total latency distributions of snapshot receives. | from(remote address)              | HistogramVec  |
 
@@ -90,7 +88,6 @@ These metrics describe the storage status of raft nodes in the `metasrv`. All th
 ### Meta Network
 
 These metrics describe the network status of meta service in the `metasrv`. All these metrics are prefixed with `metasrv_meta_network_`.
-i
 | Name             | Description                                            | Type       |
 | ---------------- | ------------------------------------------------------ | ---------- |
 | meta_sent_bytes  | Total number of sent bytes to meta grpc client.        | IntCounter |

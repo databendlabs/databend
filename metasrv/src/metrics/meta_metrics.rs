@@ -646,13 +646,9 @@ pub fn incr_meta_metrics_meta_request_result(success: bool) {
 
 pub fn incr_raft_storage_fail(func: &str, write: bool) {
     if write {
-        RAFT_STORAGE_WRITE_FAILED
-            .with_label_values(&[&func.to_string()])
-            .inc();
+        RAFT_STORAGE_WRITE_FAILED.with_label_values(&[func]).inc();
     } else {
-        RAFT_STORAGE_READ_FAILED
-            .with_label_values(&[&func.to_string()])
-            .inc();
+        RAFT_STORAGE_READ_FAILED.with_label_values(&[func]).inc();
     }
 }
 

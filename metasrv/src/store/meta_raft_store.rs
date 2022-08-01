@@ -337,29 +337,23 @@ impl RaftStorage<LogEntry, AppliedState> for MetaRaftStore {
 
     #[tracing::instrument(level = "debug", skip(self), fields(id=self.id))]
     async fn purge_logs_upto(&self, log_id: LogId) -> Result<(), StorageError> {
-        match self
+        if let Err(err) = self
             .log
             .set_last_purged(log_id)
             .await
             .map_to_sto_err(ErrorSubject::Logs, ErrorVerb::Write)
         {
-            Err(err) => {
-                incr_raft_storage_fail("purge_logs_upto", true);
-                return Err(err);
-            }
-            Ok(_) => {}
+            incr_raft_storage_fail("purge_logs_upto", true);
+            return Err(err);
         };
-        match self
+        if let Err(err) = self
             .log
             .range_remove(..=log_id.index)
             .await
             .map_to_sto_err(ErrorSubject::Log(log_id), ErrorVerb::Delete)
         {
-            Err(err) => {
-                incr_raft_storage_fail("purge_logs_upto", true);
-                return Err(err);
-            }
-            Ok(_) => {}
+            incr_raft_storage_fail("purge_logs_upto", true);
+            return Err(err);
         }
 
         Ok(())
