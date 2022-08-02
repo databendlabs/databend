@@ -47,8 +47,8 @@ wget --no-check-certificate https://repo.databend.rs/t_ontime/t_ontime.csv.zip
 unzip t_ontime.csv.zip
 ```
 
-```shell title='Load CSV files into Databend'
-curl -H "insert_sql:insert into ontime format CSV" -H "skip_header:0" -H "field_delimiter:\t"  -F "upload=@t_ontime.csv"  -XPUT http://root:@127.0.0.1:8000/v1/streaming_load
+```shell title='Load TSV files into Databend'
+curl -H "insert_sql:insert into ontime format TSV" -H "skip_header:0" -F "upload=@t_ontime.csv"  -XPUT http://root:@127.0.0.1:8000/v1/streaming_load
 ```
 
 :::tip
