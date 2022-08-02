@@ -57,7 +57,7 @@ async fn test_alter_user_interpreter() -> Result<()> {
         let (plan, _, _) = planner.plan_sql(&test_query).await?;
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         assert_eq!(executor.name(), "AlterUserInterpreter");
-        let mut stream = executor.execute(None).await?;
+        let mut stream = executor.execute().await?;
         while let Some(_block) = stream.next().await {}
         let new_user = user_mgr.get_user(tenant, user_info.identity()).await?;
         assert_eq!(

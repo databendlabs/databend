@@ -164,7 +164,7 @@ impl TestFixture {
     pub async fn create_default_table(&self) -> Result<()> {
         let create_table_plan = self.default_crate_table_plan();
         let interpreter = CreateTableInterpreter::try_create(self.ctx.clone(), create_table_plan)?;
-        interpreter.execute(None).await?;
+        interpreter.execute().await?;
         Ok(())
     }
 
@@ -375,7 +375,7 @@ pub async fn execute_query(ctx: Arc<QueryContext>, query: &str) -> Result<Sendab
     let mut planner = Planner::new(ctx.clone());
     let (plan, _, _) = planner.plan_sql(query).await?;
     let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
-    executor.execute(None).await
+    executor.execute().await
 }
 
 pub async fn execute_command(ctx: Arc<QueryContext>, query: &str) -> Result<()> {

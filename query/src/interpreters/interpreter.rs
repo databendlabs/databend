@@ -34,10 +34,7 @@ pub trait Interpreter: Sync + Send {
     }
 
     /// The core of the databend processor which will execute the logical plan and get the DataBlock
-    async fn execute(
-        &self,
-        input_stream: Option<SendableDataBlockStream>,
-    ) -> Result<SendableDataBlockStream>;
+    async fn execute(&self) -> Result<SendableDataBlockStream>;
 
     /// Create the new pipeline for databend's new execution model
     /// Currently databend is developing a new execution model with a hybrid pull-based & push-based strategy

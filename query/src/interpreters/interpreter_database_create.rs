@@ -44,11 +44,8 @@ impl Interpreter for CreateDatabaseInterpreter {
         "CreateDatabaseInterpreter"
     }
 
-    #[tracing::instrument(level = "debug", skip(self, _input_stream), fields(ctx.id = self.ctx.get_id().as_str()))]
-    async fn execute(
-        &self,
-        _input_stream: Option<SendableDataBlockStream>,
-    ) -> Result<SendableDataBlockStream> {
+    #[tracing::instrument(level = "debug", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
+    async fn execute(&self) -> Result<SendableDataBlockStream> {
         self.ctx
             .get_current_session()
             .validate_privilege(&GrantObject::Global, UserPrivilegeType::Create)

@@ -60,7 +60,7 @@ impl Procedure for SearchTablesProcedure {
 
         let stream = if let PlanNode::Select(plan) = optimized {
             let interpreter = SelectInterpreter::try_create(ctx.clone(), plan)?;
-            interpreter.execute(None).await
+            interpreter.execute().await
         } else {
             return Err(ErrorCode::LogicalError("search tables build query error"));
         }?;

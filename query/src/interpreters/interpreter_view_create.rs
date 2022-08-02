@@ -48,7 +48,7 @@ impl Interpreter for CreateViewInterpreter {
         "CreateViewInterpreter"
     }
 
-    async fn execute(&self, _: Option<SendableDataBlockStream>) -> Result<SendableDataBlockStream> {
+    async fn execute(&self) -> Result<SendableDataBlockStream> {
         // check privilige
         self.ctx
             .get_current_session()

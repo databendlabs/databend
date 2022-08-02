@@ -119,7 +119,7 @@ async fn execute_v2(
     let _ = interpreter
         .set_source_pipe_builder(Option::from(source_pipe_builder))
         .map_err(|e| error!("interpreter.set_source_pipe_builder.error: {:?}", e));
-    let data_stream = interpreter.execute(None).await?;
+    let data_stream = interpreter.execute().await?;
 
     let mut data_stream = ctx.try_create_abortable(data_stream)?;
     let format_setting = ctx.get_format_settings()?;
@@ -181,7 +181,7 @@ async fn execute(
         let _ = interpreter
             .set_source_pipe_builder(Option::from(source_pipe_builder))
             .map_err(|e| error!("interpreter.set_source_pipe_builder.error: {:?}", e));
-        interpreter.execute(None).await?
+        interpreter.execute().await?
     };
 
     let mut data_stream = ctx.try_create_abortable(data_stream)?;
