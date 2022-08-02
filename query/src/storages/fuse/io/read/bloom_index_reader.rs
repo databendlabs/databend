@@ -200,7 +200,7 @@ async fn load_column_bytes(
         }
     } else {
         Err(ErrorCode::LogicalError(format!(
-            "no such column {col_name}"
+            "failed to load bloom index column. no such column {col_name}"
         )))
     }
 }
@@ -211,16 +211,15 @@ async fn read_index_meta(
     path: &str,
     dal: &Operator,
 ) -> Result<Arc<FileMetaData>> {
-    let cache_key = format!("{path}-bf");
     if let Some(bloom_index_meta_cache) =
         ctx.get_storage_cache_manager().get_bloom_index_meta_cache()
     {
         let cache = &mut bloom_index_meta_cache.write().await;
-        if let Some(file_meta) = cache.get(&cache_key) {
+        if let Some(file_meta) = cache.get(path) {
             Ok(file_meta.clone())
         } else {
             let file_meta = Arc::new(load_index_meta(dal, path).await?);
-            cache.put(cache_key, file_meta.clone());
+            cache.put(path.to_owned(), file_meta.clone());
             Ok(file_meta)
         }
     } else {

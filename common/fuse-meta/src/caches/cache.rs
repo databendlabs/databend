@@ -21,6 +21,9 @@ use crate::caches::MemoryCache;
 use crate::caches::SegmentInfoCache;
 use crate::caches::TableSnapshotCache;
 
+static DEFAULT_BLOOM_INDEX_META_CACHE_ITEMS: u64 = 3000;
+static DEFAULT_BLOOM_INDEX_COLUMN_CACHE_ITEMS: u64 = 9000;
+
 /// Where all the caches reside
 pub struct CacheManager {
     table_snapshot_cache: Option<TableSnapshotCache>,
@@ -48,8 +51,9 @@ impl CacheManager {
         } else {
             let table_snapshot_cache = Self::with_capacity(config.table_cache_snapshot_count);
             let segment_info_cache = Self::with_capacity(config.table_cache_segment_count);
-            let bloom_index_cache = Self::with_capacity(3000);
-            let bloom_index_meta_cache = Self::with_capacity(3000);
+            let bloom_index_cache = Self::with_capacity(DEFAULT_BLOOM_INDEX_META_CACHE_ITEMS);
+            let bloom_index_meta_cache =
+                Self::with_capacity(DEFAULT_BLOOM_INDEX_COLUMN_CACHE_ITEMS);
             Self {
                 table_snapshot_cache,
                 segment_info_cache,
