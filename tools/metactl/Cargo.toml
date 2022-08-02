@@ -12,6 +12,13 @@ name = "databend-metactl"
 doctest = false
 test = false
 
+[features]
+io-uring = [
+    "common-meta-sled-store/io-uring",
+    "common-meta-raft-store/io-uring",
+    "databend-meta/io-uring",
+]
+
 [dependencies]
 # Workspace dependencies
 common-base = { path = "../../common/base" }

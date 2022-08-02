@@ -6067,6 +6067,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "rio"
+version = "0.9.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9e98c25665909853c07874301124482754434520ab572ac6a22e90366de6685b"
+dependencies = [
+ "libc",
+]
+
+[[package]]
 name = "ritelinked"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6737,6 +6746,7 @@ dependencies = [
  "libc",
  "log",
  "parking_lot 0.11.2",
+ "rio",
 ]
 
 [[package]]
