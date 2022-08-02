@@ -47,10 +47,7 @@ impl Interpreter for ShowGrantsInterpreter {
         self.plan.schema()
     }
 
-    async fn execute(
-        &self,
-        _input_stream: Option<SendableDataBlockStream>,
-    ) -> Result<SendableDataBlockStream> {
+    async fn execute(&self) -> Result<SendableDataBlockStream> {
         let tenant = self.ctx.get_tenant();
         let user_mgr = self.ctx.get_user_manager();
         let role_cache_mgr = self.ctx.get_role_cache_manager();

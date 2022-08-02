@@ -47,10 +47,7 @@ impl Interpreter for ShowCreateDatabaseInterpreter {
         self.plan.schema()
     }
 
-    async fn execute(
-        &self,
-        _input_stream: Option<SendableDataBlockStream>,
-    ) -> Result<SendableDataBlockStream> {
+    async fn execute(&self) -> Result<SendableDataBlockStream> {
         let tenant = self.ctx.get_tenant();
         let calalog = self.ctx.get_catalog(&self.plan.catalog)?;
         let db = calalog

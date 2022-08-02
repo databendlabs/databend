@@ -35,7 +35,7 @@ async fn test_clustering_information_table_read() -> Result<()> {
     // test db & table
     let create_table_plan = fixture.default_crate_table_plan();
     let interpreter = CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;
-    interpreter.execute(None).await?;
+    interpreter.execute().await?;
 
     // func args
     let arg_db = Expression::create_literal(DataValue::String(db.as_bytes().to_vec()));

@@ -151,7 +151,7 @@ impl InteractiveWorkerBase {
         let sent_all_data = ch_ctx.state.sent_all_data.clone();
         let start = Instant::now();
         ctx.try_spawn(async move {
-            interpreter.execute(None).await.unwrap();
+            interpreter.execute().await.unwrap();
             sent_all_data.notify_one();
         })?;
         histogram!(
@@ -212,7 +212,7 @@ impl InteractiveWorkerBase {
                 .map_err(|e| error!("interpreter.start.error: {:?}", e));
 
             // Execute and read stream data.
-            let data_stream = interpreter.execute(None);
+            let data_stream = interpreter.execute();
             let mut data_stream = match data_stream.await {
                 Ok(stream) => stream,
                 Err(e) => {

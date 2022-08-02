@@ -208,7 +208,7 @@ impl CopyInterpreterV2 {
 
         let table = StageTable::try_create(stage_table_info)?;
 
-        let stream = select_interpreter.execute(None).await?;
+        let stream = select_interpreter.execute().await?;
         let results = table.append_data(self.ctx.clone(), stream).await?;
 
         table
@@ -230,11 +230,8 @@ impl Interpreter for CopyInterpreterV2 {
         "CopyInterpreterV2"
     }
 
-    #[tracing::instrument(level = "debug", name = "copy_interpreter_execute_v2", skip(self, _input_stream), fields(ctx.id = self.ctx.get_id().as_str()))]
-    async fn execute(
-        &self,
-        _input_stream: Option<SendableDataBlockStream>,
-    ) -> Result<SendableDataBlockStream> {
+    #[tracing::instrument(level = "debug", name = "copy_interpreter_execute_v2", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
+    async fn execute(&self) -> Result<SendableDataBlockStream> {
         match &self.plan {
             // TODO(xuanwo): extract them as a separate function.
             CopyPlanV2::IntoTable {

@@ -415,7 +415,7 @@ impl AsyncInsertQueue {
         builder.add_source(output_port.clone(), source);
 
         interpreter.set_source_pipe_builder(Some(builder))?;
-        interpreter.execute(None).await?;
+        interpreter.execute().await?;
         Ok(())
     }
 

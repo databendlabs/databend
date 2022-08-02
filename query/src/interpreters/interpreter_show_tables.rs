@@ -111,17 +111,14 @@ impl Interpreter for ShowTablesInterpreter {
         "ShowTablesInterpreter"
     }
 
-    async fn execute(
-        &self,
-        input_stream: Option<SendableDataBlockStream>,
-    ) -> Result<SendableDataBlockStream> {
+    async fn execute(&self) -> Result<SendableDataBlockStream> {
         let query = self.build_query()?;
         let plan = PlanParser::parse(self.ctx.clone(), &query).await?;
         let optimized = Optimizers::create(self.ctx.clone()).optimize(&plan)?;
 
         if let PlanNode::Select(plan) = optimized {
             let interpreter = SelectInterpreter::try_create(self.ctx.clone(), plan)?;
-            interpreter.execute(input_stream).await
+            interpreter.execute().await
         } else {
             return Err(ErrorCode::LogicalError("Show tables build query error"));
         }
