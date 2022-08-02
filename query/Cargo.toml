@@ -24,6 +24,12 @@ tokio-console = ["common-tracing/console", "common-base/tracing"]
 memory-profiling = ["common-base/memory-profiling", "common-http/memory-profiling", "tempfile"]
 storage-hdfs = ["opendal/services-hdfs", "common-storage/storage-hdfs"]
 hive = ["common-hive-meta-store", "thrift", "storage-hdfs", "common-config/hive"]
+io-uring = [
+    "common-meta-embedded/io-uring",
+    "common-meta-store/io-uring",
+    "common-meta-sled-store/io-uring",
+    "common-meta-raft-store/io-uring",
+]
 
 [dependencies]
 # Workspace dependencies
