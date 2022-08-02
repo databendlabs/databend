@@ -9,7 +9,7 @@ cat $CURDIR/../ddl/hits.sql | $MYSQL_CLIENT_CONNECT
 
 hits_statements=(
   ## load data
-  "COPY INTO hits FROM 'https://repo.databend.rs/dataset/stateful/hits_1m.tsv.gz' FILE_FORMAT = ( type = 'CSV' field_delimiter = '\t' compression = 'gzip' record_delimiter = '\n' skip_header = 1 );"
+  "COPY INTO hits FROM 'https://repo.databend.rs/dataset/stateful/hits_100k.tsv' FILE_FORMAT = ( type = 'CSV' field_delimiter = '\t' record_delimiter = '\n' skip_header = 1 );"
   ## run test
   "SELECT '====== SQL1 ======';"
   "SELECT COUNT(*) FROM hits;"
@@ -84,11 +84,11 @@ hits_statements=(
   "SELECT '====== SQL36 ======';"
   "SELECT ClientIP, ClientIP - 1, ClientIP - 2, ClientIP - 3, COUNT(*) AS c FROM hits GROUP BY ClientIP, ClientIP - 1, ClientIP - 2, ClientIP - 3 ORDER BY c, ClientIP DESC LIMIT 10;"
   "SELECT '====== SQL37 ======';"
-  "SELECT URL, COUNT(*) AS PageViews FROM hits WHERE CounterID = 62 AND EventDate >= '2013-07-01' AND EventDate <= '2013-07-31' AND DontCountHits = 0 AND IsRefresh = 0 AND URL <> '' GROUP BY URL ORDER BY URL, PageViews DESC LIMIT 10;"
+  "SELECT URL, COUNT(*) AS PageViews FROM hits WHERE CounterID = 62 AND EventDate >= '2013-07-01' AND EventDate <= '2013-07-31' AND DontCountHits = 0 AND IsRefresh = 0 AND URL <> '' GROUP BY URL ORDER BY URL DESC LIMIT 10;"
   "SELECT '====== SQL38 ======';"
-  "SELECT Title, COUNT(*) AS PageViews FROM hits WHERE CounterID = 62 AND EventDate >= '2013-07-01' AND EventDate <= '2013-07-31' AND DontCountHits = 0 AND IsRefresh = 0 AND Title <> '' GROUP BY Title, PageViews ORDER BY Title DESC LIMIT 10;"
+  "SELECT Title, COUNT(*) AS PageViews FROM hits WHERE CounterID = 62 AND EventDate >= '2013-07-01' AND EventDate <= '2013-07-31' AND DontCountHits = 0 AND IsRefresh = 0 AND Title <> '' GROUP BY Title ORDER BY Title DESC LIMIT 10;"
   "SELECT '====== SQL39 ======';"
-  "SELECT URL, COUNT(*) AS PageViews FROM hits WHERE CounterID = 62 AND EventDate >= '2013-07-01' AND EventDate <= '2013-07-31' AND IsRefresh = 0 AND IsLink <> 0 AND IsDownload = 0 GROUP BY URL ORDER BY URL, PageViews DESC LIMIT 10 OFFSET 1000;"
+  "SELECT URL, COUNT(*) AS PageViews FROM hits WHERE CounterID = 62 AND EventDate >= '2013-07-01' AND EventDate <= '2013-07-31' AND IsRefresh = 0 AND IsLink <> 0 AND IsDownload = 0 GROUP BY URL ORDER BY URL DESC LIMIT 10 OFFSET 1000;"
   "SELECT '====== SQL40 ======';"
   "SELECT TraficSourceID, SearchEngineID, AdvEngineID, CASE WHEN (SearchEngineID = 0 AND AdvEngineID = 0) THEN Referer ELSE '' END AS Src, URL AS Dst, COUNT(*) AS PageViews FROM hits WHERE CounterID = 62 AND EventDate >= '2013-07-01' AND EventDate <= '2013-07-31' AND IsRefresh = 0 GROUP BY TraficSourceID, SearchEngineID, AdvEngineID, Src, Dst ORDER BY Dst DESC LIMIT 10 OFFSET 1000;"
   "SELECT '====== SQL41 ======';"
