@@ -190,6 +190,7 @@ impl MySQLFederated {
             // Set.
             ("(?i)^(SET NAMES(.*))", None),
             ("(?i)^(SET character_set_results(.*))", None),
+            ("(?i)^(SET net_write_timeout(.*))", None),
             ("(?i)^(SET FOREIGN_KEY_CHECKS(.*))", None),
             ("(?i)^(SET AUTOCOMMIT(.*))", None),
             ("(?i)^(SET SQL_LOG_BIN(.*))", None),
