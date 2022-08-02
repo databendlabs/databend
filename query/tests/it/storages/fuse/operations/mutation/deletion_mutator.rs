@@ -15,6 +15,7 @@
 use std::collections::hash_map::RandomState;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::sync::Arc;
 
 use common_base::base::tokio;
 use common_datablocks::DataBlock;
@@ -89,8 +90,8 @@ async fn test_deletion_mutator_multiple_empty_segments() -> Result<()> {
         None,
     );
 
-    let mut mutator =
-        DeletionMutator::try_create(ctx.as_ref(), &location_generator, &base_snapshot)?;
+    let table_ctx: Arc<dyn TableContext> = ctx as Arc<dyn TableContext>;
+    let mut mutator = DeletionMutator::try_create(&table_ctx, &location_generator, &base_snapshot)?;
 
     // clear half of the segments
     for (i, _) in test_segment_locations.iter().enumerate().take(100) {

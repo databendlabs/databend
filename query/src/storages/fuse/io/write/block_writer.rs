@@ -12,41 +12,64 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::sync::Arc;
+
+use common_arrow::parquet::compression::CompressionOptions;
 use common_arrow::parquet::metadata::ThriftFileMetaData;
+use common_catalog::table_context::TableContext;
 use common_datablocks::serialize_data_blocks;
+use common_datablocks::serialize_data_blocks_with_compression;
 use common_datablocks::DataBlock;
 use common_exception::Result;
 use common_fuse_meta::meta::BlockMeta;
+use common_fuse_meta::meta::Location;
 use opendal::Operator;
 use tracing::warn;
+use uuid::Uuid;
 
 use crate::storages::fuse::io::retry;
 use crate::storages::fuse::io::retry::Retryable;
 use crate::storages::fuse::io::TableMetaLocationGenerator;
 use crate::storages::fuse::operations::util;
 use crate::storages::fuse::statistics::gen_columns_statistics;
+use crate::storages::index::BloomFilterIndexer;
 
 pub struct BlockWriter<'a> {
+    ctx: &'a Arc<dyn TableContext>,
     location_generator: &'a TableMetaLocationGenerator,
     data_accessor: &'a Operator,
+    enable_index: bool,
 }
 
 impl<'a> BlockWriter<'a> {
     pub fn new(
+        ctx: &'a Arc<dyn TableContext>,
         data_accessor: &'a Operator,
         location_generator: &'a TableMetaLocationGenerator,
+        enable_index: bool,
     ) -> Self {
         Self {
+            ctx,
             location_generator,
             data_accessor,
+            enable_index,
         }
     }
     pub async fn write(&self, block: DataBlock) -> Result<BlockMeta> {
-        let (location, _) = self.location_generator.gen_block_location();
+        let (location, block_id) = self.location_generator.gen_block_location();
         let data_accessor = &self.data_accessor;
         let row_count = block.num_rows() as u64;
         let block_size = block.memory_size() as u64;
         let col_stats = gen_columns_statistics(&block)?;
+        let mut bloom_filter_index_location = None;
+        let mut bloom_filter_index_size = 0;
+        if self.enable_index {
+            let (size, location) = self
+                .build_block_index(data_accessor, &block, block_id)
+                .await?;
+            bloom_filter_index_location = Some(location);
+            bloom_filter_index_size = size;
+        }
         let (file_size, file_meta_data) = write_block(block, data_accessor, &location.0).await?;
         let col_metas = util::column_metas(&file_meta_data)?;
         let cluster_stats = None; // TODO confirm this with zhyass
@@ -58,10 +81,33 @@ impl<'a> BlockWriter<'a> {
             col_metas,
             cluster_stats,
             location,
-            None,
-            0,
+            bloom_filter_index_location,
+            bloom_filter_index_size,
         );
         Ok(block_meta)
+    }
+
+    pub async fn build_block_index(
+        &self,
+        data_accessor: &Operator,
+        block: &DataBlock,
+        block_id: Uuid,
+    ) -> Result<(u64, Location)> {
+        let bloom_index = BloomFilterIndexer::try_create(self.ctx.clone(), &[block])?;
+        let index_block = bloom_index.bloom_block;
+        let location = self
+            .location_generator
+            .block_bloom_index_location(&block_id);
+        let mut data = Vec::with_capacity(300 * 1024);
+        let index_block_schema = &bloom_index.bloom_schema;
+        let (size, _) = serialize_data_blocks_with_compression(
+            vec![index_block],
+            &index_block_schema,
+            &mut data,
+            CompressionOptions::Uncompressed,
+        )?;
+        write_data(&data, data_accessor, &location.0).await?;
+        Ok((size, location))
     }
 }
 

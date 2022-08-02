@@ -14,6 +14,7 @@
 
 use std::collections::hash_map::RandomState;
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
@@ -47,25 +48,28 @@ pub type SegmentIndex = usize;
 
 pub struct DeletionMutator<'a> {
     mutations: HashMap<SegmentIndex, Vec<Replacement>>,
-    ctx: &'a dyn TableContext,
+    ctx: &'a Arc<dyn TableContext>,
     location_generator: &'a TableMetaLocationGenerator,
     base_snapshot: &'a TableSnapshot,
     data_accessor: Operator,
+    rebuild_bloom_filter_index: bool,
 }
 
 impl<'a> DeletionMutator<'a> {
     pub fn try_create(
-        ctx: &'a dyn TableContext,
+        ctx: &'a Arc<dyn TableContext>,
         location_generator: &'a TableMetaLocationGenerator,
         base_snapshot: &'a TableSnapshot,
     ) -> Result<Self> {
         let data_accessor = ctx.get_storage_operator()?;
+        let rebuild_bloom_filter_index = ctx.get_settings().get_enable_bloom_filter_index()? != 0;
         Ok(Self {
             mutations: HashMap::new(),
             ctx,
             location_generator,
             base_snapshot,
             data_accessor,
+            rebuild_bloom_filter_index,
         })
     }
 
@@ -80,7 +84,7 @@ impl<'a> DeletionMutator<'a> {
                 .enumerate(),
         );
 
-        let segment_reader = MetaReaders::segment_info_reader(self.ctx);
+        let segment_reader = MetaReaders::segment_info_reader(self.ctx.as_ref());
 
         let segment_info_cache = self
             .ctx
@@ -182,7 +186,12 @@ impl<'a> DeletionMutator<'a> {
         let new_block_meta = if replace_with.num_rows() == 0 {
             None
         } else {
-            let block_writer = BlockWriter::new(&self.data_accessor, self.location_generator);
+            let block_writer = BlockWriter::new(
+                self.ctx,
+                &self.data_accessor,
+                self.location_generator,
+                self.rebuild_bloom_filter_index,
+            );
             Some(block_writer.write(replace_with).await?)
         };
         let original_block_loc = location_of_block_to_be_replaced;
