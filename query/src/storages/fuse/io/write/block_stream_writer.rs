@@ -27,9 +27,9 @@ use futures::StreamExt;
 use futures::TryStreamExt;
 use opendal::Operator;
 
-use super::block_writer;
 use crate::pipelines::processors::transforms::ExpressionExecutor;
 use crate::sessions::TableContext;
+use crate::storages::fuse::io::BlockWriter;
 use crate::storages::fuse::io::TableMetaLocationGenerator;
 use crate::storages::fuse::statistics::BlockStatistics;
 use crate::storages::fuse::statistics::StatisticsAccumulator;
@@ -46,6 +46,7 @@ pub struct BlockStreamWriter {
     meta_locations: TableMetaLocationGenerator,
     cluster_key_info: Option<ClusterKeyInfo>,
     ctx: Arc<dyn TableContext>,
+    enable_bloom_filter_index: bool,
 }
 
 impl BlockStreamWriter {
@@ -89,6 +90,7 @@ impl BlockStreamWriter {
         cluster_key_info: Option<ClusterKeyInfo>,
     ) -> Result<Self> {
         let data_accessor = ctx.get_storage_operator()?;
+        let enable_bloom_filter_index = ctx.get_settings().get_enable_bloom_filter_index()? != 0;
         Ok(Self {
             num_block_threshold,
             data_accessor,
@@ -97,6 +99,7 @@ impl BlockStreamWriter {
             meta_locations,
             cluster_key_info,
             ctx,
+            enable_bloom_filter_index,
         })
     }
 
@@ -184,13 +187,19 @@ impl BlockStreamWriter {
         }
 
         let mut acc = self.statistics_accumulator.take().unwrap_or_default();
-        let (location, _) = self.meta_locations.gen_block_location();
+        let (location, block_id) = self.meta_locations.gen_block_location();
         let block_statistics = BlockStatistics::from(&block, location.0.clone(), cluster_stats)?;
 
-        let (file_size, file_meta_data) =
-            block_writer::write_block(block, &self.data_accessor, &location.0).await?;
-
-        acc.add_block(file_size, file_meta_data, block_statistics, None, 0)?;
+        let block_writer = BlockWriter::new(
+            &self.ctx,
+            &self.data_accessor,
+            &self.meta_locations,
+            self.enable_bloom_filter_index,
+        );
+        let block_meta = block_writer
+            .write_with_location(block, block_id, location)
+            .await?;
+        acc.add_with_block_meta(block_meta, block_statistics)?;
 
         self.number_of_blocks_accumulated += 1;
         if self.number_of_blocks_accumulated >= self.num_block_threshold {

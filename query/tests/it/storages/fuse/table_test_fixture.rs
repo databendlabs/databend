@@ -37,6 +37,7 @@ use databend_query::sql::Planner;
 use databend_query::sql::OPT_KEY_DATABASE_ID;
 use databend_query::storages::fuse::table_functions::ClusteringInformationTable;
 use databend_query::storages::fuse::table_functions::FuseSnapshotTable;
+use databend_query::storages::fuse::FUSE_TBL_BLOCK_INDEX_PREFIX;
 use databend_query::storages::fuse::FUSE_TBL_BLOCK_PREFIX;
 use databend_query::storages::fuse::FUSE_TBL_SEGMENT_PREFIX;
 use databend_query::storages::fuse::FUSE_TBL_SNAPSHOT_PREFIX;
@@ -369,6 +370,7 @@ pub async fn check_data_dir(
     snapshot_count: u32,
     segment_count: u32,
     block_count: u32,
+    index_count: u32,
 ) {
     let data_path = match fixture.ctx().get_config().storage.params {
         StorageParams::Fs(v) => v.root,
@@ -378,9 +380,11 @@ pub async fn check_data_dir(
     let mut ss_count = 0;
     let mut sg_count = 0;
     let mut b_count = 0;
+    let mut i_count = 0;
     let prefix_snapshot = FUSE_TBL_SNAPSHOT_PREFIX;
     let prefix_segment = FUSE_TBL_SEGMENT_PREFIX;
     let prefix_block = FUSE_TBL_BLOCK_PREFIX;
+    let prefix_index = FUSE_TBL_BLOCK_INDEX_PREFIX;
     for entry in WalkDir::new(root) {
         let entry = entry.unwrap();
         if entry.file_type().is_file() {
@@ -391,6 +395,8 @@ pub async fn check_data_dir(
                 sg_count += 1;
             } else if entry.path().to_str().unwrap().contains(prefix_block) {
                 b_count += 1;
+            } else if entry.path().to_str().unwrap().contains(prefix_index) {
+                i_count += 1;
             }
         }
     }
@@ -409,6 +415,12 @@ pub async fn check_data_dir(
     assert_eq!(
         b_count, block_count,
         "case [{}], check block count",
+        case_name
+    );
+
+    assert_eq!(
+        i_count, index_count,
+        "case [{}], check index count",
         case_name
     );
 }

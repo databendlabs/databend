@@ -77,6 +77,44 @@ impl StatisticsAccumulator {
         Ok(())
     }
 
+    pub fn add_with_block_meta(
+        &mut self,
+        meta: BlockMeta,
+        statistics: BlockStatistics,
+    ) -> Result<()> {
+        let bloom_filter_index_location = meta.bloom_filter_index_location;
+        let bloom_filter_index_size = meta.bloom_filter_index_size;
+        let file_size = meta.file_size;
+        self.file_size += file_size;
+        self.index_size += bloom_filter_index_size;
+        self.summary_block_count += 1;
+        self.in_memory_size += statistics.block_bytes_size;
+        self.summary_row_count += statistics.block_rows_size;
+        self.blocks_statistics
+            .push(statistics.block_column_statistics.clone());
+
+        let row_count = statistics.block_rows_size;
+        let block_size = statistics.block_bytes_size;
+        let col_stats = statistics.block_column_statistics.clone();
+        let data_location = (statistics.block_file_location, DataBlock::VERSION);
+        let col_metas = meta.col_metas;
+        let cluster_stats = statistics.block_cluster_statistics;
+
+        self.blocks_metas.push(BlockMeta::new(
+            row_count,
+            block_size,
+            file_size,
+            col_stats,
+            col_metas,
+            cluster_stats,
+            data_location,
+            bloom_filter_index_location,
+            bloom_filter_index_size,
+        ));
+
+        Ok(())
+    }
+
     pub fn summary(&self) -> Result<StatisticsOfColumns> {
         super::reduce_block_statistics(&self.blocks_statistics)
     }

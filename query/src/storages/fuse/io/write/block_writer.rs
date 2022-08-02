@@ -34,6 +34,9 @@ use crate::storages::fuse::operations::util;
 use crate::storages::fuse::statistics::gen_columns_statistics;
 use crate::storages::index::BloomFilterIndexer;
 
+const DEFAULT_BLOOM_INDEX_WRITE_BUFFER_SIZE: usize = 300 * 1024;
+const DEFAULT_BLOCK_WRITE_BUFFER_SIZE: usize = 100 * 1024 * 1024;
+
 pub struct BlockWriter<'a> {
     ctx: &'a Arc<dyn TableContext>,
     location_generator: &'a TableMetaLocationGenerator,
@@ -55,8 +58,12 @@ impl<'a> BlockWriter<'a> {
             enable_index,
         }
     }
-    pub async fn write(&self, block: DataBlock) -> Result<BlockMeta> {
-        let (location, block_id) = self.location_generator.gen_block_location();
+    pub async fn write_with_location(
+        &self,
+        block: DataBlock,
+        block_id: Uuid,
+        location: Location,
+    ) -> Result<BlockMeta> {
         let data_accessor = &self.data_accessor;
         let row_count = block.num_rows() as u64;
         let block_size = block.memory_size() as u64;
@@ -87,6 +94,11 @@ impl<'a> BlockWriter<'a> {
         Ok(block_meta)
     }
 
+    pub async fn write(&self, block: DataBlock) -> Result<BlockMeta> {
+        let (location, block_id) = self.location_generator.gen_block_location();
+        self.write_with_location(block, block_id, location).await
+    }
+
     pub async fn build_block_index(
         &self,
         data_accessor: &Operator,
@@ -98,7 +110,7 @@ impl<'a> BlockWriter<'a> {
         let location = self
             .location_generator
             .block_bloom_index_location(&block_id);
-        let mut data = Vec::with_capacity(300 * 1024);
+        let mut data = Vec::with_capacity(DEFAULT_BLOOM_INDEX_WRITE_BUFFER_SIZE);
         let index_block_schema = &bloom_index.bloom_schema;
         let (size, _) = serialize_data_blocks_with_compression(
             vec![index_block],
@@ -116,8 +128,7 @@ pub async fn write_block(
     data_accessor: &Operator,
     location: &str,
 ) -> Result<(u64, ThriftFileMetaData)> {
-    // we need a configuration of block size threshold here
-    let mut buf = Vec::with_capacity(100 * 1024 * 1024);
+    let mut buf = Vec::with_capacity(DEFAULT_BLOCK_WRITE_BUFFER_SIZE);
     let schema = block.schema().clone();
     let result = serialize_data_blocks(vec![block], &schema, &mut buf)?;
     write_data(&buf, data_accessor, location).await?;
