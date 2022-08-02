@@ -255,11 +255,8 @@ pub fn register(registry: &mut FunctionRegistry) {
             |col, _| col.data.len(),
             |val, trim_str, writer| {
                 let chunk_size = trim_str.len();
-                let pos = val
-                    .chunks(chunk_size)
-                    .enumerate()
-                    .find(|(_, chunk)| *chunk != trim_str);
-                if let Some((idx, _)) = pos {
+                let pos = val.chunks(chunk_size).position(|chunk| chunk != trim_str);
+                if let Some(idx) = pos {
                     writer.put_slice(&val.as_bytes()[idx * chunk_size..]);
                 }
                 writer.commit_row();
@@ -276,11 +273,8 @@ pub fn register(registry: &mut FunctionRegistry) {
             |col, _| col.data.len(),
             |val, trim_str, writer| {
                 let chunk_size = trim_str.len();
-                let pos = val
-                    .rchunks(chunk_size)
-                    .enumerate()
-                    .find(|(_, chunk)| *chunk != trim_str);
-                if let Some((idx, _)) = pos {
+                let pos = val.rchunks(chunk_size).position(|chunk| chunk != trim_str);
+                if let Some(idx) = pos {
                     writer.put_slice(&val.as_bytes()[..val.len() - idx * chunk_size]);
                 }
                 writer.commit_row();
@@ -297,11 +291,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             |col, _| col.data.len(),
             |val, trim_str, writer| {
                 let chunk_size = trim_str.len();
-                let start_pos = val
-                    .chunks(chunk_size)
-                    .enumerate()
-                    .find(|(_, chunk)| chunk != &trim_str)
-                    .map(|(idx, _)| idx);
+                let start_pos = val.chunks(chunk_size).position(|chunk| chunk != trim_str);
 
                 // Trim all
                 if start_pos.is_none() {
@@ -309,11 +299,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                     return Ok(());
                 }
 
-                let end_pos = val
-                    .rchunks(chunk_size)
-                    .enumerate()
-                    .find(|(_, chunk)| chunk != &trim_str)
-                    .map(|(idx, _)| idx);
+                let end_pos = val.rchunks(chunk_size).position(|chunk| chunk != trim_str);
 
                 if let (Some(start_idx), Some(end_idx)) = (start_pos, end_pos) {
                     writer.put_slice(
