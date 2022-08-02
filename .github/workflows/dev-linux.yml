@@ -129,7 +129,7 @@ jobs:
       - uses: ./.github/actions/test_sqllogic_standalone_linux
 
   test_stateful_standalone_linux:
-    timeout-minutes: 10
+    timeout-minutes: 20
     runs-on: [self-hosted, X64, Linux, development]
     needs: build_gnu
     steps:
