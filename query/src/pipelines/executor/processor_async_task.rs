@@ -52,7 +52,9 @@ impl ProcessorAsyncTask {
             let right = Box::pin(finished_notify.notified());
             match futures::future::select(left, right).await {
                 Either::Left((res, _)) => res,
-                Either::Right((_, _)) => Err(ErrorCode::AbortedQuery("")),
+                Either::Right((_, _)) => Err(ErrorCode::AbortedQuery(
+                    "Aborted query, because the server is shutting down or the query was killed.",
+                )),
             }
         };
 
