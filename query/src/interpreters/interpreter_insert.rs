@@ -84,11 +84,7 @@ impl Interpreter for InsertInterpreter {
         "InsertIntoInterpreter"
     }
 
-    async fn execute(
-        &self,
-        input_stream: Option<SendableDataBlockStream>,
-    ) -> Result<SendableDataBlockStream> {
-        let _input_stream = input_stream;
+    async fn execute(&self) -> Result<SendableDataBlockStream> {
         let plan = &self.plan;
         let settings = self.ctx.get_settings();
         let table = self

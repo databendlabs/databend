@@ -61,10 +61,7 @@ impl InsertInterpreterV2 {
         }))
     }
 
-    async fn execute_new(
-        &self,
-        _input_stream: Option<SendableDataBlockStream>,
-    ) -> Result<SendableDataBlockStream> {
+    async fn execute_new(&self) -> Result<SendableDataBlockStream> {
         let plan = &self.plan;
         let settings = self.ctx.get_settings();
         let table = self
@@ -228,11 +225,8 @@ impl Interpreter for InsertInterpreterV2 {
         "InsertIntoInterpreter"
     }
 
-    async fn execute(
-        &self,
-        input_stream: Option<SendableDataBlockStream>,
-    ) -> Result<SendableDataBlockStream> {
-        self.execute_new(input_stream).await
+    async fn execute(&self) -> Result<SendableDataBlockStream> {
+        self.execute_new().await
     }
 
     async fn create_new_pipeline(&self) -> Result<Pipeline> {

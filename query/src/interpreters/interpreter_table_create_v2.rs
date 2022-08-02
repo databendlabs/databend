@@ -50,10 +50,7 @@ impl Interpreter for CreateTableInterpreterV2 {
         "CreateTableInterpreterV2"
     }
 
-    async fn execute(
-        &self,
-        input_stream: Option<SendableDataBlockStream>,
-    ) -> Result<SendableDataBlockStream> {
+    async fn execute(&self) -> Result<SendableDataBlockStream> {
         self.ctx
             .get_current_session()
             .validate_privilege(
@@ -113,10 +110,7 @@ impl Interpreter for CreateTableInterpreterV2 {
         }
 
         match &self.plan.as_select {
-            Some(select_plan_node) => {
-                self.create_table_as_select(input_stream, select_plan_node.clone())
-                    .await
-            }
+            Some(select_plan_node) => self.create_table_as_select(select_plan_node.clone()).await,
             None => self.create_table().await,
         }
     }
@@ -125,7 +119,6 @@ impl Interpreter for CreateTableInterpreterV2 {
 impl CreateTableInterpreterV2 {
     async fn create_table_as_select(
         &self,
-        input_stream: Option<SendableDataBlockStream>,
         select_plan: Box<Plan>,
     ) -> Result<SendableDataBlockStream> {
         let tenant = self.ctx.get_tenant();
@@ -166,7 +159,7 @@ impl CreateTableInterpreterV2 {
         };
         let insert_interpreter_v2 =
             InsertInterpreterV2::try_create(self.ctx.clone(), insert_plan, false)?;
-        insert_interpreter_v2.execute(input_stream).await?;
+        insert_interpreter_v2.execute().await?;
 
         Ok(Box::pin(DataBlockStream::create(
             self.plan.schema(),
