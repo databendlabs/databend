@@ -39,6 +39,7 @@ use crate::storages::fuse::operations::AppendOperationLogEntry;
 use crate::storages::fuse::operations::FuseTableSink;
 use crate::storages::fuse::FuseTable;
 use crate::storages::fuse::DEFAULT_BLOCK_PER_SEGMENT;
+use crate::storages::fuse::DEFAULT_BLOCK_SIZE_IN_MEM_SIZE_THRESHOLD;
 use crate::storages::fuse::DEFAULT_ROW_PER_BLOCK;
 use crate::storages::fuse::FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD;
 use crate::storages::fuse::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
