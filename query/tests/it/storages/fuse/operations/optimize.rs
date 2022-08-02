@@ -78,10 +78,9 @@ async fn test_fuse_snapshot_optimize_compact() -> Result<()> {
         let table = fixture.latest_default_table().await?;
         let num_blocks = 1;
         let stream = TestFixture::gen_sample_blocks_stream(num_blocks, 1);
-        let r = table.append_data(ctx.clone(), stream).await?;
-        table
-            .commit_insertion(ctx.clone(), CATALOG_DEFAULT, r.try_collect().await?, false)
-            .await?;
+            
+              let blocks = stream.try_collect().await?;
+            fixture.append_blocks_to_table(table.clone(), blocks, false).await?;
     }
 
     // optimize compact

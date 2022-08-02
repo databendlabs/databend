@@ -96,23 +96,7 @@ impl Table for NullTable {
 
         Ok(())
     }
-
-    async fn append_data(
-        &self,
-        _ctx: Arc<dyn TableContext>,
-        mut stream: SendableDataBlockStream,
-    ) -> Result<SendableDataBlockStream> {
-        while let Some(block) = stream.next().await {
-            let block = block?;
-            info!("Ignore one block rows: {}", block.num_rows())
-        }
-        Ok(Box::pin(DataBlockStream::create(
-            std::sync::Arc::new(DataSchema::empty()),
-            None,
-            vec![],
-        )))
-    }
-
+ 
     fn append2(&self, _: Arc<dyn TableContext>, pipeline: &mut Pipeline) -> Result<()> {
         let mut sink_pipeline_builder = SinkPipeBuilder::create();
         for _ in 0..pipeline.output_len() {

@@ -44,22 +44,6 @@ async fn test_null_table() -> Result<()> {
         },
     })?;
 
-    // append data.
-    {
-        let block = DataBlock::create(schema.clone(), vec![
-            Series::from_data(vec![1u64, 2]),
-            Series::from_data(vec![11u64, 22]),
-        ]);
-
-        let blocks = vec![Ok(block)];
-
-        let input_stream = futures::stream::iter::<Vec<Result<DataBlock>>>(blocks.clone());
-        table
-            .append_data(ctx.clone(), Box::pin(input_stream))
-            .await
-            .unwrap();
-    }
-
     // read.
     {
         let source_plan = table.read_plan(ctx.clone(), None).await?;

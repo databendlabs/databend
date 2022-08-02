@@ -35,9 +35,8 @@ async fn test_fuse_occ_retry() -> Result<()> {
         let num_blocks = 1;
         let rows_per_block = 1;
         let value_start_from = 1;
-        let stream =
+        let _ =
             TestFixture::gen_sample_blocks_stream_ex(num_blocks, rows_per_block, value_start_from);
-        table.append_data(ctx.clone(), stream).await?
     };
 
     // insert another row `id = 5` into the table, and do commit the insertion
@@ -47,10 +46,9 @@ async fn test_fuse_occ_retry() -> Result<()> {
         let value_start_from = 5;
         let stream =
             TestFixture::gen_sample_blocks_stream_ex(num_blocks, rows_per_block, value_start_from);
-        let r = table.append_data(ctx.clone(), stream).await?;
-        table
-            .commit_insertion(ctx.clone(), CATALOG_DEFAULT, r.try_collect().await?, false)
-            .await?;
+       
+        let blocks = stream.try_collect().await?;
+        fixture.append_blocks_to_table(table.clone(), blocks, false).await?;
     }
 
     // commit the previous pending insertion

@@ -14,6 +14,7 @@
 use std::path::Path;
 use std::sync::Arc;
 
+use common_base::base::TrySpawn;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
@@ -38,6 +39,8 @@ use crate::sql::plans::CopyPlanV2;
 use crate::sql::plans::Plan;
 use crate::storages::stage::StageSourceHelper;
 use crate::storages::stage::StageTable;
+
+use super::append2table;
 
 pub struct CopyInterpreterV2 {
     ctx: Arc<QueryContext>,
@@ -205,21 +208,10 @@ impl CopyInterpreterV2 {
             path: path.to_string(),
             files: vec![],
         };
-
+        
+        let pipeline = select_interpreter.create_new_pipeline().await?;
         let table = StageTable::try_create(stage_table_info)?;
-
-        let stream = select_interpreter.execute(None).await?;
-        let results = table.append_data(self.ctx.clone(), stream).await?;
-
-        table
-            .commit_insertion(
-                self.ctx.clone(),
-                &self.ctx.get_current_catalog(),
-                results.try_collect().await?,
-                false,
-            )
-            .await?;
-
+        append2table(self.ctx.clone(), table, data_schema.clone(), pipeline, false, &self.ctx.get_current_catalog()).await?;
         Ok(Box::pin(DataBlockStream::create(data_schema, None, vec![])))
     }
 }

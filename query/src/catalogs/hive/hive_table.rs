@@ -328,18 +328,6 @@ impl Table for HiveTable {
         self.do_read2(ctx, plan, pipeline)
     }
 
-    async fn append_data(
-        &self,
-        _ctx: Arc<dyn TableContext>,
-        _stream: SendableDataBlockStream,
-    ) -> Result<SendableDataBlockStream> {
-        Err(ErrorCode::UnImplement(format!(
-            "append operation for table {} is not implemented, table engine is {}",
-            self.name(),
-            self.get_table_info().meta.engine
-        )))
-    }
-
     async fn commit_insertion(
         &self,
         _ctx: Arc<dyn TableContext>,

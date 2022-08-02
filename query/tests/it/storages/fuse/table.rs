@@ -60,11 +60,9 @@ async fn test_fuse_table_normal_case() -> Result<()> {
         let value_start_from = 1;
         let stream =
             TestFixture::gen_sample_blocks_stream_ex(num_blocks, rows_per_block, value_start_from);
-
-        let r = table.append_data(ctx.clone(), stream).await?;
-        table
-            .commit_insertion(ctx.clone(), CATALOG_DEFAULT, r.try_collect().await?, false)
-            .await?;
+        
+        let blocks = stream.try_collect().await?;
+        fixture.append_blocks_to_table(table.clone(), blocks, false).await?;
 
         // get the latest tbl
         let prev_version = table.get_table_info().ident.seq;
@@ -119,10 +117,8 @@ async fn test_fuse_table_normal_case() -> Result<()> {
         let stream =
             TestFixture::gen_sample_blocks_stream_ex(num_blocks, rows_per_block, value_start_from);
 
-        let r = table.append_data(ctx.clone(), stream).await?;
-        table
-            .commit_insertion(ctx.clone(), CATALOG_DEFAULT, r.try_collect().await?, true)
-            .await?;
+        let blocks = stream.try_collect().await?;
+        fixture.append_blocks_to_table(table.clone(), blocks, false).await?;
 
         // get the latest tbl
         let prev_version = table.get_table_info().ident.seq;
@@ -201,10 +197,9 @@ async fn test_fuse_table_truncate() -> Result<()> {
     let stream =
         TestFixture::gen_sample_blocks_stream_ex(num_blocks, rows_per_block, value_start_from);
 
-    let r = table.append_data(ctx.clone(), stream).await?;
-    table
-        .commit_insertion(ctx.clone(), CATALOG_DEFAULT, r.try_collect().await?, false)
-        .await?;
+    let blocks = stream.try_collect().await?;
+    fixture.append_blocks_to_table(table.clone(), blocks, false).await?;
+        
     let source_plan = table.read_plan(ctx.clone(), None).await?;
 
     // get the latest tbl
@@ -257,10 +252,9 @@ async fn test_fuse_table_optimize() -> Result<()> {
         let table = fixture.latest_default_table().await?;
         let num_blocks = 1;
         let stream = TestFixture::gen_sample_blocks_stream(num_blocks, 1);
-        let r = table.append_data(ctx.clone(), stream).await?;
-        table
-            .commit_insertion(ctx.clone(), CATALOG_DEFAULT, r.try_collect().await?, false)
-            .await?;
+        
+          let blocks = stream.try_collect().await?;
+        fixture.append_blocks_to_table(table.clone(), blocks, false).await?;
     }
 
     // there will be 5 blocks

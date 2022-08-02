@@ -147,12 +147,10 @@ async fn test_fuse_table_exact_statistic() -> Result<()> {
         let value_start_from = 1;
         let stream =
             TestFixture::gen_sample_blocks_stream_ex(num_blocks, rows_per_block, value_start_from);
-
-        let r = table.append_data(ctx.clone(), stream).await?;
-        table
-            .commit_insertion(ctx.clone(), CATALOG_DEFAULT, r.try_collect().await?, false)
-            .await?;
-
+        
+          let blocks = stream.try_collect().await?;
+    fixture.append_blocks_to_table(table.clone(), blocks, false).await?;
+     
         table = fixture.latest_default_table().await?;
 
         let push_downs = Extras {

@@ -218,13 +218,6 @@ impl Table for MemoryTable {
         Ok(())
     }
 
-    async fn append_data(
-        &self,
-        _ctx: Arc<dyn TableContext>,
-        stream: SendableDataBlockStream,
-    ) -> Result<SendableDataBlockStream> {
-        Ok(Box::pin(stream))
-    }
 
     async fn commit_insertion(
         &self,

@@ -40,6 +40,8 @@ use crate::pipelines::SourcePipeBuilder;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 
+use super::interpreter_common::append2table;
+
 pub struct InsertInterpreter {
     ctx: Arc<QueryContext>,
     plan: InsertPlan,
@@ -161,43 +163,15 @@ impl Interpreter for InsertInterpreter {
                 }
             };
         }
-        let need_fill_missing_columns = table.schema() != plan.schema();
-        if need_fill_missing_columns {
-            pipeline.add_transform(|transform_input_port, transform_output_port| {
-                TransformAddOn::try_create(
-                    transform_input_port,
-                    transform_output_port,
-                    self.plan.schema(),
-                    table.schema(),
-                    self.ctx.clone(),
-                )
-            })?;
-        }
-        table.append2(self.ctx.clone(), &mut pipeline)?;
-        let async_runtime = self.ctx.get_storage_runtime();
-        let query_need_abort = self.ctx.query_need_abort();
-        pipeline.set_max_threads(self.ctx.get_settings().get_max_threads()? as usize);
-        let executor =
-            PipelineCompleteExecutor::try_create(async_runtime, query_need_abort, pipeline)?;
-        executor.execute()?;
-        drop(executor);
-        let overwrite = self.plan.overwrite;
-        let catalog_name = self.plan.catalog.clone();
-        let context = self.ctx.clone();
-        let append_entries = self.ctx.consume_precommit_blocks();
-        let handler = self.ctx.get_storage_runtime().spawn(async move {
-            table
-                .commit_insertion(context, &catalog_name, append_entries, overwrite)
-                .await
-        });
-        match handler.await {
-            Ok(Ok(_)) => Ok(()),
-            Ok(Err(cause)) => Err(cause),
-            Err(cause) => Err(ErrorCode::PanicError(format!(
-                "Maybe panic while in commit insert. {}",
-                cause
-            ))),
-        }?;
+        
+        append2table(
+            self.ctx.clone(),
+            table.clone(),
+            plan.schema(),
+           pipeline,
+             plan.overwrite,
+             plan.catalog.as_str(),
+        ).await?;
 
         Ok(Box::pin(DataBlockStream::create(
             self.plan.schema(),

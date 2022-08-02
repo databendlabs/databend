@@ -169,14 +169,10 @@ async fn test_fuse_historical_table_is_read_only() -> Result<()> {
         None,
         vec![],
     ));
-
+    
     // check append_data
-    let res = tbl.append_data(ctx.clone(), empty_stream).await;
+    let res = fixture.append_blocks_to_table(table.clone(), vec![], false).await;
     assert_not_writable(res, "append_data");
-
-    // check  commit_insertion
-    let res = tbl.commit_insertion(ctx.clone(), "", vec![], false).await;
-    assert_not_writable(res, "commit_insertion");
 
     // check truncate
     let res = tbl

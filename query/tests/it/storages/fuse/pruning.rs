@@ -21,6 +21,7 @@ use common_exception::Result;
 use common_fuse_meta::meta::BlockMeta;
 use common_fuse_meta::meta::TableSnapshot;
 use common_meta_app::schema::TableMeta;
+use common_pipeline::Pipeline;
 use common_planners::add;
 use common_planners::col;
 use common_planners::lit;
@@ -125,12 +126,9 @@ async fn test_block_pruner() -> Result<()> {
         })
         .collect::<Vec<_>>();
 
-    let stream = Box::pin(futures::stream::iter(blocks));
-    let r = table.append_data(ctx.clone(), stream).await?;
-    table
-        .commit_insertion(ctx.clone(), CATALOG_DEFAULT, r.try_collect().await?, false)
-        .await?;
-
+    
+    fixture.append_blocks_to_table(table.clone(), blocks, false).await?;
+    
     // get the latest tbl
     let table = catalog
         .get_table(
@@ -262,11 +260,7 @@ async fn test_block_pruner_monotonic() -> Result<()> {
         ])),
     ];
 
-    let stream = Box::pin(futures::stream::iter(blocks));
-    let r = table.append_data(ctx.clone(), stream).await?;
-    table
-        .commit_insertion(ctx.clone(), CATALOG_DEFAULT, r.try_collect().await?, false)
-        .await?;
+    fixture.append_blocks_to_table(table.clone(), blocks, false).await?;
 
     // get the latest tbl
     let table = catalog

@@ -120,15 +120,6 @@ impl Table for StageTable {
         Ok(())
     }
 
-    // Write data to stage file.
-    // TODO: support append2
-    async fn append_data(
-        &self,
-        _ctx: Arc<dyn TableContext>,
-        stream: SendableDataBlockStream,
-    ) -> Result<SendableDataBlockStream> {
-        Ok(Box::pin(stream))
-    }
 
     async fn commit_insertion(
         &self,
