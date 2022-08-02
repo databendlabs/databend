@@ -168,6 +168,9 @@ impl DataExchangeManager {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
         if let Some(mut query_coordinator) = queries_coordinator.remove(query_id) {
+            // Drop mutex guard to avoid deadlock during shutdown,
+            drop(queries_coordinator_guard);
+
             query_coordinator.on_finished(may_error);
         }
     }
@@ -578,35 +581,43 @@ impl QueryCoordinator {
         mut stream: Streaming<FlightData>,
     ) -> Result<JoinHandle<()>> {
         if let Some(subscribe_channel) = self.subscribe_channel.remove(source) {
+            let ctx = self.ctx.clone();
             let source = source.to_string();
             let target = self.executor_id.clone();
+            let query_id = self.query_id.clone();
 
             return Ok(self.runtime.spawn(async move {
                 'fragment_loop: while let Some(flight_data) = stream.next().await {
-                    let data_packet = match flight_data {
-                        Err(status) => DataPacket::ErrorCode(ErrorCode::from(status)),
-                        Ok(flight_data) => match DataPacket::try_from(flight_data) {
-                            Ok(data_packet) => data_packet,
-                            Err(error_code) => DataPacket::ErrorCode(error_code),
-                        },
+                    match flight_data {
+                        Err(status) => {
+                            let cause = Some(ErrorCode::from(status));
+                            let exchange_manager = ctx.get_exchange_manager();
+                            exchange_manager.shutdown_query(&query_id, cause).ok();
+                            break 'fragment_loop;
+                        }
+                        Ok(flight_data) => {
+                            let data_packet = match DataPacket::try_from(flight_data) {
+                                Ok(data_packet) => data_packet,
+                                Err(error_code) => DataPacket::ErrorCode(error_code),
+                            };
+
+                            if matches!(&data_packet, DataPacket::FinishQuery) {
+                                let exchange_manager = ctx.get_exchange_manager();
+                                exchange_manager.shutdown_query(&query_id, None).ok();
+                                break 'fragment_loop;
+                            }
+
+                            if let Err(_cause) = subscribe_channel.send(Ok(data_packet)).await {
+                                tracing::warn!(
+                                    "Subscribe channel closed, source {}, target {}",
+                                    source,
+                                    target
+                                );
+
+                                break 'fragment_loop;
+                            }
+                        }
                     };
-
-                    // Send last message and break loop.
-                    let mut break_loop = matches!(&data_packet, DataPacket::ErrorCode(_));
-
-                    if let Err(_cause) = subscribe_channel.send(Ok(data_packet)).await {
-                        tracing::warn!(
-                            "Subscribe channel closed, source {}, target {}",
-                            source,
-                            target
-                        );
-
-                        break_loop = true;
-                    }
-
-                    if break_loop {
-                        break 'fragment_loop;
-                    }
                 }
             }));
         };
