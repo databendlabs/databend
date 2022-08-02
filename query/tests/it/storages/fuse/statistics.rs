@@ -16,14 +16,17 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_base::base::tokio;
+use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_fuse_meta::meta::ColumnStatistics;
-use databend_query::storages::fuse::io::write_block;
+use databend_query::storages::fuse::io::BlockWriter;
+use databend_query::storages::fuse::io::TableMetaLocationGenerator;
 use databend_query::storages::fuse::statistics::accumulator;
 use databend_query::storages::fuse::statistics::gen_columns_statistics;
 use databend_query::storages::fuse::statistics::reducers;
 use databend_query::storages::fuse::statistics::BlockStatistics;
+use databend_query::storages::fuse::statistics::StatisticsAccumulator;
 use opendal::Accessor;
 use opendal::Operator;
 
@@ -132,28 +135,46 @@ fn test_reduce_block_statistics_in_memory_size() -> common_exception::Result<()>
     Ok(())
 }
 
-#[tokio::test]
-async fn test_ft_stats_accumulator() -> common_exception::Result<()> {
-    let enable_index = 0u64;
+async fn do_test_accumulator(
+    enable_bloom_index: u64,
+) -> common_exception::Result<StatisticsAccumulator> {
     let blocks = TestFixture::gen_sample_blocks(10, 1);
-    let mut stats_acc = accumulator::StatisticsAccumulator::new();
-    let test_file_size = 1;
+    let fixture = TestFixture::new().await;
+    let ctx = fixture.ctx();
+    ctx.get_settings()
+        .set_enable_bloom_filter_index(enable_bloom_index)?;
+
+    let mut stats_acc = StatisticsAccumulator::new();
 
     let mut builder = opendal::services::memory::Backend::build();
     let accessor: Arc<dyn Accessor> = builder.finish().await?;
     let operator = Operator::new(accessor);
+    let table_ctx: Arc<dyn TableContext> = ctx;
+    let loc_generator = TableMetaLocationGenerator::with_prefix("/".to_owned());
+    let enable_idx = enable_bloom_index != 0;
 
-    // TODO enable bloom filter
     for item in blocks {
         let block = item?;
-
         let block_statistics = BlockStatistics::from(&block, "does_not_matter".to_owned(), None)?;
-        let (_file_size, file_meta_data) = write_block(block, &operator, "does_not_matter").await?;
-        // meta does not matter
-        stats_acc.add_block(test_file_size, file_meta_data, block_statistics, None, 0)?;
+        let block_writer = BlockWriter::new(&table_ctx, &operator, &loc_generator, enable_idx);
+        let block_meta = block_writer.write(block).await?;
+        stats_acc.add_with_block_meta(block_meta, block_statistics)?;
     }
-    assert_eq!(10, stats_acc.blocks_statistics.len());
-    // TODO more cases here pls
+
+    Ok(stats_acc)
+}
+
+#[tokio::test]
+async fn test_ft_stats_accumulator() -> common_exception::Result<()> {
+    let enable_index = 0u64;
+    let acc = do_test_accumulator(enable_index).await?;
+    assert_eq!(10, acc.blocks_statistics.len());
+    assert_eq!(acc.index_size, 0);
+
+    let enable_index = 1u64;
+    let acc = do_test_accumulator(enable_index).await?;
+    assert_eq!(10, acc.blocks_statistics.len());
+    assert!(acc.index_size > 0);
     Ok(())
 }
 
