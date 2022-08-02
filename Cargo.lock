@@ -1082,7 +1082,6 @@ dependencies = [
  "common-pipeline",
  "common-planners",
  "common-settings",
- "common-streams",
  "common-users",
  "dyn-clone",
  "opendal",
