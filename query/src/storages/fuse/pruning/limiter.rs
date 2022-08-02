@@ -12,33 +12,56 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 pub trait Limiter {
-    fn within_limit(&self, n: usize) -> bool;
+    fn exceeded(&self) -> bool;
+    fn within_limit(&self, n: u64) -> bool;
 }
 
 pub struct Unlimited;
 
 impl Limiter for Unlimited {
-    fn within_limit(&self, _: usize) -> bool {
+    fn exceeded(&self) -> bool {
+        false
+    }
+
+    fn within_limit(&self, _: u64) -> bool {
         true
     }
 }
 
-impl Limiter for AtomicUsize {
-    fn within_limit(&self, n: usize) -> bool {
-        let o = self.fetch_sub(n, Ordering::Relaxed);
-        o > n
+struct U64Limiter {
+    limit: u64,
+    state: AtomicU64,
+}
+
+impl U64Limiter {
+    fn new(limit: u64) -> Self {
+        Self {
+            limit,
+            state: AtomicU64::new(0),
+        }
+    }
+}
+
+impl Limiter for U64Limiter {
+    fn exceeded(&self) -> bool {
+        self.state.load(Ordering::Relaxed) >= self.limit
+    }
+
+    fn within_limit(&self, n: u64) -> bool {
+        let o = self.state.fetch_add(n, Ordering::Relaxed);
+        o <= self.limit
     }
 }
 
 pub type LimiterPruner = Arc<dyn Limiter + Send + Sync>;
 pub fn new_limiter(limit: Option<usize>) -> LimiterPruner {
     match limit {
-        Some(size) => Arc::new(AtomicUsize::new(size)),
+        Some(size) => Arc::new(U64Limiter::new(size as u64)),
         _ => Arc::new(Unlimited),
     }
 }

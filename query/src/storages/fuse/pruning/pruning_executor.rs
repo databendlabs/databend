@@ -72,6 +72,8 @@ impl BlockPruner {
             return Self::all_the_blocks(segment_locs, ctx.as_ref()).await;
         }
 
+        // 1. prepare pruners
+
         // prepare the limiter. in case that limit is none, an unlimited limiter will be returned
         let limiter = limiter::new_limiter(limit);
 
@@ -90,57 +92,74 @@ impl BlockPruner {
             Arc::new(NonPruner)
         };
 
-        let segments_with_idx = segment_locs.into_iter().enumerate();
-
+        // 2. kick off
+        //
         // To make the pruning process more parallel (not just concurrent), we explicitly spawn
         // pruning tasks in (the multi-threaded) storage runtime.
         //
-        // To simplify things, an optimistic way of error handling is taken: errors are handled
-        // at the "collect" phase. e.g. if anything goes wrong, we can not break the whole
-        // pruning task immediately , but only at the time that all tasks are done
+        // NOTE:
+        // A. To simplify things, an optimistic way of error handling is taken: errors are handled
+        // at the "collect" phase. e.g. if anything goes wrong, we do not break the whole
+        // pruning task immediately, but only at the time that all tasks are done
+        //
+        // B. since limiter is working concurrently, we arrange some checks among the pruning,
+        //    to avoid heavy io operation vainly,
         let storage_runtime = ctx.get_storage_runtime();
-        let join_handlers = segments_with_idx
-            .map(|(idx, (seg_loc, ver))| {
-                let ctx = ctx.clone();
-                let range_filter_pruner = range_filter_pruner.clone();
-                let bloom_filter_pruner = bloom_filter_pruner.clone();
-                let limiter = limiter.clone();
-                async move {
-                    let segment_reader = MetaReaders::segment_info_reader(ctx.as_ref());
-                    let segment_info = segment_reader.read(seg_loc, None, ver).await?;
-                    let mut result = Vec::with_capacity(segment_info.blocks.len());
-                    // prune segment using range filter
-                    if range_filter_pruner.should_keep(&segment_info.summary.col_stats) {
-                        for block_meta in &segment_info.blocks {
-                            // prune block using range filter
-                            if range_filter_pruner.should_keep(&block_meta.col_stats) {
-                                // prune block using bloom filter
-                                if bloom_filter_pruner
-                                    .should_keep(&block_meta.bloom_filter_index_location)
-                                    .await
-                                {
+        let mut join_handlers = Vec::with_capacity(segment_locs.len());
+        for (idx, (seg_loc, ver)) in segment_locs.into_iter().enumerate() {
+            let ctx = ctx.clone();
+            let range_filter_pruner = range_filter_pruner.clone();
+            let bloom_filter_pruner = bloom_filter_pruner.clone();
+            let limiter = limiter.clone();
+            let segment_pruning_fut = async move {
+                let segment_reader = MetaReaders::segment_info_reader(ctx.as_ref());
+                if limiter.exceeded() {
+                    // before read segment info, check if limit already exceeded
+                    return Ok(vec![]);
+                }
+                let segment_info = segment_reader.read(seg_loc, None, ver).await?;
+                let mut result = Vec::with_capacity(segment_info.blocks.len());
+                if range_filter_pruner.should_keep(&segment_info.summary.col_stats) {
+                    for block_meta in &segment_info.blocks {
+                        // prune block using range filter
+                        if limiter.exceeded() {
+                            // before using bloom index to prune, check if limit already exceeded
+                            return Ok(result);
+                        }
+                        if range_filter_pruner.should_keep(&block_meta.col_stats) {
+                            // prune block using bloom filter
+                            if bloom_filter_pruner
+                                .should_keep(&block_meta.bloom_filter_index_location)
+                                .await
+                            {
+                                if limiter.within_limit(block_meta.row_count) {
                                     result.push((idx, block_meta.clone()));
-                                    if !limiter.within_limit(block_meta.row_count as usize) {
-                                        break; // TODO not enough, should break out the outer map
-                                    }
+                                } else {
+                                    break;
                                 }
                             }
                         }
                     }
-                    Ok::<_, ErrorCode>(result)
                 }
-                .instrument(tracing::debug_span!("filter_segment_with_storage_rt"))
-            })
-            .map(|fut| storage_runtime.spawn(fut))
-            .collect::<Vec<_>>();
+                Ok::<_, ErrorCode>(result)
+            }
+            .instrument(tracing::debug_span!("filter_segment_with_storage_rt"));
+            join_handlers.push(storage_runtime.spawn(segment_pruning_fut));
+        }
 
-        let block_metas = future::try_join_all(join_handlers)
+        let joint = future::try_join_all(join_handlers)
             .await
             .map_err(|e| ErrorCode::StorageOther(format!("block pruning failure, {}", e)))?;
 
+        // 3. collect the result
         tracing::debug_span!("collect_result").in_scope(|| {
-            let metas = block_metas.into_iter().collect::<Result<Vec<_>>>()?;
-            Ok::<_, ErrorCode>(metas.into_iter().flatten().collect())
+            // flatten the collected block metas
+            let metas = joint
+                .into_iter()
+                .collect::<Result<Vec<_>>>()?
+                .into_iter()
+                .flatten();
+            Ok(metas.collect())
         })
     }
 

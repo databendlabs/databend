@@ -134,6 +134,7 @@ fn test_reduce_block_statistics_in_memory_size() -> common_exception::Result<()>
 
 #[tokio::test]
 async fn test_ft_stats_accumulator() -> common_exception::Result<()> {
+    let enable_index = 0u64;
     let blocks = TestFixture::gen_sample_blocks(10, 1);
     let mut stats_acc = accumulator::StatisticsAccumulator::new();
     let test_file_size = 1;
@@ -142,6 +143,7 @@ async fn test_ft_stats_accumulator() -> common_exception::Result<()> {
     let accessor: Arc<dyn Accessor> = builder.finish().await?;
     let operator = Operator::new(accessor);
 
+    // TODO enable bloom filter
     for item in blocks {
         let block = item?;
 
