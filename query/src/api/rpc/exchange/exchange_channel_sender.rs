@@ -147,22 +147,30 @@ impl ExchangeSender {
         let mut join_handlers = self.join_handlers.lock();
 
         let to_request_server = self.is_to_request_server();
-        let is_finished = self.target_fragments_finished[&fragment_id].clone();
+        let is_abort = self.target_fragments_finished[&fragment_id].clone();
         let (f_tx, f_rx) = async_channel::bounded(1);
 
         join_handlers.push(runtime.spawn(async move {
             // flight connect is closed if c_tx is closed.
-            'fragment_loop: while !is_finished.load(Ordering::Relaxed) && !c_tx.is_closed() {
+            'fragment_loop: while !is_abort.load(Ordering::Relaxed) && !c_tx.is_closed() {
                 let sleep_future = Box::pin(sleep(Duration::from_millis(500)));
 
                 match futures::future::select(sleep_future, f_rx.recv()).await {
                     Either::Left((_, _)) => {
+                        if is_abort.load(Ordering::Relaxed) {
+                            break 'fragment_loop;
+                        }
+
                         if to_request_server {
                             ExchangeSender::send_progress_if_need(&ctx, &c_tx).await;
                             ExchangeSender::send_precommit_if_need(&ctx, &c_tx).await;
                         }
                     }
                     Either::Right((recv_message, _)) => {
+                        if is_abort.load(Ordering::Relaxed) {
+                            break 'fragment_loop;
+                        }
+
                         if let Ok(recv_packet) = recv_message {
                             if c_tx.send(recv_packet).await.is_err() {
                                 return;
@@ -176,8 +184,9 @@ impl ExchangeSender {
                 };
             }
 
-            if !c_tx.is_closed() {
+            if is_abort.load(Ordering::Relaxed) && !c_tx.is_closed() {
                 c_tx.send(DataPacket::FinishQuery).await.ok();
+                return;
             }
 
             while let Ok(recv_message) = f_rx.try_recv() {
