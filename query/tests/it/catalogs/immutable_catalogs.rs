@@ -95,7 +95,7 @@ async fn test_immutable_catalogs_database() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_immutable_catalogs_table() -> Result<()> {
     let tenant = "test";
-    let catalog = create_catalog()?;
+    let catalog = create_catalog().await?;
 
     let db_list_1 = catalog.list_tables(tenant, "system").await?;
     assert!(!db_list_1.is_empty());

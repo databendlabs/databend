@@ -10,6 +10,9 @@ edition = "2021"
 doctest = false
 test = false
 
+[features]
+io-uring = ["common-meta-store/io-uring"]
+
 [dependencies] # In alphabetical order
 # Workspace dependencies
 common-base = { path = "../base" }

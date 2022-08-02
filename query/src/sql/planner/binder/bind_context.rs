@@ -130,38 +130,10 @@ impl BindContext {
         // Lookup parent context to support correlated subquery
         loop {
             for column_binding in bind_context.columns.iter() {
-                match (
-                    (database, column_binding.database_name.as_ref()),
-                    (table, column_binding.table_name.as_ref()),
-                ) {
-                    // No qualified table name specified
-                    ((None, _), (None, None)) | ((None, _), (None, Some(_)))
-                        if column.name.to_lowercase() == column_binding.column_name =>
-                    {
-                        result.push(column_binding.clone());
-                    }
-
-                    // Qualified column reference without database name
-                    ((None, _), (Some(table), Some(table_name)))
-                        if &table.to_lowercase() == table_name
-                            && column.name.to_lowercase() == column_binding.column_name =>
-                    {
-                        result.push(column_binding.clone());
-                    }
-
-                    // Qualified column reference with database name
-                    ((Some(db), Some(db_name)), (Some(table), Some(table_name)))
-                        if &db.to_lowercase() == db_name
-                            && &table.to_lowercase() == table_name
-                            && column.name.to_lowercase() == column_binding.column_name =>
-                    {
-                        result.push(column_binding.clone());
-                    }
-
-                    _ => {}
+                if Self::match_column_binding(database, table, column, column_binding) {
+                    result.push(column_binding.clone());
                 }
             }
-
             if !result.is_empty() {
                 break;
             }
@@ -187,6 +159,43 @@ impl BindContext {
             ))
         } else {
             Ok(result.remove(0))
+        }
+    }
+
+    pub fn match_column_binding(
+        database: Option<&str>,
+        table: Option<&str>,
+        column: &Identifier,
+        column_binding: &ColumnBinding,
+    ) -> bool {
+        match (
+            (database, column_binding.database_name.as_ref()),
+            (table, column_binding.table_name.as_ref()),
+        ) {
+            // No qualified table name specified
+            ((None, _), (None, None)) | ((None, _), (None, Some(_)))
+                if column.name.to_lowercase() == column_binding.column_name =>
+            {
+                true
+            }
+
+            // Qualified column reference without database name
+            ((None, _), (Some(table), Some(table_name)))
+                if &table.to_lowercase() == table_name
+                    && column.name.to_lowercase() == column_binding.column_name =>
+            {
+                true
+            }
+
+            // Qualified column reference with database name
+            ((Some(db), Some(db_name)), (Some(table), Some(table_name)))
+                if &db.to_lowercase() == db_name
+                    && &table.to_lowercase() == table_name
+                    && column.name.to_lowercase() == column_binding.column_name =>
+            {
+                true
+            }
+            _ => false,
         }
     }
 

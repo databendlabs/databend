@@ -253,8 +253,7 @@ class SuiteRunner(object):
     def __init__(self, kind, args):
         self.label = None
         self.retry_time = 3
-        self.driver = None
-        self.path = "./suites/"
+        self.driver = None     
         self.statement_files = []
         self.kind = kind
         self.show_query_on_execution = True
@@ -270,18 +269,17 @@ class SuiteRunner(object):
 
         if type(skips) is str:
             skips = skips.split(",")
+        
+        suite_path = self.args.suites
 
-        for filename in glob.iglob(f'{self.path}/**', recursive=True):
+        for filename in glob.iglob(f'{suite_path}/**', recursive=True):
             if os.path.isfile(filename):
                 base_name = os.path.basename(filename)
-                dirs = os.path.dirname(filename).split('/')
+                dirs = os.path.dirname(filename).split(os.sep)
 
                 if self.args.skip_dir and any(
                         s in dirs for s in self.args.skip_dir):
-                    continue
-
-                if self.args.run_dir and not any(s in dirs
-                                                 for s in self.args.run_dir):
+                    log.info(f"Skip test file {filename}, skip test in dirs {self.args.skip_dir}")
                     continue
 
                 if self.args.skip and any(
@@ -289,10 +287,14 @@ class SuiteRunner(object):
                     log.info(f"Skip test file {filename}")
                     continue
 
+                if self.args.run_dir and not any(s in dirs for s in self.args.run_dir):
+                    log.info(f"Skip test file {filename}, not in run dir {self.args.run_dir}")
+                    continue
+
                 if not self.args.pattern or any(
                     [re.search(r, base_name) for r in self.args.pattern]):
                     self.statement_files.append(
-                        (filename, os.path.relpath(filename, self.path)))
+                        (filename, os.path.relpath(filename, suite_path)))
 
         self.statement_files.sort()
 
@@ -416,7 +418,7 @@ class SuiteRunner(object):
 
     def run_sql_suite(self):
         log.info(
-            f"run_sql_suite for {self.kind} on base {os.path.abspath(self.path)}"
+            f"run_sql_suite for {self.kind} on base {os.path.abspath(self.args.suites)}"
         )
         self.fetch_files()
         self.execute()

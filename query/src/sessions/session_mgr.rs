@@ -54,21 +54,21 @@ use crate::storages::cache::CacheManager;
 use crate::Config;
 
 pub struct SessionManager {
-    pub(in crate::sessions) conf: RwLock<Config>,
-    pub(in crate::sessions) discovery: RwLock<Arc<ClusterDiscovery>>,
-    pub(in crate::sessions) catalogs: RwLock<Arc<CatalogManager>>,
+    pub(in crate::sessions) conf: Config,
+    pub(in crate::sessions) discovery: Arc<ClusterDiscovery>,
+    pub(in crate::sessions) catalogs: Arc<CatalogManager>,
     pub(in crate::sessions) http_query_manager: Arc<HttpQueryManager>,
     pub(in crate::sessions) data_exchange_manager: Arc<DataExchangeManager>,
 
     pub(in crate::sessions) max_sessions: usize,
     pub(in crate::sessions) active_sessions: Arc<RwLock<HashMap<String, Arc<Session>>>>,
-    pub(in crate::sessions) storage_cache_manager: RwLock<Arc<CacheManager>>,
+    pub(in crate::sessions) storage_cache_manager: Arc<CacheManager>,
     pub status: Arc<RwLock<SessionManagerStatus>>,
-    storage_operator: RwLock<Operator>,
+    storage_operator: Operator,
     storage_runtime: Arc<Runtime>,
 
-    user_api_provider: RwLock<Arc<UserApiProvider>>,
-    role_cache_manager: RwLock<Arc<RoleCacheMgr>>,
+    user_api_provider: Arc<UserApiProvider>,
+    role_cache_manager: Arc<RoleCacheMgr>,
     // When typ is MySQL, insert into this map, key is id, val is MySQL connection id.
     pub(crate) mysql_conn_map: Arc<RwLock<HashMap<Option<u32>, String>>>,
     pub(in crate::sessions) mysql_basic_conn_id: AtomicU32,
@@ -134,19 +134,19 @@ impl SessionManager {
             )))));
 
         Ok(Arc::new(SessionManager {
-            conf: RwLock::new(conf),
-            catalogs: RwLock::new(catalogs),
-            discovery: RwLock::new(discovery),
+            conf,
+            catalogs,
+            discovery,
             http_query_manager,
             max_sessions,
             active_sessions,
             data_exchange_manager: exchange_manager,
-            storage_cache_manager: RwLock::new(storage_cache_manager),
+            storage_cache_manager,
             status,
-            storage_operator: RwLock::new(storage_operator),
+            storage_operator,
             storage_runtime,
-            user_api_provider: RwLock::new(user_api_provider),
-            role_cache_manager: RwLock::new(role_cache_manager),
+            user_api_provider,
+            role_cache_manager,
             mysql_conn_map,
             mysql_basic_conn_id: AtomicU32::new(9_u32.to_le() as u32),
             async_insert_queue,
@@ -155,11 +155,11 @@ impl SessionManager {
     }
 
     pub fn get_conf(&self) -> Config {
-        self.conf.read().clone()
+        self.conf.clone()
     }
 
     pub fn get_cluster_discovery(self: &Arc<Self>) -> Arc<ClusterDiscovery> {
-        self.discovery.read().clone()
+        self.discovery.clone()
     }
 
     pub fn get_http_query_manager(self: &Arc<Self>) -> Arc<HttpQueryManager> {
@@ -167,15 +167,15 @@ impl SessionManager {
     }
 
     pub fn get_catalog_manager(self: &Arc<Self>) -> Arc<CatalogManager> {
-        self.catalogs.read().clone()
+        self.catalogs.clone()
     }
 
     pub fn get_storage_operator(self: &Arc<Self>) -> Operator {
-        self.storage_operator.read().clone()
+        self.storage_operator.clone()
     }
 
     pub fn get_storage_cache_manager(&self) -> Arc<CacheManager> {
-        self.storage_cache_manager.read().clone()
+        self.storage_cache_manager.clone()
     }
 
     pub fn get_data_exchange_manager(&self) -> Arc<DataExchangeManager> {
@@ -187,11 +187,11 @@ impl SessionManager {
     }
 
     pub fn get_user_api_provider(&self) -> Arc<UserApiProvider> {
-        self.user_api_provider.read().clone()
+        self.user_api_provider.clone()
     }
 
     pub fn get_role_cache_manager(&self) -> Arc<RoleCacheMgr> {
-        self.role_cache_manager.read().clone()
+        self.role_cache_manager.clone()
     }
 
     pub async fn create_session(self: &Arc<Self>, typ: SessionType) -> Result<SessionRef> {
@@ -407,50 +407,6 @@ impl SessionManager {
         })?;
 
         Ok(op)
-    }
-
-    pub async fn reload_config(&self) -> Result<()> {
-        // TODO(xp): Potential race condition if fields are updated one by one.
-        //           These fields should all be got prepared then update in one atomic update.
-
-        let config = {
-            let mut config = self.conf.write();
-            let config_file = config.config_file.clone();
-            *config = Config::load()?;
-            config.config_file = config_file;
-            config.clone()
-        };
-
-        {
-            let catalogs = CatalogManager::try_new(&config).await?;
-            *self.catalogs.write() = Arc::new(catalogs);
-        }
-
-        *self.storage_cache_manager.write() = Arc::new(CacheManager::init(&config.query));
-
-        {
-            // NOTE: Magic happens here. We will add a layer upon original storage operator
-            // so that all underlying storage operations will send to storage runtime.
-            let operator = Self::init_storage_operator(&config)
-                .await?
-                .layer(DalRuntime::new(self.storage_runtime.inner()));
-            *self.storage_operator.write() = operator;
-        }
-
-        {
-            let discovery = ClusterDiscovery::create_global(config.clone()).await?;
-            *self.discovery.write() = discovery;
-        }
-
-        {
-            let x = UserApiProvider::create_global(config.meta.to_meta_grpc_client_conf()).await?;
-            *self.user_api_provider.write() = x.clone();
-
-            let role_cache_manager = RoleCacheMgr::new(x);
-            *self.role_cache_manager.write() = Arc::new(role_cache_manager);
-        }
-
-        Ok(())
     }
 
     pub fn get_async_insert_queue(&self) -> Arc<RwLock<Option<Arc<AsyncInsertQueue>>>> {

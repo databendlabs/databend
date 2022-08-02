@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -161,6 +162,8 @@ pub trait Catalog: DynClone + Send + Sync {
             "'get_table_function' not implemented",
         ))
     }
+
+    fn as_any(&self) -> &dyn Any;
 
     // Get table engines
     fn get_table_engines(&self) -> Vec<StorageDescription> {
