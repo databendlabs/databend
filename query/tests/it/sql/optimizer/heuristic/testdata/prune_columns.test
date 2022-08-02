@@ -54,7 +54,7 @@ Project: [a (#1)]
                                 Scan: default.system.numbers
 
 
-# Prune unused columns for correlated query (CrossApply ...)
+# Prune unused columns for correlated query
 select t1.a from (select number + 1 as a, number + 1 as b from numbers(1)) as t1 where t1.a = (select count(*) from (select t2.a, t3.a from (select number + 1 as a, number + 1 as b, number + 1 as c, number + 1 as d from numbers(1)) as t2, (select number + 1 as a, number + 1 as b, number + 1 as c from numbers(1)) as t3 where t2.b = t3.b and t2.c = 1))
 ----
 Project: [a (#1)]
@@ -79,12 +79,10 @@ Project: [a (#1)]
                                                     Scan: default.system.numbers
 
 
-# Prune unused columns for order by
+# Prune unused columns with order by
 select name, is_aggregate from system.functions order by example
 ----
-Project: [name (#0),is_aggregate (#2)]
-    EvalScalar: [functions.is_aggregate (#2), functions.name (#0)]
+Project: [name (#0)]
+    EvalScalar: [functions.name (#0)]
         Sort: [example (#7) ASC]
             Scan: default.system.functions
-
-
