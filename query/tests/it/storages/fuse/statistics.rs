@@ -144,8 +144,9 @@ async fn test_ft_stats_accumulator() -> common_exception::Result<()> {
 
     for item in blocks {
         let block = item?;
-        let block_statistics = BlockStatistics::from(&block, "".to_owned(), None)?;
-        let (_file_size, file_meta_data) = write_block(block, &operator, "").await?;
+
+        let block_statistics = BlockStatistics::from(&block, "does_not_matter".to_owned(), None)?;
+        let (_file_size, file_meta_data) = write_block(block, &operator, "does_not_matter").await?;
         // meta does not matter
         stats_acc.add_block(test_file_size, file_meta_data, block_statistics, None, 0)?;
     }

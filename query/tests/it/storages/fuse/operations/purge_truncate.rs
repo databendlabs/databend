@@ -49,7 +49,7 @@ async fn test_fuse_truncate_purge(enable_bloom_filter: u64) -> Result<()> {
     check_data_dir(&fixture, "truncate_purge", 2, 2, 2).await;
 
     // let's truncate
-    let qry = format!("truncate table '{}'.'{}' purge", db, tbl);
+    let qry = format!("truncate table {}.{} purge", db, tbl);
     execute_command(ctx.clone(), qry.as_str()).await?;
 
     // one history item left there
