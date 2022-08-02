@@ -17,13 +17,13 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::task::Context;
 use std::task::Poll;
-use futures_util::future::{BoxFuture, Either, Select};
-use futures_util::FutureExt;
-use common_base::base::tokio::sync::futures::Notified;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_pipeline::processors::processor::ProcessorPtr;
+use futures_util::future::BoxFuture;
+use futures_util::future::Either;
+use futures_util::FutureExt;
 
 use crate::pipelines::executor::executor_condvar::WorkersCondvar;
 use crate::pipelines::executor::executor_tasks::CompletedAsyncTask;
@@ -38,7 +38,7 @@ pub struct ProcessorAsyncTask {
 }
 
 impl ProcessorAsyncTask {
-    pub fn create<Inner: Future<Output=Result<()>> + Send + 'static>(
+    pub fn create<Inner: Future<Output = Result<()>> + Send + 'static>(
         worker_id: usize,
         processor: ProcessorPtr,
         queue: Arc<ExecutorTasksQueue>,

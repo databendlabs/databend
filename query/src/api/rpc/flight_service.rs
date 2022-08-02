@@ -41,7 +41,7 @@ use crate::sessions::SessionManager;
 use crate::sessions::SessionType;
 
 pub type FlightStream<T> =
-Pin<Box<dyn Stream<Item=Result<T, tonic::Status>> + Send + Sync + 'static>>;
+    Pin<Box<dyn Stream<Item = Result<T, tonic::Status>> + Send + Sync + 'static>>;
 
 pub struct DatabendQueryFlightService {
     sessions: Arc<SessionManager>,

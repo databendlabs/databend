@@ -575,7 +575,11 @@ impl QueryCoordinator {
         Ok(())
     }
 
-    pub fn receive_data(&mut self, source: &str, mut stream: Streaming<FlightData>) -> Result<JoinHandle<()>> {
+    pub fn receive_data(
+        &mut self,
+        source: &str,
+        mut stream: Streaming<FlightData>,
+    ) -> Result<JoinHandle<()>> {
         if let Some(subscribe_channel) = self.subscribe_channel.remove(source) {
             let ctx = self.ctx.clone();
             let source = source.to_string();

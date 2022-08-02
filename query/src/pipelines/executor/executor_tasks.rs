@@ -13,18 +13,14 @@
 // limitations under the License.
 
 use std::collections::VecDeque;
-use std::future::Future;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
-use futures_util::future::{BoxFuture, Either};
-use futures_util::FutureExt;
 
+use common_base::base::tokio::sync::Notify;
 use common_exception::Result;
 use parking_lot::Mutex;
 use petgraph::prelude::NodeIndex;
-use common_base::base::tokio::sync::futures::Notified;
-use common_base::base::tokio::sync::Notify;
 
 use crate::pipelines::executor::executor_condvar::WorkersCondvar;
 use crate::pipelines::executor::executor_condvar::WorkersWaitingStatus;
