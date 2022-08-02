@@ -105,6 +105,13 @@ select count(*) as x from (select 1 as x union all select 2 as x) group by x;
 Add results here
 
 statement query I
+select count(*) from t1 left join
+(select t1.a from t1  cross join t1 as x where x.c>t1.c and x.d<t1.d) as t2 on t1.a = t2.a;
+
+----
+30
+
+statement query I
 select case when c>d then a*2 else b*10 end as col1
 from (
  select d, a, b, c

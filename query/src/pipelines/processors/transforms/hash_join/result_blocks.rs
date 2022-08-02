@@ -619,8 +619,14 @@ impl JoinHashTable {
             Ok(column.clone())
         } else if column.is_nullable() {
             let col: &NullableColumn = Series::check_get(column)?;
-            let new_validity = col.ensure_validity() & validity;
-            let col = NullableColumn::wrap_inner(col.inner().clone(), Some(new_validity));
+            // It's possible validity is longer than col.
+            let diff_len = validity.len() - col.ensure_validity().len();
+            let mut new_validity = MutableBitmap::with_capacity(validity.len());
+            for (b1, b2) in validity.iter().zip(col.ensure_validity().iter()) {
+                new_validity.push(b1 & b2);
+            }
+            new_validity.extend_constant(diff_len, false);
+            let col = NullableColumn::wrap_inner(col.inner().clone(), Some(new_validity.into()));
             Ok(col)
         } else {
             let col = NullableColumn::wrap_inner(column.clone(), Some(validity.clone()));
