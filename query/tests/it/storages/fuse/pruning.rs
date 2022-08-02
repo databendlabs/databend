@@ -21,14 +21,12 @@ use common_exception::Result;
 use common_fuse_meta::meta::BlockMeta;
 use common_fuse_meta::meta::TableSnapshot;
 use common_meta_app::schema::TableMeta;
-use common_pipeline::Pipeline;
 use common_planners::add;
 use common_planners::col;
 use common_planners::lit;
 use common_planners::sub;
 use common_planners::CreateTablePlan;
 use common_planners::Extras;
-use databend_query::catalogs::CATALOG_DEFAULT;
 use databend_query::interpreters::CreateTableInterpreter;
 use databend_query::interpreters::Interpreter;
 use databend_query::sessions::QueryContext;
@@ -39,7 +37,6 @@ use databend_query::storages::fuse::io::MetaReaders;
 use databend_query::storages::fuse::pruning::BlockPruner;
 use databend_query::storages::fuse::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 use databend_query::storages::fuse::FUSE_OPT_KEY_ROW_PER_BLOCK;
-use futures::TryStreamExt;
 
 use crate::storages::fuse::table_test_fixture::TestFixture;
 
@@ -94,7 +91,7 @@ async fn test_block_pruner() -> Result<()> {
     };
 
     let interpreter = CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;
-    interpreter.execute(None).await?;
+    let _ = interpreter.execute(None).await?;
 
     // get table
     let catalog = ctx.get_catalog("default")?;
@@ -115,20 +112,21 @@ async fn test_block_pruner() -> Result<()> {
     let blocks = (0..num_blocks)
         .into_iter()
         .map(|idx| {
-            Ok(DataBlock::create(test_schema.clone(), vec![
+            DataBlock::create(test_schema.clone(), vec![
                 // value of column a always equals  1
                 gen_col(1, row_per_block),
                 // for column b
                 // - for all block `B` in blocks, whose index is `i`
                 // - for all row in `B`, value of column b  equals `i`
                 gen_col(idx as u64, row_per_block),
-            ]))
+            ])
         })
         .collect::<Vec<_>>();
 
-    
-    fixture.append_blocks_to_table(table.clone(), blocks, false).await?;
-    
+    fixture
+        .append_blocks_to_table(table.clone(), blocks, false)
+        .await?;
+
     // get the latest tbl
     let table = catalog
         .get_table(
@@ -246,21 +244,23 @@ async fn test_block_pruner_monotonic() -> Result<()> {
         .await?;
 
     let blocks = vec![
-        Ok(DataBlock::create(test_schema.clone(), vec![
+        DataBlock::create(test_schema.clone(), vec![
             Series::from_data(vec![1u64, 2, 3]),
             Series::from_data(vec![11u64, 12, 13]),
-        ])),
-        Ok(DataBlock::create(test_schema.clone(), vec![
+        ]),
+        DataBlock::create(test_schema.clone(), vec![
             Series::from_data(vec![4u64, 5, 6]),
             Series::from_data(vec![21u64, 22, 23]),
-        ])),
-        Ok(DataBlock::create(test_schema, vec![
+        ]),
+        DataBlock::create(test_schema, vec![
             Series::from_data(vec![7u64, 8, 9]),
             Series::from_data(vec![31u64, 32, 33]),
-        ])),
+        ]),
     ];
 
-    fixture.append_blocks_to_table(table.clone(), blocks, false).await?;
+    fixture
+        .append_blocks_to_table(table.clone(), blocks, false)
+        .await?;
 
     // get the latest tbl
     let table = catalog

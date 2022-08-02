@@ -16,7 +16,6 @@ use std::any::Any;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
-use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 use common_meta_app::schema::TableInfo;
@@ -25,10 +24,6 @@ use common_planners::Partitions;
 use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
 use common_planners::TruncateTablePlan;
-use common_streams::DataBlockStream;
-use common_streams::SendableDataBlockStream;
-use futures::stream::StreamExt;
-use tracing::info;
 
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
@@ -96,7 +91,7 @@ impl Table for NullTable {
 
         Ok(())
     }
- 
+
     fn append2(&self, _: Arc<dyn TableContext>, pipeline: &mut Pipeline) -> Result<()> {
         let mut sink_pipeline_builder = SinkPipeBuilder::create();
         for _ in 0..pipeline.output_len() {

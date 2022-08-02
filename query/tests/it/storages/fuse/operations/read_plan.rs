@@ -22,7 +22,6 @@ use common_fuse_meta::meta::BlockMeta;
 use common_fuse_meta::meta::ColumnMeta;
 use common_fuse_meta::meta::ColumnStatistics;
 use common_planners::Extras;
-use databend_query::catalogs::CATALOG_DEFAULT;
 use databend_query::interpreters::CreateTableInterpreter;
 use databend_query::interpreters::Interpreter;
 use databend_query::storages::fuse::ColumnLeaf;
@@ -147,10 +146,12 @@ async fn test_fuse_table_exact_statistic() -> Result<()> {
         let value_start_from = 1;
         let stream =
             TestFixture::gen_sample_blocks_stream_ex(num_blocks, rows_per_block, value_start_from);
-        
-          let blocks = stream.try_collect().await?;
-    fixture.append_blocks_to_table(table.clone(), blocks, false).await?;
-     
+
+        let blocks = stream.try_collect().await?;
+        fixture
+            .append_blocks_to_table(table.clone(), blocks, false)
+            .await?;
+
         table = fixture.latest_default_table().await?;
 
         let push_downs = Extras {

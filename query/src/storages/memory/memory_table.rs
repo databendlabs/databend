@@ -25,7 +25,6 @@ use common_planners::Partitions;
 use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
 use common_planners::TruncateTablePlan;
-use common_streams::SendableDataBlockStream;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 
@@ -217,7 +216,6 @@ impl Table for MemoryTable {
         pipeline.add_pipe(sink_pipeline_builder.finalize());
         Ok(())
     }
-
 
     async fn commit_insertion(
         &self,

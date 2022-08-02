@@ -13,7 +13,6 @@
 //  limitations under the License.
 
 use common_base::base::tokio;
-use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_meta_app::schema::TableInfo;
@@ -27,10 +26,7 @@ use futures::TryStreamExt;
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_null_table() -> Result<()> {
     let ctx = crate::tests::create_query_context().await?;
-    let schema = DataSchemaRefExt::create(vec![
-        DataField::new("a", u64::to_data_type()),
-        DataField::new("b", u64::to_data_type()),
-    ]);
+
     let table = NullTable::try_create(crate::tests::create_storage_context().await?, TableInfo {
         desc: "'default'.'a'".into(),
         name: "a".into(),

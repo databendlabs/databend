@@ -12,14 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::VecDeque;
 use std::io;
 use std::sync::Arc;
 
 use chrono::TimeZone;
 use chrono::Utc;
 use common_base::base::TrySpawn;
-use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -33,14 +31,20 @@ use regex::Regex;
 use tracing::warn;
 
 use crate::pipelines::executor::PipelineCompleteExecutor;
-use crate::pipelines::processors::BlocksSource;
 use crate::pipelines::processors::TransformAddOn;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::storages::stage::StageSourceHelper;
 use crate::storages::Table;
 
-pub async fn append2table(ctx: Arc<QueryContext>, table: Arc<dyn Table>, source_schema: DataSchemaRef, mut pipeline:  Pipeline, overwrite: bool, catalog_name: &str) -> Result<()> {
+pub async fn append2table(
+    ctx: Arc<QueryContext>,
+    table: Arc<dyn Table>,
+    source_schema: DataSchemaRef,
+    mut pipeline: Pipeline,
+    overwrite: bool,
+    catalog_name: &str,
+) -> Result<()> {
     let need_fill_missing_columns = table.schema() != source_schema;
     if need_fill_missing_columns {
         pipeline.add_transform(|transform_input_port, transform_output_port| {
@@ -55,17 +59,16 @@ pub async fn append2table(ctx: Arc<QueryContext>, table: Arc<dyn Table>, source_
     }
 
     table.append2(ctx.clone(), &mut pipeline)?;
-    let async_runtime =  ctx.get_storage_runtime();
+    let async_runtime = ctx.get_storage_runtime();
     let query_need_abort = ctx.query_need_abort();
 
     pipeline.set_max_threads(ctx.get_settings().get_max_threads()? as usize);
-    let executor =
-        PipelineCompleteExecutor::try_create(async_runtime, query_need_abort, pipeline)?;
+    let executor = PipelineCompleteExecutor::try_create(async_runtime, query_need_abort, pipeline)?;
 
     executor.execute()?;
     drop(executor);
 
-    let append_entries =  ctx.consume_precommit_blocks();
+    let append_entries = ctx.consume_precommit_blocks();
     // We must put the commit operation to global runtime, which will avoid the "dispatch dropped without returning error" in tower
     let catalog_name = catalog_name.to_owned();
     let handler = ctx.get_storage_runtime().spawn(async move {
@@ -83,7 +86,6 @@ pub async fn append2table(ctx: Arc<QueryContext>, table: Arc<dyn Table>, source_
         ))),
     }
 }
-
 
 pub async fn validate_grant_object_exists(
     ctx: &Arc<QueryContext>,

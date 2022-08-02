@@ -27,7 +27,6 @@ use common_planners::Partitions;
 use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
 use common_planners::TruncateTablePlan;
-use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use futures::StreamExt;
 use parking_lot::RwLock;
@@ -118,8 +117,7 @@ impl QueryLogTable {
             data: Arc::new(RwLock::new(VecDeque::new())),
         }
     }
-    
-    
+
     pub async fn append_data(
         &self,
         _ctx: Arc<dyn TableContext>,
@@ -140,7 +138,6 @@ impl QueryLogTable {
 
         Ok(())
     }
-    
 }
 
 #[async_trait::async_trait]

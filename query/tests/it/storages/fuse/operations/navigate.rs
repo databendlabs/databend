@@ -14,16 +14,13 @@
 
 use std::ops::Add;
 use std::ops::Sub;
-use std::sync::Arc;
 use std::time::Duration;
 
 use common_base::base::tokio;
 use common_datablocks::DataBlock;
-use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::TruncateTablePlan;
-use common_streams::DataBlockStream;
 use databend_query::pipelines::Pipeline;
 use databend_query::storages::fuse::io::MetaReaders;
 use databend_query::storages::fuse::io::TableMetaLocationGenerator;
@@ -164,14 +161,11 @@ async fn test_fuse_historical_table_is_read_only() -> Result<()> {
     // check append2
     let res = tbl.append2(ctx.clone(), &mut Pipeline::create());
     assert_not_writable(res, "append2");
-    let empty_stream = Box::pin(DataBlockStream::create(
-        Arc::new(DataSchema::empty()),
-        None,
-        vec![],
-    ));
-    
+
     // check append_data
-    let res = fixture.append_blocks_to_table(table.clone(), vec![], false).await;
+    let res = fixture
+        .append_blocks_to_table(table.clone(), vec![], false)
+        .await;
     assert_not_writable(res, "append_data");
 
     // check truncate

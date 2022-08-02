@@ -24,7 +24,6 @@ use common_planners::DropTableClusterKeyPlan;
 use common_planners::ReadDataSourcePlan;
 use common_planners::SourceInfo;
 use common_planners::TruncateTablePlan;
-use databend_query::catalogs::CATALOG_DEFAULT;
 use databend_query::interpreters::AlterTableClusterKeyInterpreter;
 use databend_query::interpreters::CreateTableInterpreter;
 use databend_query::interpreters::DropTableClusterKeyInterpreter;
@@ -60,9 +59,11 @@ async fn test_fuse_table_normal_case() -> Result<()> {
         let value_start_from = 1;
         let stream =
             TestFixture::gen_sample_blocks_stream_ex(num_blocks, rows_per_block, value_start_from);
-        
+
         let blocks = stream.try_collect().await?;
-        fixture.append_blocks_to_table(table.clone(), blocks, false).await?;
+        fixture
+            .append_blocks_to_table(table.clone(), blocks, false)
+            .await?;
 
         // get the latest tbl
         let prev_version = table.get_table_info().ident.seq;
@@ -118,7 +119,9 @@ async fn test_fuse_table_normal_case() -> Result<()> {
             TestFixture::gen_sample_blocks_stream_ex(num_blocks, rows_per_block, value_start_from);
 
         let blocks = stream.try_collect().await?;
-        fixture.append_blocks_to_table(table.clone(), blocks, false).await?;
+        fixture
+            .append_blocks_to_table(table.clone(), blocks, false)
+            .await?;
 
         // get the latest tbl
         let prev_version = table.get_table_info().ident.seq;
@@ -198,8 +201,10 @@ async fn test_fuse_table_truncate() -> Result<()> {
         TestFixture::gen_sample_blocks_stream_ex(num_blocks, rows_per_block, value_start_from);
 
     let blocks = stream.try_collect().await?;
-    fixture.append_blocks_to_table(table.clone(), blocks, false).await?;
-        
+    fixture
+        .append_blocks_to_table(table.clone(), blocks, false)
+        .await?;
+
     let source_plan = table.read_plan(ctx.clone(), None).await?;
 
     // get the latest tbl
@@ -252,9 +257,11 @@ async fn test_fuse_table_optimize() -> Result<()> {
         let table = fixture.latest_default_table().await?;
         let num_blocks = 1;
         let stream = TestFixture::gen_sample_blocks_stream(num_blocks, 1);
-        
-          let blocks = stream.try_collect().await?;
-        fixture.append_blocks_to_table(table.clone(), blocks, false).await?;
+
+        let blocks = stream.try_collect().await?;
+        fixture
+            .append_blocks_to_table(table.clone(), blocks, false)
+            .await?;
     }
 
     // there will be 5 blocks

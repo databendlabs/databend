@@ -21,8 +21,9 @@ use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_meta_app::schema::DatabaseMeta;
 use common_meta_app::schema::TableMeta;
-use common_pipeline::Pipeline;
 use common_pipeline::processors::port::OutputPort;
+use common_pipeline::Pipeline;
+use common_pipeline::SourcePipeBuilder;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
 use common_planners::Expression;
@@ -31,10 +32,10 @@ use common_storage::StorageFsConfig;
 use common_storage::StorageParams;
 use common_streams::SendableDataBlockStream;
 use databend_query::catalogs::CATALOG_DEFAULT;
+use databend_query::interpreters::append2table;
 use databend_query::interpreters::CreateTableInterpreter;
 use databend_query::interpreters::Interpreter;
 use databend_query::interpreters::InterpreterFactoryV2;
-use databend_query::interpreters::append2table;
 use databend_query::pipelines::processors::BlocksSource;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContext;
@@ -234,22 +235,41 @@ impl TestFixture {
             )
             .await
     }
-    
-    pub async fn append_blocks_to_table(&self, table: Arc<dyn Table>, blocks: Vec<DataBlock>, overwrite: bool) -> Result<()> {
-        let source_schema = blocks.get(0).map(|b| b.schema().clone()).unwrap_or(table.schema());
+
+    pub async fn append_blocks_to_table(
+        &self,
+        table: Arc<dyn Table>,
+        blocks: Vec<DataBlock>,
+        overwrite: bool,
+    ) -> Result<()> {
+        let source_schema = blocks
+            .get(0)
+            .map(|b| b.schema().clone())
+            .unwrap_or_else(|| table.schema());
         let mut pipeline = Pipeline::create();
-        let blocks =  Arc::new(Mutex::new(VecDeque::from_iter(blocks)));
+        let mut builder = SourcePipeBuilder::create();
+
+        let blocks = Arc::new(Mutex::new(VecDeque::from_iter(blocks)));
         for _index in 0..self.ctx.get_settings().get_max_threads()? {
             let output = OutputPort::create();
             builder.add_source(
                 output.clone(),
-                BlocksSource::create(ctx.clone(), output.clone(), blocks.clone())?,
+                BlocksSource::create(self.ctx.clone(), output.clone(), blocks.clone())?,
             );
         }
         pipeline.add_pipe(builder.finalize());
-        append2table(ctx, table, source_schema, pipeline, overwrite, ctx.get_catalog(CATALOG_DEFAULT)).await
-    }
 
+        let cat = self.ctx.get_current_catalog();
+        append2table(
+            self.ctx.clone(),
+            table,
+            source_schema,
+            pipeline,
+            overwrite,
+            cat.as_str(),
+        )
+        .await
+    }
 }
 
 fn gen_db_name(prefix: &str) -> String {
@@ -378,9 +398,11 @@ pub async fn append_sample_data_overwrite(
 ) -> Result<()> {
     let stream = TestFixture::gen_sample_blocks_stream(num_blocks, 1);
     let table = fixture.latest_default_table().await?;
-    
+
     let blocks = stream.try_collect().await?;
-    fixture.append_blocks_to_table(table.clone(), blocks, overwrite).await?;
+    fixture
+        .append_blocks_to_table(table.clone(), blocks, overwrite)
+        .await
 }
 
 pub async fn check_data_dir(

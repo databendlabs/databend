@@ -15,7 +15,6 @@
 use std::collections::VecDeque;
 use std::sync::Arc;
 
-use common_base::base::TrySpawn;
 use common_datavalues::DataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -28,19 +27,16 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use parking_lot::Mutex;
 
+use super::interpreter_common::append2table;
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreter;
-use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::BlocksSource;
-use crate::pipelines::processors::TransformAddOn;
 use crate::pipelines::processors::TransformCastSchema;
 use crate::pipelines::Pipeline;
 use crate::pipelines::SourcePipeBuilder;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
-
-use super::interpreter_common::append2table;
 
 pub struct InsertInterpreter {
     ctx: Arc<QueryContext>,
@@ -163,15 +159,16 @@ impl Interpreter for InsertInterpreter {
                 }
             };
         }
-        
+
         append2table(
             self.ctx.clone(),
             table.clone(),
             plan.schema(),
-           pipeline,
-             plan.overwrite,
-             plan.catalog.as_str(),
-        ).await?;
+            pipeline,
+            plan.overwrite,
+            plan.catalog.as_str(),
+        )
+        .await?;
 
         Ok(Box::pin(DataBlockStream::create(
             self.plan.schema(),

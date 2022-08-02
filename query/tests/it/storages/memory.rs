@@ -61,7 +61,12 @@ async fn test_memorytable() -> Result<()> {
         let input_stream = futures::stream::iter::<Vec<Result<DataBlock>>>(blocks.clone());
         // with overwrite false
         table
-            .commit_insertion(ctx.clone(), CATALOG_DEFAULT, input_stream.try_collect().await?, false)
+            .commit_insertion(
+                ctx.clone(),
+                CATALOG_DEFAULT,
+                input_stream.try_collect().await?,
+                false,
+            )
             .await?;
     }
 
@@ -150,7 +155,12 @@ async fn test_memorytable() -> Result<()> {
         let input_stream = futures::stream::iter::<Vec<Result<DataBlock>>>(blocks.clone());
         // with overwrite = true
         table
-            .commit_insertion(ctx.clone(), CATALOG_DEFAULT, input_stream.try_collect().await?, true)
+            .commit_insertion(
+                ctx.clone(),
+                CATALOG_DEFAULT,
+                input_stream.try_collect().await?,
+                true,
+            )
             .await?;
     }
 

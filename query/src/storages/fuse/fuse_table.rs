@@ -36,8 +36,6 @@ use common_planners::Partitions;
 use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
 use common_planners::TruncateTablePlan;
-use common_streams::SendableDataBlockStream;
-use futures::StreamExt;
 use uuid::Uuid;
 
 use crate::pipelines::Pipeline;

@@ -28,7 +28,6 @@ use common_planners::ReadDataSourcePlan;
 use common_planners::StageTableInfo;
 use common_planners::Statistics;
 use common_planners::TruncateTablePlan;
-use common_streams::SendableDataBlockStream;
 use parking_lot::Mutex;
 use tracing::info;
 
@@ -119,7 +118,6 @@ impl Table for StageTable {
         }
         Ok(())
     }
-
 
     async fn commit_insertion(
         &self,

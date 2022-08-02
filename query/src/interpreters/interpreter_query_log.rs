@@ -222,7 +222,7 @@ impl InterpreterQueryLog {
         ]);
         let blocks = vec![Ok(block)];
         let input_stream = futures::stream::iter::<Vec<Result<DataBlock>>>(blocks);
-        
+
         let query_log_table: &QueryLogTable = query_log.as_any().downcast_ref().unwrap();
         query_log_table
             .append_data(self.ctx.clone(), Box::pin(input_stream))

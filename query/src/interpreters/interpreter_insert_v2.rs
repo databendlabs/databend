@@ -15,9 +15,6 @@
 use std::collections::VecDeque;
 use std::sync::Arc;
 
-use common_arrow::arrow::datatypes::SchemaRef;
-use common_base::base::TrySpawn;
-use common_catalog::table::Table;
 use common_datavalues::DataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -26,13 +23,12 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use parking_lot::Mutex;
 
+use super::interpreter_common::append2table;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::interpreters::SelectInterpreterV2;
-use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::BlocksSource;
-use crate::pipelines::processors::TransformAddOn;
 use crate::pipelines::processors::TransformCastSchema;
 use crate::pipelines::Pipeline;
 use crate::pipelines::SourcePipeBuilder;
@@ -41,8 +37,6 @@ use crate::sessions::TableContext;
 use crate::sql::plans::Insert;
 use crate::sql::plans::InsertInputSource;
 use crate::sql::plans::Plan;
-
-use super::interpreter_common::append2table;
 
 pub struct InsertInterpreterV2 {
     ctx: Arc<QueryContext>,
@@ -155,16 +149,17 @@ impl InsertInterpreterV2 {
                 }
             };
         }
-    
+
         append2table(
             self.ctx.clone(),
             table.clone(),
             plan.schema(),
             pipeline,
-             self.plan.overwrite,
-             self.plan.catalog.as_str(),
-        ).await?;
-       
+            self.plan.overwrite,
+            self.plan.catalog.as_str(),
+        )
+        .await?;
+
         Ok(Box::pin(DataBlockStream::create(
             self.plan.schema(),
             None,
@@ -213,4 +208,3 @@ impl Interpreter for InsertInterpreterV2 {
         Ok(())
     }
 }
-
