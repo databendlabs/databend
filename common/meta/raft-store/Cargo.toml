@@ -11,6 +11,9 @@ edition = "2021"
 doctest = false
 test = false
 
+[features]
+io-uring = ["common-meta-sled-store/io-uring"]
+
 [dependencies]
 common-exception = { path = "../../exception" }
 common-grpc = { path = "../../grpc" }
