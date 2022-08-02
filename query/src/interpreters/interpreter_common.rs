@@ -37,13 +37,11 @@ use crate::sessions::TableContext;
 use crate::storages::stage::StageSourceHelper;
 use crate::storages::Table;
 
-pub async fn append2table(
+pub fn append2table(
     ctx: Arc<QueryContext>,
     table: Arc<dyn Table>,
     source_schema: DataSchemaRef,
     mut pipeline: Pipeline,
-    overwrite: bool,
-    catalog_name: &str,
 ) -> Result<()> {
     let need_fill_missing_columns = table.schema() != source_schema;
     if need_fill_missing_columns {
@@ -64,13 +62,17 @@ pub async fn append2table(
 
     pipeline.set_max_threads(ctx.get_settings().get_max_threads()? as usize);
     let executor = PipelineCompleteExecutor::try_create(async_runtime, query_need_abort, pipeline)?;
+    executor.execute()
+}
 
-    executor.execute()?;
-    drop(executor);
-
+pub async fn commit2table(
+    ctx: Arc<QueryContext>,
+    table: Arc<dyn Table>,
+    overwrite: bool,
+) -> Result<()> {
     let append_entries = ctx.consume_precommit_blocks();
     // We must put the commit operation to global runtime, which will avoid the "dispatch dropped without returning error" in tower
-    let catalog_name = catalog_name.to_owned();
+    let catalog_name = ctx.get_current_catalog();
     let handler = ctx.get_storage_runtime().spawn(async move {
         table
             .commit_insertion(ctx, &catalog_name, append_entries, overwrite)

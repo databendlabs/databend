@@ -124,7 +124,7 @@ async fn test_block_pruner() -> Result<()> {
         .collect::<Vec<_>>();
 
     fixture
-        .append_blocks_to_table(table.clone(), blocks, false)
+        .append_commit_blocks(table.clone(), blocks, false, true)
         .await?;
 
     // get the latest tbl
@@ -259,7 +259,7 @@ async fn test_block_pruner_monotonic() -> Result<()> {
     ];
 
     fixture
-        .append_blocks_to_table(table.clone(), blocks, false)
+        .append_commit_blocks(table.clone(), blocks, false, true)
         .await?;
 
     // get the latest tbl

@@ -27,6 +27,7 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use parking_lot::Mutex;
 
+use super::commit2table;
 use super::interpreter_common::append2table;
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreter;
@@ -160,16 +161,8 @@ impl Interpreter for InsertInterpreter {
             };
         }
 
-        append2table(
-            self.ctx.clone(),
-            table.clone(),
-            plan.schema(),
-            pipeline,
-            plan.overwrite,
-            plan.catalog.as_str(),
-        )
-        .await?;
-
+        append2table(self.ctx.clone(), table.clone(), plan.schema(), pipeline)?;
+        commit2table(self.ctx.clone(), table.clone(), plan.overwrite).await?;
         Ok(Box::pin(DataBlockStream::create(
             self.plan.schema(),
             None,

@@ -29,6 +29,7 @@ use regex::Regex;
 use tracing::info;
 
 use super::append2table;
+use super::commit2table;
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreterV2;
 use crate::pipelines::executor::PipelineCompleteExecutor;
@@ -209,15 +210,15 @@ impl CopyInterpreterV2 {
 
         let pipeline = select_interpreter.create_new_pipeline().await?;
         let table = StageTable::try_create(stage_table_info)?;
+
         append2table(
             self.ctx.clone(),
-            table,
+            table.clone(),
             data_schema.clone(),
             pipeline,
-            false,
-            &self.ctx.get_current_catalog(),
-        )
-        .await?;
+        )?;
+        commit2table(self.ctx.clone(), table.clone(), false).await?;
+
         Ok(Box::pin(DataBlockStream::create(data_schema, None, vec![])))
     }
 }

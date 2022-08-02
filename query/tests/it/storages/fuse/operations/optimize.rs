@@ -79,7 +79,7 @@ async fn test_fuse_snapshot_optimize_compact() -> Result<()> {
 
         let blocks = stream.try_collect().await?;
         fixture
-            .append_blocks_to_table(table.clone(), blocks, false)
+            .append_commit_blocks(table.clone(), blocks, false, true)
             .await?;
     }
 

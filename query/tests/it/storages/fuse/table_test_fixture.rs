@@ -33,6 +33,7 @@ use common_storage::StorageParams;
 use common_streams::SendableDataBlockStream;
 use databend_query::catalogs::CATALOG_DEFAULT;
 use databend_query::interpreters::append2table;
+use databend_query::interpreters::commit2table;
 use databend_query::interpreters::CreateTableInterpreter;
 use databend_query::interpreters::Interpreter;
 use databend_query::interpreters::InterpreterFactoryV2;
@@ -236,11 +237,13 @@ impl TestFixture {
             .await
     }
 
-    pub async fn append_blocks_to_table(
+    /// append_commit_blocks with single thread
+    pub async fn append_commit_blocks(
         &self,
         table: Arc<dyn Table>,
         blocks: Vec<DataBlock>,
         overwrite: bool,
+        commit: bool,
     ) -> Result<()> {
         let source_schema = blocks
             .get(0)
@@ -250,25 +253,19 @@ impl TestFixture {
         let mut builder = SourcePipeBuilder::create();
 
         let blocks = Arc::new(Mutex::new(VecDeque::from_iter(blocks)));
-        for _index in 0..self.ctx.get_settings().get_max_threads()? {
-            let output = OutputPort::create();
-            builder.add_source(
-                output.clone(),
-                BlocksSource::create(self.ctx.clone(), output.clone(), blocks.clone())?,
-            );
-        }
+        let output = OutputPort::create();
+        builder.add_source(
+            output.clone(),
+            BlocksSource::create(self.ctx.clone(), output.clone(), blocks.clone())?,
+        );
         pipeline.add_pipe(builder.finalize());
 
-        let cat = self.ctx.get_current_catalog();
-        append2table(
-            self.ctx.clone(),
-            table,
-            source_schema,
-            pipeline,
-            overwrite,
-            cat.as_str(),
-        )
-        .await
+        append2table(self.ctx.clone(), table.clone(), source_schema, pipeline)?;
+
+        if commit {
+            commit2table(self.ctx.clone(), table.clone(), overwrite).await?;
+        }
+        Ok(())
     }
 }
 
@@ -401,7 +398,7 @@ pub async fn append_sample_data_overwrite(
 
     let blocks = stream.try_collect().await?;
     fixture
-        .append_blocks_to_table(table.clone(), blocks, overwrite)
+        .append_commit_blocks(table.clone(), blocks, overwrite, true)
         .await
 }
 

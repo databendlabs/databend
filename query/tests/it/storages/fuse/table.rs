@@ -62,7 +62,7 @@ async fn test_fuse_table_normal_case() -> Result<()> {
 
         let blocks = stream.try_collect().await?;
         fixture
-            .append_blocks_to_table(table.clone(), blocks, false)
+            .append_commit_blocks(table.clone(), blocks, false, true)
             .await?;
 
         // get the latest tbl
@@ -120,7 +120,7 @@ async fn test_fuse_table_normal_case() -> Result<()> {
 
         let blocks = stream.try_collect().await?;
         fixture
-            .append_blocks_to_table(table.clone(), blocks, false)
+            .append_commit_blocks(table.clone(), blocks, true, true)
             .await?;
 
         // get the latest tbl
@@ -202,7 +202,7 @@ async fn test_fuse_table_truncate() -> Result<()> {
 
     let blocks = stream.try_collect().await?;
     fixture
-        .append_blocks_to_table(table.clone(), blocks, false)
+        .append_commit_blocks(table.clone(), blocks, false, true)
         .await?;
 
     let source_plan = table.read_plan(ctx.clone(), None).await?;
@@ -260,7 +260,7 @@ async fn test_fuse_table_optimize() -> Result<()> {
 
         let blocks = stream.try_collect().await?;
         fixture
-            .append_blocks_to_table(table.clone(), blocks, false)
+            .append_commit_blocks(table.clone(), blocks, false, true)
             .await?;
     }
 
