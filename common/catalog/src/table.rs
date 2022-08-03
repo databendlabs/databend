@@ -34,7 +34,6 @@ use common_planners::Partitions;
 use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
 use common_planners::TruncateTablePlan;
-use common_streams::SendableDataBlockStream;
 
 use crate::table_context::TableContext;
 
@@ -128,20 +127,16 @@ pub trait Table: Sync + Send {
         _: &ReadDataSourcePlan,
         _: &mut Pipeline,
     ) -> Result<()> {
-        unimplemented!()
+        Err(ErrorCode::UnImplement(format!(
+            "read2 operation for table {} is not implemented, table engine is {}",
+            self.name(),
+            self.get_table_info().meta.engine
+        )))
     }
 
     fn append2(&self, _: Arc<dyn TableContext>, _: &mut Pipeline) -> Result<()> {
-        unimplemented!()
-    }
-
-    async fn append_data(
-        &self,
-        _ctx: Arc<dyn TableContext>,
-        _stream: SendableDataBlockStream,
-    ) -> Result<SendableDataBlockStream> {
         Err(ErrorCode::UnImplement(format!(
-            "append operation for table {} is not implemented, table engine is {}",
+            "append2 operation for table {} is not implemented, table engine is {}",
             self.name(),
             self.get_table_info().meta.engine
         )))

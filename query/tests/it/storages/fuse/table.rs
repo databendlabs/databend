@@ -24,7 +24,6 @@ use common_planners::DropTableClusterKeyPlan;
 use common_planners::ReadDataSourcePlan;
 use common_planners::SourceInfo;
 use common_planners::TruncateTablePlan;
-use databend_query::catalogs::CATALOG_DEFAULT;
 use databend_query::interpreters::AlterTableClusterKeyInterpreter;
 use databend_query::interpreters::CreateTableInterpreter;
 use databend_query::interpreters::DropTableClusterKeyInterpreter;
@@ -61,9 +60,9 @@ async fn test_fuse_table_normal_case() -> Result<()> {
         let stream =
             TestFixture::gen_sample_blocks_stream_ex(num_blocks, rows_per_block, value_start_from);
 
-        let r = table.append_data(ctx.clone(), stream).await?;
-        table
-            .commit_insertion(ctx.clone(), CATALOG_DEFAULT, r.try_collect().await?, false)
+        let blocks = stream.try_collect().await?;
+        fixture
+            .append_commit_blocks(table.clone(), blocks, false, true)
             .await?;
 
         // get the latest tbl
@@ -119,9 +118,9 @@ async fn test_fuse_table_normal_case() -> Result<()> {
         let stream =
             TestFixture::gen_sample_blocks_stream_ex(num_blocks, rows_per_block, value_start_from);
 
-        let r = table.append_data(ctx.clone(), stream).await?;
-        table
-            .commit_insertion(ctx.clone(), CATALOG_DEFAULT, r.try_collect().await?, true)
+        let blocks = stream.try_collect().await?;
+        fixture
+            .append_commit_blocks(table.clone(), blocks, true, true)
             .await?;
 
         // get the latest tbl
@@ -201,10 +200,11 @@ async fn test_fuse_table_truncate() -> Result<()> {
     let stream =
         TestFixture::gen_sample_blocks_stream_ex(num_blocks, rows_per_block, value_start_from);
 
-    let r = table.append_data(ctx.clone(), stream).await?;
-    table
-        .commit_insertion(ctx.clone(), CATALOG_DEFAULT, r.try_collect().await?, false)
+    let blocks = stream.try_collect().await?;
+    fixture
+        .append_commit_blocks(table.clone(), blocks, false, true)
         .await?;
+
     let source_plan = table.read_plan(ctx.clone(), None).await?;
 
     // get the latest tbl
@@ -257,9 +257,10 @@ async fn test_fuse_table_optimize() -> Result<()> {
         let table = fixture.latest_default_table().await?;
         let num_blocks = 1;
         let stream = TestFixture::gen_sample_blocks_stream(num_blocks, 1);
-        let r = table.append_data(ctx.clone(), stream).await?;
-        table
-            .commit_insertion(ctx.clone(), CATALOG_DEFAULT, r.try_collect().await?, false)
+
+        let blocks = stream.try_collect().await?;
+        fixture
+            .append_commit_blocks(table.clone(), blocks, false, true)
             .await?;
     }
 

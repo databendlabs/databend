@@ -39,7 +39,9 @@ use crate::storages::fuse::operations::AppendOperationLogEntry;
 use crate::storages::fuse::operations::FuseTableSink;
 use crate::storages::fuse::FuseTable;
 use crate::storages::fuse::DEFAULT_BLOCK_PER_SEGMENT;
+use crate::storages::fuse::DEFAULT_BLOCK_SIZE_IN_MEM_SIZE_THRESHOLD;
 use crate::storages::fuse::DEFAULT_ROW_PER_BLOCK;
+use crate::storages::fuse::FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD;
 use crate::storages::fuse::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 use crate::storages::fuse::FUSE_OPT_KEY_ROW_PER_BLOCK;
 use crate::storages::index::ClusterKeyInfo;
@@ -109,6 +111,11 @@ impl FuseTable {
     pub fn do_append2(&self, ctx: Arc<dyn TableContext>, pipeline: &mut Pipeline) -> Result<()> {
         let max_row_per_block = self.get_option(FUSE_OPT_KEY_ROW_PER_BLOCK, DEFAULT_ROW_PER_BLOCK);
         let min_rows_per_block = (max_row_per_block as f64 * 0.8) as usize;
+        let max_bytes_per_block = self.get_option(
+            FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD,
+            DEFAULT_BLOCK_SIZE_IN_MEM_SIZE_THRESHOLD,
+        );
+
         let block_per_seg =
             self.get_option(FUSE_OPT_KEY_BLOCK_PER_SEGMENT, DEFAULT_BLOCK_PER_SEGMENT);
 
@@ -118,7 +125,7 @@ impl FuseTable {
             TransformCompact::try_create(
                 transform_input_port,
                 transform_output_port,
-                BlockCompactor::new(max_row_per_block, min_rows_per_block),
+                BlockCompactor::new(max_row_per_block, min_rows_per_block, max_bytes_per_block),
             )
         })?;
 

@@ -14,7 +14,6 @@
 use common_base::base::tokio;
 use common_datablocks::DataBlock;
 use common_exception::Result;
-use databend_query::catalogs::CATALOG_DEFAULT;
 use futures::TryStreamExt;
 
 use crate::storages::fuse::table_test_fixture::execute_query;
@@ -31,14 +30,18 @@ async fn test_fuse_occ_retry() -> Result<()> {
     let table = fixture.latest_default_table().await?;
 
     // insert one row `id = 1` into the table, without committing
-    let pending = {
+    {
         let num_blocks = 1;
         let rows_per_block = 1;
         let value_start_from = 1;
         let stream =
             TestFixture::gen_sample_blocks_stream_ex(num_blocks, rows_per_block, value_start_from);
-        table.append_data(ctx.clone(), stream).await?
-    };
+
+        let blocks = stream.try_collect().await?;
+        fixture
+            .append_commit_blocks(table.clone(), blocks, false, false)
+            .await?;
+    }
 
     // insert another row `id = 5` into the table, and do commit the insertion
     {
@@ -47,21 +50,12 @@ async fn test_fuse_occ_retry() -> Result<()> {
         let value_start_from = 5;
         let stream =
             TestFixture::gen_sample_blocks_stream_ex(num_blocks, rows_per_block, value_start_from);
-        let r = table.append_data(ctx.clone(), stream).await?;
-        table
-            .commit_insertion(ctx.clone(), CATALOG_DEFAULT, r.try_collect().await?, false)
+
+        let blocks = stream.try_collect().await?;
+        fixture
+            .append_commit_blocks(table.clone(), blocks, false, true)
             .await?;
     }
-
-    // commit the previous pending insertion
-    table
-        .commit_insertion(
-            ctx.clone(),
-            CATALOG_DEFAULT,
-            pending.try_collect().await?,
-            false,
-        )
-        .await?;
 
     // let's check it out
     let qry = format!("select * from {}.{} order by id ", db, tbl);

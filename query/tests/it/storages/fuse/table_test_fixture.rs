@@ -12,6 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::collections::VecDeque;
 use std::sync::Arc;
 
 use common_datablocks::assert_blocks_sorted_eq_with_name;
@@ -20,6 +21,9 @@ use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_meta_app::schema::DatabaseMeta;
 use common_meta_app::schema::TableMeta;
+use common_pipeline::processors::port::OutputPort;
+use common_pipeline::Pipeline;
+use common_pipeline::SourcePipeBuilder;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
 use common_planners::Expression;
@@ -28,9 +32,12 @@ use common_storage::StorageFsConfig;
 use common_storage::StorageParams;
 use common_streams::SendableDataBlockStream;
 use databend_query::catalogs::CATALOG_DEFAULT;
+use databend_query::interpreters::append2table;
+use databend_query::interpreters::commit2table;
 use databend_query::interpreters::CreateTableInterpreter;
 use databend_query::interpreters::Interpreter;
 use databend_query::interpreters::InterpreterFactoryV2;
+use databend_query::pipelines::processors::BlocksSource;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContext;
 use databend_query::sql::Planner;
@@ -45,6 +52,7 @@ use databend_query::storages::TableStreamReadWrap;
 use databend_query::storages::ToReadDataSourcePlan;
 use databend_query::table_functions::TableArgs;
 use futures::TryStreamExt;
+use parking_lot::Mutex;
 use tempfile::TempDir;
 use tokio_stream::StreamExt;
 use uuid::Uuid;
@@ -228,6 +236,37 @@ impl TestFixture {
             )
             .await
     }
+
+    /// append_commit_blocks with single thread
+    pub async fn append_commit_blocks(
+        &self,
+        table: Arc<dyn Table>,
+        blocks: Vec<DataBlock>,
+        overwrite: bool,
+        commit: bool,
+    ) -> Result<()> {
+        let source_schema = blocks
+            .get(0)
+            .map(|b| b.schema().clone())
+            .unwrap_or_else(|| table.schema());
+        let mut pipeline = Pipeline::create();
+        let mut builder = SourcePipeBuilder::create();
+
+        let blocks = Arc::new(Mutex::new(VecDeque::from_iter(blocks)));
+        let output = OutputPort::create();
+        builder.add_source(
+            output.clone(),
+            BlocksSource::create(self.ctx.clone(), output.clone(), blocks.clone())?,
+        );
+        pipeline.add_pipe(builder.finalize());
+
+        append2table(self.ctx.clone(), table.clone(), source_schema, pipeline)?;
+
+        if commit {
+            commit2table(self.ctx.clone(), table.clone(), overwrite).await?;
+        }
+        Ok(())
+    }
 }
 
 fn gen_db_name(prefix: &str) -> String {
@@ -356,10 +395,10 @@ pub async fn append_sample_data_overwrite(
 ) -> Result<()> {
     let stream = TestFixture::gen_sample_blocks_stream(num_blocks, 1);
     let table = fixture.latest_default_table().await?;
-    let ctx = fixture.ctx();
-    let stream = table.append_data(ctx.clone(), stream).await?;
-    table
-        .commit_insertion(ctx, CATALOG_DEFAULT, stream.try_collect().await?, overwrite)
+
+    let blocks = stream.try_collect().await?;
+    fixture
+        .append_commit_blocks(table.clone(), blocks, overwrite, true)
         .await
 }
 

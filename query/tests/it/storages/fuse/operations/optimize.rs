@@ -14,7 +14,6 @@
 
 use common_base::base::tokio;
 use common_exception::Result;
-use databend_query::catalogs::CATALOG_DEFAULT;
 use futures::TryStreamExt;
 
 use crate::storages::fuse::table_test_fixture::append_sample_data;
@@ -69,7 +68,6 @@ async fn test_fuse_snapshot_optimize_compact() -> Result<()> {
     let fixture = TestFixture::new().await;
     let db = fixture.default_db_name();
     let tbl = fixture.default_table_name();
-    let ctx = fixture.ctx();
     fixture.create_default_table().await?;
 
     // insert 5 blocks
@@ -78,9 +76,10 @@ async fn test_fuse_snapshot_optimize_compact() -> Result<()> {
         let table = fixture.latest_default_table().await?;
         let num_blocks = 1;
         let stream = TestFixture::gen_sample_blocks_stream(num_blocks, 1);
-        let r = table.append_data(ctx.clone(), stream).await?;
-        table
-            .commit_insertion(ctx.clone(), CATALOG_DEFAULT, r.try_collect().await?, false)
+
+        let blocks = stream.try_collect().await?;
+        fixture
+            .append_commit_blocks(table.clone(), blocks, false, true)
             .await?;
     }
 
