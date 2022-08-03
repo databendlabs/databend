@@ -112,6 +112,41 @@ select count(*) from t1 left join
 30
 
 statement query I
+select (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col3 from t1 order by col3;
+
+----
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+
+statement query I
 select case when c>d then a*2 else b*10 end as col1
 from (
  select d, a, b, c

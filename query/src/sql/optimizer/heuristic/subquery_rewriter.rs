@@ -50,6 +50,7 @@ use crate::sql::plans::SubqueryExpr;
 use crate::sql::plans::SubqueryType;
 use crate::sql::IndexType;
 use crate::sql::MetadataRef;
+use crate::sql::ScalarExpr;
 
 pub enum UnnestResult {
     Uncorrelated,
@@ -330,14 +331,14 @@ impl SubqueryRewriter {
                         data_type: Box::new(UInt64Type::new_impl()),
                     });
                     Scalar::FunctionCall(FunctionCall {
-                        arguments: vec![is_null, zero, column_ref],
+                        arguments: vec![is_null, zero, column_ref.clone()],
                         func_name: "multi_if".to_string(),
                         arg_types: vec![
                             BooleanType::new_impl(),
                             UInt64Type::new_impl(),
-                            UInt64Type::new_impl(),
+                            column_ref.data_type(),
                         ],
-                        return_type: Box::new(UInt64Type::new_impl()),
+                        return_type: Box::new(NullableType::new_impl(UInt64Type::new_impl())),
                     })
                 } else {
                     column_ref
