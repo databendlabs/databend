@@ -135,7 +135,11 @@ pub trait Table: Sync + Send {
     }
 
     fn append2(&self, _: Arc<dyn TableContext>, _: &mut Pipeline) -> Result<()> {
-        Ok(())
+        Err(ErrorCode::UnImplement(format!(
+            "append2 operation for table {} is not implemented, table engine is {}",
+            self.name(),
+            self.get_table_info().meta.engine
+        )))
     }
 
     async fn commit_insertion(

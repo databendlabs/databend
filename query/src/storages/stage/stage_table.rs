@@ -22,6 +22,8 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_formats::output_format::OutputFormatType;
 use common_meta_app::schema::TableInfo;
+use common_pipeline::processors::port::InputPort;
+use common_pipeline::SinkPipeBuilder;
 use common_planners::Extras;
 use common_planners::Partitions;
 use common_planners::ReadDataSourcePlan;
@@ -33,6 +35,7 @@ use tracing::info;
 
 use super::StageSourceHelper;
 use crate::pipelines::processors::port::OutputPort;
+use crate::pipelines::processors::ContextSink;
 use crate::pipelines::processors::TransformLimit;
 use crate::pipelines::Pipeline;
 use crate::pipelines::SourcePipeBuilder;
@@ -119,6 +122,20 @@ impl Table for StageTable {
         Ok(())
     }
 
+    fn append2(&self, ctx: Arc<dyn TableContext>, pipeline: &mut Pipeline) -> Result<()> {
+        let mut sink_pipeline_builder = SinkPipeBuilder::create();
+        for _ in 0..pipeline.output_len() {
+            let input_port = InputPort::create();
+            sink_pipeline_builder.add_sink(
+                input_port.clone(),
+                ContextSink::create(input_port, ctx.clone()),
+            );
+        }
+        pipeline.add_pipe(sink_pipeline_builder.finalize());
+        Ok(())
+    }
+
+    // TODO use tmp file_name & rename to have atomic commit
     async fn commit_insertion(
         &self,
         ctx: Arc<dyn TableContext>,

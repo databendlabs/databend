@@ -31,8 +31,7 @@ use parking_lot::RwLock;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::ProcessorPtr;
-use crate::pipelines::processors::Sink;
-use crate::pipelines::processors::Sinker;
+use crate::pipelines::processors::ContextSink;
 use crate::pipelines::processors::SyncSource;
 use crate::pipelines::processors::SyncSourcer;
 use crate::pipelines::Pipeline;
@@ -209,10 +208,9 @@ impl Table for MemoryTable {
             let input_port = InputPort::create();
             sink_pipeline_builder.add_sink(
                 input_port.clone(),
-                MemoryTableSink::create(input_port, ctx.clone()),
+                ContextSink::create(input_port, ctx.clone()),
             );
         }
-
         pipeline.add_pipe(sink_pipeline_builder.finalize());
         Ok(())
     }
@@ -297,24 +295,5 @@ impl SyncSource for MemoryTableSource {
             None => Ok(None),
             Some(data_block) => self.projection(data_block),
         }
-    }
-}
-
-pub struct MemoryTableSink {
-    ctx: Arc<dyn TableContext>,
-}
-
-impl MemoryTableSink {
-    pub fn create(input: Arc<InputPort>, ctx: Arc<dyn TableContext>) -> ProcessorPtr {
-        Sinker::create(input, MemoryTableSink { ctx })
-    }
-}
-
-impl Sink for MemoryTableSink {
-    const NAME: &'static str = "MemoryTableSink";
-
-    fn consume(&mut self, data_block: DataBlock) -> Result<()> {
-        self.ctx.push_precommit_block(data_block);
-        Ok(())
     }
 }
