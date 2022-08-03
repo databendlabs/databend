@@ -1,0 +1,37 @@
+statement ok
+DROP TABLE IF EXISTS t;
+
+statement ok
+set enable_bloom_filter_index = 1;
+
+statement ok
+CREATE TABLE t(c int);
+
+statement ok
+INSERT INTO t VALUES(1), (10), (50), (100);
+
+statement ok
+INSERT INTO t VALUES(1), (11), (51), (100);
+
+statement ok
+INSERT INTO t VALUES(1), (12), (52), (100);
+
+statement query T
+explain select * from t where c = 1;
+
+----
+Projection: c:Int32
+  Filter: (c = 1)
+    ReadDataSource: scan schema: [c:Int32], statistics: [read_rows: 12, read_bytes: 120, partitions_scanned: 3, partitions_total: 3], push_downs: [projections: [0], filters: [(c = 1)]]
+
+statement query T
+explain select * from t where c = 10;
+
+----
+Projection: c:Int32
+  Filter: (c = 10)
+    ReadDataSource: scan schema: [c:Int32], statistics: [read_rows: 4, read_bytes: 40, partitions_scanned: 1, partitions_total: 3], push_downs: [projections: [0], filters: [(c = 10)]]
+
+statement ok
+DROP TABLE t;
+
