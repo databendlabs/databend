@@ -305,7 +305,7 @@ impl Catalog for HiveCatalog {
         unimplemented!()
     }
 
-    async fn create_share(&self, req: CreateShareReq) -> Result<CreateShareReply> {
+    async fn create_share(&self, _req: CreateShareReq) -> Result<CreateShareReply> {
         unimplemented!()
     }
 }
