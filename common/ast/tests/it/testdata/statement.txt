@@ -5778,3 +5778,30 @@ Presign(
 )
 
 
+---------- Input ----------
+CREATE SHARE t COMMENT='share comment';
+---------- Output ---------
+CREATE SHARE t comment='share comment'
+---------- AST ------------
+CreateShare(
+    CreateShareStmt {
+        if_not_exists: false,
+        catalog: None,
+        share: 't',
+        comment: Some('share comment'),
+    },
+)
+
+---------- Input ----------
+CREATE SHARE IF NOT EXISTS t;
+---------- Output ---------
+CREATE SHARE IF NOT EXISTS t;
+---------- AST ------------
+CreateShare(
+    CreateShareStmt {
+        if_not_exists: true,
+        catalog: None,
+        share: 't',
+        comment: None,
+    },
+)

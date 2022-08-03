@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_meta_api::SchemaApi;
+use common_meta_api::ShareApi;
 use common_meta_app::schema::CountTablesReply;
 use common_meta_app::schema::CountTablesReq;
 use common_meta_app::schema::CreateDatabaseReply;
@@ -48,6 +49,8 @@ use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
+use common_meta_app::share::CreateShareReply;
+use common_meta_app::share::CreateShareReq;
 use common_meta_store::MetaStoreProvider;
 use common_meta_types::MetaId;
 use tracing::info;
@@ -319,5 +322,10 @@ impl Catalog for MutableCatalog {
 
     fn get_table_engines(&self) -> Vec<StorageDescription> {
         self.ctx.storage_factory.get_storage_descriptors()
+    }
+
+    async fn create_share(&self, req: CreateShareReq) -> Result<CreateShareReply> {
+        let res = self.ctx.meta.create_share(req).await?;
+        Ok(res)
     }
 }

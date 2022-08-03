@@ -40,6 +40,8 @@ use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
+use common_meta_app::share::CreateShareReply;
+use common_meta_app::share::CreateShareReq;
 use common_meta_types::MetaId;
 
 use crate::catalogs::catalog::Catalog;
@@ -205,6 +207,13 @@ impl Catalog for ImmutableCatalog {
     async fn update_table_meta(&self, req: UpdateTableMetaReq) -> Result<UpdateTableMetaReply> {
         Err(ErrorCode::UnImplement(format!(
             "update table meta not allowed for system database {:?}",
+            req
+        )))
+    }
+
+    async fn create_share(&self, req: CreateShareReq) -> Result<CreateShareReply> {
+        Err(ErrorCode::UnImplement(format!(
+            "create share not allowed for system database {:?}",
             req
         )))
     }

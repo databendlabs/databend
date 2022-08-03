@@ -25,6 +25,7 @@ use crate::interpreters::interpreter_copy_v2::CopyInterpreterV2;
 use crate::interpreters::interpreter_presign::PresignInterpreter;
 use crate::interpreters::interpreter_table_create_v2::CreateTableInterpreterV2;
 use crate::interpreters::AlterUserInterpreter;
+use crate::interpreters::CreateShareInterpreter;
 use crate::interpreters::DropUserInterpreter;
 use crate::sessions::QueryContext;
 use crate::sql::plans::Plan;
@@ -248,6 +249,12 @@ impl InterpreterFactoryV2 {
                 *p.clone(),
             )?)),
             Plan::Kill(p) => Ok(Arc::new(KillInterpreter::try_create(ctx, *p.clone())?)),
+
+            // share plans
+            Plan::CreateShare(p) => Ok(Arc::new(CreateShareInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
         }
     }
 }

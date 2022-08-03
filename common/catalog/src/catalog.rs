@@ -41,6 +41,8 @@ use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
+use common_meta_app::share::CreateShareReply;
+use common_meta_app::share::CreateShareReq;
 use common_meta_types::MetaId;
 use dyn_clone::DynClone;
 
@@ -169,4 +171,7 @@ pub trait Catalog: DynClone + Send + Sync {
     fn get_table_engines(&self) -> Vec<StorageDescription> {
         unimplemented!()
     }
+
+    /// share functions
+    async fn create_share(&self, req: CreateShareReq) -> Result<CreateShareReply>;
 }

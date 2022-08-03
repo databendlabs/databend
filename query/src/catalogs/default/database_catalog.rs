@@ -40,6 +40,8 @@ use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
+use common_meta_app::share::CreateShareReply;
+use common_meta_app::share::CreateShareReq;
 use common_meta_types::MetaId;
 use tracing::info;
 
@@ -459,5 +461,23 @@ impl Catalog for DatabaseCatalog {
     fn get_table_engines(&self) -> Vec<StorageDescription> {
         // only return mutable_catalog storage table engines
         self.mutable_catalog.get_table_engines()
+    }
+
+    async fn create_share(&self, req: CreateShareReq) -> Result<CreateShareReply> {
+        if req.share_name.tenant.is_empty() {
+            return Err(ErrorCode::TenantIsEmpty(
+                "Tenant can not empty(while create share)",
+            ));
+        }
+        info!("Create share from req:{:?}", req);
+
+        // if self
+        // .immutable_catalog
+        // .exists_database(req.tenant(), req.db_name())
+        // .await?
+        // {
+        // return self.immutable_catalog.create_table(req).await;
+        // }
+        self.mutable_catalog.create_share(req).await
     }
 }

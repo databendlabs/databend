@@ -291,6 +291,11 @@ impl<'a> Binder {
                 self.bind_kill_stmt(bind_context, kill_target, object_id.as_str())
                     .await?
             }
+
+            Statement::CreateShare(stmt) => {
+                self.bind_create_share(stmt).await?
+            }
+
         };
         Ok(plan)
     }

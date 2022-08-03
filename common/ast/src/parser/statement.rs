@@ -741,6 +741,24 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         },
     );
 
+    // share statements
+    let create_share = map(
+        rule! {
+            CREATE ~ SHARE ~ (IF ~ NOT ~ EXISTS )? ~ #peroid_separated_idents_1_to_2 ~ ( COMMENT ~ "=" ~ #literal_string)?
+        },
+        |(_, _, opt_if_not_exists, (catalog, share), comment_opt)| {
+            Statement::CreateShare(CreateShareStmt {
+                if_not_exists: opt_if_not_exists.is_some(),
+                catalog,
+                share,
+                comment: match comment_opt {
+                    Some(opt) => Some(opt.2),
+                    None => None,
+                },
+            })
+        },
+    );
+
     let statement_body = alt((
         rule!(
             #map(query, |query| Statement::Query(Box::new(query)))
@@ -825,6 +843,10 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         ),
         rule!(
             #presign: "`PRESIGN [{DOWNLOAD | UPLOAD}] <location> [EXPIRE = 3600]`"
+        ),
+        // share
+        rule!(
+            #create_share: "`CREATE SHARE <share_name> [ COMMENT = '<string_literal>' ]`"
         ),
     ));
 
