@@ -131,7 +131,7 @@ jobs:
           dirs: "gen query"
 
   test_sqllogic_ydb_standalone_linux:
-    timeout-minutes: 10
+    timeout-minutes: 15
     runs-on: [self-hosted, X64, Linux, development]
     needs: build_gnu
     steps:
