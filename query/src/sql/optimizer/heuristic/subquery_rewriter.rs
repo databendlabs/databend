@@ -323,22 +323,26 @@ impl SubqueryRewriter {
                     let is_null = Scalar::FunctionCall(FunctionCall {
                         arguments: vec![column_ref.clone()],
                         func_name: "is_null".to_string(),
-                        arg_types: vec![NullableType::new_impl(UInt64Type::new_impl())],
+                        arg_types: vec![column_ref.data_type()],
                         return_type: Box::new(BooleanType::new_impl()),
                     });
                     let zero = Scalar::ConstantExpr(ConstantExpr {
                         value: DataValue::UInt64(0),
                         data_type: Box::new(UInt64Type::new_impl()),
                     });
-                    Scalar::FunctionCall(FunctionCall {
-                        arguments: vec![is_null, zero, column_ref.clone()],
-                        func_name: "multi_if".to_string(),
-                        arg_types: vec![
-                            BooleanType::new_impl(),
-                            UInt64Type::new_impl(),
-                            column_ref.data_type(),
-                        ],
-                        return_type: Box::new(NullableType::new_impl(UInt64Type::new_impl())),
+                    Scalar::CastExpr(CastExpr {
+                        argument: Box::new(Scalar::FunctionCall(FunctionCall {
+                            arguments: vec![is_null, zero, column_ref.clone()],
+                            func_name: "if".to_string(),
+                            arg_types: vec![
+                                BooleanType::new_impl(),
+                                UInt64Type::new_impl(),
+                                UInt64Type::new_impl(),
+                            ],
+                            return_type: Box::new(UInt64Type::new_impl()),
+                        })),
+                        from_type: Box::new(column_ref.data_type()),
+                        target_type: Box::new(UInt64Type::new_impl()),
                     })
                 } else {
                     column_ref
