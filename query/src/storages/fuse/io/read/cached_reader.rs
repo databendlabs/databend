@@ -18,7 +18,7 @@ use common_cache::Cache;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_fuse_meta::caches::CacheDeferMetrics;
-use common_fuse_meta::caches::MemoryCache;
+use common_fuse_meta::caches::ItemCache;
 use common_fuse_meta::caches::TenantLabel;
 use tracing::warn;
 
@@ -38,7 +38,7 @@ pub trait HasTenantLabel {
 
 /// A "cache-aware" reader
 pub struct CachedReader<T, L> {
-    cache: Option<MemoryCache<T>>,
+    cache: Option<ItemCache<T>>,
     loader: L,
     name: String,
 }
@@ -46,7 +46,7 @@ pub struct CachedReader<T, L> {
 impl<T, L> CachedReader<T, L>
 where L: Loader<T> + HasTenantLabel
 {
-    pub fn new(cache: Option<MemoryCache<T>>, loader: L, name: impl Into<String>) -> Self {
+    pub fn new(cache: Option<ItemCache<T>>, loader: L, name: impl Into<String>) -> Self {
         Self {
             cache,
             loader,

@@ -14,15 +14,19 @@
 
 use common_config::QueryConfig;
 
+use crate::caches::memory_cache::new_bytes_cache;
 use crate::caches::memory_cache::BloomIndexCache;
 use crate::caches::memory_cache::BloomIndexMetaCache;
-use crate::caches::new_memory_cache;
-use crate::caches::MemoryCache;
+use crate::caches::memory_cache::BytesCache;
+use crate::caches::new_item_cache;
+use crate::caches::ItemCache;
 use crate::caches::SegmentInfoCache;
 use crate::caches::TableSnapshotCache;
 
+// default number of index meta cached, default 3000 items
 static DEFAULT_BLOOM_INDEX_META_CACHE_ITEMS: u64 = 3000;
-static DEFAULT_BLOOM_INDEX_COLUMN_CACHE_ITEMS: u64 = 9000;
+// default size of cached bloom filter index (in bytes), 1G
+static DEFAULT_BLOOM_INDEX_COLUMN_CACHE_SIZE: u64 = 1024 * 1024 * 1024;
 
 /// Where all the caches reside
 pub struct CacheManager {
@@ -49,11 +53,11 @@ impl CacheManager {
                 tenant_id: config.tenant_id.clone(),
             }
         } else {
-            let table_snapshot_cache = Self::with_capacity(config.table_cache_snapshot_count);
-            let segment_info_cache = Self::with_capacity(config.table_cache_segment_count);
-            let bloom_index_cache = Self::with_capacity(DEFAULT_BLOOM_INDEX_META_CACHE_ITEMS);
+            let table_snapshot_cache = Self::new_item_cache(config.table_cache_snapshot_count);
+            let segment_info_cache = Self::new_item_cache(config.table_cache_segment_count);
+            let bloom_index_cache = Self::new_bytes_cache(DEFAULT_BLOOM_INDEX_META_CACHE_ITEMS);
             let bloom_index_meta_cache =
-                Self::with_capacity(DEFAULT_BLOOM_INDEX_COLUMN_CACHE_ITEMS);
+                Self::new_item_cache(DEFAULT_BLOOM_INDEX_COLUMN_CACHE_SIZE);
             Self {
                 table_snapshot_cache,
                 segment_info_cache,
@@ -89,9 +93,17 @@ impl CacheManager {
         self.cluster_id.as_str()
     }
 
-    fn with_capacity<T>(capacity: u64) -> Option<MemoryCache<T>> {
+    fn new_item_cache<T>(capacity: u64) -> Option<ItemCache<T>> {
         if capacity > 0 {
-            Some(new_memory_cache(capacity))
+            Some(new_item_cache(capacity))
+        } else {
+            None
+        }
+    }
+
+    fn new_bytes_cache(capacity: u64) -> Option<BytesCache> {
+        if capacity > 0 {
+            Some(new_bytes_cache(capacity))
         } else {
             None
         }

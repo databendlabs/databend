@@ -16,6 +16,8 @@ use std::sync::Arc;
 
 use common_arrow::parquet::metadata::FileMetaData;
 use common_base::base::tokio::sync::RwLock;
+use common_cache::BytesMeter;
+use common_cache::Cache;
 use common_cache::Count;
 use common_cache::DefaultHashBuilder;
 use common_cache::LruCache;
@@ -23,17 +25,26 @@ use common_cache::LruCache;
 use crate::meta::SegmentInfo;
 use crate::meta::TableSnapshot;
 
-pub type MemoryCache<V> = Arc<RwLock<LruCache<String, Arc<V>, DefaultHashBuilder, Count>>>;
+// cache meters by counting number of items
+pub type ItemCache<V> = Arc<RwLock<LruCache<String, Arc<V>, DefaultHashBuilder, Count>>>;
 
-pub fn new_memory_cache<V>(capacity: u64) -> MemoryCache<V> {
+// cache meters by bytes
+pub type BytesCache = Arc<RwLock<LruCache<String, Arc<Vec<u8>>, DefaultHashBuilder, BytesMeter>>>;
+
+pub fn new_item_cache<V>(capacity: u64) -> ItemCache<V> {
     Arc::new(RwLock::new(LruCache::new(capacity)))
 }
 
-pub type SegmentInfoCache = MemoryCache<SegmentInfo>;
-pub type TableSnapshotCache = MemoryCache<TableSnapshot>;
+pub fn new_bytes_cache(capacity: u64) -> BytesCache {
+    let c = LruCache::with_meter_and_hasher(capacity, BytesMeter, DefaultHashBuilder::new());
+    Arc::new(RwLock::new(c))
+}
+
+pub type SegmentInfoCache = ItemCache<SegmentInfo>;
+pub type TableSnapshotCache = ItemCache<TableSnapshot>;
 /// Cache bloom filter.
-/// Each cache item per column, per block
-pub type BloomIndexCache = MemoryCache<Vec<u8>>;
-/// FileMetaCache of bloom filter index data
+/// For each index block, columns are cached individually.
+pub type BloomIndexCache = BytesCache;
+/// FileMetaCache of bloom filter index data.
 /// Each cache item per block
-pub type BloomIndexMetaCache = MemoryCache<FileMetaData>;
+pub type BloomIndexMetaCache = ItemCache<FileMetaData>;
