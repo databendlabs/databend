@@ -9,6 +9,11 @@ inputs:
     description: ""
     required: true
     default: "x86_64-unknown-linux-gnu"
+  dirs:
+    description: "logic test suites dirs"
+    required: true
+    default: ""
+  
 runs:
   using: "composite"
   steps:
@@ -27,7 +32,7 @@ runs:
     - name: Run sqllogic Tests with Standalone mode with embedded meta-store
       shell: bash
       run: |
-        bash ./scripts/ci/ci-run-sqllogic-tests.sh
+        bash ./scripts/ci/ci-run-sqllogic-tests.sh ${{ inputs.dirs }}
 
     # - name: Upload failure
     #   if: failure()

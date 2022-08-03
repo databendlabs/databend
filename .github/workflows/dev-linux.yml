@@ -120,13 +120,25 @@ jobs:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_stateless_cluster_linux
 
-  test_sqllogic_standalone_linux:
-    timeout-minutes: 20
+  test_sqllogic_base_standalone_linux:
+    timeout-minutes: 10
     runs-on: [self-hosted, X64, Linux, development]
     needs: build_gnu
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_sqllogic_standalone_linux
+        with:
+          dirs: "gen query"
+
+  test_sqllogic_ydb_standalone_linux:
+    timeout-minutes: 10
+    runs-on: [self-hosted, X64, Linux, development]
+    needs: build_gnu
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ./.github/actions/test_sqllogic_standalone_linux
+        with:
+          dirs: "ydb"
 
   test_stateful_standalone_linux:
     timeout-minutes: 10
