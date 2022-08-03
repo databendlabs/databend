@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_base::base::Runtime;
 use common_base::base::TrySpawn;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
@@ -88,8 +89,8 @@ impl BlockPruner {
 
         // 2. kick off
         //
-        // To make the pruning process more parallel (not just concurrent), we explicitly spawn
-        // pruning tasks in (the multi-threaded) storage runtime.
+        // As suggested by Winter, to make the pruning process more parallel (not just concurrent),
+        // we create a dedicated runtime for pruning tasks.
         //
         // NOTE:
         // A. To simplify things, an optimistic way of error handling is taken: errors are handled
@@ -98,7 +99,10 @@ impl BlockPruner {
         //
         // B. since limiter is working concurrently, we arrange some checks among the pruning,
         //    to avoid heavy io operation vainly,
-        let storage_runtime = ctx.get_storage_runtime();
+        let pruning_runtime = Runtime::with_worker_threads(
+            ctx.get_settings().get_max_threads()? as usize,
+            Some("pruning-worker".to_owned()),
+        )?;
         let mut join_handlers = Vec::with_capacity(segment_locs.len());
         for (idx, (seg_loc, ver)) in segment_locs.into_iter().enumerate() {
             let ctx = ctx.clone();
@@ -138,7 +142,7 @@ impl BlockPruner {
                 Ok::<_, ErrorCode>(result)
             }
             .instrument(tracing::debug_span!("filter_segment_with_storage_rt"));
-            join_handlers.push(storage_runtime.spawn(segment_pruning_fut));
+            join_handlers.push(pruning_runtime.try_spawn(segment_pruning_fut)?);
         }
 
         let joint = future::try_join_all(join_handlers)

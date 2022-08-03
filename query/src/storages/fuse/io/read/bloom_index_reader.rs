@@ -70,6 +70,11 @@ impl BlockBloomFilterIndexReader for Location {
 }
 
 mod util_v1 {
+    use std::future::Future;
+
+    use common_base::base::Runtime;
+    use common_base::base::TrySpawn;
+
     use super::*;
 
     /// load index column data
@@ -186,6 +191,7 @@ mod util_v1 {
         path: &str,
         dal: &Operator,
     ) -> Result<(Arc<Vec<u8>>, usize)> {
+        let storage_runtime = &ctx.get_storage_runtime();
         let cols = file_meta.row_groups[0].columns();
         if let Some((idx, col_meta)) = cols
             .iter()
@@ -199,18 +205,34 @@ mod util_v1 {
                 if let Some(bytes) = cache.get(&cache_key) {
                     Ok((bytes.clone(), idx))
                 } else {
-                    let bytes = load_index_column_data_from_storage(col_meta, dal, path).await?;
-                    let bytes = Arc::new(bytes);
+                    let bytes = Arc::new(
+                        // As suggested by Winter, execute task of loading data in storage runtime
+                        load_index_column_data_from_storage(
+                            col_meta.clone(),
+                            dal.clone(),
+                            path.to_owned(),
+                        )
+                        .execute_in_runtime(&storage_runtime)
+                        .await??,
+                    );
                     cache.put(cache_key, bytes.clone());
                     Ok((bytes, idx))
                 }
             } else {
-                let bytes = load_index_column_data_from_storage(col_meta, dal, path).await?;
-                Ok((Arc::new(bytes), idx))
+                let bytes = Arc::new(
+                    load_index_column_data_from_storage(
+                        col_meta.clone(),
+                        dal.clone(),
+                        path.to_owned(),
+                    )
+                    .execute_in_runtime(&storage_runtime)
+                    .await??,
+                );
+                Ok((bytes, idx))
             }
         } else {
             Err(ErrorCode::LogicalError(format!(
-                "failed to load bloom index column. no such column {col_name}"
+                "failed to find bloom index column. no such column {col_name}"
             )))
         }
     }
@@ -223,6 +245,7 @@ mod util_v1 {
         path: &str,
         dal: &Operator,
     ) -> Result<Arc<FileMetaData>> {
+        let storage_runtime = ctx.get_storage_runtime();
         if let Some(bloom_index_meta_cache) =
             ctx.get_storage_cache_manager().get_bloom_index_meta_cache()
         {
@@ -230,19 +253,25 @@ mod util_v1 {
             if let Some(file_meta) = cache.get(path) {
                 Ok(file_meta.clone())
             } else {
-                let file_meta = Arc::new(load_index_meta_from_storage(dal, path).await?);
+                let file_meta = load_index_meta_from_storage(dal.clone(), path.to_owned())
+                    .execute_in_runtime(&storage_runtime)
+                    .await??;
+                let file_meta = Arc::new(file_meta);
                 cache.put(path.to_owned(), file_meta.clone());
                 Ok(file_meta)
             }
         } else {
-            let file_meta = Arc::new(load_index_meta_from_storage(dal, path).await?);
+            let file_meta = load_index_meta_from_storage(dal.clone(), path.to_owned())
+                .execute_in_runtime(&storage_runtime)
+                .await??;
+            let file_meta = Arc::new(file_meta);
             Ok(file_meta)
         }
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
-    async fn load_index_meta_from_storage(dal: &Operator, path: &str) -> Result<FileMetaData> {
-        let object = dal.object(path);
+    async fn load_index_meta_from_storage(dal: Operator, path: String) -> Result<FileMetaData> {
+        let object = dal.object(&path);
         let mut reader = object.seekable_reader(0..);
         let file_meta = read_metadata_async(&mut reader).await?;
         Ok(file_meta)
@@ -250,17 +279,38 @@ mod util_v1 {
 
     #[tracing::instrument(level = "debug", skip_all)]
     async fn load_index_column_data_from_storage(
-        col_meta: &ColumnChunkMetaData,
-        dal: &Operator,
-        path: &str,
+        col_meta: ColumnChunkMetaData,
+        dal: Operator,
+        path: String,
     ) -> Result<Vec<u8>> {
         let chunk_meta = col_meta.metadata();
         let chunk_offset = chunk_meta.data_page_offset as u64;
         let col_len = chunk_meta.total_compressed_size as u64;
-        let column_reader = dal.object(path);
+        let column_reader = dal.object(&path);
         let bytes = column_reader
             .range_read(chunk_offset..chunk_offset + col_len)
             .await?;
         Ok(bytes)
+    }
+
+    #[async_trait::async_trait]
+    trait InRuntime
+    where Self: Future
+    {
+        async fn execute_in_runtime(self, runtime: &Runtime) -> Result<Self::Output>;
+    }
+
+    #[async_trait::async_trait]
+    impl<T> InRuntime for T
+    where
+        T: Future + Send + 'static,
+        T::Output: Send + 'static,
+    {
+        async fn execute_in_runtime(self, runtime: &Runtime) -> Result<T::Output> {
+            runtime
+                .try_spawn(self)?
+                .await
+                .map_err(|e| ErrorCode::TokioError(format!("runtime join error. {}", e)))
+        }
     }
 }
