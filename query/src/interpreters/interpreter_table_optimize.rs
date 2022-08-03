@@ -41,10 +41,7 @@ impl Interpreter for OptimizeTableInterpreter {
         "OptimizeTableInterpreter"
     }
 
-    async fn execute(
-        &self,
-        _input_stream: Option<SendableDataBlockStream>,
-    ) -> Result<SendableDataBlockStream> {
+    async fn execute(&self) -> Result<SendableDataBlockStream> {
         let plan = &self.plan;
         let mut table = self
             .ctx

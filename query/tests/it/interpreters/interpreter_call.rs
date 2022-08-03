@@ -33,7 +33,7 @@ async fn test_call_interpreter() -> Result<()> {
     let (plan, _, _) = planner.plan_sql(query).await?;
     let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
     assert_eq!(executor.name(), "CallInterpreter");
-    let res = executor.execute(None).await;
+    let res = executor.execute().await;
     assert_eq!(res.is_err(), true);
     assert_eq!(
         res.err().unwrap().code(),
@@ -53,7 +53,7 @@ async fn test_call_fuse_snapshot_interpreter() -> Result<()> {
         let (plan, _, _) = planner.plan_sql(query).await?;
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         assert_eq!(executor.name(), "CallInterpreter");
-        let res = executor.execute(None).await;
+        let res = executor.execute().await;
         assert_eq!(res.is_err(), true);
         let expect = "Code: 1028, displayText = Function `FUSE_SNAPSHOT` expect to have [2, 3] arguments, but got 0.";
         assert_eq!(expect, res.err().unwrap().to_string());
@@ -65,7 +65,7 @@ async fn test_call_fuse_snapshot_interpreter() -> Result<()> {
         let (plan, _, _) = planner.plan_sql(query).await?;
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         assert_eq!(executor.name(), "CallInterpreter");
-        let res = executor.execute(None).await;
+        let res = executor.execute().await;
         assert_eq!(res.is_err(), true);
         assert_eq!(
             res.err().unwrap().code(),
@@ -79,7 +79,7 @@ async fn test_call_fuse_snapshot_interpreter() -> Result<()> {
         let (plan, _, _) = planner.plan_sql(query).await?;
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         assert_eq!(executor.name(), "CallInterpreter");
-        let res = executor.execute(None).await;
+        let res = executor.execute().await;
         assert_eq!(res.is_err(), true);
         let expect =
             "Code: 1015, displayText = expects table of engine FUSE, but got SystemTables.";
@@ -94,7 +94,7 @@ async fn test_call_fuse_snapshot_interpreter() -> Result<()> {
 
         let (plan, _, _) = planner.plan_sql(query).await?;
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
-        let _ = executor.execute(None).await?;
+        let _ = executor.execute().await?;
     }
 
     // FuseHistory
@@ -102,7 +102,7 @@ async fn test_call_fuse_snapshot_interpreter() -> Result<()> {
         let query = "call system$fuse_snapshot(default, a)";
         let (plan, _, _) = planner.plan_sql(query).await?;
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
-        let _ = executor.execute(None).await?;
+        let _ = executor.execute().await?;
     }
 
     Ok(())
@@ -119,7 +119,7 @@ async fn test_call_clustering_information_interpreter() -> Result<()> {
         let (plan, _, _) = planner.plan_sql(query).await?;
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         assert_eq!(executor.name(), "CallInterpreter");
-        let res = executor.execute(None).await;
+        let res = executor.execute().await;
         assert_eq!(res.is_err(), true);
         let expect = "Code: 1028, displayText = Function `CLUSTERING_INFORMATION` expect to have 2 arguments, but got 0.";
         assert_eq!(expect, res.err().unwrap().to_string());
@@ -131,7 +131,7 @@ async fn test_call_clustering_information_interpreter() -> Result<()> {
         let (plan, _, _) = planner.plan_sql(query).await?;
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         assert_eq!(executor.name(), "CallInterpreter");
-        let res = executor.execute(None).await;
+        let res = executor.execute().await;
         assert_eq!(res.is_err(), true);
         assert_eq!(
             res.err().unwrap().code(),
@@ -145,7 +145,7 @@ async fn test_call_clustering_information_interpreter() -> Result<()> {
         let (plan, _, _) = planner.plan_sql(query).await?;
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         assert_eq!(executor.name(), "CallInterpreter");
-        let res = executor.execute(None).await;
+        let res = executor.execute().await;
         assert_eq!(res.is_err(), true);
         let expect =
             "Code: 1015, displayText = expects table of engine FUSE, but got SystemTables.";
@@ -160,7 +160,7 @@ async fn test_call_clustering_information_interpreter() -> Result<()> {
 
         let (plan, _, _) = planner.plan_sql(query).await?;
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
-        let _ = executor.execute(None).await?;
+        let _ = executor.execute().await?;
     }
 
     // Unclustered.
@@ -168,7 +168,7 @@ async fn test_call_clustering_information_interpreter() -> Result<()> {
         let query = "call system$clustering_information(default, a)";
         let (plan, _, _) = planner.plan_sql(query).await?;
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
-        let res = executor.execute(None).await;
+        let res = executor.execute().await;
         assert_eq!(res.is_err(), true);
         let expect =
             "Code: 1081, displayText = Invalid clustering keys or table a is not clustered.";
@@ -183,7 +183,7 @@ async fn test_call_clustering_information_interpreter() -> Result<()> {
 
         let (plan, _, _) = planner.plan_sql(query).await?;
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
-        let _ = executor.execute(None).await?;
+        let _ = executor.execute().await?;
     }
 
     // FuseHistory
@@ -191,7 +191,7 @@ async fn test_call_clustering_information_interpreter() -> Result<()> {
         let query = "call system$clustering_information(default, b)";
         let (plan, _, _) = planner.plan_sql(query).await?;
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
-        let _ = executor.execute(None).await?;
+        let _ = executor.execute().await?;
     }
 
     Ok(())
@@ -207,7 +207,7 @@ async fn test_call_bootstrap_tenant_interpreter() -> Result<()> {
         let query = "call admin$bootstrap_tenant()";
         let (plan, _, _) = planner.plan_sql(query).await?;
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
-        let res = executor.execute(None).await;
+        let res = executor.execute().await;
         assert_eq!(res.is_err(), true);
         let expect = "Code: 1028, displayText = Function `BOOTSTRAP_TENANT` expect to have 1 arguments, but got 0.";
         assert_eq!(expect, res.err().unwrap().to_string());
@@ -218,7 +218,7 @@ async fn test_call_bootstrap_tenant_interpreter() -> Result<()> {
         let query = "call admin$bootstrap_tenant(tenant1)";
         let (plan, _, _) = planner.plan_sql(query).await?;
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
-        let res = executor.execute(None).await;
+        let res = executor.execute().await;
         assert_eq!(res.is_err(), true);
         let expect = "Code: 1062, displayText = Access denied: 'BOOTSTRAP_TENANT' only used in management-mode.";
         assert_eq!(expect, res.err().unwrap().to_string());
@@ -234,7 +234,7 @@ async fn test_call_bootstrap_tenant_interpreter() -> Result<()> {
         let query = "call admin$bootstrap_tenant(tenant1)";
         let (plan, _, _) = planner.plan_sql(query).await?;
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
-        let res = executor.execute(None).await;
+        let res = executor.execute().await;
         assert_eq!(res.is_err(), true);
         let expect = "Code: 1063, displayText = Access denied: 'BOOTSTRAP_TENANT' requires user TENANTSETTING option flag.";
         assert_eq!(expect, res.err().unwrap().to_string());
@@ -251,7 +251,7 @@ async fn test_call_bootstrap_tenant_interpreter() -> Result<()> {
         let query = "call admin$bootstrap_tenant(tenant1)";
         let (plan, _, _) = planner.plan_sql(query).await?;
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
-        executor.execute(None).await?;
+        executor.execute().await?;
 
         let user_mgr = ctx.get_user_manager();
         // should create account admin role
@@ -270,7 +270,7 @@ async fn test_call_bootstrap_tenant_interpreter() -> Result<()> {
         let query = "call admin$bootstrap_tenant(tenant1)";
         let (plan, _, _) = planner.plan_sql(query).await?;
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
-        executor.execute(None).await?;
+        executor.execute().await?;
         let user_mgr = ctx.get_user_manager();
         // should create account admin role
         let role = "account_admin".to_string();
@@ -296,7 +296,7 @@ async fn test_call_tenant_quota_interpreter() -> Result<()> {
         let query = "call admin$tenant_quota(tenant1)";
         let (plan, _, _) = planner.plan_sql(query).await?;
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
-        let res = executor.execute(None).await;
+        let res = executor.execute().await;
         assert_eq!(res.is_err(), true);
         let expect =
             "Code: 1062, displayText = Access denied: 'TENANT_QUOTA' only used in management-mode.";
@@ -317,7 +317,7 @@ async fn test_call_tenant_quota_interpreter() -> Result<()> {
         let query = "call admin$tenant_quota()";
         let (plan, _, _) = planner.plan_sql(query).await?;
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
-        let stream = executor.execute(None).await?;
+        let stream = executor.execute().await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
             "+---------------+-------------------------+------------+---------------------+",
@@ -334,7 +334,7 @@ async fn test_call_tenant_quota_interpreter() -> Result<()> {
         let query = "call admin$tenant_quota(tenant1)";
         let (plan, _, _) = planner.plan_sql(query).await?;
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
-        let stream = executor.execute(None).await?;
+        let stream = executor.execute().await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
             "+---------------+-------------------------+------------+---------------------+",
@@ -351,7 +351,7 @@ async fn test_call_tenant_quota_interpreter() -> Result<()> {
         let query = "call admin$tenant_quota(tenant1, 7, 5, 3, 3)";
         let (plan, _, _) = planner.plan_sql(query).await?;
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
-        let stream = executor.execute(None).await?;
+        let stream = executor.execute().await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
             "+---------------+-------------------------+------------+---------------------+",
@@ -367,7 +367,7 @@ async fn test_call_tenant_quota_interpreter() -> Result<()> {
         let query = "call admin$tenant_quota(tenant1, 8)";
         let (plan, _, _) = planner.plan_sql(query).await?;
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
-        let stream = executor.execute(None).await?;
+        let stream = executor.execute().await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
             "+---------------+-------------------------+------------+---------------------+",
@@ -383,7 +383,7 @@ async fn test_call_tenant_quota_interpreter() -> Result<()> {
         let query = "call admin$tenant_quota(tenant1)";
         let (plan, _, _) = planner.plan_sql(query).await?;
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
-        let stream = executor.execute(None).await?;
+        let stream = executor.execute().await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
             "+---------------+-------------------------+------------+---------------------+",
@@ -400,7 +400,7 @@ async fn test_call_tenant_quota_interpreter() -> Result<()> {
         let query = "call admin$tenant_quota()";
         let (plan, _, _) = planner.plan_sql(query).await?;
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
-        let stream = executor.execute(None).await?;
+        let stream = executor.execute().await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
             "+---------------+-------------------------+------------+---------------------+",
@@ -426,7 +426,7 @@ async fn test_call_stats_tenant_tables_interpreter() -> Result<()> {
         let (plan, _, _) = planner.plan_sql(query).await?;
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         assert_eq!(executor.name(), "CallInterpreter");
-        let res = executor.execute(None).await;
+        let res = executor.execute().await;
         assert_eq!(res.is_err(), true);
         let expect = "Code: 1028, displayText = Function `TENANT_TABLES` expect to have [1, 18446744073709551614] arguments, but got 0.";
         assert_eq!(expect, res.err().unwrap().to_string());
@@ -437,7 +437,7 @@ async fn test_call_stats_tenant_tables_interpreter() -> Result<()> {
         let query = "call stats$tenant_tables(tenant1)";
         let (plan, _, _) = planner.plan_sql(query).await?;
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
-        let res = executor.execute(None).await;
+        let res = executor.execute().await;
         assert_eq!(res.is_err(), true);
         let expect = "Code: 1062, displayText = Access denied: 'TENANT_TABLES' only used in management-mode.";
         assert_eq!(expect, res.err().unwrap().to_string());
@@ -456,7 +456,7 @@ async fn test_call_stats_tenant_tables_interpreter() -> Result<()> {
         let query = "call stats$tenant_tables(tenant1, tenant2, tenant3)";
         let (plan, _, _) = planner.plan_sql(query).await?;
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
-        let stream = executor.execute(None).await?;
+        let stream = executor.execute().await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
             "+-----------+-------------+",
