@@ -52,7 +52,8 @@ pub struct StageTable {
 
 impl StageTable {
     pub fn try_create(table_info: StageTableInfo) -> Result<Arc<dyn Table>> {
-        let table_info_placeholder = TableInfo::default();
+        let table_info_placeholder = TableInfo::default().set_schema(table_info.schema());
+
         Ok(Arc::new(Self {
             table_info,
             table_info_placeholder,
@@ -175,6 +176,7 @@ impl Table for StageTable {
                     format_options.record_delimiter.as_bytes().to_vec();
             }
         }
+
         let mut output_format = fmt.create_format(self.table_info.schema(), format_settings);
 
         let prefix = output_format.serialize_prefix()?;

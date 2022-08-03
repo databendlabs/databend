@@ -219,7 +219,11 @@ impl CopyInterpreterV2 {
         )?;
         commit2table(self.ctx.clone(), table.clone(), false).await?;
 
-        Ok(Box::pin(DataBlockStream::create(data_schema, None, vec![])))
+        Ok(Box::pin(DataBlockStream::create(
+            Arc::new(DataSchema::empty()),
+            None,
+            vec![],
+        )))
     }
 }
 
