@@ -25,23 +25,25 @@ use pretty_assertions::assert_eq;
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_drop_user_interpreter() -> Result<()> {
     let ctx = crate::tests::create_query_context().await?;
+    let mut planner = Planner::new(ctx.clone());
+
     let tenant = ctx.get_tenant();
 
     {
         let query = "DROP USER 'test'@'localhost'";
-        let plan = PlanParser::parse(ctx.clone(), query).await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         assert_eq!(executor.name(), "DropUserInterpreter");
-        let ret = executor.execute(None).await;
+        let ret = executor.execute().await;
         assert!(ret.is_err())
     }
 
     {
         let query = "DROP USER IF EXISTS 'test'@'localhost'";
-        let plan = PlanParser::parse(ctx.clone(), query).await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         assert_eq!(executor.name(), "DropUserInterpreter");
-        let ret = executor.execute(None).await;
+        let ret = executor.execute().await;
         assert!(ret.is_ok())
     }
 
@@ -65,10 +67,10 @@ async fn test_drop_user_interpreter() -> Result<()> {
         );
 
         let query = "DROP USER 'test'@'localhost'";
-        let plan = PlanParser::parse(ctx.clone(), query).await?;
-        let executor = InterpreterFactory::get(ctx, plan.clone())?;
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         assert_eq!(executor.name(), "DropUserInterpreter");
-        executor.execute(None).await?;
+        executor.execute().await?;
     }
 
     Ok(())

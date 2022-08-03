@@ -44,10 +44,11 @@ impl Interpreter for ExplainInterpreterV2 {
         "ExplainInterpreterV2"
     }
 
-    async fn execute(
-        &self,
-        _input_stream: Option<SendableDataBlockStream>,
-    ) -> Result<SendableDataBlockStream> {
+    fn schema(&self) -> DataSchemaRef {
+        self.schema.clone()
+    }
+
+    async fn execute(&self) -> Result<SendableDataBlockStream> {
         let blocks = match &self.kind {
             ExplainKind::Syntax => self.explain_syntax(&self.plan)?,
             ExplainKind::Pipeline => match &self.plan {

@@ -24,15 +24,15 @@ use pretty_assertions::assert_eq;
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_create_udf_interpreter() -> Result<()> {
     let ctx = crate::tests::create_query_context().await?;
+    let mut planner = Planner::new(ctx.clone());
     let tenant = ctx.get_tenant();
 
-    let query = "CREATE FUNCTION IF NOT EXISTS isnotempty AS (p) -> not(is_null(p)) DESC = 'This is a description'";
-
     {
-        let plan = PlanParser::parse(ctx.clone(), query).await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let query = "CREATE FUNCTION IF NOT EXISTS isnotempty AS (p) -> not(is_null(p)) DESC = 'This is a description'";
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         assert_eq!(executor.name(), "CreateUserUDFInterpreter");
-        let mut stream = executor.execute(None).await?;
+        let mut stream = executor.execute().await?;
         while let Some(_block) = stream.next().await {}
         let udf = ctx
             .get_user_manager()
@@ -41,15 +41,16 @@ async fn test_create_udf_interpreter() -> Result<()> {
 
         assert_eq!(udf.name, "isnotempty");
         assert_eq!(udf.parameters, vec!["p".to_string()]);
-        assert_eq!(udf.definition, "not(is_null(p))");
+        assert_eq!(udf.definition, "NOT is_null(p)");
         assert_eq!(udf.description, "This is a description")
     }
 
+    // IF NOT EXISTS.
     {
-        // IF NOT EXISTS.
-        let plan = PlanParser::parse(ctx.clone(), query).await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        executor.execute(None).await?;
+        let query = "CREATE FUNCTION IF NOT EXISTS isnotempty AS (p) -> not(is_null(p)) DESC = 'This is a description'";
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        executor.execute().await?;
 
         let udf = ctx
             .get_user_manager()
@@ -58,16 +59,16 @@ async fn test_create_udf_interpreter() -> Result<()> {
 
         assert_eq!(udf.name, "isnotempty");
         assert_eq!(udf.parameters, vec!["p".to_string()]);
-        assert_eq!(udf.definition, "not(is_null(p))");
+        assert_eq!(udf.definition, "NOT is_null(p)");
         assert_eq!(udf.description, "This is a description")
     }
 
     {
-        let query1 =
+        let query =
             "CREATE FUNCTION isnotempty AS (p) -> not(is_null(p)) DESC = 'This is a description'";
-        let plan = PlanParser::parse(ctx.clone(), query1).await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        let r = executor.execute(None).await;
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let r = executor.execute().await;
         assert!(r.is_err());
         let e = r.err();
         assert_eq!(e.unwrap().code(), ErrorCode::udf_already_exists_code());
@@ -79,7 +80,7 @@ async fn test_create_udf_interpreter() -> Result<()> {
 
         assert_eq!(udf.name, "isnotempty");
         assert_eq!(udf.parameters, vec!["p".to_string()]);
-        assert_eq!(udf.definition, "not(is_null(p))");
+        assert_eq!(udf.definition, "NOT is_null(p)");
         assert_eq!(udf.description, "This is a description")
     }
     Ok(())

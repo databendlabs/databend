@@ -15,19 +15,21 @@
 use common_base::base::tokio;
 use common_exception::Result;
 use databend_query::interpreters::*;
-use databend_query::sql::PlanParser;
+use databend_query::sql::Planner;
 use futures::stream::StreamExt;
 use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_setting_interpreter() -> Result<()> {
     let ctx = crate::tests::create_query_context().await?;
+    let mut planner = Planner::new(ctx.clone());
 
-    let plan = PlanParser::parse(ctx.clone(), "SET max_block_size=1").await?;
-    let executor = InterpreterFactory::get(ctx.clone(), plan)?;
+    let query = "SET max_block_size=1";
+    let (plan, _, _) = planner.plan_sql(query).await?;
+    let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
     assert_eq!(executor.name(), "SettingInterpreter");
 
-    let mut stream = executor.execute(None).await?;
+    let mut stream = executor.execute().await?;
     while let Some(_block) = stream.next().await {}
 
     Ok(())
@@ -36,10 +38,12 @@ async fn test_setting_interpreter() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_setting_interpreter_error() -> Result<()> {
     let ctx = crate::tests::create_query_context().await?;
+    let mut planner = Planner::new(ctx.clone());
 
-    let plan = PlanParser::parse(ctx.clone(), "SET max_block_size=1").await?;
-    let executor = InterpreterFactory::get(ctx.clone(), plan)?;
-    if let Err(e) = executor.execute(None).await {
+    let query = "SET max_block_size=1";
+    let (plan, _, _) = planner.plan_sql(query).await?;
+    let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+    if let Err(e) = executor.execute().await {
         let expect = "Code: 1020, displayText = Unknown variable: \"xx\".";
         assert_eq!(expect, e.to_string());
     }

@@ -177,6 +177,7 @@ pub fn contain_subquery(scalar: &Scalar) -> bool {
         Scalar::FunctionCall(FunctionCall { arguments, .. }) => {
             arguments.iter().any(contain_subquery)
         }
+        Scalar::CastExpr(CastExpr { argument, .. }) => contain_subquery(argument),
         _ => false,
     }
 }

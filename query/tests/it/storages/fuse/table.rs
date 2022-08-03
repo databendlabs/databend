@@ -29,9 +29,9 @@ use databend_query::interpreters::AlterTableClusterKeyInterpreter;
 use databend_query::interpreters::CreateTableInterpreter;
 use databend_query::interpreters::DropTableClusterKeyInterpreter;
 use databend_query::interpreters::Interpreter;
-use databend_query::interpreters::InterpreterFactory;
+use databend_query::interpreters::InterpreterFactoryV2;
 use databend_query::sessions::TableContext;
-use databend_query::sql::PlanParser;
+use databend_query::sql::Planner;
 use databend_query::sql::OPT_KEY_DATABASE_ID;
 use databend_query::sql::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_query::storages::fuse::io::MetaReaders;
@@ -49,7 +49,7 @@ async fn test_fuse_table_normal_case() -> Result<()> {
 
     let create_table_plan = fixture.default_crate_table_plan();
     let interpreter = CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;
-    interpreter.execute(None).await?;
+    interpreter.execute().await?;
 
     let mut table = fixture.latest_default_table().await?;
 
@@ -176,7 +176,7 @@ async fn test_fuse_table_truncate() -> Result<()> {
 
     let create_table_plan = fixture.default_crate_table_plan();
     let interpreter = CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;
-    interpreter.execute(None).await?;
+    interpreter.execute().await?;
 
     let table = fixture.latest_default_table().await?;
     let truncate_plan = TruncateTablePlan {
@@ -241,6 +241,7 @@ async fn test_fuse_table_truncate() -> Result<()> {
 async fn test_fuse_table_optimize() -> Result<()> {
     let fixture = TestFixture::new().await;
     let ctx = fixture.ctx();
+    let mut planner = Planner::new(ctx.clone());
 
     let create_table_plan = fixture.default_crate_table_plan();
 
@@ -248,7 +249,7 @@ async fn test_fuse_table_optimize() -> Result<()> {
     let tbl_name = create_table_plan.table.clone();
     let db_name = create_table_plan.database.clone();
     let interpreter = CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;
-    interpreter.execute(None).await?;
+    interpreter.execute().await?;
 
     // insert 5 times
     let n = 5;
@@ -270,8 +271,8 @@ async fn test_fuse_table_optimize() -> Result<()> {
     // do compact
     let query = format!("optimize table {}.{} compact", db_name, tbl_name);
 
-    let plan = PlanParser::parse(ctx.clone(), &query).await?;
-    let interpreter = InterpreterFactory::get(ctx.clone(), plan)?;
+    let (plan, _, _) = planner.plan_sql(&query).await?;
+    let interpreter = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
 
     // `PipelineBuilder` will parallelize the table reading according to value of setting `max_threads`,
     // and `Table::read` will also try to de-queue read jobs preemptively. thus, the number of blocks
@@ -280,7 +281,7 @@ async fn test_fuse_table_optimize() -> Result<()> {
     // To avoid flaky test, the value of setting `max_threads` is set to be 1, so that pipeline_builder will
     // only arrange one worker for the `ReadDataSourcePlan`.
     ctx.get_settings().set_max_threads(1)?;
-    let data_stream = interpreter.execute(None).await?;
+    let data_stream = interpreter.execute().await?;
     let _ = data_stream.try_collect::<Vec<_>>();
 
     // verify compaction
@@ -321,7 +322,7 @@ async fn test_fuse_alter_table_cluster_key() -> Result<()> {
 
     // create test table
     let interpreter = CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;
-    interpreter.execute(None).await?;
+    interpreter.execute().await?;
 
     // add cluster key
     let alter_table_cluster_key_plan = AlterTableClusterKeyPlan {
@@ -333,7 +334,7 @@ async fn test_fuse_alter_table_cluster_key() -> Result<()> {
     };
     let interpreter =
         AlterTableClusterKeyInterpreter::try_create(ctx.clone(), alter_table_cluster_key_plan)?;
-    interpreter.execute(None).await?;
+    interpreter.execute().await?;
 
     let table = fixture.latest_default_table().await?;
     let table_info = table.get_table_info();
@@ -359,7 +360,7 @@ async fn test_fuse_alter_table_cluster_key() -> Result<()> {
     };
     let interpreter =
         DropTableClusterKeyInterpreter::try_create(ctx.clone(), drop_table_cluster_key_plan)?;
-    interpreter.execute(None).await?;
+    interpreter.execute().await?;
 
     let table = fixture.latest_default_table().await?;
     let table_info = table.get_table_info();

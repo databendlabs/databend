@@ -25,15 +25,16 @@ use crate::expression::Span;
 use crate::function::FunctionRegistry;
 use crate::function::FunctionSignature;
 use crate::types::DataType;
+use crate::Scalar;
 
 pub fn check(ast: &RawExpr, fn_registry: &FunctionRegistry) -> Result<(Expr, DataType)> {
     match ast {
         RawExpr::Literal { span, lit } => {
-            let ty = check_literal(lit);
+            let (scalar, ty) = check_literal(lit);
             Ok((
-                Expr::Literal {
+                Expr::Constant {
                     span: span.clone(),
-                    lit: lit.clone(),
+                    scalar,
                 },
                 ty,
             ))
@@ -128,21 +129,21 @@ fn wrap_nullable_for_try_cast(span: Span, ty: &DataType) -> Result<DataType> {
     }
 }
 
-pub fn check_literal(literal: &Literal) -> DataType {
+pub fn check_literal(literal: &Literal) -> (Scalar, DataType) {
     match literal {
-        Literal::Null => DataType::Null,
-        Literal::Int8(_) => DataType::Int8,
-        Literal::Int16(_) => DataType::Int16,
-        Literal::Int32(_) => DataType::Int32,
-        Literal::Int64(_) => DataType::Int64,
-        Literal::UInt8(_) => DataType::UInt8,
-        Literal::UInt16(_) => DataType::UInt16,
-        Literal::UInt32(_) => DataType::UInt32,
-        Literal::UInt64(_) => DataType::UInt64,
-        Literal::Float32(_) => DataType::Float32,
-        Literal::Float64(_) => DataType::Float64,
-        Literal::Boolean(_) => DataType::Boolean,
-        Literal::String(_) => DataType::String,
+        Literal::Null => (Scalar::Null, DataType::Null),
+        Literal::Int8(v) => (Scalar::Int8(*v), DataType::Int8),
+        Literal::Int16(v) => (Scalar::Int16(*v), DataType::Int16),
+        Literal::Int32(v) => (Scalar::Int32(*v), DataType::Int32),
+        Literal::Int64(v) => (Scalar::Int64(*v), DataType::Int64),
+        Literal::UInt8(v) => (Scalar::UInt8(*v), DataType::UInt8),
+        Literal::UInt16(v) => (Scalar::UInt16(*v), DataType::UInt16),
+        Literal::UInt32(v) => (Scalar::UInt32(*v), DataType::UInt32),
+        Literal::UInt64(v) => (Scalar::UInt64(*v), DataType::UInt64),
+        Literal::Float32(v) => (Scalar::Float32(*v), DataType::Float32),
+        Literal::Float64(v) => (Scalar::Float64(*v), DataType::Float64),
+        Literal::Boolean(v) => (Scalar::Boolean(*v), DataType::Boolean),
+        Literal::String(v) => (Scalar::String(v.clone()), DataType::String),
     }
 }
 

@@ -35,6 +35,7 @@ pub use meta_metrics::incr_meta_metrics_snapshot_send_failures_to_peer;
 pub use meta_metrics::incr_meta_metrics_snapshot_send_inflights_to_peer;
 pub use meta_metrics::incr_meta_metrics_snapshot_send_success_to_peer;
 pub use meta_metrics::incr_meta_metrics_watchers;
+pub use meta_metrics::incr_raft_storage_fail;
 pub use meta_metrics::init_meta_metrics_recorder;
 pub use meta_metrics::meta_metrics_to_prometheus_string;
 pub use meta_metrics::sample_meta_metrics_snapshot_recv;

@@ -20,7 +20,6 @@ use std::sync::Arc;
 
 use async_channel::Sender;
 use common_arrow::arrow_format::flight::data::FlightData;
-use common_base::base::tokio::sync::Notify;
 use common_base::base::tokio::task::JoinHandle;
 use common_base::base::Runtime;
 use common_base::base::Thread;
@@ -30,7 +29,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::PlanNode;
 use futures::StreamExt;
-use futures_util::future::Either;
 use parking_lot::Mutex;
 use parking_lot::ReentrantMutex;
 use tonic::Streaming;
@@ -170,6 +168,9 @@ impl DataExchangeManager {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
         if let Some(mut query_coordinator) = queries_coordinator.remove(query_id) {
+            // Drop mutex guard to avoid deadlock during shutdown,
+            drop(queries_coordinator_guard);
+
             query_coordinator.on_finished(may_error);
         }
     }
@@ -302,8 +303,6 @@ struct QueryCoordinator {
     executor: Option<Arc<PipelineCompleteExecutor>>,
     exchange_senders: Vec<Arc<ExchangeSender>>,
     exchange_receivers: Vec<Arc<ExchangeReceiver>>,
-    subscribe_flight_shutdown_notify: Vec<Arc<Notify>>,
-    subscribe_flight_finished_notify: Vec<Arc<Notify>>,
 }
 
 impl QueryCoordinator {
@@ -337,8 +336,6 @@ impl QueryCoordinator {
                 2,
                 Some(String::from("Cluster-Pub-Sub")),
             )?),
-            subscribe_flight_shutdown_notify: vec![],
-            subscribe_flight_finished_notify: vec![],
         })
     }
 
@@ -400,30 +397,8 @@ impl QueryCoordinator {
             }
         }
 
-        for shutdown_notify in &self.subscribe_flight_shutdown_notify {
-            shutdown_notify.notify_one();
-        }
-
-        for finished_notify in &self.subscribe_flight_finished_notify {
-            let finished_notify = finished_notify.clone();
-            futures::executor::block_on(async move { finished_notify.notified().await });
-        }
-
         // close request server channel.
         drop(self.request_server_tx.take());
-
-        for receiver in &self.exchange_receivers {
-            receiver.shutdown();
-        }
-
-        for receiver in &self.exchange_receivers {
-            let receiver = receiver.clone();
-            futures::executor::block_on(async move {
-                if let Err(cause) = receiver.join().await {
-                    tracing::warn!("Receiver join failure {:?}", cause);
-                }
-            });
-        }
 
         for sender in &self.exchange_senders {
             sender.abort();
@@ -434,6 +409,15 @@ impl QueryCoordinator {
             futures::executor::block_on(async move {
                 if let Err(cause) = sender.join().await {
                     tracing::warn!("Sender join failure {:?}", cause);
+                }
+            });
+        }
+
+        for receiver in &self.exchange_receivers {
+            let receiver = receiver.clone();
+            futures::executor::block_on(async move {
+                if let Err(cause) = receiver.join().await {
+                    tracing::warn!("Receiver join failure {:?}", cause);
                 }
             });
         }
@@ -597,36 +581,31 @@ impl QueryCoordinator {
         mut stream: Streaming<FlightData>,
     ) -> Result<JoinHandle<()>> {
         if let Some(subscribe_channel) = self.subscribe_channel.remove(source) {
+            let ctx = self.ctx.clone();
             let source = source.to_string();
             let target = self.executor_id.clone();
-            let shutdown_notify = Arc::new(Notify::new());
-            let finished_notify = Arc::new(Notify::new());
-            self.subscribe_flight_shutdown_notify
-                .push(shutdown_notify.clone());
-            self.subscribe_flight_finished_notify
-                .push(finished_notify.clone());
+            let query_id = self.query_id.clone();
 
             return Ok(self.runtime.spawn(async move {
-                let mut shutdown_notified = Box::pin(shutdown_notify.notified());
-
-                'fragment_loop: loop {
-                    match futures::future::select(shutdown_notified, stream.next()).await {
-                        Either::Left((_, _)) => {
+                'fragment_loop: while let Some(flight_data) = stream.next().await {
+                    match flight_data {
+                        Err(status) => {
+                            let cause = Some(ErrorCode::from(status));
+                            let exchange_manager = ctx.get_exchange_manager();
+                            exchange_manager.shutdown_query(&query_id, cause).ok();
                             break 'fragment_loop;
                         }
-                        Either::Right((None, _)) => {
-                            break 'fragment_loop;
-                        }
-                        Either::Right((Some(flight_data), n)) => {
-                            shutdown_notified = n;
-
-                            let data_packet = match flight_data {
-                                Err(status) => DataPacket::ErrorCode(ErrorCode::from(status)),
-                                Ok(flight_data) => match DataPacket::try_from(flight_data) {
-                                    Ok(data_packet) => data_packet,
-                                    Err(error_code) => DataPacket::ErrorCode(error_code),
-                                },
+                        Ok(flight_data) => {
+                            let data_packet = match DataPacket::try_from(flight_data) {
+                                Ok(data_packet) => data_packet,
+                                Err(error_code) => DataPacket::ErrorCode(error_code),
                             };
+
+                            if matches!(&data_packet, DataPacket::FinishQuery) {
+                                let exchange_manager = ctx.get_exchange_manager();
+                                exchange_manager.shutdown_query(&query_id, None).ok();
+                                break 'fragment_loop;
+                            }
 
                             if let Err(_cause) = subscribe_channel.send(Ok(data_packet)).await {
                                 tracing::warn!(
@@ -638,10 +617,8 @@ impl QueryCoordinator {
                                 break 'fragment_loop;
                             }
                         }
-                    }
+                    };
                 }
-
-                finished_notify.notify_one();
             }));
         };
 
@@ -665,7 +642,8 @@ impl QueryCoordinator {
         fragment_id: usize,
         schema: DataSchemaRef,
     ) -> Result<PipelineBuildResult> {
-        let (tx, rx) = async_channel::bounded(1);
+        // TODO(Winter): we need to implement back pressure on the network side.
+        let (tx, rx) = async_channel::unbounded();
 
         // Register subscriber for data exchange.
         self.subscribe_fragments

@@ -14,18 +14,26 @@
 
 // The servers module used for external communication with user, such as MySQL wired protocol, etc.
 
+use common_exception::Result;
 use common_settings::Settings;
 
 use crate::interpreters::InterpreterFactoryV2;
+use crate::sql::DfHint;
 use crate::sql::DfStatement;
 
 pub fn use_planner_v2(
     settings: &Settings,
-    stmts: &[DfStatement],
-) -> common_exception::Result<bool> {
-    Ok(settings.get_enable_planner_v2()? != 0
-        && stmts.get(0).map_or(false, InterpreterFactoryV2::check)
-        || stmts
-            .get(0)
-            .map_or(false, InterpreterFactoryV2::enable_default))
+    stmts: &Result<(Vec<DfStatement>, Vec<DfHint>)>,
+) -> Result<bool> {
+    match stmts {
+        Ok((stmts, _)) => Ok(settings.get_enable_planner_v2()? != 0
+            || stmts.get(0).map_or(false, InterpreterFactoryV2::check)),
+        Err(e) => {
+            if settings.get_enable_planner_v2()? != 0 {
+                Ok(true)
+            } else {
+                Err(e.clone())
+            }
+        }
+    }
 }

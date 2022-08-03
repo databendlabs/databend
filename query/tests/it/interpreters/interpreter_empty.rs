@@ -22,25 +22,15 @@ use pretty_assertions::assert_eq;
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_empty_interpreter() -> Result<()> {
     let ctx = crate::tests::create_query_context().await?;
-
-    {
-        let query = "/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */";
-        let plan = PlanParser::parse(ctx.clone(), query).await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan)?;
-        assert_eq!(executor.name(), "EmptyInterpreter");
-
-        let stream = executor.execute(None).await?;
-        let result = stream.try_collect::<Vec<_>>().await;
-        assert!(result.is_ok())
-    }
+    let mut planner = Planner::new(ctx.clone());
 
     {
         let query = "/*!40101*/select number from numbers_mt(1)";
-        let plan = PlanParser::parse(ctx.clone(), query).await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan)?;
-        assert_eq!(executor.name(), "SelectInterpreter");
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        assert_eq!(executor.name(), "SelectInterpreterV2");
 
-        let stream = executor.execute(None).await?;
+        let stream = executor.execute().await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let block = &result[0];
         assert_eq!(block.num_columns(), 1);

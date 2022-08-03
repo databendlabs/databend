@@ -119,7 +119,7 @@ async fn execute_v2(
     let _ = interpreter
         .set_source_pipe_builder(Option::from(source_pipe_builder))
         .map_err(|e| error!("interpreter.set_source_pipe_builder.error: {:?}", e));
-    let data_stream = interpreter.execute(None).await?;
+    let data_stream = interpreter.execute().await?;
 
     let mut data_stream = ctx.try_create_abortable(data_stream)?;
     let format_setting = ctx.get_format_settings()?;
@@ -181,7 +181,7 @@ async fn execute(
         let _ = interpreter
             .set_source_pipe_builder(Option::from(source_pipe_builder))
             .map_err(|e| error!("interpreter.set_source_pipe_builder.error: {:?}", e));
-        interpreter.execute(None).await?
+        interpreter.execute().await?
     };
 
     let mut data_stream = ctx.try_create_abortable(data_stream)?;
@@ -249,22 +249,9 @@ pub async fn clickhouse_handler_get(
         return serialize_one_block(context.clone(), block, &sql, &params, default_format)
             .map_err(InternalServerError);
     }
-
-    let (stmts, _) = DfParser::parse_sql(sql.as_str(), context.get_current_session().get_type())
-        .unwrap_or_else(|_| (vec![], vec![]));
-
     let settings = context.get_settings();
-    if !context.get_config().query.management_mode
-        && (settings
-            .get_enable_planner_v2()
-            .map_err(InternalServerError)?
-            != 0
-            && !stmts.is_empty()
-            && stmts.get(0).map_or(false, InterpreterFactoryV2::check)
-            || stmts
-                .get(0)
-                .map_or(false, InterpreterFactoryV2::enable_default))
-    {
+    let stmts = DfParser::parse_sql(sql.as_str(), context.get_current_session().get_type());
+    if use_planner_v2(&settings, &stmts).map_err(InternalServerError)? {
         let mut planner = Planner::new(context.clone());
         let (plan, _, fmt) = planner.plan_sql(&sql).await.map_err(BadRequest)?;
         let format = get_format_with_default(fmt, default_format)?;
@@ -329,8 +316,7 @@ pub async fn clickhouse_handler_post(
             .map_err(InternalServerError);
     }
 
-    let (stmts, _) = DfParser::parse_sql(sql.as_str(), ctx.get_current_session().get_type())
-        .unwrap_or_else(|_| (vec![], vec![]));
+    let stmts = DfParser::parse_sql(sql.as_str(), ctx.get_current_session().get_type());
     if use_planner_v2(&settings, &stmts).map_err(InternalServerError)? {
         let mut planner = Planner::new(ctx.clone());
         let (plan, _, fmt) = planner.plan_sql(&sql).await.map_err(BadRequest)?;

@@ -1,0 +1,91 @@
+statement ok
+DROP DATABASE IF EXISTS showtabstat;
+
+statement ok
+CREATE DATABASE showtabstat;
+
+statement ok
+CREATE TABLE showtabstat.t1(c1 int) ENGINE = Null;
+
+statement ok
+CREATE TABLE showtabstat.t2(c1 int) ENGINE = Null;
+
+statement ok
+CREATE TABLE showtabstat.t3(c1 int) ENGINE = Null;
+
+statement ok
+USE showtabstat;
+
+
+statement ok 
+SHOW TABLE STATUS;
+
+
+statement ok 
+SHOW TABLE STATUS LIKE 't%';
+
+
+
+statement ok 
+SHOW TABLE STATUS LIKE 't2';
+
+
+statement ok
+SHOW TABLE STATUS LIKE 't';
+
+
+statement ok 
+SHOW TABLE STATUS WHERE Name LIKE 't%';
+
+
+statement ok
+SHOW TABLE STATUS WHERE Name = 't%' AND 1 = 0;
+
+statement ok
+SHOW TABLE STATUS WHERE Name = 't2' OR 1 = 1;
+
+statement ok
+SHOW TABLE STATUS WHERE Name = 't2' AND 1 = 1;
+
+statement ok
+USE default;
+
+
+statement ok 
+SHOW TABLE STATUS FROM showtabstat WHERE Name LIKE 't%';
+
+
+statement ok
+SHOW TABLE STATUS FROM showtabstat WHERE Name = 't%' AND 1 = 0;
+
+
+statement ok 
+SHOW TABLE STATUS FROM showtabstat WHERE Name = 't2' OR 1 = 1;
+
+
+statement ok 
+SHOW TABLE STATUS FROM showtabstat WHERE Name = 't2' AND 1 = 1;
+
+statement ok
+CREATE TABLE showtabstat.t4(c1 int);
+
+
+statement ok
+SHOW TABLE STATUS FROM showtabstat WHERE Name = 't4';
+ 
+statement ok
+insert into showtabstat.t4 values(1);
+
+
+statement ok
+SHOW TABLE STATUS FROM showtabstat WHERE Name = 't4';
+
+statement ok
+SHOW TABLE STATUS FROM showtabstat WHERE engine = 'test'; 
+
+statement ok
+SHOW TABLE STATUS FROM showtabstat WHERE Create_time = 'test'; 
+
+statement ok
+DROP DATABASE IF EXISTS showtabstat;
+

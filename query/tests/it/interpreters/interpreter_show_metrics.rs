@@ -16,19 +16,21 @@ use common_base::base::tokio;
 use common_exception::Result;
 use common_metrics::init_default_metrics_recorder;
 use databend_query::interpreters::*;
-use databend_query::sql::PlanParser;
+use databend_query::sql::Planner;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_show_metrics_interpreter() -> Result<()> {
     init_default_metrics_recorder();
     let ctx = crate::tests::create_query_context().await?;
+    let mut planner = Planner::new(ctx.clone());
 
     // show metrics.
     {
-        let plan = PlanParser::parse(ctx.clone(), "show metrics").await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        assert_eq!(executor.name(), "ShowMetricsInterpreter");
-        let _ = executor.execute(None).await?;
+        let query = "show metrics";
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        assert_eq!(executor.name(), "SelectInterpreterV2");
+        let _ = executor.execute().await?;
     }
 
     Ok(())

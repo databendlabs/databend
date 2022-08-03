@@ -45,10 +45,11 @@ impl Interpreter for ShowCreateTableInterpreter {
         "ShowCreateTableInterpreter"
     }
 
-    async fn execute(
-        &self,
-        _input_stream: Option<SendableDataBlockStream>,
-    ) -> Result<SendableDataBlockStream> {
+    fn schema(&self) -> DataSchemaRef {
+        self.plan.schema()
+    }
+
+    async fn execute(&self) -> Result<SendableDataBlockStream> {
         let tenant = self.ctx.get_tenant();
         let catalog = self.ctx.get_catalog(self.plan.catalog.as_str())?;
 

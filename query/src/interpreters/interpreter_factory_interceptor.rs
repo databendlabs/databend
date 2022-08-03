@@ -15,6 +15,7 @@
 use std::sync::Arc;
 use std::time::SystemTime;
 
+use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 use common_planners::PlanNode;
 use common_streams::ErrorStream;
@@ -63,17 +64,18 @@ impl Interpreter for InterceptorInterpreter {
         self.inner.name()
     }
 
-    async fn execute(
-        &self,
-        input_stream: Option<SendableDataBlockStream>,
-    ) -> Result<SendableDataBlockStream> {
+    fn schema(&self) -> DataSchemaRef {
+        self.inner.schema()
+    }
+
+    async fn execute(&self) -> Result<SendableDataBlockStream> {
         // Management mode access check.
         self.management_mode_access.check(&self.plan)?;
 
         let _ = self
             .inner
             .set_source_pipe_builder((*self.source_pipe_builder.lock()).clone());
-        let result_stream = match self.inner.execute(input_stream).await {
+        let result_stream = match self.inner.execute().await {
             Ok(s) => s,
             Err(e) => {
                 self.ctx.set_error(e.clone());

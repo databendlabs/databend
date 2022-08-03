@@ -47,11 +47,12 @@ impl Interpreter for PresignInterpreter {
         "PresignInterpreter"
     }
 
-    #[tracing::instrument(level = "debug", name = "presign_interpreter_execute", skip(self, _input_stream), fields(ctx.id = self.ctx.get_id().as_str()))]
-    async fn execute(
-        &self,
-        _input_stream: Option<SendableDataBlockStream>,
-    ) -> Result<SendableDataBlockStream> {
+    fn schema(&self) -> DataSchemaRef {
+        self.plan.schema()
+    }
+
+    #[tracing::instrument(level = "debug", name = "presign_interpreter_execute", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
+    async fn execute(&self) -> Result<SendableDataBlockStream> {
         let op = StageSourceHelper::get_op(&self.ctx, &self.plan.stage).await?;
         if !op.metadata().can_presign() {
             return Err(ErrorCode::StorageUnsupported(

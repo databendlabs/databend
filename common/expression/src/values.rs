@@ -21,6 +21,8 @@ use common_arrow::arrow::trusted_len::TrustedLen;
 use enum_as_inner::EnumAsInner;
 use itertools::Itertools;
 use ordered_float::NotNan;
+use serde::Deserialize;
+use serde::Serialize;
 
 use crate::property::BooleanDomain;
 use crate::property::Domain;
@@ -41,7 +43,7 @@ use crate::util::bitmap_into_mut;
 use crate::util::buffer_into_mut;
 use crate::util::constant_bitmap;
 
-#[derive(EnumAsInner)]
+#[derive(EnumAsInner, Clone)]
 pub enum Value<T: ValueType> {
     Scalar(T::Scalar),
     Column(T::Column),
@@ -53,7 +55,7 @@ pub enum ValueRef<'a, T: ValueType> {
     Column(T::Column),
 }
 
-#[derive(Debug, Clone, Default, EnumAsInner)]
+#[derive(Debug, Clone, Default, EnumAsInner, Serialize, Deserialize)]
 pub enum Scalar {
     #[default]
     Null,
@@ -70,6 +72,7 @@ pub enum Scalar {
     Float64(f64),
     Boolean(bool),
     String(Vec<u8>),
+    #[serde(skip)]
     Array(Column),
     Tuple(Vec<Scalar>),
 }
@@ -177,6 +180,13 @@ impl<'a> ValueRef<'a, AnyType> {
             ValueRef::Scalar(scalar) => ValueRef::Scalar(T::try_downcast_scalar(scalar)?),
             ValueRef::Column(col) => ValueRef::Column(T::try_downcast_column(col)?),
         })
+    }
+
+    pub fn index(&self, index: usize) -> Option<ScalarRef<'_>> {
+        match self {
+            ValueRef::Scalar(scalar) => Some(scalar.clone()),
+            ValueRef::Column(col) => col.index(index),
+        }
     }
 }
 

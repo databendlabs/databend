@@ -15,37 +15,25 @@
 use common_base::base::tokio;
 use common_exception::Result;
 use databend_query::interpreters::*;
-use databend_query::sql::PlanParser;
+use databend_query::sql::Planner;
 use futures::TryStreamExt;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_show_settings_interpreter() -> Result<()> {
     let ctx = crate::tests::create_query_context().await?;
+    let mut planner = Planner::new(ctx.clone());
 
     // show settings.
     {
-        let plan = PlanParser::parse(ctx.clone(), "show settings").await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        assert_eq!(executor.name(), "ShowSettingsInterpreter");
+        let query = "show settings";
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        assert_eq!(executor.name(), "SelectInterpreterV2");
 
-        let stream = executor.execute(None).await?;
+        let stream = executor.execute().await?;
         let result = stream.try_collect::<Vec<_>>().await?;
-        // let expected = vec![
-        //     "+------------------------------------+---------+---------+---------+--------------------------------------------------------------------------------------------------------------------------------------------+--------+",
-        //     "| name                               | value   | default | level   | description                                                                                                                                | type   |",
-        //     "+------------------------------------+---------+---------+---------+--------------------------------------------------------------------------------------------------------------------------------------------+--------+",
-        //     "| enable_new_processor_framework     | 1       | 1       | SESSION | Enable new processor framework if value != 0, default value: 1                                                                             | UInt64 |",
-        //     "| flight_client_timeout              | 60      | 60      | SESSION | Max duration the flight client request is allowed to take in seconds. By default, it is 60 seconds                                         | UInt64 |",
-        //     "| max_block_size                     | 10000   | 10000   | SESSION | Maximum block size for reading                                                                                                             | UInt64 |",
-        //     "| max_threads                        | 8       | 16      | SESSION | The maximum number of threads to execute the request. By default, it is determined automatically.                                          | UInt64 |",
-        //     "| storage_occ_backoff_init_delay_ms  | 5       | 5       | SESSION | The initial retry delay in millisecond. By default, it is 5 ms.                                                                            | UInt64 |",
-        //     "| storage_occ_backoff_max_delay_ms   | 20000   | 20000   | SESSION | The maximum  back off delay in millisecond, once the retry interval reaches this value, it stops increasing. By default, it is 20 seconds. | UInt64 |",
-        //     "| storage_occ_backoff_max_elapsed_ms | 120000  | 120000  | SESSION | The maximum elapsed time after the occ starts, beyond which there will be no more retries. By default, it is 2 minutes.                    | UInt64 |",
-        //     "| storage_read_buffer_size           | 1048576 | 1048576 | SESSION | The size of buffer in bytes for buffered reader of dal. By default, it is 1MB.                                                             | UInt64 |",
-        //     "+------------------------------------+---------+---------+---------+--------------------------------------------------------------------------------------------------------------------------------------------+--------+",
-        // ];
         assert!(!result.is_empty());
-        assert!(result[0].num_columns() == 6);
+        assert_eq!(result[0].num_columns(), 6);
         assert!(result[0].num_rows() > 5);
     }
 

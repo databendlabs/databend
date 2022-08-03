@@ -64,7 +64,7 @@ async fn test_fuse_occ_retry() -> Result<()> {
         .await?;
 
     // let's check it out
-    let qry = format!("select * from '{}'.'{}' order by id ", db, tbl);
+    let qry = format!("select * from {}.{} order by id ", db, tbl);
     let blocks = execute_query(ctx.clone(), qry.as_str())
         .await?
         .try_collect::<Vec<DataBlock>>()

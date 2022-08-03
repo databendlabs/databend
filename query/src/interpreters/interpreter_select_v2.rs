@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_streams::SendableDataBlockStream;
@@ -62,11 +63,12 @@ impl Interpreter for SelectInterpreterV2 {
         "SelectInterpreterV2"
     }
 
-    #[tracing::instrument(level = "debug", name = "select_interpreter_v2_execute", skip(self, _input_stream), fields(ctx.id = self.ctx.get_id().as_str()))]
-    async fn execute(
-        &self,
-        _input_stream: Option<SendableDataBlockStream>,
-    ) -> Result<SendableDataBlockStream> {
+    fn schema(&self) -> DataSchemaRef {
+        self.bind_context.output_schema()
+    }
+
+    #[tracing::instrument(level = "debug", name = "select_interpreter_v2_execute", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
+    async fn execute(&self) -> Result<SendableDataBlockStream> {
         let builder = PhysicalPlanBuilder::new(self.metadata.clone());
         let physical_plan = builder.build(&self.s_expr)?;
         if let Some(handle) = self.ctx.get_http_query() {

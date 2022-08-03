@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
@@ -82,6 +83,10 @@ impl ImmutableCatalog {
 
 #[async_trait::async_trait]
 impl Catalog for ImmutableCatalog {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
     async fn get_database(&self, _tenant: &str, db_name: &str) -> Result<Arc<dyn Database>> {
         match db_name {
             "system" => Ok(self.sys_db.clone()),

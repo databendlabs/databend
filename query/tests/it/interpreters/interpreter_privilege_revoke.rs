@@ -24,13 +24,14 @@ use common_meta_types::UserPrivilegeSet;
 use common_meta_types::UserPrivilegeType;
 use databend_query::interpreters::*;
 use databend_query::sessions::TableContext;
-use databend_query::sql::PlanParser;
+use databend_query::sql::Planner;
 use futures::stream::StreamExt;
 use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_revoke_privilege_interpreter() -> Result<()> {
     let ctx = crate::tests::create_query_context().await?;
+    let mut planner = Planner::new(ctx.clone());
     let tenant = ctx.get_tenant().to_string();
 
     let name = "test";
@@ -45,10 +46,10 @@ async fn test_revoke_privilege_interpreter() -> Result<()> {
     let user_mgr = ctx.get_user_manager();
     user_mgr.add_user(&tenant, user_info.clone(), false).await?;
     let query = format!("REVOKE ALL ON *.* FROM '{}'@'{}'", name, hostname);
-    let plan = PlanParser::parse(ctx.clone(), &query).await?;
-    let executor = InterpreterFactory::get(ctx, plan.clone())?;
+    let (plan, _, _) = planner.plan_sql(&query).await?;
+    let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
     assert_eq!(executor.name(), "RevokePrivilegeInterpreter");
-    let mut stream = executor.execute(None).await?;
+    let mut stream = executor.execute().await?;
     while let Some(_block) = stream.next().await {}
     let new_user = user_mgr.get_user(&tenant, user_info.identity()).await?;
     assert_eq!(new_user.grants, UserGrantSet::empty());
@@ -59,6 +60,7 @@ async fn test_revoke_privilege_interpreter() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_revoke_privilege_interpreter_on_role() -> Result<()> {
     let ctx = crate::tests::create_query_context().await?;
+    let mut planner = Planner::new(ctx.clone());
     let tenant = ctx.get_tenant().to_string();
 
     let mut role_info = RoleInfo::new("role1");
@@ -74,10 +76,10 @@ async fn test_revoke_privilege_interpreter_on_role() -> Result<()> {
     user_mgr.add_role(&tenant, role_info, false).await?;
 
     let query = "REVOKE ALL ON *.* FROM ROLE 'role1'";
-    let plan = PlanParser::parse(ctx.clone(), query).await?;
-    let executor = InterpreterFactory::get(ctx, plan.clone())?;
+    let (plan, _, _) = planner.plan_sql(query).await?;
+    let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
     assert_eq!(executor.name(), "RevokePrivilegeInterpreter");
-    let mut stream = executor.execute(None).await?;
+    let mut stream = executor.execute().await?;
     while let Some(_block) = stream.next().await {}
 
     let role = user_mgr.get_role(&tenant, "role1".to_string()).await?;

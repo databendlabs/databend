@@ -44,15 +44,19 @@ use tracing::error;
 use tracing::warn;
 
 use super::writers::from_clickhouse_block;
+use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
-use crate::interpreters::InterpreterQueryLog;
+use crate::interpreters::InterpreterFactoryV2;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::SyncReceiverCkSource;
 use crate::pipelines::SourcePipeBuilder;
+use crate::servers::utils::use_planner_v2;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionRef;
 use crate::sessions::TableContext;
+use crate::sql::DfParser;
 use crate::sql::PlanParser;
+use crate::sql::Planner;
 
 pub struct InteractiveWorkerBase;
 
@@ -74,27 +78,35 @@ impl InteractiveWorkerBase {
         let ctx = session.create_query_context().await?;
         ctx.attach_query_str(query);
 
-        let plan = PlanParser::parse(ctx.clone(), query).await;
+        let statements = DfParser::parse_sql(query, ctx.get_current_session().get_type());
 
-        let plan = match plan {
-            Ok(p) => p,
-            Err(e) => {
-                InterpreterQueryLog::fail_to_start(ctx, e.clone()).await;
-                return Err(e);
-            }
-        };
+        if use_planner_v2(&ctx.get_settings(), &statements)? {
+            let mut planner = Planner::new(ctx.clone());
+            let interpreter = planner
+                .plan_sql(query)
+                .await
+                .and_then(|v| InterpreterFactoryV2::get(ctx.clone(), &v.0))?;
+            Self::process_query(ctx, interpreter).await
+        } else {
+            let statements = statements.unwrap().0;
+            let plan = PlanParser::build_plan(statements, ctx.clone()).await?;
 
-        match plan {
-            PlanNode::Insert(ref insert) => {
-                // It has select plan, so we do not need to consume data from client
-                // data is from server and insert into server, just behave like select query
-                if insert.has_select_plan() {
-                    return Self::process_select_query(plan, ctx).await;
+            match plan {
+                PlanNode::Insert(ref insert) => {
+                    // It has select plan, so we do not need to consume data from client
+                    // data is from server and insert into server, just behave like select query
+                    if insert.has_select_plan() {
+                        let interpreter = InterpreterFactory::get(ctx.clone(), plan)?;
+                        return Self::process_query(ctx, interpreter).await;
+                    }
+
+                    Self::process_insert_query(insert.clone(), ch_ctx, ctx).await
                 }
-
-                Self::process_insert_query(insert.clone(), ch_ctx, ctx).await
+                _ => {
+                    let interpreter = InterpreterFactory::get(ctx.clone(), plan)?;
+                    Self::process_query(ctx, interpreter).await
+                }
             }
-            _ => Self::process_select_query(plan, ctx).await,
         }
     }
 
@@ -139,7 +151,7 @@ impl InteractiveWorkerBase {
         let sent_all_data = ch_ctx.state.sent_all_data.clone();
         let start = Instant::now();
         ctx.try_spawn(async move {
-            interpreter.execute(None).await.unwrap();
+            interpreter.execute().await.unwrap();
             sent_all_data.notify_one();
         })?;
         histogram!(
@@ -151,12 +163,11 @@ impl InteractiveWorkerBase {
         Ok(rx)
     }
 
-    pub async fn process_select_query(
-        plan: PlanNode,
+    pub async fn process_query(
         ctx: Arc<QueryContext>,
+        interpreter: Arc<dyn Interpreter>,
     ) -> Result<Receiver<BlockItem>> {
         let start = Instant::now();
-        let interpreter = InterpreterFactory::get(ctx.clone(), plan)?;
         let name = interpreter.name().to_string();
         histogram!(
             super::clickhouse_metrics::METRIC_INTERPRETER_USEDTIME,
@@ -201,7 +212,7 @@ impl InteractiveWorkerBase {
                 .map_err(|e| error!("interpreter.start.error: {:?}", e));
 
             // Execute and read stream data.
-            let data_stream = interpreter.execute(None);
+            let data_stream = interpreter.execute();
             let mut data_stream = match data_stream.await {
                 Ok(stream) => stream,
                 Err(e) => {

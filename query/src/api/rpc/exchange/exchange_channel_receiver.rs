@@ -13,19 +13,15 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::sync::atomic::AtomicBool;
-use std::sync::atomic::Ordering;
 use std::sync::atomic::Ordering::Acquire;
 use std::sync::Arc;
 
 use async_channel::Receiver;
-use common_base::base::tokio::sync::Notify;
 use common_base::base::tokio::task::JoinHandle;
 use common_base::base::Runtime;
 use common_base::base::TrySpawn;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use futures::future::Either;
 use parking_lot::Mutex;
 
 use crate::api::rpc::exchange::exchange_channel::FragmentReceiver;
@@ -40,8 +36,6 @@ pub struct ExchangeReceiver {
     rx: Mutex<Option<Receiver<Result<DataPacket>>>>,
     fragments_receiver: Mutex<Option<Vec<Option<FragmentReceiver>>>>,
 
-    finished: Arc<AtomicBool>,
-    shutdown_notify: Arc<Notify>,
     worker_handler: Mutex<Option<JoinHandle<()>>>,
 }
 
@@ -66,8 +60,6 @@ impl ExchangeReceiver {
             query_id,
             rx: Mutex::new(Some(rx)),
             worker_handler: Mutex::new(None),
-            shutdown_notify: Arc::new(Notify::new()),
-            finished: Arc::new(AtomicBool::new(false)),
             fragments_receiver: Mutex::new(Some(receivers_array)),
         })
     }
@@ -75,40 +67,17 @@ impl ExchangeReceiver {
     pub fn listen(self: &Arc<Self>) -> Result<()> {
         let this = self.clone();
         let rx = self.get_rx()?;
-        let shutdown_notify = self.shutdown_notify.clone();
         let mut fragments_receiver = self.get_fragments_receiver()?;
 
         let worker_handler = self.runtime.spawn(async move {
-            let mut notified = Box::pin(shutdown_notify.notified());
-
-            while !this.finished.load(Ordering::Relaxed) {
-                match futures::future::select(rx.recv(), notified).await {
-                    Either::Left((recv_data, b)) => {
-                        notified = b;
-
-                        if let Ok(recv_data) = recv_data {
-                            let txs = &mut fragments_receiver;
-                            if let Err(cause) = this.on_packet(recv_data, txs).await {
-                                if Self::send_error(&mut fragments_receiver, &cause).await {
-                                    Self::shutdown_query(&this, cause);
-                                }
-                                return;
-                            }
-                        } else {
-                            // This ok. we will close the channel when the data transmission is completed.
-                            break;
-                        }
+            while let Ok(recv_data) = rx.recv().await {
+                let txs = &mut fragments_receiver;
+                if let Err(cause) = this.on_packet(recv_data, txs).await {
+                    if Self::send_error(&mut fragments_receiver, &cause).await {
+                        Self::shutdown_query(&this, cause);
                     }
-                    Either::Right((_notified, _recv)) => {
-                        break;
-                    }
-                };
 
-                while let Ok(recv_data) = rx.try_recv() {
-                    let txs = &mut fragments_receiver;
-                    if let Err(_cause) = this.on_packet(recv_data, txs).await {
-                        break;
-                    }
+                    return;
                 }
             }
         });
@@ -145,11 +114,6 @@ impl ExchangeReceiver {
         if let Err(cause) = exchange_manager.shutdown_query(query_id, Some(cause)) {
             tracing::warn!("Cannot shutdown query, cause {:?}", cause);
         }
-    }
-
-    pub fn shutdown(self: &Arc<Self>) {
-        self.finished.store(true, Ordering::SeqCst);
-        self.shutdown_notify.notify_one();
     }
 
     pub async fn join(self: &Arc<Self>) -> Result<()> {
@@ -232,6 +196,7 @@ impl ExchangeReceiver {
             DataPacket::ErrorCode(error_code) => Err(error_code),
             DataPacket::Progress(progress_info) => progress_info.inc(&self.ctx),
             DataPacket::PrecommitBlock(precommit_block) => precommit_block.precommit(&self.ctx),
+            DataPacket::FinishQuery => unreachable!(),
         }
     }
 }

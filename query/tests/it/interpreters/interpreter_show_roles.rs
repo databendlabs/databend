@@ -15,27 +15,29 @@
 use common_base::base::tokio;
 use common_exception::Result;
 use databend_query::interpreters::*;
-use databend_query::sql::PlanParser;
+use databend_query::sql::Planner;
 use futures::TryStreamExt;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_show_roles_interpreter() -> Result<()> {
     let ctx = crate::tests::create_query_context().await?;
+    let mut planner = Planner::new(ctx.clone());
 
     {
-        let query = "CREATE ROLE test";
-        let plan = PlanParser::parse(ctx.clone(), query).await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        let _ = executor.execute(None).await?;
+        let query = "CREATE ROLE 'test'";
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let _ = executor.execute().await?;
     }
 
     // show roles.
     {
-        let plan = PlanParser::parse(ctx.clone(), "show roles").await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        assert_eq!(executor.name(), "ShowRolesInterpreter");
+        let query = "show roles";
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        assert_eq!(executor.name(), "SelectInterpreterV2");
 
-        let stream = executor.execute(None).await?;
+        let stream = executor.execute().await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
             "+------+-----------------+",

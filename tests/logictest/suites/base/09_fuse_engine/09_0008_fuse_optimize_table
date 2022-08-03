@@ -1,0 +1,180 @@
+statement ok
+DROP DATABASE IF EXISTS db_09_0008;
+
+statement ok
+CREATE DATABASE db_09_0008;
+
+statement ok
+USE db_09_0008;
+
+statement ok
+create table t(a uint64);
+
+statement ok
+insert into t values (5);
+
+statement ok
+insert into t values (6);
+
+statement ok
+insert into t values (7);
+
+statement query I
+select * from t order by a;
+
+----
+5
+6
+7
+
+statement ok
+optimize table t compact;
+
+statement query I
+select * from t order by a;
+
+----
+5
+6
+7
+
+statement query T
+explain select count(1) from t;
+
+----
+Projection: count():UInt64
+  Projection: 3 as count():UInt64
+    Expression: 3:UInt64 (Exact Statistics)
+      ReadDataSource: scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1, partitions_scanned: 1, partitions_total: 1]
+
+statement query B
+select count(*)=4 from fuse_snapshot('db_09_0008', 't');
+
+----
+1
+
+
+
+statement ok
+optimize table `t` purge;
+
+statement query B
+select count(*)=1 from fuse_snapshot('db_09_0008', 't');
+
+----
+1
+
+
+
+statement query I
+select * from t order by a;
+
+----
+5
+6
+7
+
+statement ok
+optimize table `t` purge;
+
+statement query I
+select * from t order by a;
+
+----
+5
+6
+7
+
+statement ok
+insert into t values (8);
+
+statement ok
+insert into t values (9);
+
+statement ok
+insert into t values (10);
+
+statement query I
+select * from t order by a;
+
+----
+5
+6
+7
+8
+9
+10
+
+statement ok
+optimize table `t` all;
+
+statement query B
+select count(*)=1 from fuse_snapshot('db_09_0008', 't');
+
+----
+1
+
+
+
+statement query I
+select * from t order by a;
+
+----
+5
+6
+7
+8
+9
+10
+
+statement ok
+create table m(a uint64) Engine = Fuse;
+
+-- statement ok
+-- optimize table m;
+
+statement ok
+optimize table m all;
+
+statement ok
+optimize table m purge;
+
+statement ok
+optimize table m compact;
+
+statement ok
+drop table m;
+
+statement ok
+create table m(a uint64) engine=Fuse;
+
+statement ok
+insert into m values(1);
+
+statement ok
+insert into m values(2);
+
+-- statement ok
+-- optimize table m;
+
+-- statement ok
+-- optimize table m;
+
+statement ok
+optimize table m all;
+
+statement ok
+optimize table m purge;
+
+statement ok
+optimize table m compact;
+
+statement ok
+DROP TABLE m;
+
+statement ok
+DROP TABLE t;
+
+statement ok
+DROP DATABASE db_09_0008;
+

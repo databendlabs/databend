@@ -1,0 +1,94 @@
+statement query B
+SELECT LENGTH(gen_random_uuid()) = 36;
+
+----
+1
+
+
+
+statement query B
+SELECT IGNORE(gen_random_uuid());
+
+----
+0
+
+
+
+statement query T
+SELECT gen_zero_uuid();
+
+----
+00000000-0000-0000-0000-000000000000
+
+statement query B
+SELECT is_empty_uuid(gen_random_uuid());
+
+----
+0
+
+
+
+statement query B
+SELECT is_empty_uuid(gen_zero_uuid());
+
+----
+1
+
+
+
+statement query B
+SELECT is_empty_uuid('5');
+
+----
+1
+
+
+
+statement query B
+SELECT is_empty_uuid(null);
+
+----
+1
+
+
+
+statement query B
+SELECT is_not_empty_uuid(gen_random_uuid());
+
+----
+1
+
+
+
+statement query B
+SELECT is_not_empty_uuid(gen_zero_uuid());
+
+----
+0
+
+
+
+statement query B
+SELECT is_not_empty_uuid('5');
+
+----
+0
+
+
+
+statement query B
+SELECT is_not_empty_uuid(null);
+
+----
+0
+
+
+
+statement query BB
+SELECT UNIQ(gen_random_uuid())  = 10, COUNT_IF(LENGTH(gen_random_uuid()) = 36)  = 10 from numbers(10);
+
+----
+1 1
+
+ true
+

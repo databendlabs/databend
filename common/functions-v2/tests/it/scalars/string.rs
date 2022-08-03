@@ -34,6 +34,15 @@ fn test_string() {
     test_char_length(file);
     test_to_base64(file);
     test_from_base64(file);
+    test_quote(file);
+    test_reverse(file);
+    test_ascii(file);
+    test_ltrim(file);
+    test_rtrim(file);
+    test_trim_leading(file);
+    test_trim_trailing(file);
+    test_trim_both(file);
+    test_trim(file);
 }
 
 fn test_upper(file: &mut impl Write) {
@@ -104,12 +113,237 @@ fn test_to_base64(file: &mut impl Write) {
 fn test_from_base64(file: &mut impl Write) {
     run_ast(file, "from_base64('QWJj')", &[]);
     run_ast(file, "from_base64('MTIz')", &[]);
-    run_ast(file, "to_base64(Null)", &[]);
-    run_ast(file, "to_base64(a)", &[(
+    run_ast(file, "from_base64(Null)", &[]);
+    run_ast(file, "from_base64(a)", &[(
         "a",
         DataType::String,
         build_string_column(&["QWJj", "MTIz"]),
     )])
+}
+
+fn test_quote(file: &mut impl Write) {
+    run_ast(file, r#"quote('a\0b')"#, &[]);
+    run_ast(file, r#"quote('a\'b')"#, &[]);
+    run_ast(file, r#"quote('a\"b')"#, &[]);
+    run_ast(file, r#"quote('a\bb')"#, &[]);
+    run_ast(file, r#"quote('a\nb')"#, &[]);
+    run_ast(file, r#"quote('a\rb')"#, &[]);
+    run_ast(file, r#"quote('a\tb')"#, &[]);
+    run_ast(file, r#"quote('a\\b')"#, &[]);
+    run_ast(file, "quote('你好')", &[]);
+    run_ast(file, "quote('ß😀山')", &[]);
+    run_ast(file, "quote('Dobrý den')", &[]);
+    run_ast(file, "quote(Null)", &[]);
+    run_ast(file, "quote(a)", &[(
+        "a",
+        DataType::String,
+        build_string_column(&[r#"a\0b"#, r#"a\'b"#, r#"a\nb"#]),
+    )])
+}
+
+fn test_reverse(file: &mut impl Write) {
+    run_ast(file, "reverse('abc')", &[]);
+    run_ast(file, "reverse('a')", &[]);
+    run_ast(file, "reverse('')", &[]);
+    run_ast(file, "reverse('你好')", &[]);
+    run_ast(file, "reverse('ß😀山')", &[]);
+    run_ast(file, "reverse('Dobrý den')", &[]);
+    run_ast(file, "reverse(Null)", &[]);
+    run_ast(file, "reverse(a)", &[(
+        "a",
+        DataType::String,
+        build_string_column(&["abc", "a", ""]),
+    )])
+}
+
+fn test_ascii(file: &mut impl Write) {
+    run_ast(file, "ascii('1')", &[]);
+    run_ast(file, "ascii('123')", &[]);
+    run_ast(file, "ascii('-1')", &[]);
+    run_ast(file, "ascii('')", &[]);
+    run_ast(file, "ascii('你好')", &[]);
+    run_ast(file, "ascii('😀123')", &[]);
+    run_ast(file, "ascii(Null)", &[]);
+    run_ast(file, "ascii(a)", &[(
+        "a",
+        DataType::String,
+        build_string_column(&["1", "123", "-1", "你好"]),
+    )]);
+    run_ast(file, "ascii(b)", &[(
+        "b",
+        DataType::String,
+        build_string_column(&[""]),
+    )]);
+}
+
+fn test_ltrim(file: &mut impl Write) {
+    run_ast(file, "ltrim('   abc   ')", &[]);
+    run_ast(file, "ltrim('  ')", &[]);
+    run_ast(file, "ltrim(NULL)", &[]);
+    run_ast(file, "ltrim(a)", &[(
+        "a",
+        DataType::String,
+        build_string_column(&["abc", "   abc", "   abc   ", "abc   "]),
+    )]);
+}
+
+fn test_rtrim(file: &mut impl Write) {
+    run_ast(file, "rtrim('   abc   ')", &[]);
+    run_ast(file, "rtrim('  ')", &[]);
+    run_ast(file, "rtrim(NULL)", &[]);
+    run_ast(file, "rtrim(a)", &[(
+        "a",
+        DataType::String,
+        build_string_column(&["abc", "   abc", "   abc   ", "abc   "]),
+    )]);
+}
+
+fn test_trim_leading(file: &mut impl Write) {
+    run_ast(file, "trim_leading('aaabbaaa', 'a')", &[]);
+    run_ast(file, "trim_leading('aaabbaaa', 'aa')", &[]);
+    run_ast(file, "trim_leading('aaaaaaaa', 'a')", &[]);
+    run_ast(file, "trim_leading('aaabbaaa', 'b')", &[]);
+    run_ast(file, "trim_leading(NULL, 'a')", &[]);
+    run_ast(file, "trim_leading('aaaaaaaa', NULL)", &[]);
+
+    let table = [
+        (
+            "a",
+            DataType::String,
+            build_string_column(&["aabbaa", "bbccbb", "ccddcc"]),
+        ),
+        ("b", DataType::String, build_string_column(&["a", "b", "c"])),
+    ];
+
+    run_ast(file, "trim_leading(a, 'a')", &table);
+    run_ast(file, "trim_leading(a, b)", &table);
+    run_ast(file, "trim_leading('aba', b)", &table);
+}
+
+fn test_trim_trailing(file: &mut impl Write) {
+    run_ast(file, "trim_trailing('aaabbaaa', 'a')", &[]);
+    run_ast(file, "trim_trailing('aaabbaaa', 'aa')", &[]);
+    run_ast(file, "trim_trailing('aaaaaaaa', 'a')", &[]);
+    run_ast(file, "trim_trailing('aaabbaaa', 'b')", &[]);
+    run_ast(file, "trim_trailing(NULL, 'a')", &[]);
+    run_ast(file, "trim_trailing('aaaaaaaa', NULL)", &[]);
+
+    let table = [
+        (
+            "a",
+            DataType::String,
+            build_string_column(&["aabbaa", "bbccbb", "ccddcc"]),
+        ),
+        ("b", DataType::String, build_string_column(&["a", "b", "c"])),
+    ];
+
+    run_ast(file, "trim_trailing(a, 'b')", &table);
+    run_ast(file, "trim_trailing(a, b)", &table);
+    run_ast(file, "trim_trailing('aba', b)", &table);
+}
+
+fn test_trim_both(file: &mut impl Write) {
+    run_ast(file, "trim_both('aaabbaaa', 'a')", &[]);
+    run_ast(file, "trim_both('aaabbaaa', 'aa')", &[]);
+    run_ast(file, "trim_both('aaaaaaaa', 'a')", &[]);
+    run_ast(file, "trim_both('aaabbaaa', 'b')", &[]);
+    run_ast(file, "trim_both(NULL, 'a')", &[]);
+    run_ast(file, "trim_both('aaaaaaaa', NULL)", &[]);
+
+    let table = [
+        (
+            "a",
+            DataType::String,
+            build_string_column(&["aabbaa", "bbccbb", "ccddcc"]),
+        ),
+        ("b", DataType::String, build_string_column(&["a", "b", "c"])),
+    ];
+
+    run_ast(file, "trim_both(a, 'a')", &table);
+    run_ast(file, "trim_both(a, b)", &table);
+    run_ast(file, "trim_both('aba', b)", &table);
+}
+
+fn test_trim_with_from(file: &mut impl Write, trim_where: &str) {
+    assert!(matches!(trim_where, "both" | "leading" | "trailing"));
+
+    run_ast(
+        file,
+        format!("trim({} 'a' from 'aaabbaaa')", trim_where).as_str(),
+        &[],
+    );
+    run_ast(
+        file,
+        format!("trim({} 'aa' from 'aaabbaaa')", trim_where).as_str(),
+        &[],
+    );
+    run_ast(
+        file,
+        format!("trim({} 'a' from 'aaaaaaaa')", trim_where).as_str(),
+        &[],
+    );
+    run_ast(
+        file,
+        format!("trim({} 'b' from 'aaabbaaa')", trim_where).as_str(),
+        &[],
+    );
+    run_ast(
+        file,
+        format!("trim({} 'a' from NULL)", trim_where).as_str(),
+        &[],
+    );
+    run_ast(
+        file,
+        format!("trim({} NULL from 'aaaaaaaa')", trim_where).as_str(),
+        &[],
+    );
+
+    let table = [
+        (
+            "a",
+            DataType::String,
+            build_string_column(&["aabbaa", "bbccbb", "ccddcc"]),
+        ),
+        ("b", DataType::String, build_string_column(&["a", "b", "c"])),
+    ];
+
+    run_ast(
+        file,
+        format!("trim({} 'a' from a)", trim_where).as_str(),
+        &table,
+    );
+    run_ast(
+        file,
+        format!("trim({} b from a)", trim_where).as_str(),
+        &table,
+    );
+    run_ast(
+        file,
+        format!("trim({} a from a)", trim_where).as_str(),
+        &table,
+    );
+    run_ast(
+        file,
+        format!("trim({} b from 'aba')", trim_where).as_str(),
+        &table,
+    );
+}
+
+fn test_trim(file: &mut impl Write) {
+    // TRIM(<expr>)
+    run_ast(file, "trim('   abc   ')", &[]);
+    run_ast(file, "trim('  ')", &[]);
+    run_ast(file, "trim(NULL)", &[]);
+    run_ast(file, "trim(a)", &[(
+        "a",
+        DataType::String,
+        build_string_column(&["abc", "   abc", "   abc   ", "abc   "]),
+    )]);
+
+    // TRIM([[BOTH | LEADING | TRAILING] <expr> FROM] <expr>)
+    test_trim_with_from(file, "both");
+    test_trim_with_from(file, "leading");
+    test_trim_with_from(file, "trailing");
 }
 
 fn build_string_column(strings: &[&str]) -> Column {
