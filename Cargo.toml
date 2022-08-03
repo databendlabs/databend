@@ -70,6 +70,7 @@ debug = true
 
 [profile.dev]
 split-debuginfo = "unpacked"
+overflow-checks = false
 
 [profile.dev.package]
 addr2line = { opt-level = 3 }
