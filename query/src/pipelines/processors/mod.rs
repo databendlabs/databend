@@ -19,6 +19,7 @@ pub(crate) mod transforms;
 
 pub use sinks::AsyncSink;
 pub use sinks::AsyncSinker;
+pub use sinks::ContextSink;
 pub use sinks::EmptySink;
 pub use sinks::Sink;
 pub use sinks::Sinker;

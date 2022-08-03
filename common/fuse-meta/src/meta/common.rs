@@ -58,6 +58,8 @@ pub struct Statistics {
 
     pub uncompressed_byte_size: u64,
     pub compressed_byte_size: u64,
+    #[serde(default)]
+    pub index_size: u64,
 
     pub col_stats: HashMap<ColumnId, ColumnStatistics>,
 }

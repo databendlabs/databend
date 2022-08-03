@@ -18,11 +18,14 @@ pub mod retry;
 mod write;
 
 pub use locations::TableMetaLocationGenerator;
+pub use read::load_bloom_filter_by_columns;
+pub use read::BlockBloomFilterIndexReader;
 pub use read::BlockReader;
 pub use read::MetaReaders;
 pub use read::SegmentInfoReader;
 pub use read::TableSnapshotReader;
 pub use write::write_block;
+pub use write::write_data;
 pub use write::write_meta;
 pub use write::BlockCompactor;
 pub use write::BlockStreamWriter;

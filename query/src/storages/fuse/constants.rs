@@ -17,6 +17,7 @@ pub const FUSE_OPT_KEY_BLOCK_PER_SEGMENT: &str = "block_per_segment";
 pub const FUSE_OPT_KEY_ROW_PER_BLOCK: &str = "row_per_block";
 
 pub const FUSE_TBL_BLOCK_PREFIX: &str = "_b";
+pub const FUSE_TBL_BLOCK_INDEX_PREFIX: &str = "_i";
 pub const FUSE_TBL_SEGMENT_PREFIX: &str = "_sg";
 pub const FUSE_TBL_SNAPSHOT_PREFIX: &str = "_ss";
 

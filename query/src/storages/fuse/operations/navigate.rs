@@ -125,7 +125,7 @@ impl FuseTable {
                 number_of_rows: summary.row_count,
                 data_bytes: summary.uncompressed_byte_size,
                 compressed_data_bytes: summary.compressed_byte_size,
-                index_data_bytes: 0, // we do not have it yet
+                index_data_bytes: summary.index_size,
             };
 
             // let's instantiate it
