@@ -112,6 +112,50 @@ pub fn transform_expr(ast: common_ast::ast::Expr, columns: &[(&str, DataType)]) 
                 transform_expr(*right, columns),
             ],
         },
+        common_ast::ast::Expr::Trim {
+            span,
+            expr,
+            trim_where,
+        } => {
+            if let Some(inner) = trim_where {
+                match inner.0 {
+                    common_ast::ast::TrimWhere::Both => RawExpr::FunctionCall {
+                        span: transform_span(span),
+                        name: "trim_both".to_string(),
+                        params: vec![],
+                        args: vec![
+                            transform_expr(*expr, columns),
+                            transform_expr(*inner.1, columns),
+                        ],
+                    },
+                    common_ast::ast::TrimWhere::Leading => RawExpr::FunctionCall {
+                        span: transform_span(span),
+                        name: "trim_leading".to_string(),
+                        params: vec![],
+                        args: vec![
+                            transform_expr(*expr, columns),
+                            transform_expr(*inner.1, columns),
+                        ],
+                    },
+                    common_ast::ast::TrimWhere::Trailing => RawExpr::FunctionCall {
+                        span: transform_span(span),
+                        name: "trim_trailing".to_string(),
+                        params: vec![],
+                        args: vec![
+                            transform_expr(*expr, columns),
+                            transform_expr(*inner.1, columns),
+                        ],
+                    },
+                }
+            } else {
+                RawExpr::FunctionCall {
+                    span: transform_span(span),
+                    name: "trim".to_string(),
+                    params: vec![],
+                    args: vec![transform_expr(*expr, columns)],
+                }
+            }
+        }
         _ => unimplemented!(),
     }
 }

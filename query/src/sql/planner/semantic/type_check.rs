@@ -394,15 +394,32 @@ impl<'a> TypeChecker<'a> {
 
             Expr::Case {
                 span,
+                operand,
                 conditions,
                 results,
                 else_result,
-                ..
             } => {
                 let mut arguments = Vec::with_capacity(conditions.len() * 2 + 1);
                 for (c, r) in conditions.iter().zip(results.iter()) {
-                    arguments.push(c);
-                    arguments.push(r);
+                    match operand {
+                        Some(operand) => {
+                            // compare case operand with each conditions until one of them is equal
+                            let equal_expr = Expr::FunctionCall {
+                                span,
+                                distinct: false,
+                                name: Identifier {
+                                    name: "=".to_string(),
+                                    quote: None,
+                                    span: span[0].clone(),
+                                },
+                                args: vec![*operand.clone(), c.clone()],
+                                params: vec![],
+                            };
+                            arguments.push(equal_expr)
+                        }
+                        None => arguments.push(c.clone()),
+                    }
+                    arguments.push(r.clone());
                 }
                 let null_arg = Expr::Literal {
                     span: &[],
@@ -410,11 +427,12 @@ impl<'a> TypeChecker<'a> {
                 };
 
                 if let Some(expr) = else_result {
-                    arguments.push(expr.as_ref());
+                    arguments.push(*expr.clone());
                 } else {
-                    arguments.push(&null_arg)
+                    arguments.push(null_arg)
                 }
-                self.resolve_function(span, "multi_if", &arguments, required_type)
+                let args_ref: Vec<&Expr> = arguments.iter().collect();
+                self.resolve_function(span, "multi_if", &args_ref, required_type)
                     .await?
             }
 
