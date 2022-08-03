@@ -261,8 +261,8 @@ impl<'a> Binder {
                 udf: UserDefinedFunction {
                     name: udf_name.to_string(),
                     parameters: parameters.iter().map(|v| v.to_string()).collect(),
-                    description: definition.to_string(),
-                    definition: description.clone().unwrap_or_default(),
+                    definition: definition.to_string(),
+                    description: description.clone().unwrap_or_default(),
                 },
             })),
             Statement::DropUDF {
