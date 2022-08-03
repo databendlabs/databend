@@ -309,9 +309,8 @@ impl<'a> Binder {
         let (stmt, _) = parse_sql(&tokens, &backtrace)?;
         let mut plan = self.bind_statement(bind_context, &stmt).await?;
 
-        match &mut plan {
-            Plan::Query { rewrite_kind, .. } => *rewrite_kind = Some(rewrite_kind_r),
-            _ => {}
+        if let Plan::Query { rewrite_kind, .. } = &mut plan {
+            *rewrite_kind = Some(rewrite_kind_r)
         }
         Ok(plan)
     }

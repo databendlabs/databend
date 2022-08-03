@@ -51,10 +51,10 @@ impl ManagementModeAccess {
         // Allows for management-mode.
         if self.ctx.get_config().query.management_mode {
             let ok = match plan {
-                Plan::Query {  rewrite_kind, .. } => {
+                Plan::Query {rewrite_kind, .. } => {
                     use crate::sql::plans::RewriteKind;
                     match rewrite_kind  {
-                        Some(v) => match v {
+                        Some(ref v) => matches!(v,
                             RewriteKind::ShowDatabases
                             | RewriteKind::ShowTables
                             | RewriteKind::ShowEngines
@@ -62,14 +62,12 @@ impl ManagementModeAccess {
                             | RewriteKind::ShowFunctions
                             | RewriteKind::ShowUsers
                             | RewriteKind::ShowStages
-                            | RewriteKind::ShowRoles => true,
-                            _ => false,
-                        },
-                        None => false,
+                            | RewriteKind::ShowRoles),
+                        _ => false
                     }
-                }
+                },
                 // Show.
-                | Plan::ShowCreateDatabase(_)
+                Plan::ShowCreateDatabase(_)
                 | Plan::ShowCreateTable(_)
                 | Plan::ShowGrants(_)
 

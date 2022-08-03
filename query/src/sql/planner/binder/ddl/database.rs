@@ -41,8 +41,8 @@ use common_planners::UndropDatabasePlan;
 use crate::sessions::TableContext;
 use crate::sql::binder::Binder;
 use crate::sql::plans::Plan;
-use crate::sql::BindContext;
 use crate::sql::plans::RewriteKind;
+use crate::sql::BindContext;
 
 impl<'a> Binder {
     pub(in crate::sql::planner::binder) async fn bind_show_databases(
