@@ -65,10 +65,9 @@ impl<'a> Binder {
             None => (),
         }
         write!(query, " ORDER BY name").unwrap();
-        let tokens = tokenize_sql(query.as_str())?;
-        let backtrace = Backtrace::new();
-        let (stmt, _) = parse_sql(&tokens, &backtrace)?;
-        self.bind_statement(bind_context, &stmt).await
+
+        self.bind_rewrite_to_query(bind_context, query.as_str(), RewriteKind::ShowDatabases)
+            .await
     }
 
     pub(in crate::sql::planner::binder) async fn bind_show_create_database(

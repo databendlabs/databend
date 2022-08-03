@@ -13,9 +13,9 @@
 // limitations under the License.
 
 use common_base::base::tokio;
+use common_exception::Result;
 use databend_query::interpreters::InterpreterFactoryV2;
 use databend_query::sql::Planner;
-use common_exception::Result;
 
 // ref: https://github.com/datafuselabs/databend/issues/6901
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
