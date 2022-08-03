@@ -2,9 +2,6 @@ statement ok
 DROP TABLE IF EXISTS t;
 
 statement ok
-set enable_bloom_filter_index = 1;
-
-statement ok
 CREATE TABLE t(c int);
 
 statement ok

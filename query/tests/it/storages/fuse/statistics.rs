@@ -134,15 +134,11 @@ fn test_reduce_block_statistics_in_memory_size() -> common_exception::Result<()>
     Ok(())
 }
 
-async fn do_test_accumulator(
-    enable_bloom_index: u64,
-) -> common_exception::Result<StatisticsAccumulator> {
+#[tokio::test]
+async fn test_accumulator() -> common_exception::Result<()> {
     let blocks = TestFixture::gen_sample_blocks(10, 1);
     let fixture = TestFixture::new().await;
     let ctx = fixture.ctx();
-    ctx.get_settings()
-        .set_enable_bloom_filter_index(enable_bloom_index)?;
-
     let mut stats_acc = StatisticsAccumulator::new();
 
     let mut builder = opendal::services::memory::Backend::build();
@@ -150,30 +146,17 @@ async fn do_test_accumulator(
     let operator = Operator::new(accessor);
     let table_ctx: Arc<dyn TableContext> = ctx;
     let loc_generator = TableMetaLocationGenerator::with_prefix("/".to_owned());
-    let enable_idx = enable_bloom_index != 0;
 
     for item in blocks {
         let block = item?;
         let block_statistics = BlockStatistics::from(&block, "does_not_matter".to_owned(), None)?;
-        let block_writer = BlockWriter::new(&table_ctx, &operator, &loc_generator, enable_idx);
+        let block_writer = BlockWriter::new(&table_ctx, &operator, &loc_generator);
         let block_meta = block_writer.write(block).await?;
         stats_acc.add_with_block_meta(block_meta, block_statistics)?;
     }
 
-    Ok(stats_acc)
-}
-
-#[tokio::test]
-async fn test_ft_stats_accumulator() -> common_exception::Result<()> {
-    let enable_index = 0u64;
-    let acc = do_test_accumulator(enable_index).await?;
-    assert_eq!(10, acc.blocks_statistics.len());
-    assert_eq!(acc.index_size, 0);
-
-    let enable_index = 1u64;
-    let acc = do_test_accumulator(enable_index).await?;
-    assert_eq!(10, acc.blocks_statistics.len());
-    assert!(acc.index_size > 0);
+    assert_eq!(10, stats_acc.blocks_statistics.len());
+    assert!(stats_acc.index_size > 0);
     Ok(())
 }
 

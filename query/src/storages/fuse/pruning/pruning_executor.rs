@@ -30,7 +30,6 @@ use tracing::Instrument;
 use super::bloom_pruner;
 use crate::sessions::TableContext;
 use crate::storages::fuse::io::MetaReaders;
-use crate::storages::fuse::pruning::bloom_pruner::NonPruner;
 use crate::storages::fuse::pruning::limiter;
 use crate::storages::fuse::pruning::range_pruner;
 
@@ -82,15 +81,10 @@ impl BlockPruner {
         let range_filter_pruner =
             range_pruner::new_range_filter_pruner(ctx, filter_expression, &schema)?;
 
+        // prepare the bloom filter, if filter_expression is none, an dummy pruner will be returned
         let dal = ctx.get_storage_operator()?;
-        let enable_bloom_index = ctx.get_settings().get_enable_bloom_filter_index()?;
-        let bloom_filter_pruner = if enable_bloom_index != 0 {
-            // prepare the bloom filter, if filter_expression is none, an dummy pruner will be returned
-            bloom_pruner::new_bloom_filter_pruner(ctx, filter_expression, &schema, dal)?
-        } else {
-            // toggle off bloom filter according the session settings
-            Arc::new(NonPruner)
-        };
+        let bloom_filter_pruner =
+            bloom_pruner::new_bloom_filter_pruner(ctx, filter_expression, &schema, dal)?;
 
         // 2. kick off
         //

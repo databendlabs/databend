@@ -13,7 +13,6 @@
 //  limitations under the License.
 use common_base::base::tokio;
 use common_exception::Result;
-use databend_query::sessions::TableContext;
 
 use crate::storages::fuse::table_test_fixture::append_sample_data;
 use crate::storages::fuse::table_test_fixture::check_data_dir;
@@ -23,30 +22,17 @@ use crate::storages::fuse::table_test_fixture::TestFixture;
 
 #[tokio::test]
 async fn test_fuse_truncate_purge_stmt() -> Result<()> {
-    let mut enable_bloom_filter = 0;
-    test_fuse_truncate_purge(enable_bloom_filter).await?;
-
-    enable_bloom_filter = 1;
-    test_fuse_truncate_purge(enable_bloom_filter).await?;
-
-    Ok(())
-}
-
-async fn test_fuse_truncate_purge(enable_bloom_filter: u64) -> Result<()> {
     let fixture = TestFixture::new().await;
     let db = fixture.default_db_name();
     let tbl = fixture.default_table_name();
     let ctx = fixture.ctx();
     fixture.create_default_table().await?;
-    ctx.get_settings()
-        .set_enable_bloom_filter_index(enable_bloom_filter)?;
 
     // ingests some 2 blocks
     append_sample_data(1, &fixture).await?;
     append_sample_data(1, &fixture).await?;
 
-    let index_enabled = enable_bloom_filter != 0;
-    let expected_index_count = if index_enabled { 2 } else { 0 };
+    let expected_index_count = 2;
     // there should be some data there: 2 snapshot, 2 segment, 2 block
     check_data_dir(&fixture, "truncate_purge", 2, 2, 2, expected_index_count).await;
 

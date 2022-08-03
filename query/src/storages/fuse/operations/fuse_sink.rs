@@ -55,7 +55,7 @@ enum State {
         size: u64,
         meta_data: Box<ThriftFileMetaData>,
         block_statistics: BlockStatistics,
-        bloom_index_state: Option<BloomIndexState>,
+        bloom_index_state: BloomIndexState,
     },
     GenerateSegment,
     SerializedSegment {
@@ -75,7 +75,6 @@ pub struct FuseTableSink {
     meta_locations: TableMetaLocationGenerator,
     accumulator: StatisticsAccumulator,
     cluster_key_info: Option<ClusterKeyInfo>,
-    bloom_filter_index_enabled: bool,
 }
 
 impl FuseTableSink {
@@ -87,7 +86,6 @@ impl FuseTableSink {
         meta_locations: TableMetaLocationGenerator,
         cluster_key_info: Option<ClusterKeyInfo>,
     ) -> Result<ProcessorPtr> {
-        let bloom_filter_index_enabled = ctx.get_settings().get_enable_bloom_filter_index()? != 0;
         Ok(ProcessorPtr::create(Box::new(FuseTableSink {
             ctx,
             input,
@@ -97,7 +95,6 @@ impl FuseTableSink {
             accumulator: Default::default(),
             num_block_threshold: num_block_threshold as u64,
             cluster_key_info,
-            bloom_filter_index_enabled,
         })))
     }
 }
@@ -166,7 +163,7 @@ impl Processor for FuseTableSink {
 
                 let (block_location, block_id) = self.meta_locations.gen_block_location();
 
-                let bloom_index_state = if self.bloom_filter_index_enabled {
+                let bloom_index_state = {
                     // write index
                     let bloom_index = BloomFilterIndexer::try_create(self.ctx.clone(), &[&block])?;
                     let index_block = bloom_index.bloom_block;
@@ -179,13 +176,11 @@ impl Processor for FuseTableSink {
                         &mut data,
                         CompressionOptions::Uncompressed,
                     )?;
-                    Some(BloomIndexState {
+                    BloomIndexState {
                         data,
                         size,
                         location,
-                    })
-                } else {
-                    None
+                    }
                 };
 
                 let block_statistics =
@@ -248,22 +243,19 @@ impl Processor for FuseTableSink {
                 .await?;
 
                 // write bloom filter index
-                if let Some(index_state) = &bloom_index_state {
-                    io::write_data(
-                        &index_state.data,
-                        &self.data_accessor,
-                        &index_state.location.0,
-                    )
-                    .await?;
-                }
+                io::write_data(
+                    &bloom_index_state.data,
+                    &self.data_accessor,
+                    &bloom_index_state.location.0,
+                )
+                .await?;
 
-                let bloom_filter_index_size =
-                    bloom_index_state.as_ref().map(|s| s.size).unwrap_or(0);
+                let bloom_filter_index_size = bloom_index_state.size;
                 self.accumulator.add_block(
                     size,
                     *meta_data,
                     block_statistics,
-                    bloom_index_state.map(|s| s.location),
+                    Some(bloom_index_state.location),
                     bloom_filter_index_size,
                 )?;
 

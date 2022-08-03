@@ -52,7 +52,6 @@ pub struct DeletionMutator<'a> {
     location_generator: &'a TableMetaLocationGenerator,
     base_snapshot: &'a TableSnapshot,
     data_accessor: Operator,
-    rebuild_bloom_filter_index: bool,
 }
 
 impl<'a> DeletionMutator<'a> {
@@ -62,14 +61,12 @@ impl<'a> DeletionMutator<'a> {
         base_snapshot: &'a TableSnapshot,
     ) -> Result<Self> {
         let data_accessor = ctx.get_storage_operator()?;
-        let rebuild_bloom_filter_index = ctx.get_settings().get_enable_bloom_filter_index()? != 0;
         Ok(Self {
             mutations: HashMap::new(),
             ctx,
             location_generator,
             base_snapshot,
             data_accessor,
-            rebuild_bloom_filter_index,
         })
     }
 
@@ -186,12 +183,8 @@ impl<'a> DeletionMutator<'a> {
         let new_block_meta = if replace_with.num_rows() == 0 {
             None
         } else {
-            let block_writer = BlockWriter::new(
-                self.ctx,
-                &self.data_accessor,
-                self.location_generator,
-                self.rebuild_bloom_filter_index,
-            );
+            let block_writer =
+                BlockWriter::new(self.ctx, &self.data_accessor, self.location_generator);
             Some(block_writer.write(replace_with).await?)
         };
         let original_block_loc = location_of_block_to_be_replaced;

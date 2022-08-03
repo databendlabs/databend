@@ -46,7 +46,6 @@ pub struct BlockStreamWriter {
     meta_locations: TableMetaLocationGenerator,
     cluster_key_info: Option<ClusterKeyInfo>,
     ctx: Arc<dyn TableContext>,
-    enable_bloom_filter_index: bool,
 }
 
 impl BlockStreamWriter {
@@ -90,7 +89,6 @@ impl BlockStreamWriter {
         cluster_key_info: Option<ClusterKeyInfo>,
     ) -> Result<Self> {
         let data_accessor = ctx.get_storage_operator()?;
-        let enable_bloom_filter_index = ctx.get_settings().get_enable_bloom_filter_index()? != 0;
         Ok(Self {
             num_block_threshold,
             data_accessor,
@@ -99,7 +97,6 @@ impl BlockStreamWriter {
             meta_locations,
             cluster_key_info,
             ctx,
-            enable_bloom_filter_index,
         })
     }
 
@@ -190,12 +187,7 @@ impl BlockStreamWriter {
         let (location, block_id) = self.meta_locations.gen_block_location();
         let block_statistics = BlockStatistics::from(&block, location.0.clone(), cluster_stats)?;
 
-        let block_writer = BlockWriter::new(
-            &self.ctx,
-            &self.data_accessor,
-            &self.meta_locations,
-            self.enable_bloom_filter_index,
-        );
+        let block_writer = BlockWriter::new(&self.ctx, &self.data_accessor, &self.meta_locations);
         let block_meta = block_writer
             .write_with_location(block, block_id, location)
             .await?;

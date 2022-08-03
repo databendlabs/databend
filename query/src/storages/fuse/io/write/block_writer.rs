@@ -41,7 +41,6 @@ pub struct BlockWriter<'a> {
     ctx: &'a Arc<dyn TableContext>,
     location_generator: &'a TableMetaLocationGenerator,
     data_accessor: &'a Operator,
-    enable_index: bool,
 }
 
 impl<'a> BlockWriter<'a> {
@@ -49,13 +48,11 @@ impl<'a> BlockWriter<'a> {
         ctx: &'a Arc<dyn TableContext>,
         data_accessor: &'a Operator,
         location_generator: &'a TableMetaLocationGenerator,
-        enable_index: bool,
     ) -> Self {
         Self {
             ctx,
             location_generator,
             data_accessor,
-            enable_index,
         }
     }
     pub async fn write_with_location(
@@ -68,15 +65,9 @@ impl<'a> BlockWriter<'a> {
         let row_count = block.num_rows() as u64;
         let block_size = block.memory_size() as u64;
         let col_stats = gen_columns_statistics(&block)?;
-        let mut bloom_filter_index_location = None;
-        let mut bloom_filter_index_size = 0;
-        if self.enable_index {
-            let (size, location) = self
-                .build_block_index(data_accessor, &block, block_id)
-                .await?;
-            bloom_filter_index_location = Some(location);
-            bloom_filter_index_size = size;
-        }
+        let (bloom_filter_index_size, bloom_filter_index_location) = self
+            .build_block_index(data_accessor, &block, block_id)
+            .await?;
         let (file_size, file_meta_data) = write_block(block, data_accessor, &location.0).await?;
         let col_metas = util::column_metas(&file_meta_data)?;
         let cluster_stats = None; // TODO confirm this with zhyass
@@ -88,7 +79,7 @@ impl<'a> BlockWriter<'a> {
             col_metas,
             cluster_stats,
             location,
-            bloom_filter_index_location,
+            Some(bloom_filter_index_location),
             bloom_filter_index_size,
         );
         Ok(block_meta)
