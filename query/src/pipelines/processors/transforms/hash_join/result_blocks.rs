@@ -463,12 +463,23 @@ impl JoinHashTable {
             self.row_space.gather(build_indexs)?
         };
 
-        let nullable_columns = build_block
-            .columns()
-            .iter()
-            .map(|c| Self::set_validity(c, &validity))
-            .collect::<Result<Vec<_>>>()?;
-
+        let nullable_columns = if self.row_space.datablocks().is_empty() && !build_indexs.is_empty()
+        {
+            build_block
+                .columns()
+                .iter()
+                .map(|c| {
+                    c.data_type()
+                        .create_constant_column(&DataValue::Null, build_indexs.len())
+                })
+                .collect::<Result<Vec<_>>>()?
+        } else {
+            build_block
+                .columns()
+                .iter()
+                .map(|c| Self::set_validity(c, &validity))
+                .collect::<Result<Vec<_>>>()?
+        };
         let nullable_build_block =
             DataBlock::create(self.row_space.data_schema.clone(), nullable_columns.clone());
         let probe_block = DataBlock::block_take_by_indices(input, probe_indexs)?;

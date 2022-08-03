@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_arrow::arrow::bitmap::MutableBitmap;
 use common_datablocks::*;
 use common_datavalues::prelude::*;
 use common_exception::Result;
@@ -38,6 +39,39 @@ fn test_data_block_take() -> Result<()> {
         "| 1 | b1 |",
         "| 3 | b3 |",
         "+---+----+",
+    ];
+    common_datablocks::assert_blocks_eq(expected, &[take]);
+
+    Ok(())
+}
+
+#[test]
+fn test_data_block_take_with_nullable() -> Result<()> {
+    let schema = DataSchemaRefExt::create(vec![
+        DataField::new("a", NullableType::new_impl(i64::to_data_type())),
+        DataField::new("b", Vu8::to_data_type()),
+    ]);
+
+    let mut validity = MutableBitmap::new();
+    validity.extend_constant(3, false);
+
+    let col1 =
+        NullableColumn::wrap_inner(Series::from_data(vec![1i64, 2, 1]), Some(validity.into()));
+    let raw = DataBlock::create(schema, vec![
+        col1,
+        Series::from_data(vec!["b1", "b2", "b3"]),
+    ]);
+
+    let take = DataBlock::block_take_by_indices(&raw, &[0, 2])?;
+    assert_eq!(raw.schema(), take.schema());
+
+    let expected = vec![
+        "+------+----+",
+        "| a    | b  |",
+        "+------+----+",
+        "| NULL | b1 |",
+        "| NULL | b3 |",
+        "+------+----+",
     ];
     common_datablocks::assert_blocks_eq(expected, &[take]);
 
