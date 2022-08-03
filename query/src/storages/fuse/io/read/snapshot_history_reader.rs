@@ -31,7 +31,7 @@ impl<'a> TableSnapshotReader<'a> {
         limit: Option<usize>,
     ) -> common_exception::Result<Vec<Arc<TableSnapshot>>> {
         let mut snapshots = vec![];
-        let mut l = limit.map_or((u64::MAX, |v| v as u64);
+        let mut l = limit.map_or(u64::MAX, |v| v as u64);
 
         if l == 0 {
             return Ok(snapshots);

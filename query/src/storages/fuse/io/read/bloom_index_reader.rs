@@ -212,7 +212,7 @@ mod util_v1 {
                             dal.clone(),
                             path.to_owned(),
                         )
-                        .execute_in_runtime(&storage_runtime)
+                        .execute_in_runtime(storage_runtime)
                         .await??,
                     );
                     cache.put(cache_key, bytes.clone());
@@ -225,7 +225,7 @@ mod util_v1 {
                         dal.clone(),
                         path.to_owned(),
                     )
-                    .execute_in_runtime(&storage_runtime)
+                    .execute_in_runtime(storage_runtime)
                     .await??,
                 );
                 Ok((bytes, idx))
@@ -245,7 +245,7 @@ mod util_v1 {
         path: &str,
         dal: &Operator,
     ) -> Result<Arc<FileMetaData>> {
-        let storage_runtime = ctx.get_storage_runtime();
+        let storage_runtime = &ctx.get_storage_runtime();
         if let Some(bloom_index_meta_cache) =
             ctx.get_storage_cache_manager().get_bloom_index_meta_cache()
         {
@@ -254,7 +254,7 @@ mod util_v1 {
                 Ok(file_meta.clone())
             } else {
                 let file_meta = load_index_meta_from_storage(dal.clone(), path.to_owned())
-                    .execute_in_runtime(&storage_runtime)
+                    .execute_in_runtime(storage_runtime)
                     .await??;
                 let file_meta = Arc::new(file_meta);
                 cache.put(path.to_owned(), file_meta.clone());
@@ -262,7 +262,7 @@ mod util_v1 {
             }
         } else {
             let file_meta = load_index_meta_from_storage(dal.clone(), path.to_owned())
-                .execute_in_runtime(&storage_runtime)
+                .execute_in_runtime(storage_runtime)
                 .await??;
             let file_meta = Arc::new(file_meta);
             Ok(file_meta)
