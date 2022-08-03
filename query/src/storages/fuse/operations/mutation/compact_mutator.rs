@@ -98,7 +98,7 @@ impl<'a> CompactMutator<'a> {
         // Compact the blocks.
         let col_ids = all_the_columns_ids(table);
         let mut compactor = BlockCompactor::new(self.row_per_block);
-        let block_writer = BlockWriter::new(&self.data_accessor, self.location_generator);
+        let block_writer = BlockWriter::new(self.ctx, &self.data_accessor, self.location_generator);
         for block_meta in &merged_blocks {
             let block_reader = table.create_block_reader(self.ctx, col_ids.clone())?;
             let data_block = block_reader.read_with_block_meta(block_meta).await?;

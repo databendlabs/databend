@@ -49,7 +49,13 @@ pub struct BlockMeta {
     pub col_stats: HashMap<ColumnId, ColumnStatistics>,
     pub col_metas: HashMap<ColumnId, ColumnMeta>,
     pub cluster_stats: Option<ClusterStatistics>,
+    /// location of data block
     pub location: Location,
+    /// location of bloom filter index
+    pub bloom_filter_index_location: Option<Location>,
+
+    #[serde(default)]
+    pub bloom_filter_index_size: u64,
 
     /// Compression algo used to compress the columns of blocks
     ///
@@ -61,6 +67,7 @@ pub struct BlockMeta {
 }
 
 impl BlockMeta {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         row_count: u64,
         block_size: u64,
@@ -69,6 +76,8 @@ impl BlockMeta {
         col_metas: HashMap<ColumnId, ColumnMeta>,
         cluster_stats: Option<ClusterStatistics>,
         location: Location,
+        bloom_filter_index_location: Option<Location>,
+        bloom_filter_index_size: u64,
     ) -> Self {
         Self {
             row_count,
@@ -78,6 +87,8 @@ impl BlockMeta {
             col_metas,
             cluster_stats,
             location,
+            bloom_filter_index_location,
+            bloom_filter_index_size,
             compression: Compression::Lz4Raw,
         }
     }
@@ -123,6 +134,8 @@ impl From<v0::BlockMeta> for BlockMeta {
             col_metas: s.col_metas,
             cluster_stats: None,
             location: (s.location.path, DataBlock::VERSION),
+            bloom_filter_index_location: None,
+            bloom_filter_index_size: 0,
             compression: Compression::Lz4,
         }
     }

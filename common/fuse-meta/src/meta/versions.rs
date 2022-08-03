@@ -19,6 +19,7 @@ use common_exception::ErrorCode;
 
 use crate::meta::v0;
 use crate::meta::v1;
+use crate::meta::v1::BlockBloomFilterIndex;
 use crate::meta::Versioned;
 
 // Here versions of meta are tagged with numeric values
@@ -64,13 +65,19 @@ impl SnapshotVersion {
 
 impl Versioned<0> for DataBlock {}
 
+impl Versioned<1> for BlockBloomFilterIndex {}
+
+pub enum BlockBloomFilterIndexVersion {
+    V1(PhantomData<v1::BlockBloomFilterIndex>),
+}
+
 mod converters {
 
     use super::*;
 
     impl TryFrom<u64> for SegmentInfoVersion {
         type Error = ErrorCode;
-        fn try_from(value: u64) -> std::result::Result<Self, Self::Error> {
+        fn try_from(value: u64) -> Result<Self, Self::Error> {
             match value {
                 0 => Ok(SegmentInfoVersion::V0(
                     // `ver_eq<_, 0>` is merely a static check to make sure that
@@ -87,12 +94,26 @@ mod converters {
 
     impl TryFrom<u64> for SnapshotVersion {
         type Error = ErrorCode;
-        fn try_from(value: u64) -> std::result::Result<Self, Self::Error> {
+        fn try_from(value: u64) -> Result<Self, Self::Error> {
             match value {
                 0 => Ok(SnapshotVersion::V0(ver_eq::<_, 0>(PhantomData))),
                 1 => Ok(SnapshotVersion::V1(ver_eq::<_, 1>(PhantomData))),
                 _ => Err(ErrorCode::LogicalError(format!(
                     "unknown snapshot segment version {value}, versions supported: 0, 1"
+                ))),
+            }
+        }
+    }
+
+    impl TryFrom<u64> for BlockBloomFilterIndexVersion {
+        type Error = ErrorCode;
+        fn try_from(value: u64) -> Result<Self, Self::Error> {
+            match value {
+                1 => Ok(BlockBloomFilterIndexVersion::V1(ver_eq::<_, 1>(
+                    PhantomData,
+                ))),
+                _ => Err(ErrorCode::LogicalError(format!(
+                    "unknown block bloom filer index version {value}, versions supported: 1"
                 ))),
             }
         }

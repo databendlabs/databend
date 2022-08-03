@@ -73,6 +73,9 @@ fn test_to_partitions() -> Result<()> {
         .iter()
         .map(|(_, col_stats)| col_stats.in_memory_size)
         .sum();
+
+    let bloom_filter_location = None;
+    let bloom_filter_size = 0;
     let block_meta = BlockMeta::new(
         0,
         block_size,
@@ -81,6 +84,8 @@ fn test_to_partitions() -> Result<()> {
         cols_metas.clone(),
         cluster_stats,
         location,
+        bloom_filter_location,
+        bloom_filter_size,
     );
 
     let blocks_metas = (0..num_of_block)

@@ -69,7 +69,7 @@ impl FuseTable {
         plan: &DeletePlan,
     ) -> Result<()> {
         let mut deletion_collector =
-            DeletionMutator::try_create(ctx.as_ref(), &self.meta_location_generator, snapshot)?;
+            DeletionMutator::try_create(&ctx, &self.meta_location_generator, snapshot)?;
         let schema = self.table_info.schema();
         // TODO refine pruner
         let extras = Extras {
@@ -80,7 +80,7 @@ impl FuseTable {
         };
         let push_downs = Some(extras);
         let block_metas = BlockPruner::new(snapshot.clone())
-            .apply(&ctx, schema, &push_downs)
+            .prune(&ctx, schema, &push_downs)
             .await?;
 
         // delete block one by one.

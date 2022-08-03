@@ -214,7 +214,7 @@ impl FuseTable {
             let input_port = InputPort::create();
             sink_pipeline_builder.add_sink(
                 input_port.clone(),
-                FuseTableSink::create(
+                FuseTableSink::try_create(
                     input_port,
                     ctx.clone(),
                     block_per_seg,

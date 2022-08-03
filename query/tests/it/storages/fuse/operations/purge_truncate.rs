@@ -28,15 +28,16 @@ async fn test_fuse_truncate_purge_stmt() -> Result<()> {
     let ctx = fixture.ctx();
     fixture.create_default_table().await?;
 
-    // ingests some test data
+    // ingests some 2 blocks
     append_sample_data(1, &fixture).await?;
     append_sample_data(1, &fixture).await?;
 
-    // there should be some data there: 1 snapshot, 1 segment, 1 block
-    check_data_dir(&fixture, "truncate_purge", 2, 2, 2).await;
+    let expected_index_count = 2;
+    // there should be some data there: 2 snapshot, 2 segment, 2 block
+    check_data_dir(&fixture, "truncate_purge", 2, 2, 2, expected_index_count).await;
 
     // let's truncate
-    let qry = format!("truncate table '{}'.'{}' purge", db, tbl);
+    let qry = format!("truncate table {}.{} purge", db, tbl);
     execute_command(ctx.clone(), qry.as_str()).await?;
 
     // one history item left there
@@ -47,6 +48,14 @@ async fn test_fuse_truncate_purge_stmt() -> Result<()> {
     .await?;
 
     // there should be only a snapshot file left there, no segments or blocks
-    check_data_dir(&fixture, "truncate_after_purge_check_file_items", 1, 0, 0).await;
+    check_data_dir(
+        &fixture,
+        "truncate_after_purge_check_file_items",
+        1,
+        0,
+        0,
+        0,
+    )
+    .await;
     Ok(())
 }

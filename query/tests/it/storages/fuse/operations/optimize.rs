@@ -45,21 +45,25 @@ async fn do_purge_test(case_name: &str, operation: &str) -> Result<()> {
     let db = fixture.default_db_name();
     let tbl = fixture.default_table_name();
     let qry = format!("optimize table {}.{} {}", db, tbl, operation);
-    // insert, and then insert overwrite (1 snapshot, 1 segment, 1 block for each insertion);
-    insert_test_data(&qry, &fixture).await?;
-    // there should be only 1 snapshot, 1 segment, 1 block left
-    check_data_dir(&fixture, case_name, 1, 1, 1).await;
+
+    // insert, and then insert overwrite (1 snapshot, 1 segment, 1 data block, 1 index block for each insertion);
+    do_insertions(&fixture).await?;
+
+    // execute the query
+    let ctx = fixture.ctx();
+    execute_command(ctx, &qry).await?;
+
+    // there should be only 1 snapshot, 1 segment, 1 block left, and 0 index left
+    check_data_dir(&fixture, case_name, 1, 1, 1, 1).await;
     history_should_have_only_one_item(&fixture, case_name).await
 }
 
-async fn insert_test_data(qry: &str, fixture: &TestFixture) -> Result<()> {
-    let ctx = fixture.ctx();
+async fn do_insertions(fixture: &TestFixture) -> Result<()> {
     fixture.create_default_table().await?;
     // ingests 1 block, 1 segment, 1 snapshot
     append_sample_data(1, fixture).await?;
     // then, overwrite the table, new data set: 1 block, 1 segment, 1 snapshot
     append_sample_data_overwrite(1, true, fixture).await?;
-    execute_command(ctx.clone(), qry).await?;
     Ok(())
 }
 

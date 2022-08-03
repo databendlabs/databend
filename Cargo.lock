@@ -1286,6 +1286,7 @@ dependencies = [
 name = "common-fuse-meta"
 version = "0.1.0"
 dependencies = [
+ "common-arrow",
  "common-base",
  "common-cache",
  "common-config",
