@@ -122,12 +122,13 @@ jobs:
 
   test_sqllogic_standalone_linux:
     timeout-minutes: 15
+    name: test_sqllogic_${{ matrix.dirs }}_standalone_linux
     runs-on: [self-hosted, X64, Linux, development]
     needs: build_gnu
     strategy:
       matrix:
         dirs:
-          - "gen query"
+          - "base"
           - "ydb"
     steps:
       - uses: actions/checkout@v3
