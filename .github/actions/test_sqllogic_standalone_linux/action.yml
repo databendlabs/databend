@@ -13,7 +13,6 @@ inputs:
     description: "logic test suites dirs"
     required: true
     default: ""
-  
 runs:
   using: "composite"
   steps:
