@@ -15,6 +15,7 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use common_catalog::catalog::CATALOG_DEFAULT;
 use common_datablocks::DataBlock;
 use common_exception::Result;
 use common_meta_app::schema::TableIdent;
@@ -29,7 +30,6 @@ use common_planners::Statistics;
 use super::clustering_information::ClusteringInformation;
 use super::table_args::get_cluster_keys;
 use super::table_args::parse_func_table_args;
-use crate::catalogs::CATALOG_DEFAULT;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::AsyncSource;

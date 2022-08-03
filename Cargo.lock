@@ -1079,7 +1079,7 @@ dependencies = [
  "common-io",
  "common-meta-app",
  "common-meta-types",
- "common-pipeline",
+ "common-pipeline-core",
  "common-planners",
  "common-settings",
  "common-users",
@@ -1087,6 +1087,36 @@ dependencies = [
  "opendal",
  "parking_lot 0.12.1",
  "time 0.3.11",
+]
+
+[[package]]
+name = "common-catalogs"
+version = "0.1.0"
+dependencies = [
+ "async-trait 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)",
+ "common-base",
+ "common-catalog",
+ "common-config",
+ "common-contexts",
+ "common-datablocks",
+ "common-datavalues",
+ "common-exception",
+ "common-functions",
+ "common-fuse-meta",
+ "common-hive-meta-store",
+ "common-io",
+ "common-meta-app",
+ "common-meta-types",
+ "common-pipeline-core",
+ "common-planners",
+ "common-settings",
+ "common-users",
+ "dyn-clone",
+ "opendal",
+ "parking_lot 0.12.1",
+ "thrift",
+ "time 0.3.11",
+ "tracing",
 ]
 
 [[package]]
@@ -1603,10 +1633,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "common-pipeline"
+name = "common-pipeline-core"
 version = "0.1.0"
 dependencies = [
  "async-trait 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)",
+ "common-base",
  "common-datablocks",
  "common-datavalues",
  "common-exception",
@@ -1620,6 +1651,54 @@ dependencies = [
  "petgraph",
  "serde",
  "time 0.3.11",
+]
+
+[[package]]
+name = "common-pipeline-sources"
+version = "0.1.0"
+dependencies = [
+ "async-trait 0.1.56 (git+https://github.com/datafuse-extras/async-trait?rev=f0b0fd5)",
+ "common-base",
+ "common-catalog",
+ "common-datablocks",
+ "common-datavalues",
+ "common-exception",
+ "common-io",
+ "common-pipeline-core",
+ "futures",
+ "futures-util",
+ "itertools",
+ "num_cpus",
+ "once_cell",
+ "parking_lot 0.12.1",
+ "petgraph",
+ "serde",
+ "time 0.3.11",
+]
+
+[[package]]
+name = "common-pipeline-transforms"
+version = "0.1.0"
+dependencies = [
+ "async-trait 0.1.56 (git+https://github.com/datafuse-extras/async-trait?rev=f0b0fd5)",
+ "common-base",
+ "common-catalog",
+ "common-datablocks",
+ "common-datavalues",
+ "common-exception",
+ "common-io",
+ "common-pipeline-core",
+ "common-planners",
+ "futures",
+ "futures-util",
+ "itertools",
+ "num_cpus",
+ "once_cell",
+ "parking_lot 0.12.1",
+ "petgraph",
+ "serde",
+ "time 0.3.11",
+ "tracing",
 ]
 
 [[package]]
@@ -1706,6 +1785,97 @@ dependencies = [
  "opendal",
  "percent-encoding",
  "serde",
+]
+
+[[package]]
+name = "common-storages-hive"
+version = "0.1.0"
+dependencies = [
+ "async-recursion",
+ "async-trait 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)",
+ "backoff",
+ "clap 3.2.15",
+ "common-arrow",
+ "common-base",
+ "common-catalog",
+ "common-catalogs",
+ "common-config",
+ "common-datablocks",
+ "common-datavalues",
+ "common-exception",
+ "common-fuse-meta",
+ "common-grpc",
+ "common-hive-meta-store",
+ "common-meta-app",
+ "common-meta-types",
+ "common-pipeline-core",
+ "common-pipeline-sources",
+ "common-planners",
+ "common-storage",
+ "common-storages-index",
+ "common-tracing",
+ "common-users",
+ "futures",
+ "futures-util",
+ "itertools",
+ "num_cpus",
+ "once_cell",
+ "opendal",
+ "parking_lot 0.12.1",
+ "semver",
+ "serde",
+ "serfig",
+ "thrift",
+ "time 0.3.11",
+ "tracing",
+ "typetag",
+]
+
+[[package]]
+name = "common-storages-index"
+version = "0.1.0"
+dependencies = [
+ "async-recursion",
+ "async-trait 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)",
+ "backoff",
+ "bincode",
+ "bit-vec",
+ "clap 3.2.15",
+ "common-arrow",
+ "common-base",
+ "common-catalog",
+ "common-catalogs",
+ "common-config",
+ "common-datablocks",
+ "common-datavalues",
+ "common-exception",
+ "common-functions",
+ "common-fuse-meta",
+ "common-grpc",
+ "common-hive-meta-store",
+ "common-meta-app",
+ "common-meta-types",
+ "common-pipeline-core",
+ "common-pipeline-transforms",
+ "common-planners",
+ "common-storage",
+ "common-tracing",
+ "common-users",
+ "futures",
+ "futures-util",
+ "itertools",
+ "num_cpus",
+ "once_cell",
+ "opendal",
+ "parking_lot 0.12.1",
+ "rand 0.8.5",
+ "semver",
+ "serde",
+ "serfig",
+ "thrift",
+ "time 0.3.11",
+ "tracing",
+ "typetag",
 ]
 
 [[package]]
@@ -2289,6 +2459,7 @@ dependencies = [
  "common-building",
  "common-cache",
  "common-catalog",
+ "common-catalogs",
  "common-config",
  "common-contexts",
  "common-datablocks",
@@ -2313,10 +2484,14 @@ dependencies = [
  "common-meta-store",
  "common-meta-types",
  "common-metrics",
- "common-pipeline",
+ "common-pipeline-core",
+ "common-pipeline-sources",
+ "common-pipeline-transforms",
  "common-planners",
  "common-settings",
  "common-storage",
+ "common-storages-hive",
+ "common-storages-index",
  "common-streams",
  "common-tracing",
  "common-users",

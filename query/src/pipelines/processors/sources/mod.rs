@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod async_source;
 mod blocks_source;
 mod deserializer;
 mod empty_source;
@@ -21,12 +20,13 @@ mod multi_file_splitter;
 mod stream_source;
 mod stream_source_v2;
 mod sync_ck_source_receiver;
-mod sync_source;
 mod sync_source_receiver;
 
 pub use async_source::AsyncSource;
 pub use async_source::AsyncSourcer;
 pub use blocks_source::BlocksSource;
+use common_pipeline_sources::processors::sources::async_source;
+use common_pipeline_sources::processors::sources::sync_source;
 pub use deserializer::Deserializer;
 pub use empty_source::EmptySource;
 pub use file_splitter::FileSplitter;

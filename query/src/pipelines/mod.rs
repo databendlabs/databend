@@ -15,8 +15,8 @@
 pub mod executor;
 pub mod processors;
 
-use common_pipeline::pipe;
-use common_pipeline::pipeline;
+use common_pipeline_core::pipe;
+use common_pipeline_core::pipeline;
 
 mod pipeline_build_res;
 mod pipeline_builder;

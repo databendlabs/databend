@@ -15,15 +15,16 @@
 use std::collections::VecDeque;
 use std::sync::Arc;
 
+use common_catalog::catalog::CATALOG_DEFAULT;
 use common_datablocks::assert_blocks_sorted_eq_with_name;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_meta_app::schema::DatabaseMeta;
 use common_meta_app::schema::TableMeta;
-use common_pipeline::processors::port::OutputPort;
-use common_pipeline::Pipeline;
-use common_pipeline::SourcePipeBuilder;
+use common_pipeline_core::processors::port::OutputPort;
+use common_pipeline_core::Pipeline;
+use common_pipeline_core::SourcePipeBuilder;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
 use common_planners::Expression;
@@ -31,7 +32,6 @@ use common_planners::Extras;
 use common_storage::StorageFsConfig;
 use common_storage::StorageParams;
 use common_streams::SendableDataBlockStream;
-use databend_query::catalogs::CATALOG_DEFAULT;
 use databend_query::interpreters::append2table;
 use databend_query::interpreters::commit2table;
 use databend_query::interpreters::CreateTableInterpreter;

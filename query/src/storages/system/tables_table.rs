@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_catalog::catalog::CATALOG_DEFAULT;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
@@ -22,7 +23,6 @@ use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 
 use crate::catalogs::Catalog;
-use crate::catalogs::CATALOG_DEFAULT;
 use crate::sessions::TableContext;
 use crate::storages::system::table::AsyncOneBlockSystemTable;
 use crate::storages::system::table::AsyncSystemTable;

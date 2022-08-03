@@ -17,7 +17,7 @@ pub mod fuse;
 pub mod github;
 #[cfg(feature = "hive")]
 pub mod hive;
-pub mod index;
+pub use common_storages_index as index;
 pub mod information_schema;
 pub mod memory;
 pub mod null;

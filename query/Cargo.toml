@@ -23,7 +23,7 @@ simd = ["common-arrow/simd"]
 tokio-console = ["common-tracing/console", "common-base/tracing"]
 memory-profiling = ["common-base/memory-profiling", "common-http/memory-profiling", "tempfile"]
 storage-hdfs = ["opendal/services-hdfs", "common-storage/storage-hdfs"]
-hive = ["common-hive-meta-store", "thrift", "storage-hdfs", "common-config/hive"]
+hive = ["common-hive-meta-store", "thrift", "storage-hdfs", "common-config/hive", "common-storages-hive"]
 io-uring = [
     "common-meta-embedded/io-uring",
     "common-meta-store/io-uring",
@@ -38,6 +38,7 @@ common-ast = { path = "../common/ast" }
 common-base = { path = "../common/base" }
 common-cache = { path = "../common/cache" }
 common-catalog = { path = "../common/catalog" }
+common-catalogs = { path = "../common/catalogs" }
 common-config = { path = "../common/config" }
 common-contexts = { path = "../common/contexts" }
 common-datablocks = { path = "../common/datablocks" }
@@ -62,10 +63,14 @@ common-meta-sled-store = { path = "../common/meta/sled-store" }
 common-meta-store = { path = "../common/meta/store" }
 common-meta-types = { path = "../common/meta/types" }
 common-metrics = { path = "../common/metrics" }
-common-pipeline = { path = "../common/pipeline" }
+common-pipeline-core = { path = "../common/pipeline/core" }
+common-pipeline-sources = { path = "../common/pipeline/sources" }
+common-pipeline-transforms = { path = "../common/pipeline/transforms" }
 common-planners = { path = "../common/planners" }
 common-settings = { path = "../common/settings" }
 common-storage = { path = "../common/storage" }
+common-storages-hive = { path = "../common/storages/hive", optional = true }
+common-storages-index = { path = "../common/storages/index" }
 common-streams = { path = "../common/streams" }
 common-tracing = { path = "../common/tracing" }
 common-users = { path = "../common/users" }
