@@ -54,7 +54,7 @@ impl Limiter for U64Limiter {
 
     fn within_limit(&self, n: u64) -> bool {
         let o = self.state.fetch_add(n, Ordering::Relaxed);
-        o <= self.limit
+        o < self.limit
     }
 }
 
