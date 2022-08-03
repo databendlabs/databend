@@ -25,9 +25,6 @@ use common_ast::ast::ShowCreateDatabaseStmt;
 use common_ast::ast::ShowDatabasesStmt;
 use common_ast::ast::ShowLimit;
 use common_ast::ast::UndropDatabaseStmt;
-use common_ast::parser::parse_sql;
-use common_ast::parser::tokenize_sql;
-use common_ast::Backtrace;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::ToDataType;
@@ -45,6 +42,7 @@ use crate::sessions::TableContext;
 use crate::sql::binder::Binder;
 use crate::sql::plans::Plan;
 use crate::sql::BindContext;
+use crate::sql::plans::RewriteKind;
 
 impl<'a> Binder {
     pub(in crate::sql::planner::binder) async fn bind_show_databases(
