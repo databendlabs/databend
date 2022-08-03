@@ -62,10 +62,7 @@ impl Interpreter for KillInterpreter {
         "KillInterpreter"
     }
 
-    async fn execute(
-        &self,
-        _input_stream: Option<SendableDataBlockStream>,
-    ) -> Result<SendableDataBlockStream> {
+    async fn execute(&self) -> Result<SendableDataBlockStream> {
         self.ctx
             .get_current_session()
             .validate_privilege(&GrantObject::Global, UserPrivilegeType::Super)

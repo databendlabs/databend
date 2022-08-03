@@ -1082,7 +1082,6 @@ dependencies = [
  "common-pipeline",
  "common-planners",
  "common-settings",
- "common-streams",
  "common-users",
  "dyn-clone",
  "opendal",
@@ -4788,9 +4787,9 @@ checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
 
 [[package]]
 name = "opendal"
-version = "0.11.3"
+version = "0.11.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "470a35200a050b8dd34d4713ba32d9e145c363115e989860ea03e784a5040533"
+checksum = "f795048c5dfeedf0ccf718e0000f848fc41daf8f68e2d0eb7687c68da481d725"
 dependencies = [
  "anyhow",
  "async-compat",
@@ -6068,6 +6067,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "rio"
+version = "0.9.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9e98c25665909853c07874301124482754434520ab572ac6a22e90366de6685b"
+dependencies = [
+ "libc",
+]
+
+[[package]]
 name = "ritelinked"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6738,6 +6746,7 @@ dependencies = [
  "libc",
  "log",
  "parking_lot 0.11.2",
+ "rio",
 ]
 
 [[package]]

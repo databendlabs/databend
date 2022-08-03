@@ -22,7 +22,6 @@ use common_fuse_meta::meta::BlockMeta;
 use common_fuse_meta::meta::ColumnMeta;
 use common_fuse_meta::meta::ColumnStatistics;
 use common_planners::Extras;
-use databend_query::catalogs::CATALOG_DEFAULT;
 use databend_query::interpreters::CreateTableInterpreter;
 use databend_query::interpreters::Interpreter;
 use databend_query::storages::fuse::ColumnLeaf;
@@ -141,7 +140,7 @@ async fn test_fuse_table_exact_statistic() -> Result<()> {
 
     let create_table_plan = fixture.default_crate_table_plan();
     let interpreter = CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;
-    interpreter.execute(None).await?;
+    interpreter.execute().await?;
 
     let mut table = fixture.latest_default_table().await?;
 
@@ -153,9 +152,9 @@ async fn test_fuse_table_exact_statistic() -> Result<()> {
         let stream =
             TestFixture::gen_sample_blocks_stream_ex(num_blocks, rows_per_block, value_start_from);
 
-        let r = table.append_data(ctx.clone(), stream).await?;
-        table
-            .commit_insertion(ctx.clone(), CATALOG_DEFAULT, r.try_collect().await?, false)
+        let blocks = stream.try_collect().await?;
+        fixture
+            .append_commit_blocks(table.clone(), blocks, false, true)
             .await?;
 
         table = fixture.latest_default_table().await?;

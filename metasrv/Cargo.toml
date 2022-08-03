@@ -22,6 +22,12 @@ default = ["simd"]
 memory-profiling = ["common-base/memory-profiling", "common-http/memory-profiling"]
 simd = ["common-arrow/simd"]
 tokio-console = ["common-tracing/console", "common-base/tracing"]
+io-uring = [
+    "sled/io_uring",
+    "common-meta-store/io-uring",
+    "common-meta-sled-store/io-uring",
+    "common-meta-raft-store/io-uring",
+]
 
 [dependencies]
 # Workspace dependencies

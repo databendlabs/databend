@@ -49,11 +49,8 @@ impl Interpreter for DescribeUserStageInterpreter {
         "DescribeUserStageInterpreter"
     }
 
-    #[tracing::instrument(level = "info", skip(self, input_stream), fields(ctx.id = self.ctx.get_id().as_str()))]
-    async fn execute(
-        &self,
-        input_stream: Option<SendableDataBlockStream>,
-    ) -> Result<SendableDataBlockStream> {
+    #[tracing::instrument(level = "info", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
+    async fn execute(&self) -> Result<SendableDataBlockStream> {
         let user_mgr = self.ctx.get_user_manager();
         let tenant = self.ctx.get_tenant();
         user_mgr.get_stage(&tenant, &self.plan.name).await?;
@@ -64,7 +61,7 @@ impl Interpreter for DescribeUserStageInterpreter {
 
         if let PlanNode::Select(plan) = optimized {
             let interpreter = SelectInterpreter::try_create(self.ctx.clone(), plan)?;
-            interpreter.execute(input_stream).await
+            interpreter.execute().await
         } else {
             return Err(ErrorCode::LogicalError("Describe stage build query error"));
         }

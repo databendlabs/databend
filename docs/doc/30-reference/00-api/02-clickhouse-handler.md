@@ -5,9 +5,7 @@ description:
   Databend is ClickHouse wire protocol-compatible.
 ---
 
-<p align="center">
-<img src="https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/api/api-handler-clickhouse.png" width="200"/>
-</p>
+![image](../../../public/img/api/api-handler-clickhouse.png)
 
 ## Overview
 

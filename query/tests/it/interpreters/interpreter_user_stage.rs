@@ -32,7 +32,7 @@ async fn test_user_stage_interpreter() -> Result<()> {
         let (plan, _, _) = planner.plan_sql(query).await?;
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         assert_eq!(executor.name(), "CreateUserStageInterpreter");
-        let mut stream = executor.execute(None).await?;
+        let mut stream = executor.execute().await?;
         while let Some(_block) = stream.next().await {}
     }
 
@@ -43,7 +43,7 @@ async fn test_user_stage_interpreter() -> Result<()> {
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         assert_eq!(executor.name(), "DescribeUserStageInterpreter");
 
-        let mut stream = executor.execute(None).await?;
+        let mut stream = executor.execute().await?;
         let mut blocks = vec![];
 
         while let Some(block) = stream.next().await {
@@ -79,7 +79,7 @@ async fn test_user_stage_interpreter() -> Result<()> {
         let (plan, _, _) = planner.plan_sql(query).await?;
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         assert_eq!(executor.name(), "CreateUserStageInterpreter");
-        let res = executor.execute(None).await;
+        let res = executor.execute().await;
         assert!(res.is_err());
         assert_eq!(
             res.err().unwrap().to_string(),
@@ -94,7 +94,7 @@ async fn test_user_stage_interpreter() -> Result<()> {
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         assert_eq!(executor.name(), "DropUserStageInterpreter");
 
-        let mut stream = executor.execute(None).await?;
+        let mut stream = executor.execute().await?;
         while let Some(_block) = stream.next().await {}
     }
 

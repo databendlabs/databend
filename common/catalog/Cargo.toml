@@ -23,11 +23,10 @@ common-meta-types = { path = "../meta/types" }
 common-pipeline = { path = "../pipeline" }
 common-planners = { path = "../planners" }
 common-settings = { path = "../settings" }
-common-streams = { path = "../streams" }
 common-users = { path = "../users" }
 
 async-trait = "0.1.56"
 dyn-clone = "1.0.6"
-opendal = { version = "0.11.3", features = ["retry"] }
+opendal = { version = "0.11.4", features = ["retry"] }
 parking_lot = "0.12.1"
 time = "0.3.10"

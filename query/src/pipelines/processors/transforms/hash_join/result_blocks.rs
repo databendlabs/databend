@@ -463,12 +463,23 @@ impl JoinHashTable {
             self.row_space.gather(build_indexs)?
         };
 
-        let nullable_columns = build_block
-            .columns()
-            .iter()
-            .map(|c| Self::set_validity(c, &validity))
-            .collect::<Result<Vec<_>>>()?;
-
+        let nullable_columns = if self.row_space.datablocks().is_empty() && !build_indexs.is_empty()
+        {
+            build_block
+                .columns()
+                .iter()
+                .map(|c| {
+                    c.data_type()
+                        .create_constant_column(&DataValue::Null, build_indexs.len())
+                })
+                .collect::<Result<Vec<_>>>()?
+        } else {
+            build_block
+                .columns()
+                .iter()
+                .map(|c| Self::set_validity(c, &validity))
+                .collect::<Result<Vec<_>>>()?
+        };
         let nullable_build_block =
             DataBlock::create(self.row_space.data_schema.clone(), nullable_columns.clone());
         let probe_block = DataBlock::block_take_by_indices(input, probe_indexs)?;
@@ -619,8 +630,14 @@ impl JoinHashTable {
             Ok(column.clone())
         } else if column.is_nullable() {
             let col: &NullableColumn = Series::check_get(column)?;
-            let new_validity = col.ensure_validity() & validity;
-            let col = NullableColumn::wrap_inner(col.inner().clone(), Some(new_validity));
+            // It's possible validity is longer than col.
+            let diff_len = validity.len() - col.ensure_validity().len();
+            let mut new_validity = MutableBitmap::with_capacity(validity.len());
+            for (b1, b2) in validity.iter().zip(col.ensure_validity().iter()) {
+                new_validity.push(b1 & b2);
+            }
+            new_validity.extend_constant(diff_len, false);
+            let col = NullableColumn::wrap_inner(col.inner().clone(), Some(new_validity.into()));
             Ok(col)
         } else {
             let col = NullableColumn::wrap_inner(column.clone(), Some(validity.clone()));

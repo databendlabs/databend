@@ -28,6 +28,8 @@ use futures::TryStreamExt;
 use regex::Regex;
 use tracing::info;
 
+use super::append2table;
+use super::commit2table;
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreterV2;
 use crate::pipelines::executor::PipelineCompleteExecutor;
@@ -206,21 +208,22 @@ impl CopyInterpreterV2 {
             files: vec![],
         };
 
+        let pipeline = select_interpreter.create_new_pipeline().await?;
         let table = StageTable::try_create(stage_table_info)?;
 
-        let stream = select_interpreter.execute(None).await?;
-        let results = table.append_data(self.ctx.clone(), stream).await?;
+        append2table(
+            self.ctx.clone(),
+            table.clone(),
+            data_schema.clone(),
+            pipeline,
+        )?;
+        commit2table(self.ctx.clone(), table.clone(), false).await?;
 
-        table
-            .commit_insertion(
-                self.ctx.clone(),
-                &self.ctx.get_current_catalog(),
-                results.try_collect().await?,
-                false,
-            )
-            .await?;
-
-        Ok(Box::pin(DataBlockStream::create(data_schema, None, vec![])))
+        Ok(Box::pin(DataBlockStream::create(
+            Arc::new(DataSchema::empty()),
+            None,
+            vec![],
+        )))
     }
 }
 
@@ -230,11 +233,8 @@ impl Interpreter for CopyInterpreterV2 {
         "CopyInterpreterV2"
     }
 
-    #[tracing::instrument(level = "debug", name = "copy_interpreter_execute_v2", skip(self, _input_stream), fields(ctx.id = self.ctx.get_id().as_str()))]
-    async fn execute(
-        &self,
-        _input_stream: Option<SendableDataBlockStream>,
-    ) -> Result<SendableDataBlockStream> {
+    #[tracing::instrument(level = "debug", name = "copy_interpreter_execute_v2", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
+    async fn execute(&self) -> Result<SendableDataBlockStream> {
         match &self.plan {
             // TODO(xuanwo): extract them as a separate function.
             CopyPlanV2::IntoTable {

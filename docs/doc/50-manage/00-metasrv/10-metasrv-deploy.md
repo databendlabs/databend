@@ -182,7 +182,7 @@ curl -I  http://127.0.0.1:28101/v1/health
 
 Check the response is `HTTP/1.1 200 OK`.
 
-### 2.2.4 Create config files for other 2 nodes
+#### 2.2.4 Create config files for other 2 nodes
 
 The config for other nodes are similar, except the `single` should be replaced
 with `join`, and the `id` has to be different.
@@ -218,7 +218,7 @@ join                = ["localhost:28103"]
 The arg `join` specifies a list of raft addresses(`<raft_advertise_host>:<raft_api_port>`) of nodes in the existing cluster it wants to
 be joined to.
 
-### Start other nodes
+#### 2.2.5 Start other nodes
 
 ```shell
 ./databend-meta -c ./databend-meta-2.toml > meta2.log 2>&1 &

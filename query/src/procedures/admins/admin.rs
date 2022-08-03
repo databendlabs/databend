@@ -14,17 +14,12 @@
 
 use super::tenant_quota::TenantQuotaProcedure;
 use crate::procedures::admins::bootstrap_tenant::BootstrapTenantProcedure;
-use crate::procedures::admins::reload_config::ReloadConfigProcedure;
 use crate::procedures::ProcedureFactory;
 
 pub struct AdminProcedure;
 
 impl AdminProcedure {
     pub fn register(factory: &mut ProcedureFactory) {
-        factory.register(
-            "admin$reload_config",
-            Box::new(ReloadConfigProcedure::try_create),
-        );
         factory.register(
             "admin$bootstrap_tenant",
             Box::new(BootstrapTenantProcedure::try_create),
