@@ -13,7 +13,7 @@ queue_rules:
       - check-success=test_stateless_standalone_linux
       - check-success=test_stateless_cluster_linux
       - check-success=test_stateful_standalone_linux
-      - check-success=test_sqllogic_standalone_linux
+      - check-success~=^test_sqllogic_(base|ydb)_standalone_linux$
 
   - name: docs_queue
     conditions:
