@@ -9,6 +9,7 @@ edition = "2021"
 [features]
 
 [dependencies]
+common-arrow = { path = "../arrow" }
 common-base = { path = "../base" }
 common-cache = { path = "../cache" }
 common-config = { path = "../config" }

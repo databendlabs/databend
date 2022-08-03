@@ -325,8 +325,8 @@ async fn test_block_stream_writer() -> Result<()> {
 fn test_meta_locations() -> Result<()> {
     let test_prefix = "test_pref";
     let locs = TableMetaLocationGenerator::with_prefix(test_prefix.to_owned());
-    let block_loc = locs.gen_block_location();
-    assert!(block_loc.starts_with(test_prefix));
+    let ((path, _ver), _id) = locs.gen_block_location();
+    assert!(path.starts_with(test_prefix));
     let seg_loc = locs.gen_segment_info_location();
     assert!(seg_loc.starts_with(test_prefix));
     let uuid = Uuid::new_v4();

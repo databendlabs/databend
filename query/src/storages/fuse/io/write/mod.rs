@@ -22,6 +22,7 @@ pub use block_stream_writer::BlockCompactor;
 pub use block_stream_writer::BlockStreamWriter;
 pub use block_stream_writer::SegmentInfoStream;
 pub use block_writer::write_block;
+pub use block_writer::write_data;
 pub use block_writer::BlockWriter;
 pub use meta_writer::write_meta;
 pub use segment_writer::SegmentWriter;

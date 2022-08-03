@@ -121,12 +121,20 @@ jobs:
       - uses: ./.github/actions/test_stateless_cluster_linux
 
   test_sqllogic_standalone_linux:
-    timeout-minutes: 20
+    timeout-minutes: 15
+    name: test_sqllogic_${{ matrix.dirs }}_standalone_linux
     runs-on: [self-hosted, X64, Linux, development]
     needs: build_gnu
+    strategy:
+      matrix:
+        dirs:
+          - "base"
+          - "ydb"
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_sqllogic_standalone_linux
+        with:
+          dirs: ${{ matrix.dirs }}
 
   test_stateful_standalone_linux:
     timeout-minutes: 10

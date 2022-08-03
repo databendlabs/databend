@@ -290,8 +290,9 @@ fn create_blocks() -> Vec<DataBlock> {
 
 async fn create_bloom_indexer() -> Result<BloomFilterIndexer> {
     let blocks = create_blocks();
+    let block_refs = blocks.iter().collect::<Vec<_>>();
     let ctx = create_query_context().await?;
-    BloomFilterIndexer::try_create_with_seed(blocks.as_slice(), create_seed(), ctx)
+    BloomFilterIndexer::try_create_with_seed(&block_refs, create_seed(), ctx)
 }
 
 #[tokio::test]
@@ -339,9 +340,9 @@ async fn test_bloom_hash_collision() -> Result<()> {
         assert!(!bloom.contains(&single_value_bloom), "{}", num);
     }
 
-    // When hash collision happens, although number 34 doesn't exist in data_blocks, the hash bits say yes.
+    // When hash collision happens, although number 32 doesn't exist in data_blocks, the hash bits say yes.
     let single_value_bloom =
-        create_bloom(u8::to_data_type(), Series::from_data(vec![34_u8]), &bloom).await?;
+        create_bloom(u8::to_data_type(), Series::from_data(vec![32_u8]), &bloom).await?;
     assert!(bloom.contains(&single_value_bloom));
     Ok(())
 }
@@ -356,8 +357,8 @@ async fn test_bloom_indexer_single_column_prune() -> Result<()> {
 
     let tests: Vec<Test> = vec![
         Test {
-            name: "ColumnUInt8 = 32",
-            expr: col("ColumnUInt8").eq(lit(32u8)),
+            name: "ColumnUInt8 = 31",
+            expr: col("ColumnUInt8").eq(lit(31u8)),
             expected_eval_result: BloomFilterExprEvalResult::False,
         },
         Test {

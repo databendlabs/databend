@@ -36,8 +36,6 @@ use common_planners::Partitions;
 use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
 use common_planners::TruncateTablePlan;
-use common_streams::SendableDataBlockStream;
-use futures::StreamExt;
 use uuid::Uuid;
 
 use crate::pipelines::Pipeline;
@@ -358,22 +356,6 @@ impl Table for FuseTable {
         self.do_append2(ctx, pipeline)
     }
 
-    #[tracing::instrument(level = "debug", name = "fuse_table_append_data", skip(self, ctx, stream), fields(ctx.id = ctx.get_id().as_str()))]
-    async fn append_data(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        stream: SendableDataBlockStream,
-    ) -> Result<SendableDataBlockStream> {
-        self.check_mutable()?;
-        let log_entry_stream = self.append_chunks(ctx, stream).await?;
-        let data_block_stream =
-            log_entry_stream.map(|append_log_entry_res| match append_log_entry_res {
-                Ok(log_entry) => DataBlock::try_from(log_entry),
-                Err(err) => Err(err),
-            });
-        Ok(Box::pin(data_block_stream))
-    }
-
     #[tracing::instrument(level = "debug", name = "fuse_table_commit_insertion", skip(self, ctx, operations), fields(ctx.id = ctx.get_id().as_str()))]
     async fn commit_insertion(
         &self,
@@ -415,7 +397,7 @@ impl Table for FuseTable {
             num_rows: Some(s.number_of_rows),
             data_size: Some(s.data_bytes),
             data_size_compressed: Some(s.compressed_data_bytes),
-            index_length: None, // we do not have it yet
+            index_size: Some(s.index_data_bytes),
         }))
     }
 

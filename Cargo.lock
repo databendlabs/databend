@@ -1082,7 +1082,6 @@ dependencies = [
  "common-pipeline",
  "common-planners",
  "common-settings",
- "common-streams",
  "common-users",
  "dyn-clone",
  "opendal",
@@ -1287,6 +1286,7 @@ dependencies = [
 name = "common-fuse-meta"
 version = "0.1.0"
 dependencies = [
+ "common-arrow",
  "common-base",
  "common-cache",
  "common-config",
