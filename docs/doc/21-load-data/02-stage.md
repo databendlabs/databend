@@ -5,9 +5,7 @@ description:
   Load data from Databend stages.
 ---
 
-<p align="center">
-<img src="https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/load/load-data-from-stage.png" width="550"/>
-</p>
+![image](../../public/img/load/load-data-from-stage.png)
 
 ### Before You Begin
 
