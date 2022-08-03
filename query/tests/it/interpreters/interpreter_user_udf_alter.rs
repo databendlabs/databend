@@ -49,15 +49,15 @@ async fn test_alter_udf_interpreter() -> Result<()> {
         let (plan, _, _) = planner.plan_sql(query).await?;
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         assert_eq!(executor.name(), "AlterUserUDFInterpreter");
-    
+
         let mut stream = executor.execute().await?;
         while let Some(_block) = stream.next().await {}
-    
+
         let udf = ctx
             .get_user_manager()
             .get_udf(&tenant, "isnotempty")
             .await?;
-    
+
         assert_eq!(udf.name, "isnotempty");
         assert_eq!(udf.parameters, vec!["d".to_string()]);
         assert_eq!(udf.definition, "NOT is_not_null(d)");

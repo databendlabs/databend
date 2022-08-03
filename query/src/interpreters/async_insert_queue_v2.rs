@@ -268,6 +268,7 @@ impl AsyncInsertQueue {
                         s_expr,
                         metadata,
                         bind_context,
+                        ..
                     } => SelectInterpreterV2::try_create(
                         ctx.clone(),
                         *bind_context.clone(),
