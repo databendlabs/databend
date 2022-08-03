@@ -27,7 +27,6 @@ use common_planners::Partitions;
 use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
 use common_planners::TruncateTablePlan;
-use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use futures::StreamExt;
 use parking_lot::RwLock;
@@ -118,6 +117,27 @@ impl QueryLogTable {
             data: Arc::new(RwLock::new(VecDeque::new())),
         }
     }
+
+    pub async fn append_data(
+        &self,
+        _ctx: Arc<dyn TableContext>,
+        mut stream: SendableDataBlockStream,
+    ) -> Result<()> {
+        while let Some(block) = stream.next().await {
+            let block = block?;
+            self.data.write().push_back(block);
+        }
+
+        // Check overflow.
+        let over = self.data.read().len() as i32 - self.max_rows;
+        if over > 0 {
+            for _x in 0..over {
+                self.data.write().pop_front();
+            }
+        }
+
+        Ok(())
+    }
 }
 
 #[async_trait::async_trait]
@@ -155,31 +175,6 @@ impl Table for QueryLogTable {
 
         pipeline.add_pipe(source_builder.finalize());
         Ok(())
-    }
-
-    async fn append_data(
-        &self,
-        _ctx: Arc<dyn TableContext>,
-        mut stream: SendableDataBlockStream,
-    ) -> Result<SendableDataBlockStream> {
-        while let Some(block) = stream.next().await {
-            let block = block?;
-            self.data.write().push_back(block);
-        }
-
-        // Check overflow.
-        let over = self.data.read().len() as i32 - self.max_rows;
-        if over > 0 {
-            for _x in 0..over {
-                self.data.write().pop_front();
-            }
-        }
-
-        Ok(Box::pin(DataBlockStream::create(
-            std::sync::Arc::new(DataSchema::empty()),
-            None,
-            vec![],
-        )))
     }
 
     async fn truncate(

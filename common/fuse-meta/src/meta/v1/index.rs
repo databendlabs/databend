@@ -12,11 +12,22 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-pub use v0::ColumnMeta;
-pub use v1::BlockBloomFilterIndex;
-pub use v1::BlockMeta;
-pub use v1::SegmentInfo;
-pub use v1::TableSnapshot;
+use common_datablocks::DataBlock;
 
-use super::v0;
-use super::v1;
+// index data of Block, which itself is also a DataBlock.
+//
+// depends on the query conditions, columns of index data will be loaded on demand.
+pub struct BlockBloomFilterIndex {
+    // Before index mod is extracted from databend-query, we just keep the DataBlock here
+    data: DataBlock,
+}
+
+impl BlockBloomFilterIndex {
+    pub fn new(data: DataBlock) -> Self {
+        Self { data }
+    }
+
+    pub fn into_data(self) -> DataBlock {
+        self.data
+    }
+}

@@ -181,6 +181,17 @@ impl FuseTable {
             let res = reader.read(x, None, *ver).await?;
             for block_meta in &res.blocks {
                 if !root.contains(block_meta.location.0.as_str()) {
+                    if let Some(bloom_index_location) = &block_meta.bloom_filter_index_location {
+                        let path = &bloom_index_location.0;
+                        if let Some(c) =
+                            ctx.get_storage_cache_manager().get_bloom_index_meta_cache()
+                        {
+                            let cache = &mut *c.write().await;
+                            cache.pop(path);
+                        }
+                        self.remove_location(&accessor, bloom_index_location.0.as_str())
+                            .await?;
+                    }
                     self.remove_location(&accessor, block_meta.location.0.as_str())
                         .await?;
                 }
@@ -232,22 +243,22 @@ impl FuseTable {
 
         // 1. remove the segments
         for (x, _v) in segments_to_be_deleted {
-            self.remove_location(&accessor, x.as_str()).await?;
             if let Some(c) = ctx.get_storage_cache_manager().get_table_segment_cache() {
                 let cache = &mut *c.write().await;
                 cache.pop(x.as_str());
             }
+            self.remove_location(&accessor, x.as_str()).await?;
         }
 
         let locs = self.meta_location_generator();
         // 2. remove the snapshots
         for (id, ver) in snapshots_to_be_deleted.iter().rev() {
             let loc = locs.snapshot_location_from_uuid(id, *ver)?;
-            self.remove_location(&accessor, loc.as_str()).await?;
             if let Some(c) = ctx.get_storage_cache_manager().get_table_snapshot_cache() {
                 let cache = &mut *c.write().await;
                 cache.pop(loc.as_str());
             }
+            self.remove_location(&accessor, loc.as_str()).await?;
         }
 
         Ok(())

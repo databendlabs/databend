@@ -14,35 +14,30 @@
 
 use std::sync::Arc;
 
+use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
-use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 
+use super::Sink;
+use super::Sinker;
 use crate::pipelines::processors::port::InputPort;
-use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::ProcessorPtr;
-use crate::pipelines::processors::transforms::transform::Transform;
-use crate::pipelines::processors::transforms::transform::Transformer;
 
-pub struct TransformRename {
-    schema: DataSchemaRef,
+pub struct ContextSink {
+    ctx: Arc<dyn TableContext>,
 }
 
-impl TransformRename {
-    pub fn create(
-        input: Arc<InputPort>,
-        output: Arc<OutputPort>,
-        schema: DataSchemaRef,
-    ) -> ProcessorPtr {
-        Transformer::create(input, output, Self { schema })
+impl ContextSink {
+    pub fn create(input: Arc<InputPort>, ctx: Arc<dyn TableContext>) -> ProcessorPtr {
+        Sinker::create(input, ContextSink { ctx })
     }
 }
 
-impl Transform for TransformRename {
-    const NAME: &'static str = "Rename";
+impl Sink for ContextSink {
+    const NAME: &'static str = "ContextSink ";
 
-    fn transform(&mut self, data: DataBlock) -> Result<DataBlock> {
-        let result = DataBlock::create(self.schema.clone(), data.columns().to_vec());
-        Ok(result)
+    fn consume(&mut self, block: DataBlock) -> Result<()> {
+        self.ctx.push_precommit_block(block);
+        Ok(())
     }
 }
