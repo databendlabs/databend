@@ -74,8 +74,8 @@ impl Interpreter for InterceptorInterpreter {
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         // Management mode access check.
-        match self.new_plan {
-            Some(p) => self.management_mode_access.check_new(&p)?,
+        match &self.new_plan {
+            Some(p) => self.management_mode_access.check_new(p)?,
             _ => self.management_mode_access.check(&self.plan)?,
         }
 
