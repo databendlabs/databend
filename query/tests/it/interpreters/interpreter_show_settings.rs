@@ -30,7 +30,7 @@ async fn test_show_settings_interpreter() -> Result<()> {
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         assert_eq!(executor.name(), "SelectInterpreterV2");
 
-        let stream = executor.execute(None).await?;
+        let stream = executor.execute().await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         assert!(!result.is_empty());
         assert_eq!(result[0].num_columns(), 6);

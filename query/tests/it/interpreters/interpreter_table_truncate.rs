@@ -34,7 +34,7 @@ async fn test_truncate_table_interpreter() -> Result<()> {
 
         let (plan, _, _) = planner.plan_sql(query).await?;
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
-        let _ = executor.execute(None).await?;
+        let _ = executor.execute().await?;
     }
 
     // Insert into.
@@ -42,7 +42,7 @@ async fn test_truncate_table_interpreter() -> Result<()> {
         let query = "INSERT INTO default.a VALUES('1,1', '2,2')";
         let (plan, _, _) = planner.plan_sql(query).await?;
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
-        let _ = executor.execute(None).await?;
+        let _ = executor.execute().await?;
     }
 
     // select.
@@ -50,7 +50,7 @@ async fn test_truncate_table_interpreter() -> Result<()> {
         let query = "SELECT * FROM default.a";
         let (plan, _, _) = planner.plan_sql(query).await?;
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
-        let stream = executor.execute(None).await?;
+        let stream = executor.execute().await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
             "+-----+-----+",
@@ -69,7 +69,7 @@ async fn test_truncate_table_interpreter() -> Result<()> {
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         assert_eq!(executor.name(), "TruncateTableInterpreter");
 
-        let stream = executor.execute(None).await?;
+        let stream = executor.execute().await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec!["++", "++"];
         common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
@@ -80,7 +80,7 @@ async fn test_truncate_table_interpreter() -> Result<()> {
         let query = "SELECT * FROM default.a";
         let (plan, _, _) = planner.plan_sql(query).await?;
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
-        let stream = executor.execute(None).await?;
+        let stream = executor.execute().await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec!["++", "++"];
         common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());

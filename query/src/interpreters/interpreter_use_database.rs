@@ -42,10 +42,7 @@ impl Interpreter for UseDatabaseInterpreter {
         "UseDatabaseInterpreter"
     }
 
-    async fn execute(
-        &self,
-        _input_stream: Option<SendableDataBlockStream>,
-    ) -> Result<SendableDataBlockStream> {
+    async fn execute(&self) -> Result<SendableDataBlockStream> {
         if self.plan.database.trim().is_empty() {
             return Err(ErrorCode::UnknownDatabase("No database selected"));
         }
