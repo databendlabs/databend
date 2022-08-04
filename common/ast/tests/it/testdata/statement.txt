@@ -5805,27 +5805,38 @@ Presign(
 ---------- Input ----------
 CREATE SHARE t COMMENT='share comment';
 ---------- Output ---------
-CREATE SHARE t comment='share comment'
+CREATE SHARE Identifier { name: "t", quote: None, span: Ident(13..14) } COMMENT = share comment
 ---------- AST ------------
 CreateShare(
     CreateShareStmt {
         if_not_exists: false,
-        catalog: None,
-        share: 't',
-        comment: Some('share comment'),
+        share: Identifier {
+            name: "t",
+            quote: None,
+            span: Ident(13..14),
+        },
+        comment: Some(
+            "share comment",
+        ),
     },
 )
+
 
 ---------- Input ----------
 CREATE SHARE IF NOT EXISTS t;
 ---------- Output ---------
-CREATE SHARE IF NOT EXISTS t;
+CREATE SHARE IF NOT EXISTS Identifier { name: "t", quote: None, span: Ident(27..28) }
 ---------- AST ------------
 CreateShare(
     CreateShareStmt {
         if_not_exists: true,
-        catalog: None,
-        share: 't',
+        share: Identifier {
+            name: "t",
+            quote: None,
+            span: Ident(27..28),
+        },
         comment: None,
     },
 )
+
+
