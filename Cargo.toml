@@ -75,7 +75,14 @@ split-debuginfo = "unpacked"
 overflow-checks = false
 
 [profile.test]
+opt-level = 0
+debug = 0
+codegen-units = 16
+lto = false
+incremental = true
+debug-assertions = true
 overflow-checks = true
+rpath = false
 
 [profile.dev.package]
 addr2line = { opt-level = 3 }
