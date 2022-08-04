@@ -20,9 +20,6 @@ use common_datavalues::DataValue;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
-use common_planners::ReadDataSourcePlan;
-use common_planners::SourceInfo;
-use common_planners::Statistics;
 use databend_query::sql::optimizer::SExpr;
 use databend_query::sql::planner::plans::JoinType;
 use databend_query::sql::plans::BoundColumnRef;
@@ -63,33 +60,6 @@ impl Table for DummyTable {
 
     fn get_table_info(&self) -> &TableInfo {
         &self.table_info
-    }
-}
-
-fn get_dummy_read_source() -> ReadDataSourcePlan {
-    ReadDataSourcePlan {
-        catalog: "".to_string(),
-        source_info: SourceInfo::TableSource(TableInfo {
-            ident: TableIdent::new(0, 0),
-            desc: "".to_string(),
-            name: "".to_string(),
-            meta: TableMeta {
-                schema: DataSchemaRefExt::create(vec![]),
-                ..Default::default()
-            },
-        }),
-        scan_fields: None,
-        parts: vec![],
-        statistics: Statistics {
-            read_rows: 0,
-            read_bytes: 0,
-            partitions_scanned: 0,
-            partitions_total: 0,
-            is_exact: false,
-        },
-        description: "".to_string(),
-        tbl_args: None,
-        push_downs: None,
     }
 }
 
