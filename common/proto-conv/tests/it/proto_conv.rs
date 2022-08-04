@@ -185,13 +185,13 @@ fn test_pb_from_to() -> anyhow::Result<()> {
 fn test_incompatible() -> anyhow::Result<()> {
     let db_meta = new_db_meta();
     let mut p = db_meta.to_pb()?;
-    p.ver = 3;
-    p.min_compatible = 3;
+    p.ver = 4;
+    p.min_compatible = 4;
 
     let res = mt::DatabaseMeta::from_pb(p);
     assert_eq!(
         Incompatible {
-            reason: s("executable ver=2 is smaller than the message min compatible ver: 3")
+            reason: s("executable ver=3 is smaller than the message min compatible ver: 4")
         },
         res.unwrap_err()
     );
