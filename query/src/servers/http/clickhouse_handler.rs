@@ -438,6 +438,7 @@ fn get_format_from_plan(
             s_expr: _,
             metadata: _,
             bind_context,
+            ..
         } => bind_context.format.clone(),
         _ => None,
     };

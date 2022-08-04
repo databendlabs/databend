@@ -142,7 +142,6 @@ impl Interpreter for SelectInterpreterV2 {
                 "Unsupported run query with sub-pipeline".to_string(),
             ));
         }
-
         Ok(build_res.main_pipeline)
     }
 

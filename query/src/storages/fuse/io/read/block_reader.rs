@@ -333,39 +333,25 @@ impl BlockReader {
         offset: u64,
         length: u64,
     ) -> Result<(usize, Vec<u8>)> {
-        let handler = common_base::base::tokio::spawn(async move {
-            let op = || async {
-                let mut chunk = vec![0; length as usize];
-                // Sine error conversion DO matters: retry depends on the conversion
-                // to distinguish transient errors from permanent ones.
-                // Explict error conversion is used here, to make the code easy to be followed
-                let mut r = o
-                    .range_reader(offset..offset + length)
-                    .await
-                    .map_err(retry::from_io_error)?;
-                r.read_exact(&mut chunk).await?;
-                Ok(chunk)
-            };
+        let op = || async {
+            let mut chunk = vec![0; length as usize];
+            let mut r = o
+                .range_reader(offset..offset + length)
+                .await
+                .map_err(retry::from_io_error)?;
+            r.read_exact(&mut chunk).await?;
+            Ok(chunk)
+        };
 
-            let notify = |e: std::io::Error, duration| {
-                warn!(
-                    "transient error encountered while reading column, at duration {:?} : {}",
-                    duration, e,
-                )
-            };
+        let notify = |e: std::io::Error, duration| {
+            warn!(
+                "transient error encountered while reading column, at duration {:?} : {}",
+                duration, e,
+            )
+        };
 
-            let chunk = op.retry_with_notify(notify).await?;
-            Ok((index, chunk))
-        });
-
-        match handler.await {
-            Ok(Ok((index, data))) => Ok((index, data)),
-            Ok(Err(cause)) => Err(cause),
-            Err(cause) => Err(ErrorCode::TokioError(format!(
-                "Cannot join future {:?}",
-                cause
-            ))),
-        }
+        let chunk = op.retry_with_notify(notify).await?;
+        Ok((index, chunk))
     }
 
     #[tracing::instrument(level = "debug", skip_all)]

@@ -305,8 +305,12 @@ impl<'a> JoinConditionResolver<'a> {
         right_join_conditions: &mut Vec<Scalar>,
         other_join_conditions: &mut Vec<Scalar>,
     ) -> Result<()> {
-        let mut scalar_binder =
-            ScalarBinder::new(self.join_context, self.ctx.clone(), self.metadata.clone());
+        let mut scalar_binder = ScalarBinder::new(
+            self.join_context,
+            self.ctx.clone(),
+            self.metadata.clone(),
+            &[],
+        );
         let (scalar, _) = scalar_binder.bind(condition).await?;
         let conjunctions = split_conjunctions(&scalar);
 

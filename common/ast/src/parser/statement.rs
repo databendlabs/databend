@@ -208,7 +208,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let show_tables = map(
         rule! {
-            SHOW ~ FULL? ~ TABLES ~ HISTORY? ~ ( FROM ~ ^#ident )? ~ #show_limit?
+            SHOW ~ FULL? ~ TABLES ~ HISTORY? ~ ( ( FROM | IN ) ~ ^#ident )? ~ #show_limit?
         },
         |(_, opt_full, _, opt_history, opt_database, limit)| {
             Statement::ShowTables(ShowTablesStmt {
@@ -741,6 +741,23 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         },
     );
 
+    // share statements
+    let create_share = map(
+        rule! {
+            CREATE ~ SHARE ~ (IF ~ NOT ~ EXISTS )? ~ #ident ~ ( COMMENT ~ "=" ~ #literal_string)?
+        },
+        |(_, _, opt_if_not_exists, share, comment_opt)| {
+            Statement::CreateShare(CreateShareStmt {
+                if_not_exists: opt_if_not_exists.is_some(),
+                share,
+                comment: match comment_opt {
+                    Some(opt) => Some(opt.2),
+                    None => None,
+                },
+            })
+        },
+    );
+
     let statement_body = alt((
         rule!(
             #map(query, |query| Statement::Query(Box::new(query)))
@@ -825,6 +842,10 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         ),
         rule!(
             #presign: "`PRESIGN [{DOWNLOAD | UPLOAD}] <location> [EXPIRE = 3600]`"
+        ),
+        // share
+        rule!(
+            #create_share: "`CREATE SHARE <share_name> [ COMMENT = '<string_literal>' ]`"
         ),
     ));
 

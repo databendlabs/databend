@@ -55,6 +55,7 @@ use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::binder::wrap_cast_if_needed;
 use crate::sql::binder::Binder;
+use crate::sql::binder::NameResolutionResult;
 use crate::sql::optimizer::RelExpr;
 use crate::sql::planner::metadata::optimize_remove_count_args;
 use crate::sql::planner::metadata::MetadataRef;
@@ -87,6 +88,8 @@ pub struct TypeChecker<'a> {
     ctx: Arc<QueryContext>,
     metadata: MetadataRef,
 
+    aliases: &'a [(String, Scalar)],
+
     // true if current expr is inside an aggregate function.
     // This is used to check if there is nested aggregate function.
     in_aggregate_function: bool,
@@ -97,11 +100,13 @@ impl<'a> TypeChecker<'a> {
         bind_context: &'a BindContext,
         ctx: Arc<QueryContext>,
         metadata: MetadataRef,
+        aliases: &'a [(String, Scalar)],
     ) -> Self {
         Self {
             bind_context,
             ctx,
             metadata,
+            aliases,
             in_aggregate_function: false,
         }
     }
@@ -148,14 +153,23 @@ impl<'a> TypeChecker<'a> {
                 column,
                 ..
             } => {
-                let column = self.bind_context.resolve_column(
+                let result = self.bind_context.resolve_name(
                     database.as_ref().map(|ident| ident.name.as_str()),
                     table.as_ref().map(|ident| ident.name.as_str()),
                     column,
+                    self.aliases,
                 )?;
-                let data_type = column.data_type.clone();
+                let (scalar, data_type) = match result {
+                    NameResolutionResult::Column(column) => {
+                        let data_type = *column.data_type.clone();
+                        (BoundColumnRef { column }.into(), data_type)
+                    }
+                    NameResolutionResult::Alias { scalar, .. } => {
+                        (scalar.clone(), scalar.data_type())
+                    }
+                };
 
-                Box::new((BoundColumnRef { column }.into(), *data_type))
+                Box::new((scalar, data_type))
             }
 
             Expr::IsNull {

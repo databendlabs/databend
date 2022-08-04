@@ -84,6 +84,7 @@ impl RangeFilter {
         })
     }
 
+    #[tracing::instrument(level = "debug", name = "range_filter_eval", skip_all)]
     pub fn eval(&self, stats: &StatisticsOfColumns) -> Result<bool> {
         let mut columns = Vec::with_capacity(self.stat_columns.len());
         for col in self.stat_columns.iter() {

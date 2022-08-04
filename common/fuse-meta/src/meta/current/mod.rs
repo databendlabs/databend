@@ -13,6 +13,7 @@
 //  limitations under the License.
 
 pub use v0::ColumnMeta;
+pub use v1::BlockBloomFilterIndex;
 pub use v1::BlockMeta;
 pub use v1::SegmentInfo;
 pub use v1::TableSnapshot;

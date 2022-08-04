@@ -126,6 +126,7 @@ impl ResultTableSink {
             uncompressed_byte_size: acc.in_memory_size,
             compressed_byte_size: acc.file_size,
             col_stats,
+            index_size: 0,
         });
 
         let meta = ResultTableMeta {
@@ -178,8 +179,17 @@ impl Processor for ResultTableSink {
                 let schema = block.schema().clone();
                 let (size, meta_data) =
                     serialize_data_blocks(vec![block.clone()], &schema, &mut data)?;
-                self.accumulator
-                    .add_block(size, meta_data, block_statistics)?;
+
+                let bloom_index_location = None;
+                let bloom_index_size = 0_u64;
+                self.accumulator.add_block(
+                    size,
+                    meta_data,
+                    block_statistics,
+                    bloom_index_location,
+                    bloom_index_size,
+                )?;
+
                 self.state = State::Serialized {
                     block,
                     data,
