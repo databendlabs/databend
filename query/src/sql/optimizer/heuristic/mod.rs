@@ -90,7 +90,8 @@ impl HeuristicOptimizer {
     }
 
     fn post_optimize(&mut self, s_expr: SExpr) -> Result<SExpr> {
-        prune_columns::prune_columns(&s_expr)
+        let pruner = prune_columns::ColumnPruner::new(self.metadata.clone());
+        pruner.prune_columns(&s_expr)
     }
 
     pub fn optimize(&mut self, s_expr: SExpr) -> Result<SExpr> {
