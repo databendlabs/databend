@@ -160,6 +160,7 @@ pub enum Statement<'a> {
 
     // share
     CreateShare(CreateShareStmt<'a>),
+    DropShare(DropShareStmt<'a>),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -362,6 +363,7 @@ impl<'a> Display for Statement<'a> {
             Statement::Call(stmt) => write!(f, "{stmt}")?,
             Statement::Presign(stmt) => write!(f, "{stmt}")?,
             Statement::CreateShare(stmt) => write!(f, "{stmt}")?,
+            Statement::DropShare(stmt) => write!(f, "{stmt}")?,
         }
         Ok(())
     }

@@ -297,7 +297,9 @@ impl<'a> Binder {
             Statement::CreateShare(stmt) => {
                 self.bind_create_share(stmt).await?
             }
-
+            Statement::DropShare(stmt) => {
+                self.bind_drop_share(stmt).await?
+            }
         };
         Ok(plan)
     }

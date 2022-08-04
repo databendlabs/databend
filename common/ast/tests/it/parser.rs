@@ -258,6 +258,8 @@ fn test_statement() {
         r#"PRESIGN UPLOAD @my_stage/path/to/file EXPIRE=7200"#,
         r#"CREATE SHARE t COMMENT='share comment';"#,
         r#"CREATE SHARE IF NOT EXISTS t;"#,
+        r#"DROP SHARE a;"#,
+        r#"DROP SHARE IF EXISTS a;"#,
     ];
 
     for case in cases {

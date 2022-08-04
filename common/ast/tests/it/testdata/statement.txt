@@ -5945,3 +5945,37 @@ CreateShare(
 )
 
 
+---------- Input ----------
+DROP SHARE a;
+---------- Output ---------
+DROP SHARE a
+---------- AST ------------
+DropShare(
+    DropShareStmt {
+        if_exists: false,
+        share: Identifier {
+            name: "a",
+            quote: None,
+            span: Ident(11..12),
+        },
+    },
+)
+
+
+---------- Input ----------
+DROP SHARE IF EXISTS a;
+---------- Output ---------
+DROP SHARE IF EXISTS a
+---------- AST ------------
+DropShare(
+    DropShareStmt {
+        if_exists: true,
+        share: Identifier {
+            name: "a",
+            quote: None,
+            span: Ident(21..22),
+        },
+    },
+)
+
+

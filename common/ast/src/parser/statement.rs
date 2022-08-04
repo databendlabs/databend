@@ -757,6 +757,17 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             })
         },
     );
+    let drop_share = map(
+        rule! {
+            DROP ~ SHARE ~ (IF ~ EXISTS )? ~ #ident
+        },
+        |(_, _, opt_if_exists, share)| {
+            Statement::DropShare(DropShareStmt {
+                if_exists: opt_if_exists.is_some(),
+                share,
+            })
+        },
+    );
 
     let statement_body = alt((
         rule!(
@@ -845,7 +856,8 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         ),
         // share
         rule!(
-            #create_share: "`CREATE SHARE <share_name> [ COMMENT = '<string_literal>' ]`"
+            #create_share: "`CREATE SHARE [IF NOT EXISTS] <share_name> [ COMMENT = '<string_literal>' ]`"
+            | #drop_share: "`DROP SHARE [IF EXISTS] <share_name>`"
         ),
     ));
 

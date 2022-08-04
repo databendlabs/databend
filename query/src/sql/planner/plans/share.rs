@@ -18,8 +18,10 @@ use common_datavalues::chrono::Utc;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_meta_app::share::CreateShareReq;
+use common_meta_app::share::DropShareReq;
 use common_meta_app::share::ShareNameIdent;
 
+// Create Share Plan
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct CreateSharePlan {
     pub if_not_exists: bool,
@@ -43,6 +45,32 @@ impl From<CreateSharePlan> for CreateShareReq {
 }
 
 impl CreateSharePlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
+}
+
+// Drop Share Plan
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct DropSharePlan {
+    pub if_exists: bool,
+    pub tenant: String,
+    pub share: String,
+}
+
+impl From<DropSharePlan> for DropShareReq {
+    fn from(p: DropSharePlan) -> Self {
+        DropShareReq {
+            if_exists: p.if_exists,
+            share_name: ShareNameIdent {
+                tenant: p.tenant,
+                share_name: p.share,
+            },
+        }
+    }
+}
+
+impl DropSharePlan {
     pub fn schema(&self) -> DataSchemaRef {
         Arc::new(DataSchema::empty())
     }

@@ -200,6 +200,7 @@ pub enum Plan {
 
     // Share
     CreateShare(Box<CreateSharePlan>),
+    DropShare(Box<DropSharePlan>),
 }
 
 #[derive(Clone)]
@@ -271,6 +272,7 @@ impl Display for Plan {
             Plan::SetVariable(_) => write!(f, "SetVariable"),
             Plan::Kill(_) => write!(f, "Kill"),
             Plan::CreateShare(_) => write!(f, "CreateShare"),
+            Plan::DropShare(_) => write!(f, "DropShare"),
         }
     }
 }
@@ -334,6 +336,7 @@ impl Plan {
             Plan::SetVariable(plan) => plan.schema(),
             Plan::Kill(_) => Arc::new(DataSchema::empty()),
             Plan::CreateShare(plan) => plan.schema(),
+            Plan::DropShare(plan) => plan.schema(),
         }
     }
 }
