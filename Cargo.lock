@@ -1645,6 +1645,7 @@ dependencies = [
  "petgraph",
  "serde",
  "time 0.3.11",
+ "tokio",
 ]
 
 [[package]]
