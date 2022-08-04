@@ -30,10 +30,28 @@ impl Display for CreateShareStmt<'_> {
         if self.if_not_exists {
             write!(f, "IF NOT EXISTS ")?;
         }
-        write!(f, "{:?}", self.share)?;
+        write!(f, "{}", self.share)?;
         if let Some(comment) = &self.comment {
             write!(f, " COMMENT = {comment}")?;
         }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DropShareStmt<'a> {
+    pub if_exists: bool,
+    pub share: Identifier<'a>,
+}
+
+impl Display for DropShareStmt<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "DROP SHARE ")?;
+        if self.if_exists {
+            write!(f, "IF EXISTS ")?;
+        }
+        write!(f, "{}", self.share)?;
+
         Ok(())
     }
 }

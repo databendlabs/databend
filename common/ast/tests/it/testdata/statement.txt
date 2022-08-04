@@ -5805,7 +5805,7 @@ Presign(
 ---------- Input ----------
 CREATE SHARE t COMMENT='share comment';
 ---------- Output ---------
-CREATE SHARE Identifier { name: "t", quote: None, span: Ident(13..14) } COMMENT = share comment
+CREATE SHARE t COMMENT = share comment
 ---------- AST ------------
 CreateShare(
     CreateShareStmt {
@@ -5825,7 +5825,7 @@ CreateShare(
 ---------- Input ----------
 CREATE SHARE IF NOT EXISTS t;
 ---------- Output ---------
-CREATE SHARE IF NOT EXISTS Identifier { name: "t", quote: None, span: Ident(27..28) }
+CREATE SHARE IF NOT EXISTS t
 ---------- AST ------------
 CreateShare(
     CreateShareStmt {
@@ -5836,6 +5836,40 @@ CreateShare(
             span: Ident(27..28),
         },
         comment: None,
+    },
+)
+
+
+---------- Input ----------
+DROP SHARE a;
+---------- Output ---------
+DROP SHARE a
+---------- AST ------------
+DropShare(
+    DropShareStmt {
+        if_exists: false,
+        share: Identifier {
+            name: "a",
+            quote: None,
+            span: Ident(11..12),
+        },
+    },
+)
+
+
+---------- Input ----------
+DROP SHARE IF EXISTS a;
+---------- Output ---------
+DROP SHARE IF EXISTS a
+---------- AST ------------
+DropShare(
+    DropShareStmt {
+        if_exists: true,
+        share: Identifier {
+            name: "a",
+            quote: None,
+            span: Ident(21..22),
+        },
     },
 )
 
