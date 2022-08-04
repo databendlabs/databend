@@ -138,6 +138,9 @@ impl<'a> Binder {
         &self,
         tokens: &[Token],
     ) -> Result<String> {
+        if tokens.is_empty() {
+            return Ok("".to_string());
+        }
         let first_token = tokens
             .first()
             .ok_or_else(|| ErrorCode::SyntaxException("Missing token"))?;
