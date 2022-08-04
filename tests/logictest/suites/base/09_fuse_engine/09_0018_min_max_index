@@ -11,13 +11,13 @@ statement ok
 CREATE TABLE t(c1 int, c2 string);
 
 statement ok
-INSERT INTO t VALUES(1, "a");
+INSERT INTO t VALUES(1, 'a');
 
 statement ok
-INSERT INTO t VALUES(2, "b");
+INSERT INTO t VALUES(2, 'b');
 
 statement ok
-INSERT INTO t VALUES(3, "c");
+INSERT INTO t VALUES(3, 'c');
 
 statement query T
 explain select * from t where c1 = 1;
