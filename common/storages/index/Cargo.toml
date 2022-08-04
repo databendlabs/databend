@@ -23,10 +23,10 @@ common-grpc = { path = "../../grpc" }
 common-hive-meta-store = { path = "../../hive-meta-store" }
 common-meta-app = { path = "../../meta/app" }
 common-meta-types = { path = "../../meta/types" }
-common-storage = { path = "../../storage" }
-common-planners = { path = "../../planners" }
 common-pipeline-core = { path = "../../pipeline/core" }
 common-pipeline-transforms = { path = "../../pipeline/transforms" }
+common-planners = { path = "../../planners" }
+common-storage = { path = "../../storage" }
 common-tracing = { path = "../../tracing" }
 common-users = { path = "../../users" }
 

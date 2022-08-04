@@ -14,3 +14,6 @@
 
 pub mod async_source;
 pub mod sync_source;
+
+pub use async_source::*;
+pub use sync_source::*;

@@ -1392,6 +1392,39 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-legacy-parser"
+version = "0.1.0"
+dependencies = [
+ "async-trait 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)",
+ "clap 3.2.15",
+ "common-ast",
+ "common-base",
+ "common-config",
+ "common-datavalues",
+ "common-exception",
+ "common-functions",
+ "common-grpc",
+ "common-meta-types",
+ "common-planners",
+ "common-storage",
+ "common-tracing",
+ "common-users",
+ "futures",
+ "futures-util",
+ "itertools",
+ "metrics 0.19.0",
+ "num_cpus",
+ "once_cell",
+ "opendal",
+ "parking_lot 0.12.1",
+ "semver",
+ "serde",
+ "serfig",
+ "sqlparser",
+ "time 0.3.11",
+]
+
+[[package]]
 name = "common-macros"
 version = "0.1.0"
 dependencies = [
@@ -1788,6 +1821,60 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-storages-fuse"
+version = "0.1.0"
+dependencies = [
+ "async-recursion",
+ "async-stream",
+ "async-trait 0.1.56 (git+https://github.com/datafuse-extras/async-trait?rev=f0b0fd5)",
+ "backoff",
+ "chrono",
+ "clap 3.2.15",
+ "common-arrow",
+ "common-ast",
+ "common-base",
+ "common-cache",
+ "common-catalog",
+ "common-config",
+ "common-datablocks",
+ "common-datavalues",
+ "common-exception",
+ "common-functions",
+ "common-fuse-meta",
+ "common-grpc",
+ "common-hive-meta-store",
+ "common-legacy-parser",
+ "common-meta-app",
+ "common-meta-types",
+ "common-pipeline-core",
+ "common-pipeline-sources",
+ "common-pipeline-transforms",
+ "common-planners",
+ "common-storage",
+ "common-storages-index",
+ "common-storages-util",
+ "common-streams",
+ "common-tracing",
+ "common-users",
+ "futures",
+ "futures-util",
+ "itertools",
+ "num_cpus",
+ "once_cell",
+ "opendal",
+ "parking_lot 0.12.1",
+ "semver",
+ "serde",
+ "serde_json",
+ "serfig",
+ "thrift",
+ "time 0.3.11",
+ "tracing",
+ "typetag",
+ "uuid 1.1.2",
+]
+
+[[package]]
 name = "common-storages-hive"
 version = "0.1.0"
 dependencies = [
@@ -1813,6 +1900,7 @@ dependencies = [
  "common-planners",
  "common-storage",
  "common-storages-index",
+ "common-storages-util",
  "common-tracing",
  "common-users",
  "futures",
@@ -1853,6 +1941,54 @@ dependencies = [
  "common-fuse-meta",
  "common-grpc",
  "common-hive-meta-store",
+ "common-meta-app",
+ "common-meta-types",
+ "common-pipeline-core",
+ "common-pipeline-transforms",
+ "common-planners",
+ "common-storage",
+ "common-tracing",
+ "common-users",
+ "futures",
+ "futures-util",
+ "itertools",
+ "num_cpus",
+ "once_cell",
+ "opendal",
+ "parking_lot 0.12.1",
+ "rand 0.8.5",
+ "semver",
+ "serde",
+ "serfig",
+ "thrift",
+ "time 0.3.11",
+ "tracing",
+ "typetag",
+]
+
+[[package]]
+name = "common-storages-util"
+version = "0.1.0"
+dependencies = [
+ "async-recursion",
+ "async-trait 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)",
+ "backoff",
+ "bincode",
+ "bit-vec",
+ "clap 3.2.15",
+ "common-arrow",
+ "common-base",
+ "common-catalog",
+ "common-catalogs",
+ "common-config",
+ "common-datablocks",
+ "common-datavalues",
+ "common-exception",
+ "common-functions",
+ "common-fuse-meta",
+ "common-grpc",
+ "common-hive-meta-store",
+ "common-meta-api",
  "common-meta-app",
  "common-meta-types",
  "common-pipeline-core",
@@ -2473,6 +2609,7 @@ dependencies = [
  "common-hive-meta-store",
  "common-http",
  "common-io",
+ "common-legacy-parser",
  "common-macros",
  "common-management",
  "common-meta-api",
@@ -2490,8 +2627,10 @@ dependencies = [
  "common-planners",
  "common-settings",
  "common-storage",
+ "common-storages-fuse",
  "common-storages-hive",
  "common-storages-index",
+ "common-storages-util",
  "common-streams",
  "common-tracing",
  "common-users",

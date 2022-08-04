@@ -52,6 +52,7 @@ common-hashtable = { path = "../common/hashtable" }
 common-hive-meta-store = { path = "../common/hive-meta-store", optional = true }
 common-http = { path = "../common/http" }
 common-io = { path = "../common/io" }
+common-legacy-parser = { path = "../common/legacy-parser" }
 common-macros = { path = "../common/macros" }
 common-management = { path = "../common/management" }
 common-meta-api = { path = "../common/meta/api" }
@@ -69,8 +70,10 @@ common-pipeline-transforms = { path = "../common/pipeline/transforms" }
 common-planners = { path = "../common/planners" }
 common-settings = { path = "../common/settings" }
 common-storage = { path = "../common/storage" }
+common-storages-fuse = { path = "../common/storages/fuse" }
 common-storages-hive = { path = "../common/storages/hive", optional = true }
 common-storages-index = { path = "../common/storages/index" }
+common-storages-util = { path = "../common/storages/util" }
 common-streams = { path = "../common/streams" }
 common-tracing = { path = "../common/tracing" }
 common-users = { path = "../common/users" }

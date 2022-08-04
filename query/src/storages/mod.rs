@@ -13,10 +13,8 @@
 // limitations under the License.
 
 pub mod cache;
-pub mod fuse;
+pub use common_storages_fuse as fuse;
 pub mod github;
-#[cfg(feature = "hive")]
-pub mod hive;
 pub use common_storages_index as index;
 pub mod information_schema;
 pub mod memory;
@@ -24,7 +22,6 @@ pub mod null;
 pub mod random;
 pub mod result;
 pub mod stage;
-mod storage_context;
 mod storage_factory;
 mod storage_table;
 mod storage_table_read_plan;
@@ -34,6 +31,7 @@ pub mod view;
 
 pub use common_catalog::table::NavigationPoint;
 pub use common_catalog::table::TableStatistics;
+use common_storages_util::storage_context;
 pub use storage_context::StorageContext;
 pub use storage_factory::StorageCreator;
 pub use storage_factory::StorageDescription;
