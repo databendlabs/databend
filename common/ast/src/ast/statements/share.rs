@@ -15,13 +15,11 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use crate::ast::write_period_separated_list;
 use crate::ast::Identifier;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CreateShareStmt<'a> {
     pub if_not_exists: bool,
-    pub catalog: Option<Identifier<'a>>,
     pub share: Identifier<'a>,
     pub comment: Option<String>,
 }
@@ -32,7 +30,7 @@ impl Display for CreateShareStmt<'_> {
         if self.if_not_exists {
             write!(f, "IF NOT EXISTS ")?;
         }
-        write_period_separated_list(f, self.catalog.iter().chain(Some(&self.share)))?;
+        write!(f, "{:?}", self.share)?;
         if let Some(comment) = &self.comment {
             write!(f, " COMMENT = {comment}")?;
         }

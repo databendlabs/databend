@@ -24,7 +24,6 @@ use common_meta_app::share::ShareNameIdent;
 pub struct CreateSharePlan {
     pub if_not_exists: bool,
     pub tenant: String,
-    pub catalog: String,
     pub share: String,
     pub comment: Option<String>,
 }

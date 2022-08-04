@@ -27,20 +27,14 @@ impl<'a> Binder {
     ) -> Result<Plan> {
         let CreateShareStmt {
             if_not_exists,
-            catalog,
             share,
             comment,
         } = stmt;
 
-        let catalog = catalog
-            .as_ref()
-            .map(|catalog| catalog.name.to_lowercase())
-            .unwrap_or_else(|| self.ctx.get_current_catalog());
         let share = share.name.to_lowercase();
 
         let plan = CreateSharePlan {
             if_not_exists: *if_not_exists,
-            catalog,
             tenant: self.ctx.get_tenant(),
             share,
             comment: comment.as_ref().cloned(),
