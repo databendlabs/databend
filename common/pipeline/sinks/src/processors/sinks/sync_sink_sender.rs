@@ -17,11 +17,11 @@ use std::sync::Arc;
 use common_base::base::tokio::sync::mpsc::Sender;
 use common_datablocks::DataBlock;
 use common_exception::Result;
+use common_pipeline_core::processors::port::InputPort;
+use common_pipeline_core::processors::processor::ProcessorPtr;
 
-use crate::pipelines::processors::port::InputPort;
-use crate::pipelines::processors::processor::ProcessorPtr;
-use crate::pipelines::processors::sinks::sync_sink::Sink;
-use crate::pipelines::processors::sinks::sync_sink::Sinker;
+use crate::processors::sinks::Sink;
+use crate::processors::sinks::Sinker;
 
 pub struct SyncSenderSink {
     sender: Sender<Result<DataBlock>>,

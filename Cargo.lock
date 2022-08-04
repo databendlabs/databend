@@ -1648,6 +1648,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-pipeline-sinks"
+version = "0.1.0"
+dependencies = [
+ "async-trait 0.1.56 (git+https://github.com/datafuse-extras/async-trait?rev=f0b0fd5)",
+ "common-base",
+ "common-catalog",
+ "common-datablocks",
+ "common-datavalues",
+ "common-exception",
+ "common-io",
+ "common-pipeline-core",
+ "common-planners",
+ "futures",
+ "futures-util",
+ "itertools",
+ "num_cpus",
+ "once_cell",
+ "parking_lot 0.12.1",
+ "petgraph",
+ "serde",
+ "time 0.3.11",
+ "tracing",
+]
+
+[[package]]
 name = "common-pipeline-sources"
 version = "0.1.0"
 dependencies = [
@@ -1918,6 +1943,66 @@ dependencies = [
  "time 0.3.11",
  "tracing",
  "typetag",
+]
+
+[[package]]
+name = "common-storages-preludes"
+version = "0.1.0"
+dependencies = [
+ "async-stream",
+ "async-trait 0.1.56 (git+https://github.com/datafuse-extras/async-trait?rev=f0b0fd5)",
+ "backoff",
+ "chrono",
+ "clap 3.2.15",
+ "common-arrow",
+ "common-ast",
+ "common-base",
+ "common-building",
+ "common-cache",
+ "common-catalog",
+ "common-config",
+ "common-contexts",
+ "common-datablocks",
+ "common-datavalues",
+ "common-exception",
+ "common-functions",
+ "common-fuse-meta",
+ "common-grpc",
+ "common-legacy-parser",
+ "common-meta-app",
+ "common-meta-types",
+ "common-metrics",
+ "common-pipeline-core",
+ "common-pipeline-sinks",
+ "common-pipeline-sources",
+ "common-pipeline-transforms",
+ "common-planners",
+ "common-storage",
+ "common-storages-index",
+ "common-storages-util",
+ "common-streams",
+ "common-tracing",
+ "common-users",
+ "futures",
+ "futures-util",
+ "itertools",
+ "num_cpus",
+ "octocrab",
+ "once_cell",
+ "opendal",
+ "parking_lot 0.12.1",
+ "reqwest",
+ "semver",
+ "serde",
+ "serde_json",
+ "serfig",
+ "snailquote",
+ "thrift",
+ "time 0.3.11",
+ "tracing",
+ "typetag",
+ "uuid 1.1.2",
+ "walkdir",
 ]
 
 [[package]]
@@ -2559,6 +2644,7 @@ dependencies = [
  "common-meta-types",
  "common-metrics",
  "common-pipeline-core",
+ "common-pipeline-sinks",
  "common-pipeline-sources",
  "common-pipeline-transforms",
  "common-planners",
@@ -2567,6 +2653,7 @@ dependencies = [
  "common-storages-fuse",
  "common-storages-hive",
  "common-storages-index",
+ "common-storages-preludes",
  "common-storages-util",
  "common-streams",
  "common-tracing",

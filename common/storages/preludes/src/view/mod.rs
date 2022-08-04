@@ -12,7 +12,5 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod clusters_table;
-
-pub use clusters_table::ClustersTable;
-pub use common_storages_preludes::system::*;
+pub mod view_table;
+pub use view_table::ViewTable;

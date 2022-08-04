@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod clusters_table;
+#![feature(generic_associated_types)]
 
-pub use clusters_table::ClustersTable;
-pub use common_storages_preludes::system::*;
+pub mod processors;

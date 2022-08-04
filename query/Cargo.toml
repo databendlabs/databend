@@ -64,6 +64,7 @@ common-meta-store = { path = "../common/meta/store" }
 common-meta-types = { path = "../common/meta/types" }
 common-metrics = { path = "../common/metrics" }
 common-pipeline-core = { path = "../common/pipeline/core" }
+common-pipeline-sinks = { path = "../common/pipeline/sinks" }
 common-pipeline-sources = { path = "../common/pipeline/sources" }
 common-pipeline-transforms = { path = "../common/pipeline/transforms" }
 common-planners = { path = "../common/planners" }
@@ -72,6 +73,7 @@ common-storage = { path = "../common/storage" }
 common-storages-fuse = { path = "../common/storages/fuse" }
 common-storages-hive = { path = "../common/storages/hive", optional = true }
 common-storages-index = { path = "../common/storages/index" }
+common-storages-preludes = { path = "../common/storages/preludes" }
 common-storages-util = { path = "../common/storages/util" }
 common-streams = { path = "../common/streams" }
 common-tracing = { path = "../common/tracing" }

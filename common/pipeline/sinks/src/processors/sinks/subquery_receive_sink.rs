@@ -19,11 +19,11 @@ use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataValue;
 use common_exception::Result;
+use common_pipeline_core::processors::port::InputPort;
+use common_pipeline_core::processors::processor::ProcessorPtr;
 
-use crate::pipelines::processors::port::InputPort;
-use crate::pipelines::processors::processor::ProcessorPtr;
-use crate::pipelines::processors::Sink;
-use crate::pipelines::processors::Sinker;
+use crate::processors::sinks::Sink;
+use crate::processors::sinks::Sinker;
 
 pub struct SubqueryReceiveSink {
     input_columns: Vec<Vec<DataValue>>,

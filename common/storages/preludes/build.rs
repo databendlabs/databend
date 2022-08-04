@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,18 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod async_sink;
-mod context_sink;
-mod empty_sink;
-mod subquery_receive_sink;
-mod sync_sink;
-mod sync_sink_sender;
-
-pub use async_sink::AsyncSink;
-pub use async_sink::AsyncSinker;
-pub use context_sink::ContextSink;
-pub use empty_sink::EmptySink;
-pub use subquery_receive_sink::SubqueryReceiveSink;
-pub use sync_sink::Sink;
-pub use sync_sink::Sinker;
-pub use sync_sink_sender::SyncSenderSink;
+fn main() {
+    common_building::setup();
+}

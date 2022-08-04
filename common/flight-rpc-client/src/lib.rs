@@ -12,28 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
+pub mod flight_actions;
+pub mod flight_client;
+pub mod packets;
 
-use common_datablocks::DataBlock;
-use common_exception::Result;
-
-use super::Sink;
-use super::Sinker;
-use crate::pipelines::processors::port::InputPort;
-use crate::pipelines::processors::processor::ProcessorPtr;
-
-pub struct EmptySink;
-
-impl EmptySink {
-    pub fn create(input: Arc<InputPort>) -> ProcessorPtr {
-        Sinker::create(input, EmptySink {})
-    }
-}
-
-impl Sink for EmptySink {
-    const NAME: &'static str = "EmptySink";
-
-    fn consume(&mut self, _: DataBlock) -> Result<()> {
-        Ok(())
-    }
-}
+use common_config::Config;

@@ -14,30 +14,26 @@
 
 use std::sync::Arc;
 
-use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
 use common_exception::Result;
+use common_pipeline_core::processors::port::InputPort;
+use common_pipeline_core::processors::processor::ProcessorPtr;
 
 use super::Sink;
 use super::Sinker;
-use crate::pipelines::processors::port::InputPort;
-use crate::pipelines::processors::processor::ProcessorPtr;
 
-pub struct ContextSink {
-    ctx: Arc<dyn TableContext>,
-}
+pub struct EmptySink;
 
-impl ContextSink {
-    pub fn create(input: Arc<InputPort>, ctx: Arc<dyn TableContext>) -> ProcessorPtr {
-        Sinker::create(input, ContextSink { ctx })
+impl EmptySink {
+    pub fn create(input: Arc<InputPort>) -> ProcessorPtr {
+        Sinker::create(input, EmptySink {})
     }
 }
 
-impl Sink for ContextSink {
-    const NAME: &'static str = "ContextSink ";
+impl Sink for EmptySink {
+    const NAME: &'static str = "EmptySink";
 
-    fn consume(&mut self, block: DataBlock) -> Result<()> {
-        self.ctx.push_precommit_block(block);
+    fn consume(&mut self, _: DataBlock) -> Result<()> {
         Ok(())
     }
 }

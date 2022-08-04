@@ -14,12 +14,7 @@
 
 pub mod cache;
 pub use common_storages_fuse as fuse;
-pub mod github;
 pub use common_storages_index as index;
-pub mod information_schema;
-pub mod memory;
-pub mod null;
-pub mod random;
 pub mod result;
 pub mod stage;
 mod storage_factory;
@@ -31,6 +26,11 @@ pub mod view;
 
 pub use common_catalog::table::NavigationPoint;
 pub use common_catalog::table::TableStatistics;
+pub use common_storages_preludes::github;
+pub use common_storages_preludes::information_schema;
+pub use common_storages_preludes::memory;
+pub use common_storages_preludes::null;
+pub use common_storages_preludes::random;
 use common_storages_util::storage_context;
 pub use storage_context::StorageContext;
 pub use storage_factory::StorageCreator;
