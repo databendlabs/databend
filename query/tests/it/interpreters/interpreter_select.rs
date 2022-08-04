@@ -29,7 +29,7 @@ async fn test_select_interpreter() -> Result<()> {
         let executor = InterpreterFactory::get(ctx.clone(), plan)?;
         assert_eq!(executor.name(), "SelectInterpreter");
 
-        let stream = executor.execute(None).await?;
+        let stream = executor.execute().await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let block = &result[0];
         assert_eq!(block.num_columns(), 1);
@@ -59,7 +59,7 @@ async fn test_select_interpreter() -> Result<()> {
         let executor = InterpreterFactory::get(ctx.clone(), plan)?;
         assert_eq!(executor.name(), "SelectInterpreter");
 
-        let stream = executor.execute(None).await?;
+        let stream = executor.execute().await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let block = &result[0];
         assert_eq!(block.num_columns(), 4);

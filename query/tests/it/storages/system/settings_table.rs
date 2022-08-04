@@ -30,7 +30,6 @@ async fn test_settings_table() -> Result<()> {
 
     let stream = table.read(ctx, &source_plan).await?;
     let result = stream.try_collect::<Vec<_>>().await?;
-
     let expected = vec![
         "+--------------------------------+---------+---------+---------+----------------------------------------------------------------------------------------------------+--------+",
         "| name                           | value   | default | level   | description                                                                                        | type   |",

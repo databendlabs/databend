@@ -1,5 +1,8 @@
 [advisories]
 ignore = [
+    # rio: v0.9.4 https://rustsec.org/advisories/RUSTSEC-2020-0021
+    # allows a use-after-free buffer access when a future is leaked
+    "RUSTSEC-2020-0021",
     # time: Potential segfault in the time crate
     # We are not accected by this CVE.
     # And there is no actions we can take, waiting for upstream.

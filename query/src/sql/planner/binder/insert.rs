@@ -427,7 +427,7 @@ async fn exprs_to_datavalue<'a>(
     }
     let mut expressions = Vec::with_capacity(exprs.len());
     for (i, expr) in exprs.iter().enumerate() {
-        let mut scalar_binder = ScalarBinder::new(bind_context, ctx.clone(), metadata.clone());
+        let mut scalar_binder = ScalarBinder::new(bind_context, ctx.clone(), metadata.clone(), &[]);
         let scalar = scalar_binder.bind(expr).await?.0;
         let expression_builder = ExpressionBuilderWithRenaming::create(metadata.clone());
         let expr = expression_builder.build(&scalar)?;

@@ -45,10 +45,7 @@ impl Interpreter for DropTableInterpreter {
         "DropTableInterpreter"
     }
 
-    async fn execute(
-        &self,
-        _input_stream: Option<SendableDataBlockStream>,
-    ) -> Result<SendableDataBlockStream> {
+    async fn execute(&self) -> Result<SendableDataBlockStream> {
         let catalog_name = self.plan.catalog.as_str();
         let db_name = self.plan.database.as_str();
         let tbl_name = self.plan.table.as_str();

@@ -63,7 +63,7 @@ impl FuseTable {
             number_of_rows: new_snapshot.summary.row_count,
             data_bytes: new_snapshot.summary.uncompressed_byte_size,
             compressed_data_bytes: new_snapshot.summary.compressed_byte_size,
-            index_data_bytes: 0, // TODO we do not have it yet
+            index_data_bytes: new_snapshot.summary.index_size,
         };
         let ctx: &dyn TableContext = ctx.as_ref();
         self.update_table_meta(ctx, &plan.catalog, &new_snapshot, &mut new_table_meta)

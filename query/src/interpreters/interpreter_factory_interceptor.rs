@@ -30,10 +30,12 @@ use crate::interpreters::InterpreterQueryLog;
 use crate::pipelines::SourcePipeBuilder;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
+use crate::sql::plans::Plan;
 
 pub struct InterceptorInterpreter {
     ctx: Arc<QueryContext>,
     plan: PlanNode,
+    new_plan: Option<Plan>,
     inner: InterpreterPtr,
     query_log: InterpreterQueryLog,
     source_pipe_builder: Mutex<Option<SourcePipeBuilder>>,
@@ -45,11 +47,13 @@ impl InterceptorInterpreter {
         ctx: Arc<QueryContext>,
         inner: InterpreterPtr,
         plan: PlanNode,
+        new_plan: Option<Plan>,
         query_kind: String,
     ) -> Self {
         InterceptorInterpreter {
             ctx: ctx.clone(),
             plan,
+            new_plan,
             inner,
             query_log: InterpreterQueryLog::create(ctx.clone(), query_kind),
             source_pipe_builder: Mutex::new(None),
@@ -68,17 +72,17 @@ impl Interpreter for InterceptorInterpreter {
         self.inner.schema()
     }
 
-    async fn execute(
-        &self,
-        input_stream: Option<SendableDataBlockStream>,
-    ) -> Result<SendableDataBlockStream> {
+    async fn execute(&self) -> Result<SendableDataBlockStream> {
         // Management mode access check.
-        self.management_mode_access.check(&self.plan)?;
+        match &self.new_plan {
+            Some(p) => self.management_mode_access.check_new(p)?,
+            _ => self.management_mode_access.check(&self.plan)?,
+        }
 
         let _ = self
             .inner
             .set_source_pipe_builder((*self.source_pipe_builder.lock()).clone());
-        let result_stream = match self.inner.execute(input_stream).await {
+        let result_stream = match self.inner.execute().await {
             Ok(s) => s,
             Err(e) => {
                 self.ctx.set_error(e.clone());

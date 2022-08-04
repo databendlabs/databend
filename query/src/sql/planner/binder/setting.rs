@@ -31,7 +31,8 @@ impl<'a> Binder {
         variable: &Identifier<'a>,
         value: &Literal,
     ) -> Result<Plan> {
-        let type_checker = TypeChecker::new(bind_context, self.ctx.clone(), self.metadata.clone());
+        let type_checker =
+            TypeChecker::new(bind_context, self.ctx.clone(), self.metadata.clone(), &[]);
 
         let variable = variable.name.clone();
 

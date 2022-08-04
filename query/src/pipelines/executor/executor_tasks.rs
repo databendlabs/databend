@@ -17,6 +17,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
+use common_base::base::tokio::sync::Notify;
 use common_exception::Result;
 use parking_lot::Mutex;
 use petgraph::prelude::NodeIndex;
@@ -29,6 +30,7 @@ use crate::pipelines::processors::processor::ProcessorPtr;
 
 pub struct ExecutorTasksQueue {
     finished: Arc<AtomicBool>,
+    finished_notify: Arc<Notify>,
     workers_tasks: Mutex<ExecutorTasks>,
 }
 
@@ -36,12 +38,14 @@ impl ExecutorTasksQueue {
     pub fn create(workers_size: usize) -> Arc<ExecutorTasksQueue> {
         Arc::new(ExecutorTasksQueue {
             finished: Arc::new(AtomicBool::new(false)),
+            finished_notify: Arc::new(Notify::new()),
             workers_tasks: Mutex::new(ExecutorTasks::create(workers_size)),
         })
     }
 
     pub fn finish(&self, workers_condvar: Arc<WorkersCondvar>) {
         self.finished.store(true, Ordering::Relaxed);
+        self.finished_notify.notify_waiters();
 
         let mut workers_tasks = self.workers_tasks.lock();
         let mut wakeup_workers =
@@ -183,6 +187,10 @@ impl ExecutorTasksQueue {
             drop(workers_tasks);
             condvar.wakeup(worker_id);
         }
+    }
+
+    pub fn get_finished_notify(&self) -> Arc<Notify> {
+        self.finished_notify.clone()
     }
 }
 

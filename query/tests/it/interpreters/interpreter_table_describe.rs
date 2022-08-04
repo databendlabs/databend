@@ -34,7 +34,7 @@ async fn interpreter_describe_table_test() -> Result<()> {
 
         let (plan, _, _) = planner.plan_sql(query).await?;
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
-        let _ = executor.execute(None).await?;
+        let _ = executor.execute().await?;
     }
 
     // describe table.
@@ -44,7 +44,7 @@ async fn interpreter_describe_table_test() -> Result<()> {
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         assert_eq!(executor.name(), "DescribeTableInterpreter");
 
-        let stream = executor.execute(None).await?;
+        let stream = executor.execute().await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
             "+-------+----------+------+---------+-------+",
@@ -67,7 +67,7 @@ async fn interpreter_describe_table_test() -> Result<()> {
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         assert_eq!(executor.name(), "DescribeTableInterpreter");
 
-        let stream = executor.execute(None).await?;
+        let stream = executor.execute().await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
             "+-------+----------+------+---------+-------+",

@@ -138,6 +138,7 @@ fn test_statement() {
         r#"ALTER DATABASE catalog.c RENAME TO a;"#,
         r#"CREATE TABLE t (a INT COMMENT 'col comment') COMMENT='table comment';"#,
         r#"GRANT SELECT, CREATE ON * TO 'test-grant'@'localhost';"#,
+        r#"GRANT SELECT, CREATE ON *.* TO 'test-grant'@'localhost';"#,
         r#"GRANT SELECT, CREATE ON * TO USER 'test-grant'@'localhost';"#,
         r#"GRANT SELECT, CREATE ON * TO ROLE 'role1';"#,
         r#"GRANT ALL ON *.* TO 'test-grant'@'localhost';"#,
@@ -251,6 +252,8 @@ fn test_statement() {
         r#"PRESIGN @my_stage/path/to/file"#,
         r#"PRESIGN DOWNLOAD @my_stage/path/to/file"#,
         r#"PRESIGN UPLOAD @my_stage/path/to/file EXPIRE=7200"#,
+        r#"CREATE SHARE t COMMENT='share comment';"#,
+        r#"CREATE SHARE IF NOT EXISTS t;"#,
     ];
 
     for case in cases {

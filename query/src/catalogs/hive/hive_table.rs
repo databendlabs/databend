@@ -30,7 +30,6 @@ use common_planners::Partitions;
 use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
 use common_planners::TruncateTablePlan;
-use common_streams::SendableDataBlockStream;
 use futures::TryStreamExt;
 use opendal::ObjectMode;
 use opendal::Operator;
@@ -326,18 +325,6 @@ impl Table for HiveTable {
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         self.do_read2(ctx, plan, pipeline)
-    }
-
-    async fn append_data(
-        &self,
-        _ctx: Arc<dyn TableContext>,
-        _stream: SendableDataBlockStream,
-    ) -> Result<SendableDataBlockStream> {
-        Err(ErrorCode::UnImplement(format!(
-            "append operation for table {} is not implemented, table engine is {}",
-            self.name(),
-            self.get_table_info().meta.engine
-        )))
     }
 
     async fn commit_insertion(

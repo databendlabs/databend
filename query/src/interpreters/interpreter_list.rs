@@ -49,11 +49,8 @@ impl Interpreter for ListInterpreter {
         self.plan.schema()
     }
 
-    #[tracing::instrument(level = "debug", name = "list_interpreter_execute", skip(self, _input_stream), fields(ctx.id = self.ctx.get_id().as_str()))]
-    async fn execute(
-        &self,
-        mut _input_stream: Option<SendableDataBlockStream>,
-    ) -> Result<SendableDataBlockStream> {
+    #[tracing::instrument(level = "debug", name = "list_interpreter_execute", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
+    async fn execute(&self) -> Result<SendableDataBlockStream> {
         let plan = &self.plan;
         let files = list_files(&self.ctx, &plan.stage, &plan.path, &plan.pattern).await?;
 

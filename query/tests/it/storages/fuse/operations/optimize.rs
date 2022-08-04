@@ -14,7 +14,6 @@
 
 use common_base::base::tokio;
 use common_exception::Result;
-use databend_query::catalogs::CATALOG_DEFAULT;
 use futures::TryStreamExt;
 
 use crate::storages::fuse::table_test_fixture::append_sample_data;
@@ -46,21 +45,25 @@ async fn do_purge_test(case_name: &str, operation: &str) -> Result<()> {
     let db = fixture.default_db_name();
     let tbl = fixture.default_table_name();
     let qry = format!("optimize table {}.{} {}", db, tbl, operation);
-    // insert, and then insert overwrite (1 snapshot, 1 segment, 1 block for each insertion);
-    insert_test_data(&qry, &fixture).await?;
-    // there should be only 1 snapshot, 1 segment, 1 block left
-    check_data_dir(&fixture, case_name, 1, 1, 1).await;
+
+    // insert, and then insert overwrite (1 snapshot, 1 segment, 1 data block, 1 index block for each insertion);
+    do_insertions(&fixture).await?;
+
+    // execute the query
+    let ctx = fixture.ctx();
+    execute_command(ctx, &qry).await?;
+
+    // there should be only 1 snapshot, 1 segment, 1 block left, and 0 index left
+    check_data_dir(&fixture, case_name, 1, 1, 1, 1).await;
     history_should_have_only_one_item(&fixture, case_name).await
 }
 
-async fn insert_test_data(qry: &str, fixture: &TestFixture) -> Result<()> {
-    let ctx = fixture.ctx();
+async fn do_insertions(fixture: &TestFixture) -> Result<()> {
     fixture.create_default_table().await?;
     // ingests 1 block, 1 segment, 1 snapshot
     append_sample_data(1, fixture).await?;
     // then, overwrite the table, new data set: 1 block, 1 segment, 1 snapshot
     append_sample_data_overwrite(1, true, fixture).await?;
-    execute_command(ctx.clone(), qry).await?;
     Ok(())
 }
 
@@ -69,7 +72,6 @@ async fn test_fuse_snapshot_optimize_compact() -> Result<()> {
     let fixture = TestFixture::new().await;
     let db = fixture.default_db_name();
     let tbl = fixture.default_table_name();
-    let ctx = fixture.ctx();
     fixture.create_default_table().await?;
 
     // insert 5 blocks
@@ -78,9 +80,10 @@ async fn test_fuse_snapshot_optimize_compact() -> Result<()> {
         let table = fixture.latest_default_table().await?;
         let num_blocks = 1;
         let stream = TestFixture::gen_sample_blocks_stream(num_blocks, 1);
-        let r = table.append_data(ctx.clone(), stream).await?;
-        table
-            .commit_insertion(ctx.clone(), CATALOG_DEFAULT, r.try_collect().await?, false)
+
+        let blocks = stream.try_collect().await?;
+        fixture
+            .append_commit_blocks(table.clone(), blocks, false, true)
             .await?;
     }
 

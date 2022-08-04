@@ -24,7 +24,6 @@ use common_planners::DropTableClusterKeyPlan;
 use common_planners::ReadDataSourcePlan;
 use common_planners::SourceInfo;
 use common_planners::TruncateTablePlan;
-use databend_query::catalogs::CATALOG_DEFAULT;
 use databend_query::interpreters::AlterTableClusterKeyInterpreter;
 use databend_query::interpreters::CreateTableInterpreter;
 use databend_query::interpreters::DropTableClusterKeyInterpreter;
@@ -49,7 +48,7 @@ async fn test_fuse_table_normal_case() -> Result<()> {
 
     let create_table_plan = fixture.default_crate_table_plan();
     let interpreter = CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;
-    interpreter.execute(None).await?;
+    interpreter.execute().await?;
 
     let mut table = fixture.latest_default_table().await?;
 
@@ -61,9 +60,9 @@ async fn test_fuse_table_normal_case() -> Result<()> {
         let stream =
             TestFixture::gen_sample_blocks_stream_ex(num_blocks, rows_per_block, value_start_from);
 
-        let r = table.append_data(ctx.clone(), stream).await?;
-        table
-            .commit_insertion(ctx.clone(), CATALOG_DEFAULT, r.try_collect().await?, false)
+        let blocks = stream.try_collect().await?;
+        fixture
+            .append_commit_blocks(table.clone(), blocks, false, true)
             .await?;
 
         // get the latest tbl
@@ -119,9 +118,9 @@ async fn test_fuse_table_normal_case() -> Result<()> {
         let stream =
             TestFixture::gen_sample_blocks_stream_ex(num_blocks, rows_per_block, value_start_from);
 
-        let r = table.append_data(ctx.clone(), stream).await?;
-        table
-            .commit_insertion(ctx.clone(), CATALOG_DEFAULT, r.try_collect().await?, true)
+        let blocks = stream.try_collect().await?;
+        fixture
+            .append_commit_blocks(table.clone(), blocks, true, true)
             .await?;
 
         // get the latest tbl
@@ -176,7 +175,7 @@ async fn test_fuse_table_truncate() -> Result<()> {
 
     let create_table_plan = fixture.default_crate_table_plan();
     let interpreter = CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;
-    interpreter.execute(None).await?;
+    interpreter.execute().await?;
 
     let table = fixture.latest_default_table().await?;
     let truncate_plan = TruncateTablePlan {
@@ -201,10 +200,11 @@ async fn test_fuse_table_truncate() -> Result<()> {
     let stream =
         TestFixture::gen_sample_blocks_stream_ex(num_blocks, rows_per_block, value_start_from);
 
-    let r = table.append_data(ctx.clone(), stream).await?;
-    table
-        .commit_insertion(ctx.clone(), CATALOG_DEFAULT, r.try_collect().await?, false)
+    let blocks = stream.try_collect().await?;
+    fixture
+        .append_commit_blocks(table.clone(), blocks, false, true)
         .await?;
+
     let source_plan = table.read_plan(ctx.clone(), None).await?;
 
     // get the latest tbl
@@ -249,7 +249,7 @@ async fn test_fuse_table_optimize() -> Result<()> {
     let tbl_name = create_table_plan.table.clone();
     let db_name = create_table_plan.database.clone();
     let interpreter = CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;
-    interpreter.execute(None).await?;
+    interpreter.execute().await?;
 
     // insert 5 times
     let n = 5;
@@ -257,9 +257,10 @@ async fn test_fuse_table_optimize() -> Result<()> {
         let table = fixture.latest_default_table().await?;
         let num_blocks = 1;
         let stream = TestFixture::gen_sample_blocks_stream(num_blocks, 1);
-        let r = table.append_data(ctx.clone(), stream).await?;
-        table
-            .commit_insertion(ctx.clone(), CATALOG_DEFAULT, r.try_collect().await?, false)
+
+        let blocks = stream.try_collect().await?;
+        fixture
+            .append_commit_blocks(table.clone(), blocks, false, true)
             .await?;
     }
 
@@ -281,7 +282,7 @@ async fn test_fuse_table_optimize() -> Result<()> {
     // To avoid flaky test, the value of setting `max_threads` is set to be 1, so that pipeline_builder will
     // only arrange one worker for the `ReadDataSourcePlan`.
     ctx.get_settings().set_max_threads(1)?;
-    let data_stream = interpreter.execute(None).await?;
+    let data_stream = interpreter.execute().await?;
     let _ = data_stream.try_collect::<Vec<_>>();
 
     // verify compaction
@@ -322,7 +323,7 @@ async fn test_fuse_alter_table_cluster_key() -> Result<()> {
 
     // create test table
     let interpreter = CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;
-    interpreter.execute(None).await?;
+    interpreter.execute().await?;
 
     // add cluster key
     let alter_table_cluster_key_plan = AlterTableClusterKeyPlan {
@@ -334,7 +335,7 @@ async fn test_fuse_alter_table_cluster_key() -> Result<()> {
     };
     let interpreter =
         AlterTableClusterKeyInterpreter::try_create(ctx.clone(), alter_table_cluster_key_plan)?;
-    interpreter.execute(None).await?;
+    interpreter.execute().await?;
 
     let table = fixture.latest_default_table().await?;
     let table_info = table.get_table_info();
@@ -360,7 +361,7 @@ async fn test_fuse_alter_table_cluster_key() -> Result<()> {
     };
     let interpreter =
         DropTableClusterKeyInterpreter::try_create(ctx.clone(), drop_table_cluster_key_plan)?;
-    interpreter.execute(None).await?;
+    interpreter.execute().await?;
 
     let table = fixture.latest_default_table().await?;
     let table_info = table.get_table_info();

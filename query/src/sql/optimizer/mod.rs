@@ -76,10 +76,12 @@ pub fn optimize(
             s_expr,
             bind_context,
             metadata,
+            rewrite_kind,
         } => Ok(Plan::Query {
             s_expr: optimize_query(ctx, opt_ctx, metadata.clone(), bind_context.clone(), s_expr)?,
             bind_context,
             metadata,
+            rewrite_kind,
         }),
         Plan::Explain { kind, plan } => Ok(Plan::Explain {
             kind,

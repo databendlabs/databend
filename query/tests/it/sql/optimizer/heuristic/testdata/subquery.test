@@ -2,7 +2,7 @@
 select t.number from numbers(1) as t, numbers(1) as t1 where t.number = (select count(*) from numbers(1) as t2, numbers(1) as t3 where t.number = t2.number)
 ----
 Project: [number (#0)]
-    Filter: [t.number (#0) = multi_if(is_null(scalar_subquery_4 (#4)), 0, scalar_subquery_4 (#4))]
+    Filter: [t.number (#0) = CAST(if(is_null(scalar_subquery_4 (#4)), 0, scalar_subquery_4 (#4)) AS BIGINT UNSIGNED)]
         HashJoin: SINGLE, build keys: [subquery_6 (#6)], probe keys: [subquery_0 (#0)], join filters: []
             CrossJoin
                 Scan: default.system.numbers
@@ -119,7 +119,7 @@ Project: [number (#0)]
 select t.number from numbers(1) as t, numbers(1) as t1 where (select count(*) = 1 from numbers(1) where t.number = number) and t.number = t1.number
 ----
 Project: [number (#0)]
-    Filter: [multi_if(is_null(scalar_subquery_3 (#3)), 0, scalar_subquery_3 (#3))]
+    Filter: [CAST(if(is_null(scalar_subquery_3 (#3)), 0, scalar_subquery_3 (#3)) AS BIGINT UNSIGNED)]
         HashJoin: SINGLE, build keys: [subquery_5 (#5)], probe keys: [subquery_0 (#0)], join filters: []
             HashJoin: INNER, build keys: [t1.number (#1)], probe keys: [t.number (#0)], join filters: []
                 Scan: default.system.numbers
