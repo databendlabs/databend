@@ -12,7 +12,6 @@ test = false
 common-arrow = { path = "../../arrow" }
 common-base = { path = "../../base" }
 common-catalog = { path = "../../catalog" }
-common-catalogs = { path = "../../catalogs" }
 common-config = { path = "../../config" }
 common-datablocks = { path = "../../datablocks" }
 common-datavalues = { path = "../../datavalues" }
@@ -20,7 +19,6 @@ common-exception = { path = "../../exception" }
 common-functions = { path = "../../functions" }
 common-fuse-meta = { path = "../../fuse-meta" }
 common-grpc = { path = "../../grpc" }
-common-hive-meta-store = { path = "../../hive-meta-store" }
 common-meta-app = { path = "../../meta/app" }
 common-meta-types = { path = "../../meta/types" }
 common-pipeline-core = { path = "../../pipeline/core" }
@@ -30,9 +28,7 @@ common-storage = { path = "../../storage" }
 common-tracing = { path = "../../tracing" }
 common-users = { path = "../../users" }
 
-async-recursion = "1.0.0"
 async-trait = "0.1.56"
-backoff = { version = "0.4.0", features = ["futures", "tokio"] }
 bincode = { version = "2.0.0-rc.1", features = ["serde", "std", "alloc"] }
 bit-vec = { version = "0.6.3", features = ["serde_std"] }
 clap = { version = "3.2.5", features = ["derive", "env"] }

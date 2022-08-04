@@ -38,7 +38,6 @@ common-ast = { path = "../common/ast" }
 common-base = { path = "../common/base" }
 common-cache = { path = "../common/cache" }
 common-catalog = { path = "../common/catalog" }
-common-catalogs = { path = "../common/catalogs" }
 common-config = { path = "../common/config" }
 common-contexts = { path = "../common/contexts" }
 common-datablocks = { path = "../common/datablocks" }

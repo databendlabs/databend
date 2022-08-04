@@ -1024,7 +1024,6 @@ dependencies = [
  "anyhow",
  "async-trait 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)",
  "common-exception",
- "common-macros",
  "ctrlc",
  "futures",
  "libc",
@@ -1087,36 +1086,6 @@ dependencies = [
  "opendal",
  "parking_lot 0.12.1",
  "time 0.3.11",
-]
-
-[[package]]
-name = "common-catalogs"
-version = "0.1.0"
-dependencies = [
- "async-trait 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)",
- "common-base",
- "common-catalog",
- "common-config",
- "common-contexts",
- "common-datablocks",
- "common-datavalues",
- "common-exception",
- "common-functions",
- "common-fuse-meta",
- "common-hive-meta-store",
- "common-io",
- "common-meta-app",
- "common-meta-types",
- "common-pipeline-core",
- "common-planners",
- "common-settings",
- "common-users",
- "dyn-clone",
- "opendal",
- "parking_lot 0.12.1",
- "thrift",
- "time 0.3.11",
- "tracing",
 ]
 
 [[package]]
@@ -1398,17 +1367,12 @@ dependencies = [
  "async-trait 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)",
  "clap 3.2.15",
  "common-ast",
- "common-base",
- "common-config",
  "common-datavalues",
  "common-exception",
  "common-functions",
- "common-grpc",
  "common-meta-types",
  "common-planners",
  "common-storage",
- "common-tracing",
- "common-users",
  "futures",
  "futures-util",
  "itertools",
@@ -1417,9 +1381,7 @@ dependencies = [
  "once_cell",
  "opendal",
  "parking_lot 0.12.1",
- "semver",
  "serde",
- "serfig",
  "sqlparser",
  "time 0.3.11",
 ]
@@ -1670,7 +1632,6 @@ name = "common-pipeline-core"
 version = "0.1.0"
 dependencies = [
  "async-trait 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)",
- "common-base",
  "common-datablocks",
  "common-datavalues",
  "common-exception",
@@ -1824,7 +1785,6 @@ dependencies = [
 name = "common-storages-fuse"
 version = "0.1.0"
 dependencies = [
- "async-recursion",
  "async-stream",
  "async-trait 0.1.56 (git+https://github.com/datafuse-extras/async-trait?rev=f0b0fd5)",
  "backoff",
@@ -1842,7 +1802,6 @@ dependencies = [
  "common-functions",
  "common-fuse-meta",
  "common-grpc",
- "common-hive-meta-store",
  "common-legacy-parser",
  "common-meta-app",
  "common-meta-types",
@@ -1885,7 +1844,6 @@ dependencies = [
  "common-arrow",
  "common-base",
  "common-catalog",
- "common-catalogs",
  "common-config",
  "common-datablocks",
  "common-datavalues",
@@ -1923,16 +1881,13 @@ dependencies = [
 name = "common-storages-index"
 version = "0.1.0"
 dependencies = [
- "async-recursion",
  "async-trait 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)",
- "backoff",
  "bincode",
  "bit-vec",
  "clap 3.2.15",
  "common-arrow",
  "common-base",
  "common-catalog",
- "common-catalogs",
  "common-config",
  "common-datablocks",
  "common-datavalues",
@@ -1940,7 +1895,6 @@ dependencies = [
  "common-functions",
  "common-fuse-meta",
  "common-grpc",
- "common-hive-meta-store",
  "common-meta-app",
  "common-meta-types",
  "common-pipeline-core",
@@ -1970,33 +1924,20 @@ dependencies = [
 name = "common-storages-util"
 version = "0.1.0"
 dependencies = [
- "async-recursion",
  "async-trait 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)",
  "backoff",
  "bincode",
- "bit-vec",
  "clap 3.2.15",
  "common-arrow",
  "common-base",
- "common-catalog",
- "common-catalogs",
- "common-config",
  "common-datablocks",
  "common-datavalues",
  "common-exception",
- "common-functions",
- "common-fuse-meta",
- "common-grpc",
- "common-hive-meta-store",
  "common-meta-api",
  "common-meta-app",
  "common-meta-types",
- "common-pipeline-core",
- "common-pipeline-transforms",
- "common-planners",
  "common-storage",
  "common-tracing",
- "common-users",
  "futures",
  "futures-util",
  "itertools",
@@ -2005,13 +1946,10 @@ dependencies = [
  "opendal",
  "parking_lot 0.12.1",
  "rand 0.8.5",
- "semver",
  "serde",
- "serfig",
  "thrift",
  "time 0.3.11",
  "tracing",
- "typetag",
 ]
 
 [[package]]
@@ -2595,7 +2533,6 @@ dependencies = [
  "common-building",
  "common-cache",
  "common-catalog",
- "common-catalogs",
  "common-config",
  "common-contexts",
  "common-datablocks",

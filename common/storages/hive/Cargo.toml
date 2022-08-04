@@ -12,7 +12,6 @@ test = false
 common-arrow = { path = "../../arrow" }
 common-base = { path = "../../base" }
 common-catalog = { path = "../../catalog" }
-common-catalogs = { path = "../../catalogs" }
 common-config = { path = "../../config" }
 common-datablocks = { path = "../../datablocks" }
 common-datavalues = { path = "../../datavalues" }

@@ -21,7 +21,6 @@ common-exception = { path = "../../exception" }
 common-functions = { path = "../../functions" }
 common-fuse-meta = { path = "../../fuse-meta" }
 common-grpc = { path = "../../grpc" }
-common-hive-meta-store = { path = "../../hive-meta-store" }
 common-legacy-parser = { path = "../../legacy-parser" }
 common-meta-app = { path = "../../meta/app" }
 common-meta-types = { path = "../../meta/types" }
@@ -36,7 +35,6 @@ common-streams = { path = "../../streams" }
 common-tracing = { path = "../../tracing" }
 common-users = { path = "../../users" }
 
-async-recursion = "1.0.0"
 async-stream = "0.3.3"
 async-trait = { git = "https://github.com/datafuse-extras/async-trait", rev = "f0b0fd5" }
 backoff = { version = "0.4.0", features = ["futures", "tokio"] }
