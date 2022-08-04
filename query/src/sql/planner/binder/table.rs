@@ -173,7 +173,7 @@ impl<'a> Binder {
                 alias,
             } => {
                 let mut scalar_binder =
-                    ScalarBinder::new(bind_context, self.ctx.clone(), self.metadata.clone());
+                    ScalarBinder::new(bind_context, self.ctx.clone(), self.metadata.clone(), &[]);
                 let mut args = Vec::with_capacity(params.len());
                 for arg in params.iter() {
                     args.push(scalar_binder.bind(arg).await?);
@@ -296,7 +296,7 @@ impl<'a> Binder {
             TimeTravelPoint::Snapshot(s) => Ok(NavigationPoint::SnapshotID(s.to_owned())),
             TimeTravelPoint::Timestamp(expr) => {
                 let mut type_checker =
-                    TypeChecker::new(bind_context, self.ctx.clone(), self.metadata.clone());
+                    TypeChecker::new(bind_context, self.ctx.clone(), self.metadata.clone(), &[]);
                 let box (scalar, data_type) = type_checker
                     .resolve(expr, Some(TimestampType::new_impl(6)))
                     .await?;

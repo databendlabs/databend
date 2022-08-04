@@ -29,9 +29,11 @@ use common_management::UdfMgr;
 use common_management::UserApi;
 use common_management::UserMgr;
 use common_meta_api::KVApi;
+use common_meta_store::MetaStore;
 use common_meta_store::MetaStoreProvider;
 
 pub struct UserApiProvider {
+    meta: MetaStore,
     client: Arc<dyn KVApi>,
 }
 
@@ -39,6 +41,7 @@ impl UserApiProvider {
     pub async fn create_global(conf: RpcClientConf) -> Result<Arc<UserApiProvider>> {
         let client = MetaStoreProvider::new(conf).try_get_meta_store().await?;
         Ok(Arc::new(UserApiProvider {
+            meta: client.clone(),
             client: client.arc(),
         }))
     }
@@ -65,5 +68,9 @@ impl UserApiProvider {
 
     pub fn get_setting_api_client(&self, tenant: &str) -> Result<Arc<dyn SettingApi>> {
         Ok(Arc::new(SettingMgr::create(self.client.clone(), tenant)?))
+    }
+
+    pub fn get_meta_store_client(&self) -> Arc<MetaStore> {
+        Arc::new(self.meta.clone())
     }
 }
