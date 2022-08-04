@@ -39,6 +39,12 @@ Get help with:
 python main.py -h
 ```
 
+Useful arguments:
+1. --run-dir ydb  will only run the suites in dir ./suites/ydb/
+2. --skip-dir ydb  will skip the suites in dir ./suites/ydb
+3. --suites other_dir  wiil use suites file in dir ./other_dir
+4. Run files by pattern string like: python main.py "03_0001"
+
 ## Docker
 
 ### Build image
@@ -58,6 +64,56 @@ docker build -t sqllogic/test:latest .
 - MYSQL_USER
 - ADDITIONAL_HEADERS (for security scenario)
 3. docker run --name logictest --rm --network host datafuselabs/sqllogictest:latest
+
+## How to write logic test
+
+Fast start, you can follow this demo: https://github.com/datafuselabs/databend/blob/main/tests/logictest/suites/select_0
+
+Runner supported: mysql handler, http handler, clickhouse handler.
+
+- ok
+  - Returns no error, don't care about the result
+- error
+  - Returns with error and expected error message, usually with an error code, but also with a message string; the way to determine whether the specified string is in the returned message
+- query
+  - Return result and check the result with expected, follow by query_type and query_label
+  - query_type is a char represent a column in result, multi char means multi column
+    - B Boolean
+    - T text   
+    - F floating point
+    - I integer
+  - query_label If different runner return inconsistency, you can write like this(suppose that mysql handler is get different result)
+
+This is a query demo(query_label is optional):
+
+```
+statement query III label(mysql)
+select number, number + 1, number + 999 from numbers(10);
+
+----
+     0     1   999
+     1     2  1000
+     2     3  1001
+     3     4  1002
+     4     5  1003
+     5     6  1004
+     6     7  1005
+     7     8  1006
+     8     9  1007
+     9    10  1008.0
+
+----  mysql
+     0     1   999
+     1     2  1000
+     2     3  1001
+     3     4  1002
+     4     5  1003
+     5     6  1004
+     6     7  1005
+     7     8  1006
+     8     9  1007
+     9    10  1008
+```
 
 ## Write logic test tips
 
@@ -91,8 +147,10 @@ select 1;
 ```
 
 **tips** If you do not care about result, use statement ok instead of statement query
+**tips** Add ORDER BY to ensure that the order of returned results is always consistent
 **warning** A statement query need result, and even if you want to skip a case, you still need to keep the results in the test content
 
 # Learn More
 
-Ref pr: https://github.com/datafuselabs/databend/pull/5048
+RFC: https://github.com/datafuselabs/databend/blob/main/docs/doc/60-contributing/03-rfcs/20220425-new_sql_logic_test_framework.md
+Migration discussion: https://github.com/datafuselabs/databend/discussions/5838
