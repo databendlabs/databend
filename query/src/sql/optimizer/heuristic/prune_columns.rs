@@ -94,13 +94,24 @@ impl ColumnPruner {
                     acc.union(&v.used_columns()).cloned().collect()
                 });
                 // Include columns referenced in left conditions
-                let right = p.right_conditions.iter().fold(required, |acc, v| {
+                let right = p.right_conditions.iter().fold(required.clone(), |acc, v| {
                     acc.union(&v.used_columns()).cloned().collect()
                 });
+
+                let others = p.other_conditions.iter().fold(required, |acc, v| {
+                    acc.union(&v.used_columns()).cloned().collect()
+                });
+
                 Ok(SExpr::create_binary(
                     RelOperator::LogicalInnerJoin(p.clone()),
-                    self.keep_required_columns(expr.child(0)?, left)?,
-                    self.keep_required_columns(expr.child(1)?, right)?,
+                    self.keep_required_columns(
+                        expr.child(0)?,
+                        left.union(&others).cloned().collect(),
+                    )?,
+                    self.keep_required_columns(
+                        expr.child(1)?,
+                        right.union(&others).cloned().collect(),
+                    )?,
                 ))
             }
             RelOperator::Project(p) => {
