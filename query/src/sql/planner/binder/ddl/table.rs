@@ -45,6 +45,7 @@ use crate::sql::optimizer::OptimizerConfig;
 use crate::sql::optimizer::OptimizerContext;
 use crate::sql::plans::create_table_v2::CreateTablePlanV2;
 use crate::sql::plans::Plan;
+use crate::sql::plans::RewriteKind;
 use crate::sql::BindContext;
 use crate::sql::ColumnBinding;
 use crate::sql::ScalarExpr;
@@ -182,10 +183,8 @@ impl<'a> Binder {
             }
         };
         debug!("show tables rewrite to: {:?}", query);
-        let tokens = tokenize_sql(query.as_str())?;
-        let backtrace = Backtrace::new();
-        let (stmt, _) = parse_sql(&tokens, &backtrace)?;
-        self.bind_statement(bind_context, &stmt).await
+        self.bind_rewrite_to_query(bind_context, query.as_str(), RewriteKind::ShowTables)
+            .await
     }
 
     pub(in crate::sql::planner::binder) async fn bind_show_create_table(

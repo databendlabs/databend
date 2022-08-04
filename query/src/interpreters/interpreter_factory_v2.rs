@@ -48,6 +48,7 @@ impl InterpreterFactoryV2 {
             ctx,
             inner,
             PlanNode::Empty(EmptyPlan::create()),
+            Some(plan.clone()),
             plan.to_string(),
         )))
     }
@@ -58,6 +59,7 @@ impl InterpreterFactoryV2 {
                 s_expr,
                 bind_context,
                 metadata,
+                ..
             } => Ok(Arc::new(SelectInterpreterV2::try_create(
                 ctx,
                 *bind_context.clone(),
