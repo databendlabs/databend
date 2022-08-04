@@ -63,7 +63,7 @@ async fn run_test(ctx: Arc<QueryContext>, suite: &Suite) -> Result<String> {
         } => {
             let mut heuristic_opt = HeuristicOptimizer::new(
                 ctx.clone(),
-                bind_context.clone(),
+                bind_context,
                 metadata.clone(),
                 RuleList::create(suite.rules.clone())?,
                 false,
