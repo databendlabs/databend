@@ -32,15 +32,10 @@ client = connect(host='127.0.0.1',
                  port='9001')
 cur = client.cursor()
 try:
-    cur.execute('INSERT INTO db1.t1(a) VALUES("Test")')
-except OperationalError as e:
-    assert (
-        'DB:Exception. Unable to get field named "Test". Valid fields: ["a"].'
-        in str(e))
-try:
-    res = cur.execute('SELECT a FROM db1.t1 WHERE a="Test"')
-except Exception as e:
-    assert ('DB:Exception. Unknown column Test.' in str(e))
+    cur.execute("INSERT INTO db1.t1(a) VALUES('Test')")
+    cur.execute("SELECT a FROM db1.t1 WHERE a='Test'")
+    res = cur.fetchall()
+    assert res == [('Test',)]
 finally:
     sql = "DROP DATABASE db1;"
     client1.run(sql)
