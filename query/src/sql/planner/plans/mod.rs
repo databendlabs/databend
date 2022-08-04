@@ -119,6 +119,7 @@ pub enum Plan {
         s_expr: SExpr,
         metadata: MetadataRef,
         bind_context: Box<BindContext>,
+        rewrite_kind: Option<RewriteKind>,
     },
 
     Explain {
@@ -132,11 +133,7 @@ pub enum Plan {
     // Call
     Call(Box<CallPlan>),
 
-    // System
-    // ShowSettings, ShowMetrics, ShowProcessList-> Rewrite to Query,
-
     // Databases
-    // ShowDatabases(_) -> Rewrite to Query,
     ShowCreateDatabase(Box<ShowCreateDatabasePlan>),
     CreateDatabase(Box<CreateDatabasePlan>),
     DropDatabase(Box<DropDatabasePlan>),
@@ -145,7 +142,6 @@ pub enum Plan {
     UseDatabase(Box<UseDatabasePlan>),
 
     // Tables
-    // ShowTables/ShowTablesStatus -> Rewrite to Query,
     ShowCreateTable(Box<ShowCreateTablePlan>),
     DescribeTable(Box<DescribeTablePlan>),
     CreateTable(Box<CreateTablePlanV2>),
@@ -168,7 +164,6 @@ pub enum Plan {
     DropView(Box<DropViewPlan>),
 
     // Account
-    // ShowUsers -> Rewrite to Query,
     AlterUser(Box<AlterUserPlan>),
     CreateUser(Box<CreateUserPlan>),
     DropUser(Box<DropUserPlan>),
@@ -178,7 +173,7 @@ pub enum Plan {
     AlterUDF(Box<AlterUserUDFPlan>),
     DropUDF(Box<DropUserUDFPlan>),
 
-    // ShowRoles  -> Rewrite to Query,
+    // Role
     CreateRole(Box<CreateRolePlan>),
     DropRole(Box<DropRolePlan>),
     GrantRole(Box<GrantRolePlan>),
@@ -188,7 +183,6 @@ pub enum Plan {
     RevokeRole(Box<RevokeRolePlan>),
 
     // Stages
-    // ShowStages -> Rewrite to Query,
     ListStage(Box<ListPlan>),
     DescribeStage(Box<DescribeUserStagePlan>),
     CreateStage(Box<CreateUserStagePlan>),
@@ -201,6 +195,24 @@ pub enum Plan {
     // Set
     SetVariable(Box<SettingPlan>),
     Kill(Box<KillPlan>),
+}
+
+#[derive(Clone)]
+pub enum RewriteKind {
+    ShowSettings,
+    ShowMetrics,
+    ShowProcessList,
+    ShowEngines,
+
+    ShowDatabases,
+    ShowTables,
+    ShowTablesStatus,
+
+    ShowFunctions,
+
+    ShowUsers,
+    ShowStages,
+    ShowRoles,
 }
 
 impl Display for Plan {
@@ -265,6 +277,7 @@ impl Plan {
                 s_expr: _,
                 metadata: _,
                 bind_context,
+                ..
             } => bind_context.output_schema(),
             Plan::Explain { kind: _, plan: _ } => {
                 DataSchemaRefExt::create(vec![DataField::new("explain", Vu8::to_data_type())])

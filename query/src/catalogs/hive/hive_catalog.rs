@@ -117,6 +117,18 @@ impl HiveCatalog {
         let table_meta = client
             .get_table(db_name.clone(), table_name.clone())
             .map_err(from_thrift_error)?;
+
+        if let Some(sd) = table_meta.sd.as_ref() {
+            if let Some(input_format) = sd.input_format.as_ref() {
+                if input_format != "org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat" {
+                    return Err(ErrorCode::UnImplement(format!(
+                        "only support parquet, {} not support",
+                        input_format
+                    )));
+                }
+            }
+        }
+
         let fields = client
             .get_schema(db_name, table_name)
             .map_err(from_thrift_error)?;

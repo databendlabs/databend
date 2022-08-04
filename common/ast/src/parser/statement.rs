@@ -208,7 +208,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let show_tables = map(
         rule! {
-            SHOW ~ FULL? ~ TABLES ~ HISTORY? ~ ( FROM ~ ^#ident )? ~ #show_limit?
+            SHOW ~ FULL? ~ TABLES ~ HISTORY? ~ ( ( FROM | IN ) ~ ^#ident )? ~ #show_limit?
         },
         |(_, opt_full, _, opt_history, opt_database, limit)| {
             Statement::ShowTables(ShowTablesStmt {

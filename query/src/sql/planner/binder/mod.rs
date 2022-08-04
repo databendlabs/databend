@@ -39,6 +39,7 @@ pub use scalar::ScalarBinder;
 pub use scalar_common::*;
 
 use super::plans::Plan;
+use super::plans::RewriteKind;
 use crate::catalogs::CatalogManager;
 use crate::sessions::QueryContext;
 use crate::sql::planner::metadata::MetadataRef;
@@ -109,6 +110,7 @@ impl<'a> Binder {
                     s_expr,
                     metadata: self.metadata.clone(),
                     bind_context: Box::new(bind_context),
+                    rewrite_kind: None,
                 }
             }
 
@@ -127,15 +129,16 @@ impl<'a> Binder {
                 self.bind_rewrite_to_query(
                     bind_context,
                     "SELECT metric, kind, labels, value FROM system.metrics",
+                    RewriteKind::ShowMetrics
                 )
                 .await?
             }
             Statement::ShowProcessList => {
-                self.bind_rewrite_to_query(bind_context, "SELECT * FROM system.processes")
+                self.bind_rewrite_to_query(bind_context, "SELECT * FROM system.processes", RewriteKind::ShowProcessList)
                     .await?
             }
             Statement::ShowEngines => {
-                 self.bind_rewrite_to_query(bind_context, "SELECT Engine, Comment FROM system.engines ORDER BY Engine ASC")
+                 self.bind_rewrite_to_query(bind_context, "SELECT Engine, Comment FROM system.engines ORDER BY Engine ASC", RewriteKind::ShowEngines)
                     .await?
             },
             Statement::ShowSettings { like } => self.bind_show_settings(bind_context, like).await?,
@@ -179,11 +182,11 @@ impl<'a> Binder {
                 if_exists: *if_exists,
                 user: user.clone(),
             })),
-            Statement::ShowUsers => self.bind_rewrite_to_query(bind_context, "SELECT name, hostname, auth_type, auth_string FROM system.users ORDER BY name").await?,
+            Statement::ShowUsers => self.bind_rewrite_to_query(bind_context, "SELECT name, hostname, auth_type, auth_string FROM system.users ORDER BY name",  RewriteKind::ShowUsers).await?,
             Statement::AlterUser(stmt) => self.bind_alter_user(stmt).await?,
 
             // Roles
-            Statement::ShowRoles => self.bind_rewrite_to_query(bind_context, "SELECT name, inherited_roles FROM system.roles ORDER BY name").await?,
+            Statement::ShowRoles => self.bind_rewrite_to_query(bind_context, "SELECT name, inherited_roles FROM system.roles ORDER BY name", RewriteKind::ShowRoles).await?,
             Statement::CreateRole {
                 if_not_exists,
                 role_name,
@@ -200,7 +203,7 @@ impl<'a> Binder {
             })),
 
             // Stages
-            Statement::ShowStages => self.bind_rewrite_to_query(bind_context, "SELECT name, stage_type, number_of_files, creator, comment FROM system.stages ORDER BY name").await?,
+            Statement::ShowStages => self.bind_rewrite_to_query(bind_context, "SELECT name, stage_type, number_of_files, creator, comment FROM system.stages ORDER BY name", RewriteKind::ShowStages).await?,
             Statement::ListStage { location, pattern } => {
                 self.bind_list_stage(location, pattern).await?
             }
@@ -261,8 +264,8 @@ impl<'a> Binder {
                 udf: UserDefinedFunction {
                     name: udf_name.to_string(),
                     parameters: parameters.iter().map(|v| v.to_string()).collect(),
-                    description: definition.to_string(),
-                    definition: description.clone().unwrap_or_default(),
+                    definition: definition.to_string(),
+                    description: description.clone().unwrap_or_default(),
                 },
             })),
             Statement::DropUDF {
@@ -299,11 +302,17 @@ impl<'a> Binder {
         &mut self,
         bind_context: &BindContext,
         query: &str,
+        rewrite_kind_r: RewriteKind,
     ) -> Result<Plan> {
         let tokens = tokenize_sql(query)?;
         let backtrace = Backtrace::new();
         let (stmt, _) = parse_sql(&tokens, &backtrace)?;
-        self.bind_statement(bind_context, &stmt).await
+        let mut plan = self.bind_statement(bind_context, &stmt).await?;
+
+        if let Plan::Query { rewrite_kind, .. } = &mut plan {
+            *rewrite_kind = Some(rewrite_kind_r)
+        }
+        Ok(plan)
     }
 
     /// Create a new ColumnBinding with assigned index

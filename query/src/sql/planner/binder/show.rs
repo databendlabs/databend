@@ -16,6 +16,7 @@ use common_ast::ast::ShowLimit;
 use common_exception::Result;
 
 use crate::sql::plans::Plan;
+use crate::sql::plans::RewriteKind;
 use crate::sql::BindContext;
 use crate::sql::Binder;
 
@@ -44,7 +45,8 @@ impl<'a> Binder {
                 }
             }
         );
-        self.bind_rewrite_to_query(bind_context, &query).await
+        self.bind_rewrite_to_query(bind_context, &query, RewriteKind::ShowFunctions)
+            .await
     }
 
     pub(in crate::sql::planner::binder) async fn bind_show_settings(
@@ -61,6 +63,7 @@ impl<'a> Binder {
             sub_query
         );
 
-        self.bind_rewrite_to_query(bind_context, &query).await
+        self.bind_rewrite_to_query(bind_context, &query, RewriteKind::ShowSettings)
+            .await
     }
 }
