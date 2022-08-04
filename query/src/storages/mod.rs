@@ -22,7 +22,6 @@ mod storage_table;
 mod storage_table_read_plan;
 mod storage_table_read_wrap;
 pub mod system;
-pub mod view;
 
 pub use common_catalog::table::NavigationPoint;
 pub use common_catalog::table::TableStatistics;
@@ -31,6 +30,7 @@ pub use common_storages_preludes::information_schema;
 pub use common_storages_preludes::memory;
 pub use common_storages_preludes::null;
 pub use common_storages_preludes::random;
+pub use common_storages_preludes::view;
 use common_storages_util::storage_context;
 pub use storage_context::StorageContext;
 pub use storage_factory::StorageCreator;
