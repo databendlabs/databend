@@ -4834,6 +4834,30 @@ Grant(
 
 
 ---------- Input ----------
+GRANT SELECT, CREATE ON *.* TO 'test-grant'@'localhost';
+---------- Output ---------
+GRANT SELECT, CREATE ON *.* TO USER 'test-grant'@'localhost'
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Privs {
+            privileges: [
+                Select,
+                Create,
+            ],
+            level: Global,
+        },
+        principal: User(
+            UserIdentity {
+                username: "test-grant",
+                hostname: "localhost",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
 GRANT SELECT, CREATE ON * TO USER 'test-grant'@'localhost';
 ---------- Output ---------
 GRANT SELECT, CREATE ON * TO USER 'test-grant'@'localhost'
