@@ -199,3 +199,19 @@ pub fn optimize_remove_count_args(name: &str, distinct: bool, args: &[&Expr]) ->
             .iter()
             .all(|expr| matches!(expr, Expr::Literal{lit,..} if *lit!=Literal::Null))
 }
+
+pub fn find_smallest_column(entries: &[ColumnEntry]) -> usize {
+    debug_assert!(!entries.is_empty());
+
+    let mut smallest_index = 0;
+    let mut smallest_size = usize::MAX;
+    for (column_index, column_entry) in entries.iter().enumerate() {
+        if let Ok(bytes) = column_entry.data_type.data_type_id().numeric_byte_size() {
+            if smallest_size > bytes {
+                smallest_size = bytes;
+                smallest_index = column_index;
+            }
+        }
+    }
+    smallest_index
+}

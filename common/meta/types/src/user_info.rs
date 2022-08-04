@@ -94,15 +94,47 @@ impl TryFrom<Vec<u8>> for UserInfo {
 #[serde(default)]
 pub struct UserOption {
     flags: BitFlags<UserOptionFlag>,
+
+    default_role: Option<String>,
 }
 
 impl UserOption {
     pub fn new(flags: BitFlags<UserOptionFlag>) -> Self {
-        Self { flags }
+        Self {
+            flags,
+            default_role: None,
+        }
+    }
+
+    pub fn empty() -> Self {
+        Default::default()
+    }
+
+    pub fn with_flags(mut self, flags: BitFlags<UserOptionFlag>) -> Self {
+        self.flags = flags;
+        self
+    }
+
+    pub fn with_default_role(mut self, default_role: Option<String>) -> Self {
+        self.default_role = default_role;
+        self
+    }
+
+    pub fn with_set_flag(mut self, flag: UserOptionFlag) -> Self {
+        self.flags.insert(flag);
+        self
     }
 
     pub fn flags(&self) -> &BitFlags<UserOptionFlag> {
         &self.flags
+    }
+
+    pub fn default_role(&self) -> Option<&String> {
+        self.default_role.as_ref()
+    }
+
+    pub fn set_default_role(&mut self, default_role: Option<String>) {
+        self.default_role = default_role;
     }
 
     pub fn set_all_flag(&mut self) {
@@ -111,6 +143,14 @@ impl UserOption {
 
     pub fn set_option_flag(&mut self, flag: UserOptionFlag) {
         self.flags.insert(flag);
+    }
+
+    pub fn switch_option_flag(&mut self, flag: UserOptionFlag, on: bool) {
+        if on {
+            self.flags.insert(flag);
+        } else {
+            self.flags.remove(flag);
+        }
     }
 
     pub fn unset_option_flag(&mut self, flag: UserOptionFlag) {
