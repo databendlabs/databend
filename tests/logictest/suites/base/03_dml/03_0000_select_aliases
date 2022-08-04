@@ -38,7 +38,7 @@ select number * number +  1 `number`, number + 1 `b` from numbers(1);
 
 onlyif mysql
 statement query ITT
-SELECT number, 'number', "number" FROM numbers(3) AS a order by a.number;
+SELECT number, 'number', 'number' FROM numbers(3) AS a order by a.number;
 
 ----
 0 number number
@@ -61,15 +61,15 @@ SELECT a.number FROM (SELECT * FROM numbers(3) AS b ORDER BY b.number) AS a;
 1
 2
 
-statement error 1058
+statement error 1065
 SELECT b.number FROM numbers(3) AS a ORDER BY a.number; 
 
-statement error 1058
+statement error 1065
 SELECT a.number FROM numbers(3) AS a ORDER BY b.number; 
 
-statement error 1058
+statement error 1065
 SELECT b.number FROM (SELECT * FROM numbers(3) AS b ORDER BY a.number) AS a; 
 
-statement error 1058
+statement error 1065
 SELECT b.number FROM (SELECT * FROM numbers(3) AS b) AS a ORDER BY b.number; 
 

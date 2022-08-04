@@ -26,7 +26,7 @@ use crate::sql::plans::ScalarExpr;
 
 impl Evaluator {
     pub fn eval_scalar<VectorID>(scalar: &Scalar) -> Result<EvalNode<VectorID>>
-    where VectorID: From<String> {
+        where VectorID: From<String> {
         match scalar {
             Scalar::BoundColumnRef(column_ref) => Ok(EvalNode::Variable {
                 id: column_ref.column.index.to_string().into(),

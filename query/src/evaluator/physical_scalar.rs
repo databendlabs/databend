@@ -26,7 +26,7 @@ impl Evaluator {
     pub fn eval_physical_scalars<VectorID>(
         physical_scalars: &[PhysicalScalar],
     ) -> Result<Vec<EvalNode<VectorID>>>
-    where VectorID: From<String> {
+        where VectorID: From<String> {
         physical_scalars
             .iter()
             .map(Evaluator::eval_physical_scalar::<VectorID>)
@@ -36,7 +36,7 @@ impl Evaluator {
     pub fn eval_physical_scalar<VectorID>(
         physical_scalar: &PhysicalScalar,
     ) -> Result<EvalNode<VectorID>>
-    where VectorID: From<String> {
+        where VectorID: From<String> {
         match physical_scalar {
             PhysicalScalar::Variable { column_id, .. } => Ok(EvalNode::Variable {
                 id: column_id.clone().into(),
@@ -56,7 +56,11 @@ impl Evaluator {
             }
             PhysicalScalar::Cast { target, input } => {
                 let from = input.data_type();
-                let cast_func = CastFunction::create("", target.name().as_str(), from)?;
+                let cast_func = if target.is_nullable() {
+                    CastFunction::create_try("", target.name().as_str(), from)?
+                } else {
+                    CastFunction::create("", target.name().as_str(), from)?
+                };
                 Ok(EvalNode::Function {
                     func: cast_func,
                     args: vec![Self::eval_physical_scalar(input)?],

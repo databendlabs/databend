@@ -901,17 +901,6 @@ statement ok
 create table ts(a DateTime(6), b DateTime, c Date);
 
 statement ok
-insert into ts values(now(), now(), today());
-
-statement query B
-select to_datetime(a) = to_datetime(b) from ts;
-
-----
-1
-
-
-
-statement ok
 drop table if exists ts;
 
 statement ok
