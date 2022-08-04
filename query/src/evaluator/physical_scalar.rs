@@ -26,7 +26,7 @@ impl Evaluator {
     pub fn eval_physical_scalars<VectorID>(
         physical_scalars: &[PhysicalScalar],
     ) -> Result<Vec<EvalNode<VectorID>>>
-        where VectorID: From<String> {
+    where VectorID: From<String> {
         physical_scalars
             .iter()
             .map(Evaluator::eval_physical_scalar::<VectorID>)
@@ -36,7 +36,7 @@ impl Evaluator {
     pub fn eval_physical_scalar<VectorID>(
         physical_scalar: &PhysicalScalar,
     ) -> Result<EvalNode<VectorID>>
-        where VectorID: From<String> {
+    where VectorID: From<String> {
         match physical_scalar {
             PhysicalScalar::Variable { column_id, .. } => Ok(EvalNode::Variable {
                 id: column_id.clone().into(),
