@@ -56,10 +56,14 @@ async fn run_test(ctx: Arc<QueryContext>, suite: &Suite) -> Result<String> {
 
     let result = match plan {
         Plan::Query {
-            s_expr, metadata, ..
+            s_expr,
+            metadata,
+            bind_context,
+            ..
         } => {
             let mut heuristic_opt = HeuristicOptimizer::new(
                 ctx.clone(),
+                bind_context.clone(),
                 metadata.clone(),
                 RuleList::create(suite.rules.clone())?,
                 false,

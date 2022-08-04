@@ -35,7 +35,7 @@ impl ColumnPruner {
         Self { metadata }
     }
 
-    pub fn prune_columns(&self, expr: &SExpr) -> Result<SExpr> {
+    pub fn prune_columns(&self, expr: &SExpr, require_columns: ColumnSet) -> Result<SExpr> {
         match expr.plan() {
             // For project and aggregate, collect required columns for its child
             RelOperator::Project(p) => Ok(SExpr::create_unary(
@@ -54,12 +54,12 @@ impl ColumnPruner {
                     self.keep_required_columns(expr.child(0)?, used)?,
                 ))
             }
-            // For the other plan nodes, keep searching for Project node.
+            // For the other plan nodes, keep searching for Project node with required columns
             p => {
                 let children = expr
                     .children()
                     .iter()
-                    .map(|expr| self.prune_columns(expr))
+                    .map(|expr| self.prune_columns(expr, require_columns.clone()))
                     .collect::<Result<Vec<_>>>()?;
                 Ok(SExpr::create(p.clone(), children, None))
             }
@@ -75,7 +75,6 @@ impl ColumnPruner {
         match expr.plan() {
             RelOperator::LogicalGet(p) => {
                 let mut used: ColumnSet = required.intersection(&p.columns).cloned().collect();
-
                 if used.is_empty() {
                     let columns = self.metadata.read().columns_by_table_index(p.table_index);
                     let smallest_index = find_smallest_column(&columns);
@@ -194,5 +193,3 @@ impl ColumnPruner {
         }
     }
 }
-
-// SELECT COUNT() FROM table_name.

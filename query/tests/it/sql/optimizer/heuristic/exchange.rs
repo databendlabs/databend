@@ -48,10 +48,14 @@ async fn run_cluster_test(ctx: Arc<QueryContext>, suite: &Suite) -> Result<Strin
 
     let result = match plan {
         Plan::Query {
-            s_expr, metadata, ..
+            s_expr,
+            metadata,
+            bind_context,
+            ..
         } => {
             let mut heuristic_opt = HeuristicOptimizer::new(
                 ctx.clone(),
+                bind_context.clone(),
                 metadata.clone(),
                 RuleList::create(suite.rules.clone())?,
                 true,

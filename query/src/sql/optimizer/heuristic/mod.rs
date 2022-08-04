@@ -25,6 +25,7 @@ use once_cell::sync::Lazy;
 
 use super::rule::RuleID;
 use super::util::validate_distributed_query;
+use super::ColumnSet;
 use crate::sessions::QueryContext;
 use crate::sql::optimizer::heuristic::decorrelate::decorrelate_subquery;
 use crate::sql::optimizer::heuristic::implement::HeuristicImplementor;
@@ -36,6 +37,7 @@ use crate::sql::optimizer::RelExpr;
 use crate::sql::optimizer::RequiredProperty;
 use crate::sql::optimizer::SExpr;
 use crate::sql::plans::Exchange;
+use crate::sql::BindContext;
 use crate::sql::MetadataRef;
 
 pub static DEFAULT_REWRITE_RULES: Lazy<Vec<RuleID>> = Lazy::new(|| {
@@ -62,6 +64,7 @@ pub struct HeuristicOptimizer {
     implementor: HeuristicImplementor,
 
     _ctx: Arc<QueryContext>,
+    bind_context: Box<BindContext>,
     metadata: MetadataRef,
 
     enable_distributed_optimization: bool,
@@ -70,6 +73,7 @@ pub struct HeuristicOptimizer {
 impl HeuristicOptimizer {
     pub fn new(
         ctx: Arc<QueryContext>,
+        bind_context: Box<BindContext>,
         metadata: MetadataRef,
         rules: RuleList,
         enable_distributed_optimization: bool,
@@ -79,6 +83,7 @@ impl HeuristicOptimizer {
             implementor: HeuristicImplementor::new(),
 
             _ctx: ctx,
+            bind_context,
             metadata,
             enable_distributed_optimization,
         }
@@ -91,7 +96,9 @@ impl HeuristicOptimizer {
 
     fn post_optimize(&mut self, s_expr: SExpr) -> Result<SExpr> {
         let pruner = prune_columns::ColumnPruner::new(self.metadata.clone());
-        pruner.prune_columns(&s_expr)
+        let require_columns: ColumnSet =
+            self.bind_context.columns.iter().map(|c| c.index).collect();
+        pruner.prune_columns(&s_expr, require_columns)
     }
 
     pub fn optimize(&mut self, s_expr: SExpr) -> Result<SExpr> {
