@@ -15,8 +15,7 @@
 use std::sync::Arc;
 
 pub use aggregate::AggregateInfo;
-pub use bind_context::BindContext;
-pub use bind_context::ColumnBinding;
+pub use bind_context::*;
 use common_ast::ast::Statement;
 use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
@@ -298,7 +297,9 @@ impl<'a> Binder {
             Statement::CreateShare(stmt) => {
                 self.bind_create_share(stmt).await?
             }
-
+            Statement::DropShare(stmt) => {
+                self.bind_drop_share(stmt).await?
+            }
         };
         Ok(plan)
     }

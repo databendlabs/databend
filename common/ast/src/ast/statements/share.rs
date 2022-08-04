@@ -32,7 +32,7 @@ impl Display for CreateShareStmt<'_> {
         }
         write!(f, "{}", self.share)?;
         if let Some(comment) = &self.comment {
-            write!(f, " COMMENT = {comment}")?;
+            write!(f, " COMMENT = '{comment}'")?;
         }
         Ok(())
     }

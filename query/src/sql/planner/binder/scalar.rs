@@ -29,6 +29,7 @@ pub struct ScalarBinder<'a> {
     bind_context: &'a BindContext,
     ctx: Arc<QueryContext>,
     metadata: MetadataRef,
+    aliases: &'a [(String, Scalar)],
 }
 
 impl<'a> ScalarBinder<'a> {
@@ -36,17 +37,23 @@ impl<'a> ScalarBinder<'a> {
         bind_context: &'a BindContext,
         ctx: Arc<QueryContext>,
         metadata: MetadataRef,
+        aliases: &'a [(String, Scalar)],
     ) -> Self {
         ScalarBinder {
             bind_context,
             ctx,
             metadata,
+            aliases,
         }
     }
 
     pub async fn bind(&mut self, expr: &Expr<'a>) -> Result<(Scalar, DataTypeImpl)> {
-        let mut type_checker =
-            TypeChecker::new(self.bind_context, self.ctx.clone(), self.metadata.clone());
+        let mut type_checker = TypeChecker::new(
+            self.bind_context,
+            self.ctx.clone(),
+            self.metadata.clone(),
+            self.aliases,
+        );
         Ok(*type_checker.resolve(expr, None).await?)
     }
 }

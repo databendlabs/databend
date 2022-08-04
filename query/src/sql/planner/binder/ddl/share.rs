@@ -43,7 +43,7 @@ impl<'a> Binder {
         Ok(Plan::CreateShare(Box::new(plan)))
     }
 
-    pub(in crate::sql::planner::binder) async fn drop_create_share(
+    pub(in crate::sql::planner::binder) async fn bind_drop_share(
         &mut self,
         stmt: &DropShareStmt<'a>,
     ) -> Result<Plan> {
