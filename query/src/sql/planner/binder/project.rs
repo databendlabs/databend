@@ -19,6 +19,7 @@ use common_ast::ast::SelectTarget;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+use super::bind_context::NameResolutionResult;
 use crate::sql::binder::select::SelectItem;
 use crate::sql::binder::select::SelectList;
 use crate::sql::optimizer::ColumnSet;
@@ -162,14 +163,16 @@ impl<'a> Binder {
                         let indirection = &names[0];
                         match indirection {
                             Indirection::Identifier(ident) => {
-                                let column_binding =
-                                    input_context.resolve_column(None, None, ident)?;
+                                let result = input_context.resolve_name(None, None, ident, &[])?;
                                 output.items.push(SelectItem {
                                     select_target,
-                                    scalar: BoundColumnRef {
-                                        column: column_binding,
-                                    }
-                                    .into(),
+                                    scalar: match result {
+                                        NameResolutionResult::Column(column) => {
+                                            BoundColumnRef { column }.into()
+                                        }
+                                        NameResolutionResult::Alias { scalar, .. } => scalar,
+                                    },
+
                                     alias: ident.name.clone(),
                                 });
                             }
@@ -197,8 +200,12 @@ impl<'a> Binder {
                     }
                 }
                 SelectTarget::AliasedExpr { expr, alias } => {
-                    let mut scalar_binder =
-                        ScalarBinder::new(input_context, self.ctx.clone(), self.metadata.clone());
+                    let mut scalar_binder = ScalarBinder::new(
+                        input_context,
+                        self.ctx.clone(),
+                        self.metadata.clone(),
+                        &[],
+                    );
                     let (bound_expr, _) = scalar_binder.bind(expr).await?;
 
                     // If alias is not specified, we will generate a name for the scalar expression.

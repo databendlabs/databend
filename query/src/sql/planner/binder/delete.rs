@@ -81,7 +81,7 @@ impl<'a> Binder {
             .await?;
 
         let mut scalar_binder =
-            ScalarBinder::new(&context, self.ctx.clone(), self.metadata.clone());
+            ScalarBinder::new(&context, self.ctx.clone(), self.metadata.clone(), &[]);
 
         let mut expression = None;
         let mut require_columns: HashSet<String> = HashSet::new();
