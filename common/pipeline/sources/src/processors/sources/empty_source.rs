@@ -16,11 +16,10 @@ use std::any::Any;
 use std::sync::Arc;
 
 use common_exception::Result;
-
-use crate::pipelines::processors::port::OutputPort;
-use crate::pipelines::processors::processor::Event;
-use crate::pipelines::processors::processor::ProcessorPtr;
-use crate::pipelines::processors::Processor;
+use common_pipeline_core::processors::port::OutputPort;
+use common_pipeline_core::processors::processor::Event;
+use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_pipeline_core::processors::Processor;
 
 pub struct EmptySource {
     output: Arc<OutputPort>,

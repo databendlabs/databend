@@ -15,15 +15,15 @@
 use std::collections::VecDeque;
 use std::sync::Arc;
 
+use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
 use common_exception::Result;
+use common_pipeline_core::processors::port::OutputPort;
+use common_pipeline_core::processors::processor::ProcessorPtr;
 use parking_lot::Mutex;
 
-use crate::pipelines::processors::port::OutputPort;
-use crate::pipelines::processors::processor::ProcessorPtr;
-use crate::pipelines::processors::SyncSource;
-use crate::pipelines::processors::SyncSourcer;
-use crate::sessions::QueryContext;
+use crate::processors::sources::SyncSource;
+use crate::processors::sources::SyncSourcer;
 
 pub struct BlocksSource {
     data_blocks: Arc<Mutex<VecDeque<DataBlock>>>,
@@ -31,7 +31,7 @@ pub struct BlocksSource {
 
 impl BlocksSource {
     pub fn create(
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
         data_blocks: Arc<Mutex<VecDeque<DataBlock>>>,
     ) -> Result<ProcessorPtr> {

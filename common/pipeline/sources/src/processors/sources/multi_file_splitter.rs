@@ -24,6 +24,10 @@ use common_formats::InputFormat;
 use common_io::prelude::FileSplit;
 use common_io::prelude::FormatSettings;
 use common_meta_types::StageFileCompression;
+use common_pipeline_core::processors::port::OutputPort;
+use common_pipeline_core::processors::processor::Event;
+use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_pipeline_core::processors::Processor;
 use common_storage::init_operator;
 use common_storage::StorageParams;
 use opendal::io_util::CompressAlgorithm;
@@ -32,10 +36,6 @@ use parking_lot::Mutex;
 
 use super::file_splitter::FileSplitter;
 use super::file_splitter::FileSplitterState;
-use crate::pipelines::processors::port::OutputPort;
-use crate::pipelines::processors::processor::Event;
-use crate::pipelines::processors::processor::ProcessorPtr;
-use crate::pipelines::processors::Processor;
 
 pub struct MultiFileSplitter {
     finished: bool,

@@ -15,42 +15,38 @@
 use std::sync::Arc;
 
 use common_base::base::tokio::sync::mpsc::Receiver;
+use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
-use common_datavalues::DataSchemaRef;
 use common_exception::Result;
-use opensrv_clickhouse::types::Block;
+use common_pipeline_core::processors::port::OutputPort;
+use common_pipeline_core::processors::processor::ProcessorPtr;
 
-use crate::pipelines::processors::port::OutputPort;
-use crate::pipelines::processors::processor::ProcessorPtr;
-use crate::pipelines::processors::sources::sync_source::SyncSource;
-use crate::pipelines::processors::sources::SyncSourcer;
-use crate::servers::clickhouse::from_clickhouse_block;
-use crate::sessions::QueryContext;
+use crate::processors::sources::SyncSource;
+use crate::processors::sources::SyncSourcer;
 
-pub struct SyncReceiverCkSource {
-    schema: DataSchemaRef,
-    receiver: Receiver<Block>,
+pub struct SyncReceiverSource {
+    receiver: Receiver<Result<DataBlock>>,
 }
 
-impl SyncReceiverCkSource {
+impl SyncReceiverSource {
     pub fn create(
-        ctx: Arc<QueryContext>,
-        receiver: Receiver<Block>,
-        output_port: Arc<OutputPort>,
-        schema: DataSchemaRef,
+        ctx: Arc<dyn TableContext>,
+        rx: Receiver<Result<DataBlock>>,
+        out: Arc<OutputPort>,
     ) -> Result<ProcessorPtr> {
-        SyncSourcer::create(ctx, output_port, SyncReceiverCkSource { schema, receiver })
+        SyncSourcer::create(ctx, out, SyncReceiverSource { receiver: rx })
     }
 }
 
 #[async_trait::async_trait]
-impl SyncSource for SyncReceiverCkSource {
-    const NAME: &'static str = "SyncReceiverCkSource";
+impl SyncSource for SyncReceiverSource {
+    const NAME: &'static str = "SyncReceiverSource";
 
     fn generate(&mut self) -> Result<Option<DataBlock>> {
         match self.receiver.blocking_recv() {
             None => Ok(None),
-            Some(block) => Ok(Some(from_clickhouse_block(self.schema.clone(), block)?)),
+            Some(Err(cause)) => Err(cause),
+            Some(Ok(data_block)) => Ok(Some(data_block)),
         }
     }
 }

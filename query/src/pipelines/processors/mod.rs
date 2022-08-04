@@ -14,9 +14,9 @@
 
 pub use common_pipeline_core::processors::*;
 use common_pipeline_sinks::processors::sinks;
-mod sources;
 pub(crate) mod transforms;
 
+use common_pipeline_sources::processors::sources;
 pub use sinks::AsyncSink;
 pub use sinks::AsyncSinker;
 pub use sinks::ContextSink;

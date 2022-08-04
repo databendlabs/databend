@@ -14,48 +14,36 @@
 
 use std::sync::Arc;
 
+use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
-use common_exception::ErrorCode;
 use common_exception::Result;
-use common_streams::SendableDataBlockStream;
-use futures::StreamExt;
+use common_pipeline_core::processors::port::OutputPort;
+use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_streams::Source;
 
-use crate::pipelines::processors::port::OutputPort;
-use crate::pipelines::processors::processor::ProcessorPtr;
-use crate::pipelines::processors::AsyncSource;
-use crate::pipelines::processors::AsyncSourcer;
-use crate::sessions::QueryContext;
+use crate::processors::sources::AsyncSource;
+use crate::processors::sources::AsyncSourcer;
 
-pub struct StreamSource {
-    stream: Option<SendableDataBlockStream>,
+pub struct StreamSourceV2 {
+    s: Box<dyn Source>,
 }
 
-impl StreamSource {
+impl StreamSourceV2 {
     pub fn create(
-        ctx: Arc<QueryContext>,
-        stream: Option<SendableDataBlockStream>,
+        ctx: Arc<dyn TableContext>,
+        s: Box<dyn Source>,
         out: Arc<OutputPort>,
     ) -> Result<ProcessorPtr> {
-        AsyncSourcer::create(ctx, out, StreamSource { stream })
+        AsyncSourcer::create(ctx, out, StreamSourceV2 { s })
     }
 }
 
 #[async_trait::async_trait]
-impl AsyncSource for StreamSource {
+impl AsyncSource for StreamSourceV2 {
     const NAME: &'static str = "stream source";
 
     #[async_trait::unboxed_simple]
     async fn generate(&mut self) -> Result<Option<DataBlock>> {
-        match self
-            .stream
-            .as_mut()
-            .ok_or_else(|| ErrorCode::EmptyData("input stream not exist or consumed"))?
-            .next()
-            .await
-        {
-            Some(Ok(block)) => Ok(Some(block)),
-            Some(Err(e)) => Err(e),
-            None => Ok(None),
-        }
+        self.s.read().await
     }
 }

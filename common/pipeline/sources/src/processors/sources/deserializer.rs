@@ -20,12 +20,11 @@ use common_datablocks::DataBlock;
 use common_exception::Result;
 use common_formats::InputFormat;
 use common_io::prelude::FileSplit;
-
-use crate::pipelines::processors::port::InputPort;
-use crate::pipelines::processors::port::OutputPort;
-use crate::pipelines::processors::processor::Event;
-use crate::pipelines::processors::processor::ProcessorPtr;
-use crate::pipelines::processors::Processor;
+use common_pipeline_core::processors::port::InputPort;
+use common_pipeline_core::processors::port::OutputPort;
+use common_pipeline_core::processors::processor::Event;
+use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_pipeline_core::processors::Processor;
 
 pub struct Deserializer {
     input_format: Arc<dyn InputFormat>,
