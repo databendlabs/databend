@@ -177,6 +177,7 @@ impl CopyInterpreterV2 {
                 s_expr,
                 metadata,
                 bind_context,
+                ..
             } => (s_expr, metadata, bind_context),
             v => unreachable!("Input plan must be Query, but it's {v}"),
         };

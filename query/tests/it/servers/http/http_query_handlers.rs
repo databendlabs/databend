@@ -211,6 +211,8 @@ async fn test_return_when_finish_v2() -> Result<()> {
 }
 
 // ref: query_log not recored correctly.
+// It could be uncommented when we remove SEE_YOU_AGAIN stmt
+
 // #[tokio::test]
 // async fn test_bad_sql() -> Result<()> {
 //     let sql = "bad sql";

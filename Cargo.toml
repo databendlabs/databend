@@ -60,7 +60,8 @@ exclude = ["tools/fuzz"]
 [profile.release]
 debug = 1
 lto = "thin"
-codegen-units = 1 # Reduce number of codegen units to increase optimizations.
+overflow-checks = false
+codegen-units = 1       # Reduce number of codegen units to increase optimizations.
 
 [profile.release.package]
 arrow2 = { codegen-units = 4 }
@@ -69,9 +70,21 @@ databend-query = { codegen-units = 4 }
 
 [profile.bench]
 debug = true
+overflow-checks = false
 
 [profile.dev]
 split-debuginfo = "unpacked"
+overflow-checks = false
+
+[profile.test]
+opt-level = 0
+debug = 0
+codegen-units = 16
+lto = false
+incremental = true
+debug-assertions = true
+overflow-checks = true
+rpath = false
 
 [profile.dev.package]
 addr2line = { opt-level = 3 }

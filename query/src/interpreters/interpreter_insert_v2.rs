@@ -105,6 +105,7 @@ impl InsertInterpreterV2 {
                             s_expr,
                             metadata,
                             bind_context,
+                            ..
                         } => SelectInterpreterV2::try_create(
                             self.ctx.clone(),
                             *bind_context.clone(),
