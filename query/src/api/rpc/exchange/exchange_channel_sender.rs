@@ -313,15 +313,28 @@ impl ExchangeSender {
 
         let mut join_handlers = self.join_handlers.lock();
         join_handlers.push(runtime.spawn(async move {
-            if let Err(status) = connection.do_put(&query_id, &source, rx).await {
-                tracing::warn!("Flight connection failure: {:?}", status);
+            let exchange = connection.do_exchange(&query_id, &source).await.unwrap();
 
-                // Shutdown all query fragments executor and report error to request server.
-                let exchange_manager = ctx.get_exchange_manager();
-                if let Err(cause) = exchange_manager.shutdown_query(&query_id, Some(status)) {
-                    tracing::warn!("Cannot shutdown query, cause {:?}", cause);
-                }
+            while let Ok(data_packet) = rx.recv().await {
+                // let data = FlightData::from(data_packet);
+                // if let Err(error) = exchange.send(data).await {
+                //     // Shutdown all query fragments executor and report error to request server.
+                //     let exchange_manager = ctx.get_exchange_manager();
+                //     if let Err(cause) = exchange_manager.shutdown_query(&query_id, Some(error)) {
+                //         tracing::warn!("Cannot shutdown query, cause {:?}", cause);
+                //     }
+                // }
             }
+
+            // if let Err(status) = connection.do_put(&query_id, &source, rx).await {
+            //     tracing::warn!("Flight connection failure: {:?}", status);
+            //
+            //     // Shutdown all query fragments executor and report error to request server.
+            //     let exchange_manager = ctx.get_exchange_manager();
+            //     if let Err(cause) = exchange_manager.shutdown_query(&query_id, Some(status)) {
+            //         tracing::warn!("Cannot shutdown query, cause {:?}", cause);
+            //     }
+            // }
         }));
 
         Ok(flight_tx)
@@ -344,7 +357,7 @@ impl ExchangeSender {
                     None,
                     Some(config.query.to_rpc_client_tls_config()),
                 )
-                .await?,
+                    .await?,
             ))),
             false => Ok(FlightClient::new(FlightServiceClient::new(
                 ConnectionFactory::create_rpc_channel(address.to_owned(), None, None).await?,

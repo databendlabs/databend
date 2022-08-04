@@ -31,6 +31,10 @@ pub use rpc::QueryFragmentsPlanPacket;
 pub use rpc::ShuffleDataExchange;
 pub use rpc::ShuffleDataExchangeV2;
 pub use rpc_service::RpcService;
+pub use rpc::DataPacket;
+pub use rpc::FragmentData;
+pub use rpc::ClientFlightExchange;
+pub use rpc::ServerFlightExchange;
 
 pub mod http;
 mod http_service;

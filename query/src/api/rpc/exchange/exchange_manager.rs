@@ -646,8 +646,7 @@ impl QueryCoordinator {
         let (tx, rx) = async_channel::unbounded();
 
         // Register subscriber for data exchange.
-        self.subscribe_fragments
-            .insert(fragment_id, FragmentReceiver::create_unrecorded(tx));
+        self.subscribe_fragments.insert(fragment_id, FragmentReceiver::create_unrecorded(tx));
 
         // Merge pipelines if exist locally pipeline
         if let Some(mut fragment_coordinator) = self.fragments_coordinator.remove(&fragment_id) {

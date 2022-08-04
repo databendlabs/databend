@@ -37,11 +37,12 @@ use tonic::Status;
 use tonic::Streaming;
 
 use crate::api::rpc::flight_actions::FlightAction;
+use crate::api::rpc::flight_client::ServerFlightExchange;
 use crate::sessions::SessionManager;
 use crate::sessions::SessionType;
 
 pub type FlightStream<T> =
-    Pin<Box<dyn Stream<Item = Result<T, tonic::Status>> + Send + Sync + 'static>>;
+Pin<Box<dyn Stream<Item=Result<T, tonic::Status>> + Send + Sync + 'static>>;
 
 pub struct DatabendQueryFlightService {
     sessions: Arc<SessionManager>,
@@ -157,10 +158,13 @@ impl FlightService for DatabendQueryFlightService {
         Err(Status::unimplemented("unimplement do_get"))
     }
 
-    async fn do_exchange(&self, _: StreamReq<FlightData>) -> Response<Self::DoExchangeStream> {
-        Err(Status::unimplemented(
-            "DatabendQuery does not implement do_exchange.",
-        ))
+    async fn do_exchange(&self, req: StreamReq<FlightData>) -> Response<Self::DoExchangeStream> {
+        let streaming = req.into_inner();
+
+        let (tx, rx) = async_channel::bounded(1);
+        let exchange = ServerFlightExchange::try_create(tx, streaming)?;
+        // Ok(RawResponse::new(Box::pin(rx)))
+        unimplemented!()
     }
 
     type DoActionStream = FlightStream<FlightResult>;

@@ -13,9 +13,11 @@
 // limitations under the License.
 
 use std::convert::TryInto;
+use std::marker::PhantomData;
 
-use async_channel::Receiver;
-use common_arrow::arrow_format::flight::data::Action;
+use async_channel::{Receiver, Sender};
+use futures_util::StreamExt;
+use common_arrow::arrow_format::flight::data::{Action, FlightData};
 use common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
 use common_base::base::tokio::time::Duration;
 use common_exception::ErrorCode;
@@ -23,7 +25,7 @@ use common_exception::Result;
 use tonic::metadata::MetadataKey;
 use tonic::metadata::MetadataValue;
 use tonic::transport::channel::Channel;
-use tonic::Request;
+use tonic::{Request, Status, Streaming};
 
 use crate::api::rpc::flight_actions::FlightAction;
 use crate::api::rpc::packets::DataPacket;
@@ -58,6 +60,13 @@ impl FlightClient {
         }
     }
 
+    pub async fn do_exchange(&mut self, query_id: &str, source: &str) -> Result<ClientFlightExchange> {
+        let (tx, rx) = async_channel::bounded(1);
+        let request = Request::new(Box::pin(rx));
+        let response = self.inner.do_exchange(request).await?;
+        ClientFlightExchange::try_create(tx, response.into_inner())
+    }
+
     pub async fn do_put(
         &mut self,
         query_id: &str,
@@ -89,6 +98,63 @@ impl FlightClient {
                 "Can not receive data from flight server, action: {:?}",
                 action_type
             ))),
+        }
+    }
+}
+
+pub type ClientFlightExchange = FlightExchangeImpl<FlightData, FlightData>;
+pub type ServerFlightExchange = FlightExchangeImpl<std::result::Result<FlightData, Status>, FlightData>;
+
+pub struct FlightExchangeImpl<OutMessage: Send, InMessage: Send> {
+    tx: Sender<OutMessage>,
+    streaming: Streaming<InMessage>,
+}
+
+impl<OutMessage: Send, InMessage: Send> FlightExchangeImpl<OutMessage, InMessage> {
+    pub fn try_create(tx: Sender<OutMessage>, streaming: Streaming<InMessage>) -> Result<FlightExchangeImpl<OutMessage, InMessage>> {
+        Ok(FlightExchangeImpl::<OutMessage, InMessage> {
+            tx,
+            streaming,
+        })
+    }
+}
+
+impl FlightExchangeImpl<FlightData, FlightData> {
+    pub async fn send(&mut self, data: DataPacket) -> Result<()> {
+        if let Err(cause) = self.tx.send(FlightData::from(data)).await {
+            return Err(ErrorCode::LogicalError("It's a bug"));
+        }
+
+        Ok(())
+    }
+
+    pub async fn recv(&mut self) -> Result<Option<DataPacket>> {
+        match self.streaming.next().await {
+            None => Ok(None),
+            Some(message) => match message {
+                Ok(data) => Ok(Some(DataPacket::try_from(data)?)),
+                Err(status) => Err(ErrorCode::from(status))
+            }
+        }
+    }
+}
+
+impl FlightExchangeImpl<std::result::Result<FlightData, Status>, FlightData> {
+    pub async fn send(&mut self, data: DataPacket) -> Result<()> {
+        if let Err(_cause) = self.tx.send(Ok(FlightData::from(data))).await {
+            return Err(ErrorCode::LogicalError("It's a bug"));
+        }
+
+        Ok(())
+    }
+
+    pub async fn recv(&mut self) -> Result<Option<DataPacket>> {
+        match self.streaming.next().await {
+            None => Ok(None),
+            Some(message) => match message {
+                Ok(data) => Ok(Some(DataPacket::try_from(data)?)),
+                Err(status) => Err(ErrorCode::from(status))
+            }
         }
     }
 }

@@ -39,3 +39,8 @@ pub use packets::FragmentPlanPacket;
 pub use packets::InitNodesChannelPacket;
 pub use packets::Packet;
 pub use packets::QueryFragmentsPlanPacket;
+pub use packets::DataPacket;
+pub use packets::FragmentData;
+pub use flight_client::ClientFlightExchange;
+pub use flight_client::ServerFlightExchange;
+
