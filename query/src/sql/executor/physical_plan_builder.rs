@@ -84,8 +84,8 @@ impl PhysicalPlanBuilder {
                     })
                     .transpose()?;
 
-                let table = metadata.table(scan.table_index);
-                let table_schema = table.table.schema();
+                let table = metadata.table(scan.table_index).table.clone();
+                let table_schema = table.schema();
                 let projection = scan
                     .columns
                     .iter()

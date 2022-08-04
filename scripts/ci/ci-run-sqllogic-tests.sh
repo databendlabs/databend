@@ -9,8 +9,8 @@ SCRIPT_PATH="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd)"
 cd "$SCRIPT_PATH/../../tests/logictest" || exit
 
 RUN_DIR=""
-if [ $# -gt 0 ];then
-    RUN_DIR="--run-dir $*"
+if [ $# -gt 0 ]; then
+	RUN_DIR="--run-dir $*"
 fi
 echo "Run suites using argument: $RUN_DIR"
 
