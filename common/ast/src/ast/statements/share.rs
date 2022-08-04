@@ -30,7 +30,7 @@ impl Display for CreateShareStmt<'_> {
         if self.if_not_exists {
             write!(f, "IF NOT EXISTS ")?;
         }
-        write!(f, "{:?}", self.share)?;
+        write!(f, "{}", self.share)?;
         if let Some(comment) = &self.comment {
             write!(f, " COMMENT = {comment}")?;
         }
