@@ -100,7 +100,7 @@ impl<'a> Binder {
 
         let having = if let Some(having) = &stmt.having {
             Some(
-                self.analyze_aggregate_having(&mut from_context, having)
+                self.analyze_aggregate_having(&mut from_context, &select_list, having)
                     .await?,
             )
         } else {
@@ -233,7 +233,7 @@ impl<'a> Binder {
         child: SExpr,
     ) -> Result<SExpr> {
         let mut scalar_binder =
-            ScalarBinder::new(bind_context, self.ctx.clone(), self.metadata.clone());
+            ScalarBinder::new(bind_context, self.ctx.clone(), self.metadata.clone(), &[]);
         let (scalar, _) = scalar_binder.bind(expr).await?;
         let filter_plan = Filter {
             predicates: split_conjunctions(&scalar),

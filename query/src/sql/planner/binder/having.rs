@@ -16,6 +16,7 @@ use common_ast::ast::Expr;
 use common_ast::parser::token::Token;
 use common_exception::Result;
 
+use super::select::SelectList;
 use crate::sql::binder::aggregate::AggregateRewriter;
 use crate::sql::binder::split_conjunctions;
 use crate::sql::binder::ScalarBinder;
@@ -32,10 +33,20 @@ impl<'a> Binder {
     pub(super) async fn analyze_aggregate_having(
         &mut self,
         bind_context: &mut BindContext,
+        select_list: &SelectList<'a>,
         having: &Expr<'a>,
     ) -> Result<(Scalar, &'a [Token<'a>])> {
-        let mut scalar_binder =
-            ScalarBinder::new(bind_context, self.ctx.clone(), self.metadata.clone());
+        let aliases = select_list
+            .items
+            .iter()
+            .map(|item| (item.alias.clone(), item.scalar.clone()))
+            .collect::<Vec<_>>();
+        let mut scalar_binder = ScalarBinder::new(
+            bind_context,
+            self.ctx.clone(),
+            self.metadata.clone(),
+            &aliases,
+        );
         let (scalar, _) = scalar_binder.bind(having).await?;
         let mut rewriter = AggregateRewriter::new(bind_context, self.metadata.clone());
         Ok((rewriter.visit(&scalar)?, having.span()))

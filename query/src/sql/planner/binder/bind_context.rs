@@ -15,12 +15,16 @@
 use common_ast::ast::Identifier;
 use common_ast::ast::TableAlias;
 use common_ast::DisplayError;
-use common_datavalues::prelude::*;
+use common_datavalues::DataField;
+use common_datavalues::DataSchemaRef;
+use common_datavalues::DataSchemaRefExt;
+use common_datavalues::DataTypeImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
 use super::AggregateInfo;
 use crate::sql::common::IndexType;
+use crate::sql::plans::Scalar;
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct ColumnBinding {
@@ -39,6 +43,12 @@ pub struct ColumnBinding {
     /// The result should only contain one `a` column.
     /// So we need make `t.a` or `t1.a` invisible in unqualified wildcard.
     pub visible_in_unqualified_wildcard: bool,
+}
+
+#[derive(Debug, Clone)]
+pub enum NameResolutionResult {
+    Column(ColumnBinding),
+    Alias { alias: String, scalar: Scalar },
 }
 
 /// `BindContext` stores all the free variables in a query and tracks the context of binding procedure.
@@ -118,20 +128,37 @@ impl BindContext {
 
     /// Try to find a column binding with given table name and column name.
     /// This method will return error if the given names are ambiguous or invalid.
-    pub fn resolve_column(
+    pub fn resolve_name(
         &self,
         database: Option<&str>,
         table: Option<&str>,
         column: &Identifier,
-    ) -> Result<ColumnBinding> {
+        available_aliases: &[(String, Scalar)],
+    ) -> Result<NameResolutionResult> {
         let mut result = vec![];
 
         let mut bind_context: &BindContext = self;
-        // Lookup parent context to support correlated subquery
+        // Lookup parent context to resolve outer reference.
         loop {
+            // TODO(leiysky): use `Identifier` for alias instead of raw string
+            for (alias, scalar) in available_aliases {
+                if database.is_none() && table.is_none() && &column.name.to_lowercase() == alias {
+                    result.push(NameResolutionResult::Alias {
+                        alias: alias.clone(),
+                        scalar: scalar.clone(),
+                    });
+                }
+            }
+
+            // We will lookup alias first. If there are matched aliases, we will skip
+            // looking up `BindContext` to avoid ambiguity.
+            if !result.is_empty() {
+                break;
+            }
+
             for column_binding in bind_context.columns.iter() {
                 if Self::match_column_binding(database, table, column, column_binding) {
-                    result.push(column_binding.clone());
+                    result.push(NameResolutionResult::Column(column_binding.clone()));
                 }
             }
             if !result.is_empty() {
