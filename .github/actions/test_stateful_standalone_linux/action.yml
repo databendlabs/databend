@@ -41,7 +41,15 @@ runs:
     - name: Run Stateful Tests with Standalone mode (ubuntu-latest only)
       shell: bash
       run: |
-        bash ./scripts/ci/ci-run-stateful-tests-standalone-s3.sh
+        ./scripts/ci/ci-run-stateful-tests-standalone-s3.sh
+
+    - name: Upload .stdout files
+      if: failure()
+      uses: actions/upload-artifact@v3
+      with:
+        name: test-stateful-standalone-linux-stdouts
+        path: |
+           ./tests/suites/1_stateful/*/*.stdout
 
     - name: Upload failure
       if: failure()

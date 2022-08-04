@@ -31,5 +31,6 @@ pub use common::Statistics;
 pub use common::StatisticsOfColumns;
 pub use common::Versioned;
 pub use current::*;
+pub use versions::BlockBloomFilterIndexVersion;
 pub use versions::SegmentInfoVersion;
 pub use versions::SnapshotVersion;

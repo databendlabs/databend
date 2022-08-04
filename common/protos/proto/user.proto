@@ -96,6 +96,7 @@ message UserOption {
   uint64 min_compatible = 101;
 
   uint64 flags = 1;
+  optional string default_role = 2;
 }
 
 message UserInfo {

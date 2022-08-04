@@ -29,6 +29,7 @@ mod physical_scan;
 mod presign;
 mod project;
 mod scalar;
+pub mod share;
 mod sort;
 
 use std::fmt::Display;
@@ -105,6 +106,7 @@ pub use presign::PresignAction;
 pub use presign::PresignPlan;
 pub use project::Project;
 pub use scalar::*;
+pub use share::*;
 pub use sort::Sort;
 pub use sort::SortItem;
 
@@ -119,6 +121,7 @@ pub enum Plan {
         s_expr: SExpr,
         metadata: MetadataRef,
         bind_context: Box<BindContext>,
+        rewrite_kind: Option<RewriteKind>,
     },
 
     Explain {
@@ -132,11 +135,7 @@ pub enum Plan {
     // Call
     Call(Box<CallPlan>),
 
-    // System
-    // ShowSettings, ShowMetrics, ShowProcessList-> Rewrite to Query,
-
     // Databases
-    // ShowDatabases(_) -> Rewrite to Query,
     ShowCreateDatabase(Box<ShowCreateDatabasePlan>),
     CreateDatabase(Box<CreateDatabasePlan>),
     DropDatabase(Box<DropDatabasePlan>),
@@ -145,7 +144,6 @@ pub enum Plan {
     UseDatabase(Box<UseDatabasePlan>),
 
     // Tables
-    // ShowTables/ShowTablesStatus -> Rewrite to Query,
     ShowCreateTable(Box<ShowCreateTablePlan>),
     DescribeTable(Box<DescribeTablePlan>),
     CreateTable(Box<CreateTablePlanV2>),
@@ -168,7 +166,6 @@ pub enum Plan {
     DropView(Box<DropViewPlan>),
 
     // Account
-    // ShowUsers -> Rewrite to Query,
     AlterUser(Box<AlterUserPlan>),
     CreateUser(Box<CreateUserPlan>),
     DropUser(Box<DropUserPlan>),
@@ -178,7 +175,7 @@ pub enum Plan {
     AlterUDF(Box<AlterUserUDFPlan>),
     DropUDF(Box<DropUserUDFPlan>),
 
-    // ShowRoles  -> Rewrite to Query,
+    // Role
     CreateRole(Box<CreateRolePlan>),
     DropRole(Box<DropRolePlan>),
     GrantRole(Box<GrantRolePlan>),
@@ -188,7 +185,6 @@ pub enum Plan {
     RevokeRole(Box<RevokeRolePlan>),
 
     // Stages
-    // ShowStages -> Rewrite to Query,
     ListStage(Box<ListPlan>),
     DescribeStage(Box<DescribeUserStagePlan>),
     CreateStage(Box<CreateUserStagePlan>),
@@ -201,6 +197,27 @@ pub enum Plan {
     // Set
     SetVariable(Box<SettingPlan>),
     Kill(Box<KillPlan>),
+
+    // Share
+    CreateShare(Box<CreateSharePlan>),
+}
+
+#[derive(Clone)]
+pub enum RewriteKind {
+    ShowSettings,
+    ShowMetrics,
+    ShowProcessList,
+    ShowEngines,
+
+    ShowDatabases,
+    ShowTables,
+    ShowTablesStatus,
+
+    ShowFunctions,
+
+    ShowUsers,
+    ShowStages,
+    ShowRoles,
 }
 
 impl Display for Plan {
@@ -253,6 +270,7 @@ impl Display for Plan {
             Plan::Presign(_) => write!(f, "Presign"),
             Plan::SetVariable(_) => write!(f, "SetVariable"),
             Plan::Kill(_) => write!(f, "Kill"),
+            Plan::CreateShare(_) => write!(f, "CreateShare"),
         }
     }
 }
@@ -265,6 +283,7 @@ impl Plan {
                 s_expr: _,
                 metadata: _,
                 bind_context,
+                ..
             } => bind_context.output_schema(),
             Plan::Explain { kind: _, plan: _ } => {
                 DataSchemaRefExt::create(vec![DataField::new("explain", Vu8::to_data_type())])
@@ -314,6 +333,7 @@ impl Plan {
             Plan::Presign(plan) => plan.schema(),
             Plan::SetVariable(plan) => plan.schema(),
             Plan::Kill(_) => Arc::new(DataSchema::empty()),
+            Plan::CreateShare(plan) => plan.schema(),
         }
     }
 }

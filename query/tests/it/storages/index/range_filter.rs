@@ -168,6 +168,24 @@ async fn test_range_filter() -> Result<()> {
             expect: false,
             error: "",
         },
+        Test {
+            name: "a > 1 and d > 2",
+            expr: col("a").gt(lit(1)).and(col("d").gt(lit(2))),
+            expect: true,
+            error: "",
+        },
+        Test {
+            name: "a > 100 or d > 2",
+            expr: col("a").gt(lit(100)).or(col("d").gt(lit(2))),
+            expect: true,
+            error: "",
+        },
+        Test {
+            name: "a > 100 or a + d > 2",
+            expr: col("a").gt(lit(100)).or(add(col("a"), col("d")).gt(lit(2))),
+            expect: true,
+            error: "",
+        },
     ];
 
     let ctx = create_query_context().await?;

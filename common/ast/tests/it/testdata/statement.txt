@@ -1432,6 +1432,111 @@ CreateTable(
 
 
 ---------- Input ----------
+ALTER USER u1 IDENTIFIED BY '123456';
+---------- Output ---------
+ALTER USER 'u1'@'%' IDENTIFIED BY '123456'
+---------- AST ------------
+AlterUser(
+    AlterUserStmt {
+        user: Some(
+            UserIdentity {
+                username: "u1",
+                hostname: "%",
+            },
+        ),
+        auth_option: Some(
+            AuthOption {
+                auth_type: None,
+                password: Some(
+                    "123456",
+                ),
+            },
+        ),
+        user_options: [],
+    },
+)
+
+
+---------- Input ----------
+ALTER USER u1 WITH DEFAULT_ROLE = 'role1';
+---------- Output ---------
+ALTER USER 'u1'@'%' WITH DEFAULT_ROLE = 'role1'
+---------- AST ------------
+AlterUser(
+    AlterUserStmt {
+        user: Some(
+            UserIdentity {
+                username: "u1",
+                hostname: "%",
+            },
+        ),
+        auth_option: None,
+        user_options: [
+            DefaultRole(
+                "role1",
+            ),
+        ],
+    },
+)
+
+
+---------- Input ----------
+ALTER USER u1 WITH DEFAULT_ROLE = 'role1', TENANTSETTING;
+---------- Output ---------
+ALTER USER 'u1'@'%' WITH DEFAULT_ROLE = 'role1' TENANTSETTING
+---------- AST ------------
+AlterUser(
+    AlterUserStmt {
+        user: Some(
+            UserIdentity {
+                username: "u1",
+                hostname: "%",
+            },
+        ),
+        auth_option: None,
+        user_options: [
+            DefaultRole(
+                "role1",
+            ),
+            TenantSetting(
+                true,
+            ),
+        ],
+    },
+)
+
+
+---------- Input ----------
+CREATE USER u1 IDENTIFIED BY '123456' WITH DEFAULT_ROLE='role123', TENANTSETTING
+---------- Output ---------
+CREATE USER 'u1'@'%' IDENTIFIED BY '123456' WITH DEFAULT_ROLE = 'role123' TENANTSETTING
+---------- AST ------------
+CreateUser(
+    CreateUserStmt {
+        if_not_exists: false,
+        user: UserIdentity {
+            username: "u1",
+            hostname: "%",
+        },
+        auth_option: AuthOption {
+            auth_type: None,
+            password: Some(
+                "123456",
+            ),
+        },
+        user_options: [
+            DefaultRole(
+                "role123",
+            ),
+            TenantSetting(
+                true,
+            ),
+        ],
+    },
+)
+
+
+---------- Input ----------
 DROP database if exists db1;
 ---------- Output ---------
 DROP DATABASE IF EXISTS db1
@@ -4554,7 +4659,7 @@ CreateUser(
                 "password",
             ),
         },
-        role_options: [],
+        user_options: [],
     },
 )
 
@@ -4594,7 +4699,7 @@ AlterUser(
                 ),
             },
         ),
-        role_options: [],
+        user_options: [],
     },
 )
 
@@ -4822,6 +4927,30 @@ Grant(
             level: Database(
                 None,
             ),
+        },
+        principal: User(
+            UserIdentity {
+                username: "test-grant",
+                hostname: "localhost",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT SELECT, CREATE ON *.* TO 'test-grant'@'localhost';
+---------- Output ---------
+GRANT SELECT, CREATE ON *.* TO USER 'test-grant'@'localhost'
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Privs {
+            privileges: [
+                Select,
+                Create,
+            ],
+            level: Global,
         },
         principal: User(
             UserIdentity {
@@ -5774,6 +5903,44 @@ Presign(
             path: "/path/to/file",
         },
         expire: 7200s,
+    },
+)
+
+
+---------- Input ----------
+CREATE SHARE t COMMENT='share comment';
+---------- Output ---------
+CREATE SHARE t COMMENT = 'share comment'
+---------- AST ------------
+CreateShare(
+    CreateShareStmt {
+        if_not_exists: false,
+        share: Identifier {
+            name: "t",
+            quote: None,
+            span: Ident(13..14),
+        },
+        comment: Some(
+            "share comment",
+        ),
+    },
+)
+
+
+---------- Input ----------
+CREATE SHARE IF NOT EXISTS t;
+---------- Output ---------
+CREATE SHARE IF NOT EXISTS t
+---------- AST ------------
+CreateShare(
+    CreateShareStmt {
+        if_not_exists: true,
+        share: Identifier {
+            name: "t",
+            quote: None,
+            span: Ident(27..28),
+        },
+        comment: None,
     },
 )
 

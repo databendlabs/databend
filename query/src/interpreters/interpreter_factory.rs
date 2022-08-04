@@ -38,7 +38,7 @@ impl InterpreterFactory {
         let inner = Self::create_interpreter(ctx.clone(), &plan)?;
         let query_kind = plan.name().to_string();
         Ok(Arc::new(InterceptorInterpreter::create(
-            ctx, inner, plan, query_kind,
+            ctx, inner, plan, None, query_kind,
         )))
     }
 

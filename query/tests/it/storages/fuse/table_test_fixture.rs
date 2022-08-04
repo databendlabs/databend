@@ -12,6 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::collections::VecDeque;
 use std::sync::Arc;
 
 use common_datablocks::assert_blocks_sorted_eq_with_name;
@@ -20,6 +21,9 @@ use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_meta_app::schema::DatabaseMeta;
 use common_meta_app::schema::TableMeta;
+use common_pipeline::processors::port::OutputPort;
+use common_pipeline::Pipeline;
+use common_pipeline::SourcePipeBuilder;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
 use common_planners::Expression;
@@ -28,15 +32,19 @@ use common_storage::StorageFsConfig;
 use common_storage::StorageParams;
 use common_streams::SendableDataBlockStream;
 use databend_query::catalogs::CATALOG_DEFAULT;
+use databend_query::interpreters::append2table;
+use databend_query::interpreters::commit2table;
 use databend_query::interpreters::CreateTableInterpreter;
 use databend_query::interpreters::Interpreter;
 use databend_query::interpreters::InterpreterFactoryV2;
+use databend_query::pipelines::processors::BlocksSource;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContext;
 use databend_query::sql::Planner;
 use databend_query::sql::OPT_KEY_DATABASE_ID;
 use databend_query::storages::fuse::table_functions::ClusteringInformationTable;
 use databend_query::storages::fuse::table_functions::FuseSnapshotTable;
+use databend_query::storages::fuse::FUSE_TBL_BLOCK_INDEX_PREFIX;
 use databend_query::storages::fuse::FUSE_TBL_BLOCK_PREFIX;
 use databend_query::storages::fuse::FUSE_TBL_SEGMENT_PREFIX;
 use databend_query::storages::fuse::FUSE_TBL_SNAPSHOT_PREFIX;
@@ -45,6 +53,7 @@ use databend_query::storages::TableStreamReadWrap;
 use databend_query::storages::ToReadDataSourcePlan;
 use databend_query::table_functions::TableArgs;
 use futures::TryStreamExt;
+use parking_lot::Mutex;
 use tempfile::TempDir;
 use tokio_stream::StreamExt;
 use uuid::Uuid;
@@ -156,7 +165,7 @@ impl TestFixture {
     pub async fn create_default_table(&self) -> Result<()> {
         let create_table_plan = self.default_crate_table_plan();
         let interpreter = CreateTableInterpreter::try_create(self.ctx.clone(), create_table_plan)?;
-        interpreter.execute(None).await?;
+        interpreter.execute().await?;
         Ok(())
     }
 
@@ -227,6 +236,37 @@ impl TestFixture {
                 self.default_table_name().as_str(),
             )
             .await
+    }
+
+    /// append_commit_blocks with single thread
+    pub async fn append_commit_blocks(
+        &self,
+        table: Arc<dyn Table>,
+        blocks: Vec<DataBlock>,
+        overwrite: bool,
+        commit: bool,
+    ) -> Result<()> {
+        let source_schema = blocks
+            .get(0)
+            .map(|b| b.schema().clone())
+            .unwrap_or_else(|| table.schema());
+        let mut pipeline = Pipeline::create();
+        let mut builder = SourcePipeBuilder::create();
+
+        let blocks = Arc::new(Mutex::new(VecDeque::from_iter(blocks)));
+        let output = OutputPort::create();
+        builder.add_source(
+            output.clone(),
+            BlocksSource::create(self.ctx.clone(), output.clone(), blocks.clone())?,
+        );
+        pipeline.add_pipe(builder.finalize());
+
+        append2table(self.ctx.clone(), table.clone(), source_schema, pipeline)?;
+
+        if commit {
+            commit2table(self.ctx.clone(), table.clone(), overwrite).await?;
+        }
+        Ok(())
     }
 }
 
@@ -336,7 +376,7 @@ pub async fn execute_query(ctx: Arc<QueryContext>, query: &str) -> Result<Sendab
     let mut planner = Planner::new(ctx.clone());
     let (plan, _, _) = planner.plan_sql(query).await?;
     let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
-    executor.execute(None).await
+    executor.execute().await
 }
 
 pub async fn execute_command(ctx: Arc<QueryContext>, query: &str) -> Result<()> {
@@ -356,10 +396,10 @@ pub async fn append_sample_data_overwrite(
 ) -> Result<()> {
     let stream = TestFixture::gen_sample_blocks_stream(num_blocks, 1);
     let table = fixture.latest_default_table().await?;
-    let ctx = fixture.ctx();
-    let stream = table.append_data(ctx.clone(), stream).await?;
-    table
-        .commit_insertion(ctx, CATALOG_DEFAULT, stream.try_collect().await?, overwrite)
+
+    let blocks = stream.try_collect().await?;
+    fixture
+        .append_commit_blocks(table.clone(), blocks, overwrite, true)
         .await
 }
 
@@ -369,6 +409,7 @@ pub async fn check_data_dir(
     snapshot_count: u32,
     segment_count: u32,
     block_count: u32,
+    index_count: u32,
 ) {
     let data_path = match fixture.ctx().get_config().storage.params {
         StorageParams::Fs(v) => v.root,
@@ -378,9 +419,11 @@ pub async fn check_data_dir(
     let mut ss_count = 0;
     let mut sg_count = 0;
     let mut b_count = 0;
+    let mut i_count = 0;
     let prefix_snapshot = FUSE_TBL_SNAPSHOT_PREFIX;
     let prefix_segment = FUSE_TBL_SEGMENT_PREFIX;
     let prefix_block = FUSE_TBL_BLOCK_PREFIX;
+    let prefix_index = FUSE_TBL_BLOCK_INDEX_PREFIX;
     for entry in WalkDir::new(root) {
         let entry = entry.unwrap();
         if entry.file_type().is_file() {
@@ -391,6 +434,8 @@ pub async fn check_data_dir(
                 sg_count += 1;
             } else if entry.path().to_str().unwrap().contains(prefix_block) {
                 b_count += 1;
+            } else if entry.path().to_str().unwrap().contains(prefix_index) {
+                i_count += 1;
             }
         }
     }
@@ -409,6 +454,12 @@ pub async fn check_data_dir(
     assert_eq!(
         b_count, block_count,
         "case [{}], check block count",
+        case_name
+    );
+
+    assert_eq!(
+        i_count, index_count,
+        "case [{}], check index count",
         case_name
     );
 }

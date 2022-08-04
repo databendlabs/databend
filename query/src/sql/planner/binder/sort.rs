@@ -22,6 +22,7 @@ use common_ast::DisplayError;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+use super::bind_context::NameResolutionResult;
 use crate::sessions::TableContext;
 use crate::sql::binder::scalar::ScalarBinder;
 use crate::sql::binder::select::SelectList;
@@ -77,29 +78,11 @@ impl<'a> Binder {
                 } => {
                     // We first search the identifier in select list
                     let mut found = false;
+                    let db = database_name.as_ref().map(|s| s.name.as_str());
+                    let table = table_name.as_ref().map(|s| s.name.as_str());
+
                     for item in projections.iter() {
-                        let matched = match (
-                            (&database_name, &table_name),
-                            (&item.database_name, &item.table_name),
-                        ) {
-                            (
-                                (Some(ident_database), Some(ident_table)),
-                                (Some(database), Some(table)),
-                            ) if &ident_database.name == database
-                                && &ident_table.name == table
-                                && ident.name == item.column_name =>
-                            {
-                                true
-                            }
-                            ((None, Some(ident_table)), (_, Some(table)))
-                                if &ident_table.name == table && ident.name == item.column_name =>
-                            {
-                                true
-                            }
-                            ((None, None), (_, _)) if ident.name == item.column_name => true,
-                            _ => false,
-                        };
-                        if matched {
+                        if BindContext::match_column_binding(db, table, ident, item) {
                             order_items.push(OrderItem {
                                 expr: order.clone(),
                                 index: item.index,
@@ -122,19 +105,26 @@ impl<'a> Binder {
 
                     // If there isn't a matched alias in select list, we will fallback to
                     // from clause.
-                    let column = from_context.resolve_column(database_name.as_ref().map(|v| v.name.as_str()), table_name.as_ref().map(|v| v.name.as_str()), ident).and_then(|v| {
+                    let result = from_context.resolve_name(database_name.as_ref().map(|v| v.name.as_str()), table_name.as_ref().map(|v| v.name.as_str()), ident, &[]).and_then(|v| {
                         if distinct {
                             Err(ErrorCode::SemanticError(order.expr.span().display_error("for SELECT DISTINCT, ORDER BY expressions must appear in select list".to_string())))
                         } else {
                             Ok(v)
                         }
                     })?;
-                    order_items.push(OrderItem {
-                        expr: order.clone(),
-                        name: column.column_name.clone(),
-                        index: column.index,
-                        need_eval_scalar: false,
-                    });
+                    match result {
+                        NameResolutionResult::Column(column) => {
+                            order_items.push(OrderItem {
+                                expr: order.clone(),
+                                name: column.column_name.clone(),
+                                index: column.index,
+                                need_eval_scalar: false,
+                            });
+                        }
+                        NameResolutionResult::Alias { .. } => {
+                            return Err(ErrorCode::LogicalError("Invalid name resolution result"));
+                        }
+                    }
                 }
                 Expr::Literal {
                     lit: Literal::Integer(index),
@@ -161,8 +151,12 @@ impl<'a> Binder {
                         }
                         bind_context.columns.push(column_binding.clone());
                     }
-                    let mut scalar_binder =
-                        ScalarBinder::new(&bind_context, self.ctx.clone(), self.metadata.clone());
+                    let mut scalar_binder = ScalarBinder::new(
+                        &bind_context,
+                        self.ctx.clone(),
+                        self.metadata.clone(),
+                        &[],
+                    );
                     let (bound_expr, _) = scalar_binder.bind(&order.expr).await?;
                     let rewrite_scalar = self
                         .rewrite_scalar_with_replacement(&bound_expr, &|nest_scalar| {
@@ -277,7 +271,7 @@ impl<'a> Binder {
         order_by: &[OrderByExpr<'_>],
     ) -> Result<SExpr> {
         let mut scalar_binder =
-            ScalarBinder::new(bind_context, self.ctx.clone(), self.metadata.clone());
+            ScalarBinder::new(bind_context, self.ctx.clone(), self.metadata.clone(), &[]);
         let mut order_by_items = Vec::with_capacity(order_by.len());
         for order in order_by.iter() {
             match order.expr {

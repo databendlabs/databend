@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use bincode;
 use bit_vec::BitVec;
+use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
@@ -25,7 +26,6 @@ use common_planners::Expression;
 use tracing::info;
 
 use crate::pipelines::processors::transforms::ExpressionExecutor;
-use crate::sessions::QueryContext;
 use crate::storages::index::IndexSchemaVersion;
 use crate::storages::index::SupportedType;
 
@@ -65,14 +65,19 @@ pub struct BloomFilterIndexer {
     // The schema of the source table/block, which the bloom filter work for.
     pub source_schema: DataSchemaRef,
 
+    // The schema of the bloom filter block
+    pub bloom_schema: DataSchemaRef,
+
     // The bloom block contains bloom filters;
     pub bloom_block: DataBlock,
 
-    pub ctx: Arc<QueryContext>,
+    pub ctx: Arc<dyn TableContext>,
 }
 
-const BLOOM_FILTER_MAX_NUM_BITS: usize = 20480; // 2.5KB, maybe too big?
-const BLOOM_FILTER_DEFAULT_FALSE_POSITIVE_RATE: f64 = 0.05;
+// with this setting, about 1.25MB per column, for NDV 1M
+const BLOOM_FILTER_MAX_NUM_BITS: usize = 10240000; // 320000 * size_of(u32)
+const BLOOM_FILTER_DEFAULT_FALSE_POSITIVE_RATE: f64 = 0.01;
+
 const BLOOM_FILTER_SEED_GEN_A: u64 = 845897321;
 const BLOOM_FILTER_SEED_GEN_B: u64 = 217728422;
 
@@ -82,6 +87,20 @@ impl BloomFilterIndexer {
     pub fn to_bloom_column_name(column_name: &str) -> String {
         format!("Bloom({})", column_name)
     }
+    pub fn to_bloom_schema(data_schema: &DataSchema) -> DataSchema {
+        let mut bloom_fields = vec![];
+        let fields = data_schema.fields();
+        for field in fields.iter() {
+            if BloomFilter::is_supported_type(field.data_type()) {
+                // create field for applicable ones
+                let bloom_column_name = Self::to_bloom_column_name(field.name());
+                let bloom_field = DataField::new(&bloom_column_name, Vu8::to_data_type());
+                bloom_fields.push(bloom_field);
+            }
+        }
+
+        DataSchema::new(bloom_fields)
+    }
 
     #[inline(always)]
     fn create_seed() -> u64 {
@@ -90,13 +109,15 @@ impl BloomFilterIndexer {
     }
 
     /// Load a bloom filter directly from the source table's schema and the corresponding bloom parquet file.
+    #[tracing::instrument(level = "debug", skip_all)]
     pub fn from_bloom_block(
         source_table_schema: DataSchemaRef,
         bloom_block: DataBlock,
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn TableContext>,
     ) -> Result<Self> {
         Ok(Self {
             source_schema: source_table_schema,
+            bloom_schema: bloom_block.schema().clone(),
             bloom_block,
             ctx,
         })
@@ -106,7 +127,10 @@ impl BloomFilterIndexer {
     ///
     /// All input blocks should be belong to a Parquet file, e.g. the block array represents the parquet file in memory.
 
-    pub fn try_create(ctx: Arc<QueryContext>, source_data_blocks: &[DataBlock]) -> Result<Self> {
+    pub fn try_create(
+        ctx: Arc<dyn TableContext>,
+        source_data_blocks: &[&DataBlock],
+    ) -> Result<Self> {
         let seed = Self::create_seed();
         Self::try_create_with_seed(source_data_blocks, seed, ctx)
     }
@@ -115,29 +139,21 @@ impl BloomFilterIndexer {
     ///
     /// All input blocks should be belong to a Parquet file, e.g. the block array represents the parquet file in memory.
     pub fn try_create_with_seed(
-        blocks: &[DataBlock],
+        blocks: &[&DataBlock],
         seed: u64,
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn TableContext>,
     ) -> Result<Self> {
         if blocks.is_empty() {
             return Err(ErrorCode::BadArguments("data blocks is empty"));
         }
 
         let source_schema = blocks[0].schema().clone();
-
         let total_num_rows = blocks.iter().map(|block| block.num_rows() as u64).sum();
-
         let mut bloom_columns = vec![];
-        let mut bloom_fields = vec![];
 
-        let fields = blocks[0].schema().fields();
+        let fields = source_schema.fields();
         for (i, field) in fields.iter().enumerate() {
             if BloomFilter::is_supported_type(field.data_type()) {
-                // create field for applicable ones
-                let bloom_column_name = Self::to_bloom_column_name(field.name());
-                let bloom_field = DataField::new(&bloom_column_name, Vu8::to_data_type());
-                bloom_fields.push(bloom_field);
-
                 // create bloom filter per column
                 let mut bloom_filter = BloomFilter::with_rate_and_max_bits(
                     total_num_rows,
@@ -161,10 +177,11 @@ impl BloomFilterIndexer {
             }
         }
 
-        let bloom_schema = Arc::new(DataSchema::new(bloom_fields));
-        let bloom_block = DataBlock::create(bloom_schema, bloom_columns);
+        let bloom_schema = Arc::new(Self::to_bloom_schema(source_schema.as_ref()));
+        let bloom_block = DataBlock::create(bloom_schema.clone(), bloom_columns);
         Ok(Self {
             source_schema,
+            bloom_schema,
             bloom_block,
             ctx,
         })
@@ -175,7 +192,7 @@ impl BloomFilterIndexer {
         column_name: &str,
         target: DataValue,
         typ: DataTypeImpl,
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn TableContext>,
     ) -> Result<BloomFilterExprEvalResult> {
         let bloom_column = Self::to_bloom_column_name(column_name);
         if !self.bloom_block.schema().has_field(&bloom_column)
@@ -209,6 +226,7 @@ impl BloomFilterIndexer {
     /// This happens when the data doesn't show up in bloom filter.
     ///
     /// Otherwise return either Unknown or NotApplicable.
+    #[tracing::instrument(level = "debug", name = "bloom_filter_index_eval", skip_all)]
     pub fn eval(&self, expr: &Expression) -> Result<BloomFilterExprEvalResult> {
         // TODO: support multiple columns and other ops like 'in' ...
         match expr {
@@ -460,7 +478,7 @@ impl BloomFilter {
     fn compute_column_city_hash(
         seed: u64,
         column: &ColumnRef,
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn TableContext>,
     ) -> Result<ColumnRef> {
         let input_column = "input"; // create a dummy column name
         let input_field = DataField::new(input_column, column.data_type());
@@ -501,7 +519,7 @@ impl BloomFilter {
     fn compute_column_double_hashes(
         &self,
         column: &ColumnRef,
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn TableContext>,
     ) -> Result<(ColumnRef, ColumnRef)> {
         let hash1_column: ColumnRef =
             Self::compute_column_city_hash(self.seed, column, ctx.clone())?;
@@ -515,7 +533,7 @@ impl BloomFilter {
     ///
     /// The design of skipping Nulls is arguably correct. For now we do the same as databricks.
     /// See the design of databricks https://docs.databricks.com/delta/optimizations/bloom-filters.html
-    pub fn add(&mut self, column: &ColumnRef, ctx: Arc<QueryContext>) -> Result<()> {
+    pub fn add(&mut self, column: &ColumnRef, ctx: Arc<dyn TableContext>) -> Result<()> {
         if !Self::is_supported_type(&column.data_type()) {
             return Err(ErrorCode::BadArguments(format!(
                 "Unsupported data type: {} ",
@@ -564,7 +582,7 @@ impl BloomFilter {
         &self,
         data_value: DataValue,
         data_type: DataTypeImpl,
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn TableContext>,
     ) -> Result<(u64, u64)> {
         let col = data_value.as_const_column(&data_type, 1)?;
 
@@ -596,7 +614,12 @@ impl BloomFilter {
     /// let not_exist =
     ///     BloomFilter::is_supported_type(data_type) && !bloom.find(data_value, data_type)?;
     /// ```
-    pub fn find(&self, val: DataValue, typ: DataTypeImpl, ctx: Arc<QueryContext>) -> Result<bool> {
+    pub fn find(
+        &self,
+        val: DataValue,
+        typ: DataTypeImpl,
+        ctx: Arc<dyn TableContext>,
+    ) -> Result<bool> {
         if !Self::is_supported_type(&typ) {
             return Err(ErrorCode::BadArguments(format!(
                 "Unsupported data type: {:?} ",

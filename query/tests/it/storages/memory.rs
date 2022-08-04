@@ -34,17 +34,18 @@ async fn test_memorytable() -> Result<()> {
         DataField::new("a", u32::to_data_type()),
         DataField::new("b", u64::to_data_type()),
     ]);
-    let table = MemoryTable::try_create(crate::tests::create_storage_context()?, TableInfo {
-        desc: "'default'.'a'".into(),
-        name: "a".into(),
-        ident: Default::default(),
-        meta: TableMeta {
-            schema: schema.clone(),
-            engine: "Memory".to_string(),
-            options: TableOptions::default(),
-            ..Default::default()
-        },
-    })?;
+    let table =
+        MemoryTable::try_create(crate::tests::create_storage_context().await?, TableInfo {
+            desc: "'default'.'a'".into(),
+            name: "a".into(),
+            ident: Default::default(),
+            meta: TableMeta {
+                schema: schema.clone(),
+                engine: "Memory".to_string(),
+                options: TableOptions::default(),
+                ..Default::default()
+            },
+        })?;
 
     // append data.
     {
@@ -57,15 +58,15 @@ async fn test_memorytable() -> Result<()> {
             Series::from_data(vec![33u64, 33]),
         ]);
         let blocks = vec![Ok(block), Ok(block2)];
-
         let input_stream = futures::stream::iter::<Vec<Result<DataBlock>>>(blocks.clone());
-        let r = table
-            .append_data(ctx.clone(), Box::pin(input_stream))
-            .await
-            .unwrap();
         // with overwrite false
         table
-            .commit_insertion(ctx.clone(), CATALOG_DEFAULT, r.try_collect().await?, false)
+            .commit_insertion(
+                ctx.clone(),
+                CATALOG_DEFAULT,
+                input_stream.try_collect().await?,
+                false,
+            )
             .await?;
     }
 
@@ -152,13 +153,14 @@ async fn test_memorytable() -> Result<()> {
         let blocks = vec![Ok(block), Ok(block2)];
 
         let input_stream = futures::stream::iter::<Vec<Result<DataBlock>>>(blocks.clone());
-        let r = table
-            .append_data(ctx.clone(), Box::pin(input_stream))
-            .await
-            .unwrap();
         // with overwrite = true
         table
-            .commit_insertion(ctx.clone(), CATALOG_DEFAULT, r.try_collect().await?, true)
+            .commit_insertion(
+                ctx.clone(),
+                CATALOG_DEFAULT,
+                input_stream.try_collect().await?,
+                true,
+            )
             .await?;
     }
 

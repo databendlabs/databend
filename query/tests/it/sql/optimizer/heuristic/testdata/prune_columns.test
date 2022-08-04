@@ -80,11 +80,11 @@ Project: [a (#1)]
 
 
 # Prune unused columns with order by
-select name, is_aggregate from system.functions order by example
+select name from system.functions order by example
 ----
-Project: [name (#0),is_aggregate (#2)]
-    EvalScalar: [functions.name (#0), functions.is_aggregate (#2)]
+Project: [name (#0)]
+    EvalScalar: [functions.name (#0)]
         Sort: [example (#7) ASC]
-            Scan: default.system.functions, columns: {0, 7, 2}
+            Scan: default.system.functions, columns: {0, 7}
 
 

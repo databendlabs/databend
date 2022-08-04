@@ -343,7 +343,7 @@ impl<'a> Binder {
 
             // Resolve scalar item and alias item
             let mut scalar_binder =
-                ScalarBinder::new(bind_context, self.ctx.clone(), self.metadata.clone());
+                ScalarBinder::new(bind_context, self.ctx.clone(), self.metadata.clone(), &[]);
             let (scalar_expr, data_type) = scalar_binder
                 .bind(expr)
                 .await

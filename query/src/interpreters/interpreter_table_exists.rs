@@ -42,10 +42,7 @@ impl Interpreter for ExistsTableInterpreter {
         "ExistsTableInterpreter"
     }
 
-    async fn execute(
-        &self,
-        _input_stream: Option<SendableDataBlockStream>,
-    ) -> Result<SendableDataBlockStream> {
+    async fn execute(&self) -> Result<SendableDataBlockStream> {
         let catalog = self.plan.catalog.as_str();
         let database = self.plan.database.as_str();
         let table = self.plan.table.as_str();

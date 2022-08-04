@@ -17,8 +17,8 @@ use common_exception::Result;
 use goldenfile::Mint;
 
 use super::run_suites;
-use super::Suite;
 use super::run_test;
+use super::Suite;
 use crate::tests::create_query_context;
 
 #[tokio::test]
@@ -57,7 +57,7 @@ pub async fn test_heuristic_optimizer_prune_columns() -> Result<()> {
         },
         Suite {
             comment: "# Prune unused columns with order by".to_string(),
-            query: "select name, is_aggregate from system.functions order by example".to_string(),
+            query: "select name from system.functions order by example".to_string(),
             rules: vec![],
         },
     ];

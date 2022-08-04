@@ -43,7 +43,6 @@ impl Transform for TransformRename {
 
     fn transform(&mut self, data: DataBlock) -> Result<DataBlock> {
         let result = DataBlock::create(self.schema.clone(), data.columns().to_vec());
-
         Ok(result)
     }
 }
