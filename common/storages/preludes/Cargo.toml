@@ -22,7 +22,6 @@ common-exception = { path = "../../exception" }
 common-functions = { path = "../../functions" }
 common-fuse-meta = { path = "../../fuse-meta" }
 common-grpc = { path = "../../grpc" }
-common-legacy-parser = { path = "../../legacy-parser" }
 common-meta-app = { path = "../../meta/app" }
 common-meta-types = { path = "../../meta/types" }
 common-metrics = { path = "../../metrics" }
@@ -32,7 +31,6 @@ common-pipeline-sources = { path = "../../pipeline/sources" }
 common-pipeline-transforms = { path = "../../pipeline/transforms" }
 common-planners = { path = "../../planners" }
 common-storage = { path = "../../storage" }
-common-storages-index = { path = "../index" }
 common-storages-util = { path = "../util" }
 common-streams = { path = "../../streams" }
 common-tracing = { path = "../../tracing" }

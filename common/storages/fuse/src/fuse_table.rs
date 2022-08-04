@@ -47,7 +47,6 @@ use crate::io::MetaReaders;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::AppendOperationLogEntry;
 use crate::pipelines::Pipeline;
-// use crate::sql::PlanParser;
 use crate::NavigationPoint;
 use crate::Table;
 use crate::TableStatistics;
