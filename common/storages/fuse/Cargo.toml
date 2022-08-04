@@ -41,8 +41,8 @@ common-users = { path = "../../users" }
 async-stream = "0.3.3"
 async-trait = { git = "https://github.com/datafuse-extras/async-trait", rev = "f0b0fd5" }
 backoff = { version = "0.4.0", features = ["futures", "tokio"] }
-clap = { version = "3.2.5", features = ["derive", "env"] }
 chrono = "0.4.19"
+clap = { version = "3.2.5", features = ["derive", "env"] }
 futures = "0.3.21"
 futures-util = "0.3.21"
 itertools = "0.10.3"
