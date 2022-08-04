@@ -54,7 +54,10 @@ impl Interpreter for ExplainInterpreterV2 {
             ExplainKind::Pipeline => match &self.plan {
                 Plan::Query {
                     s_expr, metadata, ..
-                } => self.explain_pipeline(s_expr.clone(), metadata.clone()).await?,
+                } => {
+                    self.explain_pipeline(s_expr.clone(), metadata.clone())
+                        .await?
+                }
                 _ => {
                     return Err(ErrorCode::UnImplement("Unsupported EXPLAIN statement"));
                 }
@@ -62,7 +65,10 @@ impl Interpreter for ExplainInterpreterV2 {
             ExplainKind::Fragments => match &self.plan {
                 Plan::Query {
                     s_expr, metadata, ..
-                } => self.explain_fragments(s_expr.clone(), metadata.clone()).await?,
+                } => {
+                    self.explain_fragments(s_expr.clone(), metadata.clone())
+                        .await?
+                }
                 _ => {
                     return Err(ErrorCode::UnImplement("Unsupported EXPLAIN statement"));
                 }
@@ -108,7 +114,11 @@ impl ExplainInterpreterV2 {
         ])])
     }
 
-    pub async fn explain_pipeline(&self, s_expr: SExpr, metadata: MetadataRef) -> Result<Vec<DataBlock>> {
+    pub async fn explain_pipeline(
+        &self,
+        s_expr: SExpr,
+        metadata: MetadataRef,
+    ) -> Result<Vec<DataBlock>> {
         let builder = PhysicalPlanBuilder::new(metadata, self.ctx.clone());
         let plan = builder.build(&s_expr).await?;
 
@@ -139,9 +149,15 @@ impl ExplainInterpreterV2 {
         Ok(blocks)
     }
 
-    async fn explain_fragments(&self, s_expr: SExpr, metadata: MetadataRef) -> Result<Vec<DataBlock>> {
+    async fn explain_fragments(
+        &self,
+        s_expr: SExpr,
+        metadata: MetadataRef,
+    ) -> Result<Vec<DataBlock>> {
         let ctx = self.ctx.clone();
-        let plan = PhysicalPlanBuilder::new(metadata, self.ctx.clone()).build(&s_expr).await?;
+        let plan = PhysicalPlanBuilder::new(metadata, self.ctx.clone())
+            .build(&s_expr)
+            .await?;
 
         let root_fragment = Fragmenter::try_create(ctx.clone())?.build_fragment(&plan)?;
 

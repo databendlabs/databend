@@ -58,7 +58,7 @@ impl PhysicalPlanBuilder {
     pub fn new(metadata: MetadataRef, ctx: Arc<QueryContext>) -> Self {
         Self { metadata, ctx }
     }
-    
+
     #[async_recursion::async_recursion]
     pub async fn build(&self, s_expr: &SExpr) -> Result<PhysicalPlan> {
         debug_assert!(check_physical(s_expr));
@@ -83,15 +83,25 @@ impl PhysicalPlanBuilder {
                             .collect::<Result<Vec<_>>>()
                     })
                     .transpose()?;
-                
-                let projection = scan.columns.iter().map(|i| *i).sorted().collect::<Vec<_>>();
+
+                let table = metadata.table(scan.table_index);
+                let table_schema = table.table.schema();
+                let projection = scan
+                    .columns
+                    .iter()
+                    .map(|index| {
+                        let name = metadata.column(*index).name.as_str();
+                        table_schema.index_of(name).unwrap()
+                    })
+                    .sorted()
+                    .collect::<Vec<_>>();
+
                 let push_downs = Extras {
-                     projection: Some(projection),
-                     filters: push_down_filters.unwrap_or_default(),
+                    projection: Some(projection),
+                    filters: push_down_filters.unwrap_or_default(),
                     ..Default::default()
                 };
-              
-                let table =  &metadata.table(scan.table_index).table;
+
                 let source = table.read_plan(self.ctx.clone(), Some(push_downs)).await?;
                 Ok(PhysicalPlan::TableScan(TableScan {
                     name_mapping,

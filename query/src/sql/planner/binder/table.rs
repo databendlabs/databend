@@ -144,11 +144,10 @@ impl<'a> Binder {
                         }
                     }
                     _ => {
-                        let table_index = self.metadata.write().add_table(
-                            catalog,
-                            database.clone(),
-                            table_meta,
-                        );
+                        let table_index =
+                            self.metadata
+                                .write()
+                                .add_table(catalog, database.clone(), table_meta);
 
                         let (s_expr, mut bind_context) =
                             self.bind_base_table(bind_context, database.as_str(), table_index)?;
