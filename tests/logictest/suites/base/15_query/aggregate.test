@@ -13,3 +13,16 @@ select number +1 from numbers(1) group by number+1;
 
 ----
 1
+
+statement query I
+select count(*) from numbers(10);
+
+----
+10
+
+
+statement query I
+select (count(1) > 1)::int from numbers(10);
+
+----
+1
