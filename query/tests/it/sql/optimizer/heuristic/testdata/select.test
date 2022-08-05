@@ -62,7 +62,6 @@ Scan: default.system.numbers
 select a from (select number as a, number+1 as b from numbers(1))
 ----
 Project: [number (#0)]
-    EvalScalar: []
-        Scan: default.system.numbers
+    Scan: default.system.numbers
 
 
