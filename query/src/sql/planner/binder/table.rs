@@ -24,12 +24,12 @@ use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
 use common_ast::Backtrace;
 use common_ast::DisplayError;
+use common_catalog::catalog::CATALOG_DEFAULT;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Expression;
 
-use crate::catalogs::CATALOG_DEFAULT;
 use crate::sessions::TableContext;
 use crate::sql::binder::scalar::ScalarBinder;
 use crate::sql::binder::Binder;
@@ -44,7 +44,6 @@ use crate::sql::IndexType;
 use crate::storages::view::view_table::QUERY;
 use crate::storages::NavigationPoint;
 use crate::storages::Table;
-use crate::storages::ToReadDataSourcePlan;
 use crate::table_functions::TableFunction;
 
 impl<'a> Binder {
@@ -70,12 +69,10 @@ impl<'a> Binder {
         let table_meta: Arc<dyn Table> = self
             .resolve_data_source(tenant.as_str(), catalog, database, "one", &None)
             .await?;
-        let source = table_meta.read_plan(self.ctx.clone(), None).await?;
         let table_index = self.metadata.write().add_table(
             CATALOG_DEFAULT.to_owned(),
             database.to_string(),
             table_meta,
-            source,
         );
 
         self.bind_base_table(bind_context, database, table_index)
@@ -147,15 +144,10 @@ impl<'a> Binder {
                         }
                     }
                     _ => {
-                        let source = table_meta
-                            .read_plan_with_catalog(self.ctx.clone(), catalog.clone(), None)
-                            .await?;
-                        let table_index = self.metadata.write().add_table(
-                            catalog,
-                            database.clone(),
-                            table_meta,
-                            source,
-                        );
+                        let table_index =
+                            self.metadata
+                                .write()
+                                .add_table(catalog, database.clone(), table_meta);
 
                         let (s_expr, mut bind_context) =
                             self.bind_base_table(bind_context, database.as_str(), table_index)?;
@@ -205,12 +197,10 @@ impl<'a> Binder {
                     .get_table_function(name.name.as_str(), table_args)?;
                 let table = table_meta.as_table();
 
-                let source = table.read_plan(self.ctx.clone(), None).await?;
                 let table_index = self.metadata.write().add_table(
                     CATALOG_DEFAULT.to_string(),
                     "system".to_string(),
                     table.clone(),
-                    source,
                 );
 
                 let (s_expr, mut bind_context) =

@@ -14,9 +14,11 @@
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use itertools::Itertools;
 
 use crate::sql::find_smallest_column;
 use crate::sql::optimizer::ColumnSet;
+use crate::sql::optimizer::RelExpr;
 use crate::sql::optimizer::SExpr;
 use crate::sql::plans::Aggregate;
 use crate::sql::plans::EvalScalar;
@@ -125,19 +127,24 @@ impl ColumnPruner {
             RelOperator::EvalScalar(p) => {
                 let mut used = vec![];
                 // Only keep columns needed by parent plan.
-                p.items.iter().for_each(|s| {
+                for s in p.items.iter() {
                     if !required.contains(&s.index) {
-                        return;
+                        continue;
                     }
                     used.push(s.clone());
                     s.scalar.used_columns().iter().for_each(|c| {
                         required.insert(*c);
                     })
-                });
-                Ok(SExpr::create_unary(
-                    RelOperator::EvalScalar(EvalScalar { items: used }),
-                    self.keep_required_columns(expr.child(0)?, required)?,
-                ))
+                }
+                if used.is_empty() {
+                    // Eliminate unneccessary `EvalScalar`
+                    self.keep_required_columns(expr.child(0)?, required)
+                } else {
+                    Ok(SExpr::create_unary(
+                        RelOperator::EvalScalar(EvalScalar { items: used }),
+                        self.keep_required_columns(expr.child(0)?, required)?,
+                    ))
+                }
             }
             RelOperator::Filter(p) => {
                 let used = p.predicates.iter().fold(required, |acc, v| {
@@ -158,6 +165,30 @@ impl ColumnPruner {
                         used.push(item.clone());
                     }
                 }
+
+                // Require arbitrary column(which has the smallest column index) for scalar `count(*)`
+                // aggregate to prevent empty input `DataBlock`.
+                let rel_expr = RelExpr::with_s_expr(expr.child(0)?);
+                let rel_prop = rel_expr.derive_relational_prop()?;
+                if required
+                    .intersection(&rel_prop.output_columns)
+                    .next()
+                    .is_none()
+                    && p.group_items.is_empty()
+                {
+                    required.insert(
+                        *rel_prop
+                            .output_columns
+                            .iter()
+                            .sorted()
+                            .take(1)
+                            .next()
+                            .ok_or_else(|| {
+                                ErrorCode::LogicalError("Invalid children without output column")
+                            })?,
+                    );
+                }
+
                 p.group_items.iter().for_each(|i| {
                     // If the group item comes from a complex expression, we only include the final
                     // column index here. The used columns will be included in its EvalScalar child.

@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_legacy_parser::ExpressionParser;
 use common_planners::EmptyPlan;
 use common_planners::ExplainPlan;
 use common_planners::Expression;
@@ -24,7 +25,6 @@ use common_planners::PlanNode;
 use common_planners::SelectPlan;
 use tracing::debug;
 
-use super::statements::ExpressionSyncAnalyzer;
 use crate::sessions::QueryContext;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
@@ -58,20 +58,11 @@ impl PlanParser {
     }
 
     pub fn parse_expr(expr: &str) -> Result<Expression> {
-        let expr = DfParser::parse_expr(expr)?;
-        let analyzer = ExpressionSyncAnalyzer::create();
-        analyzer.analyze(&expr)
+        ExpressionParser::parse_expr(expr)
     }
 
     pub fn parse_exprs(expr: &str) -> Result<Vec<Expression>> {
-        let exprs = DfParser::parse_exprs(expr)?;
-        let analyzer = ExpressionSyncAnalyzer::create();
-
-        let results = exprs
-            .iter()
-            .map(|expr| analyzer.analyze(expr))
-            .collect::<Result<Vec<_>>>();
-        results
+        ExpressionParser::parse_exprs(expr)
     }
 
     pub async fn parse_with_hint(

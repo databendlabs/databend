@@ -18,6 +18,7 @@ use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
 use chrono::NaiveDateTime;
+use common_catalog::catalog::CATALOG_DEFAULT;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::Series;
 use common_datavalues::prelude::SeriesFrom;
@@ -30,7 +31,6 @@ use serde_repr::Serialize_repr;
 use tracing::error;
 use tracing::info;
 
-use crate::catalogs::CATALOG_DEFAULT;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::storages::system::QueryLogTable;

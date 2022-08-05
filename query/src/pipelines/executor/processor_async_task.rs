@@ -20,7 +20,7 @@ use std::task::Poll;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_pipeline::processors::processor::ProcessorPtr;
+use common_pipeline_core::processors::processor::ProcessorPtr;
 use futures_util::future::BoxFuture;
 use futures_util::future::Either;
 use futures_util::FutureExt;

@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_catalog::catalog::CATALOG_DEFAULT;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use sqlparser::ast::FunctionArg;
@@ -26,7 +27,6 @@ use sqlparser::ast::TableAlias;
 use sqlparser::ast::TableFactor;
 use sqlparser::ast::TableWithJoins;
 
-use crate::catalogs::CATALOG_DEFAULT;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::statements::analyzer_expr::ExpressionAnalyzer;

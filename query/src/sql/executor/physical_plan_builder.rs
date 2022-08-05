@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -29,6 +30,7 @@ use super::Limit;
 use super::Project;
 use super::Sort;
 use super::TableScan;
+use crate::sessions::QueryContext;
 use crate::sql::executor::util::check_physical;
 use crate::sql::executor::AggregateFunctionDesc;
 use crate::sql::executor::AggregateFunctionSignature;
@@ -45,23 +47,26 @@ use crate::sql::plans::RelOperator;
 use crate::sql::plans::Scalar;
 use crate::sql::MetadataRef;
 use crate::sql::ScalarExpr;
+use crate::storages::ToReadDataSourcePlan;
 
 pub struct PhysicalPlanBuilder {
     metadata: MetadataRef,
+    ctx: Arc<QueryContext>,
 }
 
 impl PhysicalPlanBuilder {
-    pub fn new(metadata: MetadataRef) -> Self {
-        Self { metadata }
+    pub fn new(metadata: MetadataRef, ctx: Arc<QueryContext>) -> Self {
+        Self { metadata, ctx }
     }
 
-    pub fn build(&self, s_expr: &SExpr) -> Result<PhysicalPlan> {
+    #[async_recursion::async_recursion]
+    pub async fn build(&self, s_expr: &SExpr) -> Result<PhysicalPlan> {
         debug_assert!(check_physical(s_expr));
 
         match s_expr.plan() {
             RelOperator::PhysicalScan(scan) => {
                 let mut name_mapping = BTreeMap::new();
-                let metadata = self.metadata.read();
+                let metadata = self.metadata.read().clone();
                 for index in scan.columns.iter() {
                     let name = metadata.column(*index).name.clone();
                     name_mapping.insert(name, index.to_string());
@@ -79,20 +84,33 @@ impl PhysicalPlanBuilder {
                     })
                     .transpose()?;
 
-                let mut source = metadata.table(scan.table_index).source.clone();
-                source.push_downs = push_down_filters.map(|filters| Extras {
-                    filters,
-                    ..Default::default()
-                });
+                let table = metadata.table(scan.table_index).table.clone();
+                let table_schema = table.schema();
+                let projection = scan
+                    .columns
+                    .iter()
+                    .map(|index| {
+                        let name = metadata.column(*index).name.as_str();
+                        table_schema.index_of(name).unwrap()
+                    })
+                    .sorted()
+                    .collect::<Vec<_>>();
 
+                let push_downs = Extras {
+                    projection: Some(projection),
+                    filters: push_down_filters.unwrap_or_default(),
+                    ..Default::default()
+                };
+
+                let source = table.read_plan(self.ctx.clone(), Some(push_downs)).await?;
                 Ok(PhysicalPlan::TableScan(TableScan {
                     name_mapping,
-                    source: Box::new(metadata.table(scan.table_index).source.clone()),
+                    source: Box::new(source),
                 }))
             }
             RelOperator::PhysicalHashJoin(join) => {
-                let build_side = self.build(s_expr.child(1)?)?;
-                let probe_side = self.build(s_expr.child(0)?)?;
+                let build_side = self.build(s_expr.child(1)?).await?;
+                let probe_side = self.build(s_expr.child(0)?).await?;
                 Ok(PhysicalPlan::HashJoin(HashJoin {
                     build: Box::new(build_side),
                     probe: Box::new(probe_side),
@@ -126,7 +144,7 @@ impl PhysicalPlanBuilder {
                 }))
             }
             RelOperator::Project(project) => {
-                let input = self.build(s_expr.child(0)?)?;
+                let input = self.build(s_expr.child(0)?).await?;
                 let input_schema = input.output_schema()?;
                 Ok(PhysicalPlan::Project(Project {
                     input: Box::new(input),
@@ -139,7 +157,7 @@ impl PhysicalPlanBuilder {
                 }))
             }
             RelOperator::EvalScalar(eval_scalar) => Ok(PhysicalPlan::EvalScalar(EvalScalar {
-                input: Box::new(self.build(s_expr.child(0)?)?),
+                input: Box::new(self.build(s_expr.child(0)?).await?),
                 scalars: eval_scalar
                     .items
                     .iter()
@@ -151,7 +169,7 @@ impl PhysicalPlanBuilder {
             })),
 
             RelOperator::Filter(filter) => Ok(PhysicalPlan::Filter(Filter {
-                input: Box::new(self.build(s_expr.child(0)?)?),
+                input: Box::new(self.build(s_expr.child(0)?).await?),
                 predicates: filter
                     .predicates
                     .iter()
@@ -162,7 +180,7 @@ impl PhysicalPlanBuilder {
                     .collect::<Result<_>>()?,
             })),
             RelOperator::Aggregate(agg) => {
-                let input = self.build(s_expr.child(0)?)?;
+                let input = self.build(s_expr.child(0)?).await?;
                 let group_items: Vec<ColumnID> = agg
                     .group_items
                     .iter()
@@ -234,7 +252,7 @@ impl PhysicalPlanBuilder {
                 Ok(result)
             }
             RelOperator::Sort(sort) => Ok(PhysicalPlan::Sort(Sort {
-                input: Box::new(self.build(s_expr.child(0)?)?),
+                input: Box::new(self.build(s_expr.child(0)?).await?),
                 order_by: sort
                     .items
                     .iter()
@@ -246,7 +264,7 @@ impl PhysicalPlanBuilder {
                     .collect(),
             })),
             RelOperator::Limit(limit) => Ok(PhysicalPlan::Limit(Limit {
-                input: Box::new(self.build(s_expr.child(0)?)?),
+                input: Box::new(self.build(s_expr.child(0)?).await?),
                 limit: limit.limit,
                 offset: limit.offset,
             })),
@@ -264,7 +282,7 @@ impl PhysicalPlanBuilder {
                     Exchange::Merge => StageKind::Merge,
                 };
                 Ok(PhysicalPlan::Exchange(PhysicalExchange {
-                    input: Box::new(self.build(s_expr.child(0)?)?),
+                    input: Box::new(self.build(s_expr.child(0)?).await?),
                     kind,
                     keys,
                 }))
