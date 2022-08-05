@@ -499,7 +499,7 @@ impl ShareApiTestSuite {
                 privilege: ShareGrantObjectPrivilege::Usage,
             };
 
-            let res = mt.grant_object(req).await;
+            let res = mt.grant_share_object(req).await;
             info!("grant object res: {:?}", res);
             let err = res.unwrap_err();
             assert_eq!(
@@ -517,7 +517,7 @@ impl ShareApiTestSuite {
                 privilege: ShareGrantObjectPrivilege::Usage,
             };
 
-            let res = mt.grant_object(req).await;
+            let res = mt.grant_share_object(req).await;
             info!("grant object res: {:?}", res);
             let err = res.unwrap_err();
             assert_eq!(
@@ -538,7 +538,7 @@ impl ShareApiTestSuite {
                 privilege: ShareGrantObjectPrivilege::Usage,
             };
 
-            let res = mt.grant_object(req).await;
+            let res = mt.grant_share_object(req).await;
             info!("grant object res: {:?}", res);
             let err = res.unwrap_err();
             assert_eq!(
@@ -556,7 +556,7 @@ impl ShareApiTestSuite {
                 privilege: ShareGrantObjectPrivilege::Usage,
             };
 
-            let res = mt.grant_object(req).await;
+            let res = mt.grant_share_object(req).await;
             info!("grant object res: {:?}", res);
             let err = res.unwrap_err();
             assert_eq!(
@@ -574,7 +574,7 @@ impl ShareApiTestSuite {
                 privilege: ShareGrantObjectPrivilege::Usage,
             };
 
-            let res = mt.grant_object(req).await?;
+            let res = mt.grant_share_object(req).await?;
             info!("grant object res: {:?}", res);
 
             let tbl_ob_name =
@@ -586,7 +586,7 @@ impl ShareApiTestSuite {
                 privilege: ShareGrantObjectPrivilege::Usage,
             };
 
-            let res = mt.grant_object(req).await?;
+            let res = mt.grant_share_object(req).await?;
             info!("grant object res: {:?}", res);
 
             let (_share_meta_seq, share_meta) =
@@ -634,7 +634,7 @@ impl ShareApiTestSuite {
                 privilege: ShareGrantObjectPrivilege::Usage,
             };
 
-            let res = mt.grant_object(req).await;
+            let res = mt.grant_share_object(req).await;
             info!("grant object res: {:?}", res);
             let err = res.unwrap_err();
             assert_eq!(
@@ -649,7 +649,7 @@ impl ShareApiTestSuite {
                 privilege: ShareGrantObjectPrivilege::Usage,
             };
 
-            let res = mt.grant_object(req).await;
+            let res = mt.grant_share_object(req).await;
             info!("grant object res: {:?}", res);
             let err = res.unwrap_err();
             assert_eq!(
@@ -667,7 +667,7 @@ impl ShareApiTestSuite {
                 privilege: ShareGrantObjectPrivilege::Usage,
             };
 
-            let res = mt.revoke_object(req).await?;
+            let res = mt.revoke_share_object(req).await?;
             info!("revoke object res: {:?}", res);
 
             let (_share_meta_seq, share_meta) =
@@ -707,7 +707,7 @@ impl ShareApiTestSuite {
                 privilege: ShareGrantObjectPrivilege::Usage,
             };
 
-            let res = mt.grant_object(req).await?;
+            let res = mt.grant_share_object(req).await?;
             info!("grant object res: {:?}", res);
 
             // assert table share exists
@@ -724,7 +724,7 @@ impl ShareApiTestSuite {
                 privilege: ShareGrantObjectPrivilege::Usage,
             };
 
-            let res = mt.revoke_object(req).await?;
+            let res = mt.revoke_share_object(req).await?;
             info!("revoke object res: {:?}", res);
 
             // assert share_meta.database is none, and share_meta.entries is empty
@@ -849,7 +849,7 @@ impl ShareApiTestSuite {
                 privilege: ShareGrantObjectPrivilege::Usage,
             };
 
-            let res = mt.grant_object(req).await?;
+            let res = mt.grant_share_object(req).await?;
             info!("grant object res: {:?}", res);
 
             let tbl_ob_name =
@@ -861,7 +861,7 @@ impl ShareApiTestSuite {
                 privilege: ShareGrantObjectPrivilege::Usage,
             };
 
-            let res = mt.grant_object(req).await?;
+            let res = mt.grant_share_object(req).await?;
             info!("grant object res: {:?}", res);
         }
 

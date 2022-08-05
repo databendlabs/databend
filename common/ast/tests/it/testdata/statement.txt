@@ -5979,3 +5979,85 @@ DropShare(
 )
 
 
+---------- Input ----------
+GRANT USAGE ON DATABASE db1 TO SHARE a;
+---------- Output ---------
+GRANT Usage ON Database db1 TO SHARE a
+---------- AST ------------
+GrantShareObject(
+    GrantShareObjectStmt {
+        share: Identifier {
+            name: "a",
+            quote: None,
+            span: Ident(37..38),
+        },
+        object: Database(
+            "db1",
+        ),
+        privilege: Usage,
+    },
+)
+
+
+---------- Input ----------
+GRANT SELECT ON TABLE db1.tb1 TO SHARE a;
+---------- Output ---------
+GRANT Select ON Table db1/tb1 TO SHARE a
+---------- AST ------------
+GrantShareObject(
+    GrantShareObjectStmt {
+        share: Identifier {
+            name: "a",
+            quote: None,
+            span: Ident(39..40),
+        },
+        object: Table(
+            "db1",
+            "tb1",
+        ),
+        privilege: Select,
+    },
+)
+
+
+---------- Input ----------
+REVOKE USAGE ON DATABASE db1 FROM SHARE a;
+---------- Output ---------
+REVOKE Usage ON Database db1 FROM SHARE a
+---------- AST ------------
+RevokeShareObject(
+    RevokeShareObjectStmt {
+        share: Identifier {
+            name: "a",
+            quote: None,
+            span: Ident(40..41),
+        },
+        object: Database(
+            "db1",
+        ),
+        privilege: Usage,
+    },
+)
+
+
+---------- Input ----------
+REVOKE SELECT ON TABLE db1.tb1 FROM SHARE a;
+---------- Output ---------
+REVOKE Select ON Table db1/tb1 FROM SHARE a
+---------- AST ------------
+RevokeShareObject(
+    RevokeShareObjectStmt {
+        share: Identifier {
+            name: "a",
+            quote: None,
+            span: Ident(42..43),
+        },
+        object: Table(
+            "db1",
+            "tb1",
+        ),
+        privilege: Select,
+    },
+)
+
+

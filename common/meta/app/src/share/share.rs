@@ -269,6 +269,16 @@ pub enum ShareGrantObjectPrivilege {
     Select = 1 << 2,
 }
 
+impl Display for ShareGrantObjectPrivilege {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match *self {
+            ShareGrantObjectPrivilege::Usage => write!(f, "Usage"),
+            ShareGrantObjectPrivilege::ReferenceUsage => write!(f, "ReferenceUsage"),
+            ShareGrantObjectPrivilege::Select => write!(f, "Select"),
+        }
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct ShareGrantEntry {
     pub object: ShareGrantObject,
