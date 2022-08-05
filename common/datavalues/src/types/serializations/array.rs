@@ -12,11 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use common_exception::Result;
 use common_io::prelude::FormatSettings;
-use opensrv_clickhouse::types::column::ArrayColumnData;
 use serde_json::Value;
 
 use crate::prelude::*;
@@ -51,40 +48,6 @@ impl<'a> TypeSerializer<'a> for ArraySerializer<'a> {
             inner.write_field_quoted(i, buf, format, b'\'');
         }
         buf.push(b']');
-    }
-
-    fn serialize_clickhouse_const(
-        &self,
-        format: &FormatSettings,
-        size: usize,
-    ) -> Result<opensrv_clickhouse::types::column::ArcColumnData> {
-        let len = self.offsets.len() - 1;
-        let mut offsets = opensrv_clickhouse::types::column::List::with_capacity(size * len);
-        let total = self.offsets[len];
-        let mut base = 0;
-        for _ in 0..size {
-            for offset in self.offsets.iter().skip(1) {
-                offsets.push(((*offset) + base) as u64);
-            }
-            base += total;
-        }
-
-        let inner_data = self.inner.serialize_clickhouse_const(format, size)?;
-        Ok(Arc::new(ArrayColumnData::create(inner_data, offsets)))
-    }
-
-    fn serialize_clickhouse_column(
-        &self,
-        format: &FormatSettings,
-    ) -> Result<opensrv_clickhouse::types::column::ArcColumnData> {
-        let mut offsets =
-            opensrv_clickhouse::types::column::List::with_capacity(self.offsets.len() - 1);
-        for offset in self.offsets.iter().skip(1) {
-            offsets.push(*offset as u64);
-        }
-
-        let inner_data = self.inner.serialize_clickhouse_column(format)?;
-        Ok(Arc::new(ArrayColumnData::create(inner_data, offsets)))
     }
 
     fn serialize_json_values(&self, format: &FormatSettings) -> Result<Vec<Value>> {

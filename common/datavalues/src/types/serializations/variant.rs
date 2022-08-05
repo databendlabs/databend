@@ -16,8 +16,6 @@ use common_arrow::arrow::bitmap::Bitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::FormatSettings;
-use opensrv_clickhouse::types::column::ArcColumnWrapper;
-use opensrv_clickhouse::types::column::ColumnFrom;
 use serde_json;
 use serde_json::Value;
 
@@ -48,29 +46,6 @@ impl<'a> TypeSerializer<'a> for VariantSerializer<'a> {
     fn serialize_json_values(&self, _format: &FormatSettings) -> Result<Vec<Value>> {
         let result: Vec<Value> = self.values.iter().map(|v| v.as_ref().to_owned()).collect();
         Ok(result)
-    }
-
-    fn serialize_clickhouse_const(
-        &self,
-        _format: &FormatSettings,
-        size: usize,
-    ) -> Result<opensrv_clickhouse::types::column::ArcColumnData> {
-        let strings: Vec<String> = self.values.iter().map(|v| v.to_string()).collect();
-        let mut values: Vec<String> = Vec::with_capacity(self.values.len() * size);
-        for _ in 0..size {
-            for v in strings.iter() {
-                values.push(v.clone())
-            }
-        }
-        Ok(Vec::column_from::<ArcColumnWrapper>(values))
-    }
-
-    fn serialize_clickhouse_column(
-        &self,
-        _format: &FormatSettings,
-    ) -> Result<opensrv_clickhouse::types::column::ArcColumnData> {
-        let values: Vec<String> = self.values.iter().map(|v| v.to_string()).collect();
-        Ok(Vec::column_from::<ArcColumnWrapper>(values))
     }
 
     fn serialize_json_object(

@@ -155,10 +155,6 @@ spec:
               value: "0.0.0.0"
             - name: QUERY_MYSQL_HANDLER_PORT
               value: "3307"
-            - name: QUERY_CLICKHOUSE_HANDLER_HOST
-              value: "0.0.0.0"
-            - name: QUERY_CLICKHOUSE_HANDLER_PORT
-              value: "9000"
             - name: QUERY_CLICKHOUSE_HTTP_HANDLER_HOST
               value: "0.0.0.0"
             - name: QUERY_CLICKHOUSE_HTTP_HANDLER_PORT

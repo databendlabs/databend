@@ -24,6 +24,7 @@ use common_pipeline_core::processors::processor::ProcessorPtr;
 use crate::processors::sources::SyncSource;
 use crate::processors::sources::SyncSourcer;
 
+#[allow(dead_code)]
 pub struct SyncReceiverSource {
     receiver: Receiver<Result<DataBlock>>,
 }

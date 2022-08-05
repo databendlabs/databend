@@ -20,7 +20,6 @@ pub mod file_splitter;
 pub mod multi_file_splitter;
 pub mod stream_source;
 pub mod stream_source_v2;
-pub mod sync_ck_source_receiver;
 pub mod sync_source;
 pub mod sync_source_receiver;
 
@@ -36,7 +35,6 @@ pub use multi_file_splitter::MultiFileSplitter;
 pub use multi_file_splitter::OperatorInfo;
 pub use stream_source::StreamSource;
 pub use stream_source_v2::StreamSourceV2;
-pub use sync_ck_source_receiver::SyncReceiverCkSource;
 pub use sync_source::SyncSource;
 pub use sync_source::SyncSourcer;
 pub use sync_source::*;

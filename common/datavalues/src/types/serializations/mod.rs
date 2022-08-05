@@ -40,7 +40,6 @@ pub use helper::json::write_json_string;
 pub use null::NullSerializer;
 pub use nullable::NullableSerializer;
 pub use number::NumberSerializer;
-use opensrv_clickhouse::types::column::ArcColumnData;
 use serde_json::Value;
 pub use string::StringSerializer;
 pub use struct_::StructSerializer;
@@ -92,18 +91,6 @@ pub trait TypeSerializer<'a>: Send + Sync {
     }
 
     fn serialize_json_values(&self, _format: &FormatSettings) -> Result<Vec<Value>> {
-        unimplemented!()
-    }
-
-    fn serialize_clickhouse_const(
-        &self,
-        _format: &FormatSettings,
-        _size: usize,
-    ) -> Result<ArcColumnData> {
-        unimplemented!()
-    }
-
-    fn serialize_clickhouse_column(&self, _format: &FormatSettings) -> Result<ArcColumnData> {
         unimplemented!()
     }
 
