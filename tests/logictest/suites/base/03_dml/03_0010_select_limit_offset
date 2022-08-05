@@ -109,7 +109,7 @@ select number from numbers(10) order by number+number asc offset 5;
 9
 
 statement query I
-select number from numbers(10000000000000) limit 1;
+select number from numbers(10000) order by number limit 1;
 
 ----
 0

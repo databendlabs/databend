@@ -28,7 +28,6 @@ use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
-use common_planners::InsertPlan;
 use common_planners::PlanNode;
 use futures::channel::mpsc;
 use futures::channel::mpsc::Receiver;
@@ -54,6 +53,7 @@ use crate::servers::utils::use_planner_v2;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionRef;
 use crate::sessions::TableContext;
+use crate::sql::plans::InsertInputSource;
 use crate::sql::DfParser;
 use crate::sql::PlanParser;
 use crate::sql::Planner;
@@ -82,11 +82,28 @@ impl InteractiveWorkerBase {
 
         if use_planner_v2(&ctx.get_settings(), &statements)? {
             let mut planner = Planner::new(ctx.clone());
-            let interpreter = planner
-                .plan_sql(query)
-                .await
-                .and_then(|v| InterpreterFactoryV2::get(ctx.clone(), &v.0))?;
-            Self::process_query(ctx, interpreter).await
+            let (mut plan, _, _) = planner.plan_sql(query).await?;
+
+            match plan {
+                crate::sql::plans::Plan::Insert(ref mut insert) => {
+                    // It has select plan, so we do not need to consume data from client
+                    // data is from server and insert into server, just behave like select query
+                    if insert.has_select_plan() {
+                        let interpreter = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+                        return Self::process_query(ctx, interpreter).await;
+                    }
+                    // set dummy source to streaming format
+                    insert.source = InsertInputSource::StreamingWithFormat("".to_string());
+                    let schema = insert.schema();
+
+                    let interpreter = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+                    Self::process_insert_query(interpreter, schema, ch_ctx, ctx).await
+                }
+                _ => {
+                    let interpreter = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+                    Self::process_query(ctx, interpreter).await
+                }
+            }
         } else {
             let statements = statements.unwrap().0;
             let plan = PlanParser::build_plan(statements, ctx.clone()).await?;
@@ -95,12 +112,13 @@ impl InteractiveWorkerBase {
                 PlanNode::Insert(ref insert) => {
                     // It has select plan, so we do not need to consume data from client
                     // data is from server and insert into server, just behave like select query
+                    let schema = insert.schema();
+                    let interpreter = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+
                     if insert.has_select_plan() {
-                        let interpreter = InterpreterFactory::get(ctx.clone(), plan)?;
                         return Self::process_query(ctx, interpreter).await;
                     }
-
-                    Self::process_insert_query(insert.clone(), ch_ctx, ctx).await
+                    Self::process_insert_query(interpreter, schema, ch_ctx, ctx).await
                 }
                 _ => {
                     let interpreter = InterpreterFactory::get(ctx.clone(), plan)?;
@@ -111,11 +129,12 @@ impl InteractiveWorkerBase {
     }
 
     pub async fn process_insert_query(
-        insert: InsertPlan,
+        interpreter: Arc<dyn Interpreter>,
+        schema: DataSchemaRef,
         ch_ctx: &mut CHContext,
         ctx: Arc<QueryContext>,
     ) -> Result<Receiver<BlockItem>> {
-        let sample_block = DataBlock::empty_with_schema(insert.schema());
+        let sample_block = DataBlock::empty_with_schema(schema);
         let (sender, rec) = channel(2);
         ch_ctx.state.out = Some(sender);
 
@@ -125,8 +144,6 @@ impl InteractiveWorkerBase {
             input: stream,
             schema: sc.clone(),
         };
-
-        let interpreter = InterpreterFactory::get(ctx.clone(), PlanNode::Insert(insert))?;
         let name = interpreter.name().to_string();
 
         let output_port = OutputPort::create();
