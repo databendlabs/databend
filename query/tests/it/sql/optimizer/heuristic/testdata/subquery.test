@@ -36,7 +36,7 @@ select t.number from numbers(1) as t where exists (select * from numbers(1) wher
 Project: [number (#0)]
     CrossJoin
         Scan: default.system.numbers
-        Project: []
+        Project: [subquery (#3)]
             Filter: [subquery_3 (#3)]
                 EvalScalar: [count(*) (#2) = 1]
                     Aggregate(Final): group items: [], aggregate functions: [count(*)]
