@@ -884,8 +884,8 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         rule!(
             #create_share: "`CREATE SHARE [IF NOT EXISTS] <share_name> [ COMMENT = '<string_literal>' ]`"
             | #drop_share: "`DROP SHARE [IF EXISTS] <share_name>`"
-            | #grant_share_object: "`GRANT ShareGrantObjectPrivilege ON ShareGrantObject TO SHARE <share_name>`"
-            | #revoke_share_object: "`REVOKE ShareGrantObjectPrivilege ON ShareGrantObject FROM SHARE <share_name>`"
+            | #grant_share_object: "`GRANT { USAGE | SELECT | REFERENCE_USAGE } ON { DATABASE db | TABLE db.table } TO SHARE <share_name>`"
+            | #revoke_share_object: "`REVOKE { USAGE | SELECT | REFERENCE_USAGE } ON { DATABASE db | TABLE db.table } FROM SHARE <share_name>`"
         ),
     ));
 

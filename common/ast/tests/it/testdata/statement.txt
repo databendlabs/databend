@@ -5982,7 +5982,7 @@ DropShare(
 ---------- Input ----------
 GRANT USAGE ON DATABASE db1 TO SHARE a;
 ---------- Output ---------
-GRANT Usage ON Database db1 TO SHARE a
+GRANT USAGE ON DATABASE db1 TO SHARE a
 ---------- AST ------------
 GrantShareObject(
     GrantShareObjectStmt {
@@ -6002,7 +6002,7 @@ GrantShareObject(
 ---------- Input ----------
 GRANT SELECT ON TABLE db1.tb1 TO SHARE a;
 ---------- Output ---------
-GRANT Select ON Table db1/tb1 TO SHARE a
+GRANT SELECT ON TABLE db1.tb1 TO SHARE a
 ---------- AST ------------
 GrantShareObject(
     GrantShareObjectStmt {
@@ -6023,7 +6023,7 @@ GrantShareObject(
 ---------- Input ----------
 REVOKE USAGE ON DATABASE db1 FROM SHARE a;
 ---------- Output ---------
-REVOKE Usage ON Database db1 FROM SHARE a
+REVOKE USAGE ON DATABASE db1 FROM SHARE a
 ---------- AST ------------
 RevokeShareObject(
     RevokeShareObjectStmt {
@@ -6043,7 +6043,7 @@ RevokeShareObject(
 ---------- Input ----------
 REVOKE SELECT ON TABLE db1.tb1 FROM SHARE a;
 ---------- Output ---------
-REVOKE Select ON Table db1/tb1 FROM SHARE a
+REVOKE SELECT ON TABLE db1.tb1 FROM SHARE a
 ---------- AST ------------
 RevokeShareObject(
     RevokeShareObjectStmt {

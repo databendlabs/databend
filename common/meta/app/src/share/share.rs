@@ -128,10 +128,10 @@ impl Display for ShareGrantObjectName {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             ShareGrantObjectName::Database(db) => {
-                write!(f, "Database {}", db)
+                write!(f, "DATABASE {}", db)
             }
             ShareGrantObjectName::Table(db, table) => {
-                write!(f, "Table {}/{}", db, table)
+                write!(f, "TABLE {}.{}", db, table)
             }
         }
     }
@@ -272,9 +272,9 @@ pub enum ShareGrantObjectPrivilege {
 impl Display for ShareGrantObjectPrivilege {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match *self {
-            ShareGrantObjectPrivilege::Usage => write!(f, "Usage"),
-            ShareGrantObjectPrivilege::ReferenceUsage => write!(f, "ReferenceUsage"),
-            ShareGrantObjectPrivilege::Select => write!(f, "Select"),
+            ShareGrantObjectPrivilege::Usage => write!(f, "USAGE"),
+            ShareGrantObjectPrivilege::ReferenceUsage => write!(f, "REFERENCE_USAGE"),
+            ShareGrantObjectPrivilege::Select => write!(f, "SELECT"),
         }
     }
 }
