@@ -18,6 +18,7 @@
 use std::time::Instant;
 
 use common_exception::ErrorCode;
+use common_legacy_parser::ExprParser;
 use metrics::histogram;
 use sqlparser::ast::Expr;
 use sqlparser::dialect::keywords::Keyword;
@@ -84,24 +85,11 @@ impl<'a> DfParser<'a> {
     }
 
     pub fn parse_expr(expr: &str) -> Result<Expr, ParserError> {
-        let dialect = &MySqlDialect {};
-        let mut tokenizer = Tokenizer::new(dialect, expr);
-        let (tokens, position_map) = tokenizer.tokenize()?;
-        let mut parser = Parser::new(tokens, position_map, dialect);
-        parser.parse_expr()
+        ExprParser::parse_expr(expr)
     }
 
     pub fn parse_exprs(expr: &str) -> Result<Vec<Expr>, ParserError> {
-        let dialect = &MySqlDialect {};
-        let mut tokenizer = Tokenizer::new(dialect, expr);
-        let (tokens, position_map) = tokenizer.tokenize()?;
-        let mut parser = Parser::new(tokens, position_map, dialect);
-
-        parser.expect_token(&Token::LParen)?;
-        let exprs = parser.parse_comma_separated(Parser::parse_expr)?;
-        parser.expect_token(&Token::RParen)?;
-
-        Ok(exprs)
+        ExprParser::parse_exprs(expr)
     }
 
     /// Parse a SQL statement and produce a set of statements

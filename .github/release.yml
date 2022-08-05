@@ -5,6 +5,9 @@ changelog:
     authors:
       - Mergify
   categories:
+    - title: Accepted RFCs 🛫
+      labels:
+        - pr-rfc
     - title: Exciting New Features ✨
       labels:
         - pr-feature

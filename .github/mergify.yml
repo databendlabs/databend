@@ -23,6 +23,13 @@ queue_rules:
       # Docs queue only requires Vercel passing.
       - check-success=Vercel
 
+  - name: rfc_queue
+    conditions:
+      - "#approved-reviews-by>=3"
+
+      # RFC queue only requires Vercel passing.
+      - check-success=Vercel
+
 pull_request_rules:
   # Push PR into queue when it passes all checks
   - name: Put into shared queue
@@ -30,9 +37,21 @@ pull_request_rules:
       - "#approved-reviews-by>=2"
       - -draft
       - label!=pr-doc
+      - label!=pr-rfc
     actions:
       queue:
         name: shared_queue
+
+    # Push rfc PR into docs queue
+  - name: Put into rfc queue
+    conditions:
+      - "#approved-reviews-by>=3"
+      - -draft
+      - label=pr-rfc
+      - check-success=Vercel
+    actions:
+      queue:
+        name: rfc_queue
 
   # Push docs PR into docs queue
   - name: Put into docs queue
@@ -122,7 +141,7 @@ pull_request_rules:
     conditions:
       - author!=Mergify
       - -draft
-      - '-title~=^(feat|fix|refactor|ci|build|docs|website|chore)(\(.*\))?:'
+      - '-title~=^(rfc|feat|fix|refactor|ci|docs|chore)(\(.*\))?:'
     actions:
       comment:
         message: |
@@ -136,16 +155,17 @@ pull_request_rules:
             |         |
             |         +-> Summary in present tense.
             |
-            +-------> Type: feat, fix, refactor, ci, build, docs, website, chore
+            +-------> Type: rfc, feat, fix, refactor, ci, docs, chore
           ```
 
           Valid types:
 
+          - `rfc`: this PR proposes a new RFC
           - `feat`: this PR introduces a new feature to the codebase
           - `fix`: this PR patches a bug in codebase
           - `refactor`: this PR changes the code base without new features or bugfix
-          - `ci|build`: this PR changes build/testing/ci steps
-          - `docs|website`: this PR changes the documents or websites
+          - `ci`: this PR changes build/testing/ci steps
+          - `docs`: this PR changes the documents or websites
           - `chore`: this PR only has small changes that no need to record
 
   # Check if PR title contain valid types
@@ -153,7 +173,7 @@ pull_request_rules:
     conditions:
       - or:
           - author=Mergify
-          - 'title~=^(feat|fix|refactor|ci|build|docs|website|chore)(\(.*\))?:'
+          - 'title~=^(rfc|feat|fix|refactor|ci|docs|chore)(\(.*\))?:'
     actions:
       post_check:
         title: |
@@ -174,20 +194,28 @@ pull_request_rules:
             |         |
             |         +-> Summary in present tense.
             |
-            +-------> Type: feat, fix, refactor, ci, build, docs, website, chore
+            +-------> Type: feat, fix, refactor, ci, docs, chore
           ```
 
           Valid types:
 
+          - `rfc`: this PR proposes a new RFC
           - `feat`: this PR introduces a new feature to the codebase
           - `fix`: this PR patches a bug in codebase
           - `refactor`: this PR changes the code base without new features or bugfix
-          - `ci|build`: this PR changes build/testing/ci steps
-          - `docs|website`: this PR changes the documents or websites
+          - `ci`: this PR changes build/testing/ci steps
+          - `docs`: this PR changes the documents or websites
           - `chore`: this PR only has small changes that no need to record
           {% endif %}
 
   # Assign pr label based of tags
+  - name: label on RFCs
+    conditions:
+      - 'title~=^(rfc)(\(.*\))?:'
+    actions:
+      label:
+        add:
+          - pr-rfc
   - name: label on New Feature
     conditions:
       - 'title~=^(feat)(\(.*\))?:'
@@ -211,14 +239,14 @@ pull_request_rules:
           - pr-refactor
   - name: label on Build/Testing/CI
     conditions:
-      - 'title~=^(ci|build)(\(.*\))?:'
+      - 'title~=^(ci)(\(.*\))?:'
     actions:
       label:
         add:
           - pr-build
   - name: label on Documentation
     conditions:
-      - 'title~=^(docs|website)(\(.*\))?:'
+      - 'title~=^(docs)(\(.*\))?:'
     actions:
       label:
         add:

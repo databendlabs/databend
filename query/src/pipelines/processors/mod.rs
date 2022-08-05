@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub use common_pipeline::processors::*;
-mod sinks;
-mod sources;
+pub use common_pipeline_core::processors::*;
+use common_pipeline_sinks::processors::sinks;
 pub(crate) mod transforms;
 
+use common_pipeline_sources::processors::sources;
 pub use sinks::AsyncSink;
 pub use sinks::AsyncSinker;
 pub use sinks::ContextSink;
