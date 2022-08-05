@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod clickhouse_federated;
 mod clickhouse_handler;
 pub mod formats;
 mod http_services;
 pub mod middleware;
 pub mod v1;
-mod clickhouse_federated;
 
+pub use clickhouse_federated::CLickHouseFederated;
 pub use http_services::HttpHandler;
 pub use http_services::HttpHandlerKind;
-pub use clickhouse_federated::CLickHouseFederated;

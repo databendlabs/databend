@@ -201,6 +201,8 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
     );
     println!("Storage: {}", conf.storage.params);
     println!();
+    println!("Admin");
+    println!("    listened at {}", conf.query.admin_api_address);
     println!("MySQL");
     println!(
         "    listened at {}:{}",
@@ -209,15 +211,6 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
     println!(
         "    connect via: mysql -uroot -h{} -P{}",
         conf.query.mysql_handler_host, conf.query.mysql_handler_port
-    );
-    println!("Clickhouse(native)");
-    println!(
-        "    listened at {}:{}",
-        conf.query.clickhouse_handler_host, conf.query.clickhouse_handler_port
-    );
-    println!(
-        "    connect via: clickhouse-client --host {} --port {}",
-        conf.query.clickhouse_handler_host, conf.query.clickhouse_handler_port
     );
     println!("Clickhouse(http)");
     println!(

@@ -17,6 +17,7 @@ use common_datavalues::prelude::*;
 use common_datavalues::DataSchemaRefExt;
 use once_cell::sync::Lazy;
 use regex::Regex;
+
 use crate::servers::federated_helper::FederatedHelper;
 
 const CLICKHOUSE_VERSION: &str = "8.12.14";
