@@ -1,0 +1,6 @@
+statement query I
+select a+b from t;
+
+----
+2
+4
