@@ -182,8 +182,6 @@ fn test_env_config_s3() -> Result<()> {
             assert_eq!("127.0.0.1", configured.query.mysql_handler_host);
             assert_eq!(3306, configured.query.mysql_handler_port);
             assert_eq!(255, configured.query.max_active_sessions);
-            assert_eq!("1.2.3.4", configured.query.clickhouse_handler_host);
-            assert_eq!(9000, configured.query.clickhouse_handler_port);
             assert_eq!("1.2.3.4", configured.query.clickhouse_http_handler_host);
             assert_eq!(8124, configured.query.clickhouse_http_handler_port);
             assert_eq!("1.2.3.4", configured.query.http_handler_host);
@@ -264,8 +262,6 @@ fn test_env_config_fs() -> Result<()> {
             assert_eq!("127.0.0.1", configured.query.mysql_handler_host);
             assert_eq!(3306, configured.query.mysql_handler_port);
             assert_eq!(255, configured.query.max_active_sessions);
-            assert_eq!("1.2.3.4", configured.query.clickhouse_handler_host);
-            assert_eq!(9000, configured.query.clickhouse_handler_port);
             assert_eq!("1.2.3.4", configured.query.clickhouse_http_handler_host);
             assert_eq!(8124, configured.query.clickhouse_http_handler_port);
             assert_eq!("1.2.3.4", configured.query.http_handler_host);
