@@ -8,3 +8,7 @@ normal = ["openssl-src"]
 
 [dependencies]
 openssl-src = { version = "111.22" }
+# axum has yanked the latest version, we can remove this after
+# new version released.
+# ref: https://github.com/datafuselabs/databend/issues/6996
+axum = "=0.5.13"
