@@ -58,26 +58,27 @@ impl ExchangeSender {
         packet: &InitNodesChannelPacket,
         target: &str,
     ) -> Result<ExchangeSender> {
-        let target_node_info = &packet.target_nodes_info[target];
-        let target_address = target_node_info.flight_address.to_string();
-        let target_fragments_id = &packet.target_2_fragments[target];
-
-        let mut target_fragments_finished = HashMap::with_capacity(target_fragments_id.len());
-
-        for target_fragment_id in target_fragments_id {
-            target_fragments_finished.insert(*target_fragment_id, Arc::new(AtomicBool::new(false)));
-        }
-
-        Ok(ExchangeSender {
-            config,
-            target_address,
-            target_fragments_finished,
-            query_id: packet.query_id.clone(),
-            target_fragments: target_fragments_id.to_owned(),
-            join_handlers: Mutex::new(vec![]),
-            flight_client: Arc::new(Mutex::new(None)),
-            target_is_request_server: target == packet.request_server,
-        })
+        // let target_node_info = &packet.target_nodes_info[target];
+        // let target_address = target_node_info.flight_address.to_string();
+        // let target_fragments_id = &packet.target_2_fragments[target];
+        //
+        // let mut target_fragments_finished = HashMap::with_capacity(target_fragments_id.len());
+        //
+        // for target_fragment_id in target_fragments_id {
+        //     target_fragments_finished.insert(*target_fragment_id, Arc::new(AtomicBool::new(false)));
+        // }
+        //
+        // Ok(ExchangeSender {
+        //     config,
+        //     target_address,
+        //     target_fragments_finished,
+        //     query_id: packet.query_id.clone(),
+        //     target_fragments: target_fragments_id.to_owned(),
+        //     join_handlers: Mutex::new(vec![]),
+        //     flight_client: Arc::new(Mutex::new(None)),
+        //     target_is_request_server: false,
+        // })
+        unimplemented!()
     }
 
     pub fn connect_flight(&mut self, runtime: &Arc<Runtime>) -> Result<()> {
@@ -313,17 +314,16 @@ impl ExchangeSender {
 
         let mut join_handlers = self.join_handlers.lock();
         join_handlers.push(runtime.spawn(async move {
-            let exchange = connection.do_exchange(&query_id, &source).await.unwrap();
+            let mut exchange = connection.do_exchange(&query_id, &source, 0).await.unwrap();
 
             while let Ok(data_packet) = rx.recv().await {
-                // let data = FlightData::from(data_packet);
-                // if let Err(error) = exchange.send(data).await {
-                //     // Shutdown all query fragments executor and report error to request server.
-                //     let exchange_manager = ctx.get_exchange_manager();
-                //     if let Err(cause) = exchange_manager.shutdown_query(&query_id, Some(error)) {
-                //         tracing::warn!("Cannot shutdown query, cause {:?}", cause);
-                //     }
-                // }
+                if let Err(error) = exchange.send(data_packet).await {
+                    // Shutdown all query fragments executor and report error to request server.
+                    let exchange_manager = ctx.get_exchange_manager();
+                    if let Err(cause) = exchange_manager.shutdown_query(&query_id, Some(error)) {
+                        tracing::warn!("Cannot shutdown query, cause {:?}", cause);
+                    }
+                }
             }
 
             // if let Err(status) = connection.do_put(&query_id, &source, rx).await {

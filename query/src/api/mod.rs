@@ -16,7 +16,6 @@
 
 pub use http_service::HttpService;
 pub use rpc::BroadcastExchange;
-pub use rpc::CancelAction;
 pub use rpc::DataExchange;
 pub use rpc::DataExchangeManager;
 pub use rpc::DatabendQueryFlightService;
@@ -35,6 +34,7 @@ pub use rpc::DataPacket;
 pub use rpc::FragmentData;
 pub use rpc::ClientFlightExchange;
 pub use rpc::ServerFlightExchange;
+pub use rpc::ConnectionInfo;
 
 pub mod http;
 mod http_service;

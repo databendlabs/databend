@@ -24,6 +24,7 @@ mod exchange_sink_shuffle;
 mod exchange_source;
 mod exchange_source_merge;
 mod exchange_source_shuffle;
+mod exchange_transform;
 
 pub use data_exchange::BroadcastExchange;
 pub use data_exchange::DataExchange;

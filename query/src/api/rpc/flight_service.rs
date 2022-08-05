@@ -37,7 +37,8 @@ use tonic::Status;
 use tonic::Streaming;
 
 use crate::api::rpc::flight_actions::FlightAction;
-use crate::api::rpc::flight_client::ServerFlightExchange;
+use crate::api::rpc::flight_client::{FlightExchange, ServerFlightExchange};
+use crate::api::rpc::request_builder::RequestGetter;
 use crate::sessions::SessionManager;
 use crate::sessions::SessionType;
 
@@ -93,62 +94,63 @@ impl FlightService for DatabendQueryFlightService {
 
     async fn do_put(&self, req: StreamReq<FlightData>) -> Response<Self::DoPutStream> {
         // TODO: panic hook?
-        let query_id = match req.metadata().get("x-query-id") {
-            None => Err(Status::invalid_argument(
-                "Must be send X-Query-ID metadata.",
-            )),
-            Some(metadata_value) => match metadata_value.to_str() {
-                Ok(query_id) if !query_id.is_empty() => Ok(query_id.to_string()),
-                Ok(_query_id) => Err(Status::invalid_argument("x-query-id metadata is empty.")),
-                Err(cause) => Err(Status::invalid_argument(format!(
-                    "Cannot parse X-Query-ID metadata value, cause: {:?}",
-                    cause
-                ))),
-            },
-        }?;
-
-        let source = match req.metadata().get("x-source") {
-            None => Err(Status::invalid_argument("Must be send x-source metadata.")),
-            Some(metadata_value) => match metadata_value.to_str() {
-                Ok(source) if !source.is_empty() => Ok(source.to_string()),
-                Ok(_source) => Err(Status::invalid_argument("x-source metadata is empty.")),
-                Err(cause) => Err(Status::invalid_argument(format!(
-                    "Cannot parse x-source metadata value, cause: {:?}",
-                    cause
-                ))),
-            },
-        }?;
-
-        let stream = req.into_inner();
-        let exchange_manager = self.sessions.get_data_exchange_manager();
-        let join_handler = exchange_manager
-            .handle_do_put(&query_id, &source, stream)
-            .await?;
-
-        if let Err(cause) = join_handler.await {
-            if !cause.is_panic() {
-                return Err(Status::internal(format!(
-                    "Put stream is canceled. {:?}",
-                    cause
-                )));
-            }
-
-            if cause.is_panic() {
-                let panic_error = cause.into_panic();
-
-                if let Some(message) = panic_error.downcast_ref::<&'static str>() {
-                    return Err(Status::internal(format!("Put stream panic, {}", message)));
-                }
-
-                if let Some(message) = panic_error.downcast_ref::<String>() {
-                    return Err(Status::internal(format!("Put stream panic, {}", message)));
-                }
-            }
-        }
-
-        Ok(RawResponse::new(Box::pin(tokio_stream::once(Ok(PutResult {
-            app_metadata: vec![],
-        }))) as FlightStream<PutResult>))
+        // let query_id = match req.metadata().get("x-query-id") {
+        //     None => Err(Status::invalid_argument(
+        //         "Must be send X-Query-ID metadata.",
+        //     )),
+        //     Some(metadata_value) => match metadata_value.to_str() {
+        //         Ok(query_id) if !query_id.is_empty() => Ok(query_id.to_string()),
+        //         Ok(_query_id) => Err(Status::invalid_argument("x-query-id metadata is empty.")),
+        //         Err(cause) => Err(Status::invalid_argument(format!(
+        //             "Cannot parse X-Query-ID metadata value, cause: {:?}",
+        //             cause
+        //         ))),
+        //     },
+        // }?;
+        //
+        // let source = match req.metadata().get("x-source") {
+        //     None => Err(Status::invalid_argument("Must be send x-source metadata.")),
+        //     Some(metadata_value) => match metadata_value.to_str() {
+        //         Ok(source) if !source.is_empty() => Ok(source.to_string()),
+        //         Ok(_source) => Err(Status::invalid_argument("x-source metadata is empty.")),
+        //         Err(cause) => Err(Status::invalid_argument(format!(
+        //             "Cannot parse x-source metadata value, cause: {:?}",
+        //             cause
+        //         ))),
+        //     },
+        // }?;
+        //
+        // let stream = req.into_inner();
+        // let exchange_manager = self.sessions.get_data_exchange_manager();
+        // let join_handler = exchange_manager
+        //     .handle_do_put(&query_id, &source, stream)
+        //     .await?;
+        //
+        // if let Err(cause) = join_handler.await {
+        //     if !cause.is_panic() {
+        //         return Err(Status::internal(format!(
+        //             "Put stream is canceled. {:?}",
+        //             cause
+        //         )));
+        //     }
+        //
+        //     if cause.is_panic() {
+        //         let panic_error = cause.into_panic();
+        //
+        //         if let Some(message) = panic_error.downcast_ref::<&'static str>() {
+        //             return Err(Status::internal(format!("Put stream panic, {}", message)));
+        //         }
+        //
+        //         if let Some(message) = panic_error.downcast_ref::<String>() {
+        //             return Err(Status::internal(format!("Put stream panic, {}", message)));
+        //         }
+        //     }
+        // }
+        //
+        // Ok(RawResponse::new(Box::pin(tokio_stream::once(Ok(PutResult {
+        //     app_metadata: vec![],
+        // }))) as FlightStream<PutResult>))
+        Err(Status::unimplemented("unimplement do_put"))
     }
 
     type DoExchangeStream = FlightStream<FlightData>;
@@ -159,12 +161,16 @@ impl FlightService for DatabendQueryFlightService {
     }
 
     async fn do_exchange(&self, req: StreamReq<FlightData>) -> Response<Self::DoExchangeStream> {
-        let streaming = req.into_inner();
+        let source = req.get_metadata("x-source")?;
+        let query_id = req.get_metadata("x-query-id")?;
+        let fragment = req.get_metadata("x-fragment-id")?.parse::<usize>().unwrap();
 
         let (tx, rx) = async_channel::bounded(1);
-        let exchange = ServerFlightExchange::try_create(tx, streaming)?;
-        // Ok(RawResponse::new(Box::pin(rx)))
-        unimplemented!()
+        let exchange = FlightExchange::from_server(req, tx);
+
+        let exchange_manager = self.sessions.get_data_exchange_manager();
+        exchange_manager.handle_exchange(query_id, source, fragment, exchange);
+        Ok(RawResponse::new(Box::pin(rx)))
     }
 
     type DoActionStream = FlightStream<FlightResult>;
@@ -177,22 +183,11 @@ impl FlightService for DatabendQueryFlightService {
         let flight_action: FlightAction = action.try_into()?;
 
         let action_result = match &flight_action {
-            FlightAction::CancelAction(action) => {
-                // We only destroy when session is exist
-                let session_id = action.query_id.clone();
-                if let Some(session) = self.sessions.get_session_by_id(&session_id).await {
-                    // TODO: remove streams
-                    session.force_kill_session();
-                }
-
-                FlightResult { body: vec![] }
-            }
             FlightAction::InitQueryFragmentsPlan(init_query_fragments_plan) => {
                 let session = self.sessions.create_session(SessionType::FlightRPC).await?;
                 let ctx = session.create_query_context().await?;
                 let exchange_manager = self.sessions.get_data_exchange_manager();
-                exchange_manager
-                    .init_query_fragments_plan(&ctx, &init_query_fragments_plan.executor_packet)?;
+                exchange_manager.init_query_fragments_plan(&ctx, &init_query_fragments_plan.executor_packet)?;
 
                 FlightResult { body: vec![] }
             }

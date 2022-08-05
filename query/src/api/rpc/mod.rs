@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub use flight_actions::CancelAction;
 pub use flight_actions::FlightAction;
 pub use flight_client::FlightClient;
 pub use flight_service::DatabendQueryFlightService;
@@ -26,6 +25,7 @@ mod flight_scatter_hash;
 mod flight_scatter_hash_v2;
 mod flight_service;
 mod packets;
+mod request_builder;
 
 pub use exchange::BroadcastExchange;
 pub use exchange::DataExchange;
@@ -41,6 +41,7 @@ pub use packets::Packet;
 pub use packets::QueryFragmentsPlanPacket;
 pub use packets::DataPacket;
 pub use packets::FragmentData;
+pub use packets::ConnectionInfo;
 pub use flight_client::ClientFlightExchange;
 pub use flight_client::ServerFlightExchange;
 

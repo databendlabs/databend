@@ -44,8 +44,8 @@ async fn test_flight_exchange() -> Result<()> {
         ).await.unwrap())
     );
 
-    let mut exchange_channel_1 = flight_client.do_exchange("", "").await?;
-    let mut exchange_channel_2 = flight_client.do_exchange("", "").await?;
+    let mut exchange_channel_1 = flight_client.do_exchange("", "", 0).await?;
+    let mut exchange_channel_2 = flight_client.do_exchange("", "", 0).await?;
 
     let join1 = tokio::spawn(async move {
         for index in 0..100 {

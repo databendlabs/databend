@@ -30,3 +30,4 @@ pub use packet_executor::QueryFragmentsPlanPacket;
 pub use packet_fragment::FragmentPayload;
 pub use packet_fragment::FragmentPlanPacket;
 pub use packet_publisher::InitNodesChannelPacket;
+pub use packet_publisher::ConnectionInfo;

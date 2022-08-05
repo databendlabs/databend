@@ -13,10 +13,11 @@
 // limitations under the License.
 
 use std::collections::hash_map::Entry;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
+use itertools::Itertools;
 
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
@@ -24,7 +25,7 @@ use common_exception::Result;
 use common_meta_types::NodeInfo;
 use common_planners::PlanNode;
 
-use crate::api::DataExchange;
+use crate::api::{ConnectionInfo, DataExchange};
 use crate::api::ExecutePartialQueryPacket;
 use crate::api::FragmentPayload;
 use crate::api::FragmentPlanPacket;
@@ -174,28 +175,21 @@ impl QueryFragmentsActions {
     }
 
     pub fn get_query_fragments_plan_packets(&self) -> Result<Vec<QueryFragmentsPlanPacket>> {
+        let nodes_info = Self::nodes_info(&self.ctx);
+
         let fragments_packets = self.get_executors_fragments();
         let mut query_fragments_plan_packets = Vec::with_capacity(fragments_packets.len());
-
-        let nodes_info = Self::nodes_info(&self.ctx);
-        let target_source_fragments = self.get_target_source_fragments();
 
         let cluster = self.ctx.get_cluster();
         for (executor, fragments) in fragments_packets.into_iter() {
             let query_id = self.ctx.get_id();
             let executors_info = nodes_info.clone();
 
-            let source_2_fragments = match target_source_fragments.get(&executor) {
-                None => HashMap::new(),
-                Some(source_2_fragments) => source_2_fragments.clone(),
-            };
-
             query_fragments_plan_packets.push(QueryFragmentsPlanPacket::create(
                 query_id,
                 executor,
                 fragments,
                 executors_info,
-                source_2_fragments,
                 cluster.local_id(),
             ));
         }
@@ -205,37 +199,44 @@ impl QueryFragmentsActions {
 
     pub fn get_init_nodes_channel_packets(&self) -> Result<Vec<InitNodesChannelPacket>> {
         let nodes_info = Self::nodes_info(&self.ctx);
-        let mut init_nodes_channel_packets = Vec::with_capacity(nodes_info.len());
-        let connections_info = self.get_source_target_fragments();
+        let connections_info = self.fragments_connections();
 
-        let cluster = self.ctx.get_cluster();
-        for node_id in nodes_info.keys() {
-            let mut target_nodes_info = HashMap::new();
-            let mut target_2_fragments = HashMap::new();
+        let mut init_nodes_channel_packets = Vec::with_capacity(connections_info.len());
 
-            if let Some(target_connections_info) = connections_info.get(node_id) {
-                for (target, fragments) in target_connections_info {
-                    if !nodes_info.contains_key(target) {
-                        return Err(ErrorCode::ClusterUnknownNode(format!(
-                            "Not found node {} in cluster. cluster nodes: {:?}",
-                            target,
-                            nodes_info.keys().cloned().collect::<Vec<_>>()
-                        )));
-                    }
-
-                    target_2_fragments.insert(target.clone(), fragments.clone());
-                    target_nodes_info.insert(target.clone(), nodes_info[target].clone());
-                }
+        for (executor, fragments_connections) in &connections_info {
+            if !nodes_info.contains_key(executor) {
+                return Err(ErrorCode::NotFoundClusterNode(format!(
+                    "Not found node {} in cluster. cluster nodes: {:?}",
+                    executor,
+                    nodes_info.keys().cloned().collect::<Vec<_>>())
+                ));
             }
 
-            init_nodes_channel_packets.push(InitNodesChannelPacket::create(
-                self.ctx.get_id(),
-                node_id.to_owned(),
-                cluster.local_id(),
-                nodes_info.clone(),
-                target_nodes_info,
-                target_2_fragments,
-            ));
+            let executor_node_info = &nodes_info[executor];
+            let mut connections_info = Vec::with_capacity(fragments_connections.len());
+
+            for (target, fragments) in fragments_connections {
+                if !nodes_info.contains_key(target) {
+                    return Err(ErrorCode::NotFoundClusterNode(format!(
+                        "Not found node {} in cluster. cluster nodes: {:?}",
+                        target,
+                        nodes_info.keys().cloned().collect::<Vec<_>>())
+                    ));
+                }
+
+                connections_info.push(ConnectionInfo {
+                    target: nodes_info[target].clone(),
+                    fragments: fragments.into_iter().cloned().unique().collect::<Vec<_>>(),
+                });
+            }
+
+            init_nodes_channel_packets.push(
+                InitNodesChannelPacket::create(
+                    self.ctx.get_id(),
+                    executor_node_info.clone(),
+                    connections_info,
+                )
+            );
         }
 
         Ok(init_nodes_channel_packets)
@@ -256,9 +257,11 @@ impl QueryFragmentsActions {
         Ok(execute_partial_query_packets)
     }
 
-    /// map(source, map(target, vec(fragment_id)))
-    fn get_source_target_fragments(&self) -> HashMap<String, HashMap<String, Vec<usize>>> {
-        let mut source_target_fragments = HashMap::new();
+    /// unique map(source, map(target, vec(fragment_id)))
+    fn fragments_connections(&self) -> HashMap<String, HashMap<String, Vec<usize>>> {
+        let mut source_target_fragments = HashMap::<String, HashMap<String, Vec<usize>>>::new();
+
+        // We can exchange data on one connection, so let's plan how to use the least connections to complete the query.
         for fragment_actions in &self.fragments_actions {
             if let Some(exchange) = &fragment_actions.data_exchange {
                 let fragment_id = fragment_actions.fragment_id;
@@ -268,60 +271,43 @@ impl QueryFragmentsActions {
                     let source = fragment_action.executor.to_string();
 
                     for destination in &destinations {
-                        let target = destination.clone();
-                        match source_target_fragments.entry(source.clone()) {
-                            Entry::Vacant(v) => {
-                                let target_2_fragments = v.insert(HashMap::new());
-                                target_2_fragments.insert(target, vec![fragment_id]);
-                            }
-                            Entry::Occupied(mut v) => match v.get_mut().entry(target) {
+                        if &source == destination {
+                            continue;
+                        }
+
+                        if source_target_fragments.contains_key(&source) {
+                            let target_fragments = source_target_fragments.get_mut(&source).unwrap();
+
+                            match target_fragments.entry(destination.clone()) {
                                 Entry::Vacant(v) => {
                                     v.insert(vec![fragment_id]);
                                 }
                                 Entry::Occupied(mut v) => {
                                     v.get_mut().push(fragment_id);
                                 }
-                            },
-                        };
+                            };
+                        } else if source_target_fragments.contains_key(destination) {
+                            let target_fragments = source_target_fragments.get_mut(destination).unwrap();
+
+                            match target_fragments.entry(source.clone()) {
+                                Entry::Vacant(v) => {
+                                    v.insert(vec![fragment_id]);
+                                }
+                                Entry::Occupied(mut v) => {
+                                    v.get_mut().push(fragment_id);
+                                }
+                            };
+                        } else {
+                            let mut target_fragments = HashMap::new();
+                            target_fragments.insert(destination.clone(), vec![fragment_id]);
+                            source_target_fragments.insert(source.clone(), target_fragments);
+                        }
                     }
                 }
             }
         }
+
         source_target_fragments
-    }
-
-    /// map(target, map(source, vec(fragment_id)))
-    fn get_target_source_fragments(&self) -> HashMap<String, HashMap<String, Vec<usize>>> {
-        let mut target_source_fragments = HashMap::new();
-        for fragment_actions in &self.fragments_actions {
-            if let Some(exchange) = &fragment_actions.data_exchange {
-                let fragment_id = fragment_actions.fragment_id;
-                let destinations = exchange.get_destinations();
-
-                for fragment_action in &fragment_actions.fragment_actions {
-                    let source = fragment_action.executor.to_string();
-
-                    for destination in &destinations {
-                        let target = destination.clone();
-                        match target_source_fragments.entry(target) {
-                            Entry::Vacant(v) => {
-                                let source_2_fragments = v.insert(HashMap::new());
-                                source_2_fragments.insert(source.clone(), vec![fragment_id]);
-                            }
-                            Entry::Occupied(mut v) => match v.get_mut().entry(source.clone()) {
-                                Entry::Vacant(v) => {
-                                    v.insert(vec![fragment_id]);
-                                }
-                                Entry::Occupied(mut v) => {
-                                    v.get_mut().push(fragment_id);
-                                }
-                            },
-                        };
-                    }
-                }
-            }
-        }
-        target_source_fragments
     }
 
     fn nodes_info(ctx: &Arc<QueryContext>) -> HashMap<String, Arc<NodeInfo>> {

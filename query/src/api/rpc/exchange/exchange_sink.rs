@@ -21,6 +21,7 @@ use crate::api::rpc::exchange::exchange_params::ExchangeParams;
 use crate::api::rpc::exchange::exchange_params::MergeExchangeParams;
 use crate::api::rpc::exchange::exchange_sink_merge::ExchangeMergeSink;
 use crate::api::rpc::exchange::exchange_sink_shuffle::ExchangePublisherSink;
+// use crate::api::rpc::exchange::exchange_transform::ExchangeTransform;
 use crate::clusters::ClusterHelper;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
@@ -108,6 +109,29 @@ impl ExchangeSink {
             ExchangeParams::MergeExchange(params) => Self::via_merge_exchange(ctx, params),
             ExchangeParams::ShuffleExchange(params) => {
                 pipeline.add_transform(|transform_input_port, transform_output_port| {
+                    ExchangePublisherSink::<true>::try_create(
+                        ctx.clone(),
+                        params.fragment_id,
+                        transform_input_port,
+                        transform_output_port,
+                        params.clone(),
+                    )
+                })
+            }
+        }
+    }
+
+
+    pub fn via_exchange1(
+        ctx: &Arc<QueryContext>,
+        params: &ExchangeParams,
+        pipeline: &mut Pipeline,
+    ) -> Result<()> {
+        match params {
+            ExchangeParams::MergeExchange(params) => Self::via_merge_exchange(ctx, params),
+            ExchangeParams::ShuffleExchange(params) => {
+                pipeline.add_transform(|transform_input_port, transform_output_port| {
+                    // ExchangeTransform::try_create()
                     ExchangePublisherSink::<true>::try_create(
                         ctx.clone(),
                         params.fragment_id,
