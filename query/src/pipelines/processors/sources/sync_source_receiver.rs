@@ -24,6 +24,8 @@ use crate::pipelines::processors::sources::sync_source::SyncSource;
 use crate::pipelines::processors::sources::SyncSourcer;
 use crate::sessions::QueryContext;
 
+
+#[allow(dead_code)]
 pub struct SyncReceiverSource {
     receiver: Receiver<Result<DataBlock>>,
 }
