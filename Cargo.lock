@@ -900,32 +900,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "clickhouse-driver"
-version = "0.1.0-alpha.3"
-source = "git+https://github.com/datafuse-extras/clickhouse_driver?rev=cf978da#cf978da21c83a4cdb648f14308f77b6c30dd4bd5"
-dependencies = [
- "byteorder",
- "bytes 1.1.0",
- "chrono",
- "chrono-tz",
- "crossbeam",
- "futures",
- "hostname",
- "log",
- "lz4",
- "naive-cityhash",
- "once_cell",
- "parking_lot 0.12.1",
- "pin-project-lite",
- "rand 0.8.5",
- "slab",
- "thiserror",
- "tokio",
- "url",
- "uuid 0.8.2",
-]
-
-[[package]]
 name = "cmake"
 version = "0.1.48"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -962,16 +936,6 @@ source = "git+https://github.com/brendanzab/codespan?rev=c84116f5#c84116f5a667bf
 dependencies = [
  "termcolor",
  "unicode-width",
-]
-
-[[package]]
-name = "combine"
-version = "4.6.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2a604e93b79d1808327a6fca85a6f2d69de66461e7620f5a4cbf5fb4d1d7c948"
-dependencies = [
- "bytes 1.1.0",
- "memchr",
 ]
 
 [[package]]
@@ -1038,7 +1002,7 @@ dependencies = [
  "tikv-jemalloc-sys",
  "tokio",
  "tracing",
- "uuid 1.1.2",
+ "uuid",
 ]
 
 [[package]]
@@ -1158,7 +1122,6 @@ dependencies = [
  "micromarshal",
  "num",
  "once_cell",
- "opensrv-clickhouse",
  "ordered-float 3.0.0",
  "paste",
  "pretty_assertions",
@@ -1271,7 +1234,7 @@ dependencies = [
  "sqlparser",
  "strength_reduce",
  "twox-hash",
- "uuid 1.1.2",
+ "uuid",
 ]
 
 [[package]]
@@ -1701,7 +1664,6 @@ dependencies = [
  "num_cpus",
  "once_cell",
  "opendal",
- "opensrv-clickhouse",
  "parking_lot 0.12.1",
  "petgraph",
  "serde",
@@ -1868,7 +1830,7 @@ dependencies = [
  "time 0.3.11",
  "tracing",
  "typetag",
- "uuid 1.1.2",
+ "uuid",
 ]
 
 [[package]]
@@ -2012,7 +1974,7 @@ dependencies = [
  "time 0.3.11",
  "tracing",
  "typetag",
- "uuid 1.1.2",
+ "uuid",
  "walkdir",
 ]
 
@@ -2622,7 +2584,6 @@ dependencies = [
  "chrono",
  "chrono-tz",
  "clap 3.2.15",
- "clickhouse-driver",
  "common-arrow",
  "common-ast",
  "common-base",
@@ -2693,7 +2654,6 @@ dependencies = [
  "octocrab",
  "once_cell",
  "opendal",
- "opensrv-clickhouse",
  "opensrv-mysql",
  "openssl",
  "parking_lot 0.12.1",
@@ -2737,7 +2697,7 @@ dependencies = [
  "twox-hash",
  "typetag",
  "url",
- "uuid 1.1.2",
+ "uuid",
  "walkdir",
  "wiremock",
 ]
@@ -2768,7 +2728,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bef552e6f588e446098f6ba40d89ac146c8c7b64aade83c051ee00bb5d2bc18d"
 dependencies = [
  "serde",
- "uuid 1.1.2",
+ "uuid",
 ]
 
 [[package]]
@@ -4857,7 +4817,7 @@ dependencies = [
  "subprocess",
  "thiserror",
  "time 0.3.11",
- "uuid 1.1.2",
+ "uuid",
 ]
 
 [[package]]
@@ -5190,31 +5150,6 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-futures",
-]
-
-[[package]]
-name = "opensrv-clickhouse"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6f6456cb429428f239e2014cba8fffccc79049764917dc9ee0c6cf2180f412f0"
-dependencies = [
- "async-trait 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)",
- "byteorder",
- "bytes 1.1.0",
- "chrono",
- "chrono-tz",
- "combine",
- "hostname",
- "lz4",
- "micromarshal",
- "naive-cityhash",
- "once_cell",
- "thiserror",
- "tokio",
- "tokio-stream",
- "tracing",
- "url",
- "uuid 1.1.2",
 ]
 
 [[package]]
@@ -6789,7 +6724,7 @@ dependencies = [
  "thiserror",
  "time 0.3.11",
  "url",
- "uuid 1.1.2",
+ "uuid",
 ]
 
 [[package]]
@@ -7333,7 +7268,7 @@ dependencies = [
  "debugid",
  "memmap2",
  "stable_deref_trait",
- "uuid 1.1.2",
+ "uuid",
 ]
 
 [[package]]
@@ -8126,15 +8061,6 @@ name = "utf8-width"
 version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5190c9442dcdaf0ddd50f37420417d219ae5261bbf5db120d0f9bab996c9cba1"
-
-[[package]]
-name = "uuid"
-version = "0.8.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bc5cf98d8186244414c848017f0e2676b3fcb46807f6668a97dfe67359a3c4b7"
-dependencies = [
- "getrandom 0.2.7",
-]
 
 [[package]]
 name = "uuid"

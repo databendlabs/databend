@@ -14,22 +14,16 @@
 
 use std::ops::AddAssign;
 
-use chrono::Date;
 use chrono::Duration;
 use chrono::NaiveDate;
-use chrono_tz::Tz;
 use common_exception::Result;
 use common_io::prelude::FormatSettings;
 use lexical_core::ToLexical;
 use num::cast::AsPrimitive;
-use opensrv_clickhouse::types::column::ArcColumnData;
-use opensrv_clickhouse::types::column::ArcColumnWrapper;
-use opensrv_clickhouse::types::column::ColumnFrom;
 use serde_json::Value;
 
 use crate::serializations::TypeSerializer;
 use crate::ColumnRef;
-use crate::DateConverter;
 use crate::PrimitiveColumn;
 use crate::PrimitiveType;
 use crate::Series;
@@ -77,30 +71,5 @@ impl<'a, T: PrimitiveType + AsPrimitive<i64> + ToLexical> TypeSerializer<'a>
             })
             .collect();
         Ok(result)
-    }
-
-    fn serialize_clickhouse_const(
-        &self,
-        _format: &FormatSettings,
-        size: usize,
-    ) -> Result<ArcColumnData> {
-        let tz: Tz = "UTC".parse().unwrap();
-        let dates: Vec<Date<Tz>> = self.values.iter().map(|v| v.to_date(&tz)).collect();
-        let mut values: Vec<Date<Tz>> = Vec::with_capacity(self.values.len() * size);
-        for _ in 0..size {
-            for v in dates.iter() {
-                values.push(*v)
-            }
-        }
-        Ok(Vec::column_from::<ArcColumnWrapper>(values))
-    }
-
-    fn serialize_clickhouse_column(
-        &self,
-        _format: &FormatSettings,
-    ) -> Result<opensrv_clickhouse::types::column::ArcColumnData> {
-        let tz: Tz = "UTC".parse().unwrap();
-        let values: Vec<Date<Tz>> = self.values.iter().map(|v| v.to_date(&tz)).collect();
-        Ok(Vec::column_from::<ArcColumnWrapper>(values))
     }
 }

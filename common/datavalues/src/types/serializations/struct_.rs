@@ -12,12 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use common_exception::Result;
 use common_io::prelude::FormatSettings;
-use opensrv_clickhouse::types::column::ArcColumnData;
-use opensrv_clickhouse::types::column::TupleColumnData;
 use serde_json::Value;
 
 use crate::prelude::*;
@@ -52,29 +48,5 @@ impl<'a> TypeSerializer<'a> for StructSerializer<'a> {
             result.push(s);
         }
         Ok(result)
-    }
-
-    fn serialize_clickhouse_const(
-        &self,
-        format: &FormatSettings,
-        size: usize,
-    ) -> Result<ArcColumnData> {
-        let mut inner = vec![];
-        for s in &self.inners {
-            inner.push(s.serialize_clickhouse_const(format, size)?)
-        }
-
-        let data = TupleColumnData { inner };
-        Ok(Arc::new(data))
-    }
-
-    fn serialize_clickhouse_column(&self, format: &FormatSettings) -> Result<ArcColumnData> {
-        let mut inner = vec![];
-        for s in &self.inners {
-            inner.push(s.serialize_clickhouse_column(format)?)
-        }
-
-        let data = TupleColumnData { inner };
-        Ok(Arc::new(data))
     }
 }

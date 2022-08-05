@@ -19,9 +19,6 @@ use common_exception::Result;
 use common_io::prelude::FormatSettings;
 use micromarshal::Marshal;
 use micromarshal::Unmarshal;
-use opensrv_clickhouse::types::column::ArcColumnWrapper;
-use opensrv_clickhouse::types::column::ColumnFrom;
-use opensrv_clickhouse::types::HasSqlType;
 use serde_json::Value;
 
 use crate::ColumnRef;
@@ -45,15 +42,7 @@ impl<'a, T: PrimitiveType> NumberSerializer<'a, T> {
 }
 
 impl<'a, T> TypeSerializer<'a> for NumberSerializer<'a, T>
-where T: PrimitiveType
-        + opensrv_clickhouse::types::StatBuffer
-        + Marshal
-        + Unmarshal<T>
-        + HasSqlType
-        + std::convert::Into<opensrv_clickhouse::types::Value>
-        + std::convert::From<opensrv_clickhouse::types::Value>
-        + lexical_core::ToLexical
-        + PrimitiveWithFormat
+where T: PrimitiveType + Marshal + Unmarshal<T> + lexical_core::ToLexical + PrimitiveWithFormat
 {
     fn need_quote(&self) -> bool {
         false
@@ -70,28 +59,6 @@ where T: PrimitiveType
             .map(|x| serde_json::to_value(x).unwrap())
             .collect();
         Ok(result)
-    }
-
-    fn serialize_clickhouse_const(
-        &self,
-        _format: &FormatSettings,
-        size: usize,
-    ) -> Result<opensrv_clickhouse::types::column::ArcColumnData> {
-        let mut values: Vec<T> = Vec::with_capacity(self.values.len() * size);
-        for _ in 0..size {
-            for v in self.values.iter() {
-                values.push(*v)
-            }
-        }
-        Ok(Vec::column_from::<ArcColumnWrapper>(values))
-    }
-
-    fn serialize_clickhouse_column(
-        &self,
-        _format: &FormatSettings,
-    ) -> Result<opensrv_clickhouse::types::column::ArcColumnData> {
-        let values: Vec<T> = self.values.iter().map(|c| c.to_owned()).collect();
-        Ok(Vec::column_from::<ArcColumnWrapper>(values))
     }
 
     fn serialize_json_object(
