@@ -73,6 +73,7 @@ select to_date('9999-12-31');
 ----
 9999-12-31
 
+skipif clickhouse
 statement error 1010
 select to_date('10000-12-31'); 
 
@@ -94,6 +95,7 @@ select to_datetime('9999-12-31 23:59:59');
 ----
 9999-12-31 23:59:59.000000
 
+skipif clickhouse
 statement error 1010
 select to_datetime('10000-01-01 00:00:00'); 
 
@@ -520,9 +522,11 @@ select toStartOfWeek(to_date(18769), 9);
 ----
 2021-05-17
 
+skipif clickhouse
 statement error 1079
 select toStartOfWeek(to_date('1000-01-01')); 
 
+skipif clickhouse
 statement error 1079
 select toStartOfWeek(to_datetime('1000-01-01 00:00:00')); 
 
@@ -588,9 +592,11 @@ select addYears(to_datetime(1582970400000000), cast(-50, INT8)); -- 2020-2-29T10
 1970-02-28 10:00:00.000000
 
 
+skipif clickhouse
 statement error 1079
 select addYears(to_date('9999-12-31'), 1); 
 
+skipif clickhouse
 statement error 1080
 select addYears(to_datetime('9999-12-31 23:59:59'), 1); 
 
@@ -607,9 +613,11 @@ select subtractMonths(to_datetime(1582970400000000), cast(122, INT16)); -- 2020-
 2009-12-29 10:00:00.000000
 
 
+skipif clickhouse
 statement error 1079
 select subtractMonths(to_date('1000-01-01'), 1); 
 
+skipif clickhouse
 statement error 1080
 select subtractMonths(to_datetime('1000-01-01 00:00:00'), 1); 
 
@@ -625,9 +633,11 @@ select addDays(to_datetime(1582970400000000), cast(-1, INT16)); -- 2020-2-29T10:
 ----
 2020-02-28 10:00:00.000000
 
+skipif clickhouse
 statement error 1079
 select addDays(to_date('9999-12-31'), 1); 
 
+skipif clickhouse
 statement error 1080
 select addDays(to_datetime('9999-12-31 23:59:59'), 1); 
 
@@ -645,9 +655,11 @@ select addHours(to_date(18321), cast(1.2, Float32));
 2020-02-29 01:00:00.000000
 
 
+skipif clickhouse
 statement error 1080
 select addHours(to_date('9999-12-31'), 24); 
 
+skipif clickhouse
 statement error 1080
 select addHours(to_datetime('9999-12-31 23:59:59'), 1); 
 
@@ -657,9 +669,11 @@ select subtractMinutes(to_datetime(1582970400000000), cast(1, INT32)); -- 2020-2
 ----
 2020-02-29 09:59:00.000000
 
+skipif clickhouse
 statement error 1080
 select subtractMinutes(to_date('1000-01-01'), 1); 
 
+skipif clickhouse
 statement error 1080
 select subtractMinutes(to_datetime('1000-01-01 00:00:00'), 1); 
 
@@ -915,12 +929,14 @@ insert into t values('2022-04-02 15:10:28.221', '2022-04-02 15:10:28.221', '9999
 statement ok
 insert into t values('0999-04-02 15:10:28.221', '2022-04-02 15:10:28.222', '2020-10-10');
 
+skipif clickhouse
 statement error 1010
 insert into t values('10000-01-01 00:00:00', '2022-04-02 15:10:28.221', '2020-10-10'); 
 
 statement ok
 insert into t values('2022-04-02 15:10:28.221', '2022-04-02 15:10:28.223', '0999-10-10');
 
+skipif clickhouse
 statement error 1010
 insert into t values('2022-04-02 15:10:28.221', '2022-04-02 15:10:28.221', '10000-10-10'); 
 

@@ -40,6 +40,7 @@ SELECT INET_ATON(NULL);
 ----
 NULL
 
+skipif clickhouse
 statement error 1060
 SELECT INET_ATON('hello');
 
@@ -49,6 +50,7 @@ SELECT TRY_INET_NTOA(167773449);
 ----
 10.0.5.9
 
+skipif clickhouse
 statement error 1065
 SELECT TRY_INET_NTOA('167773449');
 
@@ -64,6 +66,7 @@ SELECT INET_NTOA(167773449);
 ----
 10.0.5.9
 
+skipif clickhouse
 statement error 1065
 SELECT INET_NTOA('167773449'); 
 
