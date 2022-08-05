@@ -615,6 +615,16 @@ ORDER BY c.c_id
 5  0
 6  0
 
+statement query I
+select * from numbers(5) where exists(select * from numbers(1)) order by number;
+
+----
+0
+1
+2
+3
+4
+
 
 statement ok
 drop table o;
