@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_pipeline::Pipeline;
+use common_pipeline_core::Pipeline;
 
 pub struct PipelineBuildResult {
     pub main_pipeline: Pipeline,

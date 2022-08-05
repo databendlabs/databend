@@ -889,3 +889,13 @@ impl UDFExprVisitor for ExprRPNBuilder {
         Ok(())
     }
 }
+
+use common_legacy_parser::SQLDialect;
+impl From<SessionType> for SQLDialect {
+    fn from(session_type: SessionType) -> Self {
+        match session_type {
+            SessionType::MySQL => SQLDialect::MySQL,
+            _ => SQLDialect::Other,
+        }
+    }
+}

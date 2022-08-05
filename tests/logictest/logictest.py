@@ -251,7 +251,7 @@ class SuiteRunner(object):
     def __init__(self, kind, args):
         self.label = None
         self.retry_time = 3
-        self.driver = None     
+        self.driver = None
         self.statement_files = []
         self.kind = kind
         self.show_query_on_execution = False
@@ -267,7 +267,7 @@ class SuiteRunner(object):
 
         if type(skips) is str:
             skips = skips.split(",")
-        
+
         suite_path = self.args.suites
 
         for filename in glob.iglob(f'{suite_path}/**', recursive=True):
@@ -277,7 +277,9 @@ class SuiteRunner(object):
 
                 if self.args.skip_dir and any(
                         s in dirs for s in self.args.skip_dir):
-                    log.info(f"Skip test file {filename}, in dirs {self.args.skip_dir}")
+                    log.info(
+                        f"Skip test file {filename}, in dirs {self.args.skip_dir}"
+                    )
                     continue
 
                 if self.args.skip and any(
@@ -285,8 +287,11 @@ class SuiteRunner(object):
                     log.info(f"Skip test file {filename}")
                     continue
 
-                if self.args.run_dir and not any(s in dirs for s in self.args.run_dir):
-                    log.info(f"Skip test file {filename}, not in run dir {self.args.run_dir}")
+                if self.args.run_dir and not any(s in dirs
+                                                 for s in self.args.run_dir):
+                    log.info(
+                        f"Skip test file {filename}, not in run dir {self.args.run_dir}"
+                    )
                     continue
 
                 if not self.args.pattern or any(
@@ -316,9 +321,7 @@ class SuiteRunner(object):
                                                      e)
                         continue
 
-                    log.info(
-                        f"Suite file:{file_path} pass!"
-                    )
+                    log.info(f"Suite file:{file_path} pass!")
             else:
                 raise RuntimeError(
                     f"batch_execute is not implement in runner {self.kind}")
@@ -352,11 +355,9 @@ class SuiteRunner(object):
         actual = safe_execute(lambda: self.execute_ok(statement.text),
                               statement)
         if actual is not None:
-            raise LogicError(
-                runner=self.kind,
-                message=str(statement),
-                errorType="statement ok get error in response"
-            )
+            raise LogicError(runner=self.kind,
+                             message=str(statement),
+                             errorType="statement ok get error in response")
 
     def assert_query_equal(self, f, resultset, statement):
         # use join after split instead of strip
@@ -402,9 +403,10 @@ class SuiteRunner(object):
                     self.assert_query_equal(f, resultset, statement)
                     hasResult = True
         if not hasResult:
-            raise LogicError(message=f"{statement} no result found in test file",
-                             errorType="statement query has no result in test file",
-                             runner=self.kind)
+            raise LogicError(
+                message=f"{statement} no result found in test file",
+                errorType="statement query has no result in test file",
+                runner=self.kind)
 
     # expect the query just return error
     def assert_execute_error(self, statement):
@@ -412,14 +414,15 @@ class SuiteRunner(object):
                               statement)
         if actual is None:
             raise LogicError(message=f"{str(statement)}",
-            errorType="statement error get no error message",
-            runner=self.kind)
+                             errorType="statement error get no error message",
+                             runner=self.kind)
         match = re.search(statement.s_type.expect_error, actual.msg)
         if match is None:
             raise LogicError(
                 message=
                 f"\n expected error regex is {statement.s_type.expect_error}\n actual found {actual}{str(statement)}",
-                errorType=f"statement error get error message not equal to expected",
+                errorType=
+                f"statement error get error message not equal to expected",
                 runner=self.kind)
 
     def run_sql_suite(self):

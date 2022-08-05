@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_catalog::catalog::CATALOG_DEFAULT;
 use common_datavalues::prelude::ToDataType;
 use common_datavalues::DataValue;
 use common_exception::Result;
@@ -24,7 +25,6 @@ use common_planners::PlanBuilder;
 use common_planners::PlanNode;
 use common_planners::PlanRewriter;
 
-use crate::catalogs::CATALOG_DEFAULT;
 use crate::optimizers::Optimizer;
 use crate::sessions::QueryContext;
 use crate::storages::ToReadDataSourcePlan;

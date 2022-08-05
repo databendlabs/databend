@@ -13,44 +13,6 @@
 // limitations under the License.
 
 mod clusters_table;
-mod columns_table;
-mod configs_table;
-mod contributors_table;
-mod credits_table;
-mod databases_table;
-mod engines_table;
-mod functions_table;
-mod metrics_table;
-mod one_table;
-mod processes_table;
-mod query_log_table;
-mod roles_table;
-mod settings_table;
-mod stages_table;
-mod table;
-mod tables_table;
-mod tracing_table;
-mod tracing_table_stream;
-mod users_table;
 
 pub use clusters_table::ClustersTable;
-pub use columns_table::ColumnsTable;
-pub use configs_table::ConfigsTable;
-pub use contributors_table::ContributorsTable;
-pub use credits_table::CreditsTable;
-pub use databases_table::DatabasesTable;
-pub use engines_table::EnginesTable;
-pub use functions_table::FunctionsTable;
-pub use metrics_table::MetricsTable;
-pub use one_table::OneTable;
-pub use processes_table::ProcessesTable;
-pub use query_log_table::QueryLogTable;
-pub use roles_table::RolesTable;
-pub use settings_table::SettingsTable;
-pub use stages_table::StagesTable;
-pub use tables_table::TablesTable;
-pub use tables_table::TablesTableWithHistory;
-pub use tables_table::TablesTableWithoutHistory;
-pub use tracing_table::TracingTable;
-pub use tracing_table_stream::TracingTableStream;
-pub use users_table::UsersTable;
+pub use common_storages_preludes::system::*;
