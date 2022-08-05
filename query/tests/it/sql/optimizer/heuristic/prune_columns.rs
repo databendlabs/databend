@@ -60,6 +60,11 @@ pub async fn test_heuristic_optimizer_prune_columns() -> Result<()> {
             query: "select name from system.functions order by example".to_string(),
             rules: vec![],
         },
+        Suite {
+            comment: "# Prune unused columns with cross join".to_string(),
+            query: "select t.number from numbers(10) t where exists(select * from numbers(10))".to_string(),
+            rules: vec![],
+        },
     ];
 
     run_suites(ctx, &mut file, &suites, run_test).await
