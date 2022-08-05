@@ -23,7 +23,7 @@ simd = ["common-arrow/simd"]
 tokio-console = ["common-tracing/console", "common-base/tracing"]
 memory-profiling = ["common-base/memory-profiling", "common-http/memory-profiling", "tempfile"]
 storage-hdfs = ["opendal/services-hdfs", "common-storage/storage-hdfs"]
-hive = ["common-hive-meta-store", "thrift", "storage-hdfs", "common-config/hive"]
+hive = ["common-hive-meta-store", "thrift", "storage-hdfs", "common-config/hive", "common-storages-hive"]
 io-uring = [
     "common-meta-embedded/io-uring",
     "common-meta-store/io-uring",
@@ -51,6 +51,7 @@ common-hashtable = { path = "../common/hashtable" }
 common-hive-meta-store = { path = "../common/hive-meta-store", optional = true }
 common-http = { path = "../common/http" }
 common-io = { path = "../common/io" }
+common-legacy-parser = { path = "../common/legacy-parser" }
 common-macros = { path = "../common/macros" }
 common-management = { path = "../common/management" }
 common-meta-api = { path = "../common/meta/api" }
@@ -62,10 +63,18 @@ common-meta-sled-store = { path = "../common/meta/sled-store" }
 common-meta-store = { path = "../common/meta/store" }
 common-meta-types = { path = "../common/meta/types" }
 common-metrics = { path = "../common/metrics" }
-common-pipeline = { path = "../common/pipeline" }
+common-pipeline-core = { path = "../common/pipeline/core" }
+common-pipeline-sinks = { path = "../common/pipeline/sinks" }
+common-pipeline-sources = { path = "../common/pipeline/sources" }
+common-pipeline-transforms = { path = "../common/pipeline/transforms" }
 common-planners = { path = "../common/planners" }
 common-settings = { path = "../common/settings" }
 common-storage = { path = "../common/storage" }
+common-storages-fuse = { path = "../common/storages/fuse" }
+common-storages-hive = { path = "../common/storages/hive", optional = true }
+common-storages-index = { path = "../common/storages/index" }
+common-storages-preludes = { path = "../common/storages/preludes" }
+common-storages-util = { path = "../common/storages/util" }
 common-streams = { path = "../common/streams" }
 common-tracing = { path = "../common/tracing" }
 common-users = { path = "../common/users" }
