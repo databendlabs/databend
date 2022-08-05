@@ -18,7 +18,6 @@ use std::sync::Arc;
 use common_ast::ast::Expr;
 use common_ast::ast::Literal;
 use common_datavalues::prelude::*;
-use common_planners::ReadDataSourcePlan;
 use parking_lot::RwLock;
 
 use crate::sql::common::IndexType;
@@ -35,8 +34,6 @@ pub struct TableEntry {
     pub database: String,
 
     pub table: Arc<dyn Table>,
-
-    pub source: ReadDataSourcePlan,
 }
 
 impl Debug for TableEntry {
@@ -56,7 +53,6 @@ impl TableEntry {
         catalog: String,
         database: String,
         table: Arc<dyn Table>,
-        source: ReadDataSourcePlan,
     ) -> Self {
         TableEntry {
             index,
@@ -64,7 +60,6 @@ impl TableEntry {
             catalog,
             database,
             table,
-            source,
         }
     }
 }
@@ -168,7 +163,6 @@ impl Metadata {
         catalog: String,
         database: String,
         table_meta: Arc<dyn Table>,
-        source: ReadDataSourcePlan,
     ) -> IndexType {
         let table_name = table_meta.name().to_string();
         let table_index = self.tables.len();
@@ -178,7 +172,6 @@ impl Metadata {
             database,
             catalog,
             table: table_meta.clone(),
-            source,
         };
         self.tables.push(table_entry);
         for field in table_meta.schema().fields() {

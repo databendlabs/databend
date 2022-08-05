@@ -853,6 +853,7 @@ impl TokenKind {
             | TokenKind::SELECT
             // | TokenKind::SESSION_USER
             // | TokenKind::SETOF
+            | TokenKind::SHARE
             | TokenKind::SMALLINT
             | TokenKind::SOME
             | TokenKind::SUBSTRING

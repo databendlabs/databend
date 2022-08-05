@@ -18,6 +18,7 @@ use common_exception::Result;
 use crate::sessions::TableContext;
 use crate::sql::binder::Binder;
 use crate::sql::plans::CreateSharePlan;
+use crate::sql::plans::DropSharePlan;
 use crate::sql::plans::Plan;
 
 impl<'a> Binder {
@@ -40,5 +41,21 @@ impl<'a> Binder {
             comment: comment.as_ref().cloned(),
         };
         Ok(Plan::CreateShare(Box::new(plan)))
+    }
+
+    pub(in crate::sql::planner::binder) async fn bind_drop_share(
+        &mut self,
+        stmt: &DropShareStmt<'a>,
+    ) -> Result<Plan> {
+        let DropShareStmt { if_exists, share } = stmt;
+
+        let share = share.name.to_lowercase();
+
+        let plan = DropSharePlan {
+            if_exists: *if_exists,
+            tenant: self.ctx.get_tenant(),
+            share,
+        };
+        Ok(Plan::DropShare(Box::new(plan)))
     }
 }
