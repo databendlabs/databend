@@ -13,6 +13,7 @@
 //  limitations under the License.
 
 use common_base::base::tokio;
+use common_catalog::catalog::CATALOG_DEFAULT;
 use common_datablocks::assert_blocks_sorted_eq;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
@@ -20,7 +21,6 @@ use common_exception::Result;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 use common_planners::*;
-use databend_query::catalogs::CATALOG_DEFAULT;
 use databend_query::sessions::TableContext;
 use databend_query::storages::memory::MemoryTable;
 use databend_query::storages::TableStreamReadWrap;

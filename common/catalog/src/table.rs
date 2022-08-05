@@ -25,7 +25,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::TableInfo;
 use common_meta_types::MetaId;
-use common_pipeline::Pipeline;
+use common_pipeline_core::Pipeline;
 use common_planners::DeletePlan;
 use common_planners::Expression;
 use common_planners::Extras;
