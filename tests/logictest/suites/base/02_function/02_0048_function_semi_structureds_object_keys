@@ -16,9 +16,11 @@ select id, object_keys(obj), object_keys(var) from objects_test1;
 statement ok
 drop table objects_test1;
 
+skipif clickhouse
 statement error 1010
 select object_keys(parse_json('[1,2,3]')); 
 
-statement error 1010
+skipif clickhouse
+statement error 1065
 select object_keys(1); 
 

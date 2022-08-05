@@ -1,4 +1,7 @@
 statement ok
+set enable_planner_v2 = 0;
+
+statement ok
 DROP DATABASE IF EXISTS db1;
 
 statement ok

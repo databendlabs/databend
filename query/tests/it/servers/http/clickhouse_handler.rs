@@ -68,12 +68,6 @@ async fn test_select() -> PoemResult<()> {
     }
 
     {
-        let (status, body) = server.get("").await;
-        assert_eq!(status, StatusCode::OK);
-        assert_eq!(&body, "");
-    }
-
-    {
         let (status, body) = server.get("select 1").await;
         assert_eq!(status, StatusCode::OK);
         assert_eq!(&body, "1\n");

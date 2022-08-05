@@ -96,12 +96,12 @@ impl<'a> Binder {
                 format,
                 rest_tokens,
             } => {
-                let stream_str = self.analyze_streaming_intput(rest_tokens)?;
+                let stream_str = self.analyze_streaming_input(rest_tokens)?;
                 self.analyze_stream_format(bind_context, &stream_str, Some(format), schema.clone())
                     .await
             }
             InsertSource::Values { rest_tokens } => {
-                let stream_str = self.analyze_streaming_intput(rest_tokens)?;
+                let stream_str = self.analyze_streaming_input(rest_tokens)?;
                 let str = stream_str.trim_end_matches(';');
                 self.analyze_stream_format(
                     bind_context,
@@ -134,10 +134,13 @@ impl<'a> Binder {
         Ok(Plan::Insert(Box::new(plan)))
     }
 
-    pub(in crate::sql::planner::binder) fn analyze_streaming_intput(
+    pub(in crate::sql::planner::binder) fn analyze_streaming_input(
         &self,
         tokens: &[Token],
     ) -> Result<String> {
+        if tokens.is_empty() {
+            return Ok("".to_string());
+        }
         let first_token = tokens
             .first()
             .ok_or_else(|| ErrorCode::SyntaxException("Missing token"))?;

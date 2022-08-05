@@ -76,12 +76,15 @@ SELECT CAST(CAST(1 + 1 + 1, String) AS Int8);
 ----
 3
 
+skipif clickhouse
 statement error 1010
 SELECT CAST(Null as Int64); 
 
+skipif clickhouse
 statement error 1010
 SELECT CAST(Null as Varchar); 
 
+skipif clickhouse
 statement error 1010
 SELECT CAST(Null as Boolean); 
 
@@ -98,18 +101,23 @@ SELECT CAST('33' as unsigned) = 33;
 1
 
 
+skipif clickhouse
 statement error 1010
 SELECT CAST('-33aa' as signed) = 33; 
 
+skipif clickhouse
 statement error 1010
 SELECT CAST('33 aa' as unsigned) = 33; 
 
+skipif clickhouse
 statement error 1010
 SELECT CAST('-33' as unsigned) = 0; 
 
+skipif clickhouse
 statement error 1010
 SELECT CAST('aa' as unsigned) = 0; 
 
+skipif clickhouse
 statement error 1010
 SELECT CAST('aa' as Float64) = 0; 
 
@@ -127,6 +135,7 @@ SELECT '33'::unsigned = 33;
 1
 
 
+skipif clickhouse
 statement error 1010
 SELECT '-33aa'::signed = 33; 
 
@@ -157,6 +166,7 @@ select 'false'::boolean = not 'true'::boolean;
 1
 
 
+skipif clickhouse
 statement error 1010
 select 'FalSex'::boolean; 
 
@@ -240,12 +250,15 @@ SELECT parse_json('"false"')::boolean;
 0
 
 
+skipif clickhouse
 statement error 1010
 SELECT parse_json('"test"')::boolean; 
 
+skipif clickhouse
 statement error 1010
 SELECT parse_json(1)::boolean; 
 
+skipif clickhouse
 statement error 1010
 SELECT parse_json('null')::boolean; 
 
@@ -393,12 +406,15 @@ SELECT parse_json('"9223372036854775807"')::int64;
 ----
 9223372036854775807
 
+skipif clickhouse
 statement error 1010
 SELECT parse_json('"test"')::uint64; 
 
+skipif clickhouse
 statement error 1010
 SELECT parse_json('"test"')::int64; 
 
+skipif clickhouse
 statement error 1010
 SELECT parse_json('null')::int64; 
 
@@ -426,12 +442,15 @@ SELECT parse_json('"1234.5678"')::float64;
 ----
 1234.5678
 
+skipif clickhouse
 statement error 1010
 SELECT parse_json('"test"')::float32; 
 
+skipif clickhouse
 statement error 1010
 SELECT parse_json('"test"')::float64; 
 
+skipif clickhouse
 statement error 1010
 SELECT parse_json('null')::float64; 
 
@@ -447,12 +466,15 @@ SELECT parse_json('"2022-01-01 01:01:01"')::datetime(0);
 ----
 2022-01-01 01:01:01
 
+skipif clickhouse
 statement error 1010
 SELECT parse_json('"test"')::date; 
 
+skipif clickhouse
 statement error 1010
 SELECT parse_json('"test"')::datetime; 
 
+skipif clickhouse
 statement error 1010
 SELECT parse_json('null')::datetime; 
 
@@ -474,6 +496,7 @@ SELECT parse_json('"ab"')::array;
 ----
 ["ab"]
 
+skipif clickhouse
 statement error 1010
 SELECT parse_json('null')::array; 
 
@@ -483,12 +506,15 @@ SELECT parse_json('{"a":1,"b":2}')::object;
 ----
 {"a":1,"b":2}
 
+skipif clickhouse
 statement error 1010
 SELECT parse_json('"abc"')::object; 
 
+skipif clickhouse
 statement error 1010
 SELECT parse_json('[1,2,3]')::object; 
 
+skipif clickhouse
 statement error 1010
 SELECT parse_json('null')::object; 
 
