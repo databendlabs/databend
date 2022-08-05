@@ -42,6 +42,7 @@ pub use s_expr::SExpr;
 
 use self::util::contains_local_table_scan;
 use super::plans::Plan;
+use super::BindContext;
 use crate::sessions::QueryContext;
 pub use crate::sql::optimizer::heuristic::RuleList;
 pub use crate::sql::optimizer::rule::RuleID;
@@ -77,7 +78,7 @@ pub fn optimize(
             metadata,
             rewrite_kind,
         } => Ok(Plan::Query {
-            s_expr: optimize_query(ctx, opt_ctx, metadata.clone(), s_expr)?,
+            s_expr: optimize_query(ctx, opt_ctx, metadata.clone(), bind_context.clone(), s_expr)?,
             bind_context,
             metadata,
             rewrite_kind,
@@ -114,6 +115,7 @@ pub fn optimize_query(
     ctx: Arc<QueryContext>,
     opt_ctx: Arc<OptimizerContext>,
     metadata: MetadataRef,
+    bind_context: Box<BindContext>,
     s_expr: SExpr,
 ) -> Result<SExpr> {
     let rules = RuleList::create(DEFAULT_REWRITE_RULES.clone())?;
@@ -123,7 +125,8 @@ pub fn optimize_query(
     let enable_distributed_query = opt_ctx.config.enable_distributed_optimization
         && !contains_local_table_scan(&s_expr, &metadata);
 
-    let mut heuristic = HeuristicOptimizer::new(ctx, metadata, rules, enable_distributed_query);
+    let mut heuristic =
+        HeuristicOptimizer::new(ctx, bind_context, metadata, rules, enable_distributed_query);
     let optimized = heuristic.optimize(s_expr)?;
     // TODO: enable cascades optimizer
     // let mut cascades = CascadesOptimizer::create(ctx);

@@ -741,7 +741,7 @@ impl<'a> Binder {
         match source {
             CreateTableSource::Columns(columns) => {
                 let mut scalar_binder =
-                    ScalarBinder::new(&bind_context, self.ctx.clone(), self.metadata.clone());
+                    ScalarBinder::new(&bind_context, self.ctx.clone(), self.metadata.clone(), &[]);
                 let mut fields = Vec::with_capacity(columns.len());
                 let mut fields_comments = Vec::with_capacity(columns.len());
                 for column in columns.iter() {
@@ -821,7 +821,7 @@ impl<'a> Binder {
             bind_context.columns.push(column);
         }
         let mut scalar_binder =
-            ScalarBinder::new(&bind_context, self.ctx.clone(), self.metadata.clone());
+            ScalarBinder::new(&bind_context, self.ctx.clone(), self.metadata.clone(), &[]);
 
         let mut cluster_keys = Vec::with_capacity(cluster_by.len());
         for cluster_by in cluster_by.iter() {

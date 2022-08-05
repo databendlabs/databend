@@ -29,6 +29,7 @@ mod physical_scan;
 mod presign;
 mod project;
 mod scalar;
+pub mod share;
 mod sort;
 
 use std::fmt::Display;
@@ -105,6 +106,7 @@ pub use presign::PresignAction;
 pub use presign::PresignPlan;
 pub use project::Project;
 pub use scalar::*;
+pub use share::*;
 pub use sort::Sort;
 pub use sort::SortItem;
 
@@ -195,6 +197,10 @@ pub enum Plan {
     // Set
     SetVariable(Box<SettingPlan>),
     Kill(Box<KillPlan>),
+
+    // Share
+    CreateShare(Box<CreateSharePlan>),
+    DropShare(Box<DropSharePlan>),
 }
 
 #[derive(Clone)]
@@ -265,6 +271,8 @@ impl Display for Plan {
             Plan::Presign(_) => write!(f, "Presign"),
             Plan::SetVariable(_) => write!(f, "SetVariable"),
             Plan::Kill(_) => write!(f, "Kill"),
+            Plan::CreateShare(_) => write!(f, "CreateShare"),
+            Plan::DropShare(_) => write!(f, "DropShare"),
         }
     }
 }
@@ -327,6 +335,8 @@ impl Plan {
             Plan::Presign(plan) => plan.schema(),
             Plan::SetVariable(plan) => plan.schema(),
             Plan::Kill(_) => Arc::new(DataSchema::empty()),
+            Plan::CreateShare(plan) => plan.schema(),
+            Plan::DropShare(plan) => plan.schema(),
         }
     }
 }
