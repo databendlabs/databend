@@ -38,6 +38,8 @@ members = [
     "common/tracing",
     "common/users",
     "common/storage",
+    "common/storages/hive",
+    "common/storages/index",
     "common/fuse-meta",
     # Query
     "query",
@@ -94,4 +96,3 @@ rustc-demangle = { opt-level = 3 }
 
 [patch.crates-io]
 parquet2 = { version = "0.14.1", optional = true, git = "https://github.com/datafuse-extras/parquet2", rev = "3a468fc3c4" }
-chrono = { git = "https://github.com/datafuse-extras/chrono", rev = "279f590" }

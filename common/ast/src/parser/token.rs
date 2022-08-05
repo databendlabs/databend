@@ -607,6 +607,8 @@ pub enum TokenKind {
     UPDATE,
     #[token("UPLOAD", ignore(ascii_case))]
     UPLOAD,
+    #[token("SHARE", ignore(ascii_case))]
+    SHARE,
     #[token("SUPER", ignore(ascii_case))]
     SUPER,
     #[token("STATUS", ignore(ascii_case))]
@@ -851,6 +853,7 @@ impl TokenKind {
             | TokenKind::SELECT
             // | TokenKind::SESSION_USER
             // | TokenKind::SETOF
+            | TokenKind::SHARE
             | TokenKind::SMALLINT
             | TokenKind::SOME
             | TokenKind::SUBSTRING

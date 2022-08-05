@@ -25,7 +25,7 @@ use common_meta_types::GrantObject;
 use common_meta_types::StageFile;
 use common_meta_types::StageType;
 use common_meta_types::UserStageInfo;
-use common_pipeline::Pipeline;
+use common_pipeline_core::Pipeline;
 use futures::TryStreamExt;
 use regex::Regex;
 use tracing::warn;

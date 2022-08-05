@@ -61,7 +61,10 @@ if __name__ == '__main__':
         type=int,
         help='Run each test many times (useful for e.g. flaky check)')
 
-    parser.add_argument('-q', '--suites', default="suites" , help='Path to suites dir')
+    parser.add_argument('-q',
+                        '--suites',
+                        default="suites",
+                        help='Path to suites dir')
 
     parser.add_argument('--skip',
                         nargs='+',

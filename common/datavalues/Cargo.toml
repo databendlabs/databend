@@ -20,7 +20,7 @@ primitive-types = "0.11.1"
 # Github dependencies
 
 # Crates.io dependencies
-chrono = "0.4.19"
+chrono = "0.4.20"
 chrono-tz = "0.6.1"
 dyn-clone = "1.0.6"
 enum_dispatch = "0.3.8"
