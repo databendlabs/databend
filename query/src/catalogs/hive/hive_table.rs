@@ -169,7 +169,7 @@ impl HiveTable {
         &self,
         ctx: Arc<dyn TableContext>,
         partition_keys: Vec<String>,
-        filters: &[Expression],
+        filter_expression: Option<Expression>,
         location: String,
     ) -> Result<Vec<(String, Option<String>)>> {
         let hive_catalog = ctx.get_catalog(CATALOG_HIVE)?;
@@ -181,10 +181,9 @@ impl HiveTable {
             .get_partition_names_async(table_info[0].to_string(), table_info[1].to_string(), -1)
             .await?;
 
-        if !filters.is_empty() {
+        if let Some(expr) = filter_expression {
             let partition_schemas = self.get_column_schemas(partition_keys.clone())?;
-            let partition_pruner =
-                HivePartitionPruner::create(ctx, filters[0].clone(), partition_schemas);
+            let partition_pruner = HivePartitionPruner::create(ctx, expr, partition_schemas);
             partitions = partition_pruner.prune(partitions)?;
         }
 
@@ -213,22 +212,26 @@ impl HiveTable {
 
         if let Some(partition_keys) = &self.table_options.partition_keys {
             if !partition_keys.is_empty() {
-                if let Some(extras) = push_downs {
+                let filter_expression = if let Some(extras) = push_downs {
                     if extras.filters.len() > 1 {
                         return Err(ErrorCode::UnImplement(format!(
                             "more than one filters, {:?}",
                             extras.filters
                         )));
-                    }
-                    return self
-                        .get_query_locations_from_partition_table(
-                            ctx.clone(),
-                            partition_keys.clone(),
-                            &extras.filters,
-                            location.clone(),
-                        )
-                        .await;
-                }
+                    };
+                    Some(extras.filters[0].clone())
+                } else {
+                    None
+                };
+
+                return self
+                    .get_query_locations_from_partition_table(
+                        ctx.clone(),
+                        partition_keys.clone(),
+                        filter_expression,
+                        location.clone(),
+                    )
+                    .await;
             }
         }
 

@@ -253,7 +253,7 @@ class SuiteRunner(object):
     def __init__(self, kind, args):
         self.label = None
         self.retry_time = 3
-        self.driver = None     
+        self.driver = None
         self.statement_files = []
         self.kind = kind
         self.show_query_on_execution = True
@@ -269,7 +269,7 @@ class SuiteRunner(object):
 
         if type(skips) is str:
             skips = skips.split(",")
-        
+
         suite_path = self.args.suites
 
         for filename in glob.iglob(f'{suite_path}/**', recursive=True):
@@ -279,7 +279,9 @@ class SuiteRunner(object):
 
                 if self.args.skip_dir and any(
                         s in dirs for s in self.args.skip_dir):
-                    log.info(f"Skip test file {filename}, skip test in dirs {self.args.skip_dir}")
+                    log.info(
+                        f"Skip test file {filename}, skip test in dirs {self.args.skip_dir}"
+                    )
                     continue
 
                 if self.args.skip and any(
@@ -287,8 +289,11 @@ class SuiteRunner(object):
                     log.info(f"Skip test file {filename}")
                     continue
 
-                if self.args.run_dir and not any(s in dirs for s in self.args.run_dir):
-                    log.info(f"Skip test file {filename}, not in run dir {self.args.run_dir}")
+                if self.args.run_dir and not any(s in dirs
+                                                 for s in self.args.run_dir):
+                    log.info(
+                        f"Skip test file {filename}, not in run dir {self.args.run_dir}"
+                    )
                     continue
 
                 if not self.args.pattern or any(
