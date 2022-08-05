@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [package.metadata.cargo-udeps.ignore]
-normal = ["openssl-src"]
+normal = ["openssl-src", "axum"]
 
 [dependencies]
 openssl-src = { version = "111.22" }
