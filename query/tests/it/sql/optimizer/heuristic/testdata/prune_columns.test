@@ -88,3 +88,20 @@ Project: [name (#0)]
             Scan: default.system.functions
 
 
+# Prune unused columns with cross join
+select t.number from numbers(10) t where exists(select * from numbers(10))
+----
+Project: [number (#0)]
+    EvalScalar: [t.number (#0)]
+        Filter: [subquery_3 (#3)]
+            CrossJoin
+                Scan: default.system.numbers
+                Project: [subquery (#3)]
+                    EvalScalar: [count(*) (#2) = 1]
+                        Aggregate(Initial): group items: [], aggregate functions: [count(*)]
+                            Limit: [1], Offset: [0]
+                                Project: [number (#1)]
+                                    EvalScalar: [numbers.number (#1)]
+                                        Scan: default.system.numbers
+
+
