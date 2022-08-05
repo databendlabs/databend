@@ -19,13 +19,12 @@ pub mod optimizer;
 mod parsers;
 mod plan_parser;
 pub mod planner;
-mod sql_common;
 mod sql_parser;
 mod sql_statement;
 pub mod statements;
-mod table_option_keys;
-
 pub use common::*;
+use common_legacy_parser::sql_common;
+use common_storages_util::table_option_keys;
 pub use plan_parser::PlanParser;
 pub use planner::*;
 pub use sql_common::SQLCommon;

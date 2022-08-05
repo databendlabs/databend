@@ -14,10 +14,10 @@
 
 pub mod query;
 
+use common_legacy_parser::analyzer_expr_sync;
+use common_legacy_parser::analyzer_value_expr;
 mod analyzer_expr;
-mod analyzer_expr_sync;
 mod analyzer_statement;
-mod analyzer_value_expr;
 mod statement_common;
 mod statement_delete;
 mod statement_explain;
