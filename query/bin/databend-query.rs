@@ -25,7 +25,6 @@ use common_tracing::set_panic_hook;
 use databend_query::api::HttpService;
 use databend_query::api::RpcService;
 use databend_query::metrics::MetricService;
-use databend_query::servers::ClickHouseHandler;
 use databend_query::servers::HttpHandler;
 use databend_query::servers::HttpHandlerKind;
 use databend_query::servers::MySQLHandler;
@@ -91,23 +90,6 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
 
         info!(
             "Listening for MySQL compatibility protocol: {}, Usage: mysql -uroot -h{} -P{}",
-            listening,
-            listening.ip(),
-            listening.port(),
-        );
-    }
-
-    // ClickHouse handler.
-    {
-        let hostname = conf.query.clickhouse_handler_host.clone();
-        let listening = format!("{}:{}", hostname, conf.query.clickhouse_handler_port);
-
-        let mut srv = ClickHouseHandler::create(session_manager.clone());
-        let listening = srv.start(listening.parse()?).await?;
-        shutdown_handle.add_service(srv);
-
-        info!(
-            "Listening for ClickHouse compatibility native protocol: {}, Usage: clickhouse-client --host {} --port {}",
             listening,
             listening.ip(),
             listening.port(),
@@ -219,6 +201,8 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
     );
     println!("Storage: {}", conf.storage.params);
     println!();
+    println!("Admin");
+    println!("    listened at {}", conf.query.admin_api_address);
     println!("MySQL");
     println!(
         "    listened at {}:{}",
@@ -227,15 +211,6 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
     println!(
         "    connect via: mysql -uroot -h{} -P{}",
         conf.query.mysql_handler_host, conf.query.mysql_handler_port
-    );
-    println!("Clickhouse(native)");
-    println!(
-        "    listened at {}:{}",
-        conf.query.clickhouse_handler_host, conf.query.clickhouse_handler_port
-    );
-    println!(
-        "    connect via: clickhouse-client --host {} --port {}",
-        conf.query.clickhouse_handler_host, conf.query.clickhouse_handler_port
     );
     println!("Clickhouse(http)");
     println!(

@@ -116,7 +116,13 @@ impl ColumnPruner {
                 ))
             }
             RelOperator::Project(p) => {
-                let used: ColumnSet = p.columns.intersection(&required).cloned().collect();
+                let mut used: ColumnSet = p.columns.intersection(&required).cloned().collect();
+                if used.is_empty() {
+                    // Keep at least one column for project.
+                    used.insert(*p.columns.iter().sorted().take(1).next().ok_or_else(|| {
+                        ErrorCode::LogicalError("Invalid Project without output column")
+                    })?);
+                }
                 Ok(SExpr::create_unary(
                     RelOperator::Project(Project {
                         columns: used.clone(),

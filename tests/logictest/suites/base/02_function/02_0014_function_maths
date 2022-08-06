@@ -25,15 +25,19 @@ SELECT abs(-10086);
 ----
 10086
 
-statement error 1007
+skipif clickhouse
+statement error 1065
 SELECT abs('-233.0'); 
 
-statement error 1007
+skipif clickhouse
+statement error 1065
 SELECT abs('blah'); 
 
-statement error 1007
+skipif clickhouse
+statement error 1065
 SELECT abs(TRUE); 
 
+skipif clickhouse
 statement error 1049
 select abs(-9223372036854775808); 
 
@@ -166,7 +170,8 @@ SELECT exp(2);
 ----
 7.38905609893065
 
-statement error 1007
+skipif clickhouse
+statement error 1065
 SELECT exp('2'); 
 
 statement query F
@@ -318,7 +323,8 @@ nan
 ---- http
 NaN
 
-statement error 1007
+skipif clickhouse
+statement error 1065
 SELECT sqrt('a'); 
 
 statement query F
@@ -365,10 +371,12 @@ SELECT pow(number, NULL) from numbers(2);
 NULL
 NULL
 
-statement error 1007
+skipif clickhouse
+statement error 1065
 SELECT pow('a', 2); 
 
-statement error 1007
+skipif clickhouse
+statement error 1065
 SELECT pow(2, 'a'); 
 
 statement ok

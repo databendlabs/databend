@@ -523,9 +523,11 @@ pub struct QueryConfig {
     #[clap(long, default_value = "256")]
     pub max_active_sessions: u64,
 
+    #[deprecated(note = "clickhouse tcp support is deprecated")]
     #[clap(long, default_value = "127.0.0.1")]
     pub clickhouse_handler_host: String,
 
+    #[deprecated(note = "clickhouse tcp support is deprecated")]
     #[clap(long, default_value = "9000")]
     pub clickhouse_handler_port: u16,
 
@@ -665,8 +667,6 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             mysql_handler_host: self.mysql_handler_host,
             mysql_handler_port: self.mysql_handler_port,
             max_active_sessions: self.max_active_sessions,
-            clickhouse_handler_host: self.clickhouse_handler_host,
-            clickhouse_handler_port: self.clickhouse_handler_port,
             clickhouse_http_handler_host: self.clickhouse_http_handler_host,
             clickhouse_http_handler_port: self.clickhouse_http_handler_port,
             http_handler_host: self.http_handler_host,
@@ -705,6 +705,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
     }
 }
 
+#[allow(deprecated)]
 impl From<InnerQueryConfig> for QueryConfig {
     fn from(inner: InnerQueryConfig) -> Self {
         Self {
@@ -714,8 +715,11 @@ impl From<InnerQueryConfig> for QueryConfig {
             mysql_handler_host: inner.mysql_handler_host,
             mysql_handler_port: inner.mysql_handler_port,
             max_active_sessions: inner.max_active_sessions,
-            clickhouse_handler_host: inner.clickhouse_handler_host,
-            clickhouse_handler_port: inner.clickhouse_handler_port,
+
+            // clickhouse tcp is deprecated
+            clickhouse_handler_host: "127.0.0.1".to_string(),
+            clickhouse_handler_port: 9000,
+
             clickhouse_http_handler_host: inner.clickhouse_http_handler_host,
             clickhouse_http_handler_port: inner.clickhouse_http_handler_port,
             http_handler_host: inner.http_handler_host,

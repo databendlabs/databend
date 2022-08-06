@@ -84,7 +84,8 @@ impl PhysicalPlanBuilder {
                     })
                     .transpose()?;
 
-                let table = metadata.table(scan.table_index).table.clone();
+                let table_entry = metadata.table(scan.table_index);
+                let table = table_entry.table.clone();
                 let table_schema = table.schema();
                 let projection = scan
                     .columns
@@ -102,7 +103,13 @@ impl PhysicalPlanBuilder {
                     ..Default::default()
                 };
 
-                let source = table.read_plan(self.ctx.clone(), Some(push_downs)).await?;
+                let source = table
+                    .read_plan_with_catalog(
+                        self.ctx.clone(),
+                        table_entry.catalog.clone(),
+                        Some(push_downs),
+                    )
+                    .await?;
                 Ok(PhysicalPlan::TableScan(TableScan {
                     name_mapping,
                     source: Box::new(source),

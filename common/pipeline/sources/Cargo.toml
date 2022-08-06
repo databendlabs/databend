@@ -29,7 +29,6 @@ itertools = "0.10.3"
 num_cpus = "1.13.1"
 once_cell = "1.12.0"
 opendal = { version = "0.11.4", features = ["retry"] }
-opensrv-clickhouse = "0.1.0"
 parking_lot = "0.12.1"
 petgraph = "0.6.2"
 serde = { version = "1.0.137", features = ["derive"] }

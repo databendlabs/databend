@@ -22,6 +22,7 @@ SELECT FROM_BASE64(NULL);
 ----
 NULL
 
+skipif clickhouse
 statement error 1060
 SELECT FROM_BASE64('1'); 
 

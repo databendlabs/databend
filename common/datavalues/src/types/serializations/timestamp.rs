@@ -16,8 +16,6 @@ use chrono::DateTime;
 use chrono_tz::Tz;
 use common_exception::Result;
 use common_io::prelude::FormatSettings;
-use opensrv_clickhouse::types::column::ArcColumnWrapper;
-use opensrv_clickhouse::types::column::ColumnFrom;
 use serde_json::Value;
 
 use crate::ColumnRef;
@@ -78,36 +76,5 @@ impl<'a> TypeSerializer<'a> for TimestampSerializer<'a> {
             })
             .collect();
         Ok(result)
-    }
-
-    fn serialize_clickhouse_const(
-        &self,
-        format: &FormatSettings,
-        size: usize,
-    ) -> Result<opensrv_clickhouse::types::column::ArcColumnData> {
-        let times: Vec<DateTime<Tz>> = self
-            .values
-            .iter()
-            .map(|v| self.to_timestamp(v, &format.timezone))
-            .collect();
-        let mut values: Vec<DateTime<Tz>> = Vec::with_capacity(self.values.len() * size);
-        for _ in 0..size {
-            for v in times.iter() {
-                values.push(*v)
-            }
-        }
-        Ok(Vec::column_from::<ArcColumnWrapper>(values))
-    }
-
-    fn serialize_clickhouse_column(
-        &self,
-        format: &FormatSettings,
-    ) -> Result<opensrv_clickhouse::types::column::ArcColumnData> {
-        let values: Vec<DateTime<Tz>> = self
-            .values
-            .iter()
-            .map(|v| self.to_timestamp(v, &format.timezone))
-            .collect();
-        Ok(Vec::column_from::<ArcColumnWrapper>(values))
     }
 }

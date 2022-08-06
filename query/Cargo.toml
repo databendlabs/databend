@@ -118,7 +118,6 @@ num_cpus = "1.13.1"
 octocrab = "0.16.0"
 once_cell = "1.12.0"
 opendal = { version = "0.11.4", features = ["retry", "compress"] }
-opensrv-clickhouse = "0.1.0"
 opensrv-mysql = "0.1.0"
 openssl = { version = "0.10.40", features = ["vendored"] }
 parking_lot = "0.12.1"
@@ -161,7 +160,6 @@ uuid = { version = "1.1.2", features = ["serde", "v4"] }
 walkdir = "2.3.2"
 
 [dev-dependencies]
-clickhouse-driver = { git = "https://github.com/datafuse-extras/clickhouse_driver", rev = "cf978da" }
 criterion = "0.3.5"
 goldenfile = "1.4"
 hex = "0.4.3"
