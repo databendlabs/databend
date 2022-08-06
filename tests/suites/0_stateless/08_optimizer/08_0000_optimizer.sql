@@ -1,3 +1,4 @@
+set enable_planner_v2 = 0;
 SET max_threads=16;
 
 -- https://github.com/datafuselabs/databend/issues/574

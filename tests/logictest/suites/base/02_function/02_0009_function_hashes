@@ -137,7 +137,7 @@ SELECT City64WithSeed('1234567890', 12.12);
 10660895976650300430
 
 statement query I
-SELECT City64WithSeed(CAST(100000 as DateTime), 1234);
+SELECT City64WithSeed(to_datetime(100000), 1234);
 
 ----
 4538088127563444061

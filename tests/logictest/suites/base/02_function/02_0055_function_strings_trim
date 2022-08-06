@@ -12,10 +12,3 @@ select trim('abc');
 
 ----
 abc
-
-statement query T
-select trim(null);
-
-----
-NULL
-

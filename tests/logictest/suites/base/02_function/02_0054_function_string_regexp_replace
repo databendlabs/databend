@@ -106,12 +106,15 @@ abc def ghi
 statement ok
 DROP TABLE t1;
 
+skipif clickhouse
 statement error 1006
 SELECT REGEXP_REPLACE('a b c', 'b', 'X', 0); 
 
+skipif clickhouse
 statement error 1006
 SELECT REGEXP_REPLACE('a b c', 'b', 'X', 1, -1); 
 
+skipif clickhouse
 statement error 1006
 SELECT REGEXP_REPLACE('a b c', 'b', 'X', 1, 0, '-i'); 
 

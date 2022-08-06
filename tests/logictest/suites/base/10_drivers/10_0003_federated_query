@@ -1,4 +1,7 @@
 statement ok
+set enable_planner_v2 = 0;
+
+statement ok
 /*!40101*/select number from numbers_mt(2) ORDER BY number;
 
 statement ok
