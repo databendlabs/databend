@@ -19,8 +19,6 @@ use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_meta_app::share::CreateShareReq;
 use common_meta_app::share::DropShareReq;
-use common_meta_app::share::GrantShareObjectReq;
-use common_meta_app::share::RevokeShareObjectReq;
 use common_meta_app::share::ShareGrantObjectName;
 use common_meta_app::share::ShareGrantObjectPrivilege;
 use common_meta_app::share::ShareNameIdent;
@@ -83,24 +81,9 @@ impl DropSharePlan {
 // Grant Share Object Plan
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct GrantShareObjectPlan {
-    pub tenant: String,
     pub share: String,
     pub object: ShareGrantObjectName,
     pub privilege: ShareGrantObjectPrivilege,
-}
-
-impl From<GrantShareObjectPlan> for GrantShareObjectReq {
-    fn from(p: GrantShareObjectPlan) -> Self {
-        GrantShareObjectReq {
-            share_name: ShareNameIdent {
-                tenant: p.tenant,
-                share_name: p.share,
-            },
-            object: p.object,
-            privilege: p.privilege,
-            grant_on: Utc::now(),
-        }
-    }
 }
 
 impl GrantShareObjectPlan {
@@ -112,24 +95,9 @@ impl GrantShareObjectPlan {
 // Revoke Share Object Plan
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct RevokeShareObjectPlan {
-    pub tenant: String,
     pub share: String,
     pub object: ShareGrantObjectName,
     pub privilege: ShareGrantObjectPrivilege,
-}
-
-impl From<RevokeShareObjectPlan> for RevokeShareObjectReq {
-    fn from(p: RevokeShareObjectPlan) -> Self {
-        RevokeShareObjectReq {
-            share_name: ShareNameIdent {
-                tenant: p.tenant,
-                share_name: p.share,
-            },
-            object: p.object,
-            privilege: p.privilege,
-            update_on: Utc::now(),
-        }
-    }
 }
 
 impl RevokeShareObjectPlan {

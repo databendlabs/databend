@@ -14,8 +14,11 @@
 
 use std::sync::Arc;
 
+use common_datavalues::chrono::Utc;
 use common_exception::Result;
 use common_meta_api::ShareApi;
+use common_meta_app::share::RevokeShareObjectReq;
+use common_meta_app::share::ShareNameIdent;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
@@ -42,11 +45,19 @@ impl Interpreter for RevokeShareObjectInterpreter {
     }
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {
+        let tenant = self.ctx.get_tenant();
         let user_mgr = self.ctx.get_user_manager();
         let meta_api = user_mgr.get_meta_store_client();
-        meta_api
-            .revoke_share_object(self.plan.clone().into())
-            .await?;
+        let req = RevokeShareObjectReq {
+            share_name: ShareNameIdent {
+                tenant,
+                share_name: self.plan.share.clone(),
+            },
+            object: self.plan.object.clone(),
+            privilege: self.plan.privilege,
+            update_on: Utc::now(),
+        };
+        meta_api.revoke_share_object(req).await?;
 
         Ok(Box::pin(DataBlockStream::create(
             self.plan.schema(),

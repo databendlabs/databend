@@ -74,7 +74,6 @@ impl<'a> Binder {
         let share = share.name.to_lowercase();
 
         let plan = GrantShareObjectPlan {
-            tenant: self.ctx.get_tenant(),
             share,
             object: object.clone(),
             privilege: *privilege,
@@ -95,7 +94,6 @@ impl<'a> Binder {
         let share = share.name.to_lowercase();
 
         let plan = RevokeShareObjectPlan {
-            tenant: self.ctx.get_tenant(),
             share,
             object: object.clone(),
             privilege: *privilege,
