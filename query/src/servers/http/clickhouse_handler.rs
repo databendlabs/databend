@@ -142,15 +142,23 @@ async fn execute(
     let session = ctx.get_current_session();
     let stream = stream! {
         yield compress_fn(prefix);
+        let mut ok = true;
         while let Some(block) = data_stream.next().await {
             match block{
                 Ok(block) => {
                     yield compress_fn(output_format.serialize_block(&block));
                 },
-                Err(err) => yield(Err(err)),
+                Err(err) => {
+                    let message = format!("{}", err);
+                    yield compress_fn(Ok(message.into_bytes()));
+                    ok = false;
+                    break
+                }
             };
         }
-        yield compress_fn(output_format.finalize());
+        if ok {
+            yield compress_fn(output_format.finalize());
+        }
 
         let _ = interpreter
             .finish()
