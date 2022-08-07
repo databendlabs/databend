@@ -100,7 +100,7 @@ impl ExchangeSink {
         }
     }
 
-    pub fn via_exchange(
+    pub fn via(
         ctx: &Arc<QueryContext>,
         params: &ExchangeParams,
         pipeline: &mut Pipeline,

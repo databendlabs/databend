@@ -14,6 +14,8 @@
 
 use std::convert::TryInto;
 use std::marker::PhantomData;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use async_channel::{Receiver, Sender, TryRecvError};
 use futures_util::StreamExt;
@@ -125,7 +127,7 @@ impl FlightExchange {
         let (tx, rx) = async_channel::bounded(1);
         common_base::base::tokio::spawn(async move {
             while let Some(message) = streaming.next().await {
-                if let Err(cause) = tx.send(message).await {
+                if let Err(_cause) = tx.send(message).await {
                     break;
                 }
             }
@@ -133,7 +135,7 @@ impl FlightExchange {
 
         FlightExchange::Server(ServerFlightExchange {
             response_tx,
-            streaming: rx,
+            request_rx: rx,
         })
     }
 
@@ -141,7 +143,7 @@ impl FlightExchange {
         response_tx: Sender<FlightData>,
         mut streaming: Streaming<FlightData>,
     ) -> FlightExchange {
-        let (tx, rx) = async_channel::bounded(1);
+        let (tx, request_rx) = async_channel::bounded(1);
         common_base::base::tokio::spawn(async move {
             while let Some(message) = streaming.next().await {
                 if let Err(cause) = tx.send(message).await {
@@ -151,8 +153,9 @@ impl FlightExchange {
         });
 
         FlightExchange::Client(ClientFlightExchange {
-            streaming: rx,
+            request_rx,
             response_tx,
+            state: Arc::new(ChannelState::create()),
         })
     }
 }
@@ -178,17 +181,45 @@ impl FlightExchange {
             FlightExchange::Server(exchange) => exchange.try_recv(),
         }
     }
+
+    pub fn close_request(&self) {
+        match self {
+            FlightExchange::Client(exchange) => exchange.close_request(),
+            FlightExchange::Server(exchange) => exchange.close_request(),
+        }
+    }
+
+    pub fn close_response(&self) {
+        match self {
+            FlightExchange::Client(exchange) => exchange.close_response(),
+            FlightExchange::Server(exchange) => exchange.close_response(),
+        }
+    }
 }
 
-#[derive(Clone)]
+struct ChannelState {
+    request_count: AtomicUsize,
+    response_count: AtomicUsize,
+}
+
+impl ChannelState {
+    pub fn create() -> ChannelState {
+        ChannelState {
+            request_count: AtomicUsize::new(1),
+            response_count: AtomicUsize::new(1),
+        }
+    }
+}
+
 pub struct ClientFlightExchange {
+    state: Arc<ChannelState>,
     response_tx: Sender<FlightData>,
-    streaming: Receiver<std::result::Result<FlightData, Status>>,
+    request_rx: Receiver<std::result::Result<FlightData, Status>>,
 }
 
 impl ClientFlightExchange {
     pub async fn send(&self, data: DataPacket) -> Result<()> {
-        if let Err(cause) = self.response_tx.send(FlightData::from(data)).await {
+        if let Err(_cause) = self.response_tx.send(FlightData::from(data)).await {
             return Err(ErrorCode::LogicalError("It's a bug"));
         }
 
@@ -196,7 +227,7 @@ impl ClientFlightExchange {
     }
 
     pub async fn recv(&self) -> Result<Option<DataPacket>> {
-        match self.streaming.recv().await {
+        match self.request_rx.recv().await {
             Err(_) => Ok(None),
             Ok(message) => match message {
                 Ok(data) => Ok(Some(DataPacket::try_from(data)?)),
@@ -206,7 +237,7 @@ impl ClientFlightExchange {
     }
 
     pub fn try_recv(&self) -> Result<Option<DataPacket>> {
-        match self.streaming.try_recv() {
+        match self.request_rx.try_recv() {
             Err(_) => Ok(None),
             Ok(message) => match message {
                 Ok(data) => Ok(Some(DataPacket::try_from(data)?)),
@@ -214,12 +245,75 @@ impl ClientFlightExchange {
             }
         }
     }
+
+    pub fn close_request(&self) {
+        if self.state.request_count.fetch_sub(1, Ordering::AcqRel) == 1 {
+            self.request_rx.close();
+        }
+    }
+
+    pub fn close_response(&self) {
+        if self.state.response_count.fetch_sub(1, Ordering::AcqRel) == 1 {
+            self.request_rx.close();
+        }
+    }
+}
+
+impl Clone for ClientFlightExchange {
+    fn clone(&self) -> Self {
+        self.state.request_count.fetch_add(1, Ordering::SeqCst);
+        self.state.response_count.fetch_add(1, Ordering::SeqCst);
+
+        ClientFlightExchange {
+            state: self.state.clone(),
+            request_rx: self.request_rx.clone(),
+            response_tx: self.response_tx.clone(),
+        }
+    }
+}
+
+impl Drop for ClientFlightExchange {
+    fn drop(&mut self) {
+        if self.state.request_count.fetch_sub(1, Ordering::AcqRel) == 1 {
+            self.request_rx.close();
+        }
+
+        if self.state.response_count.fetch_sub(1, Ordering::AcqRel) == 1 {
+            self.response_tx.close();
+        }
+    }
 }
 
 #[derive(Clone)]
 pub struct ServerFlightExchange {
-    streaming: Receiver<std::result::Result<FlightData, Status>>,
+    state: Arc<ChannelState>,
+    request_rx: Receiver<std::result::Result<FlightData, Status>>,
     response_tx: Sender<std::result::Result<FlightData, Status>>,
+}
+
+impl Clone for ServerFlightExchange {
+    fn clone(&self) -> Self {
+        self.state.request_count.fetch_add(1, Ordering::SeqCst);
+        self.state.response_count.fetch_add(1, Ordering::SeqCst);
+
+        ServerFlightExchange {
+            state: self.state.clone(),
+            request_rx: self.request_rx.clone(),
+            response_tx: self.response_tx.clone(),
+        }
+    }
+}
+
+impl Drop for ClientFlightExchange {
+    fn drop(&mut self) {
+        if self.state.request_count.fetch_sub(1, Ordering::AcqRel) == 1 {
+            self.request_rx.close();
+        }
+
+        if self.state.response_count.fetch_sub(1, Ordering::AcqRel) == 1 {
+            self.response_tx.close();
+        }
+    }
 }
 
 impl ServerFlightExchange {
@@ -232,7 +326,7 @@ impl ServerFlightExchange {
     }
 
     pub async fn recv(&self) -> Result<Option<DataPacket>> {
-        match self.streaming.recv().await {
+        match self.request_rx.recv().await {
             Err(_) => Ok(None),
             Ok(message) => match message {
                 Ok(data) => Ok(Some(DataPacket::try_from(data)?)),
@@ -242,12 +336,24 @@ impl ServerFlightExchange {
     }
 
     pub fn try_recv(&self) -> Result<Option<DataPacket>> {
-        match self.streaming.try_recv() {
+        match self.request_rx.try_recv() {
             Err(_) => Ok(None),
             Ok(message) => match message {
                 Ok(data) => Ok(Some(DataPacket::try_from(data)?)),
                 Err(status) => Err(ErrorCode::from(status)),
             }
+        }
+    }
+
+    pub fn close_request(&self) {
+        if self.state.request_count.fetch_sub(1, Ordering::AcqRel) == 1 {
+            self.request_rx.close();
+        }
+    }
+
+    pub fn close_response(&self) {
+        if self.state.response_count.fetch_sub(1, Ordering::AcqRel) == 1 {
+            self.request_rx.close();
         }
     }
 }

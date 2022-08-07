@@ -54,6 +54,7 @@ use crate::api::FragmentPayload;
 use crate::api::FragmentPlanPacket;
 use crate::api::InitNodesChannelPacket;
 use crate::api::QueryFragmentsPlanPacket;
+use crate::api::rpc::exchange::exchange_transform::ExchangeTransform;
 use crate::api::rpc::flight_client::FlightExchange;
 use crate::interpreters::QueryFragmentActions;
 use crate::interpreters::QueryFragmentsActions;
@@ -361,21 +362,18 @@ impl QueryCoordinatorNew {
                 return Ok(fragment_coordinator.pipeline_build_res.unwrap());
             }
 
-            // let exchange_params = fragment_coordinator.create_exchange_params(self)?;
-            // let mut build_res = fragment_coordinator.pipeline_build_res.unwrap();
-            //
-            // // Add exchange data publisher.
-            // ExchangeSink::via_exchange(&self.ctx, &exchange_params, &mut build_res.main_pipeline)?;
-            //
-            // let data_exchange = fragment_coordinator.data_exchange.as_ref().unwrap();
-            //
-            // // Add exchange data subscriber.
-            // if data_exchange.from_multiple_nodes() {
-            //     ExchangeSource::via_exchange(rx, &exchange_params, &mut build_res.main_pipeline)?;
-            // }
+            let exchange_params = fragment_coordinator.create_exchange_params_new(self)?;
+            let mut build_res = fragment_coordinator.pipeline_build_res.unwrap();
 
-            unimplemented!()
-            // return Ok(build_res);
+            let data_exchange = fragment_coordinator.data_exchange.as_ref().unwrap();
+
+            // Add exchange data transform.
+            match !data_exchange.from_multiple_nodes() {
+                true => ExchangeSink::via(ctx, &exchange_params, &mut build_res.main_pipeline)?,
+                false => ExchangeTransform::via(ctx, &exchange_params, &mut build_res.main_pipeline)?,
+            };
+
+            return Ok(build_res);
         }
 
         let mut pipeline = Pipeline::create();
@@ -796,7 +794,7 @@ impl QueryCoordinator {
             let mut build_res = fragment_coordinator.pipeline_build_res.unwrap();
 
             // Add exchange data publisher.
-            ExchangeSink::via_exchange(&self.ctx, &exchange_params, &mut build_res.main_pipeline)?;
+            ExchangeSink::via(&self.ctx, &exchange_params, &mut build_res.main_pipeline)?;
 
             let data_exchange = fragment_coordinator.data_exchange.as_ref().unwrap();
 
@@ -843,6 +841,61 @@ impl FragmentCoordinator {
     }
 
     pub fn create_exchange_params(&self, query: &QueryCoordinator) -> Result<ExchangeParams> {
+        match &self.data_exchange {
+            None => Err(ErrorCode::LogicalError("Cannot find data exchange.")),
+            Some(DataExchange::Merge(exchange)) => {
+                Ok(ExchangeParams::MergeExchange(MergeExchangeParams {
+                    schema: self.payload.schema()?,
+                    fragment_id: self.fragment_id,
+                    query_id: query.query_id.to_string(),
+                    destination_id: exchange.destination_id.clone(),
+                }))
+            }
+            Some(DataExchange::Broadcast(exchange)) => {
+                Ok(ExchangeParams::ShuffleExchange(ShuffleExchangeParams {
+                    schema: self.payload.schema()?,
+                    fragment_id: self.fragment_id,
+                    query_id: query.query_id.to_string(),
+                    executor_id: query.executor_id.to_string(),
+                    destination_ids: exchange.destination_ids.to_owned(),
+                    shuffle_scatter: Arc::new(Box::new(BroadcastFlightScatter::try_create(
+                        exchange.destination_ids.len(),
+                    )?)),
+                }))
+            }
+            Some(DataExchange::ShuffleDataExchange(exchange)) => {
+                Ok(ExchangeParams::ShuffleExchange(ShuffleExchangeParams {
+                    schema: self.payload.schema()?,
+                    fragment_id: self.fragment_id,
+                    query_id: query.query_id.to_string(),
+                    executor_id: query.executor_id.to_string(),
+                    destination_ids: exchange.destination_ids.to_owned(),
+                    shuffle_scatter: Arc::new(Box::new(HashFlightScatter::try_create(
+                        query.ctx.clone(),
+                        self.payload.schema()?,
+                        Some(exchange.exchange_expression.clone()),
+                        exchange.destination_ids.len(),
+                    )?)),
+                }))
+            }
+            Some(DataExchange::ShuffleDataExchangeV2(exchange)) => {
+                Ok(ExchangeParams::ShuffleExchange(ShuffleExchangeParams {
+                    schema: self.payload.schema()?,
+                    fragment_id: self.fragment_id,
+                    query_id: query.query_id.to_string(),
+                    executor_id: query.executor_id.to_string(),
+                    destination_ids: exchange.destination_ids.to_owned(),
+                    shuffle_scatter: Arc::new(Box::new(HashFlightScatterV2::try_create(
+                        query.ctx.try_get_function_context()?,
+                        exchange.shuffle_keys.clone(),
+                        exchange.destination_ids.len(),
+                    )?)),
+                }))
+            }
+        }
+    }
+
+    pub fn create_exchange_params_new(&self, query: &QueryCoordinatorNew) -> Result<ExchangeParams> {
         match &self.data_exchange {
             None => Err(ErrorCode::LogicalError("Cannot find data exchange.")),
             Some(DataExchange::Merge(exchange)) => {
