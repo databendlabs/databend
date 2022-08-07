@@ -18,8 +18,7 @@ use common_datavalues::DataSchema;
 use common_exception::Result;
 use common_streams::SendableDataBlockStream;
 
-use crate::procedures::procedure::BlockStreamProcedure;
-use crate::procedures::procedure::BlockStreamWrapper;
+use crate::procedures::procedure::ProcedureStream;
 use crate::procedures::Procedure;
 use crate::procedures::ProcedureFeatures;
 use crate::sessions::QueryContext;
@@ -30,12 +29,13 @@ pub struct FuseSnapshotProcedure {}
 
 impl FuseSnapshotProcedure {
     pub fn try_create() -> Result<Box<dyn Procedure>> {
-        Ok(Box::new(FuseSnapshotProcedure {}.wrap()))
+        // Ok(Box::new(FuseSnapshotProcedure {}.to_procedure()))
+        Ok(FuseSnapshotProcedure {}.into_procedure())
     }
 }
 
 #[async_trait::async_trait]
-impl BlockStreamProcedure for FuseSnapshotProcedure {
+impl ProcedureStream for FuseSnapshotProcedure {
     fn name(&self) -> &str {
         "FUSE_SNAPSHOT"
     }

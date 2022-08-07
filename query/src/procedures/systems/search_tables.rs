@@ -24,9 +24,8 @@ use futures::TryStreamExt;
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreter;
 use crate::optimizers::Optimizers;
-use crate::procedures::procedure::OneBlockWrapper;
-use crate::procedures::OneBlockProcedure;
 use crate::procedures::Procedure;
+use crate::procedures::ProcedureBlock;
 use crate::procedures::ProcedureFeatures;
 use crate::sessions::QueryContext;
 use crate::sql::PlanParser;
@@ -36,12 +35,12 @@ pub struct SearchTablesProcedure {}
 
 impl SearchTablesProcedure {
     pub fn try_create() -> Result<Box<dyn Procedure>> {
-        Ok(Box::new(OneBlockWrapper(SearchTablesProcedure {})))
+        Ok(SearchTablesProcedure {}.into_procedure())
     }
 }
 
 #[async_trait::async_trait]
-impl OneBlockProcedure for SearchTablesProcedure {
+impl ProcedureBlock for SearchTablesProcedure {
     fn name(&self) -> &str {
         "SEARCH_TABLES"
     }

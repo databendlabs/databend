@@ -24,9 +24,8 @@ use common_exception::Result;
 use common_meta_types::TenantQuota;
 use common_meta_types::UserOptionFlag;
 
-use crate::procedures::procedure::OneBlockWrapper;
-use crate::procedures::OneBlockProcedure;
 use crate::procedures::Procedure;
+use crate::procedures::ProcedureBlock;
 use crate::procedures::ProcedureFeatures;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
@@ -35,12 +34,12 @@ pub struct TenantQuotaProcedure;
 
 impl TenantQuotaProcedure {
     pub fn try_create() -> Result<Box<dyn Procedure>> {
-        Ok(Box::new(OneBlockWrapper(TenantQuotaProcedure {})))
+        Ok(TenantQuotaProcedure {}.into_procedure())
     }
 }
 
 #[async_trait::async_trait]
-impl OneBlockProcedure for TenantQuotaProcedure {
+impl ProcedureBlock for TenantQuotaProcedure {
     fn name(&self) -> &str {
         "TENANT_QUOTA"
     }

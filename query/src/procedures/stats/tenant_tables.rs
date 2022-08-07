@@ -23,9 +23,8 @@ use common_exception::Result;
 use common_meta_app::schema::CountTablesReq;
 use common_meta_types::UserOptionFlag;
 
-use crate::procedures::procedure::OneBlockWrapper;
-use crate::procedures::OneBlockProcedure;
 use crate::procedures::Procedure;
+use crate::procedures::ProcedureBlock;
 use crate::procedures::ProcedureFeatures;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
@@ -34,12 +33,12 @@ pub struct TenantTablesProcedure {}
 
 impl TenantTablesProcedure {
     pub fn try_create() -> Result<Box<dyn Procedure>> {
-        Ok(Box::new(OneBlockWrapper(TenantTablesProcedure {})))
+        Ok(TenantTablesProcedure {}.into_procedure())
     }
 }
 
 #[async_trait::async_trait]
-impl OneBlockProcedure for TenantTablesProcedure {
+impl ProcedureBlock for TenantTablesProcedure {
     fn name(&self) -> &str {
         "TENANT_TABLES"
     }

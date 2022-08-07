@@ -23,9 +23,8 @@ use common_meta_types::UserOptionFlag;
 use common_meta_types::UserPrivilegeSet;
 use tracing::info;
 
-use crate::procedures::procedure::OneBlockWrapper;
-use crate::procedures::OneBlockProcedure;
 use crate::procedures::Procedure;
+use crate::procedures::ProcedureBlock;
 use crate::procedures::ProcedureFeatures;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
@@ -34,12 +33,12 @@ pub struct BootstrapTenantProcedure {}
 
 impl BootstrapTenantProcedure {
     pub fn try_create() -> Result<Box<dyn Procedure>> {
-        Ok(Box::new(OneBlockWrapper(BootstrapTenantProcedure {})))
+        Ok(BootstrapTenantProcedure {}.into_procedure())
     }
 }
 
 #[async_trait::async_trait]
-impl OneBlockProcedure for BootstrapTenantProcedure {
+impl ProcedureBlock for BootstrapTenantProcedure {
     fn name(&self) -> &str {
         "BOOTSTRAP_TENANT"
     }

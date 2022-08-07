@@ -75,7 +75,15 @@ pub trait Procedure: Sync + Send {
 }
 
 #[async_trait::async_trait]
-pub trait OneBlockProcedure {
+pub trait ProcedureBlock {
+    fn into_procedure(self) -> Box<dyn Procedure>
+    where
+        Self: Send + Sync,
+        Self: Sized + 'static,
+    {
+        Box::new(BlockProcedure(self))
+    }
+
     fn name(&self) -> &str;
 
     fn features(&self) -> ProcedureFeatures;
@@ -86,11 +94,15 @@ pub trait OneBlockProcedure {
 }
 
 #[async_trait::async_trait]
-pub trait BlockStreamProcedure
+pub trait ProcedureStream
 where Self: Sized
 {
-    fn wrap(self) -> BlockStreamWrapper<Self> {
-        BlockStreamWrapper(self)
+    fn into_procedure(self) -> Box<dyn Procedure>
+    where
+        Self: Send + Sync,
+        Self: Sized + 'static,
+    {
+        Box::new(StreamProcedureWrapper(self))
     }
 
     fn name(&self) -> &str;
@@ -106,11 +118,11 @@ where Self: Sized
     fn schema(&self) -> Arc<DataSchema>;
 }
 
-pub struct OneBlockWrapper<T>(pub T);
+struct BlockProcedure<T>(pub T);
 
 #[async_trait::async_trait]
-impl<T> Procedure for OneBlockWrapper<T>
-where T: OneBlockProcedure + Sync + Send
+impl<T> Procedure for BlockProcedure<T>
+where T: ProcedureBlock + Sync + Send
 {
     fn procedure_name(&self) -> &str {
         self.0.name()
@@ -149,11 +161,11 @@ where T: OneBlockProcedure + Sync + Send
     }
 }
 
-pub struct BlockStreamWrapper<T>(pub T);
+struct StreamProcedureWrapper<T>(pub T);
 
 #[async_trait::async_trait]
-impl<T> Procedure for BlockStreamWrapper<T>
-where T: BlockStreamProcedure + Sync + Send
+impl<T> Procedure for StreamProcedureWrapper<T>
+where T: ProcedureStream + Sync + Send
 {
     fn procedure_name(&self) -> &str {
         self.0.name()

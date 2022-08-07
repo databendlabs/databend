@@ -18,9 +18,8 @@ use common_datablocks::DataBlock;
 use common_datavalues::DataSchema;
 use common_exception::Result;
 
-use crate::procedures::procedure::OneBlockWrapper;
-use crate::procedures::OneBlockProcedure;
 use crate::procedures::Procedure;
+use crate::procedures::ProcedureBlock;
 use crate::procedures::ProcedureFeatures;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
@@ -32,12 +31,12 @@ pub struct ClusteringInformationProcedure {}
 
 impl ClusteringInformationProcedure {
     pub fn try_create() -> Result<Box<dyn Procedure>> {
-        Ok(Box::new(OneBlockWrapper(ClusteringInformationProcedure {})))
+        Ok(ClusteringInformationProcedure {}.into_procedure())
     }
 }
 
 #[async_trait::async_trait]
-impl OneBlockProcedure for ClusteringInformationProcedure {
+impl ProcedureBlock for ClusteringInformationProcedure {
     fn name(&self) -> &str {
         "CLUSTERING_INFORMATION"
     }
