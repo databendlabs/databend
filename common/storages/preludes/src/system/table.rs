@@ -53,9 +53,7 @@ pub struct SyncOneBlockSystemTable<TTable: SyncSystemTable> {
     inner_table: Arc<TTable>,
 }
 
-impl<TTable: 'static + SyncSystemTable> SyncOneBlockSystemTable<TTable>
-where Self: Table
-{
+impl<TTable: 'static + SyncSystemTable> SyncOneBlockSystemTable<TTable> {
     pub fn create(inner: TTable) -> Arc<dyn Table> {
         Arc::new(SyncOneBlockSystemTable::<TTable> {
             inner_table: Arc::new(inner),
@@ -109,9 +107,7 @@ struct SystemTableSyncSource<TTable: 'static + SyncSystemTable> {
     context: Arc<dyn TableContext>,
 }
 
-impl<TTable: 'static + SyncSystemTable> SystemTableSyncSource<TTable>
-where Self: SyncSource
-{
+impl<TTable: 'static + SyncSystemTable> SystemTableSyncSource<TTable> {
     pub fn create(
         ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
@@ -158,9 +154,7 @@ pub struct AsyncOneBlockSystemTable<TTable: AsyncSystemTable> {
     inner_table: Arc<TTable>,
 }
 
-impl<TTable: 'static + AsyncSystemTable> AsyncOneBlockSystemTable<TTable>
-where Self: Table
-{
+impl<TTable: 'static + AsyncSystemTable> AsyncOneBlockSystemTable<TTable> {
     pub fn create(inner: TTable) -> Arc<dyn Table> {
         Arc::new(AsyncOneBlockSystemTable::<TTable> {
             inner_table: Arc::new(inner),

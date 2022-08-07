@@ -22,7 +22,7 @@ use futures_util::stream;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::TableSnapshotReader;
 
-impl<'a> TableSnapshotReader<'a> {
+impl TableSnapshotReader {
     pub async fn read_snapshot_history(
         &self,
         latest_snapshot_location: Option<impl AsRef<str>>,
@@ -72,15 +72,13 @@ impl<'a> TableSnapshotReader<'a> {
     }
 
     pub fn snapshot_history(
-        &'a self,
+        self,
         location: String,
         format_version: u64,
         location_gen: TableMetaLocationGenerator,
     ) -> Pin<
         Box<
-            dyn futures::stream::Stream<Item = common_exception::Result<Arc<TableSnapshot>>>
-                + 'a
-                + Send,
+            dyn futures::stream::Stream<Item = common_exception::Result<Arc<TableSnapshot>>> + Send,
         >,
     > {
         let stream = stream::try_unfold(

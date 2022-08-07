@@ -23,6 +23,8 @@ use common_meta_types::UserOptionFlag;
 use common_meta_types::UserPrivilegeSet;
 use tracing::info;
 
+use crate::procedures::procedure::OneBlockWrapper;
+use crate::procedures::OneBlockProcedure;
 use crate::procedures::Procedure;
 use crate::procedures::ProcedureFeatures;
 use crate::sessions::QueryContext;
@@ -32,12 +34,12 @@ pub struct BootstrapTenantProcedure {}
 
 impl BootstrapTenantProcedure {
     pub fn try_create() -> Result<Box<dyn Procedure>> {
-        Ok(Box::new(BootstrapTenantProcedure {}))
+        Ok(Box::new(OneBlockWrapper(BootstrapTenantProcedure {})))
     }
 }
 
 #[async_trait::async_trait]
-impl Procedure for BootstrapTenantProcedure {
+impl OneBlockProcedure for BootstrapTenantProcedure {
     fn name(&self) -> &str {
         "BOOTSTRAP_TENANT"
     }
@@ -51,7 +53,7 @@ impl Procedure for BootstrapTenantProcedure {
             .user_option_flag(UserOptionFlag::TenantSetting)
     }
 
-    async fn inner_eval(&self, ctx: Arc<QueryContext>, args: Vec<String>) -> Result<DataBlock> {
+    async fn all_data(&self, ctx: Arc<QueryContext>, args: Vec<String>) -> Result<DataBlock> {
         let tenant = args[0].clone();
         let user_mgr = ctx.get_user_manager();
 

@@ -14,43 +14,98 @@
 
 use std::sync::Arc;
 
+use common_catalog::table::Table;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_fuse_meta::meta::TableSnapshot;
+use common_streams::DataBlockStream;
+use common_streams::SendableDataBlockStream;
+use futures::stream::StreamExt;
+use futures::stream::TryStreamExt;
 
 use crate::io::MetaReaders;
+use crate::io::TableMetaLocationGenerator;
 use crate::sessions::TableContext;
 use crate::FuseTable;
 
-pub struct FuseSnapshot<'a> {
+pub struct FuseSnapshot {
     pub ctx: Arc<dyn TableContext>,
-    pub table: &'a FuseTable,
+    pub table: Arc<dyn Table>,
 }
 
-impl<'a> FuseSnapshot<'a> {
-    pub fn new(ctx: Arc<dyn TableContext>, table: &'a FuseTable) -> Self {
+impl FuseSnapshot {
+    pub fn new(ctx: Arc<dyn TableContext>, table: Arc<dyn Table>) -> Self {
         Self { ctx, table }
     }
 
-    pub async fn get_history(&self, limit: Option<usize>) -> Result<DataBlock> {
-        let tbl = self.table;
+    pub fn new_stream(
+        ctx: Arc<dyn TableContext>,
+        database_name: String,
+        table_name: String,
+        catalog_name: String,
+        limit: Option<usize>,
+    ) -> SendableDataBlockStream {
+        let table_instance = {
+            let ctx = ctx.clone();
+            async move {
+                let tenant_id = ctx.get_tenant();
+                let tbl = ctx
+                    .get_catalog(catalog_name.as_str())?
+                    .get_table(
+                        tenant_id.as_str(),
+                        database_name.as_str(),
+                        table_name.as_str(),
+                    )
+                    .await?;
+                Ok(tbl)
+            }
+        };
+
+        let resolved_table = futures::stream::once(table_instance);
+        let stream = resolved_table.map(move |item: Result<_>| match item {
+            Ok(table) => {
+                let fuse_snapshot = FuseSnapshot::new(ctx.clone(), table);
+                Ok(fuse_snapshot.get_history(limit)?)
+            }
+            Err(e) => Err(e),
+        });
+
+        stream.try_flatten().boxed()
+    }
+
+    pub fn get_history(self, limit: Option<usize>) -> Result<SendableDataBlockStream> {
+        let tbl = FuseTable::try_from_table(self.table.as_ref())?;
         let snapshot_location = tbl.snapshot_loc();
-        let snapshot_version = tbl.snapshot_format_version();
-        let reader = MetaReaders::table_snapshot_reader(self.ctx.as_ref());
-        let snapshots = reader
-            .read_snapshot_history(
+        let meta_location_generator = tbl.meta_location_generator.clone();
+        if let Some(snapshot_location) = snapshot_location {
+            let snapshot_version = tbl.snapshot_format_version();
+            let snapshot_reader = MetaReaders::table_snapshot_reader(self.ctx.clone());
+            let snapshot_stream = snapshot_reader.snapshot_history(
                 snapshot_location,
                 snapshot_version,
                 tbl.meta_location_generator().clone(),
-                limit,
-            )
-            .await?;
-        self.snapshots_to_block(snapshots, snapshot_version)
+            );
+            let block_stream = snapshot_stream.map(move |snapshot| match snapshot {
+                Ok(snapshot) => Self::snapshots_to_block(
+                    &meta_location_generator,
+                    vec![snapshot],
+                    snapshot_version,
+                ),
+                Err(e) => Err(e),
+            });
+            if let Some(limit) = limit {
+                Ok(block_stream.take(limit).boxed())
+            } else {
+                Ok(block_stream.boxed())
+            }
+        } else {
+            Ok(DataBlockStream::create(FuseSnapshot::schema(), None, vec![]).boxed())
+        }
     }
 
     fn snapshots_to_block(
-        &self,
+        location_generator: &TableMetaLocationGenerator,
         snapshots: Vec<Arc<TableSnapshot>>,
         latest_snapshot_version: u64,
     ) -> Result<DataBlock> {
@@ -66,7 +121,6 @@ impl<'a> FuseSnapshot<'a> {
         let mut uncompressed: Vec<u64> = Vec::with_capacity(len);
         let mut timestamps: Vec<Option<i64>> = Vec::with_capacity(len);
         let mut current_snapshot_version = latest_snapshot_version;
-        let location_generator = &self.table.meta_location_generator;
         for s in snapshots {
             snapshot_ids.push(s.snapshot_id.simple().to_string().into_bytes());
             snapshot_locations.push(

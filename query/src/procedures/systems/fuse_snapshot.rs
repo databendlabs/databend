@@ -14,27 +14,28 @@
 
 use std::sync::Arc;
 
-use common_datablocks::DataBlock;
 use common_datavalues::DataSchema;
 use common_exception::Result;
+use common_streams::SendableDataBlockStream;
 
+use crate::procedures::procedure::BlockStreamProcedure;
+use crate::procedures::procedure::BlockStreamWrapper;
 use crate::procedures::Procedure;
 use crate::procedures::ProcedureFeatures;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::storages::fuse::table_functions::FuseSnapshot;
-use crate::storages::fuse::FuseTable;
 
 pub struct FuseSnapshotProcedure {}
 
 impl FuseSnapshotProcedure {
     pub fn try_create() -> Result<Box<dyn Procedure>> {
-        Ok(Box::new(FuseSnapshotProcedure {}))
+        Ok(Box::new(FuseSnapshotProcedure {}.wrap()))
     }
 }
 
 #[async_trait::async_trait]
-impl Procedure for FuseSnapshotProcedure {
+impl BlockStreamProcedure for FuseSnapshotProcedure {
     fn name(&self) -> &str {
         "FUSE_SNAPSHOT"
     }
@@ -43,7 +44,11 @@ impl Procedure for FuseSnapshotProcedure {
         ProcedureFeatures::default().variadic_arguments(2, 3)
     }
 
-    async fn inner_eval(&self, ctx: Arc<QueryContext>, args: Vec<String>) -> Result<DataBlock> {
+    async fn data_stream(
+        &self,
+        ctx: Arc<QueryContext>,
+        args: Vec<String>,
+    ) -> Result<SendableDataBlockStream> {
         let catalog_name = ctx.get_current_catalog();
         let tenant_id = ctx.get_tenant();
         let database_name = args[0].clone();
@@ -64,9 +69,7 @@ impl Procedure for FuseSnapshotProcedure {
             )
             .await?;
 
-        let tbl = FuseTable::try_from_table(tbl.as_ref())?;
-
-        Ok(FuseSnapshot::new(ctx, tbl).get_history(limit).await?)
+        FuseSnapshot::new(ctx, tbl).get_history(limit)
     }
 
     fn schema(&self) -> Arc<DataSchema> {

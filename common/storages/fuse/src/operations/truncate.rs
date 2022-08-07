@@ -34,7 +34,7 @@ impl FuseTable {
         purge: bool,
         catalog_name: &str,
     ) -> Result<()> {
-        if let Some(prev_snapshot) = self.read_table_snapshot(ctx.as_ref()).await? {
+        if let Some(prev_snapshot) = self.read_table_snapshot(ctx.clone()).await? {
             let prev_id = prev_snapshot.snapshot_id;
 
             let new_snapshot = TableSnapshot::new(

@@ -39,7 +39,7 @@ impl FuseTable {
         ctx: Arc<dyn TableContext>,
         push_downs: Option<Extras>,
     ) -> Result<(Statistics, Partitions)> {
-        let snapshot = self.read_table_snapshot(ctx.as_ref()).await?;
+        let snapshot = self.read_table_snapshot(ctx.clone()).await?;
         match snapshot {
             Some(snapshot) => {
                 if let Some(result) = self.check_quick_path(&snapshot, &push_downs) {

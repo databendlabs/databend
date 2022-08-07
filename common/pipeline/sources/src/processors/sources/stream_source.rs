@@ -31,6 +31,10 @@ pub struct StreamSource {
 }
 
 impl StreamSource {
+    pub fn new(stream: Option<SendableDataBlockStream>) -> Self {
+        StreamSource { stream }
+    }
+
     pub fn create(
         ctx: Arc<dyn TableContext>,
         stream: Option<SendableDataBlockStream>,

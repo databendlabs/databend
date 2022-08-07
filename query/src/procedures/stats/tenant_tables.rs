@@ -23,6 +23,8 @@ use common_exception::Result;
 use common_meta_app::schema::CountTablesReq;
 use common_meta_types::UserOptionFlag;
 
+use crate::procedures::procedure::OneBlockWrapper;
+use crate::procedures::OneBlockProcedure;
 use crate::procedures::Procedure;
 use crate::procedures::ProcedureFeatures;
 use crate::sessions::QueryContext;
@@ -32,12 +34,12 @@ pub struct TenantTablesProcedure {}
 
 impl TenantTablesProcedure {
     pub fn try_create() -> Result<Box<dyn Procedure>> {
-        Ok(Box::new(TenantTablesProcedure {}))
+        Ok(Box::new(OneBlockWrapper(TenantTablesProcedure {})))
     }
 }
 
 #[async_trait::async_trait]
-impl Procedure for TenantTablesProcedure {
+impl OneBlockProcedure for TenantTablesProcedure {
     fn name(&self) -> &str {
         "TENANT_TABLES"
     }
@@ -51,7 +53,7 @@ impl Procedure for TenantTablesProcedure {
             .user_option_flag(UserOptionFlag::TenantSetting)
     }
 
-    async fn inner_eval(&self, ctx: Arc<QueryContext>, args: Vec<String>) -> Result<DataBlock> {
+    async fn all_data(&self, ctx: Arc<QueryContext>, args: Vec<String>) -> Result<DataBlock> {
         let mut table_counts: Vec<u64> = Vec::with_capacity(args.len());
         for tenant in args.iter() {
             let catalog = ctx.get_catalog(&ctx.get_current_catalog())?;

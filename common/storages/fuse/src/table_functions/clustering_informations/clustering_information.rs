@@ -58,7 +58,7 @@ impl<'a> ClusteringInformation<'a> {
     }
 
     pub async fn get_clustering_info(&self) -> Result<DataBlock> {
-        let snapshot = self.table.read_table_snapshot(self.ctx.as_ref()).await?;
+        let snapshot = self.table.read_table_snapshot(self.ctx.clone()).await?;
 
         let mut blocks = Vec::new();
         if let Some(snapshot) = snapshot {

@@ -39,7 +39,8 @@ pub trait BufReaderProvider {
 }
 
 pub type SegmentInfoReader<'a> = CachedReader<SegmentInfo, &'a dyn TableContext>;
-pub type TableSnapshotReader<'a> = CachedReader<TableSnapshot, &'a dyn TableContext>;
+// pub type TableSnapshotReader<'a> = CachedReader<TableSnapshot, &'a dyn TableContext>;
+pub type TableSnapshotReader = CachedReader<TableSnapshot, Arc<dyn TableContext>>;
 
 pub struct MetaReaders;
 
@@ -52,7 +53,8 @@ impl MetaReaders {
         )
     }
 
-    pub fn table_snapshot_reader(ctx: &dyn TableContext) -> TableSnapshotReader {
+    // pub fn table_snapshot_reader(ctx: &dyn TableContext) -> TableSnapshotReader {
+    pub fn table_snapshot_reader(ctx: Arc<dyn TableContext>) -> TableSnapshotReader {
         TableSnapshotReader::new(
             ctx.get_storage_cache_manager().get_table_snapshot_cache(),
             ctx,
@@ -112,22 +114,24 @@ impl BufReaderProvider for &dyn TableContext {
     }
 }
 
+#[async_trait::async_trait]
+impl BufReaderProvider for Arc<dyn TableContext> {
+    async fn buf_reader(&self, path: &str, len: Option<u64>) -> Result<BufReader<BytesReader>> {
+        self.as_ref().buf_reader(path, len).await
+    }
+}
+
 impl HasTenantLabel for &dyn TableContext {
     fn tenant_label(&self) -> TenantLabel {
-        ctx_tenant_label(*self)
+        let mgr = self.get_storage_cache_manager();
+        TenantLabel {
+            tenant_id: mgr.get_tenant_id().to_owned(),
+            cluster_id: mgr.get_cluster_id().to_owned(),
+        }
     }
 }
-
 impl HasTenantLabel for Arc<dyn TableContext> {
     fn tenant_label(&self) -> TenantLabel {
-        ctx_tenant_label(self.as_ref())
-    }
-}
-
-fn ctx_tenant_label(ctx: &dyn TableContext) -> TenantLabel {
-    let mgr = ctx.get_storage_cache_manager();
-    TenantLabel {
-        tenant_id: mgr.get_tenant_id().to_owned(),
-        cluster_id: mgr.get_cluster_id().to_owned(),
+        self.as_ref().tenant_label()
     }
 }

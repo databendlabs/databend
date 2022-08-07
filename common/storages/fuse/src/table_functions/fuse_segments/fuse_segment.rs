@@ -42,7 +42,7 @@ impl<'a> FuseSegment<'a> {
         let tbl = self.table;
         let snapshot_location = tbl.snapshot_loc();
         let snapshot_version = tbl.snapshot_format_version();
-        let reader = MetaReaders::table_snapshot_reader(self.ctx.as_ref());
+        let reader = MetaReaders::table_snapshot_reader(self.ctx.clone());
         let limit = None;
         let snapshots = reader
             .read_snapshot_history(

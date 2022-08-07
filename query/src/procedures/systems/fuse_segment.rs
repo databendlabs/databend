@@ -18,6 +18,8 @@ use common_datablocks::DataBlock;
 use common_datavalues::DataSchema;
 use common_exception::Result;
 
+use crate::procedures::procedure::OneBlockWrapper;
+use crate::procedures::OneBlockProcedure;
 use crate::procedures::Procedure;
 use crate::procedures::ProcedureFeatures;
 use crate::sessions::QueryContext;
@@ -29,12 +31,12 @@ pub struct FuseSegmentProcedure {}
 
 impl FuseSegmentProcedure {
     pub fn try_create() -> Result<Box<dyn Procedure>> {
-        Ok(Box::new(FuseSegmentProcedure {}))
+        Ok(Box::new(OneBlockWrapper(FuseSegmentProcedure {})))
     }
 }
 
 #[async_trait::async_trait]
-impl Procedure for FuseSegmentProcedure {
+impl OneBlockProcedure for FuseSegmentProcedure {
     fn name(&self) -> &str {
         "FUSE_SEGMENT"
     }
@@ -43,7 +45,7 @@ impl Procedure for FuseSegmentProcedure {
         ProcedureFeatures::default().num_arguments(3)
     }
 
-    async fn inner_eval(&self, ctx: Arc<QueryContext>, args: Vec<String>) -> Result<DataBlock> {
+    async fn all_data(&self, ctx: Arc<QueryContext>, args: Vec<String>) -> Result<DataBlock> {
         let database_name = args[0].clone();
         let table_name = args[1].clone();
         let snapshot_id = args[2].clone();
