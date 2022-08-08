@@ -101,7 +101,7 @@ echo "CREATE TABLE IF NOT EXISTS lineitem
 
 #download data 
 echo "download start..."
-curl -o ${CURDIR}/data/tpch.tar.gz  http://repo.databend.rs/dataset/stateful/tpch.tar.gz 
+curl -s -o ${CURDIR}/data/tpch.tar.gz  http://repo.databend.rs/dataset/stateful/tpch.tar.gz 
 echo "download ok"
 tar -zxvf "${CURDIR}"/data/tpch.tar.gz -C ${CURDIR}/data
 echo " extract ok"
