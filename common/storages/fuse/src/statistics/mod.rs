@@ -16,6 +16,7 @@ pub mod accumulator;
 mod block_statistics;
 mod column_statistic;
 pub mod reducers;
+mod cluster_statistics;
 
 pub use accumulator::StatisticsAccumulator;
 pub use block_statistics::BlockStatistics;

@@ -15,8 +15,6 @@
 use std::str::FromStr;
 use std::sync::Arc;
 
-use async_stream::stream;
-use common_cache::Cache;
 use common_catalog::table_context::TableContext;
 use common_datablocks::SortColumnDescription;
 use common_datavalues::DataSchemaRefExt;
@@ -30,13 +28,8 @@ use common_pipeline_transforms::processors::transforms::ExpressionTransform;
 use common_pipeline_transforms::processors::transforms::TransformSortPartial;
 use common_pipeline_transforms::processors::ExpressionExecutor;
 use common_planners::Expression;
-use common_streams::SendableDataBlockStream;
-use futures::StreamExt;
 
 use crate::index::ClusterKeyInfo;
-use crate::io::write_meta;
-use crate::io::BlockStreamWriter;
-use crate::operations::AppendOperationLogEntry;
 use crate::operations::FuseTableSink;
 use crate::FuseTable;
 use crate::DEFAULT_BLOCK_PER_SEGMENT;
@@ -46,68 +39,7 @@ use crate::FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD;
 use crate::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 use crate::FUSE_OPT_KEY_ROW_PER_BLOCK;
 
-pub type AppendOperationLogEntryStream =
-    std::pin::Pin<Box<dyn futures::stream::Stream<Item = Result<AppendOperationLogEntry>> + Send>>;
-
 impl FuseTable {
-    #[inline]
-    pub async fn append_chunks(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        stream: SendableDataBlockStream,
-    ) -> Result<AppendOperationLogEntryStream> {
-        let rows_per_block = self.get_option(FUSE_OPT_KEY_ROW_PER_BLOCK, DEFAULT_ROW_PER_BLOCK);
-
-        let block_per_seg =
-            self.get_option(FUSE_OPT_KEY_BLOCK_PER_SEGMENT, DEFAULT_BLOCK_PER_SEGMENT);
-
-        let da = ctx.get_storage_operator()?;
-
-        let cluster_key_info = self.cluster_key_meta.clone().map(|(id, _)| ClusterKeyInfo {
-            cluster_key_id: id,
-            cluster_key_index: vec![],
-            exprs: self.cluster_keys.clone(),
-            expression_executor: None,
-            data_schema: self.table_info.schema(),
-        });
-
-        let mut segment_stream = BlockStreamWriter::write_block_stream(
-            ctx.clone(),
-            stream,
-            rows_per_block,
-            block_per_seg,
-            self.meta_location_generator().clone(),
-            cluster_key_info,
-        )
-        .await?;
-
-        let locs = self.meta_location_generator().clone();
-        let segment_info_cache = ctx.get_storage_cache_manager().get_table_segment_cache();
-
-        let log_entries = stream! {
-            while let Some(segment) = segment_stream.next().await {
-                let log_entry_res = match segment {
-                    Ok(seg) => {
-                        let seg_loc = locs.gen_segment_info_location();
-                        write_meta(&da, &seg_loc, &seg).await?;
-                        let seg = Arc::new(seg);
-                        let log_entry = AppendOperationLogEntry::new(seg_loc.clone(), seg.clone());
-                        if let Some(ref cache) = segment_info_cache {
-                            let cache = &mut cache.write().await;
-                            cache.put(seg_loc, seg);
-                        }
-
-                        Ok(log_entry)
-                    },
-                    Err(err) => Err(err),
-                };
-                yield(log_entry_res);
-            }
-        };
-
-        Ok(Box::pin(log_entries))
-    }
-
     pub fn do_append2(&self, ctx: Arc<dyn TableContext>, pipeline: &mut Pipeline) -> Result<()> {
         let max_row_per_block = self.get_option(FUSE_OPT_KEY_ROW_PER_BLOCK, DEFAULT_ROW_PER_BLOCK);
         let min_rows_per_block = (max_row_per_block as f64 * 0.8) as usize;
@@ -203,9 +135,7 @@ impl FuseTable {
             cluster_key_info = Some(ClusterKeyInfo {
                 cluster_key_id: self.cluster_key_meta.as_ref().unwrap().0,
                 cluster_key_index,
-                exprs: self.cluster_keys.clone(),
                 expression_executor,
-                data_schema: input_schema.clone(),
             });
         }
 
