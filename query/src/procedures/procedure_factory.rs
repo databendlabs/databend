@@ -80,7 +80,6 @@ pub struct ProcedureFactory {
 static FUNCTION_FACTORY: Lazy<Arc<ProcedureFactory>> = Lazy::new(|| {
     let mut factory = ProcedureFactory::create();
     SystemProcedure::register(&mut factory);
-    StatsProcedure::register(&mut factory);
     AdminProcedure::register(&mut factory);
     Arc::new(factory)
 });
