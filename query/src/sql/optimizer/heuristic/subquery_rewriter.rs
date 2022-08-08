@@ -390,6 +390,7 @@ impl SubqueryRewriter {
                     "count(*)".to_string(),
                     agg_func.return_type()?,
                     None,
+                    None,
                 );
 
                 let agg = Aggregate {
@@ -414,6 +415,7 @@ impl SubqueryRewriter {
                 let compare_index = self.metadata.write().add_column(
                     "subquery".to_string(),
                     BooleanType::new_impl(),
+                    None,
                     None,
                 );
                 let compare = ComparisonExpr {
@@ -521,6 +523,7 @@ impl SubqueryRewriter {
                     self.metadata.write().add_column(
                         "marker".to_string(),
                         NullableType::new_impl(BooleanType::new_impl()),
+                        None,
                         None,
                     )
                 };

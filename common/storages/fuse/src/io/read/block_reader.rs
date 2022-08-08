@@ -12,11 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::hash_map::Entry;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_arrow::arrow::datatypes::Field;
-use common_arrow::arrow::datatypes::Schema;
 use common_arrow::arrow::io::parquet::read::column_iter_to_arrays;
 use common_arrow::arrow::io::parquet::read::ArrayIter;
 use common_arrow::arrow::io::parquet::read::RowGroupDeserializer;
@@ -34,6 +35,7 @@ use common_exception::Result;
 use common_fuse_meta::meta::BlockMeta;
 use common_fuse_meta::meta::Compression;
 use common_planners::PartInfoPtr;
+use common_planners::Projection;
 use futures::AsyncReadExt;
 use futures::StreamExt;
 use futures::TryStreamExt;
@@ -43,8 +45,8 @@ use tracing::debug_span;
 use tracing::warn;
 use tracing::Instrument;
 
-use crate::fuse_part::build_column_leaves;
 use crate::fuse_part::ColumnLeaf;
+use crate::fuse_part::ColumnLeaves;
 use crate::fuse_part::ColumnMeta;
 use crate::fuse_part::FusePartInfo;
 use crate::io::retry;
@@ -53,10 +55,9 @@ use crate::io::retry::Retryable;
 #[derive(Clone)]
 pub struct BlockReader {
     operator: Operator,
-    projection: Vec<usize>,
-    arrow_schema: Arc<Schema>,
+    projection: Projection,
     projected_schema: DataSchemaRef,
-    column_leaves: Vec<ColumnLeaf>,
+    column_leaves: ColumnLeaves,
     parquet_schema_descriptor: SchemaDescriptor,
 }
 
@@ -64,13 +65,18 @@ impl BlockReader {
     pub fn create(
         operator: Operator,
         schema: DataSchemaRef,
-        projection: Vec<usize>,
+        projection: Projection,
     ) -> Result<Arc<BlockReader>> {
-        let projected_schema = DataSchemaRef::new(schema.project(&projection));
+        let projected_schema = match projection {
+            Projection::Columns(ref indices) => DataSchemaRef::new(schema.project(indices)),
+            Projection::InnerColumns(ref path_indices) => {
+                DataSchemaRef::new(schema.inner_project(path_indices))
+            }
+        };
 
         let arrow_schema = schema.to_arrow();
         let parquet_schema_descriptor = to_parquet_schema(&arrow_schema)?;
-        let column_leaves = build_column_leaves(&parquet_schema_descriptor);
+        let column_leaves = ColumnLeaves::new_from_schema(&arrow_schema);
 
         Ok(Arc::new(BlockReader {
             operator,
@@ -78,7 +84,6 @@ impl BlockReader {
             projected_schema,
             parquet_schema_descriptor,
             column_leaves,
-            arrow_schema: Arc::new(arrow_schema),
         }))
     }
 
@@ -135,30 +140,27 @@ impl BlockReader {
         let num_rows = meta.row_count as usize;
         let num_cols = self.projection.len();
         let mut column_chunk_futs = Vec::with_capacity(num_cols);
-
         let mut columns_meta: HashMap<usize, ColumnMeta> =
             HashMap::with_capacity(meta.col_metas.len());
-        for proj in &self.projection {
-            let column_leaf = &self.column_leaves[*proj];
-            let indices = &column_leaf.leaf_ids;
-            for index in indices {
-                let column_meta = &meta.col_metas[&(*index as u32)];
 
-                let column_reader = self.operator.object(&meta.location.0);
-                let fut = async move {
-                    let column_chunk = column_reader
-                        .range_read(column_meta.offset..column_meta.offset + column_meta.len)
-                        .await?;
-                    Ok::<_, ErrorCode>((*index, column_chunk))
-                }
-                .instrument(debug_span!("read_col_chunk"));
-                column_chunk_futs.push(fut);
-
-                columns_meta.insert(
-                    *index,
-                    ColumnMeta::create(column_meta.offset, column_meta.len, column_meta.num_values),
-                );
+        let columns = self.column_leaves.get_by_projection(&self.projection)?;
+        let indices = Self::build_projection_indices(&columns);
+        for index in indices {
+            let column_meta = &meta.col_metas[&(index as u32)];
+            let column_reader = self.operator.object(&meta.location.0);
+            let fut = async move {
+                let column_chunk = column_reader
+                    .range_read(column_meta.offset..column_meta.offset + column_meta.len)
+                    .await?;
+                Ok::<_, ErrorCode>((index, column_chunk))
             }
+            .instrument(debug_span!("read_col_chunk"));
+            column_chunk_futs.push(fut);
+
+            columns_meta.insert(
+                index,
+                ColumnMeta::create(column_meta.offset, column_meta.len, column_meta.num_values),
+            );
         }
 
         let num_cols = columns_meta.len();
@@ -166,20 +168,25 @@ impl BlockReader {
             .buffered(std::cmp::min(10, num_cols))
             .try_collect::<Vec<_>>()
             .await?;
+
         let mut chunk_map: HashMap<usize, Vec<u8>> = chunks.into_iter().collect();
-
+        let mut cnt_map = Self::build_projection_count_map(&columns);
         let mut columns_array_iter = Vec::with_capacity(num_cols);
-        for proj in &self.projection {
-            let field = self.arrow_schema.fields[*proj].clone();
-            let column_leaf = &self.column_leaves[*proj];
-            let indices = &column_leaf.leaf_ids;
-
+        for column in &columns {
+            let field = column.field.clone();
+            let indices = &column.leaf_ids;
             let mut column_metas = Vec::with_capacity(indices.len());
             let mut column_chunks = Vec::with_capacity(indices.len());
             let mut column_descriptors = Vec::with_capacity(indices.len());
             for index in indices {
                 let column_meta = &columns_meta[index];
-                let column_chunk = chunk_map.remove(index).unwrap();
+                let cnt = cnt_map.get_mut(index).unwrap();
+                *cnt -= 1;
+                let column_chunk = if cnt > &mut 0 {
+                    chunk_map.get(index).unwrap().clone()
+                } else {
+                    chunk_map.remove(index).unwrap()
+                };
                 let column_descriptor = &self.parquet_schema_descriptor.columns()[*index];
                 column_metas.push(column_meta);
                 column_chunks.push(column_chunk);
@@ -205,25 +212,20 @@ impl BlockReader {
         let num_rows = part.nums_rows;
         let num_cols = self.projection.len();
         let mut column_chunk_futs = Vec::with_capacity(num_cols);
-        for proj in &self.projection {
-            let column_leaf = &self.column_leaves[*proj];
-            let indices = &column_leaf.leaf_ids;
-            for index in indices {
-                let column_meta = &part.columns_meta[index];
-                let column_reader = self.operator.object(&part.location);
-                let fut = async move {
-                    let (idx, column_chunk) = Self::read_column(
-                        column_reader,
-                        *index,
-                        column_meta.offset,
-                        column_meta.length,
-                    )
-                    .await?;
-                    Ok::<_, ErrorCode>((idx, column_chunk))
-                }
-                .instrument(debug_span!("read_col_chunk"));
-                column_chunk_futs.push(fut);
+
+        let columns = self.column_leaves.get_by_projection(&self.projection)?;
+        let indices = Self::build_projection_indices(&columns);
+        for index in indices {
+            let column_meta = &part.columns_meta[&index];
+            let column_reader = self.operator.object(&part.location);
+            let fut = async move {
+                let (idx, column_chunk) =
+                    Self::read_column(column_reader, index, column_meta.offset, column_meta.length)
+                        .await?;
+                Ok::<_, ErrorCode>((idx, column_chunk))
             }
+            .instrument(debug_span!("read_col_chunk"));
+            column_chunk_futs.push(fut);
         }
 
         let num_cols = column_chunk_futs.len();
@@ -231,20 +233,25 @@ impl BlockReader {
             .buffered(std::cmp::min(10, num_cols))
             .try_collect::<Vec<_>>()
             .await?;
+
         let mut chunk_map: HashMap<usize, Vec<u8>> = chunks.into_iter().collect();
-
+        let mut cnt_map = Self::build_projection_count_map(&columns);
         let mut columns_array_iter = Vec::with_capacity(num_cols);
-        for proj in &self.projection {
-            let field = self.arrow_schema.fields[*proj].clone();
-            let column_leaf = &self.column_leaves[*proj];
-            let indices = &column_leaf.leaf_ids;
-
+        for column in &columns {
+            let field = column.field.clone();
+            let indices = &column.leaf_ids;
             let mut column_metas = Vec::with_capacity(indices.len());
             let mut column_chunks = Vec::with_capacity(indices.len());
             let mut column_descriptors = Vec::with_capacity(indices.len());
             for index in indices {
                 let column_meta = &part.columns_meta[index];
-                let column_chunk = chunk_map.remove(index).unwrap();
+                let cnt = cnt_map.get_mut(index).unwrap();
+                *cnt -= 1;
+                let column_chunk = if cnt > &mut 0 {
+                    chunk_map.get(index).unwrap().clone()
+                } else {
+                    chunk_map.remove(index).unwrap()
+                };
                 let column_descriptor = &self.parquet_schema_descriptor.columns()[*index];
                 column_metas.push(column_meta);
                 column_chunks.push(column_chunk);
@@ -273,17 +280,23 @@ impl BlockReader {
         let mut columns_array_iter = Vec::with_capacity(self.projection.len());
 
         let num_rows = part.nums_rows;
-        for proj in &self.projection {
-            let field = self.arrow_schema.fields[*proj].clone();
-            let column_leaf = &self.column_leaves[*proj];
-            let indices = &column_leaf.leaf_ids;
-
+        let columns = self.column_leaves.get_by_projection(&self.projection)?;
+        let mut cnt_map = Self::build_projection_count_map(&columns);
+        for column in &columns {
+            let field = column.field.clone();
+            let indices = &column.leaf_ids;
             let mut column_metas = Vec::with_capacity(indices.len());
             let mut column_chunks = Vec::with_capacity(indices.len());
             let mut column_descriptors = Vec::with_capacity(indices.len());
             for index in indices {
                 let column_meta = &part.columns_meta[index];
-                let column_chunk = chunk_map.remove(index).unwrap();
+                let cnt = cnt_map.get_mut(index).unwrap();
+                *cnt -= 1;
+                let column_chunk = if cnt > &mut 0 {
+                    chunk_map.get(index).unwrap().clone()
+                } else {
+                    chunk_map.remove(index).unwrap()
+                };
                 let column_descriptor = &self.parquet_schema_descriptor.columns()[*index];
                 column_metas.push(column_meta);
                 column_chunks.push(column_chunk);
@@ -308,20 +321,16 @@ impl BlockReader {
         let part = FusePartInfo::from_part(&part)?;
         let mut join_handlers = Vec::with_capacity(self.projection.len());
 
-        for proj in &self.projection {
-            let column_leaf = &self.column_leaves[*proj];
-            let indices = &column_leaf.leaf_ids;
-
-            for index in indices {
-                let column_meta = &part.columns_meta[index];
-
-                join_handlers.push(Self::read_column(
-                    self.operator.object(&part.location),
-                    *index,
-                    column_meta.offset,
-                    column_meta.length,
-                ));
-            }
+        let columns = self.column_leaves.get_by_projection(&self.projection)?;
+        let indices = Self::build_projection_indices(&columns);
+        for index in indices {
+            let column_meta = &part.columns_meta[&index];
+            join_handlers.push(Self::read_column(
+                self.operator.object(&part.location),
+                index,
+                column_meta.offset,
+                column_meta.length,
+            ));
         }
 
         futures::future::try_join_all(join_handlers).await
@@ -374,5 +383,32 @@ impl BlockReader {
             Compression::Lz4 => ParquetCompression::Lz4,
             Compression::Lz4Raw => ParquetCompression::Lz4Raw,
         }
+    }
+
+    // Build non duplicate leaf_ids to avoid repeated read column from parquet
+    fn build_projection_indices(columns: &Vec<&ColumnLeaf>) -> HashSet<usize> {
+        let mut indices = HashSet::with_capacity(columns.len());
+        for column in columns {
+            for index in &column.leaf_ids {
+                indices.insert(*index);
+            }
+        }
+        indices
+    }
+
+    // Build a map to record the count number of each leaf_id
+    fn build_projection_count_map(columns: &Vec<&ColumnLeaf>) -> HashMap<usize, usize> {
+        let mut cnt_map = HashMap::with_capacity(columns.len());
+        for column in columns {
+            for index in &column.leaf_ids {
+                if let Entry::Vacant(e) = cnt_map.entry(*index) {
+                    e.insert(1);
+                } else {
+                    let cnt = cnt_map.get_mut(index).unwrap();
+                    *cnt += 1;
+                }
+            }
+        }
+        cnt_map
     }
 }

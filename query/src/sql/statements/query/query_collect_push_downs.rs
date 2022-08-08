@@ -18,6 +18,7 @@ use common_datavalues::DataType;
 use common_exception::Result;
 use common_planners::Expression;
 use common_planners::Extras;
+use common_planners::Projection;
 
 use crate::sql::statements::query::query_ast_ir::QueryASTIRVisitor;
 use crate::sql::statements::query::JoinedSchema;
@@ -68,7 +69,8 @@ impl QueryCollectPushDowns {
     fn collect_push_downs(mut self, ir: &QueryASTIR, schema: &mut JoinedSchema) -> Result<()> {
         for index in 0..schema.get_tables_desc().len() {
             let table_desc = &schema.get_tables_desc()[index];
-            let projection = self.collect_table_require_columns(table_desc);
+            let col_indices = self.collect_table_require_columns(table_desc);
+            let projection = Projection::Columns(col_indices);
 
             let mut limit = None;
             let mut order_by = vec![];

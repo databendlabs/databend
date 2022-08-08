@@ -154,10 +154,10 @@ impl<'a> AggregateRewriter<'a> {
                     scalar: arg.clone(),
                 });
             } else {
-                let index = self
-                    .metadata
-                    .write()
-                    .add_column(name.clone(), arg.data_type(), None);
+                let index =
+                    self.metadata
+                        .write()
+                        .add_column(name.clone(), arg.data_type(), None, None);
 
                 // Generate a ColumnBinding for each argument of aggregates
                 let column_binding = ColumnBinding {
@@ -187,6 +187,7 @@ impl<'a> AggregateRewriter<'a> {
         let index = self.metadata.write().add_column(
             aggregate.display_name.clone(),
             *aggregate.return_type.clone(),
+            None,
             None,
         );
 
@@ -371,9 +372,12 @@ impl<'a> Binder {
             {
                 *index
             } else {
-                self.metadata
-                    .write()
-                    .add_column(group_item_name.clone(), data_type.clone(), None)
+                self.metadata.write().add_column(
+                    group_item_name.clone(),
+                    data_type.clone(),
+                    None,
+                    None,
+                )
             };
 
             bind_context.aggregate_info.group_items.push(ScalarItem {

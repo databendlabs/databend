@@ -244,13 +244,14 @@ impl<'a> Binder {
         let columns = metadata.columns_by_table_index(table_index);
         let table = metadata.table(table_index);
         for column in columns.iter() {
+            let visible_in_unqualified_wildcard = column.path_indices.is_none();
             let column_binding = ColumnBinding {
                 database_name: Some(database_name.to_string()),
                 table_name: Some(table.name.clone()),
                 column_name: column.name.clone(),
                 index: column.column_index,
                 data_type: Box::new(column.data_type.clone()),
-                visible_in_unqualified_wildcard: true,
+                visible_in_unqualified_wildcard,
             };
             bind_context.add_column_binding(column_binding);
         }

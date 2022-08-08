@@ -20,6 +20,7 @@ use common_base::base::tokio::sync::Notify;
 use common_datablocks::DataBlock;
 use common_exception::Result;
 use common_planners::PartInfoPtr;
+use common_planners::Projection;
 
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
@@ -215,9 +216,10 @@ impl BlockBufferWriterWithResultTable {
     ) -> Result<Box<dyn BlockBufferWriter>> {
         let schema = query_info.schema.clone();
         let writer = ResultTableWriter::new(ctx.clone(), query_info).await?;
-        let projection = (0..schema.fields().len())
+        let indices = (0..schema.fields().len())
             .into_iter()
             .collect::<Vec<usize>>();
+        let projection = Projection::Columns(indices);
 
         let reader = BlockReader::create(ctx.get_storage_operator()?, schema, projection)?;
         Ok(Box::new(Self {

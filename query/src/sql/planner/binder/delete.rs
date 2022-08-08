@@ -20,6 +20,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::DeletePlan;
 use common_planners::Expression;
+use common_planners::Projection;
 
 use crate::sessions::TableContext;
 use crate::sql::binder::Binder;
@@ -105,11 +106,11 @@ impl<'a> Binder {
 
         let tbl_info = table.get_table_info();
         let table_id = tbl_info.ident.clone();
-        let mut projection = vec![];
+        let mut col_indices = vec![];
         let schema = tbl_info.meta.schema.as_ref();
         for col_name in require_columns {
             if let Some((idx, _)) = schema.column_with_name(col_name.as_str()) {
-                projection.push(idx);
+                col_indices.push(idx);
             } else {
                 return Err(ErrorCode::UnknownColumn(format!(
                     "Column [{}] not found",
@@ -117,6 +118,8 @@ impl<'a> Binder {
                 )));
             }
         }
+        // @todo wait delete migrate to new planner
+        let projection = Projection::Columns(col_indices);
 
         let plan = DeletePlan {
             catalog_name,

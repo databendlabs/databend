@@ -15,6 +15,8 @@
 use std::collections::HashMap;
 use std::iter::Iterator;
 
+use common_arrow::arrow::datatypes::DataType as ArrowType;
+use common_arrow::arrow::datatypes::Field as ArrowField;
 use common_base::base::tokio;
 use common_datavalues::DataValue;
 use common_exception::Result;
@@ -22,6 +24,8 @@ use common_fuse_meta::meta::BlockMeta;
 use common_fuse_meta::meta::ColumnMeta;
 use common_fuse_meta::meta::ColumnStatistics;
 use common_planners::Extras;
+use common_planners::Projection;
+use common_storages_fuse::ColumnLeaves;
 use databend_query::interpreters::CreateTableInterpreter;
 use databend_query::interpreters::Interpreter;
 use databend_query::storages::fuse::ColumnLeaf;
@@ -50,7 +54,7 @@ fn test_to_partitions() -> Result<()> {
     };
 
     let col_leaves_gen = |col_id| ColumnLeaf {
-        name: "".to_string(),
+        field: ArrowField::new("".to_string(), ArrowType::Int64, false),
         leaf_ids: vec![col_id],
         children: None,
     };
@@ -98,23 +102,28 @@ fn test_to_partitions() -> Result<()> {
         .map(col_leaves_gen)
         .collect::<Vec<_>>();
 
+    let column_leafs = ColumnLeaves {
+        column_leaves,
+    };
+
     // CASE I:  no projection
-    let (s, parts) = FuseTable::to_partitions(&blocks_metas, &column_leaves, None);
+    let (s, parts) = FuseTable::to_partitions(&blocks_metas, &column_leafs, None);
     assert_eq!(parts.len(), num_of_block as usize);
     let expected_block_size: u64 = cols_metas.iter().map(|(_, col_meta)| col_meta.len).sum();
     assert_eq!(expected_block_size * num_of_block, s.read_bytes as u64);
 
     // CASE II: col pruning
     // projection which keeps the odd ones
-    let proj = (0..num_of_col)
+    let col_ids = (0..num_of_col)
         .into_iter()
         .filter(|v| v & 1 != 0)
         .collect::<Vec<usize>>();
+    let proj = Projection::Columns(col_ids.clone());
 
     // for each block, the block size we expects (after pruning)
     let expected_block_size: u64 = cols_metas
         .iter()
-        .filter(|(cid, _)| proj.contains(&(**cid as usize)))
+        .filter(|(cid, _)| col_ids.contains(&(**cid as usize)))
         .map(|(_, col_meta)| col_meta.len)
         .sum();
 
@@ -126,7 +135,7 @@ fn test_to_partitions() -> Result<()> {
         order_by: vec![],
     });
 
-    let (stats, parts) = FuseTable::to_partitions(&blocks_metas, &column_leaves, push_down);
+    let (stats, parts) = FuseTable::to_partitions(&blocks_metas, &column_leafs, push_down);
     assert_eq!(parts.len(), num_of_block as usize);
     assert_eq!(expected_block_size * num_of_block, stats.read_bytes as u64);
 
@@ -159,8 +168,9 @@ async fn test_fuse_table_exact_statistic() -> Result<()> {
 
         table = fixture.latest_default_table().await?;
 
+        let proj = Projection::Columns(vec![]);
         let push_downs = Extras {
-            projection: Some(vec![]),
+            projection: Some(proj),
             filters: vec![],
             limit: None,
             order_by: vec![],

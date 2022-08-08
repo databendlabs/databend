@@ -18,6 +18,7 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_meta_app::schema::TableInfo;
 use common_planners::Extras;
+use common_planners::Projection;
 use common_planners::ReadDataSourcePlan;
 use common_planners::SourceInfo;
 use common_planners::Statistics;
@@ -59,13 +60,27 @@ impl ToReadDataSourcePlan for dyn Table {
 
         let scan_fields = match (self.benefit_column_prune(), &push_downs) {
             (true, Some(push_downs)) => match &push_downs.projection {
-                Some(projection) if projection.len() < table_info.schema().fields().len() => {
-                    let fields = projection
-                        .iter()
-                        .map(|i| table_info.schema().field(*i).clone());
+                Some(projection) => match projection {
+                    Projection::Columns(ref indices) => {
+                        if indices.len() < table_info.schema().fields().len() {
+                            let fields = indices
+                                .iter()
+                                .map(|i| table_info.schema().field(*i).clone());
 
-                    Some((projection.iter().cloned().zip(fields)).collect::<BTreeMap<_, _>>())
-                }
+                            Some((indices.iter().cloned().zip(fields)).collect::<BTreeMap<_, _>>())
+                        } else {
+                            None
+                        }
+                    }
+                    Projection::InnerColumns(ref path_indices) => {
+                        let column_ids: Vec<usize> = path_indices.keys().cloned().collect();
+                        let new_schema = table_info.schema().inner_project(path_indices);
+                        Some(
+                            (column_ids.iter().cloned().zip(new_schema.fields().clone()))
+                                .collect::<BTreeMap<_, _>>(),
+                        )
+                    }
+                },
                 _ => None,
             },
             _ => None,

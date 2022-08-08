@@ -21,6 +21,7 @@ use common_exception::Result;
 use common_planners::DeletePlan;
 use common_planners::Expression;
 use common_planners::PlanNode;
+use common_planners::Projection;
 use sqlparser::ast::Expr;
 use sqlparser::ast::ObjectName;
 
@@ -87,11 +88,11 @@ impl AnalyzableStatement for DfDeleteStatement {
         };
 
         let table_id = tbl_info.ident.clone();
-        let mut projection = vec![];
+        let mut col_indices = vec![];
         let schema = tbl_info.meta.schema.as_ref();
         for col_name in require_columns {
             if let Some((idx, _)) = schema.column_with_name(col_name.as_str()) {
-                projection.push(idx);
+                col_indices.push(idx);
             } else {
                 return Err(ErrorCode::UnknownColumn(format!(
                     "Column [{}] not found",
@@ -99,6 +100,8 @@ impl AnalyzableStatement for DfDeleteStatement {
                 )));
             }
         }
+        // @todo wait delete migrate to new planner
+        let projection = Projection::Columns(col_indices);
 
         // Parallel / Distributed execution of deletion not supported yet
         Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::Delete(

@@ -23,6 +23,7 @@ use common_meta_app::schema::TableInfo;
 use crate::Expression;
 use crate::Extras;
 use crate::Partitions;
+use crate::Projection;
 use crate::StageTableInfo;
 use crate::Statistics;
 
@@ -61,7 +62,7 @@ pub struct ReadDataSourcePlan {
     /// Required fields to scan.
     ///
     /// After optimization, only a sub set of the fields in `table_info.schema().fields` are needed.
-    /// The key is the index of the field in original `table_info.schema().fields`.
+    /// The key is the column_index of `ColumnEntry` in `Metadata`.
     ///
     /// If it is None, one should use `table_info.schema().fields()`.
     pub scan_fields: Option<BTreeMap<usize, DataField>>,
@@ -93,7 +94,7 @@ impl ReadDataSourcePlan {
             .unwrap_or_else(|| self.source_info.schema().fields_map())
     }
 
-    pub fn projections(&self) -> Vec<usize> {
+    pub fn projections(&self) -> Projection {
         let default_proj = || {
             (0..self.source_info.schema().fields().len())
                 .into_iter()
@@ -107,7 +108,7 @@ impl ReadDataSourcePlan {
         {
             prj.clone()
         } else {
-            default_proj()
+            Projection::Columns(default_proj())
         }
     }
 }

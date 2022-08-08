@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::VecDeque;
 use std::fmt::Debug;
 use std::sync::Arc;
 
@@ -72,6 +73,8 @@ pub struct ColumnEntry {
 
     // Table index of column entry. None if column is derived from a subquery.
     pub table_index: Option<IndexType>,
+    // Path indices for inner column of struct data type.
+    pub path_indices: Option<Vec<IndexType>>,
 }
 
 impl ColumnEntry {
@@ -80,12 +83,14 @@ impl ColumnEntry {
         data_type: DataTypeImpl,
         column_index: IndexType,
         table_index: Option<IndexType>,
+        path_indices: Option<Vec<IndexType>>,
     ) -> Self {
         ColumnEntry {
             column_index,
             name,
             data_type,
             table_index,
+            path_indices,
         }
     }
 }
@@ -151,9 +156,11 @@ impl Metadata {
         name: String,
         data_type: DataTypeImpl,
         table_index: Option<IndexType>,
+        path_indices: Option<Vec<IndexType>>,
     ) -> IndexType {
         let column_index = self.columns.len();
-        let column_entry = ColumnEntry::new(name, data_type, column_index, table_index);
+        let column_entry =
+            ColumnEntry::new(name, data_type, column_index, table_index, path_indices);
         self.columns.push(column_entry);
         column_index
     }
@@ -174,12 +181,50 @@ impl Metadata {
             table: table_meta.clone(),
         };
         self.tables.push(table_entry);
-        for field in table_meta.schema().fields() {
+        let mut struct_fields = VecDeque::new();
+        for (i, field) in table_meta.schema().fields().iter().enumerate() {
             self.add_column(
                 field.name().clone(),
                 field.data_type().clone(),
                 Some(table_index),
+                None,
             );
+            if field.data_type().data_type_id() == TypeID::Struct {
+                struct_fields.push_back((vec![i], field.clone()));
+            }
+        }
+        // add inner columns of struct column
+        while !struct_fields.is_empty() {
+            let (path_indices, field) = struct_fields.pop_front().unwrap();
+            let struct_type: StructType = field.data_type().clone().try_into().unwrap();
+
+            let inner_types = struct_type.types();
+            let inner_names = match struct_type.names() {
+                Some(inner_names) => inner_names
+                    .iter()
+                    .map(|name| format!("{}:{}", field.name(), name))
+                    .collect::<Vec<_>>(),
+                None => (0..inner_types.len())
+                    .map(|i| format!("{}:{}", field.name(), i))
+                    .collect::<Vec<_>>(),
+            };
+            for ((i, inner_name), inner_type) in
+                inner_names.into_iter().enumerate().zip(inner_types.iter())
+            {
+                let mut inner_path_indices = path_indices.clone();
+                inner_path_indices.push(i);
+
+                self.add_column(
+                    inner_name.clone(),
+                    inner_type.clone(),
+                    Some(table_index),
+                    Some(inner_path_indices.clone()),
+                );
+                if inner_type.data_type_id() == TypeID::Struct {
+                    let inner_field = DataField::new(&inner_name, inner_type.clone());
+                    struct_fields.push_back((inner_path_indices, inner_field));
+                }
+            }
         }
         table_index
     }

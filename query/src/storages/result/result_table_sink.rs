@@ -23,6 +23,7 @@ use common_exception::Result;
 use common_fuse_meta::meta::SegmentInfo;
 use common_fuse_meta::meta::Statistics as FuseMetaStatistics;
 use common_planners::PartInfoPtr;
+use common_planners::Projection;
 use opendal::Operator;
 
 use crate::pipelines::processors::port::InputPort;
@@ -83,9 +84,10 @@ impl ResultTableSink {
     ) -> Result<ProcessorPtr> {
         let schema = query_info.schema.clone();
         let query_id = query_info.query_id.clone();
-        let projection = (0..schema.fields().len())
+        let indices = (0..schema.fields().len())
             .into_iter()
             .collect::<Vec<usize>>();
+        let projection = Projection::Columns(indices);
 
         let block_reader = BlockReader::create(ctx.get_storage_operator()?, schema, projection)?;
         Ok(ProcessorPtr::create(Box::new(ResultTableSink {

@@ -12,13 +12,41 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
+
 use crate::Expression;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub enum Projection {
+    /// column indices of the table
+    Columns(Vec<usize>),
+    /// inner column indices for tuple data type with inner columns.
+    /// the key is the column_index of ColumnEntry.
+    /// the value is the path indices of inner columns.
+    InnerColumns(BTreeMap<usize, Vec<usize>>),
+}
+
+impl Projection {
+    pub fn len(&self) -> usize {
+        match self {
+            Projection::Columns(indices) => indices.len(),
+            Projection::InnerColumns(path_indices) => path_indices.len(),
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        match self {
+            Projection::Columns(indices) => indices.is_empty(),
+            Projection::InnerColumns(path_indices) => path_indices.is_empty(),
+        }
+    }
+}
 
 /// Extras is a wrapper for push down items.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Default)]
 pub struct Extras {
     /// Optional column indices to use as a projection
-    pub projection: Option<Vec<usize>>,
+    pub projection: Option<Projection>,
     /// Optional filter expression plan
     pub filters: Vec<Expression>,
     /// Optional limit to skip read

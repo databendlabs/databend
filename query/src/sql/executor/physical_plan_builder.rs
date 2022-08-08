@@ -18,6 +18,7 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Extras;
+use common_planners::Projection;
 use common_planners::StageKind;
 use itertools::Itertools;
 
@@ -65,12 +66,18 @@ impl PhysicalPlanBuilder {
 
         match s_expr.plan() {
             RelOperator::PhysicalScan(scan) => {
+                let mut has_inner_column = false;
                 let mut name_mapping = BTreeMap::new();
                 let metadata = self.metadata.read().clone();
                 for index in scan.columns.iter() {
-                    let name = metadata.column(*index).name.clone();
+                    let column = metadata.column(*index);
+                    if column.path_indices.is_some() {
+                        has_inner_column = true;
+                    }
+                    let name = column.name.clone();
                     name_mapping.insert(name, index.to_string());
                 }
+
                 let push_down_filters = scan
                     .push_down_predicates
                     .clone()
@@ -87,15 +94,37 @@ impl PhysicalPlanBuilder {
                 let table_entry = metadata.table(scan.table_index);
                 let table = table_entry.table.clone();
                 let table_schema = table.schema();
-                let projection = scan
-                    .columns
-                    .iter()
-                    .map(|index| {
-                        let name = metadata.column(*index).name.as_str();
-                        table_schema.index_of(name).unwrap()
-                    })
-                    .sorted()
-                    .collect::<Vec<_>>();
+
+                let projection = if !has_inner_column {
+                    let col_indices = scan
+                        .columns
+                        .iter()
+                        .map(|index| {
+                            let name = metadata.column(*index).name.as_str();
+                            table_schema.index_of(name).unwrap()
+                        })
+                        .sorted()
+                        .collect::<Vec<_>>();
+                    Projection::Columns(col_indices)
+                } else {
+                    let col_indices = scan
+                        .columns
+                        .iter()
+                        .map(|index| {
+                            let column = metadata.column(*index);
+                            match &column.path_indices {
+                                Some(path_indices) => (column.column_index, path_indices.clone()),
+                                None => {
+                                    let name = metadata.column(*index).name.as_str();
+                                    let idx = table_schema.index_of(name).unwrap();
+                                    (column.column_index, vec![idx])
+                                }
+                            }
+                        })
+                        .sorted()
+                        .collect::<BTreeMap<_, _>>();
+                    Projection::InnerColumns(col_indices)
+                };
 
                 let push_downs = Extras {
                     projection: Some(projection),

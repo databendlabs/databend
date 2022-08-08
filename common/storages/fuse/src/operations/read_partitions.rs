@@ -15,7 +15,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_arrow::arrow::io::parquet::write::to_parquet_schema;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_fuse_meta::meta::BlockMeta;
@@ -23,10 +22,10 @@ use common_fuse_meta::meta::TableSnapshot;
 use common_planners::Extras;
 use common_planners::PartInfoPtr;
 use common_planners::Partitions;
+use common_planners::Projection;
 use common_planners::Statistics;
 
-use crate::fuse_part::build_column_leaves;
-use crate::fuse_part::ColumnLeaf;
+use crate::fuse_part::ColumnLeaves;
 use crate::fuse_part::ColumnMeta;
 use crate::fuse_part::FusePartInfo;
 use crate::pruning::BlockPruner;
@@ -48,8 +47,7 @@ impl FuseTable {
                 let schema = self.table_info.schema();
 
                 let arrow_schema = schema.to_arrow();
-                let parquet_schema_descriptor = to_parquet_schema(&arrow_schema)?;
-                let column_leaves = build_column_leaves(&parquet_schema_descriptor);
+                let column_leaves = ColumnLeaves::new_from_schema(&arrow_schema);
 
                 let block_metas = BlockPruner::new(snapshot.clone())
                     .prune(&ctx, schema, &push_downs)
@@ -84,7 +82,7 @@ impl FuseTable {
 
     pub fn to_partitions(
         blocks_metas: &[BlockMeta],
-        column_leaves: &[ColumnLeaf],
+        column_leaves: &ColumnLeaves,
         push_down: Option<Extras>,
     ) -> (Statistics, Partitions) {
         let limit = push_down
@@ -146,8 +144,8 @@ impl FuseTable {
 
     fn projection_partitions(
         metas: &[BlockMeta],
-        column_leaves: &[ColumnLeaf],
-        projections: &[usize],
+        column_leaves: &ColumnLeaves,
+        projection: &Projection,
         limit: usize,
     ) -> (Statistics, Partitions) {
         let mut statistics = Statistics::default_exact();
@@ -160,18 +158,13 @@ impl FuseTable {
         let mut remaining = limit;
 
         for block_meta in metas {
-            partitions.push(Self::projection_part(
-                block_meta,
-                column_leaves,
-                projections,
-            ));
-
+            partitions.push(Self::projection_part(block_meta, column_leaves, projection));
             let rows = block_meta.row_count as usize;
 
             statistics.read_rows += rows;
-            for projection in projections {
-                let column_leaf = &column_leaves[*projection];
-                let indices = &column_leaf.leaf_ids;
+            let columns = column_leaves.get_by_projection(projection).unwrap();
+            for column in &columns {
+                let indices = &column.leaf_ids;
                 for index in indices {
                     let col_metas = &block_meta.col_metas[&(*index as u32)];
                     statistics.read_bytes += col_metas.len as usize;
@@ -215,14 +208,14 @@ impl FuseTable {
 
     fn projection_part(
         meta: &BlockMeta,
-        column_leaves: &[ColumnLeaf],
-        projections: &[usize],
+        column_leaves: &ColumnLeaves,
+        projection: &Projection,
     ) -> PartInfoPtr {
-        let mut columns_meta = HashMap::with_capacity(projections.len());
+        let mut columns_meta = HashMap::with_capacity(projection.len());
 
-        for projection in projections {
-            let column_leaf = &column_leaves[*projection];
-            let indices = &column_leaf.leaf_ids;
+        let columns = column_leaves.get_by_projection(projection).unwrap();
+        for column in &columns {
+            let indices = &column.leaf_ids;
             for index in indices {
                 let column_meta = &meta.col_metas[&(*index as u32)];
 
