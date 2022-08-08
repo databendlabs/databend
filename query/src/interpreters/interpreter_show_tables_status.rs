@@ -46,7 +46,7 @@ impl ShowTablesStatusInterpreter {
         }
 
         if DatabaseCatalog::is_case_insensitive_db(&database) {
-            database = database.to_uppercase()
+            database = database.to_uppercase();
         }
 
         let select_cols = "name AS Name, engine AS Engine, 0 AS Version, \

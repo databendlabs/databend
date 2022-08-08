@@ -35,6 +35,7 @@ use crate::sql::binder::scalar::ScalarBinder;
 use crate::sql::binder::Binder;
 use crate::sql::binder::ColumnBinding;
 use crate::sql::optimizer::SExpr;
+use crate::sql::planner::semantic::normalize_identifier;
 use crate::sql::planner::semantic::TypeChecker;
 use crate::sql::plans::ConstantExpr;
 use crate::sql::plans::LogicalGet;
@@ -95,19 +96,17 @@ impl<'a> Binder {
                 // Get catalog name
                 let catalog = catalog
                     .as_ref()
-                    .map(|id| id.name.clone())
+                    .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
                     .unwrap_or_else(|| self.ctx.get_current_catalog());
 
                 // Get database name
                 let database = database
                     .as_ref()
-                    .map(|ident| ident.name.clone())
+                    .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
                     .unwrap_or_else(|| self.ctx.get_current_database());
 
-                let table = table.name.clone();
+                let table = normalize_identifier(table, &self.name_resolution_ctx).name;
 
-                // TODO: simply normalize table name to lower case, maybe use a more reasonable way
-                let table = table.to_lowercase();
                 let tenant = self.ctx.get_tenant();
 
                 let navigation_point = match travel_point {
@@ -152,7 +151,7 @@ impl<'a> Binder {
                         let (s_expr, mut bind_context) =
                             self.bind_base_table(bind_context, database.as_str(), table_index)?;
                         if let Some(alias) = alias {
-                            bind_context.apply_table_alias(alias)?;
+                            bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
                         }
                         Ok((s_expr, bind_context))
                     }
@@ -164,8 +163,13 @@ impl<'a> Binder {
                 params,
                 alias,
             } => {
-                let mut scalar_binder =
-                    ScalarBinder::new(bind_context, self.ctx.clone(), self.metadata.clone(), &[]);
+                let mut scalar_binder = ScalarBinder::new(
+                    bind_context,
+                    self.ctx.clone(),
+                    &self.name_resolution_ctx,
+                    self.metadata.clone(),
+                    &[],
+                );
                 let mut args = Vec::with_capacity(params.len());
                 for arg in params.iter() {
                     args.push(scalar_binder.bind(arg).await?);
@@ -194,7 +198,10 @@ impl<'a> Binder {
                 let table_meta: Arc<dyn TableFunction> = self
                     .catalogs
                     .get_catalog(CATALOG_DEFAULT)?
-                    .get_table_function(name.name.as_str(), table_args)?;
+                    .get_table_function(
+                        &normalize_identifier(name, &self.name_resolution_ctx).name,
+                        table_args,
+                    )?;
                 let table = table_meta.as_table();
 
                 let table_index = self.metadata.write().add_table(
@@ -206,7 +213,7 @@ impl<'a> Binder {
                 let (s_expr, mut bind_context) =
                     self.bind_base_table(bind_context, "system", table_index)?;
                 if let Some(alias) = alias {
-                    bind_context.apply_table_alias(alias)?;
+                    bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
                 }
                 Ok((s_expr, bind_context))
             }
@@ -218,7 +225,7 @@ impl<'a> Binder {
             } => {
                 let (s_expr, mut bind_context) = self.bind_query(bind_context, subquery).await?;
                 if let Some(alias) = alias {
-                    bind_context.apply_table_alias(alias)?;
+                    bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
                 }
                 Ok((s_expr, bind_context))
             }
@@ -239,7 +246,7 @@ impl<'a> Binder {
             let column_binding = ColumnBinding {
                 database_name: Some(database_name.to_string()),
                 table_name: Some(table.name.clone()),
-                column_name: column.name.to_lowercase(),
+                column_name: column.name.clone(),
                 index: column.column_index,
                 data_type: Box::new(column.data_type.clone()),
                 visible_in_unqualified_wildcard: true,
@@ -285,8 +292,13 @@ impl<'a> Binder {
         match travel_point {
             TimeTravelPoint::Snapshot(s) => Ok(NavigationPoint::SnapshotID(s.to_owned())),
             TimeTravelPoint::Timestamp(expr) => {
-                let mut type_checker =
-                    TypeChecker::new(bind_context, self.ctx.clone(), self.metadata.clone(), &[]);
+                let mut type_checker = TypeChecker::new(
+                    bind_context,
+                    self.ctx.clone(),
+                    &self.name_resolution_ctx,
+                    self.metadata.clone(),
+                    &[],
+                );
                 let box (scalar, data_type) = type_checker
                     .resolve(expr, Some(TimestampType::new_impl(6)))
                     .await?;
