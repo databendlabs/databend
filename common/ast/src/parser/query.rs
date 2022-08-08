@@ -166,14 +166,10 @@ pub fn alias_name(i: Input) -> IResult<Identifier> {
 
 pub fn table_alias(i: Input) -> IResult<TableAlias> {
     map(
-        rule! {#alias_name ~ ( "(" ~ ^#comma_separated_list1(ident) ~ ")")?},
-        |(name, columns)| TableAlias {
+        rule! { #alias_name ~ ( "(" ~ ^#comma_separated_list1(ident) ~ ")")? },
+        |(name, opt_columns)| TableAlias {
             name,
-            columns: if let Some(cols) = columns {
-                cols.1
-            } else {
-                vec![]
-            },
+            columns: opt_columns.map(|(_, cols, _)| cols).unwrap_or_default(),
         },
     )(i)
 }
