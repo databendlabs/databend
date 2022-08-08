@@ -151,7 +151,7 @@ impl FlightExchange {
         let (tx, request_rx) = async_channel::bounded(1);
         common_base::base::tokio::spawn(async move {
             while let Some(message) = streaming.next().await {
-                if let Err(cause) = tx.send(message).await {
+                if let Err(_cause) = tx.send(message).await {
                     break;
                 }
             }
@@ -279,8 +279,8 @@ impl ClientFlightExchange {
 
 impl Clone for ClientFlightExchange {
     fn clone(&self) -> Self {
-        self.state.request_count.fetch_add(1, Ordering::SeqCst);
-        self.state.response_count.fetch_add(1, Ordering::SeqCst);
+        self.state.request_count.fetch_add(1, Ordering::Relaxed);
+        self.state.response_count.fetch_add(1, Ordering::Relaxed);
 
         ClientFlightExchange {
             state: self.state.clone(),
@@ -318,8 +318,8 @@ pub struct ServerFlightExchange {
 
 impl Clone for ServerFlightExchange {
     fn clone(&self) -> Self {
-        self.state.request_count.fetch_add(1, Ordering::SeqCst);
-        self.state.response_count.fetch_add(1, Ordering::SeqCst);
+        self.state.request_count.fetch_add(1, Ordering::Relaxed);
+        self.state.response_count.fetch_add(1, Ordering::Relaxed);
 
         ServerFlightExchange {
             state: self.state.clone(),
@@ -333,12 +333,16 @@ impl Clone for ServerFlightExchange {
 
 impl Drop for ServerFlightExchange {
     fn drop(&mut self) {
-        if self.state.request_count.fetch_sub(1, Ordering::AcqRel) == 1 {
-            self.request_rx.close();
+        if !self.is_closed_request.fetch_or(true, Ordering::SeqCst) {
+            if self.state.request_count.fetch_sub(1, Ordering::AcqRel) == 1 {
+                self.request_rx.close();
+            }
         }
 
-        if self.state.response_count.fetch_sub(1, Ordering::AcqRel) == 1 {
-            self.response_tx.close();
+        if !self.is_closed_response.fetch_or(true, Ordering::SeqCst) {
+            if self.state.response_count.fetch_sub(1, Ordering::AcqRel) == 1 {
+                self.response_tx.close();
+            }
         }
     }
 }

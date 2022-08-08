@@ -36,7 +36,7 @@ use crate::api::rpc::flight_client::FlightExchange;
 use crate::api::rpc::packets::{PrecommitBlock, ProgressInfo};
 use crate::sessions::QueryContext;
 
-pub struct ExchangeMergeTransform {
+pub struct ExchangeSourceTransform {
     finished: bool,
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
@@ -46,7 +46,7 @@ pub struct ExchangeMergeTransform {
     exchange_params: MergeExchangeParams,
 }
 
-impl ExchangeMergeTransform {
+impl ExchangeSourceTransform {
     pub fn try_create(
         ctx: &QueryContext,
         input: Arc<InputPort>,
@@ -57,7 +57,7 @@ impl ExchangeMergeTransform {
         let exchange_manager = ctx.get_exchange_manager();
         let flight_exchanges = exchange_manager.get_flight_exchanges(&exchange_params)?;
 
-        Ok(ProcessorPtr::create(Box::new(ExchangeMergeTransform {
+        Ok(ProcessorPtr::create(Box::new(ExchangeSourceTransform {
             finished: false,
             input,
             output,
@@ -70,7 +70,7 @@ impl ExchangeMergeTransform {
 }
 
 #[async_trait::async_trait]
-impl Processor for ExchangeMergeTransform {
+impl Processor for ExchangeSourceTransform {
     fn name(&self) -> &'static str {
         "ExchangeSourceTransform"
     }
@@ -154,7 +154,7 @@ impl Processor for ExchangeMergeTransform {
     }
 }
 
-impl ExchangeMergeTransform {
+impl ExchangeSourceTransform {
     fn on_recv_error(&mut self, cause: ErrorCode) -> Result<()> {
         Err(cause)
     }

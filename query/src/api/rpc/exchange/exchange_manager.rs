@@ -211,7 +211,16 @@ impl DataExchangeManager {
     fn get_root_pipeline(&self, query_id: String, root_actions: &QueryFragmentActions) -> Result<PipelineBuildResult> {
         let schema = root_actions.get_schema()?;
         let fragment_id = root_actions.fragment_id;
-        self.get_fragment_source(query_id, fragment_id, schema)
+        let build_res = self.get_fragment_source(&query_id, fragment_id, schema)?;
+
+        let queries_coordinator_guard = self.queries_coordinator.lock();
+        let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
+
+        if let Some(query_coordinator) = queries_coordinator.get_mut(&query_id) {
+            query_coordinator.exchanges.clear();
+        }
+
+        Ok(build_res)
         // TODO: set on_finished callback
     }
 
@@ -227,14 +236,14 @@ impl DataExchangeManager {
 
     pub fn get_fragment_source(
         &self,
-        query_id: String,
+        query_id: &str,
         fragment_id: usize,
         schema: DataSchemaRef,
     ) -> Result<PipelineBuildResult> {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 
-        match queries_coordinator.get_mut(&query_id) {
+        match queries_coordinator.get_mut(query_id) {
             None => Err(ErrorCode::LogicalError("Query not exists.")),
             Some(query_coordinator) => query_coordinator.subscribe_fragment(fragment_id, schema),
         }
@@ -364,7 +373,7 @@ impl QueryCoordinator {
             return Ok(build_res);
         }
 
-        let mut pipeline = Pipeline::create();
+        // let mut pipeline = Pipeline::create();
 
         // let settings = self.ctx.get_settings();
         // let max_threads = settings.get_max_threads()? as usize;

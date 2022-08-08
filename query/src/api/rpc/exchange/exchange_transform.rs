@@ -12,7 +12,7 @@ use crate::api::rpc::exchange::exchange_params::{ExchangeParams, SerializeParams
 use crate::sessions::QueryContext;
 use common_exception::{ErrorCode, Result};
 use common_pipeline_core::Pipeline;
-use crate::api::rpc::exchange::exchange_transform_merge::ExchangeMergeTransform;
+use crate::api::rpc::exchange::exchange_transform_source::ExchangeSourceTransform;
 use crate::api::rpc::flight_client::FlightExchange;
 use crate::api::rpc::packets::{PrecommitBlock, ProgressInfo};
 use crate::clusters::ClusterHelper;
@@ -70,7 +70,7 @@ impl ExchangeTransform {
                 }
 
                 pipeline.add_transform(|transform_input_port, transform_output_port| {
-                    ExchangeMergeTransform::try_create(
+                    ExchangeSourceTransform::try_create(
                         ctx,
                         transform_input_port,
                         transform_output_port,
