@@ -4,14 +4,14 @@ use common_arrow::arrow::io::flight::{default_ipc_fields, deserialize_batch, ser
 use common_arrow::arrow::io::ipc::IpcSchema;
 use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
-use common_pipeline::processors::port::{InputPort, OutputPort};
-use common_pipeline::processors::Processor;
-use common_pipeline::processors::processor::{Event, ProcessorPtr};
+use common_pipeline_core::processors::port::{InputPort, OutputPort};
+use common_pipeline_core::processors::Processor;
+use common_pipeline_core::processors::processor::{Event, ProcessorPtr};
 use crate::api::{DataPacket, FragmentData};
 use crate::api::rpc::exchange::exchange_params::{ExchangeParams, SerializeParams, ShuffleExchangeParams};
 use crate::sessions::QueryContext;
 use common_exception::{ErrorCode, Result};
-use common_pipeline::Pipeline;
+use common_pipeline_core::Pipeline;
 use crate::api::rpc::flight_client::FlightExchange;
 use crate::api::rpc::packets::{PrecommitBlock, ProgressInfo};
 use crate::clusters::ClusterHelper;

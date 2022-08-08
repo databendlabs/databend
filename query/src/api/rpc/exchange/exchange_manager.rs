@@ -39,7 +39,6 @@ use crate::api::rpc::exchange::exchange_params::ExchangeParams;
 use crate::api::rpc::exchange::exchange_params::MergeExchangeParams;
 use crate::api::rpc::exchange::exchange_params::ShuffleExchangeParams;
 use crate::api::rpc::exchange::exchange_sink::ExchangeSink;
-use crate::api::rpc::exchange::exchange_source::ExchangeSource;
 use crate::api::rpc::flight_scatter_broadcast::BroadcastFlightScatter;
 use crate::api::rpc::flight_scatter_hash::HashFlightScatter;
 use crate::api::rpc::flight_scatter_hash_v2::HashFlightScatterV2;
