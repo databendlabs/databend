@@ -87,7 +87,7 @@ impl Column {
                 let mut bitmaps = Vec::with_capacity(columns.len());
                 let mut inners = Vec::with_capacity(columns.len());
                 for c in columns {
-                    let nullable_column = NullableType::<AnyType>::try_downcast_column(&c).unwrap();
+                    let nullable_column = NullableType::<AnyType>::try_downcast_column(c).unwrap();
                     inners.push(nullable_column.column);
                     bitmaps.push(Column::Boolean(nullable_column.validity));
                 }

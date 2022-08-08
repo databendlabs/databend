@@ -83,15 +83,15 @@ impl Chunk {
                 if let Some(v) = NullableType::<BooleanType>::try_downcast_scalar(&v.as_ref()) {
                     Some(Value::Scalar(v.unwrap_or_default()))
                 } else {
-                    BooleanType::try_downcast_scalar(&v.as_ref()).map(|c| Value::Scalar(c))
+                    BooleanType::try_downcast_scalar(&v.as_ref()).map(Value::Scalar)
                 }
             }
             Value::Column(c) => {
-                if let Some(nb) = NullableType::<BooleanType>::try_downcast_column(&c) {
+                if let Some(nb) = NullableType::<BooleanType>::try_downcast_column(c) {
                     let validity = common_arrow::arrow::bitmap::and(&nb.validity, &nb.column);
                     Some(Value::Column(validity))
                 } else {
-                    BooleanType::try_downcast_column(&c).map(|c| Value::Column(c))
+                    BooleanType::try_downcast_column(c).map(Value::Column)
                 }
             }
         }
