@@ -140,40 +140,35 @@ async fn execute(
         }
     };
 
-    let mut blocks: Vec<Result<Vec<u8>>> = vec![];
-    for _ in 0..2 {
-        match data_stream.next().await {
-            Some(block) => {
-                match block {
-                    Ok(block) => {
-                        blocks.push(compress_fn(output_format.serialize_block(&block)));
-                    }
-                    Err(err) => return Err(err),
-                };
-            }
-            None => break,
-        }
-    }
+    // try to catch runtime error before http response, so user can client can get http 500
+    let first_block = match data_stream.next().await {
+        Some(block) => match block {
+            Ok(block) => Some(compress_fn(output_format.serialize_block(&block))),
+            Err(err) => return Err(err),
+        },
+        None => None,
+    };
 
     let session = ctx.get_current_session();
     let stream = stream! {
         yield compress_fn(prefix);
-        for b in blocks {
-            yield b;
-        }
         let mut ok = true;
-        while let Some(block) = data_stream.next().await {
-            match block{
-                Ok(block) => {
-                    yield compress_fn(output_format.serialize_block(&block));
-                },
-                Err(err) => {
-                    let message = format!("{}", err);
-                    yield compress_fn(Ok(message.into_bytes()));
-                    ok = false;
-                    break
-                }
-            };
+        // do not pull data_stream if we already meet a None
+        if let Some(block) = first_block {
+            yield block;
+            while let Some(block) = data_stream.next().await {
+                match block{
+                    Ok(block) => {
+                        yield compress_fn(output_format.serialize_block(&block));
+                    },
+                    Err(err) => {
+                        let message = format!("{}", err);
+                        yield compress_fn(Ok(message.into_bytes()));
+                        ok = false;
+                        break
+                    }
+                };
+            }
         }
         if ok {
             yield compress_fn(output_format.finalize());
