@@ -18,7 +18,6 @@ use std::sync::Arc;
 use common_ast::ast::Expr;
 use common_ast::ast::Literal;
 use common_datavalues::prelude::*;
-use common_planners::ReadDataSourcePlan;
 use parking_lot::RwLock;
 
 use crate::sql::common::IndexType;
@@ -35,8 +34,6 @@ pub struct TableEntry {
     pub database: String,
 
     pub table: Arc<dyn Table>,
-
-    pub source: ReadDataSourcePlan,
 }
 
 impl Debug for TableEntry {
@@ -56,7 +53,6 @@ impl TableEntry {
         catalog: String,
         database: String,
         table: Arc<dyn Table>,
-        source: ReadDataSourcePlan,
     ) -> Self {
         TableEntry {
             index,
@@ -64,7 +60,6 @@ impl TableEntry {
             catalog,
             database,
             table,
-            source,
         }
     }
 }
@@ -168,7 +163,6 @@ impl Metadata {
         catalog: String,
         database: String,
         table_meta: Arc<dyn Table>,
-        source: ReadDataSourcePlan,
     ) -> IndexType {
         let table_name = table_meta.name().to_string();
         let table_index = self.tables.len();
@@ -178,7 +172,6 @@ impl Metadata {
             database,
             catalog,
             table: table_meta.clone(),
-            source,
         };
         self.tables.push(table_entry);
         for field in table_meta.schema().fields() {
@@ -198,4 +191,20 @@ pub fn optimize_remove_count_args(name: &str, distinct: bool, args: &[&Expr]) ->
         && args
             .iter()
             .all(|expr| matches!(expr, Expr::Literal{lit,..} if *lit!=Literal::Null))
+}
+
+pub fn find_smallest_column(entries: &[ColumnEntry]) -> usize {
+    debug_assert!(!entries.is_empty());
+
+    let mut smallest_index = 0;
+    let mut smallest_size = usize::MAX;
+    for (column_index, column_entry) in entries.iter().enumerate() {
+        if let Ok(bytes) = column_entry.data_type.data_type_id().numeric_byte_size() {
+            if smallest_size > bytes {
+                smallest_size = bytes;
+                smallest_index = column_index;
+            }
+        }
+    }
+    smallest_index
 }

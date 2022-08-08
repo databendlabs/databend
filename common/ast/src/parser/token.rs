@@ -549,6 +549,8 @@ pub enum TokenKind {
     QUERY,
     #[token("RECORD_DELIMITER", ignore(ascii_case))]
     RECORD_DELIMITER,
+    #[token("REFERENCE_USAGE", ignore(ascii_case))]
+    REFERENCE_USAGE,
     #[token("REGEXP", ignore(ascii_case))]
     REGEXP,
     #[token("RENAME", ignore(ascii_case))]
@@ -607,6 +609,8 @@ pub enum TokenKind {
     UPDATE,
     #[token("UPLOAD", ignore(ascii_case))]
     UPLOAD,
+    #[token("SHARE", ignore(ascii_case))]
+    SHARE,
     #[token("SUPER", ignore(ascii_case))]
     SUPER,
     #[token("STATUS", ignore(ascii_case))]
@@ -851,6 +855,7 @@ impl TokenKind {
             | TokenKind::SELECT
             // | TokenKind::SESSION_USER
             // | TokenKind::SETOF
+            | TokenKind::SHARE
             | TokenKind::SMALLINT
             | TokenKind::SOME
             | TokenKind::SUBSTRING

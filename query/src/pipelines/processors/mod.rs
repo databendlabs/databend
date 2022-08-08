@@ -12,13 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub use common_pipeline::processors::*;
-mod sinks;
-mod sources;
+pub use common_pipeline_core::processors::*;
+use common_pipeline_sinks::processors::sinks;
 pub(crate) mod transforms;
 
+use common_pipeline_sources::processors::sources;
 pub use sinks::AsyncSink;
 pub use sinks::AsyncSinker;
+pub use sinks::ContextSink;
 pub use sinks::EmptySink;
 pub use sinks::Sink;
 pub use sinks::Sinker;
@@ -35,8 +36,6 @@ pub use sources::MultiFileSplitter;
 pub use sources::OperatorInfo;
 pub use sources::StreamSource;
 pub use sources::StreamSourceV2;
-pub use sources::SyncReceiverCkSource;
-pub use sources::SyncReceiverSource;
 pub use sources::SyncSource;
 pub use sources::SyncSourcer;
 pub use transforms::AggregatorParams;

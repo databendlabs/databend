@@ -49,6 +49,8 @@ use crate::table::Table;
 use crate::table_args::TableArgs;
 use crate::table_function::TableFunction;
 
+pub const CATALOG_DEFAULT: &str = "default";
+
 pub struct CatalogManager {
     pub catalogs: HashMap<String, Arc<dyn Catalog>>,
 }

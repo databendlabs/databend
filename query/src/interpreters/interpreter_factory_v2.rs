@@ -25,6 +25,8 @@ use crate::interpreters::interpreter_copy_v2::CopyInterpreterV2;
 use crate::interpreters::interpreter_presign::PresignInterpreter;
 use crate::interpreters::interpreter_table_create_v2::CreateTableInterpreterV2;
 use crate::interpreters::AlterUserInterpreter;
+use crate::interpreters::CreateShareInterpreter;
+use crate::interpreters::DropShareInterpreter;
 use crate::interpreters::DropUserInterpreter;
 use crate::sessions::QueryContext;
 use crate::sql::plans::Plan;
@@ -48,6 +50,7 @@ impl InterpreterFactoryV2 {
             ctx,
             inner,
             PlanNode::Empty(EmptyPlan::create()),
+            Some(plan.clone()),
             plan.to_string(),
         )))
     }
@@ -58,6 +61,7 @@ impl InterpreterFactoryV2 {
                 s_expr,
                 bind_context,
                 metadata,
+                ..
             } => Ok(Arc::new(SelectInterpreterV2::try_create(
                 ctx,
                 *bind_context.clone(),
@@ -248,6 +252,21 @@ impl InterpreterFactoryV2 {
                 *p.clone(),
             )?)),
             Plan::Kill(p) => Ok(Arc::new(KillInterpreter::try_create(ctx, *p.clone())?)),
+
+            // share plans
+            Plan::CreateShare(p) => Ok(Arc::new(CreateShareInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            Plan::DropShare(p) => Ok(Arc::new(DropShareInterpreter::try_create(ctx, *p.clone())?)),
+            Plan::GrantShareObject(p) => Ok(Arc::new(GrantShareObjectInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            Plan::RevokeShareObject(p) => Ok(Arc::new(RevokeShareObjectInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
         }
     }
 }

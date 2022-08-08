@@ -18,11 +18,11 @@ use std::sync::Arc;
 
 use async_stream::stream;
 use common_datablocks::DataBlock;
+use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
 use common_formats::output_format::OutputFormatType;
-use common_planners::PlanNode;
 use common_streams::SendableDataBlockStream;
 use futures::StreamExt;
 use http::HeaderMap;
@@ -46,11 +46,12 @@ use tracing::info;
 
 use crate::interpreters::InterpreterFactory;
 use crate::interpreters::InterpreterFactoryV2;
+use crate::interpreters::InterpreterPtr;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::StreamSource;
 use crate::pipelines::SourcePipeBuilder;
-use crate::servers::clickhouse::CLickHouseFederated;
 use crate::servers::http::v1::HttpQueryContext;
+use crate::servers::http::CLickHouseFederated;
 use crate::servers::utils::use_planner_v2;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionType;
@@ -100,75 +101,14 @@ impl StatementHandlerParams {
     }
 }
 
-async fn execute_v2(
-    ctx: Arc<QueryContext>,
-    plan: Plan,
-    format: OutputFormatType,
-    _input_stream: Option<SendableDataBlockStream>,
-    params: StatementHandlerParams,
-) -> Result<WithContentType<Body>> {
-    let interpreter = InterpreterFactoryV2::get(ctx.clone(), &plan.clone())?;
-    let _ = interpreter
-        .start()
-        .await
-        .map_err(|e| error!("interpreter.start.error: {:?}", e));
-    let output_port = OutputPort::create();
-    let stream_source = StreamSource::create(ctx.clone(), None, output_port.clone())?;
-    let mut source_pipe_builder = SourcePipeBuilder::create();
-    source_pipe_builder.add_source(output_port, stream_source);
-    let _ = interpreter
-        .set_source_pipe_builder(Option::from(source_pipe_builder))
-        .map_err(|e| error!("interpreter.set_source_pipe_builder.error: {:?}", e));
-    let data_stream = interpreter.execute().await?;
-
-    let mut data_stream = ctx.try_create_abortable(data_stream)?;
-    let format_setting = ctx.get_format_settings()?;
-
-    let mut output_format = format.create_format(plan.schema(), format_setting);
-    let prefix = Ok(output_format.serialize_prefix()?);
-
-    let compress_fn = move |rb: Result<Vec<u8>>| -> Result<Vec<u8>> {
-        if params.compress() {
-            match rb {
-                Ok(b) => compress_block(b),
-                Err(e) => Err(e),
-            }
-        } else {
-            rb
-        }
-    };
-
-    let session = ctx.get_current_session();
-    let stream = stream! {
-        yield compress_fn(prefix);
-        while let Some(block) = data_stream.next().await {
-            match block{
-                Ok(block) => {
-                    yield compress_fn(output_format.serialize_block(&block));
-                },
-                Err(err) => yield(Err(err)),
-            };
-        }
-        yield compress_fn(output_format.finalize());
-        let _ = interpreter
-            .finish()
-            .await
-            .map_err(|e| error!("interpreter.finish error: {:?} ", e));
-        // to hold session ref until stream is all consumed
-        let _ = session.get_id();
-    };
-
-    Ok(Body::from_bytes_stream(stream).with_content_type(format.get_content_type()))
-}
-
 async fn execute(
     ctx: Arc<QueryContext>,
-    plan: PlanNode,
+    interpreter: InterpreterPtr,
+    schema: DataSchemaRef,
     format: OutputFormatType,
     input_stream: Option<SendableDataBlockStream>,
     params: StatementHandlerParams,
 ) -> Result<WithContentType<Body>> {
-    let interpreter = InterpreterFactory::get(ctx.clone(), plan.clone())?;
     let _ = interpreter
         .start()
         .await
@@ -186,7 +126,7 @@ async fn execute(
 
     let mut data_stream = ctx.try_create_abortable(data_stream)?;
     let format_setting = ctx.get_format_settings()?;
-    let mut output_format = format.create_format(plan.schema(), format_setting);
+    let mut output_format = format.create_format(schema, format_setting);
     let prefix = Ok(output_format.serialize_prefix()?);
 
     let compress_fn = move |rb: Result<Vec<u8>>| -> Result<Vec<u8>> {
@@ -258,7 +198,8 @@ pub async fn clickhouse_handler_get(
         let format = get_format_from_plan(&plan, format)?;
 
         context.attach_query_str(&sql);
-        execute_v2(context, plan, format, None, params)
+        let interpreter = InterpreterFactoryV2::get(context.clone(), &plan).map_err(BadRequest)?;
+        execute(context, interpreter, plan.schema(), format, None, params)
             .await
             .map_err(InternalServerError)
     } else {
@@ -268,7 +209,9 @@ pub async fn clickhouse_handler_get(
 
         context.attach_query_str(&sql);
         let format = get_format_with_default(format, default_format)?;
-        execute(context, plan, format, None, params)
+        let schema = plan.schema();
+        let interpreter = InterpreterFactory::get(context.clone(), plan).map_err(BadRequest)?;
+        execute(context, interpreter, schema, format, None, params)
             .await
             .map_err(InternalServerError)
     }
@@ -323,7 +266,8 @@ pub async fn clickhouse_handler_post(
         let format = get_format_with_default(fmt, default_format)?;
         let format = get_format_from_plan(&plan, format)?;
         ctx.attach_query_str(&sql);
-        execute_v2(ctx, plan, format, None, params)
+        let interpreter = InterpreterFactoryV2::get(ctx.clone(), &plan).map_err(BadRequest)?;
+        execute(ctx, interpreter, plan.schema(), format, None, params)
             .await
             .map_err(InternalServerError)
     } else {
@@ -335,7 +279,9 @@ pub async fn clickhouse_handler_post(
 
         let format = get_format_with_default(format, default_format)?;
 
-        execute(ctx, plan, format, None, params)
+        let schema = plan.schema();
+        let interpreter = InterpreterFactory::get(ctx.clone(), plan).map_err(BadRequest)?;
+        execute(ctx, interpreter, schema, format, None, params)
             .await
             .map_err(InternalServerError)
     }
@@ -438,6 +384,7 @@ fn get_format_from_plan(
             s_expr: _,
             metadata: _,
             bind_context,
+            ..
         } => bind_context.format.clone(),
         _ => None,
     };

@@ -342,9 +342,9 @@ checksum = "d468802bab17cbc0cc575e9b053f41e72aa36bfa6b7f55e3529ffa43161b97fa"
 
 [[package]]
 name = "axum"
-version = "0.5.14"
+version = "0.5.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c943a505c17b494638a38a9af129067f760c9c06794b9f57d499266909be8e72"
+checksum = "6b9496f0c1d1afb7a2af4338bbe1d969cddfead41d87a9fb3aaa6d0bbc7af648"
 dependencies = [
  "async-trait 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)",
  "axum-core",
@@ -361,6 +361,8 @@ dependencies = [
  "percent-encoding",
  "pin-project-lite",
  "serde",
+ "serde_json",
+ "serde_urlencoded",
  "sync_wrapper",
  "tokio",
  "tower",
@@ -797,14 +799,16 @@ checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 
 [[package]]
 name = "chrono"
-version = "0.4.19"
-source = "git+https://github.com/datafuse-extras/chrono?rev=279f590#279f5907879c9618767e5501ac01f79d5b7a4b38"
+version = "0.4.20"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6127248204b9aba09a362f6c930ef6a78f2c1b2215f8a7b398c06e1083f17af0"
 dependencies = [
- "libc",
+ "js-sys",
  "num-integer",
  "num-traits",
  "serde",
  "time 0.1.44",
+ "wasm-bindgen",
  "winapi",
 ]
 
@@ -896,32 +900,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "clickhouse-driver"
-version = "0.1.0-alpha.3"
-source = "git+https://github.com/datafuse-extras/clickhouse_driver?rev=cf978da#cf978da21c83a4cdb648f14308f77b6c30dd4bd5"
-dependencies = [
- "byteorder",
- "bytes 1.1.0",
- "chrono",
- "chrono-tz",
- "crossbeam",
- "futures",
- "hostname",
- "log",
- "lz4",
- "naive-cityhash",
- "once_cell",
- "parking_lot 0.12.1",
- "pin-project-lite",
- "rand 0.8.5",
- "slab",
- "thiserror",
- "tokio",
- "url",
- "uuid 0.8.2",
-]
-
-[[package]]
 name = "cmake"
 version = "0.1.48"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -961,16 +939,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "combine"
-version = "4.6.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2a604e93b79d1808327a6fca85a6f2d69de66461e7620f5a4cbf5fb4d1d7c948"
-dependencies = [
- "bytes 1.1.0",
- "memchr",
-]
-
-[[package]]
 name = "comfy-table"
 version = "6.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1002,6 +970,7 @@ dependencies = [
  "common-datavalues",
  "common-exception",
  "common-functions",
+ "common-meta-app",
  "common-meta-types",
  "fast-float",
  "goldenfile",
@@ -1024,7 +993,6 @@ dependencies = [
  "anyhow",
  "async-trait 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)",
  "common-exception",
- "common-macros",
  "ctrlc",
  "futures",
  "libc",
@@ -1035,7 +1003,7 @@ dependencies = [
  "tikv-jemalloc-sys",
  "tokio",
  "tracing",
- "uuid 1.1.2",
+ "uuid",
 ]
 
 [[package]]
@@ -1079,10 +1047,9 @@ dependencies = [
  "common-io",
  "common-meta-app",
  "common-meta-types",
- "common-pipeline",
+ "common-pipeline-core",
  "common-planners",
  "common-settings",
- "common-streams",
  "common-users",
  "dyn-clone",
  "opendal",
@@ -1156,7 +1123,6 @@ dependencies = [
  "micromarshal",
  "num",
  "once_cell",
- "opensrv-clickhouse",
  "ordered-float 3.0.0",
  "paste",
  "pretty_assertions",
@@ -1171,6 +1137,7 @@ dependencies = [
 name = "common-dep-hack"
 version = "0.1.0"
 dependencies = [
+ "axum",
  "openssl-src",
 ]
 
@@ -1268,7 +1235,7 @@ dependencies = [
  "sqlparser",
  "strength_reduce",
  "twox-hash",
- "uuid 1.1.2",
+ "uuid",
 ]
 
 [[package]]
@@ -1287,6 +1254,7 @@ dependencies = [
 name = "common-fuse-meta"
 version = "0.1.0"
 dependencies = [
+ "common-arrow",
  "common-base",
  "common-cache",
  "common-config",
@@ -1358,6 +1326,32 @@ dependencies = [
  "micromarshal",
  "rand 0.8.5",
  "serde",
+ "time 0.3.11",
+]
+
+[[package]]
+name = "common-legacy-parser"
+version = "0.1.0"
+dependencies = [
+ "async-trait 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)",
+ "clap 3.2.15",
+ "common-ast",
+ "common-datavalues",
+ "common-exception",
+ "common-functions",
+ "common-meta-types",
+ "common-planners",
+ "common-storage",
+ "futures",
+ "futures-util",
+ "itertools",
+ "metrics 0.19.0",
+ "num_cpus",
+ "once_cell",
+ "opendal",
+ "parking_lot 0.12.1",
+ "serde",
+ "sqlparser",
  "time 0.3.11",
 ]
 
@@ -1603,7 +1597,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "common-pipeline"
+name = "common-pipeline-core"
 version = "0.1.0"
 dependencies = [
  "async-trait 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1620,6 +1614,86 @@ dependencies = [
  "petgraph",
  "serde",
  "time 0.3.11",
+ "tokio",
+]
+
+[[package]]
+name = "common-pipeline-sinks"
+version = "0.1.0"
+dependencies = [
+ "async-trait 0.1.56 (git+https://github.com/datafuse-extras/async-trait?rev=f0b0fd5)",
+ "common-base",
+ "common-catalog",
+ "common-datablocks",
+ "common-datavalues",
+ "common-exception",
+ "common-io",
+ "common-pipeline-core",
+ "common-planners",
+ "futures",
+ "futures-util",
+ "itertools",
+ "num_cpus",
+ "once_cell",
+ "parking_lot 0.12.1",
+ "petgraph",
+ "serde",
+ "time 0.3.11",
+ "tracing",
+]
+
+[[package]]
+name = "common-pipeline-sources"
+version = "0.1.0"
+dependencies = [
+ "async-trait 0.1.56 (git+https://github.com/datafuse-extras/async-trait?rev=f0b0fd5)",
+ "chrono",
+ "common-base",
+ "common-catalog",
+ "common-datablocks",
+ "common-datavalues",
+ "common-exception",
+ "common-formats",
+ "common-io",
+ "common-meta-types",
+ "common-pipeline-core",
+ "common-storage",
+ "common-streams",
+ "futures",
+ "futures-util",
+ "itertools",
+ "num_cpus",
+ "once_cell",
+ "opendal",
+ "parking_lot 0.12.1",
+ "petgraph",
+ "serde",
+ "time 0.3.11",
+]
+
+[[package]]
+name = "common-pipeline-transforms"
+version = "0.1.0"
+dependencies = [
+ "async-trait 0.1.56 (git+https://github.com/datafuse-extras/async-trait?rev=f0b0fd5)",
+ "common-base",
+ "common-catalog",
+ "common-datablocks",
+ "common-datavalues",
+ "common-exception",
+ "common-io",
+ "common-pipeline-core",
+ "common-planners",
+ "futures",
+ "futures-util",
+ "itertools",
+ "num_cpus",
+ "once_cell",
+ "parking_lot 0.12.1",
+ "petgraph",
+ "serde",
+ "time 0.3.11",
+ "tracing",
 ]
 
 [[package]]
@@ -1706,6 +1780,235 @@ dependencies = [
  "opendal",
  "percent-encoding",
  "serde",
+]
+
+[[package]]
+name = "common-storages-fuse"
+version = "0.1.0"
+dependencies = [
+ "async-stream",
+ "async-trait 0.1.56 (git+https://github.com/datafuse-extras/async-trait?rev=f0b0fd5)",
+ "backoff",
+ "chrono",
+ "clap 3.2.15",
+ "common-arrow",
+ "common-ast",
+ "common-base",
+ "common-cache",
+ "common-catalog",
+ "common-config",
+ "common-datablocks",
+ "common-datavalues",
+ "common-exception",
+ "common-functions",
+ "common-fuse-meta",
+ "common-grpc",
+ "common-legacy-parser",
+ "common-meta-app",
+ "common-meta-types",
+ "common-pipeline-core",
+ "common-pipeline-sources",
+ "common-pipeline-transforms",
+ "common-planners",
+ "common-storage",
+ "common-storages-index",
+ "common-storages-util",
+ "common-streams",
+ "common-tracing",
+ "common-users",
+ "futures",
+ "futures-util",
+ "itertools",
+ "num_cpus",
+ "once_cell",
+ "opendal",
+ "parking_lot 0.12.1",
+ "semver",
+ "serde",
+ "serde_json",
+ "serfig",
+ "thrift",
+ "time 0.3.11",
+ "tracing",
+ "typetag",
+ "uuid",
+]
+
+[[package]]
+name = "common-storages-hive"
+version = "0.1.0"
+dependencies = [
+ "async-recursion",
+ "async-trait 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)",
+ "backoff",
+ "clap 3.2.15",
+ "common-arrow",
+ "common-base",
+ "common-catalog",
+ "common-config",
+ "common-datablocks",
+ "common-datavalues",
+ "common-exception",
+ "common-fuse-meta",
+ "common-grpc",
+ "common-hive-meta-store",
+ "common-meta-app",
+ "common-meta-types",
+ "common-pipeline-core",
+ "common-pipeline-sources",
+ "common-planners",
+ "common-storage",
+ "common-storages-index",
+ "common-storages-util",
+ "common-tracing",
+ "common-users",
+ "futures",
+ "futures-util",
+ "itertools",
+ "num_cpus",
+ "once_cell",
+ "opendal",
+ "parking_lot 0.12.1",
+ "semver",
+ "serde",
+ "serfig",
+ "thrift",
+ "time 0.3.11",
+ "tracing",
+ "typetag",
+]
+
+[[package]]
+name = "common-storages-index"
+version = "0.1.0"
+dependencies = [
+ "async-trait 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)",
+ "bincode",
+ "bit-vec",
+ "clap 3.2.15",
+ "common-arrow",
+ "common-base",
+ "common-catalog",
+ "common-config",
+ "common-datablocks",
+ "common-datavalues",
+ "common-exception",
+ "common-functions",
+ "common-fuse-meta",
+ "common-grpc",
+ "common-meta-app",
+ "common-meta-types",
+ "common-pipeline-core",
+ "common-pipeline-transforms",
+ "common-planners",
+ "common-storage",
+ "common-tracing",
+ "common-users",
+ "futures",
+ "futures-util",
+ "itertools",
+ "num_cpus",
+ "once_cell",
+ "opendal",
+ "parking_lot 0.12.1",
+ "rand 0.8.5",
+ "semver",
+ "serde",
+ "serfig",
+ "thrift",
+ "time 0.3.11",
+ "tracing",
+ "typetag",
+]
+
+[[package]]
+name = "common-storages-preludes"
+version = "0.1.0"
+dependencies = [
+ "async-stream",
+ "async-trait 0.1.56 (git+https://github.com/datafuse-extras/async-trait?rev=f0b0fd5)",
+ "backoff",
+ "chrono",
+ "clap 3.2.15",
+ "common-arrow",
+ "common-ast",
+ "common-base",
+ "common-building",
+ "common-cache",
+ "common-catalog",
+ "common-config",
+ "common-contexts",
+ "common-datablocks",
+ "common-datavalues",
+ "common-exception",
+ "common-functions",
+ "common-fuse-meta",
+ "common-grpc",
+ "common-meta-app",
+ "common-meta-types",
+ "common-metrics",
+ "common-pipeline-core",
+ "common-pipeline-sinks",
+ "common-pipeline-sources",
+ "common-pipeline-transforms",
+ "common-planners",
+ "common-storage",
+ "common-storages-util",
+ "common-streams",
+ "common-tracing",
+ "common-users",
+ "futures",
+ "futures-util",
+ "itertools",
+ "num_cpus",
+ "octocrab",
+ "once_cell",
+ "opendal",
+ "parking_lot 0.12.1",
+ "reqwest",
+ "semver",
+ "serde",
+ "serde_json",
+ "serfig",
+ "snailquote",
+ "thrift",
+ "time 0.3.11",
+ "tracing",
+ "typetag",
+ "uuid",
+ "walkdir",
+]
+
+[[package]]
+name = "common-storages-util"
+version = "0.1.0"
+dependencies = [
+ "async-trait 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)",
+ "backoff",
+ "bincode",
+ "clap 3.2.15",
+ "common-arrow",
+ "common-base",
+ "common-datablocks",
+ "common-datavalues",
+ "common-exception",
+ "common-meta-api",
+ "common-meta-app",
+ "common-meta-types",
+ "common-storage",
+ "common-tracing",
+ "futures",
+ "futures-util",
+ "itertools",
+ "num_cpus",
+ "once_cell",
+ "opendal",
+ "parking_lot 0.12.1",
+ "rand 0.8.5",
+ "serde",
+ "thrift",
+ "time 0.3.11",
+ "tracing",
 ]
 
 [[package]]
@@ -2282,7 +2585,6 @@ dependencies = [
  "chrono",
  "chrono-tz",
  "clap 3.2.15",
- "clickhouse-driver",
  "common-arrow",
  "common-ast",
  "common-base",
@@ -2302,6 +2604,7 @@ dependencies = [
  "common-hive-meta-store",
  "common-http",
  "common-io",
+ "common-legacy-parser",
  "common-macros",
  "common-management",
  "common-meta-api",
@@ -2313,10 +2616,18 @@ dependencies = [
  "common-meta-store",
  "common-meta-types",
  "common-metrics",
- "common-pipeline",
+ "common-pipeline-core",
+ "common-pipeline-sinks",
+ "common-pipeline-sources",
+ "common-pipeline-transforms",
  "common-planners",
  "common-settings",
  "common-storage",
+ "common-storages-fuse",
+ "common-storages-hive",
+ "common-storages-index",
+ "common-storages-preludes",
+ "common-storages-util",
  "common-streams",
  "common-tracing",
  "common-users",
@@ -2344,7 +2655,6 @@ dependencies = [
  "octocrab",
  "once_cell",
  "opendal",
- "opensrv-clickhouse",
  "opensrv-mysql",
  "openssl",
  "parking_lot 0.12.1",
@@ -2388,7 +2698,7 @@ dependencies = [
  "twox-hash",
  "typetag",
  "url",
- "uuid 1.1.2",
+ "uuid",
  "walkdir",
  "wiremock",
 ]
@@ -2419,7 +2729,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bef552e6f588e446098f6ba40d89ac146c8c7b64aade83c051ee00bb5d2bc18d"
 dependencies = [
  "serde",
- "uuid 1.1.2",
+ "uuid",
 ]
 
 [[package]]
@@ -4508,7 +4818,7 @@ dependencies = [
  "subprocess",
  "thiserror",
  "time 0.3.11",
- "uuid 1.1.2",
+ "uuid",
 ]
 
 [[package]]
@@ -4841,31 +5151,6 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-futures",
-]
-
-[[package]]
-name = "opensrv-clickhouse"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6f6456cb429428f239e2014cba8fffccc79049764917dc9ee0c6cf2180f412f0"
-dependencies = [
- "async-trait 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)",
- "byteorder",
- "bytes 1.1.0",
- "chrono",
- "chrono-tz",
- "combine",
- "hostname",
- "lz4",
- "micromarshal",
- "naive-cityhash",
- "once_cell",
- "thiserror",
- "tokio",
- "tokio-stream",
- "tracing",
- "url",
- "uuid 1.1.2",
 ]
 
 [[package]]
@@ -6440,7 +6725,7 @@ dependencies = [
  "thiserror",
  "time 0.3.11",
  "url",
- "uuid 1.1.2",
+ "uuid",
 ]
 
 [[package]]
@@ -6984,7 +7269,7 @@ dependencies = [
  "debugid",
  "memmap2",
  "stable_deref_trait",
- "uuid 1.1.2",
+ "uuid",
 ]
 
 [[package]]
@@ -7777,15 +8062,6 @@ name = "utf8-width"
 version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5190c9442dcdaf0ddd50f37420417d219ae5261bbf5db120d0f9bab996c9cba1"
-
-[[package]]
-name = "uuid"
-version = "0.8.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bc5cf98d8186244414c848017f0e2676b3fcb46807f6668a97dfe67359a3c4b7"
-dependencies = [
- "getrandom 0.2.7",
-]
 
 [[package]]
 name = "uuid"

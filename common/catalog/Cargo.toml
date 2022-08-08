@@ -20,10 +20,9 @@ common-fuse-meta = { path = "../fuse-meta" }
 common-io = { path = "../io" }
 common-meta-app = { path = "../meta/app" }
 common-meta-types = { path = "../meta/types" }
-common-pipeline = { path = "../pipeline" }
+common-pipeline-core = { path = "../pipeline/core" }
 common-planners = { path = "../planners" }
 common-settings = { path = "../settings" }
-common-streams = { path = "../streams" }
 common-users = { path = "../users" }
 
 async-trait = "0.1.56"

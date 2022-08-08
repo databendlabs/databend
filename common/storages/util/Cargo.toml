@@ -1,0 +1,41 @@
+[package]
+name = "common-storages-util"
+version = "0.1.0"
+edition = "2021"
+authors = ["Databend Authors <opensource@datafuselabs.com>"]
+license = "Apache-2.0"
+publish = false
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+doctest = false
+test = false
+
+[dependencies]
+common-arrow = { path = "../../arrow" }
+common-base = { path = "../../base" }
+common-datablocks = { path = "../../datablocks" }
+common-datavalues = { path = "../../datavalues" }
+common-exception = { path = "../../exception" }
+common-meta-api = { path = "../../meta/api" }
+common-meta-app = { path = "../../meta/app" }
+common-meta-types = { path = "../../meta/types" }
+common-storage = { path = "../../storage" }
+common-tracing = { path = "../../tracing" }
+
+async-trait = "0.1.56"
+backoff = { version = "0.4.0", features = ["futures", "tokio"] }
+bincode = { version = "2.0.0-rc.1", features = ["serde", "std", "alloc"] }
+clap = { version = "3.2.5", features = ["derive", "env"] }
+futures = "0.3.21"
+futures-util = "0.3.21"
+itertools = "0.10.3"
+num_cpus = "1.13.1"
+once_cell = "1.12.0"
+opendal = { version = "0.11.4", features = ["retry"] }
+parking_lot = "0.12.1"
+rand = "0.8.5"
+serde = { version = "1.0.137", features = ["derive"] }
+thrift = "0.15.0"
+time = "0.3.10"
+tracing = "0.1.35"

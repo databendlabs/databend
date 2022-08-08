@@ -17,8 +17,6 @@ use std::sync::Arc;
 use common_base::base::tokio::runtime::Runtime;
 use common_base::base::Thread;
 use common_exception::Result;
-use common_storage::StorageFsConfig;
-use common_storage::StorageParams;
 use databend_query::sessions::SessionManager;
 use databend_query::Config;
 
@@ -116,13 +114,6 @@ impl SessionManagerBuilder {
     pub fn api_tls_server_root_ca_cert(self, value: impl Into<String>) -> SessionManagerBuilder {
         let mut new_config = self.config;
         new_config.query.api_tls_server_root_ca_cert = value.into();
-        SessionManagerBuilder::create_with_conf(new_config)
-    }
-
-    pub fn fs_storage_path(self, path: String) -> SessionManagerBuilder {
-        let mut new_config = self.config;
-
-        new_config.storage.params = StorageParams::Fs(StorageFsConfig { root: path });
         SessionManagerBuilder::create_with_conf(new_config)
     }
 

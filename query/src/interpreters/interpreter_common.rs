@@ -17,19 +17,77 @@ use std::sync::Arc;
 
 use chrono::TimeZone;
 use chrono::Utc;
+use common_base::base::TrySpawn;
+use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::GrantObject;
 use common_meta_types::StageFile;
 use common_meta_types::StageType;
 use common_meta_types::UserStageInfo;
+use common_pipeline_core::Pipeline;
 use futures::TryStreamExt;
 use regex::Regex;
 use tracing::warn;
 
+use crate::pipelines::executor::PipelineCompleteExecutor;
+use crate::pipelines::processors::TransformAddOn;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::storages::stage::StageSourceHelper;
+use crate::storages::Table;
+
+pub fn append2table(
+    ctx: Arc<QueryContext>,
+    table: Arc<dyn Table>,
+    source_schema: DataSchemaRef,
+    mut pipeline: Pipeline,
+) -> Result<()> {
+    let need_fill_missing_columns = table.schema() != source_schema;
+    if need_fill_missing_columns {
+        pipeline.add_transform(|transform_input_port, transform_output_port| {
+            TransformAddOn::try_create(
+                transform_input_port,
+                transform_output_port,
+                source_schema.clone(),
+                table.schema(),
+                ctx.clone(),
+            )
+        })?;
+    }
+
+    table.append2(ctx.clone(), &mut pipeline)?;
+    let async_runtime = ctx.get_storage_runtime();
+    let query_need_abort = ctx.query_need_abort();
+
+    pipeline.set_max_threads(ctx.get_settings().get_max_threads()? as usize);
+    let executor = PipelineCompleteExecutor::try_create(async_runtime, query_need_abort, pipeline)?;
+    executor.execute()
+}
+
+pub async fn commit2table(
+    ctx: Arc<QueryContext>,
+    table: Arc<dyn Table>,
+    overwrite: bool,
+) -> Result<()> {
+    let append_entries = ctx.consume_precommit_blocks();
+    // We must put the commit operation to global runtime, which will avoid the "dispatch dropped without returning error" in tower
+    let catalog_name = ctx.get_current_catalog();
+    let handler = ctx.get_storage_runtime().spawn(async move {
+        table
+            .commit_insertion(ctx, &catalog_name, append_entries, overwrite)
+            .await
+    });
+
+    match handler.await {
+        Ok(Ok(_)) => Ok(()),
+        Ok(Err(cause)) => Err(cause),
+        Err(cause) => Err(ErrorCode::PanicError(format!(
+            "Maybe panic while in commit insert. {}",
+            cause
+        ))),
+    }
+}
 
 pub async fn validate_grant_object_exists(
     ctx: &Arc<QueryContext>,

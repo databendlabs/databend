@@ -89,9 +89,6 @@ flight_api_address = "127.0.0.1:9091"
 mysql_handler_host = "127.0.0.1"
 mysql_handler_port = 3307
 
-# Query ClickHouse Handler.
-clickhouse_handler_host = "127.0.0.1"
-clickhouse_handler_port = 9001
 
 # Query HTTP Handler.
 http_handler_host = "127.0.0.1"

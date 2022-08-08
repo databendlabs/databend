@@ -78,6 +78,7 @@ impl ResultTableWriter {
             uncompressed_byte_size: acc.in_memory_size,
             compressed_byte_size: acc.file_size,
             col_stats,
+            index_size: 0,
         });
 
         let meta = ResultTableMeta {
@@ -109,7 +110,7 @@ impl ResultTableWriter {
                 e
             })?;
         self.accumulator
-            .add_block(size, meta_data, block_statistics)?;
+            .add_block(size, meta_data, block_statistics, None, 0)?;
         Ok(self.get_last_part_info())
     }
 

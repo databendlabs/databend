@@ -22,18 +22,20 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_formats::output_format::OutputFormatType;
 use common_meta_app::schema::TableInfo;
+use common_pipeline_core::processors::port::InputPort;
+use common_pipeline_core::SinkPipeBuilder;
 use common_planners::Extras;
 use common_planners::Partitions;
 use common_planners::ReadDataSourcePlan;
 use common_planners::StageTableInfo;
 use common_planners::Statistics;
 use common_planners::TruncateTablePlan;
-use common_streams::SendableDataBlockStream;
 use parking_lot::Mutex;
 use tracing::info;
 
 use super::StageSourceHelper;
 use crate::pipelines::processors::port::OutputPort;
+use crate::pipelines::processors::ContextSink;
 use crate::pipelines::processors::TransformLimit;
 use crate::pipelines::Pipeline;
 use crate::pipelines::SourcePipeBuilder;
@@ -50,7 +52,8 @@ pub struct StageTable {
 
 impl StageTable {
     pub fn try_create(table_info: StageTableInfo) -> Result<Arc<dyn Table>> {
-        let table_info_placeholder = TableInfo::default();
+        let table_info_placeholder = TableInfo::default().set_schema(table_info.schema());
+
         Ok(Arc::new(Self {
             table_info,
             table_info_placeholder,
@@ -120,16 +123,20 @@ impl Table for StageTable {
         Ok(())
     }
 
-    // Write data to stage file.
-    // TODO: support append2
-    async fn append_data(
-        &self,
-        _ctx: Arc<dyn TableContext>,
-        stream: SendableDataBlockStream,
-    ) -> Result<SendableDataBlockStream> {
-        Ok(Box::pin(stream))
+    fn append2(&self, ctx: Arc<dyn TableContext>, pipeline: &mut Pipeline) -> Result<()> {
+        let mut sink_pipeline_builder = SinkPipeBuilder::create();
+        for _ in 0..pipeline.output_len() {
+            let input_port = InputPort::create();
+            sink_pipeline_builder.add_sink(
+                input_port.clone(),
+                ContextSink::create(input_port, ctx.clone()),
+            );
+        }
+        pipeline.add_pipe(sink_pipeline_builder.finalize());
+        Ok(())
     }
 
+    // TODO use tmp file_name & rename to have atomic commit
     async fn commit_insertion(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -169,6 +176,7 @@ impl Table for StageTable {
                     format_options.record_delimiter.as_bytes().to_vec();
             }
         }
+
         let mut output_format = fmt.create_format(self.table_info.schema(), format_settings);
 
         let prefix = output_format.serialize_prefix()?;

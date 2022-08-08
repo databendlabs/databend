@@ -1,3 +1,4 @@
+set enable_planner_v2 = 0;
 DROP TABLE IF EXISTS t;
 
 CREATE TABLE t(a int null, b int null);

@@ -93,6 +93,11 @@ impl Plan {
             Plan::SetVariable(p) => Ok(format!("{:?}", p)),
             Plan::UseDatabase(p) => Ok(format!("{:?}", p)),
             Plan::Kill(p) => Ok(format!("{:?}", p)),
+
+            Plan::CreateShare(p) => Ok(format!("{:?}", p)),
+            Plan::DropShare(p) => Ok(format!("{:?}", p)),
+            Plan::GrantShareObject(p) => Ok(format!("{:?}", p)),
+            Plan::RevokeShareObject(p) => Ok(format!("{:?}", p)),
         }
     }
 }

@@ -18,6 +18,7 @@ use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
 use chrono::NaiveDateTime;
+use common_catalog::catalog::CATALOG_DEFAULT;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::Series;
 use common_datavalues::prelude::SeriesFrom;
@@ -30,9 +31,9 @@ use serde_repr::Serialize_repr;
 use tracing::error;
 use tracing::info;
 
-use crate::catalogs::CATALOG_DEFAULT;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
+use crate::storages::system::QueryLogTable;
 
 #[derive(Clone, Copy, Serialize_repr)]
 #[repr(u8)]
@@ -221,7 +222,9 @@ impl InterpreterQueryLog {
         ]);
         let blocks = vec![Ok(block)];
         let input_stream = futures::stream::iter::<Vec<Result<DataBlock>>>(blocks);
-        let _ = query_log
+
+        let query_log_table: &QueryLogTable = query_log.as_any().downcast_ref().unwrap();
+        query_log_table
             .append_data(self.ctx.clone(), Box::pin(input_stream))
             .await?;
 

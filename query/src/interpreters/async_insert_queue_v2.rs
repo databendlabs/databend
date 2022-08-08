@@ -45,7 +45,6 @@ use crate::sessions::Settings;
 use crate::sql::plans::Insert;
 use crate::sql::plans::InsertInputSource;
 use crate::sql::plans::Plan;
-use crate::storages::memory::MemoryTableSink;
 
 #[derive(Clone)]
 pub struct InsertKey {
@@ -268,6 +267,7 @@ impl AsyncInsertQueue {
                         s_expr,
                         metadata,
                         bind_context,
+                        ..
                     } => SelectInterpreterV2::try_create(
                         ctx.clone(),
                         *bind_context.clone(),
@@ -284,7 +284,7 @@ impl AsyncInsertQueue {
                     let input_port = InputPort::create();
                     sink_pipeline_builder.add_sink(
                         input_port.clone(),
-                        MemoryTableSink::create(input_port, ctx.clone()),
+                        ContextSink::create(input_port, ctx.clone()),
                     );
                 }
                 pipeline.add_pipe(sink_pipeline_builder.finalize());

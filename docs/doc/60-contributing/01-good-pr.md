@@ -87,16 +87,17 @@ fix(query): fix group by string bug
 |     |
 |     +-> Summary in present tense.
 |
-+-------> Type: feat, fix, refactor, ci, build, docs, website, chore
++-------> Type: rfc, feat, fix, refactor, ci, docs, chore
 ```
 
 More types:
 
+- `rfc`: this PR proposes a new RFC
 - `feat`: this PR introduces a new feature to the codebase
 - `fix`: this PR patches a bug in codebase
 - `refactor`: this PR changes the code base without new features or bugfix
-- `ci|build`: this PR changes build/testing/ci steps
-- `docs|website`: this PR changes the documents or websites
+- `ci`: this PR changes build/ci steps
+- `docs`: this PR changes the documents or websites
 - `chore`: this PR only has small changes that no need to record, like coding styles.
 
 ### PR Template

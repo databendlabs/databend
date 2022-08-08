@@ -69,8 +69,8 @@ impl Interpreter for SelectInterpreterV2 {
 
     #[tracing::instrument(level = "debug", name = "select_interpreter_v2_execute", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
     async fn execute(&self) -> Result<SendableDataBlockStream> {
-        let builder = PhysicalPlanBuilder::new(self.metadata.clone());
-        let physical_plan = builder.build(&self.s_expr)?;
+        let builder = PhysicalPlanBuilder::new(self.metadata.clone(), self.ctx.clone());
+        let physical_plan = builder.build(&self.s_expr).await?;
         if let Some(handle) = self.ctx.get_http_query() {
             return handle
                 .execute(self.ctx.clone(), &physical_plan, &self.bind_context.columns)
@@ -122,8 +122,8 @@ impl Interpreter for SelectInterpreterV2 {
     /// This method will create a new pipeline
     /// The QueryPipelineBuilder will use the optimized plan to generate a Pipeline
     async fn create_new_pipeline(&self) -> Result<Pipeline> {
-        let builder = PhysicalPlanBuilder::new(self.metadata.clone());
-        let physical_plan = builder.build(&self.s_expr)?;
+        let builder = PhysicalPlanBuilder::new(self.metadata.clone(), self.ctx.clone());
+        let physical_plan = builder.build(&self.s_expr).await?;
         let last_schema = physical_plan.output_schema()?;
 
         let pipeline_builder = PipelineBuilder::create(self.ctx.clone());
@@ -142,7 +142,6 @@ impl Interpreter for SelectInterpreterV2 {
                 "Unsupported run query with sub-pipeline".to_string(),
             ));
         }
-
         Ok(build_res.main_pipeline)
     }
 

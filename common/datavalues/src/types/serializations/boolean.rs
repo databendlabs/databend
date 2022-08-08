@@ -15,8 +15,6 @@
 use common_arrow::arrow::bitmap::Bitmap;
 use common_exception::Result;
 use common_io::prelude::FormatSettings;
-use opensrv_clickhouse::types::column::ArcColumnWrapper;
-use opensrv_clickhouse::types::column::ColumnFrom;
 use serde_json::Value;
 
 use crate::prelude::*;
@@ -55,28 +53,6 @@ impl<'a> TypeSerializer<'a> for BooleanSerializer {
             .map(|v| serde_json::to_value(v).unwrap())
             .collect();
         Ok(result)
-    }
-
-    fn serialize_clickhouse_const(
-        &self,
-        _format: &FormatSettings,
-        size: usize,
-    ) -> Result<opensrv_clickhouse::types::column::ArcColumnData> {
-        let mut values: Vec<u8> = Vec::with_capacity(self.values.len() * size);
-        for _ in 0..size {
-            for v in self.values.iter() {
-                values.push(v as u8)
-            }
-        }
-        Ok(Vec::column_from::<ArcColumnWrapper>(values))
-    }
-
-    fn serialize_clickhouse_column(
-        &self,
-        _format: &FormatSettings,
-    ) -> Result<opensrv_clickhouse::types::column::ArcColumnData> {
-        let values: Vec<u8> = self.values.iter().map(|c| c as u8).collect();
-        Ok(Vec::column_from::<ArcColumnWrapper>(values))
     }
 
     fn serialize_json_object(

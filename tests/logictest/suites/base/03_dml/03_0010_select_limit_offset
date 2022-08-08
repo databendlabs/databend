@@ -1,0 +1,116 @@
+statement query I
+select number from numbers(100) order by number asc limit 10;
+
+----
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+
+statement query I
+select number from numbers(100) order by number*2 asc limit 10;
+
+----
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+
+statement query I
+select number from numbers(100) order by number asc limit 10, 10;
+
+----
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+
+statement query I
+select number from numbers(100) order by number-2 asc limit 10, 10;
+
+----
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+
+statement query I
+select number from numbers(100) order by number asc limit 10 offset 10;
+
+----
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+
+statement query I
+select number from numbers(100) order by number/2 asc limit 10 offset 10;
+
+----
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+
+statement query I
+select number from numbers(10) order by number asc offset 5;
+
+----
+5
+6
+7
+8
+9
+
+statement query I
+select number from numbers(10) order by number+number asc offset 5;
+
+----
+5
+6
+7
+8
+9
+
+statement query I
+select number from numbers(10000) order by number limit 1;
+
+----
+0
+

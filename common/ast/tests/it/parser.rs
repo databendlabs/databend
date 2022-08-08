@@ -100,6 +100,10 @@ fn test_statement() {
         r#"CREATE TABLE t(c1 int null, c2 bigint null, c3 varchar null);"#,
         r#"CREATE TABLE t(c1 int not null, c2 bigint not null, c3 varchar not null);"#,
         r#"CREATE TABLE t(c1 int default 1);"#,
+        r#"ALTER USER u1 IDENTIFIED BY '123456';"#,
+        r#"ALTER USER u1 WITH DEFAULT_ROLE = 'role1';"#,
+        r#"ALTER USER u1 WITH DEFAULT_ROLE = 'role1', TENANTSETTING;"#,
+        r#"CREATE USER u1 IDENTIFIED BY '123456' WITH DEFAULT_ROLE='role123', TENANTSETTING"#,
         r#"DROP database if exists db1;"#,
         r#"select distinct a, count(*) from t where a = 1 and b - 1 < a group by a having a = 1;"#,
         r#"select * from t4;"#,
@@ -138,6 +142,7 @@ fn test_statement() {
         r#"ALTER DATABASE catalog.c RENAME TO a;"#,
         r#"CREATE TABLE t (a INT COMMENT 'col comment') COMMENT='table comment';"#,
         r#"GRANT SELECT, CREATE ON * TO 'test-grant'@'localhost';"#,
+        r#"GRANT SELECT, CREATE ON *.* TO 'test-grant'@'localhost';"#,
         r#"GRANT SELECT, CREATE ON * TO USER 'test-grant'@'localhost';"#,
         r#"GRANT SELECT, CREATE ON * TO ROLE 'role1';"#,
         r#"GRANT ALL ON *.* TO 'test-grant'@'localhost';"#,
@@ -251,6 +256,14 @@ fn test_statement() {
         r#"PRESIGN @my_stage/path/to/file"#,
         r#"PRESIGN DOWNLOAD @my_stage/path/to/file"#,
         r#"PRESIGN UPLOAD @my_stage/path/to/file EXPIRE=7200"#,
+        r#"CREATE SHARE t COMMENT='share comment';"#,
+        r#"CREATE SHARE IF NOT EXISTS t;"#,
+        r#"DROP SHARE a;"#,
+        r#"DROP SHARE IF EXISTS a;"#,
+        r#"GRANT USAGE ON DATABASE db1 TO SHARE a;"#,
+        r#"GRANT SELECT ON TABLE db1.tb1 TO SHARE a;"#,
+        r#"REVOKE USAGE ON DATABASE db1 FROM SHARE a;"#,
+        r#"REVOKE SELECT ON TABLE db1.tb1 FROM SHARE a;"#,
     ];
 
     for case in cases {

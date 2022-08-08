@@ -1,0 +1,42 @@
+statement ok
+CREATE TABLE IF NOT EXISTS random_table (i INT, ni INT NULL, f FLOAT, b BOOLEAN, s VARCHAR, d DATE, t TIMESTAMP, a ARRAY(INT)) ENGINE=RANDOM;
+
+statement query I
+SELECT COUNT(*) FROM (SELECT * FROM random_table LIMIT 5);
+
+----
+5
+
+statement query I
+SELECT COUNT(*) FROM (SELECT * FROM random_table LIMIT 10);
+
+----
+10
+
+statement query I
+SELECT COUNT(*) FROM (SELECT * FROM random_table LIMIT 1000);
+
+----
+1000
+
+statement query I
+SELECT COUNT(*) FROM (SELECT * FROM random_table LIMIT 6000);
+
+----
+6000
+
+statement query I
+SELECT COUNT(*) FROM (SELECT * FROM random_table LIMIT 8765);
+
+----
+8765
+
+statement query I
+SELECT COUNT(*) FROM random_table;
+
+----
+10000
+
+statement ok
+DROP TABLE random_table;
+

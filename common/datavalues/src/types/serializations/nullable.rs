@@ -12,12 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use common_arrow::arrow::bitmap::Bitmap;
 use common_exception::Result;
 use common_io::prelude::FormatSettings;
-use opensrv_clickhouse::types::column::NullableColumnData;
 use serde_json::Value;
 
 use crate::serializations::TypeSerializer;
@@ -81,29 +78,5 @@ impl<'a> TypeSerializer<'a> for NullableSerializer<'a> {
             }
         });
         Ok(res)
-    }
-
-    fn serialize_clickhouse_const(
-        &self,
-        format: &FormatSettings,
-        size: usize,
-    ) -> Result<opensrv_clickhouse::types::column::ArcColumnData> {
-        let inner = self.inner.serialize_clickhouse_const(format, size)?;
-        let nulls: Vec<_> = self.validity.iter().map(|v| !v as u8).collect();
-        let nulls = nulls.repeat(size);
-        let data = NullableColumnData { nulls, inner };
-
-        Ok(Arc::new(data))
-    }
-
-    fn serialize_clickhouse_column(
-        &self,
-        format: &FormatSettings,
-    ) -> Result<opensrv_clickhouse::types::column::ArcColumnData> {
-        let inner = self.inner.serialize_clickhouse_column(format)?;
-        let nulls = self.validity.iter().map(|v| !v as u8).collect();
-        let data = NullableColumnData { nulls, inner };
-
-        Ok(Arc::new(data))
     }
 }

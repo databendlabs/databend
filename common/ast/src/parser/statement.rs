@@ -15,6 +15,8 @@
 use std::collections::BTreeMap;
 use std::time::Duration;
 
+use common_meta_app::share::ShareGrantObjectName;
+use common_meta_app::share::ShareGrantObjectPrivilege;
 use common_meta_types::AuthType;
 use common_meta_types::PrincipalIdentity;
 use common_meta_types::UserIdentity;
@@ -208,7 +210,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let show_tables = map(
         rule! {
-            SHOW ~ FULL? ~ TABLES ~ HISTORY? ~ ( FROM ~ ^#ident )? ~ #show_limit?
+            SHOW ~ FULL? ~ TABLES ~ HISTORY? ~ ( ( FROM | IN ) ~ ^#ident )? ~ #show_limit?
         },
         |(_, opt_full, _, opt_history, opt_database, limit)| {
             Statement::ShowTables(ShowTablesStmt {
@@ -458,9 +460,9 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             CREATE ~ USER ~ ( IF ~ NOT ~ EXISTS )?
             ~ #user_identity
             ~ IDENTIFIED ~ ( WITH ~ ^#auth_type )? ~ ( BY ~ ^#literal_string )?
-            ~ ( WITH ~ ^#role_option+ )?
+            ~ ( WITH ~ ^#comma_separated_list1(user_option))?
         },
-        |(_, _, opt_if_not_exists, user, _, opt_auth_type, opt_password, opt_role_options)| {
+        |(_, _, opt_if_not_exists, user, _, opt_auth_type, opt_password, opt_user_option)| {
             Statement::CreateUser(CreateUserStmt {
                 if_not_exists: opt_if_not_exists.is_some(),
                 user,
@@ -468,8 +470,8 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
                     auth_type: opt_auth_type.map(|(_, auth_type)| auth_type),
                     password: opt_password.map(|(_, password)| password),
                 },
-                role_options: opt_role_options
-                    .map(|(_, role_options)| role_options)
+                user_options: opt_user_option
+                    .map(|(_, user_options)| user_options)
                     .unwrap_or_default(),
             })
         },
@@ -478,17 +480,17 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         rule! {
             ALTER ~ USER ~ ( #map(rule! { USER ~ "(" ~ ")" }, |_| None) | #map(user_identity, Some) )
             ~ ( IDENTIFIED ~ ( WITH ~ ^#auth_type )? ~ ( BY ~ ^#literal_string )? )?
-            ~ ( WITH ~ ^#role_option+ )?
+            ~ ( WITH ~ ^#comma_separated_list1(user_option) )?
         },
-        |(_, _, user, opt_auth_option, opt_role_options)| {
+        |(_, _, user, opt_auth_option, opt_user_option)| {
             Statement::AlterUser(AlterUserStmt {
                 user,
                 auth_option: opt_auth_option.map(|(_, opt_auth_type, opt_password)| AuthOption {
                     auth_type: opt_auth_type.map(|(_, auth_type)| auth_type),
                     password: opt_password.map(|(_, password)| password),
                 }),
-                role_options: opt_role_options
-                    .map(|(_, role_options)| role_options)
+                user_options: opt_user_option
+                    .map(|(_, user_options)| user_options)
                     .unwrap_or_default(),
             })
         },
@@ -741,6 +743,58 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         },
     );
 
+    // share statements
+    let create_share = map(
+        rule! {
+            CREATE ~ SHARE ~ (IF ~ NOT ~ EXISTS )? ~ #ident ~ ( COMMENT ~ "=" ~ #literal_string)?
+        },
+        |(_, _, opt_if_not_exists, share, comment_opt)| {
+            Statement::CreateShare(CreateShareStmt {
+                if_not_exists: opt_if_not_exists.is_some(),
+                share,
+                comment: match comment_opt {
+                    Some(opt) => Some(opt.2),
+                    None => None,
+                },
+            })
+        },
+    );
+    let drop_share = map(
+        rule! {
+            DROP ~ SHARE ~ (IF ~ EXISTS )? ~ #ident
+        },
+        |(_, _, opt_if_exists, share)| {
+            Statement::DropShare(DropShareStmt {
+                if_exists: opt_if_exists.is_some(),
+                share,
+            })
+        },
+    );
+    let grant_share_object = map(
+        rule! {
+            GRANT ~ #priv_share_type ~ ON ~ #grant_share_object_name ~ TO ~ SHARE ~ #ident
+        },
+        |(_, privilege, _, object, _, _, share)| {
+            Statement::GrantShareObject(GrantShareObjectStmt {
+                share,
+                object,
+                privilege,
+            })
+        },
+    );
+    let revoke_share_object = map(
+        rule! {
+            REVOKE ~ #priv_share_type ~ ON ~ #grant_share_object_name ~ FROM ~ SHARE ~ #ident
+        },
+        |(_, privilege, _, object, _, _, share)| {
+            Statement::RevokeShareObject(RevokeShareObjectStmt {
+                share,
+                object,
+                privilege,
+            })
+        },
+    );
+
     let statement_body = alt((
         rule!(
             #map(query, |query| Statement::Query(Box::new(query)))
@@ -785,8 +839,8 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         ),
         rule!(
             #show_users : "`SHOW USERS`"
-            | #create_user : "`CREATE USER [IF NOT EXISTS] '<username>'@'hostname' IDENTIFIED [WITH <auth_type>] [BY <password>] [WITH <role_option> ...]`"
-            | #alter_user : "`ALTER USER ('<username>'@'hostname' | USER()) [IDENTIFIED [WITH <auth_type>] [BY <password>]] [WITH <role_option> ...]`"
+            | #create_user : "`CREATE USER [IF NOT EXISTS] '<username>'@'hostname' IDENTIFIED [WITH <auth_type>] [BY <password>] [WITH <user_option>, ...]`"
+            | #alter_user : "`ALTER USER ('<username>'@'hostname' | USER()) [IDENTIFIED [WITH <auth_type>] [BY <password>]] [WITH <user_option>, ...]`"
             | #drop_user : "`DROP USER [IF EXISTS] '<username>'@'hostname'`"
             | #show_roles : "`SHOW ROLES`"
             | #create_role : "`CREATE ROLE [IF NOT EXISTS] '<role_name>']`"
@@ -825,6 +879,13 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         ),
         rule!(
             #presign: "`PRESIGN [{DOWNLOAD | UPLOAD}] <location> [EXPIRE = 3600]`"
+        ),
+        // share
+        rule!(
+            #create_share: "`CREATE SHARE [IF NOT EXISTS] <share_name> [ COMMENT = '<string_literal>' ]`"
+            | #drop_share: "`DROP SHARE [IF EXISTS] <share_name>`"
+            | #grant_share_object: "`GRANT { USAGE | SELECT | REFERENCE_USAGE } ON { DATABASE db | TABLE db.table } TO SHARE <share_name>`"
+            | #revoke_share_object: "`REVOKE { USAGE | SELECT | REFERENCE_USAGE } ON { DATABASE db | TABLE db.table } FROM SHARE <share_name>`"
         ),
     ));
 
@@ -980,6 +1041,41 @@ pub fn priv_type(i: Input) -> IResult<UserPrivilegeType> {
         value(UserPrivilegeType::CreateStage, rule! { CREATE ~ STAGE }),
         value(UserPrivilegeType::Set, rule! { SET }),
     ))(i)
+}
+
+pub fn priv_share_type(i: Input) -> IResult<ShareGrantObjectPrivilege> {
+    alt((
+        value(ShareGrantObjectPrivilege::Usage, rule! { USAGE }),
+        value(ShareGrantObjectPrivilege::Select, rule! { SELECT }),
+        value(
+            ShareGrantObjectPrivilege::ReferenceUsage,
+            rule! { REFERENCE_USAGE },
+        ),
+    ))(i)
+}
+
+pub fn grant_share_object_name(i: Input) -> IResult<ShareGrantObjectName> {
+    let database = map(
+        rule! {
+            DATABASE ~ #ident
+        },
+        |(_, database)| ShareGrantObjectName::Database(database.to_string()),
+    );
+
+    // `db01`.'tb1' or `db01`.`tb1` or `db01`.tb1
+    let table = map(
+        rule! {
+            TABLE ~  #ident ~ "." ~ #ident
+        },
+        |(_, database, _, table)| {
+            ShareGrantObjectName::Table(database.to_string(), table.to_string())
+        },
+    );
+
+    rule!(
+        #database : "DATABASE <database>"
+        | #table : "TABLE <database>.<table>"
+    )(i)
 }
 
 pub fn grant_level(i: Input) -> IResult<AccountMgrLevel> {
@@ -1277,12 +1373,25 @@ pub fn database_engine(i: Input) -> IResult<DatabaseEngine> {
     )(i)
 }
 
-pub fn role_option(i: Input) -> IResult<RoleOption> {
+pub fn user_option(i: Input) -> IResult<UserOptionItem> {
+    let default_role_option = map(
+        rule! {
+            "DEFAULT_ROLE" ~ "=" ~ #literal_string
+        },
+        |(_, _, role)| UserOptionItem::DefaultRole(role),
+    );
     alt((
-        value(RoleOption::TenantSetting, rule! { TENANTSETTING }),
-        value(RoleOption::NoTenantSetting, rule! { NOTENANTSETTING }),
-        value(RoleOption::ConfigReload, rule! { CONFIGRELOAD }),
-        value(RoleOption::NoConfigReload, rule! { NOCONFIGRELOAD }),
+        value(UserOptionItem::TenantSetting(true), rule! { TENANTSETTING }),
+        value(
+            UserOptionItem::TenantSetting(false),
+            rule! { NOTENANTSETTING },
+        ),
+        value(UserOptionItem::ConfigReload(true), rule! { CONFIGRELOAD }),
+        value(
+            UserOptionItem::ConfigReload(false),
+            rule! { NOCONFIGRELOAD },
+        ),
+        default_role_option,
     ))(i)
 }
 

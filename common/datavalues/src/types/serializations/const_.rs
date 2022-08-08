@@ -47,13 +47,6 @@ impl<'a> TypeSerializer<'a> for ConstSerializer<'a> {
         Ok(self.repeat(self.inner.serialize_json_values(format)?))
     }
 
-    fn serialize_clickhouse_column(
-        &self,
-        format: &FormatSettings,
-    ) -> Result<opensrv_clickhouse::types::column::ArcColumnData> {
-        self.inner.serialize_clickhouse_const(format, self.size)
-    }
-
     fn serialize_json_object(
         &self,
         valids: Option<&Bitmap>,
