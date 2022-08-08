@@ -155,6 +155,13 @@ impl<T: ValueType> ArrayColumn<T> {
         ))
     }
 
+    pub fn index_unchecked(&self, index: usize) -> T::Column {
+        T::slice_column(
+            &self.values,
+            (self.offsets[index] as usize)..(self.offsets[index + 1] as usize),
+        )
+    }
+
     pub fn slice(&self, range: Range<usize>) -> Self {
         let offsets = self
             .offsets

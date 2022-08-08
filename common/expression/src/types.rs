@@ -98,6 +98,11 @@ pub trait ValueType: Debug + Clone + PartialEq + Sized + 'static {
     fn iter_column<'a>(col: &'a Self::Column) -> Self::ColumnIterator<'a>;
 
     fn column_to_builder(col: Self::Column) -> Self::ColumnBuilder;
+    fn column_init_builder(col: &Self::Column, _capacity: usize) -> Self::ColumnBuilder {
+        let col = Self::slice_column(col, 0..0);
+        Self::column_to_builder(col)
+    }
+
     fn builder_len(builder: &Self::ColumnBuilder) -> usize;
     fn push_item(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>);
     fn push_default(builder: &mut Self::ColumnBuilder);
@@ -341,6 +346,20 @@ macro_rules! with_number_type {
     ($t:tt, $($tail:tt)*) => {{
         match_template::match_template! {
             $t = [UInt8, UInt16, UInt32, UInt64, Int8, Int16, Int32, Int64, Float32, Float64],
+            $($tail)*
+        }
+    }}
+}
+
+#[macro_export]
+macro_rules! with_number_mapped_type {
+    ($t:tt, $($tail:tt)*) => {{
+        match_template::match_template! {
+            $t = [
+                UInt8 => u8, UInt16 => u16, UInt32 => u32, UInt64 => u64,
+                Int8 => i8, Int16 => i16, Int32 => i32, Int64 => i64,
+                Float32 => f32, Float64 => f64
+            ],
             $($tail)*
         }
     }}

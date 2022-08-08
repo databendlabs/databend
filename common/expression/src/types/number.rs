@@ -109,6 +109,10 @@ impl<Int: Number> ValueType for NumberType<Int> {
         buffer_into_mut(col)
     }
 
+    fn column_init_builder(_col: &Self::Column, capacity: usize) -> Self::ColumnBuilder {
+        Vec::with_capacity(capacity)
+    }
+
     fn builder_len(builder: &Self::ColumnBuilder) -> usize {
         builder.len()
     }

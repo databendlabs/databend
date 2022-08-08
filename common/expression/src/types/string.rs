@@ -92,6 +92,10 @@ impl ValueType for StringType {
         StringColumnBuilder::from_column(col)
     }
 
+    fn column_init_builder(_col: &Self::Column, capacity: usize) -> Self::ColumnBuilder {
+        StringColumnBuilder::with_capacity(capacity, 0)
+    }
+
     fn builder_len(builder: &Self::ColumnBuilder) -> usize {
         builder.len()
     }
@@ -152,6 +156,10 @@ impl StringColumn {
         } else {
             None
         }
+    }
+
+    pub fn index_unchecked(&self, index: usize) -> &[u8] {
+        &self.data[(self.offsets[index] as usize)..(self.offsets[index + 1] as usize)]
     }
 
     pub fn slice(&self, range: Range<usize>) -> Self {
