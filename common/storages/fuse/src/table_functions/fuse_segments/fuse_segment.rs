@@ -18,6 +18,7 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_fuse_meta::meta::TableSnapshot;
+use futures_util::StreamExt;
 
 use crate::io::MetaReaders;
 use crate::sessions::TableContext;
@@ -40,26 +41,35 @@ impl<'a> FuseSegment<'a> {
 
     pub async fn get_segments(&self) -> Result<DataBlock> {
         let tbl = self.table;
-        let snapshot_location = tbl.snapshot_loc();
-        let snapshot_version = tbl.snapshot_format_version();
-        let reader = MetaReaders::table_snapshot_reader(self.ctx.clone());
-        let limit = None;
-        let snapshots = reader
-            .read_snapshot_history(
+        let maybe_snapshot = tbl.read_table_snapshot(self.ctx.clone()).await?;
+        if let Some(snapshot) = maybe_snapshot {
+            // prepare the stream of snapshot
+            let snapshot_version = tbl.snapshot_format_version();
+            let snapshot_location = tbl
+                .meta_location_generator
+                .snapshot_location_from_uuid(&snapshot.snapshot_id, snapshot_version)?;
+            let reader = MetaReaders::table_snapshot_reader(self.ctx.clone());
+            let mut snapshot_stream = reader.snapshot_history(
                 snapshot_location,
                 snapshot_version,
                 tbl.meta_location_generator().clone(),
-                limit,
-            )
-            .await?;
+            );
 
-        for snapshot in snapshots {
-            if snapshot.snapshot_id.simple().to_string() == self.snapshot_id {
-                return self.segments_to_block(snapshot).await;
+            // find the element by snapshot_id in stream
+            while let Some(item) = snapshot_stream.next().await {
+                match item {
+                    Ok(snapshot)
+                        if snapshot.snapshot_id.simple().to_string() == self.snapshot_id =>
+                    {
+                        return self.segments_to_block(snapshot).await;
+                    }
+                    Err(e) => return Err(e),
+                    _ => (),
+                }
             }
         }
 
-        Ok(DataBlock::empty())
+        Ok(DataBlock::empty_with_schema(Self::schema()))
     }
 
     async fn segments_to_block(&self, snapshot: Arc<TableSnapshot>) -> Result<DataBlock> {

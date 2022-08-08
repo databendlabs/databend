@@ -122,7 +122,7 @@ impl Table for FuseSnapshotTable {
 
         pipeline.add_pipe(Pipe::SimplePipe {
             inputs_port: vec![],
-            outputs_port: vec![output.clone()],
+            outputs_port: vec![output],
             processors: vec![source],
         });
 
