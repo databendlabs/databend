@@ -34,13 +34,6 @@ use common_planners::Expressions;
 use common_planners::RequireColumnsVisitor;
 
 #[derive(Clone)]
-pub struct ClusterKeyInfo {
-    pub cluster_key_id: u32,
-    pub cluster_key_index: Vec<usize>,
-    pub expression_executor: Option<ExpressionExecutor>,
-}
-
-#[derive(Clone)]
 pub struct RangeFilter {
     origin: DataSchemaRef,
     schema: DataSchemaRef,

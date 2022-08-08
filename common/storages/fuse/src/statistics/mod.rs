@@ -14,12 +14,13 @@
 
 pub mod accumulator;
 mod block_statistics;
+mod cluster_statistics;
 mod column_statistic;
 pub mod reducers;
-mod cluster_statistics;
 
 pub use accumulator::StatisticsAccumulator;
 pub use block_statistics::BlockStatistics;
+pub use cluster_statistics::ClusterStatsGenerator;
 pub use column_statistic::gen_columns_statistics;
 pub use column_statistic::traverse;
 pub use reducers::merge_statistics;

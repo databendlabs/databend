@@ -55,6 +55,7 @@ impl<'a> BlockWriter<'a> {
             data_accessor,
         }
     }
+
     pub async fn write_with_location(
         &self,
         block: DataBlock,

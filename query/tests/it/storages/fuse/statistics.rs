@@ -25,6 +25,7 @@ use databend_query::storages::fuse::io::TableMetaLocationGenerator;
 use databend_query::storages::fuse::statistics::gen_columns_statistics;
 use databend_query::storages::fuse::statistics::reducers;
 use databend_query::storages::fuse::statistics::BlockStatistics;
+use databend_query::storages::fuse::statistics::ClusterStatsGenerator;
 use databend_query::storages::fuse::statistics::StatisticsAccumulator;
 use opendal::Accessor;
 use opendal::Operator;
@@ -170,13 +171,24 @@ fn test_ft_stats_cluster_stats() -> common_exception::Result<()> {
         Series::from_data(vec![1i32, 2, 3]),
         Series::from_data(vec!["123456", "234567", "345678"]),
     ]);
-    let stats = BlockStatistics::clusters_statistics(0, &[0], &blocks)?;
+
+    let stats_gen = ClusterStatsGenerator {
+        cluster_key_id: 0,
+        cluster_key_index: vec![0],
+        expression_executor: None,
+    };
+    let (stats, _) = stats_gen.gen_stats_with_block(&blocks)?;
     assert!(stats.is_some());
     let stats = stats.unwrap();
     assert_eq!(vec![DataValue::Int64(1)], stats.min);
     assert_eq!(vec![DataValue::Int64(3)], stats.max);
 
-    let stats = BlockStatistics::clusters_statistics(1, &[1], &blocks)?;
+    let stats_gen = ClusterStatsGenerator {
+        cluster_key_id: 1,
+        cluster_key_index: vec![1],
+        expression_executor: None,
+    };
+    let (stats, _) = stats_gen.gen_stats_with_block(&blocks)?;
     assert!(stats.is_some());
     let stats = stats.unwrap();
     assert_eq!(vec![DataValue::String(b"12345".to_vec())], stats.min);
