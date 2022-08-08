@@ -15,12 +15,6 @@
 use common_datablocks::DataBlock;
 use common_exception::Result;
 
-// pub struct OutputData {
-//     pub data_block: Option<DataBlock>,
-//     pub has_serialized_blocks: bool,
-//     pub serialized_blocks: Vec<Option<DataBlock>>,
-// }
-
 pub trait FlightScatter: Sync + Send {
     fn execute(&self, data_block: &DataBlock, num: usize) -> Result<Vec<DataBlock>>;
 }

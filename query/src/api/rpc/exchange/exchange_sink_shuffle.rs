@@ -139,7 +139,9 @@ impl Processor for ExchangePublisherSink {
                 output_data.serialized_blocks.push(Some(DataPacket::FragmentData(data)));
             }
 
-            self.output_data = Some(output_data);
+            if output_data.has_serialized_data {
+                self.output_data = Some(output_data);
+            }
         }
 
         Ok(())

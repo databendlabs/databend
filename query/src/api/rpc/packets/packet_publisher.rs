@@ -39,11 +39,7 @@ pub struct InitNodesChannelPacket {
 }
 
 impl InitNodesChannelPacket {
-    pub fn create(
-        query_id: String,
-        executor: Arc<NodeInfo>,
-        connections_info: Vec<ConnectionInfo>,
-    ) -> InitNodesChannelPacket {
+    pub fn create(query_id: String, executor: Arc<NodeInfo>, connections_info: Vec<ConnectionInfo>) -> InitNodesChannelPacket {
         InitNodesChannelPacket {
             query_id,
             executor,
