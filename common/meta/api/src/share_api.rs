@@ -37,8 +37,14 @@ pub trait ShareApi: Sync + Send {
 
     async fn drop_share(&self, req: DropShareReq) -> MetaResult<DropShareReply>;
 
-    async fn grant_object(&self, req: GrantShareObjectReq) -> MetaResult<GrantShareObjectReply>;
-    async fn revoke_object(&self, req: RevokeShareObjectReq) -> MetaResult<RevokeShareObjectReply>;
+    async fn grant_share_object(
+        &self,
+        req: GrantShareObjectReq,
+    ) -> MetaResult<GrantShareObjectReply>;
+    async fn revoke_share_object(
+        &self,
+        req: RevokeShareObjectReq,
+    ) -> MetaResult<RevokeShareObjectReply>;
 
     async fn add_share_account(&self, req: AddShareAccountReq) -> MetaResult<AddShareAccountReply>;
     async fn remove_share_account(

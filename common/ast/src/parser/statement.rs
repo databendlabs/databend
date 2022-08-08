@@ -15,6 +15,8 @@
 use std::collections::BTreeMap;
 use std::time::Duration;
 
+use common_meta_app::share::ShareGrantObjectName;
+use common_meta_app::share::ShareGrantObjectPrivilege;
 use common_meta_types::AuthType;
 use common_meta_types::PrincipalIdentity;
 use common_meta_types::UserIdentity;
@@ -768,6 +770,30 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             })
         },
     );
+    let grant_share_object = map(
+        rule! {
+            GRANT ~ #priv_share_type ~ ON ~ #grant_share_object_name ~ TO ~ SHARE ~ #ident
+        },
+        |(_, privilege, _, object, _, _, share)| {
+            Statement::GrantShareObject(GrantShareObjectStmt {
+                share,
+                object,
+                privilege,
+            })
+        },
+    );
+    let revoke_share_object = map(
+        rule! {
+            REVOKE ~ #priv_share_type ~ ON ~ #grant_share_object_name ~ FROM ~ SHARE ~ #ident
+        },
+        |(_, privilege, _, object, _, _, share)| {
+            Statement::RevokeShareObject(RevokeShareObjectStmt {
+                share,
+                object,
+                privilege,
+            })
+        },
+    );
 
     let statement_body = alt((
         rule!(
@@ -858,6 +884,8 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         rule!(
             #create_share: "`CREATE SHARE [IF NOT EXISTS] <share_name> [ COMMENT = '<string_literal>' ]`"
             | #drop_share: "`DROP SHARE [IF EXISTS] <share_name>`"
+            | #grant_share_object: "`GRANT { USAGE | SELECT | REFERENCE_USAGE } ON { DATABASE db | TABLE db.table } TO SHARE <share_name>`"
+            | #revoke_share_object: "`REVOKE { USAGE | SELECT | REFERENCE_USAGE } ON { DATABASE db | TABLE db.table } FROM SHARE <share_name>`"
         ),
     ));
 
@@ -1013,6 +1041,41 @@ pub fn priv_type(i: Input) -> IResult<UserPrivilegeType> {
         value(UserPrivilegeType::CreateStage, rule! { CREATE ~ STAGE }),
         value(UserPrivilegeType::Set, rule! { SET }),
     ))(i)
+}
+
+pub fn priv_share_type(i: Input) -> IResult<ShareGrantObjectPrivilege> {
+    alt((
+        value(ShareGrantObjectPrivilege::Usage, rule! { USAGE }),
+        value(ShareGrantObjectPrivilege::Select, rule! { SELECT }),
+        value(
+            ShareGrantObjectPrivilege::ReferenceUsage,
+            rule! { REFERENCE_USAGE },
+        ),
+    ))(i)
+}
+
+pub fn grant_share_object_name(i: Input) -> IResult<ShareGrantObjectName> {
+    let database = map(
+        rule! {
+            DATABASE ~ #ident
+        },
+        |(_, database)| ShareGrantObjectName::Database(database.to_string()),
+    );
+
+    // `db01`.'tb1' or `db01`.`tb1` or `db01`.tb1
+    let table = map(
+        rule! {
+            TABLE ~  #ident ~ "." ~ #ident
+        },
+        |(_, database, _, table)| {
+            ShareGrantObjectName::Table(database.to_string(), table.to_string())
+        },
+    );
+
+    rule!(
+        #database : "DATABASE <database>"
+        | #table : "TABLE <database>.<table>"
+    )(i)
 }
 
 pub fn grant_level(i: Input) -> IResult<AccountMgrLevel> {

@@ -19,7 +19,9 @@ use crate::sessions::TableContext;
 use crate::sql::binder::Binder;
 use crate::sql::plans::CreateSharePlan;
 use crate::sql::plans::DropSharePlan;
+use crate::sql::plans::GrantShareObjectPlan;
 use crate::sql::plans::Plan;
+use crate::sql::plans::RevokeShareObjectPlan;
 
 impl<'a> Binder {
     pub(in crate::sql::planner::binder) async fn bind_create_share(
@@ -57,5 +59,45 @@ impl<'a> Binder {
             share,
         };
         Ok(Plan::DropShare(Box::new(plan)))
+    }
+
+    pub(in crate::sql::planner::binder) async fn bind_grant_share_object(
+        &mut self,
+        stmt: &GrantShareObjectStmt<'a>,
+    ) -> Result<Plan> {
+        let GrantShareObjectStmt {
+            share,
+            object,
+            privilege,
+        } = stmt;
+
+        let share = share.name.to_lowercase();
+
+        let plan = GrantShareObjectPlan {
+            share,
+            object: object.clone(),
+            privilege: *privilege,
+        };
+        Ok(Plan::GrantShareObject(Box::new(plan)))
+    }
+
+    pub(in crate::sql::planner::binder) async fn bind_revoke_share_object(
+        &mut self,
+        stmt: &RevokeShareObjectStmt<'a>,
+    ) -> Result<Plan> {
+        let RevokeShareObjectStmt {
+            share,
+            object,
+            privilege,
+        } = stmt;
+
+        let share = share.name.to_lowercase();
+
+        let plan = RevokeShareObjectPlan {
+            share,
+            object: object.clone(),
+            privilege: *privilege,
+        };
+        Ok(Plan::RevokeShareObject(Box::new(plan)))
     }
 }

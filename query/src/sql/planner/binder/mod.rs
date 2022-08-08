@@ -294,11 +294,18 @@ impl<'a> Binder {
                     .await?
             }
 
+            // share statements
             Statement::CreateShare(stmt) => {
                 self.bind_create_share(stmt).await?
             }
             Statement::DropShare(stmt) => {
                 self.bind_drop_share(stmt).await?
+            }
+            Statement::GrantShareObject(stmt) => {
+                self.bind_grant_share_object(stmt).await?
+            }
+            Statement::RevokeShareObject(stmt) => {
+                self.bind_revoke_share_object(stmt).await?
             }
         };
         Ok(plan)
