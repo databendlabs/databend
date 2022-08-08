@@ -143,7 +143,7 @@ impl<'a> CompactMutator<'a> {
     ) -> Result<()> {
         if let Some(blocks) = blocks {
             for block in blocks {
-                let new_block_meta = writer.write(block).await?;
+                let new_block_meta = writer.write(block, None).await?;
                 metas.push(new_block_meta);
             }
         }

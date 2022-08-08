@@ -74,7 +74,7 @@ pub struct FuseTableSink {
     num_block_threshold: u64,
     meta_locations: TableMetaLocationGenerator,
     accumulator: StatisticsAccumulator,
-    cluster_stats_gen: Option<ClusterStatsGenerator>,
+    cluster_stats_gen: ClusterStatsGenerator,
 }
 
 impl FuseTableSink {
@@ -84,7 +84,7 @@ impl FuseTableSink {
         num_block_threshold: usize,
         data_accessor: Operator,
         meta_locations: TableMetaLocationGenerator,
-        cluster_stats_gen: Option<ClusterStatsGenerator>,
+        cluster_stats_gen: ClusterStatsGenerator,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(FuseTableSink {
             ctx,
@@ -146,11 +146,8 @@ impl Processor for FuseTableSink {
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::None) {
             State::NeedSerialize(data_block) => {
-                let mut cluster_stats = None;
-                let mut block = data_block;
-                if let Some(v) = &self.cluster_stats_gen {
-                    (cluster_stats, block) = v.gen_stats_with_block(&block)?;
-                }
+                let (cluster_stats, block) =
+                    self.cluster_stats_gen.gen_stats_for_append(&data_block)?;
 
                 let (block_location, block_id) = self.meta_locations.gen_block_location();
 

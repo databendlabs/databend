@@ -87,9 +87,9 @@ impl FuseTable {
         &self,
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
-    ) -> Result<Option<ClusterStatsGenerator>> {
+    ) -> Result<ClusterStatsGenerator> {
         if self.cluster_keys.is_empty() {
-            return Ok(None);
+            return Ok(ClusterStatsGenerator::default());
         }
 
         let input_schema = self.table_info.schema();
@@ -161,11 +161,11 @@ impl FuseTable {
             )
         })?;
 
-        Ok(Some(ClusterStatsGenerator {
-            cluster_key_id: self.cluster_key_meta.as_ref().unwrap().0,
+        Ok(ClusterStatsGenerator::new(
+            self.cluster_key_meta.as_ref().unwrap().0,
             cluster_key_index,
             expression_executor,
-        }))
+        ))
     }
 
     pub fn get_option<T: FromStr>(&self, opt_key: &str, default: T) -> T {

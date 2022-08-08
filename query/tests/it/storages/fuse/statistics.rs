@@ -152,7 +152,7 @@ async fn test_accumulator() -> common_exception::Result<()> {
         let block = item?;
         let block_statistics = BlockStatistics::from(&block, "does_not_matter".to_owned(), None)?;
         let block_writer = BlockWriter::new(&table_ctx, &operator, &loc_generator);
-        let block_meta = block_writer.write(block).await?;
+        let block_meta = block_writer.write(block, None).await?;
         stats_acc.add_with_block_meta(block_meta, block_statistics)?;
     }
 
@@ -172,23 +172,15 @@ fn test_ft_stats_cluster_stats() -> common_exception::Result<()> {
         Series::from_data(vec!["123456", "234567", "345678"]),
     ]);
 
-    let stats_gen = ClusterStatsGenerator {
-        cluster_key_id: 0,
-        cluster_key_index: vec![0],
-        expression_executor: None,
-    };
-    let (stats, _) = stats_gen.gen_stats_with_block(&blocks)?;
+    let stats_gen = ClusterStatsGenerator::new(0, vec![0], None);
+    let (stats, _) = stats_gen.gen_stats_for_append(&blocks)?;
     assert!(stats.is_some());
     let stats = stats.unwrap();
     assert_eq!(vec![DataValue::Int64(1)], stats.min);
     assert_eq!(vec![DataValue::Int64(3)], stats.max);
 
-    let stats_gen = ClusterStatsGenerator {
-        cluster_key_id: 1,
-        cluster_key_index: vec![1],
-        expression_executor: None,
-    };
-    let (stats, _) = stats_gen.gen_stats_with_block(&blocks)?;
+    let stats_gen = ClusterStatsGenerator::new(1, vec![1], None);
+    let (stats, _) = stats_gen.gen_stats_for_append(&blocks)?;
     assert!(stats.is_some());
     let stats = stats.unwrap();
     assert_eq!(vec![DataValue::String(b"12345".to_vec())], stats.min);

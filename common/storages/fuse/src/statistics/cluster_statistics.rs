@@ -18,15 +18,27 @@ use common_exception::Result;
 use common_fuse_meta::meta::ClusterStatistics;
 use common_pipeline_transforms::processors::ExpressionExecutor;
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct ClusterStatsGenerator {
-    pub cluster_key_id: u32,
-    pub cluster_key_index: Vec<usize>,
-    pub expression_executor: Option<ExpressionExecutor>,
+    cluster_key_id: u32,
+    cluster_key_index: Vec<usize>,
+    expression_executor: Option<ExpressionExecutor>,
 }
 
 impl ClusterStatsGenerator {
-    pub fn gen_stats_with_block(
+    pub fn new(
+        cluster_key_id: u32,
+        cluster_key_index: Vec<usize>,
+        expression_executor: Option<ExpressionExecutor>,
+    ) -> Self {
+        Self {
+            cluster_key_id,
+            cluster_key_index,
+            expression_executor,
+        }
+    }
+
+    pub fn gen_stats_for_append(
         &self,
         data_block: &DataBlock,
     ) -> Result<(Option<ClusterStatistics>, DataBlock)> {
@@ -39,6 +51,31 @@ impl ClusterStatsGenerator {
         }
 
         Ok((cluster_stats, block))
+    }
+
+    pub fn gen_stats_with_origin(
+        &self,
+        sorted_block: &DataBlock,
+        origin_stats: Option<ClusterStatistics>,
+    ) -> Result<Option<ClusterStatistics>> {
+        if origin_stats.is_none() {
+            return Ok(None);
+        }
+
+        let origin_stats = origin_stats.unwrap();
+        if origin_stats.cluster_key_id != self.cluster_key_id {
+            return Ok(None);
+        }
+
+        let block = if let Some(executor) = &self.expression_executor {
+            let indices = vec![0u32, sorted_block.num_rows() as u32 - 1];
+            let input = DataBlock::block_take_by_indices(sorted_block, &indices)?;
+            executor.execute(&input)?
+        } else {
+            sorted_block.clone()
+        };
+
+        self.clusters_statistics(&block)
     }
 
     fn clusters_statistics(&self, data_block: &DataBlock) -> Result<Option<ClusterStatistics>> {
