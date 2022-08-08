@@ -16,6 +16,7 @@ Query {
         FORMAT(33..39),
         CSV(40..43),
     ],
+    with: None,
     body: Select(
         SelectStmt {
             span: [
@@ -95,6 +96,7 @@ Query {
         JOIN(29..33),
         Ident(34..40),
     ],
+    with: None,
     body: Select(
         SelectStmt {
             span: [
@@ -183,6 +185,7 @@ Query {
         JOIN(29..33),
         Ident(34..40),
     ],
+    with: None,
     body: Select(
         SelectStmt {
             span: [
@@ -277,6 +280,7 @@ Query {
         LIMIT(50..55),
         LiteralInteger(56..57),
     ],
+    with: None,
     body: Select(
         SelectStmt {
             span: [
@@ -421,6 +425,7 @@ Query {
         OFFSET(58..64),
         LiteralInteger(65..66),
     ],
+    with: None,
     body: Select(
         SelectStmt {
             span: [
@@ -567,6 +572,7 @@ Query {
         JOIN(36..40),
         Ident(41..47),
     ],
+    with: None,
     body: Select(
         SelectStmt {
             span: [
@@ -665,6 +671,7 @@ Query {
         Ident(73..75),
         RParen(75..76),
     ],
+    with: None,
     body: Select(
         SelectStmt {
             span: [
@@ -797,6 +804,1341 @@ Query {
 
 
 ---------- Input ----------
+with t2(tt) as (select a from t) select t2.tt from t2  where t2.tt > 1
+---------- Output ---------
+SELECT t2.tt FROM t2 WHERE t2.tt > 1
+---------- AST ------------
+Query {
+    span: [
+        WITH(0..4),
+        Ident(5..7),
+        LParen(7..8),
+        Ident(8..10),
+        RParen(10..11),
+        AS(12..14),
+        LParen(15..16),
+        SELECT(16..22),
+        Ident(23..24),
+        FROM(25..29),
+        Ident(30..31),
+        RParen(31..32),
+        SELECT(33..39),
+        Ident(40..42),
+        Period(42..43),
+        Ident(43..45),
+        FROM(46..50),
+        Ident(51..53),
+        WHERE(55..60),
+        Ident(61..63),
+        Period(63..64),
+        Ident(64..66),
+        Gt(67..68),
+        LiteralInteger(69..70),
+    ],
+    with: Some(
+        With {
+            span: [
+                WITH(0..4),
+                Ident(5..7),
+                LParen(7..8),
+                Ident(8..10),
+                RParen(10..11),
+                AS(12..14),
+                LParen(15..16),
+                SELECT(16..22),
+                Ident(23..24),
+                FROM(25..29),
+                Ident(30..31),
+                RParen(31..32),
+            ],
+            recursive: false,
+            ctes: [
+                Cte {
+                    span: [
+                        Ident(5..7),
+                        LParen(7..8),
+                        Ident(8..10),
+                        RParen(10..11),
+                        AS(12..14),
+                        LParen(15..16),
+                        SELECT(16..22),
+                        Ident(23..24),
+                        FROM(25..29),
+                        Ident(30..31),
+                        RParen(31..32),
+                    ],
+                    alias: TableAlias {
+                        name: Identifier {
+                            name: "t2",
+                            quote: None,
+                            span: Ident(5..7),
+                        },
+                        columns: [
+                            Identifier {
+                                name: "tt",
+                                quote: None,
+                                span: Ident(8..10),
+                            },
+                        ],
+                    },
+                    query: Query {
+                        span: [
+                            SELECT(16..22),
+                            Ident(23..24),
+                            FROM(25..29),
+                            Ident(30..31),
+                        ],
+                        with: None,
+                        body: Select(
+                            SelectStmt {
+                                span: [
+                                    SELECT(16..22),
+                                    Ident(23..24),
+                                    FROM(25..29),
+                                    Ident(30..31),
+                                ],
+                                distinct: false,
+                                select_list: [
+                                    AliasedExpr {
+                                        expr: ColumnRef {
+                                            span: [
+                                                Ident(23..24),
+                                            ],
+                                            database: None,
+                                            table: None,
+                                            column: Identifier {
+                                                name: "a",
+                                                quote: None,
+                                                span: Ident(23..24),
+                                            },
+                                        },
+                                        alias: None,
+                                    },
+                                ],
+                                from: [
+                                    Table {
+                                        span: [
+                                            Ident(30..31),
+                                        ],
+                                        catalog: None,
+                                        database: None,
+                                        table: Identifier {
+                                            name: "t",
+                                            quote: None,
+                                            span: Ident(30..31),
+                                        },
+                                        alias: None,
+                                        travel_point: None,
+                                    },
+                                ],
+                                selection: None,
+                                group_by: [],
+                                having: None,
+                            },
+                        ),
+                        order_by: [],
+                        limit: [],
+                        offset: None,
+                        format: None,
+                    },
+                },
+            ],
+        },
+    ),
+    body: Select(
+        SelectStmt {
+            span: [
+                SELECT(33..39),
+                Ident(40..42),
+                Period(42..43),
+                Ident(43..45),
+                FROM(46..50),
+                Ident(51..53),
+                WHERE(55..60),
+                Ident(61..63),
+                Period(63..64),
+                Ident(64..66),
+                Gt(67..68),
+                LiteralInteger(69..70),
+            ],
+            distinct: false,
+            select_list: [
+                AliasedExpr {
+                    expr: ColumnRef {
+                        span: [
+                            Ident(40..42),
+                            Period(42..43),
+                            Ident(43..45),
+                        ],
+                        database: None,
+                        table: Some(
+                            Identifier {
+                                name: "t2",
+                                quote: None,
+                                span: Ident(40..42),
+                            },
+                        ),
+                        column: Identifier {
+                            name: "tt",
+                            quote: None,
+                            span: Ident(43..45),
+                        },
+                    },
+                    alias: None,
+                },
+            ],
+            from: [
+                Table {
+                    span: [
+                        Ident(51..53),
+                    ],
+                    catalog: None,
+                    database: None,
+                    table: Identifier {
+                        name: "t2",
+                        quote: None,
+                        span: Ident(51..53),
+                    },
+                    alias: None,
+                    travel_point: None,
+                },
+            ],
+            selection: Some(
+                BinaryOp {
+                    span: [
+                        Gt(67..68),
+                    ],
+                    op: Gt,
+                    left: ColumnRef {
+                        span: [
+                            Ident(61..63),
+                            Period(63..64),
+                            Ident(64..66),
+                        ],
+                        database: None,
+                        table: Some(
+                            Identifier {
+                                name: "t2",
+                                quote: None,
+                                span: Ident(61..63),
+                            },
+                        ),
+                        column: Identifier {
+                            name: "tt",
+                            quote: None,
+                            span: Ident(64..66),
+                        },
+                    },
+                    right: Literal {
+                        span: [
+                            LiteralInteger(69..70),
+                        ],
+                        lit: Integer(
+                            1,
+                        ),
+                    },
+                },
+            ),
+            group_by: [],
+            having: None,
+        },
+    ),
+    order_by: [],
+    limit: [],
+    offset: None,
+    format: None,
+}
+
+
+---------- Input ----------
+with t2 as (select a from t) select t2.a from t2  where t2.a > 1
+---------- Output ---------
+SELECT t2.a FROM t2 WHERE t2.a > 1
+---------- AST ------------
+Query {
+    span: [
+        WITH(0..4),
+        Ident(5..7),
+        AS(8..10),
+        LParen(11..12),
+        SELECT(12..18),
+        Ident(19..20),
+        FROM(21..25),
+        Ident(26..27),
+        RParen(27..28),
+        SELECT(29..35),
+        Ident(36..38),
+        Period(38..39),
+        Ident(39..40),
+        FROM(41..45),
+        Ident(46..48),
+        WHERE(50..55),
+        Ident(56..58),
+        Period(58..59),
+        Ident(59..60),
+        Gt(61..62),
+        LiteralInteger(63..64),
+    ],
+    with: Some(
+        With {
+            span: [
+                WITH(0..4),
+                Ident(5..7),
+                AS(8..10),
+                LParen(11..12),
+                SELECT(12..18),
+                Ident(19..20),
+                FROM(21..25),
+                Ident(26..27),
+                RParen(27..28),
+            ],
+            recursive: false,
+            ctes: [
+                Cte {
+                    span: [
+                        Ident(5..7),
+                        AS(8..10),
+                        LParen(11..12),
+                        SELECT(12..18),
+                        Ident(19..20),
+                        FROM(21..25),
+                        Ident(26..27),
+                        RParen(27..28),
+                    ],
+                    alias: TableAlias {
+                        name: Identifier {
+                            name: "t2",
+                            quote: None,
+                            span: Ident(5..7),
+                        },
+                        columns: [],
+                    },
+                    query: Query {
+                        span: [
+                            SELECT(12..18),
+                            Ident(19..20),
+                            FROM(21..25),
+                            Ident(26..27),
+                        ],
+                        with: None,
+                        body: Select(
+                            SelectStmt {
+                                span: [
+                                    SELECT(12..18),
+                                    Ident(19..20),
+                                    FROM(21..25),
+                                    Ident(26..27),
+                                ],
+                                distinct: false,
+                                select_list: [
+                                    AliasedExpr {
+                                        expr: ColumnRef {
+                                            span: [
+                                                Ident(19..20),
+                                            ],
+                                            database: None,
+                                            table: None,
+                                            column: Identifier {
+                                                name: "a",
+                                                quote: None,
+                                                span: Ident(19..20),
+                                            },
+                                        },
+                                        alias: None,
+                                    },
+                                ],
+                                from: [
+                                    Table {
+                                        span: [
+                                            Ident(26..27),
+                                        ],
+                                        catalog: None,
+                                        database: None,
+                                        table: Identifier {
+                                            name: "t",
+                                            quote: None,
+                                            span: Ident(26..27),
+                                        },
+                                        alias: None,
+                                        travel_point: None,
+                                    },
+                                ],
+                                selection: None,
+                                group_by: [],
+                                having: None,
+                            },
+                        ),
+                        order_by: [],
+                        limit: [],
+                        offset: None,
+                        format: None,
+                    },
+                },
+            ],
+        },
+    ),
+    body: Select(
+        SelectStmt {
+            span: [
+                SELECT(29..35),
+                Ident(36..38),
+                Period(38..39),
+                Ident(39..40),
+                FROM(41..45),
+                Ident(46..48),
+                WHERE(50..55),
+                Ident(56..58),
+                Period(58..59),
+                Ident(59..60),
+                Gt(61..62),
+                LiteralInteger(63..64),
+            ],
+            distinct: false,
+            select_list: [
+                AliasedExpr {
+                    expr: ColumnRef {
+                        span: [
+                            Ident(36..38),
+                            Period(38..39),
+                            Ident(39..40),
+                        ],
+                        database: None,
+                        table: Some(
+                            Identifier {
+                                name: "t2",
+                                quote: None,
+                                span: Ident(36..38),
+                            },
+                        ),
+                        column: Identifier {
+                            name: "a",
+                            quote: None,
+                            span: Ident(39..40),
+                        },
+                    },
+                    alias: None,
+                },
+            ],
+            from: [
+                Table {
+                    span: [
+                        Ident(46..48),
+                    ],
+                    catalog: None,
+                    database: None,
+                    table: Identifier {
+                        name: "t2",
+                        quote: None,
+                        span: Ident(46..48),
+                    },
+                    alias: None,
+                    travel_point: None,
+                },
+            ],
+            selection: Some(
+                BinaryOp {
+                    span: [
+                        Gt(61..62),
+                    ],
+                    op: Gt,
+                    left: ColumnRef {
+                        span: [
+                            Ident(56..58),
+                            Period(58..59),
+                            Ident(59..60),
+                        ],
+                        database: None,
+                        table: Some(
+                            Identifier {
+                                name: "t2",
+                                quote: None,
+                                span: Ident(56..58),
+                            },
+                        ),
+                        column: Identifier {
+                            name: "a",
+                            quote: None,
+                            span: Ident(59..60),
+                        },
+                    },
+                    right: Literal {
+                        span: [
+                            LiteralInteger(63..64),
+                        ],
+                        lit: Integer(
+                            1,
+                        ),
+                    },
+                },
+            ),
+            group_by: [],
+            having: None,
+        },
+    ),
+    order_by: [],
+    limit: [],
+    offset: None,
+    format: None,
+}
+
+
+---------- Input ----------
+with t2(tt) as (select a from t), t3 as (select * from t), t4 as (select a from t where a > 1) select t2.tt, t3.a, t4.a from t2, t3, t4 where t2.tt > 1
+---------- Output ---------
+SELECT t2.tt, t3.a, t4.a FROM t2, t3, t4 WHERE t2.tt > 1
+---------- AST ------------
+Query {
+    span: [
+        WITH(0..4),
+        Ident(5..7),
+        LParen(7..8),
+        Ident(8..10),
+        RParen(10..11),
+        AS(12..14),
+        LParen(15..16),
+        SELECT(16..22),
+        Ident(23..24),
+        FROM(25..29),
+        Ident(30..31),
+        RParen(31..32),
+        Comma(32..33),
+        Ident(34..36),
+        AS(37..39),
+        LParen(40..41),
+        SELECT(41..47),
+        Multiply(48..49),
+        FROM(50..54),
+        Ident(55..56),
+        RParen(56..57),
+        Comma(57..58),
+        Ident(59..61),
+        AS(62..64),
+        LParen(65..66),
+        SELECT(66..72),
+        Ident(73..74),
+        FROM(75..79),
+        Ident(80..81),
+        WHERE(82..87),
+        Ident(88..89),
+        Gt(90..91),
+        LiteralInteger(92..93),
+        RParen(93..94),
+        SELECT(95..101),
+        Ident(102..104),
+        Period(104..105),
+        Ident(105..107),
+        Comma(107..108),
+        Ident(109..111),
+        Period(111..112),
+        Ident(112..113),
+        Comma(113..114),
+        Ident(115..117),
+        Period(117..118),
+        Ident(118..119),
+        FROM(120..124),
+        Ident(125..127),
+        Comma(127..128),
+        Ident(129..131),
+        Comma(131..132),
+        Ident(133..135),
+        WHERE(136..141),
+        Ident(142..144),
+        Period(144..145),
+        Ident(145..147),
+        Gt(148..149),
+        LiteralInteger(150..151),
+    ],
+    with: Some(
+        With {
+            span: [
+                WITH(0..4),
+                Ident(5..7),
+                LParen(7..8),
+                Ident(8..10),
+                RParen(10..11),
+                AS(12..14),
+                LParen(15..16),
+                SELECT(16..22),
+                Ident(23..24),
+                FROM(25..29),
+                Ident(30..31),
+                RParen(31..32),
+                Comma(32..33),
+                Ident(34..36),
+                AS(37..39),
+                LParen(40..41),
+                SELECT(41..47),
+                Multiply(48..49),
+                FROM(50..54),
+                Ident(55..56),
+                RParen(56..57),
+                Comma(57..58),
+                Ident(59..61),
+                AS(62..64),
+                LParen(65..66),
+                SELECT(66..72),
+                Ident(73..74),
+                FROM(75..79),
+                Ident(80..81),
+                WHERE(82..87),
+                Ident(88..89),
+                Gt(90..91),
+                LiteralInteger(92..93),
+                RParen(93..94),
+            ],
+            recursive: false,
+            ctes: [
+                Cte {
+                    span: [
+                        Ident(5..7),
+                        LParen(7..8),
+                        Ident(8..10),
+                        RParen(10..11),
+                        AS(12..14),
+                        LParen(15..16),
+                        SELECT(16..22),
+                        Ident(23..24),
+                        FROM(25..29),
+                        Ident(30..31),
+                        RParen(31..32),
+                    ],
+                    alias: TableAlias {
+                        name: Identifier {
+                            name: "t2",
+                            quote: None,
+                            span: Ident(5..7),
+                        },
+                        columns: [
+                            Identifier {
+                                name: "tt",
+                                quote: None,
+                                span: Ident(8..10),
+                            },
+                        ],
+                    },
+                    query: Query {
+                        span: [
+                            SELECT(16..22),
+                            Ident(23..24),
+                            FROM(25..29),
+                            Ident(30..31),
+                        ],
+                        with: None,
+                        body: Select(
+                            SelectStmt {
+                                span: [
+                                    SELECT(16..22),
+                                    Ident(23..24),
+                                    FROM(25..29),
+                                    Ident(30..31),
+                                ],
+                                distinct: false,
+                                select_list: [
+                                    AliasedExpr {
+                                        expr: ColumnRef {
+                                            span: [
+                                                Ident(23..24),
+                                            ],
+                                            database: None,
+                                            table: None,
+                                            column: Identifier {
+                                                name: "a",
+                                                quote: None,
+                                                span: Ident(23..24),
+                                            },
+                                        },
+                                        alias: None,
+                                    },
+                                ],
+                                from: [
+                                    Table {
+                                        span: [
+                                            Ident(30..31),
+                                        ],
+                                        catalog: None,
+                                        database: None,
+                                        table: Identifier {
+                                            name: "t",
+                                            quote: None,
+                                            span: Ident(30..31),
+                                        },
+                                        alias: None,
+                                        travel_point: None,
+                                    },
+                                ],
+                                selection: None,
+                                group_by: [],
+                                having: None,
+                            },
+                        ),
+                        order_by: [],
+                        limit: [],
+                        offset: None,
+                        format: None,
+                    },
+                },
+                Cte {
+                    span: [
+                        Ident(34..36),
+                        AS(37..39),
+                        LParen(40..41),
+                        SELECT(41..47),
+                        Multiply(48..49),
+                        FROM(50..54),
+                        Ident(55..56),
+                        RParen(56..57),
+                    ],
+                    alias: TableAlias {
+                        name: Identifier {
+                            name: "t3",
+                            quote: None,
+                            span: Ident(34..36),
+                        },
+                        columns: [],
+                    },
+                    query: Query {
+                        span: [
+                            SELECT(41..47),
+                            Multiply(48..49),
+                            FROM(50..54),
+                            Ident(55..56),
+                        ],
+                        with: None,
+                        body: Select(
+                            SelectStmt {
+                                span: [
+                                    SELECT(41..47),
+                                    Multiply(48..49),
+                                    FROM(50..54),
+                                    Ident(55..56),
+                                ],
+                                distinct: false,
+                                select_list: [
+                                    QualifiedName(
+                                        [
+                                            Star,
+                                        ],
+                                    ),
+                                ],
+                                from: [
+                                    Table {
+                                        span: [
+                                            Ident(55..56),
+                                        ],
+                                        catalog: None,
+                                        database: None,
+                                        table: Identifier {
+                                            name: "t",
+                                            quote: None,
+                                            span: Ident(55..56),
+                                        },
+                                        alias: None,
+                                        travel_point: None,
+                                    },
+                                ],
+                                selection: None,
+                                group_by: [],
+                                having: None,
+                            },
+                        ),
+                        order_by: [],
+                        limit: [],
+                        offset: None,
+                        format: None,
+                    },
+                },
+                Cte {
+                    span: [
+                        Ident(59..61),
+                        AS(62..64),
+                        LParen(65..66),
+                        SELECT(66..72),
+                        Ident(73..74),
+                        FROM(75..79),
+                        Ident(80..81),
+                        WHERE(82..87),
+                        Ident(88..89),
+                        Gt(90..91),
+                        LiteralInteger(92..93),
+                        RParen(93..94),
+                    ],
+                    alias: TableAlias {
+                        name: Identifier {
+                            name: "t4",
+                            quote: None,
+                            span: Ident(59..61),
+                        },
+                        columns: [],
+                    },
+                    query: Query {
+                        span: [
+                            SELECT(66..72),
+                            Ident(73..74),
+                            FROM(75..79),
+                            Ident(80..81),
+                            WHERE(82..87),
+                            Ident(88..89),
+                            Gt(90..91),
+                            LiteralInteger(92..93),
+                        ],
+                        with: None,
+                        body: Select(
+                            SelectStmt {
+                                span: [
+                                    SELECT(66..72),
+                                    Ident(73..74),
+                                    FROM(75..79),
+                                    Ident(80..81),
+                                    WHERE(82..87),
+                                    Ident(88..89),
+                                    Gt(90..91),
+                                    LiteralInteger(92..93),
+                                ],
+                                distinct: false,
+                                select_list: [
+                                    AliasedExpr {
+                                        expr: ColumnRef {
+                                            span: [
+                                                Ident(73..74),
+                                            ],
+                                            database: None,
+                                            table: None,
+                                            column: Identifier {
+                                                name: "a",
+                                                quote: None,
+                                                span: Ident(73..74),
+                                            },
+                                        },
+                                        alias: None,
+                                    },
+                                ],
+                                from: [
+                                    Table {
+                                        span: [
+                                            Ident(80..81),
+                                        ],
+                                        catalog: None,
+                                        database: None,
+                                        table: Identifier {
+                                            name: "t",
+                                            quote: None,
+                                            span: Ident(80..81),
+                                        },
+                                        alias: None,
+                                        travel_point: None,
+                                    },
+                                ],
+                                selection: Some(
+                                    BinaryOp {
+                                        span: [
+                                            Gt(90..91),
+                                        ],
+                                        op: Gt,
+                                        left: ColumnRef {
+                                            span: [
+                                                Ident(88..89),
+                                            ],
+                                            database: None,
+                                            table: None,
+                                            column: Identifier {
+                                                name: "a",
+                                                quote: None,
+                                                span: Ident(88..89),
+                                            },
+                                        },
+                                        right: Literal {
+                                            span: [
+                                                LiteralInteger(92..93),
+                                            ],
+                                            lit: Integer(
+                                                1,
+                                            ),
+                                        },
+                                    },
+                                ),
+                                group_by: [],
+                                having: None,
+                            },
+                        ),
+                        order_by: [],
+                        limit: [],
+                        offset: None,
+                        format: None,
+                    },
+                },
+            ],
+        },
+    ),
+    body: Select(
+        SelectStmt {
+            span: [
+                SELECT(95..101),
+                Ident(102..104),
+                Period(104..105),
+                Ident(105..107),
+                Comma(107..108),
+                Ident(109..111),
+                Period(111..112),
+                Ident(112..113),
+                Comma(113..114),
+                Ident(115..117),
+                Period(117..118),
+                Ident(118..119),
+                FROM(120..124),
+                Ident(125..127),
+                Comma(127..128),
+                Ident(129..131),
+                Comma(131..132),
+                Ident(133..135),
+                WHERE(136..141),
+                Ident(142..144),
+                Period(144..145),
+                Ident(145..147),
+                Gt(148..149),
+                LiteralInteger(150..151),
+            ],
+            distinct: false,
+            select_list: [
+                AliasedExpr {
+                    expr: ColumnRef {
+                        span: [
+                            Ident(102..104),
+                            Period(104..105),
+                            Ident(105..107),
+                        ],
+                        database: None,
+                        table: Some(
+                            Identifier {
+                                name: "t2",
+                                quote: None,
+                                span: Ident(102..104),
+                            },
+                        ),
+                        column: Identifier {
+                            name: "tt",
+                            quote: None,
+                            span: Ident(105..107),
+                        },
+                    },
+                    alias: None,
+                },
+                AliasedExpr {
+                    expr: ColumnRef {
+                        span: [
+                            Ident(109..111),
+                            Period(111..112),
+                            Ident(112..113),
+                        ],
+                        database: None,
+                        table: Some(
+                            Identifier {
+                                name: "t3",
+                                quote: None,
+                                span: Ident(109..111),
+                            },
+                        ),
+                        column: Identifier {
+                            name: "a",
+                            quote: None,
+                            span: Ident(112..113),
+                        },
+                    },
+                    alias: None,
+                },
+                AliasedExpr {
+                    expr: ColumnRef {
+                        span: [
+                            Ident(115..117),
+                            Period(117..118),
+                            Ident(118..119),
+                        ],
+                        database: None,
+                        table: Some(
+                            Identifier {
+                                name: "t4",
+                                quote: None,
+                                span: Ident(115..117),
+                            },
+                        ),
+                        column: Identifier {
+                            name: "a",
+                            quote: None,
+                            span: Ident(118..119),
+                        },
+                    },
+                    alias: None,
+                },
+            ],
+            from: [
+                Table {
+                    span: [
+                        Ident(125..127),
+                    ],
+                    catalog: None,
+                    database: None,
+                    table: Identifier {
+                        name: "t2",
+                        quote: None,
+                        span: Ident(125..127),
+                    },
+                    alias: None,
+                    travel_point: None,
+                },
+                Table {
+                    span: [
+                        Ident(129..131),
+                    ],
+                    catalog: None,
+                    database: None,
+                    table: Identifier {
+                        name: "t3",
+                        quote: None,
+                        span: Ident(129..131),
+                    },
+                    alias: None,
+                    travel_point: None,
+                },
+                Table {
+                    span: [
+                        Ident(133..135),
+                    ],
+                    catalog: None,
+                    database: None,
+                    table: Identifier {
+                        name: "t4",
+                        quote: None,
+                        span: Ident(133..135),
+                    },
+                    alias: None,
+                    travel_point: None,
+                },
+            ],
+            selection: Some(
+                BinaryOp {
+                    span: [
+                        Gt(148..149),
+                    ],
+                    op: Gt,
+                    left: ColumnRef {
+                        span: [
+                            Ident(142..144),
+                            Period(144..145),
+                            Ident(145..147),
+                        ],
+                        database: None,
+                        table: Some(
+                            Identifier {
+                                name: "t2",
+                                quote: None,
+                                span: Ident(142..144),
+                            },
+                        ),
+                        column: Identifier {
+                            name: "tt",
+                            quote: None,
+                            span: Ident(145..147),
+                        },
+                    },
+                    right: Literal {
+                        span: [
+                            LiteralInteger(150..151),
+                        ],
+                        lit: Integer(
+                            1,
+                        ),
+                    },
+                },
+            ),
+            group_by: [],
+            having: None,
+        },
+    ),
+    order_by: [],
+    limit: [],
+    offset: None,
+    format: None,
+}
+
+
+---------- Input ----------
+with recursive t2(tt) as (select a from t1 union select tt from t2) select t2.tt from t2
+---------- Output ---------
+SELECT t2.tt FROM t2
+---------- AST ------------
+Query {
+    span: [
+        WITH(0..4),
+        RECURSIVE(5..14),
+        Ident(15..17),
+        LParen(17..18),
+        Ident(18..20),
+        RParen(20..21),
+        AS(22..24),
+        LParen(25..26),
+        SELECT(26..32),
+        Ident(33..34),
+        FROM(35..39),
+        Ident(40..42),
+        UNION(43..48),
+        SELECT(49..55),
+        Ident(56..58),
+        FROM(59..63),
+        Ident(64..66),
+        RParen(66..67),
+        SELECT(68..74),
+        Ident(75..77),
+        Period(77..78),
+        Ident(78..80),
+        FROM(81..85),
+        Ident(86..88),
+    ],
+    with: Some(
+        With {
+            span: [
+                WITH(0..4),
+                RECURSIVE(5..14),
+                Ident(15..17),
+                LParen(17..18),
+                Ident(18..20),
+                RParen(20..21),
+                AS(22..24),
+                LParen(25..26),
+                SELECT(26..32),
+                Ident(33..34),
+                FROM(35..39),
+                Ident(40..42),
+                UNION(43..48),
+                SELECT(49..55),
+                Ident(56..58),
+                FROM(59..63),
+                Ident(64..66),
+                RParen(66..67),
+            ],
+            recursive: true,
+            ctes: [
+                Cte {
+                    span: [
+                        Ident(15..17),
+                        LParen(17..18),
+                        Ident(18..20),
+                        RParen(20..21),
+                        AS(22..24),
+                        LParen(25..26),
+                        SELECT(26..32),
+                        Ident(33..34),
+                        FROM(35..39),
+                        Ident(40..42),
+                        UNION(43..48),
+                        SELECT(49..55),
+                        Ident(56..58),
+                        FROM(59..63),
+                        Ident(64..66),
+                        RParen(66..67),
+                    ],
+                    alias: TableAlias {
+                        name: Identifier {
+                            name: "t2",
+                            quote: None,
+                            span: Ident(15..17),
+                        },
+                        columns: [
+                            Identifier {
+                                name: "tt",
+                                quote: None,
+                                span: Ident(18..20),
+                            },
+                        ],
+                    },
+                    query: Query {
+                        span: [
+                            SELECT(26..32),
+                            Ident(33..34),
+                            FROM(35..39),
+                            Ident(40..42),
+                            UNION(43..48),
+                            SELECT(49..55),
+                            Ident(56..58),
+                            FROM(59..63),
+                            Ident(64..66),
+                        ],
+                        with: None,
+                        body: SetOperation(
+                            SetOperation {
+                                span: [
+                                    UNION(43..48),
+                                ],
+                                op: Union,
+                                all: false,
+                                left: Select(
+                                    SelectStmt {
+                                        span: [
+                                            SELECT(26..32),
+                                            Ident(33..34),
+                                            FROM(35..39),
+                                            Ident(40..42),
+                                        ],
+                                        distinct: false,
+                                        select_list: [
+                                            AliasedExpr {
+                                                expr: ColumnRef {
+                                                    span: [
+                                                        Ident(33..34),
+                                                    ],
+                                                    database: None,
+                                                    table: None,
+                                                    column: Identifier {
+                                                        name: "a",
+                                                        quote: None,
+                                                        span: Ident(33..34),
+                                                    },
+                                                },
+                                                alias: None,
+                                            },
+                                        ],
+                                        from: [
+                                            Table {
+                                                span: [
+                                                    Ident(40..42),
+                                                ],
+                                                catalog: None,
+                                                database: None,
+                                                table: Identifier {
+                                                    name: "t1",
+                                                    quote: None,
+                                                    span: Ident(40..42),
+                                                },
+                                                alias: None,
+                                                travel_point: None,
+                                            },
+                                        ],
+                                        selection: None,
+                                        group_by: [],
+                                        having: None,
+                                    },
+                                ),
+                                right: Select(
+                                    SelectStmt {
+                                        span: [
+                                            SELECT(49..55),
+                                            Ident(56..58),
+                                            FROM(59..63),
+                                            Ident(64..66),
+                                        ],
+                                        distinct: false,
+                                        select_list: [
+                                            AliasedExpr {
+                                                expr: ColumnRef {
+                                                    span: [
+                                                        Ident(56..58),
+                                                    ],
+                                                    database: None,
+                                                    table: None,
+                                                    column: Identifier {
+                                                        name: "tt",
+                                                        quote: None,
+                                                        span: Ident(56..58),
+                                                    },
+                                                },
+                                                alias: None,
+                                            },
+                                        ],
+                                        from: [
+                                            Table {
+                                                span: [
+                                                    Ident(64..66),
+                                                ],
+                                                catalog: None,
+                                                database: None,
+                                                table: Identifier {
+                                                    name: "t2",
+                                                    quote: None,
+                                                    span: Ident(64..66),
+                                                },
+                                                alias: None,
+                                                travel_point: None,
+                                            },
+                                        ],
+                                        selection: None,
+                                        group_by: [],
+                                        having: None,
+                                    },
+                                ),
+                            },
+                        ),
+                        order_by: [],
+                        limit: [],
+                        offset: None,
+                        format: None,
+                    },
+                },
+            ],
+        },
+    ),
+    body: Select(
+        SelectStmt {
+            span: [
+                SELECT(68..74),
+                Ident(75..77),
+                Period(77..78),
+                Ident(78..80),
+                FROM(81..85),
+                Ident(86..88),
+            ],
+            distinct: false,
+            select_list: [
+                AliasedExpr {
+                    expr: ColumnRef {
+                        span: [
+                            Ident(75..77),
+                            Period(77..78),
+                            Ident(78..80),
+                        ],
+                        database: None,
+                        table: Some(
+                            Identifier {
+                                name: "t2",
+                                quote: None,
+                                span: Ident(75..77),
+                            },
+                        ),
+                        column: Identifier {
+                            name: "tt",
+                            quote: None,
+                            span: Ident(78..80),
+                        },
+                    },
+                    alias: None,
+                },
+            ],
+            from: [
+                Table {
+                    span: [
+                        Ident(86..88),
+                    ],
+                    catalog: None,
+                    database: None,
+                    table: Identifier {
+                        name: "t2",
+                        quote: None,
+                        span: Ident(86..88),
+                    },
+                    alias: None,
+                    travel_point: None,
+                },
+            ],
+            selection: None,
+            group_by: [],
+            having: None,
+        },
+    ),
+    order_by: [],
+    limit: [],
+    offset: None,
+    format: None,
+}
+
+
+---------- Input ----------
 select c_count cc, count(*) as custdist, sum(c_acctbal) as totacctbal
             from customer, orders ODS,
                 (
@@ -891,6 +2233,7 @@ Query {
         Comma(651..652),
         Ident(653..663),
     ],
+    with: None,
     body: Select(
         SelectStmt {
             span: [
@@ -1128,6 +2471,7 @@ Query {
                             BY(452..454),
                             Ident(479..488),
                         ],
+                        with: None,
                         body: Select(
                             SelectStmt {
                                 span: [
@@ -1478,6 +2822,7 @@ Query {
         FROM(32..36),
         Ident(37..39),
     ],
+    with: None,
     body: SetOperation(
         SetOperation {
             span: [
@@ -1590,6 +2935,7 @@ Query {
         FROM(55..59),
         Ident(60..62),
     ],
+    with: None,
     body: SetOperation(
         SetOperation {
             span: [
@@ -1748,6 +3094,7 @@ Query {
         FROM(59..63),
         Ident(64..66),
     ],
+    with: None,
     body: SetOperation(
         SetOperation {
             span: [
@@ -1908,6 +3255,7 @@ Query {
         FROM(57..61),
         Ident(62..64),
     ],
+    with: None,
     body: SetOperation(
         SetOperation {
             span: [
@@ -2068,6 +3416,7 @@ Query {
         Ident(61..63),
         RParen(63..64),
     ],
+    with: None,
     body: SetOperation(
         SetOperation {
             span: [

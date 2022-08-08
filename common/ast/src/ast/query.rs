@@ -25,7 +25,8 @@ use crate::parser::token::Token;
 #[derive(Debug, Clone, PartialEq)]
 pub struct Query<'a> {
     pub span: &'a [Token<'a>],
-
+    // With clause, common table expression
+    pub with: Option<With<'a>>,
     // Set operator: SELECT or UNION / EXCEPT / INTERSECT
     pub body: SetExpr<'a>,
 
@@ -38,6 +39,20 @@ pub struct Query<'a> {
     pub offset: Option<Expr<'a>>,
     // FORMAT <format>
     pub format: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct With<'a> {
+    pub span: &'a [Token<'a>],
+    pub recursive: bool,
+    pub ctes: Vec<Cte<'a>>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Cte<'a> {
+    pub span: &'a [Token<'a>],
+    pub alias: TableAlias<'a>,
+    pub query: Query<'a>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
