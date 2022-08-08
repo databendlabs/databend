@@ -26,6 +26,7 @@ struct OutputData {
 
 pub struct ExchangeTransform {
     finished: bool,
+    wait_channel_closed: bool,
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
     input_data: Option<DataBlock>,
@@ -53,6 +54,7 @@ impl ExchangeTransform {
                 output_data: None,
                 shuffle_exchange_params: params.clone(),
                 serialize_params: params.create_serialize_params()?,
+                wait_channel_closed: false,
             }
         )))
     }
@@ -143,9 +145,13 @@ impl Processor for ExchangeTransform {
                 return Ok(Event::Finished);
             }
 
-            for flight_exchange in &self.flight_exchanges {
-                // No more data will be sent. close the response of endpoint.
-                flight_exchange.close_response();
+            if !self.wait_channel_closed {
+                self.wait_channel_closed = true;
+
+                for flight_exchange in &self.flight_exchanges {
+                    // No more data will be sent. close the response of endpoint.
+                    flight_exchange.close_output();
+                }
             }
 
             return Ok(Event::Async);
@@ -230,7 +236,7 @@ impl Processor for ExchangeTransform {
             }
         }
 
-        if !self.finished && self.input.is_finished() {
+        if self.wait_channel_closed && !self.finished {
             // async recv if input is finished.
             // TODO: use future::future::select_all to parallel await
             for flight_exchange in &self.flight_exchanges {

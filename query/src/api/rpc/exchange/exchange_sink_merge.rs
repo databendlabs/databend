@@ -81,7 +81,7 @@ impl Processor for ExchangeMergeSink {
         }
 
         if self.input.is_finished() {
-            self.flight_exchange.close_response();
+            self.flight_exchange.close_output();
             return Ok(Event::Finished);
         }
 

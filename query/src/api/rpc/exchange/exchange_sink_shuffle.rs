@@ -92,7 +92,7 @@ impl Processor for ExchangePublisherSink {
         if self.input.is_finished() {
             // No more data to sent.
             for flight_exchange in &self.flight_exchanges {
-                flight_exchange.close_response();
+                flight_exchange.close_output();
             }
 
             return Ok(Event::Finished);

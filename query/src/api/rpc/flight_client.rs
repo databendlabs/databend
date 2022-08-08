@@ -192,19 +192,19 @@ impl FlightExchange {
         }
     }
 
-    pub fn close_request(&self) {
+    pub fn close_input(&self) {
         match self {
             FlightExchange::Dummy => { /* do nothing*/ }
-            FlightExchange::Client(exchange) => exchange.close_request(),
-            FlightExchange::Server(exchange) => exchange.close_request(),
+            FlightExchange::Client(exchange) => exchange.close_input(),
+            FlightExchange::Server(exchange) => exchange.close_input(),
         }
     }
 
-    pub fn close_response(&self) {
+    pub fn close_output(&self) {
         match self {
             FlightExchange::Dummy => { /* do nothing*/ }
-            FlightExchange::Client(exchange) => exchange.close_response(),
-            FlightExchange::Server(exchange) => exchange.close_response(),
+            FlightExchange::Client(exchange) => exchange.close_ouput(),
+            FlightExchange::Server(exchange) => exchange.close_output(),
         }
     }
 }
@@ -260,7 +260,7 @@ impl ClientFlightExchange {
         }
     }
 
-    pub fn close_request(&self) {
+    pub fn close_input(&self) {
         if !self.is_closed_request.fetch_or(true, Ordering::SeqCst) {
             if self.state.request_count.fetch_sub(1, Ordering::AcqRel) == 1 {
                 self.request_rx.close();
@@ -268,7 +268,7 @@ impl ClientFlightExchange {
         }
     }
 
-    pub fn close_response(&self) {
+    pub fn close_ouput(&self) {
         if !self.is_closed_response.fetch_or(true, Ordering::SeqCst) {
             if self.state.response_count.fetch_sub(1, Ordering::AcqRel) == 1 {
                 self.response_tx.close();
@@ -376,7 +376,7 @@ impl ServerFlightExchange {
         }
     }
 
-    pub fn close_request(&self) {
+    pub fn close_input(&self) {
         if !self.is_closed_request.fetch_or(true, Ordering::SeqCst) {
             if self.state.request_count.fetch_sub(1, Ordering::AcqRel) == 1 {
                 self.request_rx.close();
@@ -384,7 +384,7 @@ impl ServerFlightExchange {
         }
     }
 
-    pub fn close_response(&self) {
+    pub fn close_output(&self) {
         if !self.is_closed_response.fetch_or(true, Ordering::SeqCst) {
             if self.state.response_count.fetch_sub(1, Ordering::AcqRel) == 1 {
                 self.response_tx.close();

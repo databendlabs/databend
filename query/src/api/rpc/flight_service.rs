@@ -112,7 +112,7 @@ impl FlightService for DatabendQueryFlightService {
         let exchange = FlightExchange::from_server(req, tx);
 
         let exchange_manager = self.sessions.get_data_exchange_manager();
-        exchange_manager.handle_exchange(query_id, source, fragment, exchange);
+        exchange_manager.handle_exchange(query_id, source, fragment, exchange)?;
         Ok(RawResponse::new(Box::pin(rx)))
     }
 

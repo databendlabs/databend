@@ -17,6 +17,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::task::Context;
 use std::task::Poll;
+use std::time::{Duration, Instant};
 
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -28,6 +29,7 @@ use futures_util::FutureExt;
 use crate::pipelines::executor::executor_condvar::WorkersCondvar;
 use crate::pipelines::executor::executor_tasks::CompletedAsyncTask;
 use crate::pipelines::executor::executor_tasks::ExecutorTasksQueue;
+use common_base::base::tokio::time::sleep;
 
 pub struct ProcessorAsyncTask {
     worker_id: usize,
@@ -38,7 +40,7 @@ pub struct ProcessorAsyncTask {
 }
 
 impl ProcessorAsyncTask {
-    pub fn create<Inner: Future<Output = Result<()>> + Send + 'static>(
+    pub fn create<Inner: Future<Output=Result<()>> + Send + 'static>(
         worker_id: usize,
         processor: ProcessorPtr,
         queue: Arc<ExecutorTasksQueue>,
@@ -47,7 +49,7 @@ impl ProcessorAsyncTask {
     ) -> ProcessorAsyncTask {
         let finished_notify = queue.get_finished_notify();
 
-        let inner = async move {
+        let mut inner = async move {
             let left = Box::pin(inner);
             let right = Box::pin(finished_notify.notified());
             match futures::future::select(left, right).await {
@@ -55,6 +57,31 @@ impl ProcessorAsyncTask {
                 Either::Right((_, _)) => Err(ErrorCode::AbortedQuery(
                     "Aborted query, because the server is shutting down or the query was killed.",
                 )),
+            }
+        };
+
+        let wraning_processor = processor.clone();
+        let inner = async move {
+            let start = Instant::now();
+            let mut inner = inner.boxed();
+
+            loop {
+                unsafe {
+                    let mut interval = Box::pin(sleep(Duration::from_secs(5)));
+                    match futures::future::select(interval, inner).await {
+                        Either::Left((_, right)) => {
+                            inner = right;
+                            tracing::warn!(
+                                "Very slow processor async task, processor name: {:?}, elapsed: {:?}",
+                                wraning_processor.name(),
+                                start.elapsed()
+                            );
+                        }
+                        Either::Right((res, _)) => {
+                            return res;
+                        }
+                    }
+                }
             }
         };
 
