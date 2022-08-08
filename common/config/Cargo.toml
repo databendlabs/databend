@@ -16,15 +16,13 @@ common-hive-meta-store = { path = "../hive-meta-store", optional = true }
 common-storage = { path = "../storage" }
 common-tracing = { path = "../tracing" }
 
-async-trait = "0.1.56"
 clap = { version = "3.2.5", features = ["derive", "env"] }
 once_cell = "1.12.0"
-opendal = { version = "0.11.4", features = ["retry", "compress"] }
+opendal = { version = "0.11.4", features = ["retry", "compress"], optional = true }
 semver = "1.0.10"
 serde = { version = "1.0.137", features = ["derive"] }
 serfig = "0.0.2"
 thrift = { version = "0.15.0", optional = true }
-time = "0.3.10"
 
 [features]
 default = []
