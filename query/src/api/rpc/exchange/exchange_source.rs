@@ -12,52 +12,52 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use async_channel::Receiver;
-use common_arrow::arrow_format::flight::data::FlightData;
-use common_datavalues::DataSchemaRef;
-use common_exception::Result;
-
-use crate::api::rpc::exchange::exchange_params::ExchangeParams;
-use crate::api::rpc::exchange::exchange_source_merge::ExchangeMergeSource;
-use crate::api::rpc::exchange::exchange_source_shuffle::ExchangeShuffleSource;
-use crate::pipelines::processors::port::OutputPort;
-use crate::pipelines::Pipeline;
-use crate::pipelines::SourcePipeBuilder;
-
-pub struct ExchangeSource {}
-
-impl ExchangeSource {
-    pub fn via_exchange(
-        rx: Receiver<Result<FlightData>>,
-        params: &ExchangeParams,
-        pipeline: &mut Pipeline,
-    ) -> Result<()> {
-        pipeline.add_transform(|transform_input_port, transform_output_port| {
-            ExchangeShuffleSource::try_create(
-                transform_input_port,
-                transform_output_port,
-                rx.clone(),
-                params.get_schema(),
-            )
-        })
-    }
-
-    pub fn create_source(
-        rx: Receiver<Result<FlightData>>,
-        schema: DataSchemaRef,
-        pipeline: &mut Pipeline,
-        parallel_size: usize,
-    ) -> Result<()> {
-        let mut source_builder = SourcePipeBuilder::create();
-        for _index in 0..parallel_size {
-            let output = OutputPort::create();
-            source_builder.add_source(
-                output.clone(),
-                ExchangeMergeSource::try_create(output, rx.clone(), schema.clone())?,
-            );
-        }
-
-        pipeline.add_pipe(source_builder.finalize());
-        Ok(())
-    }
-}
+// use async_channel::Receiver;
+// use common_arrow::arrow_format::flight::data::FlightData;
+// use common_datavalues::DataSchemaRef;
+// use common_exception::Result;
+//
+// use crate::api::rpc::exchange::exchange_params::ExchangeParams;
+// use crate::api::rpc::exchange::exchange_source_merge::ExchangeMergeSource;
+// use crate::api::rpc::exchange::exchange_source_shuffle::ExchangeShuffleSource;
+// use crate::pipelines::processors::port::OutputPort;
+// use crate::pipelines::Pipeline;
+// use crate::pipelines::SourcePipeBuilder;
+//
+// pub struct ExchangeSource {}
+//
+// impl ExchangeSource {
+//     pub fn via_exchange(
+//         rx: Receiver<Result<FlightData>>,
+//         params: &ExchangeParams,
+//         pipeline: &mut Pipeline,
+//     ) -> Result<()> {
+//         pipeline.add_transform(|transform_input_port, transform_output_port| {
+//             ExchangeShuffleSource::try_create(
+//                 transform_input_port,
+//                 transform_output_port,
+//                 rx.clone(),
+//                 params.get_schema(),
+//             )
+//         })
+//     }
+//
+//     pub fn create_source(
+//         rx: Receiver<Result<FlightData>>,
+//         schema: DataSchemaRef,
+//         pipeline: &mut Pipeline,
+//         parallel_size: usize,
+//     ) -> Result<()> {
+//         let mut source_builder = SourcePipeBuilder::create();
+//         for _index in 0..parallel_size {
+//             let output = OutputPort::create();
+//             source_builder.add_source(
+//                 output.clone(),
+//                 ExchangeMergeSource::try_create(output, rx.clone(), schema.clone())?,
+//             );
+//         }
+//
+//         pipeline.add_pipe(source_builder.finalize());
+//         Ok(())
+//     }
+// }

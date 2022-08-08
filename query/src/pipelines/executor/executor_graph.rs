@@ -343,12 +343,14 @@ impl RunningGraph {
     pub fn create(pipeline: Pipeline) -> Result<RunningGraph> {
         let graph_state = ExecutingGraph::create(pipeline)?;
         debug!("Create running graph:{:?}", graph_state);
+        println!("Create running graph:{:?}", graph_state);
         Ok(RunningGraph(graph_state))
     }
 
     pub fn from_pipelines(pipelines: Vec<Pipeline>) -> Result<RunningGraph> {
         let graph_state = ExecutingGraph::from_pipelines(pipelines)?;
         debug!("Create running graph:{:?}", graph_state);
+        println!("Create running graph:{:?}", graph_state);
         Ok(RunningGraph(graph_state))
     }
 

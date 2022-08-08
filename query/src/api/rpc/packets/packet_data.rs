@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::{Debug, Formatter};
 use std::io::Read;
 use std::io::Write;
 use std::pin::Pin;
@@ -41,20 +42,34 @@ use futures::StreamExt;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 
-pub enum FragmentData {
-    End(usize),
-    Data(usize, FlightData),
+pub struct FragmentData {
+    pub data: FlightData,
+}
+
+impl FragmentData {
+    pub fn create(data: FlightData) -> FragmentData {
+        FragmentData { data }
+    }
+}
+
+impl Debug for FragmentData {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FragmentData").finish()
+    }
 }
 
 #[allow(clippy::enum_variant_names)]
+#[derive(Debug)]
 pub enum ProgressInfo {
     ScanProgress(ProgressValues),
     WriteProgress(ProgressValues),
     ResultProgress(ProgressValues),
 }
 
+#[derive(Debug)]
 pub struct PrecommitBlock(pub DataBlock);
 
+#[derive(Debug)]
 pub enum DataPacket {
     ErrorCode(ErrorCode),
     Progress(ProgressInfo),
@@ -81,15 +96,6 @@ impl Stream for DataPacketStream {
             Poll::Pending => Poll::Pending,
             Poll::Ready(None) => Poll::Ready(None),
             Poll::Ready(Some(packet)) => Poll::Ready(Some(FlightData::from(packet))),
-        }
-    }
-}
-
-impl FragmentData {
-    pub fn get_fragment_id(&self) -> usize {
-        match self {
-            FragmentData::End(fragment_id) => *fragment_id,
-            FragmentData::Data(fragment_id, _) => *fragment_id,
         }
     }
 }
@@ -134,23 +140,11 @@ impl From<DataPacket> for FlightData {
 
 impl From<FragmentData> for FlightData {
     fn from(data: FragmentData) -> Self {
-        let mut app_metadata = vec![0x01];
-        let fragment_id = data.get_fragment_id();
-        app_metadata.extend_from_slice(&fragment_id.to_be_bytes());
-
-        match data {
-            FragmentData::End(_) => FlightData {
-                app_metadata,
-                data_body: vec![],
-                data_header: vec![],
-                flight_descriptor: None,
-            },
-            FragmentData::Data(_, flight_data) => FlightData {
-                app_metadata,
-                data_body: flight_data.data_body,
-                data_header: flight_data.data_header,
-                flight_descriptor: None,
-            },
+        FlightData {
+            app_metadata: vec![0x01],
+            data_body: data.data.data_body,
+            data_header: data.data.data_header,
+            flight_descriptor: None,
         }
     }
 }
@@ -217,14 +211,10 @@ impl TryFrom<FlightData> for DataPacket {
         }
 
         match flight_data.app_metadata[0] {
-            0x01 => Ok(DataPacket::FragmentData(FragmentData::try_from(
-                flight_data,
-            )?)),
+            0x01 => Ok(DataPacket::FragmentData(FragmentData::try_from(flight_data)?)),
             0x02 => Ok(DataPacket::ErrorCode(ErrorCode::try_from(flight_data)?)),
             0x03 => Ok(DataPacket::Progress(ProgressInfo::try_from(flight_data)?)),
-            0x04 => Ok(DataPacket::PrecommitBlock(PrecommitBlock::try_from(
-                flight_data,
-            )?)),
+            0x04 => Ok(DataPacket::PrecommitBlock(PrecommitBlock::try_from(flight_data)?)),
             0x05 => Ok(DataPacket::FinishQuery),
             _ => Err(ErrorCode::BadBytes("Unknown flight data packet type.")),
         }
@@ -235,20 +225,12 @@ impl TryFrom<FlightData> for FragmentData {
     type Error = ErrorCode;
 
     fn try_from(flight_data: FlightData) -> Result<Self> {
-        match flight_data.app_metadata[1..].try_into() {
-            Err(_) => Err(ErrorCode::BadBytes("Cannot parse inf usize.")),
-            Ok(slice) => Ok(
-                match flight_data.data_header.is_empty() && flight_data.data_body.is_empty() {
-                    true => FragmentData::End(usize::from_be_bytes(slice)),
-                    false => FragmentData::Data(usize::from_be_bytes(slice), FlightData {
-                        app_metadata: vec![],
-                        flight_descriptor: None,
-                        data_body: flight_data.data_body,
-                        data_header: flight_data.data_header,
-                    }),
-                },
-            ),
-        }
+        Ok(FragmentData::create(FlightData {
+            app_metadata: vec![],
+            flight_descriptor: None,
+            data_body: flight_data.data_body,
+            data_header: flight_data.data_header,
+        }))
     }
 }
 

@@ -13,9 +13,6 @@
 // limitations under the License.
 
 mod data_exchange;
-mod exchange_channel;
-mod exchange_channel_receiver;
-mod exchange_channel_sender;
 mod exchange_manager;
 mod exchange_params;
 mod exchange_sink;

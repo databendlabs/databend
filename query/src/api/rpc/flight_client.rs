@@ -114,6 +114,8 @@ impl FlightClient {
 
 #[derive(Clone)]
 pub enum FlightExchange {
+    // dummy if localhost
+    Dummy,
     Client(ClientFlightExchange),
     Server(ServerFlightExchange),
 }
@@ -136,6 +138,7 @@ impl FlightExchange {
         FlightExchange::Server(ServerFlightExchange {
             response_tx,
             request_rx: rx,
+            state: Arc::new(ChannelState::create()),
         })
     }
 
@@ -163,6 +166,7 @@ impl FlightExchange {
 impl FlightExchange {
     pub async fn send(&self, data: DataPacket) -> Result<()> {
         match self {
+            FlightExchange::Dummy => Err(ErrorCode::UnImplement("Unimplemented send in dummy exchange.")),
             FlightExchange::Client(exchange) => exchange.send(data).await,
             FlightExchange::Server(exchange) => exchange.send(data).await,
         }
@@ -172,11 +176,13 @@ impl FlightExchange {
         match self {
             FlightExchange::Client(exchange) => exchange.recv().await,
             FlightExchange::Server(exchange) => exchange.recv().await,
+            FlightExchange::Dummy => Ok(None),
         }
     }
 
     pub fn try_recv(&self) -> Result<Option<DataPacket>> {
         match self {
+            FlightExchange::Dummy => Ok(None),
             FlightExchange::Client(exchange) => exchange.try_recv(),
             FlightExchange::Server(exchange) => exchange.try_recv(),
         }
@@ -184,6 +190,7 @@ impl FlightExchange {
 
     pub fn close_request(&self) {
         match self {
+            FlightExchange::Dummy => { /* do nothing*/ }
             FlightExchange::Client(exchange) => exchange.close_request(),
             FlightExchange::Server(exchange) => exchange.close_request(),
         }
@@ -191,6 +198,7 @@ impl FlightExchange {
 
     pub fn close_response(&self) {
         match self {
+            FlightExchange::Dummy => { /* do nothing*/ }
             FlightExchange::Client(exchange) => exchange.close_response(),
             FlightExchange::Server(exchange) => exchange.close_response(),
         }
@@ -254,7 +262,7 @@ impl ClientFlightExchange {
 
     pub fn close_response(&self) {
         if self.state.response_count.fetch_sub(1, Ordering::AcqRel) == 1 {
-            self.request_rx.close();
+            self.response_tx.close();
         }
     }
 }
@@ -284,7 +292,6 @@ impl Drop for ClientFlightExchange {
     }
 }
 
-#[derive(Clone)]
 pub struct ServerFlightExchange {
     state: Arc<ChannelState>,
     request_rx: Receiver<std::result::Result<FlightData, Status>>,
@@ -304,7 +311,7 @@ impl Clone for ServerFlightExchange {
     }
 }
 
-impl Drop for ClientFlightExchange {
+impl Drop for ServerFlightExchange {
     fn drop(&mut self) {
         if self.state.request_count.fetch_sub(1, Ordering::AcqRel) == 1 {
             self.request_rx.close();
@@ -353,7 +360,7 @@ impl ServerFlightExchange {
 
     pub fn close_response(&self) {
         if self.state.response_count.fetch_sub(1, Ordering::AcqRel) == 1 {
-            self.request_rx.close();
+            self.response_tx.close();
         }
     }
 }

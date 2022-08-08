@@ -21,9 +21,9 @@ use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::api::rpc::exchange::exchange_channel::FragmentSender;
-use crate::api::rpc::exchange::exchange_params::MergeExchangeParams;
+use crate::api::rpc::exchange::exchange_params::{ExchangeParams, MergeExchangeParams};
 use crate::api::rpc::exchange::exchange_params::SerializeParams;
+use crate::api::rpc::flight_client::FlightExchange;
 use crate::api::rpc::packets::DataPacket;
 use crate::api::rpc::packets::FragmentData;
 use crate::pipelines::processors::port::InputPort;
@@ -34,56 +34,30 @@ use crate::sessions::QueryContext;
 
 pub struct ExchangeMergeSink {
     ctx: Arc<QueryContext>,
-    fragment_id: usize,
-
     input: Arc<InputPort>,
     input_data: Option<DataBlock>,
     output_data: Option<DataPacket>,
     serialize_params: SerializeParams,
     exchange_params: MergeExchangeParams,
-    peer_endpoint_publisher: Option<FragmentSender>,
+    flight_exchange: FlightExchange,
 }
 
 impl ExchangeMergeSink {
-    pub fn try_create(
-        ctx: Arc<QueryContext>,
-        fragment_id: usize,
-        input: Arc<InputPort>,
-        exchange_params: MergeExchangeParams,
-    ) -> Result<ProcessorPtr> {
-        let serialize_params = exchange_params.create_serialize_params()?;
+    pub fn try_create(ctx: Arc<QueryContext>, input: Arc<InputPort>, exchange_params: &MergeExchangeParams) -> Result<ProcessorPtr> {
+        let params = ExchangeParams::MergeExchange(exchange_params.clone());
+        let exchange_manager = ctx.get_exchange_manager();
+        let mut flight_exchange = exchange_manager.get_flight_exchanges(&params)?;
+        assert_eq!(flight_exchange.len(), 1);
+
         Ok(ProcessorPtr::create(Box::new(ExchangeMergeSink {
             ctx,
             input,
-            fragment_id,
-            exchange_params,
-            serialize_params,
             input_data: None,
             output_data: None,
-            peer_endpoint_publisher: None,
+            exchange_params: exchange_params.clone(),
+            flight_exchange: flight_exchange.remove(0),
+            serialize_params: exchange_params.create_serialize_params()?,
         })))
-    }
-
-    pub fn init(processor: &mut ProcessorPtr) -> Result<()> {
-        unsafe {
-            if let Some(exchange_merge) = processor.as_any().downcast_mut::<Self>() {
-                let id = exchange_merge.fragment_id;
-                let query_id = &exchange_merge.exchange_params.query_id;
-                let destination_id = &exchange_merge.exchange_params.destination_id;
-                let exchange_manager = exchange_merge.ctx.get_exchange_manager();
-                exchange_merge.peer_endpoint_publisher =
-                    Some(exchange_manager.get_fragment_sink(query_id, id, destination_id)?);
-            }
-
-            Ok(())
-        }
-    }
-
-    fn get_endpoint_publisher(&self) -> Result<&FragmentSender> {
-        match &self.peer_endpoint_publisher {
-            Some(tx) => Ok(tx),
-            None => Err(ErrorCode::LogicalError("Cannot get endpoint_publisher.")),
-        }
     }
 }
 
@@ -98,18 +72,8 @@ impl Processor for ExchangeMergeSink {
     }
 
     fn event(&mut self) -> Result<Event> {
-        if let Some(output) = self.output_data.take() {
-            let tx = self.get_endpoint_publisher()?;
-
-            if let Err(try_send_err) = tx.try_send(output) {
-                return match try_send_err {
-                    TrySendError::Closed(_) => Ok(Event::Finished),
-                    TrySendError::Full(value) => {
-                        self.output_data = Some(value);
-                        Ok(Event::Async)
-                    }
-                };
-            }
+        if self.output_data.is_some() {
+            return Ok(Event::Async);
         }
 
         if self.input_data.is_some() {
@@ -117,10 +81,7 @@ impl Processor for ExchangeMergeSink {
         }
 
         if self.input.is_finished() {
-            if let Some(publisher) = self.peer_endpoint_publisher.take() {
-                drop(publisher);
-            }
-
+            self.flight_exchange.close_response();
             return Ok(Event::Finished);
         }
 
@@ -151,7 +112,7 @@ impl Processor for ExchangeMergeSink {
             }
 
             // FlightData
-            let data = FragmentData::Data(self.fragment_id, values);
+            let data = FragmentData::create(values);
             self.output_data = Some(DataPacket::FragmentData(data));
         }
 
@@ -160,8 +121,7 @@ impl Processor for ExchangeMergeSink {
 
     async fn async_process(&mut self) -> Result<()> {
         if let Some(output_data) = self.output_data.take() {
-            let tx = self.get_endpoint_publisher()?;
-            if tx.send(output_data).await.is_err() {
+            if self.flight_exchange.send(output_data).await.is_err() {
                 return Err(ErrorCode::TokioError(
                     "Cannot send flight data to endpoint, because sender is closed.",
                 ));
