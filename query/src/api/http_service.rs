@@ -60,6 +60,10 @@ impl HttpService {
                 get(super::http::v1::instance_status::instance_status_handler),
             )
             .at(
+                "/v1/tenants/:tenant/status",
+                get(super::http::v1::tenant_status::tenant_status_handler),
+            )
+            .at(
                 "/v1/cluster/list",
                 get(super::http::v1::cluster::cluster_list_handler),
             )
