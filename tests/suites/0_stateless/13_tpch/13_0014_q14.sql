@@ -1,6 +1,7 @@
 
 select
     TRUNCATE(100.00 * sum(case
+            TRUNCATE(100.00 * sum(case
                              when p_type like 'PROMO%'
                                  then l_extendedprice * (1 - l_discount)
                              else 0
