@@ -38,6 +38,8 @@ impl ClusterStatsGenerator {
         }
     }
 
+    // This can be used in block append.
+    // The input block contains the cluster key block.
     pub fn gen_stats_for_append(
         &self,
         data_block: &DataBlock,
@@ -53,9 +55,10 @@ impl ClusterStatsGenerator {
         Ok((cluster_stats, block))
     }
 
-    pub fn gen_stats_with_origin(
+    // This can be used in deletion, for an existing block.
+    pub fn gen_with_origin_stats(
         &self,
-        sorted_block: &DataBlock,
+        data_block: &DataBlock,
         origin_stats: Option<ClusterStatistics>,
     ) -> Result<Option<ClusterStatistics>> {
         if origin_stats.is_none() {
@@ -68,11 +71,13 @@ impl ClusterStatsGenerator {
         }
 
         let block = if let Some(executor) = &self.expression_executor {
-            let indices = vec![0u32, sorted_block.num_rows() as u32 - 1];
-            let input = DataBlock::block_take_by_indices(sorted_block, &indices)?;
+            // For a clustered table, data_block has been sorted, but may not contain cluster key.
+            // So only need to get the first and the last row for execute.
+            let indices = vec![0u32, data_block.num_rows() as u32 - 1];
+            let input = DataBlock::block_take_by_indices(data_block, &indices)?;
             executor.execute(&input)?
         } else {
-            sorted_block.clone()
+            data_block.clone()
         };
 
         self.clusters_statistics(&block)

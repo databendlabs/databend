@@ -193,7 +193,7 @@ impl<'a> DeletionMutator<'a> {
                 BlockWriter::new(self.ctx, &self.data_accessor, self.location_generator);
             let cluster_stats = self
                 .cluster_stats_gen
-                .gen_stats_with_origin(&replace_with, origin_stats)?;
+                .gen_with_origin_stats(&replace_with, origin_stats)?;
             Some(block_writer.write(replace_with, cluster_stats).await?)
         };
         let original_block_loc = location_of_block_to_be_replaced;
