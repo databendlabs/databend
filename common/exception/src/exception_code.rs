@@ -223,8 +223,8 @@ build_exceptions! {
     ShareAlreadyExists(2705),
     UnknownShare(2706),
     UnknownShareId(2707),
-    ShareAccountAlreadyExists(2708),
-    UnknownShareAccount(2709),
+    ShareAccountsAlreadyExists(2708),
+    UnknownShareAccounts(2709),
     WrongShareObject(2710),
 
     // Variable error codes.

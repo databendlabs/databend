@@ -20,8 +20,8 @@ use common_meta_app::schema::DatabaseNameIdent;
 use common_meta_app::schema::TableId;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TableNameIdent;
-use common_meta_app::share::AddShareAccountReply;
-use common_meta_app::share::AddShareAccountReq;
+use common_meta_app::share::AddShareAccountsReply;
+use common_meta_app::share::AddShareAccountsReq;
 use common_meta_app::share::CreateShareReply;
 use common_meta_app::share::CreateShareReq;
 use common_meta_app::share::DropShareReply;
@@ -30,8 +30,8 @@ use common_meta_app::share::GetShareGrantObjectReply;
 use common_meta_app::share::GetShareGrantObjectReq;
 use common_meta_app::share::GrantShareObjectReply;
 use common_meta_app::share::GrantShareObjectReq;
-use common_meta_app::share::RemoveShareAccountReply;
-use common_meta_app::share::RemoveShareAccountReq;
+use common_meta_app::share::RemoveShareAccountsReply;
+use common_meta_app::share::RemoveShareAccountsReq;
 use common_meta_app::share::RevokeShareObjectReply;
 use common_meta_app::share::RevokeShareObjectReq;
 use common_meta_app::share::ShareAccountMeta;
@@ -47,11 +47,11 @@ use common_meta_app::share::ShareNameIdent;
 use common_meta_app::share::ShowShareReply;
 use common_meta_app::share::ShowShareReq;
 use common_meta_types::app_error::AppError;
-use common_meta_types::app_error::ShareAccountAlreadyExists;
+use common_meta_types::app_error::ShareAccountsAlreadyExists;
 use common_meta_types::app_error::ShareAlreadyExists;
 use common_meta_types::app_error::TxnRetryMaxTimes;
 use common_meta_types::app_error::UnknownShare;
-use common_meta_types::app_error::UnknownShareAccount;
+use common_meta_types::app_error::UnknownShareAccounts;
 use common_meta_types::app_error::UnknownShareId;
 use common_meta_types::app_error::WrongShareObject;
 use common_meta_types::ConditionResult::Eq;
@@ -310,7 +310,10 @@ impl<KV: KVApi> ShareApi for KV {
         )))
     }
 
-    async fn add_share_account(&self, req: AddShareAccountReq) -> MetaResult<AddShareAccountReply> {
+    async fn add_share_accounts(
+        &self,
+        req: AddShareAccountsReq,
+    ) -> MetaResult<AddShareAccountsReply> {
         debug!(req = debug(&req), "ShareApi: {}", func_name!());
 
         let name_key = &req.share_name;
@@ -319,21 +322,36 @@ impl<KV: KVApi> ShareApi for KV {
             retry += 1;
 
             let res =
-                get_share_or_err(self, name_key, format!("add_share_account: {}", &name_key)).await;
+                get_share_or_err(self, name_key, format!("add_share_accounts: {}", &name_key))
+                    .await;
 
             let (share_id_seq, share_id, share_meta_seq, mut share_meta) = match res {
                 Ok(x) => x,
                 Err(e) => {
+                    if let MetaError::AppError(AppError::UnknownShare(_)) = e {
+                        if req.if_exists {
+                            return Ok(AddShareAccountsReply {});
+                        }
+                    }
                     return Err(e);
                 }
             };
 
-            if share_meta.has_account(&req.account) {
-                return Err(MetaError::AppError(AppError::ShareAccountAlreadyExists(
-                    ShareAccountAlreadyExists::new(
+            let mut add_share_account_keys = vec![];
+            for account in req.accounts.iter() {
+                if !share_meta.has_account(account) {
+                    add_share_account_keys.push(ShareAccountNameIdent {
+                        account: account.clone(),
+                        share_id,
+                    });
+                }
+            }
+            if add_share_account_keys.is_empty() {
+                return Err(MetaError::AppError(AppError::ShareAccountsAlreadyExists(
+                    ShareAccountsAlreadyExists::new(
                         req.share_name.share_name,
-                        req.account,
-                        "share account already exists",
+                        req.accounts,
+                        "share accounts already exists",
                     ),
                 )));
             }
@@ -343,26 +361,34 @@ impl<KV: KVApi> ShareApi for KV {
             // add (account, share_id) -> share_account_meta
             // return share_id
             {
-                let share_account_key = ShareAccountNameIdent {
-                    account: req.account.clone(),
-                    share_id,
-                };
                 let id_key = ShareId { share_id };
-                share_meta.add_account(req.account.clone());
+                let mut condition = vec![
+                    txn_cond_seq(name_key, Eq, share_id_seq),
+                    txn_cond_seq(&id_key, Eq, share_meta_seq),
+                ];
+                let mut if_then = vec![];
 
-                let share_account_meta =
-                    ShareAccountMeta::new(req.account.clone(), share_id, req.share_on);
+                for share_account_key in add_share_account_keys.iter() {
+                    condition.push(txn_cond_seq(share_account_key, Eq, 0));
+
+                    let share_account_meta = ShareAccountMeta::new(
+                        share_account_key.account.clone(),
+                        share_id,
+                        req.share_on,
+                    );
+
+                    if_then.push(txn_op_put(
+                        share_account_key,
+                        serialize_struct(&share_account_meta)?,
+                    )); /* (account, share_id) -> share_account_meta */
+
+                    share_meta.add_account(share_account_key.account.clone());
+                }
+                if_then.push(txn_op_put(&id_key, serialize_struct(&share_meta)?)); /* (share_id) -> share_meta */
 
                 let txn_req = TxnRequest {
-                    condition: vec![
-                        txn_cond_seq(name_key, Eq, share_id_seq),
-                        txn_cond_seq(&id_key, Eq, share_meta_seq),
-                        txn_cond_seq(&share_account_key, Eq, 0),
-                    ],
-                    if_then: vec![
-                        txn_op_put(&id_key, serialize_struct(&share_meta)?), /* (share_id) -> share_meta */
-                        txn_op_put(&share_account_key, serialize_struct(&share_account_meta)?), /* (account, share_id) -> share_account_meta */
-                    ],
+                    condition,
+                    if_then,
                     else_then: vec![],
                 };
 
@@ -372,88 +398,109 @@ impl<KV: KVApi> ShareApi for KV {
                     name = debug(&name_key),
                     id = debug(&id_key),
                     succ = display(succ),
-                    "add_share_account"
+                    "add_share_accounts"
                 );
 
                 if succ {
-                    return Ok(AddShareAccountReply { share_id });
+                    return Ok(AddShareAccountsReply {});
                 }
             }
         }
 
         Err(MetaError::AppError(AppError::TxnRetryMaxTimes(
-            TxnRetryMaxTimes::new("add_share_account", TXN_MAX_RETRY_TIMES),
+            TxnRetryMaxTimes::new("add_share_accounts", TXN_MAX_RETRY_TIMES),
         )))
     }
 
-    async fn remove_share_account(
+    async fn remove_share_accounts(
         &self,
-        req: RemoveShareAccountReq,
-    ) -> MetaResult<RemoveShareAccountReply> {
+        req: RemoveShareAccountsReq,
+    ) -> MetaResult<RemoveShareAccountsReply> {
         debug!(req = debug(&req), "ShareApi: {}", func_name!());
 
-        let share_id = req.share_id;
+        let name_key = &req.share_name;
         let mut retry = 0;
-
-        let share_account_key = ShareAccountNameIdent {
-            account: req.account.clone(),
-            share_id: req.share_id,
-        };
-        let id_key = ShareId { share_id };
 
         while retry < TXN_MAX_RETRY_TIMES {
             retry += 1;
 
-            let res = get_share_meta_by_id_or_err(
+            let res = get_share_or_err(
                 self,
-                share_id,
-                format!("remove_share_account: {}", share_id),
+                name_key,
+                format!("remove_share_accounts: {}", &name_key),
             )
             .await;
 
-            let (share_meta_seq, mut share_meta) = match res {
+            let (_share_id_seq, share_id, share_meta_seq, mut share_meta) = match res {
                 Ok(x) => x,
                 Err(e) => {
+                    if let MetaError::AppError(AppError::UnknownShare(_)) = e {
+                        if req.if_exists {
+                            return Ok(RemoveShareAccountsReply {});
+                        }
+                    }
                     return Err(e);
                 }
             };
 
-            if !share_meta.has_account(&req.account) {
-                return Err(MetaError::AppError(AppError::UnknownShareAccount(
-                    UnknownShareAccount::new(req.account, share_id, "unknown share account"),
-                )));
+            let mut remove_share_account_keys_and_seqs = vec![];
+            for account in req.accounts.iter() {
+                if share_meta.has_account(account) {
+                    let share_account_key = ShareAccountNameIdent {
+                        account: account.clone(),
+                        share_id,
+                    };
+
+                    let res = get_share_account_meta_or_err(
+                        self,
+                        &share_account_key,
+                        format!("remove_share_accounts: {}", share_id),
+                    )
+                    .await;
+
+                    let (share_meta_account_seq, _share_account_meta) = match res {
+                        Ok(x) => x,
+                        Err(e) => {
+                            return Err(e);
+                        }
+                    };
+
+                    remove_share_account_keys_and_seqs
+                        .push((share_account_key, share_meta_account_seq));
+                }
             }
 
-            let res = get_share_account_meta_or_err(
-                self,
-                &share_account_key,
-                format!("remove_share_account: {}", share_id),
-            )
-            .await;
-
-            let (share_meta_account_seq, _share_account_meta) = match res {
-                Ok(x) => x,
-                Err(e) => {
-                    return Err(e);
-                }
-            };
+            if remove_share_account_keys_and_seqs.is_empty() {
+                return Err(MetaError::AppError(AppError::UnknownShareAccounts(
+                    UnknownShareAccounts::new(req.accounts, share_id, "unknown share account"),
+                )));
+            }
 
             // Remove share account by these operations:
             // mod share_meta delete account
             // del (account, share_id)
             // return share_id
             {
-                share_meta.del_account(&req.account);
+                let id_key = ShareId { share_id };
+                let mut condition = vec![txn_cond_seq(&id_key, Eq, share_meta_seq)];
+                let mut if_then = vec![];
+
+                for share_account_key_and_seq in remove_share_account_keys_and_seqs.iter() {
+                    condition.push(txn_cond_seq(
+                        &share_account_key_and_seq.0,
+                        Eq,
+                        share_account_key_and_seq.1,
+                    ));
+
+                    if_then.push(txn_op_del(&share_account_key_and_seq.0)); // del (account, share_id)
+
+                    share_meta.del_account(&share_account_key_and_seq.0.account);
+                }
+                if_then.push(txn_op_put(&id_key, serialize_struct(&share_meta)?)); /* (share_id) -> share_meta */
 
                 let txn_req = TxnRequest {
-                    condition: vec![
-                        txn_cond_seq(&id_key, Eq, share_meta_seq),
-                        txn_cond_seq(&share_account_key, Eq, share_meta_account_seq),
-                    ],
-                    if_then: vec![
-                        txn_op_put(&id_key, serialize_struct(&share_meta)?), /* (share_id) -> share_meta */
-                        txn_op_del(&share_account_key), // del (account, share_id)
-                    ],
+                    condition,
+                    if_then,
                     else_then: vec![],
                 };
 
@@ -462,17 +509,17 @@ impl<KV: KVApi> ShareApi for KV {
                 debug!(
                     id = debug(&id_key),
                     succ = display(succ),
-                    "remove_share_account"
+                    "remove_share_accounts"
                 );
 
                 if succ {
-                    return Ok(RemoveShareAccountReply {});
+                    return Ok(RemoveShareAccountsReply {});
                 }
             }
         }
 
         Err(MetaError::AppError(AppError::TxnRetryMaxTimes(
-            TxnRetryMaxTimes::new("remove_share_account", TXN_MAX_RETRY_TIMES),
+            TxnRetryMaxTimes::new("remove_share_accounts", TXN_MAX_RETRY_TIMES),
         )))
     }
 
@@ -945,7 +992,7 @@ pub(crate) async fn get_share_account_meta_or_err(
 
 /// Return OK if a share_id or share_account_meta exists by checking the seq.
 ///
-/// Otherwise returns UnknownShareAccount error
+/// Otherwise returns UnknownShareAccounts error
 fn share_account_meta_has_to_exist(
     seq: u64,
     name_key: &ShareAccountNameIdent,
@@ -954,9 +1001,9 @@ fn share_account_meta_has_to_exist(
     if seq == 0 {
         debug!(seq, ?name_key, "share account does not exist");
 
-        Err(MetaError::AppError(AppError::UnknownShareAccount(
-            UnknownShareAccount::new(
-                &name_key.account,
+        Err(MetaError::AppError(AppError::UnknownShareAccounts(
+            UnknownShareAccounts::new(
+                vec![name_key.account.clone()],
                 name_key.share_id,
                 format!("{}: {}", msg, name_key),
             ),
