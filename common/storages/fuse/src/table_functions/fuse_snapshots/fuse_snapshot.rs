@@ -39,13 +39,16 @@ impl FuseSnapshot {
         Self { ctx, table }
     }
 
-    pub fn new_stream(
+    /// Get table snapshot history as stream of data block
+    /// For cases that caller inside sync context, i.e. using async catalog api is not convenient
+    pub fn new_snapshot_history_stream(
         ctx: Arc<dyn TableContext>,
         database_name: String,
         table_name: String,
         catalog_name: String,
         limit: Option<usize>,
     ) -> SendableDataBlockStream {
+        // prepare the future that resolved the table
         let table_instance = {
             let ctx = ctx.clone();
             async move {
@@ -62,19 +65,24 @@ impl FuseSnapshot {
             }
         };
 
+        // chain the future with a stream of snapshot, for the resolved table,  as data blocks
         let resolved_table = futures::stream::once(table_instance);
         let stream = resolved_table.map(move |item: Result<_>| match item {
             Ok(table) => {
                 let fuse_snapshot = FuseSnapshot::new(ctx.clone(), table);
-                Ok(fuse_snapshot.get_history(limit)?)
+                Ok(fuse_snapshot.get_history_stream_as_blocks(limit)?)
             }
             Err(e) => Err(e),
         });
 
+        // flat it into single stream of data blocks
         stream.try_flatten().boxed()
     }
 
-    pub fn get_history(self, limit: Option<usize>) -> Result<SendableDataBlockStream> {
+    pub fn get_history_stream_as_blocks(
+        self,
+        limit: Option<usize>,
+    ) -> Result<SendableDataBlockStream> {
         let tbl = FuseTable::try_from_table(self.table.as_ref())?;
         let snapshot_location = tbl.snapshot_loc();
         let meta_location_generator = tbl.meta_location_generator.clone();
@@ -86,6 +94,8 @@ impl FuseSnapshot {
                 snapshot_version,
                 tbl.meta_location_generator().clone(),
             );
+
+            // map snapshot to data block
             let block_stream = snapshot_stream.map(move |snapshot| match snapshot {
                 Ok(snapshot) => Self::snapshots_to_block(
                     &meta_location_generator,
@@ -94,13 +104,18 @@ impl FuseSnapshot {
                 ),
                 Err(e) => Err(e),
             });
+
+            // limit if necessary
             if let Some(limit) = limit {
                 Ok(block_stream.take(limit).boxed())
             } else {
                 Ok(block_stream.boxed())
             }
         } else {
-            Ok(DataBlockStream::create(FuseSnapshot::schema(), None, vec![]).boxed())
+            // to carries the schema info back to caller, instead of an empty stream,
+            // a stream of single empty block item returned
+            let data_block = DataBlock::empty_with_schema(FuseSnapshot::schema());
+            Ok(DataBlockStream::create(FuseSnapshot::schema(), None, vec![data_block]).boxed())
         }
     }
 

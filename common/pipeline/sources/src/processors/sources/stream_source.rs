@@ -26,13 +26,21 @@ use futures::StreamExt;
 use crate::processors::sources::AsyncSource;
 use crate::processors::sources::AsyncSourcer;
 
-pub struct StreamSource {
+/// AsyncSource backed by a stream
+pub struct AsyncStreamSource<const SKIP_EMPTY_DATA_BLOCK: bool> {
     stream: Option<SendableDataBlockStream>,
 }
 
-impl StreamSource {
+/// AsyncSource backed by a stream, and will skip empty data blocks
+pub type StreamSource = AsyncStreamSource<true>;
+
+/// AsyncSource backed by a stream, which will NOT skip empty data blocks.
+/// Needed in situations where an empty block with schema should be returned
+pub type StreamSourceNoSkipEmpty = AsyncStreamSource<false>;
+
+impl<const T: bool> AsyncStreamSource<T> {
     pub fn new(stream: Option<SendableDataBlockStream>) -> Self {
-        StreamSource { stream }
+        AsyncStreamSource { stream }
     }
 
     pub fn create(
@@ -40,13 +48,14 @@ impl StreamSource {
         stream: Option<SendableDataBlockStream>,
         out: Arc<OutputPort>,
     ) -> Result<ProcessorPtr> {
-        AsyncSourcer::create(ctx, out, StreamSource { stream })
+        AsyncSourcer::create(ctx, out, AsyncStreamSource::<T> { stream })
     }
 }
 
 #[async_trait::async_trait]
-impl AsyncSource for StreamSource {
+impl<const T: bool> AsyncSource for AsyncStreamSource<T> {
     const NAME: &'static str = "stream source";
+    const SKIP_EMPTY_DATA_BLOCK: bool = T;
 
     #[async_trait::unboxed_simple]
     async fn generate(&mut self) -> Result<Option<DataBlock>> {

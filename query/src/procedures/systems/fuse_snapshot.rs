@@ -54,12 +54,7 @@ impl ProcedureStream for FuseSnapshotProcedure {
         let database_name = args[0].clone();
         let table_name = args[1].clone();
 
-        let limit = if args.len() > 2 {
-            let size = args[2].parse::<usize>()?;
-            Some(size)
-        } else {
-            None
-        };
+        let limit = args.get(2).map(|arg| arg.parse::<usize>()).transpose()?;
         let tbl = ctx
             .get_catalog(&catalog_name)?
             .get_table(
@@ -69,7 +64,7 @@ impl ProcedureStream for FuseSnapshotProcedure {
             )
             .await?;
 
-        FuseSnapshot::new(ctx, tbl).get_history(limit)
+        FuseSnapshot::new(ctx, tbl).get_history_stream_as_blocks(limit)
     }
 
     fn schema(&self) -> Arc<DataSchema> {

@@ -17,8 +17,8 @@ use std::sync::Arc;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_fuse_meta::meta::TableSnapshot;
-use futures_util::StreamExt;
+use common_fuse_meta::meta::Location;
+use futures_util::TryStreamExt;
 
 use crate::io::MetaReaders;
 use crate::sessions::TableContext;
@@ -56,15 +56,9 @@ impl<'a> FuseSegment<'a> {
             );
 
             // find the element by snapshot_id in stream
-            while let Some(item) = snapshot_stream.next().await {
-                match item {
-                    Ok(snapshot)
-                        if snapshot.snapshot_id.simple().to_string() == self.snapshot_id =>
-                    {
-                        return self.segments_to_block(snapshot).await;
-                    }
-                    Err(e) => return Err(e),
-                    _ => (),
+            while let Some(snapshot) = snapshot_stream.try_next().await? {
+                if snapshot.snapshot_id.simple().to_string() == self.snapshot_id {
+                    return self.segments_to_block(&snapshot.segments).await;
                 }
             }
         }
@@ -72,8 +66,8 @@ impl<'a> FuseSegment<'a> {
         Ok(DataBlock::empty_with_schema(Self::schema()))
     }
 
-    async fn segments_to_block(&self, snapshot: Arc<TableSnapshot>) -> Result<DataBlock> {
-        let len = snapshot.segments.len();
+    async fn segments_to_block(&self, segments: &[Location]) -> Result<DataBlock> {
+        let len = segments.len();
         let mut format_versions: Vec<u64> = Vec::with_capacity(len);
         let mut block_count: Vec<u64> = Vec::with_capacity(len);
         let mut row_count: Vec<u64> = Vec::with_capacity(len);
@@ -81,7 +75,7 @@ impl<'a> FuseSegment<'a> {
         let mut uncompressed: Vec<u64> = Vec::with_capacity(len);
         let mut file_location: Vec<Vec<u8>> = Vec::with_capacity(len);
 
-        for segment_location in &snapshot.segments {
+        for segment_location in segments {
             let (location, version) = (segment_location.0.clone(), segment_location.1);
             let reader = MetaReaders::segment_info_reader(self.ctx.as_ref());
             let segment_info = reader.read(&location, None, version).await?;

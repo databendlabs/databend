@@ -20,7 +20,7 @@ use common_exception::Result;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
-use common_pipeline_sources::processors::sources::StreamSource;
+use common_pipeline_sources::processors::sources::StreamSourceNoSkipEmpty;
 use common_planners::Expression;
 use common_planners::Extras;
 use common_planners::Partitions;
@@ -116,9 +116,15 @@ impl Table for FuseSnapshotTable {
         let database_name = self.arg_database_name.to_owned();
         let table_name = self.arg_table_name.to_owned();
         let catalog_name = CATALOG_DEFAULT.to_owned();
-        let snapshot_stream =
-            FuseSnapshot::new_stream(ctx.clone(), database_name, table_name, catalog_name, limit);
-        let source = StreamSource::create(ctx, Some(snapshot_stream), output.clone())?;
+        let snapshot_stream = FuseSnapshot::new_snapshot_history_stream(
+            ctx.clone(),
+            database_name,
+            table_name,
+            catalog_name,
+            limit,
+        );
+
+        let source = StreamSourceNoSkipEmpty::create(ctx, Some(snapshot_stream), output.clone())?;
 
         pipeline.add_pipe(Pipe::SimplePipe {
             inputs_port: vec![],
