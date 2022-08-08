@@ -216,6 +216,39 @@ impl ShareApiTestSuite {
         let create_on = Utc::now();
         let if_exists = true;
 
+        info!("--- add and remove account with not exist share");
+        {
+            let req = AddShareAccountsReq {
+                share_name: share_name.clone(),
+                share_on,
+                if_exists: false,
+                accounts: vec![account.to_string()],
+            };
+
+            // get share meta and check account has been added
+            let res = mt.add_share_accounts(req).await;
+            assert!(res.is_err());
+            let err = res.unwrap_err();
+            assert_eq!(
+                ErrorCode::UnknownShare("").code(),
+                ErrorCode::from(err).code()
+            );
+
+            let req = RemoveShareAccountsReq {
+                share_name: share_name.clone(),
+                if_exists: false,
+                accounts: vec![account2.to_string()],
+            };
+
+            let res = mt.remove_share_accounts(req).await;
+            assert!(res.is_err());
+            let err = res.unwrap_err();
+            assert_eq!(
+                ErrorCode::UnknownShare("").code(),
+                ErrorCode::from(err).code()
+            );
+        }
+
         info!("--- prepare share1");
         {
             let req = CreateShareReq {

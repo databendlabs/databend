@@ -350,7 +350,7 @@ impl<KV: KVApi> ShareApi for KV {
                 return Err(MetaError::AppError(AppError::ShareAccountsAlreadyExists(
                     ShareAccountsAlreadyExists::new(
                         req.share_name.share_name,
-                        req.accounts,
+                        &req.accounts,
                         "share accounts already exists",
                     ),
                 )));
@@ -472,7 +472,7 @@ impl<KV: KVApi> ShareApi for KV {
 
             if remove_share_account_keys_and_seqs.is_empty() {
                 return Err(MetaError::AppError(AppError::UnknownShareAccounts(
-                    UnknownShareAccounts::new(req.accounts, share_id, "unknown share account"),
+                    UnknownShareAccounts::new(&req.accounts, share_id, "unknown share account"),
                 )));
             }
 
@@ -1003,7 +1003,7 @@ fn share_account_meta_has_to_exist(
 
         Err(MetaError::AppError(AppError::UnknownShareAccounts(
             UnknownShareAccounts::new(
-                vec![name_key.account.clone()],
+                &[name_key.account.clone()],
                 name_key.share_id,
                 format!("{}: {}", msg, name_key),
             ),

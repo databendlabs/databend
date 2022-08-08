@@ -293,7 +293,7 @@ pub struct ShareAccountsAlreadyExists {
 impl ShareAccountsAlreadyExists {
     pub fn new(
         share_name: impl Into<String>,
-        accounts: impl Into<Vec<String>>,
+        accounts: &[String],
         context: impl Into<String>,
     ) -> Self {
         Self {
@@ -313,11 +313,7 @@ pub struct UnknownShareAccounts {
 }
 
 impl UnknownShareAccounts {
-    pub fn new(
-        accounts: impl Into<Vec<String>>,
-        share_id: u64,
-        context: impl Into<String>,
-    ) -> Self {
+    pub fn new(accounts: &[String], share_id: u64, context: impl Into<String>) -> Self {
         Self {
             accounts: accounts.into(),
             share_id,
