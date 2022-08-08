@@ -15,6 +15,9 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use common_meta_app::share::ShareGrantObjectName;
+use common_meta_app::share::ShareGrantObjectPrivilege;
+
 use crate::ast::Identifier;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -51,6 +54,44 @@ impl Display for DropShareStmt<'_> {
             write!(f, "IF EXISTS ")?;
         }
         write!(f, "{}", self.share)?;
+
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GrantShareObjectStmt<'a> {
+    pub share: Identifier<'a>,
+    pub object: ShareGrantObjectName,
+    pub privilege: ShareGrantObjectPrivilege,
+}
+
+impl Display for GrantShareObjectStmt<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "GRANT {} ON {} TO SHARE {}",
+            self.privilege, self.object, self.share
+        )?;
+
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RevokeShareObjectStmt<'a> {
+    pub share: Identifier<'a>,
+    pub object: ShareGrantObjectName,
+    pub privilege: ShareGrantObjectPrivilege,
+}
+
+impl Display for RevokeShareObjectStmt<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "REVOKE {} ON {} FROM SHARE {}",
+            self.privilege, self.object, self.share
+        )?;
 
         Ok(())
     }

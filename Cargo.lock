@@ -970,6 +970,7 @@ dependencies = [
  "common-datavalues",
  "common-exception",
  "common-functions",
+ "common-meta-app",
  "common-meta-types",
  "fast-float",
  "goldenfile",

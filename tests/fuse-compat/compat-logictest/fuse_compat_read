@@ -1,6 +1,80 @@
 statement query I
-select a+b from t;
+select c_bool      FROM fuse_compat_table;
 
 ----
-2
-4
+0
+
+statement query I
+select c_tinyint   FROM fuse_compat_table;
+
+----
+127
+
+statement query I
+select c_smallint  FROM fuse_compat_table;
+
+----
+3267
+
+statement query I
+select c_int       FROM fuse_compat_table;
+
+----
+2147483647
+
+
+statement query I
+select c_bigint    FROM fuse_compat_table;
+
+----
+9223372036854775807
+
+
+statement query F
+select c_float     FROM fuse_compat_table;
+
+----
+3.4
+
+statement query F
+select c_double    FROM fuse_compat_table;
+
+----
+1.7
+
+statement query T
+select c_date      FROM fuse_compat_table;
+
+----
+9999-12-31
+
+statement query T
+select c_timestamp FROM fuse_compat_table;
+
+----
+1991-01-01 00:00:00.000000
+
+statement query T
+select c_varchar   FROM fuse_compat_table;
+
+----
+varchar
+
+
+statement query T
+select c_array     FROM fuse_compat_table;
+
+----
+[1,2,3,["a","b","c"]]
+
+statement query T
+select c_object    FROM fuse_compat_table;
+
+----
+{"a":1,"b":{"c":2}}
+
+statement query T
+select c_variant   FROM fuse_compat_table;
+
+----
+[1,{"a":1,"b":{"c":2}}]

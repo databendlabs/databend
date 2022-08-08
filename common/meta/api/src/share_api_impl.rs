@@ -476,7 +476,10 @@ impl<KV: KVApi> ShareApi for KV {
         )))
     }
 
-    async fn grant_object(&self, req: GrantShareObjectReq) -> MetaResult<GrantShareObjectReply> {
+    async fn grant_share_object(
+        &self,
+        req: GrantShareObjectReq,
+    ) -> MetaResult<GrantShareObjectReply> {
         debug!(req = debug(&req), "ShareApi: {}", func_name!());
 
         let share_name_key = &req.share_name;
@@ -486,7 +489,7 @@ impl<KV: KVApi> ShareApi for KV {
             let res = get_share_or_err(
                 self,
                 share_name_key,
-                format!("grant_object: {}", &share_name_key),
+                format!("grant_share_object: {}", &share_name_key),
             )
             .await;
 
@@ -545,7 +548,7 @@ impl<KV: KVApi> ShareApi for KV {
                     name = debug(&share_name_key),
                     id = debug(&id_key),
                     succ = display(succ),
-                    "grant_object"
+                    "grant_share_object"
                 );
 
                 if succ {
@@ -555,11 +558,14 @@ impl<KV: KVApi> ShareApi for KV {
         }
 
         Err(MetaError::AppError(AppError::TxnRetryMaxTimes(
-            TxnRetryMaxTimes::new("grant_object", TXN_MAX_RETRY_TIMES),
+            TxnRetryMaxTimes::new("grant_share_object", TXN_MAX_RETRY_TIMES),
         )))
     }
 
-    async fn revoke_object(&self, req: RevokeShareObjectReq) -> MetaResult<RevokeShareObjectReply> {
+    async fn revoke_share_object(
+        &self,
+        req: RevokeShareObjectReq,
+    ) -> MetaResult<RevokeShareObjectReply> {
         debug!(req = debug(&req), "ShareApi: {}", func_name!());
 
         let share_name_key = &req.share_name;
@@ -569,7 +575,7 @@ impl<KV: KVApi> ShareApi for KV {
             let res = get_share_or_err(
                 self,
                 share_name_key,
-                format!("revoke_object: {}", &share_name_key),
+                format!("revoke_share_object: {}", &share_name_key),
             )
             .await;
 
@@ -634,7 +640,7 @@ impl<KV: KVApi> ShareApi for KV {
                     name = debug(&share_name_key),
                     id = debug(&id_key),
                     succ = display(succ),
-                    "revoke_object"
+                    "revoke_share_object"
                 );
 
                 if succ {
@@ -644,7 +650,7 @@ impl<KV: KVApi> ShareApi for KV {
         }
 
         Err(MetaError::AppError(AppError::TxnRetryMaxTimes(
-            TxnRetryMaxTimes::new("revoke_object", TXN_MAX_RETRY_TIMES),
+            TxnRetryMaxTimes::new("revoke_share_object", TXN_MAX_RETRY_TIMES),
         )))
     }
 
@@ -659,7 +665,7 @@ impl<KV: KVApi> ShareApi for KV {
         let res = get_share_or_err(
             self,
             share_name_key,
-            format!("revoke_object: {}", &share_name_key),
+            format!("revoke_share_object: {}", &share_name_key),
         )
         .await;
 
