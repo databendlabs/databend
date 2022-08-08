@@ -12,9 +12,11 @@ use crate::api::rpc::exchange::exchange_params::{ExchangeParams, SerializeParams
 use crate::sessions::QueryContext;
 use common_exception::{ErrorCode, Result};
 use common_pipeline_core::Pipeline;
+use crate::api::rpc::exchange::exchange_transform_merge::ExchangeMergeTransform;
 use crate::api::rpc::flight_client::FlightExchange;
 use crate::api::rpc::packets::{PrecommitBlock, ProgressInfo};
 use crate::clusters::ClusterHelper;
+use crate::sql::executor::PhysicalPlan::ExchangeSource;
 
 struct OutputData {
     pub data_block: Option<DataBlock>,
@@ -57,15 +59,25 @@ impl ExchangeTransform {
 
     pub fn via(ctx: &Arc<QueryContext>, params: &ExchangeParams, pipeline: &mut Pipeline) -> Result<()> {
         match params {
-            ExchangeParams::MergeExchange(params) => match params.destination_id == ctx.get_cluster().local_id() {
-                true => Ok(()), // do nothing
-                false => Err(ErrorCode::LogicalError(format!(
-                    "Locally depends on merge exchange, but the localhost is not a coordination node. executor: {}, destination_id: {}, fragment id: {}",
-                    ctx.get_cluster().local_id(),
-                    params.destination_id,
-                    params.fragment_id
-                ))),
-            },
+            ExchangeParams::MergeExchange(params) => {
+                if params.destination_id != ctx.get_cluster().local_id() {
+                    return Err(ErrorCode::LogicalError(format!(
+                        "Locally depends on merge exchange, but the localhost is not a coordination node. executor: {}, destination_id: {}, fragment id: {}",
+                        ctx.get_cluster().local_id(),
+                        params.destination_id,
+                        params.fragment_id
+                    )));
+                }
+
+                pipeline.add_transform(|transform_input_port, transform_output_port| {
+                    ExchangeMergeTransform::try_create(
+                        ctx,
+                        transform_input_port,
+                        transform_output_port,
+                        &params,
+                    )
+                })
+            }
             ExchangeParams::ShuffleExchange(params) => {
                 pipeline.add_transform(|transform_input_port, transform_output_port| {
                     ExchangeTransform::try_create(

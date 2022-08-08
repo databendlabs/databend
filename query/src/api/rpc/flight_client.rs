@@ -15,7 +15,7 @@
 use std::convert::TryInto;
 use std::marker::PhantomData;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 use async_channel::{Receiver, Sender, TryRecvError};
 use futures_util::StreamExt;
@@ -139,6 +139,8 @@ impl FlightExchange {
             response_tx,
             request_rx: rx,
             state: Arc::new(ChannelState::create()),
+            is_closed_request: AtomicBool::new(false),
+            is_closed_response: AtomicBool::new(false),
         })
     }
 
@@ -159,6 +161,8 @@ impl FlightExchange {
             request_rx,
             response_tx,
             state: Arc::new(ChannelState::create()),
+            is_closed_request: AtomicBool::new(false),
+            is_closed_response: AtomicBool::new(false),
         })
     }
 }
@@ -221,6 +225,8 @@ impl ChannelState {
 
 pub struct ClientFlightExchange {
     state: Arc<ChannelState>,
+    is_closed_request: AtomicBool,
+    is_closed_response: AtomicBool,
     response_tx: Sender<FlightData>,
     request_rx: Receiver<std::result::Result<FlightData, Status>>,
 }
@@ -255,14 +261,18 @@ impl ClientFlightExchange {
     }
 
     pub fn close_request(&self) {
-        if self.state.request_count.fetch_sub(1, Ordering::AcqRel) == 1 {
-            self.request_rx.close();
+        if !self.is_closed_request.fetch_or(true, Ordering::SeqCst) {
+            if self.state.request_count.fetch_sub(1, Ordering::AcqRel) == 1 {
+                self.request_rx.close();
+            }
         }
     }
 
     pub fn close_response(&self) {
-        if self.state.response_count.fetch_sub(1, Ordering::AcqRel) == 1 {
-            self.response_tx.close();
+        if !self.is_closed_response.fetch_or(true, Ordering::SeqCst) {
+            if self.state.response_count.fetch_sub(1, Ordering::AcqRel) == 1 {
+                self.response_tx.close();
+            }
         }
     }
 }
@@ -276,24 +286,32 @@ impl Clone for ClientFlightExchange {
             state: self.state.clone(),
             request_rx: self.request_rx.clone(),
             response_tx: self.response_tx.clone(),
+            is_closed_request: AtomicBool::new(false),
+            is_closed_response: AtomicBool::new(false),
         }
     }
 }
 
 impl Drop for ClientFlightExchange {
     fn drop(&mut self) {
-        if self.state.request_count.fetch_sub(1, Ordering::AcqRel) == 1 {
-            self.request_rx.close();
+        if !self.is_closed_request.fetch_or(true, Ordering::SeqCst) {
+            if self.state.request_count.fetch_sub(1, Ordering::AcqRel) == 1 {
+                self.request_rx.close();
+            }
         }
 
-        if self.state.response_count.fetch_sub(1, Ordering::AcqRel) == 1 {
-            self.response_tx.close();
+        if !self.is_closed_response.fetch_or(true, Ordering::SeqCst) {
+            if self.state.response_count.fetch_sub(1, Ordering::AcqRel) == 1 {
+                self.response_tx.close();
+            }
         }
     }
 }
 
 pub struct ServerFlightExchange {
     state: Arc<ChannelState>,
+    is_closed_request: AtomicBool,
+    is_closed_response: AtomicBool,
     request_rx: Receiver<std::result::Result<FlightData, Status>>,
     response_tx: Sender<std::result::Result<FlightData, Status>>,
 }
@@ -307,6 +325,8 @@ impl Clone for ServerFlightExchange {
             state: self.state.clone(),
             request_rx: self.request_rx.clone(),
             response_tx: self.response_tx.clone(),
+            is_closed_request: AtomicBool::new(false),
+            is_closed_response: AtomicBool::new(false),
         }
     }
 }
@@ -353,14 +373,18 @@ impl ServerFlightExchange {
     }
 
     pub fn close_request(&self) {
-        if self.state.request_count.fetch_sub(1, Ordering::AcqRel) == 1 {
-            self.request_rx.close();
+        if !self.is_closed_request.fetch_or(true, Ordering::SeqCst) {
+            if self.state.request_count.fetch_sub(1, Ordering::AcqRel) == 1 {
+                self.request_rx.close();
+            }
         }
     }
 
     pub fn close_response(&self) {
-        if self.state.response_count.fetch_sub(1, Ordering::AcqRel) == 1 {
-            self.response_tx.close();
+        if !self.is_closed_response.fetch_or(true, Ordering::SeqCst) {
+            if self.state.response_count.fetch_sub(1, Ordering::AcqRel) == 1 {
+                self.response_tx.close();
+            }
         }
     }
 }

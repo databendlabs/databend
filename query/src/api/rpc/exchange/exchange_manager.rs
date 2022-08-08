@@ -278,15 +278,14 @@ impl QueryCoordinator {
     pub fn get_flight_exchanges(&self, params: &ExchangeParams) -> Result<Vec<FlightExchange>> {
         match params {
             ExchangeParams::MergeExchange(params) => {
-                let exchange_key = (params.destination_id.clone(), params.fragment_id);
-                Ok(vec![match self.exchanges.get(&exchange_key) {
-                    None => Err(ErrorCode::UnknownFragmentExchange(format!(
-                        "Unknown fragment exchange channel, {}, {}",
-                        params.destination_id,
-                        params.fragment_id
-                    ))),
-                    Some(exchange_channel) => Ok(exchange_channel.clone()),
-                }?])
+                let mut exchanges = vec![];
+                for ((_target, fragment), exchange) in &self.exchanges {
+                    if *fragment == params.fragment_id {
+                        exchanges.push(exchange.clone());
+                    }
+                }
+
+                Ok(exchanges)
             }
             ExchangeParams::ShuffleExchange(params) => {
                 let mut exchanges = Vec::with_capacity(params.destination_ids.len());
