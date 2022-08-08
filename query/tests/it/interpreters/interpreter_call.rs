@@ -15,8 +15,6 @@
 use common_base::base::tokio;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_types::GrantObject;
-use common_meta_types::UserGrantSet;
 use common_meta_types::UserOptionFlag;
 use databend_query::interpreters::*;
 use databend_query::sessions::TableContext;
