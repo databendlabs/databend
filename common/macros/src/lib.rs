@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![deny(unused_crate_dependencies)]
+
 mod async_entrypoint;
 
 use proc_macro::TokenStream;
