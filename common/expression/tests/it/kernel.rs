@@ -1,0 +1,155 @@
+// Copyright 2022 Datafuse Labs.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+use std::io::Write;
+
+use common_expression::types::nullable::NullableColumn;
+use common_expression::types::string::StringColumn;
+use common_expression::Chunk;
+use common_expression::Column;
+use common_expression::Value;
+use goldenfile::Mint;
+
+#[test]
+pub fn test_pass() {
+    let mut mint = Mint::new("tests/it/testdata");
+    let mut file = mint.new_goldenfile("kernel-pass.txt").unwrap();
+
+    run_filter(
+        &mut file,
+        Column::Boolean(vec![true, false, false, false, true].into()),
+        &[
+            Column::Int32(vec![0, 1, 2, 3, -4].into()),
+            Column::Nullable(Box::new(NullableColumn {
+                column: Column::UInt8(vec![10, 11, 12, 13, 14].into()),
+                validity: vec![false, true, false, false, false].into(),
+            })),
+            Column::Null { len: 5 },
+            Column::Nullable(Box::new(NullableColumn {
+                column: Column::String(StringColumn {
+                    data: "abcde".as_bytes().to_vec().into(),
+                    offsets: vec![0, 1, 2, 3, 4, 5].into(),
+                }),
+                validity: vec![true, true, false, false, false].into(),
+            })),
+        ],
+    );
+
+    run_filter(
+        &mut file,
+        Column::Nullable(Box::new(NullableColumn {
+            column: Column::Boolean(vec![true, true, false, true, true].into()),
+            validity: vec![false, true, true, false, false].into(),
+        })),
+        &[
+            Column::Int32(vec![0, 1, 2, 3, -4].into()),
+            Column::Nullable(Box::new(NullableColumn {
+                column: Column::UInt8(vec![10, 11, 12, 13, 14].into()),
+                validity: vec![false, true, false, false, false].into(),
+            })),
+            Column::Null { len: 5 },
+            Column::Nullable(Box::new(NullableColumn {
+                column: Column::String(StringColumn {
+                    data: "xyzab".as_bytes().to_vec().into(),
+                    offsets: vec![0, 1, 2, 3, 4, 5].into(),
+                }),
+                validity: vec![false, true, true, false, false].into(),
+            })),
+        ],
+    );
+
+    run_concat(&mut file, vec![
+        vec![
+            Column::Int32(vec![0, 1, 2, 3, -4].into()),
+            Column::Nullable(Box::new(NullableColumn {
+                column: Column::UInt8(vec![10, 11, 12, 13, 14].into()),
+                validity: vec![false, true, false, false, false].into(),
+            })),
+            Column::Null { len: 5 },
+            Column::EmptyArray { len: 5 },
+            Column::Nullable(Box::new(NullableColumn {
+                column: Column::String(StringColumn {
+                    data: "xyzab".as_bytes().to_vec().into(),
+                    offsets: vec![0, 1, 2, 3, 4, 5].into(),
+                }),
+                validity: vec![false, true, true, false, false].into(),
+            })),
+        ],
+        vec![
+            Column::Int32(vec![5, 6].into()),
+            Column::Nullable(Box::new(NullableColumn {
+                column: Column::UInt8(vec![15, 16].into()),
+                validity: vec![false, true].into(),
+            })),
+            Column::Null { len: 2 },
+            Column::EmptyArray { len: 2 },
+            Column::Nullable(Box::new(NullableColumn {
+                column: Column::String(StringColumn {
+                    data: "xy".as_bytes().to_vec().into(),
+                    offsets: vec![0, 1, 2].into(),
+                }),
+                validity: vec![false, true].into(),
+            })),
+        ],
+    ]);
+}
+
+fn run_filter(file: &mut impl Write, predicate: Column, columns: &[Column]) {
+    let len = columns.get(0).map(|c| c.len()).unwrap_or(1);
+    let columns = columns.iter().map(|c| Value::Column(c.clone())).collect();
+
+    let chunk = Chunk::new(columns, len);
+
+    let predicate = Value::Column(predicate);
+    let result = chunk.clone().filter(&predicate);
+
+    match result {
+        Ok(result_chunk) => {
+            writeln!(file, "Filter:         {predicate:?}").unwrap();
+            writeln!(file, "Source:\n{chunk:?}").unwrap();
+            writeln!(file, "Result:\n{result_chunk:?}").unwrap();
+            write!(file, "\n\n").unwrap();
+        }
+        Err(err) => {
+            writeln!(file, "error: {}\n", err.message()).unwrap();
+        }
+    }
+}
+
+fn run_concat(file: &mut impl Write, columns: Vec<Vec<Column>>) {
+    let chunks: Vec<Chunk> = columns
+        .iter()
+        .map(|cs| {
+            let num_rows = cs.get(0).map(|c| c.len()).unwrap_or(1);
+            let cs = cs.iter().map(|c| Value::Column(c.clone())).collect();
+            Chunk::new(cs, num_rows)
+        })
+        .collect();
+
+    let result = Chunk::concat(&chunks);
+
+    match result {
+        Ok(result_chunk) => {
+            for (i, c) in chunks.iter().enumerate() {
+                writeln!(file, "Concat-Column {}:", i).unwrap();
+                writeln!(file, "{:?}", c).unwrap();
+            }
+            writeln!(file, "Result:\n{result_chunk:?}").unwrap();
+            write!(file, "\n\n").unwrap();
+        }
+        Err(err) => {
+            writeln!(file, "error: {}\n", err.message()).unwrap();
+        }
+    }
+}
