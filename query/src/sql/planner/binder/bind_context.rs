@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_ast::ast::Identifier;
 use common_ast::ast::TableAlias;
+use common_ast::parser::token::Token;
 use common_ast::DisplayError;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
@@ -24,7 +24,9 @@ use common_exception::Result;
 
 use super::AggregateInfo;
 use crate::sql::common::IndexType;
+use crate::sql::normalize_identifier;
 use crate::sql::plans::Scalar;
+use crate::sql::NameResolutionContext;
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct ColumnBinding {
@@ -107,10 +109,14 @@ impl BindContext {
 
     /// Apply table alias like `SELECT * FROM t AS t1(a, b, c)`.
     /// This method will rename column bindings according to table alias.
-    pub fn apply_table_alias(&mut self, alias: &TableAlias) -> Result<()> {
+    pub fn apply_table_alias(
+        &mut self,
+        alias: &TableAlias,
+        name_resolution_ctx: &NameResolutionContext,
+    ) -> Result<()> {
         for column in self.columns.iter_mut() {
             column.database_name = None;
-            column.table_name = Some(alias.name.name.to_lowercase());
+            column.table_name = Some(normalize_identifier(&alias.name, name_resolution_ctx).name);
         }
 
         if alias.columns.len() > self.columns.len() {
@@ -120,7 +126,12 @@ impl BindContext {
                 alias.columns.len()
             )));
         }
-        for (index, column_name) in alias.columns.iter().map(ToString::to_string).enumerate() {
+        for (index, column_name) in alias
+            .columns
+            .iter()
+            .map(|ident| normalize_identifier(ident, name_resolution_ctx).name)
+            .enumerate()
+        {
             self.columns[index].column_name = column_name;
         }
         Ok(())
@@ -132,7 +143,8 @@ impl BindContext {
         &self,
         database: Option<&str>,
         table: Option<&str>,
-        column: &Identifier,
+        column: &str,
+        span: &Token<'_>,
         available_aliases: &[(String, Scalar)],
     ) -> Result<NameResolutionResult> {
         let mut result = vec![];
@@ -142,7 +154,7 @@ impl BindContext {
         loop {
             // TODO(leiysky): use `Identifier` for alias instead of raw string
             for (alias, scalar) in available_aliases {
-                if database.is_none() && table.is_none() && &column.name.to_lowercase() == alias {
+                if database.is_none() && table.is_none() && column == alias {
                     result.push(NameResolutionResult::Alias {
                         alias: alias.clone(),
                         scalar: scalar.clone(),
@@ -174,15 +186,11 @@ impl BindContext {
 
         if result.is_empty() {
             Err(ErrorCode::SemanticError(
-                column
-                    .span
-                    .display_error("column doesn't exist".to_string()),
+                span.display_error("column doesn't exist".to_string()),
             ))
         } else if result.len() > 1 {
             Err(ErrorCode::SemanticError(
-                column
-                    .span
-                    .display_error("column reference is ambiguous".to_string()),
+                span.display_error("column reference is ambiguous".to_string()),
             ))
         } else {
             Ok(result.remove(0))
@@ -192,7 +200,7 @@ impl BindContext {
     pub fn match_column_binding(
         database: Option<&str>,
         table: Option<&str>,
-        column: &Identifier,
+        column: &str,
         column_binding: &ColumnBinding,
     ) -> bool {
         match (
@@ -201,24 +209,21 @@ impl BindContext {
         ) {
             // No qualified table name specified
             ((None, _), (None, None)) | ((None, _), (None, Some(_)))
-                if column.name.to_lowercase() == column_binding.column_name =>
+                if column == column_binding.column_name =>
             {
                 true
             }
 
             // Qualified column reference without database name
             ((None, _), (Some(table), Some(table_name)))
-                if &table.to_lowercase() == table_name
-                    && column.name.to_lowercase() == column_binding.column_name =>
+                if table == table_name && column == column_binding.column_name =>
             {
                 true
             }
 
             // Qualified column reference with database name
             ((Some(db), Some(db_name)), (Some(table), Some(table_name)))
-                if &db.to_lowercase() == db_name
-                    && &table.to_lowercase() == table_name
-                    && column.name.to_lowercase() == column_binding.column_name =>
+                if db == db_name && table == table_name && column == column_binding.column_name =>
             {
                 true
             }

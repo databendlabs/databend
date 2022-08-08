@@ -21,6 +21,7 @@ use common_exception::Result;
 use crate::sessions::QueryContext;
 use crate::sql::planner::binder::BindContext;
 use crate::sql::planner::metadata::MetadataRef;
+use crate::sql::planner::semantic::NameResolutionContext;
 use crate::sql::planner::semantic::TypeChecker;
 use crate::sql::plans::Scalar;
 
@@ -28,6 +29,7 @@ use crate::sql::plans::Scalar;
 pub struct ScalarBinder<'a> {
     bind_context: &'a BindContext,
     ctx: Arc<QueryContext>,
+    name_resolution_ctx: &'a NameResolutionContext,
     metadata: MetadataRef,
     aliases: &'a [(String, Scalar)],
 }
@@ -36,12 +38,14 @@ impl<'a> ScalarBinder<'a> {
     pub fn new(
         bind_context: &'a BindContext,
         ctx: Arc<QueryContext>,
+        name_resolution_ctx: &'a NameResolutionContext,
         metadata: MetadataRef,
         aliases: &'a [(String, Scalar)],
     ) -> Self {
         ScalarBinder {
             bind_context,
             ctx,
+            name_resolution_ctx,
             metadata,
             aliases,
         }
@@ -51,6 +55,7 @@ impl<'a> ScalarBinder<'a> {
         let mut type_checker = TypeChecker::new(
             self.bind_context,
             self.ctx.clone(),
+            self.name_resolution_ctx,
             self.metadata.clone(),
             self.aliases,
         );

@@ -28,6 +28,7 @@ use crate::sql::planner::binder::scalar::ScalarBinder;
 use crate::sql::planner::binder::BindContext;
 use crate::sql::planner::binder::Binder;
 use crate::sql::planner::binder::ColumnBinding;
+use crate::sql::planner::semantic::normalize_identifier;
 use crate::sql::planner::semantic::GroupingChecker;
 use crate::sql::plans::BoundColumnRef;
 use crate::sql::plans::EvalScalar;
@@ -163,7 +164,13 @@ impl<'a> Binder {
                         let indirection = &names[0];
                         match indirection {
                             Indirection::Identifier(ident) => {
-                                let result = input_context.resolve_name(None, None, ident, &[])?;
+                                let result = input_context.resolve_name(
+                                    None,
+                                    None,
+                                    &normalize_identifier(ident, &self.name_resolution_ctx).name,
+                                    &ident.span,
+                                    &[],
+                                )?;
                                 output.items.push(SelectItem {
                                     select_target,
                                     scalar: match result {
@@ -203,6 +210,7 @@ impl<'a> Binder {
                     let mut scalar_binder = ScalarBinder::new(
                         input_context,
                         self.ctx.clone(),
+                        &self.name_resolution_ctx,
                         self.metadata.clone(),
                         &[],
                     );
@@ -210,7 +218,7 @@ impl<'a> Binder {
 
                     // If alias is not specified, we will generate a name for the scalar expression.
                     let expr_name = match alias {
-                        Some(alias) => alias.name.to_lowercase(),
+                        Some(alias) => normalize_identifier(alias, &self.name_resolution_ctx).name,
                         None => format!("{:#}", expr),
                     };
 

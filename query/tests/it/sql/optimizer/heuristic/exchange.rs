@@ -28,6 +28,7 @@ use databend_query::sql::optimizer::DEFAULT_REWRITE_RULES;
 use databend_query::sql::plans::Plan;
 use databend_query::sql::Binder;
 use databend_query::sql::Metadata;
+use databend_query::sql::NameResolutionContext;
 use goldenfile::Mint;
 use parking_lot::RwLock;
 
@@ -42,6 +43,7 @@ async fn run_cluster_test(ctx: Arc<QueryContext>, suite: &Suite) -> Result<Strin
     let binder = Binder::new(
         ctx.clone(),
         ctx.get_catalogs(),
+        NameResolutionContext::default(),
         Arc::new(RwLock::new(Metadata::create())),
     );
     let plan = binder.bind(&stmt).await?;
