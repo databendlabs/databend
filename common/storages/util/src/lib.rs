@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![deny(unused_crate_dependencies)]
+
 pub mod retry;
 pub mod storage_context;
 pub mod table_option_keys;

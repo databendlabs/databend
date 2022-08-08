@@ -12,6 +12,8 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+#![deny(unused_crate_dependencies)]
+
 use std::sync::Arc;
 
 use common_exception::Result;
