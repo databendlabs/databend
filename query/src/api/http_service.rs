@@ -55,7 +55,10 @@ impl HttpService {
             .at("/v1/health", get(health_handler))
             .at("/v1/config", get(super::http::v1::config::config_handler))
             .at("/v1/logs", get(super::http::v1::logs::logs_handler))
-            .at("/v1/status", get(super::http::v1::status::status_handler))
+            .at(
+                "/v1/status",
+                get(super::http::v1::instance_status::instance_status_handler),
+            )
             .at(
                 "/v1/cluster/list",
                 get(super::http::v1::cluster::cluster_list_handler),
