@@ -60,8 +60,8 @@ impl HttpService {
                 get(super::http::v1::instance_status::instance_status_handler),
             )
             .at(
-                "/v1/tenants/:tenant/status",
-                get(super::http::v1::tenant_status::tenant_status_handler),
+                "/v1/tables",
+                get(super::http::v1::tenant_tables::list_tables_handler),
             )
             .at(
                 "/v1/cluster/list",
@@ -69,6 +69,13 @@ impl HttpService {
             )
             .at("/debug/home", get(debug_home_handler))
             .at("/debug/pprof/profile", get(debug_pprof_handler));
+
+        if self.sessions.get_conf().query.management_mode {
+            route = route.at(
+                "/v1/tenants/:tenant/tables",
+                get(super::http::v1::tenant_tables::list_tenant_tables_handler),
+            )
+        }
 
         #[cfg(feature = "memory-profiling")]
         {

@@ -18,7 +18,6 @@ use chrono::DateTime;
 use chrono::Utc;
 use common_catalog::catalog::CATALOG_DEFAULT;
 use common_exception::Result;
-use common_meta_app::schema::CountTablesReq;
 use poem::web::Data;
 use poem::web::Json;
 use poem::web::Path;
@@ -38,56 +37,68 @@ pub struct TenantTableInfo {
     pub table: String,
     pub database: String,
     pub engine: String,
-    pub cluster_by: String,
     pub created_on: DateTime<Utc>,
+    pub updated_on: DateTime<Utc>,
     pub rows: u64,
-    pub data_size: u64,
-    pub data_size_compressed: u64,
-    pub index_size: u64,
+    pub data_bytes: u64,
+    pub compressed_data_bytes: u64,
+    pub index_bytes: u64,
 }
 
 async fn load_tenant_tables(
     session_mgr: &Arc<SessionManager>,
-    tenant: &String,
+    tenant: &str,
 ) -> Result<Vec<TenantTableInfo>> {
     let catalog = session_mgr
         .get_catalog_manager()
         .get_catalog(CATALOG_DEFAULT)?;
-    let databases = catalog.list_databases(tenant.as_str()).await?;
+    let databases = catalog.list_databases(tenant).await?;
 
     let mut table_infos: Vec<TenantTableInfo> = vec![];
     for database in databases {
-        let tables = catalog.list_tables(tenant).await?;
+        let tables = catalog.list_tables(tenant, database.name()).await?;
         for table in tables {
+            let stats = &table.get_table_info().meta.statistics;
             table_infos.push(TenantTableInfo {
-                table: table.name.clone(),
-                database: database.name.clone(),
-                engine: table.engine.clone(),
-                cluster_by: table.cluster_by.clone(),
-                created_on: table.created_on.clone(),
-                rows: table.rows,
-                data_size: table.data_size,
-                data_size_compressed: table.data_size_compressed,
-                index_size: table.index_size,
+                table: table.name().to_string(),
+                database: database.name().to_string(),
+                engine: table.engine().to_string(),
+                created_on: table.get_table_info().meta.created_on,
+                updated_on: table.get_table_info().meta.updated_on,
+                rows: stats.number_of_rows,
+                data_bytes: stats.data_bytes,
+                compressed_data_bytes: stats.compressed_data_bytes,
+                index_bytes: stats.index_data_bytes,
             });
         }
     }
     Ok(table_infos)
 }
 
-// This handler returns the statistics about the metadata of a tenant, includes tables count, users
-// count, etc. It's only enabled in the management mode.
+// This handler returns the statistics about the tables of a tenant. It's only enabled in management mode.
 #[poem::handler]
-pub async fn tenant_status_handler(
+pub async fn list_tenant_tables_handler(
     Path(tenant): Path<String>,
     session_mgr: Data<&Arc<SessionManager>>,
 ) -> poem::Result<impl IntoResponse> {
+    let tables = load_tenant_tables(&session_mgr, &tenant)
+        .await
+        .map_err(poem::error::InternalServerError)?;
+    Ok(Json(TenantTablesResponse { tables }))
+}
+
+// This handler returns the statistics about the tables of the current tenant.
+#[poem::handler]
+pub async fn list_tables_handler(
+    session_mgr: Data<&Arc<SessionManager>>,
+) -> poem::Result<impl IntoResponse> {
     let conf = session_mgr.get_conf();
-    if !conf.query.management_mode {
-        return Err(poem::error::NotFoundError.into());
+    let tenant = &conf.query.tenant_id;
+    if tenant.is_empty() {
+        return Ok(Json(TenantTablesResponse { tables: vec![] }));
     }
 
-    let tables = load_tenant_tables(&session_mgr, &tenant)
+    let tables = load_tenant_tables(&session_mgr, tenant)
         .await
         .map_err(poem::error::InternalServerError)?;
     Ok(Json(TenantTablesResponse { tables }))
