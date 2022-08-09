@@ -113,18 +113,18 @@ impl Display for AlterShareAccountsStmt<'_> {
         }
         write!(f, "{}", self.share)?;
         if self.add {
-            write!(f, " ADD TENANTS ")?;
+            write!(f, " ADD TENANTS = ")?;
         } else {
-            write!(f, " REMOVE TENANTS ")?;
+            write!(f, " REMOVE TENANTS = ")?;
         }
         let mut first = true;
         for account in self.tenants.iter() {
             if !first {
-                write!(f, " , ")?;
+                write!(f, ",")?;
             } else {
                 first = false;
             }
-            write!(f, " {} ", account)?;
+            write!(f, "{}", account)?;
         }
 
         Ok(())

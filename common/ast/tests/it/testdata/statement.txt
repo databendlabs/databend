@@ -6093,7 +6093,7 @@ RevokeShareObject(
 ---------- Input ----------
 ALTER SHARE a ADD TENANTS = b,c;
 ---------- Output ---------
-ALTER SHARE a ADD TENANTS  b  ,  c 
+ALTER SHARE a ADD TENANTS = b,c
 ---------- AST ------------
 AlterShareAccounts(
     AlterShareAccountsStmt {
@@ -6123,7 +6123,7 @@ AlterShareAccounts(
 ---------- Input ----------
 ALTER SHARE IF EXISTS a ADD TENANTS = b,c;
 ---------- Output ---------
-ALTER SHARE IF EXISTS a ADD TENANTS  b  ,  c 
+ALTER SHARE IF EXISTS a ADD TENANTS = b,c
 ---------- AST ------------
 AlterShareAccounts(
     AlterShareAccountsStmt {
@@ -6153,7 +6153,7 @@ AlterShareAccounts(
 ---------- Input ----------
 ALTER SHARE IF EXISTS a REMOVE TENANTS = b,c;
 ---------- Output ---------
-ALTER SHARE IF EXISTS a REMOVE TENANTS  b  ,  c 
+ALTER SHARE IF EXISTS a REMOVE TENANTS = b,c
 ---------- AST ------------
 AlterShareAccounts(
     AlterShareAccountsStmt {
