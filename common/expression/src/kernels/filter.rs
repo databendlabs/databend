@@ -15,11 +15,14 @@
 use common_arrow::arrow::bitmap::utils::BitChunkIterExact;
 use common_arrow::arrow::bitmap::utils::BitChunksExact;
 use common_arrow::arrow::bitmap::Bitmap;
+use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::arrow::buffer::Buffer;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+use crate::types::array::ArrayColumnBuilder;
 use crate::types::nullable::NullableColumn;
+use crate::types::string::StringColumnBuilder;
 use crate::types::AnyType;
 use crate::types::ArrayType;
 use crate::types::BooleanType;
@@ -100,19 +103,39 @@ impl Chunk {
 
 impl Column {
     pub fn filter(&self, filter: &Bitmap) -> Column {
+        let length = filter.len() - filter.unset_bits();
+        if length == self.len() {
+            return self.clone();
+        }
+
         with_number_type!(SRC_TYPE, match self {
             Column::SRC_TYPE(values) => {
                 Column::SRC_TYPE(Self::filter_primitive_types(values, filter))
             }
-            Column::Null { .. } | Column::EmptyArray { .. } =>
-                self.slice(0..filter.len() - filter.unset_bits()),
-            Column::Boolean(bm) => Self::filter_scalar_types::<BooleanType>(bm, filter),
-            Column::String(column) => Self::filter_scalar_types::<StringType>(column, filter),
-            Column::Array(column) =>
-                Self::filter_scalar_types::<ArrayType<AnyType>>(column, filter),
+            Column::Null { .. } | Column::EmptyArray { .. } => self.slice(0..length),
+
+            Column::Boolean(bm) => Self::filter_scalar_types::<BooleanType>(
+                bm,
+                MutableBitmap::with_capacity(length),
+                filter
+            ),
+            Column::String(column) => Self::filter_scalar_types::<StringType>(
+                column,
+                StringColumnBuilder::with_capacity(length, 0),
+                filter
+            ),
+            Column::Array(column) => {
+                let mut builder = ArrayColumnBuilder::<AnyType>::from_column(column.slice(0..0));
+                builder.reserve(length);
+                Self::filter_scalar_types::<ArrayType<AnyType>>(column, builder, filter)
+            }
             Column::Nullable(c) => {
                 let column = Self::filter(&c.column, filter);
-                let validity = Self::filter_scalar_types::<BooleanType>(&c.validity, filter);
+                let validity = Self::filter_scalar_types::<BooleanType>(
+                    &c.validity,
+                    MutableBitmap::with_capacity(length),
+                    filter,
+                );
                 Column::Nullable(Box::new(NullableColumn {
                     column,
                     validity: BooleanType::try_downcast_column(&validity).unwrap(),
@@ -126,13 +149,12 @@ impl Column {
         })
     }
 
-    fn filter_scalar_types<T: ValueType>(col: &T::Column, filter: &Bitmap) -> Column {
-        let length = filter.len() - filter.unset_bits();
-        if length == T::column_len(col) {
-            return T::upcast_column(col.clone());
-        }
+    fn filter_scalar_types<T: ValueType>(
+        col: &T::Column,
+        mut builder: T::ColumnBuilder,
+        filter: &Bitmap,
+    ) -> Column {
         const CHUNK_SIZE: usize = 64;
-        let mut builder = T::column_init_builder(col, length);
         let (mut slice, offset, mut length) = filter.as_slice();
         let mut start_index: usize = 0;
 

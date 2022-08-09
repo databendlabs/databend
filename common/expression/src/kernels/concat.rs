@@ -12,11 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::arrow::buffer::Buffer;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+use crate::types::array::ArrayColumnBuilder;
 use crate::types::nullable::NullableColumn;
+use crate::types::string::StringColumnBuilder;
 use crate::types::AnyType;
 use crate::types::ArrayType;
 use crate::types::BooleanType;
@@ -68,6 +71,7 @@ impl Column {
         if columns.len() == 1 {
             return columns[0].clone();
         }
+        let capacity = columns.iter().map(|c| c.len()).sum();
 
         with_number_mapped_type!(SRC_TYPE, match &columns[0] {
             Column::SRC_TYPE(_) => {
@@ -78,11 +82,28 @@ impl Column {
                 }
                 NumberType::<SRC_TYPE>::upcast_column(Self::concat_primitive_types(&values))
             }
-            Column::Null { .. } => Self::concat_scalar_types::<NullType>(columns),
-            Column::EmptyArray { .. } => Self::concat_scalar_types::<EmptyArrayType>(columns),
-            Column::Boolean(_) => Self::concat_scalar_types::<BooleanType>(columns),
-            Column::String(_) => Self::concat_scalar_types::<StringType>(columns),
-            Column::Array(_) => Self::concat_scalar_types::<ArrayType<AnyType>>(columns),
+            Column::Null { .. } => {
+                let builder: usize = 0;
+                Self::concat_scalar_types::<NullType>(builder, columns)
+            }
+            Column::EmptyArray { .. } => {
+                let builder: usize = 0;
+                Self::concat_scalar_types::<EmptyArrayType>(builder, columns)
+            }
+            Column::Boolean(_) => {
+                let builder = MutableBitmap::with_capacity(capacity);
+                Self::concat_scalar_types::<BooleanType>(builder, columns)
+            }
+            Column::String(_) => {
+                let data_capacity = columns.iter().map(|c| c.memory_size() - c.len() * 8).sum();
+                let builder = StringColumnBuilder::with_capacity(capacity, data_capacity);
+                Self::concat_scalar_types::<StringType>(builder, columns)
+            }
+            Column::Array(col) => {
+                let mut builder = ArrayColumnBuilder::<AnyType>::from_column(col.slice(0..0));
+                builder.reserve(capacity);
+                Self::concat_scalar_types::<ArrayType<AnyType>>(builder, columns)
+            }
             Column::Nullable(_) => {
                 let mut bitmaps = Vec::with_capacity(columns.len());
                 let mut inners = Vec::with_capacity(columns.len());
@@ -91,12 +112,29 @@ impl Column {
                     inners.push(nullable_column.column);
                     bitmaps.push(Column::Boolean(nullable_column.validity));
                 }
+
                 let column = Self::concat(&inners);
-                let validity = Self::concat_scalar_types::<BooleanType>(&bitmaps);
+                let validity_builder = MutableBitmap::with_capacity(capacity);
+                let validity = Self::concat_scalar_types::<BooleanType>(validity_builder, &bitmaps);
                 let validity = BooleanType::try_downcast_column(&validity).unwrap();
+
                 Column::Nullable(Box::new(NullableColumn { column, validity }))
             }
-            Column::Tuple { .. } => Self::concat_scalar_types::<AnyType>(columns),
+            Column::Tuple { fields, .. } => {
+                let fields = (0..fields.len())
+                    .map(|idx| {
+                        let cs: Vec<Column> = columns
+                            .iter()
+                            .map(|col| col.as_tuple().unwrap().0[idx].clone())
+                            .collect();
+                        Self::concat(&cs)
+                    })
+                    .collect();
+                Column::Tuple {
+                    fields,
+                    len: capacity,
+                }
+            }
         })
     }
 
@@ -109,14 +147,14 @@ impl Column {
         results.into()
     }
 
-    fn concat_scalar_types<T: ValueType>(columns: &[Column]) -> Column {
-        let capacity = columns.iter().map(|c| c.len()).sum();
+    fn concat_scalar_types<T: ValueType>(
+        mut builder: T::ColumnBuilder,
+        columns: &[Column],
+    ) -> Column {
         let columns: Vec<T::Column> = columns
             .iter()
             .map(|c| T::try_downcast_column(c).unwrap())
             .collect();
-
-        let mut builder = T::column_init_builder(&columns[0], capacity);
         for col in columns {
             for item in T::iter_column(&col) {
                 T::push_item(&mut builder, item)

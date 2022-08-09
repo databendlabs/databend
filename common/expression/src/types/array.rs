@@ -249,6 +249,10 @@ impl<T: ValueType> ArrayColumnBuilder<T> {
         self.offsets.len() - 1
     }
 
+    pub fn reserve(&mut self, additional: usize) {
+        self.offsets.reserve(additional);
+    }
+
     pub fn push(&mut self, item: T::Column) {
         let other_col = T::column_to_builder(item);
         T::append_builder(&mut self.builder, &other_col);
