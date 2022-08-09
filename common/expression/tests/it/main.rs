@@ -991,7 +991,7 @@ fn run_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType, Column
             output_domain
                 .as_ref()
                 .map(ToString::to_string)
-                .unwrap_or("Unknown".to_string()),
+                .unwrap_or_else(|| "Unknown".to_string()),
             result?,
         )
     };
