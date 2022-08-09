@@ -348,6 +348,10 @@ fn test_query() {
         r#"select * from customer inner join orders on a = b limit 2 offset 3"#,
         r#"select * from customer natural full join orders"#,
         r#"select * from customer natural join orders left outer join detail using (id)"#,
+        r#"with t2(tt) as (select a from t) select t2.tt from t2  where t2.tt > 1"#,
+        r#"with t2 as (select a from t) select t2.a from t2  where t2.a > 1"#,
+        r#"with t2(tt) as (select a from t), t3 as (select * from t), t4 as (select a from t where a > 1) select t2.tt, t3.a, t4.a from t2, t3, t4 where t2.tt > 1"#,
+        r#"with recursive t2(tt) as (select a from t1 union select tt from t2) select t2.tt from t2"#,
         r#"select c_count cc, count(*) as custdist, sum(c_acctbal) as totacctbal
             from customer, orders ODS,
                 (

@@ -5,7 +5,7 @@ error:
   --> SQL:1:29
   |
 1 | select * from customer join where a = b
-  |                             ^^^^^ expected `(`, `UNION`, `EXCEPT`, `INTERSECT`, `SELECT`, <Ident>, or 1 more ...
+  |                             ^^^^^ expected `(`, `WITH`, `UNION`, `EXCEPT`, `INTERSECT`, `SELECT`, or 2 more ...
 
 
 ---------- Input ----------
@@ -15,7 +15,7 @@ error:
   --> SQL:1:15
   |
 1 | select * from join customer
-  | ------        ^^^^ expected `(`, `UNION`, `EXCEPT`, `INTERSECT`, `SELECT`, <Ident>, or 1 more ...
+  | ------        ^^^^ expected `(`, `UNION`, `EXCEPT`, `INTERSECT`, `SELECT`, <Ident>, or 2 more ...
   | |              
   | while parsing `SELECT ...`
 

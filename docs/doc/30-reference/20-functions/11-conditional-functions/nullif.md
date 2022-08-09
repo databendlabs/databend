@@ -5,15 +5,6 @@ description: 'NULLIF( <expr1>, <expr2> ) function'
 
 The NULLIF() function compares two expressions and returns NULL if they are equal. Otherwise, the first expression is returned.
 
-:::tip
-
-Before using this function, you must enable the new Databend planner. To do so, perform the following command in the SQL client:
-
-```sql
-> set enable_planner_v2=1;
-```
-:::
-
 ## Syntax
 
 ```sql
@@ -34,7 +25,6 @@ The data type of the returned value is the data type of \<expr1\>.
 ## Examples
 
 ```sql
-SET enable_planner_v2 = 1;
 
 SELECT a, b, NULLIF(a, b) FROM t;
 +------+------+--------------+
