@@ -1,7 +1,6 @@
 ---
 title: Benchmarking Databend using TPC-H
 description: Benchmarking Databend using TPC-H
-slug: benchmark
 date: 2022-08-08
 tags: [databend, benchmark, TPC-H]
 authors:
