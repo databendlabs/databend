@@ -1412,7 +1412,7 @@ insert into t1 values(1, 2), (2, 3), (3 ,4), (2, 3);
 statement ok
 insert into t2 values(2,2), (3, 5), (7 ,8), (2, 3), (3, 4);
 
-onlyif mysql
+
 statement query II
 select * from t1 intersect select * from t2 order by t1.a, t1.b;
 
@@ -1420,7 +1420,7 @@ select * from t1 intersect select * from t2 order by t1.a, t1.b;
 2 3
 3 4
 
-onlyif mysql
+
 statement query II
 select * from t1 except select * from t2 order by t1.a, t1.b;
 
@@ -1619,42 +1619,42 @@ select * from t1 where t1.a not in (select t2.a from t2);
 ----
 1 2
 
-onlyif mysql
+
 statement query II
 select * from t1 where t1.a in (select t2.a from t2);
 
 ----
 2 3
 
-onlyif mysql
+
 statement query II
 select * from t1 where t1.a = any (select t2.a from t2);
 
 ----
 2 3
 
-onlyif mysql
+
 statement query II
 select * from t1 where t1.a = some (select t2.a from t2);
 
 ----
 2 3
 
-onlyif mysql
+
 statement query II
 select * from t1 where t1.a != all (select t2.a from t2);
 
 ----
 1 2
 
-onlyif mysql
+
 statement query II
 select * from t1 where t1.a >= any (select t2.a from t2);
 
 ----
 2 3
 
-onlyif mysql
+
 statement ok
 select * from t1 where t1.a = all (select t2.a from t2);
 
@@ -1812,21 +1812,21 @@ select t1.a from t1 where not exists (select t2.a from t2 where t1.a = t2.a) and
 ----
 1
 
-onlyif mysql
+
 statement query II
 select * from t1 where t1.a = any (select t2.a from t2 where t1.a = t2.a);
 
 ----
 2 3
 
-onlyif mysql
+
 statement query II
 select * from t1 where t1.a = any (select t2.a from t2 where t1.a > 1);
 
 ----
 2 3
 
-onlyif mysql
+
 statement ok
 select * from t1 where t1.a > any (select t2.a from t2 where t1.a > 1);
 

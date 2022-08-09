@@ -13,3 +13,4 @@
 // limitations under the License.
 
 mod format;
+mod semantic;

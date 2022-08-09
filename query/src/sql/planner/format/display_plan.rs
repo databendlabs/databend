@@ -96,6 +96,8 @@ impl Plan {
 
             Plan::CreateShare(p) => Ok(format!("{:?}", p)),
             Plan::DropShare(p) => Ok(format!("{:?}", p)),
+            Plan::GrantShareObject(p) => Ok(format!("{:?}", p)),
+            Plan::RevokeShareObject(p) => Ok(format!("{:?}", p)),
         }
     }
 }

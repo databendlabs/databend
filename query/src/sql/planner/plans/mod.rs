@@ -201,6 +201,8 @@ pub enum Plan {
     // Share
     CreateShare(Box<CreateSharePlan>),
     DropShare(Box<DropSharePlan>),
+    GrantShareObject(Box<GrantShareObjectPlan>),
+    RevokeShareObject(Box<RevokeShareObjectPlan>),
 }
 
 #[derive(Clone)]
@@ -273,6 +275,8 @@ impl Display for Plan {
             Plan::Kill(_) => write!(f, "Kill"),
             Plan::CreateShare(_) => write!(f, "CreateShare"),
             Plan::DropShare(_) => write!(f, "DropShare"),
+            Plan::GrantShareObject(_) => write!(f, "GrantShareObject"),
+            Plan::RevokeShareObject(_) => write!(f, "RevokeShareObject"),
         }
     }
 }
@@ -337,6 +341,8 @@ impl Plan {
             Plan::Kill(_) => Arc::new(DataSchema::empty()),
             Plan::CreateShare(plan) => plan.schema(),
             Plan::DropShare(plan) => plan.schema(),
+            Plan::GrantShareObject(plan) => plan.schema(),
+            Plan::RevokeShareObject(plan) => plan.schema(),
         }
     }
 }

@@ -549,6 +549,8 @@ pub enum TokenKind {
     QUERY,
     #[token("RECORD_DELIMITER", ignore(ascii_case))]
     RECORD_DELIMITER,
+    #[token("REFERENCE_USAGE", ignore(ascii_case))]
+    REFERENCE_USAGE,
     #[token("REGEXP", ignore(ascii_case))]
     REGEXP,
     #[token("RENAME", ignore(ascii_case))]

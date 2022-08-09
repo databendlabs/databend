@@ -22,7 +22,7 @@ copy_from_location_cases=(
 
 for i in "${copy_from_location_cases[@]}"; do
   echo "$i" | $MYSQL_CLIENT_CONNECT
-  echo "select count(1), avg(Year), sum(DayOfWeek)  from ontime200" | $MYSQL_CLIENT_CONNECT
+  echo "select count(1), avg(\"Year\"), sum(\"DayOfWeek\") from ontime200" | $MYSQL_CLIENT_CONNECT
   echo "truncate table ontime200" | $MYSQL_CLIENT_CONNECT
 done
 

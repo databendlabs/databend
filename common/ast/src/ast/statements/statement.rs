@@ -161,6 +161,8 @@ pub enum Statement<'a> {
     // share
     CreateShare(CreateShareStmt<'a>),
     DropShare(DropShareStmt<'a>),
+    GrantShareObject(GrantShareObjectStmt<'a>),
+    RevokeShareObject(RevokeShareObjectStmt<'a>),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -364,6 +366,8 @@ impl<'a> Display for Statement<'a> {
             Statement::Presign(stmt) => write!(f, "{stmt}")?,
             Statement::CreateShare(stmt) => write!(f, "{stmt}")?,
             Statement::DropShare(stmt) => write!(f, "{stmt}")?,
+            Statement::GrantShareObject(stmt) => write!(f, "{stmt}")?,
+            Statement::RevokeShareObject(stmt) => write!(f, "{stmt}")?,
         }
         Ok(())
     }

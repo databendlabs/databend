@@ -88,25 +88,25 @@ pub struct DropShareReq {
 pub struct DropShareReply {}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct AddShareAccountReq {
+pub struct AddShareAccountsReq {
     pub share_name: ShareNameIdent,
-    pub account: String,
+    pub if_exists: bool,
+    pub accounts: Vec<String>,
     pub share_on: DateTime<Utc>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct AddShareAccountReply {
-    pub share_id: u64,
+pub struct AddShareAccountsReply {}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct RemoveShareAccountsReq {
+    pub share_name: ShareNameIdent,
+    pub if_exists: bool,
+    pub accounts: Vec<String>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct RemoveShareAccountReq {
-    pub account: String,
-    pub share_id: u64,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct RemoveShareAccountReply {}
+pub struct RemoveShareAccountsReply {}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct ShowShareOfReq {
@@ -128,10 +128,10 @@ impl Display for ShareGrantObjectName {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             ShareGrantObjectName::Database(db) => {
-                write!(f, "Database {}", db)
+                write!(f, "DATABASE {}", db)
             }
             ShareGrantObjectName::Table(db, table) => {
-                write!(f, "Table {}/{}", db, table)
+                write!(f, "TABLE {}.{}", db, table)
             }
         }
     }
@@ -267,6 +267,16 @@ pub enum ShareGrantObjectPrivilege {
     ReferenceUsage = 1 << 1,
     // For TABLE or VIEW
     Select = 1 << 2,
+}
+
+impl Display for ShareGrantObjectPrivilege {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match *self {
+            ShareGrantObjectPrivilege::Usage => write!(f, "USAGE"),
+            ShareGrantObjectPrivilege::ReferenceUsage => write!(f, "REFERENCE_USAGE"),
+            ShareGrantObjectPrivilege::Select => write!(f, "SELECT"),
+        }
+    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]

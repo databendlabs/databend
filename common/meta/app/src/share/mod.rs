@@ -15,8 +15,8 @@
 #[allow(clippy::module_inception)]
 mod share;
 
-pub use share::AddShareAccountReply;
-pub use share::AddShareAccountReq;
+pub use share::AddShareAccountsReply;
+pub use share::AddShareAccountsReq;
 pub use share::CreateShareReply;
 pub use share::CreateShareReq;
 pub use share::DropShareReply;
@@ -25,8 +25,8 @@ pub use share::GetShareGrantObjectReply;
 pub use share::GetShareGrantObjectReq;
 pub use share::GrantShareObjectReply;
 pub use share::GrantShareObjectReq;
-pub use share::RemoveShareAccountReply;
-pub use share::RemoveShareAccountReq;
+pub use share::RemoveShareAccountsReply;
+pub use share::RemoveShareAccountsReq;
 pub use share::RevokeShareObjectReply;
 pub use share::RevokeShareObjectReq;
 pub use share::ShareAccountMeta;

@@ -47,9 +47,11 @@ use crate::sessions::TableContext;
 use crate::sql::binder::Binder;
 use crate::sql::binder::ScalarBinder;
 use crate::sql::executor::ExpressionBuilderWithRenaming;
+use crate::sql::normalize_identifier;
 use crate::sql::optimizer::optimize;
 use crate::sql::optimizer::OptimizerConfig;
 use crate::sql::optimizer::OptimizerContext;
+use crate::sql::planner::semantic::NameResolutionContext;
 use crate::sql::plans::Insert;
 use crate::sql::plans::InsertInputSource;
 use crate::sql::plans::InsertValueBlock;
@@ -63,35 +65,47 @@ impl<'a> Binder {
         bind_context: &BindContext,
         stmt: &InsertStmt<'a>,
     ) -> Result<Plan> {
-        let catalog_name = match stmt.catalog.clone() {
-            Some(catalog) => catalog.name.clone(),
-            None => self.ctx.get_current_catalog(),
-        };
-        let database_name = match stmt.database.clone() {
-            Some(database) => database.name.clone(),
-            None => self.ctx.get_current_database(),
-        };
-        let table_name = stmt.table.name.clone();
+        let InsertStmt {
+            catalog,
+            database,
+            table,
+            columns,
+            source,
+            overwrite,
+        } = stmt;
+        let catalog_name = catalog.as_ref().map_or_else(
+            || self.ctx.get_current_catalog(),
+            |ident| normalize_identifier(ident, &self.name_resolution_ctx).name,
+        );
+        let database_name = database.as_ref().map_or_else(
+            || self.ctx.get_current_database(),
+            |ident| normalize_identifier(ident, &self.name_resolution_ctx).name,
+        );
+        let table_name = normalize_identifier(table, &self.name_resolution_ctx).name;
         let table = self
             .ctx
             .get_table(&catalog_name, &database_name, &table_name)
             .await?;
         let table_id = table.get_id();
 
-        let schema: DataSchemaRef = match stmt.columns.is_empty() {
-            true => table.schema(),
-            false => {
-                let schema = table.schema();
-                let fields = stmt
-                    .columns
-                    .iter()
-                    .map(|ident| schema.field_with_name(&ident.name).map(|v| v.clone()))
-                    .collect::<Result<Vec<_>>>()?;
-                DataSchemaRefExt::create(fields)
-            }
+        let schema = if columns.is_empty() {
+            table.schema()
+        } else {
+            let schema = table.schema();
+            let fields = columns
+                .iter()
+                .map(|ident| {
+                    schema
+                        .field_with_name(
+                            &normalize_identifier(ident, &self.name_resolution_ctx).name,
+                        )
+                        .map(|v| v.clone())
+                })
+                .collect::<Result<Vec<_>>>()?;
+            DataSchemaRefExt::create(fields)
         };
 
-        let input_source: Result<InsertInputSource> = match stmt.source.clone() {
+        let input_source: Result<InsertInputSource> = match source.clone() {
             InsertSource::Streaming {
                 format,
                 rest_tokens,
@@ -127,7 +141,7 @@ impl<'a> Binder {
             table: table_name,
             table_id,
             schema,
-            overwrite: stmt.overwrite,
+            overwrite: *overwrite,
             source: input_source?,
         };
 
@@ -172,6 +186,7 @@ impl<'a> Binder {
                 let mut reader = NestedCheckpointReader::new(BufferReader::new(cursor));
                 let source = ValueSourceV2::new(
                     self.ctx.clone(),
+                    &self.name_resolution_ctx,
                     bind_context,
                     schema,
                     self.metadata.clone(),
@@ -210,6 +225,7 @@ impl<'a> Binder {
 
 pub struct ValueSourceV2<'a> {
     ctx: Arc<QueryContext>,
+    name_resolution_ctx: &'a NameResolutionContext,
     bind_context: &'a BindContext,
     schema: DataSchemaRef,
     metadata: MetadataRef,
@@ -218,12 +234,14 @@ pub struct ValueSourceV2<'a> {
 impl<'a> ValueSourceV2<'a> {
     pub fn new(
         ctx: Arc<QueryContext>,
+        name_resolution_ctx: &'a NameResolutionContext,
         bind_context: &'a BindContext,
         schema: DataSchemaRef,
         metadata: MetadataRef,
     ) -> Self {
         Self {
             ctx,
+            name_resolution_ctx,
             schema,
             bind_context,
             metadata,
@@ -335,6 +353,7 @@ impl<'a> ValueSourceV2<'a> {
                     exprs,
                     &self.schema,
                     self.ctx.clone(),
+                    self.name_resolution_ctx,
                     bind_context,
                     metadata,
                 )
@@ -420,6 +439,7 @@ async fn exprs_to_datavalue<'a>(
     exprs: Vec<Expr<'a>>,
     schema: &DataSchemaRef,
     ctx: Arc<QueryContext>,
+    name_resolution_ctx: &NameResolutionContext,
     bind_context: &BindContext,
     metadata: MetadataRef,
 ) -> Result<Vec<DataValue>> {
@@ -430,7 +450,13 @@ async fn exprs_to_datavalue<'a>(
     }
     let mut expressions = Vec::with_capacity(exprs.len());
     for (i, expr) in exprs.iter().enumerate() {
-        let mut scalar_binder = ScalarBinder::new(bind_context, ctx.clone(), metadata.clone(), &[]);
+        let mut scalar_binder = ScalarBinder::new(
+            bind_context,
+            ctx.clone(),
+            name_resolution_ctx,
+            metadata.clone(),
+            &[],
+        );
         let scalar = scalar_binder.bind(expr).await?.0;
         let expression_builder = ExpressionBuilderWithRenaming::create(metadata.clone());
         let expr = expression_builder.build(&scalar)?;

@@ -19,6 +19,8 @@ use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_meta_app::share::CreateShareReq;
 use common_meta_app::share::DropShareReq;
+use common_meta_app::share::ShareGrantObjectName;
+use common_meta_app::share::ShareGrantObjectPrivilege;
 use common_meta_app::share::ShareNameIdent;
 
 // Create Share Plan
@@ -71,6 +73,34 @@ impl From<DropSharePlan> for DropShareReq {
 }
 
 impl DropSharePlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
+}
+
+// Grant Share Object Plan
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct GrantShareObjectPlan {
+    pub share: String,
+    pub object: ShareGrantObjectName,
+    pub privilege: ShareGrantObjectPrivilege,
+}
+
+impl GrantShareObjectPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
+}
+
+// Revoke Share Object Plan
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct RevokeShareObjectPlan {
+    pub share: String,
+    pub object: ShareGrantObjectName,
+    pub privilege: ShareGrantObjectPrivilege,
+}
+
+impl RevokeShareObjectPlan {
     pub fn schema(&self) -> DataSchemaRef {
         Arc::new(DataSchema::empty())
     }

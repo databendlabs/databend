@@ -260,6 +260,10 @@ fn test_statement() {
         r#"CREATE SHARE IF NOT EXISTS t;"#,
         r#"DROP SHARE a;"#,
         r#"DROP SHARE IF EXISTS a;"#,
+        r#"GRANT USAGE ON DATABASE db1 TO SHARE a;"#,
+        r#"GRANT SELECT ON TABLE db1.tb1 TO SHARE a;"#,
+        r#"REVOKE USAGE ON DATABASE db1 FROM SHARE a;"#,
+        r#"REVOKE SELECT ON TABLE db1.tb1 FROM SHARE a;"#,
     ];
 
     for case in cases {

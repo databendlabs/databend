@@ -22,6 +22,7 @@ use common_planners::DropViewPlan;
 
 use crate::sessions::TableContext;
 use crate::sql::binder::Binder;
+use crate::sql::planner::semantic::normalize_identifier;
 use crate::sql::plans::Plan;
 
 impl<'a> Binder {
@@ -40,13 +41,13 @@ impl<'a> Binder {
         let tenant = self.ctx.get_tenant();
         let catalog = catalog
             .as_ref()
-            .map(|ident| ident.name.to_lowercase())
+            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
             .unwrap_or_else(|| self.ctx.get_current_catalog());
         let database = database
             .as_ref()
-            .map(|ident| ident.name.to_lowercase())
+            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
             .unwrap_or_else(|| self.ctx.get_current_database());
-        let viewname = view.name.to_lowercase();
+        let viewname = normalize_identifier(view, &self.name_resolution_ctx).name;
         let subquery = format!("{}", query);
 
         let plan = CreateViewPlan {
@@ -74,13 +75,13 @@ impl<'a> Binder {
         let tenant = self.ctx.get_tenant();
         let catalog = catalog
             .as_ref()
-            .map(|ident| ident.name.to_lowercase())
+            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
             .unwrap_or_else(|| self.ctx.get_current_catalog());
         let database = database
             .as_ref()
-            .map(|ident| ident.name.to_lowercase())
+            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
             .unwrap_or_else(|| self.ctx.get_current_database());
-        let viewname = view.name.to_lowercase();
+        let viewname = normalize_identifier(view, &self.name_resolution_ctx).name;
         let subquery = format!("{}", query);
 
         let plan = AlterViewPlan {
@@ -107,13 +108,13 @@ impl<'a> Binder {
         let tenant = self.ctx.get_tenant();
         let catalog = catalog
             .as_ref()
-            .map(|ident| ident.name.to_lowercase())
+            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
             .unwrap_or_else(|| self.ctx.get_current_catalog());
         let database = database
             .as_ref()
-            .map(|ident| ident.name.to_lowercase())
+            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
             .unwrap_or_else(|| self.ctx.get_current_database());
-        let viewname = view.name.to_lowercase();
+        let viewname = normalize_identifier(view, &self.name_resolution_ctx).name;
 
         let plan = DropViewPlan {
             if_exists: *if_exists,
