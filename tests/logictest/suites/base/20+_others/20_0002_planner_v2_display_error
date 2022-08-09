@@ -34,7 +34,7 @@ create table t1(a int);
 statement ok
 create table t2(a int);
 
-onlyif mysql
+
 statement error 1065
 select a as b from t1 intersect select a as b from t2 order by a;
 
