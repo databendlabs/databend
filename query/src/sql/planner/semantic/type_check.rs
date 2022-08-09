@@ -50,6 +50,8 @@ use common_functions::scalars::FunctionFactory;
 use common_functions::scalars::TupleFunction;
 use common_planners::validate_function_arg;
 
+use super::name_resolution::NameResolutionContext;
+use super::normalize_identifier;
 use crate::evaluator::Evaluator;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
@@ -86,6 +88,7 @@ use crate::sql::ScalarExpr;
 pub struct TypeChecker<'a> {
     bind_context: &'a BindContext,
     ctx: Arc<QueryContext>,
+    name_resolution_ctx: &'a NameResolutionContext,
     metadata: MetadataRef,
 
     aliases: &'a [(String, Scalar)],
@@ -99,12 +102,14 @@ impl<'a> TypeChecker<'a> {
     pub fn new(
         bind_context: &'a BindContext,
         ctx: Arc<QueryContext>,
+        name_resolution_ctx: &'a NameResolutionContext,
         metadata: MetadataRef,
         aliases: &'a [(String, Scalar)],
     ) -> Self {
         Self {
             bind_context,
             ctx,
+            name_resolution_ctx,
             metadata,
             aliases,
             in_aggregate_function: false,
@@ -150,13 +155,21 @@ impl<'a> TypeChecker<'a> {
             Expr::ColumnRef {
                 database,
                 table,
-                column,
+                column: ident,
                 ..
             } => {
+                let database = database
+                    .as_ref()
+                    .map(|ident| normalize_identifier(ident, self.name_resolution_ctx).name);
+                let table = table
+                    .as_ref()
+                    .map(|ident| normalize_identifier(ident, self.name_resolution_ctx).name);
+                let column = normalize_identifier(ident, self.name_resolution_ctx).name;
                 let result = self.bind_context.resolve_name(
-                    database.as_ref().map(|ident| ident.name.as_str()),
-                    table.as_ref().map(|ident| ident.name.as_str()),
-                    column,
+                    database.as_deref(),
+                    table.as_deref(),
+                    column.as_str(),
+                    &ident.span,
                     self.aliases,
                 )?;
                 let (scalar, data_type) = match result {
@@ -1312,6 +1325,7 @@ impl<'a> TypeChecker<'a> {
         let mut binder = Binder::new(
             self.ctx.clone(),
             self.ctx.get_catalogs(),
+            self.name_resolution_ctx.clone(),
             self.metadata.clone(),
         );
 

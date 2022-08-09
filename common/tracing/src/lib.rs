@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #![feature(backtrace)]
+#![deny(unused_crate_dependencies)]
 
 #[macro_use]
 mod macros;

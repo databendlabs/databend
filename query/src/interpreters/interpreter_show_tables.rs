@@ -46,7 +46,7 @@ impl ShowTablesInterpreter {
         }
 
         if DatabaseCatalog::is_case_insensitive_db(&database) {
-            database = database.to_uppercase()
+            database = database.to_uppercase();
         }
 
         let showfull = self.plan.showfull;

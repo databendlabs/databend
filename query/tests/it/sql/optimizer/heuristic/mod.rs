@@ -35,6 +35,7 @@ use databend_query::sql::optimizer::RuleList;
 use databend_query::sql::plans::Plan;
 use databend_query::sql::Binder;
 use databend_query::sql::Metadata;
+use databend_query::sql::NameResolutionContext;
 use parking_lot::RwLock;
 
 pub(super) struct Suite {
@@ -50,6 +51,7 @@ async fn run_test(ctx: Arc<QueryContext>, suite: &Suite) -> Result<String> {
     let binder = Binder::new(
         ctx.clone(),
         ctx.get_catalogs(),
+        NameResolutionContext::default(),
         Arc::new(RwLock::new(Metadata::create())),
     );
     let plan = binder.bind(&stmt).await?;

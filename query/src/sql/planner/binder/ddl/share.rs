@@ -17,9 +17,12 @@ use common_exception::Result;
 
 use crate::sessions::TableContext;
 use crate::sql::binder::Binder;
+use crate::sql::normalize_identifier;
 use crate::sql::plans::CreateSharePlan;
 use crate::sql::plans::DropSharePlan;
+use crate::sql::plans::GrantShareObjectPlan;
 use crate::sql::plans::Plan;
+use crate::sql::plans::RevokeShareObjectPlan;
 
 impl<'a> Binder {
     pub(in crate::sql::planner::binder) async fn bind_create_share(
@@ -32,7 +35,7 @@ impl<'a> Binder {
             comment,
         } = stmt;
 
-        let share = share.name.to_lowercase();
+        let share = normalize_identifier(share, &self.name_resolution_ctx).name;
 
         let plan = CreateSharePlan {
             if_not_exists: *if_not_exists,
@@ -49,7 +52,7 @@ impl<'a> Binder {
     ) -> Result<Plan> {
         let DropShareStmt { if_exists, share } = stmt;
 
-        let share = share.name.to_lowercase();
+        let share = normalize_identifier(share, &self.name_resolution_ctx).name;
 
         let plan = DropSharePlan {
             if_exists: *if_exists,
@@ -57,5 +60,45 @@ impl<'a> Binder {
             share,
         };
         Ok(Plan::DropShare(Box::new(plan)))
+    }
+
+    pub(in crate::sql::planner::binder) async fn bind_grant_share_object(
+        &mut self,
+        stmt: &GrantShareObjectStmt<'a>,
+    ) -> Result<Plan> {
+        let GrantShareObjectStmt {
+            share,
+            object,
+            privilege,
+        } = stmt;
+
+        let share = normalize_identifier(share, &self.name_resolution_ctx).name;
+
+        let plan = GrantShareObjectPlan {
+            share,
+            object: object.clone(),
+            privilege: *privilege,
+        };
+        Ok(Plan::GrantShareObject(Box::new(plan)))
+    }
+
+    pub(in crate::sql::planner::binder) async fn bind_revoke_share_object(
+        &mut self,
+        stmt: &RevokeShareObjectStmt<'a>,
+    ) -> Result<Plan> {
+        let RevokeShareObjectStmt {
+            share,
+            object,
+            privilege,
+        } = stmt;
+
+        let share = normalize_identifier(share, &self.name_resolution_ctx).name;
+
+        let plan = RevokeShareObjectPlan {
+            share,
+            object: object.clone(),
+            privilege: *privilege,
+        };
+        Ok(Plan::RevokeShareObject(Box::new(plan)))
     }
 }

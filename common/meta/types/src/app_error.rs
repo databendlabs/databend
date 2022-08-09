@@ -283,39 +283,39 @@ impl ShareAlreadyExists {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
-#[error("ShareAccountAlreadyExists: {share_name} while {context}")]
-pub struct ShareAccountAlreadyExists {
+#[error("ShareAccountsAlreadyExists: {share_name} while {context}")]
+pub struct ShareAccountsAlreadyExists {
     share_name: String,
-    account: String,
+    accounts: Vec<String>,
     context: String,
 }
 
-impl ShareAccountAlreadyExists {
+impl ShareAccountsAlreadyExists {
     pub fn new(
         share_name: impl Into<String>,
-        account: impl Into<String>,
+        accounts: &[String],
         context: impl Into<String>,
     ) -> Self {
         Self {
             share_name: share_name.into(),
-            account: account.into(),
+            accounts: accounts.into(),
             context: context.into(),
         }
     }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
-#[error("UnknownShareAccount: {account} {share_id} while {context}")]
-pub struct UnknownShareAccount {
-    account: String,
+#[error("UnknownShareAccounts: {share_id} while {context}")]
+pub struct UnknownShareAccounts {
+    accounts: Vec<String>,
     share_id: u64,
     context: String,
 }
 
-impl UnknownShareAccount {
-    pub fn new(account: impl Into<String>, share_id: u64, context: impl Into<String>) -> Self {
+impl UnknownShareAccounts {
+    pub fn new(accounts: &[String], share_id: u64, context: impl Into<String>) -> Self {
         Self {
-            account: account.into(),
+            accounts: accounts.into(),
             share_id,
             context: context.into(),
         }
@@ -448,10 +448,10 @@ pub enum AppError {
     UnknownShareId(#[from] UnknownShareId),
 
     #[error(transparent)]
-    ShareAccountAlreadyExists(#[from] ShareAccountAlreadyExists),
+    ShareAccountsAlreadyExists(#[from] ShareAccountsAlreadyExists),
 
     #[error(transparent)]
-    UnknownShareAccount(#[from] UnknownShareAccount),
+    UnknownShareAccounts(#[from] UnknownShareAccounts),
 
     #[error(transparent)]
     WrongShareObject(#[from] WrongShareObject),
@@ -535,20 +535,20 @@ impl AppErrorMessage for UnknownShareId {
     }
 }
 
-impl AppErrorMessage for ShareAccountAlreadyExists {
+impl AppErrorMessage for ShareAccountsAlreadyExists {
     fn message(&self) -> String {
         format!(
-            "Share account for ({},{}) already exists",
-            self.share_name, self.account
+            "Share accounts for ({},{:?}) already exists",
+            self.share_name, self.accounts
         )
     }
 }
 
-impl AppErrorMessage for UnknownShareAccount {
+impl AppErrorMessage for UnknownShareAccounts {
     fn message(&self) -> String {
         format!(
-            "Unknown share account for ({},{})",
-            self.account, self.share_id
+            "Unknown share account for ({:?},{})",
+            self.accounts, self.share_id
         )
     }
 }
@@ -631,10 +631,10 @@ impl From<AppError> for ErrorCode {
             AppError::ShareAlreadyExists(err) => ErrorCode::ShareAlreadyExists(err.message()),
             AppError::UnknownShare(err) => ErrorCode::UnknownShare(err.message()),
             AppError::UnknownShareId(err) => ErrorCode::UnknownShareId(err.message()),
-            AppError::ShareAccountAlreadyExists(err) => {
-                ErrorCode::ShareAccountAlreadyExists(err.message())
+            AppError::ShareAccountsAlreadyExists(err) => {
+                ErrorCode::ShareAccountsAlreadyExists(err.message())
             }
-            AppError::UnknownShareAccount(err) => ErrorCode::UnknownShareAccount(err.message()),
+            AppError::UnknownShareAccounts(err) => ErrorCode::UnknownShareAccounts(err.message()),
             AppError::WrongShareObject(err) => ErrorCode::WrongShareObject(err.message()),
             AppError::TxnRetryMaxTimes(err) => ErrorCode::TxnRetryMaxTimes(err.message()),
         }
