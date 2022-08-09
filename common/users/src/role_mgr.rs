@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
+
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::GrantObject;
@@ -19,6 +21,7 @@ use common_meta_types::RoleInfo;
 use common_meta_types::UserIdentity;
 use common_meta_types::UserPrivilegeSet;
 
+use crate::role_util::find_all_related_roles;
 use crate::UserApiProvider;
 
 impl UserApiProvider {
@@ -133,15 +136,27 @@ impl UserApiProvider {
             .map_err(|e| e.add_message_back("(while revoke role from user)"))
     }
 
+    // the grant_role can not have cycle with target_role.
     pub async fn grant_role_to_role(
         &self,
         tenant: &str,
-        role: String,
+        target_role: String,
         grant_role: String,
     ) -> Result<Option<u64>> {
+        let related_roles = self.find_related_roles(tenant, &vec![grant_role]).await?;
+        let have_cycle = related_roles
+            .into_iter()
+            .any(|r| r.identity() == target_role);
+        if have_cycle {
+            return Err(ErrorCode::InvalidRole(format!(
+                "there's cycle between {} and {}",
+                target_role, grant_role
+            )));
+        }
+
         let client = self.get_role_api_client(tenant)?;
         client
-            .grant_role(role, grant_role, None)
+            .grant_role(target_role, grant_role, None)
             .await
             .map_err(|e| e.add_message_back("(while grant role to role)"))
     }
@@ -173,5 +188,19 @@ impl UserApiProvider {
                 }
             }
         }
+    }
+
+    fn find_related_roles(
+        &self,
+        tenant: &str,
+        role_identities: &[String],
+    ) -> Result<Vec<RoleInfo>> {
+        let tenant_roles_map = self
+            .get_roles(tenant)
+            .await?
+            .into_iter()
+            .map(|r| (r.identity(), r))
+            .collect::<HashMap<_, _>>();
+        Ok(find_all_related_roles(&tenant_roles_map, role_identities))
     }
 }
