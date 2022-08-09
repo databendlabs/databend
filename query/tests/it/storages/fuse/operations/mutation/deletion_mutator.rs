@@ -31,6 +31,7 @@ use databend_query::sessions::TableContext;
 use databend_query::storages::fuse::io::SegmentWriter;
 use databend_query::storages::fuse::io::TableMetaLocationGenerator;
 use databend_query::storages::fuse::operations::DeletionMutator;
+use databend_query::storages::fuse::statistics::ClusterStatsGenerator;
 use uuid::Uuid;
 
 use crate::storages::fuse::table_test_fixture::TestFixture;
@@ -91,14 +92,19 @@ async fn test_deletion_mutator_multiple_empty_segments() -> Result<()> {
     );
 
     let table_ctx: Arc<dyn TableContext> = ctx as Arc<dyn TableContext>;
-    let mut mutator = DeletionMutator::try_create(&table_ctx, &location_generator, &base_snapshot)?;
+    let mut mutator = DeletionMutator::try_create(
+        &table_ctx,
+        &location_generator,
+        &base_snapshot,
+        ClusterStatsGenerator::default(),
+    )?;
 
     // clear half of the segments
     for (i, _) in test_segment_locations.iter().enumerate().take(100) {
         if i % 2 == 0 {
             // empty the segment (segment only contains one block)
             mutator
-                .replace_with(i, test_block_locations[i].clone(), DataBlock::empty())
+                .replace_with(i, test_block_locations[i].clone(), None, DataBlock::empty())
                 .await?;
         }
     }

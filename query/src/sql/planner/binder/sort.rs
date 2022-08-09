@@ -28,6 +28,7 @@ use crate::sql::binder::scalar::ScalarBinder;
 use crate::sql::binder::select::SelectList;
 use crate::sql::binder::Binder;
 use crate::sql::binder::ColumnBinding;
+use crate::sql::normalize_identifier;
 use crate::sql::optimizer::SExpr;
 use crate::sql::planner::semantic::GroupingChecker;
 use crate::sql::plans::AggregateFunction;
@@ -78,11 +79,21 @@ impl<'a> Binder {
                 } => {
                     // We first search the identifier in select list
                     let mut found = false;
-                    let db = database_name.as_ref().map(|s| s.name.as_str());
-                    let table = table_name.as_ref().map(|s| s.name.as_str());
+                    let database = database_name
+                        .as_ref()
+                        .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name);
+                    let table = table_name
+                        .as_ref()
+                        .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name);
+                    let column = normalize_identifier(ident, &self.name_resolution_ctx).name;
 
                     for item in projections.iter() {
-                        if BindContext::match_column_binding(db, table, ident, item) {
+                        if BindContext::match_column_binding(
+                            database.as_deref(),
+                            table.as_deref(),
+                            column.as_str(),
+                            item,
+                        ) {
                             order_items.push(OrderItem {
                                 expr: order.clone(),
                                 index: item.index,
@@ -105,7 +116,13 @@ impl<'a> Binder {
 
                     // If there isn't a matched alias in select list, we will fallback to
                     // from clause.
-                    let result = from_context.resolve_name(database_name.as_ref().map(|v| v.name.as_str()), table_name.as_ref().map(|v| v.name.as_str()), ident, &[]).and_then(|v| {
+                    let result = from_context.resolve_name(
+                        database.as_deref(),
+                        table.as_deref(),
+                        &column,
+                        &ident.span,
+                       &[])
+                    .and_then(|v| {
                         if distinct {
                             Err(ErrorCode::SemanticError(order.expr.span().display_error("for SELECT DISTINCT, ORDER BY expressions must appear in select list".to_string())))
                         } else {
@@ -154,6 +171,7 @@ impl<'a> Binder {
                     let mut scalar_binder = ScalarBinder::new(
                         &bind_context,
                         self.ctx.clone(),
+                        &self.name_resolution_ctx,
                         self.metadata.clone(),
                         &[],
                     );
@@ -270,8 +288,13 @@ impl<'a> Binder {
         child: SExpr,
         order_by: &[OrderByExpr<'_>],
     ) -> Result<SExpr> {
-        let mut scalar_binder =
-            ScalarBinder::new(bind_context, self.ctx.clone(), self.metadata.clone(), &[]);
+        let mut scalar_binder = ScalarBinder::new(
+            bind_context,
+            self.ctx.clone(),
+            &self.name_resolution_ctx,
+            self.metadata.clone(),
+            &[],
+        );
         let mut order_by_items = Vec::with_capacity(order_by.len());
         for order in order_by.iter() {
             match order.expr {

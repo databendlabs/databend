@@ -1,0 +1,53 @@
+onlyif mysql
+statement ok
+drop table if exists "T";
+
+onlyif mysql
+statement ok
+create table "T"("A" int);
+
+onlyif mysql
+statement ok
+insert into "T" values(1);
+
+onlyif mysql
+statement query I
+select "T"."A" from "T"
+
+----
+1
+
+onlyif mysql
+statement error doesn't exist
+select t."A" from "T"
+
+onlyif mysql
+statement error doesn't exist
+select t.a from "T"
+
+onlyif mysql
+statement error doesn't exist
+select a from "T"
+
+onlyif mysql
+statement error doesn't exist
+select "T".a from "T"
+
+onlyif mysql
+statement query I
+select "B" from (select "A" as "B" from "T");
+
+----
+1
+
+onlyif mysql
+statement error
+select b from (select "A" as "B" from "T");
+
+onlyif mysql
+statement error
+select "b" from (select "A" as "B" from "T");
+
+onlyif mysql
+statement ok
+drop table "T";

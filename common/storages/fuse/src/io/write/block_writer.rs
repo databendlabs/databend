@@ -22,6 +22,7 @@ use common_datablocks::serialize_data_blocks_with_compression;
 use common_datablocks::DataBlock;
 use common_exception::Result;
 use common_fuse_meta::meta::BlockMeta;
+use common_fuse_meta::meta::ClusterStatistics;
 use common_fuse_meta::meta::Location;
 use opendal::Operator;
 use tracing::warn;
@@ -55,11 +56,13 @@ impl<'a> BlockWriter<'a> {
             data_accessor,
         }
     }
+
     pub async fn write_with_location(
         &self,
         block: DataBlock,
         block_id: Uuid,
         location: Location,
+        cluster_stats: Option<ClusterStatistics>,
     ) -> Result<BlockMeta> {
         let data_accessor = &self.data_accessor;
         let row_count = block.num_rows() as u64;
@@ -70,7 +73,6 @@ impl<'a> BlockWriter<'a> {
             .await?;
         let (file_size, file_meta_data) = write_block(block, data_accessor, &location.0).await?;
         let col_metas = util::column_metas(&file_meta_data)?;
-        let cluster_stats = None; // TODO confirm this with zhyass
         let block_meta = BlockMeta::new(
             row_count,
             block_size,
@@ -85,9 +87,14 @@ impl<'a> BlockWriter<'a> {
         Ok(block_meta)
     }
 
-    pub async fn write(&self, block: DataBlock) -> Result<BlockMeta> {
+    pub async fn write(
+        &self,
+        block: DataBlock,
+        cluster_stats: Option<ClusterStatistics>,
+    ) -> Result<BlockMeta> {
         let (location, block_id) = self.location_generator.gen_block_location();
-        self.write_with_location(block, block_id, location).await
+        self.write_with_location(block, block_id, location, cluster_stats)
+            .await
     }
 
     pub async fn build_block_index(

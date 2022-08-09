@@ -32,6 +32,7 @@ use common_storage::UriLocation;
 
 use crate::sessions::TableContext;
 use crate::sql::binder::Binder;
+use crate::sql::normalize_identifier;
 use crate::sql::plans::CopyPlanV2;
 use crate::sql::plans::Plan;
 use crate::sql::plans::ValidationMode;
@@ -56,13 +57,13 @@ impl<'a> Binder {
             ) => {
                 let catalog_name = catalog
                     .as_ref()
-                    .map(|v| v.to_string())
+                    .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
                     .unwrap_or_else(|| self.ctx.get_current_catalog());
                 let database_name = database
                     .as_ref()
-                    .map(|v| v.to_string())
+                    .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
                     .unwrap_or_else(|| self.ctx.get_current_database());
-                let table = table.to_string();
+                let table = normalize_identifier(table, &self.name_resolution_ctx).name;
 
                 self.bind_copy_from_stage_into_table(
                     bind_context,
@@ -85,13 +86,13 @@ impl<'a> Binder {
             ) => {
                 let catalog_name = catalog
                     .as_ref()
-                    .map(|v| v.to_string())
+                    .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
                     .unwrap_or_else(|| self.ctx.get_current_catalog());
                 let database_name = database
                     .as_ref()
-                    .map(|v| v.to_string())
+                    .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
                     .unwrap_or_else(|| self.ctx.get_current_database());
-                let table = table.to_string();
+                let table = normalize_identifier(table, &self.name_resolution_ctx).name;
 
                 let ul = UriLocation {
                     protocol: uri_location.protocol.clone(),
@@ -120,13 +121,13 @@ impl<'a> Binder {
             ) => {
                 let catalog_name = catalog
                     .as_ref()
-                    .map(|v| v.to_string())
+                    .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
                     .unwrap_or_else(|| self.ctx.get_current_catalog());
                 let database_name = database
                     .as_ref()
-                    .map(|v| v.to_string())
+                    .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
                     .unwrap_or_else(|| self.ctx.get_current_database());
-                let table = table.to_string();
+                let table = normalize_identifier(table, &self.name_resolution_ctx).name;
 
                 self.bind_copy_from_table_into_stage(
                     bind_context,
@@ -149,13 +150,13 @@ impl<'a> Binder {
             ) => {
                 let catalog_name = catalog
                     .as_ref()
-                    .map(|v| v.to_string())
+                    .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
                     .unwrap_or_else(|| self.ctx.get_current_catalog());
                 let database_name = database
                     .as_ref()
-                    .map(|v| v.to_string())
+                    .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
                     .unwrap_or_else(|| self.ctx.get_current_database());
-                let table = table.to_string();
+                let table = normalize_identifier(table, &self.name_resolution_ctx).name;
 
                 let ul = UriLocation {
                     protocol: uri_location.protocol.clone(),

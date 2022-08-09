@@ -15,7 +15,6 @@
 use std::collections::HashMap;
 
 use common_datablocks::DataBlock;
-use common_datavalues::DataValue;
 use common_fuse_meta::meta::ClusterStatistics;
 use common_fuse_meta::meta::ColumnId;
 use common_fuse_meta::meta::ColumnStatistics;
@@ -43,46 +42,5 @@ impl BlockStatistics {
             block_column_statistics: column_statistic::gen_columns_statistics(data_block)?,
             block_cluster_statistics: cluster_stats,
         })
-    }
-
-    pub fn clusters_statistics(
-        cluster_key_id: u32,
-        cluster_key_index: &[usize],
-        block: &DataBlock,
-    ) -> common_exception::Result<Option<ClusterStatistics>> {
-        if cluster_key_index.is_empty() {
-            return Ok(None);
-        }
-
-        let mut min = Vec::with_capacity(cluster_key_index.len());
-        let mut max = Vec::with_capacity(cluster_key_index.len());
-
-        for key in cluster_key_index.iter() {
-            let col = block.column(*key);
-
-            let mut left = col.get_checked(0)?;
-            // To avoid high cardinality, for the string column,
-            // cluster statistics uses only the first 5 bytes.
-            if let DataValue::String(v) = &left {
-                let l = v.len() as usize;
-                let e = if l < 5 { l } else { 5 };
-                left = DataValue::from(&v[0..e]);
-            }
-            min.push(left);
-
-            let mut right = col.get_checked(col.len() - 1)?;
-            if let DataValue::String(v) = &right {
-                let l = v.len() as usize;
-                let e = if l < 5 { l } else { 5 };
-                right = DataValue::from(&v[0..e]);
-            }
-            max.push(right);
-        }
-
-        Ok(Some(ClusterStatistics {
-            cluster_key_id,
-            min,
-            max,
-        }))
     }
 }

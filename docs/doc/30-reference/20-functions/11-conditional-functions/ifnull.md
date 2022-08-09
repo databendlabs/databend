@@ -5,8 +5,6 @@ description: 'IFNULL( <expr1>, <expr2> ) function'
 
 The IFNULL() function return the first expression if it is not NULL. Otherwise, the second expression is returned.
 
-IFNULL() is available under planner_v2.
-
 ## Syntax
 
 ```sql
@@ -27,7 +25,6 @@ The data type of the returned value is the data type of \<expr1\>.
 ## Examples
 
 ```sql
-SET enable_planner_v2 = 1;
 
 SELECT a, b, IFNULL(a, b) FROM t;
 +------+------+--------------+

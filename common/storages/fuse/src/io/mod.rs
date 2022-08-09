@@ -28,7 +28,5 @@ pub use write::write_block;
 pub use write::write_data;
 pub use write::write_meta;
 pub use write::BlockCompactor;
-pub use write::BlockStreamWriter;
 pub use write::BlockWriter;
-pub use write::SegmentInfoStream;
 pub use write::SegmentWriter;
