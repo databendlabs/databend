@@ -19,7 +19,6 @@ use std::sync::Arc;
 use common_arrow::arrow::array::Array;
 use common_arrow::arrow::chunk::Chunk;
 use common_arrow::arrow::datatypes::Field;
-use common_arrow::arrow::datatypes::Schema as ArrowSchema;
 use common_arrow::arrow::io::parquet::read;
 use common_arrow::arrow::io::parquet::read::read_columns_many;
 use common_arrow::arrow::io::parquet::read::ArrayIter;
@@ -30,7 +29,6 @@ use common_arrow::parquet::read::read_metadata;
 use common_datablocks::DataBlock;
 use common_datavalues::remove_nullable;
 use common_datavalues::DataField;
-use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -154,7 +152,6 @@ impl InputFormat for ParquetInputFormat {
         }
 
         let mut data_blocks = Vec::with_capacity(parquet_metadata.row_groups.len());
-
         for row_group in &parquet_metadata.row_groups {
             let arrays = Self::read_columns(&read_fields, row_group, &mut cursor)?;
             let chunk = Self::deserialize(row_group.num_rows() as usize, arrays)?;
