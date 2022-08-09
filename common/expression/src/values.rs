@@ -159,13 +159,7 @@ impl<'a, T: ValueType> ValueRef<'a, T> {
             (ValueRef::Column(c1), ValueRef::Column(c2)) => c1 == c2,
             (ValueRef::Scalar(s), ValueRef::Column(c))
             | (ValueRef::Column(c), ValueRef::Scalar(s)) => {
-                for scalar in T::iter_column(c) {
-                    if scalar != *s {
-                        return false;
-                    }
-                }
-                true
-                // T::iter_column(c).all(|scalar| &scalar == s)
+                T::iter_column(c).all(|scalar| scalar == *s)
             }
         }
     }
