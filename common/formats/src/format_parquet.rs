@@ -29,6 +29,7 @@ use common_arrow::parquet::metadata::RowGroupMetaData;
 use common_arrow::parquet::read::read_metadata;
 use common_datablocks::DataBlock;
 use common_datavalues::remove_nullable;
+use common_datavalues::DataField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
@@ -53,7 +54,6 @@ impl InputState for ParquetInputState {
 
 pub struct ParquetInputFormat {
     schema: DataSchemaRef,
-    arrow_table_schema: ArrowSchema,
 }
 
 impl ParquetInputFormat {
@@ -69,11 +69,7 @@ impl ParquetInputFormat {
     }
 
     pub fn try_create(_name: &str, schema: DataSchemaRef) -> Result<Arc<dyn InputFormat>> {
-        let arrow_table_schema = schema.to_arrow();
-        Ok(Arc::new(ParquetInputFormat {
-            schema,
-            arrow_table_schema,
-        }))
+        Ok(Arc::new(ParquetInputFormat { schema }))
     }
 
     fn read_meta_data(cursor: &mut Cursor<&Vec<u8>>) -> Result<FileMetaData> {
@@ -130,22 +126,25 @@ impl InputFormat for ParquetInputFormat {
         let mut cursor = Cursor::new(&split.buf);
         let parquet_metadata = Self::read_meta_data(&mut cursor)?;
         let infer_schema = read::infer_schema(&parquet_metadata)?;
-        let actually_schema = DataSchema::from(&infer_schema);
+        let mut read_fields = Vec::with_capacity(self.schema.num_fields());
 
         for f in self.schema.fields().iter() {
-            if let Some(m) = actually_schema
-                .fields()
+            if let Some(m) = infer_schema
+                .fields
                 .iter()
-                .filter(|c| c.name().eq_ignore_ascii_case(f.name()))
+                .filter(|c| c.name.eq_ignore_ascii_case(f.name()))
                 .last()
             {
-                if remove_nullable(m.data_type()) != remove_nullable(f.data_type()) {
+                let tf = DataField::from(m);
+                if remove_nullable(tf.data_type()) != remove_nullable(f.data_type()) {
                     let diff = Diff::from_debug(f, m, "expected_field", "infer_field");
                     return Err(ErrorCode::ParquetError(format!(
                         "parquet schema mismatch, differ: {}",
                         diff
                     )));
                 }
+
+                read_fields.push(m.clone());
             } else {
                 return Err(ErrorCode::ParquetError(format!(
                     "schema field size mismatch, expected to find column: {}",
@@ -154,11 +153,10 @@ impl InputFormat for ParquetInputFormat {
             }
         }
 
-        let fields = &self.arrow_table_schema.fields;
         let mut data_blocks = Vec::with_capacity(parquet_metadata.row_groups.len());
 
         for row_group in &parquet_metadata.row_groups {
-            let arrays = Self::read_columns(fields, row_group, &mut cursor)?;
+            let arrays = Self::read_columns(&read_fields, row_group, &mut cursor)?;
             let chunk = Self::deserialize(row_group.num_rows() as usize, arrays)?;
             data_blocks.push(DataBlock::from_chunk(&self.schema, &chunk)?);
         }
