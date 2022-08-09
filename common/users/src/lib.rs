@@ -22,6 +22,7 @@ mod user_stage;
 mod user_udf;
 
 pub mod role_cache_mgr;
+mod role_util;
 
 pub use jwt::*;
 pub use role_cache_mgr::RoleCacheMgr;
