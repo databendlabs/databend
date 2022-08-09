@@ -1074,38 +1074,38 @@ impl<'a> TypeChecker<'a> {
     ) -> Result<Box<(Scalar, DataTypeImpl)>> {
         match interval_kind {
             IntervalKind::Year => {
-                self.resolve_function(span, "toYear", &[arg], Some(TimestampType::new_impl(0)))
+                self.resolve_function(span, "to_year", &[arg], Some(TimestampType::new_impl(0)))
                     .await
             }
             IntervalKind::Month => {
-                self.resolve_function(span, "toMonth", &[arg], Some(TimestampType::new_impl(0)))
+                self.resolve_function(span, "to_month", &[arg], Some(TimestampType::new_impl(0)))
                     .await
             }
             IntervalKind::Day => {
                 self.resolve_function(
                     span,
-                    "toDayOfMonth",
+                    "to_day_of_month",
                     &[arg],
                     Some(TimestampType::new_impl(0)),
                 )
                 .await
             }
             IntervalKind::Hour => {
-                self.resolve_function(span, "toHour", &[arg], Some(TimestampType::new_impl(0)))
+                self.resolve_function(span, "to_hour", &[arg], Some(TimestampType::new_impl(0)))
                     .await
             }
             IntervalKind::Minute => {
-                self.resolve_function(span, "toMinute", &[arg], Some(TimestampType::new_impl(0)))
+                self.resolve_function(span, "to_minute", &[arg], Some(TimestampType::new_impl(0)))
                     .await
             }
             IntervalKind::Second => {
-                self.resolve_function(span, "toSecond", &[arg], Some(TimestampType::new_impl(0)))
+                self.resolve_function(span, "to_second", &[arg], Some(TimestampType::new_impl(0)))
                     .await
             }
             IntervalKind::Doy => {
                 self.resolve_function(
                     span,
-                    "toDayOfYear",
+                    "to_day_of_year",
                     &[arg],
                     Some(TimestampType::new_impl(0)),
                 )
@@ -1114,7 +1114,7 @@ impl<'a> TypeChecker<'a> {
             IntervalKind::Dow => {
                 self.resolve_function(
                     span,
-                    "toDayOfWeek",
+                    "to_day_of_week",
                     &[arg],
                     Some(TimestampType::new_impl(0)),
                 )
