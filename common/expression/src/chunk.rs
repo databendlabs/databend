@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use crate::types::AnyType;
+use crate::Domain;
 use crate::Value;
 
 /// Chunk is a lightweight container for a group of columns.
@@ -62,5 +63,12 @@ impl Chunk {
 
     pub fn num_columns(&self) -> usize {
         self.columns.len()
+    }
+
+    pub fn domains(&self) -> Vec<Domain> {
+        self.columns
+            .iter()
+            .map(|value| value.as_ref().domain())
+            .collect()
     }
 }

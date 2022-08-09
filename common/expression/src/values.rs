@@ -20,17 +20,14 @@ use common_arrow::arrow::buffer::Buffer;
 use common_arrow::arrow::trusted_len::TrustedLen;
 use enum_as_inner::EnumAsInner;
 use itertools::Itertools;
-use ordered_float::NotNan;
+use ordered_float::OrderedFloat;
 use serde::Deserialize;
 use serde::Serialize;
 
 use crate::property::BooleanDomain;
 use crate::property::Domain;
-use crate::property::FloatDomain;
-use crate::property::IntDomain;
 use crate::property::NullableDomain;
 use crate::property::StringDomain;
-use crate::property::UIntDomain;
 use crate::types::array::ArrayColumn;
 use crate::types::array::ArrayColumnBuilder;
 use crate::types::nullable::NullableColumn;
@@ -42,20 +39,21 @@ use crate::util::append_bitmap;
 use crate::util::bitmap_into_mut;
 use crate::util::buffer_into_mut;
 use crate::util::constant_bitmap;
+use crate::NumberDomain;
 
-#[derive(EnumAsInner, Clone)]
+#[derive(Debug, Clone, EnumAsInner)]
 pub enum Value<T: ValueType> {
     Scalar(T::Scalar),
     Column(T::Column),
 }
 
-#[derive(EnumAsInner)]
+#[derive(Debug, Clone, EnumAsInner)]
 pub enum ValueRef<'a, T: ValueType> {
     Scalar(T::ScalarRef<'a>),
     Column(T::Column),
 }
 
-#[derive(Debug, Clone, Default, EnumAsInner, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, EnumAsInner, Serialize, Deserialize)]
 pub enum Scalar {
     #[default]
     Null,
@@ -77,7 +75,7 @@ pub enum Scalar {
     Tuple(Vec<Scalar>),
 }
 
-#[derive(Debug, Clone, Default, EnumAsInner)]
+#[derive(Clone, PartialEq, Default, EnumAsInner)]
 pub enum ScalarRef<'a> {
     #[default]
     Null,
@@ -119,7 +117,7 @@ pub enum Column {
     Tuple { fields: Vec<Column>, len: usize },
 }
 
-#[derive(Debug, Clone, EnumAsInner)]
+#[derive(Debug, Clone, PartialEq, EnumAsInner)]
 pub enum ColumnBuilder {
     Null {
         len: usize,
@@ -152,6 +150,23 @@ impl<'a, T: ValueType> ValueRef<'a, T> {
         match self {
             ValueRef::Scalar(scalar) => Value::Scalar(T::to_owned_scalar(scalar)),
             ValueRef::Column(col) => Value::Column(col),
+        }
+    }
+
+    pub fn sematically_eq(&'a self, other: &'a Self) -> bool {
+        match (self, other) {
+            (ValueRef::Scalar(s1), ValueRef::Scalar(s2)) => s1 == s2,
+            (ValueRef::Column(c1), ValueRef::Column(c2)) => c1 == c2,
+            (ValueRef::Scalar(s), ValueRef::Column(c))
+            | (ValueRef::Column(c), ValueRef::Scalar(s)) => {
+                for scalar in T::iter_column(c) {
+                    if scalar != *s {
+                        return false;
+                    }
+                }
+                true
+                // T::iter_column(c).all(|scalar| &scalar == s)
+            }
         }
     }
 }
@@ -188,13 +203,11 @@ impl<'a> ValueRef<'a, AnyType> {
             ValueRef::Column(col) => col.index(index),
         }
     }
-}
 
-impl<'a, T: ValueType> Clone for ValueRef<'a, T> {
-    fn clone(&self) -> Self {
+    pub fn domain(&self) -> Domain {
         match self {
-            ValueRef::Scalar(scalar) => ValueRef::Scalar(scalar.clone()),
-            ValueRef::Column(col) => ValueRef::Column(col.clone()),
+            ValueRef::Scalar(scalar) => scalar.domain(),
+            ValueRef::Column(col) => col.domain(),
         }
     }
 }
@@ -269,6 +282,42 @@ impl<'a> ScalarRef<'a> {
                 fields: fields.iter().map(|field| field.repeat(n)).collect(),
                 len: n,
             },
+        }
+    }
+
+    pub fn domain(&self) -> Domain {
+        match self {
+            ScalarRef::Null => Domain::Nullable(NullableDomain {
+                has_null: true,
+                value: None,
+            }),
+            ScalarRef::EmptyArray => Domain::Array(None),
+            ScalarRef::Int8(i) => Domain::Int8(NumberDomain { min: *i, max: *i }),
+            ScalarRef::Int16(i) => Domain::Int16(NumberDomain { min: *i, max: *i }),
+            ScalarRef::Int32(i) => Domain::Int32(NumberDomain { min: *i, max: *i }),
+            ScalarRef::Int64(i) => Domain::Int64(NumberDomain { min: *i, max: *i }),
+            ScalarRef::UInt8(i) => Domain::UInt8(NumberDomain { min: *i, max: *i }),
+            ScalarRef::UInt16(i) => Domain::UInt16(NumberDomain { min: *i, max: *i }),
+            ScalarRef::UInt32(i) => Domain::UInt32(NumberDomain { min: *i, max: *i }),
+            ScalarRef::UInt64(i) => Domain::UInt64(NumberDomain { min: *i, max: *i }),
+            ScalarRef::Float32(i) => Domain::Float32(NumberDomain { min: *i, max: *i }),
+            ScalarRef::Float64(i) => Domain::Float64(NumberDomain { min: *i, max: *i }),
+            ScalarRef::Boolean(true) => Domain::Boolean(BooleanDomain {
+                has_false: false,
+                has_true: true,
+            }),
+            ScalarRef::Boolean(false) => Domain::Boolean(BooleanDomain {
+                has_false: true,
+                has_true: false,
+            }),
+            ScalarRef::String(s) => Domain::String(StringDomain {
+                min: s.to_vec(),
+                max: Some(s.to_vec()),
+            }),
+            ScalarRef::Array(array) => Domain::Array(Some(Box::new(array.domain()))),
+            ScalarRef::Tuple(fields) => {
+                Domain::Tuple(fields.iter().map(|field| field.domain()).collect())
+            }
         }
     }
 }
@@ -401,87 +450,82 @@ impl Column {
             Column::EmptyArray { .. } => Domain::Array(None),
             Column::Int8(col) => {
                 let (min, max) = col.iter().minmax().into_option().unwrap();
-                Domain::Int(IntDomain {
-                    min: *min as i64,
-                    max: *max as i64,
+                Domain::Int8(NumberDomain {
+                    min: *min,
+                    max: *max,
                 })
             }
             Column::Int16(col) => {
                 let (min, max) = col.iter().minmax().into_option().unwrap();
-                Domain::Int(IntDomain {
-                    min: *min as i64,
-                    max: *max as i64,
+                Domain::Int16(NumberDomain {
+                    min: *min,
+                    max: *max,
                 })
             }
             Column::Int32(col) => {
                 let (min, max) = col.iter().minmax().into_option().unwrap();
-                Domain::Int(IntDomain {
-                    min: *min as i64,
-                    max: *max as i64,
+                Domain::Int32(NumberDomain {
+                    min: *min,
+                    max: *max,
                 })
             }
             Column::Int64(col) => {
                 let (min, max) = col.iter().minmax().into_option().unwrap();
-                Domain::Int(IntDomain {
-                    min: *min as i64,
-                    max: *max as i64,
+                Domain::Int64(NumberDomain {
+                    min: *min,
+                    max: *max,
                 })
             }
             Column::UInt8(col) => {
                 let (min, max) = col.iter().minmax().into_option().unwrap();
-                Domain::UInt(UIntDomain {
-                    min: *min as u64,
-                    max: *max as u64,
+                Domain::UInt8(NumberDomain {
+                    min: *min,
+                    max: *max,
                 })
             }
             Column::UInt16(col) => {
                 let (min, max) = col.iter().minmax().into_option().unwrap();
-                Domain::UInt(UIntDomain {
-                    min: *min as u64,
-                    max: *max as u64,
+                Domain::UInt16(NumberDomain {
+                    min: *min,
+                    max: *max,
                 })
             }
             Column::UInt32(col) => {
                 let (min, max) = col.iter().minmax().into_option().unwrap();
-                Domain::UInt(UIntDomain {
-                    min: *min as u64,
-                    max: *max as u64,
+                Domain::UInt32(NumberDomain {
+                    min: *min,
+                    max: *max,
                 })
             }
             Column::UInt64(col) => {
                 let (min, max) = col.iter().minmax().into_option().unwrap();
-                Domain::UInt(UIntDomain {
-                    min: *min as u64,
-                    max: *max as u64,
+                Domain::UInt64(NumberDomain {
+                    min: *min,
+                    max: *max,
                 })
             }
             Column::Float32(col) => {
-                // TODO: may panic if all values are NaN
                 let (min, max) = col
                     .iter()
                     .cloned()
-                    .map(NotNan::new)
-                    .filter_map(Result::ok)
+                    .map(OrderedFloat::from)
                     .minmax()
                     .into_option()
                     .unwrap();
-                Domain::Float(FloatDomain {
-                    // Cast to f32 and then to f64 to round to the nearest f32 value.
-                    min: *min as f32 as f64,
-                    max: *max as f32 as f64,
+                Domain::Float32(NumberDomain {
+                    min: *min,
+                    max: *max,
                 })
             }
             Column::Float64(col) => {
-                // TODO: may panic if all values are NaN
                 let (min, max) = col
                     .iter()
                     .cloned()
-                    .map(NotNan::new)
-                    .filter_map(Result::ok)
+                    .map(OrderedFloat::from)
                     .minmax()
                     .into_option()
                     .unwrap();
-                Domain::Float(FloatDomain {
+                Domain::Float64(NumberDomain {
                     min: *min,
                     max: *max,
                 })

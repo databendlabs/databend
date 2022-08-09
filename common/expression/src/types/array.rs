@@ -128,10 +128,6 @@ impl<T: ArgType> ArgType for ArrayType<T> {
         DataType::Array(Box::new(T::data_type()))
     }
 
-    fn full_domain(generics: &GenericMap) -> Self::Domain {
-        T::full_domain(generics)
-    }
-
     fn create_builder(capacity: usize, generics: &GenericMap) -> Self::ColumnBuilder {
         ArrayColumnBuilder::with_capacity(capacity, 0, generics)
     }
@@ -211,7 +207,7 @@ impl<'a, T: ValueType> Iterator for ArrayIterator<'a, T> {
 
 unsafe impl<'a, T: ValueType> TrustedLen for ArrayIterator<'a, T> {}
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ArrayColumnBuilder<T: ValueType> {
     pub builder: T::ColumnBuilder,
     pub offsets: Vec<u64>,

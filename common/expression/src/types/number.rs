@@ -18,11 +18,10 @@ use std::ops::Range;
 
 use common_arrow::arrow::buffer::Buffer;
 use common_arrow::arrow::types::NativeType;
+use num_traits::NumCast;
+use ordered_float::OrderedFloat;
 
 use crate::property::Domain;
-use crate::property::FloatDomain;
-use crate::property::IntDomain;
-use crate::property::UIntDomain;
 use crate::types::ArgType;
 use crate::types::DataType;
 use crate::types::GenericMap;
@@ -30,32 +29,35 @@ use crate::types::ValueType;
 use crate::util::buffer_into_mut;
 use crate::values::Column;
 use crate::values::Scalar;
+use crate::NumberDomain;
 use crate::ScalarRef;
 
 pub trait Number: Debug + Clone + PartialEq + 'static {
-    type Storage: NativeType;
-    type Domain: Debug + Clone + PartialEq;
+    type Storage: NumCast + Copy + From<Self::OrderedStorage> + NativeType;
+    type OrderedStorage: NumCast + Copy + From<Self::Storage> + Ord;
+
+    const MIN: Self::Storage;
+    const MAX: Self::Storage;
 
     fn data_type() -> DataType;
     fn try_downcast_scalar(scalar: &ScalarRef) -> Option<Self::Storage>;
     fn try_downcast_column(col: &Column) -> Option<Buffer<Self::Storage>>;
-    fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain>;
+    fn try_downcast_domain(domain: &Domain) -> Option<NumberDomain<Self>>;
     fn upcast_scalar(scalar: Self::Storage) -> Scalar;
     fn upcast_column(col: Buffer<Self::Storage>) -> Column;
-    fn upcast_domain(domain: Self::Domain) -> Domain;
-    fn full_domain() -> Self::Domain;
+    fn upcast_domain(domain: NumberDomain<Self>) -> Domain;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NumberType<T: Number>(PhantomData<T>);
 
-impl<Int: Number> ValueType for NumberType<Int> {
-    type Scalar = Int::Storage;
-    type ScalarRef<'a> = Int::Storage;
-    type Column = Buffer<Int::Storage>;
-    type Domain = Int::Domain;
-    type ColumnIterator<'a> = std::iter::Cloned<std::slice::Iter<'a, Int::Storage>>;
-    type ColumnBuilder = Vec<Int::Storage>;
+impl<Num: Number> ValueType for NumberType<Num> {
+    type Scalar = Num::Storage;
+    type ScalarRef<'a> = Num::Storage;
+    type Column = Buffer<Num::Storage>;
+    type Domain = NumberDomain<Num>;
+    type ColumnIterator<'a> = std::iter::Cloned<std::slice::Iter<'a, Num::Storage>>;
+    type ColumnBuilder = Vec<Num::Storage>;
 
     fn to_owned_scalar<'a>(scalar: Self::ScalarRef<'a>) -> Self::Scalar {
         scalar
@@ -66,27 +68,27 @@ impl<Int: Number> ValueType for NumberType<Int> {
     }
 
     fn try_downcast_scalar<'a>(scalar: &'a ScalarRef) -> Option<Self::ScalarRef<'a>> {
-        Int::try_downcast_scalar(scalar)
+        Num::try_downcast_scalar(scalar)
     }
 
     fn try_downcast_column<'a>(col: &'a Column) -> Option<Self::Column> {
-        Int::try_downcast_column(col)
+        Num::try_downcast_column(col)
     }
 
-    fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
-        Int::try_downcast_domain(domain)
+    fn try_downcast_domain(domain: &Domain) -> Option<NumberDomain<Num>> {
+        Num::try_downcast_domain(domain)
     }
 
     fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
-        Int::upcast_scalar(scalar)
+        Num::upcast_scalar(scalar)
     }
 
     fn upcast_column(col: Self::Column) -> Column {
-        Int::upcast_column(col)
+        Num::upcast_column(col)
     }
 
-    fn upcast_domain(domain: Self::Domain) -> Domain {
-        Int::upcast_domain(domain)
+    fn upcast_domain(domain: NumberDomain<Num>) -> Domain {
+        Num::upcast_domain(domain)
     }
 
     fn column_len<'a>(col: &'a Self::Column) -> usize {
@@ -118,7 +120,7 @@ impl<Int: Number> ValueType for NumberType<Int> {
     }
 
     fn push_default(builder: &mut Self::ColumnBuilder) {
-        builder.push(Int::Storage::default());
+        builder.push(Num::Storage::default());
     }
 
     fn append_builder(builder: &mut Self::ColumnBuilder, other_builder: &Self::ColumnBuilder) {
@@ -135,13 +137,9 @@ impl<Int: Number> ValueType for NumberType<Int> {
     }
 }
 
-impl<Int: Number> ArgType for NumberType<Int> {
+impl<Num: Number> ArgType for NumberType<Num> {
     fn data_type() -> DataType {
-        Int::data_type()
-    }
-
-    fn full_domain(_: &GenericMap) -> Self::Domain {
-        Int::full_domain()
+        Num::data_type()
     }
 
     fn create_builder(capacity: usize, _generics: &GenericMap) -> Self::ColumnBuilder {
@@ -155,7 +153,10 @@ impl<Int: Number> ArgType for NumberType<Int> {
 
 impl Number for u8 {
     type Storage = u8;
-    type Domain = UIntDomain;
+    type OrderedStorage = u8;
+
+    const MIN: Self::Storage = u8::MIN;
+    const MAX: Self::Storage = u8::MAX;
 
     fn data_type() -> DataType {
         DataType::UInt8
@@ -169,8 +170,8 @@ impl Number for u8 {
         col.as_u_int8().cloned()
     }
 
-    fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
-        domain.as_u_int().cloned()
+    fn try_downcast_domain(domain: &Domain) -> Option<NumberDomain<Self>> {
+        domain.as_u_int8().cloned()
     }
 
     fn upcast_scalar(scalar: Self::Storage) -> Scalar {
@@ -181,21 +182,17 @@ impl Number for u8 {
         Column::UInt8(col)
     }
 
-    fn upcast_domain(domain: Self::Domain) -> Domain {
-        Domain::UInt(domain)
-    }
-
-    fn full_domain() -> Self::Domain {
-        UIntDomain {
-            min: 0,
-            max: u8::MAX as u64,
-        }
+    fn upcast_domain(domain: NumberDomain<Self>) -> Domain {
+        Domain::UInt8(domain)
     }
 }
 
 impl Number for u16 {
     type Storage = u16;
-    type Domain = UIntDomain;
+    type OrderedStorage = u16;
+
+    const MIN: Self::Storage = u16::MIN;
+    const MAX: Self::Storage = u16::MAX;
 
     fn data_type() -> DataType {
         DataType::UInt16
@@ -209,8 +206,8 @@ impl Number for u16 {
         col.as_u_int16().cloned()
     }
 
-    fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
-        domain.as_u_int().cloned()
+    fn try_downcast_domain(domain: &Domain) -> Option<NumberDomain<Self>> {
+        domain.as_u_int16().cloned()
     }
 
     fn upcast_scalar(scalar: Self::Storage) -> Scalar {
@@ -221,21 +218,17 @@ impl Number for u16 {
         Column::UInt16(col)
     }
 
-    fn upcast_domain(domain: Self::Domain) -> Domain {
-        Domain::UInt(domain)
-    }
-
-    fn full_domain() -> Self::Domain {
-        UIntDomain {
-            min: 0,
-            max: u16::MAX as u64,
-        }
+    fn upcast_domain(domain: NumberDomain<Self>) -> Domain {
+        Domain::UInt16(domain)
     }
 }
 
 impl Number for u32 {
     type Storage = u32;
-    type Domain = UIntDomain;
+    type OrderedStorage = u32;
+
+    const MIN: Self::Storage = u32::MIN;
+    const MAX: Self::Storage = u32::MAX;
 
     fn data_type() -> DataType {
         DataType::UInt32
@@ -249,8 +242,8 @@ impl Number for u32 {
         col.as_u_int32().cloned()
     }
 
-    fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
-        domain.as_u_int().cloned()
+    fn try_downcast_domain(domain: &Domain) -> Option<NumberDomain<Self>> {
+        domain.as_u_int32().cloned()
     }
 
     fn upcast_scalar(scalar: Self::Storage) -> Scalar {
@@ -261,21 +254,17 @@ impl Number for u32 {
         Column::UInt32(col)
     }
 
-    fn upcast_domain(domain: Self::Domain) -> Domain {
-        Domain::UInt(domain)
-    }
-
-    fn full_domain() -> Self::Domain {
-        UIntDomain {
-            min: 0,
-            max: u32::MAX as u64,
-        }
+    fn upcast_domain(domain: NumberDomain<Self>) -> Domain {
+        Domain::UInt32(domain)
     }
 }
 
 impl Number for u64 {
     type Storage = u64;
-    type Domain = UIntDomain;
+    type OrderedStorage = u64;
+
+    const MIN: Self::Storage = u64::MIN;
+    const MAX: Self::Storage = u64::MAX;
 
     fn data_type() -> DataType {
         DataType::UInt64
@@ -289,9 +278,10 @@ impl Number for u64 {
         col.as_u_int64().cloned()
     }
 
-    fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
-        domain.as_u_int().cloned()
+    fn try_downcast_domain(domain: &Domain) -> Option<NumberDomain<Self>> {
+        domain.as_u_int64().cloned()
     }
+
     fn upcast_scalar(scalar: Self::Storage) -> Scalar {
         Scalar::UInt64(scalar)
     }
@@ -300,20 +290,17 @@ impl Number for u64 {
         Column::UInt64(col)
     }
 
-    fn upcast_domain(domain: Self::Domain) -> Domain {
-        Domain::UInt(domain)
-    }
-    fn full_domain() -> Self::Domain {
-        UIntDomain {
-            min: 0,
-            max: u64::MAX,
-        }
+    fn upcast_domain(domain: NumberDomain<Self>) -> Domain {
+        Domain::UInt64(domain)
     }
 }
 
 impl Number for i8 {
     type Storage = i8;
-    type Domain = IntDomain;
+    type OrderedStorage = i8;
+
+    const MIN: Self::Storage = i8::MIN;
+    const MAX: Self::Storage = i8::MAX;
 
     fn data_type() -> DataType {
         DataType::Int8
@@ -327,8 +314,8 @@ impl Number for i8 {
         col.as_int8().cloned()
     }
 
-    fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
-        domain.as_int().cloned()
+    fn try_downcast_domain(domain: &Domain) -> Option<NumberDomain<Self>> {
+        domain.as_int8().cloned()
     }
 
     fn upcast_scalar(scalar: Self::Storage) -> Scalar {
@@ -339,21 +326,17 @@ impl Number for i8 {
         Column::Int8(col)
     }
 
-    fn upcast_domain(domain: Self::Domain) -> Domain {
-        Domain::Int(domain)
-    }
-
-    fn full_domain() -> Self::Domain {
-        IntDomain {
-            min: i8::MIN as i64,
-            max: i8::MAX as i64,
-        }
+    fn upcast_domain(domain: NumberDomain<Self>) -> Domain {
+        Domain::Int8(domain)
     }
 }
 
 impl Number for i16 {
     type Storage = i16;
-    type Domain = IntDomain;
+    type OrderedStorage = i16;
+
+    const MIN: Self::Storage = i16::MIN;
+    const MAX: Self::Storage = i16::MAX;
 
     fn data_type() -> DataType {
         DataType::Int16
@@ -367,8 +350,8 @@ impl Number for i16 {
         col.as_int16().cloned()
     }
 
-    fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
-        domain.as_int().cloned()
+    fn try_downcast_domain(domain: &Domain) -> Option<NumberDomain<Self>> {
+        domain.as_int16().cloned()
     }
 
     fn upcast_scalar(scalar: Self::Storage) -> Scalar {
@@ -379,21 +362,17 @@ impl Number for i16 {
         Column::Int16(col)
     }
 
-    fn upcast_domain(domain: Self::Domain) -> Domain {
-        Domain::Int(domain)
-    }
-
-    fn full_domain() -> Self::Domain {
-        IntDomain {
-            min: i16::MIN as i64,
-            max: i16::MAX as i64,
-        }
+    fn upcast_domain(domain: NumberDomain<Self>) -> Domain {
+        Domain::Int16(domain)
     }
 }
 
 impl Number for i32 {
     type Storage = i32;
-    type Domain = IntDomain;
+    type OrderedStorage = i32;
+
+    const MIN: Self::Storage = i32::MIN;
+    const MAX: Self::Storage = i32::MAX;
 
     fn data_type() -> DataType {
         DataType::Int32
@@ -407,8 +386,8 @@ impl Number for i32 {
         col.as_int32().cloned()
     }
 
-    fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
-        domain.as_int().cloned()
+    fn try_downcast_domain(domain: &Domain) -> Option<NumberDomain<Self>> {
+        domain.as_int32().cloned()
     }
 
     fn upcast_scalar(scalar: Self::Storage) -> Scalar {
@@ -419,20 +398,17 @@ impl Number for i32 {
         Column::Int32(col)
     }
 
-    fn upcast_domain(domain: Self::Domain) -> Domain {
-        Domain::Int(domain)
-    }
-
-    fn full_domain() -> Self::Domain {
-        IntDomain {
-            min: i32::MIN as i64,
-            max: i32::MAX as i64,
-        }
+    fn upcast_domain(domain: NumberDomain<Self>) -> Domain {
+        Domain::Int32(domain)
     }
 }
+
 impl Number for i64 {
     type Storage = i64;
-    type Domain = IntDomain;
+    type OrderedStorage = i64;
+
+    const MIN: Self::Storage = i64::MIN;
+    const MAX: Self::Storage = i64::MAX;
 
     fn data_type() -> DataType {
         DataType::Int64
@@ -446,8 +422,8 @@ impl Number for i64 {
         col.as_int64().cloned()
     }
 
-    fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
-        domain.as_int().cloned()
+    fn try_downcast_domain(domain: &Domain) -> Option<NumberDomain<Self>> {
+        domain.as_int64().cloned()
     }
 
     fn upcast_scalar(scalar: Self::Storage) -> Scalar {
@@ -458,21 +434,17 @@ impl Number for i64 {
         Column::Int64(col)
     }
 
-    fn upcast_domain(domain: Self::Domain) -> Domain {
-        Domain::Int(domain)
-    }
-
-    fn full_domain() -> Self::Domain {
-        IntDomain {
-            min: i64::MIN,
-            max: i64::MAX,
-        }
+    fn upcast_domain(domain: NumberDomain<Self>) -> Domain {
+        Domain::Int64(domain)
     }
 }
 
 impl Number for f32 {
     type Storage = f32;
-    type Domain = FloatDomain;
+    type OrderedStorage = OrderedFloat<f32>;
+
+    const MIN: Self::Storage = f32::NEG_INFINITY;
+    const MAX: Self::Storage = f32::INFINITY;
 
     fn data_type() -> DataType {
         DataType::Float32
@@ -486,8 +458,8 @@ impl Number for f32 {
         col.as_float32().cloned()
     }
 
-    fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
-        domain.as_float().cloned()
+    fn try_downcast_domain(domain: &Domain) -> Option<NumberDomain<Self>> {
+        domain.as_float32().cloned()
     }
 
     fn upcast_scalar(scalar: Self::Storage) -> Scalar {
@@ -498,21 +470,17 @@ impl Number for f32 {
         Column::Float32(col)
     }
 
-    fn upcast_domain(domain: Self::Domain) -> Domain {
-        Domain::Float(domain)
-    }
-
-    fn full_domain() -> Self::Domain {
-        FloatDomain {
-            min: f32::NEG_INFINITY as f64,
-            max: f32::INFINITY as f64,
-        }
+    fn upcast_domain(domain: NumberDomain<Self>) -> Domain {
+        Domain::Float32(domain)
     }
 }
 
 impl Number for f64 {
     type Storage = f64;
-    type Domain = FloatDomain;
+    type OrderedStorage = OrderedFloat<f64>;
+
+    const MIN: Self::Storage = f64::NEG_INFINITY;
+    const MAX: Self::Storage = f64::INFINITY;
 
     fn data_type() -> DataType {
         DataType::Float64
@@ -526,9 +494,10 @@ impl Number for f64 {
         col.as_float64().cloned()
     }
 
-    fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
-        domain.as_float().cloned()
+    fn try_downcast_domain(domain: &Domain) -> Option<NumberDomain<Self>> {
+        domain.as_float64().cloned()
     }
+
     fn upcast_scalar(scalar: Self::Storage) -> Scalar {
         Scalar::Float64(scalar)
     }
@@ -537,13 +506,20 @@ impl Number for f64 {
         Column::Float64(col)
     }
 
-    fn upcast_domain(domain: Self::Domain) -> Domain {
-        Domain::Float(domain)
+    fn upcast_domain(domain: NumberDomain<Self>) -> Domain {
+        Domain::Float64(domain)
     }
-    fn full_domain() -> Self::Domain {
-        FloatDomain {
-            min: f64::NEG_INFINITY,
-            max: f64::INFINITY,
-        }
-    }
+}
+
+pub fn overflow_cast<T: Number, U: Number>(src: T::Storage) -> (U::Storage, bool) {
+    let src: T::OrderedStorage = src.into();
+    let dest_min: T::OrderedStorage = num_traits::cast(U::MIN).unwrap_or(T::MIN).into();
+    let dest_max: T::OrderedStorage = num_traits::cast(U::MAX).unwrap_or(T::MAX).into();
+    let src_clamp: T::OrderedStorage = src.clamp(dest_min, dest_max);
+    let overflowing = src != src_clamp;
+    // The number must be within the range that `U` can represent after clamping, therefore
+    // it's safe to unwrap.
+    let dest: U::OrderedStorage = num_traits::cast(src_clamp).unwrap();
+
+    (dest.into(), overflowing)
 }
