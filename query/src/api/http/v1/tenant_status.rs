@@ -34,15 +34,22 @@ pub struct TenantStatus {
 }
 
 struct TenantStatusLoader {
-    session_manager: Arc<SessionManager>,
+    session_mgr: Arc<SessionManager>,
+    tenant: String,
 }
 
 impl TenantStatusLoader {
-    fn load_tables_count(tenant: String) -> Result<u64> {
-        let catalog = session_mgr
+    async fn load_tables_count(&self) -> Result<u64> {
+        let catalog = self
+            .session_mgr
             .get_catalog_manager()
             .get_catalog(CATALOG_DEFAULT)?;
-        catalog.count_tables(CountTablesReq { tenant })?
+        catalog
+            .count_tables(CountTablesReq {
+                tenant: self.tenant.clone(),
+            })
+            .await
+            .map(|r| r.count)
     }
 }
 
@@ -59,8 +66,12 @@ pub async fn tenant_status_handler(
     }
 
     let loader = TenantStatusLoader {
-        session_manager: session_mgr.clone(),
+        session_mgr: session_mgr.clone(),
+        tenant,
     };
-    let tables_count = loader.load_tables_count(tenant)?;
+    let tables_count = loader
+        .load_tables_count()
+        .await
+        .map_err(poem::error::InternalServerError)?;
     Ok(Json(TenantStatus { tables_count }))
 }
