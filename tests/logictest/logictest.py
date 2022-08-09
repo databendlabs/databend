@@ -413,16 +413,17 @@ class SuiteRunner(object):
         actual = safe_execute(lambda: self.execute_error(statement.text),
                               statement)
         if actual is None:
-            raise LogicError(message=f"{str(statement)}",
-                             errorType="statement error get no error message",
-                             runner=self.kind)
+            raise LogicError(
+                message=
+                f"expected error {statement.s_type.expect_error}, but got ok on statement: {statement.text} ",
+                errorType="Error code mismatch",
+                runner=self.kind)
         match = re.search(statement.s_type.expect_error, actual.msg)
         if match is None:
             raise LogicError(
                 message=
                 f"\n expected error regex is {statement.s_type.expect_error}\n actual found {actual}{str(statement)}",
-                errorType=
-                f"statement error get error message not equal to expected",
+                errorType="Error code mismatch",
                 runner=self.kind)
 
     def run_sql_suite(self):
