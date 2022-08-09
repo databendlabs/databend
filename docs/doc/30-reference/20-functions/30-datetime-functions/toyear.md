@@ -1,5 +1,5 @@
 ---
-title: TOYEAR
+title: to_year
 ---
 
 Converts a date or date with time to a UInt16 number containing the year number (AD).
@@ -7,7 +7,7 @@ Converts a date or date with time to a UInt16 number containing the year number 
 ## Syntax
 
 ```sql
-TOYEAR( <expr> )
+to_year( <expr> )
 ```
 
 ## Arguments
@@ -23,16 +23,16 @@ A `UInt16` date type value
 ## Examples
 
 ```sql
-SELECT toyear(now());
+SELECT to_year(now());
 +---------------+
-| toyear(now()) |
+| to_year(now()) |
 +---------------+
 |          2022 |
 +---------------+
 
-SELECT toyear(to_datetime(1));
+SELECT to_year(to_datetime(1));
 +-----------------------+
-| toyear(to_datetime(1)) |
+| to_year(to_datetime(1)) |
 +-----------------------+
 |                  1970 |
 +-----------------------+

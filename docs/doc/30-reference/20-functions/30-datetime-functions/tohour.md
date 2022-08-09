@@ -1,5 +1,5 @@
 ---
-title: toHour
+title: to_hour
 ---
 
 Converts a date with time to a UInt8 number containing the number of the hour in 24-hour time (0-23).
@@ -8,7 +8,7 @@ This function assumes that if clocks are moved ahead, it is by one hour and occu
 ## Syntax
 
 ```sql
-toHour( <expr> )
+to_hour( <expr> )
 ```
 
 ## Arguments
@@ -24,16 +24,16 @@ toHour( <expr> )
 ## Examples
 
 ```sql
-SELECT toHour(now());
+SELECT to_hour(now());
 +---------------+
-| toHour(now()) |
+| to_hour(now()) |
 +---------------+
 |             6 |
 +---------------+
 
-SELECT toHour(to_datetime(1630812366));
+SELECT to_hour(to_datetime(1630812366));
 +--------------------------------+
-| toHour(to_datetime(1630812366)) |
+| to_hour(to_datetime(1630812366)) |
 +--------------------------------+
 |                              3 |
 +--------------------------------+
