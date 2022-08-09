@@ -16,6 +16,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::GrantObject;
 use common_meta_types::RoleInfo;
+use common_meta_types::UserIdentity;
 use common_meta_types::UserPrivilegeSet;
 
 use crate::UserApiProvider;
@@ -104,6 +105,32 @@ impl UserApiProvider {
             .revoke_privileges(role, object, privileges, None)
             .await
             .map_err(|e| e.add_message_back("(while revoke role privileges)"))
+    }
+
+    pub async fn grant_role_to_user(
+        &self,
+        tenant: &str,
+        user: UserIdentity,
+        grant_role: String,
+    ) -> Result<Option<u64>> {
+        let client = self.get_user_api_client(tenant)?;
+        client
+            .grant_role(user, grant_role.clone(), None)
+            .await
+            .map_err(|e| e.add_message_back("(while grant role to user)"))
+    }
+
+    pub async fn revoke_role_from_user(
+        &self,
+        tenant: &str,
+        user: UserIdentity,
+        revoke_role: String,
+    ) -> Result<Option<u64>> {
+        let client = self.get_user_api_client(tenant)?;
+        client
+            .revoke_role(user, revoke_role.clone(), None)
+            .await
+            .map_err(|e| e.add_message_back("(while revoke role from user)"))
     }
 
     pub async fn grant_role_to_role(
