@@ -21,7 +21,7 @@ use common_grpc::RpcClientConf;
 use common_meta_types::GrantObject;
 use common_meta_types::RoleInfo;
 use common_meta_types::UserPrivilegeSet;
-use common_users::role_cache_mgr::find_all_related_roles;
+use common_users::role_util::find_all_related_roles;
 use common_users::RoleCacheMgr;
 use common_users::UserApiProvider;
 

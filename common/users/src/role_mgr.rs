@@ -116,14 +116,16 @@ impl UserApiProvider {
         target_role: String,
         grant_role: String,
     ) -> Result<Option<u64>> {
-        let related_roles = self.find_related_roles(tenant, &vec![grant_role]).await?;
+        let related_roles = self
+            .find_related_roles(tenant, &[grant_role.clone()])
+            .await?;
         let have_cycle = related_roles
             .into_iter()
             .any(|r| r.identity() == target_role);
         if have_cycle {
             return Err(ErrorCode::InvalidRole(format!(
                 "there's cycle between {} and {}",
-                target_role, grant_role
+                &target_role, &grant_role
             )));
         }
 
@@ -163,7 +165,7 @@ impl UserApiProvider {
         }
     }
 
-    fn find_related_roles(
+    async fn find_related_roles(
         &self,
         tenant: &str,
         role_identities: &[String],
