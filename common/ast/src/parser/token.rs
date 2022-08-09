@@ -289,8 +289,6 @@ pub enum TokenKind {
     COMMENTS,
     #[token("COMPACT", ignore(ascii_case))]
     COMPACT,
-    #[token("CONFIGRELOAD", ignore(ascii_case))]
-    CONFIGRELOAD,
     #[token("CONNECTION", ignore(ascii_case))]
     CONNECTION,
     #[token("CHAR", ignore(ascii_case))]
@@ -505,8 +503,6 @@ pub enum TokenKind {
     NATURAL,
     #[token("NO_PASSWORD", ignore(ascii_case))]
     NO_PASSWORD,
-    #[token("NOCONFIGRELOAD", ignore(ascii_case))]
-    NOCONFIGRELOAD,
     #[token("NOT", ignore(ascii_case))]
     NOT,
     #[token("NOTENANTSETTING", ignore(ascii_case))]

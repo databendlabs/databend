@@ -1404,11 +1404,6 @@ pub fn user_option(i: Input) -> IResult<UserOptionItem> {
             UserOptionItem::TenantSetting(false),
             rule! { NOTENANTSETTING },
         ),
-        value(UserOptionItem::ConfigReload(true), rule! { CONFIGRELOAD }),
-        value(
-            UserOptionItem::ConfigReload(false),
-            rule! { NOCONFIGRELOAD },
-        ),
         default_role_option,
     ))(i)
 }

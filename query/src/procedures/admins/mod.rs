@@ -13,7 +13,6 @@
 // limitations under the License.
 
 mod admin;
-pub mod bootstrap_tenant;
 pub mod tenant_quota;
 
 pub use admin::AdminProcedure;
