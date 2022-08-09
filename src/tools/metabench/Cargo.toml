@@ -19,7 +19,7 @@ common-meta-api = { path = "../../common/meta/api" }
 common-meta-app = { path = "../../common/meta/app" }
 common-meta-grpc = { path = "../../common/meta/grpc" }
 common-meta-types = { path = "../../common/meta/types" }
-databend-meta = { path = "../../metasrv" }
+databend-meta = { path = "../../meta" }
 
 # Crates.io dependencies
 clap = { version = "3.2.5", features = ["derive", "env"] }

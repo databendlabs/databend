@@ -1,5 +1,5 @@
 [package]
-name = "common-dep-hack"
+name = "common-workspace-hack"
 version = "0.1.0"
 edition = "2021"
 
