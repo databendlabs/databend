@@ -81,10 +81,8 @@ impl FromToProto<pb::UserOption> for mt::UserOption {
     where Self: Sized {
         check_ver(p.ver, p.min_compatible)?;
 
-        let flags =
-            BitFlags::<mt::UserOptionFlag, u64>::from_bits(p.flags).map_err(|e| Incompatible {
-                reason: format!("UserOptionFlag error: {}", e),
-            })?;
+        // ignore unknown flags
+        let flags = BitFlags::<mt::UserOptionFlag, u64>::from_bits_truncate(p.flags);
 
         Ok(mt::UserOption::default()
             .with_flags(flags)

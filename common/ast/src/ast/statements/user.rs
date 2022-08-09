@@ -157,7 +157,6 @@ pub enum AccountMgrLevel {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum UserOptionItem {
     TenantSetting(bool),
-    ConfigReload(bool),
     DefaultRole(String),
 }
 
@@ -166,9 +165,6 @@ impl UserOptionItem {
         match self {
             Self::TenantSetting(enabled) => {
                 option.switch_option_flag(UserOptionFlag::TenantSetting, *enabled);
-            }
-            Self::ConfigReload(enabled) => {
-                option.switch_option_flag(UserOptionFlag::ConfigReload, *enabled);
             }
             Self::DefaultRole(v) => option.set_default_role(Some(v.clone())),
         }
@@ -232,8 +228,6 @@ impl Display for UserOptionItem {
         match self {
             UserOptionItem::TenantSetting(true) => write!(f, "TENANTSETTING"),
             UserOptionItem::TenantSetting(false) => write!(f, "NOTENANTSETTING"),
-            UserOptionItem::ConfigReload(true) => write!(f, "CONFIGRELOAD"),
-            UserOptionItem::ConfigReload(false) => write!(f, "NOCONFIGRELOAD"),
             UserOptionItem::DefaultRole(v) => write!(f, "DEFAULT_ROLE = '{}'", v),
         }
     }
