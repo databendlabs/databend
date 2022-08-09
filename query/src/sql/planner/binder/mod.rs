@@ -311,6 +311,9 @@ impl<'a> Binder {
             Statement::RevokeShareObject(stmt) => {
                 self.bind_revoke_share_object(stmt).await?
             }
+            Statement::AlterShareAccounts(stmt) => {
+                self.bind_alter_share_accounts(stmt).await?
+            }
         };
         Ok(plan)
     }

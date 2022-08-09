@@ -18,6 +18,7 @@ use common_exception::Result;
 use crate::sessions::TableContext;
 use crate::sql::binder::Binder;
 use crate::sql::normalize_identifier;
+use crate::sql::plans::AlterShareAccountsPlan;
 use crate::sql::plans::CreateSharePlan;
 use crate::sql::plans::DropSharePlan;
 use crate::sql::plans::GrantShareObjectPlan;
@@ -100,5 +101,31 @@ impl<'a> Binder {
             privilege: *privilege,
         };
         Ok(Plan::RevokeShareObject(Box::new(plan)))
+    }
+
+    pub(in crate::sql::planner::binder) async fn bind_alter_share_accounts(
+        &mut self,
+        stmt: &AlterShareAccountsStmt<'a>,
+    ) -> Result<Plan> {
+        let AlterShareAccountsStmt {
+            share,
+            if_exists,
+            tenants,
+            add,
+        } = stmt;
+
+        let share = normalize_identifier(share, &self.name_resolution_ctx).name;
+        let mut accounts = vec![];
+        for tenant in tenants {
+            accounts.push(tenant.to_string());
+        }
+
+        let plan = AlterShareAccountsPlan {
+            share,
+            if_exists: *if_exists,
+            add: *add,
+            accounts,
+        };
+        Ok(Plan::AlterShareAccounts(Box::new(plan)))
     }
 }

@@ -267,6 +267,10 @@ impl InterpreterFactoryV2 {
                 ctx,
                 *p.clone(),
             )?)),
+            Plan::AlterShareAccounts(p) => Ok(Arc::new(AlterShareTenantsInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
         }
     }
 }

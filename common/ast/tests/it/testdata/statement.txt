@@ -6061,3 +6061,93 @@ RevokeShareObject(
 )
 
 
+---------- Input ----------
+ALTER SHARE a ADD TENANTS = b,c;
+---------- Output ---------
+ALTER SHARE a ADD TENANTS  b  ,  c 
+---------- AST ------------
+AlterShareAccounts(
+    AlterShareAccountsStmt {
+        share: Identifier {
+            name: "a",
+            quote: None,
+            span: Ident(12..13),
+        },
+        if_exists: false,
+        tenants: [
+            Identifier {
+                name: "b",
+                quote: None,
+                span: Ident(28..29),
+            },
+            Identifier {
+                name: "c",
+                quote: None,
+                span: Ident(30..31),
+            },
+        ],
+        add: true,
+    },
+)
+
+
+---------- Input ----------
+ALTER SHARE IF EXISTS a ADD TENANTS = b,c;
+---------- Output ---------
+ALTER SHARE IF EXISTS a ADD TENANTS  b  ,  c 
+---------- AST ------------
+AlterShareAccounts(
+    AlterShareAccountsStmt {
+        share: Identifier {
+            name: "a",
+            quote: None,
+            span: Ident(22..23),
+        },
+        if_exists: true,
+        tenants: [
+            Identifier {
+                name: "b",
+                quote: None,
+                span: Ident(38..39),
+            },
+            Identifier {
+                name: "c",
+                quote: None,
+                span: Ident(40..41),
+            },
+        ],
+        add: true,
+    },
+)
+
+
+---------- Input ----------
+ALTER SHARE IF EXISTS a REMOVE TENANTS = b,c;
+---------- Output ---------
+ALTER SHARE IF EXISTS a REMOVE TENANTS  b  ,  c 
+---------- AST ------------
+AlterShareAccounts(
+    AlterShareAccountsStmt {
+        share: Identifier {
+            name: "a",
+            quote: None,
+            span: Ident(22..23),
+        },
+        if_exists: true,
+        tenants: [
+            Identifier {
+                name: "b",
+                quote: None,
+                span: Ident(41..42),
+            },
+            Identifier {
+                name: "c",
+                quote: None,
+                span: Ident(43..44),
+            },
+        ],
+        add: false,
+    },
+)
+
+

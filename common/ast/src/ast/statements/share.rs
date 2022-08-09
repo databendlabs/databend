@@ -96,3 +96,37 @@ impl Display for RevokeShareObjectStmt<'_> {
         Ok(())
     }
 }
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AlterShareAccountsStmt<'a> {
+    pub share: Identifier<'a>,
+    pub if_exists: bool,
+    pub tenants: Vec<Identifier<'a>>,
+    pub add: bool,
+}
+
+impl Display for AlterShareAccountsStmt<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ALTER SHARE ")?;
+        if self.if_exists {
+            write!(f, "IF EXISTS ")?;
+        }
+        write!(f, "{}", self.share)?;
+        if self.add {
+            write!(f, " ADD TENANTS ")?;
+        } else {
+            write!(f, " REMOVE TENANTS ")?;
+        }
+        let mut first = true;
+        for account in self.tenants.iter() {
+            if !first {
+                write!(f, " , ")?;
+            } else {
+                first = false;
+            }
+            write!(f, " {} ", account)?;
+        }
+
+        Ok(())
+    }
+}
