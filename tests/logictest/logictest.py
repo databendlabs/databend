@@ -413,9 +413,11 @@ class SuiteRunner(object):
         actual = safe_execute(lambda: self.execute_error(statement.text),
                               statement)
         if actual is None:
-            raise LogicError(message=f"expected error {statement.s_type.expect_error}, but got ok on statement: {statement.text} " ,
-                             errorType="Error code mismatch",
-                             runner=self.kind)
+            raise LogicError(
+                message=
+                f"expected error {statement.s_type.expect_error}, but got ok on statement: {statement.text} ",
+                errorType="Error code mismatch",
+                runner=self.kind)
         match = re.search(statement.s_type.expect_error, actual.msg)
         if match is None:
             raise LogicError(
