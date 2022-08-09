@@ -15,11 +15,16 @@
 use std::sync::Arc;
 
 /// Defines API to convert from/to protobuf meta type.
-pub trait FromToProto<PB> {
-    fn from_pb(p: PB) -> Result<Self, Incompatible>
+pub trait FromToProto {
+    /// The corresponding protobuf defined type.
+    type PB;
+
+    /// Convert to rust type from protobuf type.
+    fn from_pb(p: Self::PB) -> Result<Self, Incompatible>
     where Self: Sized;
 
-    fn to_pb(&self) -> Result<PB, Incompatible>;
+    /// Convert from rust type to protobuf type.
+    fn to_pb(&self) -> Result<Self::PB, Incompatible>;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -28,15 +33,17 @@ pub struct Incompatible {
     pub reason: String,
 }
 
-impl<T, PB> FromToProto<PB> for Arc<T>
-where T: FromToProto<PB>
+impl<T> FromToProto for Arc<T>
+where T: FromToProto
 {
-    fn from_pb(p: PB) -> Result<Self, Incompatible>
+    type PB = T::PB;
+
+    fn from_pb(p: Self::PB) -> Result<Self, Incompatible>
     where Self: Sized {
         Ok(Arc::new(T::from_pb(p)?))
     }
 
-    fn to_pb(&self) -> Result<PB, Incompatible> {
+    fn to_pb(&self) -> Result<T::PB, Incompatible> {
         let s = self.as_ref();
         s.to_pb()
     }

@@ -22,7 +22,9 @@ use crate::Incompatible;
 use crate::MIN_COMPATIBLE_VER;
 use crate::VER;
 
-impl FromToProto<pb::S3StorageConfig> for StorageS3Config {
+impl FromToProto for StorageS3Config {
+    type PB = pb::S3StorageConfig;
+
     fn from_pb(p: pb::S3StorageConfig) -> Result<Self, Incompatible>
     where Self: Sized {
         check_ver(p.version, p.min_compatible)?;
@@ -57,7 +59,9 @@ impl FromToProto<pb::S3StorageConfig> for StorageS3Config {
     }
 }
 
-impl FromToProto<pb::FsStorageConfig> for StorageFsConfig {
+impl FromToProto for StorageFsConfig {
+    type PB = pb::FsStorageConfig;
+
     fn from_pb(p: pb::FsStorageConfig) -> Result<Self, Incompatible>
     where Self: Sized {
         check_ver(p.version, p.min_compatible)?;
