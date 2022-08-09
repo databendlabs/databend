@@ -146,6 +146,10 @@ CREATE TABLE IF NOT EXISTS lineitem
 
 ### Step 3: Load test data to Databend
 
+This step uses the HTTP API `v1/streaming_load` to load the test data to Databend. More information about this API can be found at https://databend.rs/doc/load-data/local. 
+
+The code below connects to Databend using the Root user. Please note that the root user only works when you access Databend from localhost. You will need to create new users and grant proper privileges first to connect to Databend remotely.
+
 ```shell
 #!/bin/bash
 
