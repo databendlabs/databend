@@ -52,7 +52,7 @@ impl Chunk {
                 if s {
                     Ok(self)
                 } else {
-                    Ok(Chunk::empty())
+                    Ok(self.slice(0..0))
                 }
             }
             Value::Column(bitmap) => {
@@ -61,7 +61,7 @@ impl Chunk {
                     0 => Ok(self),
                     _ => {
                         if count_zeros == self.num_rows() {
-                            return Ok(Chunk::empty());
+                            return Ok(self.slice(0..0));
                         }
                         let mut after_columns = Vec::with_capacity(self.num_columns());
                         for value in self.columns() {

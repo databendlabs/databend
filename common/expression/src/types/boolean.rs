@@ -85,6 +85,13 @@ impl ValueType for BooleanType {
         col.get(index)
     }
 
+    unsafe fn index_column_unchecked<'a>(
+        col: &'a Self::Column,
+        index: usize,
+    ) -> Self::ScalarRef<'a> {
+        col.get_bit_unchecked(index)
+    }
+
     fn slice_column<'a>(col: &'a Self::Column, range: Range<usize>) -> Self::Column {
         col.clone().slice(range.start, range.end - range.start)
     }

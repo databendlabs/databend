@@ -14,3 +14,5 @@
 
 mod concat;
 mod filter;
+mod scatter;
+mod take;

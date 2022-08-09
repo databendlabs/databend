@@ -103,6 +103,43 @@ pub fn test_pass() {
             })),
         ],
     ]);
+
+    run_take(&mut file, &[0, 3, 1], &[
+        Column::Int32(vec![0, 1, 2, 3, -4].into()),
+        Column::Nullable(Box::new(NullableColumn {
+            column: Column::UInt8(vec![10, 11, 12, 13, 14].into()),
+            validity: vec![false, true, false, false, false].into(),
+        })),
+        Column::Null { len: 5 },
+        Column::Nullable(Box::new(NullableColumn {
+            column: Column::String(StringColumn {
+                data: "xyzab".as_bytes().to_vec().into(),
+                offsets: vec![0, 1, 2, 3, 4, 5].into(),
+            }),
+            validity: vec![false, true, true, false, false].into(),
+        })),
+    ]);
+
+    run_scatter(
+        &mut file,
+        &[
+            Column::Int32(vec![0, 1, 2, 3, -4].into()),
+            Column::Nullable(Box::new(NullableColumn {
+                column: Column::UInt8(vec![10, 11, 12, 13, 14].into()),
+                validity: vec![false, true, false, false, false].into(),
+            })),
+            Column::Null { len: 5 },
+            Column::Nullable(Box::new(NullableColumn {
+                column: Column::String(StringColumn {
+                    data: "xyzab".as_bytes().to_vec().into(),
+                    offsets: vec![0, 1, 2, 3, 4, 5].into(),
+                }),
+                validity: vec![false, true, true, false, false].into(),
+            })),
+        ],
+        &[0, 0, 1, 2, 1],
+        3,
+    );
 }
 
 fn run_filter(file: &mut impl Write, predicate: Column, columns: &[Column]) {
@@ -146,6 +183,49 @@ fn run_concat(file: &mut impl Write, columns: Vec<Vec<Column>>) {
                 writeln!(file, "{:?}", c).unwrap();
             }
             writeln!(file, "Result:\n{result_chunk:?}").unwrap();
+            write!(file, "\n\n").unwrap();
+        }
+        Err(err) => {
+            writeln!(file, "error: {}\n", err.message()).unwrap();
+        }
+    }
+}
+
+fn run_take(file: &mut impl Write, indices: &[u32], columns: &[Column]) {
+    let len = columns.get(0).map(|c| c.len()).unwrap_or(1);
+    let columns = columns.iter().map(|c| Value::Column(c.clone())).collect();
+    let chunk = Chunk::new(columns, len);
+
+    let result = Chunk::take(chunk.clone(), indices);
+
+    match result {
+        Ok(result_chunk) => {
+            writeln!(file, "Take:         {indices:?}").unwrap();
+            writeln!(file, "Source:\n{chunk:?}").unwrap();
+            writeln!(file, "Result:\n{result_chunk:?}").unwrap();
+            write!(file, "\n\n").unwrap();
+        }
+        Err(err) => {
+            writeln!(file, "error: {}\n", err.message()).unwrap();
+        }
+    }
+}
+
+fn run_scatter(file: &mut impl Write, columns: &[Column], indices: &[u32], scatter_size: usize) {
+    let len = columns.get(0).map(|c| c.len()).unwrap_or(1);
+    let columns = columns.iter().map(|c| Value::Column(c.clone())).collect();
+    let chunk = Chunk::new(columns, len);
+
+    let result = Chunk::scatter(&chunk, indices, scatter_size);
+
+    match result {
+        Ok(result_chunk) => {
+            writeln!(file, "Scatter:         {indices:?}").unwrap();
+            writeln!(file, "Source:\n{chunk:?}").unwrap();
+
+            for (i, c) in result_chunk.iter().enumerate() {
+                writeln!(file, "Result-{i}:\n{c:?}").unwrap();
+            }
             write!(file, "\n\n").unwrap();
         }
         Err(err) => {

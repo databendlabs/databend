@@ -97,6 +97,13 @@ impl<Int: Number> ValueType for NumberType<Int> {
         col.get(index).cloned()
     }
 
+    unsafe fn index_column_unchecked<'a>(
+        col: &'a Self::Column,
+        index: usize,
+    ) -> Self::ScalarRef<'a> {
+        *col.get_unchecked(index)
+    }
+
     fn slice_column<'a>(col: &'a Self::Column, range: Range<usize>) -> Self::Column {
         col.clone().slice(range.start, range.end - range.start)
     }
