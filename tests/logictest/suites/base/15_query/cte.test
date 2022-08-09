@@ -1,0 +1,61 @@
+statement ok
+drop table if exists t1 all;
+
+statement ok
+create table t1(a integer, b integer, c integer, d integer, e integer);
+
+statement ok
+insert into t1(e,c,b,d,a) values(103,102,100,101,104);
+
+statement ok
+insert into t1(a,c,d,e,b) values(107,106,108,109,105);
+
+statement ok
+insert into t1(e,d,b,a,c) values(110,114,112,111,113);
+
+statement ok
+insert into t1(d,c,e,a,b) values(116,119,117,115,118);
+
+statement query III
+with t2(tt) as (select a from t1), t3 as (select * from t1), t4 as (select a from t1 where a > 105) select t2.tt, t3.a, t4.a from t2, t3, t4 where t2.tt > 107 order by t2.tt, t3.a, t4.a;
+
+----
+111 104 107
+111 104 111
+111 104 115
+111 107 107
+111 107 111
+111 107 115
+111 111 107
+111 111 111
+111 111 115
+111 115 107
+111 115 111
+111 115 115
+115 104 107
+115 104 111
+115 104 115
+115 107 107
+115 107 111
+115 107 115
+115 111 107
+115 111 111
+115 111 115
+115 115 107
+115 115 111
+115 115 115
+
+statement query I
+with t2(tt) as (select a from t1) select t2.tt from t2  where t2.tt > 105 order by t2.tt;
+
+----
+107
+111
+115
+
+statement query I
+with t2 as (select a from t1) select t2.a from t2  where t2.a > 107 order by t2.a;
+
+----
+111
+115

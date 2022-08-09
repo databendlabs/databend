@@ -287,3 +287,9 @@ impl BindContext {
         DataSchemaRefExt::create(fields)
     }
 }
+
+impl Default for BindContext {
+    fn default() -> Self {
+        BindContext::new()
+    }
+}

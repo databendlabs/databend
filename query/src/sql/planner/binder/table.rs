@@ -111,7 +111,7 @@ impl<'a> Binder {
                     let alias_table_name = alias
                         .as_ref()
                         .map(|alias| alias.name.name.clone())
-                        .unwrap_or(table.name.clone());
+                        .unwrap_or_else(|| table.name.clone());
                     for column in cte_bind_context.columns.iter_mut() {
                         column.database_name = None;
                         column.table_name = Some(alias_table_name.clone());
