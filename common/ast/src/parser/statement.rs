@@ -798,11 +798,11 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         rule! {
             ALTER ~ SHARE ~ (IF ~ EXISTS )? ~ #ident ~ #alter_add_share_accounts ~ TENANTS ~ Eq ~ #comma_separated_list1(ident)
         },
-        |(_, _, opt_if_exists, share, add, _, _, tenants)| {
-            Statement::AlterShareAccounts(AlterShareAccountsStmt {
+        |(_, _, opt_if_exists, share, is_add, _, _, tenants)| {
+            Statement::AlterShareAccounts(AlterShareTenantsStmt {
                 share,
                 if_exists: opt_if_exists.is_some(),
-                add,
+                is_add,
                 tenants,
             })
         },
@@ -899,7 +899,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             | #drop_share: "`DROP SHARE [IF EXISTS] <share_name>`"
             | #grant_share_object: "`GRANT { USAGE | SELECT | REFERENCE_USAGE } ON { DATABASE db | TABLE db.table } TO SHARE <share_name>`"
             | #revoke_share_object: "`REVOKE { USAGE | SELECT | REFERENCE_USAGE } ON { DATABASE db | TABLE db.table } FROM SHARE <share_name>`"
-            | #alter_share_accounts: "`ALTER SHARE [IF EXISTS] <share_name> {ADD | REMOVE} TENANTS = tenant [, tenant, ...]`"
+            | #alter_share_accounts: "`ALTER SHARE [IF EXISTS] <share_name> { ADD | REMOVE } TENANTS = tenant [, tenant, ...]`"
         ),
     ));
 

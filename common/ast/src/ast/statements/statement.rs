@@ -163,7 +163,7 @@ pub enum Statement<'a> {
     DropShare(DropShareStmt<'a>),
     GrantShareObject(GrantShareObjectStmt<'a>),
     RevokeShareObject(RevokeShareObjectStmt<'a>),
-    AlterShareAccounts(AlterShareAccountsStmt<'a>),
+    AlterShareAccounts(AlterShareTenantsStmt<'a>),
 }
 
 #[derive(Debug, Clone, PartialEq)]

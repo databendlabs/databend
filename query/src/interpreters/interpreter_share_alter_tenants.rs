@@ -49,7 +49,7 @@ impl Interpreter for AlterShareTenantsInterpreter {
         let tenant = self.ctx.get_tenant();
         let user_mgr = self.ctx.get_user_manager();
         let meta_api = user_mgr.get_meta_store_client();
-        if self.plan.add {
+        if self.plan.is_add {
             let req = AddShareAccountsReq {
                 share_name: ShareNameIdent {
                     tenant,

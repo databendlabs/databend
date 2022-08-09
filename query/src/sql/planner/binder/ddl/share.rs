@@ -14,6 +14,7 @@
 
 use common_ast::ast::*;
 use common_exception::Result;
+use itertools::Itertools;
 
 use crate::sessions::TableContext;
 use crate::sql::binder::Binder;
@@ -105,26 +106,26 @@ impl<'a> Binder {
 
     pub(in crate::sql::planner::binder) async fn bind_alter_share_accounts(
         &mut self,
-        stmt: &AlterShareAccountsStmt<'a>,
+        stmt: &AlterShareTenantsStmt<'a>,
     ) -> Result<Plan> {
-        let AlterShareAccountsStmt {
+        let AlterShareTenantsStmt {
             share,
             if_exists,
             tenants,
-            add,
+            is_add,
         } = stmt;
 
         let share = normalize_identifier(share, &self.name_resolution_ctx).name;
-        let mut accounts = vec![];
-        for tenant in tenants {
-            accounts.push(tenant.to_string());
-        }
 
         let plan = AlterShareAccountsPlan {
             share,
             if_exists: *if_exists,
-            add: *add,
-            accounts,
+            is_add: *is_add,
+            accounts: tenants
+                .iter()
+                .map(|v| v.to_string())
+                .into_iter()
+                .collect_vec(),
         };
         Ok(Plan::AlterShareAccounts(Box::new(plan)))
     }

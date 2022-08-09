@@ -112,7 +112,7 @@ pub struct AlterShareAccountsPlan {
     pub share: String,
     pub if_exists: bool,
     pub accounts: Vec<String>,
-    pub add: bool,
+    pub is_add: bool,
 }
 
 impl AlterShareAccountsPlan {

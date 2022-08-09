@@ -6096,7 +6096,7 @@ ALTER SHARE a ADD TENANTS = b,c;
 ALTER SHARE a ADD TENANTS = b,c
 ---------- AST ------------
 AlterShareAccounts(
-    AlterShareAccountsStmt {
+    AlterShareTenantsStmt {
         share: Identifier {
             name: "a",
             quote: None,
@@ -6115,7 +6115,7 @@ AlterShareAccounts(
                 span: Ident(30..31),
             },
         ],
-        add: true,
+        is_add: true,
     },
 )
 
@@ -6126,7 +6126,7 @@ ALTER SHARE IF EXISTS a ADD TENANTS = b,c;
 ALTER SHARE IF EXISTS a ADD TENANTS = b,c
 ---------- AST ------------
 AlterShareAccounts(
-    AlterShareAccountsStmt {
+    AlterShareTenantsStmt {
         share: Identifier {
             name: "a",
             quote: None,
@@ -6145,7 +6145,7 @@ AlterShareAccounts(
                 span: Ident(40..41),
             },
         ],
-        add: true,
+        is_add: true,
     },
 )
 
@@ -6156,7 +6156,7 @@ ALTER SHARE IF EXISTS a REMOVE TENANTS = b,c;
 ALTER SHARE IF EXISTS a REMOVE TENANTS = b,c
 ---------- AST ------------
 AlterShareAccounts(
-    AlterShareAccountsStmt {
+    AlterShareTenantsStmt {
         share: Identifier {
             name: "a",
             quote: None,
@@ -6175,7 +6175,7 @@ AlterShareAccounts(
                 span: Ident(43..44),
             },
         ],
-        add: false,
+        is_add: false,
     },
 )
 
