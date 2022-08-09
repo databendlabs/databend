@@ -14,6 +14,8 @@
 
 use std::sync::Arc;
 
+use chrono::DateTime;
+use chrono::Utc;
 use common_catalog::catalog::CATALOG_DEFAULT;
 use common_exception::Result;
 use common_meta_app::schema::CountTablesReq;
@@ -27,30 +29,50 @@ use serde::Serialize;
 use crate::sessions::SessionManager;
 
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Default)]
-pub struct TenantStatus {
-    tables_count: u64,
-    // TODO(liyazhou): add users_count: u64,
-    // TODO(liyazhou): add tables
+pub struct TenantTablesResponse {
+    pub tables: Vec<TenantTableInfo>,
 }
 
-struct TenantStatusLoader {
-    session_mgr: Arc<SessionManager>,
-    tenant: String,
+#[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Default)]
+pub struct TenantTableInfo {
+    pub table: String,
+    pub database: String,
+    pub engine: String,
+    pub cluster_by: String,
+    pub created_on: DateTime<Utc>,
+    pub rows: u64,
+    pub data_size: u64,
+    pub data_size_compressed: u64,
+    pub index_size: u64,
 }
 
-impl TenantStatusLoader {
-    async fn load_tables_count(&self) -> Result<u64> {
-        let catalog = self
-            .session_mgr
-            .get_catalog_manager()
-            .get_catalog(CATALOG_DEFAULT)?;
-        catalog
-            .count_tables(CountTablesReq {
-                tenant: self.tenant.clone(),
-            })
-            .await
-            .map(|r| r.count)
+async fn load_tenant_tables(
+    session_mgr: &Arc<SessionManager>,
+    tenant: &String,
+) -> Result<Vec<TenantTableInfo>> {
+    let catalog = session_mgr
+        .get_catalog_manager()
+        .get_catalog(CATALOG_DEFAULT)?;
+    let databases = catalog.list_databases(tenant.as_str()).await?;
+
+    let mut table_infos: Vec<TenantTableInfo> = vec![];
+    for database in databases {
+        let tables = catalog.list_tables(tenant).await?;
+        for table in tables {
+            table_infos.push(TenantTableInfo {
+                table: table.name.clone(),
+                database: database.name.clone(),
+                engine: table.engine.clone(),
+                cluster_by: table.cluster_by.clone(),
+                created_on: table.created_on.clone(),
+                rows: table.rows,
+                data_size: table.data_size,
+                data_size_compressed: table.data_size_compressed,
+                index_size: table.index_size,
+            });
+        }
     }
+    Ok(table_infos)
 }
 
 // This handler returns the statistics about the metadata of a tenant, includes tables count, users
@@ -65,13 +87,8 @@ pub async fn tenant_status_handler(
         return Err(poem::error::NotFoundError.into());
     }
 
-    let loader = TenantStatusLoader {
-        session_mgr: session_mgr.clone(),
-        tenant,
-    };
-    let tables_count = loader
-        .load_tables_count()
+    let tables = load_tenant_tables(&session_mgr, &tenant)
         .await
         .map_err(poem::error::InternalServerError)?;
-    Ok(Json(TenantStatus { tables_count }))
+    Ok(Json(TenantTablesResponse { tables }))
 }
