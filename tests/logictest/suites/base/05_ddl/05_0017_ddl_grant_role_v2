@@ -1,5 +1,4 @@
-statement ok
-SET enable_planner_v2 = 1;
+
 
 statement ok
 DROP ROLE IF EXISTS 'test';

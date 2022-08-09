@@ -1,6 +1,5 @@
 
-statement ok
-set enable_planner_v2 = 1;
+
 
 
 statement query I
@@ -1671,8 +1670,7 @@ statement ok
 insert into t3 values(1);
 
 
-statement ok
-set enable_planner_v2 = 1;
+
 
 
 statement query I

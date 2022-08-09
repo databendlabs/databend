@@ -1,4 +1,4 @@
-set enable_planner_v2 = 1;
+
 select
     TRUNCATE(100.00 * sum(case
                              when p_type like 'PROMO%'

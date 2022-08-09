@@ -1,8 +1,7 @@
 -- TODO(need fix)
 
 onlyif mysql
-statement ok
-set enable_planner_v2 = 1;
+
 
 onlyif mysql
 statement ok

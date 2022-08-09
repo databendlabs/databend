@@ -99,9 +99,5 @@ hits_statements=(
   "SELECT DATE_TRUNC(minute, EventTime) AS M, COUNT(*) AS PageViews FROM hits WHERE CounterID = 62 AND EventDate >= '2013-07-14' AND EventDate <= '2013-07-15' AND IsRefresh = 0 AND DontCountHits = 0 GROUP BY  M ORDER BY  M  LIMIT 10 OFFSET 1000;"
 )
 
-for i in "${hits_statements[@]}"; do
-  echo "set enable_planner_v2 = 1; set unquoted_ident_case_sensitive = 1; $i" | $MYSQL_CLIENT_CONNECT
-done
-
 ## Clean up
 echo "drop table if exists hits all;" | $MYSQL_CLIENT_CONNECT

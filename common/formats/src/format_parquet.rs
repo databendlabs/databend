@@ -31,7 +31,6 @@ use common_datablocks::DataBlock;
 use common_datavalues::remove_nullable;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
-use common_datavalues::DataTypeImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::FileSplit;
@@ -133,39 +132,26 @@ impl InputFormat for ParquetInputFormat {
         let infer_schema = read::infer_schema(&parquet_metadata)?;
         let actually_schema = DataSchema::from(&infer_schema);
 
-        if actually_schema.num_fields() != self.schema.num_fields() {
-            return Err(ErrorCode::ParquetError(format!(
-                "schema field size mismatch, expected: {}, got: {} ",
-                actually_schema.num_fields(),
-                self.schema.num_fields()
-            )));
-        }
-
-        // we ignore the nullable sign to compare the schema
-        let fa: Vec<(&String, DataTypeImpl)> = self
-            .schema
-            .fields()
-            .iter()
-            .map(|f| (f.name(), remove_nullable(f.data_type())))
-            .collect();
-
-        let fb: Vec<(&String, DataTypeImpl)> = actually_schema
-            .fields()
-            .iter()
-            .map(|f| (f.name(), remove_nullable(f.data_type())))
-            .collect();
-
-        if fa != fb {
-            let diff = Diff::from_debug(
-                &self.schema,
-                &actually_schema,
-                "expected_schema",
-                "infer_schema",
-            );
-            return Err(ErrorCode::ParquetError(format!(
-                "parquet schema mismatch, differ: {}",
-                diff
-            )));
+        for f in self.schema.fields().iter() {
+            if let Some(m) = actually_schema
+                .fields()
+                .iter()
+                .filter(|c| c.name().eq_ignore_ascii_case(f.name()))
+                .last()
+            {
+                if remove_nullable(m.data_type()) != remove_nullable(f.data_type()) {
+                    let diff = Diff::from_debug(f, m, "expected_field", "infer_field");
+                    return Err(ErrorCode::ParquetError(format!(
+                        "parquet schema mismatch, differ: {}",
+                        diff
+                    )));
+                }
+            } else {
+                return Err(ErrorCode::ParquetError(format!(
+                    "schema field size mismatch, expected to find column: {}",
+                    f.name()
+                )));
+            }
         }
 
         let fields = &self.arrow_table_schema.fields;
