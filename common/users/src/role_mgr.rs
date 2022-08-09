@@ -119,13 +119,11 @@ impl UserApiProvider {
         let related_roles = self
             .find_related_roles(tenant, &[grant_role.clone()])
             .await?;
-        let have_cycle = related_roles
-            .into_iter()
-            .any(|r| r.identity() == target_role);
+        let have_cycle = related_roles.iter().any(|r| r.identity() == target_role);
         if have_cycle {
             return Err(ErrorCode::InvalidRole(format!(
-                "there's cycle between {} and {}",
-                &target_role, &grant_role
+                "{} contains {}, can not be grant to {}",
+                &grant_role, &target_role, &target_role
             )));
         }
 

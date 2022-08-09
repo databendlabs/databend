@@ -10,6 +10,15 @@ DROP ROLE IF EXISTS 'test-role';
 statement ok
 DROP USER IF EXISTS 'test-user';
 
+statement ok
+DROP ROLE IF EXISTS 'role1';
+
+statement ok
+DROP ROLE IF EXISTS 'role2';
+
+statement ok
+DROP ROLE IF EXISTS 'role3';
+
 statement error 2204
 GRANT ROLE 'test' TO 'test-user'; 
 
@@ -62,13 +71,13 @@ statement ok
 DROP USER 'test-user';
 
 statement ok
-DROP USER 'role1';
+DROP ROLE 'role1';
 
 statement ok
-DROP USER 'role2';
+DROP ROLE 'role2';
 
 statement ok
-DROP USER 'role3';
+DROP ROLE 'role3';
 
 statement ok
 SET enable_planner_v2 = 0;
