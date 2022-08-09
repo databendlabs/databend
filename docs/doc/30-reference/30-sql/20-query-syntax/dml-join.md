@@ -10,15 +10,6 @@ A *join* allows you to combine columns from two or more tables into a single res
 * Left Join
 * Right Join
 
-:::tip
-
-To use JOIN, you must enable the new Databend planner first. To do so, perform the following command in the SQL client:
-
-```sql
-> set enable_planner_v2=1;
-```
-:::
-
 ## Inner Join
 
 An *inner join* returns the rows that meet the join conditions in the result set.

@@ -30,9 +30,7 @@ common-pipeline-transforms = { path = "../../pipeline/transforms" }
 common-planners = { path = "../../planners" }
 common-storages-index = { path = "../index" }
 common-storages-util = { path = "../util" }
-common-streams = { path = "../../streams" }
 
-async-stream = "0.3.3"
 async-trait = { git = "https://github.com/datafuse-extras/async-trait", rev = "f0b0fd5" }
 backoff = { version = "0.4.0", features = ["futures", "tokio"] }
 chrono = "0.4.19"

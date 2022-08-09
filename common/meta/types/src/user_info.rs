@@ -167,14 +167,12 @@ impl UserOption {
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, Eq, PartialEq, num_derive::FromPrimitive)]
 pub enum UserOptionFlag {
     TenantSetting = 1 << 0,
-    ConfigReload = 1 << 1,
 }
 
 impl std::fmt::Display for UserOptionFlag {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             UserOptionFlag::TenantSetting => write!(f, "TENANTSETTING"),
-            UserOptionFlag::ConfigReload => write!(f, "CONFIGRELOAD"),
         }
     }
 }

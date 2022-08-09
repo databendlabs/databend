@@ -70,11 +70,11 @@ select parse_json('{ "x" : "abc", "y" : false, "z": 10} ');
 ----
 {"x":"abc","y":false,"z":10}
 
-skipif clickhouse
+
 statement error 1010
 select parse_json('[1,'); 
 
-skipif clickhouse
+
 statement error 1010
 select parse_json('"ab'); 
 
@@ -92,23 +92,23 @@ select parse_json(parse_json('"\\\"abc\\\""'));
 ----
 "abc"
 
-skipif clickhouse
+
 statement error 1010
 select parse_json(parse_json('"abc"')); 
 
-skipif clickhouse
+
 statement error 1010
 select parse_json(to_date('2022-01-01')); 
 
-skipif clickhouse
+
 statement error 1028
 select parse_json(); 
 
-skipif clickhouse
+
 statement error 1028
 select parse_json('a', 'aa'); 
 
-skipif clickhouse
+
 statement error 1028
 select get(parse_json('a', 'aa')); 
 

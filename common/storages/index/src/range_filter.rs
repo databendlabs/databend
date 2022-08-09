@@ -26,21 +26,12 @@ use common_functions::scalars::check_pattern_type;
 use common_functions::scalars::FunctionFactory;
 use common_functions::scalars::PatternType;
 use common_fuse_meta::meta::StatisticsOfColumns;
-use common_pipeline_transforms::processors::transforms::transform_expression_executor::ExpressionExecutor;
+use common_pipeline_transforms::processors::transforms::ExpressionExecutor;
 use common_planners::lit;
 use common_planners::Expression;
 use common_planners::ExpressionMonotonicityVisitor;
 use common_planners::Expressions;
 use common_planners::RequireColumnsVisitor;
-
-#[derive(Clone)]
-pub struct ClusterKeyInfo {
-    pub cluster_key_id: u32,
-    pub cluster_key_index: Vec<usize>,
-    pub exprs: Vec<Expression>,
-    pub expression_executor: Option<ExpressionExecutor>,
-    pub data_schema: DataSchemaRef,
-}
 
 #[derive(Clone)]
 pub struct RangeFilter {

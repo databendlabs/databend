@@ -16,8 +16,10 @@ use std::sync::Arc;
 
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
+use common_datavalues::DataSchemaRefExt;
 use common_exception::Result;
 use common_fuse_meta::meta::TableSnapshot;
+use common_pipeline_transforms::processors::ExpressionExecutor;
 use common_planners::DeletePlan;
 use common_planners::Expression;
 use common_planners::Extras;
@@ -27,6 +29,7 @@ use crate::operations::mutation::delete_from_block;
 use crate::operations::mutation::deletion_mutator::Deletion;
 use crate::operations::mutation::deletion_mutator::DeletionMutator;
 use crate::pruning::BlockPruner;
+use crate::statistics::ClusterStatsGenerator;
 use crate::FuseTable;
 
 impl FuseTable {
@@ -68,8 +71,13 @@ impl FuseTable {
         filter: &Expression,
         plan: &DeletePlan,
     ) -> Result<()> {
-        let mut deletion_collector =
-            DeletionMutator::try_create(&ctx, &self.meta_location_generator, snapshot)?;
+        let cluster_stats_gen = self.cluster_stats_gen(ctx.clone())?;
+        let mut deletion_collector = DeletionMutator::try_create(
+            &ctx,
+            &self.meta_location_generator,
+            snapshot,
+            cluster_stats_gen,
+        )?;
         let schema = self.table_info.schema();
         // TODO refine pruner
         let extras = Extras {
@@ -96,7 +104,12 @@ impl FuseTable {
                     // after deletion, the data block `r` remains, let keep it  by replacing the block
                     // located at `block_meta.location`, of segment indexed by `seg_idx`, with a new block `r`
                     deletion_collector
-                        .replace_with(seg_idx, block_meta.location.clone(), r)
+                        .replace_with(
+                            seg_idx,
+                            block_meta.location.clone(),
+                            block_meta.cluster_stats.clone(),
+                            r,
+                        )
                         .await?
                 }
             }
@@ -122,5 +135,55 @@ impl FuseTable {
         .await?;
         // TODO check if error is recoverable, and try to resolve the conflict
         Ok(())
+    }
+
+    fn cluster_stats_gen(&self, ctx: Arc<dyn TableContext>) -> Result<ClusterStatsGenerator> {
+        if self.cluster_key_meta.is_none() {
+            return Ok(ClusterStatsGenerator::default());
+        }
+
+        let len = self.cluster_keys.len();
+        let cluster_key_id = self.cluster_key_meta.clone().unwrap().0;
+
+        let input_schema = self.table_info.schema();
+        let input_fields = input_schema.fields().clone();
+
+        let mut cluster_key_index = Vec::with_capacity(len);
+        let mut output_fields = Vec::with_capacity(len);
+        let mut exists = true;
+        for expr in &self.cluster_keys {
+            output_fields.push(expr.to_data_field(&input_schema)?);
+
+            if exists {
+                match input_fields
+                    .iter()
+                    .position(|x| x.name() == &expr.column_name())
+                {
+                    None => exists = false,
+                    Some(idx) => cluster_key_index.push(idx),
+                };
+            }
+        }
+
+        let mut expression_executor = None;
+        if !exists {
+            cluster_key_index = (0..len).collect();
+            let output_schema = DataSchemaRefExt::create(output_fields);
+            let executor = ExpressionExecutor::try_create(
+                ctx,
+                "expression executor for generator cluster statistics",
+                input_schema,
+                output_schema,
+                self.cluster_keys.clone(),
+                true,
+            )?;
+            expression_executor = Some(executor);
+        }
+
+        Ok(ClusterStatsGenerator::new(
+            cluster_key_id,
+            cluster_key_index,
+            expression_executor,
+        ))
     }
 }

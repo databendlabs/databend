@@ -193,13 +193,13 @@ async fn delete_test_data(
     Ok(())
 }
 
-async fn get_test_data<PB, T>(
+async fn get_test_data<T>(
     kv_api: &(impl KVApi + ?Sized),
     key: &impl KVApiKey,
 ) -> Result<T, MetaError>
 where
-    PB: common_protos::prost::Message + Default,
-    T: FromToProto<PB>,
+    T: FromToProto,
+    T::PB: common_protos::prost::Message + Default,
 {
     let res = kv_api.get_kv(&key.to_key()).await?;
     if let Some(res) = res {

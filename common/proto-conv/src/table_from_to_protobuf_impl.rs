@@ -29,7 +29,8 @@ use crate::Incompatible;
 use crate::MIN_COMPATIBLE_VER;
 use crate::VER;
 
-impl FromToProto<pb::TableInfo> for mt::TableInfo {
+impl FromToProto for mt::TableInfo {
+    type PB = pb::TableInfo;
     fn from_pb(p: pb::TableInfo) -> Result<Self, Incompatible> {
         check_ver(p.ver, p.min_compatible)?;
 
@@ -65,7 +66,8 @@ impl FromToProto<pb::TableInfo> for mt::TableInfo {
     }
 }
 
-impl FromToProto<pb::TableNameIdent> for mt::TableNameIdent {
+impl FromToProto for mt::TableNameIdent {
+    type PB = pb::TableNameIdent;
     fn from_pb(p: pb::TableNameIdent) -> Result<Self, Incompatible> {
         check_ver(p.ver, p.min_compatible)?;
 
@@ -89,7 +91,8 @@ impl FromToProto<pb::TableNameIdent> for mt::TableNameIdent {
     }
 }
 
-impl FromToProto<pb::DbIdTableName> for mt::DBIdTableName {
+impl FromToProto for mt::DBIdTableName {
+    type PB = pb::DbIdTableName;
     fn from_pb(p: pb::DbIdTableName) -> Result<Self, Incompatible> {
         check_ver(p.ver, p.min_compatible)?;
 
@@ -111,7 +114,8 @@ impl FromToProto<pb::DbIdTableName> for mt::DBIdTableName {
     }
 }
 
-impl FromToProto<pb::TableIdent> for mt::TableIdent {
+impl FromToProto for mt::TableIdent {
+    type PB = pb::TableIdent;
     fn from_pb(p: pb::TableIdent) -> Result<Self, Incompatible> {
         check_ver(p.ver, p.min_compatible)?;
 
@@ -134,7 +138,8 @@ impl FromToProto<pb::TableIdent> for mt::TableIdent {
     }
 }
 
-impl FromToProto<pb::TableMeta> for mt::TableMeta {
+impl FromToProto for mt::TableMeta {
+    type PB = pb::TableMeta;
     fn from_pb(p: pb::TableMeta) -> Result<Self, Incompatible> {
         check_ver(p.ver, p.min_compatible)?;
 
@@ -197,7 +202,8 @@ impl FromToProto<pb::TableMeta> for mt::TableMeta {
     }
 }
 
-impl FromToProto<pb::TableStatistics> for mt::TableStatistics {
+impl FromToProto for mt::TableStatistics {
+    type PB = pb::TableStatistics;
     fn from_pb(p: pb::TableStatistics) -> Result<Self, Incompatible> {
         check_ver(p.ver, p.min_compatible)?;
 
@@ -224,7 +230,8 @@ impl FromToProto<pb::TableStatistics> for mt::TableStatistics {
     }
 }
 
-impl FromToProto<pb::TableIdList> for mt::TableIdList {
+impl FromToProto for mt::TableIdList {
+    type PB = pb::TableIdList;
     fn from_pb(p: pb::TableIdList) -> Result<Self, Incompatible> {
         check_ver(p.ver, p.min_compatible)?;
 

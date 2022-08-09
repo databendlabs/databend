@@ -25,7 +25,8 @@ use crate::parser::token::Token;
 #[derive(Debug, Clone, PartialEq)]
 pub struct Query<'a> {
     pub span: &'a [Token<'a>],
-
+    // With clause, common table expression
+    pub with: Option<With<'a>>,
     // Set operator: SELECT or UNION / EXCEPT / INTERSECT
     pub body: SetExpr<'a>,
 
@@ -38,6 +39,20 @@ pub struct Query<'a> {
     pub offset: Option<Expr<'a>>,
     // FORMAT <format>
     pub format: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct With<'a> {
+    pub span: &'a [Token<'a>],
+    pub recursive: bool,
+    pub ctes: Vec<Cte<'a>>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Cte<'a> {
+    pub span: &'a [Token<'a>],
+    pub alias: TableAlias<'a>,
+    pub query: Query<'a>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -216,7 +231,7 @@ impl<'a> Display for TableAlias<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", &self.name)?;
         if !self.columns.is_empty() {
-            write!(f, " (")?;
+            write!(f, "(")?;
             write_period_separated_list(f, &self.columns)?;
             write!(f, ")")?;
         }
@@ -413,8 +428,30 @@ impl<'a> Display for SetExpr<'a> {
     }
 }
 
+impl<'a> Display for Cte<'a> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} AS ({})", self.alias, self.query)?;
+        Ok(())
+    }
+}
+impl<'a> Display for With<'a> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        if self.recursive {
+            write!(f, "RECURSIVE ")?;
+        }
+
+        write_comma_separated_list(f, &self.ctes)?;
+        Ok(())
+    }
+}
+
 impl<'a> Display for Query<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        // CTE, with clause
+        if let Some(with) = &self.with {
+            write!(f, "WITH {with} ")?;
+        }
+
         // Query body
         write!(f, "{}", self.body)?;
 

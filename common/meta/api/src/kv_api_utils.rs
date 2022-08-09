@@ -65,14 +65,14 @@ pub async fn get_u64_value<T: KVApiKey>(
 /// Get a struct value.
 ///
 /// It returns seq number and the data.
-pub async fn get_struct_value<K, PB, T>(
+pub async fn get_struct_value<K, T>(
     kv_api: &(impl KVApi + ?Sized),
     k: &K,
 ) -> Result<(u64, Option<T>), MetaError>
 where
     K: KVApiKey,
-    PB: common_protos::prost::Message + Default,
-    T: FromToProto<PB>,
+    T: FromToProto,
+    T::PB: common_protos::prost::Message + Default,
 {
     let res = kv_api.get_kv(&k.to_key()).await?;
 
@@ -112,21 +112,23 @@ pub fn serialize_u64(value: u64) -> Result<Vec<u8>, MetaError> {
     Ok(v)
 }
 
-pub fn serialize_struct<PB: common_protos::prost::Message>(
-    value: &impl FromToProto<PB>,
-) -> Result<Vec<u8>, MetaError> {
+pub fn serialize_struct<T>(value: &T) -> Result<Vec<u8>, MetaError>
+where
+    T: FromToProto + 'static,
+    T::PB: common_protos::prost::Message,
+{
     let p = value.to_pb().map_err(meta_encode_err)?;
     let mut buf = vec![];
     common_protos::prost::Message::encode(&p, &mut buf).map_err(meta_encode_err)?;
     Ok(buf)
 }
 
-pub fn deserialize_struct<PB, T>(buf: &[u8]) -> Result<T, MetaError>
+pub fn deserialize_struct<T>(buf: &[u8]) -> Result<T, MetaError>
 where
-    PB: common_protos::prost::Message + Default,
-    T: FromToProto<PB>,
+    T: FromToProto,
+    T::PB: common_protos::prost::Message + Default,
 {
-    let p: PB = common_protos::prost::Message::decode(buf).map_err(meta_encode_err)?;
+    let p: T::PB = common_protos::prost::Message::decode(buf).map_err(meta_encode_err)?;
     let v: T = FromToProto::from_pb(p).map_err(meta_encode_err)?;
 
     Ok(v)

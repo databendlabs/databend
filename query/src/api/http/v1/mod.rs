@@ -14,5 +14,6 @@
 
 pub mod cluster;
 pub mod config;
+pub mod instance_status;
 pub mod logs;
-pub mod status;
+pub mod tenant_tables;
