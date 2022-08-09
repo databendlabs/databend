@@ -243,7 +243,7 @@ async fn test_fuse_table_optimize() -> Result<()> {
     let ctx = fixture.ctx();
     let mut planner = Planner::new(ctx.clone());
 
-    let create_table_plan = fixture.default_crate_table_plan();
+    let create_table_plan = fixture.create_normal_table_plan();
 
     // create test table
     let tbl_name = create_table_plan.table.clone();

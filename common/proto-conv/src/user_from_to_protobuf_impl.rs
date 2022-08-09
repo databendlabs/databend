@@ -23,7 +23,9 @@ use common_datavalues::chrono::DateTime;
 use common_datavalues::chrono::Utc;
 use common_meta_types as mt;
 use common_protos::pb;
+use common_storage::StorageFsConfig;
 use common_storage::StorageParams;
+use common_storage::StorageS3Config;
 use enumflags2::BitFlags;
 use num::FromPrimitive;
 
@@ -81,10 +83,8 @@ impl FromToProto<pb::UserOption> for mt::UserOption {
     where Self: Sized {
         check_ver(p.ver, p.min_compatible)?;
 
-        let flags =
-            BitFlags::<mt::UserOptionFlag, u64>::from_bits(p.flags).map_err(|e| Incompatible {
-                reason: format!("UserOptionFlag error: {}", e),
-            })?;
+        // ignore unknown flags
+        let flags = BitFlags::<mt::UserOptionFlag, u64>::from_bits_truncate(p.flags);
 
         Ok(mt::UserOption::default()
             .with_flags(flags)
@@ -404,10 +404,10 @@ impl FromToProto<pb::user_stage_info::StageStorage> for StorageParams {
     where Self: Sized {
         match p.storage {
             Some(pb::user_stage_info::stage_storage::Storage::S3(s)) => {
-                Ok(StorageParams::from_pb(s)?)
+                Ok(StorageParams::S3(StorageS3Config::from_pb(s)?))
             }
             Some(pb::user_stage_info::stage_storage::Storage::Fs(s)) => {
-                Ok(StorageParams::from_pb(s)?)
+                Ok(StorageParams::Fs(StorageFsConfig::from_pb(s)?))
             }
             None => Err(Incompatible {
                 reason: "StageStorage.storage cannot be None".to_string(),
@@ -417,15 +417,11 @@ impl FromToProto<pb::user_stage_info::StageStorage> for StorageParams {
 
     fn to_pb(&self) -> Result<pb::user_stage_info::StageStorage, Incompatible> {
         match self {
-            StorageParams::S3(_) => Ok(pb::user_stage_info::StageStorage {
-                storage: Some(pb::user_stage_info::stage_storage::Storage::S3(
-                    self.to_pb()?,
-                )),
+            StorageParams::S3(v) => Ok(pb::user_stage_info::StageStorage {
+                storage: Some(pb::user_stage_info::stage_storage::Storage::S3(v.to_pb()?)),
             }),
-            StorageParams::Fs(_) => Ok(pb::user_stage_info::StageStorage {
-                storage: Some(pb::user_stage_info::stage_storage::Storage::Fs(
-                    self.to_pb()?,
-                )),
+            StorageParams::Fs(v) => Ok(pb::user_stage_info::StageStorage {
+                storage: Some(pb::user_stage_info::stage_storage::Storage::Fs(v.to_pb()?)),
             }),
             _ => todo!("other stage storage are not supported"),
         }

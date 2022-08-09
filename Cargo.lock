@@ -1707,7 +1707,6 @@ dependencies = [
 name = "common-storages-fuse"
 version = "0.1.0"
 dependencies = [
- "async-stream",
  "async-trait 0.1.56 (git+https://github.com/datafuse-extras/async-trait?rev=f0b0fd5)",
  "backoff",
  "chrono",
@@ -1729,7 +1728,6 @@ dependencies = [
  "common-planners",
  "common-storages-index",
  "common-storages-util",
- "common-streams",
  "futures",
  "futures-util",
  "opendal",

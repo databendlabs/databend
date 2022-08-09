@@ -88,25 +88,25 @@ pub struct DropShareReq {
 pub struct DropShareReply {}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct AddShareAccountReq {
+pub struct AddShareAccountsReq {
     pub share_name: ShareNameIdent,
-    pub account: String,
+    pub if_exists: bool,
+    pub accounts: Vec<String>,
     pub share_on: DateTime<Utc>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct AddShareAccountReply {
-    pub share_id: u64,
+pub struct AddShareAccountsReply {}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct RemoveShareAccountsReq {
+    pub share_name: ShareNameIdent,
+    pub if_exists: bool,
+    pub accounts: Vec<String>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct RemoveShareAccountReq {
-    pub account: String,
-    pub share_id: u64,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct RemoveShareAccountReply {}
+pub struct RemoveShareAccountsReply {}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct ShowShareOfReq {

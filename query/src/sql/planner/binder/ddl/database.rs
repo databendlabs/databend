@@ -40,6 +40,7 @@ use common_planners::UndropDatabasePlan;
 
 use crate::sessions::TableContext;
 use crate::sql::binder::Binder;
+use crate::sql::planner::semantic::normalize_identifier;
 use crate::sql::plans::Plan;
 use crate::sql::plans::RewriteKind;
 use crate::sql::BindContext;
@@ -76,9 +77,9 @@ impl<'a> Binder {
 
         let catalog = catalog
             .as_ref()
-            .map(|catalog| catalog.name.to_lowercase())
+            .map(|catalog| normalize_identifier(catalog, &self.name_resolution_ctx).name)
             .unwrap_or_else(|| self.ctx.get_current_catalog());
-        let database = database.name.to_lowercase();
+        let database = normalize_identifier(database, &self.name_resolution_ctx).name;
         let schema = DataSchemaRefExt::create(vec![
             DataField::new("Database", Vu8::to_data_type()),
             DataField::new("Create Database", Vu8::to_data_type()),
@@ -105,9 +106,9 @@ impl<'a> Binder {
         let tenant = self.ctx.get_tenant();
         let catalog = catalog
             .as_ref()
-            .map(|catalog| catalog.name.to_lowercase())
+            .map(|catalog| normalize_identifier(catalog, &self.name_resolution_ctx).name)
             .unwrap_or_else(|| self.ctx.get_current_catalog());
-        let database = database.name.to_lowercase();
+        let database = normalize_identifier(database, &self.name_resolution_ctx).name;
 
         match &action {
             AlterDatabaseAction::RenameDatabase { new_db } => {
@@ -140,9 +141,9 @@ impl<'a> Binder {
         let tenant = self.ctx.get_tenant();
         let catalog = catalog
             .as_ref()
-            .map(|catalog| catalog.name.to_lowercase())
+            .map(|catalog| normalize_identifier(catalog, &self.name_resolution_ctx).name)
             .unwrap_or_else(|| self.ctx.get_current_catalog());
-        let database = database.name.to_lowercase();
+        let database = normalize_identifier(database, &self.name_resolution_ctx).name;
 
         Ok(Plan::DropDatabase(Box::new(DropDatabasePlan {
             if_exists: *if_exists,
@@ -161,9 +162,9 @@ impl<'a> Binder {
         let tenant = self.ctx.get_tenant();
         let catalog = catalog
             .as_ref()
-            .map(|catalog| catalog.name.to_lowercase())
+            .map(|catalog| normalize_identifier(catalog, &self.name_resolution_ctx).name)
             .unwrap_or_else(|| self.ctx.get_current_catalog());
-        let database = database.name.to_lowercase();
+        let database = normalize_identifier(database, &self.name_resolution_ctx).name;
 
         Ok(Plan::UndropDatabase(Box::new(UndropDatabasePlan {
             tenant,
@@ -187,9 +188,9 @@ impl<'a> Binder {
         let tenant = self.ctx.get_tenant();
         let catalog = catalog
             .as_ref()
-            .map(|catalog| catalog.name.to_lowercase())
+            .map(|catalog| normalize_identifier(catalog, &self.name_resolution_ctx).name)
             .unwrap_or_else(|| self.ctx.get_current_catalog());
-        let database = database.name.to_lowercase();
+        let database = normalize_identifier(database, &self.name_resolution_ctx).name;
         let meta = self.database_meta(engine, options)?;
 
         Ok(Plan::CreateDatabase(Box::new(CreateDatabasePlan {

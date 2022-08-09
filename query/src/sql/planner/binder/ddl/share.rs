@@ -17,6 +17,7 @@ use common_exception::Result;
 
 use crate::sessions::TableContext;
 use crate::sql::binder::Binder;
+use crate::sql::normalize_identifier;
 use crate::sql::plans::CreateSharePlan;
 use crate::sql::plans::DropSharePlan;
 use crate::sql::plans::GrantShareObjectPlan;
@@ -34,7 +35,7 @@ impl<'a> Binder {
             comment,
         } = stmt;
 
-        let share = share.name.to_lowercase();
+        let share = normalize_identifier(share, &self.name_resolution_ctx).name;
 
         let plan = CreateSharePlan {
             if_not_exists: *if_not_exists,
@@ -51,7 +52,7 @@ impl<'a> Binder {
     ) -> Result<Plan> {
         let DropShareStmt { if_exists, share } = stmt;
 
-        let share = share.name.to_lowercase();
+        let share = normalize_identifier(share, &self.name_resolution_ctx).name;
 
         let plan = DropSharePlan {
             if_exists: *if_exists,
@@ -71,7 +72,7 @@ impl<'a> Binder {
             privilege,
         } = stmt;
 
-        let share = share.name.to_lowercase();
+        let share = normalize_identifier(share, &self.name_resolution_ctx).name;
 
         let plan = GrantShareObjectPlan {
             share,
@@ -91,7 +92,7 @@ impl<'a> Binder {
             privilege,
         } = stmt;
 
-        let share = share.name.to_lowercase();
+        let share = normalize_identifier(share, &self.name_resolution_ctx).name;
 
         let plan = RevokeShareObjectPlan {
             share,
