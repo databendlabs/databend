@@ -1330,8 +1330,8 @@ impl<'a> TypeChecker<'a> {
         );
 
         // Create new `BindContext` with current `bind_context` as its parent, so we can resolve outer columns.
-        let bind_context = BindContext::with_parent(Box::new(self.bind_context.clone()));
-        let (s_expr, output_context) = binder.bind_query(&bind_context, subquery).await?;
+        let mut bind_context = BindContext::with_parent(Box::new(self.bind_context.clone()));
+        let (s_expr, output_context) = binder.bind_query(&mut bind_context, subquery).await?;
 
         if (typ == SubqueryType::Scalar || typ == SubqueryType::Any)
             && output_context.columns.len() > 1

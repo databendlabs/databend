@@ -81,7 +81,7 @@ impl<'a> Binder {
 
     pub(super) async fn bind_table_reference(
         &mut self,
-        bind_context: &BindContext,
+        bind_context: &mut BindContext,
         table_ref: &TableReference<'a>,
     ) -> Result<(SExpr, BindContext)> {
         match table_ref {
@@ -93,6 +93,42 @@ impl<'a> Binder {
                 alias,
                 travel_point,
             } => {
+                let table_name = normalize_identifier(table, &self.name_resolution_ctx).name;
+                // Check common table expression
+                let ctes = bind_context.ctes_map.clone();
+                if let Some(cte_info) = ctes.get(&table_name) {
+                    let mut cte_bind_context = cte_info.bind_context.clone();
+                    let mut cols_alias = cte_info.columns_alias.clone();
+                    if let Some(alias) = alias {
+                        for (idx, col_alias) in alias.columns.iter().enumerate() {
+                            if idx < cte_info.columns_alias.len() {
+                                cols_alias[idx] = col_alias.name.clone();
+                            } else {
+                                cols_alias.push(col_alias.name.clone());
+                            }
+                        }
+                    }
+                    let alias_table_name = alias
+                        .as_ref()
+                        .map(|alias| alias.name.name.clone())
+                        .unwrap_or(table.name.clone());
+                    for column in cte_bind_context.columns.iter_mut() {
+                        column.database_name = None;
+                        column.table_name = Some(alias_table_name.clone());
+                    }
+
+                    if cols_alias.len() > cte_bind_context.columns.len() {
+                        return Err(ErrorCode::SemanticError(format!(
+                            "table has {} columns available but {} columns specified",
+                            cte_bind_context.columns.len(),
+                            cols_alias.len()
+                        )));
+                    }
+                    for (index, column_name) in cols_alias.iter().enumerate() {
+                        cte_bind_context.columns[index].column_name = column_name.clone();
+                    }
+                    return Ok((cte_info.s_expr.clone(), cte_bind_context));
+                }
                 // Get catalog name
                 let catalog = catalog
                     .as_ref()
@@ -104,8 +140,6 @@ impl<'a> Binder {
                     .as_ref()
                     .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
                     .unwrap_or_else(|| self.ctx.get_current_database());
-
-                let table = normalize_identifier(table, &self.name_resolution_ctx).name;
 
                 let tenant = self.ctx.get_tenant();
 
@@ -120,7 +154,7 @@ impl<'a> Binder {
                         tenant.as_str(),
                         catalog.as_str(),
                         database.as_str(),
-                        table.as_str(),
+                        table_name.as_str(),
                         &navigation_point,
                     )
                     .await?;

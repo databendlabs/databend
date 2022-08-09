@@ -43,7 +43,7 @@ use crate::sql::BindContext;
 impl<'a> Binder {
     pub(in crate::sql::planner::binder) async fn bind_copy(
         &mut self,
-        bind_context: &BindContext,
+        bind_context: &mut BindContext,
         stmt: &CopyStmt<'a>,
     ) -> Result<Plan> {
         match (&stmt.src, &stmt.dst) {
@@ -313,7 +313,7 @@ impl<'a> Binder {
     #[allow(clippy::too_many_arguments)]
     async fn bind_copy_from_table_into_stage(
         &mut self,
-        bind_context: &BindContext,
+        bind_context: &mut BindContext,
         stmt: &CopyStmt<'a>,
         src_catalog_name: &str,
         src_database_name: &str,
@@ -359,7 +359,7 @@ impl<'a> Binder {
     #[allow(clippy::too_many_arguments)]
     async fn bind_copy_from_table_into_uri(
         &mut self,
-        bind_context: &BindContext,
+        bind_context: &mut BindContext,
         stmt: &CopyStmt<'a>,
         src_catalog_name: &str,
         src_database_name: &str,
@@ -409,7 +409,7 @@ impl<'a> Binder {
     /// Bind COPY INFO <stage_location> FROM <query>
     async fn bind_copy_from_query_into_stage(
         &mut self,
-        bind_context: &BindContext,
+        bind_context: &mut BindContext,
         stmt: &CopyStmt<'a>,
         src_query: &Query<'_>,
         dst_stage: &str,
@@ -439,7 +439,7 @@ impl<'a> Binder {
     #[allow(clippy::too_many_arguments)]
     async fn bind_copy_from_query_into_uri(
         &mut self,
-        bind_context: &BindContext,
+        bind_context: &mut BindContext,
         stmt: &CopyStmt<'a>,
         src_query: &Query<'_>,
         dst_uri_location: &UriLocation,

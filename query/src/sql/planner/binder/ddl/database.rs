@@ -48,7 +48,7 @@ use crate::sql::BindContext;
 impl<'a> Binder {
     pub(in crate::sql::planner::binder) async fn bind_show_databases(
         &mut self,
-        bind_context: &BindContext,
+        bind_context: &mut BindContext,
         stmt: &ShowDatabasesStmt<'a>,
     ) -> Result<Plan> {
         let ShowDatabasesStmt { limit } = stmt;

@@ -45,7 +45,7 @@ impl<'a> Binder {
     #[async_recursion]
     pub(super) async fn bind_join(
         &mut self,
-        bind_context: &BindContext,
+        bind_context: &mut BindContext,
         join: &Join<'a>,
     ) -> Result<(SExpr, BindContext)> {
         let (left_child, left_context) =

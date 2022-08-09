@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
+
 use common_ast::ast::TableAlias;
 use common_ast::parser::token::Token;
 use common_ast::DisplayError;
@@ -25,6 +27,7 @@ use common_exception::Result;
 use super::AggregateInfo;
 use crate::sql::common::IndexType;
 use crate::sql::normalize_identifier;
+use crate::sql::optimizer::SExpr;
 use crate::sql::plans::Scalar;
 use crate::sql::NameResolutionContext;
 
@@ -54,7 +57,7 @@ pub enum NameResolutionResult {
 }
 
 /// `BindContext` stores all the free variables in a query and tracks the context of binding procedure.
-#[derive(Clone, Default, Debug)]
+#[derive(Clone, Debug)]
 pub struct BindContext {
     pub parent: Option<Box<BindContext>>,
 
@@ -69,11 +72,27 @@ pub struct BindContext {
 
     /// Format type of query output.
     pub format: Option<String>,
+
+    pub ctes_map: HashMap<String, CteInfo>,
+}
+
+#[derive(Clone, Debug)]
+pub struct CteInfo {
+    pub columns_alias: Vec<String>,
+    pub s_expr: SExpr,
+    pub bind_context: BindContext,
 }
 
 impl BindContext {
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            parent: None,
+            columns: Vec::new(),
+            aggregate_info: AggregateInfo::default(),
+            in_grouping: false,
+            format: None,
+            ctes_map: HashMap::new(),
+        }
     }
 
     pub fn with_parent(parent: Box<BindContext>) -> Self {
@@ -83,6 +102,7 @@ impl BindContext {
             aggregate_info: Default::default(),
             in_grouping: false,
             format: None,
+            ctes_map: HashMap::new(),
         }
     }
 
