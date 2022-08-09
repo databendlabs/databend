@@ -73,8 +73,10 @@ async fn test_find_all_related_roles() -> Result<()> {
             "role1", "role2", "role3", "role4", "role5",
         ]),
     ];
-    let mut cached: HashMap<String, RoleInfo> =
-        roles.into_iter().map(|r| (r.identity(), r)).collect();
+    let mut cached: HashMap<String, RoleInfo> = roles
+        .into_iter()
+        .map(|r| (r.identity().to_string(), r))
+        .collect();
     for (lhs, rhs) in role_grants {
         cached
             .get_mut(&lhs.to_string())
@@ -85,7 +87,7 @@ async fn test_find_all_related_roles() -> Result<()> {
     for (input, want) in tests {
         let got: HashSet<_> = find_all_related_roles(&cached, &input)
             .into_iter()
-            .map(|r| r.identity())
+            .map(|r| r.identity().to_string())
             .collect();
         let want: HashSet<_> = want.iter().map(|s| s.to_string()).collect();
         assert_eq!(got, want);

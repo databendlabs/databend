@@ -172,7 +172,7 @@ impl UserApiProvider {
             .get_roles(tenant)
             .await?
             .into_iter()
-            .map(|r| (r.identity(), r))
+            .map(|r| (r.identity().to_string(), r))
             .collect::<HashMap<_, _>>();
         Ok(find_all_related_roles(&tenant_roles_map, role_identities))
     }
