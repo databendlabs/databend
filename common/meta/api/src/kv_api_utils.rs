@@ -36,6 +36,7 @@ use common_meta_types::UpsertKVReq;
 use common_proto_conv::FromToProto;
 use tracing::debug;
 
+use crate::Id;
 use crate::KVApi;
 use crate::KVApiKey;
 
@@ -56,7 +57,7 @@ pub async fn get_u64_value<T: KVApiKey>(
     let res = kv_api.get_kv(&key.to_key()).await?;
 
     if let Some(seq_v) = res {
-        Ok((seq_v.seq, deserialize_u64(&seq_v.data)?))
+        Ok((seq_v.seq, *deserialize_u64(&seq_v.data)?))
     } else {
         Ok((0, 0))
     }
@@ -83,9 +84,14 @@ where
     }
 }
 
-pub fn deserialize_u64(v: &[u8]) -> Result<u64, MetaError> {
+pub fn serialize_u64(value: impl Into<Id>) -> Result<Vec<u8>, MetaError> {
+    let v = serde_json::to_vec(&*value.into()).map_err(meta_encode_err)?;
+    Ok(v)
+}
+
+pub fn deserialize_u64(v: &[u8]) -> Result<Id, MetaError> {
     let id = serde_json::from_slice(v).map_err(meta_encode_err)?;
-    Ok(id)
+    Ok(Id::new(id))
 }
 
 /// Generate an id on metasrv.
@@ -105,11 +111,6 @@ pub async fn fetch_id<T: KVApiKey>(kv_api: &impl KVApi, generator: T) -> Result<
     // seq: MatchSeq::Any always succeeds
     let seq_v = res.result.unwrap();
     Ok(seq_v.seq)
-}
-
-pub fn serialize_u64(value: u64) -> Result<Vec<u8>, MetaError> {
-    let v = serde_json::to_vec(&value).map_err(meta_encode_err)?;
-    Ok(v)
 }
 
 pub fn serialize_struct<T>(value: &T) -> Result<Vec<u8>, MetaError>

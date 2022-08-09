@@ -2116,7 +2116,7 @@ async fn list_u64_value<K: KVApiKey>(
     let mut values = Vec::with_capacity(n);
 
     for (str_key, seqv) in res.iter() {
-        let id = deserialize_u64(&seqv.data).map_err(meta_encode_err)?;
+        let id = *deserialize_u64(&seqv.data).map_err(meta_encode_err)?;
         values.push(id);
 
         // Parse key and get db_name:
