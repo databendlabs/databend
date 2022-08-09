@@ -121,11 +121,7 @@ impl<'a> Binder {
             share,
             if_exists: *if_exists,
             is_add: *is_add,
-            accounts: tenants
-                .iter()
-                .map(|v| v.to_string())
-                .into_iter()
-                .collect_vec(),
+            accounts: tenants.iter().map(|v| v.to_string()).collect_vec(),
         };
         Ok(Plan::AlterShareAccounts(Box::new(plan)))
     }
