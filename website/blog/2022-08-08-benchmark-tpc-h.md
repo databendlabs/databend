@@ -164,4 +164,4 @@ done
 
 All the definitions of the TPC-H queries can be found at https://www.tpc.org/tpc_documents_current_versions/pdf/tpc-h_v3.0.1.pdf. You can simply run them by copying and pasting the scripts to Databend.
 
-The Databend team ran the TPC-H benchmark around two months ago and uploaded their queries and results to GitHub. You can find them at https://github.com/datafuselabs/databend/tree/main/tests/suites/0_stateless/13_tpch. Please note that Databend now uses the new planner by default, so you DO NOT need to enable it before running the queries.
+The Databend team ran the TPC-H benchmark around two months ago and uploaded their queries and results to GitHub. You can find them at https://github.com/datafuselabs/databend/tree/main/tests/suites/0_stateless/13_tpch. Please note that Databend now uses the new planner by default, so you DO NOT need to enable it any more before running the queries.
