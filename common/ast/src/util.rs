@@ -92,7 +92,13 @@ fn non_reserved_identifier(
             ),
             move |i| {
                 match_token(QuotedString)(i).and_then(|(i2, token)| {
-                    if token.text().starts_with(i.1.ident_quote()) {
+                    if token
+                        .text()
+                        .chars()
+                        .next()
+                        .filter(|c| i.1.is_ident_quote(*c))
+                        .is_some()
+                    {
                         Ok((i2, Identifier {
                             span: token.clone(),
                             name: token.text()[1..token.text().len() - 1].to_string(),

@@ -1080,13 +1080,19 @@ pub fn literal_string(i: Input) -> IResult<String> {
             QuotedString
         },
         |token| {
-            if token.text().starts_with(i.1.ident_quote()) {
-                Err(ErrorKind::ExpectToken(QuotedString))
-            } else {
+            if token
+                .text()
+                .chars()
+                .next()
+                .filter(|c| i.1.is_string_quote(*c))
+                .is_some()
+            {
                 let str = &token.text()[1..token.text().len() - 1];
                 let unescaped =
                     unescape(str, '\'').ok_or(ErrorKind::Other("invalid escape or unicode"))?;
                 Ok(unescaped)
+            } else {
+                Err(ErrorKind::ExpectToken(QuotedString))
             }
         },
     )(i)

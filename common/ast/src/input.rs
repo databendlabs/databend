@@ -86,10 +86,17 @@ pub enum Dialect {
 }
 
 impl Dialect {
-    pub fn ident_quote(&self) -> char {
+    pub fn is_ident_quote(&self, c: char) -> bool {
         match self {
-            Dialect::MySQL => '`',
-            Dialect::PostgreSQL => '"',
+            Dialect::MySQL => c == '`',
+            Dialect::PostgreSQL => c == '"',
+        }
+    }
+
+    pub fn is_string_quote(&self, c: char) -> bool {
+        match self {
+            Dialect::MySQL => c == '\'' || c == '"',
+            Dialect::PostgreSQL => c == '\'',
         }
     }
 }
