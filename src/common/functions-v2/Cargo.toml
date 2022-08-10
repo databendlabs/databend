@@ -19,5 +19,5 @@ bstr = "0.2.17"
 
 [dev-dependencies]
 comfy-table = "6"
-common-ast = { path = "../ast" }
+common-ast = { path = "../../query/ast" }
 goldenfile = "1.4"

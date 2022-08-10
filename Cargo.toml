@@ -45,6 +45,7 @@ members = [
     "src/common/fuse-meta",
     # Query
     "src/query",
+    "src/query/ast",
     # Meta
     "src/meta",
     # Hack
@@ -54,7 +55,7 @@ members = [
 
 # cargo can't build fuzz targets with afl
 # split `fuzz` into seperate workspace can help resolve this.
-exclude = ["tools/fuzz"]
+exclude = ["src/query/ast/fuzz"]
 
 [profile.release]
 debug = 1

@@ -11,11 +11,11 @@ doctest = false
 
 [dependencies] # In alphabetical order
 # Workspace dependencies
-common-datavalues = { path = "../datavalues" }
-common-exception = { path = "../exception" }
-common-functions = { path = "../functions" }
-common-meta-app = { path = "../meta/app" }
-common-meta-types = { path = "../meta/types" }
+common-datavalues = { path = "../../common/datavalues" }
+common-exception = { path = "../../common/exception" }
+common-functions = { path = "../../common/functions" }
+common-meta-app = { path = "../../common/meta/app" }
+common-meta-types = { path = "../../common/meta/types" }
 
 # Github dependencies
 # TODO(andylokandy): Use the version from crates.io once
@@ -35,7 +35,7 @@ thiserror = "1.0.31"
 url = "2.2.2"
 
 [dev-dependencies]
-common-base = { path = "../base" }
+common-base = { path = "../../common/base" }
 goldenfile = "1.4"
 pretty_assertions = "1.2.1"
 regex = "1.5.6"

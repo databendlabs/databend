@@ -11,7 +11,7 @@ doctest = false
 test = false
 
 [dependencies]
-common-ast = { path = "../../common/ast" }
+common-ast = { path = ".." }
 
 afl = "0.12"
 arbitrary = "1.1.3"
