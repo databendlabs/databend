@@ -26,15 +26,15 @@ use common_streams::SendableDataBlockStream;
 use crate::interpreters::Interpreter;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
-use crate::sql::plans::share::AlterShareAccountsPlan;
+use crate::sql::plans::share::AlterShareTenantsPlan;
 
 pub struct AlterShareTenantsInterpreter {
     ctx: Arc<QueryContext>,
-    plan: AlterShareAccountsPlan,
+    plan: AlterShareTenantsPlan,
 }
 
 impl AlterShareTenantsInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: AlterShareAccountsPlan) -> Result<Self> {
+    pub fn try_create(ctx: Arc<QueryContext>, plan: AlterShareTenantsPlan) -> Result<Self> {
         Ok(AlterShareTenantsInterpreter { ctx, plan })
     }
 }

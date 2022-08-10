@@ -19,7 +19,7 @@ use itertools::Itertools;
 use crate::sessions::TableContext;
 use crate::sql::binder::Binder;
 use crate::sql::normalize_identifier;
-use crate::sql::plans::AlterShareAccountsPlan;
+use crate::sql::plans::AlterShareTenantsPlan;
 use crate::sql::plans::CreateSharePlan;
 use crate::sql::plans::DropSharePlan;
 use crate::sql::plans::GrantShareObjectPlan;
@@ -117,12 +117,12 @@ impl<'a> Binder {
 
         let share = normalize_identifier(share, &self.name_resolution_ctx).name;
 
-        let plan = AlterShareAccountsPlan {
+        let plan = AlterShareTenantsPlan {
             share,
             if_exists: *if_exists,
             is_add: *is_add,
             accounts: tenants.iter().map(|v| v.to_string()).collect_vec(),
         };
-        Ok(Plan::AlterShareAccounts(Box::new(plan)))
+        Ok(Plan::AlterShareTenants(Box::new(plan)))
     }
 }
