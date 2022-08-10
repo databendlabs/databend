@@ -80,9 +80,9 @@ pub struct WithSpan<'a, T> {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Dialect {
-    MySQL,
     #[default]
     PostgreSQL,
+    MySQL,
 }
 
 impl Dialect {
