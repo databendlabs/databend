@@ -53,10 +53,6 @@ members = [
     "src/workspace-hack",
 ]
 
-# cargo can't build fuzz targets with afl
-# split `fuzz` into seperate workspace can help resolve this.
-exclude = ["src/query/ast/fuzz"]
-
 [profile.release]
 debug = 1
 lto = "thin"
