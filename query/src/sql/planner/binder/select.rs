@@ -150,6 +150,7 @@ impl<'a> Binder {
         let mut output_context = BindContext::new();
         output_context.parent = from_context.parent;
         output_context.columns = from_context.columns;
+        output_context.ctes_map = from_context.ctes_map;
 
         Ok((s_expr, output_context))
     }

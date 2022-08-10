@@ -97,12 +97,12 @@ impl BindContext {
 
     pub fn with_parent(parent: Box<BindContext>) -> Self {
         BindContext {
-            parent: Some(parent),
+            parent: Some(parent.clone()),
             columns: vec![],
             aggregate_info: Default::default(),
             in_grouping: false,
             format: None,
-            ctes_map: HashMap::new(),
+            ctes_map: parent.ctes_map.clone(),
         }
     }
 
