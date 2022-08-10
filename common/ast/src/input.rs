@@ -89,7 +89,8 @@ impl Dialect {
     pub fn is_ident_quote(&self, c: char) -> bool {
         match self {
             Dialect::MySQL => c == '`',
-            Dialect::PostgreSQL => c == '"',
+            // TODO: remove '`' quote support once mysql handler correctly set mysql dialect.
+            Dialect::PostgreSQL => c == '"' || c == '`',
         }
     }
 
