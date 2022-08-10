@@ -48,11 +48,11 @@ const PREFIX_DATABASE_ID_TO_NAME: &str = "__fd_database_id_to_name";
 const PREFIX_TABLE_ID_TO_NAME: &str = "__fd_table_id_to_name";
 
 /// Key for database id generator
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct DatabaseIdGen {}
 
 /// Key for table id generator
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TableIdGen {}
 
 /// __fd_database/<tenant>/<db_name> -> <db_id>

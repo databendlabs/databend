@@ -85,6 +85,13 @@ impl ValueType for BooleanType {
         col.get(index)
     }
 
+    unsafe fn index_column_unchecked<'a>(
+        col: &'a Self::Column,
+        index: usize,
+    ) -> Self::ScalarRef<'a> {
+        col.get_bit_unchecked(index)
+    }
+
     fn slice_column<'a>(col: &'a Self::Column, range: Range<usize>) -> Self::Column {
         col.clone().slice(range.start, range.end - range.start)
     }
@@ -128,18 +135,18 @@ impl ArgType for BooleanType {
         DataType::Boolean
     }
 
-    fn full_domain(_: &GenericMap) -> Self::Domain {
-        BooleanDomain {
-            has_false: true,
-            has_true: true,
-        }
-    }
-
     fn create_builder(capacity: usize, _: &GenericMap) -> Self::ColumnBuilder {
         MutableBitmap::with_capacity(capacity)
     }
 
     fn column_from_iter(iter: impl Iterator<Item = Self::Scalar>, _: &GenericMap) -> Self::Column {
+        iter.collect()
+    }
+
+    fn column_from_ref_iter<'a>(
+        iter: impl Iterator<Item = Self::ScalarRef<'a>>,
+        _: &GenericMap,
+    ) -> Self::Column {
         iter.collect()
     }
 }

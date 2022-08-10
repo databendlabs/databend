@@ -21,6 +21,7 @@ use common_ast::ast::OptimizeTableAction as AstOptimizeTableAction;
 use common_ast::ast::*;
 use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
+use common_ast::walk_expr_mut;
 use common_ast::Backtrace;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
@@ -44,6 +45,7 @@ use crate::sql::optimizer::optimize;
 use crate::sql::optimizer::OptimizerConfig;
 use crate::sql::optimizer::OptimizerContext;
 use crate::sql::planner::semantic::normalize_identifier;
+use crate::sql::planner::semantic::IdentifierNormalizer;
 use crate::sql::plans::create_table_v2::CreateTablePlanV2;
 use crate::sql::plans::Plan;
 use crate::sql::plans::RewriteKind;
@@ -843,7 +845,14 @@ impl<'a> Binder {
                     cluster_by
                 )));
             }
-            cluster_keys.push(format!("{:#}", cluster_by));
+            let mut cluster_by = cluster_by.clone();
+            walk_expr_mut(
+                &mut IdentifierNormalizer {
+                    ctx: &self.name_resolution_ctx,
+                },
+                &mut cluster_by,
+            );
+            cluster_keys.push(format!("{:#}", &cluster_by));
         }
 
         Ok(cluster_keys)

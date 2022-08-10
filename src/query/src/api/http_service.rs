@@ -55,13 +55,27 @@ impl HttpService {
             .at("/v1/health", get(health_handler))
             .at("/v1/config", get(super::http::v1::config::config_handler))
             .at("/v1/logs", get(super::http::v1::logs::logs_handler))
-            .at("/v1/status", get(super::http::v1::status::status_handler))
+            .at(
+                "/v1/status",
+                get(super::http::v1::instance_status::instance_status_handler),
+            )
+            .at(
+                "/v1/tables",
+                get(super::http::v1::tenant_tables::list_tables_handler),
+            )
             .at(
                 "/v1/cluster/list",
                 get(super::http::v1::cluster::cluster_list_handler),
             )
             .at("/debug/home", get(debug_home_handler))
             .at("/debug/pprof/profile", get(debug_pprof_handler));
+
+        if self.sessions.get_conf().query.management_mode {
+            route = route.at(
+                "/v1/tenants/:tenant/tables",
+                get(super::http::v1::tenant_tables::list_tenant_tables_handler),
+            )
+        }
 
         #[cfg(feature = "memory-profiling")]
         {

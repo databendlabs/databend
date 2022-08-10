@@ -36,7 +36,7 @@ const PREFIX_SHARE_ID_TO_NAME: &str = "__fd_share_id_to_name";
 const PREFIX_SHARE_ACCOUNT_ID: &str = "__fd_share_account_id";
 
 /// Key for share id generator
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ShareIdGen {}
 
 impl KVApiKey for ShareIdGen {

@@ -55,7 +55,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                                 has_false: false,
                             }),
                         ) => {
-                            return args_domain[cond_idx + 1].clone();
+                            return Some(args_domain[cond_idx + 1].clone());
                         }
                         (
                             None,
@@ -82,7 +82,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                                 has_false: false,
                             }),
                         ) => {
-                            return prev_domain.merge(&args_domain[cond_idx + 1]);
+                            return Some(prev_domain.merge(&args_domain[cond_idx + 1]));
                         }
                         (
                             Some(_),
@@ -106,10 +106,10 @@ pub fn register(registry: &mut FunctionRegistry) {
                     }
                 }
 
-                match domain {
+                Some(match domain {
                     Some(domain) => domain.merge(args_domain.last().unwrap()),
                     None => args_domain.last().unwrap().clone(),
-                }
+                })
             }),
             eval: Box::new(|args, generics| {
                 let len = args.iter().find_map(|arg| match arg {
