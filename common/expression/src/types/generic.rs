@@ -76,6 +76,13 @@ impl<const INDEX: usize> ValueType for GenericType<INDEX> {
         col.index(index)
     }
 
+    unsafe fn index_column_unchecked<'a>(
+        col: &'a Self::Column,
+        index: usize,
+    ) -> Self::ScalarRef<'a> {
+        col.index(index).unwrap()
+    }
+
     fn slice_column<'a>(col: &'a Self::Column, range: Range<usize>) -> Self::Column {
         col.slice(range)
     }

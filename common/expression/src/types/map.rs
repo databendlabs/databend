@@ -98,6 +98,13 @@ impl<K: ValueType, V: ValueType> ValueType for KvPair<K, V> {
         col.index(index)
     }
 
+    unsafe fn index_column_unchecked<'a>(
+        col: &'a Self::Column,
+        index: usize,
+    ) -> Self::ScalarRef<'a> {
+        col.index_unchecked(index)
+    }
+
     fn slice_column<'a>(col: &'a Self::Column, range: Range<usize>) -> Self::Column {
         col.slice(range)
     }
@@ -161,6 +168,16 @@ impl<K: ValueType, V: ValueType> KvColumn<K, V> {
             K::index_column(&self.keys, index)?,
             V::index_column(&self.values, index)?,
         ))
+    }
+
+    /// # Safety
+    ///
+    /// Calling this method with an out-of-bounds index is *[undefined behavior]*
+    pub unsafe fn index_unchecked(&self, index: usize) -> (K::ScalarRef<'_>, V::ScalarRef<'_>) {
+        (
+            K::index_column_unchecked(&self.keys, index),
+            V::index_column_unchecked(&self.values, index),
+        )
     }
 
     fn slice(&self, range: Range<usize>) -> Self {
@@ -305,6 +322,13 @@ impl<T: ValueType> ValueType for MapType<T> {
 
     fn index_column<'a>(col: &'a Self::Column, index: usize) -> Option<Self::ScalarRef<'a>> {
         <MapInternal<T> as ValueType>::index_column(col, index)
+    }
+
+    unsafe fn index_column_unchecked<'a>(
+        col: &'a Self::Column,
+        index: usize,
+    ) -> Self::ScalarRef<'a> {
+        <MapInternal<T> as ValueType>::index_column_unchecked(col, index)
     }
 
     fn slice_column<'a>(col: &'a Self::Column, range: Range<usize>) -> Self::Column {

@@ -86,6 +86,13 @@ impl<T: ValueType> ValueType for ArrayType<T> {
         col.index(index)
     }
 
+    unsafe fn index_column_unchecked<'a>(
+        col: &'a Self::Column,
+        index: usize,
+    ) -> Self::ScalarRef<'a> {
+        col.index_unchecked(index)
+    }
+
     fn slice_column<'a>(col: &'a Self::Column, range: Range<usize>) -> Self::Column {
         col.slice(range)
     }
@@ -149,6 +156,16 @@ impl<T: ValueType> ArrayColumn<T> {
             &self.values,
             (self.offsets[index] as usize)..(self.offsets[index + 1] as usize),
         ))
+    }
+
+    /// # Safety
+    ///
+    /// Calling this method with an out-of-bounds index is *[undefined behavior]*
+    pub unsafe fn index_unchecked(&self, index: usize) -> T::Column {
+        T::slice_column(
+            &self.values,
+            (self.offsets[index] as usize)..(self.offsets[index + 1] as usize),
+        )
     }
 
     pub fn slice(&self, range: Range<usize>) -> Self {
@@ -236,6 +253,10 @@ impl<T: ValueType> ArrayColumnBuilder<T> {
 
     pub fn len(&self) -> usize {
         self.offsets.len() - 1
+    }
+
+    pub fn reserve(&mut self, additional: usize) {
+        self.offsets.reserve(additional);
     }
 
     pub fn push(&mut self, item: T::Column) {

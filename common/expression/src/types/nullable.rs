@@ -100,6 +100,13 @@ impl<T: ValueType> ValueType for NullableType<T> {
         col.index(index)
     }
 
+    unsafe fn index_column_unchecked<'a>(
+        col: &'a Self::Column,
+        index: usize,
+    ) -> Self::ScalarRef<'a> {
+        col.index_unchecked(index)
+    }
+
     fn slice_column<'a>(col: &'a Self::Column, range: Range<usize>) -> Self::Column {
         col.slice(range)
     }
@@ -163,6 +170,16 @@ impl<T: ValueType> NullableColumn<T> {
             Some(true) => Some(Some(T::index_column(&self.column, index).unwrap())),
             Some(false) => Some(None),
             None => None,
+        }
+    }
+
+    /// # Safety
+    ///
+    /// Calling this method with an out-of-bounds index is *[undefined behavior]*
+    pub unsafe fn index_unchecked(&self, index: usize) -> Option<T::ScalarRef<'_>> {
+        match self.validity.get_bit_unchecked(index) {
+            true => Some(T::index_column(&self.column, index).unwrap()),
+            false => None,
         }
     }
 

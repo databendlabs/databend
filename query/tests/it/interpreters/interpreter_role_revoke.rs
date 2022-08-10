@@ -87,7 +87,9 @@ async fn test_revoke_role_interpreter() -> Result<()> {
     let mut test_role = RoleInfo::new("test_role");
     test_role.grants.grant_role("test".to_string());
     user_mgr.add_role(&tenant, test_role.clone(), false).await?;
-    let role_info = user_mgr.get_role(&tenant, test_role.identity()).await?;
+    let role_info = user_mgr
+        .get_role(&tenant, test_role.identity().to_string())
+        .await?;
     assert_eq!(role_info.grants.roles().len(), 1);
 
     // Revoke role from normal role.
@@ -97,7 +99,9 @@ async fn test_revoke_role_interpreter() -> Result<()> {
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         let _ = executor.execute().await?;
 
-        let role_info = user_mgr.get_role(&tenant, test_role.identity()).await?;
+        let role_info = user_mgr
+            .get_role(&tenant, test_role.identity().to_string())
+            .await?;
         let roles = role_info.grants.roles();
         assert_eq!(roles.len(), 0);
     }
@@ -109,7 +113,9 @@ async fn test_revoke_role_interpreter() -> Result<()> {
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         let _ = executor.execute().await?;
 
-        let role_info = user_mgr.get_role(&tenant, test_role.identity()).await?;
+        let role_info = user_mgr
+            .get_role(&tenant, test_role.identity().to_string())
+            .await?;
         let roles = role_info.grants.roles();
         assert_eq!(roles.len(), 0);
     }
