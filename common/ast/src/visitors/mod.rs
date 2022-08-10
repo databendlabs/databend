@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod grouping_check;
-mod name_resolution;
-mod type_check;
+mod visitor;
+mod visitor_mut;
+mod walk;
+mod walk_mut;
 
-pub use grouping_check::GroupingChecker;
-pub use name_resolution::normalize_identifier;
-pub use name_resolution::IdentifierNormalizer;
-pub use name_resolution::NameResolutionContext;
-pub use type_check::TypeChecker;
+pub use visitor::Visitor;
+pub use visitor_mut::VisitorMut;
+pub use walk::*;
+pub use walk_mut::*;

@@ -12,7 +12,7 @@ create table t("A" int);
 
 onlyif mysql
 statement ok
-create table "T"(a int);
+create table "T"(a int) cluster by (A+1);
 
 onlyif mysql
 statement ok
