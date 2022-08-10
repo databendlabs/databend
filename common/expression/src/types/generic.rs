@@ -76,6 +76,13 @@ impl<const INDEX: usize> ValueType for GenericType<INDEX> {
         col.index(index)
     }
 
+    unsafe fn index_column_unchecked<'a>(
+        col: &'a Self::Column,
+        index: usize,
+    ) -> Self::ScalarRef<'a> {
+        col.index(index).unwrap()
+    }
+
     fn slice_column<'a>(col: &'a Self::Column, range: Range<usize>) -> Self::Column {
         col.slice(range)
     }
@@ -116,10 +123,6 @@ impl<const INDEX: usize> ValueType for GenericType<INDEX> {
 impl<const INDEX: usize> ArgType for GenericType<INDEX> {
     fn data_type() -> DataType {
         DataType::Generic(INDEX)
-    }
-
-    fn full_domain(generics: &GenericMap) -> Self::Domain {
-        Domain::full(&generics[INDEX], generics)
     }
 
     fn create_builder(capacity: usize, generics: &GenericMap) -> Self::ColumnBuilder {

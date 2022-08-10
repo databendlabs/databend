@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_ast::ast::Identifier;
+use common_ast::VisitorMut;
 use common_settings::Settings;
 
 #[derive(Debug, Clone)]
@@ -59,5 +60,16 @@ pub fn normalize_identifier<'a>(
             quote: ident.quote,
             span: ident.span.clone(),
         }
+    }
+}
+
+pub struct IdentifierNormalizer<'a> {
+    pub ctx: &'a NameResolutionContext,
+}
+
+impl<'a> VisitorMut for IdentifierNormalizer<'a> {
+    fn visit_identifier(&mut self, ident: &mut Identifier<'_>) {
+        let normalized_ident = normalize_identifier(ident, self.ctx);
+        *ident = normalized_ident;
     }
 }

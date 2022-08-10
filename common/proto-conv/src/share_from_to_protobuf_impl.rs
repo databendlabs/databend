@@ -30,7 +30,8 @@ use crate::Incompatible;
 use crate::MIN_COMPATIBLE_VER;
 use crate::VER;
 
-impl FromToProto<pb::ShareNameIdent> for mt::ShareNameIdent {
+impl FromToProto for mt::ShareNameIdent {
+    type PB = pb::ShareNameIdent;
     fn from_pb(p: pb::ShareNameIdent) -> Result<Self, Incompatible> {
         check_ver(p.ver, p.min_compatible)?;
 
@@ -52,7 +53,8 @@ impl FromToProto<pb::ShareNameIdent> for mt::ShareNameIdent {
     }
 }
 
-impl FromToProto<pb::ShareGrantObject> for mt::ShareGrantObject {
+impl FromToProto for mt::ShareGrantObject {
+    type PB = pb::ShareGrantObject;
     fn from_pb(p: pb::ShareGrantObject) -> Result<Self, Incompatible> {
         check_ver(p.ver, p.min_compatible)?;
 
@@ -88,7 +90,8 @@ impl FromToProto<pb::ShareGrantObject> for mt::ShareGrantObject {
     }
 }
 
-impl FromToProto<pb::ShareGrantEntry> for mt::ShareGrantEntry {
+impl FromToProto for mt::ShareGrantEntry {
+    type PB = pb::ShareGrantEntry;
     fn from_pb(p: pb::ShareGrantEntry) -> Result<Self, Incompatible>
     where Self: Sized {
         check_ver(p.ver, p.min_compatible)?;
@@ -127,7 +130,8 @@ impl FromToProto<pb::ShareGrantEntry> for mt::ShareGrantEntry {
     }
 }
 
-impl FromToProto<pb::ShareMeta> for mt::ShareMeta {
+impl FromToProto for mt::ShareMeta {
+    type PB = pb::ShareMeta;
     fn from_pb(p: pb::ShareMeta) -> Result<Self, Incompatible>
     where Self: Sized {
         check_ver(p.ver, p.min_compatible)?;
@@ -177,7 +181,8 @@ impl FromToProto<pb::ShareMeta> for mt::ShareMeta {
     }
 }
 
-impl FromToProto<pb::ShareAccountMeta> for mt::ShareAccountMeta {
+impl FromToProto for mt::ShareAccountMeta {
+    type PB = pb::ShareAccountMeta;
     fn from_pb(p: pb::ShareAccountMeta) -> Result<Self, Incompatible>
     where Self: Sized {
         check_ver(p.ver, p.min_compatible)?;

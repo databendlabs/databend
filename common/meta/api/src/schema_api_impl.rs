@@ -103,11 +103,10 @@ use crate::table_has_to_exist;
 use crate::txn_cond_seq;
 use crate::txn_op_del;
 use crate::txn_op_put;
-use crate::DatabaseIdGen;
+use crate::IdGenerator;
 use crate::KVApi;
 use crate::KVApiKey;
 use crate::SchemaApi;
-use crate::TableIdGen;
 use crate::TXN_MAX_RETRY_TIMES;
 
 const DEFAULT_DATA_RETENTION_SECONDS: i64 = 24 * 60 * 60;
@@ -173,7 +172,7 @@ impl<KV: KVApi> SchemaApi for KV {
             // append db_id into _fd_db_id_list/<tenant>/<db_name>
             // (db_id) -> (tenant,db_name)
 
-            let db_id = fetch_id(self, DatabaseIdGen {}).await?;
+            let db_id = fetch_id(self, IdGenerator::database_id()).await?;
             let id_key = DatabaseId { db_id };
             let id_to_name_key = DatabaseIdToName { db_id };
 
@@ -784,7 +783,7 @@ impl<KV: KVApi> SchemaApi for KV {
             // append table_id into _fd_table_id_list/db_id/table_name
             // (table_id) -> table_name
 
-            let table_id = fetch_id(self, TableIdGen {}).await?;
+            let table_id = fetch_id(self, IdGenerator::table_id()).await?;
 
             let tbid = TableId { table_id };
 
@@ -2116,7 +2115,7 @@ async fn list_u64_value<K: KVApiKey>(
     let mut values = Vec::with_capacity(n);
 
     for (str_key, seqv) in res.iter() {
-        let id = deserialize_u64(&seqv.data).map_err(meta_encode_err)?;
+        let id = *deserialize_u64(&seqv.data).map_err(meta_encode_err)?;
         values.push(id);
 
         // Parse key and get db_name:

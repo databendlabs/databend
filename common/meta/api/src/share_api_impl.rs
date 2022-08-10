@@ -68,6 +68,7 @@ use crate::fetch_id;
 use crate::get_db_or_err;
 use crate::get_struct_value;
 use crate::get_u64_value;
+use crate::id_generator::IdGenerator;
 use crate::send_txn;
 use crate::serialize_struct;
 use crate::serialize_u64;
@@ -77,7 +78,6 @@ use crate::txn_op_del;
 use crate::txn_op_put;
 use crate::KVApi;
 use crate::ShareApi;
-use crate::ShareIdGen;
 use crate::TXN_MAX_RETRY_TIMES;
 
 /// ShareApi is implemented upon KVApi.
@@ -154,7 +154,7 @@ impl<KV: KVApi> ShareApi for KV {
             // (share_id) -> share_meta
             // (share) -> (tenant,share_name)
 
-            let share_id = fetch_id(self, ShareIdGen {}).await?;
+            let share_id = fetch_id(self, IdGenerator::share_id()).await?;
             let id_key = ShareId { share_id };
             let id_to_name_key = ShareIdToName { share_id };
 

@@ -180,6 +180,7 @@ build_exceptions! {
     IllegalUserInfoFormat(2203),
     UnknownRole(2204),
     IllegalUserSettingFormat(2205),
+    InvalidRole(2206),
 
     // Meta api error codes.
     DatabaseAlreadyExists(2301),
