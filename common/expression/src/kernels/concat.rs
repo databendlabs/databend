@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::bitmap::MutableBitmap;
-use common_arrow::arrow::buffer::Buffer;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -21,6 +19,7 @@ use crate::types::array::ArrayColumnBuilder;
 use crate::types::nullable::NullableColumn;
 use crate::types::string::StringColumnBuilder;
 use crate::types::AnyType;
+use crate::types::ArgType;
 use crate::types::ArrayType;
 use crate::types::BooleanType;
 use crate::types::EmptyArrayType;
@@ -73,36 +72,28 @@ impl Column {
         }
         let capacity = columns.iter().map(|c| c.len()).sum();
 
-        with_number_mapped_type!(SRC_TYPE, match &columns[0] {
-            Column::SRC_TYPE(_) => {
-                let mut values = Vec::with_capacity(columns.len());
-                for c in columns.iter() {
-                    let value = NumberType::<SRC_TYPE>::try_downcast_column(c).unwrap();
-                    values.push(value.clone());
-                }
-                NumberType::<SRC_TYPE>::upcast_column(Self::concat_primitive_types(&values))
+        with_number_mapped_type!(NUM_TYPE, match &columns[0] {
+            Column::NUM_TYPE(_) => {
+                Self::concat_arg_types::<NumberType<NUM_TYPE>>(columns)
             }
             Column::Null { .. } => {
-                let builder: usize = 0;
-                Self::concat_scalar_types::<NullType>(builder, columns)
+                Self::concat_arg_types::<NullType>(columns)
             }
             Column::EmptyArray { .. } => {
-                let builder: usize = 0;
-                Self::concat_scalar_types::<EmptyArrayType>(builder, columns)
+                Self::concat_arg_types::<EmptyArrayType>(columns)
             }
             Column::Boolean(_) => {
-                let builder = MutableBitmap::with_capacity(capacity);
-                Self::concat_scalar_types::<BooleanType>(builder, columns)
+                Self::concat_arg_types::<BooleanType>(columns)
             }
             Column::String(_) => {
                 let data_capacity = columns.iter().map(|c| c.memory_size() - c.len() * 8).sum();
                 let builder = StringColumnBuilder::with_capacity(capacity, data_capacity);
-                Self::concat_scalar_types::<StringType>(builder, columns)
+                Self::concat_value_types::<StringType>(builder, columns)
             }
             Column::Array(col) => {
                 let mut builder = ArrayColumnBuilder::<AnyType>::from_column(col.slice(0..0));
                 builder.reserve(capacity);
-                Self::concat_scalar_types::<ArrayType<AnyType>>(builder, columns)
+                Self::concat_value_types::<ArrayType<AnyType>>(builder, columns)
             }
             Column::Nullable(_) => {
                 let mut bitmaps = Vec::with_capacity(columns.len());
@@ -114,8 +105,7 @@ impl Column {
                 }
 
                 let column = Self::concat(&inners);
-                let validity_builder = MutableBitmap::with_capacity(capacity);
-                let validity = Self::concat_scalar_types::<BooleanType>(validity_builder, &bitmaps);
+                let validity = Self::concat_arg_types::<BooleanType>(&bitmaps);
                 let validity = BooleanType::try_downcast_column(&validity).unwrap();
 
                 Column::Nullable(Box::new(NullableColumn { column, validity }))
@@ -138,16 +128,17 @@ impl Column {
         })
     }
 
-    fn concat_primitive_types<T: Copy>(values: &[Buffer<T>]) -> Buffer<T> {
-        let capacity = values.iter().map(|c| c.len()).sum();
-        let mut results = Vec::with_capacity(capacity);
-        for value in values {
-            results.extend_from_slice(value.as_slice());
-        }
-        results.into()
+    fn concat_arg_types<T: ArgType>(columns: &[Column]) -> Column {
+        let columns: Vec<T::Column> = columns
+            .iter()
+            .map(|c| T::try_downcast_column(c).unwrap())
+            .collect();
+        let iter = columns.iter().flat_map(|c| T::iter_column(c));
+        let result = T::column_from_ref_iter(iter, &[]);
+        T::upcast_column(result)
     }
 
-    fn concat_scalar_types<T: ValueType>(
+    fn concat_value_types<T: ValueType>(
         mut builder: T::ColumnBuilder,
         columns: &[Column],
     ) -> Column {

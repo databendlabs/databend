@@ -99,10 +99,6 @@ impl ValueType for StringType {
         StringColumnBuilder::from_column(col)
     }
 
-    fn column_init_builder(_col: &Self::Column, capacity: usize) -> Self::ColumnBuilder {
-        StringColumnBuilder::with_capacity(capacity, 0)
-    }
-
     fn builder_len(builder: &Self::ColumnBuilder) -> usize {
         builder.len()
     }

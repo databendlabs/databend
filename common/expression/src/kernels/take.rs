@@ -12,20 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::bitmap::MutableBitmap;
-use common_arrow::arrow::buffer::Buffer;
 use common_arrow::arrow::types::Index;
 use common_exception::Result;
 
 use crate::types::array::ArrayColumnBuilder;
 use crate::types::nullable::NullableColumn;
-use crate::types::string::StringColumnBuilder;
 use crate::types::AnyType;
+use crate::types::ArgType;
 use crate::types::ArrayType;
 use crate::types::BooleanType;
+use crate::types::NumberType;
 use crate::types::StringType;
 use crate::types::ValueType;
-use crate::with_number_type;
+use crate::with_number_mapped_type;
 use crate::Chunk;
 use crate::Column;
 use crate::Value;
@@ -50,34 +49,22 @@ impl Chunk {
 impl Column {
     pub fn take<I: Index>(&self, indices: &[I]) -> Self {
         let length = indices.len();
-        with_number_type!(SRC_TYPE, match self {
-            Column::SRC_TYPE(values) => {
-                Column::SRC_TYPE(Self::take_primitives(values, indices))
+        with_number_mapped_type!(NUM_TYPE, match self {
+            Column::NUM_TYPE(values) => {
+                Self::take_arg_types::<NumberType<NUM_TYPE>, _>(values, indices)
             }
             Column::Null { .. } | Column::EmptyArray { .. } => self.slice(0..length),
 
-            Column::Boolean(bm) => Self::take_scalars::<BooleanType, _>(
-                bm,
-                MutableBitmap::with_capacity(length),
-                indices
-            ),
-            Column::String(column) => Self::take_scalars::<StringType, _>(
-                column,
-                StringColumnBuilder::with_capacity(length, 0),
-                indices
-            ),
+            Column::Boolean(bm) => Self::take_arg_types::<BooleanType, _>(bm, indices),
+            Column::String(column) => Self::take_arg_types::<StringType, _>(column, indices),
             Column::Array(column) => {
                 let mut builder = ArrayColumnBuilder::<AnyType>::from_column(column.slice(0..0));
                 builder.reserve(length);
-                Self::take_scalars::<ArrayType<AnyType>, _>(column, builder, indices)
+                Self::take_value_types::<ArrayType<AnyType>, _>(column, builder, indices)
             }
             Column::Nullable(c) => {
                 let column = c.column.take(indices);
-                let validity = Self::take_scalars::<BooleanType, _>(
-                    &c.validity,
-                    MutableBitmap::with_capacity(length),
-                    indices,
-                );
+                let validity = Self::take_arg_types::<BooleanType, _>(&c.validity, indices);
                 Column::Nullable(Box::new(NullableColumn {
                     column,
                     validity: BooleanType::try_downcast_column(&validity).unwrap(),
@@ -93,7 +80,17 @@ impl Column {
         })
     }
 
-    fn take_scalars<T: ValueType, I: Index>(
+    fn take_arg_types<T: ArgType, I: Index>(col: &T::Column, indices: &[I]) -> Column {
+        let col = T::column_from_ref_iter(
+            indices
+                .iter()
+                .map(|index| unsafe { T::index_column_unchecked(col, index.to_usize()) }),
+            &[],
+        );
+        T::upcast_column(col)
+    }
+
+    fn take_value_types<T: ValueType, I: Index>(
         col: &T::Column,
         mut builder: T::ColumnBuilder,
         indices: &[I],
@@ -107,19 +104,5 @@ impl Column {
             }
         }
         T::upcast_column(T::build_column(builder))
-    }
-
-    fn take_primitives<T: Copy, I: Index>(col: &Buffer<T>, indices: &[I]) -> Buffer<T> {
-        let mut vs: Vec<T> = Vec::with_capacity(indices.len());
-        let mut dst = vs.as_mut_ptr();
-        for index in indices {
-            unsafe {
-                let e = col[index.to_usize()];
-                dst.write(e);
-                dst = dst.add(1);
-            }
-        }
-        unsafe { vs.set_len(indices.len()) };
-        vs.into()
     }
 }

@@ -113,7 +113,6 @@ impl Column {
                 Column::SRC_TYPE(Self::filter_primitive_types(values, filter))
             }
             Column::Null { .. } | Column::EmptyArray { .. } => self.slice(0..length),
-
             Column::Boolean(bm) => Self::filter_scalar_types::<BooleanType>(
                 bm,
                 MutableBitmap::with_capacity(length),

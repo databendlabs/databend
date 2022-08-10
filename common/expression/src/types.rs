@@ -104,12 +104,7 @@ pub trait ValueType: Debug + Clone + PartialEq + Sized + 'static {
     ) -> Self::ScalarRef<'a>;
     fn slice_column<'a>(col: &'a Self::Column, range: Range<usize>) -> Self::Column;
     fn iter_column<'a>(col: &'a Self::Column) -> Self::ColumnIterator<'a>;
-
     fn column_to_builder(col: Self::Column) -> Self::ColumnBuilder;
-    fn column_init_builder(col: &Self::Column, _capacity: usize) -> Self::ColumnBuilder {
-        let col = Self::slice_column(col, 0..0);
-        Self::column_to_builder(col)
-    }
 
     fn builder_len(builder: &Self::ColumnBuilder) -> usize;
     fn push_item(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>);
@@ -123,6 +118,7 @@ pub trait ArgType: ValueType {
     fn data_type() -> DataType;
     fn full_domain(generics: &GenericMap) -> Self::Domain;
     fn create_builder(capacity: usize, generics: &GenericMap) -> Self::ColumnBuilder;
+
     fn column_from_iter(
         iter: impl Iterator<Item = Self::Scalar>,
         generics: &GenericMap,
@@ -130,6 +126,17 @@ pub trait ArgType: ValueType {
         let mut col = Self::create_builder(iter.size_hint().0, generics);
         for item in iter {
             Self::push_item(&mut col, Self::to_scalar_ref(&item));
+        }
+        Self::build_column(col)
+    }
+
+    fn column_from_ref_iter<'a>(
+        iter: impl Iterator<Item = Self::ScalarRef<'a>>,
+        generics: &GenericMap,
+    ) -> Self::Column {
+        let mut col = Self::create_builder(iter.size_hint().0, generics);
+        for item in iter {
+            Self::push_item(&mut col, item);
         }
         Self::build_column(col)
     }

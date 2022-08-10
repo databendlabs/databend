@@ -153,9 +153,9 @@ fn run_filter(file: &mut impl Write, predicate: Column, columns: &[Column]) {
 
     match result {
         Ok(result_chunk) => {
-            writeln!(file, "Filter:         {predicate:?}").unwrap();
-            writeln!(file, "Source:\n{chunk:?}").unwrap();
-            writeln!(file, "Result:\n{result_chunk:?}").unwrap();
+            writeln!(file, "Filter:         {predicate}").unwrap();
+            writeln!(file, "Source:\n{chunk}").unwrap();
+            writeln!(file, "Result:\n{result_chunk}").unwrap();
             write!(file, "\n\n").unwrap();
         }
         Err(err) => {
@@ -182,7 +182,7 @@ fn run_concat(file: &mut impl Write, columns: Vec<Vec<Column>>) {
                 writeln!(file, "Concat-Column {}:", i).unwrap();
                 writeln!(file, "{:?}", c).unwrap();
             }
-            writeln!(file, "Result:\n{result_chunk:?}").unwrap();
+            writeln!(file, "Result:\n{result_chunk}").unwrap();
             write!(file, "\n\n").unwrap();
         }
         Err(err) => {
@@ -201,8 +201,8 @@ fn run_take(file: &mut impl Write, indices: &[u32], columns: &[Column]) {
     match result {
         Ok(result_chunk) => {
             writeln!(file, "Take:         {indices:?}").unwrap();
-            writeln!(file, "Source:\n{chunk:?}").unwrap();
-            writeln!(file, "Result:\n{result_chunk:?}").unwrap();
+            writeln!(file, "Source:\n{chunk}").unwrap();
+            writeln!(file, "Result:\n{result_chunk}").unwrap();
             write!(file, "\n\n").unwrap();
         }
         Err(err) => {
@@ -221,10 +221,10 @@ fn run_scatter(file: &mut impl Write, columns: &[Column], indices: &[u32], scatt
     match result {
         Ok(result_chunk) => {
             writeln!(file, "Scatter:         {indices:?}").unwrap();
-            writeln!(file, "Source:\n{chunk:?}").unwrap();
+            writeln!(file, "Source:\n{chunk}").unwrap();
 
             for (i, c) in result_chunk.iter().enumerate() {
-                writeln!(file, "Result-{i}:\n{c:?}").unwrap();
+                writeln!(file, "Result-{i}:\n{c}").unwrap();
             }
             write!(file, "\n\n").unwrap();
         }

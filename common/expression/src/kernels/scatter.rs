@@ -54,7 +54,7 @@ impl Chunk {
 
         let mut scattered_chunks = Vec::with_capacity(scatter_size);
         for index in 0..scatter_size {
-            let mut chunk_columns = vec![];
+            let mut chunk_columns = Vec::with_capacity(scattered_columns.len());
             let mut size = 0;
             for item in scattered_columns.iter() {
                 size = item[index].len();
@@ -84,8 +84,8 @@ impl Column {
 
     pub fn scatter<I: Index>(&self, indices: &[I], scatter_size: usize) -> Vec<Self> {
         let length = indices.len();
-        with_number_mapped_type!(SRC_TYPE, match self {
-            Column::SRC_TYPE(values) => Self::scatter_scalars::<NumberType<SRC_TYPE>, _>(
+        with_number_mapped_type!(NUM_TYPE, match self {
+            Column::NUM_TYPE(values) => Self::scatter_scalars::<NumberType<NUM_TYPE>, _>(
                 values,
                 Vec::with_capacity(length),
                 indices,
@@ -130,7 +130,7 @@ impl Column {
                 );
                 columns
                     .iter()
-                    .zip(validitys.iter())
+                    .zip(&validitys)
                     .map(|(column, validity)| {
                         Column::Nullable(Box::new(NullableColumn {
                             column: column.clone(),
@@ -140,23 +140,20 @@ impl Column {
                     .collect()
             }
             Column::Tuple { fields, .. } => {
-                let fields_vs: Vec<Vec<Column>> = fields
+                let mut fields_vs: Vec<Vec<Column>> = fields
                     .iter()
                     .map(|c| c.scatter(indices, scatter_size))
                     .collect();
 
                 (0..scatter_size)
                     .map(|index| {
-                        let mut columns = Vec::with_capacity(fields.len());
-                        let mut len = 0;
-                        for field in fields_vs.iter() {
-                            len = field[index].len();
-                            columns.push(field[index].clone());
-                        }
-
+                        let fields: Vec<Column> = fields_vs
+                            .iter_mut()
+                            .map(|field| field.remove(index))
+                            .collect();
                         Column::Tuple {
-                            fields: columns,
-                            len,
+                            len: fields.first().map(|f| f.len()).unwrap_or(0),
+                            fields,
                         }
                     })
                     .collect()

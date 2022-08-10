@@ -116,10 +116,6 @@ impl<Int: Number> ValueType for NumberType<Int> {
         buffer_into_mut(col)
     }
 
-    fn column_init_builder(_col: &Self::Column, capacity: usize) -> Self::ColumnBuilder {
-        Vec::with_capacity(capacity)
-    }
-
     fn builder_len(builder: &Self::ColumnBuilder) -> usize {
         builder.len()
     }
@@ -160,6 +156,13 @@ impl<Int: Number> ArgType for NumberType<Int> {
     }
 
     fn column_from_iter(iter: impl Iterator<Item = Self::Scalar>, _: &GenericMap) -> Self::Column {
+        iter.collect()
+    }
+
+    fn column_from_ref_iter<'a>(
+        iter: impl Iterator<Item = Self::ScalarRef<'a>>,
+        _: &GenericMap,
+    ) -> Self::Column {
         iter.collect()
     }
 }
