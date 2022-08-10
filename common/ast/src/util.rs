@@ -92,17 +92,17 @@ fn non_reserved_identifier(
             ),
             move |i| {
                 match_token(QuotedString)(i).and_then(|(i2, token)| {
-                    if token.text().starts_with('\'') {
-                        Err(nom::Err::Error(Error::from_error_kind(
-                            i,
-                            ErrorKind::ExpectToken(Ident),
-                        )))
-                    } else {
+                    if token.text().starts_with(i.1.ident_quote()) {
                         Ok((i2, Identifier {
                             span: token.clone(),
                             name: token.text()[1..token.text().len() - 1].to_string(),
                             quote: Some(token.text().chars().next().unwrap()),
                         }))
+                    } else {
+                        Err(nom::Err::Error(Error::from_error_kind(
+                            i,
+                            ErrorKind::ExpectToken(Ident),
+                        )))
                     }
                 })
             },
@@ -333,7 +333,7 @@ where
         .map_err(nom::Err::Error)?;
     if let Some(elem) = iter.peek() {
         // Rollback parsing footprint on unused expr elements.
-        input.1.clear();
+        input.2.clear();
         Ok((input.slice(input.offset(&elem.span)..), expr))
     } else {
         Ok((rest, expr))

@@ -23,7 +23,7 @@ use crate::Backtrace;
 /// Input tokens slice with a backtrace that records all errors including
 /// the optional branch.
 #[derive(Debug, Clone, Copy)]
-pub struct Input<'a>(pub &'a [Token<'a>], pub &'a Backtrace<'a>);
+pub struct Input<'a>(pub &'a [Token<'a>], pub Dialect, pub &'a Backtrace<'a>);
 
 impl<'a> std::ops::Deref for Input<'a> {
     type Target = [Token<'a>];
@@ -50,19 +50,19 @@ impl<'a> nom::Offset for Input<'a> {
 
 impl<'a> nom::Slice<Range<usize>> for Input<'a> {
     fn slice(&self, range: Range<usize>) -> Self {
-        Input(&self.0[range], self.1)
+        Input(&self.0[range], self.1, self.2)
     }
 }
 
 impl<'a> nom::Slice<RangeTo<usize>> for Input<'a> {
     fn slice(&self, range: RangeTo<usize>) -> Self {
-        Input(&self.0[range], self.1)
+        Input(&self.0[range], self.1, self.2)
     }
 }
 
 impl<'a> nom::Slice<RangeFrom<usize>> for Input<'a> {
     fn slice(&self, range: RangeFrom<usize>) -> Self {
-        Input(&self.0[range], self.1)
+        Input(&self.0[range], self.1, self.2)
     }
 }
 
@@ -76,4 +76,20 @@ impl<'a> nom::Slice<RangeFull> for Input<'a> {
 pub struct WithSpan<'a, T> {
     pub(crate) span: Input<'a>,
     pub(crate) elem: T,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Dialect {
+    MySQL,
+    #[default]
+    PostgreSQL,
+}
+
+impl Dialect {
+    pub fn ident_quote(&self) -> char {
+        match self {
+            Dialect::MySQL => '`',
+            Dialect::PostgreSQL => '"',
+        }
+    }
 }
