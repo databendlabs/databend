@@ -24,6 +24,7 @@ use common_ast::parser::parse_comma_separated_exprs;
 use common_ast::parser::token::Token;
 use common_ast::parser::tokenize_sql;
 use common_ast::Backtrace;
+use common_ast::Dialect;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_datavalues::DataSchemaRef;
@@ -346,8 +347,11 @@ impl<'a> ValueSourceV2<'a> {
                 let sql = std::str::from_utf8(buf).unwrap();
                 let tokens = tokenize_sql(sql)?;
                 let backtrace = Backtrace::new();
-                let exprs =
-                    parse_comma_separated_exprs(&tokens[1..tokens.len() as usize], &backtrace)?;
+                let exprs = parse_comma_separated_exprs(
+                    &tokens[1..tokens.len() as usize],
+                    Dialect::PostgreSQL,
+                    &backtrace,
+                )?;
 
                 let values = exprs_to_datavalue(
                     exprs,

@@ -2027,9 +2027,9 @@ Query(
 
 
 ---------- Input ----------
-select * from a, b, c order by `db`.`a`.`c1`;
+select * from a, b, c order by "db"."a"."c1";
 ---------- Output ---------
-SELECT * FROM a, b, c ORDER BY `db`.`a`.`c1`
+SELECT * FROM a, b, c ORDER BY "db"."a"."c1"
 ---------- AST ------------
 Query(
     Query {
@@ -2134,7 +2134,7 @@ Query(
                         Identifier {
                             name: "db",
                             quote: Some(
-                                '`',
+                                '"',
                             ),
                             span: QuotedString(31..35),
                         },
@@ -2143,7 +2143,7 @@ Query(
                         Identifier {
                             name: "a",
                             quote: Some(
-                                '`',
+                                '"',
                             ),
                             span: QuotedString(36..39),
                         },
@@ -2151,7 +2151,7 @@ Query(
                     column: Identifier {
                         name: "c1",
                         quote: Some(
-                            '`',
+                            '"',
                         ),
                         span: QuotedString(40..44),
                     },

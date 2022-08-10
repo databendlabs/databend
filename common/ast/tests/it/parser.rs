@@ -21,6 +21,7 @@ use common_ast::parser::token::*;
 use common_ast::parser::tokenize_sql;
 use common_ast::rule;
 use common_ast::Backtrace;
+use common_ast::Dialect;
 use common_ast::DisplayError;
 use common_ast::Input;
 use common_exception::Result;
@@ -33,7 +34,7 @@ macro_rules! run_parser {
         let backtrace = Backtrace::new();
         let parser = $parser;
         let mut parser = rule! { #parser ~ &EOI };
-        match parser.parse(Input(&tokens, &backtrace)) {
+        match parser.parse(Input(&tokens, Dialect::PostgreSQL, &backtrace)) {
             Ok((i, (output, _))) => {
                 assert_eq!(i[0].kind, TokenKind::EOI);
                 writeln!($file, "---------- Input ----------").unwrap();
@@ -109,7 +110,7 @@ fn test_statement() {
         r#"select * from t4;"#,
         r#"select * from aa.bb;"#,
         r#"select * from a, b, c;"#,
-        r#"select * from a, b, c order by `db`.`a`.`c1`;"#,
+        r#"select * from a, b, c order by "db"."a"."c1";"#,
         r#"select * from a join b on a.a = b.a;"#,
         r#"select * from a left outer join b on a.a = b.a;"#,
         r#"select * from a right outer join b on a.a = b.a;"#,
@@ -272,7 +273,7 @@ fn test_statement() {
     for case in cases {
         let tokens = tokenize_sql(case).unwrap();
         let backtrace = Backtrace::new();
-        let (stmt, fmt) = parse_sql(&tokens, &backtrace).unwrap();
+        let (stmt, fmt) = parse_sql(&tokens, Dialect::PostgreSQL, &backtrace).unwrap();
         writeln!(file, "---------- Input ----------").unwrap();
         writeln!(file, "{}", case).unwrap();
         writeln!(file, "---------- Output ---------").unwrap();
@@ -328,7 +329,7 @@ fn test_statement_error() {
     for case in cases {
         let tokens = tokenize_sql(case).unwrap();
         let backtrace = Backtrace::new();
-        let err = parse_sql(&tokens, &backtrace).unwrap_err();
+        let err = parse_sql(&tokens, Dialect::PostgreSQL, &backtrace).unwrap_err();
         writeln!(file, "---------- Input ----------").unwrap();
         writeln!(file, "{}", case).unwrap();
         writeln!(file, "---------- Output ---------").unwrap();
@@ -429,7 +430,7 @@ fn test_expr() {
         r#"1 - -(- - -1)"#,
         r#"1 + a * c.d"#,
         r#"number % 2"#,
-        r#"`t`:k1.k2"#,
+        r#""t":k1.k2"#,
         r#"col1 not between 1 and 2"#,
         r#"sum(col1)"#,
         r#""random"()"#,

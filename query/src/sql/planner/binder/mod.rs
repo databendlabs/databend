@@ -20,6 +20,7 @@ use common_ast::ast::Statement;
 use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
 use common_ast::Backtrace;
+use common_ast::Dialect;
 use common_datavalues::DataTypeImpl;
 use common_exception::Result;
 use common_meta_types::UserDefinedFunction;
@@ -326,7 +327,7 @@ impl<'a> Binder {
     ) -> Result<Plan> {
         let tokens = tokenize_sql(query)?;
         let backtrace = Backtrace::new();
-        let (stmt, _) = parse_sql(&tokens, &backtrace)?;
+        let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL, &backtrace)?;
         let mut plan = self.bind_statement(bind_context, &stmt).await?;
 
         if let Plan::Query { rewrite_kind, .. } = &mut plan {
