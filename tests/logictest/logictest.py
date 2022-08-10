@@ -100,7 +100,7 @@ class LogicError(Exception):
         self.runner = runner
 
     def __str__(self):
-        return f"Ruuner: {self.runner}\nErrorType: {self.errorType}\nMessage: {self.message}"
+        return f"Runner: {self.runner}\nErrorType: {self.errorType}\nMessage: {self.message}"
 
 
 class Statement:
