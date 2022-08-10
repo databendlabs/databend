@@ -1258,7 +1258,7 @@ impl<'a> TypeChecker<'a> {
             IntervalKind::Year => {
                 self.resolve_function(
                     span,
-                    "toStartOfYear",
+                    "to_start_of_year",
                     &[date],
                     Some(TimestampType::new_impl(0)),
                 )
@@ -1267,7 +1267,7 @@ impl<'a> TypeChecker<'a> {
             IntervalKind::Month => {
                 self.resolve_function(
                     span,
-                    "toStartOfMonth",
+                    "to_start_of_month",
                     &[date],
                     Some(TimestampType::new_impl(0)),
                 )
@@ -1276,7 +1276,7 @@ impl<'a> TypeChecker<'a> {
             IntervalKind::Day => {
                 self.resolve_function(
                     span,
-                    "toStartOfDay",
+                    "to_start_of_day",
                     &[date],
                     Some(TimestampType::new_impl(0)),
                 )
@@ -1285,7 +1285,7 @@ impl<'a> TypeChecker<'a> {
             IntervalKind::Hour => {
                 self.resolve_function(
                     span,
-                    "toStartOfHour",
+                    "to_start_of_hour",
                     &[date],
                     Some(TimestampType::new_impl(0)),
                 )
@@ -1294,7 +1294,7 @@ impl<'a> TypeChecker<'a> {
             IntervalKind::Minute => {
                 self.resolve_function(
                     span,
-                    "toStartOfMinute",
+                    "to_start_of_minute",
                     &[date],
                     Some(TimestampType::new_impl(0)),
                 )
@@ -1303,7 +1303,7 @@ impl<'a> TypeChecker<'a> {
             IntervalKind::Second => {
                 self.resolve_function(
                     span,
-                    "toStartOfSecond",
+                    "to_start_of_second",
                     &[date],
                     Some(TimestampType::new_impl(0)),
                 )
