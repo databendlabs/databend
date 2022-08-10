@@ -12,24 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use poem::FromRequest;
 use poem::Request;
 use poem::RequestBody;
 use poem::Result as PoemResult;
 
-use crate::sessions::SessionRef;
+use crate::sessions::Session;
 use crate::sessions::SessionType;
 
 pub struct HttpQueryContext {
-    session: SessionRef,
+    session: Arc<Session>,
 }
 
 impl HttpQueryContext {
-    pub fn new(session: SessionRef) -> Self {
+    pub fn new(session: Arc<Session>) -> Self {
         HttpQueryContext { session }
     }
 
-    pub fn get_session(&self, session_type: SessionType) -> SessionRef {
+    pub fn get_session(&self, session_type: SessionType) -> Arc<Session> {
         self.session.set_type(session_type);
         self.session.clone()
     }

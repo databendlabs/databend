@@ -23,7 +23,7 @@ use common_users::JwtAuthenticator;
 use common_users::UserApiProvider;
 use jwtk::Claims;
 
-use crate::sessions::SessionRef;
+use crate::sessions::Session;
 pub use crate::Config;
 
 pub struct AuthMgr {
@@ -49,7 +49,7 @@ impl AuthMgr {
         }))
     }
 
-    pub async fn auth(&self, session: SessionRef, credential: &Credential) -> Result<()> {
+    pub async fn auth(&self, session: Arc<Session>, credential: &Credential) -> Result<()> {
         let user_info = match credential {
             Credential::Jwt {
                 token: t,
@@ -105,7 +105,7 @@ impl AuthMgr {
 
     async fn process_jwt_claims(
         &self,
-        session: &SessionRef,
+        session: &Arc<Session>,
         claims: &Claims<CustomClaims>,
     ) -> Result<(String, String)> {
         // setup tenant if the JWT claims contain extra.tenant_id

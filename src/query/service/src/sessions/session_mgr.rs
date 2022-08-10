@@ -36,7 +36,6 @@ use tracing::debug;
 use tracing::info;
 
 use crate::sessions::session::Session;
-use crate::sessions::session_ref::SessionRef;
 use crate::sessions::ProcessInfo;
 use crate::sessions::SessionContext;
 use crate::sessions::SessionManagerStatus;
@@ -87,7 +86,7 @@ impl SessionManager {
         self.conf.clone()
     }
 
-    pub async fn create_session(self: &Arc<Self>, typ: SessionType) -> Result<SessionRef> {
+    pub async fn create_session(self: &Arc<Self>, typ: SessionType) -> Result<Arc<Session>> {
         // TODO: maybe deadlock
         let config = self.get_conf();
         {
@@ -137,7 +136,7 @@ impl SessionManager {
 
             sessions.insert(session.get_id(), session.clone());
 
-            Ok(SessionRef::create(session))
+            Ok(session)
         } else {
             Err(ErrorCode::TooManyUserConnections(
                 "The current accept connection has exceeded max_active_sessions config",
@@ -149,14 +148,14 @@ impl SessionManager {
         self: &Arc<Self>,
         id: String,
         aborted: bool,
-    ) -> Result<SessionRef> {
+    ) -> Result<Arc<Session>> {
         // TODO: maybe deadlock?
         let config = self.get_conf();
         {
             let sessions = self.active_sessions.read();
             let v = sessions.get(&id);
             if v.is_some() {
-                return Ok(SessionRef::create(v.unwrap().clone()));
+                return Ok(v.unwrap().clone());
             }
         }
 
@@ -180,18 +179,16 @@ impl SessionManager {
             );
 
             sessions.insert(id, session.clone());
-            Ok(SessionRef::create(session))
+            Ok(session)
         } else {
-            Ok(SessionRef::create(v.unwrap().clone()))
+            Ok(v.unwrap().clone())
         }
     }
 
     #[allow(clippy::ptr_arg)]
-    pub async fn get_session_by_id(self: &Arc<Self>, id: &str) -> Option<SessionRef> {
+    pub async fn get_session_by_id(self: &Arc<Self>, id: &str) -> Option<Arc<Session>> {
         let sessions = self.active_sessions.read();
-        sessions
-            .get(id)
-            .map(|session| SessionRef::create(session.clone()))
+        sessions.get(id).cloned()
     }
 
     #[allow(clippy::ptr_arg)]
