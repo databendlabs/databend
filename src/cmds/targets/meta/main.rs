@@ -26,7 +26,6 @@ use common_meta_store::MetaStoreProvider;
 use common_tracing::init_logging;
 use databend_meta::api::GrpcServer;
 use databend_meta::api::HttpService;
-use databend_meta::cmd;
 use databend_meta::configs::Config;
 use databend_meta::meta_service::MetaNode;
 use databend_meta::metrics::init_meta_metrics_recorder;
@@ -34,6 +33,10 @@ use databend_meta::version::METASRV_COMMIT_VERSION;
 use databend_meta::version::METASRV_SEMVER;
 use databend_meta::version::MIN_METACLI_SEMVER;
 use tracing::info;
+
+mod kvapi;
+
+pub use kvapi::KvApiCommand;
 
 const CMD_KVAPI_PREFIX: &str = "kvapi::";
 
@@ -148,7 +151,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
 }
 
 async fn run_kvapi_command(conf: &Config, op: &str) {
-    match cmd::KvApiCommand::from_config(conf, op) {
+    match KvApiCommand::from_config(conf, op) {
         Ok(kv_cmd) => {
             let rpc_conf = RpcClientConf {
                 address: conf.grpc_api_address.clone(),

@@ -19,8 +19,7 @@ use common_meta_api::KVApi;
 use common_meta_types::MatchSeq;
 use common_meta_types::Operation;
 use common_meta_types::UpsertKVReq;
-
-use crate::configs::Config;
+use databend_meta::configs::Config;
 
 pub enum KvApiCommand {
     Get(String),

@@ -11,12 +11,6 @@ edition = "2021"
 doctest = false
 test = false
 
-[[bin]]
-name = "databend-query"
-path = "bin/databend-query.rs"
-doctest = false
-test = false
-
 [features]
 default = ["simd"]
 simd = ["common-arrow/simd"]
@@ -52,7 +46,6 @@ common-hive-meta-store = { path = "../common/hive-meta-store", optional = true }
 common-http = { path = "../common/http" }
 common-io = { path = "../common/io" }
 common-legacy-parser = { path = "../common/legacy-parser" }
-common-macros = { path = "../common/macros" }
 common-management = { path = "../common/management" }
 common-meta-api = { path = "../common/meta/api" }
 common-meta-app = { path = "../common/meta/app" }
@@ -132,7 +125,6 @@ reqwest = "0.11.11"
 rsa = "0.5.0"
 segment-tree = "2.0.0"
 semver = "1.0.10"
-sentry = "0.27.0"
 serde = { version = "1.0.137", features = ["derive"] }
 serde-bridge = "0.0.3"
 serde_json = "1.0.81"

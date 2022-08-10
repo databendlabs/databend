@@ -1,5 +1,7 @@
 [workspace]
 members = [
+    # Cmds
+    "src/cmds",
     # Common
     "src/common/arrow",
     "src/common/base",
@@ -45,9 +47,6 @@ members = [
     "src/query",
     # Meta
     "src/meta",
-    # Tools
-    "src/tools/metabench",
-    "src/tools/metactl",
     # Hack
     # This crate is used to hack our cargo.lock to resovle CVEs and so on.
     "src/workspace-hack",
