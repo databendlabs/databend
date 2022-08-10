@@ -130,13 +130,6 @@ impl ArgType for StringType {
         DataType::String
     }
 
-    fn full_domain(_: &GenericMap) -> Self::Domain {
-        StringDomain {
-            min: vec![],
-            max: None,
-        }
-    }
-
     fn create_builder(capacity: usize, _: &GenericMap) -> Self::ColumnBuilder {
         StringColumnBuilder::with_capacity(capacity, 0)
     }
@@ -208,7 +201,7 @@ impl<'a> Iterator for StringIterator<'a> {
 
 unsafe impl<'a> TrustedLen for StringIterator<'a> {}
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StringColumnBuilder {
     pub data: Vec<u8>,
     pub offsets: Vec<u64>,

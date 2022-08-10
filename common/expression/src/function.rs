@@ -50,7 +50,7 @@ impl Default for FunctionContext {
 
 /// `FunctionID` is a unique identifier for a function. It's used to construct
 /// the exactly same function from the remote execution nodes.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum FunctionID {
     Builtin {
         name: String,
@@ -67,7 +67,7 @@ pub enum FunctionID {
 pub struct Function {
     pub signature: FunctionSignature,
     #[allow(clippy::type_complexity)]
-    pub calc_domain: Box<dyn Fn(&[Domain], &GenericMap) -> Domain>,
+    pub calc_domain: Box<dyn Fn(&[Domain], &GenericMap) -> Option<Domain>>,
     #[allow(clippy::type_complexity)]
     pub eval: Box<dyn Fn(&[ValueRef<AnyType>], &GenericMap) -> Result<Value<AnyType>, String>>,
 }
@@ -236,7 +236,7 @@ impl FunctionRegistry {
         self.register_1_arg_core::<NullType, NullType, _, _>(
             name,
             property.clone(),
-            |_| None,
+            |_| Some(()),
             |_, _| Ok(Value::Scalar(())),
         );
 
@@ -328,19 +328,19 @@ impl FunctionRegistry {
         self.register_2_arg_core::<NullableType<I1>, NullType, NullType, _, _>(
             name,
             property.clone(),
-            |_, _| None,
+            |_, _| Some(()),
             |_, _, _| Ok(Value::Scalar(())),
         );
         self.register_2_arg_core::<NullType, NullableType<I2>, NullType, _, _>(
             name,
             property.clone(),
-            |_, _| None,
+            |_, _| Some(()),
             |_, _, _| Ok(Value::Scalar(())),
         );
         self.register_2_arg_core::<NullType, NullType, NullType, _, _>(
             name,
             property.clone(),
-            |_, _| None,
+            |_, _| Some(()),
             |_, _, _| Ok(Value::Scalar(())),
         );
 
@@ -411,31 +411,26 @@ impl FunctionRegistry {
 
 fn erase_calc_domain_generic_0_arg<O: ArgType>(
     func: impl Fn() -> Option<O::Domain>,
-) -> impl Fn(&[Domain], &GenericMap) -> Domain {
-    move |_args, generics| {
-        let domain = func().unwrap_or_else(|| O::full_domain(generics));
-        O::upcast_domain(domain)
-    }
+) -> impl Fn(&[Domain], &GenericMap) -> Option<Domain> {
+    move |_args, _generics| func().map(O::upcast_domain)
 }
 
 fn erase_calc_domain_generic_1_arg<I1: ArgType, O: ArgType>(
     func: impl Fn(&I1::Domain) -> Option<O::Domain>,
-) -> impl Fn(&[Domain], &GenericMap) -> Domain {
-    move |args, generics| {
+) -> impl Fn(&[Domain], &GenericMap) -> Option<Domain> {
+    move |args, _generics| {
         let arg1 = I1::try_downcast_domain(&args[0]).unwrap();
-        let domain = func(&arg1).unwrap_or_else(|| O::full_domain(generics));
-        O::upcast_domain(domain)
+        func(&arg1).map(O::upcast_domain)
     }
 }
 
 fn erase_calc_domain_generic_2_arg<I1: ArgType, I2: ArgType, O: ArgType>(
     func: impl Fn(&I1::Domain, &I2::Domain) -> Option<O::Domain>,
-) -> impl Fn(&[Domain], &GenericMap) -> Domain {
-    move |args, generics| {
+) -> impl Fn(&[Domain], &GenericMap) -> Option<Domain> {
+    move |args, _generics| {
         let arg1 = I1::try_downcast_domain(&args[0]).unwrap();
         let arg2 = I2::try_downcast_domain(&args[1]).unwrap();
-        let domain = func(&arg1, &arg2).unwrap_or_else(|| O::full_domain(generics));
-        O::upcast_domain(domain)
+        func(&arg1, &arg2).map(O::upcast_domain)
     }
 }
 
