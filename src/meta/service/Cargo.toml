@@ -24,17 +24,17 @@ io-uring = [
 
 [dependencies]
 # Workspace dependencies
-common-arrow = { path = "../common/arrow" }
-common-base = { path = "../common/base" }
-common-exception = { path = "../common/exception" }
-common-grpc = { path = "../common/grpc" }
-common-http = { path = "../common/http" }
-common-meta-api = { path = "../common/meta/api" }
-common-meta-grpc = { path = "../common/meta/grpc" }
-common-meta-raft-store = { path = "../common/meta/raft-store" }
-common-meta-sled-store = { path = "../common/meta/sled-store" }
-common-meta-types = { path = "../common/meta/types" }
-common-tracing = { path = "../common/tracing" }
+common-arrow = { path = "../../common/arrow" }
+common-base = { path = "../../common/base" }
+common-exception = { path = "../../common/exception" }
+common-grpc = { path = "../../common/grpc" }
+common-http = { path = "../../common/http" }
+common-meta-api = { path = "../../common/meta/api" }
+common-meta-grpc = { path = "../../common/meta/grpc" }
+common-meta-raft-store = { path = "../../common/meta/raft-store" }
+common-meta-sled-store = { path = "../../common/meta/sled-store" }
+common-meta-types = { path = "../../common/meta/types" }
+common-tracing = { path = "../../common/tracing" }
 
 # Github dependencies
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1", default-features = false }
@@ -64,8 +64,6 @@ tracing-appender = "0.2.2"
 tracing-subscriber = { version = "0.3.11", features = ["env-filter", "ansi"] }
 
 [dev-dependencies]
-common-meta-api = { path = "../common/meta/api" }
-
 async-entry = "0.3.1"
 env_logger = "0.9.0"
 maplit = "1.0.2"
@@ -75,4 +73,4 @@ reqwest = { version = "0.11.11", features = ["json"] }
 temp-env = "0.2.0"
 
 [build-dependencies]
-common-building = { path = "../common/building" }
+common-building = { path = "../../common/building" }

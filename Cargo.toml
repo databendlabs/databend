@@ -2,6 +2,7 @@
 members = [
     # Cmds
     "src/cmds",
+
     # Common
     "src/common/arrow",
     "src/common/base",
@@ -43,11 +44,16 @@ members = [
     "src/common/storages/hive",
     "src/common/storages/index",
     "src/common/fuse-meta",
+
     # Query
     "src/query/ast",
-    "src/query/service", # databend-query
+    # databend-query
+    "src/query/service",
+
     # Meta
-    "src/meta",
+    # databend-meta
+    "src/meta/service",
+
     # Hack
     # This crate is used to hack our cargo.lock to resovle CVEs and so on.
     "src/workspace-hack",
