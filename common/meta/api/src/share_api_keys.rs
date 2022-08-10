@@ -28,28 +28,13 @@ use kv_api_key::unescape;
 use crate::kv_api_key;
 use crate::KVApiKey;
 use crate::KVApiKeyError;
-use crate::PREFIX_ID_GEN;
 
 const PREFIX_SHARE: &str = "__fd_share";
 const PREFIX_SHARE_ID: &str = "__fd_share_id";
 const PREFIX_SHARE_ID_TO_NAME: &str = "__fd_share_id_to_name";
 const PREFIX_SHARE_ACCOUNT_ID: &str = "__fd_share_account_id";
 
-/// Key for share id generator
-#[derive(Debug, Clone)]
-pub struct ShareIdGen {}
-
-impl KVApiKey for ShareIdGen {
-    const PREFIX: &'static str = PREFIX_ID_GEN;
-
-    fn to_key(&self) -> String {
-        format!("{}/share_id", Self::PREFIX)
-    }
-
-    fn from_key(_s: &str) -> Result<Self, KVApiKeyError> {
-        unimplemented!()
-    }
-}
+pub(crate) const ID_GEN_SHARE: &str = "share_id";
 
 /// __fd_share/<tenant>/<share_name> -> <share_id>
 impl KVApiKey for ShareNameIdent {

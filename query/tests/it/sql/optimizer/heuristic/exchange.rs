@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
 use common_ast::Backtrace;
+use common_ast::Dialect;
 use common_base::base::tokio;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
@@ -39,7 +40,7 @@ use crate::tests::create_query_context;
 async fn run_cluster_test(ctx: Arc<QueryContext>, suite: &Suite) -> Result<String> {
     let tokens = tokenize_sql(&suite.query)?;
     let bt = Backtrace::new();
-    let (stmt, _) = parse_sql(&tokens, &bt)?;
+    let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL, &bt)?;
     let binder = Binder::new(
         ctx.clone(),
         ctx.get_catalogs(),
