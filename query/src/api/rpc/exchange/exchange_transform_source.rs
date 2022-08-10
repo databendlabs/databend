@@ -116,7 +116,7 @@ impl Processor for ExchangeSourceTransform {
         }
 
         if self.input.has_data() {
-            self.output.push_data(self.input.pull_data().unwrap());
+            self.output.push_data(Ok(self.input.pull_data().unwrap()?));
             return Ok(Event::NeedConsume);
         }
 

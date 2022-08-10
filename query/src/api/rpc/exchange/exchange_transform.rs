@@ -135,7 +135,7 @@ impl Processor for ExchangeTransform {
             }
         }
 
-        if self.input_data.is_some() {
+        if self.input_data.is_some() || self.remote_data.is_some() {
             return Ok(Event::Sync);
         }
 
@@ -261,6 +261,7 @@ impl ExchangeTransform {
     fn on_recv_data(&mut self, fragment_data: FragmentData) -> Result<()> {
         // do nothing if has output data.
         if self.output_data.is_some() {
+            self.remote_data = Some(DataPacket::FragmentData(fragment_data));
             return Ok(());
         }
 

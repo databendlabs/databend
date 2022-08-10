@@ -72,7 +72,15 @@ impl ProcessorAsyncTask {
                         Either::Left((_, right)) => {
                             inner = right;
                             tracing::warn!(
-                                "Very slow processor async task, processor name: {:?}, elapsed: {:?}",
+                                "Very slow processor async task, processor id: {:?}, name: {:?}, elapsed: {:?}",
+                                wraning_processor.id(),
+                                wraning_processor.name(),
+                                start.elapsed()
+                            );
+
+                            println!(
+                                "Very slow processor async task, processor id: {:?}, name: {:?}, elapsed: {:?}",
+                                wraning_processor.id(),
                                 wraning_processor.name(),
                                 start.elapsed()
                             );

@@ -83,10 +83,10 @@ impl DataExchangeManager {
 
         let source = &packet.executor.id;
         for connection_info in &packet.connections_info {
-            let address = &connection_info.target.flight_address;
-            let mut flight_client = Self::create_client(&self.config, address).await?;
-
             for fragment in &connection_info.fragments {
+                let address = &connection_info.target.flight_address;
+                let mut flight_client = Self::create_client(&self.config, address).await?;
+
                 targets_exchanges.insert(
                     (connection_info.target.id.clone(), *fragment),
                     flight_client.do_exchange(&packet.query_id, source, *fragment).await?,
@@ -298,6 +298,7 @@ impl QueryCoordinator {
             }
             ExchangeParams::ShuffleExchange(params) => {
                 let mut exchanges = Vec::with_capacity(params.destination_ids.len());
+
                 for destination in &params.destination_ids {
                     exchanges.push(match destination == &params.executor_id {
                         true => Ok(FlightExchange::Dummy),
@@ -440,6 +441,8 @@ impl QueryCoordinator {
                 // {shutdown}
                 println!("Shutdown query {:?}", cause);
             }
+
+            println!("Shutdown successfully");
         });
 
         Ok(())
