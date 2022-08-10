@@ -29,6 +29,7 @@ use common_ast::parser::parse_expr;
 use common_ast::parser::token::Token;
 use common_ast::parser::tokenize_sql;
 use common_ast::Backtrace;
+use common_ast::Dialect;
 use common_ast::DisplayError;
 use common_datavalues::type_coercion::merge_types;
 use common_datavalues::ArrayType;
@@ -1586,7 +1587,7 @@ impl<'a> TypeChecker<'a> {
             }
             let backtrace = Backtrace::new();
             let sql_tokens = tokenize_sql(udf.definition.as_str())?;
-            let expr = parse_expr(&sql_tokens, &backtrace)?;
+            let expr = parse_expr(&sql_tokens, Dialect::PostgreSQL, &backtrace)?;
             let mut args_map = HashMap::new();
             arguments.iter().enumerate().for_each(|(idx, argument)| {
                 if let Some(parameter) = parameters.get(idx) {
