@@ -41,6 +41,7 @@ pub use metadata::Metadata;
 pub use metadata::MetadataRef;
 pub use metadata::TableEntry;
 pub use semantic::normalize_identifier;
+pub use semantic::IdentifierNormalizer;
 pub use semantic::NameResolutionContext;
 
 use self::plans::Plan;
