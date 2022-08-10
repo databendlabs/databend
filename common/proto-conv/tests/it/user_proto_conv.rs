@@ -210,6 +210,22 @@ fn test_load_old_user() -> anyhow::Result<()> {
         assert_eq!(want, got);
     }
 
+    {
+        // a legacy UserInfo with ConfigReload flag set
+        let user_info_v3: Vec<u8> = vec![
+            10, 9, 116, 101, 115, 116, 95, 117, 115, 101, 114, 18, 9, 108, 111, 99, 97, 108, 104,
+            111, 115, 116, 26, 25, 18, 17, 10, 13, 116, 101, 115, 116, 95, 112, 97, 115, 115, 119,
+            111, 114, 100, 16, 1, 160, 6, 3, 168, 6, 1, 34, 26, 10, 18, 10, 8, 10, 0, 160, 6, 3,
+            168, 6, 1, 16, 2, 160, 6, 3, 168, 6, 1, 160, 6, 3, 168, 6, 1, 42, 15, 8, 10, 16, 128,
+            80, 24, 128, 160, 1, 160, 6, 3, 168, 6, 1, 50, 15, 8, 2, 18, 5, 114, 111, 108, 101, 49,
+            160, 6, 3, 168, 6, 1, 160, 6, 3, 168, 6, 1,
+        ];
+        let p: pb::UserInfo =
+            common_protos::prost::Message::decode(user_info_v3.as_slice()).map_err(print_err)?;
+        let got = mt::UserInfo::from_pb(p).map_err(print_err)?;
+        assert!(got.option.flags().is_empty());
+    }
+
     // UserStage is loadable
     {
         let user_stage_info_v1: Vec<u8> = vec![

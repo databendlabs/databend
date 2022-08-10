@@ -75,12 +75,12 @@ pub enum DataType {
 }
 
 pub trait ValueType: Debug + Clone + PartialEq + Sized + 'static {
-    type Scalar: Debug + Clone;
-    type ScalarRef<'a>: Debug + Clone;
-    type Column: Debug + Clone;
+    type Scalar: Debug + Clone + PartialEq;
+    type ScalarRef<'a>: Debug + Clone + PartialEq;
+    type Column: Debug + Clone + PartialEq;
     type Domain: Debug + Clone + PartialEq;
     type ColumnIterator<'a>: Iterator<Item = Self::ScalarRef<'a>> + TrustedLen;
-    type ColumnBuilder: Clone;
+    type ColumnBuilder: Debug + Clone + PartialEq;
 
     fn to_owned_scalar<'a>(scalar: Self::ScalarRef<'a>) -> Self::Scalar;
     fn to_scalar_ref<'a>(scalar: &'a Self::Scalar) -> Self::ScalarRef<'a>;
@@ -94,10 +94,18 @@ pub trait ValueType: Debug + Clone + PartialEq + Sized + 'static {
 
     fn column_len<'a>(col: &'a Self::Column) -> usize;
     fn index_column<'a>(col: &'a Self::Column, index: usize) -> Option<Self::ScalarRef<'a>>;
+
+    /// # Safety
+    ///
+    /// Calling this method with an out-of-bounds index is *[undefined behavior]*
+    unsafe fn index_column_unchecked<'a>(
+        col: &'a Self::Column,
+        index: usize,
+    ) -> Self::ScalarRef<'a>;
     fn slice_column<'a>(col: &'a Self::Column, range: Range<usize>) -> Self::Column;
     fn iter_column<'a>(col: &'a Self::Column) -> Self::ColumnIterator<'a>;
-
     fn column_to_builder(col: Self::Column) -> Self::ColumnBuilder;
+
     fn builder_len(builder: &Self::ColumnBuilder) -> usize;
     fn push_item(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>);
     fn push_default(builder: &mut Self::ColumnBuilder);
@@ -108,8 +116,8 @@ pub trait ValueType: Debug + Clone + PartialEq + Sized + 'static {
 
 pub trait ArgType: ValueType {
     fn data_type() -> DataType;
-    fn full_domain(generics: &GenericMap) -> Self::Domain;
     fn create_builder(capacity: usize, generics: &GenericMap) -> Self::ColumnBuilder;
+
     fn column_from_iter(
         iter: impl Iterator<Item = Self::Scalar>,
         generics: &GenericMap,
@@ -117,6 +125,17 @@ pub trait ArgType: ValueType {
         let mut col = Self::create_builder(iter.size_hint().0, generics);
         for item in iter {
             Self::push_item(&mut col, Self::to_scalar_ref(&item));
+        }
+        Self::build_column(col)
+    }
+
+    fn column_from_ref_iter<'a>(
+        iter: impl Iterator<Item = Self::ScalarRef<'a>>,
+        generics: &GenericMap,
+    ) -> Self::Column {
+        let mut col = Self::create_builder(iter.size_hint().0, generics);
+        for item in iter {
+            Self::push_item(&mut col, item);
         }
         Self::build_column(col)
     }
@@ -338,9 +357,23 @@ const fn max_bit_with(lhs: u8, rhs: u8) -> u8 {
 
 #[macro_export]
 macro_rules! with_number_type {
-    ($t:tt, $($tail:tt)*) => {{
+    ( | $t:tt | $($tail:tt)* ) => {{
         match_template::match_template! {
             $t = [UInt8, UInt16, UInt32, UInt64, Int8, Int16, Int32, Int64, Float32, Float64],
+            $($tail)*
+        }
+    }}
+}
+
+#[macro_export]
+macro_rules! with_number_mapped_type {
+    ($t:tt, $($tail:tt)*) => {{
+        match_template::match_template! {
+            $t = [
+                UInt8 => u8, UInt16 => u16, UInt32 => u32, UInt64 => u64,
+                Int8 => i8, Int16 => i16, Int32 => i32, Int64 => i64,
+                Float32 => f32, Float64 => f64
+            ],
             $($tail)*
         }
     }}

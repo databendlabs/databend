@@ -23,7 +23,9 @@ use common_datavalues::chrono::DateTime;
 use common_datavalues::chrono::Utc;
 use common_meta_types as mt;
 use common_protos::pb;
+use common_storage::StorageFsConfig;
 use common_storage::StorageParams;
+use common_storage::StorageS3Config;
 use enumflags2::BitFlags;
 use num::FromPrimitive;
 
@@ -33,7 +35,8 @@ use crate::Incompatible;
 use crate::MIN_COMPATIBLE_VER;
 use crate::VER;
 
-impl FromToProto<pb::AuthInfo> for mt::AuthInfo {
+impl FromToProto for mt::AuthInfo {
+    type PB = pb::AuthInfo;
     fn from_pb(p: pb::AuthInfo) -> Result<Self, Incompatible>
     where Self: Sized {
         check_ver(p.ver, p.min_compatible)?;
@@ -76,15 +79,14 @@ impl FromToProto<pb::AuthInfo> for mt::AuthInfo {
     }
 }
 
-impl FromToProto<pb::UserOption> for mt::UserOption {
+impl FromToProto for mt::UserOption {
+    type PB = pb::UserOption;
     fn from_pb(p: pb::UserOption) -> Result<Self, Incompatible>
     where Self: Sized {
         check_ver(p.ver, p.min_compatible)?;
 
-        let flags =
-            BitFlags::<mt::UserOptionFlag, u64>::from_bits(p.flags).map_err(|e| Incompatible {
-                reason: format!("UserOptionFlag error: {}", e),
-            })?;
+        // ignore unknown flags
+        let flags = BitFlags::<mt::UserOptionFlag, u64>::from_bits_truncate(p.flags);
 
         Ok(mt::UserOption::default()
             .with_flags(flags)
@@ -101,7 +103,8 @@ impl FromToProto<pb::UserOption> for mt::UserOption {
     }
 }
 
-impl FromToProto<pb::UserQuota> for mt::UserQuota {
+impl FromToProto for mt::UserQuota {
+    type PB = pb::UserQuota;
     fn from_pb(p: pb::UserQuota) -> Result<Self, Incompatible>
     where Self: Sized {
         check_ver(p.ver, p.min_compatible)?;
@@ -124,7 +127,8 @@ impl FromToProto<pb::UserQuota> for mt::UserQuota {
     }
 }
 
-impl FromToProto<pb::GrantObject> for mt::GrantObject {
+impl FromToProto for mt::GrantObject {
+    type PB = pb::GrantObject;
     fn from_pb(p: pb::GrantObject) -> Result<Self, Incompatible>
     where Self: Sized {
         check_ver(p.ver, p.min_compatible)?;
@@ -175,7 +179,8 @@ impl FromToProto<pb::GrantObject> for mt::GrantObject {
     }
 }
 
-impl FromToProto<pb::GrantEntry> for mt::GrantEntry {
+impl FromToProto for mt::GrantEntry {
+    type PB = pb::GrantEntry;
     fn from_pb(p: pb::GrantEntry) -> Result<Self, Incompatible>
     where Self: Sized {
         check_ver(p.ver, p.min_compatible)?;
@@ -204,7 +209,8 @@ impl FromToProto<pb::GrantEntry> for mt::GrantEntry {
     }
 }
 
-impl FromToProto<pb::UserGrantSet> for mt::UserGrantSet {
+impl FromToProto for mt::UserGrantSet {
+    type PB = pb::UserGrantSet;
     fn from_pb(p: pb::UserGrantSet) -> Result<Self, Incompatible>
     where Self: Sized {
         check_ver(p.ver, p.min_compatible)?;
@@ -240,7 +246,8 @@ impl FromToProto<pb::UserGrantSet> for mt::UserGrantSet {
     }
 }
 
-impl FromToProto<pb::UserInfo> for mt::UserInfo {
+impl FromToProto for mt::UserInfo {
+    type PB = pb::UserInfo;
     fn from_pb(p: pb::UserInfo) -> Result<Self, Incompatible>
     where Self: Sized {
         check_ver(p.ver, p.min_compatible)?;
@@ -277,7 +284,8 @@ impl FromToProto<pb::UserInfo> for mt::UserInfo {
     }
 }
 
-impl FromToProto<pb::UserIdentity> for mt::UserIdentity {
+impl FromToProto for mt::UserIdentity {
+    type PB = pb::UserIdentity;
     fn from_pb(p: pb::UserIdentity) -> Result<Self, Incompatible>
     where Self: Sized {
         check_ver(p.ver, p.min_compatible)?;
@@ -298,7 +306,8 @@ impl FromToProto<pb::UserIdentity> for mt::UserIdentity {
     }
 }
 
-impl FromToProto<pb::user_stage_info::StageFileFormatType> for mt::StageFileFormatType {
+impl FromToProto for mt::StageFileFormatType {
+    type PB = pb::user_stage_info::StageFileFormatType;
     fn from_pb(p: pb::user_stage_info::StageFileFormatType) -> Result<Self, Incompatible>
     where Self: Sized {
         match p {
@@ -331,7 +340,8 @@ impl FromToProto<pb::user_stage_info::StageFileFormatType> for mt::StageFileForm
     }
 }
 
-impl FromToProto<pb::user_stage_info::StageFileCompression> for mt::StageFileCompression {
+impl FromToProto for mt::StageFileCompression {
+    type PB = pb::user_stage_info::StageFileCompression;
     fn from_pb(p: pb::user_stage_info::StageFileCompression) -> Result<Self, Incompatible>
     where Self: Sized {
         match p {
@@ -382,7 +392,8 @@ impl FromToProto<pb::user_stage_info::StageFileCompression> for mt::StageFileCom
     }
 }
 
-impl FromToProto<pb::user_stage_info::StageType> for mt::StageType {
+impl FromToProto for mt::StageType {
+    type PB = pb::user_stage_info::StageType;
     fn from_pb(p: pb::user_stage_info::StageType) -> Result<Self, Incompatible>
     where Self: Sized {
         match p {
@@ -399,15 +410,16 @@ impl FromToProto<pb::user_stage_info::StageType> for mt::StageType {
     }
 }
 
-impl FromToProto<pb::user_stage_info::StageStorage> for StorageParams {
+impl FromToProto for StorageParams {
+    type PB = pb::user_stage_info::StageStorage;
     fn from_pb(p: pb::user_stage_info::StageStorage) -> Result<Self, Incompatible>
     where Self: Sized {
         match p.storage {
             Some(pb::user_stage_info::stage_storage::Storage::S3(s)) => {
-                Ok(StorageParams::from_pb(s)?)
+                Ok(StorageParams::S3(StorageS3Config::from_pb(s)?))
             }
             Some(pb::user_stage_info::stage_storage::Storage::Fs(s)) => {
-                Ok(StorageParams::from_pb(s)?)
+                Ok(StorageParams::Fs(StorageFsConfig::from_pb(s)?))
             }
             None => Err(Incompatible {
                 reason: "StageStorage.storage cannot be None".to_string(),
@@ -417,22 +429,19 @@ impl FromToProto<pb::user_stage_info::StageStorage> for StorageParams {
 
     fn to_pb(&self) -> Result<pb::user_stage_info::StageStorage, Incompatible> {
         match self {
-            StorageParams::S3(_) => Ok(pb::user_stage_info::StageStorage {
-                storage: Some(pb::user_stage_info::stage_storage::Storage::S3(
-                    self.to_pb()?,
-                )),
+            StorageParams::S3(v) => Ok(pb::user_stage_info::StageStorage {
+                storage: Some(pb::user_stage_info::stage_storage::Storage::S3(v.to_pb()?)),
             }),
-            StorageParams::Fs(_) => Ok(pb::user_stage_info::StageStorage {
-                storage: Some(pb::user_stage_info::stage_storage::Storage::Fs(
-                    self.to_pb()?,
-                )),
+            StorageParams::Fs(v) => Ok(pb::user_stage_info::StageStorage {
+                storage: Some(pb::user_stage_info::stage_storage::Storage::Fs(v.to_pb()?)),
             }),
             _ => todo!("other stage storage are not supported"),
         }
     }
 }
 
-impl FromToProto<pb::user_stage_info::StageParams> for mt::StageParams {
+impl FromToProto for mt::StageParams {
+    type PB = pb::user_stage_info::StageParams;
     fn from_pb(p: pb::user_stage_info::StageParams) -> Result<Self, Incompatible>
     where Self: Sized {
         Ok(mt::StageParams {
@@ -449,7 +458,8 @@ impl FromToProto<pb::user_stage_info::StageParams> for mt::StageParams {
     }
 }
 
-impl FromToProto<pb::user_stage_info::FileFormatOptions> for mt::FileFormatOptions {
+impl FromToProto for mt::FileFormatOptions {
+    type PB = pb::user_stage_info::FileFormatOptions;
     fn from_pb(p: pb::user_stage_info::FileFormatOptions) -> Result<Self, Incompatible>
     where Self: Sized {
         check_ver(p.ver, p.min_compatible)?;
@@ -490,7 +500,8 @@ impl FromToProto<pb::user_stage_info::FileFormatOptions> for mt::FileFormatOptio
     }
 }
 
-impl FromToProto<pb::user_stage_info::OnErrorMode> for mt::OnErrorMode {
+impl FromToProto for mt::OnErrorMode {
+    type PB = pb::user_stage_info::OnErrorMode;
     fn from_pb(p: pb::user_stage_info::OnErrorMode) -> Result<Self, Incompatible>
     where Self: Sized {
         match p.mode {
@@ -540,7 +551,8 @@ impl FromToProto<pb::user_stage_info::OnErrorMode> for mt::OnErrorMode {
     }
 }
 
-impl FromToProto<pb::user_stage_info::CopyOptions> for mt::CopyOptions {
+impl FromToProto for mt::CopyOptions {
+    type PB = pb::user_stage_info::CopyOptions;
     fn from_pb(p: pb::user_stage_info::CopyOptions) -> Result<Self, Incompatible>
     where Self: Sized {
         let on_error = mt::OnErrorMode::from_pb(p.on_error.ok_or_else(|| Incompatible {
@@ -567,7 +579,8 @@ impl FromToProto<pb::user_stage_info::CopyOptions> for mt::CopyOptions {
     }
 }
 
-impl FromToProto<pb::UserStageInfo> for mt::UserStageInfo {
+impl FromToProto for mt::UserStageInfo {
+    type PB = pb::UserStageInfo;
     fn from_pb(p: pb::UserStageInfo) -> Result<Self, Incompatible>
     where Self: Sized {
         check_ver(p.ver, p.min_compatible)?;
@@ -621,7 +634,8 @@ impl FromToProto<pb::UserStageInfo> for mt::UserStageInfo {
     }
 }
 
-impl FromToProto<pb::StageFile> for mt::StageFile {
+impl FromToProto for mt::StageFile {
+    type PB = pb::StageFile;
     fn from_pb(p: pb::StageFile) -> Result<Self, Incompatible>
     where Self: Sized {
         check_ver(p.ver, p.min_compatible)?;

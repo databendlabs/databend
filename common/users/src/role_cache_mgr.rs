@@ -13,8 +13,6 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::collections::HashSet;
-use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
@@ -26,6 +24,7 @@ use common_meta_types::RoleInfo;
 use parking_lot::RwLock;
 use tracing::warn;
 
+use crate::role_util::find_all_related_roles;
 use crate::UserApiProvider;
 
 struct CachedRoles {
@@ -86,6 +85,7 @@ impl RoleCacheMgr {
         cached.remove(tenant);
     }
 
+    // find_related_roles is called on validating an user's privileges.
     pub async fn find_related_roles(
         &self,
         tenant: &str,
@@ -127,36 +127,10 @@ async fn load_roles_data(user_api: &Arc<UserApiProvider>, tenant: &str) -> Resul
     let roles = user_api.get_roles(tenant).await?;
     let roles_map = roles
         .into_iter()
-        .map(|r| (r.identity(), r))
+        .map(|r| (r.identity().to_string(), r))
         .collect::<HashMap<_, _>>();
     Ok(CachedRoles {
         roles: roles_map,
         cached_at: Instant::now(),
     })
-}
-
-// An role can be granted with multiple roles, find all the related roles in a DFS manner
-pub fn find_all_related_roles(
-    cache: &HashMap<String, RoleInfo>,
-    role_identities: &[String],
-) -> Vec<RoleInfo> {
-    let mut visited: HashSet<String> = HashSet::new();
-    let mut result: Vec<RoleInfo> = vec![];
-    let mut q: VecDeque<String> = role_identities.iter().cloned().collect();
-    while let Some(role_identity) = q.pop_front() {
-        if visited.contains(&role_identity) {
-            continue;
-        }
-        let cache_key = role_identity.to_string();
-        visited.insert(role_identity);
-        let role = match cache.get(&cache_key) {
-            None => continue,
-            Some(role) => role,
-        };
-        result.push(role.clone());
-        for related_role in role.grants.roles() {
-            q.push_back(related_role);
-        }
-    }
-    result
 }

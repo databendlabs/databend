@@ -28,7 +28,8 @@ use crate::Incompatible;
 use crate::MIN_COMPATIBLE_VER;
 use crate::VER;
 
-impl FromToProto<pb::DatabaseNameIdent> for mt::DatabaseNameIdent {
+impl FromToProto for mt::DatabaseNameIdent {
+    type PB = pb::DatabaseNameIdent;
     fn from_pb(p: pb::DatabaseNameIdent) -> Result<Self, Incompatible> {
         check_ver(p.ver, p.min_compatible)?;
 
@@ -50,7 +51,8 @@ impl FromToProto<pb::DatabaseNameIdent> for mt::DatabaseNameIdent {
     }
 }
 
-impl FromToProto<pb::DatabaseMeta> for mt::DatabaseMeta {
+impl FromToProto for mt::DatabaseMeta {
+    type PB = pb::DatabaseMeta;
     fn from_pb(p: pb::DatabaseMeta) -> Result<Self, Incompatible> {
         check_ver(p.ver, p.min_compatible)?;
 
@@ -90,7 +92,8 @@ impl FromToProto<pb::DatabaseMeta> for mt::DatabaseMeta {
     }
 }
 
-impl FromToProto<pb::DbIdList> for mt::DbIdList {
+impl FromToProto for mt::DbIdList {
+    type PB = pb::DbIdList;
     fn from_pb(p: pb::DbIdList) -> Result<Self, Incompatible> {
         check_ver(p.ver, p.min_compatible)?;
 
