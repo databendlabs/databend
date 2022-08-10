@@ -7,7 +7,7 @@ Project: [number (#0)]
             EvalScalar: [numbers.a (#0)]
                 Project: [number (#0)]
                     EvalScalar: [numbers.number (#0)]
-                        Scan: default.system.numbers
+                        Scan: default.system.numbers, filters: []
 
 
 # Prune unused columns from Aggregate
@@ -19,7 +19,7 @@ Project: [number (#0)]
             EvalScalar: [group_item (#0)]
                 Aggregate(Initial): group items: [numbers.number (#0)], aggregate functions: []
                     EvalScalar: [numbers.number (#0)]
-                        Scan: default.system.numbers
+                        Scan: default.system.numbers, filters: []
 
 
 # Prune unused columns for simple plan nodes (Project, Filter, Aggregate...)
@@ -34,7 +34,7 @@ Limit: [1], Offset: [0]
                         EvalScalar: [group_item (#0)]
                             Aggregate(Initial): group items: [numbers.number (#0), numbers.number (#0), numbers.number (#0), numbers.number (#0)], aggregate functions: []
                                 EvalScalar: [numbers.number (#0), numbers.number (#0), numbers.number (#0), numbers.number (#0), numbers.number (#0)]
-                                    Scan: default.system.numbers
+                                    Scan: default.system.numbers, filters: []
 
 
 # Prune unused columns for join plan nodes (LogicalInnerJoin ...)
@@ -48,10 +48,10 @@ Project: [a (#1)]
                     CrossJoin
                         Project: [a (#1),b (#2),c (#3)]
                             EvalScalar: [+(numbers.number (#0), 1), +(numbers.number (#0), 1), +(numbers.number (#0), 1)]
-                                Scan: default.system.numbers
+                                Scan: default.system.numbers, filters: []
                         Project: [b (#11)]
                             EvalScalar: [+(numbers.number (#9), 1)]
-                                Scan: default.system.numbers
+                                Scan: default.system.numbers, filters: []
 
 
 # Prune unused columns for correlated query
@@ -63,7 +63,7 @@ Project: [a (#1)]
             HashJoin: SINGLE, build keys: [], probe keys: [], join filters: []
                 Project: [a (#1)]
                     EvalScalar: [+(numbers.number (#0), 1)]
-                        Scan: default.system.numbers
+                        Scan: default.system.numbers, filters: []
                 Project: [COUNT(*) (#21)]
                     EvalScalar: [COUNT(*) (#22)]
                         Aggregate(Initial): group items: [], aggregate functions: [COUNT(*)]
@@ -73,10 +73,10 @@ Project: [a (#1)]
                                         CrossJoin
                                             Project: [a (#6),b (#7),c (#8)]
                                                 EvalScalar: [+(numbers.number (#5), 1), +(numbers.number (#5), 1), +(numbers.number (#5), 1)]
-                                                    Scan: default.system.numbers
+                                                    Scan: default.system.numbers, filters: []
                                             Project: [b (#16)]
                                                 EvalScalar: [+(numbers.number (#14), 1)]
-                                                    Scan: default.system.numbers
+                                                    Scan: default.system.numbers, filters: []
 
 
 # Prune unused columns with order by
@@ -85,7 +85,7 @@ select name from system.functions order by example
 Project: [name (#0)]
     EvalScalar: [functions.name (#0)]
         Sort: [example (#7) ASC]
-            Scan: default.system.functions
+            Scan: default.system.functions, filters: []
 
 
 # Prune unused columns with cross join
@@ -95,13 +95,13 @@ Project: [number (#0)]
     EvalScalar: [t.number (#0)]
         Filter: [subquery_3 (#3)]
             CrossJoin
-                Scan: default.system.numbers
+                Scan: default.system.numbers, filters: []
                 Project: [subquery (#3)]
                     EvalScalar: [count(*) (#2) = 1]
                         Aggregate(Initial): group items: [], aggregate functions: [count(*)]
                             Limit: [1], Offset: [0]
                                 Project: [number (#1)]
                                     EvalScalar: [numbers.number (#1)]
-                                        Scan: default.system.numbers
+                                        Scan: default.system.numbers, filters: []
 
 
