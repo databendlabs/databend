@@ -11,4 +11,4 @@ from
 where
         l_partkey = p_partkey
   and l_shipdate >= to_date('1995-09-01')
-  and l_shipdate < add_months(to_date('1995-09-01'), 1);
+  and l_shipdate < addMonths(to_date('1995-09-01'), 1);
