@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
 use common_ast::Backtrace;
+use common_ast::Dialect;
 use common_exception::Result;
 use parking_lot::RwLock;
 pub use plans::ScalarExpr;
@@ -64,7 +65,7 @@ impl Planner {
         // Step 1: parse SQL text into AST
         let tokens = tokenize_sql(sql)?;
         let backtrace = Backtrace::new();
-        let (stmt, format) = parse_sql(&tokens, &backtrace)?;
+        let (stmt, format) = parse_sql(&tokens, Dialect::PostgreSQL, &backtrace)?;
 
         // Step 2: bind AST with catalog, and generate a pure logical SExpr
         let metadata = Arc::new(RwLock::new(Metadata::create()));
