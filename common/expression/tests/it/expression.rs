@@ -31,17 +31,16 @@ use common_expression::BooleanDomain;
 use common_expression::Chunk;
 use common_expression::Column;
 use common_expression::ColumnBuilder;
+use common_expression::ConstantFolder;
 use common_expression::Domain;
-use common_expression::DomainCalculator;
 use common_expression::Evaluator;
-use common_expression::FloatDomain;
 use common_expression::Function;
 use common_expression::FunctionContext;
 use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
 use common_expression::FunctionSignature;
-use common_expression::IntDomain;
 use common_expression::NullableDomain;
+use common_expression::NumberDomain;
 use common_expression::RemoteExpr;
 use common_expression::Scalar;
 use common_expression::ScalarRef;
@@ -51,12 +50,14 @@ use goldenfile::Mint;
 
 use crate::parser::parse_raw_expr;
 
+// Deprecate: move tests to `common_function_v2`
 #[test]
 pub fn test_pass() {
     let mut mint = Mint::new("tests/it/testdata");
     let mut file = mint.new_goldenfile("run-pass.txt").unwrap();
 
     run_ast(&mut file, "true AND false", &[]);
+    run_ast(&mut file, "CAST(false AS BOOLEAN NULL)", &[]);
     run_ast(&mut file, "null AND false", &[]);
     run_ast(&mut file, "plus(a, 10)", &[(
         "a",
@@ -622,9 +623,9 @@ fn builtin_functions() -> FunctionRegistry {
         "plus",
         FunctionProperty::default(),
         |lhs, rhs| {
-            Some(IntDomain {
-                min: lhs.min.checked_add(rhs.min).unwrap_or(i16::MAX as i64),
-                max: lhs.max.checked_add(rhs.max).unwrap_or(i16::MAX as i64),
+            Some(NumberDomain {
+                min: lhs.min.checked_add(rhs.min).unwrap_or(i16::MAX),
+                max: lhs.max.checked_add(rhs.max).unwrap_or(i16::MAX),
             })
         },
         |lhs, rhs| lhs + rhs,
@@ -634,9 +635,9 @@ fn builtin_functions() -> FunctionRegistry {
         "minus",
         FunctionProperty::default(),
         |lhs, rhs| {
-            Some(IntDomain {
-                min: lhs.min.checked_sub(rhs.max).unwrap_or(i32::MAX as i64),
-                max: lhs.max.checked_sub(rhs.min).unwrap_or(i32::MAX as i64),
+            Some(NumberDomain {
+                min: lhs.min.checked_sub(rhs.max).unwrap_or(i32::MAX),
+                max: lhs.max.checked_sub(rhs.min).unwrap_or(i32::MAX),
             })
         },
         |lhs, rhs| lhs - rhs,
@@ -660,7 +661,7 @@ fn builtin_functions() -> FunctionRegistry {
         "avg",
         FunctionProperty::default(),
         |lhs, rhs| {
-            Some(FloatDomain {
+            Some(NumberDomain {
                 min: (lhs.min + rhs.min) / 2.0,
                 max: (lhs.max + rhs.max) / 2.0,
             })
@@ -691,15 +692,15 @@ fn builtin_functions() -> FunctionRegistry {
             calc_domain: Box::new(|args_domain, _| {
                 let min = args_domain
                     .iter()
-                    .map(|domain| domain.as_int().unwrap().min)
+                    .map(|domain| domain.as_int16().unwrap().min)
                     .min()
                     .unwrap_or(0);
                 let max = args_domain
                     .iter()
-                    .map(|domain| domain.as_int().unwrap().max)
+                    .map(|domain| domain.as_int16().unwrap().max)
                     .min()
                     .unwrap_or(0);
-                Domain::Int(IntDomain { min, max })
+                Some(Domain::Int16(NumberDomain { min, max }))
             }),
             eval: Box::new(|args, generics| {
                 if args.is_empty() {
@@ -731,7 +732,7 @@ fn builtin_functions() -> FunctionRegistry {
     registry.register_0_arg_core::<EmptyArrayType, _, _>(
         "create_array",
         FunctionProperty::default(),
-        || None,
+        || Some(()),
         |_| Ok(Value::Scalar(())),
     );
 
@@ -744,9 +745,9 @@ fn builtin_functions() -> FunctionRegistry {
                 property: FunctionProperty::default(),
             },
             calc_domain: Box::new(|args_domain, _| {
-                args_domain.iter().fold(Domain::Array(None), |acc, x| {
+                Some(args_domain.iter().fold(Domain::Array(None), |acc, x| {
                     acc.merge(&Domain::Array(Some(Box::new(x.clone()))))
-                })
+                }))
             }),
             eval: Box::new(|args, generics| {
                 let len = args.iter().find_map(|arg| match arg {
@@ -794,7 +795,7 @@ fn builtin_functions() -> FunctionRegistry {
     registry.register_passthrough_nullable_2_arg::<ArrayType<GenericType<0>>, NumberType<i16>, GenericType<0>,_, _>(
         "get",
         FunctionProperty::default(),
-        |item_domain, _| Some(item_domain.clone()),
+        |_, _| None,
         vectorize_with_writer_2_arg::<ArrayType<GenericType<0>>, NumberType<i16>, GenericType<0>>(
             |array, idx, output| {
             let item = array
@@ -813,7 +814,7 @@ fn builtin_functions() -> FunctionRegistry {
                 return_type: DataType::Tuple(args_type.to_vec()),
                 property: FunctionProperty::default(),
             },
-            calc_domain: Box::new(|args_domain, _| Domain::Tuple(args_domain.to_vec())),
+            calc_domain: Box::new(|args_domain, _| Some(Domain::Tuple(args_domain.to_vec()))),
             eval: Box::new(move |args, _generics| {
                 let len = args.iter().find_map(|arg| match arg {
                     ValueRef::Column(col) => Some(col.len()),
@@ -861,7 +862,7 @@ fn builtin_functions() -> FunctionRegistry {
                 property: FunctionProperty::default(),
             },
             calc_domain: Box::new(move |args_domain, _| {
-                args_domain[0].as_tuple().unwrap()[idx].clone()
+                Some(args_domain[0].as_tuple().unwrap()[idx].clone())
             }),
             eval: Box::new(move |args, _| match &args[0] {
                 ValueRef::Scalar(ScalarRef::Tuple(fields)) => {
@@ -900,10 +901,10 @@ fn builtin_functions() -> FunctionRegistry {
                     let fields = value.as_tuple().unwrap();
                     Box::new(fields[idx].clone())
                 });
-                Domain::Nullable(NullableDomain {
+                Some(Domain::Nullable(NullableDomain {
                     has_null: *has_null,
                     value,
-                })
+                }))
             }),
             eval: Box::new(move |args, _| match &args[0] {
                 ValueRef::Scalar(ScalarRef::Null) => Ok(Value::Scalar(Scalar::Null)),
@@ -946,8 +947,8 @@ fn run_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType, Column
             .map(|(_, _, col)| col.domain())
             .collect::<Vec<_>>();
 
-        let domain_calculator = DomainCalculator::new(input_domains.clone());
-        let output_domain = domain_calculator.calculate(&expr)?;
+        let constant_folder = ConstantFolder::new(&input_domains);
+        let (optimized_expr, output_domain) = constant_folder.fold(&expr);
 
         let num_rows = columns.iter().map(|col| col.2.len()).max().unwrap_or(0);
         let chunk = Chunk::new(
@@ -963,26 +964,42 @@ fn run_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType, Column
         });
 
         let evaluator = Evaluator {
-            input_columns: chunk,
+            input_columns: &chunk,
             context: FunctionContext::default(),
         };
-        let result = evaluator.run(&expr)?;
+        let result = evaluator.run(&expr);
+        let optimized_result = evaluator.run(&optimized_expr);
+        match &result {
+            Ok(result) => assert!(
+                result
+                    .as_ref()
+                    .sematically_eq(&optimized_result.unwrap().as_ref())
+            ),
+            Err(e) => assert_eq!(e, &optimized_result.unwrap_err()),
+        }
 
         (
             raw_expr,
             expr,
             input_domains,
             output_ty,
-            output_domain,
-            result,
+            optimized_expr,
+            output_domain
+                .as_ref()
+                .map(ToString::to_string)
+                .unwrap_or_else(|| "Unknown".to_string()),
+            result?,
         )
     };
 
     match result {
-        Ok((raw_expr, expr, input_domains, output_ty, output_domain, result)) => {
+        Ok((raw_expr, expr, input_domains, output_ty, optimized_expr, output_domain, result)) => {
             writeln!(file, "ast            : {text}").unwrap();
             writeln!(file, "raw expr       : {raw_expr}").unwrap();
             writeln!(file, "checked expr   : {expr}").unwrap();
+            if optimized_expr != expr {
+                writeln!(file, "optimized expr : {optimized_expr}").unwrap();
+            }
 
             match result {
                 Value::Scalar(output_scalar) => {

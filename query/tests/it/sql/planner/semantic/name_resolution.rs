@@ -13,9 +13,14 @@
 // limitations under the License.
 
 use common_ast::ast::Identifier;
+use common_ast::parser::parse_expr;
 use common_ast::parser::token::Token;
 use common_ast::parser::token::TokenKind;
+use common_ast::parser::tokenize_sql;
+use common_ast::walk_expr_mut;
+use common_ast::Backtrace;
 use databend_query::sql::normalize_identifier;
+use databend_query::sql::IdentifierNormalizer;
 use databend_query::sql::NameResolutionContext;
 
 #[test]
@@ -113,4 +118,21 @@ fn test_normalize_identifier_unquoted_case_sensitive() {
             "FooBar 这是一个标识符 これは識別子です Это ИДЕНТификатор Dies ist eine Kennung"
         );
     }
+}
+
+#[test]
+fn test_normalize_identifiers_in_expr() {
+    let tokens = tokenize_sql("exists(select func(\"T\".A+1) as B)").unwrap();
+    let backtrace = Backtrace::new();
+    let mut expr = parse_expr(&tokens, &backtrace).unwrap();
+
+    let ctx = NameResolutionContext::default();
+    let mut normalizer = IdentifierNormalizer { ctx: &ctx };
+
+    walk_expr_mut(&mut normalizer, &mut expr);
+
+    assert_eq!(
+        format!("{:#}", expr),
+        "EXISTS (SELECT func(\"T\".a + 1) AS b)".to_string()
+    );
 }

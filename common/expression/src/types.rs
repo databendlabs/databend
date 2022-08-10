@@ -75,12 +75,12 @@ pub enum DataType {
 }
 
 pub trait ValueType: Debug + Clone + PartialEq + Sized + 'static {
-    type Scalar: Debug + Clone;
-    type ScalarRef<'a>: Debug + Clone;
-    type Column: Debug + Clone;
+    type Scalar: Debug + Clone + PartialEq;
+    type ScalarRef<'a>: Debug + Clone + PartialEq;
+    type Column: Debug + Clone + PartialEq;
     type Domain: Debug + Clone + PartialEq;
     type ColumnIterator<'a>: Iterator<Item = Self::ScalarRef<'a>> + TrustedLen;
-    type ColumnBuilder: Clone;
+    type ColumnBuilder: Debug + Clone + PartialEq;
 
     fn to_owned_scalar<'a>(scalar: Self::ScalarRef<'a>) -> Self::Scalar;
     fn to_scalar_ref<'a>(scalar: &'a Self::Scalar) -> Self::ScalarRef<'a>;
@@ -116,7 +116,6 @@ pub trait ValueType: Debug + Clone + PartialEq + Sized + 'static {
 
 pub trait ArgType: ValueType {
     fn data_type() -> DataType;
-    fn full_domain(generics: &GenericMap) -> Self::Domain;
     fn create_builder(capacity: usize, generics: &GenericMap) -> Self::ColumnBuilder;
 
     fn column_from_iter(
@@ -358,7 +357,7 @@ const fn max_bit_with(lhs: u8, rhs: u8) -> u8 {
 
 #[macro_export]
 macro_rules! with_number_type {
-    ($t:tt, $($tail:tt)*) => {{
+    ( | $t:tt | $($tail:tt)* ) => {{
         match_template::match_template! {
             $t = [UInt8, UInt16, UInt32, UInt64, Int8, Int16, Int32, Int64, Float32, Float64],
             $($tail)*

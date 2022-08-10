@@ -62,7 +62,7 @@ pub fn with(i: Input) -> IResult<With> {
         consumed(rule! {
             #table_alias ~ AS ~ "(" ~ #query ~ ")"
         }),
-        |(span, (table_alias, _, _, query, _))| Cte {
+        |(span, (table_alias, _, _, query, _))| CTE {
             span: span.0,
             alias: table_alias,
             query,

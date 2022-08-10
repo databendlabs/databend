@@ -15,6 +15,7 @@
 use std::ops::Range;
 
 use crate::types::AnyType;
+use crate::Domain;
 use crate::Value;
 
 /// Chunk is a lightweight container for a group of columns.
@@ -63,6 +64,14 @@ impl Chunk {
     #[inline]
     pub fn is_empty(&self) -> bool {
         self.num_columns() == 0 || self.num_rows() == 0
+    }
+
+    #[inline]
+    pub fn domains(&self) -> Vec<Domain> {
+        self.columns
+            .iter()
+            .map(|value| value.as_ref().domain())
+            .collect()
     }
 
     #[inline]

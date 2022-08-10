@@ -108,9 +108,9 @@ impl Column {
             return self.clone();
         }
 
-        with_number_type!(SRC_TYPE, match self {
-            Column::SRC_TYPE(values) => {
-                Column::SRC_TYPE(Self::filter_primitive_types(values, filter))
+        with_number_type!(|NUM_TYPE| match self {
+            Column::NUM_TYPE(values) => {
+                Column::NUM_TYPE(Self::filter_primitive_types(values, filter))
             }
             Column::Null { .. } | Column::EmptyArray { .. } => self.slice(0..length),
             Column::Boolean(bm) => Self::filter_scalar_types::<BooleanType>(
