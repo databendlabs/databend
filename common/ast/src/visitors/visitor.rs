@@ -95,120 +95,160 @@ pub trait Visitor<'ast>: Sized {
     fn visit_between(
         &mut self,
         _span: &'ast [Token<'ast>],
-        _expr: &'ast Expr<'ast>,
-        _low: &'ast Expr<'ast>,
-        _high: &'ast Expr<'ast>,
+        expr: &'ast Expr<'ast>,
+        low: &'ast Expr<'ast>,
+        high: &'ast Expr<'ast>,
         _not: bool,
     ) {
+        walk_expr(self, expr);
+        walk_expr(self, low);
+        walk_expr(self, high);
     }
 
     fn visit_binary_op(
         &mut self,
         _span: &'ast [Token<'ast>],
         _op: &'ast BinaryOperator,
-        _left: &'ast Expr<'ast>,
-        _right: &'ast Expr<'ast>,
+        left: &'ast Expr<'ast>,
+        right: &'ast Expr<'ast>,
     ) {
+        walk_expr(self, left);
+        walk_expr(self, right);
     }
 
     fn visit_unary_op(
         &mut self,
         _span: &'ast [Token<'ast>],
         _op: &'ast UnaryOperator,
-        _expr: &'ast Expr<'ast>,
+        expr: &'ast Expr<'ast>,
     ) {
+        walk_expr(self, expr);
     }
 
     fn visit_cast(
         &mut self,
         _span: &'ast [Token<'ast>],
-        _expr: &'ast Expr<'ast>,
+        expr: &'ast Expr<'ast>,
         _target_type: &'ast TypeName,
         _pg_style: bool,
     ) {
+        walk_expr(self, expr);
     }
 
     fn visit_try_cast(
         &mut self,
         _span: &'ast [Token<'ast>],
-        _expr: &'ast Expr<'ast>,
+        expr: &'ast Expr<'ast>,
         _target_type: &'ast TypeName,
     ) {
+        walk_expr(self, expr);
     }
 
     fn visit_extract(
         &mut self,
         _span: &'ast [Token<'ast>],
         _kind: &'ast IntervalKind,
-        _expr: &'ast Expr<'ast>,
+        expr: &'ast Expr<'ast>,
     ) {
+        walk_expr(self, expr);
     }
 
     fn visit_positon(
         &mut self,
         _span: &'ast [Token<'ast>],
-        _substr_expr: &'ast Expr<'ast>,
-        _str_expr: &'ast Expr<'ast>,
+        substr_expr: &'ast Expr<'ast>,
+        str_expr: &'ast Expr<'ast>,
     ) {
+        walk_expr(self, substr_expr);
+        walk_expr(self, str_expr);
     }
 
     fn visit_substring(
         &mut self,
         _span: &'ast [Token<'ast>],
-        _expr: &'ast Expr<'ast>,
-        _substring_from: &'ast Option<Box<Expr<'ast>>>,
-        _substring_for: &'ast Option<Box<Expr<'ast>>>,
+        expr: &'ast Expr<'ast>,
+        substring_from: &'ast Option<Box<Expr<'ast>>>,
+        substring_for: &'ast Option<Box<Expr<'ast>>>,
     ) {
+        walk_expr(self, expr);
+        if let Some(substring_from) = substring_from {
+            walk_expr(self, substring_from);
+        }
+        if let Some(substring_for) = substring_for {
+            walk_expr(self, substring_for);
+        }
     }
 
     fn visit_trim(
         &mut self,
         _span: &'ast [Token<'ast>],
-        _expr: &'ast Expr<'ast>,
+        expr: &'ast Expr<'ast>,
         _trim_where: &'ast Option<(TrimWhere, Box<Expr<'ast>>)>,
     ) {
+        walk_expr(self, expr);
     }
 
     fn visit_literal(&mut self, _span: &'ast [Token<'ast>], _lit: &'ast Literal) {}
 
     fn visit_count_all(&mut self, _span: &'ast [Token<'ast>]) {}
 
-    fn visit_tuple(&mut self, _span: &'ast [Token<'ast>], _elements: &'ast [Expr<'ast>]) {}
+    fn visit_tuple(&mut self, _span: &'ast [Token<'ast>], elements: &'ast [Expr<'ast>]) {
+        for element in elements {
+            walk_expr(self, element);
+        }
+    }
 
     fn visit_function_call(
         &mut self,
         _span: &'ast [Token<'ast>],
         _distinct: bool,
         _name: &'ast Identifier<'ast>,
-        _args: &'ast [Expr<'ast>],
+        args: &'ast [Expr<'ast>],
         _params: &'ast [Literal],
     ) {
+        for arg in args {
+            walk_expr(self, arg);
+        }
     }
 
     fn visit_case_when(
         &mut self,
         _span: &'ast [Token<'ast>],
-        _operand: &'ast Option<Box<Expr<'ast>>>,
-        _conditions: &'ast [Expr<'ast>],
-        _results: &'ast [Expr<'ast>],
-        _else_result: &'ast Option<Box<Expr<'ast>>>,
+        operand: &'ast Option<Box<Expr<'ast>>>,
+        conditions: &'ast [Expr<'ast>],
+        results: &'ast [Expr<'ast>],
+        else_result: &'ast Option<Box<Expr<'ast>>>,
     ) {
+        if let Some(operand) = operand {
+            walk_expr(self, operand);
+        }
+        for condition in conditions {
+            walk_expr(self, condition);
+        }
+        for result in results {
+            walk_expr(self, result);
+        }
+        if let Some(else_result) = else_result {
+            walk_expr(self, else_result);
+        }
     }
 
     fn visit_exists(
         &mut self,
         _span: &'ast [Token<'ast>],
         _not: bool,
-        _subquery: &'ast Query<'ast>,
+        subquery: &'ast Query<'ast>,
     ) {
+        walk_query(self, subquery);
     }
 
     fn visit_subquery(
         &mut self,
         _span: &'ast [Token<'ast>],
         _modifier: &'ast Option<SubqueryModifier>,
-        _subquery: &'ast Query<'ast>,
+        subquery: &'ast Query<'ast>,
     ) {
+        walk_query(self, subquery);
     }
 
     fn visit_map_access(
@@ -220,58 +260,76 @@ pub trait Visitor<'ast>: Sized {
         walk_expr(self, expr);
     }
 
-    fn visit_array(&mut self, _span: &'ast [Token<'ast>], _exprs: &'ast [Expr<'ast>]) {}
+    fn visit_array(&mut self, _span: &'ast [Token<'ast>], exprs: &'ast [Expr<'ast>]) {
+        for expr in exprs {
+            walk_expr(self, expr);
+        }
+    }
 
     fn visit_interval(
         &mut self,
         _span: &'ast [Token<'ast>],
-        _expr: &'ast Expr<'ast>,
+        expr: &'ast Expr<'ast>,
         _unit: &'ast IntervalKind,
     ) {
+        walk_expr(self, expr);
     }
 
     fn visit_date_add(
         &mut self,
         _span: &'ast [Token<'ast>],
-        _date: &'ast Expr<'ast>,
-        _interval: &'ast Expr<'ast>,
+        date: &'ast Expr<'ast>,
+        interval: &'ast Expr<'ast>,
         _unit: &'ast IntervalKind,
     ) {
+        walk_expr(self, date);
+        walk_expr(self, interval);
     }
 
     fn visit_date_sub(
         &mut self,
         _span: &'ast [Token<'ast>],
-        _date: &'ast Expr<'ast>,
-        _interval: &'ast Expr<'ast>,
+        date: &'ast Expr<'ast>,
+        interval: &'ast Expr<'ast>,
         _unit: &'ast IntervalKind,
     ) {
+        walk_expr(self, date);
+        walk_expr(self, interval);
     }
 
     fn visit_date_trunc(
         &mut self,
         _span: &'ast [Token<'ast>],
         _unit: &'ast IntervalKind,
-        _date: &'ast Expr<'ast>,
+        date: &'ast Expr<'ast>,
     ) {
+        walk_expr(self, date);
     }
 
     fn visit_nullif(
         &mut self,
         _span: &'ast [Token<'ast>],
-        _expr1: &'ast Expr<'ast>,
-        _expr2: &'ast Expr<'ast>,
+        expr1: &'ast Expr<'ast>,
+        expr2: &'ast Expr<'ast>,
     ) {
+        walk_expr(self, expr1);
+        walk_expr(self, expr2);
     }
 
-    fn visit_coalesce(&mut self, _span: &'ast [Token<'ast>], _exprs: &'ast [Expr<'ast>]) {}
+    fn visit_coalesce(&mut self, _span: &'ast [Token<'ast>], exprs: &'ast [Expr<'ast>]) {
+        for expr in exprs {
+            walk_expr(self, expr);
+        }
+    }
 
     fn visit_ifnull(
         &mut self,
         _span: &'ast [Token<'ast>],
-        _expr1: &'ast Expr<'ast>,
-        _expr2: &'ast Expr<'ast>,
+        expr1: &'ast Expr<'ast>,
+        expr2: &'ast Expr<'ast>,
     ) {
+        walk_expr(self, expr1);
+        walk_expr(self, expr2);
     }
 
     fn visit_statement(&mut self, _statement: &'ast Statement<'ast>) {}
