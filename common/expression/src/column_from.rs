@@ -67,7 +67,6 @@ macro_rules! impl_from_iterator {
     };
 }
 
-
 macro_rules! impl_from_opt_iterator {
     ([], $( { $T: ident} ),*) => {
         $(
@@ -85,7 +84,6 @@ macro_rules! impl_from_opt_iterator {
     };
 }
 
-
 macro_rules! impl_from_vec {
     ([], $( { $T: ident} ),*) => {
         $(
@@ -97,7 +95,6 @@ macro_rules! impl_from_vec {
         )*
     };
 }
-
 
 macro_rules! impl_from_opt_vec {
     ([], $( { $T: ident} ),*) => {
