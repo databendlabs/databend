@@ -48,7 +48,7 @@ use crate::ShareApi;
 ///
 /// It is not used by this crate, but is used by other crate that impl `ShareApi`,
 /// to ensure an impl works as expected,
-/// such as `common/meta/embedded` and `metasrv`.
+/// such as `meta/embedded` and `metasrv`.
 #[derive(Copy, Clone)]
 pub struct ShareApiTestSuite {}
 

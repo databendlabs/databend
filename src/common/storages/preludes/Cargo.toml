@@ -25,8 +25,8 @@ common-exception = { path = "../../exception" }
 common-functions = { path = "../../functions" }
 common-fuse-meta = { path = "../../fuse-meta" }
 common-grpc = { path = "../../grpc" }
-common-meta-app = { path = "../../meta/app" }
-common-meta-types = { path = "../../meta/types" }
+common-meta-app = { path = "../../../meta/app" }
+common-meta-types = { path = "../../../meta/types" }
 common-metrics = { path = "../../metrics" }
 common-pipeline-core = { path = "../../pipeline/core" }
 common-pipeline-sinks = { path = "../../pipeline/sinks" }

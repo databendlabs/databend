@@ -16,13 +16,13 @@ io-uring = ["common-meta-sled-store/io-uring", "common-meta-raft-store/io-uring"
 
 [dependencies]
 # Workspace dependencies
-common-base = { path = "../../base" }
-common-exception = { path = "../../exception" }
+common-base = { path = "../../common/base" }
+common-exception = { path = "../../common/exception" }
 common-meta-api = { path = "../api" }
 common-meta-raft-store = { path = "../raft-store" }
 common-meta-sled-store = { path = "../sled-store" }
 common-meta-types = { path = "../types" }
-common-tracing = { path = "../../tracing" }
+common-tracing = { path = "../../common/tracing" }
 
 # Crates.io dependencies
 async-trait = "0.1.56"

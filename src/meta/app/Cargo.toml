@@ -11,7 +11,7 @@ doctest = false
 test = false
 
 [dependencies]
-common-datavalues = { path = "../../datavalues" }
+common-datavalues = { path = "../../common/datavalues" }
 common-meta-types = { path = "../types" }
 
 enumflags2 = { version = "0.7.5", features = ["serde"] }
@@ -21,7 +21,5 @@ num-traits = "0.2.15"
 serde = { version = "1.0.137", features = ["derive", "rc"] }
 
 [build-dependencies]
-common-building = { path = "../../building" }
+common-building = { path = "../../common/building" }
 tonic-build = "0.7.2"
-
-[dev-dependencies]

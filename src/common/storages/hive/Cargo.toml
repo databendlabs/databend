@@ -20,8 +20,8 @@ common-datavalues = { path = "../../datavalues" }
 common-exception = { path = "../../exception" }
 common-fuse-meta = { path = "../../fuse-meta" }
 common-hive-meta-store = { path = "../../hive-meta-store" }
-common-meta-app = { path = "../../meta/app" }
-common-meta-types = { path = "../../meta/types" }
+common-meta-app = { path = "../../../meta/app" }
+common-meta-types = { path = "../../../meta/types" }
 common-pipeline-core = { path = "../../pipeline/core" }
 common-pipeline-sources = { path = "../../pipeline/sources" }
 common-planners = { path = "../../planners" }

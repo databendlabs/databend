@@ -18,8 +18,8 @@ common-exception = { path = "../exception" }
 common-functions = { path = "../functions" }
 common-fuse-meta = { path = "../fuse-meta" }
 common-io = { path = "../io" }
-common-meta-app = { path = "../meta/app" }
-common-meta-types = { path = "../meta/types" }
+common-meta-app = { path = "../../meta/app" }
+common-meta-types = { path = "../../meta/types" }
 common-pipeline-core = { path = "../pipeline/core" }
 common-planners = { path = "../planners" }
 common-settings = { path = "../settings" }

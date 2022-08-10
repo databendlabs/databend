@@ -16,8 +16,8 @@ io-uring = ["common-meta-embedded/io-uring"]
 
 [dependencies]
 # Workspace dependencies
-common-exception = { path = "../../exception" }
-common-grpc = { path = "../../grpc" }
+common-exception = { path = "../../common/exception" }
+common-grpc = { path = "../../common/grpc" }
 common-meta-api = { path = "../api" }
 common-meta-embedded = { path = "../embedded" }
 common-meta-grpc = { path = "../grpc" }
@@ -26,5 +26,3 @@ common-meta-types = { path = "../types" }
 # Crates.io dependencies
 async-trait = "0.1.56"
 tracing = "0.1.35"
-
-[dev-dependencies]

@@ -22,5 +22,6 @@ pub const TEST_TLS_SERVER_CERT: &str = "../../../tests/certs/tls/cfssl/server/se
 pub const TEST_TLS_SERVER_KEY: &str = "../../../tests/certs/tls/cfssl/server/pkcs8-server-key.pem";
 // pub const TEST_TLS_CLIENT_CERT: &'static str = "../../../tests/certs/tls/cfssl/client/client.pem";
 // pub const TEST_TLS_CLIENT_KEY: &'static str = "../../../tests/certs/tls/cfssl/client/pkcs8-client-key.pem";
-pub const TEST_TLS_CLIENT_IDENTITY: &str = "../../../tests/certs/tls/cfssl/client/client-identity.pfx";
+pub const TEST_TLS_CLIENT_IDENTITY: &str =
+    "../../../tests/certs/tls/cfssl/client/client-identity.pfx";
 pub const TEST_TLS_CLIENT_PASSWORD: &str = "databend";

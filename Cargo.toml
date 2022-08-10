@@ -26,17 +26,10 @@ members = [
     "src/common/io",
     "src/common/macros",
     "src/common/management",
-    "src/common/meta/api",
-    "src/common/meta/embedded",
-    "src/common/meta/raft-store",
-    "src/common/meta/sled-store",
-    "src/common/meta/store",
-    "src/common/meta/types",
     "src/common/metrics",
     "src/common/planners",
     "src/common/proto-conv",
     "src/common/protos",
-    "src/common/meta/app",
     "src/common/streams",
     "src/common/tracing",
     "src/common/users",
@@ -51,6 +44,13 @@ members = [
     "src/query/service",
 
     # Meta
+    "src/meta/api",
+    "src/meta/app",
+    "src/meta/embedded",
+    "src/meta/raft-store",
+    "src/meta/sled-store",
+    "src/meta/store",
+    "src/meta/types",
     # databend-meta
     "src/meta/service",
 

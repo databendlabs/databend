@@ -29,5 +29,5 @@ tempfile = "3.3.0"
 tracing = "0.1.35"
 
 [dev-dependencies]
-common-base = { path = "../../base" }
-common-tracing = { path = "../../tracing" }
+common-base = { path = "../../common/base" }
+common-tracing = { path = "../../common/tracing" }

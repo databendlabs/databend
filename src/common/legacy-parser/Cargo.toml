@@ -13,7 +13,7 @@ common-ast = { path = "../../query/ast" }
 common-datavalues = { path = "../datavalues" }
 common-exception = { path = "../exception" }
 common-functions = { path = "../functions" }
-common-meta-types = { path = "../meta/types" }
+common-meta-types = { path = "../../meta/types" }
 common-planners = { path = "../planners" }
 
 async-trait = "0.1.56"

@@ -14,17 +14,17 @@ doctest = false
 test = false
 
 [dependencies]
-common-arrow = { path = "../../arrow" }
-common-base = { path = "../../base" }
-common-exception = { path = "../../exception" }
-common-grpc = { path = "../../grpc" }
+common-arrow = { path = "../../common/arrow" }
+common-base = { path = "../../common/base" }
+common-exception = { path = "../../common/exception" }
+common-grpc = { path = "../../common/grpc" }
 common-meta-api = { path = "../api" }
 common-meta-app = { path = "../app" }
 common-meta-types = { path = "../types" }
-common-metrics = { path = "../../metrics" }
-common-proto-conv = { path = "../../proto-conv" }
-common-protos = { path = "../../protos" }
-common-tracing = { path = "../../tracing" }
+common-metrics = { path = "../../common/metrics" }
+common-proto-conv = { path = "../../common/proto-conv" }
+common-protos = { path = "../../common//protos" }
+common-tracing = { path = "../../common/tracing" }
 
 derive_more = "0.99.17"
 futures = "0.3.21"
@@ -42,4 +42,4 @@ tracing = "0.1.35"
 [dev-dependencies]
 
 [build-dependencies]
-common-building = { path = "../../building" }
+common-building = { path = "../../common/building" }

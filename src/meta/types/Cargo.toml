@@ -11,9 +11,9 @@ doctest = false
 test = false
 
 [dependencies]
-common-datavalues = { path = "../../datavalues" }
-common-exception = { path = "../../exception" }
-common-storage = { path = "../../storage" }
+common-datavalues = { path = "../../common/datavalues" }
+common-exception = { path = "../../common/exception" }
+common-storage = { path = "../../common/storage" }
 
 openraft = { git = "https://github.com/datafuselabs/openraft", rev = "v0.7.0-alpha.2" }
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1", default-features = false }
@@ -35,7 +35,7 @@ thiserror = "1.0.31"
 tonic = { version = "0.7.2", features = ["transport", "codegen", "prost", "tls-roots", "tls"] }
 
 [build-dependencies]
-common-building = { path = "../../building" }
+common-building = { path = "../../common/building" }
 prost-build = "0.10.4"
 tonic-build = "0.7.2"
 
