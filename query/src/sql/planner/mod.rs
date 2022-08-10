@@ -58,7 +58,10 @@ impl Planner {
         Planner { ctx }
     }
 
-    pub async fn plan_sql(&mut self, sql: &str) -> Result<(Plan, MetadataRef, Option<String>)> {
+    pub async fn plan_sql(
+        &mut self,
+        sql: &str,
+    ) -> Result<(Plan, Plan, MetadataRef, Option<String>)> {
         let settings = self.ctx.get_settings();
 
         // Step 1: parse SQL text into AST
@@ -81,8 +84,8 @@ impl Planner {
         let opt_ctx = Arc::new(OptimizerContext::new(OptimizerConfig {
             enable_distributed_optimization: !self.ctx.get_cluster().is_empty(),
         }));
-        let optimized_plan = optimize(self.ctx.clone(), opt_ctx, plan)?;
+        let optimized_plan = optimize(self.ctx.clone(), opt_ctx, plan.clone())?;
 
-        Ok((optimized_plan, metadata.clone(), format))
+        Ok((optimized_plan, plan, metadata.clone(), format))
     }
 }

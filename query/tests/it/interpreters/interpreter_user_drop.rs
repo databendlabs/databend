@@ -31,8 +31,8 @@ async fn test_drop_user_interpreter() -> Result<()> {
 
     {
         let query = "DROP USER 'test'@'localhost'";
-        let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let (plan, raw_plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan, &raw_plan)?;
         assert_eq!(executor.name(), "DropUserInterpreter");
         let ret = executor.execute().await;
         assert!(ret.is_err())
@@ -40,8 +40,8 @@ async fn test_drop_user_interpreter() -> Result<()> {
 
     {
         let query = "DROP USER IF EXISTS 'test'@'localhost'";
-        let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let (plan, raw_plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan, &raw_plan)?;
         assert_eq!(executor.name(), "DropUserInterpreter");
         let ret = executor.execute().await;
         assert!(ret.is_ok())
@@ -67,8 +67,8 @@ async fn test_drop_user_interpreter() -> Result<()> {
         );
 
         let query = "DROP USER 'test'@'localhost'";
-        let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let (plan, raw_plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan, &raw_plan)?;
         assert_eq!(executor.name(), "DropUserInterpreter");
         executor.execute().await?;
     }

@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_ast::ast::ExplainKind;
 use common_exception::Result;
 use common_planners::EmptyPlan;
 use common_planners::PlanNode;
@@ -43,8 +44,8 @@ impl InterpreterFactoryV2 {
         matches!(stmt, DfStatement::SeeYouAgain)
     }
 
-    pub fn get(ctx: Arc<QueryContext>, plan: &Plan) -> Result<InterpreterPtr> {
-        let inner = InterpreterFactoryV2::create_interpreter(ctx.clone(), plan)?;
+    pub fn get(ctx: Arc<QueryContext>, plan: &Plan, raw_plan: &Plan) -> Result<InterpreterPtr> {
+        let inner = InterpreterFactoryV2::create_interpreter(ctx.clone(), plan, raw_plan)?;
 
         Ok(Arc::new(InterceptorInterpreter::create(
             ctx,
@@ -55,7 +56,11 @@ impl InterpreterFactoryV2 {
         )))
     }
 
-    fn create_interpreter(ctx: Arc<QueryContext>, plan: &Plan) -> Result<InterpreterPtr> {
+    fn create_interpreter(
+        ctx: Arc<QueryContext>,
+        plan: &Plan,
+        raw_plan: &Plan,
+    ) -> Result<InterpreterPtr> {
         match plan {
             Plan::Query {
                 s_expr,
@@ -68,11 +73,20 @@ impl InterpreterFactoryV2 {
                 s_expr.clone(),
                 metadata.clone(),
             )?)),
-            Plan::Explain { kind, plan } => Ok(Arc::new(ExplainInterpreterV2::try_create(
-                ctx,
-                *plan.clone(),
-                kind.clone(),
-            )?)),
+            Plan::Explain { kind, plan } => {
+                if kind == &ExplainKind::Raw {
+                    return Ok(Arc::new(ExplainInterpreterV2::try_create(
+                        ctx,
+                        raw_plan.clone(),
+                        kind.clone(),
+                    )?));
+                }
+                Ok(Arc::new(ExplainInterpreterV2::try_create(
+                    ctx,
+                    *plan.clone(),
+                    kind.clone(),
+                )?))
+            }
 
             Plan::Call(plan) => Ok(Arc::new(CallInterpreter::try_create(ctx, *plan.clone())?)),
 

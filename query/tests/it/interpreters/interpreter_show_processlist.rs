@@ -25,8 +25,8 @@ async fn test_show_processlist_interpreter() -> Result<()> {
     // show processlist.
     {
         let query = "show processlist";
-        let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let (plan, raw_plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan, &raw_plan)?;
         assert_eq!(executor.name(), "SelectInterpreterV2");
         let _ = executor.execute().await?;
     }

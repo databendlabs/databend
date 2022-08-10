@@ -47,7 +47,7 @@ async fn test_revoke_privilege_interpreter() -> Result<()> {
     user_mgr.add_user(&tenant, user_info.clone(), false).await?;
     let query = format!("REVOKE ALL ON *.* FROM '{}'@'{}'", name, hostname);
     let (plan, _, _) = planner.plan_sql(&query).await?;
-    let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+    let executor = InterpreterFactoryV2::get(ctx.clone(), &plan, &raw_plan)?;
     assert_eq!(executor.name(), "RevokePrivilegeInterpreter");
     let mut stream = executor.execute().await?;
     while let Some(_block) = stream.next().await {}
@@ -76,8 +76,8 @@ async fn test_revoke_privilege_interpreter_on_role() -> Result<()> {
     user_mgr.add_role(&tenant, role_info, false).await?;
 
     let query = "REVOKE ALL ON *.* FROM ROLE 'role1'";
-    let (plan, _, _) = planner.plan_sql(query).await?;
-    let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+    let (plan, raw_plan, _, _) = planner.plan_sql(query).await?;
+    let executor = InterpreterFactoryV2::get(ctx.clone(), &plan, &raw_plan)?;
     assert_eq!(executor.name(), "RevokePrivilegeInterpreter");
     let mut stream = executor.execute().await?;
     while let Some(_block) = stream.next().await {}

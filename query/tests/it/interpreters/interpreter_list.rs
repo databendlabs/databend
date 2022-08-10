@@ -31,16 +31,16 @@ async fn test_list_stage_interpreter() -> Result<()> {
     // create stage
     {
         let query = "CREATE stage test_stage";
-        let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let (plan, raw_plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan, &raw_plan)?;
         let _ = executor.execute().await?;
     }
 
     // list stage
     {
         let query = "LIST @test_stage";
-        let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let (plan, raw_plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan, &raw_plan)?;
         assert_eq!(executor.name(), "ListInterpreter");
         let stream = executor.execute().await?;
         let result = stream.try_collect::<Vec<_>>().await?;
@@ -66,8 +66,8 @@ async fn test_list_stage_interpreter() -> Result<()> {
     // list stage
     {
         let query = "LIST @test_stage";
-        let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let (plan, raw_plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan, &raw_plan)?;
         let stream = executor.execute().await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
@@ -97,8 +97,8 @@ async fn test_list_stage_interpreter() -> Result<()> {
     // list stage
     {
         let query = "LIST @test_stage";
-        let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let (plan, raw_plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan, &raw_plan)?;
         let stream = executor.execute().await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
@@ -115,8 +115,8 @@ async fn test_list_stage_interpreter() -> Result<()> {
     // list stage with file path
     {
         let query = "LIST @test_stage/test";
-        let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let (plan, raw_plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan, &raw_plan)?;
         let stream = executor.execute().await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
@@ -132,8 +132,8 @@ async fn test_list_stage_interpreter() -> Result<()> {
     // list stage with dir path
     {
         let query = "LIST @test_stage/test/";
-        let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let (plan, raw_plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan, &raw_plan)?;
         let stream = executor.execute().await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
@@ -149,8 +149,8 @@ async fn test_list_stage_interpreter() -> Result<()> {
     // list stage with pattern
     {
         let query = "LIST @test_stage pattern = '^books.*'";
-        let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let (plan, raw_plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan, &raw_plan)?;
         let stream = executor.execute().await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
@@ -166,8 +166,8 @@ async fn test_list_stage_interpreter() -> Result<()> {
     // list stage with pattern
     {
         let query = "LIST @test_stage/test/ pattern = '^books.*'";
-        let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let (plan, raw_plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan, &raw_plan)?;
         let stream = executor.execute().await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![

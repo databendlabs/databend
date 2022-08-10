@@ -181,6 +181,7 @@ impl<'a> Display for Statement<'a> {
                     ExplainKind::Graph => write!(f, " GRAPH")?,
                     ExplainKind::Pipeline => write!(f, " PIPELINE")?,
                     ExplainKind::Fragments => write!(f, " FRAGMENTS")?,
+                    ExplainKind::Raw => write!(f, " RAW")?,
                 }
                 write!(f, " {query}")?;
             }

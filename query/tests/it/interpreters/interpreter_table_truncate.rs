@@ -32,24 +32,24 @@ async fn test_truncate_table_interpreter() -> Result<()> {
             ) Engine = Memory\
         ";
 
-        let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let (plan, raw_plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan, &raw_plan)?;
         let _ = executor.execute().await?;
     }
 
     // Insert into.
     {
         let query = "INSERT INTO default.a VALUES('1,1', '2,2')";
-        let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let (plan, raw_plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan, &raw_plan)?;
         let _ = executor.execute().await?;
     }
 
     // select.
     {
         let query = "SELECT * FROM default.a";
-        let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let (plan, raw_plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan, &raw_plan)?;
         let stream = executor.execute().await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
@@ -65,8 +65,8 @@ async fn test_truncate_table_interpreter() -> Result<()> {
     // truncate table.
     {
         let query = "TRUNCATE TABLE default.a";
-        let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let (plan, raw_plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan, &raw_plan)?;
         assert_eq!(executor.name(), "TruncateTableInterpreter");
 
         let stream = executor.execute().await?;
@@ -78,8 +78,8 @@ async fn test_truncate_table_interpreter() -> Result<()> {
     // select.
     {
         let query = "SELECT * FROM default.a";
-        let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let (plan, raw_plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan, &raw_plan)?;
         let stream = executor.execute().await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec!["++", "++"];

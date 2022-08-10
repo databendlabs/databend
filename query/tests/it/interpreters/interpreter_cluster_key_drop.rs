@@ -32,16 +32,16 @@ async fn test_drop_table_cluster_key_interpreter() -> Result<()> {
             ) Engine = Fuse cluster by(a,b)\
         ";
 
-        let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let (plan, raw_plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan, &raw_plan)?;
         let _ = executor.execute().await?;
     }
 
     // Drop cluster key.
     {
         let query = "ALTER TABLE a DROP CLUSTER KEY";
-        let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let (plan, raw_plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan, &raw_plan)?;
         assert_eq!(executor.name(), "DropTableClusterKeyInterpreter");
         let stream = executor.execute().await?;
         let result = stream.try_collect::<Vec<_>>().await?;

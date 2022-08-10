@@ -27,8 +27,8 @@ async fn test_show_create_database_interpreter() -> Result<()> {
     // show create database default
     {
         let query = "show create database default";
-        let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let (plan, raw_plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan, &raw_plan)?;
         assert_eq!(executor.name(), "ShowCreateDatabaseInterpreter");
         let stream = executor.execute().await?;
         let result = stream.try_collect::<Vec<_>>().await?;
@@ -45,8 +45,8 @@ async fn test_show_create_database_interpreter() -> Result<()> {
     // show create database system
     {
         let query = "show create database system";
-        let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let (plan, raw_plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan, &raw_plan)?;
         assert_eq!(executor.name(), "ShowCreateDatabaseInterpreter");
         let stream = executor.execute().await?;
         let result = stream.try_collect::<Vec<_>>().await?;

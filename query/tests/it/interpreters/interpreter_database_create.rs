@@ -25,8 +25,8 @@ async fn test_create_database_interpreter() -> Result<()> {
     let mut planner = Planner::new(ctx.clone());
 
     let query = "create database db1";
-    let (plan, _, _) = planner.plan_sql(query).await?;
-    let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+    let (plan, raw_plan, _, _) = planner.plan_sql(query).await?;
+    let executor = InterpreterFactoryV2::get(ctx.clone(), &plan, &raw_plan)?;
     assert_eq!(executor.name(), "CreateDatabaseInterpreter");
     let mut stream = executor.execute().await?;
     while let Some(_block) = stream.next().await {}

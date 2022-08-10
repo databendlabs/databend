@@ -27,8 +27,8 @@ async fn test_show_metrics_interpreter() -> Result<()> {
     // show metrics.
     {
         let query = "show metrics";
-        let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let (plan, raw_plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan, &raw_plan)?;
         assert_eq!(executor.name(), "SelectInterpreterV2");
         let _ = executor.execute().await?;
     }

@@ -26,8 +26,8 @@ async fn test_empty_interpreter() -> Result<()> {
 
     {
         let query = "/*!40101*/select number from numbers_mt(1)";
-        let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let (plan, raw_plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan, &raw_plan)?;
         assert_eq!(executor.name(), "SelectInterpreterV2");
 
         let stream = executor.execute().await?;

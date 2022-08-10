@@ -43,8 +43,8 @@ async fn test_show_grant_interpreter() -> Result<()> {
 
     {
         let query = "SHOW GRANTS FOR 'test'@'localhost'";
-        let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let (plan, raw_plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan, &raw_plan)?;
         assert_eq!(executor.name(), "ShowGrantsInterpreter");
 
         let stream = executor.execute().await?;
@@ -55,8 +55,8 @@ async fn test_show_grant_interpreter() -> Result<()> {
 
     {
         let query = "SHOW GRANTS FOR ROLE 'role1'";
-        let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let (plan, raw_plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan, &raw_plan)?;
         assert_eq!(executor.name(), "ShowGrantsInterpreter");
 
         let stream = executor.execute().await?;
@@ -77,8 +77,8 @@ async fn test_show_grant_interpreter() -> Result<()> {
 
     {
         let query = "SHOW GRANTS FOR ROLE 'role2'";
-        let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let (plan, raw_plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan, &raw_plan)?;
 
         let stream = executor.execute().await?;
         let result = stream.try_collect::<Vec<_>>().await?;
@@ -103,8 +103,8 @@ async fn test_show_grant_interpreter() -> Result<()> {
 
     {
         let query = "SHOW GRANTS FOR 'test'@'localhost'";
-        let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let (plan, raw_plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan, &raw_plan)?;
 
         let stream = executor.execute().await?;
         let result = stream.try_collect::<Vec<_>>().await?;
@@ -131,8 +131,8 @@ async fn test_show_grant_interpreter() -> Result<()> {
 
     {
         let query = "SHOW GRANTS FOR 'test'@'localhost'";
-        let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let (plan, raw_plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan, &raw_plan)?;
 
         let stream = executor.execute().await?;
         let result = stream.try_collect::<Vec<_>>().await?;
@@ -152,8 +152,8 @@ async fn test_show_grant_interpreter() -> Result<()> {
 
     {
         let query = "SHOW GRANTS FOR ROLE 'role1'";
-        let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let (plan, raw_plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan, &raw_plan)?;
 
         let stream = executor.execute().await?;
         let result = stream.try_collect::<Vec<_>>().await?;
@@ -177,8 +177,8 @@ async fn test_show_grant_interpreter() -> Result<()> {
         .await?;
     {
         let query = "SHOW GRANTS FOR ROLE 'role1'";
-        let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let (plan, raw_plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan, &raw_plan)?;
 
         let stream = executor.execute().await?;
         let result = stream.try_collect::<Vec<_>>().await?;

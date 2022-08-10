@@ -26,8 +26,8 @@ async fn test_show_stages_interpreter() -> Result<()> {
 
     {
         let query = "CREATE STAGE test url='s3://load/files/' credentials=(aws_key_id='1a2b3c' aws_secret_key='4x5y6z')";
-        let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let (plan, raw_plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan, &raw_plan)?;
         assert_eq!(executor.name(), "CreateUserStageInterpreter");
         let mut stream = executor.execute().await?;
         while let Some(_block) = stream.next().await {}
@@ -36,7 +36,7 @@ async fn test_show_stages_interpreter() -> Result<()> {
     // show stages.
     {
         let (plan, _, _) = planner.plan_sql("show stages").await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan, &raw_plan)?;
         // Show stage will be rewritten into query.
         assert_eq!(executor.name(), "SelectInterpreterV2");
 

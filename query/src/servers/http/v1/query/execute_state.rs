@@ -200,8 +200,8 @@ impl ExecuteState {
 
         let interpreter = if is_v2 {
             let mut planner = Planner::new(ctx.clone());
-            let (plan, _, _) = planner.plan_sql(sql).await?;
-            InterpreterFactoryV2::get(ctx.clone(), &plan)
+            let (plan, raw_plan, _, _) = planner.plan_sql(sql).await?;
+            InterpreterFactoryV2::get(ctx.clone(), &plan, &raw_plan)
         } else {
             let plan = match PlanParser::parse(ctx.clone(), sql).await {
                 Ok(p) => p,

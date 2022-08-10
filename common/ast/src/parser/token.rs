@@ -571,6 +571,8 @@ pub enum TokenKind {
     RIGHT,
     #[token("RLIKE", ignore(ascii_case))]
     RLIKE,
+    #[token("RAW", ignore(ascii_case))]
+    RAW,
     #[token("SCHEMA", ignore(ascii_case))]
     SCHEMA,
     #[token("SCHEMAS", ignore(ascii_case))]

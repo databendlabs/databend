@@ -29,30 +29,30 @@ async fn test_show_tab_stat_interpreter() -> Result<()> {
         // Create database.
         {
             let query = "create database db1";
-            let (plan, _, _) = planner.plan_sql(query).await?;
-            let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+            let (plan, raw_plan, _, _) = planner.plan_sql(query).await?;
+            let executor = InterpreterFactoryV2::get(ctx.clone(), &plan, &raw_plan)?;
             let _ = executor.execute().await?;
         }
 
         // Use database.
         {
             let query = "use db1";
-            let (plan, _, _) = planner.plan_sql(query).await?;
-            let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+            let (plan, raw_plan, _, _) = planner.plan_sql(query).await?;
+            let executor = InterpreterFactoryV2::get(ctx.clone(), &plan, &raw_plan)?;
             let _ = executor.execute().await?;
         }
 
         // Create table.
         {
             let query = "create table data(a Int)";
-            let (plan, _, _) = planner.plan_sql(query).await?;
-            let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+            let (plan, raw_plan, _, _) = planner.plan_sql(query).await?;
+            let executor = InterpreterFactoryV2::get(ctx.clone(), &plan, &raw_plan)?;
             let _ = executor.execute().await?;
         }
         {
             let query = "create table bend(a Int)";
-            let (plan, _, _) = planner.plan_sql(query).await?;
-            let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+            let (plan, raw_plan, _, _) = planner.plan_sql(query).await?;
+            let executor = InterpreterFactoryV2::get(ctx.clone(), &plan, &raw_plan)?;
             let _ = executor.execute().await?;
         }
     }
@@ -60,8 +60,8 @@ async fn test_show_tab_stat_interpreter() -> Result<()> {
     // show table status like '%da%'.
     {
         let query = "show table status like '%da%'";
-        let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let (plan, raw_plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan, &raw_plan)?;
         assert_eq!(executor.name(), "SelectInterpreterV2");
         let stream = executor.execute().await?;
         let result = stream.try_collect::<Vec<_>>().await?;
@@ -78,8 +78,8 @@ async fn test_show_tab_stat_interpreter() -> Result<()> {
     // show table status where Name != 'data'.
     {
         let query = "show table status where Name != 'data'";
-        let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let (plan, raw_plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan, &raw_plan)?;
         assert_eq!(executor.name(), "SelectInterpreterV2");
         let stream = executor.execute().await?;
         let result = stream.try_collect::<Vec<_>>().await?;
@@ -96,8 +96,8 @@ async fn test_show_tab_stat_interpreter() -> Result<()> {
     // show table status from db1.
     {
         let query = "show table status from db1";
-        let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let (plan, raw_plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan, &raw_plan)?;
         assert_eq!(executor.name(), "SelectInterpreterV2");
         let stream = executor.execute().await?;
         let result = stream.try_collect::<Vec<_>>().await?;
@@ -115,8 +115,8 @@ async fn test_show_tab_stat_interpreter() -> Result<()> {
     // Teardown.
     {
         let query = "drop database db1";
-        let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let (plan, raw_plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan, &raw_plan)?;
         let _ = executor.execute().await?;
     }
 

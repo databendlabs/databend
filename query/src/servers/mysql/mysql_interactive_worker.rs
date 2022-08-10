@@ -328,7 +328,7 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
                     let mut planner = Planner::new(context.clone());
                     planner.plan_sql(query).await.and_then(|v| {
                         has_result_set = has_result_set_by_plan(&v.0);
-                        InterpreterFactoryV2::get(context.clone(), &v.0)
+                        InterpreterFactoryV2::get(context.clone(), &v.0, &v.1)
                     })
                 } else {
                     let (plan, _) = PlanParser::parse_with_hint(query, context.clone()).await;
