@@ -2,7 +2,7 @@
 select
     nation,
     o_year,
-    sum(amount) as sum_profit
+    to_int64(sum(amount)) as sum_profit
 from
     (
         select

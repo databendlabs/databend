@@ -3,7 +3,7 @@ select
     supp_nation,
     cust_nation,
     l_year,
-    sum(volume) as revenue
+    to_int64(sum(volume)) as revenue
 from
     (
         select

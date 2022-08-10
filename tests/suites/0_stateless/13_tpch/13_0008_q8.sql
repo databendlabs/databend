@@ -1,10 +1,10 @@
 set enable_planner_v2=1;
 select
     o_year,
-    sum(case
+    to_int32(sum(case
             when nation = 'BRAZIL' then volume
             else 0
-        end) / sum(volume) as mkt_share
+        end) / sum(volume)) as mkt_share
 from
     (
         select
