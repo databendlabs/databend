@@ -28,8 +28,6 @@ members = [
     "src/common/management",
     "src/common/metrics",
     "src/common/planners",
-    "src/common/proto-conv",
-    "src/common/protos",
     "src/common/streams",
     "src/common/tracing",
     "src/common/users",
@@ -51,6 +49,9 @@ members = [
     "src/meta/sled-store",
     "src/meta/store",
     "src/meta/types",
+    # meta proto
+    "src/meta/proto-conv",
+    "src/meta/protos",
     # databend-meta
     "src/meta/service",
 

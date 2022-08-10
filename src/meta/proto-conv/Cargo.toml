@@ -12,9 +12,9 @@ test = false
 
 [dependencies]
 common-datavalues = { path = "../../common/datavalues" }
-common-meta-app = { path = "../../meta/app" }
-common-meta-types = { path = "../../meta/types" }
-common-protos = { path = "../../common/protos" }
+common-meta-app = { path = "../app" }
+common-meta-types = { path = "../types" }
+common-protos = { path = "../protos" }
 common-storage = { path = "../../common/storage" }
 
 num = "0.4.0"

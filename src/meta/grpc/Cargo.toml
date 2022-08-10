@@ -22,8 +22,8 @@ common-meta-api = { path = "../api" }
 common-meta-app = { path = "../app" }
 common-meta-types = { path = "../types" }
 common-metrics = { path = "../../common/metrics" }
-common-proto-conv = { path = "../../common/proto-conv" }
-common-protos = { path = "../../common//protos" }
+common-proto-conv = { path = "../proto-conv" }
+common-protos = { path = "../protos" }
 common-tracing = { path = "../../common/tracing" }
 
 derive_more = "0.99.17"
