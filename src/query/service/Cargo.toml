@@ -27,50 +27,50 @@ io-uring = [
 
 [dependencies]
 # Workspace dependencies
-common-arrow = { path = "../common/arrow" }
-common-ast = { path = "./ast" }
-common-base = { path = "../common/base" }
-common-cache = { path = "../common/cache" }
-common-catalog = { path = "../common/catalog" }
-common-config = { path = "../common/config" }
-common-contexts = { path = "../common/contexts" }
-common-datablocks = { path = "../common/datablocks" }
-common-datavalues = { path = "../common/datavalues" }
-common-exception = { path = "../common/exception" }
-common-formats = { path = "../common/formats" }
-common-functions = { path = "../common/functions" }
-common-fuse-meta = { path = "../common/fuse-meta" }
-common-grpc = { path = "../common/grpc" }
-common-hashtable = { path = "../common/hashtable" }
-common-hive-meta-store = { path = "../common/hive-meta-store", optional = true }
-common-http = { path = "../common/http" }
-common-io = { path = "../common/io" }
-common-legacy-parser = { path = "../common/legacy-parser" }
-common-management = { path = "../common/management" }
-common-meta-api = { path = "../common/meta/api" }
-common-meta-app = { path = "../common/meta/app" }
-common-meta-embedded = { path = "../common/meta/embedded" }
-common-meta-grpc = { path = "../common/meta/grpc" }
-common-meta-raft-store = { path = "../common/meta/raft-store" }
-common-meta-sled-store = { path = "../common/meta/sled-store" }
-common-meta-store = { path = "../common/meta/store" }
-common-meta-types = { path = "../common/meta/types" }
-common-metrics = { path = "../common/metrics" }
-common-pipeline-core = { path = "../common/pipeline/core" }
-common-pipeline-sinks = { path = "../common/pipeline/sinks" }
-common-pipeline-sources = { path = "../common/pipeline/sources" }
-common-pipeline-transforms = { path = "../common/pipeline/transforms" }
-common-planners = { path = "../common/planners" }
-common-settings = { path = "../common/settings" }
-common-storage = { path = "../common/storage" }
-common-storages-fuse = { path = "../common/storages/fuse" }
-common-storages-hive = { path = "../common/storages/hive", optional = true }
-common-storages-index = { path = "../common/storages/index" }
-common-storages-preludes = { path = "../common/storages/preludes" }
-common-storages-util = { path = "../common/storages/util" }
-common-streams = { path = "../common/streams" }
-common-tracing = { path = "../common/tracing" }
-common-users = { path = "../common/users" }
+common-arrow = { path = "../../common/arrow" }
+common-ast = { path = ".././ast" }
+common-base = { path = "../../common/base" }
+common-cache = { path = "../../common/cache" }
+common-catalog = { path = "../../common/catalog" }
+common-config = { path = "../../common/config" }
+common-contexts = { path = "../../common/contexts" }
+common-datablocks = { path = "../../common/datablocks" }
+common-datavalues = { path = "../../common/datavalues" }
+common-exception = { path = "../../common/exception" }
+common-formats = { path = "../../common/formats" }
+common-functions = { path = "../../common/functions" }
+common-fuse-meta = { path = "../../common/fuse-meta" }
+common-grpc = { path = "../../common/grpc" }
+common-hashtable = { path = "../../common/hashtable" }
+common-hive-meta-store = { path = "../../common/hive-meta-store", optional = true }
+common-http = { path = "../../common/http" }
+common-io = { path = "../../common/io" }
+common-legacy-parser = { path = "../../common/legacy-parser" }
+common-management = { path = "../../common/management" }
+common-meta-api = { path = "../../common/meta/api" }
+common-meta-app = { path = "../../common/meta/app" }
+common-meta-embedded = { path = "../../common/meta/embedded" }
+common-meta-grpc = { path = "../../common/meta/grpc" }
+common-meta-raft-store = { path = "../../common/meta/raft-store" }
+common-meta-sled-store = { path = "../../common/meta/sled-store" }
+common-meta-store = { path = "../../common/meta/store" }
+common-meta-types = { path = "../../common/meta/types" }
+common-metrics = { path = "../../common/metrics" }
+common-pipeline-core = { path = "../../common/pipeline/core" }
+common-pipeline-sinks = { path = "../../common/pipeline/sinks" }
+common-pipeline-sources = { path = "../../common/pipeline/sources" }
+common-pipeline-transforms = { path = "../../common/pipeline/transforms" }
+common-planners = { path = "../../common/planners" }
+common-settings = { path = "../../common/settings" }
+common-storage = { path = "../../common/storage" }
+common-storages-fuse = { path = "../../common/storages/fuse" }
+common-storages-hive = { path = "../../common/storages/hive", optional = true }
+common-storages-index = { path = "../../common/storages/index" }
+common-storages-preludes = { path = "../../common/storages/preludes" }
+common-storages-util = { path = "../../common/storages/util" }
+common-streams = { path = "../../common/streams" }
+common-tracing = { path = "../../common/tracing" }
+common-users = { path = "../../common/users" }
 
 # Github dependencies
 async-trait = { git = "https://github.com/datafuse-extras/async-trait", rev = "f0b0fd5" }
@@ -167,7 +167,7 @@ url = "2.2.2"
 wiremock = "0.5.13"
 
 [build-dependencies]
-common-building = { path = "../common/building" }
+common-building = { path = "../../common/building" }
 
 [[bench]]
 name = "bench_main"

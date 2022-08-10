@@ -44,8 +44,8 @@ members = [
     "src/common/storages/index",
     "src/common/fuse-meta",
     # Query
-    "src/query",
     "src/query/ast",
+    "src/query/service", # databend-query
     # Meta
     "src/meta",
     # Hack

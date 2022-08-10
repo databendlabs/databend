@@ -42,7 +42,7 @@ common-meta-types = { path = "../common/meta/types" }
 common-metrics = { path = "../common/metrics" }
 common-tracing = { path = "../common/tracing" }
 databend-meta = { path = "../meta" }
-databend-query = { path = "../query" }
+databend-query = { path = "../query/service" }
 
 # Crates.io dependencies
 anyhow = "1.0.58"
