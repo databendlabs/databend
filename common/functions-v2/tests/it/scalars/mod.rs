@@ -20,7 +20,7 @@ use common_expression::type_check;
 use common_expression::types::DataType;
 use common_expression::Chunk;
 use common_expression::Column;
-use common_expression::DomainCalculator;
+use common_expression::ConstantFolder;
 use common_expression::Evaluator;
 use common_expression::FunctionContext;
 use common_expression::RemoteExpr;
@@ -54,8 +54,8 @@ pub fn run_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType, Co
             .map(|(_, _, col)| col.domain())
             .collect::<Vec<_>>();
 
-        let domain_calculator = DomainCalculator::new(input_domains.clone());
-        let output_domain = domain_calculator.calculate(&expr)?;
+        let constant_folder = ConstantFolder::new(&input_domains);
+        let (optimized_expr, output_domain) = constant_folder.fold(&expr);
 
         let num_rows = columns.iter().map(|col| col.2.len()).max().unwrap_or(0);
         let chunk = Chunk::new(
@@ -71,26 +71,42 @@ pub fn run_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType, Co
         });
 
         let evaluator = Evaluator {
-            input_columns: chunk,
+            input_columns: &chunk,
             context: FunctionContext::default(),
         };
-        let result = evaluator.run(&expr)?;
+        let result = evaluator.run(&expr);
+        let optimized_result = evaluator.run(&optimized_expr);
+        match &result {
+            Ok(result) => assert!(
+                result
+                    .as_ref()
+                    .sematically_eq(&optimized_result.unwrap().as_ref())
+            ),
+            Err(e) => assert_eq!(e, &optimized_result.unwrap_err()),
+        }
 
         (
             raw_expr,
             expr,
             input_domains,
             output_ty,
-            output_domain,
-            result,
+            optimized_expr,
+            output_domain
+                .as_ref()
+                .map(ToString::to_string)
+                .unwrap_or_else(|| "Unknown".to_string()),
+            result?,
         )
     };
 
     match result {
-        Ok((raw_expr, expr, input_domains, output_ty, output_domain, result)) => {
+        Ok((raw_expr, expr, input_domains, output_ty, optimized_expr, output_domain, result)) => {
             writeln!(file, "ast            : {text}").unwrap();
             writeln!(file, "raw expr       : {raw_expr}").unwrap();
             writeln!(file, "checked expr   : {expr}").unwrap();
+            if optimized_expr != expr {
+                writeln!(file, "optimized expr : {optimized_expr}").unwrap();
+            }
 
             match result {
                 Value::Scalar(output_scalar) => {

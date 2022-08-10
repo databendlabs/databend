@@ -12,17 +12,19 @@ test = false
 [dependencies] # In alphabetical order
 # Workspace dependencies
 common-arrow = { path = "../arrow" }
+common-exception = { path = "../exception" }
 
 # Github dependencies
 
 # Crates.io dependencies
 chrono-tz = "0.6.1"
 comfy-table = "6"
+educe = "0.4"
 enum-as-inner = "0.4"
 itertools = "0.10"
 match-template = "0.0.1"
 num-traits = "0.2"
-ordered-float = "1.0"
+ordered-float = { version = "3.0", features = ["serde"] }
 serde = "1.0"
 
 [dev-dependencies]

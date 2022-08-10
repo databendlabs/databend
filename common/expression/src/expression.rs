@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use educe::Educe;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -54,7 +55,8 @@ pub enum RawExpr {
     },
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Educe)]
+#[educe(PartialEq)]
 pub enum Expr {
     Constant {
         span: Span,
@@ -77,6 +79,7 @@ pub enum Expr {
     FunctionCall {
         span: Span,
         id: FunctionID,
+        #[educe(PartialEq(ignore))]
         function: Arc<Function>,
         generics: Vec<DataType>,
         args: Vec<Expr>,

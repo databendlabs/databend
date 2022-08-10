@@ -88,7 +88,9 @@ async fn test_grant_role_interpreter() -> Result<()> {
     // Grant role to normal role.
     {
         user_mgr.add_role(&tenant, test_role.clone(), false).await?;
-        let role_info = user_mgr.get_role(&tenant, test_role.identity()).await?;
+        let role_info = user_mgr
+            .get_role(&tenant, test_role.identity().into())
+            .await?;
         assert_eq!(role_info.grants.roles().len(), 0);
 
         let query = "GRANT ROLE 'test' TO ROLE 'test_role'";
@@ -96,7 +98,9 @@ async fn test_grant_role_interpreter() -> Result<()> {
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         let _ = executor.execute().await?;
 
-        let role_info = user_mgr.get_role(&tenant, test_role.identity()).await?;
+        let role_info = user_mgr
+            .get_role(&tenant, test_role.identity().into())
+            .await?;
         let roles = role_info.grants.roles();
         assert_eq!(roles.len(), 1);
         assert_eq!(roles[0], "test".to_string());

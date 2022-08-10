@@ -90,6 +90,12 @@ impl ValueType for NullType {
         if index < *len { Some(()) } else { None }
     }
 
+    unsafe fn index_column_unchecked<'a>(
+        _col: &'a Self::Column,
+        _index: usize,
+    ) -> Self::ScalarRef<'a> {
+    }
+
     fn slice_column<'a>(len: &'a Self::Column, range: Range<usize>) -> Self::Column {
         assert!(range.start < *len, "range {range:?} out of 0..{len}");
         range.end - range.start
@@ -133,13 +139,18 @@ impl ArgType for NullType {
         DataType::Null
     }
 
-    fn full_domain(_: &GenericMap) -> Self::Domain {}
-
     fn create_builder(_capacity: usize, _generics: &GenericMap) -> Self::ColumnBuilder {
         0
     }
 
     fn column_from_iter(iter: impl Iterator<Item = Self::Scalar>, _: &GenericMap) -> Self::Column {
+        iter.count()
+    }
+
+    fn column_from_ref_iter<'a>(
+        iter: impl Iterator<Item = Self::ScalarRef<'a>>,
+        _: &GenericMap,
+    ) -> Self::Column {
         iter.count()
     }
 }

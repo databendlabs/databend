@@ -80,6 +80,13 @@ impl ValueType for StringType {
         col.index(index)
     }
 
+    unsafe fn index_column_unchecked<'a>(
+        col: &'a Self::Column,
+        index: usize,
+    ) -> Self::ScalarRef<'a> {
+        col.index_unchecked(index)
+    }
+
     fn slice_column<'a>(col: &'a Self::Column, range: Range<usize>) -> Self::Column {
         col.slice(range)
     }
@@ -123,13 +130,6 @@ impl ArgType for StringType {
         DataType::String
     }
 
-    fn full_domain(_: &GenericMap) -> Self::Domain {
-        StringDomain {
-            min: vec![],
-            max: None,
-        }
-    }
-
     fn create_builder(capacity: usize, _: &GenericMap) -> Self::ColumnBuilder {
         StringColumnBuilder::with_capacity(capacity, 0)
     }
@@ -152,6 +152,13 @@ impl StringColumn {
         } else {
             None
         }
+    }
+
+    /// # Safety
+    ///
+    /// Calling this method with an out-of-bounds index is *[undefined behavior]*
+    pub unsafe fn index_unchecked(&self, index: usize) -> &[u8] {
+        &self.data[(self.offsets[index] as usize)..(self.offsets[index + 1] as usize)]
     }
 
     pub fn slice(&self, range: Range<usize>) -> Self {
@@ -194,7 +201,7 @@ impl<'a> Iterator for StringIterator<'a> {
 
 unsafe impl<'a> TrustedLen for StringIterator<'a> {}
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StringColumnBuilder {
     pub data: Vec<u8>,
     pub offsets: Vec<u64>,
