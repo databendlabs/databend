@@ -52,7 +52,8 @@ use crate::servers::mysql::MySQLFederated;
 use crate::servers::mysql::MYSQL_VERSION;
 use crate::servers::utils::use_planner_v2;
 use crate::sessions::QueryContext;
-use crate::sessions::SessionRef;
+use crate::sessions::Session;
+use crate::sessions::SessionManager;
 use crate::sessions::TableContext;
 use crate::sql::plans::Plan;
 use crate::sql::DfParser;
@@ -83,8 +84,14 @@ fn has_result_set_by_plan_node(plan: &PlanNode) -> bool {
 }
 
 struct InteractiveWorkerBase<W: AsyncWrite + Send + Unpin> {
-    session: SessionRef,
+    session: Arc<Session>,
     generic_hold: PhantomData<W>,
+}
+
+impl<W: AsyncWrite + Send + Unpin> Drop for InteractiveWorkerBase<W> {
+    fn drop(&mut self) {
+        SessionManager::instance().destroy_session(&self.session.get_id())
+    }
 }
 
 pub struct InteractiveWorker<W: AsyncWrite + Send + Unpin> {
@@ -486,7 +493,7 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
 }
 
 impl<W: AsyncWrite + Send + Unpin> InteractiveWorker<W> {
-    pub fn create(session: SessionRef, client_addr: String) -> InteractiveWorker<W> {
+    pub fn create(session: Arc<Session>, client_addr: String) -> InteractiveWorker<W> {
         let mut bs = vec![0u8; 20];
         let mut rng = rand::thread_rng();
         rng.fill_bytes(bs.as_mut());
