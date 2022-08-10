@@ -132,7 +132,6 @@ impl Processor for ExchangeSourceTransform {
                 DataPacket::Progress(v) => self.on_recv_progress(v),
                 DataPacket::FragmentData(v) => self.on_recv_data(v),
                 DataPacket::PrecommitBlock(v) => self.on_recv_precommit(v),
-                DataPacket::FinishQuery => self.on_finish(),
             };
         }
 
@@ -185,10 +184,6 @@ impl ExchangeSourceTransform {
     }
 
     fn on_recv_precommit(&mut self, fragment_data: PrecommitBlock) -> Result<()> {
-        unimplemented!()
-    }
-
-    fn on_finish(&mut self) -> Result<()> {
         unimplemented!()
     }
 }

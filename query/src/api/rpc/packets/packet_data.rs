@@ -75,7 +75,6 @@ pub enum DataPacket {
     Progress(ProgressInfo),
     FragmentData(FragmentData),
     PrecommitBlock(PrecommitBlock),
-    FinishQuery,
 }
 
 pub struct DataPacketStream {
@@ -128,12 +127,6 @@ impl From<DataPacket> for FlightData {
             DataPacket::PrecommitBlock(precommit_block) => {
                 FlightData::try_from(precommit_block).unwrap_or_else(FlightData::from)
             }
-            DataPacket::FinishQuery => FlightData {
-                app_metadata: vec![0x05],
-                data_body: vec![],
-                data_header: vec![],
-                flight_descriptor: None,
-            },
         }
     }
 }
@@ -215,7 +208,6 @@ impl TryFrom<FlightData> for DataPacket {
             0x02 => Ok(DataPacket::ErrorCode(ErrorCode::try_from(flight_data)?)),
             0x03 => Ok(DataPacket::Progress(ProgressInfo::try_from(flight_data)?)),
             0x04 => Ok(DataPacket::PrecommitBlock(PrecommitBlock::try_from(flight_data)?)),
-            0x05 => Ok(DataPacket::FinishQuery),
             _ => Err(ErrorCode::BadBytes("Unknown flight data packet type.")),
         }
     }

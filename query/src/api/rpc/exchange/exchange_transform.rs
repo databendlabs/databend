@@ -127,16 +127,16 @@ impl Processor for ExchangeTransform {
             return Ok(Event::Async);
         }
 
+        if self.input_data.is_some() || self.remote_data.is_some() {
+            return Ok(Event::Sync);
+        }
+
         // If the data of other nodes can be received.
         for flight_exchange in &self.flight_exchanges {
             if let Some(data_packet) = flight_exchange.try_recv()? {
                 self.remote_data = Some(data_packet);
                 return Ok(Event::Sync);
             }
-        }
-
-        if self.input_data.is_some() || self.remote_data.is_some() {
-            return Ok(Event::Sync);
         }
 
         if self.input.is_finished() {
@@ -216,7 +216,6 @@ impl Processor for ExchangeTransform {
                 DataPacket::Progress(v) => self.on_recv_progress(v),
                 DataPacket::FragmentData(v) => self.on_recv_data(v),
                 DataPacket::PrecommitBlock(v) => self.on_recv_precommit(v),
-                DataPacket::FinishQuery => self.on_finish(),
             };
         }
 
