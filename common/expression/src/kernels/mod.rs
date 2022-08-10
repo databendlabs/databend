@@ -12,9 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(box_patterns)]
-#![feature(try_blocks)]
-
-mod expression;
-mod kernel;
-mod parser;
+mod concat;
+mod filter;
+mod scatter;
+mod take;

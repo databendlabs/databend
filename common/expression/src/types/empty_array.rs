@@ -83,6 +83,12 @@ impl ValueType for EmptyArrayType {
         if index < *len { Some(()) } else { None }
     }
 
+    unsafe fn index_column_unchecked<'a>(
+        _len: &'a Self::Column,
+        _index: usize,
+    ) -> Self::ScalarRef<'a> {
+    }
+
     fn slice_column<'a>(len: &'a Self::Column, range: Range<usize>) -> Self::Column {
         assert!(range.end <= *len, "range {range:?} out of 0..{len}");
         range.end - range.start
@@ -133,6 +139,13 @@ impl ArgType for EmptyArrayType {
     }
 
     fn column_from_iter(iter: impl Iterator<Item = Self::Scalar>, _: &GenericMap) -> Self::Column {
+        iter.count()
+    }
+
+    fn column_from_ref_iter<'a>(
+        iter: impl Iterator<Item = Self::ScalarRef<'a>>,
+        _: &GenericMap,
+    ) -> Self::Column {
         iter.count()
     }
 }

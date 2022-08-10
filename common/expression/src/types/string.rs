@@ -80,6 +80,13 @@ impl ValueType for StringType {
         col.index(index)
     }
 
+    unsafe fn index_column_unchecked<'a>(
+        col: &'a Self::Column,
+        index: usize,
+    ) -> Self::ScalarRef<'a> {
+        col.index_unchecked(index)
+    }
+
     fn slice_column<'a>(col: &'a Self::Column, range: Range<usize>) -> Self::Column {
         col.slice(range)
     }
@@ -152,6 +159,13 @@ impl StringColumn {
         } else {
             None
         }
+    }
+
+    /// # Safety
+    ///
+    /// Calling this method with an out-of-bounds index is *[undefined behavior]*
+    pub unsafe fn index_unchecked(&self, index: usize) -> &[u8] {
+        &self.data[(self.offsets[index] as usize)..(self.offsets[index + 1] as usize)]
     }
 
     pub fn slice(&self, range: Range<usize>) -> Self {

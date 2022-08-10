@@ -885,6 +885,28 @@ impl Column {
             column
         }
     }
+
+    pub fn memory_size(&self) -> usize {
+        match self {
+            Column::Null { .. } => std::mem::size_of::<usize>(),
+            Column::EmptyArray { .. } => std::mem::size_of::<usize>(),
+            Column::Int8(_) => self.len(),
+            Column::Int16(_) => self.len() * 2,
+            Column::Int32(_) => self.len() * 4,
+            Column::Int64(_) => self.len() * 8,
+            Column::UInt8(_) => self.len(),
+            Column::UInt16(_) => self.len() * 2,
+            Column::UInt32(_) => self.len() * 4,
+            Column::UInt64(_) => self.len() * 8,
+            Column::Float32(_) => self.len() * 4,
+            Column::Float64(_) => self.len() * 8,
+            Column::Boolean(c) => c.as_slice().0.len(),
+            Column::String(col) => col.data.len() + col.offsets.len() * 8,
+            Column::Array(col) => col.values.memory_size() + col.offsets.len() * 8,
+            Column::Nullable(c) => c.column.memory_size() + c.validity.as_slice().0.len(),
+            Column::Tuple { fields, .. } => fields.iter().map(|f| f.memory_size()).sum(),
+        }
+    }
 }
 
 impl ColumnBuilder {

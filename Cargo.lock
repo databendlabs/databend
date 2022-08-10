@@ -1163,6 +1163,7 @@ dependencies = [
  "comfy-table",
  "common-arrow",
  "common-ast",
+ "common-exception",
  "enum-as-inner",
  "goldenfile",
  "itertools",
