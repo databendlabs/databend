@@ -157,8 +157,12 @@ async fn test_management_mode_access() -> Result<()> {
 
     for group in groups {
         for test in group.tests {
-            let (plan, _, _) = planner.plan_sql(test.query).await?;
-            let interpreter = InterpreterFactoryV2::get(ctx.clone(), &plan, &raw_plan)?;
+            let (plan_kind, _, _) = planner.plan_sql(test.query).await?;
+            let interpreter = InterpreterFactoryV2::get(
+                ctx.clone(),
+                &plan_kind.optimized_plan,
+                &plan_kind.raw_plan,
+            )?;
             let res = interpreter.execute().await;
             assert_eq!(
                 test.is_err,

@@ -215,16 +215,27 @@ pub async fn clickhouse_handler_get(
     let stmts = DfParser::parse_sql(sql.as_str(), context.get_current_session().get_type());
     if use_planner_v2(&settings, &stmts).map_err(InternalServerError)? {
         let mut planner = Planner::new(context.clone());
-        let (plan, raw_plan, _, fmt) = planner.plan_sql(&sql).await.map_err(BadRequest)?;
+        let (plan_kind, _, fmt) = planner.plan_sql(&sql).await.map_err(BadRequest)?;
         let format = get_format_with_default(fmt, default_format)?;
-        let format = get_format_from_plan(&plan, format)?;
+        let format = get_format_from_plan(&plan_kind.optimized_plan, format)?;
 
         context.attach_query_str(&sql);
-        let interpreter =
-            InterpreterFactoryV2::get(context.clone(), &plan, &raw_plan).map_err(BadRequest)?;
-        execute(context, interpreter, plan.schema(), format, None, params)
-            .await
-            .map_err(InternalServerError)
+        let interpreter = InterpreterFactoryV2::get(
+            context.clone(),
+            &plan_kind.optimized_plan,
+            &plan_kind.raw_plan,
+        )
+        .map_err(BadRequest)?;
+        execute(
+            context,
+            interpreter,
+            plan_kind.optimized_plan.schema(),
+            format,
+            None,
+            params,
+        )
+        .await
+        .map_err(InternalServerError)
     } else {
         let (plan, format) = PlanParser::parse_with_format(context.clone(), &sql)
             .await
@@ -285,15 +296,23 @@ pub async fn clickhouse_handler_post(
     let stmts = DfParser::parse_sql(sql.as_str(), ctx.get_current_session().get_type());
     if use_planner_v2(&settings, &stmts).map_err(InternalServerError)? {
         let mut planner = Planner::new(ctx.clone());
-        let (plan, raw_plan, _, fmt) = planner.plan_sql(&sql).await.map_err(BadRequest)?;
+        let (plan_kind, _, fmt) = planner.plan_sql(&sql).await.map_err(BadRequest)?;
         let format = get_format_with_default(fmt, default_format)?;
-        let format = get_format_from_plan(&plan, format)?;
+        let format = get_format_from_plan(&plan_kind.optimized_plan, format)?;
         ctx.attach_query_str(&sql);
         let interpreter =
-            InterpreterFactoryV2::get(ctx.clone(), &plan, &raw_plan).map_err(BadRequest)?;
-        execute(ctx, interpreter, plan.schema(), format, None, params)
-            .await
-            .map_err(InternalServerError)
+            InterpreterFactoryV2::get(ctx.clone(), &plan_kind.optimized_plan, &plan_kind.raw_plan)
+                .map_err(BadRequest)?;
+        execute(
+            ctx,
+            interpreter,
+            plan_kind.optimized_plan.schema(),
+            format,
+            None,
+            params,
+        )
+        .await
+        .map_err(InternalServerError)
     } else {
         let (plan, format) = PlanParser::parse_with_format(ctx.clone(), &sql)
             .await

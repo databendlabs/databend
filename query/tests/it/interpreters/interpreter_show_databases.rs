@@ -27,8 +27,9 @@ async fn test_show_databases_interpreter() -> Result<()> {
     // show databases.
     {
         let query = "show databases";
-        let (plan, raw_plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan, &raw_plan)?;
+        let (plan_kind, _, _) = planner.plan_sql(query).await?;
+        let executor =
+            InterpreterFactoryV2::get(ctx.clone(), &plan_kind.optimized_plan, &plan_kind.raw_plan)?;
         assert_eq!(executor.name(), "SelectInterpreterV2");
         let stream = executor.execute().await?;
         let result = stream.try_collect::<Vec<_>>().await?;
@@ -47,8 +48,9 @@ async fn test_show_databases_interpreter() -> Result<()> {
     // show databases like.
     {
         let query = "show databases like '%tem%'";
-        let (plan, raw_plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan, &raw_plan)?;
+        let (plan_kind, _, _) = planner.plan_sql(query).await?;
+        let executor =
+            InterpreterFactoryV2::get(ctx.clone(), &plan_kind.optimized_plan, &plan_kind.raw_plan)?;
         let stream = executor.execute().await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![

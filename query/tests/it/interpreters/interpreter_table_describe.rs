@@ -32,16 +32,18 @@ async fn interpreter_describe_table_test() -> Result<()> {
             ) Engine = Null\
         ";
 
-        let (plan, raw_plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan, &raw_plan)?;
+        let (plan_kind, _, _) = planner.plan_sql(query).await?;
+        let executor =
+            InterpreterFactoryV2::get(ctx.clone(), &plan_kind.optimized_plan, &plan_kind.raw_plan)?;
         let _ = executor.execute().await?;
     }
 
     // describe table.
     {
         let query = "DESCRIBE a";
-        let (plan, raw_plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan, &raw_plan)?;
+        let (plan_kind, _, _) = planner.plan_sql(query).await?;
+        let executor =
+            InterpreterFactoryV2::get(ctx.clone(), &plan_kind.optimized_plan, &plan_kind.raw_plan)?;
         assert_eq!(executor.name(), "DescribeTableInterpreter");
 
         let stream = executor.execute().await?;
@@ -63,8 +65,9 @@ async fn interpreter_describe_table_test() -> Result<()> {
     // `show fields from ` is same as `describe` table.
     {
         let query = "show fields from a";
-        let (plan, raw_plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan, &raw_plan)?;
+        let (plan_kind, _, _) = planner.plan_sql(query).await?;
+        let executor =
+            InterpreterFactoryV2::get(ctx.clone(), &plan_kind.optimized_plan, &plan_kind.raw_plan)?;
         assert_eq!(executor.name(), "DescribeTableInterpreter");
 
         let stream = executor.execute().await?;

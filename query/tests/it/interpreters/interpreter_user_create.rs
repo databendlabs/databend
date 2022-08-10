@@ -25,8 +25,9 @@ async fn test_create_user_interpreter() -> Result<()> {
     let mut planner = Planner::new(ctx.clone());
 
     let query = "CREATE USER 'test'@'localhost' IDENTIFIED BY 'password'";
-    let (plan, raw_plan, _, _) = planner.plan_sql(query).await?;
-    let executor = InterpreterFactoryV2::get(ctx.clone(), &plan, &raw_plan)?;
+    let (plan_kind, _, _) = planner.plan_sql(query).await?;
+    let executor =
+        InterpreterFactoryV2::get(ctx.clone(), &plan_kind.optimized_plan, &plan_kind.raw_plan)?;
     assert_eq!(executor.name(), "CreateUserInterpreter");
     let mut stream = executor.execute().await?;
     while let Some(_block) = stream.next().await {}

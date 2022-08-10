@@ -84,8 +84,9 @@ async fn test_interpreter_interceptor_for_insert() -> Result<()> {
 
     {
         let query = "create table t as select number from numbers_mt(1)";
-        let (plan, raw_plan, _, _) = planner.plan_sql(query).await?;
-        let interpreter = InterpreterFactoryV2::get(ctx.clone(), &plan, &raw_plan)?;
+        let (plan_kind, _, _) = planner.plan_sql(query).await?;
+        let interpreter =
+            InterpreterFactoryV2::get(ctx.clone(), &plan_kind.optimized_plan, &plan_kind.raw_plan)?;
         interpreter.start().await?;
         let stream = interpreter.execute().await?;
         stream.try_collect::<Vec<_>>().await?;

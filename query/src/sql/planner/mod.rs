@@ -49,6 +49,11 @@ use super::optimizer::OptimizerConfig;
 use super::optimizer::OptimizerContext;
 use crate::sessions::TableContext;
 
+pub struct PlanKind {
+    pub optimized_plan: Plan,
+    pub raw_plan: Plan,
+}
+
 pub struct Planner {
     ctx: Arc<QueryContext>,
 }
@@ -58,10 +63,7 @@ impl Planner {
         Planner { ctx }
     }
 
-    pub async fn plan_sql(
-        &mut self,
-        sql: &str,
-    ) -> Result<(Plan, Plan, MetadataRef, Option<String>)> {
+    pub async fn plan_sql(&mut self, sql: &str) -> Result<(PlanKind, MetadataRef, Option<String>)> {
         let settings = self.ctx.get_settings();
 
         // Step 1: parse SQL text into AST
@@ -86,6 +88,10 @@ impl Planner {
         }));
         let optimized_plan = optimize(self.ctx.clone(), opt_ctx, plan.clone())?;
 
-        Ok((optimized_plan, plan, metadata.clone(), format))
+        let plan_kind = PlanKind {
+            optimized_plan,
+            raw_plan: plan,
+        };
+        Ok((plan_kind, metadata.clone(), format))
     }
 }

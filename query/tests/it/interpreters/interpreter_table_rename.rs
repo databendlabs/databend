@@ -32,16 +32,18 @@ async fn test_rename_table_interpreter() -> Result<()> {
             ) Engine = Null\
         ";
 
-        let (plan, raw_plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan, &raw_plan)?;
+        let (plan_kind, _, _) = planner.plan_sql(query).await?;
+        let executor =
+            InterpreterFactoryV2::get(ctx.clone(), &plan_kind.optimized_plan, &plan_kind.raw_plan)?;
         let _ = executor.execute().await?;
     }
 
     // Rename table.
     {
         let query = "RENAME TABLE a TO b";
-        let (plan, raw_plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan, &raw_plan)?;
+        let (plan_kind, _, _) = planner.plan_sql(query).await?;
+        let executor =
+            InterpreterFactoryV2::get(ctx.clone(), &plan_kind.optimized_plan, &plan_kind.raw_plan)?;
         assert_eq!(executor.name(), "RenameTableInterpreter");
         let stream = executor.execute().await?;
         let result = stream.try_collect::<Vec<_>>().await?;
@@ -52,8 +54,9 @@ async fn test_rename_table_interpreter() -> Result<()> {
     // Drop table.
     {
         let query = "DROP TABLE b";
-        let (plan, raw_plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan, &raw_plan)?;
+        let (plan_kind, _, _) = planner.plan_sql(query).await?;
+        let executor =
+            InterpreterFactoryV2::get(ctx.clone(), &plan_kind.optimized_plan, &plan_kind.raw_plan)?;
         assert_eq!(executor.name(), "DropTableInterpreter");
         let stream = executor.execute().await?;
         let result = stream.try_collect::<Vec<_>>().await?;

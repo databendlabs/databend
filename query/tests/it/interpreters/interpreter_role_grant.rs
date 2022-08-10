@@ -31,8 +31,9 @@ async fn test_grant_role_interpreter() -> Result<()> {
     // Grant a unknown role
     {
         let query = "GRANT ROLE 'test' TO 'test_user'";
-        let (plan, raw_plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan, &raw_plan)?;
+        let (plan_kind, _, _) = planner.plan_sql(query).await?;
+        let executor =
+            InterpreterFactoryV2::get(ctx.clone(), &plan_kind.optimized_plan, &plan_kind.raw_plan)?;
         assert_eq!(executor.name(), "GrantRoleInterpreter");
         let res = executor.execute().await;
         assert!(res.is_err());
@@ -46,8 +47,9 @@ async fn test_grant_role_interpreter() -> Result<()> {
     // Grant role to unknown user.
     {
         let query = "GRANT ROLE 'test' TO 'test_user'";
-        let (plan, raw_plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan, &raw_plan)?;
+        let (plan_kind, _, _) = planner.plan_sql(query).await?;
+        let executor =
+            InterpreterFactoryV2::get(ctx.clone(), &plan_kind.optimized_plan, &plan_kind.raw_plan)?;
         assert_eq!(executor.name(), "GrantRoleInterpreter");
         let res = executor.execute().await;
         assert!(res.is_err());
@@ -62,8 +64,9 @@ async fn test_grant_role_interpreter() -> Result<()> {
         assert_eq!(user_info.grants.roles().len(), 0);
 
         let query = "GRANT ROLE 'test' TO 'test_user'";
-        let (plan, raw_plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan, &raw_plan)?;
+        let (plan_kind, _, _) = planner.plan_sql(query).await?;
+        let executor =
+            InterpreterFactoryV2::get(ctx.clone(), &plan_kind.optimized_plan, &plan_kind.raw_plan)?;
         let _ = executor.execute().await?;
 
         let user_info = user_mgr.get_user(&tenant, user_info.identity()).await?;
@@ -75,8 +78,9 @@ async fn test_grant_role_interpreter() -> Result<()> {
     // Grant role to unknown role.
     {
         let query = "GRANT ROLE 'test' TO ROLE 'test_role'";
-        let (plan, raw_plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan, &raw_plan)?;
+        let (plan_kind, _, _) = planner.plan_sql(query).await?;
+        let executor =
+            InterpreterFactoryV2::get(ctx.clone(), &plan_kind.optimized_plan, &plan_kind.raw_plan)?;
         assert_eq!(executor.name(), "GrantRoleInterpreter");
         let res = executor.execute().await;
         assert!(res.is_err());
@@ -94,8 +98,9 @@ async fn test_grant_role_interpreter() -> Result<()> {
         assert_eq!(role_info.grants.roles().len(), 0);
 
         let query = "GRANT ROLE 'test' TO ROLE 'test_role'";
-        let (plan, raw_plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan, &raw_plan)?;
+        let (plan_kind, _, _) = planner.plan_sql(query).await?;
+        let executor =
+            InterpreterFactoryV2::get(ctx.clone(), &plan_kind.optimized_plan, &plan_kind.raw_plan)?;
         let _ = executor.execute().await?;
 
         let role_info = user_mgr

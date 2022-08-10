@@ -25,8 +25,9 @@ async fn test_setting_interpreter() -> Result<()> {
     let mut planner = Planner::new(ctx.clone());
 
     let query = "SET max_block_size=1";
-    let (plan, raw_plan, _, _) = planner.plan_sql(query).await?;
-    let executor = InterpreterFactoryV2::get(ctx.clone(), &plan, &raw_plan)?;
+    let (plan_kind, _, _) = planner.plan_sql(query).await?;
+    let executor =
+        InterpreterFactoryV2::get(ctx.clone(), &plan_kind.optimized_plan, &plan_kind.raw_plan)?;
     assert_eq!(executor.name(), "SettingInterpreter");
 
     let mut stream = executor.execute().await?;
@@ -41,8 +42,9 @@ async fn test_setting_interpreter_error() -> Result<()> {
     let mut planner = Planner::new(ctx.clone());
 
     let query = "SET max_block_size=1";
-    let (plan, raw_plan, _, _) = planner.plan_sql(query).await?;
-    let executor = InterpreterFactoryV2::get(ctx.clone(), &plan, &raw_plan)?;
+    let (plan_kind, _, _) = planner.plan_sql(query).await?;
+    let executor =
+        InterpreterFactoryV2::get(ctx.clone(), &plan_kind.optimized_plan, &plan_kind.raw_plan)?;
     if let Err(e) = executor.execute().await {
         let expect = "Code: 1020, displayText = Unknown variable: \"xx\".";
         assert_eq!(expect, e.to_string());

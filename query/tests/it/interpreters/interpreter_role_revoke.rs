@@ -33,8 +33,9 @@ async fn test_revoke_role_interpreter() -> Result<()> {
     // Revoke role from unknown user.
     {
         let query = "REVOKE ROLE 'test' FROM 'test_user'";
-        let (plan, raw_plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan, &raw_plan)?;
+        let (plan_kind, _, _) = planner.plan_sql(query).await?;
+        let executor =
+            InterpreterFactoryV2::get(ctx.clone(), &plan_kind.optimized_plan, &plan_kind.raw_plan)?;
         assert_eq!(executor.name(), "RevokeRoleInterpreter");
         let res = executor.execute().await;
         assert!(res.is_err());
@@ -50,8 +51,9 @@ async fn test_revoke_role_interpreter() -> Result<()> {
         assert_eq!(user_info.grants.roles().len(), 1);
 
         let query = "REVOKE ROLE 'test' FROM 'test_user'";
-        let (plan, raw_plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan, &raw_plan)?;
+        let (plan_kind, _, _) = planner.plan_sql(query).await?;
+        let executor =
+            InterpreterFactoryV2::get(ctx.clone(), &plan_kind.optimized_plan, &plan_kind.raw_plan)?;
         let _ = executor.execute().await?;
 
         let user_info = user_mgr.get_user(&tenant, test_user.identity()).await?;
@@ -62,8 +64,9 @@ async fn test_revoke_role_interpreter() -> Result<()> {
     // Revoke role again
     {
         let query = "REVOKE ROLE 'test' FROM 'test_user'";
-        let (plan, raw_plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan, &raw_plan)?;
+        let (plan_kind, _, _) = planner.plan_sql(query).await?;
+        let executor =
+            InterpreterFactoryV2::get(ctx.clone(), &plan_kind.optimized_plan, &plan_kind.raw_plan)?;
         let _ = executor.execute().await?;
 
         let user_info = user_mgr
@@ -76,8 +79,9 @@ async fn test_revoke_role_interpreter() -> Result<()> {
     // Revoke role from unknown role.
     {
         let query = "REVOKE ROLE 'test' FROM ROLE 'test_role'";
-        let (plan, raw_plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan, &raw_plan)?;
+        let (plan_kind, _, _) = planner.plan_sql(query).await?;
+        let executor =
+            InterpreterFactoryV2::get(ctx.clone(), &plan_kind.optimized_plan, &plan_kind.raw_plan)?;
         assert_eq!(executor.name(), "RevokeRoleInterpreter");
         let res = executor.execute().await;
         assert!(res.is_err());
@@ -95,8 +99,9 @@ async fn test_revoke_role_interpreter() -> Result<()> {
     // Revoke role from normal role.
     {
         let query = "REVOKE ROLE 'test' FROM ROLE 'test_role'";
-        let (plan, raw_plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan, &raw_plan)?;
+        let (plan_kind, _, _) = planner.plan_sql(query).await?;
+        let executor =
+            InterpreterFactoryV2::get(ctx.clone(), &plan_kind.optimized_plan, &plan_kind.raw_plan)?;
         let _ = executor.execute().await?;
 
         let role_info = user_mgr
@@ -109,8 +114,9 @@ async fn test_revoke_role_interpreter() -> Result<()> {
     // Revoke role again
     {
         let query = "REVOKE ROLE 'test' FROM ROLE 'test_role'";
-        let (plan, raw_plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan, &raw_plan)?;
+        let (plan_kind, _, _) = planner.plan_sql(query).await?;
+        let executor =
+            InterpreterFactoryV2::get(ctx.clone(), &plan_kind.optimized_plan, &plan_kind.raw_plan)?;
         let _ = executor.execute().await?;
 
         let role_info = user_mgr

@@ -272,8 +272,9 @@ async fn test_fuse_table_optimize() -> Result<()> {
     // do compact
     let query = format!("optimize table {}.{} compact", db_name, tbl_name);
 
-    let (plan, _, _) = planner.plan_sql(&query).await?;
-    let interpreter = InterpreterFactoryV2::get(ctx.clone(), &plan, &raw_plan)?;
+    let (plan_kind, _, _) = planner.plan_sql(&query).await?;
+    let interpreter =
+        InterpreterFactoryV2::get(ctx.clone(), &plan_kind.optimized_plan, &plan_kind.raw_plan)?;
 
     // `PipelineBuilder` will parallelize the table reading according to value of setting `max_threads`,
     // and `Table::read` will also try to de-queue read jobs preemptively. thus, the number of blocks

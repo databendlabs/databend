@@ -26,24 +26,27 @@ async fn test_insert_into_interpreter() -> Result<()> {
     // Create default value table.
     {
         let query = "create table default.default_value_table(a String, b String DEFAULT 'b') Engine = Memory";
-        let (plan, raw_plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan, &raw_plan)?;
+        let (plan_kind, _, _) = planner.plan_sql(query).await?;
+        let executor =
+            InterpreterFactoryV2::get(ctx.clone(), &plan_kind.optimized_plan, &plan_kind.raw_plan)?;
         let _ = executor.execute().await?;
     }
 
     // Create input table.
     {
         let query = "create table default.input_table(a String, b String, c String, d String, e String) Engine = Memory";
-        let (plan, raw_plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan, &raw_plan)?;
+        let (plan_kind, _, _) = planner.plan_sql(query).await?;
+        let executor =
+            InterpreterFactoryV2::get(ctx.clone(), &plan_kind.optimized_plan, &plan_kind.raw_plan)?;
         let _ = executor.execute().await?;
     }
 
     // Create output table.
     {
         let query = "create table default.output_table(a UInt8, b Int8, c UInt16, d Int16, e String) Engine = Memory";
-        let (plan, raw_plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan, &raw_plan)?;
+        let (plan_kind, _, _) = planner.plan_sql(query).await?;
+        let executor =
+            InterpreterFactoryV2::get(ctx.clone(), &plan_kind.optimized_plan, &plan_kind.raw_plan)?;
         let _ = executor.execute().await?;
     }
 
@@ -68,8 +71,12 @@ async fn test_insert_into_interpreter() -> Result<()> {
         // select.
         {
             let query = "select * from default.default_value_table";
-            let (plan, raw_plan, _, _) = planner.plan_sql(query).await?;
-            let executor = InterpreterFactoryV2::get(ctx.clone(), &plan, &raw_plan)?;
+            let (plan_kind, _, _) = planner.plan_sql(query).await?;
+            let executor = InterpreterFactoryV2::get(
+                ctx.clone(),
+                &plan_kind.optimized_plan,
+                &plan_kind.raw_plan,
+            )?;
             let stream = executor.execute().await?;
             let result = stream.try_collect::<Vec<_>>().await?;
             let expected = vec![
@@ -104,8 +111,9 @@ async fn test_insert_into_interpreter() -> Result<()> {
     // select.
     {
         let query = "select * from default.output_table";
-        let (plan, raw_plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan, &raw_plan)?;
+        let (plan_kind, _, _) = planner.plan_sql(query).await?;
+        let executor =
+            InterpreterFactoryV2::get(ctx.clone(), &plan_kind.optimized_plan, &plan_kind.raw_plan)?;
         let stream = executor.execute().await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
