@@ -35,8 +35,8 @@ impl RoleInfo {
         }
     }
 
-    pub fn identity(&self) -> String {
-        self.name.clone()
+    pub fn identity(&self) -> &str {
+        &self.name
     }
 }
 
