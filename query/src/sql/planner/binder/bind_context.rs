@@ -112,6 +112,7 @@ impl BindContext {
     pub fn replace(&self) -> Self {
         let mut bind_context = BindContext::new();
         bind_context.parent = self.parent.clone();
+        bind_context.ctes_map = self.ctes_map.clone();
         bind_context
     }
 
