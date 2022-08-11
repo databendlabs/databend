@@ -65,10 +65,10 @@ impl BlockPruner {
             .filter(|p| p.order_by.is_empty())
             .and_then(|p| p.limit);
 
-        let filter_expression = push_down.as_ref().and_then(|extra| extra.filters.get(0));
+        let filter_expressions = push_down.as_ref().map(|extra| extra.filters.as_slice());
 
         // shortcut, just returns all the blocks
-        if limit.is_none() && filter_expression.is_none() {
+        if limit.is_none() && filter_expressions.is_none() {
             return Self::all_the_blocks(segment_locs, ctx.as_ref()).await;
         }
 
@@ -80,12 +80,12 @@ impl BlockPruner {
         // prepare the range filter.
         // if filter_expression is none, an dummy pruner will be returned, which prunes nothing
         let range_filter_pruner =
-            range_pruner::new_range_filter_pruner(ctx, filter_expression, &schema)?;
+            range_pruner::new_range_filter_pruner(ctx, filter_expressions, &schema)?;
 
         // prepare the bloom filter, if filter_expression is none, an dummy pruner will be returned
         let dal = ctx.get_storage_operator()?;
         let bloom_filter_pruner =
-            bloom_pruner::new_bloom_filter_pruner(ctx, filter_expression, &schema, dal)?;
+            bloom_pruner::new_bloom_filter_pruner(ctx, filter_expressions, &schema, dal)?;
 
         // 2. kick off
         //

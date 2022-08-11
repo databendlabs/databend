@@ -19,6 +19,7 @@ use common_catalog::table_context::TableContext;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 use common_fuse_meta::meta::Location;
+use common_planners::lit;
 use common_planners::Expression;
 use common_planners::ExpressionVisitor;
 use common_planners::Recursion;
@@ -108,13 +109,16 @@ impl BloomFilterPruner for BloomFilterIndexPruner {
 /// otherwise, a [BloomFilterIndexer] backed pruner will be return
 pub fn new_bloom_filter_pruner(
     ctx: &Arc<dyn TableContext>,
-    filter_expr: Option<&Expression>,
+    filter_exprs: Option<&[Expression]>,
     schema: &DataSchemaRef,
     dal: Operator,
 ) -> Result<Arc<dyn BloomFilterPruner + Send + Sync>> {
-    if let Some(expr) = filter_expr {
+    if let Some(exprs) = filter_exprs {
         // check if there were applicable filter conditions
-        let point_query_cols = columns_names_of_eq_expressions(expr)?;
+        let expr = exprs
+            .iter()
+            .fold(lit(true), |acc, item| acc.and(item.clone()));
+        let point_query_cols = columns_names_of_eq_expressions(&expr)?;
         if !point_query_cols.is_empty() {
             // convert to bloom filter block's column names
             let filter_block_cols = point_query_cols

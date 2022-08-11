@@ -44,11 +44,14 @@ pub struct RangeFilter {
 impl RangeFilter {
     pub fn try_create(
         ctx: Arc<dyn TableContext>,
-        expr: &Expression,
+        exprs: &[Expression],
         schema: DataSchemaRef,
     ) -> Result<Self> {
         let mut stat_columns: StatColumns = Vec::new();
-        let verifiable_expr = build_verifiable_expr(expr, &schema, &mut stat_columns);
+        let verifiable_expr = exprs.iter().fold(lit(true), |acc, item| {
+            acc.and(build_verifiable_expr(item, &schema, &mut stat_columns))
+        });
+
         let input_fields = stat_columns
             .iter()
             .map(|c| c.stat_field.clone())
