@@ -102,9 +102,7 @@ fn test_to_partitions() -> Result<()> {
         .map(col_leaves_gen)
         .collect::<Vec<_>>();
 
-    let column_leafs = ColumnLeaves {
-        column_leaves,
-    };
+    let column_leafs = ColumnLeaves { column_leaves };
 
     // CASE I:  no projection
     let (s, parts) = FuseTable::to_partitions(&blocks_metas, &column_leafs, None);
