@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_meta_app::share::AddShareAccountReply;
-use common_meta_app::share::AddShareAccountReq;
+use common_meta_app::share::AddShareAccountsReply;
+use common_meta_app::share::AddShareAccountsReq;
 use common_meta_app::share::CreateShareReply;
 use common_meta_app::share::CreateShareReq;
 use common_meta_app::share::DropShareReply;
@@ -22,8 +22,8 @@ use common_meta_app::share::GetShareGrantObjectReply;
 use common_meta_app::share::GetShareGrantObjectReq;
 use common_meta_app::share::GrantShareObjectReply;
 use common_meta_app::share::GrantShareObjectReq;
-use common_meta_app::share::RemoveShareAccountReply;
-use common_meta_app::share::RemoveShareAccountReq;
+use common_meta_app::share::RemoveShareAccountsReply;
+use common_meta_app::share::RemoveShareAccountsReq;
 use common_meta_app::share::RevokeShareObjectReply;
 use common_meta_app::share::RevokeShareObjectReq;
 use common_meta_app::share::ShowShareReply;
@@ -37,14 +37,23 @@ pub trait ShareApi: Sync + Send {
 
     async fn drop_share(&self, req: DropShareReq) -> MetaResult<DropShareReply>;
 
-    async fn grant_object(&self, req: GrantShareObjectReq) -> MetaResult<GrantShareObjectReply>;
-    async fn revoke_object(&self, req: RevokeShareObjectReq) -> MetaResult<RevokeShareObjectReply>;
-
-    async fn add_share_account(&self, req: AddShareAccountReq) -> MetaResult<AddShareAccountReply>;
-    async fn remove_share_account(
+    async fn grant_share_object(
         &self,
-        req: RemoveShareAccountReq,
-    ) -> MetaResult<RemoveShareAccountReply>;
+        req: GrantShareObjectReq,
+    ) -> MetaResult<GrantShareObjectReply>;
+    async fn revoke_share_object(
+        &self,
+        req: RevokeShareObjectReq,
+    ) -> MetaResult<RevokeShareObjectReply>;
+
+    async fn add_share_accounts(
+        &self,
+        req: AddShareAccountsReq,
+    ) -> MetaResult<AddShareAccountsReply>;
+    async fn remove_share_accounts(
+        &self,
+        req: RemoveShareAccountsReq,
+    ) -> MetaResult<RemoveShareAccountsReply>;
 
     async fn get_share_grant_objects(
         &self,

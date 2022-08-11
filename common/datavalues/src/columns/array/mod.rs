@@ -16,6 +16,8 @@ use std::sync::Arc;
 
 use common_arrow::arrow::array::*;
 use common_arrow::arrow::buffer::Buffer;
+use common_arrow::arrow::compute::cast::CastOptions;
+use common_arrow::arrow::compute::cast::{self};
 use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_arrow::arrow::types::Index;
 use common_arrow::ArrayRef;
@@ -62,13 +64,25 @@ impl ArrayColumn {
     }
 
     pub fn from_arrow_array(array: &dyn Array) -> Self {
-        Self::new(
-            array
-                .as_any()
-                .downcast_ref::<LargeListArray>()
-                .unwrap()
-                .clone(),
-        )
+        let cast_options = CastOptions {
+            wrapped: true,
+            partial: true,
+        };
+
+        match array.data_type() {
+            ArrowType::List(f) => {
+                let array = cast::cast(array, &ArrowType::LargeList(f.clone()), cast_options)
+                    .expect("list to large list cast should be ok");
+                Self::from_arrow_array(array.as_ref())
+            }
+            _ => Self::new(
+                array
+                    .as_any()
+                    .downcast_ref::<LargeListArray>()
+                    .unwrap()
+                    .clone(),
+            ),
+        }
     }
 
     pub fn from_data(data_type: DataTypeImpl, offsets: Buffer<i64>, values: ColumnRef) -> Self {

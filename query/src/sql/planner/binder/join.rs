@@ -33,6 +33,7 @@ use crate::sql::optimizer::SExpr;
 use crate::sql::planner::binder::scalar::ScalarBinder;
 use crate::sql::planner::binder::Binder;
 use crate::sql::planner::metadata::MetadataRef;
+use crate::sql::planner::semantic::NameResolutionContext;
 use crate::sql::plans::BoundColumnRef;
 use crate::sql::plans::JoinType;
 use crate::sql::plans::LogicalInnerJoin;
@@ -108,6 +109,7 @@ impl<'a> Binder {
         let mut other_conditions: Vec<Scalar> = vec![];
         let mut join_condition_resolver = JoinConditionResolver::new(
             self.ctx.clone(),
+            &self.name_resolution_ctx,
             self.metadata.clone(),
             &left_context,
             &right_context,
@@ -231,7 +233,7 @@ pub fn check_duplicate_join_tables(
 
 struct JoinConditionResolver<'a> {
     ctx: Arc<QueryContext>,
-
+    name_resolution_ctx: &'a NameResolutionContext,
     metadata: MetadataRef,
 
     left_context: &'a BindContext,
@@ -243,6 +245,7 @@ struct JoinConditionResolver<'a> {
 impl<'a> JoinConditionResolver<'a> {
     pub fn new(
         ctx: Arc<QueryContext>,
+        name_resolution_ctx: &'a NameResolutionContext,
         metadata: MetadataRef,
         left_context: &'a BindContext,
         right_context: &'a BindContext,
@@ -251,6 +254,7 @@ impl<'a> JoinConditionResolver<'a> {
     ) -> Self {
         Self {
             ctx,
+            name_resolution_ctx,
             metadata,
             left_context,
             right_context,
@@ -308,6 +312,7 @@ impl<'a> JoinConditionResolver<'a> {
         let mut scalar_binder = ScalarBinder::new(
             self.join_context,
             self.ctx.clone(),
+            self.name_resolution_ctx,
             self.metadata.clone(),
             &[],
         );
@@ -394,8 +399,10 @@ impl<'a> JoinConditionResolver<'a> {
                 .join_context
                 .columns
                 .iter_mut()
-                .find(|col_binding| col_binding.column_name == join_key_name)
+                .filter(|col_binding| col_binding.column_name == join_key_name)
+                .nth(1)
             {
+                // Always make the second using column in the join_context invisible. in unqualified wildcard.
                 col_binding.visible_in_unqualified_wildcard = false;
             }
 

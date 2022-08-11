@@ -22,13 +22,13 @@ use crate::scalars::scalar_function_test::ScalarFunctionWithFieldTest;
 #[test]
 fn test_round_function() -> Result<()> {
     let ops = vec![
-        "toStartOfSecond",
-        "toStartOfMinute",
-        "toStartOfTenMinutes",
-        "toStartOfFifteenMinutes",
-        "timeSlot",
-        "toStartOfHour",
-        "toStartOfDay",
+        "to_start_of_second",
+        "to_start_of_minute",
+        "to_start_of_ten_minutes",
+        "to_start_of_fifteen_minutes",
+        "time_slot",
+        "to_start_of_hour",
+        "to_start_of_day",
     ];
     let rounds = vec![1, 60, 60 * 10, 60 * 15, 60 * 30, 60 * 60, 60 * 60 * 24];
 
@@ -62,5 +62,5 @@ fn test_to_start_of_function() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions_with_type("toStartOfQuarter", &test)
+    test_scalar_functions_with_type("to_start_of_quarter", &test)
 }

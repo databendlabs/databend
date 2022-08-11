@@ -20,6 +20,7 @@ use common_ast::ast::Statement;
 use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
 use common_ast::Backtrace;
+use common_ast::Dialect;
 use common_datavalues::DataTypeImpl;
 use common_exception::Result;
 use common_meta_types::UserDefinedFunction;
@@ -39,6 +40,7 @@ pub use scalar_common::*;
 
 use super::plans::Plan;
 use super::plans::RewriteKind;
+use super::semantic::NameResolutionContext;
 use crate::catalogs::CatalogManager;
 use crate::sessions::QueryContext;
 use crate::sql::planner::metadata::MetadataRef;
@@ -75,6 +77,7 @@ mod table;
 pub struct Binder {
     ctx: Arc<QueryContext>,
     catalogs: Arc<CatalogManager>,
+    name_resolution_ctx: NameResolutionContext,
     metadata: MetadataRef,
 }
 
@@ -82,11 +85,13 @@ impl<'a> Binder {
     pub fn new(
         ctx: Arc<QueryContext>,
         catalogs: Arc<CatalogManager>,
+        name_resolution_ctx: NameResolutionContext,
         metadata: MetadataRef,
     ) -> Self {
         Binder {
             ctx,
             catalogs,
+            name_resolution_ctx,
             metadata,
         }
     }
@@ -137,7 +142,7 @@ impl<'a> Binder {
                     .await?
             }
             Statement::ShowEngines => {
-                 self.bind_rewrite_to_query(bind_context, "SELECT Engine, Comment FROM system.engines ORDER BY Engine ASC", RewriteKind::ShowEngines)
+                 self.bind_rewrite_to_query(bind_context, "SELECT \"Engine\", \"Comment\" FROM system.engines ORDER BY \"Engine\" ASC", RewriteKind::ShowEngines)
                     .await?
             },
             Statement::ShowSettings { like } => self.bind_show_settings(bind_context, like).await?,
@@ -294,11 +299,21 @@ impl<'a> Binder {
                     .await?
             }
 
+            // share statements
             Statement::CreateShare(stmt) => {
                 self.bind_create_share(stmt).await?
             }
             Statement::DropShare(stmt) => {
                 self.bind_drop_share(stmt).await?
+            }
+            Statement::GrantShareObject(stmt) => {
+                self.bind_grant_share_object(stmt).await?
+            }
+            Statement::RevokeShareObject(stmt) => {
+                self.bind_revoke_share_object(stmt).await?
+            }
+            Statement::AlterShareTenants(stmt) => {
+                self.bind_alter_share_accounts(stmt).await?
             }
         };
         Ok(plan)
@@ -312,7 +327,7 @@ impl<'a> Binder {
     ) -> Result<Plan> {
         let tokens = tokenize_sql(query)?;
         let backtrace = Backtrace::new();
-        let (stmt, _) = parse_sql(&tokens, &backtrace)?;
+        let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL, &backtrace)?;
         let mut plan = self.bind_statement(bind_context, &stmt).await?;
 
         if let Plan::Query { rewrite_kind, .. } = &mut plan {

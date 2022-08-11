@@ -53,6 +53,7 @@ use opendal::Operator;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 use tracing::debug;
+use tracing::Subscriber;
 
 use crate::api::DataExchangeManager;
 use crate::auth::AuthMgr;
@@ -241,6 +242,10 @@ impl QueryContext {
 
     pub fn set_affect(self: &Arc<Self>, affect: QueryAffect) {
         self.shared.set_affect(affect)
+    }
+
+    pub fn get_query_logger(&self) -> Option<Arc<dyn Subscriber + Send + Sync>> {
+        self.shared.session.session_mgr.get_query_logger()
     }
 }
 

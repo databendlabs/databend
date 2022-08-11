@@ -18,6 +18,8 @@
 //! Types in this crate will not be used directly by databend-meta.
 //! But instead, they are used by the caller of meta-client, e.g, databend-query.
 
+#![deny(unused_crate_dependencies)]
+
 pub mod schema;
 // pub mod user;
 pub mod share;

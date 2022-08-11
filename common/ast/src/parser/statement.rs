@@ -15,6 +15,8 @@
 use std::collections::BTreeMap;
 use std::time::Duration;
 
+use common_meta_app::share::ShareGrantObjectName;
+use common_meta_app::share::ShareGrantObjectPrivilege;
 use common_meta_types::AuthType;
 use common_meta_types::PrincipalIdentity;
 use common_meta_types::UserIdentity;
@@ -38,13 +40,14 @@ use crate::ErrorKind;
 pub fn statement(i: Input) -> IResult<StatementMsg> {
     let explain = map(
         rule! {
-            EXPLAIN ~ ( PIPELINE | GRAPH | FRAGMENTS )? ~ #statement
+            EXPLAIN ~ ( PIPELINE | GRAPH | FRAGMENTS | RAW )? ~ #statement
         },
         |(_, opt_kind, statement)| Statement::Explain {
             kind: match opt_kind.map(|token| token.kind) {
                 Some(TokenKind::PIPELINE) => ExplainKind::Pipeline,
                 Some(TokenKind::GRAPH) => ExplainKind::Graph,
                 Some(TokenKind::FRAGMENTS) => ExplainKind::Fragments,
+                Some(TokenKind::RAW) => ExplainKind::Raw,
                 None => ExplainKind::Syntax,
                 _ => unreachable!(),
             },
@@ -768,6 +771,43 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             })
         },
     );
+    let grant_share_object = map(
+        rule! {
+            GRANT ~ #priv_share_type ~ ON ~ #grant_share_object_name ~ TO ~ SHARE ~ #ident
+        },
+        |(_, privilege, _, object, _, _, share)| {
+            Statement::GrantShareObject(GrantShareObjectStmt {
+                share,
+                object,
+                privilege,
+            })
+        },
+    );
+    let revoke_share_object = map(
+        rule! {
+            REVOKE ~ #priv_share_type ~ ON ~ #grant_share_object_name ~ FROM ~ SHARE ~ #ident
+        },
+        |(_, privilege, _, object, _, _, share)| {
+            Statement::RevokeShareObject(RevokeShareObjectStmt {
+                share,
+                object,
+                privilege,
+            })
+        },
+    );
+    let alter_share_tenants = map(
+        rule! {
+            ALTER ~ SHARE ~ (IF ~ EXISTS )? ~ #ident ~ #alter_add_share_accounts ~ TENANTS ~ Eq ~ #comma_separated_list1(ident)
+        },
+        |(_, _, opt_if_exists, share, is_add, _, _, tenants)| {
+            Statement::AlterShareTenants(AlterShareTenantsStmt {
+                share,
+                if_exists: opt_if_exists.is_some(),
+                is_add,
+                tenants,
+            })
+        },
+    );
 
     let statement_body = alt((
         rule!(
@@ -858,6 +898,9 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         rule!(
             #create_share: "`CREATE SHARE [IF NOT EXISTS] <share_name> [ COMMENT = '<string_literal>' ]`"
             | #drop_share: "`DROP SHARE [IF EXISTS] <share_name>`"
+            | #grant_share_object: "`GRANT { USAGE | SELECT | REFERENCE_USAGE } ON { DATABASE db | TABLE db.table } TO SHARE <share_name>`"
+            | #revoke_share_object: "`REVOKE { USAGE | SELECT | REFERENCE_USAGE } ON { DATABASE db | TABLE db.table } FROM SHARE <share_name>`"
+            | #alter_share_tenants: "`ALTER SHARE [IF EXISTS] <share_name> { ADD | REMOVE } TENANTS = tenant [, tenant, ...]`"
         ),
     ));
 
@@ -1013,6 +1056,45 @@ pub fn priv_type(i: Input) -> IResult<UserPrivilegeType> {
         value(UserPrivilegeType::CreateStage, rule! { CREATE ~ STAGE }),
         value(UserPrivilegeType::Set, rule! { SET }),
     ))(i)
+}
+
+pub fn priv_share_type(i: Input) -> IResult<ShareGrantObjectPrivilege> {
+    alt((
+        value(ShareGrantObjectPrivilege::Usage, rule! { USAGE }),
+        value(ShareGrantObjectPrivilege::Select, rule! { SELECT }),
+        value(
+            ShareGrantObjectPrivilege::ReferenceUsage,
+            rule! { REFERENCE_USAGE },
+        ),
+    ))(i)
+}
+
+pub fn alter_add_share_accounts(i: Input) -> IResult<bool> {
+    alt((value(true, rule! { ADD }), value(false, rule! { REMOVE })))(i)
+}
+
+pub fn grant_share_object_name(i: Input) -> IResult<ShareGrantObjectName> {
+    let database = map(
+        rule! {
+            DATABASE ~ #ident
+        },
+        |(_, database)| ShareGrantObjectName::Database(database.to_string()),
+    );
+
+    // `db01`.'tb1' or `db01`.`tb1` or `db01`.tb1
+    let table = map(
+        rule! {
+            TABLE ~  #ident ~ "." ~ #ident
+        },
+        |(_, database, _, table)| {
+            ShareGrantObjectName::Table(database.to_string(), table.to_string())
+        },
+    );
+
+    rule!(
+        #database : "DATABASE <database>"
+        | #table : "TABLE <database>.<table>"
+    )(i)
 }
 
 pub fn grant_level(i: Input) -> IResult<AccountMgrLevel> {
@@ -1322,11 +1404,6 @@ pub fn user_option(i: Input) -> IResult<UserOptionItem> {
         value(
             UserOptionItem::TenantSetting(false),
             rule! { NOTENANTSETTING },
-        ),
-        value(UserOptionItem::ConfigReload(true), rule! { CONFIGRELOAD }),
-        value(
-            UserOptionItem::ConfigReload(false),
-            rule! { NOCONFIGRELOAD },
         ),
         default_role_option,
     ))(i)

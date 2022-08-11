@@ -32,15 +32,20 @@ use crate::util::*;
 pub fn query(i: Input) -> IResult<Query> {
     map(
         consumed(rule! {
-            #set_operation
+            #with?
+            ~ #set_operation
             ~ ( ORDER ~ ^BY ~ ^#comma_separated_list1(order_by_expr) )?
             ~ ( LIMIT ~ ^#comma_separated_list1(expr) )?
             ~ ( OFFSET ~ ^#expr )?
             ~ ( FORMAT ~ #ident )?
             : "`SELECT ...`"
         }),
-        |(span, (body, opt_order_by_block, opt_limit_block, opt_offset_block, opt_format))| Query {
+        |(
+            span,
+            (with, body, opt_order_by_block, opt_limit_block, opt_offset_block, opt_format),
+        )| Query {
             span: span.0,
+            with,
             body,
             order_by: opt_order_by_block
                 .map(|(_, _, order_by)| order_by)
@@ -48,6 +53,30 @@ pub fn query(i: Input) -> IResult<Query> {
             limit: opt_limit_block.map(|(_, limit)| limit).unwrap_or_default(),
             offset: opt_offset_block.map(|(_, offset)| offset),
             format: opt_format.map(|(_, format)| format.name),
+        },
+    )(i)
+}
+
+pub fn with(i: Input) -> IResult<With> {
+    let cte = map(
+        consumed(rule! {
+            #table_alias ~ AS ~ "(" ~ #query ~ ")"
+        }),
+        |(span, (table_alias, _, _, query, _))| CTE {
+            span: span.0,
+            alias: table_alias,
+            query,
+        },
+    );
+
+    map(
+        consumed(rule! {
+            WITH ~ RECURSIVE? ~ ^#comma_separated_list1(cte)
+        }),
+        |(span, (_, recursive, ctes))| With {
+            span: span.0,
+            recursive: recursive.is_some(),
+            ctes,
         },
     )(i)
 }
@@ -136,10 +165,13 @@ pub fn alias_name(i: Input) -> IResult<Identifier> {
 }
 
 pub fn table_alias(i: Input) -> IResult<TableAlias> {
-    map(alias_name, |name| TableAlias {
-        name,
-        columns: vec![],
-    })(i)
+    map(
+        rule! { #alias_name ~ ( "(" ~ ^#comma_separated_list1(ident) ~ ")")? },
+        |(name, opt_columns)| TableAlias {
+            name,
+            columns: opt_columns.map(|(_, cols, _)| cols).unwrap_or_default(),
+        },
+    )(i)
 }
 
 pub fn table_function(i: Input) -> IResult<TableReference> {

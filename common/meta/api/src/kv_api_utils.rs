@@ -36,6 +36,7 @@ use common_meta_types::UpsertKVReq;
 use common_proto_conv::FromToProto;
 use tracing::debug;
 
+use crate::Id;
 use crate::KVApi;
 use crate::KVApiKey;
 
@@ -56,7 +57,7 @@ pub async fn get_u64_value<T: KVApiKey>(
     let res = kv_api.get_kv(&key.to_key()).await?;
 
     if let Some(seq_v) = res {
-        Ok((seq_v.seq, deserialize_u64(&seq_v.data)?))
+        Ok((seq_v.seq, *deserialize_u64(&seq_v.data)?))
     } else {
         Ok((0, 0))
     }
@@ -65,14 +66,14 @@ pub async fn get_u64_value<T: KVApiKey>(
 /// Get a struct value.
 ///
 /// It returns seq number and the data.
-pub async fn get_struct_value<K, PB, T>(
+pub async fn get_struct_value<K, T>(
     kv_api: &(impl KVApi + ?Sized),
     k: &K,
 ) -> Result<(u64, Option<T>), MetaError>
 where
     K: KVApiKey,
-    PB: common_protos::prost::Message + Default,
-    T: FromToProto<PB>,
+    T: FromToProto,
+    T::PB: common_protos::prost::Message + Default,
 {
     let res = kv_api.get_kv(&k.to_key()).await?;
 
@@ -83,9 +84,14 @@ where
     }
 }
 
-pub fn deserialize_u64(v: &[u8]) -> Result<u64, MetaError> {
+pub fn serialize_u64(value: impl Into<Id>) -> Result<Vec<u8>, MetaError> {
+    let v = serde_json::to_vec(&*value.into()).map_err(meta_encode_err)?;
+    Ok(v)
+}
+
+pub fn deserialize_u64(v: &[u8]) -> Result<Id, MetaError> {
     let id = serde_json::from_slice(v).map_err(meta_encode_err)?;
-    Ok(id)
+    Ok(Id::new(id))
 }
 
 /// Generate an id on metasrv.
@@ -107,26 +113,23 @@ pub async fn fetch_id<T: KVApiKey>(kv_api: &impl KVApi, generator: T) -> Result<
     Ok(seq_v.seq)
 }
 
-pub fn serialize_u64(value: u64) -> Result<Vec<u8>, MetaError> {
-    let v = serde_json::to_vec(&value).map_err(meta_encode_err)?;
-    Ok(v)
-}
-
-pub fn serialize_struct<PB: common_protos::prost::Message>(
-    value: &impl FromToProto<PB>,
-) -> Result<Vec<u8>, MetaError> {
+pub fn serialize_struct<T>(value: &T) -> Result<Vec<u8>, MetaError>
+where
+    T: FromToProto + 'static,
+    T::PB: common_protos::prost::Message,
+{
     let p = value.to_pb().map_err(meta_encode_err)?;
     let mut buf = vec![];
     common_protos::prost::Message::encode(&p, &mut buf).map_err(meta_encode_err)?;
     Ok(buf)
 }
 
-pub fn deserialize_struct<PB, T>(buf: &[u8]) -> Result<T, MetaError>
+pub fn deserialize_struct<T>(buf: &[u8]) -> Result<T, MetaError>
 where
-    PB: common_protos::prost::Message + Default,
-    T: FromToProto<PB>,
+    T: FromToProto,
+    T::PB: common_protos::prost::Message + Default,
 {
-    let p: PB = common_protos::prost::Message::decode(buf).map_err(meta_encode_err)?;
+    let p: T::PB = common_protos::prost::Message::decode(buf).map_err(meta_encode_err)?;
     let v: T = FromToProto::from_pb(p).map_err(meta_encode_err)?;
 
     Ok(v)

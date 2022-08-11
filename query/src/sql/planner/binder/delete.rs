@@ -80,8 +80,13 @@ impl<'a> Binder {
             .bind_table_reference(bind_context, table_reference)
             .await?;
 
-        let mut scalar_binder =
-            ScalarBinder::new(&context, self.ctx.clone(), self.metadata.clone(), &[]);
+        let mut scalar_binder = ScalarBinder::new(
+            &context,
+            self.ctx.clone(),
+            &self.name_resolution_ctx,
+            self.metadata.clone(),
+            &[],
+        );
 
         let mut expression = None;
         let mut require_columns: HashSet<String> = HashSet::new();

@@ -259,6 +259,18 @@ impl InterpreterFactoryV2 {
                 *p.clone(),
             )?)),
             Plan::DropShare(p) => Ok(Arc::new(DropShareInterpreter::try_create(ctx, *p.clone())?)),
+            Plan::GrantShareObject(p) => Ok(Arc::new(GrantShareObjectInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            Plan::RevokeShareObject(p) => Ok(Arc::new(RevokeShareObjectInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            Plan::AlterShareTenants(p) => Ok(Arc::new(AlterShareTenantsInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
         }
     }
 }

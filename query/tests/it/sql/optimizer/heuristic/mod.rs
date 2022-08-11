@@ -25,6 +25,7 @@ use std::sync::Arc;
 use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
 use common_ast::Backtrace;
+use common_ast::Dialect;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use databend_query::sessions::QueryContext;
@@ -35,6 +36,7 @@ use databend_query::sql::optimizer::RuleList;
 use databend_query::sql::plans::Plan;
 use databend_query::sql::Binder;
 use databend_query::sql::Metadata;
+use databend_query::sql::NameResolutionContext;
 use parking_lot::RwLock;
 
 pub(super) struct Suite {
@@ -46,10 +48,11 @@ pub(super) struct Suite {
 async fn run_test(ctx: Arc<QueryContext>, suite: &Suite) -> Result<String> {
     let tokens = tokenize_sql(&suite.query)?;
     let bt = Backtrace::new();
-    let (stmt, _) = parse_sql(&tokens, &bt)?;
+    let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL, &bt)?;
     let binder = Binder::new(
         ctx.clone(),
         ctx.get_catalogs(),
+        NameResolutionContext::default(),
         Arc::new(RwLock::new(Metadata::create())),
     );
     let plan = binder.bind(&stmt).await?;

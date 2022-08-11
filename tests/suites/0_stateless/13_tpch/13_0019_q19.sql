@@ -1,4 +1,4 @@
-set enable_planner_v2 = 1;
+
 select
     sum(l_extendedprice* (1 - l_discount)) as revenue
 from
@@ -67,4 +67,3 @@ where
                     )
             and l_shipinstruct = 'DELIVER IN PERSON'
         )
-;

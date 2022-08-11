@@ -1,4 +1,4 @@
-set enable_planner_v2 = 1;
+
 select
     l_orderkey,
     sum(l_extendedprice * (1 - l_discount)) as revenue,
