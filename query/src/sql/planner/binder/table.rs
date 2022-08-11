@@ -18,6 +18,7 @@ use common_ast::ast::Indirection;
 use common_ast::ast::SelectStmt;
 use common_ast::ast::SelectTarget;
 use common_ast::ast::Statement;
+use common_ast::ast::TableAlias;
 use common_ast::ast::TableReference;
 use common_ast::ast::TimeTravelPoint;
 use common_ast::parser::parse_sql;
@@ -35,6 +36,7 @@ use crate::sessions::TableContext;
 use crate::sql::binder::scalar::ScalarBinder;
 use crate::sql::binder::Binder;
 use crate::sql::binder::ColumnBinding;
+use crate::sql::binder::CteInfo;
 use crate::sql::optimizer::SExpr;
 use crate::sql::planner::semantic::normalize_identifier;
 use crate::sql::planner::semantic::TypeChecker;
@@ -94,6 +96,11 @@ impl<'a> Binder {
                 alias,
                 travel_point,
             } => {
+                let table_name = normalize_identifier(table, &self.name_resolution_ctx).name;
+                // Check and bind common table expression
+                if let Some(cte_info) = bind_context.ctes_map.read().get(&table_name) {
+                    return self.bind_cte(bind_context, &table_name, alias, cte_info);
+                }
                 // Get catalog name
                 let catalog = catalog
                     .as_ref()
@@ -105,8 +112,6 @@ impl<'a> Binder {
                     .as_ref()
                     .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
                     .unwrap_or_else(|| self.ctx.get_current_database());
-
-                let table = normalize_identifier(table, &self.name_resolution_ctx).name;
 
                 let tenant = self.ctx.get_tenant();
 
@@ -121,7 +126,7 @@ impl<'a> Binder {
                         tenant.as_str(),
                         catalog.as_str(),
                         database.as_str(),
-                        table.as_str(),
+                        table_name.as_str(),
                         &navigation_point,
                     )
                     .await?;
@@ -231,6 +236,47 @@ impl<'a> Binder {
                 Ok((s_expr, bind_context))
             }
         }
+    }
+
+    fn bind_cte(
+        &mut self,
+        bind_context: &BindContext,
+        table_name: &str,
+        alias: &Option<TableAlias>,
+        cte_info: &CteInfo,
+    ) -> Result<(SExpr, BindContext)> {
+        let mut new_bind_context = bind_context.clone();
+        new_bind_context.columns = cte_info.bind_context.columns.clone();
+        let mut cols_alias = cte_info.columns_alias.clone();
+        if let Some(alias) = alias {
+            for (idx, col_alias) in alias.columns.iter().enumerate() {
+                if idx < cte_info.columns_alias.len() {
+                    cols_alias[idx] = col_alias.name.clone();
+                } else {
+                    cols_alias.push(col_alias.name.clone());
+                }
+            }
+        }
+        let alias_table_name = alias
+            .as_ref()
+            .map(|alias| normalize_identifier(&alias.name, &self.name_resolution_ctx).name)
+            .unwrap_or_else(|| table_name.to_string());
+        for column in new_bind_context.columns.iter_mut() {
+            column.database_name = None;
+            column.table_name = Some(alias_table_name.clone());
+        }
+
+        if cols_alias.len() > new_bind_context.columns.len() {
+            return Err(ErrorCode::SemanticError(format!(
+                "table has {} columns available but {} columns specified",
+                new_bind_context.columns.len(),
+                cols_alias.len()
+            )));
+        }
+        for (index, column_name) in cols_alias.iter().enumerate() {
+            new_bind_context.columns[index].column_name = column_name.clone();
+        }
+        Ok((cte_info.s_expr.clone(), new_bind_context))
     }
 
     fn bind_base_table(
