@@ -59,24 +59,24 @@ openraft = { git = "https://github.com/datafuselabs/openraft", rev = "v0.7.0-alp
 
 [[bin]]
 name = "databend-meta"
-path = "targets/meta/main.rs"
+path = "meta/main.rs"
 doctest = false
 test = false
 
 [[bin]]
 name = "databend-metabench"
-path = "targets/metabench.rs"
+path = "metabench/main.rs"
 doctest = false
 test = false
 
 [[bin]]
 name = "databend-metactl"
-path = "targets/metactl/main.rs"
+path = "metactl/main.rs"
 doctest = false
 test = false
 
 [[bin]]
 name = "databend-query"
-path = "targets/query.rs"
+path = "query/main.rs"
 doctest = false
 test = false
