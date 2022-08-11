@@ -102,7 +102,7 @@ WITH test1 AS (SELECT i + 1, j + 1 FROM test1) SELECT * FROM (SELECT * FROM test
 2 3
 4 5
 
-statement query II
+statement query III
 SELECT * FROM (WITH t1 AS (SELECT to_int32(number) i FROM numbers(5)) SELECT * FROM t1) l INNER JOIN test1 r on l.i = r.i;
 
 ----
@@ -213,7 +213,7 @@ statement query I
 WITH 
 x AS (SELECT number AS a FROM numbers(10)),
 y AS (SELECT number AS a FROM numbers(5))
-SELECT * FROM x left JOIN y USING (a)
+SELECT x.a FROM x left JOIN y ON x.a = y.a
 ORDER BY a;
 
 ----
@@ -222,11 +222,11 @@ ORDER BY a;
 2
 3
 4
-NULL
-NULL
-NULL
-NULL
-NULL
+5
+6
+7
+8
+9
 
 statement query I
 WITH 
@@ -234,20 +234,6 @@ x AS (SELECT number AS a FROM numbers(10)),
 y AS (SELECT number AS a FROM numbers(5))
 SELECT * FROM x JOIN y USING (a)
 ORDER BY x.a;
-
-----
-0
-1
-2
-3
-4
-
-statement query I
-WITH 
-x AS (SELECT number AS a FROM numbers(10)),
-y AS (SELECT number AS a FROM numbers(5)),
-z AS (SELECT 1::UInt64 b)
-SELECT * FROM x JOIN y USING (a) WHERE x.a in (SELECT * FROM z);
 
 ----
 0
