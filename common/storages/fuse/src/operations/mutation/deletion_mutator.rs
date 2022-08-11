@@ -21,6 +21,7 @@ use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_fuse_meta::meta::BlockMeta;
+use common_fuse_meta::meta::ClusterStatistics;
 use common_fuse_meta::meta::Location;
 use common_fuse_meta::meta::SegmentInfo;
 use common_fuse_meta::meta::TableSnapshot;
@@ -33,6 +34,7 @@ use crate::io::SegmentWriter;
 use crate::io::TableMetaLocationGenerator;
 use crate::statistics::reducers::reduce_block_metas;
 use crate::statistics::reducers::reduce_statistics;
+use crate::statistics::ClusterStatsGenerator;
 
 pub enum Deletion {
     NothingDeleted,
@@ -52,6 +54,7 @@ pub struct DeletionMutator<'a> {
     location_generator: &'a TableMetaLocationGenerator,
     base_snapshot: &'a TableSnapshot,
     data_accessor: Operator,
+    cluster_stats_gen: ClusterStatsGenerator,
 }
 
 impl<'a> DeletionMutator<'a> {
@@ -59,6 +62,7 @@ impl<'a> DeletionMutator<'a> {
         ctx: &'a Arc<dyn TableContext>,
         location_generator: &'a TableMetaLocationGenerator,
         base_snapshot: &'a TableSnapshot,
+        cluster_stats_gen: ClusterStatsGenerator,
     ) -> Result<Self> {
         let data_accessor = ctx.get_storage_operator()?;
         Ok(Self {
@@ -67,6 +71,7 @@ impl<'a> DeletionMutator<'a> {
             location_generator,
             base_snapshot,
             data_accessor,
+            cluster_stats_gen,
         })
     }
 
@@ -177,6 +182,7 @@ impl<'a> DeletionMutator<'a> {
         &mut self,
         seg_idx: usize,
         location_of_block_to_be_replaced: Location,
+        origin_stats: Option<ClusterStatistics>,
         replace_with: DataBlock,
     ) -> Result<()> {
         // write new block, and keep the mutations
@@ -185,7 +191,10 @@ impl<'a> DeletionMutator<'a> {
         } else {
             let block_writer =
                 BlockWriter::new(self.ctx, &self.data_accessor, self.location_generator);
-            Some(block_writer.write(replace_with).await?)
+            let cluster_stats = self
+                .cluster_stats_gen
+                .gen_with_origin_stats(&replace_with, origin_stats)?;
+            Some(block_writer.write(replace_with, cluster_stats).await?)
         };
         let original_block_loc = location_of_block_to_be_replaced;
         self.mutations

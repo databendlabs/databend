@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
 use common_ast::Backtrace;
+use common_ast::Dialect;
 use common_exception::Result;
 use parking_lot::RwLock;
 pub use plans::ScalarExpr;
@@ -40,6 +41,9 @@ pub use metadata::ColumnEntry;
 pub use metadata::Metadata;
 pub use metadata::MetadataRef;
 pub use metadata::TableEntry;
+pub use semantic::normalize_identifier;
+pub use semantic::IdentifierNormalizer;
+pub use semantic::NameResolutionContext;
 
 use self::plans::Plan;
 use super::optimizer::OptimizerConfig;
@@ -56,14 +60,22 @@ impl Planner {
     }
 
     pub async fn plan_sql(&mut self, sql: &str) -> Result<(Plan, MetadataRef, Option<String>)> {
+        let settings = self.ctx.get_settings();
+
         // Step 1: parse SQL text into AST
         let tokens = tokenize_sql(sql)?;
         let backtrace = Backtrace::new();
-        let (stmt, format) = parse_sql(&tokens, &backtrace)?;
+        let (stmt, format) = parse_sql(&tokens, Dialect::PostgreSQL, &backtrace)?;
 
         // Step 2: bind AST with catalog, and generate a pure logical SExpr
         let metadata = Arc::new(RwLock::new(Metadata::create()));
-        let binder = Binder::new(self.ctx.clone(), self.ctx.get_catalogs(), metadata.clone());
+        let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
+        let binder = Binder::new(
+            self.ctx.clone(),
+            self.ctx.get_catalogs(),
+            name_resolution_ctx,
+            metadata.clone(),
+        );
         let plan = binder.bind(&stmt).await?;
 
         // Step 3: optimize the SExpr with optimizers, and generate optimized physical SExpr

@@ -44,6 +44,7 @@ impl<'a> Binder {
         let mut scalar_binder = ScalarBinder::new(
             bind_context,
             self.ctx.clone(),
+            &self.name_resolution_ctx,
             self.metadata.clone(),
             &aliases,
         );

@@ -237,6 +237,8 @@ pub enum TokenKind {
     //    reserved list.
     #[token("ALL", ignore(ascii_case))]
     ALL,
+    #[token("ADD", ignore(ascii_case))]
+    ADD,
     #[token("ANY", ignore(ascii_case))]
     ANY,
     #[token("SOME", ignore(ascii_case))]
@@ -287,8 +289,6 @@ pub enum TokenKind {
     COMMENTS,
     #[token("COMPACT", ignore(ascii_case))]
     COMPACT,
-    #[token("CONFIGRELOAD", ignore(ascii_case))]
-    CONFIGRELOAD,
     #[token("CONNECTION", ignore(ascii_case))]
     CONNECTION,
     #[token("CHAR", ignore(ascii_case))]
@@ -503,8 +503,6 @@ pub enum TokenKind {
     NATURAL,
     #[token("NO_PASSWORD", ignore(ascii_case))]
     NO_PASSWORD,
-    #[token("NOCONFIGRELOAD", ignore(ascii_case))]
-    NOCONFIGRELOAD,
     #[token("NOT", ignore(ascii_case))]
     NOT,
     #[token("NOTENANTSETTING", ignore(ascii_case))]
@@ -567,12 +565,16 @@ pub enum TokenKind {
     REMOVE,
     #[token("REVOKE", ignore(ascii_case))]
     REVOKE,
+    #[token("RECURSIVE", ignore(ascii_case))]
+    RECURSIVE,
     #[token("GRANTS", ignore(ascii_case))]
     GRANTS,
     #[token("RIGHT", ignore(ascii_case))]
     RIGHT,
     #[token("RLIKE", ignore(ascii_case))]
     RLIKE,
+    #[token("RAW", ignore(ascii_case))]
+    RAW,
     #[token("SCHEMA", ignore(ascii_case))]
     SCHEMA,
     #[token("SCHEMAS", ignore(ascii_case))]
@@ -627,6 +629,8 @@ pub enum TokenKind {
     TEXT,
     #[token("TENANTSETTING", ignore(ascii_case))]
     TENANTSETTING,
+    #[token("TENANTS", ignore(ascii_case))]
+    TENANTS,
     #[token("THEN", ignore(ascii_case))]
     THEN,
     #[token("TIMESTAMP", ignore(ascii_case))]

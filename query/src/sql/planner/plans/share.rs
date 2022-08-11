@@ -105,3 +105,18 @@ impl RevokeShareObjectPlan {
         Arc::new(DataSchema::empty())
     }
 }
+
+// Alter Share Tenants Plan
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct AlterShareTenantsPlan {
+    pub share: String,
+    pub if_exists: bool,
+    pub accounts: Vec<String>,
+    pub is_add: bool,
+}
+
+impl AlterShareTenantsPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
+}

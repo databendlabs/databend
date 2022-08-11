@@ -1,5 +1,5 @@
 ---
-title: toDayOfYear
+title: to_day_of_year
 ---
 
 Converts a date or date with time to a UInt16 number containing the number of the day of the year (1-366).
@@ -7,7 +7,7 @@ Converts a date or date with time to a UInt16 number containing the number of th
 ## Syntax
 
 ```sql
-toDayOfYear( <expr> )
+to_day_of_year( <expr> )
 ```
 
 ## Arguments
@@ -23,16 +23,16 @@ A `UInt16` number datatype.
 ## Examples
 
 ```sql
-SELECT toDayOfYear(to_date(18869));
+SELECT to_day_of_year(to_date(18869));
 +----------------------------+
-| toDayOfYear(to_date(18869)) |
+| to_day_of_year(to_date(18869)) |
 +----------------------------+
 |                        242 |
 +----------------------------+
 
-SELECT toDayOfYear(now());
+SELECT to_day_of_year(now());
 +--------------------+
-| toDayOfYear(now()) |
+| to_day_of_year(now()) |
 +--------------------+
 |                 88 |
 +--------------------+

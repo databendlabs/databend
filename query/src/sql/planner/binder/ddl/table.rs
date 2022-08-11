@@ -21,7 +21,9 @@ use common_ast::ast::OptimizeTableAction as AstOptimizeTableAction;
 use common_ast::ast::*;
 use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
+use common_ast::walk_expr_mut;
 use common_ast::Backtrace;
+use common_ast::Dialect;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
@@ -43,6 +45,8 @@ use crate::sql::is_reserved_opt_key;
 use crate::sql::optimizer::optimize;
 use crate::sql::optimizer::OptimizerConfig;
 use crate::sql::optimizer::OptimizerContext;
+use crate::sql::planner::semantic::normalize_identifier;
+use crate::sql::planner::semantic::IdentifierNormalizer;
 use crate::sql::plans::create_table_v2::CreateTablePlanV2;
 use crate::sql::plans::Plan;
 use crate::sql::plans::RewriteKind;
@@ -128,8 +132,8 @@ impl<'a> Binder {
         } = stmt;
 
         let mut database = database
-            .clone()
-            .map(|ident| ident.name.to_lowercase())
+            .as_ref()
+            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
             .unwrap_or_else(|| self.ctx.get_current_database());
 
         if DatabaseCatalog::is_case_insensitive_db(database.as_str()) {
@@ -199,13 +203,13 @@ impl<'a> Binder {
 
         let catalog = catalog
             .as_ref()
-            .map(|catalog| catalog.name.to_lowercase())
+            .map(|catalog| normalize_identifier(catalog, &self.name_resolution_ctx).name)
             .unwrap_or_else(|| self.ctx.get_current_catalog());
         let database = database
             .as_ref()
-            .map(|ident| ident.name.to_lowercase())
+            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
             .unwrap_or_else(|| self.ctx.get_current_database());
-        let table = table.name.to_lowercase();
+        let table = normalize_identifier(table, &self.name_resolution_ctx).name;
 
         let schema = DataSchemaRefExt::create(vec![
             DataField::new("Table", Vu8::to_data_type()),
@@ -231,13 +235,13 @@ impl<'a> Binder {
 
         let catalog = catalog
             .as_ref()
-            .map(|catalog| catalog.name.to_lowercase())
+            .map(|catalog| normalize_identifier(catalog, &self.name_resolution_ctx).name)
             .unwrap_or_else(|| self.ctx.get_current_catalog());
         let database = database
             .as_ref()
-            .map(|ident| ident.name.to_lowercase())
+            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
             .unwrap_or_else(|| self.ctx.get_current_database());
-        let table = table.name.to_lowercase();
+        let table = normalize_identifier(table, &self.name_resolution_ctx).name;
         let schema = DataSchemaRefExt::create(vec![
             DataField::new("Field", Vu8::to_data_type()),
             DataField::new("Type", Vu8::to_data_type()),
@@ -265,8 +269,8 @@ impl<'a> Binder {
         } = stmt;
 
         let database = db
-            .clone()
-            .map(|ident| ident.name.to_lowercase())
+            .as_ref()
+            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
             .unwrap_or_else(|| self.ctx.get_current_database());
 
         let select_cols = "name AS Name, engine AS Engine, 0 AS Version, \
@@ -301,7 +305,7 @@ impl<'a> Binder {
         };
         let tokens = tokenize_sql(query.as_str())?;
         let backtrace = Backtrace::new();
-        let (stmt, _) = parse_sql(&tokens, &backtrace)?;
+        let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL, &backtrace)?;
         self.bind_statement(bind_context, &stmt).await
     }
 
@@ -324,13 +328,13 @@ impl<'a> Binder {
 
         let catalog = catalog
             .as_ref()
-            .map(|catalog| catalog.name.to_lowercase())
+            .map(|catalog| normalize_identifier(catalog, &self.name_resolution_ctx).name)
             .unwrap_or_else(|| self.ctx.get_current_catalog());
         let database = database
             .as_ref()
-            .map(|ident| ident.name.to_lowercase())
+            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
             .unwrap_or_else(|| self.ctx.get_current_database());
-        let table = table.name.to_lowercase();
+        let table = normalize_identifier(table, &self.name_resolution_ctx).name;
 
         // Take FUSE engine AS default engine
         let engine = engine.clone().unwrap_or(Engine::Fuse);
@@ -471,13 +475,13 @@ impl<'a> Binder {
         let tenant = self.ctx.get_tenant();
         let catalog = catalog
             .as_ref()
-            .map(|catalog| catalog.name.to_lowercase())
+            .map(|catalog| normalize_identifier(catalog, &self.name_resolution_ctx).name)
             .unwrap_or_else(|| self.ctx.get_current_catalog());
         let database = database
             .as_ref()
-            .map(|ident| ident.name.to_lowercase())
+            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
             .unwrap_or_else(|| self.ctx.get_current_database());
-        let table = table.name.to_lowercase();
+        let table = normalize_identifier(table, &self.name_resolution_ctx).name;
 
         Ok(Plan::DropTable(Box::new(DropTablePlan {
             if_exists: *if_exists,
@@ -502,13 +506,13 @@ impl<'a> Binder {
         let tenant = self.ctx.get_tenant();
         let catalog = catalog
             .as_ref()
-            .map(|catalog| catalog.name.to_lowercase())
+            .map(|catalog| normalize_identifier(catalog, &self.name_resolution_ctx).name)
             .unwrap_or_else(|| self.ctx.get_current_catalog());
         let database = database
             .as_ref()
-            .map(|ident| ident.name.to_lowercase())
+            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
             .unwrap_or_else(|| self.ctx.get_current_database());
-        let table = table.name.to_lowercase();
+        let table = normalize_identifier(table, &self.name_resolution_ctx).name;
 
         Ok(Plan::UndropTable(Box::new(UndropTablePlan {
             tenant,
@@ -533,20 +537,20 @@ impl<'a> Binder {
         let tenant = self.ctx.get_tenant();
         let catalog = catalog
             .as_ref()
-            .map(|catalog| catalog.name.to_lowercase())
+            .map(|catalog| normalize_identifier(catalog, &self.name_resolution_ctx).name)
             .unwrap_or_else(|| self.ctx.get_current_catalog());
         let database = database
             .as_ref()
-            .map(|ident| ident.name.to_lowercase())
+            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
             .unwrap_or_else(|| self.ctx.get_current_database());
-        let table = table.name.to_lowercase();
+        let table = normalize_identifier(table, &self.name_resolution_ctx).name;
 
         match action {
             AlterTableAction::RenameTable { new_table } => {
                 let entities = vec![RenameTableEntity {
                     if_exists: *if_exists,
                     new_database: database.clone(),
-                    new_table: new_table.name.clone(),
+                    new_table: normalize_identifier(new_table, &self.name_resolution_ctx).name,
                     catalog,
                     database,
                     table,
@@ -603,22 +607,22 @@ impl<'a> Binder {
         let tenant = self.ctx.get_tenant();
         let catalog = catalog
             .as_ref()
-            .map(|catalog| catalog.name.to_lowercase())
+            .map(|catalog| normalize_identifier(catalog, &self.name_resolution_ctx).name)
             .unwrap_or_else(|| self.ctx.get_current_catalog());
         let database = database
             .as_ref()
-            .map(|ident| ident.name.to_lowercase())
+            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
             .unwrap_or_else(|| self.ctx.get_current_database());
-        let table = table.name.to_lowercase();
+        let table = normalize_identifier(table, &self.name_resolution_ctx).name;
         let new_catalog = new_catalog
             .as_ref()
-            .map(|catalog| catalog.name.to_lowercase())
+            .map(|catalog| normalize_identifier(catalog, &self.name_resolution_ctx).name)
             .unwrap_or_else(|| self.ctx.get_current_catalog());
         let new_database = new_database
             .as_ref()
-            .map(|ident| ident.name.to_lowercase())
+            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
             .unwrap_or_else(|| self.ctx.get_current_database());
-        let new_table = new_table.name.to_lowercase();
+        let new_table = normalize_identifier(new_table, &self.name_resolution_ctx).name;
 
         if new_catalog != catalog {
             return Err(ErrorCode::BadArguments(
@@ -654,13 +658,13 @@ impl<'a> Binder {
 
         let catalog = catalog
             .as_ref()
-            .map(|catalog| catalog.name.to_lowercase())
+            .map(|catalog| normalize_identifier(catalog, &self.name_resolution_ctx).name)
             .unwrap_or_else(|| self.ctx.get_current_catalog());
         let database = database
             .as_ref()
-            .map(|ident| ident.name.to_lowercase())
+            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
             .unwrap_or_else(|| self.ctx.get_current_database());
-        let table = table.name.to_lowercase();
+        let table = normalize_identifier(table, &self.name_resolution_ctx).name;
 
         Ok(Plan::TruncateTable(Box::new(TruncateTablePlan {
             catalog,
@@ -683,13 +687,13 @@ impl<'a> Binder {
 
         let catalog = catalog
             .as_ref()
-            .map(|catalog| catalog.name.to_lowercase())
+            .map(|catalog| normalize_identifier(catalog, &self.name_resolution_ctx).name)
             .unwrap_or_else(|| self.ctx.get_current_catalog());
         let database = database
             .as_ref()
-            .map(|ident| ident.name.to_lowercase())
+            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
             .unwrap_or_else(|| self.ctx.get_current_database());
-        let table = table.name.to_lowercase();
+        let table = normalize_identifier(table, &self.name_resolution_ctx).name;
         let action = action
             .map(|v| match v {
                 AstOptimizeTableAction::All => OptimizeTableAction::All,
@@ -718,13 +722,13 @@ impl<'a> Binder {
 
         let catalog = catalog
             .as_ref()
-            .map(|catalog| catalog.name.to_lowercase())
+            .map(|catalog| normalize_identifier(catalog, &self.name_resolution_ctx).name)
             .unwrap_or_else(|| self.ctx.get_current_catalog());
         let database = database
             .as_ref()
-            .map(|ident| ident.name.to_lowercase())
+            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
             .unwrap_or_else(|| self.ctx.get_current_database());
-        let table = table.name.to_lowercase();
+        let table = normalize_identifier(table, &self.name_resolution_ctx).name;
 
         Ok(Plan::ExistsTable(Box::new(ExistsTablePlan {
             catalog,
@@ -740,12 +744,17 @@ impl<'a> Binder {
         let bind_context = BindContext::new();
         match source {
             CreateTableSource::Columns(columns) => {
-                let mut scalar_binder =
-                    ScalarBinder::new(&bind_context, self.ctx.clone(), self.metadata.clone(), &[]);
+                let mut scalar_binder = ScalarBinder::new(
+                    &bind_context,
+                    self.ctx.clone(),
+                    &self.name_resolution_ctx,
+                    self.metadata.clone(),
+                    &[],
+                );
                 let mut fields = Vec::with_capacity(columns.len());
                 let mut fields_comments = Vec::with_capacity(columns.len());
                 for column in columns.iter() {
-                    let name = column.name.name.clone();
+                    let name = normalize_identifier(&column.name, &self.name_resolution_ctx).name;
                     let data_type = TypeFactory::instance().get(column.data_type.to_string())?;
 
                     let field = DataField::new(&name, data_type).with_default_expr({
@@ -768,13 +777,13 @@ impl<'a> Binder {
             } => {
                 let catalog = catalog
                     .as_ref()
-                    .map(|catalog| catalog.name.to_lowercase())
+                    .map(|catalog| normalize_identifier(catalog, &self.name_resolution_ctx).name)
                     .unwrap_or_else(|| self.ctx.get_current_catalog());
                 let database = database.as_ref().map_or_else(
                     || self.ctx.get_current_catalog(),
-                    |ident| ident.name.to_lowercase(),
+                    |ident| normalize_identifier(ident, &self.name_resolution_ctx).name,
                 );
-                let table_name = table.name.to_lowercase();
+                let table_name = normalize_identifier(table, &self.name_resolution_ctx).name;
                 let table = self.ctx.get_table(&catalog, &database, &table_name).await?;
                 Ok((table.schema(), table.field_comments().clone()))
             }
@@ -812,7 +821,7 @@ impl<'a> Binder {
             let column = ColumnBinding {
                 database_name: None,
                 table_name: None,
-                column_name: field.name().to_lowercase(),
+                column_name: field.name().clone(),
                 // A dummy index is fine, since we won't actually evaluate the expression
                 index: 0,
                 data_type: Box::new(field.data_type().clone()),
@@ -820,8 +829,13 @@ impl<'a> Binder {
             };
             bind_context.columns.push(column);
         }
-        let mut scalar_binder =
-            ScalarBinder::new(&bind_context, self.ctx.clone(), self.metadata.clone(), &[]);
+        let mut scalar_binder = ScalarBinder::new(
+            &bind_context,
+            self.ctx.clone(),
+            &self.name_resolution_ctx,
+            self.metadata.clone(),
+            &[],
+        );
 
         let mut cluster_keys = Vec::with_capacity(cluster_by.len());
         for cluster_by in cluster_by.iter() {
@@ -832,7 +846,14 @@ impl<'a> Binder {
                     cluster_by
                 )));
             }
-            cluster_keys.push(format!("{:#}", cluster_by));
+            let mut cluster_by = cluster_by.clone();
+            walk_expr_mut(
+                &mut IdentifierNormalizer {
+                    ctx: &self.name_resolution_ctx,
+                },
+                &mut cluster_by,
+            );
+            cluster_keys.push(format!("{:#}", &cluster_by));
         }
 
         Ok(cluster_keys)

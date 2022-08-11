@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![deny(unused_crate_dependencies)]
+
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::fmt::Debug;
@@ -201,6 +203,24 @@ impl Settings {
                 level: ScopeLevel::Session,
                 desc: "The timeout in seconds for waiting for processing of async insert, default value: 100",
             },
+            SettingValue {
+                default_value: DataValue::UInt64(0),
+                user_setting: UserSetting::create(
+                    "unquoted_ident_case_sensitive",
+                    DataValue::UInt64(0),
+                ),
+                level: ScopeLevel::Session,
+                desc: "Case sensitivity of unquoted identifiers, default value: 0 (aka case-insensitive)",
+            },
+            SettingValue {
+                default_value: DataValue::UInt64(1),
+                user_setting: UserSetting::create(
+                    "quoted_ident_case_sensitive",
+                    DataValue::UInt64(1),
+                ),
+                level: ScopeLevel::Session,
+                desc: "Case sensitivity of quoted identifiers, default value: 1 (aka case-sensitive)",
+            },
         ];
 
         let settings = Arc::new(RwLock::new(HashMap::default()));
@@ -362,6 +382,30 @@ impl Settings {
     pub fn set_wait_for_async_insert_timeout(&self, val: u64) -> Result<()> {
         let key = "wait_for_async_insert_timeout";
         self.try_set_u64(key, val, false)
+    }
+
+    pub fn get_unquoted_ident_case_sensitive(&self) -> Result<bool> {
+        static KEY: &str = "unquoted_ident_case_sensitive";
+        let v = self.try_get_u64(KEY)?;
+        Ok(v != 0)
+    }
+
+    pub fn set_unquoted_ident_case_sensitive(&self, val: bool) -> Result<()> {
+        static KEY: &str = "unquoted_ident_case_sensitive";
+        let v = if val { 1 } else { 0 };
+        self.try_set_u64(KEY, v, false)
+    }
+
+    pub fn get_quoted_ident_case_sensitive(&self) -> Result<bool> {
+        static KEY: &str = "quoted_ident_case_sensitive";
+        let v = self.try_get_u64(KEY)?;
+        Ok(v != 0)
+    }
+
+    pub fn set_quoted_ident_case_sensitive(&self, val: bool) -> Result<()> {
+        static KEY: &str = "quoted_ident_case_sensitive";
+        let v = if val { 1 } else { 0 };
+        self.try_set_u64(KEY, v, false)
     }
 
     pub fn has_setting(&self, key: &str) -> bool {

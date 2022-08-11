@@ -33,6 +33,12 @@ pub struct Identifier<'a> {
     pub span: Token<'a>,
 }
 
+impl<'a> Identifier<'a> {
+    pub fn quoted(&self) -> bool {
+        self.quote.is_some()
+    }
+}
+
 impl<'a> Display for Identifier<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         if let Some(c) = self.quote {

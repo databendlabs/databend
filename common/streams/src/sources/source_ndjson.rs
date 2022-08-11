@@ -58,7 +58,7 @@ impl NDJsonSourceBuilder {
 
     pub fn build<R>(&self, reader: R) -> Result<NDJsonSource<R>>
     where R: AsyncBufRead + Unpin + Send {
-        NDJsonSource::try_create(self.clone(), reader)
+        NDJsonSource::try_create(self.clone(), reader, self.format.ident_case_sensitive)
     }
 }
 
@@ -67,17 +67,23 @@ pub struct NDJsonSource<R> {
     reader: R,
     rows: usize,
     buffer: String,
+    ident_case_sensitive: bool,
 }
 
 impl<R> NDJsonSource<R>
 where R: AsyncBufRead + Unpin + Send
 {
-    fn try_create(builder: NDJsonSourceBuilder, reader: R) -> Result<Self> {
+    fn try_create(
+        builder: NDJsonSourceBuilder,
+        reader: R,
+        ident_case_sensitive: bool,
+    ) -> Result<Self> {
         Ok(Self {
             builder,
             reader,
             rows: 0,
             buffer: String::new(),
+            ident_case_sensitive,
         })
     }
 }
@@ -142,10 +148,22 @@ where R: AsyncBufRead + Unpin + Send
                 continue;
             }
 
-            let json: serde_json::Value = serde_json::from_reader(self.buffer.as_bytes())?;
+            let mut json: serde_json::Value = serde_json::from_reader(self.buffer.as_bytes())?;
+
+            // if it's not case_sensitive, we convert to lowercase
+            if !self.ident_case_sensitive {
+                if let serde_json::Value::Object(x) = json {
+                    let y = x.into_iter().map(|(k, v)| (k.to_lowercase(), v)).collect();
+                    json = serde_json::Value::Object(y);
+                }
+            }
 
             for ((name, type_name), deser) in fields.iter().zip(packs.iter_mut()) {
-                let value = &json[name];
+                let value = if self.ident_case_sensitive {
+                    &json[name]
+                } else {
+                    &json[name.to_lowercase()]
+                };
                 deser.de_json(value, &self.builder.format).map_err(|e| {
                     let value_str = format!("{:?}", value);
                     ErrorCode::BadBytes(format!(

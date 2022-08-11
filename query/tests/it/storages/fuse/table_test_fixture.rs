@@ -162,6 +162,29 @@ impl TestFixture {
         }
     }
 
+    // create a normal table without cluster key.
+    pub fn create_normal_table_plan(&self) -> CreateTablePlan {
+        CreateTablePlan {
+            if_not_exists: false,
+            tenant: self.default_tenant(),
+            catalog: self.default_catalog_name(),
+            database: self.default_db_name(),
+            table: self.default_table_name(),
+            table_meta: TableMeta {
+                schema: TestFixture::default_schema(),
+                engine: "FUSE".to_string(),
+                options: [
+                    // database id is required for FUSE
+                    (OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned()),
+                ]
+                .into(),
+                ..Default::default()
+            },
+            as_select: None,
+            cluster_keys: vec![],
+        }
+    }
+
     pub async fn create_default_table(&self) -> Result<()> {
         let create_table_plan = self.default_crate_table_plan();
         let interpreter = CreateTableInterpreter::try_create(self.ctx.clone(), create_table_plan)?;

@@ -42,6 +42,7 @@ pub struct FormatSettings {
 
     pub input_buffer_size: usize,
     pub decompress_buffer_size: usize,
+    pub ident_case_sensitive: bool,
 }
 
 impl Default for FormatSettings {
@@ -65,6 +66,7 @@ impl Default for FormatSettings {
             json_escape_forward_slashes: true,
             input_buffer_size: 1024 * 1024,
             decompress_buffer_size: 1024 * 1024,
+            ident_case_sensitive: false,
         }
     }
 }

@@ -29,6 +29,7 @@ use common_ast::parser::parse_expr;
 use common_ast::parser::token::Token;
 use common_ast::parser::tokenize_sql;
 use common_ast::Backtrace;
+use common_ast::Dialect;
 use common_ast::DisplayError;
 use common_datavalues::type_coercion::merge_types;
 use common_datavalues::ArrayType;
@@ -50,6 +51,8 @@ use common_functions::scalars::FunctionFactory;
 use common_functions::scalars::TupleFunction;
 use common_planners::validate_function_arg;
 
+use super::name_resolution::NameResolutionContext;
+use super::normalize_identifier;
 use crate::evaluator::Evaluator;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
@@ -86,6 +89,7 @@ use crate::sql::ScalarExpr;
 pub struct TypeChecker<'a> {
     bind_context: &'a BindContext,
     ctx: Arc<QueryContext>,
+    name_resolution_ctx: &'a NameResolutionContext,
     metadata: MetadataRef,
 
     aliases: &'a [(String, Scalar)],
@@ -99,12 +103,14 @@ impl<'a> TypeChecker<'a> {
     pub fn new(
         bind_context: &'a BindContext,
         ctx: Arc<QueryContext>,
+        name_resolution_ctx: &'a NameResolutionContext,
         metadata: MetadataRef,
         aliases: &'a [(String, Scalar)],
     ) -> Self {
         Self {
             bind_context,
             ctx,
+            name_resolution_ctx,
             metadata,
             aliases,
             in_aggregate_function: false,
@@ -150,13 +156,21 @@ impl<'a> TypeChecker<'a> {
             Expr::ColumnRef {
                 database,
                 table,
-                column,
+                column: ident,
                 ..
             } => {
+                let database = database
+                    .as_ref()
+                    .map(|ident| normalize_identifier(ident, self.name_resolution_ctx).name);
+                let table = table
+                    .as_ref()
+                    .map(|ident| normalize_identifier(ident, self.name_resolution_ctx).name);
+                let column = normalize_identifier(ident, self.name_resolution_ctx).name;
                 let result = self.bind_context.resolve_name(
-                    database.as_ref().map(|ident| ident.name.as_str()),
-                    table.as_ref().map(|ident| ident.name.as_str()),
-                    column,
+                    database.as_deref(),
+                    table.as_deref(),
+                    column.as_str(),
+                    &ident.span,
                     self.aliases,
                 )?;
                 let (scalar, data_type) = match result {
@@ -1061,38 +1075,38 @@ impl<'a> TypeChecker<'a> {
     ) -> Result<Box<(Scalar, DataTypeImpl)>> {
         match interval_kind {
             IntervalKind::Year => {
-                self.resolve_function(span, "toYear", &[arg], Some(TimestampType::new_impl(0)))
+                self.resolve_function(span, "to_year", &[arg], Some(TimestampType::new_impl(0)))
                     .await
             }
             IntervalKind::Month => {
-                self.resolve_function(span, "toMonth", &[arg], Some(TimestampType::new_impl(0)))
+                self.resolve_function(span, "to_month", &[arg], Some(TimestampType::new_impl(0)))
                     .await
             }
             IntervalKind::Day => {
                 self.resolve_function(
                     span,
-                    "toDayOfMonth",
+                    "to_day_of_month",
                     &[arg],
                     Some(TimestampType::new_impl(0)),
                 )
                 .await
             }
             IntervalKind::Hour => {
-                self.resolve_function(span, "toHour", &[arg], Some(TimestampType::new_impl(0)))
+                self.resolve_function(span, "to_hour", &[arg], Some(TimestampType::new_impl(0)))
                     .await
             }
             IntervalKind::Minute => {
-                self.resolve_function(span, "toMinute", &[arg], Some(TimestampType::new_impl(0)))
+                self.resolve_function(span, "to_minute", &[arg], Some(TimestampType::new_impl(0)))
                     .await
             }
             IntervalKind::Second => {
-                self.resolve_function(span, "toSecond", &[arg], Some(TimestampType::new_impl(0)))
+                self.resolve_function(span, "to_second", &[arg], Some(TimestampType::new_impl(0)))
                     .await
             }
             IntervalKind::Doy => {
                 self.resolve_function(
                     span,
-                    "toDayOfYear",
+                    "to_day_of_year",
                     &[arg],
                     Some(TimestampType::new_impl(0)),
                 )
@@ -1101,7 +1115,7 @@ impl<'a> TypeChecker<'a> {
             IntervalKind::Dow => {
                 self.resolve_function(
                     span,
-                    "toDayOfWeek",
+                    "to_day_of_week",
                     &[arg],
                     Some(TimestampType::new_impl(0)),
                 )
@@ -1245,7 +1259,7 @@ impl<'a> TypeChecker<'a> {
             IntervalKind::Year => {
                 self.resolve_function(
                     span,
-                    "toStartOfYear",
+                    "to_start_of_year",
                     &[date],
                     Some(TimestampType::new_impl(0)),
                 )
@@ -1254,7 +1268,7 @@ impl<'a> TypeChecker<'a> {
             IntervalKind::Month => {
                 self.resolve_function(
                     span,
-                    "toStartOfMonth",
+                    "to_start_of_month",
                     &[date],
                     Some(TimestampType::new_impl(0)),
                 )
@@ -1263,7 +1277,7 @@ impl<'a> TypeChecker<'a> {
             IntervalKind::Day => {
                 self.resolve_function(
                     span,
-                    "toStartOfDay",
+                    "to_start_of_day",
                     &[date],
                     Some(TimestampType::new_impl(0)),
                 )
@@ -1272,7 +1286,7 @@ impl<'a> TypeChecker<'a> {
             IntervalKind::Hour => {
                 self.resolve_function(
                     span,
-                    "toStartOfHour",
+                    "to_start_of_hour",
                     &[date],
                     Some(TimestampType::new_impl(0)),
                 )
@@ -1281,7 +1295,7 @@ impl<'a> TypeChecker<'a> {
             IntervalKind::Minute => {
                 self.resolve_function(
                     span,
-                    "toStartOfMinute",
+                    "to_start_of_minute",
                     &[date],
                     Some(TimestampType::new_impl(0)),
                 )
@@ -1290,7 +1304,7 @@ impl<'a> TypeChecker<'a> {
             IntervalKind::Second => {
                 self.resolve_function(
                     span,
-                    "toStartOfSecond",
+                    "to_start_of_second",
                     &[date],
                     Some(TimestampType::new_impl(0)),
                 )
@@ -1312,6 +1326,7 @@ impl<'a> TypeChecker<'a> {
         let mut binder = Binder::new(
             self.ctx.clone(),
             self.ctx.get_catalogs(),
+            self.name_resolution_ctx.clone(),
             self.metadata.clone(),
         );
 
@@ -1572,7 +1587,7 @@ impl<'a> TypeChecker<'a> {
             }
             let backtrace = Backtrace::new();
             let sql_tokens = tokenize_sql(udf.definition.as_str())?;
-            let expr = parse_expr(&sql_tokens, &backtrace)?;
+            let expr = parse_expr(&sql_tokens, Dialect::PostgreSQL, &backtrace)?;
             let mut args_map = HashMap::new();
             arguments.iter().enumerate().for_each(|(idx, argument)| {
                 if let Some(parameter) = parameters.get(idx) {
@@ -1591,9 +1606,9 @@ impl<'a> TypeChecker<'a> {
                 .map_err(|e| ErrorCode::SemanticError(span.display_error(e.message())))?;
             self.resolve(&udf_expr, None).await
         } else {
-            Err(ErrorCode::SemanticError(span.display_error(
-                "No function matches the given name.".to_string(),
-            )))
+            Err(ErrorCode::SemanticError(span.display_error(format!(
+                "No function matches the given name: {func_name}"
+            ))))
         }
     }
 

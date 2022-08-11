@@ -1,5 +1,5 @@
 ---
-title: toSecond
+title: to_second
 ---
 
 Converts a date with time to a UInt8 number containing the number of the second in the minute (0-59).
@@ -7,7 +7,7 @@ Converts a date with time to a UInt8 number containing the number of the second 
 ## Syntax
 
 ```sql
-toSecond( <expr> )
+to_second( <expr> )
 ```
 
 ## Arguments
@@ -23,16 +23,16 @@ toSecond( <expr> )
 ## Examples
 
 ```sql
-SELECT toSecond(now());
+SELECT to_second(now());
 +-----------------+
-| toSecond(now()) |
+| to_second(now()) |
 +-----------------+
 |              14 |
 +-----------------+
 
-SELECT toSecond(to_datetime(1630812366));
+SELECT to_second(to_datetime(1630812366));
 +----------------------------------+
-| toSecond(to_datetime(1630812366)) |
+| to_second(to_datetime(1630812366)) |
 +----------------------------------+
 |                                6 |
 +----------------------------------+

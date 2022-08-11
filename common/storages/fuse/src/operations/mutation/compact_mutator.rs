@@ -70,13 +70,14 @@ impl<'a> CompactMutator<'a> {
         let mut segments = Vec::new();
         let mut summarys = Vec::new();
         let reader = MetaReaders::segment_info_reader(self.ctx.as_ref());
+        let no_cluster = table.cluster_key_meta.is_none();
         for segment_location in &snapshot.segments {
             let (x, ver) = (segment_location.0.clone(), segment_location.1);
             let mut need_merge = false;
             let mut remains = Vec::new();
             let segment = reader.read(x, None, ver).await?;
             segment.blocks.iter().for_each(|b| {
-                if b.row_count != self.row_per_block as u64 {
+                if no_cluster && b.row_count != self.row_per_block as u64 {
                     merged_blocks.push(b.clone());
                     need_merge = true;
                 } else {
@@ -143,7 +144,7 @@ impl<'a> CompactMutator<'a> {
     ) -> Result<()> {
         if let Some(blocks) = blocks {
             for block in blocks {
-                let new_block_meta = writer.write(block).await?;
+                let new_block_meta = writer.write(block, None).await?;
                 metas.push(new_block_meta);
             }
         }

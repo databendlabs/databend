@@ -15,7 +15,7 @@ cat << EOF > /tmp/databend_test_csv2.txt
 
 EOF
 
-echo "set enable_planner_v2 = 1;" | $MYSQL_CLIENT_CONNECT
+
 echo "create table a ( a datetime, b string, c int);" | $MYSQL_CLIENT_CONNECT
 
 curl -sH "insert_sql:insert into a format Csv" -H "skip_header:0" -F "upload=@/tmp/databend_test_csv1.txt" -F "upload=@/tmp/databend_test_csv2.txt" -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" | grep "Error"

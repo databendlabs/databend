@@ -1,12 +1,12 @@
 ---
-title: toStartOfFiveMinutes
+title: to_start_of_five_minutes
 ---
 
 Rounds down a date with time to the start of the five-minute interval.
 ## Syntax
 
 ```sql
-toStartOfFiveMinutes( <expr> )
+to_start_of_five_minutes( <expr> )
 ```
 
 ## Arguments
@@ -22,16 +22,16 @@ Datetime object, returns date in “YYYY-MM-DD hh:mm:ss” format.
 ## Examples
 
 ```sql
-SELECT toStartOfFiveMinutes(now());
+SELECT to_start_of_five_minutes(now());
 +-----------------------------+
-| toStartOfFiveMinutes(now()) |
+| to_start_of_five_minutes(now()) |
 +-----------------------------+
 | 2022-03-29 06:45:00         |
 +-----------------------------+
 
-SELECT toStartOfFiveMinutes(to_datetime(1630812366));
+SELECT to_start_of_five_minutes(to_datetime(1630812366));
 +----------------------------------------------+
-| toStartOfFiveMinutes(to_datetime(1630812366)) |
+| to_start_of_five_minutes(to_datetime(1630812366)) |
 +----------------------------------------------+
 | 2021-09-05 03:25:00                          |
 +----------------------------------------------+

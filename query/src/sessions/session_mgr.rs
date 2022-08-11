@@ -29,6 +29,7 @@ use common_exception::Result;
 use common_metrics::label_counter;
 use common_storage::init_operator;
 use common_tracing::init_logging;
+use common_tracing::init_query_logger;
 use common_users::RoleCacheMgr;
 use common_users::UserApiProvider;
 use futures::future::Either;
@@ -37,6 +38,7 @@ use opendal::Operator;
 use parking_lot::RwLock;
 use tracing::debug;
 use tracing::info;
+use tracing::Subscriber;
 use tracing_appender::non_blocking::WorkerGuard;
 
 use crate::api::DataExchangeManager;
@@ -63,6 +65,7 @@ pub struct SessionManager {
     pub(in crate::sessions) max_sessions: usize,
     pub(in crate::sessions) active_sessions: Arc<RwLock<HashMap<String, Arc<Session>>>>,
     pub(in crate::sessions) storage_cache_manager: Arc<CacheManager>,
+    pub(in crate::sessions) query_logger: Arc<RwLock<Option<Arc<dyn Subscriber + Send + Sync>>>>,
     pub status: Arc<RwLock<SessionManagerStatus>>,
     storage_operator: Operator,
     storage_runtime: Arc<Runtime>,
@@ -87,7 +90,18 @@ impl SessionManager {
             "databend-query-{}-{}",
             conf.query.tenant_id, conf.query.cluster_id
         );
-        let _log_guards = init_logging(app_name.as_str(), &conf.log);
+        let mut _log_guards = init_logging(app_name.as_str(), &conf.log);
+
+        let query_detail_name = format!("{}-{}", conf.query.tenant_id, conf.query.cluster_id);
+        let query_detail_dir = format!("{}/query-detail", conf.log.file.dir);
+        let (_guards, query_logger) = if conf.log.file.on {
+            let (_guards, query_logger) =
+                init_query_logger(query_detail_name.as_str(), query_detail_dir.as_str());
+            (_guards, Some(query_logger))
+        } else {
+            (Vec::new(), None)
+        };
+        _log_guards.extend(_guards);
 
         let catalogs = Arc::new(CatalogManager::try_new(&conf).await?);
         let storage_cache_manager = Arc::new(CacheManager::init(&conf.query));
@@ -142,6 +156,7 @@ impl SessionManager {
             active_sessions,
             data_exchange_manager: exchange_manager,
             storage_cache_manager,
+            query_logger: Arc::new(RwLock::new(query_logger)),
             status,
             storage_operator,
             storage_runtime,
@@ -411,5 +426,9 @@ impl SessionManager {
 
     pub fn get_async_insert_queue(&self) -> Arc<RwLock<Option<Arc<AsyncInsertQueue>>>> {
         self.async_insert_queue.clone()
+    }
+
+    pub fn get_query_logger(&self) -> Option<Arc<dyn Subscriber + Send + Sync>> {
+        self.query_logger.write().clone()
     }
 }

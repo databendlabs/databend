@@ -1,5 +1,5 @@
 ---
-title: toStartOfWeek
+title: to_start_of_week
 ---
 
 Returns the first day of the year for a date or a date with time.
@@ -7,7 +7,7 @@ Returns the first day of the year for a date or a date with time.
 ## Syntax
 
 ```sql
-toStartOfWeek(expr)
+to_start_of_week(expr)
 ```
 
 ## Arguments
@@ -23,16 +23,16 @@ Datetime object, returns date in “YYYY-MM-DD” format.
 ## Examples
 
 ```sql
-SELECT toStartOfWeek(now());
+SELECT to_start_of_week(now());
 +----------------------+
-| toStartOfWeek(now()) |
+| to_start_of_week(now()) |
 +----------------------+
 | 2022-03-27           |
 +----------------------+
 
-SELECT toStartOfWeek(to_datetime(1630812366));
+SELECT to_start_of_week(to_datetime(1630812366));
 +---------------------------------------+
-| toStartOfWeek(to_datetime(1630812366)) |
+| to_start_of_week(to_datetime(1630812366)) |
 +---------------------------------------+
 | 2021-09-05                            |
 +---------------------------------------+

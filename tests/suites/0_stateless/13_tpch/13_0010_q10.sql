@@ -1,4 +1,4 @@
-set enable_planner_v2 = 1;
+
 select
     c_custkey,
     c_name,
@@ -17,7 +17,7 @@ where
         c_custkey = o_custkey
   and l_orderkey = o_orderkey
   and o_orderdate >= to_date('1993-10-01')
-  and o_orderdate < addMonths(to_date('1993-10-01'), 3)
+  and o_orderdate < add_months(to_date('1993-10-01'), 3)
   and l_returnflag = 'R'
   and c_nationkey = n_nationkey
 group by

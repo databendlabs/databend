@@ -1,4 +1,4 @@
-set enable_planner_v2 = 1;
+
 select
     s_name,
     s_address
@@ -29,7 +29,7 @@ where
                     l_partkey = ps_partkey
               and l_suppkey = ps_suppkey
               and l_shipdate >= to_date('1994-01-01')
-              and l_shipdate < addYears(to_date('1994-01-01'), 1)
+              and l_shipdate < add_years(to_date('1994-01-01'), 1)
         )
     )
   and s_nationkey = n_nationkey
