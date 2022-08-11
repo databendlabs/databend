@@ -14,14 +14,12 @@
 
 use enum_as_inner::EnumAsInner;
 
+use crate::types::number::overflow_cast;
+use crate::types::number::Number;
 use crate::types::AnyType;
-use crate::types::ArgType;
-use crate::types::BooleanType;
-use crate::types::DataType;
-use crate::types::GenericMap;
-use crate::types::NumberType;
-use crate::types::StringType;
 use crate::types::ValueType;
+use crate::with_number_type;
+use crate::Scalar;
 
 #[derive(Debug, Clone, Default)]
 pub struct FunctionProperty {
@@ -37,9 +35,16 @@ impl FunctionProperty {
 
 #[derive(Debug, Clone, PartialEq, EnumAsInner)]
 pub enum Domain {
-    Int(IntDomain),
-    UInt(UIntDomain),
-    Float(FloatDomain),
+    Int8(NumberDomain<i8>),
+    Int16(NumberDomain<i16>),
+    Int32(NumberDomain<i32>),
+    Int64(NumberDomain<i64>),
+    UInt8(NumberDomain<u8>),
+    UInt16(NumberDomain<u16>),
+    UInt32(NumberDomain<u32>),
+    UInt64(NumberDomain<u64>),
+    Float32(NumberDomain<f32>),
+    Float64(NumberDomain<f64>),
     Boolean(BooleanDomain),
     String(StringDomain),
     Nullable(NullableDomain<AnyType>),
@@ -49,21 +54,9 @@ pub enum Domain {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct IntDomain {
-    pub min: i64,
-    pub max: i64,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct UIntDomain {
-    pub min: u64,
-    pub max: u64,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct FloatDomain {
-    pub min: f64,
-    pub max: f64,
+pub struct NumberDomain<T: Number> {
+    pub min: T::Storage,
+    pub max: T::Storage,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -85,64 +78,18 @@ pub struct NullableDomain<T: ValueType> {
 }
 
 impl Domain {
-    pub fn full(ty: &DataType, generics: &GenericMap) -> Self {
-        match ty {
-            DataType::Null => Domain::Nullable(NullableDomain {
-                has_null: true,
-                value: None,
-            }),
-            DataType::EmptyArray => Domain::Array(None),
-            DataType::Int8 => Domain::Int(NumberType::<i8>::full_domain(generics)),
-            DataType::Int16 => Domain::Int(NumberType::<i16>::full_domain(generics)),
-            DataType::Int32 => Domain::Int(NumberType::<i32>::full_domain(generics)),
-            DataType::Int64 => Domain::Int(NumberType::<i64>::full_domain(generics)),
-            DataType::UInt8 => Domain::UInt(NumberType::<u8>::full_domain(generics)),
-            DataType::UInt16 => Domain::UInt(NumberType::<u16>::full_domain(generics)),
-            DataType::UInt32 => Domain::UInt(NumberType::<u32>::full_domain(generics)),
-            DataType::UInt64 => Domain::UInt(NumberType::<u64>::full_domain(generics)),
-            DataType::Float32 => Domain::Float(NumberType::<f32>::full_domain(generics)),
-            DataType::Float64 => Domain::Float(NumberType::<f64>::full_domain(generics)),
-            DataType::Boolean => Domain::Boolean(BooleanType::full_domain(generics)),
-            DataType::String => Domain::String(StringType::full_domain(generics)),
-            DataType::Nullable(ty) => Domain::Nullable(NullableDomain {
-                has_null: true,
-                value: Some(Box::new(Domain::full(ty, generics))),
-            }),
-            DataType::Tuple(tys) => {
-                Domain::Tuple(tys.iter().map(|ty| Domain::full(ty, generics)).collect())
-            }
-            DataType::Array(ty) => Domain::Array(Some(Box::new(Domain::full(ty, generics)))),
-            DataType::Map(_) => Domain::Undefined,
-            DataType::Generic(idx) => Domain::full(&generics[*idx], generics),
-        }
-    }
-
     pub fn merge(&self, other: &Domain) -> Domain {
         match (self, other) {
-            (Domain::Int(self_int), Domain::Int(other_int)) => Domain::Int(IntDomain {
-                min: self_int.min.min(other_int.min),
-                max: self_int.max.max(other_int.max),
+            (Domain::Boolean(this), Domain::Boolean(other)) => Domain::Boolean(BooleanDomain {
+                has_false: this.has_false || other.has_false,
+                has_true: this.has_true || other.has_true,
             }),
-            (Domain::UInt(self_uint), Domain::UInt(other_uint)) => Domain::UInt(UIntDomain {
-                min: self_uint.min.min(other_uint.min),
-                max: self_uint.max.max(other_uint.max),
-            }),
-            (Domain::Float(self_uint), Domain::Float(other_uint)) => Domain::Float(FloatDomain {
-                min: self_uint.min.min(other_uint.min),
-                max: self_uint.max.max(other_uint.max),
-            }),
-            (Domain::Boolean(self_bool), Domain::Boolean(other_bool)) => {
-                Domain::Boolean(BooleanDomain {
-                    has_false: self_bool.has_false || other_bool.has_false,
-                    has_true: self_bool.has_true || other_bool.has_true,
-                })
-            }
-            (Domain::String(self_str), Domain::String(other_str)) => Domain::String(StringDomain {
-                min: self_str.min.as_slice().min(&other_str.min).to_vec(),
-                max: self_str
+            (Domain::String(this), Domain::String(other)) => Domain::String(StringDomain {
+                min: this.min.as_slice().min(&other.min).to_vec(),
+                max: this
                     .max
                     .as_ref()
-                    .zip(other_str.max.as_ref())
+                    .zip(other.max.as_ref())
                     .map(|(self_max, other_max)| self_max.max(other_max).to_vec()),
             }),
             (
@@ -210,7 +157,69 @@ impl Domain {
                     .map(|(self_tup, other_tup)| self_tup.merge(other_tup))
                     .collect(),
             ),
-            (a, b) => unreachable!("unable to merge {:?} with {:?}", a, b),
+            (this, other) => {
+                with_number_type!(|TYPE| match (this, other) {
+                    (Domain::TYPE(this), Domain::TYPE(other)) => Domain::TYPE(NumberDomain {
+                        min: this.min.min(other.min),
+                        max: this.max.max(other.max),
+                    }),
+                    _ => unreachable!("unable to merge {this:?} with {other:?}"),
+                })
+            }
         }
+    }
+
+    pub fn as_singleton(&self) -> Option<Scalar> {
+        match self {
+            Domain::Int8(NumberDomain { min, max }) if min == max => Some(Scalar::Int8(*min)),
+            Domain::Int16(NumberDomain { min, max }) if min == max => Some(Scalar::Int16(*min)),
+            Domain::Int32(NumberDomain { min, max }) if min == max => Some(Scalar::Int32(*min)),
+            Domain::Int64(NumberDomain { min, max }) if min == max => Some(Scalar::Int64(*min)),
+            Domain::UInt8(NumberDomain { min, max }) if min == max => Some(Scalar::UInt8(*min)),
+            Domain::UInt16(NumberDomain { min, max }) if min == max => Some(Scalar::UInt16(*min)),
+            Domain::UInt32(NumberDomain { min, max }) if min == max => Some(Scalar::UInt32(*min)),
+            Domain::UInt64(NumberDomain { min, max }) if min == max => Some(Scalar::UInt64(*min)),
+            Domain::Float32(NumberDomain { min, max }) if min == max => Some(Scalar::Float32(*min)),
+            Domain::Float64(NumberDomain { min, max }) if min == max => Some(Scalar::Float64(*min)),
+            Domain::Boolean(BooleanDomain {
+                has_false: true,
+                has_true: false,
+            }) => Some(Scalar::Boolean(false)),
+            Domain::Boolean(BooleanDomain {
+                has_false: false,
+                has_true: true,
+            }) => Some(Scalar::Boolean(true)),
+            Domain::String(StringDomain { min, max }) if Some(min) == max.as_ref() => {
+                Some(Scalar::String(min.clone()))
+            }
+            Domain::Nullable(NullableDomain {
+                has_null: true,
+                value: None,
+            }) => Some(Scalar::Null),
+            Domain::Nullable(NullableDomain {
+                has_null: false,
+                value: Some(value),
+            }) => value.as_singleton(),
+            Domain::Array(None) => Some(Scalar::EmptyArray),
+            Domain::Tuple(fields) => Some(Scalar::Tuple(
+                fields
+                    .iter()
+                    .map(|field| field.as_singleton())
+                    .collect::<Option<Vec<_>>>()?,
+            )),
+            _ => None,
+        }
+    }
+}
+
+impl<T: Number> NumberDomain<T> {
+    /// Returns the saturating cast domain and a flag denoting whether overflow happened.
+    pub fn overflow_cast<U: Number>(&self) -> (NumberDomain<U>, bool) {
+        let (min, min_overflowing) = overflow_cast::<T, U>(self.min);
+        let (max, max_overflowing) = overflow_cast::<T, U>(self.max);
+        (
+            NumberDomain { min, max },
+            min_overflowing || max_overflowing,
+        )
     }
 }

@@ -3,18 +3,15 @@ SHOW FUNCTIONS LIKE 'today%';
 
 ----
 today 1 0  Returns current date.
-todayofmonth 1 0  Converts a date or date with time to a UInt8 number containing the number of the day of the month (1-31).
-todayofweek 1 0  Converts a date or date with time to a UInt8 number containing the number of the day of the week (Monday is 1, and Sunday is 7).
-todayofyear 1 0  Converts a date or date with time to a UInt16 number containing the number of the day of the year (1-366).
 
 
 statement query TBBTT
-SHOW FUNCTIONS WHERE name LIKE 'today%';
+SHOW FUNCTIONS LIKE 'to_day%';
 
 ----
-today 1 0  Returns current date.
-todayofmonth 1 0  Converts a date or date with time to a UInt8 number containing the number of the day of the month (1-31).
-todayofweek 1 0  Converts a date or date with time to a UInt8 number containing the number of the day of the week (Monday is 1, and Sunday is 7).
-todayofyear 1 0  Converts a date or date with time to a UInt16 number containing the number of the day of the year (1-366).
+to_day_of_month 1 0  Converts a date or date with time to a UInt8 number containing the number of the day of the month (1-31).
+to_day_of_week 1 0  Converts a date or date with time to a UInt8 number containing the number of the day of the week (Monday is 1, and Sunday is 7).
+to_day_of_year 1 0  Converts a date or date with time to a UInt16 number containing the number of the day of the year (1-366).
+
 
 

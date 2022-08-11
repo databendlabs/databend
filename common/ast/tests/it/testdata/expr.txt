@@ -1116,9 +1116,9 @@ BinaryOp {
 
 
 ---------- Input ----------
-`t`:k1.k2
+"t":k1.k2
 ---------- Output ---------
-`t`:k1.k2
+"t":k1.k2
 ---------- AST ------------
 MapAccess {
     span: [
@@ -1139,7 +1139,7 @@ MapAccess {
             column: Identifier {
                 name: "t",
                 quote: Some(
-                    '`',
+                    '"',
                 ),
                 span: QuotedString(0..3),
             },

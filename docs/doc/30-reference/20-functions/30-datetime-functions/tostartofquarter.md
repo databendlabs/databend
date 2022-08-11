@@ -1,5 +1,5 @@
 ---
-title: toStartOfQuarter
+title: to_start_of_quarter
 ---
 
 Rounds down a date or date with time to the first day of the quarter.
@@ -9,7 +9,7 @@ Returns the date.
 ## Syntax
 
 ```sql
-toStartOfQuarter(expr)
+to_start_of_quarter(expr)
 ```
 
 ## Arguments
@@ -24,16 +24,16 @@ Datetime object, returns date in “YYYY-MM-DD” format.
 ## Examples
 
 ```sql
-SELECT toStartOfQuarter(to_date(18869));
+SELECT to_start_of_quarter(to_date(18869));
 +---------------------------------+
-| toStartOfQuarter(to_date(18869)) |
+| to_start_of_quarter(to_date(18869)) |
 +---------------------------------+
 | 2021-07-01                      |
 +---------------------------------+
 
-SELECT toStartOfQuarter(to_datetime(1630812366));
+SELECT to_start_of_quarter(to_datetime(1630812366));
 +------------------------------------------+
-| toStartOfQuarter(to_datetime(1630812366)) |
+| to_start_of_quarter(to_datetime(1630812366)) |
 +------------------------------------------+
 | 2021-07-01                               |
 +------------------------------------------+

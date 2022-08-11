@@ -1,11 +1,11 @@
 ===Explain===
 Project: [a (#0)]
 └── Filter: [t1.a (#0) > 0]
-    └── Scan: default.default.t1
+    └── Scan: default.default.t1, filters: [t1.a (#0) > 0]
 Filter: [(t1.a (#0) > 3) OR ((t2.a (#2) > 5) AND (t1.a (#0) > 1))]
 └── HashJoin: INNER, build keys: [t2.a (#2)], probe keys: [t1.a (#0)], join filters: []
-    ├── Scan: default.default.t1
-    └── Scan: default.default.t2
+    ├── Scan: default.default.t1, filters: []
+    └── Scan: default.default.t2, filters: []
 HashJoin: INNER, build keys: [t2.a (#2)], probe keys: [t1.a (#0)], join filters: []
-├── Scan: default.default.t1
-└── Scan: default.default.t2
+├── Scan: default.default.t1, filters: []
+└── Scan: default.default.t2, filters: []

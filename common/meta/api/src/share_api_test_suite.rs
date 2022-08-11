@@ -20,12 +20,12 @@ use common_meta_app::schema::DatabaseMeta;
 use common_meta_app::schema::DatabaseNameIdent;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TableNameIdent;
-use common_meta_app::share::AddShareAccountReq;
+use common_meta_app::share::AddShareAccountsReq;
 use common_meta_app::share::CreateShareReq;
 use common_meta_app::share::DropShareReq;
 use common_meta_app::share::GetShareGrantObjectReq;
 use common_meta_app::share::GrantShareObjectReq;
-use common_meta_app::share::RemoveShareAccountReq;
+use common_meta_app::share::RemoveShareAccountsReq;
 use common_meta_app::share::RevokeShareObjectReq;
 use common_meta_app::share::ShareAccountNameIdent;
 use common_meta_app::share::ShareGrantObject;
@@ -214,6 +214,40 @@ impl ShareApiTestSuite {
         let share_id: u64;
         let share_on = Utc::now();
         let create_on = Utc::now();
+        let if_exists = true;
+
+        info!("--- add and remove account with not exist share");
+        {
+            let req = AddShareAccountsReq {
+                share_name: share_name.clone(),
+                share_on,
+                if_exists: false,
+                accounts: vec![account.to_string()],
+            };
+
+            // get share meta and check account has been added
+            let res = mt.add_share_accounts(req).await;
+            assert!(res.is_err());
+            let err = res.unwrap_err();
+            assert_eq!(
+                ErrorCode::UnknownShare("").code(),
+                ErrorCode::from(err).code()
+            );
+
+            let req = RemoveShareAccountsReq {
+                share_name: share_name.clone(),
+                if_exists: false,
+                accounts: vec![account2.to_string()],
+            };
+
+            let res = mt.remove_share_accounts(req).await;
+            assert!(res.is_err());
+            let err = res.unwrap_err();
+            assert_eq!(
+                ErrorCode::UnknownShare("").code(),
+                ErrorCode::from(err).code()
+            );
+        }
 
         info!("--- prepare share1");
         {
@@ -233,17 +267,17 @@ impl ShareApiTestSuite {
 
         info!("--- add account account1");
         {
-            let req = AddShareAccountReq {
+            let req = AddShareAccountsReq {
                 share_name: share_name.clone(),
                 share_on,
-                account: account.to_string(),
+                if_exists,
+                accounts: vec![account.to_string()],
             };
 
             // get share meta and check account has been added
-            let res = mt.add_share_account(req).await;
+            let res = mt.add_share_accounts(req).await;
             info!("add share account res: {:?}", res);
-            let res = res.unwrap();
-            assert_eq!(res.share_id, share_id);
+            assert!(res.is_ok());
 
             let (_share_meta_seq, share_meta) =
                 get_share_meta_by_id_or_err(mt.as_kv_api(), share_id, "").await?;
@@ -286,33 +320,34 @@ impl ShareApiTestSuite {
 
         info!("--- add account account1 again");
         {
-            let req = AddShareAccountReq {
+            let req = AddShareAccountsReq {
                 share_name: share_name.clone(),
                 share_on,
-                account: account.to_string(),
+                if_exists,
+                accounts: vec![account.to_string()],
             };
 
-            let res = mt.add_share_account(req).await;
+            let res = mt.add_share_accounts(req).await;
             info!("add share account res: {:?}", res);
             let err = res.unwrap_err();
             assert_eq!(
-                ErrorCode::ShareAccountAlreadyExists("").code(),
+                ErrorCode::ShareAccountsAlreadyExists("").code(),
                 ErrorCode::from(err).code()
             );
         }
 
         info!("--- add account account2");
         {
-            let req = AddShareAccountReq {
+            let req = AddShareAccountsReq {
                 share_name: share_name.clone(),
                 share_on,
-                account: account2.to_string(),
+                if_exists,
+                accounts: vec![account2.to_string()],
             };
 
-            let res = mt.add_share_account(req).await;
+            let res = mt.add_share_accounts(req).await;
             info!("add share account res: {:?}", res);
-            let res = res.unwrap();
-            assert_eq!(res.share_id, share_id);
+            assert!(res.is_ok());
 
             let (_share_meta_seq, share_meta) =
                 get_share_meta_by_id_or_err(mt.as_kv_api(), share_id, "").await?;
@@ -343,12 +378,13 @@ impl ShareApiTestSuite {
 
         info!("--- remove account account2");
         {
-            let req = RemoveShareAccountReq {
-                share_id,
-                account: account2.to_string(),
+            let req = RemoveShareAccountsReq {
+                share_name: share_name.clone(),
+                if_exists,
+                accounts: vec![account2.to_string()],
             };
 
-            let res = mt.remove_share_account(req).await;
+            let res = mt.remove_share_accounts(req).await;
             info!("remove share account res: {:?}", res);
             assert!(res.is_ok());
 
@@ -365,7 +401,7 @@ impl ShareApiTestSuite {
             let res = get_share_account_meta_or_err(mt.as_kv_api(), &share_account_name, "").await;
             let err = res.unwrap_err();
             assert_eq!(
-                ErrorCode::UnknownShareAccount("").code(),
+                ErrorCode::UnknownShareAccounts("").code(),
                 ErrorCode::from(err).code()
             );
         }
@@ -388,7 +424,7 @@ impl ShareApiTestSuite {
             let res = get_share_account_meta_or_err(mt.as_kv_api(), &share_account_name, "").await;
             let err = res.unwrap_err();
             assert_eq!(
-                ErrorCode::UnknownShareAccount("").code(),
+                ErrorCode::UnknownShareAccounts("").code(),
                 ErrorCode::from(err).code()
             );
         }

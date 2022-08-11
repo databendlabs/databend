@@ -88,7 +88,7 @@ impl<'a> nom::error::ParseError<Input<'a>> for Error<'a> {
             span: i[0].clone(),
             errors: vec![],
             contexts: vec![],
-            backtrace: i.1,
+            backtrace: i.2,
         }
     }
 
@@ -122,7 +122,7 @@ impl<'a> nom::error::ContextError<Input<'a>> for Error<'a> {
 
 impl<'a> Error<'a> {
     pub fn from_error_kind(input: Input<'a>, kind: ErrorKind) -> Self {
-        let mut inner = input.1.inner.borrow_mut();
+        let mut inner = input.2.inner.borrow_mut();
         if let Some(ref mut inner) = *inner {
             match input.0[0].span.start.cmp(&inner.span.span.start) {
                 Ordering::Equal => {
@@ -147,7 +147,7 @@ impl<'a> Error<'a> {
             span: input.0[0].clone(),
             errors: vec![kind],
             contexts: vec![],
-            backtrace: input.1,
+            backtrace: input.2,
         }
     }
 }

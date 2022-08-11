@@ -12,8 +12,11 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+#![deny(unused_crate_dependencies)]
 extern crate common_meta_types;
 
+mod id;
+mod id_generator;
 mod kv_api;
 mod kv_api_key;
 mod kv_api_test_suite;
@@ -27,6 +30,8 @@ mod share_api_impl;
 mod share_api_keys;
 mod share_api_test_suite;
 
+pub use id::Id;
+pub(crate) use id_generator::IdGenerator;
 pub use kv_api::get_start_and_end_of_prefix;
 pub use kv_api::prefix_of_string;
 pub use kv_api::ApiBuilder;
@@ -52,13 +57,9 @@ pub use kv_api_utils::txn_op_put;
 pub use kv_api_utils::TXN_MAX_RETRY_TIMES;
 pub use schema_api::SchemaApi;
 pub(crate) use schema_api_impl::get_db_or_err;
-pub use schema_api_keys::DatabaseIdGen;
-pub use schema_api_keys::TableIdGen;
-pub(crate) use schema_api_keys::PREFIX_ID_GEN;
 pub use schema_api_test_suite::SchemaApiTestSuite;
 pub use share_api::ShareApi;
 pub(crate) use share_api_impl::get_share_account_meta_or_err;
 pub(crate) use share_api_impl::get_share_id_to_name_or_err;
 pub(crate) use share_api_impl::get_share_meta_by_id_or_err;
-pub use share_api_keys::ShareIdGen;
 pub use share_api_test_suite::ShareApiTestSuite;

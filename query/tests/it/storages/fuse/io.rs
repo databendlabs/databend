@@ -26,12 +26,7 @@ use databend_query::sessions::TableContext;
 use databend_query::storages::fuse::io::write_block;
 use databend_query::storages::fuse::io::BlockCompactor;
 use databend_query::storages::fuse::io::BlockReader;
-use databend_query::storages::fuse::io::BlockStreamWriter;
 use databend_query::storages::fuse::io::TableMetaLocationGenerator;
-use databend_query::storages::fuse::DEFAULT_BLOCK_PER_SEGMENT;
-use futures::StreamExt;
-use futures::TryStreamExt;
-use num::Integer;
 use opendal::ops::OpRead;
 use opendal::ops::OpWrite;
 use opendal::Accessor;
@@ -42,79 +37,6 @@ use parking_lot::Mutex;
 use uuid::Uuid;
 
 use crate::tests::create_query_context;
-
-#[tokio::test]
-async fn test_fuse_table_block_appender() -> Result<()> {
-    let ctx = create_query_context().await?;
-    let schema = DataSchemaRefExt::create(vec![DataField::new("a", i32::to_data_type())]);
-
-    // single segment
-    let block = DataBlock::create(schema.clone(), vec![Series::from_data(vec![1, 2, 3])]);
-    let block_stream = futures::stream::iter(vec![Ok(block)]);
-
-    let locs = TableMetaLocationGenerator::with_prefix(".".to_owned());
-    let segments = BlockStreamWriter::write_block_stream(
-        ctx.clone(),
-        Box::pin(block_stream),
-        DEFAULT_BLOCK_PER_SEGMENT,
-        0,
-        locs.clone(),
-        None,
-    )
-    .await?
-    .collect::<Vec<_>>()
-    .await;
-
-    assert_eq!(segments.len(), 1);
-    assert!(
-        segments[0].is_ok(),
-        "oops, unexpected result: {:?}",
-        segments[0]
-    );
-
-    // multiple segments
-    let number_of_blocks = 30;
-    let max_rows_per_block = 3;
-    let max_blocks_per_segment = 1;
-    let block = DataBlock::create(schema, vec![Series::from_data(vec![1, 2, 3])]);
-    let blocks = std::iter::repeat(Ok(block)).take(number_of_blocks);
-    let block_stream = futures::stream::iter(blocks);
-
-    let segments = BlockStreamWriter::write_block_stream(
-        ctx.clone(),
-        Box::pin(block_stream),
-        max_rows_per_block,
-        max_blocks_per_segment,
-        locs.clone(),
-        None,
-    )
-    .await?
-    .collect::<Vec<_>>()
-    .await;
-
-    let len = num::Integer::div_ceil(&number_of_blocks, &max_blocks_per_segment);
-    assert_eq!(segments.len(), len);
-    for segment in segments.iter() {
-        assert!(segment.is_ok(), "oops, unexpected result: {:?}", segment);
-    }
-
-    // empty blocks
-    let block_stream = futures::stream::iter(vec![]);
-    let segments = BlockStreamWriter::write_block_stream(
-        ctx,
-        Box::pin(block_stream),
-        DEFAULT_BLOCK_PER_SEGMENT,
-        0,
-        locs,
-        None,
-    )
-    .await?
-    .collect::<Vec<_>>()
-    .await;
-
-    assert!(segments.is_empty());
-    Ok(())
-}
 
 #[test]
 fn test_block_compactor() -> Result<()> {
@@ -248,75 +170,6 @@ fn test_block_compactor() -> Result<()> {
         num_blocks,
         case_name,
     )?;
-
-    Ok(())
-}
-
-#[tokio::test]
-async fn test_block_stream_writer() -> Result<()> {
-    let schema = DataSchemaRefExt::create(vec![DataField::new("a", i32::to_data_type())]);
-    let gen_rows = |n| std::iter::repeat(1i32).take(n).collect::<Vec<_>>();
-    let gen_block = |col| DataBlock::create(schema.clone(), vec![Series::from_data(col)]);
-
-    let test_case = |rows_per_sample_block,
-                     max_rows_per_block,
-                     max_blocks_per_segment,
-                     num_blocks,
-                     case_name: &'static str| async move {
-        let sample_block = gen_block(gen_rows(rows_per_sample_block));
-        let block_stream =
-            futures::stream::iter(std::iter::repeat(Ok(sample_block)).take(num_blocks));
-
-        let ctx = create_query_context().await?;
-        let locs = TableMetaLocationGenerator::with_prefix(".".to_owned());
-        let stream = BlockStreamWriter::write_block_stream(
-            ctx,
-            Box::pin(block_stream),
-            max_rows_per_block,
-            max_blocks_per_segment,
-            locs,
-            None,
-        )
-        .await?;
-        let segs = stream.try_collect::<Vec<_>>().await?;
-
-        // verify the number of blocks
-        let expected_blocks =
-            Integer::div_ceil(&(rows_per_sample_block * num_blocks), &max_rows_per_block);
-        let actual_blocks = segs.iter().fold(0, |acc, x| acc + x.blocks.len());
-        assert_eq!(expected_blocks, actual_blocks, "case: {}", case_name);
-
-        // verify the number of segment
-        let expected_segments = Integer::div_ceil(&expected_blocks, &max_blocks_per_segment);
-        assert_eq!(expected_segments, segs.len(), "case: {}", case_name);
-        Ok::<_, ErrorCode>(())
-    };
-
-    let rows_perf_sample_block = 10;
-    let rows_per_block = 10;
-    let blocks_per_segment = 10;
-    let number_of_blocks = 100;
-    test_case(
-        rows_perf_sample_block,
-        rows_per_block,
-        blocks_per_segment,
-        number_of_blocks,
-        "simple regular data",
-    )
-    .await?;
-
-    let rows_perf_sample_block = 10;
-    let rows_per_block = 3;
-    let blocks_per_segment = 3;
-    let number_of_blocks = 100;
-    test_case(
-        rows_perf_sample_block,
-        rows_per_block,
-        blocks_per_segment,
-        number_of_blocks,
-        "with remainder",
-    )
-    .await?;
 
     Ok(())
 }

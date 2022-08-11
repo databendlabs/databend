@@ -1,5 +1,5 @@
 ---
-title: toStartOfYear
+title: to_start_of_year
 ---
 
 Returns the first day of the year for a date or a date with time.
@@ -7,7 +7,7 @@ Returns the first day of the year for a date or a date with time.
 ## Syntax
 
 ```sql
-toStartOfYear( <expr> )
+to_start_of_year( <expr> )
 ```
 
 ## Arguments
@@ -23,16 +23,16 @@ Datetime object, returns date in “YYYY-MM-DD” format.
 ## Examples
 
 ```
-SELECT toStartOfYear(to_date(18869));
+SELECT to_start_of_year(to_date(18869));
 +------------------------------+
-| toStartOfYear(to_date(18869)) |
+| to_start_of_year(to_date(18869)) |
 +------------------------------+
 | 2021-01-01                   |
 +------------------------------+
 
-SELECT toStartOfYear(to_datetime(1630812366));
+SELECT to_start_of_year(to_datetime(1630812366));
 +---------------------------------------+
-| toStartOfYear(to_datetime(1630812366)) |
+| to_start_of_year(to_datetime(1630812366)) |
 +---------------------------------------+
 | 2021-01-01                            |
 +---------------------------------------+

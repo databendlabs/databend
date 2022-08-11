@@ -19,12 +19,18 @@ use common_base::base::tokio;
 use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
+use common_fuse_meta::meta::ClusterStatistics;
 use common_fuse_meta::meta::ColumnStatistics;
+use common_pipeline_transforms::processors::ExpressionExecutor;
+use common_planners::add;
+use common_planners::col;
+use common_planners::lit;
 use databend_query::storages::fuse::io::BlockWriter;
 use databend_query::storages::fuse::io::TableMetaLocationGenerator;
 use databend_query::storages::fuse::statistics::gen_columns_statistics;
 use databend_query::storages::fuse::statistics::reducers;
 use databend_query::storages::fuse::statistics::BlockStatistics;
+use databend_query::storages::fuse::statistics::ClusterStatsGenerator;
 use databend_query::storages::fuse::statistics::StatisticsAccumulator;
 use opendal::Accessor;
 use opendal::Operator;
@@ -151,7 +157,7 @@ async fn test_accumulator() -> common_exception::Result<()> {
         let block = item?;
         let block_statistics = BlockStatistics::from(&block, "does_not_matter".to_owned(), None)?;
         let block_writer = BlockWriter::new(&table_ctx, &operator, &loc_generator);
-        let block_meta = block_writer.write(block).await?;
+        let block_meta = block_writer.write(block, None).await?;
         stats_acc.add_with_block_meta(block_meta, block_statistics)?;
     }
 
@@ -170,17 +176,65 @@ fn test_ft_stats_cluster_stats() -> common_exception::Result<()> {
         Series::from_data(vec![1i32, 2, 3]),
         Series::from_data(vec!["123456", "234567", "345678"]),
     ]);
-    let stats = BlockStatistics::clusters_statistics(0, &[0], &blocks)?;
+
+    let stats_gen = ClusterStatsGenerator::new(0, vec![0], None);
+    let (stats, _) = stats_gen.gen_stats_for_append(&blocks)?;
     assert!(stats.is_some());
     let stats = stats.unwrap();
     assert_eq!(vec![DataValue::Int64(1)], stats.min);
     assert_eq!(vec![DataValue::Int64(3)], stats.max);
 
-    let stats = BlockStatistics::clusters_statistics(1, &[1], &blocks)?;
+    let stats_gen = ClusterStatsGenerator::new(1, vec![1], None);
+    let (stats, _) = stats_gen.gen_stats_for_append(&blocks)?;
     assert!(stats.is_some());
     let stats = stats.unwrap();
     assert_eq!(vec![DataValue::String(b"12345".to_vec())], stats.min);
     assert_eq!(vec![DataValue::String(b"34567".to_vec())], stats.max);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ft_cluster_stats_with_stats() -> common_exception::Result<()> {
+    let schema = DataSchemaRefExt::create(vec![DataField::new("a", i32::to_data_type())]);
+    let blocks = DataBlock::create(schema.clone(), vec![Series::from_data(vec![1i32, 2, 3])]);
+    let origin = Some(ClusterStatistics {
+        cluster_key_id: 0,
+        min: vec![DataValue::Int64(1)],
+        max: vec![DataValue::Int64(5)],
+    });
+
+    let stats_gen = ClusterStatsGenerator::new(0, vec![0], None);
+    let stats = stats_gen.gen_with_origin_stats(&blocks, origin.clone())?;
+    assert!(stats.is_some());
+    let stats = stats.unwrap();
+    assert_eq!(vec![DataValue::Int64(1)], stats.min);
+    assert_eq!(vec![DataValue::Int64(3)], stats.max);
+
+    // add expression executor.
+    let fixture = TestFixture::new().await;
+    let ctx = fixture.ctx();
+    let output_schema =
+        DataSchemaRefExt::create(vec![DataField::new("(a + 1)", i64::to_data_type())]);
+    let executor = ExpressionExecutor::try_create(
+        ctx,
+        "expression executor for generator cluster statistics",
+        schema,
+        output_schema,
+        vec![add(col("a"), lit(1))],
+        true,
+    )?;
+    let stats_gen = ClusterStatsGenerator::new(0, vec![0], Some(executor));
+    let stats = stats_gen.gen_with_origin_stats(&blocks, origin.clone())?;
+    assert!(stats.is_some());
+    let stats = stats.unwrap();
+    assert_eq!(vec![DataValue::Int64(2)], stats.min);
+    assert_eq!(vec![DataValue::Int64(4)], stats.max);
+
+    // different cluster_key_id.
+    let stats_gen = ClusterStatsGenerator::new(1, vec![0], None);
+    let stats = stats_gen.gen_with_origin_stats(&blocks, origin)?;
+    assert!(stats.is_none());
 
     Ok(())
 }

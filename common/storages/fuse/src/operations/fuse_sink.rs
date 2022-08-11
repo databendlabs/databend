@@ -27,7 +27,6 @@ use common_exception::Result;
 use common_fuse_meta::meta::Location;
 use common_fuse_meta::meta::SegmentInfo;
 use common_fuse_meta::meta::Statistics;
-use common_storages_index::ClusterKeyInfo;
 use common_storages_index::*;
 use opendal::Operator;
 
@@ -39,6 +38,7 @@ use crate::pipelines::processors::processor::Event;
 use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::Processor;
 use crate::statistics::BlockStatistics;
+use crate::statistics::ClusterStatsGenerator;
 use crate::statistics::StatisticsAccumulator;
 
 struct BloomIndexState {
@@ -74,7 +74,7 @@ pub struct FuseTableSink {
     num_block_threshold: u64,
     meta_locations: TableMetaLocationGenerator,
     accumulator: StatisticsAccumulator,
-    cluster_key_info: Option<ClusterKeyInfo>,
+    cluster_stats_gen: ClusterStatsGenerator,
 }
 
 impl FuseTableSink {
@@ -84,7 +84,7 @@ impl FuseTableSink {
         num_block_threshold: usize,
         data_accessor: Operator,
         meta_locations: TableMetaLocationGenerator,
-        cluster_key_info: Option<ClusterKeyInfo>,
+        cluster_stats_gen: ClusterStatsGenerator,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(FuseTableSink {
             ctx,
@@ -94,7 +94,7 @@ impl FuseTableSink {
             state: State::None,
             accumulator: Default::default(),
             num_block_threshold: num_block_threshold as u64,
-            cluster_key_info,
+            cluster_stats_gen,
         })))
     }
 }
@@ -146,20 +146,8 @@ impl Processor for FuseTableSink {
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::None) {
             State::NeedSerialize(data_block) => {
-                let mut cluster_stats = None;
-                let mut block = data_block;
-                if let Some(v) = &self.cluster_key_info {
-                    cluster_stats = BlockStatistics::clusters_statistics(
-                        v.cluster_key_id,
-                        &v.cluster_key_index,
-                        &block,
-                    )?;
-
-                    // Remove unused columns before serialize
-                    if let Some(executor) = &v.expression_executor {
-                        block = executor.execute(&block)?;
-                    }
-                }
+                let (cluster_stats, block) =
+                    self.cluster_stats_gen.gen_stats_for_append(&data_block)?;
 
                 let (block_location, block_id) = self.meta_locations.gen_block_location();
 

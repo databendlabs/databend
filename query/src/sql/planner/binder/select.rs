@@ -31,6 +31,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::sql::binder::scalar_common::split_conjunctions;
+use crate::sql::binder::CteInfo;
 use crate::sql::optimizer::SExpr;
 use crate::sql::planner::binder::scalar::ScalarBinder;
 use crate::sql::planner::binder::BindContext;
@@ -149,6 +150,7 @@ impl<'a> Binder {
         let mut output_context = BindContext::new();
         output_context.parent = from_context.parent;
         output_context.columns = from_context.columns;
+        output_context.ctes_map = from_context.ctes_map;
 
         Ok((s_expr, output_context))
     }
@@ -176,11 +178,30 @@ impl<'a> Binder {
         }
     }
 
+    #[async_recursion]
     pub(crate) async fn bind_query(
         &mut self,
         bind_context: &BindContext,
         query: &Query<'_>,
     ) -> Result<(SExpr, BindContext)> {
+        if let Some(with) = &query.with {
+            for cte in with.ctes.iter() {
+                let table_name = cte.alias.name.name.clone();
+                if bind_context.ctes_map.read().contains_key(&table_name) {
+                    return Err(ErrorCode::SemanticError(format!(
+                        "duplicate cte {table_name}"
+                    )));
+                }
+                let (s_expr, cte_bind_context) = self.bind_query(bind_context, &cte.query).await?;
+                let cte_info = CteInfo {
+                    columns_alias: cte.alias.columns.iter().map(|c| c.name.clone()).collect(),
+                    s_expr,
+                    bind_context: cte_bind_context.clone(),
+                };
+                let mut ctes_map = bind_context.ctes_map.write();
+                ctes_map.insert(table_name, cte_info);
+            }
+        }
         let (mut s_expr, mut bind_context) = match query.body {
             SetExpr::Select(_) | SetExpr::Query(_) => {
                 self.bind_set_expr(bind_context, &query.body, &query.order_by)
@@ -232,8 +253,13 @@ impl<'a> Binder {
         expr: &Expr<'a>,
         child: SExpr,
     ) -> Result<SExpr> {
-        let mut scalar_binder =
-            ScalarBinder::new(bind_context, self.ctx.clone(), self.metadata.clone(), &[]);
+        let mut scalar_binder = ScalarBinder::new(
+            bind_context,
+            self.ctx.clone(),
+            &self.name_resolution_ctx,
+            self.metadata.clone(),
+            &[],
+        );
         let (scalar, _) = scalar_binder.bind(expr).await?;
         let filter_plan = Filter {
             predicates: split_conjunctions(&scalar),

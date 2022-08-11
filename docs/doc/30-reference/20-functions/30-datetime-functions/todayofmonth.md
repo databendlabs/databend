@@ -1,5 +1,5 @@
 ---
-title: TODAYOFMONTH
+title: to_day_of_month
 ---
 
 Converts a date or date with time to a UInt8 number containing the number of the day of the month (1-31).
@@ -7,7 +7,7 @@ Converts a date or date with time to a UInt8 number containing the number of the
 ## Syntax
 
 ```sql
-toDayOfMonth( <expr> )
+to_day_of_month( <expr> )
 ```
 
 ## Arguments
@@ -22,16 +22,16 @@ toDayOfMonth( <expr> )
 ## Examples
 
 ```sql
-SELECT toDayOfMonth(to_date(18869));
+SELECT to_day_of_month(to_date(18869));
 +-----------------------------+
-| toDayOfMonth(to_date(18869)) |
+| to_day_of_month(to_date(18869)) |
 +-----------------------------+
 |                          30 |
 +-----------------------------+
 
-SELECT toDayOfMonth(to_datetime(1630812366));
+SELECT to_day_of_month(to_datetime(1630812366));
 +--------------------------------------+
-| toDayOfMonth(to_datetime(1630812366)) |
+| to_day_of_month(to_datetime(1630812366)) |
 +--------------------------------------+
 |                                    5 |
 +--------------------------------------+

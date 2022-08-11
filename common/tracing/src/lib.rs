@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #![feature(backtrace)]
+#![deny(unused_crate_dependencies)]
 
 #[macro_use]
 mod macros;
@@ -25,6 +26,7 @@ pub use config::Config;
 pub use config::FileConfig;
 pub use config::StderrConfig;
 pub use logging::init_logging;
+pub use logging::init_query_logger;
 pub use panic_hook::log_panic;
 pub use panic_hook::set_panic_hook;
 pub use tracing_to_jaeger::extract_remote_span_as_parent;

@@ -1,5 +1,5 @@
 ---
-title: toYYYYMM
+title: to_yyyymm
 ---
 
 Converts a date or date with time to a UInt32 number containing the year and month number.
@@ -7,7 +7,7 @@ Converts a date or date with time to a UInt32 number containing the year and mon
 ## Syntax
 
 ```sql
-toYYYYMM( <expr> )
+to_yyyymm( <expr> )
 ```
 
 ## Arguments
@@ -30,9 +30,9 @@ SELECT to_date(18875);
 | 2021-09-05    |
 +---------------+
 
-SELECT toYYYYMM(to_date(18875));
+SELECT to_yyyymm(to_date(18875));
 +-------------------------+
-| toYYYYMM(to_date(18875)) |
+| to_yyyymm(to_date(18875)) |
 +-------------------------+
 |                  202109 |
 +-------------------------+

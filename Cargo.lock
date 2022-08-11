@@ -1054,14 +1054,12 @@ dependencies = [
  "dyn-clone",
  "opendal",
  "parking_lot 0.12.1",
- "time 0.3.11",
 ]
 
 [[package]]
 name = "common-config"
 version = "0.1.0"
 dependencies = [
- "async-trait 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)",
  "clap 3.2.15",
  "common-base",
  "common-exception",
@@ -1075,7 +1073,6 @@ dependencies = [
  "serde",
  "serfig",
  "thrift",
- "time 0.3.11",
 ]
 
 [[package]]
@@ -1085,7 +1082,6 @@ dependencies = [
  "async-trait 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)",
  "common-base",
  "opendal",
- "time 0.3.11",
 ]
 
 [[package]]
@@ -1167,12 +1163,14 @@ dependencies = [
  "comfy-table",
  "common-arrow",
  "common-ast",
+ "common-exception",
+ "educe",
  "enum-as-inner",
  "goldenfile",
  "itertools",
  "match-template",
  "num-traits",
- "ordered-float 1.1.1",
+ "ordered-float 3.0.0",
  "serde",
 ]
 
@@ -1334,25 +1332,13 @@ name = "common-legacy-parser"
 version = "0.1.0"
 dependencies = [
  "async-trait 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)",
- "clap 3.2.15",
  "common-ast",
  "common-datavalues",
  "common-exception",
  "common-functions",
  "common-meta-types",
  "common-planners",
- "common-storage",
- "futures",
- "futures-util",
- "itertools",
- "metrics 0.19.0",
- "num_cpus",
- "once_cell",
- "opendal",
- "parking_lot 0.12.1",
- "serde",
  "sqlparser",
- "time 0.3.11",
 ]
 
 [[package]]
@@ -1402,7 +1388,6 @@ dependencies = [
  "common-tracing",
  "enumflags2",
  "maplit",
- "serde",
  "serde_json",
  "thiserror",
  "tonic",
@@ -1413,31 +1398,14 @@ dependencies = [
 name = "common-meta-app"
 version = "0.1.0"
 dependencies = [
- "anyerror",
- "anyhow",
  "common-building",
  "common-datavalues",
- "common-exception",
- "common-io",
  "common-meta-types",
- "derive_more",
  "enumflags2",
- "hex",
  "maplit",
- "num",
  "num-derive",
  "num-traits",
- "once_cell",
- "openraft",
- "prost",
- "regex",
  "serde",
- "serde_json",
- "sha1",
- "sha2 0.10.2",
- "sled",
- "thiserror",
- "tonic",
  "tonic-build",
 ]
 
@@ -1546,7 +1514,6 @@ dependencies = [
  "common-meta-embedded",
  "common-meta-grpc",
  "common-meta-types",
- "common-tracing",
  "tracing",
 ]
 
@@ -1627,19 +1594,7 @@ dependencies = [
  "common-datablocks",
  "common-datavalues",
  "common-exception",
- "common-io",
  "common-pipeline-core",
- "common-planners",
- "futures",
- "futures-util",
- "itertools",
- "num_cpus",
- "once_cell",
- "parking_lot 0.12.1",
- "petgraph",
- "serde",
- "time 0.3.11",
- "tracing",
 ]
 
 [[package]]
@@ -1647,11 +1602,9 @@ name = "common-pipeline-sources"
 version = "0.1.0"
 dependencies = [
  "async-trait 0.1.56 (git+https://github.com/datafuse-extras/async-trait?rev=f0b0fd5)",
- "chrono",
  "common-base",
  "common-catalog",
  "common-datablocks",
- "common-datavalues",
  "common-exception",
  "common-formats",
  "common-io",
@@ -1661,14 +1614,8 @@ dependencies = [
  "common-streams",
  "futures",
  "futures-util",
- "itertools",
- "num_cpus",
- "once_cell",
  "opendal",
  "parking_lot 0.12.1",
- "petgraph",
- "serde",
- "time 0.3.11",
 ]
 
 [[package]]
@@ -1676,23 +1623,12 @@ name = "common-pipeline-transforms"
 version = "0.1.0"
 dependencies = [
  "async-trait 0.1.56 (git+https://github.com/datafuse-extras/async-trait?rev=f0b0fd5)",
- "common-base",
  "common-catalog",
  "common-datablocks",
  "common-datavalues",
  "common-exception",
- "common-io",
  "common-pipeline-core",
  "common-planners",
- "futures",
- "futures-util",
- "itertools",
- "num_cpus",
- "once_cell",
- "parking_lot 0.12.1",
- "petgraph",
- "serde",
- "time 0.3.11",
  "tracing",
 ]
 
@@ -1747,28 +1683,15 @@ dependencies = [
 name = "common-settings"
 version = "0.1.0"
 dependencies = [
- "async-trait 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)",
- "clap 3.2.15",
- "common-base",
  "common-config",
  "common-datavalues",
  "common-exception",
- "common-grpc",
  "common-meta-types",
- "common-storage",
- "common-tracing",
  "common-users",
  "futures",
- "futures-util",
  "itertools",
  "num_cpus",
- "once_cell",
- "opendal",
  "parking_lot 0.12.1",
- "semver",
- "serde",
- "serfig",
- "time 0.3.11",
 ]
 
 [[package]]
@@ -1786,23 +1709,18 @@ dependencies = [
 name = "common-storages-fuse"
 version = "0.1.0"
 dependencies = [
- "async-stream",
  "async-trait 0.1.56 (git+https://github.com/datafuse-extras/async-trait?rev=f0b0fd5)",
  "backoff",
  "chrono",
- "clap 3.2.15",
  "common-arrow",
- "common-ast",
  "common-base",
  "common-cache",
  "common-catalog",
- "common-config",
  "common-datablocks",
  "common-datavalues",
  "common-exception",
  "common-functions",
  "common-fuse-meta",
- "common-grpc",
  "common-legacy-parser",
  "common-meta-app",
  "common-meta-types",
@@ -1810,25 +1728,13 @@ dependencies = [
  "common-pipeline-sources",
  "common-pipeline-transforms",
  "common-planners",
- "common-storage",
  "common-storages-index",
  "common-storages-util",
- "common-streams",
- "common-tracing",
- "common-users",
  "futures",
  "futures-util",
- "itertools",
- "num_cpus",
- "once_cell",
  "opendal",
- "parking_lot 0.12.1",
- "semver",
  "serde",
  "serde_json",
- "serfig",
- "thrift",
- "time 0.3.11",
  "tracing",
  "typetag",
  "uuid",
@@ -1840,40 +1746,25 @@ version = "0.1.0"
 dependencies = [
  "async-recursion",
  "async-trait 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)",
- "backoff",
- "clap 3.2.15",
  "common-arrow",
  "common-base",
  "common-catalog",
- "common-config",
  "common-datablocks",
  "common-datavalues",
  "common-exception",
  "common-fuse-meta",
- "common-grpc",
  "common-hive-meta-store",
  "common-meta-app",
  "common-meta-types",
  "common-pipeline-core",
  "common-pipeline-sources",
  "common-planners",
- "common-storage",
  "common-storages-index",
  "common-storages-util",
- "common-tracing",
- "common-users",
  "futures",
- "futures-util",
- "itertools",
- "num_cpus",
- "once_cell",
  "opendal",
- "parking_lot 0.12.1",
- "semver",
  "serde",
- "serfig",
  "thrift",
- "time 0.3.11",
  "tracing",
  "typetag",
 ]
@@ -1882,43 +1773,19 @@ dependencies = [
 name = "common-storages-index"
 version = "0.1.0"
 dependencies = [
- "async-trait 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)",
  "bincode",
  "bit-vec",
- "clap 3.2.15",
- "common-arrow",
- "common-base",
  "common-catalog",
- "common-config",
  "common-datablocks",
  "common-datavalues",
  "common-exception",
  "common-functions",
  "common-fuse-meta",
- "common-grpc",
- "common-meta-app",
- "common-meta-types",
- "common-pipeline-core",
  "common-pipeline-transforms",
  "common-planners",
- "common-storage",
- "common-tracing",
- "common-users",
- "futures",
- "futures-util",
- "itertools",
- "num_cpus",
- "once_cell",
- "opendal",
- "parking_lot 0.12.1",
  "rand 0.8.5",
- "semver",
  "serde",
- "serfig",
- "thrift",
- "time 0.3.11",
  "tracing",
- "typetag",
 ]
 
 [[package]]
@@ -1983,32 +1850,13 @@ dependencies = [
 name = "common-storages-util"
 version = "0.1.0"
 dependencies = [
- "async-trait 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)",
  "backoff",
- "bincode",
- "clap 3.2.15",
- "common-arrow",
  "common-base",
  "common-datablocks",
- "common-datavalues",
  "common-exception",
  "common-meta-api",
- "common-meta-app",
- "common-meta-types",
- "common-storage",
- "common-tracing",
- "futures",
- "futures-util",
- "itertools",
- "num_cpus",
  "once_cell",
- "opendal",
  "parking_lot 0.12.1",
- "rand 0.8.5",
- "serde",
- "thrift",
- "time 0.3.11",
- "tracing",
 ]
 
 [[package]]
@@ -2038,7 +1886,6 @@ name = "common-tracing"
 version = "0.1.0"
 dependencies = [
  "console-subscriber",
- "once_cell",
  "opentelemetry",
  "opentelemetry-jaeger",
  "sentry-tracing",
@@ -2538,8 +2385,6 @@ dependencies = [
  "common-meta-types",
  "databend-meta",
  "serde",
- "serde_json",
- "tokio-stream",
 ]
 
 [[package]]
@@ -2864,6 +2709,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "educe"
+version = "0.4.19"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c07b7cc9cd8c08d10db74fca3b20949b9b6199725c04a0cce6d543496098fcac"
+dependencies = [
+ "enum-ordinalize",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "either"
 version = "1.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2938,6 +2795,20 @@ checksum = "b13f1e69590421890f90448c3cd5f554746a31adc6dc0dac406ec6901db8dc25"
 dependencies = [
  "proc-macro2",
  "quote",
+ "syn",
+]
+
+[[package]]
+name = "enum-ordinalize"
+version = "3.1.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2170fc0efee383079a8bdd05d6ea2a184d2a0f07a1c1dcabdb2fd5e9f24bc36c"
+dependencies = [
+ "num-bigint",
+ "num-traits",
+ "proc-macro2",
+ "quote",
+ "rustc_version",
  "syn",
 ]
 
@@ -5283,6 +5154,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "96bcbab4bfea7a59c2c0fe47211a1ac4e3e96bea6eb446d704f310bc5c732ae2"
 dependencies = [
  "num-traits",
+ "serde",
 ]
 
 [[package]]

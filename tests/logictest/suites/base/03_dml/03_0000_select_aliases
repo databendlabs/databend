@@ -36,7 +36,7 @@ select number * number +  1 `number`, number + 1 `b` from numbers(1);
 ----
 1 1
 
-onlyif mysql
+
 statement query ITT
 SELECT number, 'number', 'number' FROM numbers(3) AS a order by a.number;
 

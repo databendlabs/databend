@@ -14,9 +14,12 @@
 
 use common_ast::ast::*;
 use common_exception::Result;
+use itertools::Itertools;
 
 use crate::sessions::TableContext;
 use crate::sql::binder::Binder;
+use crate::sql::normalize_identifier;
+use crate::sql::plans::AlterShareTenantsPlan;
 use crate::sql::plans::CreateSharePlan;
 use crate::sql::plans::DropSharePlan;
 use crate::sql::plans::GrantShareObjectPlan;
@@ -34,7 +37,7 @@ impl<'a> Binder {
             comment,
         } = stmt;
 
-        let share = share.name.to_lowercase();
+        let share = normalize_identifier(share, &self.name_resolution_ctx).name;
 
         let plan = CreateSharePlan {
             if_not_exists: *if_not_exists,
@@ -51,7 +54,7 @@ impl<'a> Binder {
     ) -> Result<Plan> {
         let DropShareStmt { if_exists, share } = stmt;
 
-        let share = share.name.to_lowercase();
+        let share = normalize_identifier(share, &self.name_resolution_ctx).name;
 
         let plan = DropSharePlan {
             if_exists: *if_exists,
@@ -71,7 +74,7 @@ impl<'a> Binder {
             privilege,
         } = stmt;
 
-        let share = share.name.to_lowercase();
+        let share = normalize_identifier(share, &self.name_resolution_ctx).name;
 
         let plan = GrantShareObjectPlan {
             share,
@@ -91,7 +94,7 @@ impl<'a> Binder {
             privilege,
         } = stmt;
 
-        let share = share.name.to_lowercase();
+        let share = normalize_identifier(share, &self.name_resolution_ctx).name;
 
         let plan = RevokeShareObjectPlan {
             share,
@@ -99,5 +102,27 @@ impl<'a> Binder {
             privilege: *privilege,
         };
         Ok(Plan::RevokeShareObject(Box::new(plan)))
+    }
+
+    pub(in crate::sql::planner::binder) async fn bind_alter_share_accounts(
+        &mut self,
+        stmt: &AlterShareTenantsStmt<'a>,
+    ) -> Result<Plan> {
+        let AlterShareTenantsStmt {
+            share,
+            if_exists,
+            tenants,
+            is_add,
+        } = stmt;
+
+        let share = normalize_identifier(share, &self.name_resolution_ctx).name;
+
+        let plan = AlterShareTenantsPlan {
+            share,
+            if_exists: *if_exists,
+            is_add: *is_add,
+            accounts: tenants.iter().map(|v| v.to_string()).collect_vec(),
+        };
+        Ok(Plan::AlterShareTenants(Box::new(plan)))
     }
 }

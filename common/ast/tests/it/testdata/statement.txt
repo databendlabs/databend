@@ -135,6 +135,7 @@ Explain {
                 FROM(26..30),
                 Ident(31..32),
             ],
+            with: None,
             body: Select(
                 SelectStmt {
                     span: [
@@ -363,6 +364,7 @@ CreateTable(
                     FROM(85..89),
                     Ident(90..91),
                 ],
+                with: None,
                 body: Select(
                     SelectStmt {
                         span: [
@@ -901,6 +903,7 @@ CreateView(
                 LiteralInteger(53..57),
                 RParen(57..58),
             ],
+            with: None,
             body: Select(
                 SelectStmt {
                     span: [
@@ -1022,6 +1025,7 @@ AlterView(
                 LiteralInteger(52..56),
                 RParen(56..57),
             ],
+            with: None,
             body: Select(
                 SelectStmt {
                     span: [
@@ -1590,6 +1594,7 @@ Query(
             Eq(81..82),
             LiteralInteger(83..84),
         ],
+        with: None,
         body: Select(
             SelectStmt {
                 span: [
@@ -1809,6 +1814,7 @@ Query(
             FROM(9..13),
             Ident(14..16),
         ],
+        with: None,
         body: Select(
             SelectStmt {
                 span: [
@@ -1869,6 +1875,7 @@ Query(
             Period(16..17),
             Ident(17..19),
         ],
+        with: None,
         body: Select(
             SelectStmt {
                 span: [
@@ -1941,6 +1948,7 @@ Query(
             Comma(18..19),
             Ident(20..21),
         ],
+        with: None,
         body: Select(
             SelectStmt {
                 span: [
@@ -2019,9 +2027,9 @@ Query(
 
 
 ---------- Input ----------
-select * from a, b, c order by `db`.`a`.`c1`;
+select * from a, b, c order by "db"."a"."c1";
 ---------- Output ---------
-SELECT * FROM a, b, c ORDER BY `db`.`a`.`c1`
+SELECT * FROM a, b, c ORDER BY "db"."a"."c1"
 ---------- AST ------------
 Query(
     Query {
@@ -2042,6 +2050,7 @@ Query(
             Period(39..40),
             QuotedString(40..44),
         ],
+        with: None,
         body: Select(
             SelectStmt {
                 span: [
@@ -2125,7 +2134,7 @@ Query(
                         Identifier {
                             name: "db",
                             quote: Some(
-                                '`',
+                                '"',
                             ),
                             span: QuotedString(31..35),
                         },
@@ -2134,7 +2143,7 @@ Query(
                         Identifier {
                             name: "a",
                             quote: Some(
-                                '`',
+                                '"',
                             ),
                             span: QuotedString(36..39),
                         },
@@ -2142,7 +2151,7 @@ Query(
                     column: Identifier {
                         name: "c1",
                         quote: Some(
-                            '`',
+                            '"',
                         ),
                         span: QuotedString(40..44),
                     },
@@ -2181,6 +2190,7 @@ Query(
             Period(33..34),
             Ident(34..35),
         ],
+        with: None,
         body: Select(
             SelectStmt {
                 span: [
@@ -2341,6 +2351,7 @@ Query(
             Period(44..45),
             Ident(45..46),
         ],
+        with: None,
         body: Select(
             SelectStmt {
                 span: [
@@ -2505,6 +2516,7 @@ Query(
             Period(45..46),
             Ident(46..47),
         ],
+        with: None,
         body: Select(
             SelectStmt {
                 span: [
@@ -2669,6 +2681,7 @@ Query(
             Period(44..45),
             Ident(45..46),
         ],
+        with: None,
         body: Select(
             SelectStmt {
                 span: [
@@ -2832,6 +2845,7 @@ Query(
             Period(39..40),
             Ident(40..41),
         ],
+        with: None,
         body: Select(
             SelectStmt {
                 span: [
@@ -2990,6 +3004,7 @@ Query(
             Ident(40..41),
             RParen(41..42),
         ],
+        with: None,
         body: Select(
             SelectStmt {
                 span: [
@@ -3103,6 +3118,7 @@ Query(
             Ident(41..42),
             RParen(42..43),
         ],
+        with: None,
         body: Select(
             SelectStmt {
                 span: [
@@ -3216,6 +3232,7 @@ Query(
             Ident(40..41),
             RParen(41..42),
         ],
+        with: None,
         body: Select(
             SelectStmt {
                 span: [
@@ -3328,6 +3345,7 @@ Query(
             Ident(35..36),
             RParen(36..37),
         ],
+        with: None,
         body: Select(
             SelectStmt {
                 span: [
@@ -3445,6 +3463,7 @@ Query(
             Ident(49..50),
             RParen(50..51),
         ],
+        with: None,
         body: Select(
             SelectStmt {
                 span: [
@@ -3541,6 +3560,7 @@ Query(
                                     FROM(44..48),
                                     Ident(49..50),
                                 ],
+                                with: None,
                                 body: Select(
                                     SelectStmt {
                                         span: [
@@ -3645,6 +3665,7 @@ Query(
             Ident(49..50),
             RParen(50..51),
         ],
+        with: None,
         body: Select(
             SelectStmt {
                 span: [
@@ -3741,6 +3762,7 @@ Query(
                                     FROM(44..48),
                                     Ident(49..50),
                                 ],
+                                with: None,
                                 body: Select(
                                     SelectStmt {
                                         span: [
@@ -3845,6 +3867,7 @@ Query(
             Ident(50..51),
             RParen(51..52),
         ],
+        with: None,
         body: Select(
             SelectStmt {
                 span: [
@@ -3941,6 +3964,7 @@ Query(
                                     FROM(45..49),
                                     Ident(50..51),
                                 ],
+                                with: None,
                                 body: Select(
                                     SelectStmt {
                                         span: [
@@ -4044,6 +4068,7 @@ Query(
             Ident(45..46),
             RParen(46..47),
         ],
+        with: None,
         body: Select(
             SelectStmt {
                 span: [
@@ -4136,6 +4161,7 @@ Query(
                                     FROM(40..44),
                                     Ident(45..46),
                                 ],
+                                with: None,
                                 body: Select(
                                     SelectStmt {
                                         span: [
@@ -4239,6 +4265,7 @@ Query(
             LiteralInteger(43..44),
             RParen(44..45),
         ],
+        with: None,
         body: Select(
             SelectStmt {
                 span: [
@@ -4446,6 +4473,7 @@ Insert(
                     FROM(29..33),
                     Ident(34..36),
                 ],
+                with: None,
                 body: Select(
                     SelectStmt {
                         span: [
@@ -4513,6 +4541,7 @@ Query(
             LiteralInteger(42..43),
             RBracket(43..44),
         ],
+        with: None,
         body: Select(
             SelectStmt {
                 span: [
@@ -6057,6 +6086,96 @@ RevokeShareObject(
             "tb1",
         ),
         privilege: Select,
+    },
+)
+
+
+---------- Input ----------
+ALTER SHARE a ADD TENANTS = b,c;
+---------- Output ---------
+ALTER SHARE a ADD TENANTS = b,c
+---------- AST ------------
+AlterShareTenants(
+    AlterShareTenantsStmt {
+        share: Identifier {
+            name: "a",
+            quote: None,
+            span: Ident(12..13),
+        },
+        if_exists: false,
+        tenants: [
+            Identifier {
+                name: "b",
+                quote: None,
+                span: Ident(28..29),
+            },
+            Identifier {
+                name: "c",
+                quote: None,
+                span: Ident(30..31),
+            },
+        ],
+        is_add: true,
+    },
+)
+
+
+---------- Input ----------
+ALTER SHARE IF EXISTS a ADD TENANTS = b,c;
+---------- Output ---------
+ALTER SHARE IF EXISTS a ADD TENANTS = b,c
+---------- AST ------------
+AlterShareTenants(
+    AlterShareTenantsStmt {
+        share: Identifier {
+            name: "a",
+            quote: None,
+            span: Ident(22..23),
+        },
+        if_exists: true,
+        tenants: [
+            Identifier {
+                name: "b",
+                quote: None,
+                span: Ident(38..39),
+            },
+            Identifier {
+                name: "c",
+                quote: None,
+                span: Ident(40..41),
+            },
+        ],
+        is_add: true,
+    },
+)
+
+
+---------- Input ----------
+ALTER SHARE IF EXISTS a REMOVE TENANTS = b,c;
+---------- Output ---------
+ALTER SHARE IF EXISTS a REMOVE TENANTS = b,c
+---------- AST ------------
+AlterShareTenants(
+    AlterShareTenantsStmt {
+        share: Identifier {
+            name: "a",
+            quote: None,
+            span: Ident(22..23),
+        },
+        if_exists: true,
+        tenants: [
+            Identifier {
+                name: "b",
+                quote: None,
+                span: Ident(41..42),
+            },
+            Identifier {
+                name: "c",
+                quote: None,
+                span: Ident(43..44),
+            },
+        ],
+        is_add: false,
     },
 )
 

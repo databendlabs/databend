@@ -5,9 +5,8 @@ error:
   |      ^^^ no overload satisfies `and(Boolean, UInt8)`
 
 has tried possible overloads:
-  and(Boolean NULL, NULL) :: NULL                  : unable to unify `UInt8` with `NULL`
   and(NULL, Boolean NULL) :: NULL                  : unable to unify `Boolean` with `NULL`
-  and(NULL, NULL) :: NULL                          : unable to unify `Boolean` with `NULL`
+  and(Boolean NULL, NULL) :: NULL                  : unable to unify `UInt8` with `NULL`
   and(Boolean, Boolean) :: Boolean                 : unable to unify `UInt8` with `Boolean`
   and(Boolean NULL, Boolean NULL) :: Boolean NULL  : unable to unify `UInt8` with `Boolean`
 
@@ -66,9 +65,8 @@ error:
   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no overload satisfies `get(Array(UInt8), String)`
 
 has tried possible overloads:
-  get(Array(T0) NULL, NULL) :: NULL           : unable to unify `String` with `NULL`
   get(NULL, Int16 NULL) :: NULL               : unable to unify `Array(UInt8)` with `NULL`
-  get(NULL, NULL) :: NULL                     : unable to unify `Array(UInt8)` with `NULL`
+  get(Array(T0) NULL, NULL) :: NULL           : unable to unify `String` with `NULL`
   get(Array(T0), Int16) :: T0                 : unable to unify `String` with `Int16`
   get(Array(T0) NULL, Int16 NULL) :: T0 NULL  : unable to unify `String` with `Int16`
 

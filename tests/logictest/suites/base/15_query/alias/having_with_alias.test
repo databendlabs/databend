@@ -1,5 +1,4 @@
-statement ok
-set enable_planner_v2 = 1;
+
 
 statement query I
 select count(*) as count from (select * from numbers(1)) having count = 1;

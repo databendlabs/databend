@@ -21,6 +21,7 @@ use common_ast::parser::token::*;
 use common_ast::parser::tokenize_sql;
 use common_ast::rule;
 use common_ast::Backtrace;
+use common_ast::Dialect;
 use common_ast::DisplayError;
 use common_ast::Input;
 use common_exception::Result;
@@ -33,7 +34,7 @@ macro_rules! run_parser {
         let backtrace = Backtrace::new();
         let parser = $parser;
         let mut parser = rule! { #parser ~ &EOI };
-        match parser.parse(Input(&tokens, &backtrace)) {
+        match parser.parse(Input(&tokens, Dialect::PostgreSQL, &backtrace)) {
             Ok((i, (output, _))) => {
                 assert_eq!(i[0].kind, TokenKind::EOI);
                 writeln!($file, "---------- Input ----------").unwrap();
@@ -109,7 +110,7 @@ fn test_statement() {
         r#"select * from t4;"#,
         r#"select * from aa.bb;"#,
         r#"select * from a, b, c;"#,
-        r#"select * from a, b, c order by `db`.`a`.`c1`;"#,
+        r#"select * from a, b, c order by "db"."a"."c1";"#,
         r#"select * from a join b on a.a = b.a;"#,
         r#"select * from a left outer join b on a.a = b.a;"#,
         r#"select * from a right outer join b on a.a = b.a;"#,
@@ -264,12 +265,15 @@ fn test_statement() {
         r#"GRANT SELECT ON TABLE db1.tb1 TO SHARE a;"#,
         r#"REVOKE USAGE ON DATABASE db1 FROM SHARE a;"#,
         r#"REVOKE SELECT ON TABLE db1.tb1 FROM SHARE a;"#,
+        r#"ALTER SHARE a ADD TENANTS = b,c;"#,
+        r#"ALTER SHARE IF EXISTS a ADD TENANTS = b,c;"#,
+        r#"ALTER SHARE IF EXISTS a REMOVE TENANTS = b,c;"#,
     ];
 
     for case in cases {
         let tokens = tokenize_sql(case).unwrap();
         let backtrace = Backtrace::new();
-        let (stmt, fmt) = parse_sql(&tokens, &backtrace).unwrap();
+        let (stmt, fmt) = parse_sql(&tokens, Dialect::PostgreSQL, &backtrace).unwrap();
         writeln!(file, "---------- Input ----------").unwrap();
         writeln!(file, "{}", case).unwrap();
         writeln!(file, "---------- Output ---------").unwrap();
@@ -325,7 +329,7 @@ fn test_statement_error() {
     for case in cases {
         let tokens = tokenize_sql(case).unwrap();
         let backtrace = Backtrace::new();
-        let err = parse_sql(&tokens, &backtrace).unwrap_err();
+        let err = parse_sql(&tokens, Dialect::PostgreSQL, &backtrace).unwrap_err();
         writeln!(file, "---------- Input ----------").unwrap();
         writeln!(file, "{}", case).unwrap();
         writeln!(file, "---------- Output ---------").unwrap();
@@ -345,6 +349,10 @@ fn test_query() {
         r#"select * from customer inner join orders on a = b limit 2 offset 3"#,
         r#"select * from customer natural full join orders"#,
         r#"select * from customer natural join orders left outer join detail using (id)"#,
+        r#"with t2(tt) as (select a from t) select t2.tt from t2  where t2.tt > 1"#,
+        r#"with t2 as (select a from t) select t2.a from t2  where t2.a > 1"#,
+        r#"with t2(tt) as (select a from t), t3 as (select * from t), t4 as (select a from t where a > 1) select t2.tt, t3.a, t4.a from t2, t3, t4 where t2.tt > 1"#,
+        r#"with recursive t2(tt) as (select a from t1 union select tt from t2) select t2.tt from t2"#,
         r#"select c_count cc, count(*) as custdist, sum(c_acctbal) as totacctbal
             from customer, orders ODS,
                 (
@@ -422,7 +430,7 @@ fn test_expr() {
         r#"1 - -(- - -1)"#,
         r#"1 + a * c.d"#,
         r#"number % 2"#,
-        r#"`t`:k1.k2"#,
+        r#""t":k1.k2"#,
         r#"col1 not between 1 and 2"#,
         r#"sum(col1)"#,
         r#""random"()"#,

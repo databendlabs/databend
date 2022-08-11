@@ -173,17 +173,33 @@ pub fn format_logical_inner_join(
             .into()
         })
         .collect();
-    let pred: Scalar = preds.iter().fold(preds[0].clone(), |prev, next| {
-        let func = FunctionFactory::instance()
-            .get("and", &[&prev.data_type(), &next.data_type()])
-            .unwrap();
-        Scalar::AndExpr(AndExpr {
-            left: Box::new(prev),
-            right: Box::new(next.clone()),
-            return_type: Box::new(func.return_type()),
-        })
-    });
-    write!(f, "LogicalInnerJoin: {}", format_scalar(metadata, &pred))
+    let other_conditions = op
+        .other_conditions
+        .iter()
+        .map(|scalar| format_scalar(metadata, scalar))
+        .collect::<Vec<String>>();
+
+    let equi_conditions = if !preds.is_empty() {
+        let pred = preds.iter().skip(1).fold(preds[0].clone(), |prev, next| {
+            let func = FunctionFactory::instance()
+                .get("and", &[&prev.data_type(), &next.data_type()])
+                .unwrap();
+            Scalar::AndExpr(AndExpr {
+                left: Box::new(prev),
+                right: Box::new(next.clone()),
+                return_type: Box::new(func.return_type()),
+            })
+        });
+        format_scalar(metadata, &pred)
+    } else {
+        "".to_string()
+    };
+    write!(
+        f,
+        "LogicalInnerJoin: equi-conditions: [{}], non-equi-conditions: [{}]",
+        equi_conditions,
+        other_conditions.join(", ")
+    )
 }
 
 pub fn format_hash_join(
@@ -231,8 +247,19 @@ pub fn format_physical_scan(
     let table = metadata.read().table(op.table_index).clone();
     write!(
         f,
-        "Scan: {}.{}.{}",
-        &table.catalog, &table.database, &table.name
+        "Scan: {}.{}.{}, filters: [{}]",
+        &table.catalog,
+        &table.database,
+        &table.name,
+        op.push_down_predicates.as_ref().map_or_else(
+            || "".to_string(),
+            |predicates| {
+                predicates
+                    .iter()
+                    .map(|pred| format_scalar(metadata, pred))
+                    .join(", ")
+            }
+        )
     )
 }
 
@@ -263,8 +290,9 @@ pub fn format_eval_scalar(
     metadata: &MetadataRef,
     op: &EvalScalar,
 ) -> std::fmt::Result {
-    let scalars = op
-        .items
+    let mut items = op.items.clone();
+    items.sort_by(|item1, item2| item1.index.cmp(&item2.index));
+    let scalars = items
         .iter()
         .map(|item| format_scalar(metadata, &item.scalar))
         .collect::<Vec<String>>()
