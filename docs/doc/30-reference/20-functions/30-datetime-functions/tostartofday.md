@@ -1,12 +1,12 @@
 ---
-title: toStartOfDay
+title: to_start_of_day
 ---
 
 Rounds down a date with time to the start of the day.
 ## Syntax
 
 ```sql
-toStartOfDay( <expr> )
+to_start_of_day( <expr> )
 ```
 
 ## Arguments
@@ -22,16 +22,16 @@ Datetime object, returns date in “YYYY-MM-DD hh:mm:ss” format.
 ## Examples
 
 ```sql
-SELECT toStartOfDay(now());
+SELECT to_start_of_day(now());
 +---------------------+
-| toStartOfDay(now()) |
+| to_start_of_day(now()) |
 +---------------------+
 | 2022-03-29 00:00:00 |
 +---------------------+
 
-SELECT toStartOfDay(to_datetime(1630812366));
+SELECT to_start_of_day(to_datetime(1630812366));
 +--------------------------------------+
-| toStartOfDay(to_datetime(1630812366)) |
+| to_start_of_day(to_datetime(1630812366)) |
 +--------------------------------------+
 | 2021-09-05 00:00:00                  |
 +--------------------------------------+

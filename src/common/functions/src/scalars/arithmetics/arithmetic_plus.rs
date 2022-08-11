@@ -80,7 +80,7 @@ impl ArithmeticPlusFunction {
                     if right_type.is_interval() {
                         let interval: IntervalType = args[1].to_owned().try_into()?;
                         let kind = interval.kind();
-                        let function_name = format!("add{}s", kind);
+                        let function_name = format!("add_{}s", kind);
                         FunctionFactory::instance().get(function_name, &[args[0], &Int64Type::new_impl()])
                     } else {
                         error_fn()
