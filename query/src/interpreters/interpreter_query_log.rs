@@ -114,7 +114,7 @@ pub struct LogEvent {
 
     // Exception.
     pub exception_code: i32,
-    pub exception: String,
+    pub exception_text: String,
     pub stack_trace: String,
 
     // Server.
@@ -211,7 +211,7 @@ impl InterpreterQueryLog {
             Series::from_data(vec![event.client_address.as_str()]),
             // Exception.
             Series::from_data(vec![event.exception_code]),
-            Series::from_data(vec![event.exception.as_str()]),
+            Series::from_data(vec![event.exception_text.as_str()]),
             Series::from_data(vec![event.stack_trace.as_str()]),
             // Server.
             Series::from_data(vec![event.server_version.as_str()]),
@@ -299,7 +299,8 @@ impl InterpreterQueryLog {
         session_settings.push_str("scope: SESSION");
 
         // Error
-        let (log_type, exception_code, exception, stack_trace) = error_fields(LogType::Start, err);
+        let (log_type, exception_code, exception_text, stack_trace) =
+            error_fields(LogType::Start, err);
 
         let log_event = LogEvent {
             log_type,
@@ -337,7 +338,7 @@ impl InterpreterQueryLog {
             client_address,
 
             exception_code,
-            exception,
+            exception_text,
             stack_trace,
             server_version: "".to_string(),
             session_settings,
@@ -411,7 +412,8 @@ impl InterpreterQueryLog {
         session_settings.push_str("scope: SESSION");
 
         // Error
-        let (log_type, exception_code, exception, stack_trace) = error_fields(LogType::Finish, err);
+        let (log_type, exception_code, exception_text, stack_trace) =
+            error_fields(LogType::Finish, err);
 
         let log_event = LogEvent {
             log_type,
@@ -449,7 +451,7 @@ impl InterpreterQueryLog {
             current_database,
 
             exception_code,
-            exception,
+            exception_text,
             stack_trace,
             server_version: "".to_string(),
             session_settings,
