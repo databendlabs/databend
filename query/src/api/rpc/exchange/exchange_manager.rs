@@ -17,53 +17,42 @@ use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::ops::Deref;
 use std::sync::Arc;
-use std::time::Duration;
 
-use async_channel::Sender;
-use common_arrow::arrow_format::flight::data::FlightData;
-use common_base::base::tokio::task::JoinHandle;
-use common_base::base::Runtime;
+use common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
 use common_base::base::Thread;
-use common_base::base::TrySpawn;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::PlanNode;
-use futures::StreamExt;
+use common_grpc::ConnectionFactory;
 use parking_lot::Mutex;
 use parking_lot::ReentrantMutex;
-use tonic::Streaming;
-use common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
-use common_grpc::ConnectionFactory;
 
 use crate::api::rpc::exchange::exchange_params::ExchangeParams;
 use crate::api::rpc::exchange::exchange_params::MergeExchangeParams;
 use crate::api::rpc::exchange::exchange_params::ShuffleExchangeParams;
 use crate::api::rpc::exchange::exchange_sink::ExchangeSink;
+use crate::api::rpc::exchange::exchange_transform::ExchangeTransform;
+use crate::api::rpc::exchange::statistics_receiver::StatisticsReceiver;
+use crate::api::rpc::exchange::statistics_sender::StatisticsSender;
+use crate::api::rpc::flight_client::FlightExchange;
 use crate::api::rpc::flight_scatter_broadcast::BroadcastFlightScatter;
 use crate::api::rpc::flight_scatter_hash::HashFlightScatter;
 use crate::api::rpc::flight_scatter_hash_v2::HashFlightScatterV2;
 use crate::api::rpc::packets::DataPacket;
 use crate::api::rpc::Packet;
-use crate::api::{ClientFlightExchange, DataExchange, FlightClient, ServerFlightExchange};
+use crate::api::DataExchange;
+use crate::api::FlightClient;
 use crate::api::FragmentPayload;
 use crate::api::FragmentPlanPacket;
 use crate::api::InitNodesChannelPacket;
 use crate::api::QueryFragmentsPlanPacket;
-use crate::api::rpc::exchange::exchange_transform::ExchangeTransform;
-use crate::api::rpc::exchange::statistics_receiver::StatisticsReceiver;
-use crate::api::rpc::exchange::statistics_sender::StatisticsSender;
-use crate::api::rpc::flight_client::FlightExchange;
 use crate::interpreters::QueryFragmentActions;
 use crate::interpreters::QueryFragmentsActions;
 use crate::pipelines::executor::PipelineCompleteExecutor;
-use crate::pipelines::Pipe;
-use crate::pipelines::Pipeline;
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::QueryPipelineBuilder;
-use crate::sessions::{QueryContext, SessionManager};
+use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
-use crate::sql::executor::PhysicalPlan;
 use crate::sql::executor::PipelineBuilder as PipelineBuilderV2;
 use crate::Config;
 
@@ -100,7 +89,9 @@ impl DataExchangeManager {
 
                 targets_exchanges.insert(
                     (connection_info.target.id.clone(), *fragment),
-                    flight_client.do_exchange(&packet.query_id, source, *fragment).await?,
+                    flight_client
+                        .do_exchange(&packet.query_id, source, *fragment)
+                        .await?,
                 );
             }
         }
@@ -130,7 +121,7 @@ impl DataExchangeManager {
                     None,
                     Some(config.query.to_rpc_client_tls_config()),
                 )
-                    .await?,
+                .await?,
             ))),
             false => Ok(FlightClient::new(FlightServiceClient::new(
                 ConnectionFactory::create_rpc_channel(address.to_owned(), None, None).await?,
@@ -177,18 +168,28 @@ impl DataExchangeManager {
 
         match queries_coordinator.entry(id) {
             Entry::Occupied(mut v) => v.get_mut().add_statistics_exchange(vec![exchange]),
-            Entry::Vacant(v) => v.insert(QueryCoordinator::create())
+            Entry::Vacant(v) => v
+                .insert(QueryCoordinator::create())
                 .add_statistics_exchange(vec![exchange]),
         }
     }
 
-    pub fn handle_exchange_fragment(&self, query: String, source: String, fragment: usize, exchange: FlightExchange) -> Result<()> {
+    pub fn handle_exchange_fragment(
+        &self,
+        query: String,
+        source: String,
+        fragment: usize,
+        exchange: FlightExchange,
+    ) -> Result<()> {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 
         match queries_coordinator.entry(query) {
-            Entry::Occupied(mut v) => v.get_mut().add_fragment_exchange(source, fragment, exchange),
-            Entry::Vacant(v) => v.insert(QueryCoordinator::create())
+            Entry::Occupied(mut v) => v
+                .get_mut()
+                .add_fragment_exchange(source, fragment, exchange),
+            Entry::Vacant(v) => v
+                .insert(QueryCoordinator::create())
                 .add_fragment_exchange(source, fragment, exchange),
         }
     }
@@ -206,7 +207,7 @@ impl DataExchangeManager {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 
-        if let Some(mut query_coordinator) = queries_coordinator.remove(query_id) {
+        if let Some(query_coordinator) = queries_coordinator.remove(query_id) {
             // Drop mutex guard to avoid deadlock during shutdown,
             drop(queries_coordinator_guard);
 
@@ -214,19 +215,29 @@ impl DataExchangeManager {
         }
     }
 
-    pub async fn commit_actions(&self, ctx: Arc<QueryContext>, actions: QueryFragmentsActions) -> Result<PipelineBuildResult> {
+    pub async fn commit_actions(
+        &self,
+        ctx: Arc<QueryContext>,
+        actions: QueryFragmentsActions,
+    ) -> Result<PipelineBuildResult> {
         let settings = ctx.get_settings();
         let timeout = settings.get_flight_client_timeout()?;
         let root_actions = actions.get_root_actions()?;
 
         // Initialize channels between cluster nodes
-        actions.get_init_nodes_channel_packets()?.commit(&self.config, timeout).await?;
+        actions
+            .get_init_nodes_channel_packets()?
+            .commit(&self.config, timeout)
+            .await?;
 
         // Submit distributed tasks to all nodes.
-        let (local_query_fragments_plan_packet, query_fragments_plan_packets) = actions.get_query_fragments_plan_packets()?;
+        let (local_query_fragments_plan_packet, query_fragments_plan_packets) =
+            actions.get_query_fragments_plan_packets()?;
 
         // Submit tasks to other nodes
-        query_fragments_plan_packets.commit(&self.config, timeout).await?;
+        query_fragments_plan_packets
+            .commit(&self.config, timeout)
+            .await?;
 
         // Submit tasks to localhost
         self.init_query_fragments_plan(&ctx, &local_query_fragments_plan_packet)?;
@@ -234,11 +245,18 @@ impl DataExchangeManager {
         // Get local pipeline of local task
         let build_res = self.get_root_pipeline(ctx, root_actions)?;
 
-        actions.get_execute_partial_query_packets()?.commit(&self.config, timeout).await?;
+        actions
+            .get_execute_partial_query_packets()?
+            .commit(&self.config, timeout)
+            .await?;
         Ok(build_res)
     }
 
-    fn get_root_pipeline(&self, ctx: Arc<QueryContext>, root_actions: &QueryFragmentActions) -> Result<PipelineBuildResult> {
+    fn get_root_pipeline(
+        &self,
+        ctx: Arc<QueryContext>,
+        root_actions: &QueryFragmentActions,
+    ) -> Result<PipelineBuildResult> {
         let query_id = ctx.get_id();
         let fragment_id = root_actions.fragment_id;
 
@@ -255,7 +273,8 @@ impl DataExchangeManager {
                 let mut statistics_receiver = StatisticsReceiver::create(ctx.clone(), exchanges);
                 statistics_receiver.start();
 
-                let mut statistics_receiver: Mutex<StatisticsReceiver> = Mutex::new(statistics_receiver);
+                let statistics_receiver: Mutex<StatisticsReceiver> =
+                    Mutex::new(statistics_receiver);
                 build_res.main_pipeline.set_on_finished(move |may_error| {
                     let query_id = ctx.get_id();
                     let mut statistics_receiver = statistics_receiver.lock();
@@ -303,7 +322,12 @@ impl DataExchangeManager {
         match queries_coordinator.get_mut(query_id) {
             None => Err(ErrorCode::LogicalError("Query not exists.")),
             Some(query_coordinator) => {
-                let query_ctx = query_coordinator.info.as_ref().expect("QueryInfo is none").query_ctx.clone();
+                let query_ctx = query_coordinator
+                    .info
+                    .as_ref()
+                    .expect("QueryInfo is none")
+                    .query_ctx
+                    .clone();
 
                 query_coordinator.subscribe_fragment(&query_ctx, fragment_id)
             }
@@ -343,12 +367,20 @@ impl QueryCoordinator {
         Ok(())
     }
 
-    pub fn add_fragment_exchange(&mut self, target: String, fragment: usize, exchange: FlightExchange) -> Result<()> {
+    pub fn add_fragment_exchange(
+        &mut self,
+        target: String,
+        fragment: usize,
+        exchange: FlightExchange,
+    ) -> Result<()> {
         self.fragment_exchanges.insert((target, fragment), exchange);
         Ok(())
     }
 
-    pub fn add_fragment_exchanges(&mut self, exchanges: HashMap<(String, usize), FlightExchange>) -> Result<()> {
+    pub fn add_fragment_exchanges(
+        &mut self,
+        exchanges: HashMap<(String, usize), FlightExchange>,
+    ) -> Result<()> {
         for ((target, fragment), exchange) in exchanges.into_iter() {
             self.fragment_exchanges.insert((target, fragment), exchange);
         }
@@ -374,14 +406,16 @@ impl QueryCoordinator {
                 for destination in &params.destination_ids {
                     exchanges.push(match destination == &params.executor_id {
                         true => Ok(FlightExchange::Dummy),
-                        false => match self.fragment_exchanges.get(&(destination.clone(), params.fragment_id)) {
+                        false => match self
+                            .fragment_exchanges
+                            .get(&(destination.clone(), params.fragment_id))
+                        {
                             None => Err(ErrorCode::UnknownFragmentExchange(format!(
                                 "Unknown fragment exchange channel, {}, {}",
-                                destination,
-                                params.fragment_id
+                                destination, params.fragment_id
                             ))),
                             Some(exchange_channel) => Ok(exchange_channel.clone()),
-                        }
+                        },
                     }?);
                 }
 
@@ -390,7 +424,11 @@ impl QueryCoordinator {
         }
     }
 
-    pub fn prepare_pipeline(&mut self, ctx: &Arc<QueryContext>, packet: &QueryFragmentsPlanPacket) -> Result<()> {
+    pub fn prepare_pipeline(
+        &mut self,
+        ctx: &Arc<QueryContext>,
+        packet: &QueryFragmentsPlanPacket,
+    ) -> Result<()> {
         self.info = Some(QueryInfo {
             query_ctx: ctx.clone(),
             query_id: packet.query_id.clone(),
@@ -415,7 +453,11 @@ impl QueryCoordinator {
         Ok(())
     }
 
-    pub fn subscribe_fragment(&mut self, ctx: &Arc<QueryContext>, fragment_id: usize) -> Result<PipelineBuildResult> {
+    pub fn subscribe_fragment(
+        &mut self,
+        ctx: &Arc<QueryContext>,
+        fragment_id: usize,
+    ) -> Result<PipelineBuildResult> {
         // Merge pipelines if exist locally pipeline
         if let Some(mut fragment_coordinator) = self.fragments_coordinator.remove(&fragment_id) {
             let info = self.info.as_ref().expect("QueryInfo is none");
@@ -439,7 +481,9 @@ impl QueryCoordinator {
             let data_exchange = fragment_coordinator.data_exchange.as_ref().unwrap();
 
             if !data_exchange.from_multiple_nodes() {
-                return Err(ErrorCode::UnImplement("Exchange source and no from multiple nodes is unimplemented."));
+                return Err(ErrorCode::UnImplement(
+                    "Exchange source and no from multiple nodes is unimplemented.",
+                ));
             }
 
             // Add exchange data transform.
@@ -504,7 +548,8 @@ impl QueryCoordinator {
         let async_runtime = info.query_ctx.get_storage_runtime();
         let query_need_abort = info.query_ctx.query_need_abort();
 
-        let executor = PipelineCompleteExecutor::from_pipelines(async_runtime, query_need_abort, pipelines)?;
+        let executor =
+            PipelineCompleteExecutor::from_pipelines(async_runtime, query_need_abort, pipelines)?;
 
         self.fragment_exchanges.clear();
         let info_mut = self.info.as_mut().expect("Query info is None");
@@ -515,23 +560,31 @@ impl QueryCoordinator {
         let mut request_server_exchanges = std::mem::take(&mut self.statistics_exchanges);
 
         if request_server_exchanges.len() != 1 {
-            return Err(ErrorCode::LogicalError("Request server must less than 1 if is not request server."));
+            return Err(ErrorCode::LogicalError(
+                "Request server must less than 1 if is not request server.",
+            ));
         }
 
         let ctx = query_ctx.clone();
         let request_server_exchange = request_server_exchanges[0].clone();
-        let mut statistics_sender = StatisticsSender::create(&query_id, ctx, request_server_exchange);
+        let mut statistics_sender =
+            StatisticsSender::create(&query_id, ctx, request_server_exchange);
         statistics_sender.start();
 
         Thread::named_spawn(Some(String::from("Distributed-Executor")), move || {
             if let Err(cause) = executor.execute() {
-                let mut request_server_exchange = request_server_exchanges.remove(0);
+                let request_server_exchange = request_server_exchanges.remove(0);
 
                 futures::executor::block_on(async move {
                     statistics_sender.shutdown();
 
-                    if let Err(_cause) = request_server_exchange.send(DataPacket::ErrorCode(cause)).await {
-                        tracing::warn!("Cannot send message to request server when executor failure.");
+                    if let Err(_cause) = request_server_exchange
+                        .send(DataPacket::ErrorCode(cause))
+                        .await
+                    {
+                        tracing::warn!(
+                            "Cannot send message to request server when executor failure."
+                        );
                     };
 
                     // Wait request server close channel.
@@ -546,7 +599,9 @@ impl QueryCoordinator {
             // Destroy coordinator_server_exchange if executor is not failure.
             statistics_sender.shutdown();
             drop(request_server_exchanges);
-            query_ctx.get_exchange_manager().on_finished_query(&query_id);
+            query_ctx
+                .get_exchange_manager()
+                .on_finished_query(&query_id);
         });
 
         Ok(())
@@ -572,7 +627,11 @@ impl FragmentCoordinator {
         })
     }
 
-    pub fn create_exchange_params(&self, ctx: &Arc<QueryContext>, info: &QueryInfo) -> Result<ExchangeParams> {
+    pub fn create_exchange_params(
+        &self,
+        ctx: &Arc<QueryContext>,
+        info: &QueryInfo,
+    ) -> Result<ExchangeParams> {
         match &self.data_exchange {
             None => Err(ErrorCode::LogicalError("Cannot find data exchange.")),
             Some(DataExchange::Merge(exchange)) => {

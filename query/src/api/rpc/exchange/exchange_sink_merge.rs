@@ -15,13 +15,13 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use async_channel::TrySendError;
 use common_arrow::arrow::io::flight::serialize_batch;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::api::rpc::exchange::exchange_params::{ExchangeParams, MergeExchangeParams};
+use crate::api::rpc::exchange::exchange_params::ExchangeParams;
+use crate::api::rpc::exchange::exchange_params::MergeExchangeParams;
 use crate::api::rpc::exchange::exchange_params::SerializeParams;
 use crate::api::rpc::flight_client::FlightExchange;
 use crate::api::rpc::packets::DataPacket;
@@ -33,28 +33,28 @@ use crate::pipelines::processors::Processor;
 use crate::sessions::QueryContext;
 
 pub struct ExchangeMergeSink {
-    ctx: Arc<QueryContext>,
     input: Arc<InputPort>,
     input_data: Option<DataBlock>,
     output_data: Option<DataPacket>,
     serialize_params: SerializeParams,
-    exchange_params: MergeExchangeParams,
     flight_exchange: FlightExchange,
 }
 
 impl ExchangeMergeSink {
-    pub fn try_create(ctx: Arc<QueryContext>, input: Arc<InputPort>, exchange_params: &MergeExchangeParams) -> Result<ProcessorPtr> {
+    pub fn try_create(
+        ctx: Arc<QueryContext>,
+        input: Arc<InputPort>,
+        exchange_params: &MergeExchangeParams,
+    ) -> Result<ProcessorPtr> {
         let params = ExchangeParams::MergeExchange(exchange_params.clone());
         let exchange_manager = ctx.get_exchange_manager();
         let mut flight_exchange = exchange_manager.get_flight_exchanges(&params)?;
         assert_eq!(flight_exchange.len(), 1);
 
         Ok(ProcessorPtr::create(Box::new(ExchangeMergeSink {
-            ctx,
             input,
             input_data: None,
             output_data: None,
-            exchange_params: exchange_params.clone(),
             flight_exchange: flight_exchange.remove(0),
             serialize_params: exchange_params.create_serialize_params()?,
         })))

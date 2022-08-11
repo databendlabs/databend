@@ -13,22 +13,26 @@
 // limitations under the License.
 
 use std::convert::TryInto;
-use std::error::Error;
-use std::marker::PhantomData;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
-use async_channel::{Receiver, Sender, TryRecvError};
-use futures_util::StreamExt;
-use common_arrow::arrow_format::flight::data::{Action, FlightData};
+use async_channel::Receiver;
+use async_channel::Sender;
+use common_arrow::arrow_format::flight::data::Action;
+use common_arrow::arrow_format::flight::data::FlightData;
 use common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
 use common_base::base::tokio::time::Duration;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use futures_util::StreamExt;
 use tonic::metadata::MetadataKey;
 use tonic::metadata::MetadataValue;
 use tonic::transport::channel::Channel;
-use tonic::{Request, Status, Streaming};
+use tonic::Request;
+use tonic::Status;
+use tonic::Streaming;
 
 use crate::api::rpc::flight_actions::FlightAction;
 use crate::api::rpc::packets::DataPacket;
@@ -68,27 +72,38 @@ impl FlightClient {
         let (tx, rx) = async_channel::bounded(1);
         Ok(FlightExchange::from_client(
             tx,
-            self.inner.do_exchange(
-                RequestBuilder::create(Box::pin(rx))
-                    .with_metadata("x-type", "request_server_exchange")?
-                    .with_metadata("x-query-id", query_id)?
-                    .build()
-            ).await?.into_inner(),
+            self.inner
+                .do_exchange(
+                    RequestBuilder::create(Box::pin(rx))
+                        .with_metadata("x-type", "request_server_exchange")?
+                        .with_metadata("x-query-id", query_id)?
+                        .build(),
+                )
+                .await?
+                .into_inner(),
         ))
     }
 
-    pub async fn do_exchange(&mut self, query_id: &str, source: &str, fragment_id: usize) -> Result<FlightExchange> {
+    pub async fn do_exchange(
+        &mut self,
+        query_id: &str,
+        source: &str,
+        fragment_id: usize,
+    ) -> Result<FlightExchange> {
         let (tx, rx) = async_channel::bounded(1);
         Ok(FlightExchange::from_client(
             tx,
-            self.inner.do_exchange(
-                RequestBuilder::create(Box::pin(rx))
-                    .with_metadata("x-type", "exchange_fragment")?
-                    .with_metadata("x-source", source)?
-                    .with_metadata("x-query-id", query_id)?
-                    .with_metadata("x-fragment-id", &fragment_id.to_string())?
-                    .build()
-            ).await?.into_inner(),
+            self.inner
+                .do_exchange(
+                    RequestBuilder::create(Box::pin(rx))
+                        .with_metadata("x-type", "exchange_fragment")?
+                        .with_metadata("x-source", source)?
+                        .with_metadata("x-query-id", query_id)?
+                        .with_metadata("x-fragment-id", &fragment_id.to_string())?
+                        .build(),
+                )
+                .await?
+                .into_inner(),
         ))
     }
 
@@ -185,7 +200,9 @@ impl FlightExchange {
 impl FlightExchange {
     pub async fn send(&self, data: DataPacket) -> Result<()> {
         match self {
-            FlightExchange::Dummy => Err(ErrorCode::UnImplement("Unimplemented send in dummy exchange.")),
+            FlightExchange::Dummy => Err(ErrorCode::UnImplement(
+                "Unimplemented send in dummy exchange.",
+            )),
             FlightExchange::Client(exchange) => exchange.send(data).await,
             FlightExchange::Server(exchange) => exchange.send(data).await,
         }
@@ -260,8 +277,8 @@ impl ClientFlightExchange {
             Err(_) => Ok(None),
             Ok(message) => match message {
                 Ok(data) => Ok(Some(DataPacket::try_from(data)?)),
-                Err(status) => Err(ErrorCode::from(status))
-            }
+                Err(status) => Err(ErrorCode::from(status)),
+            },
         }
     }
 
@@ -271,23 +288,23 @@ impl ClientFlightExchange {
             Ok(message) => match message {
                 Ok(data) => Ok(Some(DataPacket::try_from(data)?)),
                 Err(status) => Err(ErrorCode::from(status)),
-            }
+            },
         }
     }
 
     pub fn close_input(&self) {
-        if !self.is_closed_request.fetch_or(true, Ordering::SeqCst) {
-            if self.state.request_count.fetch_sub(1, Ordering::AcqRel) == 1 {
-                self.request_rx.close();
-            }
+        if !self.is_closed_request.fetch_or(true, Ordering::SeqCst)
+            && self.state.request_count.fetch_sub(1, Ordering::AcqRel) == 1
+        {
+            self.request_rx.close();
         }
     }
 
     pub fn close_output(&self) {
-        if !self.is_closed_response.fetch_or(true, Ordering::SeqCst) {
-            if self.state.response_count.fetch_sub(1, Ordering::AcqRel) == 1 {
-                self.response_tx.close();
-            }
+        if !self.is_closed_response.fetch_or(true, Ordering::SeqCst)
+            && self.state.response_count.fetch_sub(1, Ordering::AcqRel) == 1
+        {
+            self.response_tx.close();
         }
     }
 }
@@ -309,16 +326,16 @@ impl Clone for ClientFlightExchange {
 
 impl Drop for ClientFlightExchange {
     fn drop(&mut self) {
-        if !self.is_closed_request.fetch_or(true, Ordering::SeqCst) {
-            if self.state.request_count.fetch_sub(1, Ordering::AcqRel) == 1 {
-                self.request_rx.close();
-            }
+        if !self.is_closed_request.fetch_or(true, Ordering::SeqCst)
+            && self.state.request_count.fetch_sub(1, Ordering::AcqRel) == 1
+        {
+            self.request_rx.close();
         }
 
-        if !self.is_closed_response.fetch_or(true, Ordering::SeqCst) {
-            if self.state.response_count.fetch_sub(1, Ordering::AcqRel) == 1 {
-                self.response_tx.close();
-            }
+        if !self.is_closed_response.fetch_or(true, Ordering::SeqCst)
+            && self.state.response_count.fetch_sub(1, Ordering::AcqRel) == 1
+        {
+            self.response_tx.close();
         }
     }
 }
@@ -348,16 +365,16 @@ impl Clone for ServerFlightExchange {
 
 impl Drop for ServerFlightExchange {
     fn drop(&mut self) {
-        if !self.is_closed_request.fetch_or(true, Ordering::SeqCst) {
-            if self.state.request_count.fetch_sub(1, Ordering::AcqRel) == 1 {
-                self.request_rx.close();
-            }
+        if !self.is_closed_request.fetch_or(true, Ordering::SeqCst)
+            && self.state.request_count.fetch_sub(1, Ordering::AcqRel) == 1
+        {
+            self.request_rx.close();
         }
 
-        if !self.is_closed_response.fetch_or(true, Ordering::SeqCst) {
-            if self.state.response_count.fetch_sub(1, Ordering::AcqRel) == 1 {
-                self.response_tx.close();
-            }
+        if !self.is_closed_response.fetch_or(true, Ordering::SeqCst)
+            && self.state.response_count.fetch_sub(1, Ordering::AcqRel) == 1
+        {
+            self.response_tx.close();
         }
     }
 }
@@ -376,8 +393,8 @@ impl ServerFlightExchange {
             Err(_) => Ok(None),
             Ok(message) => match message {
                 Ok(data) => Ok(Some(DataPacket::try_from(data)?)),
-                Err(status) => Err(ErrorCode::from(status))
-            }
+                Err(status) => Err(ErrorCode::from(status)),
+            },
         }
     }
 
@@ -387,23 +404,23 @@ impl ServerFlightExchange {
             Ok(message) => match message {
                 Ok(data) => Ok(Some(DataPacket::try_from(data)?)),
                 Err(status) => Err(ErrorCode::from(status)),
-            }
+            },
         }
     }
 
     pub fn close_input(&self) {
-        if !self.is_closed_request.fetch_or(true, Ordering::SeqCst) {
-            if self.state.request_count.fetch_sub(1, Ordering::AcqRel) == 1 {
-                self.request_rx.close();
-            }
+        if !self.is_closed_request.fetch_or(true, Ordering::SeqCst)
+            && self.state.request_count.fetch_sub(1, Ordering::AcqRel) == 1
+        {
+            self.request_rx.close();
         }
     }
 
     pub fn close_output(&self) {
-        if !self.is_closed_response.fetch_or(true, Ordering::SeqCst) {
-            if self.state.response_count.fetch_sub(1, Ordering::AcqRel) == 1 {
-                self.response_tx.close();
-            }
+        if !self.is_closed_response.fetch_or(true, Ordering::SeqCst)
+            && self.state.response_count.fetch_sub(1, Ordering::AcqRel) == 1
+        {
+            self.response_tx.close();
         }
     }
 }

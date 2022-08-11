@@ -48,7 +48,8 @@ pub struct Pipeline {
     on_finished: Option<FinishedCallback>,
 }
 
-pub type FinishedCallback = Arc<Box<dyn Fn(&Option<ErrorCode>) -> Result<()> + Send + Sync + 'static>>;
+pub type FinishedCallback =
+    Arc<Box<dyn Fn(&Option<ErrorCode>) -> Result<()> + Send + Sync + 'static>>;
 
 impl Pipeline {
     pub fn create() -> Pipeline {
@@ -122,7 +123,7 @@ impl Pipeline {
     }
 
     pub fn add_transform<F>(&mut self, f: F) -> Result<()>
-        where F: Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr> {
+    where F: Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr> {
         let mut transform_builder = TransformPipeBuilder::create();
         for _index in 0..self.output_len() {
             let input_port = InputPort::create();
@@ -158,7 +159,10 @@ impl Pipeline {
         }
     }
 
-    pub fn set_on_finished<F: Fn(&Option<ErrorCode>) -> Result<()> + Send + Sync + 'static>(&mut self, f: F) {
+    pub fn set_on_finished<F: Fn(&Option<ErrorCode>) -> Result<()> + Send + Sync + 'static>(
+        &mut self,
+        f: F,
+    ) {
         if let Some(on_finished) = &self.on_finished {
             let old_finished = on_finished.clone();
 

@@ -17,8 +17,10 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::task::Context;
 use std::task::Poll;
-use std::time::{Duration, Instant};
+use std::time::Duration;
+use std::time::Instant;
 
+use common_base::base::tokio::time::sleep;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_pipeline_core::processors::processor::ProcessorPtr;
@@ -29,7 +31,6 @@ use futures_util::FutureExt;
 use crate::pipelines::executor::executor_condvar::WorkersCondvar;
 use crate::pipelines::executor::executor_tasks::CompletedAsyncTask;
 use crate::pipelines::executor::executor_tasks::ExecutorTasksQueue;
-use common_base::base::tokio::time::sleep;
 
 pub struct ProcessorAsyncTask {
     worker_id: usize,
@@ -40,7 +41,7 @@ pub struct ProcessorAsyncTask {
 }
 
 impl ProcessorAsyncTask {
-    pub fn create<Inner: Future<Output=Result<()>> + Send + 'static>(
+    pub fn create<Inner: Future<Output = Result<()>> + Send + 'static>(
         worker_id: usize,
         processor: ProcessorPtr,
         queue: Arc<ExecutorTasksQueue>,
@@ -49,7 +50,7 @@ impl ProcessorAsyncTask {
     ) -> ProcessorAsyncTask {
         let finished_notify = queue.get_finished_notify();
 
-        let mut inner = async move {
+        let inner = async move {
             let left = Box::pin(inner);
             let right = Box::pin(finished_notify.notified());
             match futures::future::select(left, right).await {
@@ -67,7 +68,7 @@ impl ProcessorAsyncTask {
 
             loop {
                 unsafe {
-                    let mut interval = Box::pin(sleep(Duration::from_secs(5)));
+                    let interval = Box::pin(sleep(Duration::from_secs(5)));
                     match futures::future::select(interval, inner).await {
                         Either::Left((_, right)) => {
                             inner = right;

@@ -15,19 +15,18 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use async_channel::TrySendError;
 use common_arrow::arrow::io::flight::serialize_batch;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::api::rpc::exchange::exchange_params::{ExchangeParams, SerializeParams};
+use crate::api::rpc::exchange::exchange_params::ExchangeParams;
+use crate::api::rpc::exchange::exchange_params::SerializeParams;
 use crate::api::rpc::exchange::exchange_params::ShuffleExchangeParams;
 use crate::api::rpc::flight_client::FlightExchange;
 use crate::api::rpc::packets::DataPacket;
 use crate::api::rpc::packets::FragmentData;
 use crate::pipelines::processors::port::InputPort;
-use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::Event;
 use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::Processor;
@@ -39,8 +38,6 @@ struct OutputData {
 }
 
 pub struct ExchangePublisherSink {
-    ctx: Arc<QueryContext>,
-
     serialize_params: SerializeParams,
     shuffle_exchange_params: ShuffleExchangeParams,
 
@@ -51,22 +48,23 @@ pub struct ExchangePublisherSink {
 }
 
 impl ExchangePublisherSink {
-    pub fn try_create(ctx: Arc<QueryContext>, input: Arc<InputPort>, params: &ShuffleExchangeParams) -> Result<ProcessorPtr> {
+    pub fn try_create(
+        ctx: Arc<QueryContext>,
+        input: Arc<InputPort>,
+        params: &ShuffleExchangeParams,
+    ) -> Result<ProcessorPtr> {
         let exchange_params = ExchangeParams::ShuffleExchange(params.clone());
         let exchange_manager = ctx.get_exchange_manager();
         let flight_exchanges = exchange_manager.get_flight_exchanges(&exchange_params)?;
 
-        Ok(ProcessorPtr::create(Box::new(
-            ExchangePublisherSink {
-                ctx,
-                input,
-                flight_exchanges,
-                input_data: None,
-                output_data: None,
-                shuffle_exchange_params: params.clone(),
-                serialize_params: params.create_serialize_params()?,
-            }
-        )))
+        Ok(ProcessorPtr::create(Box::new(ExchangePublisherSink {
+            input,
+            flight_exchanges,
+            input_data: None,
+            output_data: None,
+            shuffle_exchange_params: params.clone(),
+            serialize_params: params.create_serialize_params()?,
+        })))
     }
 }
 
@@ -136,7 +134,9 @@ impl Processor for ExchangePublisherSink {
 
                 output_data.has_serialized_data = true;
                 let data = FragmentData::create(values);
-                output_data.serialized_blocks.push(Some(DataPacket::FragmentData(data)));
+                output_data
+                    .serialized_blocks
+                    .push(Some(DataPacket::FragmentData(data)));
             }
 
             if output_data.has_serialized_data {

@@ -12,7 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt::{Debug, Formatter};
+use std::fmt::Debug;
+use std::fmt::Formatter;
 use std::io::Read;
 use std::io::Write;
 use std::pin::Pin;
@@ -201,10 +202,14 @@ impl TryFrom<FlightData> for DataPacket {
         }
 
         match flight_data.app_metadata[0] {
-            0x01 => Ok(DataPacket::FragmentData(FragmentData::try_from(flight_data)?)),
+            0x01 => Ok(DataPacket::FragmentData(FragmentData::try_from(
+                flight_data,
+            )?)),
             0x02 => Ok(DataPacket::ErrorCode(ErrorCode::try_from(flight_data)?)),
             0x03 => Ok(DataPacket::Progress(ProgressInfo::try_from(flight_data)?)),
-            0x04 => Ok(DataPacket::PrecommitBlock(PrecommitBlock::try_from(flight_data)?)),
+            0x04 => Ok(DataPacket::PrecommitBlock(PrecommitBlock::try_from(
+                flight_data,
+            )?)),
             _ => Err(ErrorCode::BadBytes("Unknown flight data packet type.")),
         }
     }

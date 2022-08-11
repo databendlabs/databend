@@ -1,16 +1,35 @@
+// Copyright 2022 Datafuse Labs.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+
+use common_base::base::tokio;
+use common_base::base::tokio::sync::Notify;
+use common_base::base::tokio::task::JoinHandle;
+use common_exception::ErrorCode;
+use common_exception::Result;
 use futures_util::future::Either;
 use parking_lot::Mutex;
-use common_base::base::tokio::sync::Notify;
+
 use crate::api::rpc::flight_client::FlightExchange;
+use crate::api::rpc::packets::PrecommitBlock;
+use crate::api::rpc::packets::ProgressInfo;
+use crate::api::DataPacket;
+use crate::api::FragmentData;
 use crate::sessions::QueryContext;
-use common_base::base::tokio;
-use common_base::base::tokio::task::JoinHandle;
-use common_catalog::table_context::TableContext;
-use common_exception::{ErrorCode, Result};
-use crate::api::{DataPacket, FragmentData};
-use crate::api::rpc::packets::{PrecommitBlock, ProgressInfo};
 
 pub struct StatisticsReceiver {
     ctx: Arc<QueryContext>,
@@ -39,7 +58,7 @@ impl StatisticsReceiver {
             let shutdown_flag = self.shutdown_flag.clone();
             let shutdown_notify = self.shutdown_notify.clone();
             let recv_error = self.recv_error.clone();
-            let mut flight_exchange = flight_exchange.clone();
+            let flight_exchange = flight_exchange.clone();
 
             self.exchange_handler.push(tokio::spawn(async move {
                 let mut recv = Box::pin(flight_exchange.recv());
@@ -55,21 +74,27 @@ impl StatisticsReceiver {
                                 break 'worker_loop;
                             }
                         }
-                        Either::Right((_, _)) => { break 'worker_loop; }
+                        Either::Right((_, _)) => {
+                            break 'worker_loop;
+                        }
                     }
                 }
             }));
         }
     }
 
-    fn on_data_packet(ctx: &Arc<QueryContext>, recv_error: &Mutex<Option<ErrorCode>>, res: Result<Option<DataPacket>>) -> bool {
+    fn on_data_packet(
+        ctx: &Arc<QueryContext>,
+        recv_error: &Mutex<Option<ErrorCode>>,
+        res: Result<Option<DataPacket>>,
+    ) -> bool {
         match res {
             Ok(None) => true,
-            Err(error) => Self::on_recv_error(&ctx, recv_error, error),
-            Ok(Some(DataPacket::ErrorCode(v))) => Self::on_recv_error(&ctx, recv_error, v),
-            Ok(Some(DataPacket::Progress(v))) => Self::on_recv_progress(&ctx, v),
+            Err(error) => Self::on_recv_error(ctx, recv_error, error),
+            Ok(Some(DataPacket::ErrorCode(v))) => Self::on_recv_error(ctx, recv_error, v),
+            Ok(Some(DataPacket::Progress(v))) => Self::on_recv_progress(ctx, v),
             Ok(Some(DataPacket::FragmentData(v))) => Self::on_recv_data(v),
-            Ok(Some(DataPacket::PrecommitBlock(v))) => Self::on_recv_precommit(&ctx, v),
+            Ok(Some(DataPacket::PrecommitBlock(v))) => Self::on_recv_precommit(ctx, v),
         }
     }
 
@@ -81,8 +106,7 @@ impl StatisticsReceiver {
     pub fn wait_shutdown(&mut self) -> Result<()> {
         let exchanges_handler = std::mem::take(&mut self.exchange_handler);
         futures::executor::block_on(async move {
-            futures::future::join_all(exchanges_handler.into_iter())
-                .await;
+            futures::future::join_all(exchanges_handler.into_iter()).await;
         });
 
         self.take_receive_error()
@@ -91,7 +115,7 @@ impl StatisticsReceiver {
     pub fn take_receive_error(&mut self) -> Result<()> {
         match self.recv_error.lock().take() {
             None => Ok(()),
-            Some(error) => Err(error)
+            Some(error) => Err(error),
         }
     }
 
@@ -100,7 +124,7 @@ impl StatisticsReceiver {
         false
     }
 
-    fn on_recv_data(fragment_data: FragmentData) -> bool {
+    fn on_recv_data(_fragment_data: FragmentData) -> bool {
         unimplemented!()
     }
 
@@ -109,7 +133,11 @@ impl StatisticsReceiver {
         false
     }
 
-    fn on_recv_error(ctx: &Arc<QueryContext>, recv_error: &Mutex<Option<ErrorCode>>, cause: ErrorCode) -> bool {
+    fn on_recv_error(
+        ctx: &Arc<QueryContext>,
+        recv_error: &Mutex<Option<ErrorCode>>,
+        cause: ErrorCode,
+    ) -> bool {
         // abort query for current session.
         ctx.get_current_session().force_kill_query();
         let mut recv_error = recv_error.lock();
@@ -117,5 +145,3 @@ impl StatisticsReceiver {
         true
     }
 }
-
-

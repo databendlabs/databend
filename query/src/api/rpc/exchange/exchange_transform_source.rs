@@ -15,25 +15,25 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use async_channel::Receiver;
-use async_channel::TryRecvError;
 use common_arrow::arrow::io::flight::deserialize_batch;
 use common_arrow::arrow::io::ipc::write::default_ipc_fields;
 use common_arrow::arrow::io::ipc::IpcSchema;
-use common_arrow::arrow_format::flight::data::FlightData;
 use common_datablocks::DataBlock;
-use common_datavalues::DataSchemaRef;
+use common_exception::ErrorCode;
+use common_exception::Result;
 
+use crate::api::rpc::exchange::exchange_params::ExchangeParams;
+use crate::api::rpc::exchange::exchange_params::MergeExchangeParams;
+use crate::api::rpc::flight_client::FlightExchange;
+use crate::api::rpc::packets::PrecommitBlock;
+use crate::api::rpc::packets::ProgressInfo;
+use crate::api::DataPacket;
+use crate::api::FragmentData;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::Event;
 use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::Processor;
-use common_exception::{ErrorCode, Result};
-use crate::api::{DataPacket, FragmentData};
-use crate::api::rpc::exchange::exchange_params::{ExchangeParams, MergeExchangeParams};
-use crate::api::rpc::flight_client::FlightExchange;
-use crate::api::rpc::packets::{PrecommitBlock, ProgressInfo};
 use crate::sessions::QueryContext;
 
 pub struct ExchangeSourceTransform {
@@ -179,11 +179,11 @@ impl ExchangeSourceTransform {
         Ok(())
     }
 
-    fn on_recv_progress(&mut self, progress: ProgressInfo) -> Result<()> {
+    fn on_recv_progress(&mut self, _progress: ProgressInfo) -> Result<()> {
         unimplemented!()
     }
 
-    fn on_recv_precommit(&mut self, fragment_data: PrecommitBlock) -> Result<()> {
+    fn on_recv_precommit(&mut self, _fragment_data: PrecommitBlock) -> Result<()> {
         unimplemented!()
     }
 }

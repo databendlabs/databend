@@ -13,19 +13,20 @@
 // limitations under the License.
 
 use std::collections::hash_map::Entry;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
-use itertools::Itertools;
 
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::NodeInfo;
 use common_planners::PlanNode;
+use itertools::Itertools;
 
-use crate::api::{ConnectionInfo, DataExchange};
+use crate::api::ConnectionInfo;
+use crate::api::DataExchange;
 use crate::api::ExecutePartialQueryPacket;
 use crate::api::FragmentPayload;
 use crate::api::FragmentPlanPacket;
@@ -174,7 +175,9 @@ impl QueryFragmentsActions {
         Ok(())
     }
 
-    pub fn get_query_fragments_plan_packets(&self) -> Result<(QueryFragmentsPlanPacket, Vec<QueryFragmentsPlanPacket>)> {
+    pub fn get_query_fragments_plan_packets(
+        &self,
+    ) -> Result<(QueryFragmentsPlanPacket, Vec<QueryFragmentsPlanPacket>)> {
         let nodes_info = Self::nodes_info(&self.ctx);
 
         let mut fragments_packets = self.get_executors_fragments();
@@ -202,7 +205,10 @@ impl QueryFragmentsActions {
             ));
         }
 
-        Ok((local_query_fragments_plan_packet, query_fragments_plan_packets))
+        Ok((
+            local_query_fragments_plan_packet,
+            query_fragments_plan_packets,
+        ))
     }
 
     pub fn get_init_nodes_channel_packets(&self) -> Result<Vec<InitNodesChannelPacket>> {
@@ -217,8 +223,8 @@ impl QueryFragmentsActions {
                 return Err(ErrorCode::NotFoundClusterNode(format!(
                     "Not found node {} in cluster. cluster nodes: {:?}",
                     executor,
-                    nodes_info.keys().cloned().collect::<Vec<_>>())
-                ));
+                    nodes_info.keys().cloned().collect::<Vec<_>>()
+                )));
             }
 
             let executor_node_info = &nodes_info[executor];
@@ -229,24 +235,23 @@ impl QueryFragmentsActions {
                     return Err(ErrorCode::NotFoundClusterNode(format!(
                         "Not found node {} in cluster. cluster nodes: {:?}",
                         target,
-                        nodes_info.keys().cloned().collect::<Vec<_>>())
-                    ));
+                        nodes_info.keys().cloned().collect::<Vec<_>>()
+                    )));
                 }
 
                 connections_info.push(ConnectionInfo {
                     target: nodes_info[target].clone(),
-                    fragments: fragments.into_iter().cloned().unique().collect::<Vec<_>>(),
-                    create_request_channel: &executor_node_info.id == local_id || target == local_id,
+                    fragments: fragments.iter().cloned().unique().collect::<Vec<_>>(),
+                    create_request_channel: &executor_node_info.id == local_id
+                        || target == local_id,
                 });
             }
 
-            init_nodes_channel_packets.push(
-                InitNodesChannelPacket::create(
-                    self.ctx.get_id(),
-                    executor_node_info.clone(),
-                    connections_info,
-                )
-            );
+            init_nodes_channel_packets.push(InitNodesChannelPacket::create(
+                self.ctx.get_id(),
+                executor_node_info.clone(),
+                connections_info,
+            ));
         }
 
         Ok(init_nodes_channel_packets)
@@ -291,7 +296,8 @@ impl QueryFragmentsActions {
                                 .expect("Source target fragments expect source");
 
                             if target_fragments.contains_key(destination) {
-                                target_fragments.get_mut(destination)
+                                target_fragments
+                                    .get_mut(destination)
                                     .expect("Target fragments expect destination")
                                     .push(fragment_id);
 
@@ -305,7 +311,8 @@ impl QueryFragmentsActions {
                                 .expect("Source target fragments expect destination");
 
                             if target_fragments.contains_key(&source) {
-                                target_fragments.get_mut(&source)
+                                target_fragments
+                                    .get_mut(&source)
                                     .expect("Target fragments expect source")
                                     .push(fragment_id);
 

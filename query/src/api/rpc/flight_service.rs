@@ -35,16 +35,15 @@ use tonic::Request;
 use tonic::Response as RawResponse;
 use tonic::Status;
 use tonic::Streaming;
-use common_exception::ErrorCode;
 
 use crate::api::rpc::flight_actions::FlightAction;
-use crate::api::rpc::flight_client::{FlightExchange, ServerFlightExchange};
+use crate::api::rpc::flight_client::FlightExchange;
 use crate::api::rpc::request_builder::RequestGetter;
 use crate::sessions::SessionManager;
 use crate::sessions::SessionType;
 
 pub type FlightStream<T> =
-Pin<Box<dyn Stream<Item=Result<T, tonic::Status>> + Send + Sync + 'static>>;
+    Pin<Box<dyn Stream<Item = Result<T, tonic::Status>> + Send + Sync + 'static>>;
 
 pub struct DatabendQueryFlightService {
     sessions: Arc<SessionManager>,
@@ -127,7 +126,10 @@ impl FlightService for DatabendQueryFlightService {
                 exchange_manager.handle_exchange_fragment(query_id, source, fragment, exchange)?;
                 Ok(RawResponse::new(Box::pin(rx)))
             }
-            exchange_type => Err(Status::unimplemented(format!("Unimplemented exchange type: {:?}", exchange_type))),
+            exchange_type => Err(Status::unimplemented(format!(
+                "Unimplemented exchange type: {:?}",
+                exchange_type
+            ))),
         }
     }
 
@@ -145,14 +147,17 @@ impl FlightService for DatabendQueryFlightService {
                 let session = self.sessions.create_session(SessionType::FlightRPC).await?;
                 let ctx = session.create_query_context().await?;
                 let exchange_manager = self.sessions.get_data_exchange_manager();
-                exchange_manager.init_query_fragments_plan(&ctx, &init_query_fragments_plan.executor_packet)?;
+                exchange_manager
+                    .init_query_fragments_plan(&ctx, &init_query_fragments_plan.executor_packet)?;
 
                 FlightResult { body: vec![] }
             }
             FlightAction::InitNodesChannel(init_nodes_channel) => {
                 let publisher_packet = &init_nodes_channel.init_nodes_channel_packet;
                 let exchange_manager = self.sessions.get_data_exchange_manager();
-                exchange_manager.init_nodes_channel(publisher_packet).await?;
+                exchange_manager
+                    .init_nodes_channel(publisher_packet)
+                    .await?;
 
                 FlightResult { body: vec![] }
             }

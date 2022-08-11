@@ -41,9 +41,7 @@ impl Stream for ProcessorExecutorStream {
         match self_.executor.pull_data() {
             Err(cause) => Poll::Ready(Some(Err(cause))),
             Ok(Some(data)) => Poll::Ready(Some(Ok(data))),
-            Ok(None) => {
-                Poll::Ready(None)
-            }
+            Ok(None) => Poll::Ready(None),
         }
     }
 }

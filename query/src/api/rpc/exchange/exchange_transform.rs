@@ -1,22 +1,46 @@
+// Copyright 2022 Datafuse Labs.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 use std::any::Any;
 use std::sync::Arc;
-use common_arrow::arrow::io::flight::{default_ipc_fields, deserialize_batch, serialize_batch};
+
+use common_arrow::arrow::io::flight::default_ipc_fields;
+use common_arrow::arrow::io::flight::deserialize_batch;
+use common_arrow::arrow::io::flight::serialize_batch;
 use common_arrow::arrow::io::ipc::IpcSchema;
 use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
-use common_pipeline_core::processors::port::{InputPort, OutputPort};
+use common_exception::ErrorCode;
+use common_exception::Result;
+use common_pipeline_core::processors::port::InputPort;
+use common_pipeline_core::processors::port::OutputPort;
+use common_pipeline_core::processors::processor::Event;
+use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
-use common_pipeline_core::processors::processor::{Event, ProcessorPtr};
-use crate::api::{DataPacket, FragmentData};
-use crate::api::rpc::exchange::exchange_params::{ExchangeParams, SerializeParams, ShuffleExchangeParams};
-use crate::sessions::QueryContext;
-use common_exception::{ErrorCode, Result};
 use common_pipeline_core::Pipeline;
+
+use crate::api::rpc::exchange::exchange_params::ExchangeParams;
+use crate::api::rpc::exchange::exchange_params::SerializeParams;
+use crate::api::rpc::exchange::exchange_params::ShuffleExchangeParams;
 use crate::api::rpc::exchange::exchange_transform_source::ExchangeSourceTransform;
 use crate::api::rpc::flight_client::FlightExchange;
-use crate::api::rpc::packets::{PrecommitBlock, ProgressInfo};
+use crate::api::rpc::packets::PrecommitBlock;
+use crate::api::rpc::packets::ProgressInfo;
+use crate::api::DataPacket;
+use crate::api::FragmentData;
 use crate::clusters::ClusterHelper;
-use crate::sql::executor::PhysicalPlan::ExchangeSource;
+use crate::sessions::QueryContext;
 
 struct OutputData {
     pub data_block: Option<DataBlock>,
@@ -38,28 +62,35 @@ pub struct ExchangeTransform {
 }
 
 impl ExchangeTransform {
-    fn try_create(ctx: Arc<QueryContext>, params: &ShuffleExchangeParams, input: Arc<InputPort>, output: Arc<OutputPort>) -> Result<ProcessorPtr> {
+    fn try_create(
+        ctx: Arc<QueryContext>,
+        params: &ShuffleExchangeParams,
+        input: Arc<InputPort>,
+        output: Arc<OutputPort>,
+    ) -> Result<ProcessorPtr> {
         let exchange_params = ExchangeParams::ShuffleExchange(params.clone());
         let exchange_manager = ctx.get_exchange_manager();
         let flight_exchanges = exchange_manager.get_flight_exchanges(&exchange_params)?;
 
-        Ok(ProcessorPtr::create(Box::new(
-            ExchangeTransform {
-                input,
-                output,
-                flight_exchanges,
-                finished: false,
-                input_data: None,
-                remote_data: None,
-                output_data: None,
-                shuffle_exchange_params: params.clone(),
-                serialize_params: params.create_serialize_params()?,
-                wait_channel_closed: false,
-            }
-        )))
+        Ok(ProcessorPtr::create(Box::new(ExchangeTransform {
+            input,
+            output,
+            flight_exchanges,
+            finished: false,
+            input_data: None,
+            remote_data: None,
+            output_data: None,
+            shuffle_exchange_params: params.clone(),
+            serialize_params: params.create_serialize_params()?,
+            wait_channel_closed: false,
+        })))
     }
 
-    pub fn via(ctx: &Arc<QueryContext>, params: &ExchangeParams, pipeline: &mut Pipeline) -> Result<()> {
+    pub fn via(
+        ctx: &Arc<QueryContext>,
+        params: &ExchangeParams,
+        pipeline: &mut Pipeline,
+    ) -> Result<()> {
         match params {
             ExchangeParams::MergeExchange(params) => {
                 if params.destination_id != ctx.get_cluster().local_id() {
@@ -76,7 +107,7 @@ impl ExchangeTransform {
                         ctx,
                         transform_input_port,
                         transform_output_port,
-                        &params,
+                        params,
                     )
                 })
             }
@@ -202,7 +233,9 @@ impl Processor for ExchangeTransform {
 
                     output_data.has_serialized_blocks = true;
                     let data = FragmentData::create(values);
-                    output_data.serialized_blocks.push(Some(DataPacket::FragmentData(data)));
+                    output_data
+                        .serialized_blocks
+                        .push(Some(DataPacket::FragmentData(data)));
                 }
             }
 
@@ -226,7 +259,11 @@ impl Processor for ExchangeTransform {
         if let Some(mut output_data) = self.output_data.take() {
             for index in 0..output_data.serialized_blocks.len() {
                 if let Some(output_packet) = output_data.serialized_blocks[index].take() {
-                    if let Err(_) = self.flight_exchanges[index].send(output_packet).await {
+                    if self.flight_exchanges[index]
+                        .send(output_packet)
+                        .await
+                        .is_err()
+                    {
                         return Err(ErrorCode::TokioError(
                             "Cannot send flight data to endpoint, because sender is closed.",
                         ));
@@ -289,11 +326,11 @@ impl ExchangeTransform {
         Ok(())
     }
 
-    fn on_recv_progress(&mut self, progress: ProgressInfo) -> Result<()> {
+    fn on_recv_progress(&mut self, _progress: ProgressInfo) -> Result<()> {
         unimplemented!()
     }
 
-    fn on_recv_precommit(&mut self, fragment_data: PrecommitBlock) -> Result<()> {
+    fn on_recv_precommit(&mut self, _fragment_data: PrecommitBlock) -> Result<()> {
         unimplemented!()
     }
 }

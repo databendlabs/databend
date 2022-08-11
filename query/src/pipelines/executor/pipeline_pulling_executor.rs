@@ -116,7 +116,6 @@ impl PipelinePullingExecutor {
         std::thread::spawn(thread_function);
     }
 
-
     pub fn get_inner(&self) -> Arc<PipelineExecutor> {
         self.executor.clone()
     }
@@ -149,7 +148,7 @@ impl PipelinePullingExecutor {
     }
 
     pub fn try_pull_data<F>(&mut self, f: F) -> Result<Option<DataBlock>>
-        where F: Fn() -> bool {
+    where F: Fn() -> bool {
         if !self.executor.is_finished() {
             while !f() {
                 return match self.receiver.recv_timeout(Duration::from_millis(100)) {

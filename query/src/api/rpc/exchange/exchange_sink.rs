@@ -18,13 +18,10 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::api::rpc::exchange::exchange_params::ExchangeParams;
-use crate::api::rpc::exchange::exchange_params::MergeExchangeParams;
 use crate::api::rpc::exchange::exchange_sink_merge::ExchangeMergeSink;
 use crate::api::rpc::exchange::exchange_sink_shuffle::ExchangePublisherSink;
 use crate::clusters::ClusterHelper;
 use crate::pipelines::processors::port::InputPort;
-use crate::pipelines::processors::port::OutputPort;
-use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::Pipeline;
 use crate::pipelines::SinkPipeBuilder;
 use crate::sessions::QueryContext;
@@ -33,7 +30,11 @@ use crate::sessions::TableContext;
 pub struct ExchangeSink;
 
 impl ExchangeSink {
-    pub fn via(ctx: &Arc<QueryContext>, params: &ExchangeParams, pipeline: &mut Pipeline) -> Result<()> {
+    pub fn via(
+        ctx: &Arc<QueryContext>,
+        params: &ExchangeParams,
+        pipeline: &mut Pipeline,
+    ) -> Result<()> {
         match params {
             ExchangeParams::MergeExchange(params) => {
                 if params.destination_id == ctx.get_cluster().local_id() {
@@ -65,11 +66,7 @@ impl ExchangeSink {
                     let input = InputPort::create();
                     sink_builder.add_sink(
                         input.clone(),
-                        ExchangePublisherSink::try_create(
-                            ctx.clone(),
-                            input,
-                            params,
-                        )?,
+                        ExchangePublisherSink::try_create(ctx.clone(), input, params)?,
                     );
                 }
 

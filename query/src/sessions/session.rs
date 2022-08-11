@@ -178,7 +178,7 @@ impl Session {
     }
 
     pub fn attach<F>(self: &Arc<Self>, host: Option<SocketAddr>, io_shutdown: F)
-        where F: FnOnce() + Send + 'static {
+    where F: FnOnce() + Send + 'static {
         let (tx, rx) = oneshot::channel();
         self.session_ctx.set_client_host(host);
         self.session_ctx.set_io_shutdown_tx(Some(tx));

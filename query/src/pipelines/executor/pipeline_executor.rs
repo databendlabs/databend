@@ -30,7 +30,8 @@ use crate::pipelines::executor::executor_tasks::ExecutorTasksQueue;
 use crate::pipelines::executor::executor_worker_context::ExecutorWorkerContext;
 use crate::pipelines::pipeline::Pipeline;
 
-pub type FinishedCallback = Arc<Box<dyn Fn(&Option<ErrorCode>) -> Result<()> + Send + Sync + 'static>>;
+pub type FinishedCallback =
+    Arc<Box<dyn Fn(&Option<ErrorCode>) -> Result<()> + Send + Sync + 'static>>;
 
 pub struct PipelineExecutor {
     threads_num: usize,

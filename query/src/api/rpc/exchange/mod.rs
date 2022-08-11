@@ -19,11 +19,10 @@ mod exchange_sink;
 mod exchange_sink_merge;
 mod exchange_sink_shuffle;
 mod exchange_source;
-mod exchange_transform_sink;
 mod exchange_transform;
 mod exchange_transform_source;
-mod statistics_sender;
 mod statistics_receiver;
+mod statistics_sender;
 
 pub use data_exchange::BroadcastExchange;
 pub use data_exchange::DataExchange;
