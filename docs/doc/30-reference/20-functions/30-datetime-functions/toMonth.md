@@ -1,5 +1,5 @@
 ---
-title: toMonth
+title: to_month
 ---
 
 Converts a date or date with time to a UInt8 number containing the month number (1-12).
@@ -7,7 +7,7 @@ Converts a date or date with time to a UInt8 number containing the month number 
 ## Syntax
 
 ```sql
-toMonth( <expr> )
+to_month( <expr> )
 ```
 
 ## Arguments
@@ -23,16 +23,16 @@ toMonth( <expr> )
 ## Examples
 
 ```sql
-SELECT toMonth(to_date(18869));
+SELECT to_month(to_date(18869));
 +------------------------+
-| toMonth(to_date(18869)) |
+| to_month(to_date(18869)) |
 +------------------------+
 |                      8 |
 +------------------------+
 
- SELECT toMonth(to_datetime(1630812366));
+ SELECT to_month(to_datetime(1630812366));
 +---------------------------------+
-| toMonth(to_datetime(1630812366)) |
+| to_month(to_datetime(1630812366)) |
 +---------------------------------+
 |                               9 |
 +---------------------------------+

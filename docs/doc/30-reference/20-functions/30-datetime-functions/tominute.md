@@ -1,5 +1,5 @@
 ---
-title: toMinute
+title: to_minute
 ---
 
 Converts a date with time to a UInt8 number containing the number of the minute of the hour (0-59).
@@ -7,7 +7,7 @@ Converts a date with time to a UInt8 number containing the number of the minute 
 ## Syntax
 
 ```sql
-toMinute( <expr> )
+to_minute( <expr> )
 ```
 
 ## Arguments
@@ -23,16 +23,16 @@ toMinute( <expr> )
 ## Examples
 
 ```sql
-SELECT toMinute(now());
+SELECT to_minute(now());
 +-----------------+
-| toMinute(now()) |
+| to_minute(now()) |
 +-----------------+
 |              17 |
 +-----------------+
 
-SELECT toMinute(to_datetime(1630812366));
+SELECT to_minute(to_datetime(1630812366));
 +----------------------------------+
-| toMinute(to_datetime(1630812366)) |
+| to_minute(to_datetime(1630812366)) |
 +----------------------------------+
 |                               26 |
 +----------------------------------+

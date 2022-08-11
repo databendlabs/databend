@@ -289,7 +289,7 @@ impl NumberOperator<u8> for ToSecond {
     fn factor_function(_input_type: DataTypeImpl) -> Option<Box<dyn Function>> {
         Some(
             RoundFunction::try_create(
-                "toStartOfMinute",
+                "to_start_of_minute",
                 &[&TimestampType::new_impl(0)],
                 Round::Minute,
             )

@@ -6,7 +6,7 @@ from
     orders
 where
         o_orderdate >= to_date('1993-07-01')
-  and o_orderdate < addMonths(to_date('1993-07-01'), 3)
+  and o_orderdate < add_months(to_date('1993-07-01'), 3)
   and exists (
         select
             *
