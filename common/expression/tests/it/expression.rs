@@ -62,25 +62,25 @@ pub fn test_pass() {
     run_ast(&mut file, "plus(a, 10)", &[(
         "a",
         DataType::Nullable(Box::new(DataType::UInt8)),
-        Column::from_data_valids(vec![10u8, 11, 12], vec![false, true, false]),
+        Column::from_data_with_validity(vec![10u8, 11, 12], vec![false, true, false]),
     )]);
     run_ast(&mut file, "plus(a, b)", &[
         (
             "a",
             DataType::Nullable(Box::new(DataType::UInt8)),
-            Column::from_data_valids(vec![10u8, 11, 12], vec![false, true, false]),
+            Column::from_data_with_validity(vec![10u8, 11, 12], vec![false, true, false]),
         ),
         (
             "b",
             DataType::Nullable(Box::new(DataType::UInt8)),
-            Column::from_data_valids(vec![1u8, 2, 3], vec![false, true, true]),
+            Column::from_data_with_validity(vec![1u8, 2, 3], vec![false, true, true]),
         ),
     ]);
     run_ast(&mut file, "plus(a, b)", &[
         (
             "a",
             DataType::Nullable(Box::new(DataType::UInt8)),
-            Column::from_data_valids(vec![10u8, 11, 12], vec![false, true, false]),
+            Column::from_data_with_validity(vec![10u8, 11, 12], vec![false, true, false]),
         ),
         ("b", DataType::Null, Column::Null { len: 3 }),
     ]);
@@ -88,19 +88,19 @@ pub fn test_pass() {
     run_ast(&mut file, "minus(a, 10)", &[(
         "a",
         DataType::Nullable(Box::new(DataType::UInt8)),
-        Column::from_data_valids(vec![10u8, 11, 12], vec![false, true, false]),
+        Column::from_data_with_validity(vec![10u8, 11, 12], vec![false, true, false]),
     )]);
 
     run_ast(&mut file, "minus(a, b)", &[
         (
             "a",
             DataType::Nullable(Box::new(DataType::UInt16)),
-            Column::from_data_valids(vec![10u16, 11, 12], vec![false, true, false]),
+            Column::from_data_with_validity(vec![10u16, 11, 12], vec![false, true, false]),
         ),
         (
             "b",
             DataType::Nullable(Box::new(DataType::Int16)),
-            Column::from_data_valids(vec![1i16, 2, 3], vec![false, true, true]),
+            Column::from_data_with_validity(vec![1i16, 2, 3], vec![false, true, true]),
         ),
     ]);
 
@@ -108,7 +108,7 @@ pub fn test_pass() {
         (
             "a",
             DataType::Nullable(Box::new(DataType::UInt8)),
-            Column::from_data_valids(vec![10u16, 11, 12], vec![false, true, false]),
+            Column::from_data_with_validity(vec![10u16, 11, 12], vec![false, true, false]),
         ),
         ("b", DataType::Null, Column::Null { len: 3 }),
     ]);
@@ -116,19 +116,19 @@ pub fn test_pass() {
     run_ast(&mut file, "multiply(a, 10)", &[(
         "a",
         DataType::Nullable(Box::new(DataType::UInt8)),
-        Column::from_data_valids(vec![10u8, 11, 12], vec![false, true, false]),
+        Column::from_data_with_validity(vec![10u8, 11, 12], vec![false, true, false]),
     )]);
 
     run_ast(&mut file, "multiply(a, b)", &[
         (
             "a",
             DataType::Nullable(Box::new(DataType::UInt16)),
-            Column::from_data_valids(vec![10u16, 11, 12], vec![false, true, false]),
+            Column::from_data_with_validity(vec![10u16, 11, 12], vec![false, true, false]),
         ),
         (
             "b",
             DataType::Nullable(Box::new(DataType::Int16)),
-            Column::from_data_valids(vec![1i16, 2, 3], vec![false, true, true]),
+            Column::from_data_with_validity(vec![1i16, 2, 3], vec![false, true, true]),
         ),
     ]);
 
@@ -136,12 +136,12 @@ pub fn test_pass() {
         (
             "a",
             DataType::Nullable(Box::new(DataType::UInt32)),
-            Column::from_data_valids(vec![10u32, 11, 12], vec![false, true, false]),
+            Column::from_data_with_validity(vec![10u32, 11, 12], vec![false, true, false]),
         ),
         (
             "b",
             DataType::Nullable(Box::new(DataType::Int32)),
-            Column::from_data_valids(vec![1i32, 2, 3], vec![false, true, true]),
+            Column::from_data_with_validity(vec![1i32, 2, 3], vec![false, true, true]),
         ),
     ]);
 
@@ -149,7 +149,7 @@ pub fn test_pass() {
         (
             "a",
             DataType::Nullable(Box::new(DataType::UInt8)),
-            Column::from_data_valids(vec![10u8, 11, 12], vec![false, true, false]),
+            Column::from_data_with_validity(vec![10u8, 11, 12], vec![false, true, false]),
         ),
         ("b", DataType::Null, Column::Null { len: 3 }),
     ]);
@@ -157,19 +157,19 @@ pub fn test_pass() {
     run_ast(&mut file, "divide(a, 10)", &[(
         "a",
         DataType::Nullable(Box::new(DataType::UInt8)),
-        Column::from_data_valids(vec![10u8, 11, 12], vec![false, true, false]),
+        Column::from_data_with_validity(vec![10u8, 11, 12], vec![false, true, false]),
     )]);
 
     run_ast(&mut file, "divide(a, b)", &[
         (
             "a",
             DataType::Nullable(Box::new(DataType::UInt16)),
-            Column::from_data_valids(vec![10u16, 11, 12], vec![false, true, false]),
+            Column::from_data_with_validity(vec![10u16, 11, 12], vec![false, true, false]),
         ),
         (
             "b",
             DataType::Nullable(Box::new(DataType::Int16)),
-            Column::from_data_valids(vec![1i16, 2, 3], vec![false, true, true]),
+            Column::from_data_with_validity(vec![1i16, 2, 3], vec![false, true, true]),
         ),
     ]);
 
@@ -177,7 +177,7 @@ pub fn test_pass() {
         (
             "a",
             DataType::Nullable(Box::new(DataType::UInt8)),
-            Column::from_data_valids(vec![10u8, 11, 12], vec![false, true, false]),
+            Column::from_data_with_validity(vec![10u8, 11, 12], vec![false, true, false]),
         ),
         ("b", DataType::Null, Column::Null { len: 3 }),
     ]);
@@ -185,19 +185,19 @@ pub fn test_pass() {
     run_ast(&mut file, "avg(a, 10)", &[(
         "a",
         DataType::Nullable(Box::new(DataType::UInt8)),
-        Column::from_data_valids(vec![10u8, 11, 12], vec![false, true, false]),
+        Column::from_data_with_validity(vec![10u8, 11, 12], vec![false, true, false]),
     )]);
 
     run_ast(&mut file, "avg(a, b)", &[
         (
             "a",
             DataType::Nullable(Box::new(DataType::UInt16)),
-            Column::from_data_valids(vec![10u16, 11, 12], vec![false, true, false]),
+            Column::from_data_with_validity(vec![10u16, 11, 12], vec![false, true, false]),
         ),
         (
             "b",
             DataType::Nullable(Box::new(DataType::Int16)),
-            Column::from_data_valids(vec![1i16, 2, 3], vec![false, true, true]),
+            Column::from_data_with_validity(vec![1i16, 2, 3], vec![false, true, true]),
         ),
     ]);
 
@@ -205,12 +205,12 @@ pub fn test_pass() {
         (
             "a",
             DataType::Nullable(Box::new(DataType::UInt32)),
-            Column::from_data_valids(vec![10u32, 11, 12], vec![false, true, false]),
+            Column::from_data_with_validity(vec![10u32, 11, 12], vec![false, true, false]),
         ),
         (
             "b",
             DataType::Nullable(Box::new(DataType::Int32)),
-            Column::from_data_valids(vec![1i32, 2, 3], vec![false, true, true]),
+            Column::from_data_with_validity(vec![1i32, 2, 3], vec![false, true, true]),
         ),
     ]);
 
@@ -218,12 +218,12 @@ pub fn test_pass() {
         (
             "a",
             DataType::Nullable(Box::new(DataType::Float32)),
-            Column::from_data_valids(vec![10f32, 11f32, 12f32], vec![false, true, false]),
+            Column::from_data_with_validity(vec![10f32, 11f32, 12f32], vec![false, true, false]),
         ),
         (
             "b",
             DataType::Nullable(Box::new(DataType::Int32)),
-            Column::from_data_valids(vec![1i32, 2, 3], vec![false, true, true]),
+            Column::from_data_with_validity(vec![1i32, 2, 3], vec![false, true, true]),
         ),
     ]);
 
@@ -231,12 +231,12 @@ pub fn test_pass() {
         (
             "a",
             DataType::Nullable(Box::new(DataType::Float32)),
-            Column::from_data_valids(vec![10f32, 11f32, 12f32], vec![false, true, false]),
+            Column::from_data_with_validity(vec![10f32, 11f32, 12f32], vec![false, true, false]),
         ),
         (
             "b",
             DataType::Nullable(Box::new(DataType::Float64)),
-            Column::from_data_valids(vec![1f64, 2f64, 3f64], vec![false, true, true]),
+            Column::from_data_with_validity(vec![1f64, 2f64, 3f64], vec![false, true, true]),
         ),
     ]);
 
@@ -244,7 +244,7 @@ pub fn test_pass() {
         (
             "a",
             DataType::Nullable(Box::new(DataType::Int8)),
-            Column::from_data_valids(vec![10, 11, 12], vec![false, true, false]),
+            Column::from_data_with_validity(vec![10, 11, 12], vec![false, true, false]),
         ),
         ("b", DataType::Null, Column::Null { len: 3 }),
     ]);
@@ -252,7 +252,7 @@ pub fn test_pass() {
     run_ast(&mut file, "NOT a", &[(
         "a",
         DataType::Nullable(Box::new(DataType::Boolean)),
-        Column::from_data_valids(vec![true, false, true], vec![false, true, false]),
+        Column::from_data_with_validity(vec![true, false, true], vec![false, true, false]),
     )]);
 
     run_ast(&mut file, "NOT a", &[("a", DataType::Null, Column::Null {
@@ -269,7 +269,7 @@ pub fn test_pass() {
         (
             "b",
             DataType::Nullable(Box::new(DataType::String)),
-            Column::from_data_valids(vec!["a", "b", "c", "d", "e"], vec![
+            Column::from_data_with_validity(vec!["a", "b", "c", "d", "e"], vec![
                 true, true, false, false, false,
             ]),
         ),
@@ -278,12 +278,12 @@ pub fn test_pass() {
         (
             "a",
             DataType::Nullable(Box::new(DataType::Boolean)),
-            Column::from_data_valids(vec![false; 5], vec![true, true, false, false, false]),
+            Column::from_data_with_validity(vec![false; 5], vec![true, true, false, false, false]),
         ),
         (
             "b",
             DataType::Nullable(Box::new(DataType::String)),
-            Column::from_data_valids(vec!["a", "b", "c", "d", "e"], vec![
+            Column::from_data_with_validity(vec!["a", "b", "c", "d", "e"], vec![
                 true, true, false, false, false,
             ]),
         ),

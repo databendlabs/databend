@@ -24,7 +24,7 @@ pub trait ColumnFrom<D, Phantom: ?Sized> {
     /// Initialize by name and values.
     fn from_data(_: D) -> Column;
 
-    fn from_data_valids(d: D, valids: Vec<bool>) -> Column {
+    fn from_data_with_validity(d: D, valids: Vec<bool>) -> Column {
         let column = Self::from_data(d);
         Column::Nullable(Box::new(NullableColumn {
             column,

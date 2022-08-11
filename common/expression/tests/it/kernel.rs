@@ -32,11 +32,11 @@ pub fn test_pass() {
         Column::Boolean(vec![true, false, false, false, true].into()),
         &[
             Column::Int32(vec![0, 1, 2, 3, -4].into()),
-            Column::from_data_valids(vec![10u8, 11, 12, 13, 14], vec![
+            Column::from_data_with_validity(vec![10u8, 11, 12, 13, 14], vec![
                 false, true, false, false, false,
             ]),
             Column::Null { len: 5 },
-            Column::from_data_valids(vec!["a", "b", "c", "d", "e"], vec![
+            Column::from_data_with_validity(vec!["a", "b", "c", "d", "e"], vec![
                 true, true, false, false, false,
             ]),
         ],
@@ -44,16 +44,16 @@ pub fn test_pass() {
 
     run_filter(
         &mut file,
-        Column::from_data_valids(vec![true, true, false, true, true], vec![
+        Column::from_data_with_validity(vec![true, true, false, true, true], vec![
             false, true, true, false, false,
         ]),
         &[
             Column::Int32(vec![0, 1, 2, 3, -4].into()),
-            Column::from_data_valids(vec![10u8, 11, 12, 13, 14], vec![
+            Column::from_data_with_validity(vec![10u8, 11, 12, 13, 14], vec![
                 false, true, false, false, false,
             ]),
             Column::Null { len: 5 },
-            Column::from_data_valids(vec!["x", "y", "z", "a", "b"], vec![
+            Column::from_data_with_validity(vec!["x", "y", "z", "a", "b"], vec![
                 false, true, true, false, false,
             ]),
         ],
@@ -62,21 +62,21 @@ pub fn test_pass() {
     run_concat(&mut file, vec![
         vec![
             Column::Int32(vec![0, 1, 2, 3, -4].into()),
-            Column::from_data_valids(vec![10u8, 11, 12, 13, 14], vec![
+            Column::from_data_with_validity(vec![10u8, 11, 12, 13, 14], vec![
                 false, true, false, false, false,
             ]),
             Column::Null { len: 5 },
             Column::EmptyArray { len: 5 },
-            Column::from_data_valids(vec!["x", "y", "z", "a", "b"], vec![
+            Column::from_data_with_validity(vec!["x", "y", "z", "a", "b"], vec![
                 false, true, true, false, false,
             ]),
         ],
         vec![
             Column::Int32(vec![5, 6].into()),
-            Column::from_data_valids(vec![15u8, 16], vec![false, true]),
+            Column::from_data_with_validity(vec![15u8, 16], vec![false, true]),
             Column::Null { len: 2 },
             Column::EmptyArray { len: 2 },
-            Column::from_data_valids(vec!["x", "y"], vec![false, true]),
+            Column::from_data_with_validity(vec!["x", "y"], vec![false, true]),
         ],
     ]);
 
@@ -100,11 +100,11 @@ pub fn test_pass() {
         &mut file,
         &[
             Column::Int32(vec![0, 1, 2, 3, -4].into()),
-            Column::from_data_valids(vec![10, 11, 12, 13, 14], vec![
+            Column::from_data_with_validity(vec![10, 11, 12, 13, 14], vec![
                 false, true, false, false, false,
             ]),
             Column::Null { len: 5 },
-            Column::from_data_valids(vec!["x", "y", "z", "a", "b"], vec![
+            Column::from_data_with_validity(vec!["x", "y", "z", "a", "b"], vec![
                 false, true, true, false, false,
             ]),
         ],
