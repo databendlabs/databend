@@ -146,9 +146,22 @@ select 1;
 1
 ```
 
-**tips** If you do not care about result, use statement ok instead of statement query
-**tips** Add ORDER BY to ensure that the order of returned results is always consistent
-**warning** A statement query need result, and even if you want to skip a case, you still need to keep the results in the test content
+### Acknowledgement
+- *tips* If you do not care about result, use statement ok instead of statement query
+- *tips* Add ORDER BY to ensure that the order of returned results is always consistent
+- *warning* A statement query need result, and even if you want to skip a case, you still need to keep the results in the test content
+
+## Tools
+
+complete.py can auto complete test file for you, It do as follow steps:
+
+1. Get SQLs from source-file, whether an SQL file or logictest file.
+2. Execute SQL one by one, if SQL fetch result, add statement query; if SQL fetch nothing, add statement ok; if SQL get an error, add statement error
+
+### Acknowledgement
+- *tips* You can use mysql to auto-complete test suite, but make sure you know all grammar differences.
+- *tips* For mysql return bool as 1 and 0, this tool make it as int(I) in query type option.
+- *warning* No multi handlers use in auto complete tool(mysql only), if handlers return differs, manual fix it please.
 
 # Learn More
 
