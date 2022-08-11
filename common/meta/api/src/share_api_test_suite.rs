@@ -787,7 +787,6 @@ impl ShareApiTestSuite {
             tenant: tenant.to_string(),
             share_name: share1.to_string(),
         };
-        let db_id: u64;
 
         info!("--- get unknown share");
         {
@@ -847,7 +846,6 @@ impl ShareApiTestSuite {
 
             let res = mt.create_database(plan).await?;
             info!("create database res: {:?}", res);
-            db_id = res.db_id;
 
             let req = CreateTableReq {
                 if_not_exists: false,
@@ -913,7 +911,10 @@ impl ShareApiTestSuite {
             let res = res.unwrap();
             assert_eq!(res.objects.len(), 1);
             let entry = res.objects.get(0).unwrap();
-            assert_eq!(entry.object, ShareGrantObject::Database(db_id));
+            assert_eq!(
+                entry.object,
+                ShareGrantObjectName::Database(db_name.to_string())
+            );
         }
 
         info!("--- get all share objects");

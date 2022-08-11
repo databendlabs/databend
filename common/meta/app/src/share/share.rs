@@ -175,9 +175,16 @@ pub struct GetShareGrantObjectReq {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct ShareGrantReplyObject {
+    pub object: ShareGrantObjectName,
+    pub privileges: BitFlags<ShareGrantObjectPrivilege>,
+    pub grant_on: DateTime<Utc>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct GetShareGrantObjectReply {
     pub share_name: ShareNameIdent,
-    pub objects: Vec<ShareGrantEntry>,
+    pub objects: Vec<ShareGrantReplyObject>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]

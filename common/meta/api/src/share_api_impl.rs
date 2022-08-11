@@ -16,8 +16,10 @@ use std::fmt::Display;
 
 use common_meta_app::schema::DBIdTableName;
 use common_meta_app::schema::DatabaseId;
+use common_meta_app::schema::DatabaseIdToName;
 use common_meta_app::schema::DatabaseNameIdent;
 use common_meta_app::schema::TableId;
+use common_meta_app::schema::TableIdToName;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TableNameIdent;
 use common_meta_app::share::AddShareAccountsReply;
@@ -40,6 +42,7 @@ use common_meta_app::share::ShareGrantEntry;
 use common_meta_app::share::ShareGrantObject;
 use common_meta_app::share::ShareGrantObjectName;
 use common_meta_app::share::ShareGrantObjectSeqAndId;
+use common_meta_app::share::ShareGrantReplyObject;
 use common_meta_app::share::ShareId;
 use common_meta_app::share::ShareIdToName;
 use common_meta_app::share::ShareMeta;
@@ -730,6 +733,24 @@ impl<KV: KVApi> ShareApi for KV {
             });
         }
 
+        let database_obj = share_meta.database.clone().unwrap();
+        let database = get_object_name_from_id(self, &None, database_obj.object).await?;
+        if database.is_none() {
+            return Ok(GetShareGrantObjectReply {
+                share_name: req.share_name,
+                objects: vec![],
+            });
+        }
+        let database_name = match database.as_ref().unwrap() {
+            ShareGrantObjectName::Database(db_name) => Some(db_name),
+            ShareGrantObjectName::Table(_, _) => {
+                return Ok(GetShareGrantObjectReply {
+                    share_name: req.share_name,
+                    objects: vec![],
+                });
+            }
+        };
+
         let entries = match req.object {
             Some(object_name) => {
                 let seq_and_id =
@@ -751,10 +772,55 @@ impl<KV: KVApi> ShareApi for KV {
             }
         };
 
+        let mut objects = vec![];
+        for entry in entries {
+            let object = get_object_name_from_id(self, &database_name, entry.object).await?;
+            match object {
+                Some(object) => objects.push(ShareGrantReplyObject {
+                    object,
+                    privileges: entry.privileges,
+                    grant_on: entry.grant_on,
+                }),
+                None => {}
+            }
+        }
+
         Ok(GetShareGrantObjectReply {
             share_name: req.share_name,
-            objects: entries,
+            objects,
         })
+    }
+}
+
+async fn get_object_name_from_id(
+    kv_api: &(impl KVApi + ?Sized),
+    database_name: &Option<&String>,
+    object: ShareGrantObject,
+) -> Result<Option<ShareGrantObjectName>, MetaError> {
+    match object {
+        ShareGrantObject::Database(db_id) => {
+            let db_id_key = DatabaseIdToName { db_id };
+            let (_db_name_seq, db_name): (_, Option<DatabaseNameIdent>) =
+                get_struct_value(kv_api, &db_id_key).await?;
+            match db_name {
+                Some(db_name) => return Ok(Some(ShareGrantObjectName::Database(db_name.db_name))),
+                None => return Ok(None),
+            }
+        }
+        ShareGrantObject::Table(table_id) => {
+            let table_id_key = TableIdToName { table_id };
+            let (_db_name_seq, table_name): (_, Option<DBIdTableName>) =
+                get_struct_value(kv_api, &table_id_key).await?;
+            match table_name {
+                Some(table_name) => {
+                    return Ok(Some(ShareGrantObjectName::Table(
+                        database_name.as_ref().unwrap().to_string(),
+                        table_name.table_name,
+                    )));
+                }
+                None => return Ok(None),
+            }
+        }
     }
 }
 
