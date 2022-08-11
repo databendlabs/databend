@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
+use std::sync::Arc;
+
 use common_ast::ast::TableAlias;
 use common_ast::parser::token::Token;
 use common_ast::DisplayError;
@@ -21,10 +24,12 @@ use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataTypeImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use parking_lot::RwLock;
 
 use super::AggregateInfo;
 use crate::sql::common::IndexType;
 use crate::sql::normalize_identifier;
+use crate::sql::optimizer::SExpr;
 use crate::sql::plans::Scalar;
 use crate::sql::NameResolutionContext;
 
@@ -54,7 +59,7 @@ pub enum NameResolutionResult {
 }
 
 /// `BindContext` stores all the free variables in a query and tracks the context of binding procedure.
-#[derive(Clone, Default, Debug)]
+#[derive(Clone, Debug)]
 pub struct BindContext {
     pub parent: Option<Box<BindContext>>,
 
@@ -69,20 +74,37 @@ pub struct BindContext {
 
     /// Format type of query output.
     pub format: Option<String>,
+
+    pub ctes_map: Arc<RwLock<HashMap<String, CteInfo>>>,
+}
+
+#[derive(Clone, Debug)]
+pub struct CteInfo {
+    pub columns_alias: Vec<String>,
+    pub s_expr: SExpr,
+    pub bind_context: BindContext,
 }
 
 impl BindContext {
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            parent: None,
+            columns: Vec::new(),
+            aggregate_info: AggregateInfo::default(),
+            in_grouping: false,
+            format: None,
+            ctes_map: Arc::new(RwLock::new(HashMap::new())),
+        }
     }
 
     pub fn with_parent(parent: Box<BindContext>) -> Self {
         BindContext {
-            parent: Some(parent),
+            parent: Some(parent.clone()),
             columns: vec![],
             aggregate_info: Default::default(),
             in_grouping: false,
             format: None,
+            ctes_map: parent.ctes_map.clone(),
         }
     }
 
@@ -90,6 +112,7 @@ impl BindContext {
     pub fn replace(&self) -> Self {
         let mut bind_context = BindContext::new();
         bind_context.parent = self.parent.clone();
+        bind_context.ctes_map = self.ctes_map.clone();
         bind_context
     }
 
@@ -265,5 +288,11 @@ impl BindContext {
             })
             .collect();
         DataSchemaRefExt::create(fields)
+    }
+}
+
+impl Default for BindContext {
+    fn default() -> Self {
+        BindContext::new()
     }
 }
