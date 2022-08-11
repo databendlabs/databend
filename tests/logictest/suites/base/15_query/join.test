@@ -26,9 +26,8 @@ statement query III
 select * from t1 join t2 using(a) order by t1.a, t2.a;
 
 ----
-4 3 4
-6 5 6
-
+3 4 4
+5 6 6
 
 statement query I
 select t1.a from t1 join t2 using(a) order by t1.a, t2.a;
@@ -50,8 +49,8 @@ statement query III
 select * from t1 natural join t2 order by t1.a, t2.a;
 
 ----
-4 3 4
-6 5 6
+3 4 4
+5 6 6
 
 
 statement ok
