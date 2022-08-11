@@ -51,6 +51,17 @@ pub trait Number: Debug + Clone + PartialEq + 'static {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NumberType<T: Number>(PhantomData<T>);
 
+pub type Int8Type = NumberType<i8>;
+pub type Int16Type = NumberType<i16>;
+pub type Int32Type = NumberType<i32>;
+pub type Int64Type = NumberType<i64>;
+pub type UInt8Type = NumberType<u8>;
+pub type UInt16Type = NumberType<u16>;
+pub type UInt32Type = NumberType<u32>;
+pub type UInt64Type = NumberType<u64>;
+pub type Float32Type = NumberType<f32>;
+pub type Float64Type = NumberType<f64>;
+
 impl<Num: Number> ValueType for NumberType<Num> {
     type Scalar = Num::Storage;
     type ScalarRef<'a> = Num::Storage;
@@ -151,6 +162,10 @@ impl<Num: Number> ArgType for NumberType<Num> {
 
     fn create_builder(capacity: usize, _generics: &GenericMap) -> Self::ColumnBuilder {
         Vec::with_capacity(capacity)
+    }
+
+    fn column_from_vec(vec: Vec<Self::Scalar>, _generics: &GenericMap) -> Self::Column {
+        vec.into()
     }
 
     fn column_from_iter(iter: impl Iterator<Item = Self::Scalar>, _: &GenericMap) -> Self::Column {
