@@ -30,6 +30,7 @@ use serde_json;
 use serde_repr::Serialize_repr;
 use tracing::error;
 use tracing::info;
+use tracing::subscriber;
 
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
@@ -228,7 +229,16 @@ impl InterpreterQueryLog {
             .append_data(self.ctx.clone(), Box::pin(input_stream))
             .await?;
 
-        info!("{}", serde_json::to_string(event)?);
+        // info!("{}", serde_json::to_string(event)?);
+        match self.ctx.get_query_logger() {
+            Some(logger) => {
+                let event_str = serde_json::to_string(event)?;
+                subscriber::with_default(logger, || {
+                    info!("{}", event_str);
+                });
+            }
+            None => {}
+        };
 
         Ok(())
     }
