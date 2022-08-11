@@ -265,6 +265,9 @@ fn test_statement() {
         r#"GRANT SELECT ON TABLE db1.tb1 TO SHARE a;"#,
         r#"REVOKE USAGE ON DATABASE db1 FROM SHARE a;"#,
         r#"REVOKE SELECT ON TABLE db1.tb1 FROM SHARE a;"#,
+        r#"ALTER SHARE a ADD TENANTS = b,c;"#,
+        r#"ALTER SHARE IF EXISTS a ADD TENANTS = b,c;"#,
+        r#"ALTER SHARE IF EXISTS a REMOVE TENANTS = b,c;"#,
     ];
 
     for case in cases {
