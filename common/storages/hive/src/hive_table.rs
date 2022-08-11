@@ -183,7 +183,8 @@ impl HiveTable {
 
         if !filter_expressions.is_empty() {
             let partition_schemas = self.get_column_schemas(partition_keys.clone())?;
-            let partition_pruner = HivePartitionPruner::create(ctx, filter_expressions, partition_schemas);
+            let partition_pruner =
+                HivePartitionPruner::create(ctx, filter_expressions, partition_schemas);
             partitions = partition_pruner.prune(partitions)?;
         }
 
@@ -212,7 +213,10 @@ impl HiveTable {
 
         if let Some(partition_keys) = &self.table_options.partition_keys {
             if !partition_keys.is_empty() {
-                let filter_expression = push_downs.as_ref().map(|p| p.filters.clone()).unwrap_or_default();
+                let filter_expression = push_downs
+                    .as_ref()
+                    .map(|p| p.filters.clone())
+                    .unwrap_or_default();
                 return self
                     .get_query_locations_from_partition_table(
                         ctx.clone(),
