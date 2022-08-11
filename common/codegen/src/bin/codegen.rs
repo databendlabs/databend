@@ -12,8 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use codegen::writes::codegen_arithmetic_type;
+use codegen::writes::{codegen_arithmetic_type, codegen_arithmetic_type_v2};
 
 fn main() {
     codegen_arithmetic_type();
+    codegen_arithmetic_type_v2();
 }

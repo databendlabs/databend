@@ -95,7 +95,7 @@ pub fn transform_expr(ast: common_ast::ast::Expr, columns: &[(&str, DataType)]) 
         },
         common_ast::ast::Expr::UnaryOp { span, op, expr } => RawExpr::FunctionCall {
             span: transform_span(span),
-            name: transform_unary_op(op).to_string(),
+            name: transform_unary_op(op),
             params: vec![],
             args: vec![transform_expr(*expr, columns)],
         },
@@ -106,7 +106,7 @@ pub fn transform_expr(ast: common_ast::ast::Expr, columns: &[(&str, DataType)]) 
             right,
         } => RawExpr::FunctionCall {
             span: transform_span(span),
-            name: transform_binary_op(op).to_string(),
+            name: transform_binary_op(op),
             params: vec![],
             args: vec![
                 transform_expr(*left, columns),
@@ -161,22 +161,12 @@ pub fn transform_expr(ast: common_ast::ast::Expr, columns: &[(&str, DataType)]) 
     }
 }
 
-fn transform_unary_op(op: common_ast::ast::UnaryOperator) -> &'static str {
-    match op {
-        common_ast::ast::UnaryOperator::Not => "not",
-        _ => unimplemented!(),
-    }
+fn transform_unary_op(op: common_ast::ast::UnaryOperator) -> String {
+    op.to_string().to_lowercase()
 }
 
-fn transform_binary_op(op: common_ast::ast::BinaryOperator) -> &'static str {
-    match op {
-        common_ast::ast::BinaryOperator::Plus => "plus",
-        common_ast::ast::BinaryOperator::Minus => "minus",
-        common_ast::ast::BinaryOperator::And => "and",
-        common_ast::ast::BinaryOperator::Or => "or",
-        common_ast::ast::BinaryOperator::Xor => "xor",
-        _ => unimplemented!(),
-    }
+fn transform_binary_op(op: common_ast::ast::BinaryOperator) -> String {
+    op.to_string().to_lowercase()
 }
 
 fn transform_data_type(target_type: common_ast::ast::TypeName) -> DataType {

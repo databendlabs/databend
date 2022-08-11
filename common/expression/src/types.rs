@@ -22,6 +22,7 @@ pub mod null;
 pub mod nullable;
 pub mod number;
 pub mod string;
+pub mod arithmetics_type;
 
 use std::fmt::Debug;
 use std::ops::Range;
