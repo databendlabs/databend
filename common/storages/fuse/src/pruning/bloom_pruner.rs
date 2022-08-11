@@ -114,6 +114,9 @@ pub fn new_bloom_filter_pruner(
     dal: Operator,
 ) -> Result<Arc<dyn BloomFilterPruner + Send + Sync>> {
     if let Some(exprs) = filter_exprs {
+        if exprs.is_empty() {
+            return Ok(Arc::new(NonPruner));
+        }
         // check if there were applicable filter conditions
         let expr = exprs
             .iter()

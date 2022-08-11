@@ -53,7 +53,7 @@ pub fn new_range_filter_pruner<'a>(
     schema: &'a DataSchemaRef,
 ) -> Result<Arc<dyn RangeFilterPruner + Send + Sync>> {
     Ok(match filter_expr {
-        Some(exprs) => {
+        Some(exprs) if !exprs.is_empty() => {
             let range_filter = RangeFilter::try_create(ctx.clone(), exprs, schema.clone())?;
             Arc::new(range_filter)
         }
