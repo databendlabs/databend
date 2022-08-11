@@ -78,13 +78,6 @@ impl ProcessorAsyncTask {
                                 wraning_processor.name(),
                                 start.elapsed()
                             );
-
-                            println!(
-                                "Very slow processor async task, processor id: {:?}, name: {:?}, elapsed: {:?}",
-                                wraning_processor.id(),
-                                wraning_processor.name(),
-                                start.elapsed()
-                            );
                         }
                         Either::Right((res, _)) => {
                             return res;
