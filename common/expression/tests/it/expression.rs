@@ -21,7 +21,6 @@ use common_ast::DisplayError;
 use common_expression::type_check;
 use common_expression::types::array::ArrayColumn;
 use common_expression::types::nullable::NullableColumn;
-use common_expression::types::string::StringColumn;
 use common_expression::types::ArrayType;
 use common_expression::types::DataType;
 use common_expression::types::*;
@@ -31,6 +30,7 @@ use common_expression::BooleanDomain;
 use common_expression::Chunk;
 use common_expression::Column;
 use common_expression::ColumnBuilder;
+use common_expression::ColumnFrom;
 use common_expression::ConstantFolder;
 use common_expression::Domain;
 use common_expression::Evaluator;
@@ -62,37 +62,25 @@ pub fn test_pass() {
     run_ast(&mut file, "plus(a, 10)", &[(
         "a",
         DataType::Nullable(Box::new(DataType::UInt8)),
-        Column::Nullable(Box::new(NullableColumn {
-            column: Column::UInt8(vec![10, 11, 12].into()),
-            validity: vec![false, true, false].into(),
-        })),
+        Column::from_data_with_validity(vec![10u8, 11, 12], vec![false, true, false]),
     )]);
     run_ast(&mut file, "plus(a, b)", &[
         (
             "a",
             DataType::Nullable(Box::new(DataType::UInt8)),
-            Column::Nullable(Box::new(NullableColumn {
-                column: Column::UInt8(vec![10, 11, 12].into()),
-                validity: vec![false, true, false].into(),
-            })),
+            Column::from_data_with_validity(vec![10u8, 11, 12], vec![false, true, false]),
         ),
         (
             "b",
             DataType::Nullable(Box::new(DataType::UInt8)),
-            Column::Nullable(Box::new(NullableColumn {
-                column: Column::UInt8(vec![1, 2, 3].into()),
-                validity: vec![false, true, true].into(),
-            })),
+            Column::from_data_with_validity(vec![1u8, 2, 3], vec![false, true, true]),
         ),
     ]);
     run_ast(&mut file, "plus(a, b)", &[
         (
             "a",
             DataType::Nullable(Box::new(DataType::UInt8)),
-            Column::Nullable(Box::new(NullableColumn {
-                column: Column::UInt8(vec![10, 11, 12].into()),
-                validity: vec![false, true, false].into(),
-            })),
+            Column::from_data_with_validity(vec![10u8, 11, 12], vec![false, true, false]),
         ),
         ("b", DataType::Null, Column::Null { len: 3 }),
     ]);
@@ -100,28 +88,19 @@ pub fn test_pass() {
     run_ast(&mut file, "minus(a, 10)", &[(
         "a",
         DataType::Nullable(Box::new(DataType::UInt8)),
-        Column::Nullable(Box::new(NullableColumn {
-            column: Column::UInt8(vec![10, 11, 12].into()),
-            validity: vec![false, true, false].into(),
-        })),
+        Column::from_data_with_validity(vec![10u8, 11, 12], vec![false, true, false]),
     )]);
 
     run_ast(&mut file, "minus(a, b)", &[
         (
             "a",
             DataType::Nullable(Box::new(DataType::UInt16)),
-            Column::Nullable(Box::new(NullableColumn {
-                column: Column::UInt16(vec![10, 11, 12].into()),
-                validity: vec![false, true, false].into(),
-            })),
+            Column::from_data_with_validity(vec![10u16, 11, 12], vec![false, true, false]),
         ),
         (
             "b",
             DataType::Nullable(Box::new(DataType::Int16)),
-            Column::Nullable(Box::new(NullableColumn {
-                column: Column::Int16(vec![1, 2, 3].into()),
-                validity: vec![false, true, true].into(),
-            })),
+            Column::from_data_with_validity(vec![1i16, 2, 3], vec![false, true, true]),
         ),
     ]);
 
@@ -129,10 +108,7 @@ pub fn test_pass() {
         (
             "a",
             DataType::Nullable(Box::new(DataType::UInt8)),
-            Column::Nullable(Box::new(NullableColumn {
-                column: Column::UInt8(vec![10, 11, 12].into()),
-                validity: vec![false, true, false].into(),
-            })),
+            Column::from_data_with_validity(vec![10u16, 11, 12], vec![false, true, false]),
         ),
         ("b", DataType::Null, Column::Null { len: 3 }),
     ]);
@@ -140,28 +116,19 @@ pub fn test_pass() {
     run_ast(&mut file, "multiply(a, 10)", &[(
         "a",
         DataType::Nullable(Box::new(DataType::UInt8)),
-        Column::Nullable(Box::new(NullableColumn {
-            column: Column::UInt8(vec![10, 11, 12].into()),
-            validity: vec![false, true, false].into(),
-        })),
+        Column::from_data_with_validity(vec![10u8, 11, 12], vec![false, true, false]),
     )]);
 
     run_ast(&mut file, "multiply(a, b)", &[
         (
             "a",
             DataType::Nullable(Box::new(DataType::UInt16)),
-            Column::Nullable(Box::new(NullableColumn {
-                column: Column::UInt16(vec![10, 11, 12].into()),
-                validity: vec![false, true, false].into(),
-            })),
+            Column::from_data_with_validity(vec![10u16, 11, 12], vec![false, true, false]),
         ),
         (
             "b",
             DataType::Nullable(Box::new(DataType::Int16)),
-            Column::Nullable(Box::new(NullableColumn {
-                column: Column::Int16(vec![1, 2, 3].into()),
-                validity: vec![false, true, true].into(),
-            })),
+            Column::from_data_with_validity(vec![1i16, 2, 3], vec![false, true, true]),
         ),
     ]);
 
@@ -169,18 +136,12 @@ pub fn test_pass() {
         (
             "a",
             DataType::Nullable(Box::new(DataType::UInt32)),
-            Column::Nullable(Box::new(NullableColumn {
-                column: Column::UInt32(vec![10, 11, 12].into()),
-                validity: vec![false, true, false].into(),
-            })),
+            Column::from_data_with_validity(vec![10u32, 11, 12], vec![false, true, false]),
         ),
         (
             "b",
             DataType::Nullable(Box::new(DataType::Int32)),
-            Column::Nullable(Box::new(NullableColumn {
-                column: Column::Int32(vec![1, 2, 3].into()),
-                validity: vec![false, true, true].into(),
-            })),
+            Column::from_data_with_validity(vec![1i32, 2, 3], vec![false, true, true]),
         ),
     ]);
 
@@ -188,10 +149,7 @@ pub fn test_pass() {
         (
             "a",
             DataType::Nullable(Box::new(DataType::UInt8)),
-            Column::Nullable(Box::new(NullableColumn {
-                column: Column::UInt8(vec![10, 11, 12].into()),
-                validity: vec![false, true, false].into(),
-            })),
+            Column::from_data_with_validity(vec![10u8, 11, 12], vec![false, true, false]),
         ),
         ("b", DataType::Null, Column::Null { len: 3 }),
     ]);
@@ -199,28 +157,19 @@ pub fn test_pass() {
     run_ast(&mut file, "divide(a, 10)", &[(
         "a",
         DataType::Nullable(Box::new(DataType::UInt8)),
-        Column::Nullable(Box::new(NullableColumn {
-            column: Column::UInt8(vec![10, 11, 12].into()),
-            validity: vec![false, true, false].into(),
-        })),
+        Column::from_data_with_validity(vec![10u8, 11, 12], vec![false, true, false]),
     )]);
 
     run_ast(&mut file, "divide(a, b)", &[
         (
             "a",
             DataType::Nullable(Box::new(DataType::UInt16)),
-            Column::Nullable(Box::new(NullableColumn {
-                column: Column::UInt16(vec![10, 11, 12].into()),
-                validity: vec![false, true, false].into(),
-            })),
+            Column::from_data_with_validity(vec![10u16, 11, 12], vec![false, true, false]),
         ),
         (
             "b",
             DataType::Nullable(Box::new(DataType::Int16)),
-            Column::Nullable(Box::new(NullableColumn {
-                column: Column::Int16(vec![1, 2, 3].into()),
-                validity: vec![false, true, true].into(),
-            })),
+            Column::from_data_with_validity(vec![1i16, 2, 3], vec![false, true, true]),
         ),
     ]);
 
@@ -228,10 +177,7 @@ pub fn test_pass() {
         (
             "a",
             DataType::Nullable(Box::new(DataType::UInt8)),
-            Column::Nullable(Box::new(NullableColumn {
-                column: Column::UInt8(vec![10, 11, 12].into()),
-                validity: vec![false, true, false].into(),
-            })),
+            Column::from_data_with_validity(vec![10u8, 11, 12], vec![false, true, false]),
         ),
         ("b", DataType::Null, Column::Null { len: 3 }),
     ]);
@@ -239,28 +185,19 @@ pub fn test_pass() {
     run_ast(&mut file, "avg(a, 10)", &[(
         "a",
         DataType::Nullable(Box::new(DataType::UInt8)),
-        Column::Nullable(Box::new(NullableColumn {
-            column: Column::UInt8(vec![10, 11, 12].into()),
-            validity: vec![false, true, false].into(),
-        })),
+        Column::from_data_with_validity(vec![10u8, 11, 12], vec![false, true, false]),
     )]);
 
     run_ast(&mut file, "avg(a, b)", &[
         (
             "a",
             DataType::Nullable(Box::new(DataType::UInt16)),
-            Column::Nullable(Box::new(NullableColumn {
-                column: Column::UInt16(vec![10, 11, 12].into()),
-                validity: vec![false, true, false].into(),
-            })),
+            Column::from_data_with_validity(vec![10u16, 11, 12], vec![false, true, false]),
         ),
         (
             "b",
             DataType::Nullable(Box::new(DataType::Int16)),
-            Column::Nullable(Box::new(NullableColumn {
-                column: Column::Int16(vec![1, 2, 3].into()),
-                validity: vec![false, true, true].into(),
-            })),
+            Column::from_data_with_validity(vec![1i16, 2, 3], vec![false, true, true]),
         ),
     ]);
 
@@ -268,18 +205,12 @@ pub fn test_pass() {
         (
             "a",
             DataType::Nullable(Box::new(DataType::UInt32)),
-            Column::Nullable(Box::new(NullableColumn {
-                column: Column::UInt32(vec![10, 11, 12].into()),
-                validity: vec![false, true, false].into(),
-            })),
+            Column::from_data_with_validity(vec![10u32, 11, 12], vec![false, true, false]),
         ),
         (
             "b",
             DataType::Nullable(Box::new(DataType::Int32)),
-            Column::Nullable(Box::new(NullableColumn {
-                column: Column::Int32(vec![1, 2, 3].into()),
-                validity: vec![false, true, true].into(),
-            })),
+            Column::from_data_with_validity(vec![1i32, 2, 3], vec![false, true, true]),
         ),
     ]);
 
@@ -287,18 +218,12 @@ pub fn test_pass() {
         (
             "a",
             DataType::Nullable(Box::new(DataType::Float32)),
-            Column::Nullable(Box::new(NullableColumn {
-                column: Column::Float32(vec![10f32, 11f32, 12f32].into()),
-                validity: vec![false, true, false].into(),
-            })),
+            Column::from_data_with_validity(vec![10f32, 11f32, 12f32], vec![false, true, false]),
         ),
         (
             "b",
             DataType::Nullable(Box::new(DataType::Int32)),
-            Column::Nullable(Box::new(NullableColumn {
-                column: Column::Int32(vec![1, 2, 3].into()),
-                validity: vec![false, true, true].into(),
-            })),
+            Column::from_data_with_validity(vec![1i32, 2, 3], vec![false, true, true]),
         ),
     ]);
 
@@ -306,18 +231,12 @@ pub fn test_pass() {
         (
             "a",
             DataType::Nullable(Box::new(DataType::Float32)),
-            Column::Nullable(Box::new(NullableColumn {
-                column: Column::Float32(vec![10f32, 11f32, 12f32].into()),
-                validity: vec![false, true, false].into(),
-            })),
+            Column::from_data_with_validity(vec![10f32, 11f32, 12f32], vec![false, true, false]),
         ),
         (
             "b",
             DataType::Nullable(Box::new(DataType::Float64)),
-            Column::Nullable(Box::new(NullableColumn {
-                column: Column::Float64(vec![1f64, 2f64, 3f64].into()),
-                validity: vec![false, true, true].into(),
-            })),
+            Column::from_data_with_validity(vec![1f64, 2f64, 3f64], vec![false, true, true]),
         ),
     ]);
 
@@ -325,10 +244,7 @@ pub fn test_pass() {
         (
             "a",
             DataType::Nullable(Box::new(DataType::Int8)),
-            Column::Nullable(Box::new(NullableColumn {
-                column: Column::UInt8(vec![10, 11, 12].into()),
-                validity: vec![false, true, false].into(),
-            })),
+            Column::from_data_with_validity(vec![10, 11, 12], vec![false, true, false]),
         ),
         ("b", DataType::Null, Column::Null { len: 3 }),
     ]);
@@ -336,10 +252,7 @@ pub fn test_pass() {
     run_ast(&mut file, "NOT a", &[(
         "a",
         DataType::Nullable(Box::new(DataType::Boolean)),
-        Column::Nullable(Box::new(NullableColumn {
-            column: Column::Boolean(vec![true, false, true].into()),
-            validity: vec![false, true, false].into(),
-        })),
+        Column::from_data_with_validity(vec![true, false, true], vec![false, true, false]),
     )]);
 
     run_ast(&mut file, "NOT a", &[("a", DataType::Null, Column::Null {
@@ -351,39 +264,28 @@ pub fn test_pass() {
         (
             "a",
             DataType::Int16,
-            Column::Int16(vec![0, 1, 2, 3, 4].into()),
+            Column::from_data(vec![0i16, 1, 2, 3, 4]),
         ),
         (
             "b",
             DataType::Nullable(Box::new(DataType::String)),
-            Column::Nullable(Box::new(NullableColumn {
-                column: Column::String(StringColumn {
-                    data: "abcde".as_bytes().to_vec().into(),
-                    offsets: vec![0, 1, 2, 3, 4, 5].into(),
-                }),
-                validity: vec![true, true, false, false, false].into(),
-            })),
+            Column::from_data_with_validity(vec!["a", "b", "c", "d", "e"], vec![
+                true, true, false, false, false,
+            ]),
         ),
     ]);
     run_ast(&mut file, "get_tuple(1)(create_tuple(a, b))", &[
         (
             "a",
             DataType::Nullable(Box::new(DataType::Boolean)),
-            Column::Nullable(Box::new(NullableColumn {
-                column: Column::Boolean(vec![false; 5].into()),
-                validity: vec![true, true, false, false, false].into(),
-            })),
+            Column::from_data_with_validity(vec![false; 5], vec![true, true, false, false, false]),
         ),
         (
             "b",
             DataType::Nullable(Box::new(DataType::String)),
-            Column::Nullable(Box::new(NullableColumn {
-                column: Column::String(StringColumn {
-                    data: "abcde".as_bytes().to_vec().into(),
-                    offsets: vec![0, 1, 2, 3, 4, 5].into(),
-                }),
-                validity: vec![true, true, false, false, false].into(),
-            })),
+            Column::from_data_with_validity(vec!["a", "b", "c", "d", "e"], vec![
+                true, true, false, false, false,
+            ]),
         ),
     ]);
     run_ast(&mut file, "create_array()", &[]);
@@ -392,12 +294,12 @@ pub fn test_pass() {
         (
             "a",
             DataType::Int16,
-            Column::Int16(vec![0, 1, 2, 3, 4].into()),
+            Column::from_data(vec![0i16, 1, 2, 3, 4]),
         ),
         (
             "b",
             DataType::Int16,
-            Column::Int16(vec![5, 6, 7, 8, 9].into()),
+            Column::from_data(vec![5i16, 6, 7, 8, 9]),
         ),
     ]);
     run_ast(
@@ -407,12 +309,12 @@ pub fn test_pass() {
             (
                 "a",
                 DataType::Int16,
-                Column::Int16(vec![0, 1, 2, 3, 4].into()),
+                Column::from_data(vec![0i16, 1, 2, 3, 4]),
             ),
             (
                 "b",
                 DataType::Int16,
-                Column::Int16(vec![5, 6, 7, 8, 9].into()),
+                Column::from_data(vec![5i16, 6, 7, 8, 9]),
             ),
         ],
     );
@@ -428,7 +330,7 @@ pub fn test_pass() {
         (
             "b",
             DataType::UInt8,
-            Column::UInt8(vec![0, 1, 2, 3, 4].into()),
+            Column::from_data(vec![0u8, 1, 2, 3, 4]),
         ),
     ]);
     run_ast(&mut file, "get(a, b)", &[
@@ -450,23 +352,23 @@ pub fn test_pass() {
         (
             "b",
             DataType::UInt8,
-            Column::UInt8(vec![0, 1, 2, 3, 4].into()),
+            Column::from_data(vec![0u8, 1, 2, 3, 4]),
         ),
     ]);
     run_ast(&mut file, "TRY_CAST(a AS UINT8)", &[(
         "a",
         DataType::UInt16,
-        Column::UInt16(vec![0, 64, 255, 512, 1024].into()),
+        Column::from_data(vec![0u16, 64, 255, 512, 1024]),
     )]);
     run_ast(&mut file, "TRY_CAST(a AS UINT16)", &[(
         "a",
         DataType::Int16,
-        Column::Int16(vec![0, 1, 2, 3, -4].into()),
+        Column::from_data(vec![0i16, 1, 2, 3, -4]),
     )]);
     run_ast(&mut file, "TRY_CAST(a AS INT64)", &[(
         "a",
         DataType::Int16,
-        Column::Int16(vec![0, 1, 2, 3, -4].into()),
+        Column::from_data(vec![0i16, 1, 2, 3, -4]),
     )]);
     run_ast(
         &mut file,
@@ -475,32 +377,26 @@ pub fn test_pass() {
             (
                 "a",
                 DataType::UInt64,
-                Column::UInt64(
-                    vec![
-                        0,
-                        1,
-                        u8::MAX as u64,
-                        u16::MAX as u64,
-                        u32::MAX as u64,
-                        u64::MAX,
-                    ]
-                    .into(),
-                ),
+                Column::from_data(vec![
+                    0,
+                    1,
+                    u8::MAX as u64,
+                    u16::MAX as u64,
+                    u32::MAX as u64,
+                    u64::MAX,
+                ]),
             ),
             (
                 "b",
                 DataType::Float64,
-                Column::Float64(
-                    vec![
-                        0.0,
-                        u32::MAX as f64,
-                        u64::MAX as f64,
-                        f64::MIN,
-                        f64::MAX,
-                        f64::INFINITY,
-                    ]
-                    .into(),
-                ),
+                Column::from_data(vec![
+                    0.0,
+                    u32::MAX as f64,
+                    u64::MAX as f64,
+                    f64::MIN,
+                    f64::MAX,
+                    f64::INFINITY,
+                ]),
             ),
         ],
     );
@@ -511,12 +407,12 @@ pub fn test_pass() {
             (
                 "a",
                 DataType::Int16,
-                Column::Int16(vec![0, 1, 2, 127, 255].into()),
+                Column::from_data(vec![0i16, 1, 2, 127, 255]),
             ),
             (
                 "b",
                 DataType::Int16,
-                Column::Int16(vec![0, -1, -127, -128, -129].into()),
+                Column::from_data(vec![0i16, -1, -127, -128, -129]),
             ),
         ],
     );
@@ -527,12 +423,12 @@ pub fn test_pass() {
             (
                 "a",
                 DataType::Int16,
-                Column::Int16(vec![0, 1, 2, 127, 256].into()),
+                Column::from_data(vec![0i16, 1, 2, 127, 256]),
             ),
             (
                 "b",
                 DataType::Int16,
-                Column::Int16(vec![0, 1, -127, -128, -129].into()),
+                Column::from_data(vec![0i16, 1, -127, -128, -129]),
             ),
         ],
     );
@@ -540,13 +436,13 @@ pub fn test_pass() {
     run_ast(&mut file, "CAST(a AS INT16)", &[(
         "a",
         DataType::Float64,
-        Column::Float64(vec![0.0f64, 1.1, 2.2, 3.3, -4.4].into()),
+        Column::from_data(vec![0.0f64, 1.1, 2.2, 3.3, -4.4]),
     )]);
 
     run_ast(&mut file, "CAST(b AS INT16)", &[(
         "b",
         DataType::Int8,
-        Column::Int8(vec![0, 1, 2, 3, -4].into()),
+        Column::from_data(vec![0i8, 1, 2, 3, -4]),
     )]);
 }
 
@@ -560,7 +456,7 @@ pub fn test_tyck_fail() {
     run_ast(&mut file, "least(1, 2, 3, a)", &[(
         "a",
         DataType::Boolean,
-        Column::Boolean(vec![false; 3].into()),
+        Column::from_data(vec![false; 3]),
     )]);
     run_ast(&mut file, "create_array('a', 1)", &[]);
     run_ast(&mut file, "create_array('a', null, 'b', true)", &[]);
@@ -578,29 +474,29 @@ pub fn test_eval_fail() {
         (
             "a",
             DataType::Int16,
-            Column::Int16(vec![0, 1, 2, 3, 4].into()),
+            Column::from_data(vec![0i16, 1, 2, 3, 4]),
         ),
         (
             "b",
             DataType::Int16,
-            Column::Int16(vec![5, 6, 7, 8, 9].into()),
+            Column::from_data(vec![5i16, 6, 7, 8, 9]),
         ),
         (
             "idx",
             DataType::Int16,
-            Column::Int16(vec![0, 1, 2, 3, 4].into()),
+            Column::from_data(vec![0i16, 1, 2, 3, 4]),
         ),
     ]);
     run_ast(&mut file, "CAST(a AS UINT16)", &[(
         "a",
         DataType::Int16,
-        Column::Int16(vec![0, 1, 2, 3, -4].into()),
+        Column::from_data(vec![0i16, 1, 2, 3, -4]),
     )]);
 
     run_ast(&mut file, "CAST(c AS INT16)", &[(
         "c",
         DataType::Int64,
-        Column::Int64(vec![0, 11111111111, 2, 3, -4].into()),
+        Column::from_data(vec![0i64, 11111111111, 2, 3, -4]),
     )]);
 }
 

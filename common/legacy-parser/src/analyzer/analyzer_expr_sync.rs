@@ -531,22 +531,22 @@ impl ExprRPNBuilder {
             Expr::Extract { field, .. } => match field {
                 DateTimeField::Year => self
                     .rpn
-                    .push(ExprRPNItem::function(String::from("toYear"), 1)),
+                    .push(ExprRPNItem::function(String::from("to_year"), 1)),
                 DateTimeField::Month => self
                     .rpn
-                    .push(ExprRPNItem::function(String::from("toMonth"), 1)),
+                    .push(ExprRPNItem::function(String::from("to_month"), 1)),
                 DateTimeField::Day => self
                     .rpn
-                    .push(ExprRPNItem::function(String::from("toDayOfMonth"), 1)),
+                    .push(ExprRPNItem::function(String::from("to_day_of_month"), 1)),
                 DateTimeField::Hour => self
                     .rpn
-                    .push(ExprRPNItem::function(String::from("toHour"), 1)),
+                    .push(ExprRPNItem::function(String::from("to_hour"), 1)),
                 DateTimeField::Minute => self
                     .rpn
-                    .push(ExprRPNItem::function(String::from("toMinute"), 1)),
+                    .push(ExprRPNItem::function(String::from("to_minute"), 1)),
                 DateTimeField::Second => self
                     .rpn
-                    .push(ExprRPNItem::function(String::from("toSecond"), 1)),
+                    .push(ExprRPNItem::function(String::from("to_second"), 1)),
             },
             Expr::MapAccess { keys, .. } => {
                 self.rpn.push(ExprRPNItem::MapAccess(keys.to_owned()));

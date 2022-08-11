@@ -73,7 +73,7 @@ impl ArithmeticMinusFunction {
                     if right_type.is_interval() {
                         let interval: IntervalType = args[1].to_owned().try_into()?;
                         let kind = interval.kind();
-                        let function_name = format!("subtract{}s", kind);
+                        let function_name = format!("subtract_{}s", kind);
                         return FunctionFactory::instance().get(function_name, &[args[0], &Int64Type::new_impl()]);
                     }
                     with_match_date_type_error!(right_type, |$D| {

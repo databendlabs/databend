@@ -17,6 +17,7 @@ use std::fmt::Formatter;
 
 use common_meta_app::share::ShareGrantObjectName;
 use common_meta_app::share::ShareGrantObjectPrivilege;
+use itertools::Itertools;
 
 use crate::ast::Identifier;
 
@@ -91,6 +92,36 @@ impl Display for RevokeShareObjectStmt<'_> {
             f,
             "REVOKE {} ON {} FROM SHARE {}",
             self.privilege, self.object, self.share
+        )?;
+
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AlterShareTenantsStmt<'a> {
+    pub share: Identifier<'a>,
+    pub if_exists: bool,
+    pub tenants: Vec<Identifier<'a>>,
+    pub is_add: bool,
+}
+
+impl Display for AlterShareTenantsStmt<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ALTER SHARE ")?;
+        if self.if_exists {
+            write!(f, "IF EXISTS ")?;
+        }
+        write!(f, "{}", self.share)?;
+        if self.is_add {
+            write!(f, " ADD TENANTS = ")?;
+        } else {
+            write!(f, " REMOVE TENANTS = ")?;
+        }
+        write!(
+            f,
+            "{}",
+            self.tenants.iter().map(|v| v.to_string()).join(",")
         )?;
 
         Ok(())

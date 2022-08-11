@@ -22,10 +22,10 @@ use crate::scalars::scalar_function_test::test_scalar_functions_with_type;
 use crate::scalars::scalar_function_test::ScalarFunctionWithFieldTest;
 
 #[test]
-fn test_toyyyymm_function() -> Result<()> {
+fn test_to_yyyymm_function() -> Result<()> {
     let tests = vec![
         ScalarFunctionWithFieldTest {
-            name: "test_toyyyymm_date16",
+            name: "test_to_yyyymm_date16",
             columns: vec![ColumnWithField::new(
                 Series::from_data(vec![0i32]),
                 DataField::new("dummy_1", DateType::new_impl()),
@@ -34,7 +34,7 @@ fn test_toyyyymm_function() -> Result<()> {
             error: "",
         },
         ScalarFunctionWithFieldTest {
-            name: "test_toyyyymm_date32",
+            name: "test_to_yyyymm_date32",
             columns: vec![ColumnWithField::new(
                 Series::from_data(vec![0i32, 1, 2, 3]),
                 DataField::new("dummy_1", DateType::new_impl()),
@@ -43,7 +43,7 @@ fn test_toyyyymm_function() -> Result<()> {
             error: "",
         },
         ScalarFunctionWithFieldTest {
-            name: "test_toyyyymm_datetime",
+            name: "test_to_yyyymm_datetime",
             columns: vec![ColumnWithField::new(
                 Series::from_data(vec![0i64]),
                 DataField::new("dummy_1", TimestampType::new_impl(0)),
@@ -52,7 +52,7 @@ fn test_toyyyymm_function() -> Result<()> {
             error: "",
         },
         ScalarFunctionWithFieldTest {
-            name: "test_toyyyymm_constant_date16",
+            name: "test_to_yyyymm_constant_date16",
             columns: vec![ColumnWithField::new(
                 Arc::new(ConstColumn::new(Series::from_data(vec![0i32]), 1)),
                 DataField::new("dummy_1", DateType::new_impl()),
@@ -61,7 +61,7 @@ fn test_toyyyymm_function() -> Result<()> {
             error: "",
         },
         ScalarFunctionWithFieldTest {
-            name: "test_toyyyymm_constant_date32",
+            name: "test_to_yyyymm_constant_date32",
             columns: vec![ColumnWithField::new(
                 Arc::new(ConstColumn::new(Series::from_data(vec![0i32]), 1)),
                 DataField::new("dummy_1", DateType::new_impl()),
@@ -70,7 +70,7 @@ fn test_toyyyymm_function() -> Result<()> {
             error: "",
         },
         ScalarFunctionWithFieldTest {
-            name: "test_toyyyymm_constant_datetime",
+            name: "test_to_yyyymm_constant_datetime",
             columns: vec![ColumnWithField::new(
                 Arc::new(ConstColumn::new(Series::from_data(vec![0i64]), 1)),
                 DataField::new("dummy_1", TimestampType::new_impl(0)),
@@ -80,14 +80,14 @@ fn test_toyyyymm_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions_with_type("toYYYYMM", &tests)
+    test_scalar_functions_with_type("to_yyyymm", &tests)
 }
 
 #[test]
 fn test_to_yyyymmdd_function() -> Result<()> {
     let tests = vec![
         ScalarFunctionWithFieldTest {
-            name: "test_toyyyymmdd_date16",
+            name: "test_to_yyyymmdd_date16",
             columns: vec![ColumnWithField::new(
                 Series::from_data(vec![0i32]),
                 DataField::new("dummy_1", DateType::new_impl()),
@@ -96,7 +96,7 @@ fn test_to_yyyymmdd_function() -> Result<()> {
             error: "",
         },
         ScalarFunctionWithFieldTest {
-            name: "test_toyyyymmdd_date32",
+            name: "test_to_yyyymmdd_date32",
             columns: vec![ColumnWithField::new(
                 Series::from_data(vec![0i32]),
                 DataField::new("dummy_1", DateType::new_impl()),
@@ -105,7 +105,7 @@ fn test_to_yyyymmdd_function() -> Result<()> {
             error: "",
         },
         ScalarFunctionWithFieldTest {
-            name: "test_toyyyymmdd_datetime",
+            name: "test_to_yyyymmdd_datetime",
             columns: vec![ColumnWithField::new(
                 Series::from_data(vec![1630833797000000i64]),
                 DataField::new("dummy_1", TimestampType::new_impl(0)),
@@ -114,7 +114,7 @@ fn test_to_yyyymmdd_function() -> Result<()> {
             error: "",
         },
         ScalarFunctionWithFieldTest {
-            name: "test_toyyyymmdd_date16",
+            name: "test_to_yyyymmdd_date16",
             columns: vec![ColumnWithField::new(
                 Series::from_data(vec![0i32]),
                 DataField::new("dummy_1", DateType::new_impl()),
@@ -123,7 +123,7 @@ fn test_to_yyyymmdd_function() -> Result<()> {
             error: "",
         },
         ScalarFunctionWithFieldTest {
-            name: "test_toyyyymmdd_date32",
+            name: "test_to_yyyymmdd_date32",
             columns: vec![ColumnWithField::new(
                 Series::from_data(vec![0i32]),
                 DataField::new("dummy_1", DateType::new_impl()),
@@ -132,7 +132,7 @@ fn test_to_yyyymmdd_function() -> Result<()> {
             error: "",
         },
         ScalarFunctionWithFieldTest {
-            name: "test_toyyyymmdd_datetime",
+            name: "test_to_yyyymmdd_datetime",
             columns: vec![ColumnWithField::new(
                 Series::from_data(vec![1630833797000000i64]),
                 DataField::new("dummy_1", TimestampType::new_impl(0)),
@@ -141,7 +141,7 @@ fn test_to_yyyymmdd_function() -> Result<()> {
             error: "",
         },
         ScalarFunctionWithFieldTest {
-            name: "test_toyyyymmdd_constant_date16",
+            name: "test_to_yyyymmdd_constant_date16",
             columns: vec![ColumnWithField::new(
                 Arc::new(ConstColumn::new(Series::from_data(vec![0i32]), 1)),
                 DataField::new("dummy_1", DateType::new_impl()),
@@ -150,7 +150,7 @@ fn test_to_yyyymmdd_function() -> Result<()> {
             error: "",
         },
         ScalarFunctionWithFieldTest {
-            name: "test_toyyyymmdd_constant_date32",
+            name: "test_to_yyyymmdd_constant_date32",
             columns: vec![ColumnWithField::new(
                 Arc::new(ConstColumn::new(Series::from_data(vec![0i32]), 1)),
                 DataField::new("dummy_1", DateType::new_impl()),
@@ -159,7 +159,7 @@ fn test_to_yyyymmdd_function() -> Result<()> {
             error: "",
         },
         ScalarFunctionWithFieldTest {
-            name: "test_toyyyymmdd_constant_datetime",
+            name: "test_to_yyyymmdd_constant_datetime",
             columns: vec![ColumnWithField::new(
                 Arc::new(ConstColumn::new(
                     Series::from_data(vec![1630833797000000i64]),
@@ -172,14 +172,14 @@ fn test_to_yyyymmdd_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions_with_type("toYYYYMMDD", &tests)
+    test_scalar_functions_with_type("to_yyyymmdd", &tests)
 }
 
 #[test]
-fn test_toyyyymmddhhmmss_function() -> Result<()> {
+fn test_to_yyyymmddhhmmss_function() -> Result<()> {
     let tests = vec![
         ScalarFunctionWithFieldTest {
-            name: "test_toyyyymmddhhmmss_date16",
+            name: "test_to_yyyymmddhhmmss_date16",
             columns: vec![ColumnWithField::new(
                 Series::from_data(vec![0i32]),
                 DataField::new("dummy_1", DateType::new_impl()),
@@ -188,7 +188,7 @@ fn test_toyyyymmddhhmmss_function() -> Result<()> {
             error: "",
         },
         ScalarFunctionWithFieldTest {
-            name: "test_toyyyymmddhhmmss_date32",
+            name: "test_to_yyyymmddhhmmss_date32",
             columns: vec![ColumnWithField::new(
                 Series::from_data(vec![0i32]),
                 DataField::new("dummy_1", DateType::new_impl()),
@@ -197,7 +197,7 @@ fn test_toyyyymmddhhmmss_function() -> Result<()> {
             error: "",
         },
         ScalarFunctionWithFieldTest {
-            name: "test_toyyyymmddhhmmss_datetime",
+            name: "test_to_yyyymmddhhmmss_datetime",
             columns: vec![ColumnWithField::new(
                 Series::from_data(vec![1630833797000000i64]),
                 DataField::new("dummy_1", TimestampType::new_impl(0)),
@@ -206,7 +206,7 @@ fn test_toyyyymmddhhmmss_function() -> Result<()> {
             error: "",
         },
         ScalarFunctionWithFieldTest {
-            name: "test_toyyyymmddhhmmss_date16_constant",
+            name: "test_to_yyyymmddhhmmss_date16_constant",
             columns: vec![ColumnWithField::new(
                 Arc::new(ConstColumn::new(Series::from_data(vec![0i32]), 1)),
                 DataField::new("dummy_1", DateType::new_impl()),
@@ -215,7 +215,7 @@ fn test_toyyyymmddhhmmss_function() -> Result<()> {
             error: "",
         },
         ScalarFunctionWithFieldTest {
-            name: "test_toyyyymmddhhmmss_date32_constant",
+            name: "test_to_yyyymmddhhmmss_date32_constant",
             columns: vec![ColumnWithField::new(
                 Arc::new(ConstColumn::new(Series::from_data(vec![0i32]), 1)),
                 DataField::new("dummy_1", DateType::new_impl()),
@@ -224,7 +224,7 @@ fn test_toyyyymmddhhmmss_function() -> Result<()> {
             error: "",
         },
         ScalarFunctionWithFieldTest {
-            name: "test_toyyyymmddhhmmss_datetime_constant",
+            name: "test_to_yyyymmddhhmmss_datetime_constant",
             columns: vec![ColumnWithField::new(
                 Arc::new(ConstColumn::new(
                     Series::from_data(vec![1630833797000000i64]),
@@ -237,14 +237,14 @@ fn test_toyyyymmddhhmmss_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions_with_type("toYYYYMMDDhhmmss", &tests)
+    test_scalar_functions_with_type("to_yyyymmddhhmmss", &tests)
 }
 
 #[test]
-fn test_tomonth_function() -> Result<()> {
+fn test_to_month_function() -> Result<()> {
     let tests = vec![
         ScalarFunctionWithFieldTest {
-            name: "test_tomonth_date16",
+            name: "test_to_month_date16",
             columns: vec![ColumnWithField::new(
                 Series::from_data(vec![0i32]),
                 DataField::new("dummy_1", DateType::new_impl()),
@@ -253,7 +253,7 @@ fn test_tomonth_function() -> Result<()> {
             error: "",
         },
         ScalarFunctionWithFieldTest {
-            name: "test_tomonth_date32",
+            name: "test_to_month_date32",
             columns: vec![ColumnWithField::new(
                 Series::from_data(vec![0i32]),
                 DataField::new("dummy_1", DateType::new_impl()),
@@ -262,7 +262,7 @@ fn test_tomonth_function() -> Result<()> {
             error: "",
         },
         ScalarFunctionWithFieldTest {
-            name: "test_tomonth_datetime",
+            name: "test_to_month_datetime",
             columns: vec![ColumnWithField::new(
                 Series::from_data(vec![1633081817000000i64]),
                 DataField::new("dummy_1", TimestampType::new_impl(0)),
@@ -271,7 +271,7 @@ fn test_tomonth_function() -> Result<()> {
             error: "",
         },
         ScalarFunctionWithFieldTest {
-            name: "test_tomonth_date16_constant",
+            name: "test_to_month_date16_constant",
             columns: vec![ColumnWithField::new(
                 Arc::new(ConstColumn::new(Series::from_data(vec![0i32]), 1)),
                 DataField::new("dummy_1", DateType::new_impl()),
@@ -280,7 +280,7 @@ fn test_tomonth_function() -> Result<()> {
             error: "",
         },
         ScalarFunctionWithFieldTest {
-            name: "test_tomonth_date32_constant",
+            name: "test_to_month_date32_constant",
             columns: vec![ColumnWithField::new(
                 Arc::new(ConstColumn::new(Series::from_data(vec![0i32]), 1)),
                 DataField::new("dummy_1", DateType::new_impl()),
@@ -289,7 +289,7 @@ fn test_tomonth_function() -> Result<()> {
             error: "",
         },
         ScalarFunctionWithFieldTest {
-            name: "test_tomonth_datetime_constant",
+            name: "test_to_month_datetime_constant",
             columns: vec![ColumnWithField::new(
                 Arc::new(ConstColumn::new(
                     Series::from_data(vec![1633081817000000i64]),
@@ -302,14 +302,14 @@ fn test_tomonth_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions_with_type("toMonth", &tests)
+    test_scalar_functions_with_type("to_month", &tests)
 }
 
 #[test]
-fn test_todayofyear_function() -> Result<()> {
+fn test_to_day_of_year_function() -> Result<()> {
     let tests = vec![
         ScalarFunctionWithFieldTest {
-            name: "test_todayofyear_date16",
+            name: "test_to_day_of_year_date16",
             columns: vec![ColumnWithField::new(
                 Series::from_data(vec![0i32]),
                 DataField::new("dummy_1", DateType::new_impl()),
@@ -318,7 +318,7 @@ fn test_todayofyear_function() -> Result<()> {
             error: "",
         },
         ScalarFunctionWithFieldTest {
-            name: "test_todayofyear_date32",
+            name: "test_to_day_of_year_date32",
             columns: vec![ColumnWithField::new(
                 Series::from_data(vec![0i32]),
                 DataField::new("dummy_1", DateType::new_impl()),
@@ -327,7 +327,7 @@ fn test_todayofyear_function() -> Result<()> {
             error: "",
         },
         ScalarFunctionWithFieldTest {
-            name: "test_todayofyear_datetime",
+            name: "test_to_day_of_year_datetime",
             columns: vec![ColumnWithField::new(
                 Series::from_data(vec![1633173324000000i64]),
                 DataField::new("dummy_1", TimestampType::new_impl(0)),
@@ -336,7 +336,7 @@ fn test_todayofyear_function() -> Result<()> {
             error: "",
         },
         ScalarFunctionWithFieldTest {
-            name: "test_todayofyear_date16_constant",
+            name: "test_to_day_of_year_date16_constant",
             columns: vec![ColumnWithField::new(
                 Arc::new(ConstColumn::new(Series::from_data(vec![0i32]), 1)),
                 DataField::new("dummy_1", DateType::new_impl()),
@@ -345,7 +345,7 @@ fn test_todayofyear_function() -> Result<()> {
             error: "",
         },
         ScalarFunctionWithFieldTest {
-            name: "test_todayofyear_date32_constant",
+            name: "test_to_day_of_year_date32_constant",
             columns: vec![ColumnWithField::new(
                 Arc::new(ConstColumn::new(Series::from_data(vec![0i32]), 1)),
                 DataField::new("dummy_1", DateType::new_impl()),
@@ -354,7 +354,7 @@ fn test_todayofyear_function() -> Result<()> {
             error: "",
         },
         ScalarFunctionWithFieldTest {
-            name: "test_todayofyear_datetime_constant",
+            name: "test_to_day_of_year_datetime_constant",
             columns: vec![ColumnWithField::new(
                 Arc::new(ConstColumn::new(
                     Series::from_data(vec![1633173324000000i64]),
@@ -367,14 +367,14 @@ fn test_todayofyear_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions_with_type("toDayOfYear", &tests)
+    test_scalar_functions_with_type("to_day_of_year", &tests)
 }
 
 #[test]
 fn test_todatefweek_function() -> Result<()> {
     let tests = vec![
         ScalarFunctionWithFieldTest {
-            name: "test_todayofweek_date16",
+            name: "test_to_day_of_week_date16",
             columns: vec![ColumnWithField::new(
                 Series::from_data(vec![0i32]),
                 DataField::new("dummy_1", DateType::new_impl()),
@@ -383,7 +383,7 @@ fn test_todatefweek_function() -> Result<()> {
             error: "",
         },
         ScalarFunctionWithFieldTest {
-            name: "test_todayofweek_date32",
+            name: "test_to_day_of_week_date32",
             columns: vec![ColumnWithField::new(
                 Series::from_data(vec![0i32]),
                 DataField::new("dummy_1", DateType::new_impl()),
@@ -392,7 +392,7 @@ fn test_todatefweek_function() -> Result<()> {
             error: "",
         },
         ScalarFunctionWithFieldTest {
-            name: "test_todayofweek_datetime",
+            name: "test_to_day_of_week_datetime",
             columns: vec![ColumnWithField::new(
                 Series::from_data(vec![1633173324000000i64]),
                 DataField::new("dummy_1", TimestampType::new_impl(0)),
@@ -401,7 +401,7 @@ fn test_todatefweek_function() -> Result<()> {
             error: "",
         },
         ScalarFunctionWithFieldTest {
-            name: "test_todayofweek_date16_constant",
+            name: "test_to_day_of_week_date16_constant",
             columns: vec![ColumnWithField::new(
                 Arc::new(ConstColumn::new(Series::from_data(vec![0i32]), 1)),
                 DataField::new("dummy_1", DateType::new_impl()),
@@ -410,7 +410,7 @@ fn test_todatefweek_function() -> Result<()> {
             error: "",
         },
         ScalarFunctionWithFieldTest {
-            name: "test_todayofweek_date32_constant",
+            name: "test_to_day_of_week_date32_constant",
             columns: vec![ColumnWithField::new(
                 Arc::new(ConstColumn::new(Series::from_data(vec![0i32]), 1)),
                 DataField::new("dummy_1", DateType::new_impl()),
@@ -419,7 +419,7 @@ fn test_todatefweek_function() -> Result<()> {
             error: "",
         },
         ScalarFunctionWithFieldTest {
-            name: "test_todayofweek_datetime_constant",
+            name: "test_to_day_of_week_datetime_constant",
             columns: vec![ColumnWithField::new(
                 Arc::new(ConstColumn::new(
                     Series::from_data(vec![1633173324000000i64]),
@@ -432,14 +432,14 @@ fn test_todatefweek_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions_with_type("toDayOfWeek", &tests)
+    test_scalar_functions_with_type("to_day_of_week", &tests)
 }
 
 #[test]
-fn test_todayofmonth_function() -> Result<()> {
+fn test_to_day_of_month_function() -> Result<()> {
     let tests = vec![
         ScalarFunctionWithFieldTest {
-            name: "test_todayofmonth_date16",
+            name: "test_to_day_of_month_date16",
             columns: vec![ColumnWithField::new(
                 Series::from_data(vec![0i32]),
                 DataField::new("dummy_1", DateType::new_impl()),
@@ -448,7 +448,7 @@ fn test_todayofmonth_function() -> Result<()> {
             error: "",
         },
         ScalarFunctionWithFieldTest {
-            name: "test_todayofmonth_date32",
+            name: "test_to_day_of_month_date32",
             columns: vec![ColumnWithField::new(
                 Series::from_data(vec![0i32]),
                 DataField::new("dummy_1", DateType::new_impl()),
@@ -457,7 +457,7 @@ fn test_todayofmonth_function() -> Result<()> {
             error: "",
         },
         ScalarFunctionWithFieldTest {
-            name: "test_todayofmonth_datetime",
+            name: "test_to_day_of_month_datetime",
             columns: vec![ColumnWithField::new(
                 Series::from_data(vec![1633173324000000i64]),
                 DataField::new("dummy_1", TimestampType::new_impl(0)),
@@ -466,7 +466,7 @@ fn test_todayofmonth_function() -> Result<()> {
             error: "",
         },
         ScalarFunctionWithFieldTest {
-            name: "test_todayofmonth_date16_constant",
+            name: "test_to_day_of_month_date16_constant",
             columns: vec![ColumnWithField::new(
                 Arc::new(ConstColumn::new(Series::from_data(vec![0i32]), 1)),
                 DataField::new("dummy_1", DateType::new_impl()),
@@ -475,7 +475,7 @@ fn test_todayofmonth_function() -> Result<()> {
             error: "",
         },
         ScalarFunctionWithFieldTest {
-            name: "test_todayofmonth_date32_constant",
+            name: "test_to_day_of_month_date32_constant",
             columns: vec![ColumnWithField::new(
                 Arc::new(ConstColumn::new(Series::from_data(vec![0i32]), 1)),
                 DataField::new("dummy_1", DateType::new_impl()),
@@ -484,7 +484,7 @@ fn test_todayofmonth_function() -> Result<()> {
             error: "",
         },
         ScalarFunctionWithFieldTest {
-            name: "test_todayofmonth_datetime_constant",
+            name: "test_to_day_of_month_datetime_constant",
             columns: vec![ColumnWithField::new(
                 Arc::new(ConstColumn::new(
                     Series::from_data(vec![1633173324000000i64]),
@@ -497,14 +497,14 @@ fn test_todayofmonth_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions_with_type("toDayOfMonth", &tests)
+    test_scalar_functions_with_type("to_day_of_month", &tests)
 }
 
 #[test]
-fn test_tohour_function() -> Result<()> {
+fn test_to_hour_function() -> Result<()> {
     let tests = vec![
         ScalarFunctionWithFieldTest {
-            name: "test_tohour_date16",
+            name: "test_to_hour_date16",
             columns: vec![ColumnWithField::new(
                 Series::from_data(vec![0i32]),
                 DataField::new("dummy_1", DateType::new_impl()),
@@ -513,7 +513,7 @@ fn test_tohour_function() -> Result<()> {
             error: "",
         },
         ScalarFunctionWithFieldTest {
-            name: "test_tohour_date32",
+            name: "test_to_hour_date32",
             columns: vec![ColumnWithField::new(
                 Series::from_data(vec![0i32]),
                 DataField::new("dummy_1", DateType::new_impl()),
@@ -522,7 +522,7 @@ fn test_tohour_function() -> Result<()> {
             error: "",
         },
         ScalarFunctionWithFieldTest {
-            name: "test_tohour_datetime",
+            name: "test_to_hour_datetime",
             columns: vec![ColumnWithField::new(
                 Series::from_data(vec![1634551542000000i64]),
                 DataField::new("dummy_1", TimestampType::new_impl(0)),
@@ -531,7 +531,7 @@ fn test_tohour_function() -> Result<()> {
             error: "",
         },
         ScalarFunctionWithFieldTest {
-            name: "test_tohour_date16_constant",
+            name: "test_to_hour_date16_constant",
             columns: vec![ColumnWithField::new(
                 Arc::new(ConstColumn::new(Series::from_data(vec![0i32]), 1)),
                 DataField::new("dummy_1", DateType::new_impl()),
@@ -540,7 +540,7 @@ fn test_tohour_function() -> Result<()> {
             error: "",
         },
         ScalarFunctionWithFieldTest {
-            name: "test_tohour_date32_constant",
+            name: "test_to_hour_date32_constant",
             columns: vec![ColumnWithField::new(
                 Arc::new(ConstColumn::new(Series::from_data(vec![0i32]), 1)),
                 DataField::new("dummy_1", DateType::new_impl()),
@@ -549,7 +549,7 @@ fn test_tohour_function() -> Result<()> {
             error: "",
         },
         ScalarFunctionWithFieldTest {
-            name: "test_tohour_datetime_constant",
+            name: "test_to_hour_datetime_constant",
             columns: vec![ColumnWithField::new(
                 Arc::new(ConstColumn::new(
                     Series::from_data(vec![1634551542000000i64]),
@@ -562,14 +562,14 @@ fn test_tohour_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions_with_type("toHour", &tests)
+    test_scalar_functions_with_type("to_hour", &tests)
 }
 
 #[test]
-fn test_tominute_function() -> Result<()> {
+fn test_to_minute_function() -> Result<()> {
     let tests = vec![
         ScalarFunctionWithFieldTest {
-            name: "test_tominute_date16",
+            name: "test_to_minute_date16",
             columns: vec![ColumnWithField::new(
                 Series::from_data(vec![0i32]),
                 DataField::new("dummy_1", DateType::new_impl()),
@@ -578,7 +578,7 @@ fn test_tominute_function() -> Result<()> {
             error: "",
         },
         ScalarFunctionWithFieldTest {
-            name: "test_tominute_date32",
+            name: "test_to_minute_date32",
             columns: vec![ColumnWithField::new(
                 Series::from_data(vec![0i32]),
                 DataField::new("dummy_1", DateType::new_impl()),
@@ -587,7 +587,7 @@ fn test_tominute_function() -> Result<()> {
             error: "",
         },
         ScalarFunctionWithFieldTest {
-            name: "test_tominute_datetime",
+            name: "test_to_minute_datetime",
             columns: vec![ColumnWithField::new(
                 Series::from_data(vec![1634551542000000i64]),
                 DataField::new("dummy_1", TimestampType::new_impl(0)),
@@ -596,7 +596,7 @@ fn test_tominute_function() -> Result<()> {
             error: "",
         },
         ScalarFunctionWithFieldTest {
-            name: "test_tominute_date16_constant",
+            name: "test_to_minute_date16_constant",
             columns: vec![ColumnWithField::new(
                 Arc::new(ConstColumn::new(Series::from_data(vec![0i32]), 1)),
                 DataField::new("dummy_1", DateType::new_impl()),
@@ -605,7 +605,7 @@ fn test_tominute_function() -> Result<()> {
             error: "",
         },
         ScalarFunctionWithFieldTest {
-            name: "test_tominute_date32_constant",
+            name: "test_to_minute_date32_constant",
             columns: vec![ColumnWithField::new(
                 Arc::new(ConstColumn::new(Series::from_data(vec![0i32]), 1)),
                 DataField::new("dummy_1", DateType::new_impl()),
@@ -614,7 +614,7 @@ fn test_tominute_function() -> Result<()> {
             error: "",
         },
         ScalarFunctionWithFieldTest {
-            name: "test_tominute_datetime_constant",
+            name: "test_to_minute_datetime_constant",
             columns: vec![ColumnWithField::new(
                 Arc::new(ConstColumn::new(
                     Series::from_data(vec![1634551542000000i64]),
@@ -627,14 +627,14 @@ fn test_tominute_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions_with_type("toMinute", &tests)
+    test_scalar_functions_with_type("to_minute", &tests)
 }
 
 #[test]
-fn test_tosecond_function() -> Result<()> {
+fn test_to_second_function() -> Result<()> {
     let tests = vec![
         ScalarFunctionWithFieldTest {
-            name: "test_tosecond_date16",
+            name: "test_to_second_date16",
             columns: vec![ColumnWithField::new(
                 Series::from_data(vec![0i32]),
                 DataField::new("dummy_1", DateType::new_impl()),
@@ -643,7 +643,7 @@ fn test_tosecond_function() -> Result<()> {
             error: "",
         },
         ScalarFunctionWithFieldTest {
-            name: "test_tosecond_date32",
+            name: "test_to_second_date32",
             columns: vec![ColumnWithField::new(
                 Series::from_data(vec![0i32]),
                 DataField::new("dummy_1", DateType::new_impl()),
@@ -652,7 +652,7 @@ fn test_tosecond_function() -> Result<()> {
             error: "",
         },
         ScalarFunctionWithFieldTest {
-            name: "test_tosecond_datetime",
+            name: "test_to_second_datetime",
             columns: vec![ColumnWithField::new(
                 Series::from_data(vec![1634551542000000i64]),
                 DataField::new("dummy_1", TimestampType::new_impl(0)),
@@ -661,7 +661,7 @@ fn test_tosecond_function() -> Result<()> {
             error: "",
         },
         ScalarFunctionWithFieldTest {
-            name: "test_tosecond_date16_constant",
+            name: "test_to_second_date16_constant",
             columns: vec![ColumnWithField::new(
                 Arc::new(ConstColumn::new(Series::from_data(vec![0i32]), 1)),
                 DataField::new("dummy_1", DateType::new_impl()),
@@ -670,7 +670,7 @@ fn test_tosecond_function() -> Result<()> {
             error: "",
         },
         ScalarFunctionWithFieldTest {
-            name: "test_tosecond_date32_constant",
+            name: "test_to_second_date32_constant",
             columns: vec![ColumnWithField::new(
                 Arc::new(ConstColumn::new(Series::from_data(vec![0i32]), 1)),
                 DataField::new("dummy_1", DateType::new_impl()),
@@ -679,7 +679,7 @@ fn test_tosecond_function() -> Result<()> {
             error: "",
         },
         ScalarFunctionWithFieldTest {
-            name: "test_tosecond_datetime_constant",
+            name: "test_to_second_datetime_constant",
             columns: vec![ColumnWithField::new(
                 Arc::new(ConstColumn::new(
                     Series::from_data(vec![1634551542000000i64]),
@@ -692,14 +692,14 @@ fn test_tosecond_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions_with_type("toSecond", &tests)
+    test_scalar_functions_with_type("to_second", &tests)
 }
 
 #[test]
-fn test_tomonday_function() -> Result<()> {
+fn test_to_monday_function() -> Result<()> {
     let tests = vec![
         ScalarFunctionWithFieldTest {
-            name: "test_tomonday_date16",
+            name: "test_to_monday_date16",
             columns: vec![ColumnWithField::new(
                 Series::from_data(vec![18919i32]),
                 DataField::new("dummy_1", DateType::new_impl()),
@@ -708,7 +708,7 @@ fn test_tomonday_function() -> Result<()> {
             error: "",
         },
         ScalarFunctionWithFieldTest {
-            name: "test_tomonday_date32",
+            name: "test_to_monday_date32",
             columns: vec![ColumnWithField::new(
                 Series::from_data(vec![18919i32]),
                 DataField::new("dummy_1", DateType::new_impl()),
@@ -717,7 +717,7 @@ fn test_tomonday_function() -> Result<()> {
             error: "",
         },
         ScalarFunctionWithFieldTest {
-            name: "test_tomonday_datetime",
+            name: "test_to_monday_datetime",
             columns: vec![ColumnWithField::new(
                 Series::from_data(vec![1634614318000000i64]),
                 DataField::new("dummy_1", TimestampType::new_impl(0)),
@@ -727,5 +727,5 @@ fn test_tomonday_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions_with_type("toMonday", &tests)
+    test_scalar_functions_with_type("to_monday", &tests)
 }

@@ -1,12 +1,12 @@
 ---
-title: toStartOfHour
+title: to_start_of_hour
 ---
 
 Rounds down a date with time to the start of the hour.
 ## Syntax
 
 ```sql
-toStartOfHour( <expr> )
+to_start_of_hour( <expr> )
 ```
 
 ## Arguments
@@ -22,16 +22,16 @@ Datetime object, returns date in “YYYY-MM-DD hh:mm:ss” format.
 ## Examples
 
 ```sql
-SELECT toStartOfHour(now());
+SELECT to_start_of_hour(now());
 +----------------------+
-| toStartOfHour(now()) |
+| to_start_of_hour(now()) |
 +----------------------+
 | 2022-03-29 06:00:00  |
 +----------------------+
 
-SELECT toStartOfHour(to_datetime(1630812366));
+SELECT to_start_of_hour(to_datetime(1630812366));
 +---------------------------------------+
-| toStartOfHour(to_datetime(1630812366)) |
+| to_start_of_hour(to_datetime(1630812366)) |
 +---------------------------------------+
 | 2021-09-05 03:00:00                   |
 +---------------------------------------+

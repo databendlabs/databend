@@ -69,49 +69,49 @@ statement ok
 set timezone = 'UTC';
 
 statement query I
-select toyyyymm(to_timestamp(1619820000000000));
+select to_yyyymm(to_timestamp(1619820000000000));
 
 ----
 202104
 
 statement query I
-select toyyyymmdd(to_timestamp(1619820000000000));
+select to_yyyymmdd(to_timestamp(1619820000000000));
 
 ----
 20210430
 
 statement query I
-select toyyyymmddhhmmss(to_timestamp(1619820000000000));
+select to_yyyymmddhhmmss(to_timestamp(1619820000000000));
 
 ----
 20210430220000
 
 statement query T
-select tostartofmonth(to_timestamp(1619820000000000));
+select to_start_of_month(to_timestamp(1619820000000000));
 
 ----
 2021-04-01
 
 statement query I
-select tomonth(to_timestamp(1619820000000000));
+select to_month(to_timestamp(1619820000000000));
 
 ----
 4
 
 statement query I
-select todayofyear(to_timestamp(1619820000000000));
+select to_day_of_year(to_timestamp(1619820000000000));
 
 ----
 120
 
 statement query I
-select todayofmonth(to_timestamp(1619820000000000));
+select to_day_of_month(to_timestamp(1619820000000000));
 
 ----
 30
 
 statement query I
-select todayofweek(to_timestamp(1619820000000000));
+select to_day_of_week(to_timestamp(1619820000000000));
 
 ----
 5
@@ -120,49 +120,49 @@ statement ok
 set timezone = 'Asia/Shanghai';
 
 statement query I
-select toyyyymm(to_timestamp(1619820000000000));
+select to_yyyymm(to_timestamp(1619820000000000));
 
 ----
 202105
 
 statement query I
-select toyyyymmdd(to_timestamp(1619820000000000));
+select to_yyyymmdd(to_timestamp(1619820000000000));
 
 ----
 20210501
 
 statement query I
-select toyyyymmddhhmmss(to_timestamp(1619820000000000));
+select to_yyyymmddhhmmss(to_timestamp(1619820000000000));
 
 ----
 20210501060000
 
 statement query T
-select tostartofmonth(to_timestamp(1619820000000000));
+select to_start_of_month(to_timestamp(1619820000000000));
 
 ----
 2021-05-01
 
 statement query I
-select tomonth(to_timestamp(1619820000000000));
+select to_month(to_timestamp(1619820000000000));
 
 ----
 5
 
 statement query I
-select todayofyear(to_timestamp(1619820000000000));
+select to_day_of_year(to_timestamp(1619820000000000));
 
 ----
 121
 
 statement query I
-select todayofmonth(to_timestamp(1619820000000000));
+select to_day_of_month(to_timestamp(1619820000000000));
 
 ----
 1
 
 statement query I
-select todayofweek(to_timestamp(1619820000000000));
+select to_day_of_week(to_timestamp(1619820000000000));
 
 ----
 6
@@ -177,55 +177,55 @@ statement ok
 set timezone = 'UTC';
 
 statement query T
-select tostartofsecond(to_timestamp(1619822911999000));
+select to_start_of_second(to_timestamp(1619822911999000));
 
 ----
 2021-04-30 22:48:31
 
 statement query T
-select tostartofminute(to_timestamp(1619822911999000));
+select to_start_of_minute(to_timestamp(1619822911999000));
 
 ----
 2021-04-30 22:48:00
 
 statement query T
-select tostartoffiveminutes(to_timestamp(1619822911999000));
+select to_start_of_five_minutes(to_timestamp(1619822911999000));
 
 ----
 2021-04-30 22:45:00
 
 statement query T
-select tostartoftenminutes(to_timestamp(1619822911999000));
+select to_start_of_ten_minutes(to_timestamp(1619822911999000));
 
 ----
 2021-04-30 22:40:00
 
 statement query T
-select tostartoffifteenminutes(to_timestamp(1619822911999000));
+select to_start_of_fifteen_minutes(to_timestamp(1619822911999000));
 
 ----
 2021-04-30 22:45:00
 
 statement query T
-select timeslot(to_timestamp(1619822911999000));
+select time_slot(to_timestamp(1619822911999000));
 
 ----
 2021-04-30 22:30:00
 
 statement query T
-select tostartofhour(to_timestamp(1619822911999000));
+select to_start_of_hour(to_timestamp(1619822911999000));
 
 ----
 2021-04-30 22:00:00
 
 statement query T
-select tostartofday(to_timestamp(1619822911999000));
+select to_start_of_day(to_timestamp(1619822911999000));
 
 ----
 2021-04-30 00:00:00
 
 statement query T
-select tostartofweek(to_timestamp(1619822911999000));
+select to_start_of_week(to_timestamp(1619822911999000));
 
 ----
 2021-04-25
@@ -234,55 +234,55 @@ statement ok
 set timezone = 'Asia/Shanghai';
 
 statement query T
-select tostartofsecond(to_timestamp(1619822911999000));
+select to_start_of_second(to_timestamp(1619822911999000));
 
 ----
 2021-05-01 06:48:31
 
 statement query T
-select tostartofminute(to_timestamp(1619822911999000));
+select to_start_of_minute(to_timestamp(1619822911999000));
 
 ----
 2021-05-01 06:48:00
 
 statement query T
-select tostartoffiveminutes(to_timestamp(1619822911999000));
+select to_start_of_five_minutes(to_timestamp(1619822911999000));
 
 ----
 2021-05-01 06:45:00
 
 statement query T
-select tostartoftenminutes(to_timestamp(1619822911999000));
+select to_start_of_ten_minutes(to_timestamp(1619822911999000));
 
 ----
 2021-05-01 06:40:00
 
 statement query T
-select tostartoffifteenminutes(to_timestamp(1619822911999000));
+select to_start_of_fifteen_minutes(to_timestamp(1619822911999000));
 
 ----
 2021-05-01 06:45:00
 
 statement query T
-select timeslot(to_timestamp(1619822911999000));
+select time_slot(to_timestamp(1619822911999000));
 
 ----
 2021-05-01 06:30:00
 
 statement query T
-select tostartofhour(to_timestamp(1619822911999000));
+select to_start_of_hour(to_timestamp(1619822911999000));
 
 ----
 2021-05-01 06:00:00
 
 statement query T
-select tostartofday(to_timestamp(1619822911999000));
+select to_start_of_day(to_timestamp(1619822911999000));
 
 ----
 2021-05-01 00:00:00
 
 statement query T
-select tostartofweek(to_timestamp(1619822911999000));
+select to_start_of_week(to_timestamp(1619822911999000));
 
 ----
 2021-04-25
@@ -291,7 +291,7 @@ statement ok
 set timezone = 'UTC';
 
 statement query T
-select addMonths(to_timestamp(1619822911999000), 1);
+select add_months(to_timestamp(1619822911999000), 1);
 
 ----
 2021-05-30 22:48:31.999000
@@ -304,7 +304,7 @@ select to_timestamp(1583013600000000);
 
 
 statement query T
-select addYears(to_timestamp(1583013600000000), 1);
+select add_years(to_timestamp(1583013600000000), 1);
 
 ----
 2021-02-28 22:00:00.000000
@@ -314,7 +314,7 @@ statement ok
 set timezone = 'Asia/Shanghai';
 
 statement query T
-select addMonths(to_timestamp(1619822911999000), 1);
+select add_months(to_timestamp(1619822911999000), 1);
 
 ----
 2021-06-01 14:48:31.999000
@@ -326,7 +326,7 @@ select to_timestamp(1583013600000000);
 2020-03-01 06:00:00.000000
 
 statement query T
-select addYears(to_timestamp(1583013600000000), 1);
+select add_years(to_timestamp(1583013600000000), 1);
 
 ----
 2021-03-01 14:00:00.000000

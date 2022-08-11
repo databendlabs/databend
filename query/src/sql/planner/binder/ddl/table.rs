@@ -23,6 +23,7 @@ use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
 use common_ast::walk_expr_mut;
 use common_ast::Backtrace;
+use common_ast::Dialect;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
@@ -304,7 +305,7 @@ impl<'a> Binder {
         };
         let tokens = tokenize_sql(query.as_str())?;
         let backtrace = Backtrace::new();
-        let (stmt, _) = parse_sql(&tokens, &backtrace)?;
+        let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL, &backtrace)?;
         self.bind_statement(bind_context, &stmt).await
     }
 

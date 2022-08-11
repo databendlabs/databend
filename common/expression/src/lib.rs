@@ -24,6 +24,7 @@
 #[allow(dead_code)]
 mod chunk;
 
+mod column_from;
 mod display;
 mod error;
 mod evaluator;
@@ -37,6 +38,7 @@ pub mod util;
 mod values;
 
 pub use crate::chunk::*;
+pub use crate::column_from::*;
 pub use crate::error::*;
 pub use crate::evaluator::*;
 pub use crate::expression::*;

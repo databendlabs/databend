@@ -1,5 +1,4 @@
-statement ok
-set enable_planner_v2 = 1;
+
 
 statement ok
 CREATE STAGE test_stage url='s3://load/files/' credentials=(aws_key_id='1a2b3c' aws_secret_key='4x5y6z');

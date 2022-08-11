@@ -17,6 +17,7 @@ use std::ops::Range;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::arrow::buffer::Buffer;
+use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_arrow::arrow::trusted_len::TrustedLen;
 use enum_as_inner::EnumAsInner;
 use itertools::Itertools;
@@ -704,10 +705,14 @@ impl Column {
                     None,
                 ))
             }
-            Column::Nullable(col) => col
-                .column
-                .as_arrow()
-                .with_validity(Some(col.validity.clone())),
+            Column::Nullable(col) => {
+                let arrow_array = col.column.as_arrow();
+                match arrow_array.data_type() {
+                    ArrowType::Null => arrow_array,
+                    ArrowType::Extension(_, t, _) if **t == ArrowType::Null => arrow_array,
+                    _ => arrow_array.with_validity(Some(col.validity.clone())),
+                }
+            }
             Column::Tuple { fields, .. } => {
                 Box::new(common_arrow::arrow::array::StructArray::from_data(
                     self.arrow_type(),
