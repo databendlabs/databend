@@ -18,7 +18,6 @@ mod exchange_params;
 mod exchange_sink;
 mod exchange_sink_merge;
 mod exchange_sink_shuffle;
-mod exchange_source;
 mod exchange_transform;
 mod exchange_transform_source;
 mod statistics_receiver;
