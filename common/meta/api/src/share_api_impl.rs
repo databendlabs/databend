@@ -803,8 +803,8 @@ async fn get_object_name_from_id(
             let (_db_name_seq, db_name): (_, Option<DatabaseNameIdent>) =
                 get_struct_value(kv_api, &db_id_key).await?;
             match db_name {
-                Some(db_name) => return Ok(Some(ShareGrantObjectName::Database(db_name.db_name))),
-                None => return Ok(None),
+                Some(db_name) => Ok(Some(ShareGrantObjectName::Database(db_name.db_name))),
+                None => Ok(None),
             }
         }
         ShareGrantObject::Table(table_id) => {
@@ -812,13 +812,11 @@ async fn get_object_name_from_id(
             let (_db_name_seq, table_name): (_, Option<DBIdTableName>) =
                 get_struct_value(kv_api, &table_id_key).await?;
             match table_name {
-                Some(table_name) => {
-                    return Ok(Some(ShareGrantObjectName::Table(
-                        database_name.as_ref().unwrap().to_string(),
-                        table_name.table_name,
-                    )));
-                }
-                None => return Ok(None),
+                Some(table_name) => Ok(Some(ShareGrantObjectName::Table(
+                    database_name.as_ref().unwrap().to_string(),
+                    table_name.table_name,
+                ))),
+                None => Ok(None),
             }
         }
     }
