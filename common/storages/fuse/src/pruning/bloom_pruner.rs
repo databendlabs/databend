@@ -135,7 +135,7 @@ pub fn new_bloom_filter_pruner(
             return Ok(Arc::new(BloomFilterIndexPruner::new(
                 ctx.clone(),
                 filter_block_cols,
-                expr.clone(),
+                expr,
                 dal,
                 schema.clone(),
             )));

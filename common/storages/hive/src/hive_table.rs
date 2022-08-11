@@ -169,7 +169,7 @@ impl HiveTable {
         &self,
         ctx: Arc<dyn TableContext>,
         partition_keys: Vec<String>,
-        filter_expressions: Option<Vec<Expression>>,
+        filter_expressions: Vec<Expression>,
         location: String,
     ) -> Result<Vec<(String, Option<String>)>> {
         let hive_catalog = ctx.get_catalog(CATALOG_HIVE)?;
@@ -181,9 +181,9 @@ impl HiveTable {
             .get_partition_names_async(table_info[0].to_string(), table_info[1].to_string(), -1)
             .await?;
 
-        if let Some(exprs) = filter_expressions && !exprs.is_empty() {
+        if !filter_expressions.is_empty() {
             let partition_schemas = self.get_column_schemas(partition_keys.clone())?;
-            let partition_pruner = HivePartitionPruner::create(ctx, exprs, partition_schemas);
+            let partition_pruner = HivePartitionPruner::create(ctx, filter_expressions, partition_schemas);
             partitions = partition_pruner.prune(partitions)?;
         }
 
@@ -212,8 +212,7 @@ impl HiveTable {
 
         if let Some(partition_keys) = &self.table_options.partition_keys {
             if !partition_keys.is_empty() {
-                let filter_expression = push_downs.as_ref().map(|p| p.filters.clone());
-
+                let filter_expression = push_downs.as_ref().map(|p| p.filters.clone()).unwrap_or_default();
                 return self
                     .get_query_locations_from_partition_table(
                         ctx.clone(),
