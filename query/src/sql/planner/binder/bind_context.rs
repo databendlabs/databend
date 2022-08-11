@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use common_ast::ast::TableAlias;
 use common_ast::parser::token::Token;
@@ -23,6 +24,7 @@ use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataTypeImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use parking_lot::RwLock;
 
 use super::AggregateInfo;
 use crate::sql::common::IndexType;
@@ -73,7 +75,7 @@ pub struct BindContext {
     /// Format type of query output.
     pub format: Option<String>,
 
-    pub ctes_map: HashMap<String, CteInfo>,
+    pub ctes_map: Arc<RwLock<HashMap<String, CteInfo>>>,
 }
 
 #[derive(Clone, Debug)]
@@ -91,7 +93,7 @@ impl BindContext {
             aggregate_info: AggregateInfo::default(),
             in_grouping: false,
             format: None,
-            ctes_map: HashMap::new(),
+            ctes_map: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 

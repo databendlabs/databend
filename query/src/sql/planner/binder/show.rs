@@ -23,7 +23,7 @@ use crate::sql::Binder;
 impl<'a> Binder {
     pub(in crate::sql::planner::binder) async fn bind_show_functions(
         &mut self,
-        bind_context: &mut BindContext,
+        bind_context: &BindContext,
         limit: &Option<ShowLimit<'a>>,
     ) -> Result<Plan> {
         // rewrite show functions to select * from system.functions ...
@@ -51,7 +51,7 @@ impl<'a> Binder {
 
     pub(in crate::sql::planner::binder) async fn bind_show_settings(
         &mut self,
-        bind_context: &mut BindContext,
+        bind_context: &BindContext,
         like: &Option<String>,
     ) -> Result<Plan> {
         let sub_query = like

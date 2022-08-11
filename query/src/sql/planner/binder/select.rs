@@ -57,7 +57,7 @@ pub struct SelectItem<'a> {
 impl<'a> Binder {
     pub(super) async fn bind_select_stmt(
         &mut self,
-        bind_context: &mut BindContext,
+        bind_context: &BindContext,
         stmt: &SelectStmt<'a>,
         order_by: &[OrderByExpr<'a>],
     ) -> Result<(SExpr, BindContext)> {
@@ -158,7 +158,7 @@ impl<'a> Binder {
     #[async_recursion]
     pub(crate) async fn bind_set_expr(
         &mut self,
-        bind_context: &mut BindContext,
+        bind_context: &BindContext,
         set_expr: &SetExpr,
         order_by: &[OrderByExpr],
     ) -> Result<(SExpr, BindContext)> {
@@ -181,13 +181,13 @@ impl<'a> Binder {
     #[async_recursion]
     pub(crate) async fn bind_query(
         &mut self,
-        bind_context: &mut BindContext,
+        bind_context: &BindContext,
         query: &Query<'_>,
     ) -> Result<(SExpr, BindContext)> {
         if let Some(with) = &query.with {
             for cte in with.ctes.iter() {
                 let table_name = cte.alias.name.name.clone();
-                if bind_context.ctes_map.contains_key(&table_name) {
+                if bind_context.ctes_map.read().contains_key(&table_name) {
                     return Err(ErrorCode::SemanticError(format!(
                         "duplicate cte {table_name}"
                     )));
@@ -198,7 +198,8 @@ impl<'a> Binder {
                     s_expr,
                     bind_context: cte_bind_context.clone(),
                 };
-                bind_context.ctes_map.insert(table_name, cte_info);
+                let mut ctes_map = bind_context.ctes_map.write();
+                ctes_map.insert(table_name, cte_info);
             }
         }
         let (mut s_expr, mut bind_context) = match query.body {
@@ -270,7 +271,7 @@ impl<'a> Binder {
 
     pub(super) async fn bind_set_operator(
         &mut self,
-        bind_context: &mut BindContext,
+        bind_context: &BindContext,
         left: &SetExpr<'_>,
         right: &SetExpr<'_>,
         op: &SetOperator,

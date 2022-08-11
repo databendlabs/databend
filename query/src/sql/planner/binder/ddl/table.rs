@@ -118,7 +118,7 @@ impl SelectBuilder {
 impl<'a> Binder {
     pub(in crate::sql::planner::binder) async fn bind_show_tables(
         &mut self,
-        bind_context: &mut BindContext,
+        bind_context: &BindContext,
         stmt: &ShowTablesStmt<'a>,
     ) -> Result<Plan> {
         let ShowTablesStmt {
@@ -257,7 +257,7 @@ impl<'a> Binder {
 
     pub(in crate::sql::planner::binder) async fn bind_show_tables_status(
         &mut self,
-        bind_context: &mut BindContext,
+        bind_context: &BindContext,
         stmt: &ShowTablesStatusStmt<'a>,
     ) -> Result<Plan> {
         let ShowTablesStatusStmt {
@@ -357,9 +357,8 @@ impl<'a> Binder {
             }
             (None, Some(query)) => {
                 // `CREATE TABLE AS SELECT ...` without column definitions
-                let mut init_bind_context = BindContext::new();
-                let (_s_expr, bind_context) =
-                    self.bind_query(&mut init_bind_context, query).await?;
+                let init_bind_context = BindContext::new();
+                let (_s_expr, bind_context) = self.bind_query(&init_bind_context, query).await?;
                 let fields = bind_context
                     .columns
                     .iter()
@@ -376,9 +375,8 @@ impl<'a> Binder {
                 // e.g. `CREATE TABLE t (i INT) AS SELECT * from old_t` with columns speicified
                 let (source_schema, source_coments) =
                     self.analyze_create_table_schema(source).await?;
-                let mut init_bind_context = BindContext::new();
-                let (_s_expr, bind_context) =
-                    self.bind_query(&mut init_bind_context, query).await?;
+                let init_bind_context = BindContext::new();
+                let (_s_expr, bind_context) = self.bind_query(&init_bind_context, query).await?;
                 let query_fields: Vec<DataField> = bind_context
                     .columns
                     .iter()
@@ -445,9 +443,9 @@ impl<'a> Binder {
             table_meta,
             cluster_keys,
             as_select: if let Some(query) = as_query {
-                let mut bind_context = BindContext::new();
+                let bind_context = BindContext::new();
                 let stmt = Statement::Query(Box::new(*query.clone()));
-                let select_plan = self.bind_statement(&mut bind_context, &stmt).await?;
+                let select_plan = self.bind_statement(&bind_context, &stmt).await?;
                 // Don't enable distributed optimization for `CREATE TABLE ... AS SELECT ...` for now
                 let opt_ctx = Arc::new(OptimizerContext::new(OptimizerConfig::default()));
                 let optimized_plan = optimize(self.ctx.clone(), opt_ctx, select_plan)?;

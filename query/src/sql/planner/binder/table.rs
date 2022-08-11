@@ -83,7 +83,7 @@ impl<'a> Binder {
 
     pub(super) async fn bind_table_reference(
         &mut self,
-        bind_context: &mut BindContext,
+        bind_context: &BindContext,
         table_ref: &TableReference<'a>,
     ) -> Result<(SExpr, BindContext)> {
         match table_ref {
@@ -97,8 +97,7 @@ impl<'a> Binder {
             } => {
                 let table_name = normalize_identifier(table, &self.name_resolution_ctx).name;
                 // Check and bind common table expression
-                let ctes = bind_context.ctes_map.clone();
-                if let Some(cte_info) = ctes.get(&table_name) {
+                if let Some(cte_info) = bind_context.ctes_map.read().get(&table_name) {
                     return self.bind_cte(bind_context, &table_name, alias, cte_info);
                 }
                 // Get catalog name
@@ -240,7 +239,7 @@ impl<'a> Binder {
 
     fn bind_cte(
         &mut self,
-        bind_context: &mut BindContext,
+        bind_context: &BindContext,
         table_name: &str,
         alias: &Option<TableAlias>,
         cte_info: &CteInfo,

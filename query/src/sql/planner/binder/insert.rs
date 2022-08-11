@@ -62,7 +62,7 @@ use crate::sql::MetadataRef;
 impl<'a> Binder {
     pub(in crate::sql::planner::binder) async fn bind_insert(
         &mut self,
-        bind_context: &mut BindContext,
+        bind_context: &BindContext,
         stmt: &InsertStmt<'a>,
     ) -> Result<Plan> {
         let InsertStmt {

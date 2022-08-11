@@ -96,14 +96,14 @@ impl<'a> Binder {
     }
 
     pub async fn bind(mut self, stmt: &Statement<'a>) -> Result<Plan> {
-        let mut init_bind_context = BindContext::new();
-        self.bind_statement(&mut init_bind_context, stmt).await
+        let init_bind_context = BindContext::new();
+        self.bind_statement(&init_bind_context, stmt).await
     }
 
     #[async_recursion::async_recursion]
     async fn bind_statement(
         &mut self,
-        bind_context: &mut BindContext,
+        bind_context: &BindContext,
         stmt: &Statement<'a>,
     ) -> Result<Plan> {
         let plan = match stmt {
@@ -317,7 +317,7 @@ impl<'a> Binder {
 
     async fn bind_rewrite_to_query(
         &mut self,
-        bind_context: &mut BindContext,
+        bind_context: &BindContext,
         query: &str,
         rewrite_kind_r: RewriteKind,
     ) -> Result<Plan> {
