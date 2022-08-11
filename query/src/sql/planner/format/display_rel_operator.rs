@@ -290,8 +290,9 @@ pub fn format_eval_scalar(
     metadata: &MetadataRef,
     op: &EvalScalar,
 ) -> std::fmt::Result {
-    let scalars = op
-        .items
+    let mut items = op.items.clone();
+    items.sort_by(|item1, item2| item1.index.cmp(&item2.index));
+    let scalars = items
         .iter()
         .map(|item| format_scalar(metadata, &item.scalar))
         .collect::<Vec<String>>()
