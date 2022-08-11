@@ -1,5 +1,5 @@
 ---
-title: toStartOfTenMinutes
+title: to_start_of_ten_minutes
 ---
 
 Rounds down a date with time to the start of the ten-minute interval.
@@ -7,7 +7,7 @@ Rounds down a date with time to the start of the ten-minute interval.
 ## Syntax
 
 ```sql
-toStartOfTenMinutes(expr)
+to_start_of_ten_minutes(expr)
 ```
 
 ## Arguments
@@ -23,16 +23,16 @@ Datetime object, returns date in “YYYY-MM-DD hh:mm:ss” format.
 ## Examples
 
 ```sql
-SELECT toStartOfTenMinutes(now());
+SELECT to_start_of_ten_minutes(now());
 +----------------------------+
-| toStartOfTenMinutes(now()) |
+| to_start_of_ten_minutes(now()) |
 +----------------------------+
 | 2022-03-29 06:40:00        |
 +----------------------------+
 
-SELECT toStartOfTenMinutes(to_datetime(1630812366));
+SELECT to_start_of_ten_minutes(to_datetime(1630812366));
 +---------------------------------------------+
-| toStartOfTenMinutes(to_datetime(1630812366)) |
+| to_start_of_ten_minutes(to_datetime(1630812366)) |
 +---------------------------------------------+
 | 2021-09-05 03:20:00                         |
 +---------------------------------------------+

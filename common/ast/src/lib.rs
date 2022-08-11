@@ -29,6 +29,7 @@ pub use visitors::Visitor;
 pub use visitors::VisitorMut;
 
 mod input;
+pub use input::Dialect;
 pub use input::Input;
 
 mod util;

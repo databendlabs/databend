@@ -2027,9 +2027,9 @@ Query(
 
 
 ---------- Input ----------
-select * from a, b, c order by `db`.`a`.`c1`;
+select * from a, b, c order by "db"."a"."c1";
 ---------- Output ---------
-SELECT * FROM a, b, c ORDER BY `db`.`a`.`c1`
+SELECT * FROM a, b, c ORDER BY "db"."a"."c1"
 ---------- AST ------------
 Query(
     Query {
@@ -2134,7 +2134,7 @@ Query(
                         Identifier {
                             name: "db",
                             quote: Some(
-                                '`',
+                                '"',
                             ),
                             span: QuotedString(31..35),
                         },
@@ -2143,7 +2143,7 @@ Query(
                         Identifier {
                             name: "a",
                             quote: Some(
-                                '`',
+                                '"',
                             ),
                             span: QuotedString(36..39),
                         },
@@ -2151,7 +2151,7 @@ Query(
                     column: Identifier {
                         name: "c1",
                         quote: Some(
-                            '`',
+                            '"',
                         ),
                         span: QuotedString(40..44),
                     },
@@ -6086,6 +6086,96 @@ RevokeShareObject(
             "tb1",
         ),
         privilege: Select,
+    },
+)
+
+
+---------- Input ----------
+ALTER SHARE a ADD TENANTS = b,c;
+---------- Output ---------
+ALTER SHARE a ADD TENANTS = b,c
+---------- AST ------------
+AlterShareTenants(
+    AlterShareTenantsStmt {
+        share: Identifier {
+            name: "a",
+            quote: None,
+            span: Ident(12..13),
+        },
+        if_exists: false,
+        tenants: [
+            Identifier {
+                name: "b",
+                quote: None,
+                span: Ident(28..29),
+            },
+            Identifier {
+                name: "c",
+                quote: None,
+                span: Ident(30..31),
+            },
+        ],
+        is_add: true,
+    },
+)
+
+
+---------- Input ----------
+ALTER SHARE IF EXISTS a ADD TENANTS = b,c;
+---------- Output ---------
+ALTER SHARE IF EXISTS a ADD TENANTS = b,c
+---------- AST ------------
+AlterShareTenants(
+    AlterShareTenantsStmt {
+        share: Identifier {
+            name: "a",
+            quote: None,
+            span: Ident(22..23),
+        },
+        if_exists: true,
+        tenants: [
+            Identifier {
+                name: "b",
+                quote: None,
+                span: Ident(38..39),
+            },
+            Identifier {
+                name: "c",
+                quote: None,
+                span: Ident(40..41),
+            },
+        ],
+        is_add: true,
+    },
+)
+
+
+---------- Input ----------
+ALTER SHARE IF EXISTS a REMOVE TENANTS = b,c;
+---------- Output ---------
+ALTER SHARE IF EXISTS a REMOVE TENANTS = b,c
+---------- AST ------------
+AlterShareTenants(
+    AlterShareTenantsStmt {
+        share: Identifier {
+            name: "a",
+            quote: None,
+            span: Ident(22..23),
+        },
+        if_exists: true,
+        tenants: [
+            Identifier {
+                name: "b",
+                quote: None,
+                span: Ident(41..42),
+            },
+            Identifier {
+                name: "c",
+                quote: None,
+                span: Ident(43..44),
+            },
+        ],
+        is_add: false,
     },
 )
 

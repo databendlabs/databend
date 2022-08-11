@@ -18,7 +18,7 @@ where
   and n_regionkey = r_regionkey
   and r_name = 'ASIA'
   and o_orderdate >= to_date('1994-01-01')
-  and o_orderdate < addYears(to_date('1994-01-01'), 1)
+  and o_orderdate < add_years(to_date('1994-01-01'), 1)
 group by
     n_name
 order by

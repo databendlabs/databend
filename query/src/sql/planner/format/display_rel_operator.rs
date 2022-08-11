@@ -231,8 +231,19 @@ pub fn format_physical_scan(
     let table = metadata.read().table(op.table_index).clone();
     write!(
         f,
-        "Scan: {}.{}.{}",
-        &table.catalog, &table.database, &table.name
+        "Scan: {}.{}.{}, filters: [{}]",
+        &table.catalog,
+        &table.database,
+        &table.name,
+        op.push_down_predicates.as_ref().map_or_else(
+            || "".to_string(),
+            |predicates| {
+                predicates
+                    .iter()
+                    .map(|pred| format_scalar(metadata, pred))
+                    .join(", ")
+            }
+        )
     )
 }
 
