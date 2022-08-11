@@ -13,10 +13,12 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::fmt::Debug;
+use std::fmt::Formatter;
 
 use crate::Expression;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq)]
 pub enum Projection {
     /// column indices of the table
     Columns(Vec<usize>),
@@ -38,6 +40,18 @@ impl Projection {
         match self {
             Projection::Columns(indices) => indices.is_empty(),
             Projection::InnerColumns(path_indices) => path_indices.is_empty(),
+        }
+    }
+}
+
+impl Debug for Projection {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        match self {
+            Projection::Columns(indices) => write!(f, "{:?}", indices),
+            Projection::InnerColumns(path_indices) => {
+                let paths: Vec<&Vec<usize>> = path_indices.values().collect();
+                write!(f, "{:?}", paths)
+            }
         }
     }
 }
