@@ -1591,9 +1591,10 @@ impl<'a> TypeChecker<'a> {
                 .map_err(|e| ErrorCode::SemanticError(span.display_error(e.message())))?;
             self.resolve(&udf_expr, None).await
         } else {
-            Err(ErrorCode::SemanticError(span.display_error(
-                "No function matches the given name.".to_string(),
-            )))
+            Err(ErrorCode::SemanticError(span.display_error(format!(
+                "No function matches the given name:{}",
+                func_name
+            ))))
         }
     }
 
