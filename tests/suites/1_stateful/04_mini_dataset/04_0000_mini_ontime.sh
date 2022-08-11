@@ -24,7 +24,7 @@ ontime_statements=(
 )
 
 for i in "${ontime_statements[@]}"; do
-  echo "set enable_planner_v2 = 1; set unquoted_ident_case_sensitive = 1; $i" | $MYSQL_CLIENT_CONNECT
+  echo "$i" | $MYSQL_CLIENT_CONNECT
 done
 
 ## Clean table

@@ -87,7 +87,7 @@ fn test_add_months() -> Result<()> {
         expects.reserve(10);
         for (field, arg) in fields.iter().zip(args.iter()) {
             let add_months =
-                AddMonthsFunction::try_create_func("addMonths", 1, &[&DateType::new_impl(), arg])?;
+                AddMonthsFunction::try_create_func("add_months", 1, &[&DateType::new_impl(), arg])?;
             let col = add_months.eval(
                 FunctionContext::default(),
                 &[column("date"), column(field)],
@@ -115,7 +115,7 @@ fn test_add_months() -> Result<()> {
         let mut expects: Vec<i64> = Vec::new();
         expects.reserve(10);
         for (field, arg) in fields.iter().zip(args.iter()) {
-            let add_months = AddMonthsFunction::try_create_func("addMonths", 1, &[
+            let add_months = AddMonthsFunction::try_create_func("add_months", 1, &[
                 &TimestampType::new_impl(0),
                 arg,
             ])?;
@@ -204,7 +204,7 @@ fn test_add_subtract_seconds() -> Result<()> {
         let mut expects: Vec<i64> = Vec::new();
         expects.reserve(10);
         for (field, arg) in fields.iter().zip(args.iter()) {
-            let add_seconds = AddTimesFunction::try_create_func("addSeconds", 1, &[
+            let add_seconds = AddTimesFunction::try_create_func("add_seconds", 1, &[
                 &TimestampType::new_impl(0),
                 arg,
             ])?;
@@ -235,7 +235,7 @@ fn test_add_subtract_seconds() -> Result<()> {
         let mut expects: Vec<i64> = Vec::new();
         expects.reserve(10);
         for (field, arg) in fields.iter().zip(args.iter()) {
-            let add_seconds = AddTimesFunction::try_create_func("subtractSeconds", -1, &[
+            let add_seconds = AddTimesFunction::try_create_func("subtract_seconds", -1, &[
                 &TimestampType::new_impl(0),
                 arg,
             ])?;

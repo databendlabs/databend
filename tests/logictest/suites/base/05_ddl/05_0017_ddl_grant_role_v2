@@ -1,5 +1,4 @@
-statement ok
-SET enable_planner_v2 = 1;
+
 
 statement ok
 DROP ROLE IF EXISTS 'test';
@@ -9,6 +8,15 @@ DROP ROLE IF EXISTS 'test-role';
 
 statement ok
 DROP USER IF EXISTS 'test-user';
+
+statement ok
+DROP ROLE IF EXISTS 'role1';
+
+statement ok
+DROP ROLE IF EXISTS 'role2';
+
+statement ok
+DROP ROLE IF EXISTS 'role3';
 
 statement error 2204
 GRANT ROLE 'test' TO 'test-user'; 
@@ -35,6 +43,24 @@ statement ok
 GRANT ROLE 'test' TO ROLE 'test-role';
 
 statement ok
+CREATE ROLE IF NOT EXISTS 'role1';
+
+statement ok
+CREATE ROLE IF NOT EXISTS 'role2';
+
+statement ok
+CREATE ROLE IF NOT EXISTS 'role3';
+
+statement ok
+GRANT ROLE 'role1' TO ROLE 'role2';
+
+statement ok
+GRANT ROLE 'role2' TO ROLE 'role3';
+
+statement error 2206
+GRANT ROLE 'role3' TO ROLE 'role1';
+
+statement ok
 DROP ROLE 'test';
 
 statement ok
@@ -42,6 +68,15 @@ DROP ROLE 'test-role';
 
 statement ok
 DROP USER 'test-user';
+
+statement ok
+DROP ROLE 'role1';
+
+statement ok
+DROP ROLE 'role2';
+
+statement ok
+DROP ROLE 'role3';
 
 statement ok
 SET enable_planner_v2 = 0;

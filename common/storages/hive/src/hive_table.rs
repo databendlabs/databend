@@ -213,12 +213,6 @@ impl HiveTable {
         if let Some(partition_keys) = &self.table_options.partition_keys {
             if !partition_keys.is_empty() {
                 let filter_expression = if let Some(extras) = push_downs {
-                    if extras.filters.len() > 1 {
-                        return Err(ErrorCode::UnImplement(format!(
-                            "more than one filters, {:?}",
-                            extras.filters
-                        )));
-                    };
                     extras.filters.get(0).cloned()
                 } else {
                     None

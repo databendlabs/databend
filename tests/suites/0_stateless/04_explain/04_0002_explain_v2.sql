@@ -1,4 +1,4 @@
-set enable_planner_v2 = 1;
+
 select '===Explain===';
 drop table if exists t1;
 drop table if exists t2;

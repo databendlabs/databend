@@ -853,7 +853,7 @@ Query {
             ],
             recursive: false,
             ctes: [
-                Cte {
+                CTE {
                     span: [
                         Ident(5..7),
                         LParen(7..8),
@@ -1094,7 +1094,7 @@ Query {
             ],
             recursive: false,
             ctes: [
-                Cte {
+                CTE {
                     span: [
                         Ident(5..7),
                         AS(8..10),
@@ -1388,7 +1388,7 @@ Query {
             ],
             recursive: false,
             ctes: [
-                Cte {
+                CTE {
                     span: [
                         Ident(5..7),
                         LParen(7..8),
@@ -1477,7 +1477,7 @@ Query {
                         format: None,
                     },
                 },
-                Cte {
+                CTE {
                     span: [
                         Ident(34..36),
                         AS(37..39),
@@ -1547,7 +1547,7 @@ Query {
                         format: None,
                     },
                 },
-                Cte {
+                CTE {
                     span: [
                         Ident(59..61),
                         AS(62..64),
@@ -1916,7 +1916,7 @@ Query {
             ],
             recursive: true,
             ctes: [
-                Cte {
+                CTE {
                     span: [
                         Ident(15..17),
                         LParen(17..18),

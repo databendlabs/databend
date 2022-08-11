@@ -19,12 +19,14 @@ use common_exception::Result;
 use common_exception::ToErrorCode;
 use common_proto_conv::FromToProto;
 
-pub fn serialize_struct<PB: common_protos::prost::Message, ErrFn, CtxFn, D>(
-    value: &impl FromToProto<PB>,
+pub fn serialize_struct<T, ErrFn, CtxFn, D>(
+    value: &T,
     err_code_fn: ErrFn,
     context_fn: CtxFn,
 ) -> Result<Vec<u8>>
 where
+    T: FromToProto + 'static,
+    T::PB: common_protos::prost::Message + Default,
     ErrFn: FnOnce(String) -> ErrorCode + std::marker::Copy,
     D: Display,
     CtxFn: FnOnce() -> D + std::marker::Copy,
@@ -35,19 +37,19 @@ where
     Ok(buf)
 }
 
-pub fn deserialize_struct<PB, T, ErrFn, CtxFn, D>(
+pub fn deserialize_struct<T, ErrFn, CtxFn, D>(
     buf: &[u8],
     err_code_fn: ErrFn,
     context_fn: CtxFn,
 ) -> Result<T>
 where
-    PB: common_protos::prost::Message + Default,
-    T: FromToProto<PB>,
+    T: FromToProto,
+    T::PB: common_protos::prost::Message + Default,
     ErrFn: FnOnce(String) -> ErrorCode + std::marker::Copy,
     D: Display,
     CtxFn: FnOnce() -> D + std::marker::Copy,
 {
-    let p: PB =
+    let p: T::PB =
         common_protos::prost::Message::decode(buf).map_err_to_code(err_code_fn, context_fn)?;
     let v: T = FromToProto::from_pb(p).map_err_to_code(err_code_fn, context_fn)?;
 

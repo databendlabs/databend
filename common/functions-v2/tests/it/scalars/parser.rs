@@ -17,6 +17,7 @@ use common_ast::parser::parse_expr;
 use common_ast::parser::token::Token;
 use common_ast::parser::tokenize_sql;
 use common_ast::Backtrace;
+use common_ast::Dialect;
 use common_expression::types::DataType;
 use common_expression::Literal;
 use common_expression::RawExpr;
@@ -25,7 +26,7 @@ use common_expression::Span;
 pub fn parse_raw_expr(text: &str, columns: &[(&str, DataType)]) -> RawExpr {
     let backtrace = Backtrace::new();
     let tokens = tokenize_sql(text).unwrap();
-    let expr = parse_expr(&tokens, &backtrace).unwrap();
+    let expr = parse_expr(&tokens, Dialect::PostgreSQL, &backtrace).unwrap();
     transform_expr(expr, columns)
 }
 

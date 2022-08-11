@@ -98,6 +98,13 @@ impl<K: ValueType, V: ValueType> ValueType for KvPair<K, V> {
         col.index(index)
     }
 
+    unsafe fn index_column_unchecked<'a>(
+        col: &'a Self::Column,
+        index: usize,
+    ) -> Self::ScalarRef<'a> {
+        col.index_unchecked(index)
+    }
+
     fn slice_column<'a>(col: &'a Self::Column, range: Range<usize>) -> Self::Column {
         col.slice(range)
     }
@@ -140,8 +147,6 @@ impl<K: ArgType, V: ArgType> ArgType for KvPair<K, V> {
         DataType::Tuple(vec![K::data_type(), V::data_type()])
     }
 
-    fn full_domain(_: &GenericMap) -> Self::Domain {}
-
     fn create_builder(capacity: usize, generics: &GenericMap) -> Self::ColumnBuilder {
         KvColumnBuilder::with_capacity(capacity, generics)
     }
@@ -163,6 +168,16 @@ impl<K: ValueType, V: ValueType> KvColumn<K, V> {
             K::index_column(&self.keys, index)?,
             V::index_column(&self.values, index)?,
         ))
+    }
+
+    /// # Safety
+    ///
+    /// Calling this method with an out-of-bounds index is *[undefined behavior]*
+    pub unsafe fn index_unchecked(&self, index: usize) -> (K::ScalarRef<'_>, V::ScalarRef<'_>) {
+        (
+            K::index_column_unchecked(&self.keys, index),
+            V::index_column_unchecked(&self.values, index),
+        )
     }
 
     fn slice(&self, range: Range<usize>) -> Self {
@@ -309,6 +324,13 @@ impl<T: ValueType> ValueType for MapType<T> {
         <MapInternal<T> as ValueType>::index_column(col, index)
     }
 
+    unsafe fn index_column_unchecked<'a>(
+        col: &'a Self::Column,
+        index: usize,
+    ) -> Self::ScalarRef<'a> {
+        <MapInternal<T> as ValueType>::index_column_unchecked(col, index)
+    }
+
     fn slice_column<'a>(col: &'a Self::Column, range: Range<usize>) -> Self::Column {
         <MapInternal<T> as ValueType>::slice_column(col, range)
     }
@@ -349,10 +371,6 @@ impl<T: ValueType> ValueType for MapType<T> {
 impl<T: ArgType> ArgType for MapType<T> {
     fn data_type() -> DataType {
         DataType::Map(Box::new(T::data_type()))
-    }
-
-    fn full_domain(generics: &GenericMap) -> Self::Domain {
-        <MapInternal<T> as ArgType>::full_domain(generics)
     }
 
     fn create_builder(capacity: usize, generics: &GenericMap) -> Self::ColumnBuilder {

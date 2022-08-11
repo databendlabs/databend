@@ -1,5 +1,4 @@
-statement ok
-set enable_planner_v2 = 1;
+
 
 statement ok
 drop table if exists cast_test;
