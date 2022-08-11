@@ -181,7 +181,7 @@ impl HiveTable {
             .get_partition_names_async(table_info[0].to_string(), table_info[1].to_string(), -1)
             .await?;
 
-        if let Some(exprs) = filter_expressions {
+        if let Some(exprs) = filter_expressions && !exprs.is_empty() {
             let partition_schemas = self.get_column_schemas(partition_keys.clone())?;
             let partition_pruner = HivePartitionPruner::create(ctx, exprs, partition_schemas);
             partitions = partition_pruner.prune(partitions)?;

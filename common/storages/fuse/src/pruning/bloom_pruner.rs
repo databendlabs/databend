@@ -19,7 +19,6 @@ use common_catalog::table_context::TableContext;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 use common_fuse_meta::meta::Location;
-use common_planners::lit;
 use common_planners::Expression;
 use common_planners::ExpressionVisitor;
 use common_planners::Recursion;
@@ -120,7 +119,12 @@ pub fn new_bloom_filter_pruner(
         // check if there were applicable filter conditions
         let expr = exprs
             .iter()
-            .fold(lit(true), |acc, item| acc.and(item.clone()));
+            .fold(None, |acc: Option<Expression>, item| match acc {
+                Some(acc) => Some(acc.and(item.clone())),
+                None => Some(item.clone()),
+            })
+            .unwrap();
+
         let point_query_cols = columns_names_of_eq_expressions(&expr)?;
         if !point_query_cols.is_empty() {
             // convert to bloom filter block's column names
