@@ -118,6 +118,10 @@ pub trait ArgType: ValueType {
     fn data_type() -> DataType;
     fn create_builder(capacity: usize, generics: &GenericMap) -> Self::ColumnBuilder;
 
+    fn column_from_vec(vec: Vec<Self::Scalar>, generics: &GenericMap) -> Self::Column {
+        Self::column_from_iter(vec.iter().cloned(), generics)
+    }
+
     fn column_from_iter(
         iter: impl Iterator<Item = Self::Scalar>,
         generics: &GenericMap,
