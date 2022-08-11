@@ -1,4 +1,4 @@
-set enable_planner_v2 = 1;
+
 select
     o_orderpriority,
     count(*) as order_count

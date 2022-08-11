@@ -1,4 +1,4 @@
-set enable_planner_v2 = 1;
+
 select
     ps_partkey,
     sum(ps_supplycost * ps_availqty) as value
