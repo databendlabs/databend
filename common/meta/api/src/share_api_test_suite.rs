@@ -901,9 +901,10 @@ impl ShareApiTestSuite {
 
         info!("--- get share with db1");
         {
+            let name = ShareGrantObjectName::Database(db_name.to_string());
             let req = GetShareGrantObjectReq {
                 share_name: share_name.clone(),
-                object: Some(ShareGrantObjectName::Database(db_name.to_string())),
+                object: Some(name.clone()),
             };
 
             let res = mt.get_share_grant_objects(req).await;
@@ -911,10 +912,23 @@ impl ShareApiTestSuite {
             let res = res.unwrap();
             assert_eq!(res.objects.len(), 1);
             let entry = res.objects.get(0).unwrap();
-            assert_eq!(
-                entry.object,
-                ShareGrantObjectName::Database(db_name.to_string())
-            );
+            assert_eq!(entry.object, name,);
+        }
+
+        info!("--- get share with table1");
+        {
+            let name = ShareGrantObjectName::Table(db_name.to_string(), tbl_name.to_string());
+            let req = GetShareGrantObjectReq {
+                share_name: share_name.clone(),
+                object: Some(name.clone()),
+            };
+
+            let res = mt.get_share_grant_objects(req).await;
+            info!("get_share_grant_objects res: {:?}", res);
+            let res = res.unwrap();
+            assert_eq!(res.objects.len(), 1);
+            let entry = res.objects.get(0).unwrap();
+            assert_eq!(entry.object, name);
         }
 
         info!("--- get all share objects");
