@@ -49,12 +49,12 @@ impl RangeFilterPruner for RangeFilter {
 
 pub fn new_range_filter_pruner<'a>(
     ctx: &Arc<dyn TableContext>,
-    filter_expr: Option<&'a Expression>,
+    filter_expr: Option<&'a [Expression]>,
     schema: &'a DataSchemaRef,
 ) -> Result<Arc<dyn RangeFilterPruner + Send + Sync>> {
     Ok(match filter_expr {
-        Some(expr) => {
-            let range_filter = RangeFilter::try_create(ctx.clone(), expr, schema.clone())?;
+        Some(exprs) if !exprs.is_empty() => {
+            let range_filter = RangeFilter::try_create(ctx.clone(), exprs, schema.clone())?;
             Arc::new(range_filter)
         }
         _ => Arc::new(NoPruner),

@@ -29,7 +29,7 @@ use common_storages_index::range_filter::RangeFilter;
 
 pub struct HivePartitionPruner {
     pub ctx: Arc<dyn TableContext>,
-    pub filter: Expression,
+    pub filters: Vec<Expression>,
     // pub partitions: Vec<String>,
     pub partition_schema: Arc<DataSchema>,
 }
@@ -37,12 +37,12 @@ pub struct HivePartitionPruner {
 impl HivePartitionPruner {
     pub fn create(
         ctx: Arc<dyn TableContext>,
-        filter: Expression,
+        filters: Vec<Expression>,
         partition_schema: Arc<DataSchema>,
     ) -> Self {
         HivePartitionPruner {
             ctx,
-            filter,
+            filters,
             partition_schema,
         }
     }
@@ -93,7 +93,7 @@ impl HivePartitionPruner {
     pub fn prune(&self, partitions: Vec<String>) -> Result<Vec<String>> {
         let range_filter = RangeFilter::try_create(
             self.ctx.clone(),
-            &self.filter,
+            &self.filters,
             self.partition_schema.clone(),
         )?;
         let column_stats = self.get_column_stats(&partitions)?;

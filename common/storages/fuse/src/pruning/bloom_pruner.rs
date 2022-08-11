@@ -108,13 +108,24 @@ impl BloomFilterPruner for BloomFilterIndexPruner {
 /// otherwise, a [BloomFilterIndexer] backed pruner will be return
 pub fn new_bloom_filter_pruner(
     ctx: &Arc<dyn TableContext>,
-    filter_expr: Option<&Expression>,
+    filter_exprs: Option<&[Expression]>,
     schema: &DataSchemaRef,
     dal: Operator,
 ) -> Result<Arc<dyn BloomFilterPruner + Send + Sync>> {
-    if let Some(expr) = filter_expr {
+    if let Some(exprs) = filter_exprs {
+        if exprs.is_empty() {
+            return Ok(Arc::new(NonPruner));
+        }
         // check if there were applicable filter conditions
-        let point_query_cols = columns_names_of_eq_expressions(expr)?;
+        let expr = exprs
+            .iter()
+            .fold(None, |acc: Option<Expression>, item| match acc {
+                Some(acc) => Some(acc.and(item.clone())),
+                None => Some(item.clone()),
+            })
+            .unwrap();
+
+        let point_query_cols = columns_names_of_eq_expressions(&expr)?;
         if !point_query_cols.is_empty() {
             // convert to bloom filter block's column names
             let filter_block_cols = point_query_cols
@@ -124,7 +135,7 @@ pub fn new_bloom_filter_pruner(
             return Ok(Arc::new(BloomFilterIndexPruner::new(
                 ctx.clone(),
                 filter_block_cols,
-                expr.clone(),
+                expr,
                 dal,
                 schema.clone(),
             )));
