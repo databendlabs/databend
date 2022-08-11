@@ -45,6 +45,29 @@ HashJoin: INNER, build keys: [t2.a (#2)], probe keys: [t1.a (#0)], join filters:
 └── Scan: default.default.t2, filters: []
 
 onlyif mysql
+statement query T
+explain raw select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a);
+
+----
+Project: [a (#0),b (#1),a (#2),b (#3)]
+└── EvalScalar: [t2.b (#3), t1.a (#0), t1.b (#1), t2.a (#2)]
+    └── Filter: [((t1.a (#0) = t2.a (#2)) AND (t1.a (#0) > 3)) OR (t1.a (#0) = t2.a (#2))]
+        └── LogicalInnerJoin: equi-conditions: [], non-equi-conditions: []
+            ├── LogicalGet: default.default.t1
+            └── LogicalGet: default.default.t2
+
+onlyif mysql
+statement query T
+explain raw select * from t1 inner join t2 on t1.a = t2.a and t1.b = t2.b and t1.a > 2;
+
+----
+Project: [a (#0),b (#1),a (#2),b (#3)]
+└── EvalScalar: [t1.a (#0), t2.b (#3), t2.a (#2), t1.b (#1)]
+    └── LogicalInnerJoin: equi-conditions: [(t1.a (#0) = t2.a (#2)) AND (t1.b (#1) = t2.b (#3))], non-equi-conditions: [t1.a (#0) > 2]
+        ├── LogicalGet: default.default.t1
+        └── LogicalGet: default.default.t2
+
+onlyif mysql
 statement ok
 drop table t1;
 
