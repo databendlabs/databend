@@ -23,6 +23,9 @@ ontime_statements=(
   "SELECT OriginCityName, DestCityName, count(*) AS c FROM ontime_mini GROUP BY OriginCityName, DestCityName ORDER BY c DESC LIMIT 10;"
 )
 
+for i in "${ontime_statements[@]}"; do
+  echo "$i" | $MYSQL_CLIENT_CONNECT
+done
 
 ## Clean table
 echo "drop table if exists ontime_mini all;" | $MYSQL_CLIENT_CONNECT
