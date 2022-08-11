@@ -100,21 +100,18 @@ impl Stream for DataPacketStream {
 }
 
 impl ProgressInfo {
-    pub fn inc(&self, ctx: &Arc<QueryContext>) -> Result<()> {
+    pub fn inc(&self, ctx: &Arc<QueryContext>) {
         match self {
             ProgressInfo::ScanProgress(values) => ctx.get_scan_progress().incr(values),
             ProgressInfo::WriteProgress(values) => ctx.get_write_progress().incr(values),
             ProgressInfo::ResultProgress(values) => ctx.get_result_progress().incr(values),
         };
-
-        Ok(())
     }
 }
 
 impl PrecommitBlock {
-    pub fn precommit(&self, ctx: &Arc<QueryContext>) -> Result<()> {
+    pub fn precommit(&self, ctx: &Arc<QueryContext>) {
         ctx.push_precommit_block(self.0.clone());
-        Ok(())
     }
 }
 

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::convert::TryInto;
+use std::error::Error;
 use std::marker::PhantomData;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -63,12 +64,26 @@ impl FlightClient {
         }
     }
 
+    pub async fn request_server_exchange(&mut self, query_id: &str) -> Result<FlightExchange> {
+        let (tx, rx) = async_channel::bounded(1);
+        Ok(FlightExchange::from_client(
+            tx,
+            self.inner.do_exchange(
+                RequestBuilder::create(Box::pin(rx))
+                    .with_metadata("x-type", "request_server_exchange")?
+                    .with_metadata("x-query-id", query_id)?
+                    .build()
+            ).await?.into_inner(),
+        ))
+    }
+
     pub async fn do_exchange(&mut self, query_id: &str, source: &str, fragment_id: usize) -> Result<FlightExchange> {
         let (tx, rx) = async_channel::bounded(1);
         Ok(FlightExchange::from_client(
             tx,
             self.inner.do_exchange(
                 RequestBuilder::create(Box::pin(rx))
+                    .with_metadata("x-type", "exchange_fragment")?
                     .with_metadata("x-source", source)?
                     .with_metadata("x-query-id", query_id)?
                     .with_metadata("x-fragment-id", &fragment_id.to_string())?
@@ -203,7 +218,7 @@ impl FlightExchange {
     pub fn close_output(&self) {
         match self {
             FlightExchange::Dummy => { /* do nothing*/ }
-            FlightExchange::Client(exchange) => exchange.close_ouput(),
+            FlightExchange::Client(exchange) => exchange.close_output(),
             FlightExchange::Server(exchange) => exchange.close_output(),
         }
     }
@@ -268,7 +283,7 @@ impl ClientFlightExchange {
         }
     }
 
-    pub fn close_ouput(&self) {
+    pub fn close_output(&self) {
         if !self.is_closed_response.fetch_or(true, Ordering::SeqCst) {
             if self.state.response_count.fetch_sub(1, Ordering::AcqRel) == 1 {
                 self.response_tx.close();
@@ -392,3 +407,26 @@ impl ServerFlightExchange {
         }
     }
 }
+
+// fn match_for_io_error(err_status: &Status) -> Option<&std::io::Error> {
+//     let mut err: &(dyn Error + 'static) = err_status;
+//
+//     loop {
+//         if let Some(io_err) = err.downcast_ref::<std::io::Error>() {
+//             return Some(io_err);
+//         }
+//
+//         // h2::Error do not expose std::io::Error with `source()`
+//         // https://github.com/hyperium/h2/pull/462
+//         if let Some(h2_err) = err.downcast_ref::<h2::Error>() {
+//             if let Some(io_err) = h2_err.get_io() {
+//                 return Some(io_err);
+//             }
+//         }
+//
+//         err = match err.source() {
+//             Some(err) => err,
+//             None => return None,
+//         };
+//     }
+// }

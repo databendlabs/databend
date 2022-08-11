@@ -296,8 +296,4 @@ impl ExchangeTransform {
     fn on_recv_precommit(&mut self, fragment_data: PrecommitBlock) -> Result<()> {
         unimplemented!()
     }
-
-    fn on_finish(&mut self) -> Result<()> {
-        unimplemented!()
-    }
 }

@@ -35,6 +35,7 @@ use tonic::Request;
 use tonic::Response as RawResponse;
 use tonic::Status;
 use tonic::Streaming;
+use common_exception::ErrorCode;
 
 use crate::api::rpc::flight_actions::FlightAction;
 use crate::api::rpc::flight_client::{FlightExchange, ServerFlightExchange};
@@ -104,16 +105,30 @@ impl FlightService for DatabendQueryFlightService {
     }
 
     async fn do_exchange(&self, req: StreamReq<FlightData>) -> Response<Self::DoExchangeStream> {
-        let source = req.get_metadata("x-source")?;
-        let query_id = req.get_metadata("x-query-id")?;
-        let fragment = req.get_metadata("x-fragment-id")?.parse::<usize>().unwrap();
+        match req.get_metadata("x-type")?.as_str() {
+            "request_server_exchange" => {
+                let query_id = req.get_metadata("x-query-id")?;
+                let (tx, rx) = async_channel::bounded(1);
+                let exchange = FlightExchange::from_server(req, tx);
 
-        let (tx, rx) = async_channel::bounded(1);
-        let exchange = FlightExchange::from_server(req, tx);
+                let exchange_manager = self.sessions.get_data_exchange_manager();
+                exchange_manager.handle_statistics_exchange(query_id, exchange)?;
+                Ok(RawResponse::new(Box::pin(rx)))
+            }
+            "exchange_fragment" => {
+                let source = req.get_metadata("x-source")?;
+                let query_id = req.get_metadata("x-query-id")?;
+                let fragment = req.get_metadata("x-fragment-id")?.parse::<usize>().unwrap();
 
-        let exchange_manager = self.sessions.get_data_exchange_manager();
-        exchange_manager.handle_exchange(query_id, source, fragment, exchange)?;
-        Ok(RawResponse::new(Box::pin(rx)))
+                let (tx, rx) = async_channel::bounded(1);
+                let exchange = FlightExchange::from_server(req, tx);
+
+                let exchange_manager = self.sessions.get_data_exchange_manager();
+                exchange_manager.handle_exchange_fragment(query_id, source, fragment, exchange)?;
+                Ok(RawResponse::new(Box::pin(rx)))
+            }
+            exchange_type => Err(Status::unimplemented(format!("Unimplemented exchange type: {:?}", exchange_type))),
+        }
     }
 
     type DoActionStream = FlightStream<FlightResult>;

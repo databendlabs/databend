@@ -29,6 +29,7 @@ use crate::Config;
 pub struct ConnectionInfo {
     pub target: Arc<NodeInfo>,
     pub fragments: Vec<usize>,
+    pub create_request_channel: bool,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

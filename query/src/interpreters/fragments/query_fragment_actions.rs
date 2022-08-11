@@ -174,13 +174,21 @@ impl QueryFragmentsActions {
         Ok(())
     }
 
-    pub fn get_query_fragments_plan_packets(&self) -> Result<Vec<QueryFragmentsPlanPacket>> {
+    pub fn get_query_fragments_plan_packets(&self) -> Result<(QueryFragmentsPlanPacket, Vec<QueryFragmentsPlanPacket>)> {
         let nodes_info = Self::nodes_info(&self.ctx);
 
-        let fragments_packets = self.get_executors_fragments();
+        let mut fragments_packets = self.get_executors_fragments();
         let mut query_fragments_plan_packets = Vec::with_capacity(fragments_packets.len());
 
         let cluster = self.ctx.get_cluster();
+        let local_query_fragments_plan_packet = QueryFragmentsPlanPacket::create(
+            self.ctx.get_id(),
+            cluster.local_id.clone(),
+            fragments_packets.remove(&cluster.local_id).unwrap(),
+            nodes_info.clone(),
+            cluster.local_id(),
+        );
+
         for (executor, fragments) in fragments_packets.into_iter() {
             let query_id = self.ctx.get_id();
             let executors_info = nodes_info.clone();
@@ -194,10 +202,11 @@ impl QueryFragmentsActions {
             ));
         }
 
-        Ok(query_fragments_plan_packets)
+        Ok((local_query_fragments_plan_packet, query_fragments_plan_packets))
     }
 
     pub fn get_init_nodes_channel_packets(&self) -> Result<Vec<InitNodesChannelPacket>> {
+        let local_id = &self.ctx.get_cluster().local_id;
         let nodes_info = Self::nodes_info(&self.ctx);
         let connections_info = self.fragments_connections();
 
@@ -227,6 +236,7 @@ impl QueryFragmentsActions {
                 connections_info.push(ConnectionInfo {
                     target: nodes_info[target].clone(),
                     fragments: fragments.into_iter().cloned().unique().collect::<Vec<_>>(),
+                    create_request_channel: &executor_node_info.id == local_id || target == local_id,
                 });
             }
 
@@ -276,32 +286,54 @@ impl QueryFragmentsActions {
                         }
 
                         if source_target_fragments.contains_key(&source) {
-                            let target_fragments = source_target_fragments.get_mut(&source).unwrap();
+                            let target_fragments = source_target_fragments
+                                .get_mut(&source)
+                                .expect("Source target fragments expect source");
 
-                            match target_fragments.entry(destination.clone()) {
-                                Entry::Vacant(v) => {
-                                    v.insert(vec![fragment_id]);
-                                }
-                                Entry::Occupied(mut v) => {
-                                    v.get_mut().push(fragment_id);
-                                }
-                            };
-                        } else if source_target_fragments.contains_key(destination) {
-                            let target_fragments = source_target_fragments.get_mut(destination).unwrap();
+                            if target_fragments.contains_key(destination) {
+                                target_fragments.get_mut(destination)
+                                    .expect("Target fragments expect destination")
+                                    .push(fragment_id);
 
-                            match target_fragments.entry(source.clone()) {
-                                Entry::Vacant(v) => {
-                                    v.insert(vec![fragment_id]);
-                                }
-                                Entry::Occupied(mut v) => {
-                                    v.get_mut().push(fragment_id);
-                                }
-                            };
-                        } else {
-                            let mut target_fragments = HashMap::new();
-                            target_fragments.insert(destination.clone(), vec![fragment_id]);
-                            source_target_fragments.insert(source.clone(), target_fragments);
+                                continue;
+                            }
                         }
+
+                        if source_target_fragments.contains_key(destination) {
+                            let target_fragments = source_target_fragments
+                                .get_mut(destination)
+                                .expect("Source target fragments expect destination");
+
+                            if target_fragments.contains_key(&source) {
+                                target_fragments.get_mut(&source)
+                                    .expect("Target fragments expect source")
+                                    .push(fragment_id);
+
+                                continue;
+                            }
+                        }
+
+                        if source_target_fragments.contains_key(&source) {
+                            let target_fragments = source_target_fragments
+                                .get_mut(&source)
+                                .expect("Source target fragments expect source");
+
+                            target_fragments.insert(destination.clone(), vec![fragment_id]);
+                            continue;
+                        }
+
+                        if source_target_fragments.contains_key(destination) {
+                            let target_fragments = source_target_fragments
+                                .get_mut(destination)
+                                .expect("Source target fragments expect destination");
+
+                            target_fragments.insert(source.clone(), vec![fragment_id]);
+                            continue;
+                        }
+
+                        let mut target_fragments = HashMap::new();
+                        target_fragments.insert(destination.clone(), vec![fragment_id]);
+                        source_target_fragments.insert(source.clone(), target_fragments);
                     }
                 }
             }

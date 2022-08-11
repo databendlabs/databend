@@ -17,6 +17,7 @@ use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::ops::Deref;
 use std::sync::Arc;
+use std::time::Duration;
 
 use async_channel::Sender;
 use common_arrow::arrow_format::flight::data::FlightData;
@@ -50,6 +51,8 @@ use crate::api::FragmentPlanPacket;
 use crate::api::InitNodesChannelPacket;
 use crate::api::QueryFragmentsPlanPacket;
 use crate::api::rpc::exchange::exchange_transform::ExchangeTransform;
+use crate::api::rpc::exchange::statistics_receiver::StatisticsReceiver;
+use crate::api::rpc::exchange::statistics_sender::StatisticsSender;
 use crate::api::rpc::flight_client::FlightExchange;
 use crate::interpreters::QueryFragmentActions;
 use crate::interpreters::QueryFragmentsActions;
@@ -79,10 +82,18 @@ impl DataExchangeManager {
 
     // Create connections for cluster all nodes. We will push data through this connection.
     pub async fn init_nodes_channel(&self, packet: &InitNodesChannelPacket) -> Result<()> {
+        let mut request_exchanges = vec![];
         let mut targets_exchanges = HashMap::new();
 
         let source = &packet.executor.id;
         for connection_info in &packet.connections_info {
+            if connection_info.create_request_channel {
+                let query_id = &packet.query_id;
+                let address = &connection_info.target.flight_address;
+                let mut flight_client = Self::create_client(&self.config, address).await?;
+                request_exchanges.push(flight_client.request_server_exchange(query_id).await?);
+            }
+
             for fragment in &connection_info.fragments {
                 let address = &connection_info.target.flight_address;
                 let mut flight_client = Self::create_client(&self.config, address).await?;
@@ -97,10 +108,17 @@ impl DataExchangeManager {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 
-
         match queries_coordinator.entry(packet.query_id.clone()) {
-            Entry::Occupied(mut v) => v.get_mut().add_exchanges(targets_exchanges),
-            Entry::Vacant(v) => v.insert(QueryCoordinator::create()).add_exchanges(targets_exchanges),
+            Entry::Occupied(mut v) => {
+                let query_coordinator = v.get_mut();
+                query_coordinator.add_fragment_exchanges(targets_exchanges)?;
+                query_coordinator.add_statistics_exchange(request_exchanges)
+            }
+            Entry::Vacant(v) => {
+                let query_coordinator = v.insert(QueryCoordinator::create());
+                query_coordinator.add_fragment_exchanges(targets_exchanges)?;
+                query_coordinator.add_statistics_exchange(request_exchanges)
+            }
         }
     }
 
@@ -153,41 +171,47 @@ impl DataExchangeManager {
         }
     }
 
-    pub fn handle_exchange(&self, query: String, source: String, fragment: usize, exchange: FlightExchange) -> Result<()> {
+    pub fn handle_statistics_exchange(&self, id: String, exchange: FlightExchange) -> Result<()> {
+        let queries_coordinator_guard = self.queries_coordinator.lock();
+        let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
+
+        match queries_coordinator.entry(id) {
+            Entry::Occupied(mut v) => v.get_mut().add_statistics_exchange(vec![exchange]),
+            Entry::Vacant(v) => v.insert(QueryCoordinator::create())
+                .add_statistics_exchange(vec![exchange]),
+        }
+    }
+
+    pub fn handle_exchange_fragment(&self, query: String, source: String, fragment: usize, exchange: FlightExchange) -> Result<()> {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 
         match queries_coordinator.entry(query) {
-            Entry::Occupied(mut v) => v.get_mut().add_exchange(source, fragment, exchange),
+            Entry::Occupied(mut v) => v.get_mut().add_fragment_exchange(source, fragment, exchange),
             Entry::Vacant(v) => v.insert(QueryCoordinator::create())
-                .add_exchange(source, fragment, exchange),
+                .add_fragment_exchange(source, fragment, exchange),
         }
     }
 
-    pub fn on_finished_query(&self, query_id: &str, may_error: &Option<ErrorCode>) {
-        // let queries_coordinator_guard = self.queries_coordinator.lock();
-        // let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
-        // if let Some(mut query_coordinator) = queries_coordinator.remove(query_id) {
-        //     // Drop mutex guard to avoid deadlock during shutdown,
-        //     drop(queries_coordinator_guard);
-        //
-        //     query_coordinator.on_finished(may_error);
-        // }
-        unimplemented!()
+    pub fn shutdown_query(&self, query_id: &str) {
+        let queries_coordinator_guard = self.queries_coordinator.lock();
+        let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
+
+        if let Some(query_coordinator) = queries_coordinator.get_mut(query_id) {
+            query_coordinator.shutdown_query();
+        }
     }
 
-    pub fn shutdown_query(&self, query_id: &str, cause: Option<ErrorCode>) -> Result<()> {
-        // let queries_coordinator_guard = self.queries_coordinator.lock();
-        // let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
-        //
-        // match queries_coordinator.get_mut(query_id) {
-        //     None => Err(ErrorCode::LogicalError(format!(
-        //         "Query {} not found in cluster.",
-        //         query_id
-        //     ))),
-        //     Some(coordinator) => coordinator.shutdown(cause),
-        // }
-        unimplemented!()
+    pub fn on_finished_query(&self, query_id: &str) {
+        let queries_coordinator_guard = self.queries_coordinator.lock();
+        let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
+
+        if let Some(mut query_coordinator) = queries_coordinator.remove(query_id) {
+            // Drop mutex guard to avoid deadlock during shutdown,
+            drop(queries_coordinator_guard);
+
+            query_coordinator.on_finished();
+        }
     }
 
     pub async fn commit_actions(&self, ctx: Arc<QueryContext>, actions: QueryFragmentsActions) -> Result<PipelineBuildResult> {
@@ -199,29 +223,62 @@ impl DataExchangeManager {
         actions.get_init_nodes_channel_packets()?.commit(&self.config, timeout).await?;
 
         // Submit distributed tasks to all nodes.
-        actions.get_query_fragments_plan_packets()?.commit(&self.config, timeout).await?;
+        let (local_query_fragments_plan_packet, query_fragments_plan_packets) = actions.get_query_fragments_plan_packets()?;
+
+        // Submit tasks to other nodes
+        query_fragments_plan_packets.commit(&self.config, timeout).await?;
+
+        // Submit tasks to localhost
+        self.init_query_fragments_plan(&ctx, &local_query_fragments_plan_packet)?;
 
         // Get local pipeline of local task
-        let build_res = self.get_root_pipeline(ctx.get_id(), root_actions)?;
+        let build_res = self.get_root_pipeline(ctx, root_actions)?;
 
         actions.get_execute_partial_query_packets()?.commit(&self.config, timeout).await?;
         Ok(build_res)
     }
 
-    fn get_root_pipeline(&self, query_id: String, root_actions: &QueryFragmentActions) -> Result<PipelineBuildResult> {
-        let schema = root_actions.get_schema()?;
+    fn get_root_pipeline(&self, ctx: Arc<QueryContext>, root_actions: &QueryFragmentActions) -> Result<PipelineBuildResult> {
+        let query_id = ctx.get_id();
         let fragment_id = root_actions.fragment_id;
-        let build_res = self.get_fragment_source(&query_id, fragment_id, schema)?;
 
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 
-        if let Some(query_coordinator) = queries_coordinator.get_mut(&query_id) {
-            query_coordinator.exchanges.clear();
-        }
+        match queries_coordinator.get_mut(&query_id) {
+            None => Err(ErrorCode::LogicalError("Query not exists.")),
+            Some(query_coordinator) => {
+                query_coordinator.fragment_exchanges.clear();
+                let mut build_res = query_coordinator.subscribe_fragment(&ctx, fragment_id)?;
 
-        Ok(build_res)
-        // TODO: set on_finished callback
+                let exchanges = std::mem::take(&mut query_coordinator.statistics_exchanges);
+                let mut statistics_receiver = StatisticsReceiver::create(ctx.clone(), exchanges);
+                statistics_receiver.start();
+
+                let mut statistics_receiver: Mutex<StatisticsReceiver> = Mutex::new(statistics_receiver);
+                build_res.main_pipeline.set_on_finished(move |may_error| {
+                    let query_id = ctx.get_id();
+                    let mut statistics_receiver = statistics_receiver.lock();
+
+                    if let Some(error) = may_error {
+                        // TODO: try get recv error if network error.
+                        statistics_receiver.shutdown();
+                        ctx.get_exchange_manager().on_finished_query(&query_id);
+
+                        if error.code() == common_exception::ABORT_QUERY {
+                            statistics_receiver.take_receive_error()?;
+                        }
+
+                        return Err(error.clone());
+                    }
+
+                    ctx.get_exchange_manager().on_finished_query(&query_id);
+                    statistics_receiver.wait_shutdown()
+                });
+
+                Ok(build_res)
+            }
+        }
     }
 
     pub fn get_flight_exchanges(&self, params: &ExchangeParams) -> Result<Vec<FlightExchange>> {
@@ -238,14 +295,18 @@ impl DataExchangeManager {
         &self,
         query_id: &str,
         fragment_id: usize,
-        schema: DataSchemaRef,
+        _schema: DataSchemaRef,
     ) -> Result<PipelineBuildResult> {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 
         match queries_coordinator.get_mut(query_id) {
             None => Err(ErrorCode::LogicalError("Query not exists.")),
-            Some(query_coordinator) => query_coordinator.subscribe_fragment(fragment_id, schema),
+            Some(query_coordinator) => {
+                let query_ctx = query_coordinator.info.as_ref().expect("QueryInfo is none").query_ctx.clone();
+
+                query_coordinator.subscribe_fragment(&query_ctx, fragment_id)
+            }
         }
     }
 }
@@ -254,11 +315,13 @@ struct QueryInfo {
     query_id: String,
     current_executor: String,
     query_ctx: Arc<QueryContext>,
+    query_executor: Option<Arc<PipelineCompleteExecutor>>,
 }
 
 struct QueryCoordinator {
     info: Option<QueryInfo>,
-    exchanges: HashMap<(String, usize), FlightExchange>,
+    statistics_exchanges: Vec<FlightExchange>,
+    fragment_exchanges: HashMap<(String, usize), FlightExchange>,
     fragments_coordinator: HashMap<usize, Box<FragmentCoordinator>>,
 }
 
@@ -266,19 +329,28 @@ impl QueryCoordinator {
     pub fn create() -> QueryCoordinator {
         QueryCoordinator {
             info: None,
-            exchanges: Default::default(),
-            fragments_coordinator: Default::default(),
+            statistics_exchanges: vec![],
+            fragment_exchanges: HashMap::new(),
+            fragments_coordinator: HashMap::new(),
         }
     }
 
-    pub fn add_exchange(&mut self, target: String, fragment: usize, exchange: FlightExchange) -> Result<()> {
-        self.exchanges.insert((target, fragment), exchange);
+    pub fn add_statistics_exchange(&mut self, exchanges: Vec<FlightExchange>) -> Result<()> {
+        for exchange in exchanges.into_iter() {
+            self.statistics_exchanges.push(exchange);
+        }
+
         Ok(())
     }
 
-    pub fn add_exchanges(&mut self, exchanges: HashMap<(String, usize), FlightExchange>) -> Result<()> {
+    pub fn add_fragment_exchange(&mut self, target: String, fragment: usize, exchange: FlightExchange) -> Result<()> {
+        self.fragment_exchanges.insert((target, fragment), exchange);
+        Ok(())
+    }
+
+    pub fn add_fragment_exchanges(&mut self, exchanges: HashMap<(String, usize), FlightExchange>) -> Result<()> {
         for ((target, fragment), exchange) in exchanges.into_iter() {
-            self.exchanges.insert((target, fragment), exchange);
+            self.fragment_exchanges.insert((target, fragment), exchange);
         }
 
         Ok(())
@@ -288,7 +360,7 @@ impl QueryCoordinator {
         match params {
             ExchangeParams::MergeExchange(params) => {
                 let mut exchanges = vec![];
-                for ((_target, fragment), exchange) in &self.exchanges {
+                for ((_target, fragment), exchange) in &self.fragment_exchanges {
                     if *fragment == params.fragment_id {
                         exchanges.push(exchange.clone());
                     }
@@ -302,7 +374,7 @@ impl QueryCoordinator {
                 for destination in &params.destination_ids {
                     exchanges.push(match destination == &params.executor_id {
                         true => Ok(FlightExchange::Dummy),
-                        false => match self.exchanges.get(&(destination.clone(), params.fragment_id)) {
+                        false => match self.fragment_exchanges.get(&(destination.clone(), params.fragment_id)) {
                             None => Err(ErrorCode::UnknownFragmentExchange(format!(
                                 "Unknown fragment exchange channel, {}, {}",
                                 destination,
@@ -323,6 +395,7 @@ impl QueryCoordinator {
             query_ctx: ctx.clone(),
             query_id: packet.query_id.clone(),
             current_executor: packet.executor.clone(),
+            query_executor: None,
         });
 
         for fragment in &packet.fragments {
@@ -342,11 +415,11 @@ impl QueryCoordinator {
         Ok(())
     }
 
-    pub fn subscribe_fragment(&mut self, fragment_id: usize, schema: DataSchemaRef) -> Result<PipelineBuildResult> {
+    pub fn subscribe_fragment(&mut self, ctx: &Arc<QueryContext>, fragment_id: usize) -> Result<PipelineBuildResult> {
         // Merge pipelines if exist locally pipeline
         if let Some(mut fragment_coordinator) = self.fragments_coordinator.remove(&fragment_id) {
             let info = self.info.as_ref().expect("QueryInfo is none");
-            fragment_coordinator.prepare_pipeline(info.query_ctx.clone())?;
+            fragment_coordinator.prepare_pipeline(ctx.clone())?;
 
             if fragment_coordinator.pipeline_build_res.is_none() {
                 return Err(ErrorCode::LogicalError(
@@ -360,37 +433,36 @@ impl QueryCoordinator {
                 return Ok(fragment_coordinator.pipeline_build_res.unwrap());
             }
 
-            let exchange_params = fragment_coordinator.create_exchange_params(info)?;
+            let exchange_params = fragment_coordinator.create_exchange_params(ctx, info)?;
             let mut build_res = fragment_coordinator.pipeline_build_res.unwrap();
 
             let data_exchange = fragment_coordinator.data_exchange.as_ref().unwrap();
 
+            if !data_exchange.from_multiple_nodes() {
+                return Err(ErrorCode::UnImplement("Exchange source and no from multiple nodes is unimplemented."));
+            }
+
             // Add exchange data transform.
-            match !data_exchange.from_multiple_nodes() {
-                true => unimplemented!()/*ExchangeSink::via(&info.query_ctx, &exchange_params, &mut build_res.main_pipeline)?*/,
-                false => ExchangeTransform::via(&info.query_ctx, &exchange_params, &mut build_res.main_pipeline)?,
-            };
+            ExchangeTransform::via(ctx, &exchange_params, &mut build_res.main_pipeline)?;
 
             return Ok(build_res);
         }
 
-        // let mut pipeline = Pipeline::create();
+        Err(ErrorCode::UnImplement("ExchangeSource is unimplemented"))
+    }
 
-        // let settings = self.ctx.get_settings();
-        // let max_threads = settings.get_max_threads()? as usize;
-        // let max_threads = std::cmp::max(max_threads, 1);
+    pub fn shutdown_query(&mut self) {
+        if let Some(query_info) = &self.info {
+            if let Some(query_executor) = &query_info.query_executor {
+                if let Err(cause) = query_executor.finish() {
+                    tracing::error!("Cannot shutdown query, because {:?}", cause);
+                }
+            }
+        }
+    }
 
-        // Add exchange data subscriber.
-
-        // for ((target, fragment), exchange) in self.exchanges {
-        //     if fragment == fragment_id {}
-        // }
-        // ExchangeSource::create_source(rx, schema, &mut pipeline, max_threads)?;
-        // Ok(PipelineBuildResult {
-        //     main_pipeline: pipeline,
-        //     sources_pipelines: vec![],
-        // })
-        unimplemented!()
+    pub fn on_finished(self) {
+        // Do something when query finished.
     }
 
     pub fn execute_pipeline(&mut self) -> Result<()> {
@@ -406,7 +478,7 @@ impl QueryCoordinator {
 
         let mut params = Vec::with_capacity(self.fragments_coordinator.len());
         for coordinator in self.fragments_coordinator.values() {
-            params.push(coordinator.create_exchange_params(info)?);
+            params.push(coordinator.create_exchange_params(&info.query_ctx, info)?);
         }
 
         for ((_, coordinator), params) in self.fragments_coordinator.iter_mut().zip(params) {
@@ -434,424 +506,52 @@ impl QueryCoordinator {
 
         let executor = PipelineCompleteExecutor::from_pipelines(async_runtime, query_need_abort, pipelines)?;
 
-        self.exchanges.clear();
-        // TODO: set on_finished callback
+        self.fragment_exchanges.clear();
+        let info_mut = self.info.as_mut().expect("Query info is None");
+        info_mut.query_executor = Some(executor.clone());
+
+        let query_id = info_mut.query_id.clone();
+        let query_ctx = info_mut.query_ctx.clone();
+        let mut request_server_exchanges = std::mem::take(&mut self.statistics_exchanges);
+
+        if request_server_exchanges.len() != 1 {
+            return Err(ErrorCode::LogicalError("Request server must less than 1 if is not request server."));
+        }
+
+        let ctx = query_ctx.clone();
+        let request_server_exchange = request_server_exchanges[0].clone();
+        let mut statistics_sender = StatisticsSender::create(&query_id, ctx, request_server_exchange);
+        statistics_sender.start();
+
         Thread::named_spawn(Some(String::from("Distributed-Executor")), move || {
             if let Err(cause) = executor.execute() {
-                // {shutdown}
-                println!("Shutdown query {:?}", cause);
+                let mut request_server_exchange = request_server_exchanges.remove(0);
+
+                futures::executor::block_on(async move {
+                    statistics_sender.shutdown();
+
+                    if let Err(_cause) = request_server_exchange.send(DataPacket::ErrorCode(cause)).await {
+                        tracing::warn!("Cannot send message to request server when executor failure.");
+                    };
+
+                    // Wait request server close channel.
+                    // request_server_exchange.close_output();
+                    // while let Ok(Some(_data)) = request_server_exchange.recv().await {}
+                });
+
+                return;
             }
 
-            println!("Shutdown successfully");
+            // TODO: destroy query resource when panic?
+            // Destroy coordinator_server_exchange if executor is not failure.
+            statistics_sender.shutdown();
+            drop(request_server_exchanges);
+            query_ctx.get_exchange_manager().on_finished_query(&query_id);
         });
 
         Ok(())
     }
 }
-
-// struct QueryCoordinator {
-//     ctx: Arc<QueryContext>,
-//     query_id: String,
-//     executor_id: String,
-//     runtime: Arc<Runtime>,
-//     request_server_tx: Option<Sender<DataPacket>>,
-//     publish_fragments: HashMap<(String, usize), FragmentSender>,
-//     subscribe_channel: HashMap<String, Sender<Result<DataPacket>>>,
-//     subscribe_fragments: HashMap<usize, FragmentReceiver>,
-//     fragments_coordinator: HashMap<usize, Box<FragmentCoordinator>>,
-//
-//     shutdown_cause: Arc<Mutex<Option<ErrorCode>>>,
-//     executor: Option<Arc<PipelineCompleteExecutor>>,
-//     exchange_senders: Vec<Arc<ExchangeSender>>,
-//     exchange_receivers: Vec<Arc<ExchangeReceiver>>,
-// }
-
-// impl QueryCoordinator {
-//     pub fn create(
-//         ctx: &Arc<QueryContext>,
-//         executor: &QueryFragmentsPlanPacket,
-//     ) -> Result<QueryCoordinator> {
-//         let mut fragments_coordinator = HashMap::with_capacity(executor.fragments.len());
-//
-//         for fragment in &executor.fragments {
-//             fragments_coordinator.insert(
-//                 fragment.fragment_id.to_owned(),
-//                 FragmentCoordinator::create(fragment),
-//             );
-//         }
-//
-//         Ok(QueryCoordinator {
-//             ctx: ctx.clone(),
-//             fragments_coordinator,
-//             executor: None,
-//             exchange_senders: vec![],
-//             exchange_receivers: vec![],
-//             shutdown_cause: Arc::new(Mutex::new(None)),
-//             request_server_tx: None,
-//             publish_fragments: Default::default(),
-//             query_id: executor.query_id.to_owned(),
-//             subscribe_channel: Default::default(),
-//             subscribe_fragments: Default::default(),
-//             executor_id: executor.executor.to_owned(),
-//             runtime: Arc::new(Runtime::with_worker_threads(
-//                 2,
-//                 Some(String::from("Cluster-Pub-Sub")),
-//             )?),
-//         })
-//     }
-//
-//     pub fn prepare_pipeline(&mut self) -> Result<()> {
-//         let fragments_id = self
-//             .fragments_coordinator
-//             .keys()
-//             .cloned()
-//             .collect::<Vec<_>>();
-//
-//         for fragment_id in fragments_id {
-//             let ctx = self.ctx.clone();
-//             if let Some(coordinator) = self.fragments_coordinator.get_mut(&fragment_id) {
-//                 coordinator.prepare_pipeline(ctx)?;
-//             }
-//         }
-//
-//         Ok(())
-//     }
-//
-//     pub fn on_finished(&mut self, may_error: &Option<ErrorCode>) {
-//         if let Some(cause) = may_error {
-//             if let Some(request_server_tx) = self.request_server_tx.take() {
-//                 let may_error = cause.clone();
-//                 tracing::warn!("Failed to execute pipeline, cause: {}", may_error);
-//                 futures::executor::block_on(async move {
-//                     if request_server_tx
-//                         .send(DataPacket::ErrorCode(may_error))
-//                         .await
-//                         .is_err()
-//                     {
-//                         tracing::warn!("Cannot send error code, request server channel is closed.");
-//                     }
-//
-//                     drop(request_server_tx);
-//                 });
-//             }
-//         }
-//
-//         if let Some(cause) = self.shutdown_cause.lock().take() {
-//             if let Some(request_server_tx) = self.request_server_tx.take() {
-//                 futures::executor::block_on(async move {
-//                     if request_server_tx
-//                         .send(DataPacket::ErrorCode(cause))
-//                         .await
-//                         .is_err()
-//                     {
-//                         tracing::warn!("Cannot send error code, request server channel is closed.");
-//                     }
-//
-//                     drop(request_server_tx);
-//                 });
-//             }
-//         }
-//
-//         // close request server channel.
-//         drop(self.request_server_tx.take());
-//
-//         for sender in &self.exchange_senders {
-//             sender.abort();
-//         }
-//
-//         for sender in &self.exchange_senders {
-//             let sender = sender.clone();
-//             futures::executor::block_on(async move {
-//                 if let Err(cause) = sender.join().await {
-//                     tracing::warn!("Sender join failure {:?}", cause);
-//                 }
-//             });
-//         }
-//
-//         for receiver in &self.exchange_receivers {
-//             let receiver = receiver.clone();
-//             futures::executor::block_on(async move {
-//                 if let Err(cause) = receiver.join().await {
-//                     tracing::warn!("Receiver join failure {:?}", cause);
-//                 }
-//             });
-//         }
-//     }
-//
-//     pub fn shutdown(&mut self, cause: Option<ErrorCode>) -> Result<()> {
-//         {
-//             let mut shutdown_cause = self.shutdown_cause.lock();
-//             *shutdown_cause = cause;
-//         }
-//
-//         if let Some(executor) = self.executor.clone() {
-//             executor.finish()?;
-//         }
-//
-//         Ok(())
-//     }
-//
-//     // pub fn prepare_subscribes_channel(
-//     //     &mut self,
-//     //     ctx: Arc<QueryContext>,
-//     //     prepare: &QueryFragmentsPlanPacket,
-//     // ) -> Result<()> {
-//     //     for (source, fragments_id) in &prepare.source_2_fragments {
-//     //         if source == &prepare.executor {
-//     //             continue;
-//     //         }
-//     //
-//     //         let (tx, rx) = async_channel::bounded(1);
-//     //
-//     //         let ctx = ctx.clone();
-//     //         let query_id = prepare.query_id.clone();
-//     //         let runtime = self.runtime.clone();
-//     //         let receivers_map = {
-//     //             let mut receivers_map = HashMap::with_capacity(fragments_id.len());
-//     //             for receive_fragment_id in fragments_id {
-//     //                 receivers_map.insert(
-//     //                     *receive_fragment_id,
-//     //                     &self.subscribe_fragments[receive_fragment_id],
-//     //                 );
-//     //             }
-//     //
-//     //             receivers_map
-//     //         };
-//     //
-//     //         let receiver = ExchangeReceiver::create(ctx, query_id, runtime, rx, receivers_map);
-//     //
-//     //         receiver.listen()?;
-//     //         self.exchange_receivers.push(receiver);
-//     //         self.subscribe_channel.insert(source.to_string(), tx);
-//     //     }
-//     //
-//     //     Ok(())
-//     // }
-//
-//     // pub fn execute_pipeline(&mut self) -> Result<()> {
-//     //     if self.fragments_coordinator.is_empty() {
-//     //         // Empty fragments if it is a request server, because the pipelines may have been linked.
-//     //         return Ok(());
-//     //     }
-//     //
-//     //     let max_threads = self.ctx.get_settings().get_max_threads()?;
-//     //     let mut pipelines = Vec::with_capacity(self.fragments_coordinator.len());
-//     //
-//     //     let mut params = Vec::with_capacity(self.fragments_coordinator.len());
-//     //     for coordinator in self.fragments_coordinator.values() {
-//     //         params.push(coordinator.create_exchange_params(self)?);
-//     //     }
-//     //
-//     //     for ((_, coordinator), params) in self.fragments_coordinator.iter_mut().zip(params) {
-//     //         if let Some(mut build_res) = coordinator.pipeline_build_res.take() {
-//     //             build_res.set_max_threads(max_threads as usize);
-//     //
-//     //             if !build_res.main_pipeline.is_pulling_pipeline()? {
-//     //                 return Err(ErrorCode::LogicalError("Logical error, It's a bug"));
-//     //             }
-//     //
-//     //             // Add exchange data publisher.
-//     //             ExchangeSink::publisher_sink(&self.ctx, &params, &mut build_res.main_pipeline)?;
-//     //
-//     //             if !build_res.main_pipeline.is_complete_pipeline()? {
-//     //                 return Err(ErrorCode::LogicalError("Logical error, It's a bug"));
-//     //             }
-//     //
-//     //             QueryCoordinator::init_pipeline(&mut build_res)?;
-//     //             pipelines.push(build_res.main_pipeline);
-//     //             pipelines.extend(build_res.sources_pipelines.into_iter());
-//     //         }
-//     //     }
-//     //
-//     //     let async_runtime = self.ctx.get_storage_runtime();
-//     //     let query_need_abort = self.ctx.query_need_abort();
-//     //
-//     //     let executor =
-//     //         PipelineCompleteExecutor::from_pipelines(async_runtime, query_need_abort, pipelines)?;
-//     //     self.executor = Some(executor.clone());
-//     //
-//     //     Thread::named_spawn(Some(String::from("Distributed-Executor")), move || {
-//     //         executor.execute().ok();
-//     //     });
-//     //
-//     //     Ok(())
-//     // }
-//
-//     pub fn init_publisher(&mut self, exchanges: HashMap<(String, usize), FlightExchange>) -> Result<()> {
-//         // for (target, mut exchange_sender) in exchanges.into_iter() {
-//         //     let runtime = self.runtime.clone();
-//         //     exchange_sender.connect_flight(&runtime)?;
-//         //     let exchange_sender = Arc::new(exchange_sender);
-//         //
-//         //     let ctx = self.ctx.clone();
-//         //     let source = self.executor_id.clone();
-//         //     let (flight_tx, fragments_sender) = exchange_sender.listen(ctx, source, runtime)?;
-//         //
-//         //     for (fragment_id, fragment_sender) in fragments_sender.into_iter() {
-//         //         self.publish_fragments
-//         //             .insert((target.clone(), fragment_id), fragment_sender);
-//         //     }
-//         //
-//         //     if exchange_sender.is_to_request_server() {
-//         //         self.request_server_tx = Some(flight_tx);
-//         //     }
-//         //
-//         //     self.exchange_senders.push(exchange_sender);
-//         // }
-//         //
-//         // for coordinator in self.fragments_coordinator.values_mut() {
-//         //     if let Some(build_res) = coordinator.pipeline_build_res.as_mut() {
-//         //         Self::init_pipeline(build_res)?;
-//         //     }
-//         // }
-//         //
-//         // Ok(())
-//
-//         unimplemented!()
-//     }
-//
-//     pub fn init_pipeline(build_res: &mut PipelineBuildResult) -> Result<()> {
-//         for pipe in &mut build_res.main_pipeline.pipes {
-//             if let Pipe::SimplePipe { processors, .. } = pipe {
-//                 for processor in processors {
-//                     ExchangeSink::init(processor)?;
-//                 }
-//             }
-//         }
-//
-//         for source_pipeline in &mut build_res.sources_pipelines {
-//             for pipe in &mut source_pipeline.pipes {
-//                 if let Pipe::SimplePipe { processors, .. } = pipe {
-//                     for processor in processors {
-//                         ExchangeSink::init(processor)?;
-//                     }
-//                 }
-//             }
-//         }
-//
-//         Ok(())
-//     }
-//
-//     pub fn receive_data(
-//         &mut self,
-//         source: &str,
-//         mut exchange: ServerFlightExchange,
-//     ) -> Result<JoinHandle<()>> {
-//         // if let Some(subscribe_channel) = self.subscribe_channel.remove(source) {
-//         //     let ctx = self.ctx.clone();
-//         //     let source = source.to_string();
-//         //     let target = self.executor_id.clone();
-//         //     let query_id = self.query_id.clone();
-//         //
-//         //     return Ok(self.runtime.spawn(async move {
-//         //         'fragment_loop: while let Ok(Some(flight_data)) = exchange.recv().await {
-//         //             match flight_data {
-//         //                 Err(status) => {
-//         //                     let cause = Some(ErrorCode::from(status));
-//         //                     let exchange_manager = ctx.get_exchange_manager();
-//         //                     exchange_manager.shutdown_query(&query_id, cause).ok();
-//         //                     break 'fragment_loop;
-//         //                 }
-//         //                 Ok(flight_data) => {
-//         //                     let data_packet = match DataPacket::try_from(flight_data) {
-//         //                         Ok(data_packet) => data_packet,
-//         //                         Err(error_code) => DataPacket::ErrorCode(error_code),
-//         //                     };
-//         //
-//         //                     if matches!(&data_packet, DataPacket::FinishQuery) {
-//         //                         let exchange_manager = ctx.get_exchange_manager();
-//         //                         exchange_manager.shutdown_query(&query_id, None).ok();
-//         //                         break 'fragment_loop;
-//         //                     }
-//         //
-//         //                     if let Err(_cause) = subscribe_channel.send(Ok(data_packet)).await {
-//         //                         tracing::warn!(
-//         //                             "Subscribe channel closed, source {}, target {}",
-//         //                             source,
-//         //                             target
-//         //                         );
-//         //
-//         //                         break 'fragment_loop;
-//         //                     }
-//         //                 }
-//         //             };
-//         //         }
-//         //     }));
-//         // };
-//
-//         Err(ErrorCode::LogicalError(
-//             "Cannot found fragment channel, It's a bug.",
-//         ))
-//     }
-//
-//     pub fn get_fragment_sink(&self, id: usize, endpoint: &str) -> Result<FragmentSender> {
-//         match self.publish_fragments.get(&(endpoint.to_string(), id)) {
-//             None => Err(ErrorCode::LogicalError(format!(
-//                 "Not found node {} in cluster",
-//                 endpoint
-//             ))),
-//             Some(publisher) => Ok(publisher.clone()),
-//         }
-//     }
-//
-//     // pub fn subscribe_fragment(
-//     //     &mut self,
-//     //     fragment_id: usize,
-//     //     schema: DataSchemaRef,
-//     // ) -> Result<PipelineBuildResult> {
-//     //     // TODO(Winter): we need to implement back pressure on the network side.
-//     //     let (tx, rx) = async_channel::unbounded();
-//     //
-//     //     // Register subscriber for data exchange.
-//     //     self.subscribe_fragments.insert(fragment_id, FragmentReceiver::create_unrecorded(tx));
-//     //
-//     //     // Merge pipelines if exist locally pipeline
-//     //     if let Some(mut fragment_coordinator) = self.fragments_coordinator.remove(&fragment_id) {
-//     //         let ctx = self.ctx.clone();
-//     //         fragment_coordinator.prepare_pipeline(ctx)?;
-//     //
-//     //         if fragment_coordinator.pipeline_build_res.is_none() {
-//     //             return Err(ErrorCode::LogicalError(
-//     //                 "Pipeline is none, maybe query fragment circular dependency.",
-//     //             ));
-//     //         }
-//     //
-//     //         if fragment_coordinator.data_exchange.is_none() {
-//     //             // When the root fragment and the data has been send to the coordination node,
-//     //             // we do not need to wait for the data of other nodes.
-//     //             return Ok(fragment_coordinator.pipeline_build_res.unwrap());
-//     //         }
-//     //
-//     //         let exchange_params = fragment_coordinator.create_exchange_params(self)?;
-//     //         let mut build_res = fragment_coordinator.pipeline_build_res.unwrap();
-//     //
-//     //         // Add exchange data publisher.
-//     //         ExchangeSink::via(&self.ctx, &exchange_params, &mut build_res.main_pipeline)?;
-//     //
-//     //         let data_exchange = fragment_coordinator.data_exchange.as_ref().unwrap();
-//     //
-//     //         // Add exchange data subscriber.
-//     //         if data_exchange.from_multiple_nodes() {
-//     //             ExchangeSource::via_exchange(rx, &exchange_params, &mut build_res.main_pipeline)?;
-//     //         }
-//     //
-//     //         return Ok(build_res);
-//     //     }
-//     //
-//     //     let mut pipeline = Pipeline::create();
-//     //
-//     //     let settings = self.ctx.get_settings();
-//     //     let max_threads = settings.get_max_threads()? as usize;
-//     //     let max_threads = std::cmp::max(max_threads, 1);
-//     //
-//     //     // Add exchange data subscriber.
-//     //     ExchangeSource::create_source(rx, schema, &mut pipeline, max_threads)?;
-//     //     Ok(PipelineBuildResult {
-//     //         main_pipeline: pipeline,
-//     //         sources_pipelines: vec![],
-//     //     })
-//     // }
-// }
 
 struct FragmentCoordinator {
     payload: FragmentPayload,
@@ -872,7 +572,7 @@ impl FragmentCoordinator {
         })
     }
 
-    pub fn create_exchange_params(&self, info: &QueryInfo) -> Result<ExchangeParams> {
+    pub fn create_exchange_params(&self, ctx: &Arc<QueryContext>, info: &QueryInfo) -> Result<ExchangeParams> {
         match &self.data_exchange {
             None => Err(ErrorCode::LogicalError("Cannot find data exchange.")),
             Some(DataExchange::Merge(exchange)) => {
@@ -903,7 +603,7 @@ impl FragmentCoordinator {
                     executor_id: info.current_executor.to_string(),
                     destination_ids: exchange.destination_ids.to_owned(),
                     shuffle_scatter: Arc::new(Box::new(HashFlightScatter::try_create(
-                        info.query_ctx.clone(),
+                        ctx.clone(),
                         self.payload.schema()?,
                         Some(exchange.exchange_expression.clone()),
                         exchange.destination_ids.len(),
@@ -933,21 +633,14 @@ impl FragmentCoordinator {
 
             match &self.payload {
                 FragmentPayload::PlanV1(node) => {
-                    let pipeline_builder = QueryPipelineBuilder::create(ctx.clone());
+                    let pipeline_builder = QueryPipelineBuilder::create(ctx);
                     self.pipeline_build_res = Some(pipeline_builder.finalize(node)?);
                 }
                 FragmentPayload::PlanV2(plan) => {
-                    let pipeline_builder = PipelineBuilderV2::create(ctx.clone());
+                    let pipeline_builder = PipelineBuilderV2::create(ctx);
                     self.pipeline_build_res = Some(pipeline_builder.finalize(plan)?);
                 }
             };
-
-            // let ctx = ctx.clone();
-            // let query_id = query_id.to_string();
-            // build_res.main_pipeline.set_on_finished(move |may_error| {
-            //     let exchange_manager = ctx.get_exchange_manager();
-            //     exchange_manager.on_finished_query(&query_id, may_error);
-            // });
         }
 
         Ok(())

@@ -30,7 +30,7 @@ use crate::pipelines::executor::executor_tasks::ExecutorTasksQueue;
 use crate::pipelines::executor::executor_worker_context::ExecutorWorkerContext;
 use crate::pipelines::pipeline::Pipeline;
 
-pub type FinishedCallback = Arc<Box<dyn Fn(&Option<ErrorCode>) + Send + Sync + 'static>>;
+pub type FinishedCallback = Arc<Box<dyn Fn(&Option<ErrorCode>) -> Result<()> + Send + Sync + 'static>>;
 
 pub struct PipelineExecutor {
     threads_num: usize,
@@ -89,8 +89,10 @@ impl PipelineExecutor {
             threads_num,
             Arc::new(Box::new(move |may_error| {
                 for on_finished_callback in &on_finished_callbacks {
-                    on_finished_callback(may_error);
+                    on_finished_callback(may_error)?;
                 }
+
+                Ok(())
             })),
         )
     }
@@ -154,18 +156,18 @@ impl PipelineExecutor {
 
             if let Err(error_code) = join_res {
                 let may_error = Some(error_code);
-                (self.on_finished_callback)(&may_error);
+                (self.on_finished_callback)(&may_error)?;
                 return Err(may_error.unwrap());
             }
         }
 
         if let Err(error_code) = self.graph.check_finished() {
             let may_error = Some(error_code);
-            (self.on_finished_callback)(&may_error);
+            (self.on_finished_callback)(&may_error)?;
             return Err(may_error.unwrap());
         }
 
-        (self.on_finished_callback)(&None);
+        (self.on_finished_callback)(&None)?;
         Ok(())
     }
 

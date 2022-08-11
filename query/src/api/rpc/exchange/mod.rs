@@ -22,6 +22,8 @@ mod exchange_source;
 mod exchange_transform_sink;
 mod exchange_transform;
 mod exchange_transform_source;
+mod statistics_sender;
+mod statistics_receiver;
 
 pub use data_exchange::BroadcastExchange;
 pub use data_exchange::DataExchange;
