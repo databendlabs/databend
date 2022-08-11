@@ -1,7 +1,7 @@
 [workspace]
 members = [
-    # Cmds
-    "src/cmds",
+    # Binaries
+    "src/binaries",
 
     # Common
     "src/common/arrow",

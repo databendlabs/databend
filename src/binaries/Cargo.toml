@@ -1,5 +1,5 @@
 [package]
-name = "databend-cmds"
+name = "databend-binaries"
 version = "0.1.0"
 description = "databend command line tools"
 authors = ["Databend Authors <opensource@datafuselabs.com>"]
