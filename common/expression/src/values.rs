@@ -708,9 +708,8 @@ impl Column {
             Column::Nullable(col) => {
                 let arrow_array = col.column.as_arrow();
                 match arrow_array.data_type() {
-                    ArrowType::Null | ArrowType::Extension(_, t, _) if **t == ArrowType::Null => {
-                        arrow_array
-                    }
+                    ArrowType::Null => arrow_array,
+                    ArrowType::Extension(_, t, _) if **t == ArrowType::Null => arrow_array,
                     _ => arrow_array.with_validity(Some(col.validity.clone())),
                 }
             }
