@@ -37,7 +37,7 @@ impl HashFlightScatter {
         schema: DataSchemaRef,
         expr: Option<Expression>,
         num: usize,
-    ) -> common_exception::Result<Self> {
+    ) -> Result<Self> {
         match expr {
             None => Err(ErrorCode::LogicalError(
                 "Hash flight scatter need expression.",
@@ -48,11 +48,7 @@ impl HashFlightScatter {
 }
 
 impl FlightScatter for HashFlightScatter {
-    fn execute(
-        &self,
-        data_block: &DataBlock,
-        _num: usize,
-    ) -> common_exception::Result<Vec<DataBlock>> {
+    fn execute(&self, data_block: &DataBlock, _num: usize) -> Result<Vec<DataBlock>> {
         let expression_executor = self.scatter_expression_executor.clone();
         let evaluated_data_block = expression_executor.execute(data_block)?;
         let indices = evaluated_data_block.try_column_by_name(&self.scatter_expression_name)?;

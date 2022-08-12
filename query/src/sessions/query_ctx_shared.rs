@@ -247,9 +247,10 @@ impl QueryContextShared {
             Some(query_runtime) => Ok(query_runtime.clone()),
             None => {
                 let settings = self.get_settings();
+                // To avoid possible deadlock, we should keep at least two threads.
                 let max_threads = settings.get_max_threads()? as usize;
                 let runtime = Arc::new(Runtime::with_worker_threads(
-                    max_threads,
+                    std::cmp::max(2, max_threads),
                     Some("query-ctx".to_string()),
                 )?);
                 *query_runtime = Some(runtime.clone());

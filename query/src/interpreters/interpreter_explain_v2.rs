@@ -50,7 +50,7 @@ impl Interpreter for ExplainInterpreterV2 {
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         let blocks = match &self.kind {
-            ExplainKind::Syntax => self.explain_syntax(&self.plan)?,
+            ExplainKind::Syntax | ExplainKind::Raw => self.explain_syntax_or_raw(&self.plan)?,
             ExplainKind::Pipeline => match &self.plan {
                 Plan::Query {
                     s_expr, metadata, ..
@@ -105,7 +105,7 @@ impl ExplainInterpreterV2 {
         })
     }
 
-    pub fn explain_syntax(&self, plan: &Plan) -> Result<Vec<DataBlock>> {
+    pub fn explain_syntax_or_raw(&self, plan: &Plan) -> Result<Vec<DataBlock>> {
         let result = plan.format_indent()?;
         let line_splitted_result: Vec<&str> = result.lines().collect();
         let formatted_plan = Series::from_data(line_splitted_result);

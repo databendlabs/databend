@@ -36,6 +36,7 @@ pub use share::ShareGrantObject;
 pub use share::ShareGrantObjectName;
 pub use share::ShareGrantObjectPrivilege;
 pub use share::ShareGrantObjectSeqAndId;
+pub use share::ShareGrantReplyObject;
 pub use share::ShareId;
 pub use share::ShareIdToName;
 pub use share::ShareIdent;
