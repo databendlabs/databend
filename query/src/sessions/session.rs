@@ -169,7 +169,7 @@ impl Session {
         let compress = String::from_utf8(settings.get_compression()?)
             .map_err(|_| ErrorCode::UnknownCompressionType("Compress type must be valid utf-8"))?;
         format.compression = compress.parse()?;
-
+        format.ident_case_sensitive = settings.get_unquoted_ident_case_sensitive()?;
         Ok(format)
     }
 

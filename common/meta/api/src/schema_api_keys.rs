@@ -14,8 +14,6 @@
 
 //! Defines structured keys used by SchemaApi
 
-use std::fmt::Debug;
-
 use common_meta_app::schema::CountTablesKey;
 use common_meta_app::schema::DBIdTableName;
 use common_meta_app::schema::DatabaseId;
@@ -42,18 +40,12 @@ const PREFIX_DB_ID_LIST: &str = "__fd_db_id_list";
 const PREFIX_TABLE: &str = "__fd_table";
 const PREFIX_TABLE_BY_ID: &str = "__fd_table_by_id";
 const PREFIX_TABLE_ID_LIST: &str = "__fd_table_id_list";
-pub(crate) const PREFIX_ID_GEN: &str = "__fd_id_gen";
 const PREFIX_TABLE_COUNT: &str = "__fd_table_count";
 const PREFIX_DATABASE_ID_TO_NAME: &str = "__fd_database_id_to_name";
 const PREFIX_TABLE_ID_TO_NAME: &str = "__fd_table_id_to_name";
 
-/// Key for database id generator
-#[derive(Debug)]
-pub struct DatabaseIdGen {}
-
-/// Key for table id generator
-#[derive(Debug)]
-pub struct TableIdGen {}
+pub(crate) const ID_GEN_TABLE: &str = "table_id";
+pub(crate) const ID_GEN_DATABASE: &str = "database_id";
 
 /// __fd_database/<tenant>/<db_name> -> <db_id>
 impl KVApiKey for DatabaseNameIdent {
@@ -276,30 +268,6 @@ impl KVApiKey for TableIdListKey {
             db_id,
             table_name: tb_name,
         })
-    }
-}
-
-impl KVApiKey for DatabaseIdGen {
-    const PREFIX: &'static str = PREFIX_ID_GEN;
-
-    fn to_key(&self) -> String {
-        format!("{}/database_id", Self::PREFIX)
-    }
-
-    fn from_key(_s: &str) -> Result<Self, KVApiKeyError> {
-        unimplemented!()
-    }
-}
-
-impl KVApiKey for TableIdGen {
-    const PREFIX: &'static str = PREFIX_ID_GEN;
-
-    fn to_key(&self) -> String {
-        format!("{}/table_id", Self::PREFIX)
-    }
-
-    fn from_key(_s: &str) -> Result<Self, KVApiKeyError> {
-        unimplemented!()
     }
 }
 

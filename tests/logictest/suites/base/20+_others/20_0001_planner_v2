@@ -456,123 +456,6 @@ select number+1 as a from numbers(1) group by a having a = 1;
 ----
 1
 
-
-statement ok
-create table t(a int);
-
-
-statement ok
-insert into t values(1),(2),(3);
-
-
-statement ok
-drop table if exists t1;
-
-
-statement ok
-create table t1(b float);
-
-
-statement ok
-insert into t1 values(1.0),(2.0),(3.0);
-
-
-statement ok
-drop table if exists t2;
-
-
-statement ok
-create table t2(c smallint unsigned null);
-
-
-statement ok
-insert into t2 values(1),(2),(null);
-
-
-statement query IF
-select * from t inner join t1 on t.a = t1.b order by a, b;
-
-----
-1 1.0
-2 2.0
-3 3.0
-
-
-statement query II
-select * from t inner join t2 on t.a = t2.c order by a, c;
-
-----
-1 1
-2 2
-
-
-statement query II
-select * from t inner join t2 on t.a = t2.c + 1 order by a, c;
-
-----
-2 1
-3 2
-
-
-statement query II
-select * from t inner join t2 on t.a = t2.c + 1 and t.a - 1 = t2.c order by a, c;
-
-----
-2 1
-3 2
-
-
-statement query FI
-select * from t1 inner join t on t.a = t1.b order by a, b;
-
-----
-1.0 1
-2.0 2
-3.0 3
-
-
-statement query II
-select * from t2 inner join t on t.a = t2.c order by a, c;
-
-----
-1 1
-2 2
-
-
-statement query II
-select * from t2 inner join t on t.a = t2.c + 1 order by a, c;
-
-----
-1 2
-2 3
-
-
-statement query II
-select * from t2 inner join t on t.a = t2.c + 1 and t.a - 1 = t2.c order by a, c;
-
-----
-1 2
-2 3
-
-
-statement query I
-select count(*) from numbers(1000) as t inner join numbers(1000) as t1 on t.number = t1.number;
-
-----
-1000
-
-
-statement query I
-select t.number from numbers(10000) as t inner join numbers(1000) as t1 on t.number % 1000 = t1.number order by number limit 5;
-
-----
-0
-1
-2
-3
-4
-
-
 statement query II
 SELECT number%3 as c1, number%2 as c2 FROM numbers_mt (10) order by c1 desc, c2 asc;
 
@@ -629,6 +512,8 @@ SELECT SUM(number) AS s FROM numbers_mt(10) GROUP BY number ORDER BY s;
 8
 9
 
+statement ok
+drop table if exists t3;
 
 statement ok
 create table t3(a int, b int);
@@ -688,22 +573,8 @@ select number, avg(number) c from numbers(3) group by number order by c + 1, num
 1 1.0
 2 2.0
 
-
-statement ok
-drop table t;
-
-
-statement ok
-drop table t1;
-
-
-statement ok
-drop table t2;
-
-
 statement ok
 drop table t3;
-
 
 statement query I
 select 1 + 1;
@@ -973,104 +844,6 @@ SELECT DISTINCT count(number %3) as c FROM numbers(10)  group by number % 3 ORDE
 ----
 3
 4
-
-
-statement ok
-drop table if exists t1;
-
-
-statement ok
-create table t1(a int, b int);
-
-
-statement ok
-insert into t1 values(7, 8), (3, 4), (5, 6);
-
-
-statement ok
-drop table if exists t2;
-
-
-statement ok
-create table t2(a int, d int);
-
-
-statement ok
-insert into t2 values(1, 2), (3, 4), (5, 6);
-
-
-statement query III
-select * from t1 join t2 using(a) order by t1.a, t2.a;
-
-----
-4 3 4
-6 5 6
-
-
-statement query I
-select t1.a from t1 join t2 using(a) order by t1.a, t2.a;
-
-----
-3
-5
-
-
-statement query I
-select t2.d from t1 join t2 using(a) order by t1.a, t2.a;
-
-----
-4
-6
-
-
-statement query III
-select * from t1 natural join t2 order by t1.a, t2.a;
-
-----
-4 3 4
-6 5 6
-
-
-statement ok
-drop table t1;
-
-
-statement ok
-drop table t2;
-
-
-statement ok
-create table t1(a int, b int);
-
-
-statement ok
-insert into t1 values(1, 2), (1, 3), (2, 4);
-
-
-statement ok
-create table t2(c int, d int);
-
-
-statement ok
-insert into t2 values(1, 2), (2, 6);
-
-
-statement query IIII
-select * from t2 inner join t1 on t1.a = t2.c order by a, b, c, d;
-
-----
-1 2 1 2
-1 2 1 3
-2 6 2 4
-
-
-statement ok
-drop table t1;
-
-
-statement ok
-drop table t2;
-
 
 statement query T
 select trim(leading ' ' from '      abc');
@@ -1435,108 +1208,6 @@ drop table t1;
 statement ok
 drop table t2;
 
-
-statement ok
-create table t1(a int, b int);
-
-
-statement ok
-create table t2(c int, d int);
-
-
-statement ok
-insert into t1 values(1, 2), (3 ,4), (7, 8);
-
-
-statement ok
-insert into t2 values(1, 4), (2, 3), (6, 8);
-
-
-statement query IIII
-select * from t1 right join t2 on t1.a = t2.c;
-
-----
-1 2 1 4
-NULL NULL 2 3
-NULL NULL 6 8
-
-
-statement query IIII
-select * from t1 left join t2 on t1.a = t2.c;
-
-----
-1 2 1 4
-3 4 NULL NULL
-7 8 NULL NULL
-
-
-statement query IIII
-select * from t1 left outer join t2 on t1.a = t2.c and t1.a > 3 order by a,b,c,d;
-
-----
-1 2 NULL NULL
-3 4 NULL NULL
-7 8 NULL NULL
-
-
-statement query IIII
-select * from t1 left outer join t2 on t1.a = t2.c and t2.c > 4 order by a,b,c,d;
-
-----
-1 2 NULL NULL
-3 4 NULL NULL
-7 8 NULL NULL
-
-
-statement query IIII
-select * from t1 left outer join t2 on t2.c > 4 and t1.a > 3 order by a,b,c,d;
-
-----
-1 2 NULL NULL
-3 4 NULL NULL
-7 8 6 8
-
-
-statement query IIII
-select * from t1 left outer join t2 on t1.a > 3 order by a,b,c,d;
-
-----
-1 2 NULL NULL
-3 4 NULL NULL
-7 8 1 4
-7 8 2 3
-7 8 6 8
-
-
-statement query IIII
-select * from t1 left outer join t2 on t2.c > 4 order by a,b,c,d;
-
-----
-1 2 6 8
-3 4 6 8
-7 8 6 8
-
-
-statement query IIII
-select * from t1 left outer join t2 on t1.a > t2.c order by a,b,c,d;
-
-----
-1 2 NULL NULL
-3 4 1 4
-3 4 2 3
-7 8 1 4
-7 8 2 3
-7 8 6 8
-
-
-statement ok
-drop table t1;
-
-
-statement ok
-drop table t2;
-
-
 statement ok
 create table n( a int null, b int null) ;
 
@@ -1692,30 +1363,6 @@ select * from numbers(10) where number in (select * from numbers(5)) order by nu
 3
 4
 
-
-statement ok
-create table t1_null(a int null , b int null);
-
-
-statement ok
-create table t2_null(a int null , b int null);
-
-
-statement ok
-insert into t1_null values(1, 2), (2, 3), (null, 1);
-
-
-statement ok
-insert into t2_null values(3, 4), (2, 3), (null, 2);
-
-
-statement query IIII
-select * from t1_null inner join t2_null on t1_null.a = t2_null.a;
-
-----
-2 3 2 3
-
-
 statement ok
 drop table t1;
 
@@ -1726,15 +1373,6 @@ drop table t2;
 
 statement ok
 drop table t3;
-
-
-statement ok
-drop table t1_null;
-
-
-statement ok
-drop table t2_null;
-
 
 statement query TTT
 select database(), currentDatabase(), current_database();
@@ -1863,4 +1501,3 @@ drop table t2;
 
 statement ok
 set enable_planner_v2 = 0;
-

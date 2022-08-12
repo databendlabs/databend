@@ -15,20 +15,14 @@
 use common_arrow::arrow::bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use itertools::Itertools;
-use num_traits::ToPrimitive;
 
 use crate::chunk::Chunk;
 use crate::error::Result;
 use crate::expression::Expr;
 use crate::expression::Span;
 use crate::function::FunctionContext;
-use crate::property::BooleanDomain;
 use crate::property::Domain;
-use crate::property::FloatDomain;
-use crate::property::IntDomain;
 use crate::property::NullableDomain;
-use crate::property::StringDomain;
-use crate::property::UIntDomain;
 use crate::types::any::AnyType;
 use crate::types::array::ArrayColumn;
 use crate::types::nullable::NullableColumn;
@@ -40,14 +34,14 @@ use crate::values::Scalar;
 use crate::values::Value;
 use crate::with_number_type;
 
-pub struct Evaluator {
-    pub input_columns: Chunk,
+pub struct Evaluator<'a> {
+    pub input_columns: &'a Chunk,
     pub context: FunctionContext,
 }
 
-impl Evaluator {
+impl<'a> Evaluator<'a> {
     pub fn run(&self, expr: &Expr) -> Result<Value<AnyType>> {
-        match expr {
+        let result = match expr {
             Expr::Constant { scalar, .. } => Ok(Value::Scalar(scalar.clone())),
             Expr::ColumnRef { id, .. } => Ok(self.input_columns.columns()[*id].clone()),
             Expr::FunctionCall {
@@ -110,7 +104,20 @@ impl Evaluator {
                     ))),
                 }
             }
+        };
+
+        #[cfg(debug_assertions)]
+        if result.is_err() {
+            assert_eq!(
+                ConstantFolder::new(&self.input_columns.domains())
+                    .fold(expr)
+                    .1,
+                None,
+                "domain calculation should not return any domain for expressions that are possible to fail"
+            );
         }
+
+        result
     }
 
     pub fn run_cast_scalar(
@@ -147,9 +154,9 @@ impl Evaluator {
 
             (scalar, dest_ty) => {
                 // number types
-                with_number_type!(SRC_TYPE, match scalar {
+                with_number_type!(|SRC_TYPE| match scalar {
                     Scalar::SRC_TYPE(value) => {
-                        with_number_type!(DEST_TYPE, match dest_ty {
+                        with_number_type!(|DEST_TYPE| match dest_ty {
                             DataType::DEST_TYPE => {
                                 let src_info = DataType::SRC_TYPE.number_type_info().unwrap();
                                 let dest_info = DataType::DEST_TYPE.number_type_info().unwrap();
@@ -246,9 +253,9 @@ impl Evaluator {
 
             (col, dest_ty) => {
                 // number types
-                with_number_type!(SRC_TYPE, match &col {
+                with_number_type!(|SRC_TYPE| match &col {
                     Column::SRC_TYPE(col) => {
-                        with_number_type!(DEST_TYPE, match dest_ty {
+                        with_number_type!(|DEST_TYPE| match dest_ty {
                             DataType::DEST_TYPE => {
                                 let src_info = DataType::SRC_TYPE.number_type_info().unwrap();
                                 let dest_info = DataType::DEST_TYPE.number_type_info().unwrap();
@@ -363,9 +370,9 @@ impl Evaluator {
 
             (col, dest_ty) => {
                 // number types
-                with_number_type!(SRC_TYPE, match &col {
+                with_number_type!(|SRC_TYPE| match &col {
                     Column::SRC_TYPE(col) => {
-                        with_number_type!(DEST_TYPE, match dest_ty {
+                        with_number_type!(|DEST_TYPE| match dest_ty {
                             DataType::DEST_TYPE => {
                                 let src_info = DataType::SRC_TYPE.number_type_info().unwrap();
                                 let dest_info = DataType::DEST_TYPE.number_type_info().unwrap();
@@ -411,107 +418,112 @@ impl Evaluator {
     }
 }
 
-pub struct DomainCalculator {
-    input_domains: Vec<Domain>,
+pub struct ConstantFolder<'a> {
+    input_domains: &'a [Domain],
 }
 
-impl DomainCalculator {
-    pub fn new(input_domains: Vec<Domain>) -> Self {
-        DomainCalculator { input_domains }
+impl<'a> ConstantFolder<'a> {
+    pub fn new(input_domains: &'a [Domain]) -> Self {
+        ConstantFolder { input_domains }
     }
 
-    pub fn calculate(&self, expr: &Expr) -> Result<Domain> {
+    pub fn fold(&self, expr: &Expr) -> (Expr, Option<Domain>) {
         match expr {
-            Expr::Constant { scalar, .. } => Ok(self.calculate_constant(scalar)),
-            Expr::ColumnRef { id, .. } => Ok(self.input_domains[*id].clone()),
+            Expr::Constant { scalar, .. } => (expr.clone(), Some(scalar.as_ref().domain())),
+            Expr::ColumnRef { span, id } => {
+                let domain = &self.input_domains[*id];
+                let expr = domain
+                    .as_singleton()
+                    .map(|scalar| Expr::Constant {
+                        span: span.clone(),
+                        scalar,
+                    })
+                    .unwrap_or_else(|| expr.clone());
+                (expr, Some(domain.clone()))
+            }
             Expr::Cast {
                 span,
                 expr,
                 dest_type,
             } => {
-                let domain = self.calculate(expr)?;
-                self.calculate_cast(span.clone(), &domain, dest_type)
+                let (inner_expr, inner_domain) = self.fold(expr);
+                let cast_domain = inner_domain.and_then(|inner_domain| {
+                    self.calculate_cast(span.clone(), &inner_domain, dest_type)
+                });
+                let cast_expr = cast_domain
+                    .as_ref()
+                    .and_then(Domain::as_singleton)
+                    .map(|scalar| Expr::Constant {
+                        span: span.clone(),
+                        scalar,
+                    })
+                    .unwrap_or_else(|| Expr::Cast {
+                        span: span.clone(),
+                        expr: Box::new(inner_expr),
+                        dest_type: dest_type.clone(),
+                    });
+                (cast_expr, cast_domain)
             }
             Expr::TryCast {
                 span,
                 expr,
                 dest_type,
             } => {
-                let domain = self.calculate(expr)?;
-                Ok(self.calculate_try_cast(span.clone(), &domain, dest_type))
+                let (inner_expr, inner_domain) = self.fold(expr);
+                let try_cast_domain = inner_domain.map(|inner_domain| {
+                    self.calculate_try_cast(span.clone(), &inner_domain, dest_type)
+                });
+                let try_cast_expr = try_cast_domain
+                    .as_ref()
+                    .and_then(Domain::as_singleton)
+                    .map(|scalar| Expr::Constant {
+                        span: span.clone(),
+                        scalar,
+                    })
+                    .unwrap_or_else(|| Expr::TryCast {
+                        span: span.clone(),
+                        expr: Box::new(inner_expr),
+                        dest_type: dest_type.clone(),
+                    });
+                (try_cast_expr, try_cast_domain)
             }
             Expr::FunctionCall {
+                span,
+                id,
                 function,
                 generics,
                 args,
-                ..
             } => {
-                let args_domain = args
-                    .iter()
-                    .map(|arg| self.calculate(arg))
-                    .collect::<Result<Vec<_>>>()?;
-                Ok((function.calc_domain)(&args_domain, generics))
-            }
-        }
-    }
+                let (mut args_expr, mut args_domain) = (Vec::new(), Vec::new());
 
-    pub fn calculate_constant(&self, scalar: &Scalar) -> Domain {
-        match scalar {
-            Scalar::Null => Domain::Nullable(NullableDomain {
-                has_null: true,
-                value: None,
-            }),
-            Scalar::EmptyArray => Domain::Array(None),
-            Scalar::Int8(i) => Domain::Int(IntDomain {
-                min: *i as i64,
-                max: *i as i64,
-            }),
-            Scalar::Int16(i) => Domain::Int(IntDomain {
-                min: *i as i64,
-                max: *i as i64,
-            }),
-            Scalar::Int32(i) => Domain::Int(IntDomain {
-                min: *i as i64,
-                max: *i as i64,
-            }),
-            Scalar::Int64(i) => Domain::Int(IntDomain { min: *i, max: *i }),
-            Scalar::UInt8(i) => Domain::UInt(UIntDomain {
-                min: *i as u64,
-                max: *i as u64,
-            }),
-            Scalar::UInt16(i) => Domain::UInt(UIntDomain {
-                min: *i as u64,
-                max: *i as u64,
-            }),
-            Scalar::UInt32(i) => Domain::UInt(UIntDomain {
-                min: *i as u64,
-                max: *i as u64,
-            }),
-            Scalar::UInt64(i) => Domain::UInt(UIntDomain { min: *i, max: *i }),
-            Scalar::Float32(i) => Domain::Float(FloatDomain {
-                min: *i as f64,
-                max: *i as f64,
-            }),
-            Scalar::Float64(i) => Domain::Float(FloatDomain { min: *i, max: *i }),
-            Scalar::Boolean(true) => Domain::Boolean(BooleanDomain {
-                has_false: false,
-                has_true: true,
-            }),
-            Scalar::Boolean(false) => Domain::Boolean(BooleanDomain {
-                has_false: true,
-                has_true: false,
-            }),
-            Scalar::String(s) => Domain::String(StringDomain {
-                min: s.clone(),
-                max: Some(s.clone()),
-            }),
-            Scalar::Array(array) => Domain::Array(Some(Box::new(array.domain()))),
-            Scalar::Tuple(fields) => Domain::Tuple(
-                fields
-                    .iter()
-                    .map(|field| self.calculate_constant(field))
-                    .collect(),
-            ),
+                for arg in args {
+                    let (expr, domain) = self.fold(arg);
+                    if let Some(domain) = domain {
+                        args_expr.push(expr);
+                        args_domain.push(domain);
+                    } else {
+                        return (expr, None);
+                    }
+                }
+
+                let func_domain = (function.calc_domain)(&args_domain, generics);
+                let func_expr = func_domain
+                    .as_ref()
+                    .and_then(Domain::as_singleton)
+                    .map(|scalar| Expr::Constant {
+                        span: span.clone(),
+                        scalar,
+                    })
+                    .unwrap_or_else(|| Expr::FunctionCall {
+                        span: span.clone(),
+                        id: id.clone(),
+                        function: function.clone(),
+                        generics: generics.clone(),
+                        args: args_expr,
+                    });
+
+                (func_expr, func_domain)
+            }
         }
     }
 
@@ -520,14 +532,14 @@ impl DomainCalculator {
         span: Span,
         domain: &Domain,
         dest_type: &DataType,
-    ) -> Result<Domain> {
+    ) -> Option<Domain> {
         match (domain, dest_type) {
             (
                 Domain::Nullable(NullableDomain { value: None, .. }),
                 DataType::Null | DataType::Nullable(_),
-            ) => Ok(domain.clone()),
+            ) => Some(domain.clone()),
             (Domain::Array(None), DataType::EmptyArray | DataType::Array(_)) => {
-                Ok(Domain::Array(None))
+                Some(Domain::Array(None))
             }
             (
                 Domain::Nullable(NullableDomain {
@@ -535,196 +547,52 @@ impl DomainCalculator {
                     value: Some(value),
                 }),
                 DataType::Nullable(ty),
-            ) => Ok(Domain::Nullable(NullableDomain {
+            ) => Some(Domain::Nullable(NullableDomain {
                 has_null: *has_null,
                 value: Some(Box::new(self.calculate_cast(span, value, ty)?)),
             })),
-            (domain, DataType::Nullable(ty)) => Ok(Domain::Nullable(NullableDomain {
+            (domain, DataType::Nullable(ty)) => Some(Domain::Nullable(NullableDomain {
                 has_null: false,
                 value: Some(Box::new(self.calculate_cast(span, domain, ty)?)),
             })),
-            (Domain::Array(Some(domain)), DataType::Array(ty)) => Ok(Domain::Array(Some(
+            (Domain::Array(Some(domain)), DataType::Array(ty)) => Some(Domain::Array(Some(
                 Box::new(self.calculate_cast(span, domain, ty)?),
             ))),
-            (Domain::Tuple(fields), DataType::Tuple(fields_ty)) => Ok(Domain::Tuple(
+            (Domain::Tuple(fields), DataType::Tuple(fields_ty)) => Some(Domain::Tuple(
                 fields
                     .iter()
                     .zip(fields_ty)
                     .map(|(field, ty)| self.calculate_cast(span.clone(), field, ty))
-                    .collect::<Result<Vec<_>>>()?,
+                    .collect::<Option<Vec<_>>>()?,
             )),
 
             // identical types
             (Domain::Boolean(_), DataType::Boolean) | (Domain::String(_), DataType::String) => {
-                Ok(domain.clone())
+                Some(domain.clone())
             }
 
-            // number types
-            (Domain::UInt(UIntDomain { min, max }), DataType::UInt8) => {
-                Ok(Domain::UInt(UIntDomain {
-                    min: (*min).min(u8::MAX as u64),
-                    max: (*max).min(u8::MAX as u64),
-                }))
-            }
-            (Domain::UInt(UIntDomain { min, max }), DataType::UInt16) => {
-                Ok(Domain::UInt(UIntDomain {
-                    min: (*min).min(u16::MAX as u64),
-                    max: (*max).min(u16::MAX as u64),
-                }))
-            }
-            (Domain::UInt(UIntDomain { min, max }), DataType::UInt32) => {
-                Ok(Domain::UInt(UIntDomain {
-                    min: (*min).min(u32::MAX as u64),
-                    max: (*max).min(u32::MAX as u64),
-                }))
-            }
-            (Domain::UInt(_), DataType::UInt64) => Ok(domain.clone()),
-            (Domain::UInt(UIntDomain { min, max }), DataType::Int8) => Ok(Domain::Int(IntDomain {
-                min: (*min).min(i8::MAX as u64) as i64,
-                max: (*max).min(i8::MAX as u64) as i64,
-            })),
-            (Domain::UInt(UIntDomain { min, max }), DataType::Int16) => {
-                Ok(Domain::Int(IntDomain {
-                    min: (*min).min(i16::MAX as u64) as i64,
-                    max: (*max).min(i16::MAX as u64) as i64,
-                }))
-            }
-            (Domain::UInt(UIntDomain { min, max }), DataType::Int32) => {
-                Ok(Domain::Int(IntDomain {
-                    min: (*min).min(i32::MAX as u64) as i64,
-                    max: (*max).min(i32::MAX as u64) as i64,
-                }))
-            }
-            (Domain::UInt(UIntDomain { min, max }), DataType::Int64) => {
-                Ok(Domain::Int(IntDomain {
-                    min: (*min).min(i64::MAX as u64) as i64,
-                    max: (*max).min(i64::MAX as u64) as i64,
-                }))
-            }
-            (Domain::UInt(UIntDomain { min, max }), DataType::Float32) => {
-                // Cast to f32 and then to f64 to round to the nearest f32 value.
-                Ok(Domain::Float(FloatDomain {
-                    min: *min as f32 as f64,
-                    max: *max as f32 as f64,
-                }))
-            }
-            (Domain::UInt(UIntDomain { min, max }), DataType::Float64) => {
-                Ok(Domain::Float(FloatDomain {
-                    min: *min as f64,
-                    max: *max as f64,
-                }))
-            }
+            (domain, dest_ty) => {
+                // number types
+                with_number_type!(|SRC_TYPE| match domain {
+                    Domain::SRC_TYPE(domain) => {
+                        with_number_type!(|DEST_TYPE| match dest_ty {
+                            DataType::DEST_TYPE => {
+                                let (domain, overflowing) = domain.overflow_cast();
+                                if overflowing {
+                                    return None;
+                                } else {
+                                    return Some(Domain::DEST_TYPE(domain));
+                                }
+                            }
+                            _ => (),
+                        })
+                    }
+                    _ => (),
+                });
 
-            (Domain::Int(IntDomain { min, max }), DataType::UInt8) => {
-                Ok(Domain::UInt(UIntDomain {
-                    min: (*min).clamp(0, u8::MAX as i64) as u64,
-                    max: (*max).clamp(0, u8::MAX as i64) as u64,
-                }))
+                // failure cases
+                None
             }
-            (Domain::Int(IntDomain { min, max }), DataType::UInt16) => {
-                Ok(Domain::UInt(UIntDomain {
-                    min: (*min).clamp(0, u16::MAX as i64) as u64,
-                    max: (*max).clamp(0, u16::MAX as i64) as u64,
-                }))
-            }
-            (Domain::Int(IntDomain { min, max }), DataType::UInt32) => {
-                Ok(Domain::UInt(UIntDomain {
-                    min: (*min).clamp(0, u32::MAX as i64) as u64,
-                    max: (*max).clamp(0, u32::MAX as i64) as u64,
-                }))
-            }
-            (Domain::Int(IntDomain { min, max }), DataType::UInt64) => {
-                Ok(Domain::UInt(UIntDomain {
-                    min: (*min).max(0) as u64,
-                    max: (*max).max(0) as u64,
-                }))
-            }
-            (Domain::Int(IntDomain { min, max }), DataType::Int8) => Ok(Domain::Int(IntDomain {
-                min: (*min).clamp(i8::MIN as i64, i8::MAX as i64),
-                max: (*max).clamp(i8::MIN as i64, i8::MAX as i64),
-            })),
-            (Domain::Int(IntDomain { min, max }), DataType::Int16) => Ok(Domain::Int(IntDomain {
-                min: (*min).clamp(i16::MIN as i64, i16::MAX as i64),
-                max: (*max).clamp(i16::MIN as i64, i16::MAX as i64),
-            })),
-            (Domain::Int(IntDomain { min, max }), DataType::Int32) => Ok(Domain::Int(IntDomain {
-                min: (*min).clamp(i32::MIN as i64, i32::MAX as i64),
-                max: (*max).clamp(i32::MIN as i64, i32::MAX as i64),
-            })),
-            (Domain::Int(_), DataType::Int64) => Ok(domain.clone()),
-            (Domain::Int(IntDomain { min, max }), DataType::Float32) => {
-                // Cast to f32 and then to f64 to round to the nearest f32 value.
-                Ok(Domain::Float(FloatDomain {
-                    min: (*min) as f32 as f64,
-                    max: (*max) as f32 as f64,
-                }))
-            }
-            (Domain::Int(IntDomain { min, max }), DataType::Float64) => {
-                Ok(Domain::Float(FloatDomain {
-                    min: (*min) as f64,
-                    max: (*max) as f64,
-                }))
-            }
-
-            (Domain::Float(FloatDomain { min, max }), DataType::UInt8) => {
-                Ok(Domain::UInt(UIntDomain {
-                    min: (*min).round().clamp(0.0, u8::MAX as f64) as u64,
-                    max: (*max).round().clamp(0.0, u8::MAX as f64) as u64,
-                }))
-            }
-            (Domain::Float(FloatDomain { min, max }), DataType::UInt16) => {
-                Ok(Domain::UInt(UIntDomain {
-                    min: (*min).round().clamp(0.0, u16::MAX as f64) as u64,
-                    max: (*max).round().clamp(0.0, u16::MAX as f64) as u64,
-                }))
-            }
-            (Domain::Float(FloatDomain { min, max }), DataType::UInt32) => {
-                Ok(Domain::UInt(UIntDomain {
-                    min: (*min).round().clamp(0.0, u32::MAX as f64) as u64,
-                    max: (*max).round().clamp(0.0, u32::MAX as f64) as u64,
-                }))
-            }
-            (Domain::Float(FloatDomain { min, max }), DataType::UInt64) => {
-                Ok(Domain::UInt(UIntDomain {
-                    min: (*min).round().clamp(0.0, u64::MAX as f64) as u64,
-                    max: (*max).round().clamp(0.0, u64::MAX as f64) as u64,
-                }))
-            }
-            (Domain::Float(FloatDomain { min, max }), DataType::Int8) => {
-                Ok(Domain::Int(IntDomain {
-                    min: (*min).round().clamp(i8::MIN as f64, i8::MAX as f64) as i64,
-                    max: (*max).round().clamp(i8::MIN as f64, i8::MAX as f64) as i64,
-                }))
-            }
-            (Domain::Float(FloatDomain { min, max }), DataType::Int16) => {
-                Ok(Domain::Int(IntDomain {
-                    min: (*min).round().clamp(i16::MIN as f64, i16::MAX as f64) as i64,
-                    max: (*max).round().clamp(i16::MIN as f64, i16::MAX as f64) as i64,
-                }))
-            }
-            (Domain::Float(FloatDomain { min, max }), DataType::Int32) => {
-                Ok(Domain::Int(IntDomain {
-                    min: (*min).round().clamp(i32::MIN as f64, i32::MAX as f64) as i64,
-                    max: (*max).round().clamp(i32::MIN as f64, i32::MAX as f64) as i64,
-                }))
-            }
-            (Domain::Float(FloatDomain { min, max }), DataType::Int64) => {
-                Ok(Domain::Int(IntDomain {
-                    min: (*min).round().clamp(i64::MIN as f64, i64::MAX as f64) as i64,
-                    max: (*max).round().clamp(i64::MIN as f64, i64::MAX as f64) as i64,
-                }))
-            }
-            (Domain::Float(FloatDomain { min, max }), DataType::Float32) => {
-                Ok(Domain::Float(FloatDomain {
-                    // Cast to f32 and back to f64 to round to the nearest f32 value.
-                    min: (*min) as f32 as f64,
-                    max: (*max) as f32 as f64,
-                }))
-            }
-            (Domain::Float(_), DataType::Float64) => Ok(domain.clone()),
-
-            // failure cases
-            (domain, dest_ty) => Err((span, (format!("unable to cast {domain} to {dest_ty}",)))),
         }
     }
 
@@ -783,154 +651,30 @@ impl DomainCalculator {
                 })
             }
 
-            // numeric types
-            (
-                Domain::UInt(_),
-                DataType::UInt8 | DataType::UInt16 | DataType::UInt32 | DataType::UInt64,
-            ) => {
-                let new_domain = self.calculate_cast(span, domain, inner_type).unwrap();
-                Domain::Nullable(NullableDomain {
-                    has_null: *domain != new_domain,
-                    value: Some(Box::new(new_domain)),
-                })
-            }
-            (
-                Domain::UInt(UIntDomain { min, max }),
-                DataType::Int8 | DataType::Int16 | DataType::Int32 | DataType::Int64,
-            ) => {
-                let new_domain = self
-                    .calculate_cast(span, domain, inner_type)
-                    .unwrap()
-                    .into_int()
-                    .unwrap();
-                let has_null = min.to_i64().filter(|min| *min == new_domain.min).is_none()
-                    || max.to_i64().filter(|max| *max == new_domain.max).is_none();
-                Domain::Nullable(NullableDomain {
-                    has_null,
-                    value: Some(Box::new(Domain::Int(new_domain))),
-                })
-            }
-            (Domain::UInt(UIntDomain { min, max }), DataType::Float32 | DataType::Float64) => {
-                let new_domain = self
-                    .calculate_cast(span, domain, inner_type)
-                    .unwrap()
-                    .into_float()
-                    .unwrap();
-                let has_null = (*min)
-                    .to_f64()
-                    .filter(|min| *min == new_domain.min)
-                    .is_none()
-                    || (*max)
-                        .to_f64()
-                        .filter(|max| *max == new_domain.max)
-                        .is_none();
-                Domain::Nullable(NullableDomain {
-                    has_null,
-                    value: Some(Box::new(Domain::Float(new_domain))),
-                })
-            }
-            (
-                Domain::Int(IntDomain { min, max }),
-                DataType::UInt8 | DataType::UInt16 | DataType::UInt32 | DataType::UInt64,
-            ) => {
-                let new_domain = self
-                    .calculate_cast(span, domain, inner_type)
-                    .unwrap()
-                    .into_u_int()
-                    .unwrap();
-                let has_null = min.to_u64().filter(|min| *min == new_domain.min).is_none()
-                    || max.to_u64().filter(|max| *max == new_domain.max).is_none();
-                Domain::Nullable(NullableDomain {
-                    has_null,
-                    value: Some(Box::new(Domain::UInt(new_domain))),
-                })
-            }
-            (
-                Domain::Int(_),
-                DataType::Int8 | DataType::Int16 | DataType::Int32 | DataType::Int64,
-            ) => {
-                let new_domain = self.calculate_cast(span, domain, inner_type).unwrap();
-                Domain::Nullable(NullableDomain {
-                    has_null: *domain != new_domain,
-                    value: Some(Box::new(new_domain)),
-                })
-            }
-            (Domain::Int(IntDomain { min, max }), DataType::Float32 | DataType::Float64) => {
-                let new_domain = self
-                    .calculate_cast(span, domain, inner_type)
-                    .unwrap()
-                    .into_float()
-                    .unwrap();
-                let has_null = (*min)
-                    .to_f64()
-                    .filter(|min| *min == new_domain.min)
-                    .is_none()
-                    || (*max)
-                        .to_f64()
-                        .filter(|max| *max == new_domain.max)
-                        .is_none();
-                Domain::Nullable(NullableDomain {
-                    has_null,
-                    value: Some(Box::new(Domain::Float(new_domain))),
-                })
-            }
-            (
-                Domain::Float(FloatDomain { min, max }),
-                DataType::UInt8 | DataType::UInt16 | DataType::UInt32 | DataType::UInt64,
-            ) => {
-                let new_domain = self
-                    .calculate_cast(span, domain, inner_type)
-                    .unwrap()
-                    .into_u_int()
-                    .unwrap();
-                let has_null = (*min)
-                    .to_u64()
-                    .filter(|min| *min == new_domain.min)
-                    .is_none()
-                    || (*max)
-                        .to_u64()
-                        .filter(|max| *max == new_domain.max)
-                        .is_none();
-                Domain::Nullable(NullableDomain {
-                    has_null,
-                    value: Some(Box::new(Domain::UInt(new_domain))),
-                })
-            }
-            (
-                Domain::Float(FloatDomain { min, max }),
-                DataType::Int8 | DataType::Int16 | DataType::Int32 | DataType::Int64,
-            ) => {
-                let new_domain = self
-                    .calculate_cast(span, domain, inner_type)
-                    .unwrap()
-                    .into_int()
-                    .unwrap();
-                let has_null = (*min)
-                    .to_i64()
-                    .filter(|min| *min == new_domain.min)
-                    .is_none()
-                    || (*max)
-                        .to_i64()
-                        .filter(|max| *max == new_domain.max)
-                        .is_none();
-                Domain::Nullable(NullableDomain {
-                    has_null,
-                    value: Some(Box::new(Domain::Int(new_domain))),
-                })
-            }
-            (Domain::Float(_), DataType::Float32 | DataType::Float64) => {
-                let new_domain = self.calculate_cast(span, domain, inner_type).unwrap();
-                Domain::Nullable(NullableDomain {
-                    has_null: false,
-                    value: Some(Box::new(new_domain)),
-                })
-            }
+            (domain, dest_ty) => {
+                // number types
+                with_number_type!(|SRC_TYPE| match domain {
+                    Domain::SRC_TYPE(domain) => {
+                        with_number_type!(|DEST_TYPE| match dest_ty {
+                            DataType::DEST_TYPE => {
+                                let (domain, overflowing) = domain.overflow_cast();
+                                return Domain::Nullable(NullableDomain {
+                                    has_null: overflowing,
+                                    value: Some(Box::new(Domain::DEST_TYPE(domain))),
+                                });
+                            }
+                            _ => (),
+                        })
+                    }
+                    _ => (),
+                });
 
-            // failure cases
-            _ => Domain::Nullable(NullableDomain {
-                has_null: true,
-                value: None,
-            }),
+                // failure cases
+                Domain::Nullable(NullableDomain {
+                    has_null: true,
+                    value: None,
+                })
+            }
         }
     }
 }

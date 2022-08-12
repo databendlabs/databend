@@ -458,7 +458,7 @@ impl PipelineBuilder {
     pub fn build_exchange_source(&mut self, exchange_source: &ExchangeSource) -> Result<()> {
         let exchange_manager = self.ctx.get_exchange_manager();
         let build_res = exchange_manager.get_fragment_source(
-            exchange_source.query_id.clone(),
+            &exchange_source.query_id,
             exchange_source.source_fragment_id,
             exchange_source.schema.clone(),
         )?;

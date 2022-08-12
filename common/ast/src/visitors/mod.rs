@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,18 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod tenant_tables;
+mod visitor;
+mod visitor_mut;
+mod walk;
+mod walk_mut;
 
-use crate::procedures::stats::tenant_tables::TenantTablesProcedure;
-use crate::procedures::ProcedureFactory;
-
-pub struct StatsProcedure;
-
-impl StatsProcedure {
-    pub fn register(factory: &mut ProcedureFactory) {
-        factory.register(
-            "stats$tenant_tables",
-            Box::new(TenantTablesProcedure::try_create),
-        );
-    }
-}
+pub use visitor::Visitor;
+pub use visitor_mut::VisitorMut;
+pub use walk::*;
+pub use walk_mut::*;

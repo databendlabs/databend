@@ -25,6 +25,7 @@ mod util;
 
 use std::sync::Arc;
 
+use common_ast::ast::ExplainKind;
 use common_exception::Result;
 pub use heuristic::HeuristicOptimizer;
 pub use heuristic::DEFAULT_REWRITE_RULES;
@@ -83,10 +84,15 @@ pub fn optimize(
             metadata,
             rewrite_kind,
         }),
-        Plan::Explain { kind, plan } => Ok(Plan::Explain {
-            kind,
-            plan: Box::new(optimize(ctx, opt_ctx, *plan)?),
-        }),
+        Plan::Explain { kind, plan } => {
+            if kind == ExplainKind::Raw {
+                return Ok(Plan::Explain { kind, plan });
+            }
+            Ok(Plan::Explain {
+                kind,
+                plan: Box::new(optimize(ctx, opt_ctx, *plan)?),
+            })
+        }
         Plan::Copy(v) => {
             Ok(Plan::Copy(Box::new(match *v {
                 CopyPlanV2::IntoStage {

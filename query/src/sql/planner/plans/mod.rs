@@ -203,6 +203,7 @@ pub enum Plan {
     DropShare(Box<DropSharePlan>),
     GrantShareObject(Box<GrantShareObjectPlan>),
     RevokeShareObject(Box<RevokeShareObjectPlan>),
+    AlterShareTenants(Box<AlterShareTenantsPlan>),
 }
 
 #[derive(Clone)]
@@ -277,6 +278,7 @@ impl Display for Plan {
             Plan::DropShare(_) => write!(f, "DropShare"),
             Plan::GrantShareObject(_) => write!(f, "GrantShareObject"),
             Plan::RevokeShareObject(_) => write!(f, "RevokeShareObject"),
+            Plan::AlterShareTenants(_) => write!(f, "AlterShareTenants"),
         }
     }
 }
@@ -343,6 +345,7 @@ impl Plan {
             Plan::DropShare(plan) => plan.schema(),
             Plan::GrantShareObject(plan) => plan.schema(),
             Plan::RevokeShareObject(plan) => plan.schema(),
+            Plan::AlterShareTenants(plan) => plan.schema(),
         }
     }
 }

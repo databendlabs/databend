@@ -1,8 +1,7 @@
 statement ok
 drop table if exists t1 all;
 
-statement ok
-set enable_planner_v2 = 1;
+
 
 statement ok
 create table t1(a integer, b integer, c integer, d integer, e integer);

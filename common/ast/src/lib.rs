@@ -20,7 +20,16 @@ pub use error::DisplayError;
 pub use error::Error;
 pub use error::ErrorKind;
 
+mod visitors;
+pub use visitors::walk_expr;
+pub use visitors::walk_expr_mut;
+pub use visitors::walk_query;
+pub use visitors::walk_query_mut;
+pub use visitors::Visitor;
+pub use visitors::VisitorMut;
+
 mod input;
+pub use input::Dialect;
 pub use input::Input;
 
 mod util;

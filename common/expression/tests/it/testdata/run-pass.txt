@@ -1,7 +1,17 @@
 ast            : true AND false
 raw expr       : and(true, false)
 checked expr   : and<Boolean, Boolean>(true, false)
+optimized expr : false
 output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : CAST(false AS BOOLEAN NULL)
+raw expr       : CAST(false AS Boolean NULL)
+checked expr   : CAST(false AS Boolean NULL)
+optimized expr : false
+output type    : Boolean NULL
 output domain  : {FALSE}
 output         : false
 
@@ -9,6 +19,7 @@ output         : false
 ast            : null AND false
 raw expr       : and(NULL, false)
 checked expr   : and<NULL, Boolean NULL>(NULL, CAST(false AS Boolean NULL))
+optimized expr : NULL
 output type    : NULL
 output domain  : {NULL}
 output         : NULL
@@ -16,7 +27,8 @@ output         : NULL
 
 ast            : plus(a, 10)
 raw expr       : plus(ColumnRef(0)::UInt8 NULL, 10_u8)
-checked expr   : plus<Int16 NULL, Int16 NULL>(CAST(ColumnRef(0) AS Int16 NULL), CAST(10 AS Int16 NULL))
+checked expr   : plus<Int16 NULL, Int16 NULL>(CAST(ColumnRef(0) AS Int16 NULL), CAST(10_u8 AS Int16 NULL))
+optimized expr : plus<Int16 NULL, Int16 NULL>(CAST(ColumnRef(0) AS Int16 NULL), 10_i16)
 evaluation:
 +--------+--------------------+--------------------+
 |        | a                  | Output             |
@@ -62,6 +74,7 @@ evaluation (internal):
 ast            : plus(a, b)
 raw expr       : plus(ColumnRef(0)::UInt8 NULL, ColumnRef(1)::NULL)
 checked expr   : plus<Int16 NULL, NULL>(CAST(ColumnRef(0) AS Int16 NULL), ColumnRef(1))
+optimized expr : NULL
 output type    : NULL
 output domain  : {NULL}
 output         : NULL
@@ -69,7 +82,8 @@ output         : NULL
 
 ast            : minus(a, 10)
 raw expr       : minus(ColumnRef(0)::UInt8 NULL, 10_u8)
-checked expr   : minus<Int32 NULL, Int32 NULL>(CAST(ColumnRef(0) AS Int32 NULL), CAST(10 AS Int32 NULL))
+checked expr   : minus<Int32 NULL, Int32 NULL>(CAST(ColumnRef(0) AS Int32 NULL), CAST(10_u8 AS Int32 NULL))
+optimized expr : minus<Int32 NULL, Int32 NULL>(CAST(ColumnRef(0) AS Int32 NULL), 10_i32)
 evaluation:
 +--------+--------------------+------------------+
 |        | a                  | Output           |
@@ -115,6 +129,7 @@ evaluation (internal):
 ast            : minus(a, b)
 raw expr       : minus(ColumnRef(0)::UInt8 NULL, ColumnRef(1)::NULL)
 checked expr   : minus<Int32 NULL, NULL>(CAST(ColumnRef(0) AS Int32 NULL), ColumnRef(1))
+optimized expr : NULL
 output type    : NULL
 output domain  : {NULL}
 output         : NULL
@@ -122,17 +137,18 @@ output         : NULL
 
 ast            : multiply(a, 10)
 raw expr       : multiply(ColumnRef(0)::UInt8 NULL, 10_u8)
-checked expr   : multiply<Int64 NULL, Int64 NULL>(CAST(ColumnRef(0) AS Int64 NULL), CAST(10 AS Int64 NULL))
+checked expr   : multiply<Int64 NULL, Int64 NULL>(CAST(ColumnRef(0) AS Int64 NULL), CAST(10_u8 AS Int64 NULL))
+optimized expr : multiply<Int64 NULL, Int64 NULL>(CAST(ColumnRef(0) AS Int64 NULL), 10_i64)
 evaluation:
-+--------+--------------------+-------------------------------------------------------+
-|        | a                  | Output                                                |
-+--------+--------------------+-------------------------------------------------------+
-| Type   | UInt8 NULL         | Int64 NULL                                            |
-| Domain | {10..=12} ∪ {NULL} | {-9223372036854775808..=9223372036854775807} ∪ {NULL} |
-| Row 0  | NULL               | NULL                                                  |
-| Row 1  | 11                 | 110                                                   |
-| Row 2  | NULL               | NULL                                                  |
-+--------+--------------------+-------------------------------------------------------+
++--------+--------------------+------------+
+|        | a                  | Output     |
++--------+--------------------+------------+
+| Type   | UInt8 NULL         | Int64 NULL |
+| Domain | {10..=12} ∪ {NULL} | Unknown    |
+| Row 0  | NULL               | NULL       |
+| Row 1  | 11                 | 110        |
+| Row 2  | NULL               | NULL       |
++--------+--------------------+------------+
 evaluation (internal):
 +--------+-------------------------------------------------------------------------------------+
 | Column | Data                                                                                |
@@ -146,15 +162,15 @@ ast            : multiply(a, b)
 raw expr       : multiply(ColumnRef(0)::UInt16 NULL, ColumnRef(1)::Int16 NULL)
 checked expr   : multiply<Int64 NULL, Int64 NULL>(CAST(ColumnRef(0) AS Int64 NULL), CAST(ColumnRef(1) AS Int64 NULL))
 evaluation:
-+--------+--------------------+------------------+-------------------------------------------------------+
-|        | a                  | b                | Output                                                |
-+--------+--------------------+------------------+-------------------------------------------------------+
-| Type   | UInt16 NULL        | Int16 NULL       | Int64 NULL                                            |
-| Domain | {10..=12} ∪ {NULL} | {1..=3} ∪ {NULL} | {-9223372036854775808..=9223372036854775807} ∪ {NULL} |
-| Row 0  | NULL               | NULL             | NULL                                                  |
-| Row 1  | 11                 | 2                | 22                                                    |
-| Row 2  | NULL               | 3                | NULL                                                  |
-+--------+--------------------+------------------+-------------------------------------------------------+
++--------+--------------------+------------------+------------+
+|        | a                  | b                | Output     |
++--------+--------------------+------------------+------------+
+| Type   | UInt16 NULL        | Int16 NULL       | Int64 NULL |
+| Domain | {10..=12} ∪ {NULL} | {1..=3} ∪ {NULL} | Unknown    |
+| Row 0  | NULL               | NULL             | NULL       |
+| Row 1  | 11                 | 2                | 22         |
+| Row 2  | NULL               | 3                | NULL       |
++--------+--------------------+------------------+------------+
 evaluation (internal):
 +--------+-----------------------------------------------------------------------------------+
 | Column | Data                                                                              |
@@ -169,15 +185,15 @@ ast            : multiply(a, b)
 raw expr       : multiply(ColumnRef(0)::UInt32 NULL, ColumnRef(1)::Int32 NULL)
 checked expr   : multiply<Int64 NULL, Int64 NULL>(CAST(ColumnRef(0) AS Int64 NULL), CAST(ColumnRef(1) AS Int64 NULL))
 evaluation:
-+--------+--------------------+------------------+-------------------------------------------------------+
-|        | a                  | b                | Output                                                |
-+--------+--------------------+------------------+-------------------------------------------------------+
-| Type   | UInt32 NULL        | Int32 NULL       | Int64 NULL                                            |
-| Domain | {10..=12} ∪ {NULL} | {1..=3} ∪ {NULL} | {-9223372036854775808..=9223372036854775807} ∪ {NULL} |
-| Row 0  | NULL               | NULL             | NULL                                                  |
-| Row 1  | 11                 | 2                | 22                                                    |
-| Row 2  | NULL               | 3                | NULL                                                  |
-+--------+--------------------+------------------+-------------------------------------------------------+
++--------+--------------------+------------------+------------+
+|        | a                  | b                | Output     |
++--------+--------------------+------------------+------------+
+| Type   | UInt32 NULL        | Int32 NULL       | Int64 NULL |
+| Domain | {10..=12} ∪ {NULL} | {1..=3} ∪ {NULL} | Unknown    |
+| Row 0  | NULL               | NULL             | NULL       |
+| Row 1  | 11                 | 2                | 22         |
+| Row 2  | NULL               | 3                | NULL       |
++--------+--------------------+------------------+------------+
 evaluation (internal):
 +--------+-----------------------------------------------------------------------------------+
 | Column | Data                                                                              |
@@ -191,6 +207,7 @@ evaluation (internal):
 ast            : multiply(a, b)
 raw expr       : multiply(ColumnRef(0)::UInt8 NULL, ColumnRef(1)::NULL)
 checked expr   : multiply<Int64 NULL, NULL>(CAST(ColumnRef(0) AS Int64 NULL), ColumnRef(1))
+optimized expr : NULL
 output type    : NULL
 output domain  : {NULL}
 output         : NULL
@@ -198,17 +215,18 @@ output         : NULL
 
 ast            : divide(a, 10)
 raw expr       : divide(ColumnRef(0)::UInt8 NULL, 10_u8)
-checked expr   : divide<Float32 NULL, Float32 NULL>(CAST(ColumnRef(0) AS Float32 NULL), CAST(10 AS Float32 NULL))
+checked expr   : divide<Float32 NULL, Float32 NULL>(CAST(ColumnRef(0) AS Float32 NULL), CAST(10_u8 AS Float32 NULL))
+optimized expr : divide<Float32 NULL, Float32 NULL>(CAST(ColumnRef(0) AS Float32 NULL), 10.0_f32)
 evaluation:
-+--------+--------------------+-----------------------+
-|        | a                  | Output                |
-+--------+--------------------+-----------------------+
-| Type   | UInt8 NULL         | Float32 NULL          |
-| Domain | {10..=12} ∪ {NULL} | {-inf..=inf} ∪ {NULL} |
-| Row 0  | NULL               | NULL                  |
-| Row 1  | 11                 | 1.1                   |
-| Row 2  | NULL               | NULL                  |
-+--------+--------------------+-----------------------+
++--------+--------------------+--------------+
+|        | a                  | Output       |
++--------+--------------------+--------------+
+| Type   | UInt8 NULL         | Float32 NULL |
+| Domain | {10..=12} ∪ {NULL} | Unknown      |
+| Row 0  | NULL               | NULL         |
+| Row 1  | 11                 | 1.1          |
+| Row 2  | NULL               | NULL         |
++--------+--------------------+--------------+
 evaluation (internal):
 +--------+---------------------------------------------------------------------------------------+
 | Column | Data                                                                                  |
@@ -222,15 +240,15 @@ ast            : divide(a, b)
 raw expr       : divide(ColumnRef(0)::UInt16 NULL, ColumnRef(1)::Int16 NULL)
 checked expr   : divide<Float32 NULL, Float32 NULL>(CAST(ColumnRef(0) AS Float32 NULL), CAST(ColumnRef(1) AS Float32 NULL))
 evaluation:
-+--------+--------------------+------------------+-----------------------+
-|        | a                  | b                | Output                |
-+--------+--------------------+------------------+-----------------------+
-| Type   | UInt16 NULL        | Int16 NULL       | Float32 NULL          |
-| Domain | {10..=12} ∪ {NULL} | {1..=3} ∪ {NULL} | {-inf..=inf} ∪ {NULL} |
-| Row 0  | NULL               | NULL             | NULL                  |
-| Row 1  | 11                 | 2                | 5.5                   |
-| Row 2  | NULL               | 3                | NULL                  |
-+--------+--------------------+------------------+-----------------------+
++--------+--------------------+------------------+--------------+
+|        | a                  | b                | Output       |
++--------+--------------------+------------------+--------------+
+| Type   | UInt16 NULL        | Int16 NULL       | Float32 NULL |
+| Domain | {10..=12} ∪ {NULL} | {1..=3} ∪ {NULL} | Unknown      |
+| Row 0  | NULL               | NULL             | NULL         |
+| Row 1  | 11                 | 2                | 5.5          |
+| Row 2  | NULL               | 3                | NULL         |
++--------+--------------------+------------------+--------------+
 evaluation (internal):
 +--------+----------------------------------------------------------------------------------------+
 | Column | Data                                                                                   |
@@ -244,6 +262,7 @@ evaluation (internal):
 ast            : divide(a, b)
 raw expr       : divide(ColumnRef(0)::UInt8 NULL, ColumnRef(1)::NULL)
 checked expr   : divide<Float32 NULL, NULL>(CAST(ColumnRef(0) AS Float32 NULL), ColumnRef(1))
+optimized expr : NULL
 output type    : NULL
 output domain  : {NULL}
 output         : NULL
@@ -251,7 +270,8 @@ output         : NULL
 
 ast            : avg(a, 10)
 raw expr       : avg(ColumnRef(0)::UInt8 NULL, 10_u8)
-checked expr   : avg<Float64 NULL, Float64 NULL>(CAST(ColumnRef(0) AS Float64 NULL), CAST(10 AS Float64 NULL))
+checked expr   : avg<Float64 NULL, Float64 NULL>(CAST(ColumnRef(0) AS Float64 NULL), CAST(10_u8 AS Float64 NULL))
+optimized expr : avg<Float64 NULL, Float64 NULL>(CAST(ColumnRef(0) AS Float64 NULL), 10.0_f64)
 evaluation:
 +--------+--------------------+------------------------+
 |        | a                  | Output                 |
@@ -366,6 +386,7 @@ evaluation (internal):
 ast            : multiply(a, b)
 raw expr       : multiply(ColumnRef(0)::Int8 NULL, ColumnRef(1)::NULL)
 checked expr   : multiply<Int64 NULL, NULL>(CAST(ColumnRef(0) AS Int64 NULL), ColumnRef(1))
+optimized expr : NULL
 output type    : NULL
 output domain  : {NULL}
 output         : NULL
@@ -396,6 +417,7 @@ evaluation (internal):
 ast            : NOT a
 raw expr       : not(ColumnRef(0)::NULL)
 checked expr   : not<NULL>(ColumnRef(0))
+optimized expr : NULL
 output type    : NULL
 output domain  : {NULL}
 output         : NULL
@@ -403,7 +425,8 @@ output         : NULL
 
 ast            : least(10, CAST(20 as Int8), 30, 40)
 raw expr       : least(10_u8, CAST(20_u8 AS Int8), 30_u8, 40_u8)
-checked expr   : least<Int16, Int16, Int16, Int16>(CAST(10 AS Int16), CAST(CAST(20 AS Int8) AS Int16), CAST(30 AS Int16), CAST(40 AS Int16))
+checked expr   : least<Int16, Int16, Int16, Int16>(CAST(10_u8 AS Int16), CAST(CAST(20_u8 AS Int8) AS Int16), CAST(30_u8 AS Int16), CAST(40_u8 AS Int16))
+optimized expr : 10_i16
 output type    : Int16
 output domain  : {10..=10}
 output         : 10
@@ -412,6 +435,7 @@ output         : 10
 ast            : create_tuple(null, true)
 raw expr       : create_tuple(NULL, true)
 checked expr   : create_tuple<NULL, Boolean>(NULL, true)
+optimized expr : (NULL, true)
 output type    : (NULL, Boolean)
 output domain  : ({NULL}, {TRUE})
 output         : (NULL, true)
@@ -470,6 +494,7 @@ evaluation (internal):
 ast            : create_array()
 raw expr       : create_array()
 checked expr   : create_array<>()
+optimized expr : []
 output type    : Array(Nothing)
 output domain  : []
 output         : []
@@ -478,6 +503,7 @@ output         : []
 ast            : create_array(null, true)
 raw expr       : create_array(NULL, true)
 checked expr   : create_array<T0=Boolean NULL><T0, T0>(CAST(NULL AS Boolean NULL), CAST(true AS Boolean NULL))
+optimized expr : create_array<T0=Boolean NULL><T0, T0>(NULL, true)
 output type    : Array(Boolean NULL)
 output domain  : [{TRUE} ∪ {NULL}]
 output         : [NULL, true]
@@ -511,6 +537,7 @@ evaluation (internal):
 ast            : create_array(create_array(a, b), null, null)
 raw expr       : create_array(create_array(ColumnRef(0)::Int16, ColumnRef(1)::Int16), NULL, NULL)
 checked expr   : create_array<T0=Array(Int16) NULL><T0, T0, T0>(CAST(create_array<T0=Int16><T0, T0>(ColumnRef(0), ColumnRef(1)) AS Array(Int16) NULL), CAST(NULL AS Array(Int16) NULL), CAST(NULL AS Array(Int16) NULL))
+optimized expr : create_array<T0=Array(Int16) NULL><T0, T0, T0>(CAST(create_array<T0=Int16><T0, T0>(ColumnRef(0), ColumnRef(1)) AS Array(Int16) NULL), NULL, NULL)
 evaluation:
 +--------+---------+---------+--------------------------+
 |        | a       | b       | Output                   |
@@ -537,17 +564,17 @@ ast            : get(a, b)
 raw expr       : get(ColumnRef(0)::Array(Int16), ColumnRef(1)::UInt8)
 checked expr   : get<T0=Int16><Array(T0), Int16>(ColumnRef(0), CAST(ColumnRef(1) AS Int16))
 evaluation:
-+--------+----------------------------------------------------------------------------------+---------+----------+
-|        | a                                                                                | b       | Output   |
-+--------+----------------------------------------------------------------------------------+---------+----------+
-| Type   | Array(Int16)                                                                     | UInt8   | Int16    |
-| Domain | [{0..=99}]                                                                       | {0..=4} | {0..=99} |
-| Row 0  | [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]           | 0       | 0        |
-| Row 1  | [20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39] | 1       | 21       |
-| Row 2  | [40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59] | 2       | 42       |
-| Row 3  | [60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79] | 3       | 63       |
-| Row 4  | [80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99] | 4       | 84       |
-+--------+----------------------------------------------------------------------------------+---------+----------+
++--------+----------------------------------------------------------------------------------+---------+---------+
+|        | a                                                                                | b       | Output  |
++--------+----------------------------------------------------------------------------------+---------+---------+
+| Type   | Array(Int16)                                                                     | UInt8   | Int16   |
+| Domain | [{0..=99}]                                                                       | {0..=4} | Unknown |
+| Row 0  | [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]           | 0       | 0       |
+| Row 1  | [20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39] | 1       | 21      |
+| Row 2  | [40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59] | 2       | 42      |
+| Row 3  | [60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79] | 3       | 63      |
+| Row 4  | [80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99] | 4       | 84      |
++--------+----------------------------------------------------------------------------------+---------+---------+
 evaluation (internal):
 +--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
@@ -566,7 +593,7 @@ evaluation:
 |        | a                                                                                                              | b       | Output               |
 +--------+----------------------------------------------------------------------------------------------------------------+---------+----------------------+
 | Type   | Array(Array(Int16))                                                                                            | UInt8   | Array(Int16)         |
-| Domain | [[{0..=99}]]                                                                                                   | {0..=4} | [{0..=99}]           |
+| Domain | [[{0..=99}]]                                                                                                   | {0..=4} | Unknown              |
 | Row 0  | [[0, 1, 2, 3, 4], [5, 6, 7, 8, 9], [10, 11, 12, 13, 14], [15, 16, 17, 18, 19]]                                 | 0       | [0, 1, 2, 3, 4]      |
 | Row 1  | [[20, 21, 22, 23, 24], [25, 26, 27, 28, 29], [30, 31, 32, 33, 34], [35, 36, 37, 38, 39]]                       | 1       | [25, 26, 27, 28, 29] |
 | Row 2  | [[40, 41, 42, 43, 44], [45, 46, 47, 48, 49], [50, 51, 52, 53, 54]]                                             | 2       | [50, 51, 52, 53, 54] |
@@ -659,18 +686,18 @@ ast            : create_tuple(TRY_CAST(a AS FLOAT32), TRY_CAST(a AS INT32), TRY_
 raw expr       : create_tuple(TRY_CAST(ColumnRef(0)::UInt64 AS Float32), TRY_CAST(ColumnRef(0)::UInt64 AS Int32), TRY_CAST(ColumnRef(1)::Float64 AS Float32), TRY_CAST(ColumnRef(1)::Float64 AS Int32))
 checked expr   : create_tuple<Float32 NULL, Int32 NULL, Float32 NULL, Int32 NULL>(TRY_CAST(ColumnRef(0) AS Float32 NULL), TRY_CAST(ColumnRef(0) AS Int32 NULL), TRY_CAST(ColumnRef(1) AS Float32 NULL), TRY_CAST(ColumnRef(1) AS Int32 NULL))
 evaluation:
-+--------+----------------------------+---------------------------------+---------------------------------------------------------------------------------------------------------------+
-|        | a                          | b                               | Output                                                                                                        |
-+--------+----------------------------+---------------------------------+---------------------------------------------------------------------------------------------------------------+
-| Type   | UInt64                     | Float64                         | (Float32 NULL, Int32 NULL, Float32 NULL, Int32 NULL)                                                          |
-| Domain | {0..=18446744073709551615} | {-1.7976931348623157e308..=inf} | ({0.0..=1.8446744073709552e19}, {0..=2147483647} ∪ {NULL}, {-inf..=inf}, {-2147483648..=2147483647} ∪ {NULL}) |
-| Row 0  | 0                          | 0.0                             | (0.0, 0, 0.0, 0)                                                                                              |
-| Row 1  | 1                          | 4294967295.0                    | (1.0, 1, 4294967300.0, NULL)                                                                                  |
-| Row 2  | 255                        | 1.8446744073709552e19           | (255.0, 255, 1.8446744e19, NULL)                                                                              |
-| Row 3  | 65535                      | -1.7976931348623157e308         | (65535.0, 65535, -inf, NULL)                                                                                  |
-| Row 4  | 4294967295                 | 1.7976931348623157e308          | (4294967300.0, NULL, inf, NULL)                                                                               |
-| Row 5  | 18446744073709551615       | inf                             | (1.8446744e19, NULL, inf, NULL)                                                                               |
-+--------+----------------------------+---------------------------------+---------------------------------------------------------------------------------------------------------------+
++--------+----------------------------+---------------------------------+------------------------------------------------------------------------------------------------------+
+|        | a                          | b                               | Output                                                                                               |
++--------+----------------------------+---------------------------------+------------------------------------------------------------------------------------------------------+
+| Type   | UInt64                     | Float64                         | (Float32 NULL, Int32 NULL, Float32 NULL, Int32 NULL)                                                 |
+| Domain | {0..=18446744073709551615} | {-1.7976931348623157e308..=inf} | ({0.0..=1.8446744e19}, {0..=2147483647} ∪ {NULL}, {-inf..=inf}, {-2147483648..=2147483647} ∪ {NULL}) |
+| Row 0  | 0                          | 0.0                             | (0.0, 0, 0.0, 0)                                                                                     |
+| Row 1  | 1                          | 4294967295.0                    | (1.0, 1, 4294967300.0, NULL)                                                                         |
+| Row 2  | 255                        | 1.8446744073709552e19           | (255.0, 255, 1.8446744e19, NULL)                                                                     |
+| Row 3  | 65535                      | -1.7976931348623157e308         | (65535.0, 65535, -inf, NULL)                                                                         |
+| Row 4  | 4294967295                 | 1.7976931348623157e308          | (4294967300.0, NULL, inf, NULL)                                                                      |
+| Row 5  | 18446744073709551615       | inf                             | (1.8446744e19, NULL, inf, NULL)                                                                      |
++--------+----------------------------+---------------------------------+------------------------------------------------------------------------------------------------------+
 evaluation (internal):
 +--------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
@@ -684,6 +711,7 @@ evaluation (internal):
 ast            : TRY_CAST(create_array(create_array(a, b), null, null) AS Array(Array(Int8)))
 raw expr       : TRY_CAST(create_array(create_array(ColumnRef(0)::Int16, ColumnRef(1)::Int16), NULL, NULL) AS Array(Array(Int8)))
 checked expr   : TRY_CAST(create_array<T0=Array(Int16) NULL><T0, T0, T0>(CAST(create_array<T0=Int16><T0, T0>(ColumnRef(0), ColumnRef(1)) AS Array(Int16) NULL), CAST(NULL AS Array(Int16) NULL), CAST(NULL AS Array(Int16) NULL)) AS Array(Array(Int8 NULL) NULL) NULL)
+optimized expr : TRY_CAST(create_array<T0=Array(Int16) NULL><T0, T0, T0>(CAST(create_array<T0=Int16><T0, T0>(ColumnRef(0), ColumnRef(1)) AS Array(Int16) NULL), NULL, NULL) AS Array(Array(Int8 NULL) NULL) NULL)
 evaluation:
 +--------+-----------+------------+------------------------------------+
 |        | a         | b          | Output                             |

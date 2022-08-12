@@ -27,31 +27,6 @@ pub struct CancelAction {
     pub query_id: String,
 }
 
-impl TryInto<CancelAction> for Vec<u8> {
-    type Error = Status;
-
-    fn try_into(self) -> Result<CancelAction, Self::Error> {
-        match std::str::from_utf8(&self) {
-            Err(cause) => Err(Status::invalid_argument(cause.to_string())),
-            Ok(utf8_body) => match serde_json::from_str::<CancelAction>(utf8_body) {
-                Err(cause) => Err(Status::invalid_argument(cause.to_string())),
-                Ok(action) => Ok(action),
-            },
-        }
-    }
-}
-
-impl TryInto<Vec<u8>> for CancelAction {
-    type Error = ErrorCode;
-
-    fn try_into(self) -> Result<Vec<u8>, Self::Error> {
-        serde_json::to_vec(&self).map_err_to_code(
-            ErrorCode::LogicalError,
-            || "Logical error: cannot serialize BroadcastAction.",
-        )
-    }
-}
-
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct InitQueryFragmentsPlan {
     pub executor_packet: QueryFragmentsPlanPacket,
@@ -114,7 +89,6 @@ impl TryInto<Vec<u8>> for InitNodesChannel {
 
 #[derive(Clone, Debug)]
 pub enum FlightAction {
-    CancelAction(CancelAction),
     InitQueryFragmentsPlan(InitQueryFragmentsPlan),
     InitNodesChannel(InitNodesChannel),
     ExecutePartialQuery(String),
@@ -125,7 +99,6 @@ impl TryInto<FlightAction> for Action {
 
     fn try_into(self) -> Result<FlightAction, Self::Error> {
         match self.r#type.as_str() {
-            "CancelAction" => Ok(FlightAction::CancelAction(self.body.try_into()?)),
             "InitQueryFragmentsPlan" => {
                 Ok(FlightAction::InitQueryFragmentsPlan(self.body.try_into()?))
             }
@@ -147,10 +120,6 @@ impl TryInto<Action> for FlightAction {
 
     fn try_into(self) -> Result<Action, Self::Error> {
         match self {
-            FlightAction::CancelAction(cancel_action) => Ok(Action {
-                r#type: String::from("CancelAction"),
-                body: cancel_action.try_into()?,
-            }),
             FlightAction::InitQueryFragmentsPlan(init_query_fragments_plan) => Ok(Action {
                 r#type: String::from("InitQueryFragmentsPlan"),
                 body: init_query_fragments_plan.try_into()?,

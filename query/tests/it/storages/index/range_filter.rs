@@ -190,7 +190,7 @@ async fn test_range_filter() -> Result<()> {
 
     let ctx = create_query_context().await?;
     for test in tests {
-        let prune = RangeFilter::try_create(ctx.clone(), &test.expr, schema.clone())?;
+        let prune = RangeFilter::try_create(ctx.clone(), &[test.expr], schema.clone())?;
 
         match prune.eval(&stats) {
             Ok(actual) => assert_eq!(test.expect, actual, "{:#?}", test.name),

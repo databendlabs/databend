@@ -1,12 +1,12 @@
 ---
-title: TIMESLOT
+title: time_slot
 ---
 
 Rounds the time to the half hour.
 ## Syntax
 
 ```sql
-TIMESLOT( <expr> )
+time_slot( <expr> )
 ```
 
 ## Arguments
@@ -21,16 +21,16 @@ Datetime object, returns date in “YYYY-MM-DD hh:mm:ss” format.
 ## Examples
 
 ```sql
-SELECT timeslot(now());
+SELECT time_slot(now());
 +---------------------+
-| timeslot(now())     |
+| time_slot(now())     |
 +---------------------+
 | 2022-03-29 06:30:00 |
 +---------------------+
 
-SELECT timeslot(to_datetime(1630812366));
+SELECT time_slot(to_datetime(1630812366));
 +----------------------------------+
-| timeslot(to_datetime(1630812366)) |
+| time_slot(to_datetime(1630812366)) |
 +----------------------------------+
 | 2021-09-05 03:00:00              |
 +----------------------------------+

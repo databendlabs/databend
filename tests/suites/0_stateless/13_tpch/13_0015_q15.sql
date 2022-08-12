@@ -1,4 +1,4 @@
-set enable_planner_v2 = 1;
+
 select
 supp_nation,
 	cust_nation,
