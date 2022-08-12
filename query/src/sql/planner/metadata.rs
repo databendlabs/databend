@@ -195,14 +195,18 @@ pub fn optimize_remove_count_args(name: &str, distinct: bool, args: &[&Expr]) ->
 
 pub fn find_smallest_column(entries: &[ColumnEntry]) -> usize {
     debug_assert!(!entries.is_empty());
-
-    let mut smallest_index = 0;
+    let mut column_indexes = entries
+        .iter()
+        .map(|entry| entry.column_index)
+        .collect::<Vec<IndexType>>();
+    column_indexes.sort();
+    let mut smallest_index = column_indexes[0];
     let mut smallest_size = usize::MAX;
-    for (column_index, column_entry) in entries.iter().enumerate() {
+    for (idx, column_entry) in entries.iter().enumerate() {
         if let Ok(bytes) = column_entry.data_type.data_type_id().numeric_byte_size() {
             if smallest_size > bytes {
                 smallest_size = bytes;
-                smallest_index = column_index;
+                smallest_index = entries[idx].column_index;
             }
         }
     }
