@@ -77,8 +77,9 @@ impl TracingTable {
 
     fn log_files(ctx: Arc<dyn TableContext>) -> Result<VecDeque<String>> {
         debug!("list log files from {}", ctx.get_config().log.file.dir);
-
         WalkDir::new(ctx.get_config().log.file.dir.as_str())
+            // NOTE:(everpcpc) ignore log files in subdir with different format
+            .max_depth(1)
             .sort_by_key(|file| file.file_name().to_owned())
             .into_iter()
             .filter_map(|dir_entry| match dir_entry {

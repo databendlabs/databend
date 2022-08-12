@@ -30,6 +30,7 @@ use serde_json;
 use serde_repr::Serialize_repr;
 use tracing::error;
 use tracing::info;
+use tracing::subscriber;
 
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
@@ -114,7 +115,7 @@ pub struct LogEvent {
 
     // Exception.
     pub exception_code: i32,
-    pub exception: String,
+    pub exception_text: String,
     pub stack_trace: String,
 
     // Server.
@@ -211,7 +212,7 @@ impl InterpreterQueryLog {
             Series::from_data(vec![event.client_address.as_str()]),
             // Exception.
             Series::from_data(vec![event.exception_code]),
-            Series::from_data(vec![event.exception.as_str()]),
+            Series::from_data(vec![event.exception_text.as_str()]),
             Series::from_data(vec![event.stack_trace.as_str()]),
             // Server.
             Series::from_data(vec![event.server_version.as_str()]),
@@ -228,7 +229,16 @@ impl InterpreterQueryLog {
             .append_data(self.ctx.clone(), Box::pin(input_stream))
             .await?;
 
-        info!("{}", serde_json::to_string(event)?);
+        // info!("{}", serde_json::to_string(event)?);
+        match self.ctx.get_query_logger() {
+            Some(logger) => {
+                let event_str = serde_json::to_string(event)?;
+                subscriber::with_default(logger, || {
+                    info!("{}", event_str);
+                });
+            }
+            None => {}
+        };
 
         Ok(())
     }
@@ -299,7 +309,8 @@ impl InterpreterQueryLog {
         session_settings.push_str("scope: SESSION");
 
         // Error
-        let (log_type, exception_code, exception, stack_trace) = error_fields(LogType::Start, err);
+        let (log_type, exception_code, exception_text, stack_trace) =
+            error_fields(LogType::Start, err);
 
         let log_event = LogEvent {
             log_type,
@@ -337,7 +348,7 @@ impl InterpreterQueryLog {
             client_address,
 
             exception_code,
-            exception,
+            exception_text,
             stack_trace,
             server_version: "".to_string(),
             session_settings,
@@ -411,7 +422,8 @@ impl InterpreterQueryLog {
         session_settings.push_str("scope: SESSION");
 
         // Error
-        let (log_type, exception_code, exception, stack_trace) = error_fields(LogType::Finish, err);
+        let (log_type, exception_code, exception_text, stack_trace) =
+            error_fields(LogType::Finish, err);
 
         let log_event = LogEvent {
             log_type,
@@ -449,7 +461,7 @@ impl InterpreterQueryLog {
             current_database,
 
             exception_code,
-            exception,
+            exception_text,
             stack_trace,
             server_version: "".to_string(),
             session_settings,

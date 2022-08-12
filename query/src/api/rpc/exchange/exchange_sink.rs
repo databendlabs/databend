@@ -18,13 +18,10 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::api::rpc::exchange::exchange_params::ExchangeParams;
-use crate::api::rpc::exchange::exchange_params::MergeExchangeParams;
 use crate::api::rpc::exchange::exchange_sink_merge::ExchangeMergeSink;
 use crate::api::rpc::exchange::exchange_sink_shuffle::ExchangePublisherSink;
 use crate::clusters::ClusterHelper;
 use crate::pipelines::processors::port::InputPort;
-use crate::pipelines::processors::port::OutputPort;
-use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::Pipeline;
 use crate::pipelines::SinkPipeBuilder;
 use crate::sessions::QueryContext;
@@ -33,43 +30,29 @@ use crate::sessions::TableContext;
 pub struct ExchangeSink;
 
 impl ExchangeSink {
-    fn via_merge_exchange(ctx: &Arc<QueryContext>, params: &MergeExchangeParams) -> Result<()> {
-        match params.destination_id == ctx.get_cluster().local_id() {
-            true => Ok(()), // do nothing
-            false => Err(ErrorCode::LogicalError(format!(
-                "Locally depends on merge exchange, but the localhost is not a coordination node. executor: {}, destination_id: {}, fragment id: {}",
-                ctx.get_cluster().local_id(),
-                params.destination_id,
-                params.fragment_id
-            ))),
-        }
-    }
-
-    pub fn init(processor: &mut ProcessorPtr) -> Result<()> {
-        ExchangeMergeSink::init(processor)?;
-        ExchangePublisherSink::<true>::init(processor)?;
-        ExchangePublisherSink::<false>::init(processor)
-    }
-
-    pub fn publisher_sink(
+    pub fn via(
         ctx: &Arc<QueryContext>,
         params: &ExchangeParams,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         match params {
             ExchangeParams::MergeExchange(params) => {
+                if params.destination_id == ctx.get_cluster().local_id() {
+                    return Err(ErrorCode::LogicalError(format!(
+                        "Locally depends on merge exchange, but the localhost is not a coordination node. executor: {}, destination_id: {}, fragment id: {}",
+                        ctx.get_cluster().local_id(),
+                        params.destination_id,
+                        params.fragment_id
+                    )));
+                }
+
                 let mut sink_builder = SinkPipeBuilder::create();
 
                 for _index in 0..pipeline.output_len() {
                     let input = InputPort::create();
                     sink_builder.add_sink(
                         input.clone(),
-                        ExchangeMergeSink::try_create(
-                            ctx.clone(),
-                            params.fragment_id,
-                            input.clone(),
-                            params.clone(),
-                        )?,
+                        ExchangeMergeSink::try_create(ctx.clone(), input.clone(), params)?,
                     );
                 }
 
@@ -83,39 +66,12 @@ impl ExchangeSink {
                     let input = InputPort::create();
                     sink_builder.add_sink(
                         input.clone(),
-                        ExchangePublisherSink::<false>::try_create(
-                            ctx.clone(),
-                            params.fragment_id,
-                            input,
-                            OutputPort::create(),
-                            params.clone(),
-                        )?,
+                        ExchangePublisherSink::try_create(ctx.clone(), input, params)?,
                     );
                 }
 
                 pipeline.add_pipe(sink_builder.finalize());
                 Ok(())
-            }
-        }
-    }
-
-    pub fn via_exchange(
-        ctx: &Arc<QueryContext>,
-        params: &ExchangeParams,
-        pipeline: &mut Pipeline,
-    ) -> Result<()> {
-        match params {
-            ExchangeParams::MergeExchange(params) => Self::via_merge_exchange(ctx, params),
-            ExchangeParams::ShuffleExchange(params) => {
-                pipeline.add_transform(|transform_input_port, transform_output_port| {
-                    ExchangePublisherSink::<true>::try_create(
-                        ctx.clone(),
-                        params.fragment_id,
-                        transform_input_port,
-                        transform_output_port,
-                        params.clone(),
-                    )
-                })
             }
         }
     }
