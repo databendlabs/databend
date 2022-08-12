@@ -460,3 +460,9 @@ select * from (SELECT number AS a FROM numbers(10)) x right join (SELECT number 
 2
 3
 4
+
+statement query II
+select * from numbers(10) x join (select 1::UInt64 number) y on x.number = y.number;
+
+----
+1 1
