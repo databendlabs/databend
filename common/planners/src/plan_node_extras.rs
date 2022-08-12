@@ -20,6 +20,7 @@ pub struct Extras {
     /// Optional column indices to use as a projection
     pub projection: Option<Vec<usize>>,
     /// Optional filter expression plan
+    /// split_conjunctions by `and` operator
     pub filters: Vec<Expression>,
     /// Optional limit to skip read
     pub limit: Option<usize>,

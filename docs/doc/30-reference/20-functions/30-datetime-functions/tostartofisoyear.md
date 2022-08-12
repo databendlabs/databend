@@ -1,5 +1,5 @@
 ---
-title: toStartOfISOYear
+title: to_start_of_iso_year
 ---
 
 Returns the first day of the ISO year for a date or a date with time.
@@ -7,7 +7,7 @@ Returns the first day of the ISO year for a date or a date with time.
 ## Syntax
 
 ```sql
-toStartOfISOYear( <expr> )
+to_start_of_iso_year( <expr> )
 ```
 
 ## Arguments
@@ -23,16 +23,16 @@ Datetime object, returns date in “YYYY-MM-DD” format.
 ## Examples
 
 ```sql
-SELECT toStartOfISOYear(to_date(18869));
+SELECT to_start_of_iso_year(to_date(18869));
 +---------------------------------+
-| toStartOfISOYear(to_date(18869)) |
+| to_start_of_iso_year(to_date(18869)) |
 +---------------------------------+
 | 2021-01-04                      |
 +---------------------------------+
 
-SELECT toStartOfISOYear(to_datetime(1630812366));
+SELECT to_start_of_iso_year(to_datetime(1630812366));
 +------------------------------------------+
-| toStartOfISOYear(to_datetime(1630812366)) |
+| to_start_of_iso_year(to_datetime(1630812366)) |
 +------------------------------------------+
 | 2021-01-04                               |
 +------------------------------------------+

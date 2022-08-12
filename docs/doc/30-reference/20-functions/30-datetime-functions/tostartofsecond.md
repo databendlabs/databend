@@ -1,5 +1,5 @@
 ---
-title: toStartOfSecond
+title: to_start_of_second
 ---
 
 Rounds down a date with time to the start of the second.
@@ -7,7 +7,7 @@ Rounds down a date with time to the start of the second.
 ## Syntax
 
 ```sql
-toStartOfSecond(expr)
+to_start_of_second(expr)
 ```
 
 ## Arguments
@@ -23,9 +23,9 @@ Datetime object, returns date in “YYYY-MM-DD hh:mm:ss” format.
 ## Examples
 
 ```sql
-SELECT toStartOfSecond(now());;
+SELECT to_start_of_second(now());;
 +------------------------+
-| toStartOfSecond(now()) |
+| to_start_of_second(now()) |
 +------------------------+
 | 2022-04-13 13:53:47    |
 +------------------------+

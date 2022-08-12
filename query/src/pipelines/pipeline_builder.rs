@@ -248,11 +248,9 @@ impl PlanVisitor for QueryPipelineBuilder {
                 "Use version 1 remote plan in version 2 framework.",
             )),
             RemotePlan::V2(plan) => {
-                let fragment_id = plan.receive_fragment_id;
-                let query_id = plan.receive_query_id.to_owned();
                 let build_res = self.ctx.get_exchange_manager().get_fragment_source(
-                    query_id,
-                    fragment_id,
+                    &plan.receive_query_id,
+                    plan.receive_fragment_id,
                     schema,
                 )?;
 

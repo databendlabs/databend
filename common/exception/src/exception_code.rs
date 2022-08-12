@@ -144,6 +144,7 @@ build_exceptions! {
     InvalidDate(1079),
     InvalidTimestamp(1080),
     InvalidClusterKeys(1081),
+    UnknownFragmentExchange(1082),
 
     // Tenant error codes.
     TenantIsEmpty(1101),
@@ -180,6 +181,7 @@ build_exceptions! {
     IllegalUserInfoFormat(2203),
     UnknownRole(2204),
     IllegalUserSettingFormat(2205),
+    InvalidRole(2206),
 
     // Meta api error codes.
     DatabaseAlreadyExists(2301),

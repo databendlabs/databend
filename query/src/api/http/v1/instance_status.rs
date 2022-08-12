@@ -24,7 +24,7 @@ use serde::Serialize;
 use crate::sessions::SessionManager;
 
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug)]
-pub struct Status {
+pub struct InstanceStatus {
     pub running_queries_count: u64,
     // secs since epoch
     pub last_query_started_at: Option<u64>,
@@ -43,14 +43,14 @@ fn secs_since_epoch(t: SystemTime) -> u64 {
 // lightweight way to get status
 // return Status in json
 #[poem::handler]
-pub async fn status_handler(
+pub async fn instance_status_handler(
     sessions_extension: Data<&Arc<SessionManager>>,
 ) -> poem::Result<impl IntoResponse> {
     let status = {
         let status = sessions_extension.0.status.read();
         status.clone()
     };
-    let status = Status {
+    let status = InstanceStatus {
         running_queries_count: status.running_queries_count,
         last_query_started_at: status.last_query_started_at.map(secs_since_epoch),
         last_query_finished_at: status.last_query_finished_at.map(secs_since_epoch),

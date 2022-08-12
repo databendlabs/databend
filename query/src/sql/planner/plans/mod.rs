@@ -114,7 +114,7 @@ use super::BindContext;
 use super::MetadataRef;
 use crate::sql::optimizer::SExpr;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Plan {
     // `SELECT` statement
     Query {
@@ -203,9 +203,10 @@ pub enum Plan {
     DropShare(Box<DropSharePlan>),
     GrantShareObject(Box<GrantShareObjectPlan>),
     RevokeShareObject(Box<RevokeShareObjectPlan>),
+    AlterShareTenants(Box<AlterShareTenantsPlan>),
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum RewriteKind {
     ShowSettings,
     ShowMetrics,
@@ -277,6 +278,7 @@ impl Display for Plan {
             Plan::DropShare(_) => write!(f, "DropShare"),
             Plan::GrantShareObject(_) => write!(f, "GrantShareObject"),
             Plan::RevokeShareObject(_) => write!(f, "RevokeShareObject"),
+            Plan::AlterShareTenants(_) => write!(f, "AlterShareTenants"),
         }
     }
 }
@@ -343,6 +345,7 @@ impl Plan {
             Plan::DropShare(plan) => plan.schema(),
             Plan::GrantShareObject(plan) => plan.schema(),
             Plan::RevokeShareObject(plan) => plan.schema(),
+            Plan::AlterShareTenants(plan) => plan.schema(),
         }
     }
 }

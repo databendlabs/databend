@@ -1,5 +1,4 @@
-statement ok
-set enable_planner_v2 = 1;
+
 
 # Number arguments not match
 statement error 1028

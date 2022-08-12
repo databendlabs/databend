@@ -1,5 +1,4 @@
-statement ok
-SET enable_planner_v2 = 1;
+
 
 statement query B
 SELECT 1 IS DISTINCT FROM 2;

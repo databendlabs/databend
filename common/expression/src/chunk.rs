@@ -12,29 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::ops::Range;
+
 use crate::types::AnyType;
+use crate::Domain;
 use crate::Value;
 
 /// Chunk is a lightweight container for a group of columns.
+#[derive(Clone)]
 pub struct Chunk {
     columns: Vec<Value<AnyType>>,
     num_rows: usize,
-    chunk_info: Option<Box<dyn ChunkInfo>>,
 }
 
-/// ChunkInfo is extra information about a chunk, could be used during the pipeline transformation.
-pub trait ChunkInfo {}
-
 impl Chunk {
+    #[inline]
     pub fn new(columns: Vec<Value<AnyType>>, num_rows: usize) -> Self {
-        Self::new_with_info(columns, num_rows, None)
-    }
-
-    pub fn new_with_info(
-        columns: Vec<Value<AnyType>>,
-        num_rows: usize,
-        chunk_info: Option<Box<dyn ChunkInfo>>,
-    ) -> Self {
         debug_assert!(
             columns
                 .iter()
@@ -45,22 +38,84 @@ impl Chunk {
                 .count()
                 == 0
         );
-        Self {
-            columns,
-            num_rows,
-            chunk_info,
-        }
+        Self { columns, num_rows }
     }
 
+    #[inline]
+    pub fn empty() -> Self {
+        Chunk::new(vec![], 0)
+    }
+
+    #[inline]
     pub fn columns(&self) -> &[Value<AnyType>] {
         &self.columns
     }
 
+    #[inline]
     pub fn num_rows(&self) -> usize {
         self.num_rows
     }
 
+    #[inline]
     pub fn num_columns(&self) -> usize {
         self.columns.len()
+    }
+
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.num_columns() == 0 || self.num_rows() == 0
+    }
+
+    #[inline]
+    pub fn domains(&self) -> Vec<Domain> {
+        self.columns
+            .iter()
+            .map(|value| value.as_ref().domain())
+            .collect()
+    }
+
+    #[inline]
+    pub fn memory_size(&self) -> usize {
+        self.columns()
+            .iter()
+            .map(|c| match c {
+                Value::Scalar(s) => std::mem::size_of_val(s) * self.num_rows,
+                Value::Column(c) => c.memory_size(),
+            })
+            .sum()
+    }
+
+    pub fn convert_to_full(&self) -> Self {
+        let mut columns = Vec::with_capacity(self.num_columns());
+        for col in self.columns() {
+            match col {
+                Value::Scalar(s) => {
+                    let builder = s.as_ref().repeat(self.num_rows);
+                    let col = builder.build();
+                    columns.push(Value::Column(col));
+                }
+                Value::Column(c) => columns.push(Value::Column(c.clone())),
+            }
+        }
+        Self {
+            columns,
+            num_rows: self.num_rows,
+        }
+    }
+
+    pub fn slice(&self, range: Range<usize>) -> Self {
+        let mut columns = Vec::with_capacity(self.num_columns());
+        for col in self.columns() {
+            match col {
+                Value::Scalar(s) => {
+                    columns.push(Value::Scalar(s.clone()));
+                }
+                Value::Column(c) => columns.push(Value::Column(c.slice(range.clone()))),
+            }
+        }
+        Self {
+            columns,
+            num_rows: range.end - range.start + 1,
+        }
     }
 }

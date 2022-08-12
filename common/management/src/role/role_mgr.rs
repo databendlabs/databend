@@ -57,7 +57,7 @@ impl RoleMgr {
         role_info: &RoleInfo,
         seq: Option<u64>,
     ) -> common_exception::Result<u64> {
-        let key = self.make_role_key(&role_info.identity());
+        let key = self.make_role_key(role_info.identity());
         let value = serde_json::to_vec(&role_info)?;
 
         let match_seq = match seq {
@@ -92,7 +92,7 @@ impl RoleMgr {
 impl RoleApi for RoleMgr {
     async fn add_role(&self, role_info: RoleInfo) -> common_exception::Result<u64> {
         let match_seq = MatchSeq::Exact(0);
-        let key = self.make_role_key(&role_info.identity());
+        let key = self.make_role_key(role_info.identity());
         let value = serde_json::to_vec(&role_info)?;
 
         let kv_api = self.kv_api.clone();

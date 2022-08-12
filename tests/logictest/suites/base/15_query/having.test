@@ -1,5 +1,4 @@
-statement ok
-set enable_planner_v2 = 1;
+
 
 statement query I
 select * from numbers(10) having number = 1;

@@ -24,11 +24,13 @@
 #[allow(dead_code)]
 mod chunk;
 
+mod column_from;
 mod display;
 mod error;
 mod evaluator;
 mod expression;
 mod function;
+mod kernels;
 mod property;
 pub mod type_check;
 pub mod types;
@@ -36,9 +38,11 @@ pub mod util;
 mod values;
 
 pub use crate::chunk::*;
+pub use crate::column_from::*;
 pub use crate::error::*;
 pub use crate::evaluator::*;
 pub use crate::expression::*;
 pub use crate::function::*;
+pub use crate::kernels::*;
 pub use crate::property::*;
 pub use crate::values::*;

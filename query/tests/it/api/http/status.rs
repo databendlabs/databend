@@ -17,8 +17,8 @@ use std::sync::Arc;
 use common_base::base::tokio;
 use common_exception::Result;
 use common_meta_types::UserIdentity;
-use databend_query::api::http::v1::status::status_handler;
-use databend_query::api::http::v1::status::Status;
+use databend_query::api::http::v1::instance_status::instance_status_handler;
+use databend_query::api::http::v1::instance_status::InstanceStatus;
 use databend_query::interpreters::Interpreter;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::SessionManager;
@@ -39,7 +39,7 @@ use pretty_assertions::assert_eq;
 
 use crate::tests::SessionManagerBuilder;
 
-async fn get_status(ep: &AddDataEndpoint<Route, Arc<SessionManager>>) -> Status {
+async fn get_status(ep: &AddDataEndpoint<Route, Arc<SessionManager>>) -> InstanceStatus {
     let response = ep
         .call(
             Request::builder()
@@ -52,7 +52,7 @@ async fn get_status(ep: &AddDataEndpoint<Route, Arc<SessionManager>>) -> Status 
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
     let body = response.into_body().into_vec().await.unwrap();
-    serde_json::from_str::<Status>(&String::from_utf8_lossy(&body)).unwrap()
+    serde_json::from_str::<InstanceStatus>(&String::from_utf8_lossy(&body)).unwrap()
 }
 
 async fn run_query(sessions: Arc<SessionManager>) -> Result<Arc<dyn Interpreter>> {
@@ -73,7 +73,7 @@ async fn run_query(sessions: Arc<SessionManager>) -> Result<Arc<dyn Interpreter>
 async fn test_status() -> Result<()> {
     let sessions = SessionManagerBuilder::create().build()?;
     let ep = Route::new()
-        .at("/v1/status", get(status_handler))
+        .at("/v1/status", get(instance_status_handler))
         .data(sessions.clone());
 
     let status = get_status(&ep).await;

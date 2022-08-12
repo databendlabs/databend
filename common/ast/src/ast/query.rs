@@ -45,11 +45,11 @@ pub struct Query<'a> {
 pub struct With<'a> {
     pub span: &'a [Token<'a>],
     pub recursive: bool,
-    pub ctes: Vec<Cte<'a>>,
+    pub ctes: Vec<CTE<'a>>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Cte<'a> {
+pub struct CTE<'a> {
     pub span: &'a [Token<'a>],
     pub alias: TableAlias<'a>,
     pub query: Query<'a>,
@@ -428,7 +428,7 @@ impl<'a> Display for SetExpr<'a> {
     }
 }
 
-impl<'a> Display for Cte<'a> {
+impl<'a> Display for CTE<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{} AS ({})", self.alias, self.query)?;
         Ok(())

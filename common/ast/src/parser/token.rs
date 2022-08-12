@@ -237,6 +237,8 @@ pub enum TokenKind {
     //    reserved list.
     #[token("ALL", ignore(ascii_case))]
     ALL,
+    #[token("ADD", ignore(ascii_case))]
+    ADD,
     #[token("ANY", ignore(ascii_case))]
     ANY,
     #[token("SOME", ignore(ascii_case))]
@@ -571,6 +573,8 @@ pub enum TokenKind {
     RIGHT,
     #[token("RLIKE", ignore(ascii_case))]
     RLIKE,
+    #[token("RAW", ignore(ascii_case))]
+    RAW,
     #[token("SCHEMA", ignore(ascii_case))]
     SCHEMA,
     #[token("SCHEMAS", ignore(ascii_case))]
@@ -625,6 +629,8 @@ pub enum TokenKind {
     TEXT,
     #[token("TENANTSETTING", ignore(ascii_case))]
     TENANTSETTING,
+    #[token("TENANTS", ignore(ascii_case))]
+    TENANTS,
     #[token("THEN", ignore(ascii_case))]
     THEN,
     #[token("TIMESTAMP", ignore(ascii_case))]

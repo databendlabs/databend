@@ -40,13 +40,14 @@ use crate::ErrorKind;
 pub fn statement(i: Input) -> IResult<StatementMsg> {
     let explain = map(
         rule! {
-            EXPLAIN ~ ( PIPELINE | GRAPH | FRAGMENTS )? ~ #statement
+            EXPLAIN ~ ( PIPELINE | GRAPH | FRAGMENTS | RAW )? ~ #statement
         },
         |(_, opt_kind, statement)| Statement::Explain {
             kind: match opt_kind.map(|token| token.kind) {
                 Some(TokenKind::PIPELINE) => ExplainKind::Pipeline,
                 Some(TokenKind::GRAPH) => ExplainKind::Graph,
                 Some(TokenKind::FRAGMENTS) => ExplainKind::Fragments,
+                Some(TokenKind::RAW) => ExplainKind::Raw,
                 None => ExplainKind::Syntax,
                 _ => unreachable!(),
             },
@@ -794,6 +795,19 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             })
         },
     );
+    let alter_share_tenants = map(
+        rule! {
+            ALTER ~ SHARE ~ (IF ~ EXISTS )? ~ #ident ~ #alter_add_share_accounts ~ TENANTS ~ Eq ~ #comma_separated_list1(ident)
+        },
+        |(_, _, opt_if_exists, share, is_add, _, _, tenants)| {
+            Statement::AlterShareTenants(AlterShareTenantsStmt {
+                share,
+                if_exists: opt_if_exists.is_some(),
+                is_add,
+                tenants,
+            })
+        },
+    );
 
     let statement_body = alt((
         rule!(
@@ -886,6 +900,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             | #drop_share: "`DROP SHARE [IF EXISTS] <share_name>`"
             | #grant_share_object: "`GRANT { USAGE | SELECT | REFERENCE_USAGE } ON { DATABASE db | TABLE db.table } TO SHARE <share_name>`"
             | #revoke_share_object: "`REVOKE { USAGE | SELECT | REFERENCE_USAGE } ON { DATABASE db | TABLE db.table } FROM SHARE <share_name>`"
+            | #alter_share_tenants: "`ALTER SHARE [IF EXISTS] <share_name> { ADD | REMOVE } TENANTS = tenant [, tenant, ...]`"
         ),
     ));
 
@@ -1052,6 +1067,10 @@ pub fn priv_share_type(i: Input) -> IResult<ShareGrantObjectPrivilege> {
             rule! { REFERENCE_USAGE },
         ),
     ))(i)
+}
+
+pub fn alter_add_share_accounts(i: Input) -> IResult<bool> {
+    alt((value(true, rule! { ADD }), value(false, rule! { REMOVE })))(i)
 }
 
 pub fn grant_share_object_name(i: Input) -> IResult<ShareGrantObjectName> {
