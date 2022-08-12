@@ -26,7 +26,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_aliases("-", &["minus"]);
     registry.register_aliases("*", &["multiply"]);
     registry.register_aliases("/", &["divide"]);
-    registry.register_aliases("intdiv", &["div"]);
+    registry.register_aliases("div", &["intdiv"]);
 
     // TODO support modulo
     // registry.register_aliases("%", &["mod", "modulo"]);
