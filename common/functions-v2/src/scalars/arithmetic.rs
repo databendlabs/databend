@@ -67,7 +67,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                         {
                             type T = <(L, R) as ResultTypeOfBinary>::Minus;
                             registry.register_2_arg::<NumberType<L>, NumberType<R>, NumberType<T>, _, _>(
-                                "+",
+                                "-",
                                 FunctionProperty::default(),
                                 |lhs, rhs| {
                                     Some(NumberDomain::<T> {
