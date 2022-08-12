@@ -53,7 +53,7 @@ async fn run_test(ctx: Arc<QueryContext>, suite: &Suite) -> Result<String> {
     let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL, &bt)?;
     let binder = Binder::new(
         ctx.clone(),
-        CatalogManager::instance()?,
+        CatalogManager::instance(),
         NameResolutionContext::default(),
         Arc::new(RwLock::new(Metadata::create())),
     );

@@ -41,7 +41,7 @@ pub struct RpcService {
 impl RpcService {
     pub fn create() -> Result<Box<dyn DatabendQueryServer>> {
         Ok(Box::new(Self {
-            sessions: SessionManager::instance()?,
+            sessions: SessionManager::instance(),
             abort_notify: Arc::new(Notify::new()),
         }))
     }

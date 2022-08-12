@@ -84,7 +84,6 @@ pub trait TableContext: Send + Sync {
     fn attach_query_str(&self, query: &str);
     fn attach_query_plan(&self, query_plan: &PlanNode);
     fn get_fragment_id(&self) -> usize;
-    fn get_catalogs(&self) -> Result<Arc<CatalogManager>>;
     fn get_catalog(&self, catalog_name: &str) -> Result<Arc<dyn Catalog>>;
     fn get_id(&self) -> String;
     fn get_current_catalog(&self) -> String;

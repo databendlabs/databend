@@ -47,7 +47,7 @@ pub struct ShutdownHandle {
 impl ShutdownHandle {
     pub fn create() -> Result<ShutdownHandle> {
         Ok(ShutdownHandle {
-            sessions: SessionManager::instance()?,
+            sessions: SessionManager::instance(),
             services: vec![],
             shutdown: Arc::new(AtomicBool::new(false)),
         })

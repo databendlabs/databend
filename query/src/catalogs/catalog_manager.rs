@@ -30,7 +30,7 @@ use crate::catalogs::DatabaseCatalog;
 pub trait CatalogManagerHelper {
     async fn init(conf: &Config) -> Result<()>;
 
-    fn instance() -> Result<Arc<CatalogManager>>;
+    fn instance() -> Arc<CatalogManager>;
 
     async fn register_build_in_catalogs(&mut self, conf: &Config) -> Result<()>;
 
@@ -58,10 +58,10 @@ impl CatalogManagerHelper for CatalogManager {
         }
     }
 
-    fn instance() -> Result<Arc<CatalogManager>> {
+    fn instance() -> Arc<CatalogManager> {
         match CATALOG_MANAGER.get() {
-            None => Err(ErrorCode::LogicalError("CatalogManager is not init")),
-            Some(catalog_manager) => Ok(catalog_manager.clone()),
+            None => panic!("CatalogManager is not init"),
+            Some(catalog_manager) => catalog_manager.clone(),
         }
     }
 

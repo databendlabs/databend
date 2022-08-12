@@ -1213,7 +1213,7 @@ async fn test_no_download_in_management_mode() -> Result<()> {
         .nest("/v1/query", query_route())
         .with(HTTPSessionMiddleware {
             kind: HttpHandlerKind::Query,
-            session_manager: SessionManager::instance()?,
+            session_manager: SessionManager::instance(),
         });
     let sql = "select 1";
     let (status, result) = post_sql_to_endpoint(&ep, sql, 1).await?;

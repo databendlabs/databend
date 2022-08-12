@@ -59,7 +59,6 @@ use crate::Config;
 pub struct SessionManager {
     pub(in crate::sessions) conf: Config,
     pub(in crate::sessions) discovery: Arc<ClusterDiscovery>,
-    pub(in crate::sessions) http_query_manager: Arc<HttpQueryManager>,
     pub(in crate::sessions) data_exchange_manager: Arc<DataExchangeManager>,
 
     pub(in crate::sessions) max_sessions: usize,
@@ -94,10 +93,10 @@ impl SessionManager {
         }
     }
 
-    pub fn instance() -> Result<Arc<SessionManager>> {
+    pub fn instance() -> Arc<SessionManager> {
         match SESSION_MANAGER.get() {
-            None => Err(ErrorCode::LogicalError("SessionManager is not init")),
-            Some(session_manager) => Ok(session_manager.clone()),
+            None => panic!("SessionManager is not init"),
+            Some(session_manager) => session_manager.clone(),
         }
     }
 
@@ -119,7 +118,6 @@ impl SessionManager {
         };
         _log_guards.extend(_guards);
 
-        CatalogManager::init(&conf).await?;
         let storage_cache_manager = Arc::new(CacheManager::init(&conf.query));
 
         // Cluster discovery.
@@ -141,7 +139,7 @@ impl SessionManager {
             .await?
             .layer(DalRuntime::new(storage_runtime.inner()));
 
-        let http_query_manager = HttpQueryManager::create_global(conf.clone()).await?;
+        HttpQueryManager::init(&conf).await?;
         let max_sessions = conf.query.max_active_sessions as usize;
         let active_sessions = Arc::new(RwLock::new(HashMap::with_capacity(max_sessions)));
         let status = Arc::new(RwLock::new(Default::default()));
@@ -166,7 +164,6 @@ impl SessionManager {
         Ok(Arc::new(SessionManager {
             conf,
             discovery,
-            http_query_manager,
             max_sessions,
             active_sessions,
             data_exchange_manager: exchange_manager,
@@ -190,10 +187,6 @@ impl SessionManager {
 
     pub fn get_cluster_discovery(self: &Arc<Self>) -> Arc<ClusterDiscovery> {
         self.discovery.clone()
-    }
-
-    pub fn get_http_query_manager(self: &Arc<Self>) -> Arc<HttpQueryManager> {
-        self.http_query_manager.clone()
     }
 
     pub fn get_storage_operator(self: &Arc<Self>) -> Operator {

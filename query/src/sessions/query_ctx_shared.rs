@@ -224,7 +224,7 @@ impl QueryContextShared {
     ) -> Result<Arc<dyn Table>> {
         let tenant = self.get_tenant();
         let table_meta_key = (catalog.to_string(), database.to_string(), table.to_string());
-        let catalog = CatalogManager::instance()?.get_catalog(catalog)?;
+        let catalog = CatalogManager::instance().get_catalog(catalog)?;
         let cache_table = catalog.get_table(tenant.as_str(), database, table).await?;
 
         let mut tables_refs = self.tables_refs.lock();

@@ -31,7 +31,7 @@ pub mod bench_sort_query_sql;
 
 pub async fn select_executor(sql: &str) -> Result<()> {
     SessionManager::init(Config::default()).await?;
-    let sessions = SessionManager::instance()?;
+    let sessions = SessionManager::instance();
     let executor_session = sessions.create_session(SessionType::Dummy).await?;
     let ctx = executor_session.create_query_context().await?;
 

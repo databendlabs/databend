@@ -34,7 +34,10 @@ use databend_query::sessions::SessionManager;
 use databend_query::Config;
 use databend_query::QUERY_SEMVER;
 use tracing::info;
+use common_catalog::catalog::CatalogManager;
 use common_exception::ErrorCode;
+use databend_query::catalogs::CatalogManagerHelper;
+use databend_query::servers::http::v1::HttpQueryManager;
 
 #[databend_main]
 async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<()> {
@@ -158,7 +161,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
 
     // Cluster register.
     {
-        let session_manager = SessionManager::instance()?;
+        let session_manager = SessionManager::instance();
         let cluster_discovery = session_manager.get_cluster_discovery();
         let register_to_metastore = cluster_discovery.register_to_metastore(&conf);
         register_to_metastore.await?;
@@ -170,7 +173,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
 
     // Async Insert Queue
     {
-        let session_manager = SessionManager::instance()?;
+        let session_manager = SessionManager::instance();
         let async_insert_queue = session_manager
             .clone()
             .get_async_insert_queue()
@@ -253,6 +256,8 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
 }
 
 async fn global_init(conf: &Config) -> Result<(), ErrorCode> {
+    CatalogManager::init(conf).await?;
+    HttpQueryManager::init(conf).await?;
     SessionManager::init(conf.clone()).await
 }
 

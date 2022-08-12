@@ -28,7 +28,7 @@ async fn test_session_setting() -> Result<()> {
         conf.clone(),
         String::from("test-001"),
         SessionType::Dummy,
-        SessionManager::instance()?,
+        SessionManager::instance(),
         None,
     )
         .await?;

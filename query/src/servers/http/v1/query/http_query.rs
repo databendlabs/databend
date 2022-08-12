@@ -27,6 +27,7 @@ use serde::Serialize;
 
 use super::HttpQueryContext;
 use crate::interpreters::InterpreterQueryLog;
+use crate::servers::http::v1::HttpQueryManager;
 use crate::servers::http::v1::query::execute_state::Progresses;
 use crate::servers::http::v1::query::expirable::Expirable;
 use crate::servers::http::v1::query::expirable::ExpiringState;
@@ -163,7 +164,7 @@ impl HttpQuery {
         request: HttpQueryRequest,
         config: HttpQueryConfig,
     ) -> Result<Arc<HttpQuery>> {
-        let http_query_manager = ctx.session_mgr.get_http_query_manager();
+        let http_query_manager = HttpQueryManager::instance();
 
         let session = if let Some(id) = &request.session_id {
             let session = http_query_manager.get_session(id).await.ok_or_else(|| {
@@ -313,7 +314,7 @@ impl HttpQuery {
             Err(ErrorCode::AbortedQuery("killed by http")),
             true,
         )
-        .await;
+            .await;
     }
 
     pub async fn detach(&self) {

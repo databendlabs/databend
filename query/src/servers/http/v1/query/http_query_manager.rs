@@ -15,11 +15,12 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
+use once_cell::sync::OnceCell;
 
 use common_base::base::tokio;
 use common_base::base::tokio::sync::RwLock;
 use common_base::base::tokio::time::sleep;
-use common_exception::Result;
+use common_exception::{ErrorCode, Result};
 use parking_lot::Mutex;
 use tracing::warn;
 
@@ -44,15 +45,29 @@ pub struct HttpQueryManager {
     pub(crate) config: HttpQueryConfig,
 }
 
+static HTTP_QUERIES_MANAGER: OnceCell<Arc<HttpQueryManager>> = OnceCell::new();
+
 impl HttpQueryManager {
-    pub async fn create_global(cfg: Config) -> Result<Arc<HttpQueryManager>> {
-        Ok(Arc::new(HttpQueryManager {
+    pub async fn init(cfg: &Config) -> Result<()> {
+        let http_queries_manager = Arc::new(HttpQueryManager {
             queries: Arc::new(RwLock::new(HashMap::new())),
             sessions: Mutex::new(ExpiringMap::default()),
             config: HttpQueryConfig {
                 result_timeout_millis: cfg.query.http_handler_result_timeout_millis,
             },
-        }))
+        });
+
+        match HTTP_QUERIES_MANAGER.set(http_queries_manager) {
+            Ok(_) => Ok(()),
+            Err(_) => Err(ErrorCode::LogicalError("Cannot init HttpQueryManager twice"))
+        }
+    }
+
+    pub fn instance() -> Arc<HttpQueryManager> {
+        match HTTP_QUERIES_MANAGER.get() {
+            None => panic!("HttpQueryManager is not init"),
+            Some(http_queries_manager) => http_queries_manager.clone(),
+        }
     }
 
     pub(crate) async fn try_create_query(

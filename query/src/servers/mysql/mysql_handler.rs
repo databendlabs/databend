@@ -51,7 +51,7 @@ impl MySQLHandler {
         let (abort_handle, registration) = AbortHandle::new_pair();
         Ok(Box::new(MySQLHandler {
             abort_handle,
-            sessions: SessionManager::instance()?,
+            sessions: SessionManager::instance(),
             abort_registration: Some(registration),
             join_handle: None,
         }))

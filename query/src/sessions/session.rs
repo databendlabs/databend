@@ -37,6 +37,7 @@ use crate::sessions::SessionStatus;
 use crate::sessions::SessionType;
 use crate::sessions::Settings;
 use crate::Config;
+use crate::servers::http::v1::HttpQueryManager;
 
 pub struct Session {
     pub(in crate::sessions) id: String,
@@ -108,7 +109,9 @@ impl Session {
                 }
             }
         }
-        self.session_mgr.http_query_manager.kill_session(&self.id);
+
+        let http_queries_manager = HttpQueryManager::instance();
+        http_queries_manager.kill_session(&self.id);
     }
 
     pub fn kill(self: &Arc<Self>) {

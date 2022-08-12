@@ -44,7 +44,7 @@ pub struct HttpService {
 impl HttpService {
     pub fn create() -> Result<Box<HttpService>> {
         Ok(Box::new(HttpService {
-            sessions: SessionManager::instance()?,
+            sessions: SessionManager::instance(),
             shutdown_handler: HttpShutdownHandler::create("http api".to_string()),
         }))
     }

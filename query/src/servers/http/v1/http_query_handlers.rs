@@ -41,7 +41,7 @@ use super::query::ExecuteStateKind;
 use super::query::HttpQueryRequest;
 use super::query::HttpQueryResponseInternal;
 use crate::servers::http::v1::query::Progresses;
-use crate::servers::http::v1::HttpQueryContext;
+use crate::servers::http::v1::{HttpQueryContext, HttpQueryManager};
 use crate::servers::http::v1::HttpSessionConf;
 use crate::servers::http::v1::JsonBlock;
 use crate::sessions::QueryAffect;
@@ -161,7 +161,7 @@ async fn query_detach_handler(
     ctx: &HttpQueryContext,
     Path(query_id): Path<String>,
 ) -> impl IntoResponse {
-    let http_query_manager = ctx.session_mgr.get_http_query_manager();
+    let http_query_manager = HttpQueryManager::instance();
     match http_query_manager.remove_query(&query_id).await {
         Some(query) => {
             query.detach().await;
@@ -177,7 +177,7 @@ async fn query_cancel_handler(
     ctx: &HttpQueryContext,
     Path(query_id): Path<String>,
 ) -> impl IntoResponse {
-    let http_query_manager = ctx.session_mgr.get_http_query_manager();
+    let http_query_manager = HttpQueryManager::instance();
     match http_query_manager.get_query(&query_id).await {
         Some(query) => {
             query.kill().await;
@@ -193,7 +193,7 @@ async fn query_state_handler(
     ctx: &HttpQueryContext,
     Path(query_id): Path<String>,
 ) -> PoemResult<Json<QueryResponse>> {
-    let http_query_manager = ctx.session_mgr.get_http_query_manager();
+    let http_query_manager = HttpQueryManager::instance();
     match http_query_manager.get_query(&query_id).await {
         Some(query) => {
             let response = query.get_response_state_only().await;
@@ -208,7 +208,7 @@ async fn query_page_handler(
     ctx: &HttpQueryContext,
     Path((query_id, page_no)): Path<(String, usize)>,
 ) -> PoemResult<Json<QueryResponse>> {
-    let http_query_manager = ctx.session_mgr.get_http_query_manager();
+    let http_query_manager = HttpQueryManager::instance();
     match http_query_manager.get_query(&query_id).await {
         Some(query) => {
             query.clear_expire_time().await;
@@ -229,7 +229,7 @@ pub(crate) async fn query_handler(
     Json(req): Json<HttpQueryRequest>,
 ) -> PoemResult<Json<QueryResponse>> {
     info!("receive http query: {:?}", req);
-    let http_query_manager = ctx.session_mgr.get_http_query_manager();
+    let http_query_manager = HttpQueryManager::instance();
     let query = http_query_manager.try_create_query(ctx, req).await;
 
     match query {

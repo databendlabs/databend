@@ -76,7 +76,7 @@ pub struct HttpHandler {
 impl HttpHandler {
     pub fn create(kind: HttpHandlerKind) -> Result<Box<dyn Server>> {
         Ok(Box::new(HttpHandler {
-            session_manager: SessionManager::instance()?,
+            session_manager: SessionManager::instance(),
             shutdown_handler: HttpShutdownHandler::create("http handler".to_string()),
             kind,
         }))
