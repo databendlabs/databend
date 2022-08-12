@@ -37,7 +37,7 @@ use tracing::info;
 use common_catalog::catalog::CatalogManager;
 use common_exception::ErrorCode;
 use common_fuse_meta::caches::CacheManager;
-use common_users::UserApiProvider;
+use common_users::{RoleCacheMgr, UserApiProvider};
 use databend_query::catalogs::CatalogManagerHelper;
 use databend_query::servers::http::v1::HttpQueryManager;
 
@@ -263,7 +263,9 @@ async fn global_init(conf: &Config) -> Result<(), ErrorCode> {
     CatalogManager::init(conf).await?;
     HttpQueryManager::init(conf).await?;
     SessionManager::init(conf.clone()).await?;
-    UserApiProvider::init(conf.meta.to_meta_grpc_client_conf()).await
+    UserApiProvider::init(conf.meta.to_meta_grpc_client_conf()).await?;
+
+    RoleCacheMgr::init()
 }
 
 fn run_cmd(conf: &Config) -> bool {

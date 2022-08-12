@@ -31,20 +31,19 @@ pub const CATALOG_DEFAULT: &str = "default";
 async fn test_role_cache_mgr() -> Result<()> {
     let conf = RpcClientConf::default();
     UserApiProvider::init(conf).await?;
-    let user_api = UserApiProvider::instance();
+    RoleCacheMgr::init()?;
 
     let mut role1 = RoleInfo::new("role1");
     role1.grants.grant_privileges(
         &GrantObject::Database(CATALOG_DEFAULT.to_owned(), "db1".to_string()),
         UserPrivilegeSet::available_privileges_on_database(),
     );
-    user_api.add_role("tenant1", role1, false).await?;
+    UserApiProvider::instance().add_role("tenant1", role1, false).await?;
 
-    let role_cache_mgr = RoleCacheMgr::new(user_api);
-    let roles = role_cache_mgr
+    let roles = RoleCacheMgr::instance()
         .find_related_roles("tenant1", &["role1".to_string()])
         .await?;
-    assert!(roles.len() == 1);
+    assert_eq!(roles.len(), 1);
     Ok(())
 }
 

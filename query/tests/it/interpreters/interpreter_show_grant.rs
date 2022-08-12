@@ -32,7 +32,7 @@ async fn test_show_grant_interpreter() -> Result<()> {
 
     let tenant = ctx.get_tenant();
     let user_mgr = ctx.get_user_manager();
-    let role_cache_mgr = ctx.get_role_cache_manager();
+    let role_cache_mgr = RoleCacheMgr::instance();
     user_mgr
         .add_user(&tenant, UserInfo::new_no_auth("test", "localhost"), false)
         .await?;

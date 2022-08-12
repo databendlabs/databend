@@ -98,7 +98,6 @@ pub trait TableContext: Send + Sync {
     fn get_tenant(&self) -> String;
     fn set_current_tenant(&self, tenant: String);
     fn get_subquery_name(&self, _query: &PlanNode) -> String;
-    fn get_role_cache_manager(&self) -> Arc<RoleCacheMgr>;
     /// Get the data accessor metrics.
     fn get_dal_metrics(&self) -> DalMetrics;
     /// Get the session running query.

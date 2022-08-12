@@ -16,10 +16,11 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
+use once_cell::sync::OnceCell;
 
 use common_base::base::tokio;
 use common_base::base::tokio::task::JoinHandle;
-use common_exception::Result;
+use common_exception::{ErrorCode, Result};
 use common_meta_types::RoleInfo;
 use parking_lot::RwLock;
 use tracing::warn;
@@ -38,15 +39,32 @@ pub struct RoleCacheMgr {
     polling_join_handle: Option<JoinHandle<()>>,
 }
 
+static ROLE_CACHE_MANAGER: OnceCell<Arc<RoleCacheMgr>> = OnceCell::new();
+
 impl RoleCacheMgr {
-    pub fn new(user_api: Arc<UserApiProvider>) -> Self {
-        let mut mgr = Self {
+    pub fn init() -> Result<()> {
+        // Check that the user API has been initialized.
+        let _instance = UserApiProvider::instance();
+
+        let mut role_cache_manager = Self {
             cache: Arc::new(RwLock::new(HashMap::new())),
             polling_interval: Duration::new(15, 0),
             polling_join_handle: None,
         };
-        mgr.background_polling();
-        mgr
+
+        role_cache_manager.background_polling();
+
+        match ROLE_CACHE_MANAGER.set(Arc::new(role_cache_manager)) {
+            Ok(_) => Ok(()),
+            Err(_) => Err(ErrorCode::LogicalError("Cannot init RoleCacheManager twice"))
+        }
+    }
+
+    pub fn instance() -> Arc<RoleCacheMgr> {
+        match ROLE_CACHE_MANAGER.get() {
+            None => panic!("RoleCacheManager is not init"),
+            Some(role_cache_manager) => role_cache_manager.clone(),
+        }
     }
 
     pub fn background_polling(&mut self) {

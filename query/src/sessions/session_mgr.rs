@@ -68,7 +68,6 @@ pub struct SessionManager {
     storage_operator: Operator,
     storage_runtime: Arc<Runtime>,
 
-    role_cache_manager: Arc<RoleCacheMgr>,
     // When typ is MySQL, insert into this map, key is id, val is MySQL connection id.
     pub(crate) mysql_conn_map: Arc<RwLock<HashMap<Option<u32>, String>>>,
     pub(in crate::sessions) mysql_basic_conn_id: AtomicU32,
@@ -140,8 +139,6 @@ impl SessionManager {
         let status = Arc::new(RwLock::new(Default::default()));
 
         let mysql_conn_map = Arc::new(RwLock::new(HashMap::with_capacity(max_sessions)));
-        let user_api_provider = UserApiProvider::instance();
-        let role_cache_manager = Arc::new(RoleCacheMgr::new(user_api_provider.clone()));
 
         let exchange_manager = DataExchangeManager::create(conf.clone());
         let storage_runtime = Arc::new(storage_runtime);
@@ -165,7 +162,6 @@ impl SessionManager {
             status,
             storage_operator,
             storage_runtime,
-            role_cache_manager,
             mysql_conn_map,
             mysql_basic_conn_id: AtomicU32::new(9_u32.to_le() as u32),
             async_insert_queue,
@@ -191,10 +187,6 @@ impl SessionManager {
 
     pub fn get_storage_runtime(&self) -> Arc<Runtime> {
         self.storage_runtime.clone()
-    }
-
-    pub fn get_role_cache_manager(&self) -> Arc<RoleCacheMgr> {
-        self.role_cache_manager.clone()
     }
 
     pub async fn create_session(self: &Arc<Self>, typ: SessionType) -> Result<SessionRef> {

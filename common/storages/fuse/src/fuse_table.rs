@@ -41,6 +41,7 @@ use common_planners::Statistics;
 use common_planners::TruncateTablePlan;
 use common_storages_util::storage_context::StorageContext;
 use uuid::Uuid;
+use common_fuse_meta::caches::CacheManager;
 
 use crate::io::write_meta;
 use crate::io::MetaReaders;
@@ -200,9 +201,7 @@ impl FuseTable {
         let result = catalog.update_table_meta(req).await;
         match result {
             Ok(_) => {
-                if let Some(snapshot_cache) =
-                    ctx.get_storage_cache_manager().get_table_snapshot_cache()
-                {
+                if let Some(snapshot_cache) = CacheManager::instance().get_table_snapshot_cache() {
                     let cache = &mut snapshot_cache.write().await;
                     cache.put(snapshot_loc, Arc::new(snapshot.clone()));
                 }
@@ -285,7 +284,7 @@ impl Table for FuseTable {
             &new_snapshot,
             &mut new_table_meta,
         )
-        .await
+            .await
     }
 
     async fn drop_table_cluster_keys(
@@ -329,7 +328,7 @@ impl Table for FuseTable {
             &new_snapshot,
             &mut new_table_meta,
         )
-        .await
+            .await
     }
 
     #[tracing::instrument(level = "debug", name = "fuse_table_read_partitions", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]

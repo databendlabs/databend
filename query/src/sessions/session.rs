@@ -253,11 +253,7 @@ impl Session {
         // TODO: take current role instead of all roles
         let all_roles = self.get_all_roles()?;
         let tenant = self.get_current_tenant();
-        let role_cache = self
-            .get_shared_query_context()
-            .await?
-            .get_role_cache_manager();
-        let role_verified = role_cache
+        let role_verified = RoleCacheMgr::instance()
             .find_related_roles(&tenant, &all_roles)
             .await?
             .iter()
@@ -306,9 +302,5 @@ impl Session {
 
     pub fn get_status(self: &Arc<Self>) -> Arc<RwLock<SessionStatus>> {
         self.status.clone()
-    }
-
-    pub fn get_role_cache_manager(self: &Arc<Self>) -> Arc<RoleCacheMgr> {
-        self.session_mgr.get_role_cache_manager()
     }
 }

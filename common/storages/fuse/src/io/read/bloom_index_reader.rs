@@ -74,6 +74,7 @@ mod util_v1 {
 
     use common_base::base::Runtime;
     use common_base::base::TrySpawn;
+    use common_fuse_meta::caches::CacheManager;
 
     use super::*;
 
@@ -199,8 +200,7 @@ mod util_v1 {
             .find(|(_, c)| c.descriptor().path_in_schema[0] == col_name)
         {
             let cache_key = format!("{path}-{idx}");
-            if let Some(bloom_index_cache) = ctx.get_storage_cache_manager().get_bloom_index_cache()
-            {
+            if let Some(bloom_index_cache) = CacheManager::instance().get_bloom_index_cache() {
                 let cache = &mut bloom_index_cache.write().await;
                 if let Some(bytes) = cache.get(&cache_key) {
                     Ok((bytes.clone(), idx))
@@ -212,8 +212,8 @@ mod util_v1 {
                             dal.clone(),
                             path.to_owned(),
                         )
-                        .execute_in_runtime(storage_runtime)
-                        .await??,
+                            .execute_in_runtime(storage_runtime)
+                            .await??,
                     );
                     cache.put(cache_key, bytes.clone());
                     Ok((bytes, idx))
@@ -225,8 +225,8 @@ mod util_v1 {
                         dal.clone(),
                         path.to_owned(),
                     )
-                    .execute_in_runtime(storage_runtime)
-                    .await??,
+                        .execute_in_runtime(storage_runtime)
+                        .await??,
                 );
                 Ok((bytes, idx))
             }
@@ -246,9 +246,7 @@ mod util_v1 {
         dal: &Operator,
     ) -> Result<Arc<FileMetaData>> {
         let storage_runtime = &ctx.get_storage_runtime();
-        if let Some(bloom_index_meta_cache) =
-            ctx.get_storage_cache_manager().get_bloom_index_meta_cache()
-        {
+        if let Some(bloom_index_meta_cache) = CacheManager::instance().get_bloom_index_meta_cache() {
             let cache = &mut bloom_index_meta_cache.write().await;
             if let Some(file_meta) = cache.get(path) {
                 Ok(file_meta.clone())
@@ -295,16 +293,16 @@ mod util_v1 {
 
     #[async_trait::async_trait]
     trait InRuntime
-    where Self: Future
+        where Self: Future
     {
         async fn execute_in_runtime(self, runtime: &Runtime) -> Result<Self::Output>;
     }
 
     #[async_trait::async_trait]
     impl<T> InRuntime for T
-    where
-        T: Future + Send + 'static,
-        T::Output: Send + 'static,
+        where
+            T: Future + Send + 'static,
+            T::Output: Send + 'static,
     {
         async fn execute_in_runtime(self, runtime: &Runtime) -> Result<T::Output> {
             runtime

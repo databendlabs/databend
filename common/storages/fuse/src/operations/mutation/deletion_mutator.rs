@@ -26,6 +26,7 @@ use common_fuse_meta::meta::Location;
 use common_fuse_meta::meta::SegmentInfo;
 use common_fuse_meta::meta::TableSnapshot;
 use opendal::Operator;
+use common_fuse_meta::caches::CacheManager;
 
 use crate::io::write_meta;
 use crate::io::BlockWriter;
@@ -88,10 +89,7 @@ impl<'a> DeletionMutator<'a> {
 
         let segment_reader = MetaReaders::segment_info_reader(self.ctx.as_ref());
 
-        let segment_info_cache = self
-            .ctx
-            .get_storage_cache_manager()
-            .get_table_segment_cache();
+        let segment_info_cache = CacheManager::instance().get_table_segment_cache();
         let seg_writer = SegmentWriter::new(
             &self.data_accessor,
             self.location_generator,

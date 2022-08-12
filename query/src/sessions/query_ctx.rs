@@ -381,9 +381,6 @@ impl TableContext for QueryContext {
         let index = self.shared.subquery_index.fetch_add(1, Ordering::Relaxed);
         format!("_subquery_{}", index)
     }
-    fn get_role_cache_manager(&self) -> Arc<RoleCacheMgr> {
-        self.shared.get_role_cache_manager()
-    }
     /// Get the data accessor metrics.
     fn get_dal_metrics(&self) -> DalMetrics {
         self.shared.dal_ctx.get_metrics().as_ref().clone()

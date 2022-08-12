@@ -178,10 +178,6 @@ impl QueryContextShared {
         self.auth_manager.clone()
     }
 
-    pub fn get_role_cache_manager(&self) -> Arc<RoleCacheMgr> {
-        self.session.get_role_cache_manager()
-    }
-
     pub fn get_settings(&self) -> Arc<Settings> {
         self.session.get_settings()
     }

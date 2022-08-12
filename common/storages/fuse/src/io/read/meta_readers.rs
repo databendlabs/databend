@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
-use common_fuse_meta::caches::TenantLabel;
+use common_fuse_meta::caches::{CacheManager, TenantLabel};
 use common_fuse_meta::meta::SegmentInfo;
 use common_fuse_meta::meta::SegmentInfoVersion;
 use common_fuse_meta::meta::SnapshotVersion;
@@ -46,7 +46,7 @@ pub struct MetaReaders;
 impl MetaReaders {
     pub fn segment_info_reader(ctx: &dyn TableContext) -> SegmentInfoReader {
         SegmentInfoReader::new(
-            ctx.get_storage_cache_manager().get_table_segment_cache(),
+            CacheManager::instance().get_table_segment_cache(),
             ctx,
             "SEGMENT_INFO_CACHE".to_owned(),
         )
@@ -54,7 +54,7 @@ impl MetaReaders {
 
     pub fn table_snapshot_reader(ctx: &dyn TableContext) -> TableSnapshotReader {
         TableSnapshotReader::new(
-            ctx.get_storage_cache_manager().get_table_snapshot_cache(),
+            CacheManager::instance().get_table_snapshot_cache(),
             ctx,
             "SNAPSHOT_CACHE".to_owned(),
         )
@@ -63,7 +63,7 @@ impl MetaReaders {
 
 #[async_trait::async_trait]
 impl<T> Loader<TableSnapshot> for T
-where T: BufReaderProvider + Sync
+    where T: BufReaderProvider + Sync
 {
     async fn load(
         &self,
@@ -79,7 +79,7 @@ where T: BufReaderProvider + Sync
 
 #[async_trait::async_trait]
 impl<T> Loader<SegmentInfo> for T
-where T: BufReaderProvider + Sync
+    where T: BufReaderProvider + Sync
 {
     async fn load(&self, key: &str, length_hint: Option<u64>, version: u64) -> Result<SegmentInfo> {
         let version = SegmentInfoVersion::try_from(version)?;
@@ -125,7 +125,7 @@ impl HasTenantLabel for Arc<dyn TableContext> {
 }
 
 fn ctx_tenant_label(ctx: &dyn TableContext) -> TenantLabel {
-    let mgr = ctx.get_storage_cache_manager();
+    let mgr = CacheManager::instance();
     TenantLabel {
         tenant_id: mgr.get_tenant_id().to_owned(),
         cluster_id: mgr.get_cluster_id().to_owned(),

@@ -24,6 +24,7 @@ use common_fuse_meta::meta::SnapshotId;
 use futures::TryStreamExt;
 use opendal::Operator;
 use tracing::warn;
+use common_fuse_meta::caches::CacheManager;
 
 use crate::io::MetaReaders;
 use crate::FuseTable;
@@ -126,20 +127,20 @@ impl FuseTable {
             segments_to_be_deleted.iter(),
             &blocks_referenced_by_gc_root,
         )
-        .await?;
+            .await?;
 
         self.collect(
             ctx.as_ref(),
             segments_to_be_deleted,
             snapshots_to_be_deleted,
         )
-        .await
+            .await
     }
 
     async fn blocks_of(
         &self,
         ctx: &dyn TableContext,
-        segments: impl Iterator<Item = &Location>,
+        segments: impl Iterator<Item=&Location>,
     ) -> Result<HashSet<String>> {
         let mut result = HashSet::new();
         let reader = MetaReaders::segment_info_reader(ctx);
@@ -171,7 +172,7 @@ impl FuseTable {
     async fn purge_blocks(
         &self,
         ctx: &dyn TableContext,
-        segments: impl Iterator<Item = &Location>,
+        segments: impl Iterator<Item=&Location>,
         root: &HashSet<String>,
     ) -> Result<()> {
         let reader = MetaReaders::segment_info_reader(ctx);
@@ -183,9 +184,7 @@ impl FuseTable {
                 if !root.contains(block_meta.location.0.as_str()) {
                     if let Some(bloom_index_location) = &block_meta.bloom_filter_index_location {
                         let path = &bloom_index_location.0;
-                        if let Some(c) =
-                            ctx.get_storage_cache_manager().get_bloom_index_meta_cache()
-                        {
+                        if let Some(c) = CacheManager::instance().get_bloom_index_meta_cache() {
                             let cache = &mut *c.write().await;
                             cache.pop(path);
                         }
@@ -243,7 +242,7 @@ impl FuseTable {
 
         // 1. remove the segments
         for (x, _v) in segments_to_be_deleted {
-            if let Some(c) = ctx.get_storage_cache_manager().get_table_segment_cache() {
+            if let Some(c) = CacheManager::instance().get_table_segment_cache() {
                 let cache = &mut *c.write().await;
                 cache.pop(x.as_str());
             }
@@ -254,7 +253,7 @@ impl FuseTable {
         // 2. remove the snapshots
         for (id, ver) in snapshots_to_be_deleted.iter().rev() {
             let loc = locs.snapshot_location_from_uuid(id, *ver)?;
-            if let Some(c) = ctx.get_storage_cache_manager().get_table_snapshot_cache() {
+            if let Some(c) = CacheManager::instance().get_table_snapshot_cache() {
                 let cache = &mut *c.write().await;
                 cache.pop(loc.as_str());
             }
