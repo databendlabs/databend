@@ -21,7 +21,7 @@ use pretty_assertions::assert_eq;
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_single_cluster_discovery() -> Result<()> {
     let conf = crate::tests::ConfigBuilder::create().config();
-    let cluster_discovery = ClusterDiscovery::create_global(conf.clone()).await?;
+    let cluster_discovery = ClusterDiscovery::init(conf.clone()).await?;
     cluster_discovery.register_to_metastore(&conf).await?;
     let discover_cluster = cluster_discovery.discover().await?;
 

@@ -17,16 +17,17 @@ use std::sync::Arc;
 use common_base::base::tokio::runtime::Runtime;
 use common_base::base::Thread;
 use common_exception::Result;
+use databend_query::clusters::ClusterDiscovery;
 use databend_query::sessions::SessionManager;
 use databend_query::Config;
 
 async fn async_create_sessions(config: Config) -> Result<Arc<SessionManager>> {
+    ClusterDiscovery::init(config.clone()).await?;
     SessionManager::init(config.clone()).await?;
-    let sessions = SessionManager::instance();
 
-    let cluster_discovery = sessions.get_cluster_discovery();
+    let cluster_discovery = ClusterDiscovery::instance();
     cluster_discovery.register_to_metastore(&config).await?;
-    Ok(sessions)
+    Ok(SessionManager::instance())
 }
 
 fn sync_create_sessions(config: Config) -> Result<Arc<SessionManager>> {

@@ -29,6 +29,7 @@ use opendal::Operator;
 use parking_lot::RwLock;
 
 use crate::catalogs::{CatalogManager, CatalogManagerHelper};
+use crate::clusters::ClusterDiscovery;
 use crate::sessions::QueryContext;
 use crate::sessions::QueryContextShared;
 use crate::sessions::SessionContext;
@@ -55,7 +56,6 @@ impl Session {
         conf: Config,
         id: String,
         typ: SessionType,
-        session_mgr: Arc<SessionManager>,
         mysql_connection_id: Option<u32>,
     ) -> Result<Arc<Session>> {
         let session_ctx = Arc::new(SessionContext::try_create(conf.clone())?);
@@ -66,7 +66,7 @@ impl Session {
         Ok(Arc::new(Session {
             id,
             typ: RwLock::new(typ),
-            session_mgr,
+            session_mgr: SessionManager::instance(),
             ref_count,
             session_ctx,
             session_settings,
@@ -141,13 +141,12 @@ impl Session {
     }
 
     pub async fn get_shared_query_context(self: &Arc<Self>) -> Result<Arc<QueryContextShared>> {
-        let discovery = self.session_mgr.get_cluster_discovery();
+        let discovery = ClusterDiscovery::instance();
 
         let session = self.clone();
         let cluster = discovery.discover().await?;
         let shared = QueryContextShared::try_create(session, cluster).await?;
-        self.session_ctx
-            .set_query_context_shared(Some(shared.clone()));
+        self.session_ctx.set_query_context_shared(Some(shared.clone()));
         Ok(shared)
     }
 

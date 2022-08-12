@@ -39,6 +39,7 @@ use common_exception::ErrorCode;
 use common_fuse_meta::caches::CacheManager;
 use common_users::{RoleCacheManager, UserApiProvider};
 use databend_query::catalogs::CatalogManagerHelper;
+use databend_query::clusters::ClusterDiscovery;
 use databend_query::servers::http::v1::HttpQueryManager;
 
 #[databend_main]
@@ -163,8 +164,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
 
     // Cluster register.
     {
-        let session_manager = SessionManager::instance();
-        let cluster_discovery = session_manager.get_cluster_discovery();
+        let cluster_discovery = ClusterDiscovery::instance();
         let register_to_metastore = cluster_discovery.register_to_metastore(&conf);
         register_to_metastore.await?;
         info!(
@@ -259,6 +259,10 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
 
 async fn global_init(conf: &Config) -> Result<(), ErrorCode> {
     // The order of initialization is very important
+
+    // Cluster discovery.
+    ClusterDiscovery::init(conf.clone()).await?;
+
     CacheManager::init(&conf.query)?;
     CatalogManager::init(conf).await?;
     HttpQueryManager::init(conf).await?;

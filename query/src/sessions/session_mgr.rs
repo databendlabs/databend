@@ -58,7 +58,6 @@ use crate::Config;
 
 pub struct SessionManager {
     pub(in crate::sessions) conf: Config,
-    pub(in crate::sessions) discovery: Arc<ClusterDiscovery>,
 
     pub(in crate::sessions) max_sessions: usize,
     pub(in crate::sessions) active_sessions: Arc<RwLock<HashMap<String, Arc<Session>>>>,
@@ -114,9 +113,6 @@ impl SessionManager {
         };
         _log_guards.extend(_guards);
 
-        // Cluster discovery.
-        let discovery = ClusterDiscovery::create_global(conf.clone()).await?;
-
         let storage_runtime = {
             let mut storage_num_cpus = conf.storage.num_cpus as usize;
             if storage_num_cpus == 0 {
@@ -152,7 +148,6 @@ impl SessionManager {
 
         Ok(Arc::new(SessionManager {
             conf,
-            discovery,
             max_sessions,
             active_sessions,
             query_logger: Arc::new(RwLock::new(query_logger)),
@@ -168,10 +163,6 @@ impl SessionManager {
 
     pub fn get_conf(&self) -> Config {
         self.conf.clone()
-    }
-
-    pub fn get_cluster_discovery(self: &Arc<Self>) -> Arc<ClusterDiscovery> {
-        self.discovery.clone()
     }
 
     pub fn get_storage_operator(self: &Arc<Self>) -> Operator {
@@ -216,7 +207,7 @@ impl SessionManager {
             }
         }
         let session =
-            Session::try_create(config.clone(), id, typ, self.clone(), mysql_conn_id).await?;
+            Session::try_create(config.clone(), id, typ, mysql_conn_id).await?;
 
         let mut sessions = self.active_sessions.write();
         if sessions.len() < self.max_sessions {
@@ -255,7 +246,6 @@ impl SessionManager {
             config.clone(),
             id.clone(),
             SessionType::FlightRPC,
-            self.clone(),
             None,
         )
             .await?;

@@ -27,6 +27,7 @@ use futures::StreamExt;
 use tokio_stream::wrappers::TcpListenerStream;
 use tracing::error;
 use tracing::info;
+use crate::clusters::ClusterDiscovery;
 
 use crate::sessions::SessionManager;
 
@@ -62,8 +63,7 @@ impl ShutdownHandle {
 
     pub async fn shutdown(&mut self, mut signal: SignalStream) {
         self.shutdown_services(true).await;
-        self.sessions
-            .get_cluster_discovery()
+        ClusterDiscovery::instance()
             .unregister_to_metastore(&mut signal)
             .await;
         self.sessions.graceful_shutdown(signal, 5).await;
