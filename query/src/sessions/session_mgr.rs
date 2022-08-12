@@ -59,7 +59,6 @@ use crate::Config;
 pub struct SessionManager {
     pub(in crate::sessions) conf: Config,
     pub(in crate::sessions) discovery: Arc<ClusterDiscovery>,
-    pub(in crate::sessions) catalogs: Arc<CatalogManager>,
     pub(in crate::sessions) http_query_manager: Arc<HttpQueryManager>,
     pub(in crate::sessions) data_exchange_manager: Arc<DataExchangeManager>,
 
@@ -120,7 +119,7 @@ impl SessionManager {
         };
         _log_guards.extend(_guards);
 
-        let catalogs = Arc::new(CatalogManager::try_new(&conf).await?);
+        CatalogManager::init(&conf).await?;
         let storage_cache_manager = Arc::new(CacheManager::init(&conf.query));
 
         // Cluster discovery.
@@ -166,7 +165,6 @@ impl SessionManager {
 
         Ok(Arc::new(SessionManager {
             conf,
-            catalogs,
             discovery,
             http_query_manager,
             max_sessions,
@@ -198,8 +196,8 @@ impl SessionManager {
         self.http_query_manager.clone()
     }
 
-    pub fn get_catalog_manager(self: &Arc<Self>) -> Arc<CatalogManager> {
-        self.catalogs.clone()
+    pub fn get_catalog_manager(self: &Arc<Self>) -> Result<Arc<CatalogManager>> {
+        CatalogManager::instance()
     }
 
     pub fn get_storage_operator(self: &Arc<Self>) -> Operator {

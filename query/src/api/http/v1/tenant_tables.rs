@@ -50,7 +50,7 @@ async fn load_tenant_tables(
     tenant: &str,
 ) -> Result<Vec<TenantTableInfo>> {
     let catalog = session_mgr
-        .get_catalog_manager()
+        .get_catalog_manager()?
         .get_catalog(CATALOG_DEFAULT)?;
     let databases = catalog.list_databases(tenant).await?;
 

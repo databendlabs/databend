@@ -43,7 +43,7 @@ async fn run_cluster_test(ctx: Arc<QueryContext>, suite: &Suite) -> Result<Strin
     let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL, &bt)?;
     let binder = Binder::new(
         ctx.clone(),
-        ctx.get_catalogs(),
+        ctx.get_catalogs()?,
         NameResolutionContext::default(),
         Arc::new(RwLock::new(Metadata::create())),
     );

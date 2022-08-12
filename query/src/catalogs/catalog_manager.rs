@@ -14,12 +14,13 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use once_cell::sync::OnceCell;
 
 use common_catalog::catalog::Catalog;
 pub use common_catalog::catalog::CatalogManager;
 use common_catalog::catalog::CATALOG_DEFAULT;
 use common_config::Config;
-use common_exception::Result;
+use common_exception::{ErrorCode, Result};
 #[cfg(feature = "hive")]
 use common_storages_hive::CATALOG_HIVE;
 
@@ -27,7 +28,9 @@ use crate::catalogs::DatabaseCatalog;
 
 #[async_trait::async_trait]
 pub trait CatalogManagerHelper {
-    async fn try_new(conf: &Config) -> Result<CatalogManager>;
+    async fn init(conf: &Config) -> Result<()>;
+
+    fn instance() -> Result<Arc<CatalogManager>>;
 
     async fn register_build_in_catalogs(&mut self, conf: &Config) -> Result<()>;
 
@@ -35,20 +38,31 @@ pub trait CatalogManagerHelper {
     fn register_external_catalogs(&mut self, conf: &Config) -> Result<()>;
 }
 
+static CATALOG_MANAGER: OnceCell<Arc<CatalogManager>> = OnceCell::new();
+
 #[async_trait::async_trait]
 impl CatalogManagerHelper for CatalogManager {
-    async fn try_new(conf: &Config) -> Result<CatalogManager> {
-        let catalogs = HashMap::new();
-        let mut manager = CatalogManager { catalogs };
+    async fn init(conf: &Config) -> Result<()> {
+        let mut catalog_manager = CatalogManager { catalogs: HashMap::new() };
 
-        manager.register_build_in_catalogs(conf).await?;
+        catalog_manager.register_build_in_catalogs(conf).await?;
 
         #[cfg(feature = "hive")]
         {
-            manager.register_external_catalogs(conf)?;
+            catalog_manager.register_external_catalogs(conf)?;
         }
 
-        Ok(manager)
+        match CATALOG_MANAGER.set(Arc::new(catalog_manager)) {
+            Ok(_) => Ok(()),
+            Err(_) => Err(ErrorCode::LogicalError("Cannot init SessionManager twice"))
+        }
+    }
+
+    fn instance() -> Result<Arc<CatalogManager>> {
+        match CATALOG_MANAGER.get() {
+            None => Err(ErrorCode::LogicalError("CatalogManager is not init")),
+            Some(catalog_manager) => Ok(catalog_manager.clone()),
+        }
     }
 
     async fn register_build_in_catalogs(&mut self, conf: &Config) -> Result<()> {

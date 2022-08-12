@@ -1325,7 +1325,7 @@ impl<'a> TypeChecker<'a> {
     ) -> Result<Box<(Scalar, DataTypeImpl)>> {
         let mut binder = Binder::new(
             self.ctx.clone(),
-            self.ctx.get_catalogs(),
+            self.ctx.get_catalogs()?,
             self.name_resolution_ctx.clone(),
             self.metadata.clone(),
         );

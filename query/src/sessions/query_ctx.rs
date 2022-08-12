@@ -337,12 +337,12 @@ impl TableContext for QueryContext {
     fn get_fragment_id(&self) -> usize {
         self.fragment_id.fetch_add(1, Ordering::Release)
     }
-    fn get_catalogs(&self) -> Arc<CatalogManager> {
+    fn get_catalogs(&self) -> Result<Arc<CatalogManager>> {
         self.shared.get_catalogs()
     }
     fn get_catalog(&self, catalog_name: &str) -> Result<Arc<dyn Catalog>> {
         self.shared
-            .get_catalogs()
+            .get_catalogs()?
             .get_catalog(catalog_name.as_ref())
     }
     fn get_id(&self) -> String {
@@ -462,9 +462,9 @@ impl TrySpawn for QueryContext {
     /// Spawns a new asynchronous task, returning a tokio::JoinHandle for it.
     /// The task will run in the current context thread_pool not the global.
     fn try_spawn<T>(&self, task: T) -> Result<JoinHandle<T::Output>>
-    where
-        T: Future + Send + 'static,
-        T::Output: Send + 'static,
+        where
+            T: Future + Send + 'static,
+            T::Output: Send + 'static,
     {
         Ok(self.shared.try_get_runtime()?.spawn(task))
     }

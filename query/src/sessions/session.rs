@@ -178,7 +178,7 @@ impl Session {
     }
 
     pub fn attach<F>(self: &Arc<Self>, host: Option<SocketAddr>, io_shutdown: F)
-    where F: FnOnce() + Send + 'static {
+        where F: FnOnce() + Send + 'static {
         let (tx, rx) = oneshot::channel();
         self.session_ctx.set_client_host(host);
         self.session_ctx.set_io_shutdown_tx(Some(tx));
@@ -289,7 +289,7 @@ impl Session {
         self.session_mgr.clone()
     }
 
-    pub fn get_catalogs(self: &Arc<Self>) -> Arc<CatalogManager> {
+    pub fn get_catalogs(self: &Arc<Self>) -> Result<Arc<CatalogManager>> {
         self.session_mgr.get_catalog_manager()
     }
 
