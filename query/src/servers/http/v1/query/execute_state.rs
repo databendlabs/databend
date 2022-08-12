@@ -44,13 +44,12 @@ use crate::interpreters::InterpreterQueryLog;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::Pipe;
+use crate::pipelines::PipelineBuildResult;
 use crate::servers::utils::use_planner_v2;
 use crate::sessions::QueryAffect;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionRef;
 use crate::sessions::TableContext;
-use crate::sql::executor::PhysicalPlan;
-use crate::sql::executor::PipelineBuilder;
 use crate::sql::ColumnBinding;
 use crate::sql::DfParser;
 use crate::sql::DfStatement;
@@ -342,24 +341,11 @@ impl HttpQueryHandle {
     pub async fn execute(
         self,
         ctx: Arc<QueryContext>,
-        physical_plan: &PhysicalPlan,
+        mut build_res: PipelineBuildResult,
         result_columns: &[ColumnBinding],
     ) -> Result<SendableDataBlockStream> {
         let executor = self.executor.clone();
         let block_buffer = self.block_buffer.clone();
-        let last_schema = physical_plan.output_schema()?;
-
-        let pipeline_builder = PipelineBuilder::create(ctx.clone());
-        let mut build_res = pipeline_builder.finalize(physical_plan)?;
-
-        PipelineBuilder::render_result_set(
-            last_schema,
-            result_columns,
-            &mut build_res.main_pipeline,
-        )?;
-
-        let async_runtime = ctx.get_storage_runtime();
-        build_res.set_max_threads(ctx.get_settings().get_max_threads()? as usize);
 
         build_res.main_pipeline.resize(1)?;
         let input = InputPort::create();
@@ -392,6 +378,7 @@ impl HttpQueryHandle {
             processors: vec![sink],
         });
 
+        let async_runtime = ctx.get_storage_runtime();
         let async_runtime_clone = async_runtime.clone();
         let query_need_abort = ctx.query_need_abort();
 
