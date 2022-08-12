@@ -20,6 +20,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use common_base::base::Runtime;
+use common_base::base::Thread;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -113,7 +114,7 @@ impl PipelinePullingExecutor {
         let state = self.state.clone();
         let threads_executor = self.executor.clone();
         let thread_function = Self::thread_function(state, threads_executor);
-        std::thread::spawn(thread_function);
+        Thread::spawn(thread_function);
     }
 
     pub fn get_inner(&self) -> Arc<PipelineExecutor> {
@@ -123,14 +124,14 @@ impl PipelinePullingExecutor {
     fn thread_function(state: Arc<State>, executor: Arc<PipelineExecutor>) -> impl Fn() {
         move || {
             if let Err(cause) = executor.execute() {
-                if let Err(send_err) = state.sender.try_send(Err(cause)) {
+                if let Err(send_err) = state.sender.send(Err(cause)) {
                     tracing::warn!("Send error {:?}", send_err);
                 }
 
                 return;
             }
 
-            if let Err(send_err) = state.sender.try_send(Ok(None)) {
+            if let Err(send_err) = state.sender.send(Ok(None)) {
                 tracing::warn!("Send finish event error {:?}", send_err);
             }
         }
@@ -200,13 +201,6 @@ impl Sink for PullingSink {
     const NAME: &'static str = "PullingExecutorSink";
 
     fn on_finish(&mut self) -> Result<()> {
-        if let Err(cause) = self.sender.send(Ok(None)) {
-            return Err(ErrorCode::LogicalError(format!(
-                "Logical error, cannot push data into SyncSender, cause {:?}",
-                cause
-            )));
-        }
-
         Ok(())
     }
 

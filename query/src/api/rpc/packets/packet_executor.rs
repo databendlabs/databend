@@ -34,7 +34,6 @@ pub struct QueryFragmentsPlanPacket {
     pub fragments: Vec<FragmentPlanPacket>,
     // We send nodes info for each node. This is a bad choice
     pub executors_info: HashMap<String, Arc<NodeInfo>>,
-    pub source_2_fragments: HashMap<String, Vec<usize>>,
 }
 
 impl QueryFragmentsPlanPacket {
@@ -43,7 +42,6 @@ impl QueryFragmentsPlanPacket {
         executor: String,
         fragments: Vec<FragmentPlanPacket>,
         executors_info: HashMap<String, Arc<NodeInfo>>,
-        source_2_fragments: HashMap<String, Vec<usize>>,
         request_executor: String,
     ) -> QueryFragmentsPlanPacket {
         QueryFragmentsPlanPacket {
@@ -52,7 +50,6 @@ impl QueryFragmentsPlanPacket {
             fragments,
             executors_info,
             request_executor,
-            source_2_fragments,
         }
     }
 }

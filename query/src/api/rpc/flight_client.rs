@@ -13,21 +13,31 @@
 // limitations under the License.
 
 use std::convert::TryInto;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
+use std::sync::Arc;
 
 use async_channel::Receiver;
+use async_channel::Sender;
 use common_arrow::arrow_format::flight::data::Action;
+use common_arrow::arrow_format::flight::data::FlightData;
 use common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
 use common_base::base::tokio::time::Duration;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use futures_util::StreamExt;
 use tonic::metadata::MetadataKey;
 use tonic::metadata::MetadataValue;
 use tonic::transport::channel::Channel;
 use tonic::Request;
+use tonic::Status;
+use tonic::Streaming;
 
 use crate::api::rpc::flight_actions::FlightAction;
 use crate::api::rpc::packets::DataPacket;
 use crate::api::rpc::packets::DataPacketStream;
+use crate::api::rpc::request_builder::RequestBuilder;
 
 pub struct FlightClient {
     inner: FlightServiceClient<Channel>,
@@ -56,6 +66,45 @@ impl FlightClient {
                 cause
             ))),
         }
+    }
+
+    pub async fn request_server_exchange(&mut self, query_id: &str) -> Result<FlightExchange> {
+        let (tx, rx) = async_channel::bounded(1);
+        Ok(FlightExchange::from_client(
+            tx,
+            self.inner
+                .do_exchange(
+                    RequestBuilder::create(Box::pin(rx))
+                        .with_metadata("x-type", "request_server_exchange")?
+                        .with_metadata("x-query-id", query_id)?
+                        .build(),
+                )
+                .await?
+                .into_inner(),
+        ))
+    }
+
+    pub async fn do_exchange(
+        &mut self,
+        query_id: &str,
+        source: &str,
+        fragment_id: usize,
+    ) -> Result<FlightExchange> {
+        let (tx, rx) = async_channel::bounded(1);
+        Ok(FlightExchange::from_client(
+            tx,
+            self.inner
+                .do_exchange(
+                    RequestBuilder::create(Box::pin(rx))
+                        .with_metadata("x-type", "exchange_fragment")?
+                        .with_metadata("x-source", source)?
+                        .with_metadata("x-query-id", query_id)?
+                        .with_metadata("x-fragment-id", &fragment_id.to_string())?
+                        .build(),
+                )
+                .await?
+                .into_inner(),
+        ))
     }
 
     pub async fn do_put(
@@ -92,3 +141,309 @@ impl FlightClient {
         }
     }
 }
+
+#[derive(Clone)]
+pub enum FlightExchange {
+    // dummy if localhost
+    Dummy,
+    Client(ClientFlightExchange),
+    Server(ServerFlightExchange),
+}
+
+impl FlightExchange {
+    pub fn from_server(
+        streaming: Request<Streaming<FlightData>>,
+        response_tx: Sender<std::result::Result<FlightData, Status>>,
+    ) -> FlightExchange {
+        let mut streaming = streaming.into_inner();
+        let (tx, rx) = async_channel::bounded(1);
+        common_base::base::tokio::spawn(async move {
+            while let Some(message) = streaming.next().await {
+                if let Err(_cause) = tx.send(message).await {
+                    break;
+                }
+            }
+        });
+
+        FlightExchange::Server(ServerFlightExchange {
+            response_tx,
+            request_rx: rx,
+            state: Arc::new(ChannelState::create()),
+            is_closed_request: AtomicBool::new(false),
+            is_closed_response: AtomicBool::new(false),
+        })
+    }
+
+    pub fn from_client(
+        response_tx: Sender<FlightData>,
+        mut streaming: Streaming<FlightData>,
+    ) -> FlightExchange {
+        let (tx, request_rx) = async_channel::bounded(1);
+        common_base::base::tokio::spawn(async move {
+            while let Some(message) = streaming.next().await {
+                if let Err(_cause) = tx.send(message).await {
+                    break;
+                }
+            }
+        });
+
+        FlightExchange::Client(ClientFlightExchange {
+            request_rx,
+            response_tx,
+            state: Arc::new(ChannelState::create()),
+            is_closed_request: AtomicBool::new(false),
+            is_closed_response: AtomicBool::new(false),
+        })
+    }
+}
+
+impl FlightExchange {
+    pub async fn send(&self, data: DataPacket) -> Result<()> {
+        match self {
+            FlightExchange::Dummy => Err(ErrorCode::UnImplement(
+                "Unimplemented send in dummy exchange.",
+            )),
+            FlightExchange::Client(exchange) => exchange.send(data).await,
+            FlightExchange::Server(exchange) => exchange.send(data).await,
+        }
+    }
+
+    pub async fn recv(&self) -> Result<Option<DataPacket>> {
+        match self {
+            FlightExchange::Client(exchange) => exchange.recv().await,
+            FlightExchange::Server(exchange) => exchange.recv().await,
+            FlightExchange::Dummy => Ok(None),
+        }
+    }
+
+    pub fn try_recv(&self) -> Result<Option<DataPacket>> {
+        match self {
+            FlightExchange::Dummy => Ok(None),
+            FlightExchange::Client(exchange) => exchange.try_recv(),
+            FlightExchange::Server(exchange) => exchange.try_recv(),
+        }
+    }
+
+    pub fn close_input(&self) {
+        match self {
+            FlightExchange::Dummy => { /* do nothing*/ }
+            FlightExchange::Client(exchange) => exchange.close_input(),
+            FlightExchange::Server(exchange) => exchange.close_input(),
+        }
+    }
+
+    pub fn close_output(&self) {
+        match self {
+            FlightExchange::Dummy => { /* do nothing*/ }
+            FlightExchange::Client(exchange) => exchange.close_output(),
+            FlightExchange::Server(exchange) => exchange.close_output(),
+        }
+    }
+}
+
+struct ChannelState {
+    request_count: AtomicUsize,
+    response_count: AtomicUsize,
+}
+
+impl ChannelState {
+    pub fn create() -> ChannelState {
+        ChannelState {
+            request_count: AtomicUsize::new(1),
+            response_count: AtomicUsize::new(1),
+        }
+    }
+}
+
+pub struct ClientFlightExchange {
+    state: Arc<ChannelState>,
+    is_closed_request: AtomicBool,
+    is_closed_response: AtomicBool,
+    response_tx: Sender<FlightData>,
+    request_rx: Receiver<std::result::Result<FlightData, Status>>,
+}
+
+impl ClientFlightExchange {
+    pub async fn send(&self, data: DataPacket) -> Result<()> {
+        if let Err(_cause) = self.response_tx.send(FlightData::from(data)).await {
+            return Err(ErrorCode::LogicalError("It's a bug"));
+        }
+
+        Ok(())
+    }
+
+    pub async fn recv(&self) -> Result<Option<DataPacket>> {
+        match self.request_rx.recv().await {
+            Err(_) => Ok(None),
+            Ok(message) => match message {
+                Ok(data) => Ok(Some(DataPacket::try_from(data)?)),
+                Err(status) => Err(ErrorCode::from(status)),
+            },
+        }
+    }
+
+    pub fn try_recv(&self) -> Result<Option<DataPacket>> {
+        match self.request_rx.try_recv() {
+            Err(_) => Ok(None),
+            Ok(message) => match message {
+                Ok(data) => Ok(Some(DataPacket::try_from(data)?)),
+                Err(status) => Err(ErrorCode::from(status)),
+            },
+        }
+    }
+
+    pub fn close_input(&self) {
+        if !self.is_closed_request.fetch_or(true, Ordering::SeqCst)
+            && self.state.request_count.fetch_sub(1, Ordering::AcqRel) == 1
+        {
+            self.request_rx.close();
+        }
+    }
+
+    pub fn close_output(&self) {
+        if !self.is_closed_response.fetch_or(true, Ordering::SeqCst)
+            && self.state.response_count.fetch_sub(1, Ordering::AcqRel) == 1
+        {
+            self.response_tx.close();
+        }
+    }
+}
+
+impl Clone for ClientFlightExchange {
+    fn clone(&self) -> Self {
+        self.state.request_count.fetch_add(1, Ordering::Relaxed);
+        self.state.response_count.fetch_add(1, Ordering::Relaxed);
+
+        ClientFlightExchange {
+            state: self.state.clone(),
+            request_rx: self.request_rx.clone(),
+            response_tx: self.response_tx.clone(),
+            is_closed_request: AtomicBool::new(false),
+            is_closed_response: AtomicBool::new(false),
+        }
+    }
+}
+
+impl Drop for ClientFlightExchange {
+    fn drop(&mut self) {
+        if !self.is_closed_request.fetch_or(true, Ordering::SeqCst)
+            && self.state.request_count.fetch_sub(1, Ordering::AcqRel) == 1
+        {
+            self.request_rx.close();
+        }
+
+        if !self.is_closed_response.fetch_or(true, Ordering::SeqCst)
+            && self.state.response_count.fetch_sub(1, Ordering::AcqRel) == 1
+        {
+            self.response_tx.close();
+        }
+    }
+}
+
+pub struct ServerFlightExchange {
+    state: Arc<ChannelState>,
+    is_closed_request: AtomicBool,
+    is_closed_response: AtomicBool,
+    request_rx: Receiver<std::result::Result<FlightData, Status>>,
+    response_tx: Sender<std::result::Result<FlightData, Status>>,
+}
+
+impl Clone for ServerFlightExchange {
+    fn clone(&self) -> Self {
+        self.state.request_count.fetch_add(1, Ordering::Relaxed);
+        self.state.response_count.fetch_add(1, Ordering::Relaxed);
+
+        ServerFlightExchange {
+            state: self.state.clone(),
+            request_rx: self.request_rx.clone(),
+            response_tx: self.response_tx.clone(),
+            is_closed_request: AtomicBool::new(false),
+            is_closed_response: AtomicBool::new(false),
+        }
+    }
+}
+
+impl Drop for ServerFlightExchange {
+    fn drop(&mut self) {
+        if !self.is_closed_request.fetch_or(true, Ordering::SeqCst)
+            && self.state.request_count.fetch_sub(1, Ordering::AcqRel) == 1
+        {
+            self.request_rx.close();
+        }
+
+        if !self.is_closed_response.fetch_or(true, Ordering::SeqCst)
+            && self.state.response_count.fetch_sub(1, Ordering::AcqRel) == 1
+        {
+            self.response_tx.close();
+        }
+    }
+}
+
+impl ServerFlightExchange {
+    pub async fn send(&self, data: DataPacket) -> Result<()> {
+        if let Err(_cause) = self.response_tx.send(Ok(FlightData::from(data))).await {
+            return Err(ErrorCode::LogicalError("It's a bug"));
+        }
+
+        Ok(())
+    }
+
+    pub async fn recv(&self) -> Result<Option<DataPacket>> {
+        match self.request_rx.recv().await {
+            Err(_) => Ok(None),
+            Ok(message) => match message {
+                Ok(data) => Ok(Some(DataPacket::try_from(data)?)),
+                Err(status) => Err(ErrorCode::from(status)),
+            },
+        }
+    }
+
+    pub fn try_recv(&self) -> Result<Option<DataPacket>> {
+        match self.request_rx.try_recv() {
+            Err(_) => Ok(None),
+            Ok(message) => match message {
+                Ok(data) => Ok(Some(DataPacket::try_from(data)?)),
+                Err(status) => Err(ErrorCode::from(status)),
+            },
+        }
+    }
+
+    pub fn close_input(&self) {
+        if !self.is_closed_request.fetch_or(true, Ordering::SeqCst)
+            && self.state.request_count.fetch_sub(1, Ordering::AcqRel) == 1
+        {
+            self.request_rx.close();
+        }
+    }
+
+    pub fn close_output(&self) {
+        if !self.is_closed_response.fetch_or(true, Ordering::SeqCst)
+            && self.state.response_count.fetch_sub(1, Ordering::AcqRel) == 1
+        {
+            self.response_tx.close();
+        }
+    }
+}
+
+// fn match_for_io_error(err_status: &Status) -> Option<&std::io::Error> {
+//     let mut err: &(dyn Error + 'static) = err_status;
+//
+//     loop {
+//         if let Some(io_err) = err.downcast_ref::<std::io::Error>() {
+//             return Some(io_err);
+//         }
+//
+//         // h2::Error do not expose std::io::Error with `source()`
+//         // https://github.com/hyperium/h2/pull/462
+//         if let Some(h2_err) = err.downcast_ref::<h2::Error>() {
+//             if let Some(io_err) = h2_err.get_io() {
+//                 return Some(io_err);
+//             }
+//         }
+//
+//         err = match err.source() {
+//             Some(err) => err,
+//             None => return None,
+//         };
+//     }
+// }
