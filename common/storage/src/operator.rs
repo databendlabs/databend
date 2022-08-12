@@ -14,18 +14,17 @@
 
 use std::env;
 use std::io::Result;
-use std::sync::Arc;
-use once_cell::sync::OnceCell;
 
+use common_base::base::GlobalIORuntime;
+use common_contexts::DalRuntime;
+use common_exception::ErrorCode;
+use once_cell::sync::OnceCell;
 use opendal::services::azblob;
 use opendal::services::fs;
 use opendal::services::http;
 use opendal::services::memory;
 use opendal::services::s3;
 use opendal::Operator;
-use common_base::base::GlobalIORuntime;
-use common_contexts::DalRuntime;
-use common_exception::ErrorCode;
 
 use super::StorageAzblobConfig;
 use super::StorageFsConfig;
@@ -173,7 +172,7 @@ impl StorageOperator {
 
         match STORAGE_OPERATOR.set(operator) {
             Ok(_) => Ok(()),
-            Err(_) => Err(ErrorCode::LogicalError("Cannot init StorageOperator twice"))
+            Err(_) => Err(ErrorCode::LogicalError("Cannot init StorageOperator twice")),
         }
     }
 
@@ -184,4 +183,3 @@ impl StorageOperator {
         }
     }
 }
-

@@ -40,7 +40,6 @@ use crate::sessions::SessionManager;
 use crate::sessions::SessionType;
 
 pub struct MySQLHandler {
-    sessions: Arc<SessionManager>,
     abort_handle: AbortHandle,
     abort_registration: Option<AbortRegistration>,
     join_handle: Option<JoinHandle<()>>,
@@ -51,7 +50,6 @@ impl MySQLHandler {
         let (abort_handle, registration) = AbortHandle::new_pair();
         Ok(Box::new(MySQLHandler {
             abort_handle,
-            sessions: SessionManager::instance(),
             abort_registration: Some(registration),
             join_handle: None,
         }))
@@ -67,11 +65,10 @@ impl MySQLHandler {
         Ok((TcpListenerStream::new(listener), listener_addr))
     }
 
-    fn listen_loop(&self, stream: ListeningStream, rt: Arc<Runtime>) -> impl Future<Output=()> {
-        let sessions = self.sessions.clone();
+    fn listen_loop(&self, stream: ListeningStream, rt: Arc<Runtime>) -> impl Future<Output = ()> {
         stream.for_each(move |accept_socket| {
             let executor = rt.clone();
-            let sessions = sessions.clone();
+            let sessions = SessionManager::instance();
             async move {
                 match accept_socket {
                     Err(error) => error!("Broken session connection: {}", error),

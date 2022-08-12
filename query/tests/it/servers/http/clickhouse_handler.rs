@@ -30,8 +30,9 @@ use poem::EndpointExt;
 use poem::Request;
 use poem::Route;
 use pretty_assertions::assert_eq;
+use databend_query::sessions::SessionManager;
 
-use crate::tests::SessionManagerBuilder;
+use crate::tests::{ConfigBuilder};
 
 macro_rules! assert_error {
     ($body:expr, $msg:expr$(,)?) => {{
@@ -408,13 +409,10 @@ struct Server {
 
 impl Server {
     pub fn new() -> Self {
-        let session_manager = SessionManagerBuilder::create().build().unwrap();
+        SessionManager::init(ConfigBuilder::create().build()).unwrap();
         let endpoint = Route::new()
             .nest("/", clickhouse_router())
-            .with(HTTPSessionMiddleware {
-                kind: HttpHandlerKind::Clickhouse,
-                session_manager,
-            });
+            .with(HTTPSessionMiddleware { kind: HttpHandlerKind::Clickhouse });
         Server { endpoint }
     }
 

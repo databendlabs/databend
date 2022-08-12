@@ -14,15 +14,16 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use once_cell::sync::OnceCell;
 
 use common_catalog::catalog::Catalog;
 pub use common_catalog::catalog::CatalogManager;
 use common_catalog::catalog::CATALOG_DEFAULT;
 use common_config::Config;
-use common_exception::{ErrorCode, Result};
+use common_exception::ErrorCode;
+use common_exception::Result;
 #[cfg(feature = "hive")]
 use common_storages_hive::CATALOG_HIVE;
+use once_cell::sync::OnceCell;
 
 use crate::catalogs::DatabaseCatalog;
 
@@ -43,7 +44,9 @@ static CATALOG_MANAGER: OnceCell<Arc<CatalogManager>> = OnceCell::new();
 #[async_trait::async_trait]
 impl CatalogManagerHelper for CatalogManager {
     async fn init(conf: &Config) -> Result<()> {
-        let mut catalog_manager = CatalogManager { catalogs: HashMap::new() };
+        let mut catalog_manager = CatalogManager {
+            catalogs: HashMap::new(),
+        };
 
         catalog_manager.register_build_in_catalogs(conf).await?;
 
@@ -54,7 +57,7 @@ impl CatalogManagerHelper for CatalogManager {
 
         match CATALOG_MANAGER.set(Arc::new(catalog_manager)) {
             Ok(_) => Ok(()),
-            Err(_) => Err(ErrorCode::LogicalError("Cannot init SessionManager twice"))
+            Err(_) => Err(ErrorCode::LogicalError("Cannot init SessionManager twice")),
         }
     }
 

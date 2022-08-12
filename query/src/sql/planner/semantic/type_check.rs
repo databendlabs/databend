@@ -51,10 +51,10 @@ use common_functions::scalars::CastFunction;
 use common_functions::scalars::FunctionFactory;
 use common_functions::scalars::TupleFunction;
 use common_planners::validate_function_arg;
-use crate::catalogs::CatalogManagerHelper;
 
 use super::name_resolution::NameResolutionContext;
 use super::normalize_identifier;
+use crate::catalogs::CatalogManagerHelper;
 use crate::evaluator::Evaluator;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;

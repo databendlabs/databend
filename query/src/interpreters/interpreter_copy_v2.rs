@@ -14,6 +14,7 @@
 use std::path::Path;
 use std::sync::Arc;
 
+use common_base::base::GlobalIORuntime;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
@@ -27,7 +28,6 @@ use common_streams::SendableDataBlockStream;
 use futures::TryStreamExt;
 use regex::Regex;
 use tracing::info;
-use common_base::base::GlobalIORuntime;
 
 use super::append2table;
 use super::commit2table;

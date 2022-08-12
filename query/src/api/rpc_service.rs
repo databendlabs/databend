@@ -54,7 +54,7 @@ impl RpcService {
         Ok((TcpListenerStream::new(listener), listener_addr))
     }
 
-    fn shutdown_notify(&self) -> impl Future<Output=()> + 'static {
+    fn shutdown_notify(&self) -> impl Future<Output = ()> + 'static {
         let notified = self.abort_notify.clone();
         async move {
             notified.notified().await;
@@ -70,7 +70,7 @@ impl RpcService {
     }
 
     pub async fn start_with_incoming(&mut self, listener_stream: TcpListenerStream) -> Result<()> {
-        let sessions = self.sessions.clone();
+        let _sessions = self.sessions.clone();
         let flight_api_service = DatabendQueryFlightService::create();
         let conf = self.sessions.get_conf();
         let builder = Server::builder();
@@ -83,7 +83,7 @@ impl RpcService {
                     ))
                 })?)
                 .map_err(|e| {
-                    ErrorCode::TLSConfigurationFailure(format!("failed to invoke tls_config: {e}", ))
+                    ErrorCode::TLSConfigurationFailure(format!("failed to invoke tls_config: {e}",))
                 })?
         } else {
             builder

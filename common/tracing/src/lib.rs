@@ -27,11 +27,11 @@ pub use config::FileConfig;
 pub use config::StderrConfig;
 pub use logging::init_logging;
 pub use logging::init_query_logger;
+pub use logging::QueryLogger;
 pub use panic_hook::log_panic;
 pub use panic_hook::set_panic_hook;
 pub use tracing_to_jaeger::extract_remote_span_as_parent;
 pub use tracing_to_jaeger::inject_span_to_tonic_request;
-pub use logging::QueryLogger;
 
 #[macro_export]
 macro_rules! func_name {

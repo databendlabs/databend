@@ -15,12 +15,13 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
-use once_cell::sync::OnceCell;
 
 use common_base::base::tokio;
 use common_base::base::tokio::sync::RwLock;
 use common_base::base::tokio::time::sleep;
-use common_exception::{ErrorCode, Result};
+use common_exception::ErrorCode;
+use common_exception::Result;
+use once_cell::sync::OnceCell;
 use parking_lot::Mutex;
 use tracing::warn;
 
@@ -59,7 +60,9 @@ impl HttpQueryManager {
 
         match HTTP_QUERIES_MANAGER.set(http_queries_manager) {
             Ok(_) => Ok(()),
-            Err(_) => Err(ErrorCode::LogicalError("Cannot init HttpQueryManager twice"))
+            Err(_) => Err(ErrorCode::LogicalError(
+                "Cannot init HttpQueryManager twice",
+            )),
         }
     }
 

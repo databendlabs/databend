@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod global_runtime;
 mod net;
 mod profiling;
 mod progress;
@@ -23,8 +24,8 @@ mod stoppable;
 mod string_func;
 mod thread;
 mod uniq_id;
-mod global_runtime;
 
+pub use global_runtime::GlobalIORuntime;
 pub use net::get_free_tcp_port;
 pub use net::get_free_udp_port;
 pub use profiling::Profiling;
@@ -50,4 +51,3 @@ pub use tokio;
 pub use uniq_id::GlobalSequence;
 pub use uniq_id::GlobalUniqName;
 pub use uuid;
-pub use global_runtime::GlobalIORuntime;

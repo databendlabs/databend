@@ -1,7 +1,10 @@
 use std::sync::Arc;
+
+use common_exception::ErrorCode;
+use common_exception::Result;
 use once_cell::sync::OnceCell;
+
 use crate::base::Runtime;
-use common_exception::{ErrorCode, Result};
 
 pub struct GlobalIORuntime;
 
@@ -19,7 +22,7 @@ impl GlobalIORuntime {
 
         match GLOBAL_RUNTIME.set(runtime) {
             Ok(_) => Ok(()),
-            Err(_) => Err(ErrorCode::LogicalError("Cannot init GlobalRuntime twice"))
+            Err(_) => Err(ErrorCode::LogicalError("Cannot init GlobalRuntime twice")),
         }
     }
 

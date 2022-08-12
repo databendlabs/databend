@@ -27,8 +27,8 @@ use futures::StreamExt;
 use tokio_stream::wrappers::TcpListenerStream;
 use tracing::error;
 use tracing::info;
-use crate::clusters::ClusterDiscovery;
 
+use crate::clusters::ClusterDiscovery;
 use crate::sessions::SessionManager;
 
 pub type ListeningStream = Abortable<TcpListenerStream>;
@@ -81,8 +81,8 @@ impl ShutdownHandle {
 
                 info!("Received termination signal.");
                 if let Ok(false) =
-                self.shutdown
-                    .compare_exchange(false, true, Ordering::SeqCst, Ordering::Acquire)
+                    self.shutdown
+                        .compare_exchange(false, true, Ordering::SeqCst, Ordering::Acquire)
                 {
                     let shutdown_services = self.shutdown(stream);
                     shutdown_services.await;
@@ -99,8 +99,8 @@ impl ShutdownHandle {
 impl Drop for ShutdownHandle {
     fn drop(&mut self) {
         if let Ok(false) =
-        self.shutdown
-            .compare_exchange(false, true, Ordering::SeqCst, Ordering::Acquire)
+            self.shutdown
+                .compare_exchange(false, true, Ordering::SeqCst, Ordering::Acquire)
         {
             let signal_stream = DummySignalStream::create(SignalType::Exit);
             futures::executor::block_on(self.shutdown(signal_stream));

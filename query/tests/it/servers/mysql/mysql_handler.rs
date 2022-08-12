@@ -21,6 +21,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
 use databend_query::servers::MySQLHandler;
+use databend_query::sessions::SessionManager;
 use mysql_async::prelude::FromRow;
 use mysql_async::prelude::Queryable;
 use mysql_async::FromRowError;
@@ -28,12 +29,14 @@ use mysql_async::Row;
 use tokio::sync::Barrier;
 use tokio::task::JoinHandle;
 
-use crate::tests::SessionManagerBuilder;
+use crate::tests::{ConfigBuilder};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_generic_code_with_on_query() -> Result<()> {
-    let mut handler =
-        MySQLHandler::create(SessionManagerBuilder::create().max_sessions(1).build()?);
+    // Setup
+    SessionManager::init(ConfigBuilder::create().build())?;
+
+    let mut handler = MySQLHandler::create()?;
 
     let listening = "127.0.0.1:0".parse::<SocketAddr>()?;
     let runnable_server = handler.start(listening).await?;
@@ -47,8 +50,10 @@ async fn test_generic_code_with_on_query() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_rejected_session_with_sequence() -> Result<()> {
-    let mut handler =
-        MySQLHandler::create(SessionManagerBuilder::create().max_sessions(1).build()?);
+    // Setup
+    SessionManager::init(ConfigBuilder::create().build())?;
+
+    let mut handler = MySQLHandler::create()?;
 
     let listening = "127.0.0.1:0".parse::<SocketAddr>()?;
     let listening = handler.start(listening).await?;
@@ -112,8 +117,10 @@ async fn test_rejected_session_with_parallel() -> Result<()> {
         })
     }
 
-    let mut handler =
-        MySQLHandler::create(SessionManagerBuilder::create().max_sessions(1).build()?);
+    // Setup
+    SessionManager::init(ConfigBuilder::create().build())?;
+
+    let mut handler = MySQLHandler::create()?;
 
     let listening = "127.0.0.1:0".parse::<SocketAddr>()?;
     let listening = handler.start(listening).await?;
@@ -157,7 +164,7 @@ struct EmptyRow;
 
 impl FromRow for EmptyRow {
     fn from_row_opt(_: Row) -> std::result::Result<Self, FromRowError>
-    where Self: Sized {
+        where Self: Sized {
         Ok(EmptyRow)
     }
 }

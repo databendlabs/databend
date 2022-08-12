@@ -24,6 +24,7 @@ use common_datavalues::prelude::Series;
 use common_datavalues::prelude::SeriesFrom;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_tracing::QueryLogger;
 use serde::Serialize;
 use serde::Serializer;
 use serde_json;
@@ -31,7 +32,6 @@ use serde_repr::Serialize_repr;
 use tracing::error;
 use tracing::info;
 use tracing::subscriber;
-use common_tracing::QueryLogger;
 
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
@@ -47,13 +47,13 @@ pub enum LogType {
 }
 
 fn date_str<S>(dt: &i32, s: S) -> std::result::Result<S::Ok, S::Error>
-    where S: Serializer {
+where S: Serializer {
     let t = NaiveDateTime::from_timestamp(i64::from(*dt) * 24 * 3600, 0);
     s.serialize_str(t.format("%Y-%m-%d").to_string().as_str())
 }
 
 fn datetime_str<S>(dt: &i64, s: S) -> std::result::Result<S::Ok, S::Error>
-    where S: Serializer {
+where S: Serializer {
     let t = NaiveDateTime::from_timestamp(
         dt / 1_000_000,
         u32::try_from((dt % 1_000_000) * 1000).unwrap_or(0),

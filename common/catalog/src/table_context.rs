@@ -15,9 +15,8 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use common_base::base::{GlobalIORuntime, Progress};
+use common_base::base::Progress;
 use common_base::base::ProgressValues;
-use common_base::base::Runtime;
 use common_config::Config;
 use common_contexts::DalContext;
 use common_contexts::DalMetrics;
@@ -25,7 +24,6 @@ use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::scalars::FunctionContext;
-use common_fuse_meta::caches::CacheManager;
 use common_io::prelude::FormatSettings;
 use common_meta_types::UserInfo;
 use common_planners::Partitions;
@@ -33,13 +31,11 @@ use common_planners::PlanNode;
 use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
 use common_settings::Settings;
-use common_users::RoleCacheManager;
 use common_users::UserApiProvider;
 use opendal::Operator;
 use parking_lot::Mutex;
 
 use crate::catalog::Catalog;
-use crate::catalog::CatalogManager;
 use crate::cluster_info::Cluster;
 use crate::table::Table;
 

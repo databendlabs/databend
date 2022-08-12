@@ -19,7 +19,8 @@ use std::time::Instant;
 
 use common_base::base::tokio::sync::mpsc;
 use common_base::base::tokio::sync::RwLock;
-use common_base::base::{GlobalIORuntime, ProgressValues};
+use common_base::base::GlobalIORuntime;
+use common_base::base::ProgressValues;
 use common_base::base::TrySpawn;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRefExt;

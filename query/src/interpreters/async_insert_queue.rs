@@ -17,22 +17,24 @@ use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::hash::Hash;
 use std::sync::Arc;
-use once_cell::sync::OnceCell;
 
 use common_base::base::tokio::sync::Notify;
 use common_base::base::tokio::time::interval_at;
 use common_base::base::tokio::time::Duration;
 use common_base::base::tokio::time::Instant;
-use common_base::base::{GlobalIORuntime, ProgressValues, TrySpawn};
+use common_base::base::GlobalIORuntime;
+use common_base::base::ProgressValues;
 use common_base::base::Runtime;
+use common_base::base::TrySpawn;
+use common_config::Config;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::InsertPlan;
 use common_planners::SelectPlan;
+use once_cell::sync::OnceCell;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
-use common_config::Config;
 
 use super::InsertInterpreter;
 use super::SelectInterpreter;
@@ -73,8 +75,8 @@ impl PartialEq for InsertKey {
     fn eq(&self, other: &Self) -> bool {
         self.plan.eq(&other.plan)
             && self
-            .get_serialized_changed_settings()
-            .eq(&other.get_serialized_changed_settings())
+                .get_serialized_changed_settings()
+                .eq(&other.get_serialized_changed_settings())
     }
 }
 
@@ -220,7 +222,9 @@ impl AsyncInsertManager {
 
         match ASYNC_INSERT_MANAGER.set(async_insert_manager) {
             Ok(_) => Ok(()),
-            Err(_) => Err(ErrorCode::LogicalError("Cannot init AsyncInsertManager twice"))
+            Err(_) => Err(ErrorCode::LogicalError(
+                "Cannot init AsyncInsertManager twice",
+            )),
         }
     }
 
@@ -301,7 +305,7 @@ impl AsyncInsertManager {
                     ctx.query_need_abort(),
                     pipeline,
                 )
-                    .unwrap();
+                .unwrap();
                 executor.execute()?;
                 drop(executor);
                 let blocks = ctx.consume_precommit_blocks();
@@ -412,7 +416,9 @@ impl AsyncInsertManager {
         let insert_plan = key.plan;
 
         let session_manager = SessionManager::instance();
-        let session = session_manager.create_session(SessionType::HTTPQuery).await?;
+        let session = session_manager
+            .create_session(SessionType::HTTPQuery)
+            .await?;
         let ctx = session.create_query_context().await?;
         ctx.apply_changed_settings(key.changed_settings.clone())?;
 

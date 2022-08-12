@@ -18,11 +18,11 @@ use std::sync::mpsc::Receiver;
 use std::sync::mpsc::SyncSender;
 use std::sync::Arc;
 
+use common_base::base::GlobalIORuntime;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use parking_lot::Mutex;
-use common_base::base::GlobalIORuntime;
 
 use crate::pipelines::executor::PipelineExecutor;
 use crate::pipelines::processors::port::OutputPort;
@@ -32,7 +32,6 @@ use crate::pipelines::processors::SyncSourcer;
 use crate::pipelines::Pipeline;
 use crate::pipelines::SourcePipeBuilder;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
 
 struct State {
     finished: AtomicBool,

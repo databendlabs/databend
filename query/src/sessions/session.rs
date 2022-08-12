@@ -23,14 +23,13 @@ use common_io::prelude::FormatSettings;
 use common_meta_types::GrantObject;
 use common_meta_types::UserInfo;
 use common_meta_types::UserPrivilegeType;
-use common_users::{RoleCacheManager, UserApiProvider};
+use common_users::RoleCacheManager;
+use common_users::UserApiProvider;
 use futures::channel::*;
-use opendal::Operator;
 use parking_lot::RwLock;
-use common_storage::StorageOperator;
 
-use crate::catalogs::{CatalogManager, CatalogManagerHelper};
 use crate::clusters::ClusterDiscovery;
+use crate::servers::http::v1::HttpQueryManager;
 use crate::sessions::QueryContext;
 use crate::sessions::QueryContextShared;
 use crate::sessions::SessionContext;
@@ -39,7 +38,6 @@ use crate::sessions::SessionStatus;
 use crate::sessions::SessionType;
 use crate::sessions::Settings;
 use crate::Config;
-use crate::servers::http::v1::HttpQueryManager;
 
 pub struct Session {
     pub(in crate::sessions) id: String,
@@ -61,7 +59,8 @@ impl Session {
     ) -> Result<Arc<Session>> {
         let session_ctx = Arc::new(SessionContext::try_create(conf.clone())?);
         let user_api = UserApiProvider::instance();
-        let session_settings = Settings::try_create(&conf, user_api, session_ctx.get_current_tenant()).await?;
+        let session_settings =
+            Settings::try_create(&conf, user_api, session_ctx.get_current_tenant()).await?;
         let ref_count = Arc::new(AtomicUsize::new(0));
         let status = Arc::new(Default::default());
         Ok(Arc::new(Session {
@@ -147,7 +146,8 @@ impl Session {
         let session = self.clone();
         let cluster = discovery.discover().await?;
         let shared = QueryContextShared::try_create(session, cluster).await?;
-        self.session_ctx.set_query_context_shared(Some(shared.clone()));
+        self.session_ctx
+            .set_query_context_shared(Some(shared.clone()));
         Ok(shared)
     }
 
@@ -180,7 +180,7 @@ impl Session {
     }
 
     pub fn attach<F>(self: &Arc<Self>, host: Option<SocketAddr>, io_shutdown: F)
-        where F: FnOnce() + Send + 'static {
+    where F: FnOnce() + Send + 'static {
         let (tx, rx) = oneshot::channel();
         self.session_ctx.set_client_host(host);
         self.session_ctx.set_io_shutdown_tx(Some(tx));

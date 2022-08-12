@@ -20,40 +20,23 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
 
-use common_base::base::{GlobalIORuntime, tokio};
-use common_base::base::Runtime;
+use common_base::base::tokio;
 use common_base::base::SignalStream;
-use common_contexts::DalRuntime;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_metrics::label_counter;
-use common_storage::{init_operator, StorageOperator};
-use common_tracing::{init_logging, QueryLogger};
-use common_tracing::init_query_logger;
-use common_users::RoleCacheManager;
-use common_users::UserApiProvider;
 use futures::future::Either;
 use futures::StreamExt;
 use once_cell::sync::OnceCell;
-use opendal::Operator;
 use parking_lot::RwLock;
 use tracing::debug;
 use tracing::info;
-use tracing::Subscriber;
-use tracing_appender::non_blocking::WorkerGuard;
 
-use crate::api::DataExchangeManager;
-use crate::catalogs::CatalogManager;
-use crate::catalogs::CatalogManagerHelper;
-use crate::clusters::ClusterDiscovery;
-use crate::interpreters::AsyncInsertManager;
-use crate::servers::http::v1::HttpQueryManager;
 use crate::sessions::session::Session;
 use crate::sessions::session_ref::SessionRef;
 use crate::sessions::ProcessInfo;
 use crate::sessions::SessionManagerStatus;
 use crate::sessions::SessionType;
-use crate::storages::cache::CacheManager;
 use crate::Config;
 
 pub struct SessionManager {
@@ -70,10 +53,20 @@ pub struct SessionManager {
 static SESSION_MANAGER: OnceCell<Arc<SessionManager>> = OnceCell::new();
 
 impl SessionManager {
-    pub async fn init(conf: Config) -> Result<()> {
-        match SESSION_MANAGER.set(SessionManager::from_conf(conf).await?) {
+    pub fn init(conf: Config) -> Result<()> {
+        let max_sessions = conf.query.max_active_sessions as usize;
+        let session_manager = Arc::new(SessionManager {
+            conf,
+            max_sessions,
+            mysql_basic_conn_id: AtomicU32::new(9_u32.to_le() as u32),
+            status: Arc::new(RwLock::new(SessionManagerStatus::default())),
+            mysql_conn_map: Arc::new(RwLock::new(HashMap::with_capacity(max_sessions))),
+            active_sessions: Arc::new(RwLock::new(HashMap::with_capacity(max_sessions))),
+        });
+
+        match SESSION_MANAGER.set(session_manager) {
             Ok(_) => Ok(()),
-            Err(_) => Err(ErrorCode::LogicalError("Cannot init SessionManager twice"))
+            Err(_) => Err(ErrorCode::LogicalError("Cannot init SessionManager twice")),
         }
     }
 
@@ -82,23 +75,6 @@ impl SessionManager {
             None => panic!("SessionManager is not init"),
             Some(session_manager) => session_manager.clone(),
         }
-    }
-
-    pub async fn from_conf(conf: Config) -> Result<Arc<SessionManager>> {
-        let max_sessions = conf.query.max_active_sessions as usize;
-        let active_sessions = Arc::new(RwLock::new(HashMap::with_capacity(max_sessions)));
-        let status = Arc::new(RwLock::new(SessionManagerStatus::default()));
-
-        let mysql_conn_map = Arc::new(RwLock::new(HashMap::with_capacity(max_sessions)));
-
-        Ok(Arc::new(SessionManager {
-            conf,
-            max_sessions,
-            active_sessions,
-            status,
-            mysql_conn_map,
-            mysql_basic_conn_id: AtomicU32::new(9_u32.to_le() as u32),
-        }))
     }
 
     pub fn get_conf(&self) -> Config {
@@ -138,8 +114,7 @@ impl SessionManager {
                 );
             }
         }
-        let session =
-            Session::try_create(config.clone(), id, typ, mysql_conn_id).await?;
+        let session = Session::try_create(config.clone(), id, typ, mysql_conn_id).await?;
 
         let mut sessions = self.active_sessions.write();
         if sessions.len() < self.max_sessions {
@@ -174,13 +149,8 @@ impl SessionManager {
             }
         }
 
-        let session = Session::try_create(
-            config.clone(),
-            id.clone(),
-            SessionType::FlightRPC,
-            None,
-        )
-            .await?;
+        let session =
+            Session::try_create(config.clone(), id.clone(), SessionType::FlightRPC, None).await?;
 
         let mut sessions = self.active_sessions.write();
         let v = sessions.get(&id);

@@ -16,6 +16,9 @@ use std::env;
 use std::io;
 use std::sync::Arc;
 
+use common_exception::ErrorCode;
+use common_exception::Result;
+use once_cell::sync::OnceCell;
 use opentelemetry::global;
 use opentelemetry::sdk::propagation::TraceContextPropagator;
 use sentry_tracing::EventFilter;
@@ -31,8 +34,6 @@ use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::Layer;
 use tracing_subscriber::Registry;
-use common_exception::{ErrorCode, Result};
-use once_cell::sync::OnceCell;
 
 use crate::Config;
 
@@ -131,7 +132,7 @@ pub fn init_logging(name: &str, cfg: &Config) -> Vec<WorkerGuard> {
 
     // For tokio-console
     #[cfg(feature = "console")]
-        let subscriber = subscriber.with(console_subscriber::spawn());
+    let subscriber = subscriber.with(console_subscriber::spawn());
 
     // Enable log compatible layer to convert log record to tracing span.
     // We will ignore any errors that returned by this fucntions.
@@ -181,7 +182,7 @@ static QUERY_LOGGER: OnceCell<Arc<QueryLogger>> = OnceCell::new();
 impl QueryLogger {
     pub fn init(app_name_shuffle: String, config: &Config) -> Result<()> {
         let app_name = format!("databend-query-{}", app_name_shuffle);
-        let mut _log_guards = init_logging(app_name.as_str(), &config);
+        let mut _log_guards = init_logging(app_name.as_str(), config);
         let query_detail_dir = format!("{}/query-detail", config.file.dir);
 
         let query_logger = match config.file.on {
@@ -197,12 +198,12 @@ impl QueryLogger {
             false => Arc::new(QueryLogger {
                 subscriber: None,
                 _log_guards: vec![],
-            })
+            }),
         };
 
         match QUERY_LOGGER.set(query_logger) {
             Ok(_) => Ok(()),
-            Err(_) => Err(ErrorCode::LogicalError("Cannot init QueryLogger twice"))
+            Err(_) => Err(ErrorCode::LogicalError("Cannot init QueryLogger twice")),
         }
     }
 
@@ -217,4 +218,3 @@ impl QueryLogger {
         self.subscriber.clone()
     }
 }
-

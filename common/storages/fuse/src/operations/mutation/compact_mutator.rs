@@ -17,11 +17,11 @@ use std::sync::Arc;
 use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
 use common_exception::Result;
+use common_fuse_meta::caches::CacheManager;
 use common_fuse_meta::meta::BlockMeta;
 use common_fuse_meta::meta::SegmentInfo;
 use common_fuse_meta::meta::TableSnapshot;
 use opendal::Operator;
-use common_fuse_meta::caches::CacheManager;
 
 use super::block_filter::all_the_columns_ids;
 use crate::io::BlockCompactor;

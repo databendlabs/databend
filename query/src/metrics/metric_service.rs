@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::net::SocketAddr;
-use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -24,7 +23,6 @@ use poem::EndpointExt;
 use poem::IntoResponse;
 
 use crate::servers::Server;
-use crate::sessions::SessionManager;
 
 pub struct MetricService {
     shutdown_handler: HttpShutdownHandler,

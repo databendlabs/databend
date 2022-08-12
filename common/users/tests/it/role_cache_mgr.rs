@@ -38,7 +38,9 @@ async fn test_role_cache_mgr() -> Result<()> {
         &GrantObject::Database(CATALOG_DEFAULT.to_owned(), "db1".to_string()),
         UserPrivilegeSet::available_privileges_on_database(),
     );
-    UserApiProvider::instance().add_role("tenant1", role1, false).await?;
+    UserApiProvider::instance()
+        .add_role("tenant1", role1, false)
+        .await?;
 
     let roles = RoleCacheManager::instance()
         .find_related_roles("tenant1", &["role1".to_string()])

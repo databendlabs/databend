@@ -27,7 +27,6 @@ use serde::Serialize;
 
 use super::HttpQueryContext;
 use crate::interpreters::InterpreterQueryLog;
-use crate::servers::http::v1::HttpQueryManager;
 use crate::servers::http::v1::query::execute_state::Progresses;
 use crate::servers::http::v1::query::expirable::Expirable;
 use crate::servers::http::v1::query::expirable::ExpiringState;
@@ -38,6 +37,7 @@ use crate::servers::http::v1::query::Executor;
 use crate::servers::http::v1::query::PageManager;
 use crate::servers::http::v1::query::ResponseData;
 use crate::servers::http::v1::query::Wait;
+use crate::servers::http::v1::HttpQueryManager;
 use crate::sessions::QueryAffect;
 use crate::sessions::SessionType;
 use crate::sessions::TableContext;
@@ -314,7 +314,7 @@ impl HttpQuery {
             Err(ErrorCode::AbortedQuery("killed by http")),
             true,
         )
-            .await;
+        .await;
     }
 
     pub async fn detach(&self) {

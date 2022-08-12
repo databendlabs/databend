@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use common_exception::ErrorCode;
 use common_exception::Result;
 use headers::authorization::Basic;
@@ -38,7 +36,6 @@ use crate::sessions::SessionType;
 
 pub struct HTTPSessionMiddleware {
     pub kind: HttpHandlerKind,
-    pub session_manager: Arc<SessionManager>,
 }
 
 fn get_credential(req: &Request, kind: HttpHandlerKind) -> Result<Credential> {
@@ -104,23 +101,22 @@ impl<E: Endpoint> Middleware<E> for HTTPSessionMiddleware {
     type Output = HTTPSessionEndpoint<E>;
     fn transform(&self, ep: E) -> Self::Output {
         HTTPSessionEndpoint {
-            kind: self.kind,
             ep,
-            manager: self.session_manager.clone(),
+            kind: self.kind,
         }
     }
 }
 
 pub struct HTTPSessionEndpoint<E> {
-    pub kind: HttpHandlerKind,
     ep: E,
-    manager: Arc<SessionManager>,
+    pub kind: HttpHandlerKind,
 }
 
 impl<E> HTTPSessionEndpoint<E> {
     async fn auth(&self, req: &Request) -> Result<HttpQueryContext> {
         let credential = get_credential(req, self.kind)?;
-        let session = self.manager.create_session(SessionType::Dummy).await?;
+        let session_manager = SessionManager::instance();
+        let session = session_manager.create_session(SessionType::Dummy).await?;
         let ctx = session.create_query_context().await?;
         if let Some(tenant_id) = req.headers().get("X-DATABEND-TENANT") {
             let tenant_id = tenant_id.to_str().unwrap().to_string();
@@ -130,7 +126,7 @@ impl<E> HTTPSessionEndpoint<E> {
             .auth(ctx.get_current_session(), &credential)
             .await?;
 
-        Ok(HttpQueryContext::new(self.manager.clone(), session))
+        Ok(HttpQueryContext::new(session))
     }
 }
 

@@ -26,7 +26,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::UserInfo;
 use common_planners::PlanNode;
-use common_users::RoleCacheManager;
 use common_users::UserApiProvider;
 use futures::future::AbortHandle;
 use parking_lot::Mutex;
@@ -34,7 +33,8 @@ use parking_lot::RwLock;
 use uuid::Uuid;
 
 use crate::auth::AuthMgr;
-use crate::catalogs::{CatalogManager, CatalogManagerHelper};
+use crate::catalogs::CatalogManager;
+use crate::catalogs::CatalogManagerHelper;
 use crate::clusters::Cluster;
 use crate::servers::http::v1::HttpQueryHandle;
 use crate::sessions::query_affect::QueryAffect;

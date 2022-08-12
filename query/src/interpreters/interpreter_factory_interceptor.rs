@@ -28,7 +28,8 @@ use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::interpreters::InterpreterQueryLog;
 use crate::pipelines::SourcePipeBuilder;
-use crate::sessions::{QueryContext, SessionManager};
+use crate::sessions::QueryContext;
+use crate::sessions::SessionManager;
 use crate::sessions::TableContext;
 use crate::sql::plans::Plan;
 
@@ -100,10 +101,7 @@ impl Interpreter for InterceptorInterpreter {
         let session = self.ctx.get_current_session();
         let now = SystemTime::now();
         if session.get_type().is_user_session() {
-            SessionManager::instance()
-                .status
-                .write()
-                .query_start(now);
+            SessionManager::instance().status.write().query_start(now);
         }
         self.query_log.log_start(now, None).await
     }
@@ -113,10 +111,7 @@ impl Interpreter for InterceptorInterpreter {
         let now = SystemTime::now();
         session.get_status().write().query_finish();
         if session.get_type().is_user_session() {
-            SessionManager::instance()
-                .status
-                .write()
-                .query_finish(now)
+            SessionManager::instance().status.write().query_finish(now)
         }
         let error = self.ctx.get_error_value();
         self.query_log.log_finish(now, error).await

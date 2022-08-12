@@ -13,9 +13,9 @@
 // limitations under the License.
 
 use std::sync::Arc;
-use once_cell::sync::OnceCell;
 
-use common_exception::{ErrorCode, Result};
+use common_exception::ErrorCode;
+use common_exception::Result;
 use common_grpc::RpcClientConf;
 use common_management::QuotaApi;
 use common_management::QuotaMgr;
@@ -32,6 +32,7 @@ use common_management::UserMgr;
 use common_meta_api::KVApi;
 use common_meta_store::MetaStore;
 use common_meta_store::MetaStoreProvider;
+use once_cell::sync::OnceCell;
 
 pub struct UserApiProvider {
     meta: MetaStore,
@@ -50,7 +51,7 @@ impl UserApiProvider {
 
         match USER_API_PROVIDER.set(user_api_provider) {
             Ok(_) => Ok(()),
-            Err(_) => Err(ErrorCode::LogicalError("Cannot init UserApiProvider twice"))
+            Err(_) => Err(ErrorCode::LogicalError("Cannot init UserApiProvider twice")),
         }
     }
 

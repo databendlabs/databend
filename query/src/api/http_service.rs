@@ -14,7 +14,6 @@
 
 use std::net::SocketAddr;
 use std::path::Path;
-use std::sync::Arc;
 
 use common_exception::Result;
 use common_http::health_handler;
@@ -27,31 +26,29 @@ use poem::get;
 use poem::listener::RustlsCertificate;
 use poem::listener::RustlsConfig;
 use poem::Endpoint;
-use poem::EndpointExt;
 use poem::Route;
 use tracing::info;
 use tracing::warn;
 
 use crate::servers::Server;
-use crate::sessions::SessionManager;
 use crate::Config;
 
 pub struct HttpService {
-    sessions: Arc<SessionManager>,
+    config: Config,
     shutdown_handler: HttpShutdownHandler,
 }
 
 impl HttpService {
-    pub fn create() -> Result<Box<HttpService>> {
+    pub fn create(config: &Config) -> Result<Box<HttpService>> {
         Ok(Box::new(HttpService {
-            sessions: SessionManager::instance(),
+            config: config.clone(),
             shutdown_handler: HttpShutdownHandler::create("http api".to_string()),
         }))
     }
 
     fn build_router(&self) -> impl Endpoint {
         #[cfg_attr(not(feature = "memory-profiling"), allow(unused_mut))]
-            let mut route = Route::new()
+        let mut route = Route::new()
             .at("/v1/health", get(health_handler))
             .at("/v1/config", get(super::http::v1::config::config_handler))
             .at("/v1/logs", get(super::http::v1::logs::logs_handler))
@@ -70,7 +67,7 @@ impl HttpService {
             .at("/debug/home", get(debug_home_handler))
             .at("/debug/pprof/profile", get(debug_pprof_handler));
 
-        if self.sessions.get_conf().query.management_mode {
+        if self.config.query.management_mode {
             route = route.at(
                 "/v1/tenants/:tenant/tables",
                 get(super::http::v1::tenant_tables::list_tenant_tables_handler),
@@ -89,7 +86,8 @@ impl HttpService {
                 get(debug_jeprof_dump_handler),
             );
         };
-        route.data(self.sessions.clone())
+
+        route
     }
 
     fn build_tls(config: &Config) -> Result<RustlsConfig> {
@@ -108,7 +106,7 @@ impl HttpService {
     async fn start_with_tls(&mut self, listening: SocketAddr) -> Result<SocketAddr> {
         info!("Http API TLS enabled");
 
-        let tls_config = Self::build_tls(&self.sessions.get_conf())?;
+        let tls_config = Self::build_tls(&self.config)?;
         let addr = self
             .shutdown_handler
             .start_service(listening, Some(tls_config), self.build_router())
@@ -134,7 +132,7 @@ impl Server for HttpService {
     }
 
     async fn start(&mut self, listening: SocketAddr) -> Result<SocketAddr> {
-        let config = &self.sessions.get_conf().query;
+        let config = &self.config.query;
         match config.api_tls_server_key.is_empty() || config.api_tls_server_cert.is_empty() {
             true => self.start_without_tls(listening).await,
             false => self.start_with_tls(listening).await,

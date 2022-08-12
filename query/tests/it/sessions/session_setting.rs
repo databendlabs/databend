@@ -20,12 +20,12 @@ use databend_query::sessions::SessionType;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_session_setting() -> Result<()> {
-    let conf = crate::tests::ConfigBuilder::create().config();
+    let conf = crate::tests::ConfigBuilder::create().build();
 
-    SessionManager::init(conf.clone()).await?;
+    SessionManager::init(conf.clone())?;
 
     let session = Session::try_create(
-        conf.clone(),
+        conf,
         String::from("test-001"),
         SessionType::Dummy,
         None,

@@ -30,18 +30,18 @@ use crate::tests::tls_constants::TEST_TLS_CLIENT_IDENTITY;
 use crate::tests::tls_constants::TEST_TLS_CLIENT_PASSWORD;
 use crate::tests::tls_constants::TEST_TLS_SERVER_CERT;
 use crate::tests::tls_constants::TEST_TLS_SERVER_KEY;
-use crate::tests::SessionManagerBuilder;
+use crate::tests::{ConfigBuilder};
 
 // need to support local_addr, but axum_server do not have local_addr callback
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_http_service_tls_server() -> Result<()> {
     let address_str = format!("127.0.0.1:{}", get_free_tcp_port());
     let mut srv = HttpService::create(
-        SessionManagerBuilder::create()
+        &ConfigBuilder::create()
             .api_tls_server_key(TEST_SERVER_KEY)
             .api_tls_server_cert(TEST_SERVER_CERT)
-            .build()?,
-    );
+            .build(),
+    )?;
 
     let listening = srv.start(address_str.parse()?).await?;
 
@@ -73,11 +73,11 @@ async fn test_http_service_tls_server() -> Result<()> {
 async fn test_http_service_tls_server_failed_case_1() -> Result<()> {
     let address_str = format!("127.0.0.1:{}", get_free_tcp_port());
     let mut http_service = HttpService::create(
-        SessionManagerBuilder::create()
+        &ConfigBuilder::create()
             .api_tls_server_key(TEST_SERVER_KEY)
             .api_tls_server_cert(TEST_SERVER_CERT)
-            .build()?,
-    );
+            .build(),
+    )?;
     let listening = http_service.start(address_str.parse()?).await?;
 
     // test cert is issued for "localhost"
@@ -94,12 +94,12 @@ async fn test_http_service_tls_server_failed_case_1() -> Result<()> {
 async fn test_http_service_tls_server_mutual_tls() -> Result<()> {
     let addr_str = format!("127.0.0.1:{}", get_free_tcp_port());
     let mut srv = HttpService::create(
-        SessionManagerBuilder::create()
+        &ConfigBuilder::create()
             .api_tls_server_key(TEST_TLS_SERVER_KEY)
             .api_tls_server_cert(TEST_TLS_SERVER_CERT)
             .api_tls_server_root_ca_cert(TEST_TLS_CA_CERT)
-            .build()?,
-    );
+            .build(),
+    )?;
     let listening = srv.start(addr_str.parse()?).await?;
 
     // test cert is issued for "localhost"
@@ -131,12 +131,12 @@ async fn test_http_service_tls_server_mutual_tls() -> Result<()> {
 async fn test_http_service_tls_server_mutual_tls_failed() -> Result<()> {
     let address_str = format!("127.0.0.1:{}", get_free_tcp_port());
     let mut srv = HttpService::create(
-        SessionManagerBuilder::create()
+        &ConfigBuilder::create()
             .api_tls_server_key(TEST_TLS_SERVER_KEY)
             .api_tls_server_cert(TEST_TLS_SERVER_CERT)
             .api_tls_server_root_ca_cert(TEST_TLS_CA_CERT)
-            .build()?,
-    );
+            .build(),
+    )?;
     let listening = srv.start(address_str.parse()?).await?;
 
     // test cert is issued for "localhost"

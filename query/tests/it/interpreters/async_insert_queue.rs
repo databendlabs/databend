@@ -17,7 +17,8 @@ use std::thread;
 use std::time::Duration;
 use std::time::SystemTime;
 
-use common_base::base::{GlobalIORuntime, tokio};
+use common_base::base::tokio;
+use common_base::base::GlobalIORuntime;
 use common_base::base::TrySpawn;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -129,7 +130,7 @@ async fn test_async_insert_queue() -> Result<()> {
                 "insert into default.test(b) values('bbbb');",
                 context2.clone(),
             )
-                .await?;
+            .await?;
             queue2
                 .clone()
                 .push(Arc::new(insert_plan.to_owned()), context2.clone())

@@ -41,7 +41,8 @@ use super::query::ExecuteStateKind;
 use super::query::HttpQueryRequest;
 use super::query::HttpQueryResponseInternal;
 use crate::servers::http::v1::query::Progresses;
-use crate::servers::http::v1::{HttpQueryContext, HttpQueryManager};
+use crate::servers::http::v1::HttpQueryContext;
+use crate::servers::http::v1::HttpQueryManager;
 use crate::servers::http::v1::HttpSessionConf;
 use crate::servers::http::v1::JsonBlock;
 use crate::sessions::QueryAffect;
@@ -158,7 +159,7 @@ impl QueryResponse {
 
 #[poem::handler]
 async fn query_detach_handler(
-    ctx: &HttpQueryContext,
+    _ctx: &HttpQueryContext,
     Path(query_id): Path<String>,
 ) -> impl IntoResponse {
     let http_query_manager = HttpQueryManager::instance();
@@ -174,7 +175,7 @@ async fn query_detach_handler(
 // currently implementation only support kill http query
 #[poem::handler]
 async fn query_cancel_handler(
-    ctx: &HttpQueryContext,
+    _ctx: &HttpQueryContext,
     Path(query_id): Path<String>,
 ) -> impl IntoResponse {
     let http_query_manager = HttpQueryManager::instance();
@@ -190,7 +191,7 @@ async fn query_cancel_handler(
 
 #[poem::handler]
 async fn query_state_handler(
-    ctx: &HttpQueryContext,
+    _ctx: &HttpQueryContext,
     Path(query_id): Path<String>,
 ) -> PoemResult<Json<QueryResponse>> {
     let http_query_manager = HttpQueryManager::instance();
@@ -205,7 +206,7 @@ async fn query_state_handler(
 
 #[poem::handler]
 async fn query_page_handler(
-    ctx: &HttpQueryContext,
+    _ctx: &HttpQueryContext,
     Path((query_id, page_no)): Path<(String, usize)>,
 ) -> PoemResult<Json<QueryResponse>> {
     let http_query_manager = HttpQueryManager::instance();

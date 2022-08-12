@@ -33,6 +33,50 @@ impl ConfigBuilder {
         ConfigBuilder { conf }
     }
 
+    pub fn api_tls_server_key(mut self, value: impl Into<String>) -> ConfigBuilder {
+        self.conf.query.api_tls_server_key = value.into();
+        self
+    }
+
+    pub fn api_tls_server_cert(mut self, value: impl Into<String>) -> ConfigBuilder {
+        self.conf.query.api_tls_server_cert = value.into();
+        self
+    }
+
+    pub fn api_tls_server_root_ca_cert(mut self, value: impl Into<String>) -> ConfigBuilder {
+        self.conf.query.api_tls_server_root_ca_cert = value.into();
+        self
+    }
+
+    pub fn jwt_key_file(mut self, value: impl Into<String>) -> ConfigBuilder {
+        self.conf.query.jwt_key_file = value.into();
+        self
+    }
+
+    pub fn http_handler_result_time_out(mut self, value: impl Into<u64>) -> ConfigBuilder {
+        self.conf.query.http_handler_result_timeout_millis = value.into();
+        self
+    }
+
+    pub fn http_handler_tls_server_key(mut self, value: impl Into<String>) -> ConfigBuilder {
+        self.conf.query.http_handler_tls_server_key = value.into();
+        self
+    }
+
+    pub fn http_handler_tls_server_cert(mut self, value: impl Into<String>) -> ConfigBuilder {
+        self.conf.query.http_handler_tls_server_cert = value.into();
+        self
+    }
+
+    pub fn http_handler_tls_server_root_ca_cert(mut self, value: impl Into<String>) -> ConfigBuilder {
+        self.conf.query.http_handler_tls_server_root_ca_cert = value.into();
+        self
+    }
+
+    pub fn build(self) -> Config {
+        self.conf
+    }
+
     pub fn config(&self) -> Config {
         self.conf.clone()
     }

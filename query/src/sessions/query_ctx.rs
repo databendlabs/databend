@@ -23,9 +23,8 @@ use std::sync::Arc;
 
 use chrono_tz::Tz;
 use common_base::base::tokio::task::JoinHandle;
-use common_base::base::{GlobalIORuntime, Progress};
+use common_base::base::Progress;
 use common_base::base::ProgressValues;
-use common_base::base::Runtime;
 use common_base::base::TrySpawn;
 use common_contexts::DalContext;
 use common_contexts::DalMetrics;
@@ -44,32 +43,30 @@ use common_planners::ReadDataSourcePlan;
 use common_planners::SourceInfo;
 use common_planners::StageTableInfo;
 use common_planners::Statistics;
+use common_storage::StorageOperator;
 use common_streams::AbortStream;
 use common_streams::SendableDataBlockStream;
-use common_users::RoleCacheManager;
 use common_users::UserApiProvider;
 use futures::future::AbortHandle;
 use opendal::Operator;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 use tracing::debug;
-use tracing::Subscriber;
-use common_storage::StorageOperator;
-use common_tracing::QueryLogger;
 
 use crate::api::DataExchangeManager;
 use crate::auth::AuthMgr;
-use crate::catalogs::{Catalog, CatalogManagerHelper};
+use crate::catalogs::Catalog;
 use crate::catalogs::CatalogManager;
+use crate::catalogs::CatalogManagerHelper;
 use crate::clusters::Cluster;
 use crate::servers::http::v1::HttpQueryHandle;
 use crate::sessions::query_affect::QueryAffect;
-use crate::sessions::{ProcessInfo, SessionManager};
+use crate::sessions::ProcessInfo;
 use crate::sessions::QueryContextShared;
+use crate::sessions::SessionManager;
 use crate::sessions::SessionRef;
 use crate::sessions::Settings;
 use crate::sessions::TableContext;
-use crate::storages::cache::CacheManager;
 use crate::storages::stage::StageTable;
 use crate::storages::Table;
 use crate::Config;
@@ -201,9 +198,7 @@ impl QueryContext {
 
     // Get one session by session id.
     pub async fn get_session_by_id(self: &Arc<Self>, id: &str) -> Option<SessionRef> {
-        SessionManager::instance()
-            .get_session_by_id(id)
-            .await
+        SessionManager::instance().get_session_by_id(id).await
     }
 
     // Get session id by mysql connection id.
@@ -218,9 +213,7 @@ impl QueryContext {
 
     // Get all the processes list info.
     pub async fn get_processes_info(self: &Arc<Self>) -> Vec<ProcessInfo> {
-        SessionManager::instance()
-            .processes_info()
-            .await
+        SessionManager::instance().processes_info().await
     }
 
     /// Get the client socket address.
@@ -427,9 +420,7 @@ impl TableContext for QueryContext {
 
     // Get all the processes list info.
     async fn get_processes_info(&self) -> Vec<ProcessInfo> {
-        SessionManager::instance()
-            .processes_info()
-            .await
+        SessionManager::instance().processes_info().await
     }
 }
 
@@ -437,9 +428,9 @@ impl TrySpawn for QueryContext {
     /// Spawns a new asynchronous task, returning a tokio::JoinHandle for it.
     /// The task will run in the current context thread_pool not the global.
     fn try_spawn<T>(&self, task: T) -> Result<JoinHandle<T::Output>>
-        where
-            T: Future + Send + 'static,
-            T::Output: Send + 'static,
+    where
+        T: Future + Send + 'static,
+        T::Output: Send + 'static,
     {
         Ok(self.shared.try_get_runtime()?.spawn(task))
     }

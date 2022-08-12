@@ -23,7 +23,7 @@ use databend_query::Config;
 
 async fn async_create_sessions(config: Config) -> Result<Arc<SessionManager>> {
     ClusterDiscovery::init(config.clone()).await?;
-    SessionManager::init(config.clone()).await?;
+    SessionManager::init(config.clone())?;
 
     let cluster_discovery = ClusterDiscovery::instance();
     cluster_discovery.register_to_metastore(&config).await?;
@@ -39,6 +39,7 @@ pub struct SessionManagerBuilder {
     config: Config,
 }
 
+#[allow(dead_code)]
 impl SessionManagerBuilder {
     pub fn create() -> SessionManagerBuilder {
         let conf = crate::tests::ConfigBuilder::create().config();

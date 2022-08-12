@@ -17,15 +17,17 @@ use common_exception::Result;
 use databend_query::sessions::Session;
 use databend_query::sessions::SessionManager;
 use databend_query::sessions::SessionType;
+use crate::tests::ConfigBuilder;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_session() -> Result<()> {
-    let conf = crate::tests::ConfigBuilder::create().config();
+    let conf = ConfigBuilder::create().build();
 
-    SessionManager::init(conf.clone()).await?;
+    // Setup SessionManager
+    SessionManager::init(conf.clone())?;
 
     let session = Session::try_create(
-        conf.clone(),
+        conf,
         String::from("test-001"),
         SessionType::Dummy,
         None,
@@ -56,14 +58,14 @@ async fn test_session() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_session_in_management_mode() -> Result<()> {
-    let conf = crate::tests::ConfigBuilder::create()
+    let conf = ConfigBuilder::create()
         .with_management_mode()
-        .config();
+        .build();
 
-    SessionManager::init(conf.clone()).await?;
+    SessionManager::init(conf.clone())?;
 
     let session = Session::try_create(
-        conf.clone(),
+        conf,
         String::from("test-001"),
         SessionType::Dummy,
         None,

@@ -16,12 +16,13 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
-use once_cell::sync::OnceCell;
 
 use common_base::base::tokio;
 use common_base::base::tokio::task::JoinHandle;
-use common_exception::{ErrorCode, Result};
+use common_exception::ErrorCode;
+use common_exception::Result;
 use common_meta_types::RoleInfo;
+use once_cell::sync::OnceCell;
 use parking_lot::RwLock;
 use tracing::warn;
 
@@ -56,7 +57,9 @@ impl RoleCacheManager {
 
         match ROLE_CACHE_MANAGER.set(Arc::new(role_cache_manager)) {
             Ok(_) => Ok(()),
-            Err(_) => Err(ErrorCode::LogicalError("Cannot init RoleCacheManager twice"))
+            Err(_) => Err(ErrorCode::LogicalError(
+                "Cannot init RoleCacheManager twice",
+            )),
         }
     }
 

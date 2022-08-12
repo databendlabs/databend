@@ -20,6 +20,7 @@ use common_meta_types::UserIdentity;
 use common_meta_types::UserInfo;
 use common_meta_types::UserPrivilegeSet;
 use common_meta_types::UserPrivilegeType;
+use common_users::RoleCacheManager;
 use databend_query::interpreters::InterpreterFactoryV2;
 use databend_query::sessions::TableContext;
 use databend_query::sql::Planner;
@@ -32,7 +33,7 @@ async fn test_show_grant_interpreter() -> Result<()> {
 
     let tenant = ctx.get_tenant();
     let user_mgr = ctx.get_user_manager();
-    let role_cache_mgr = RoleCacheMgr::instance();
+    let role_cache_mgr = RoleCacheManager::instance();
     user_mgr
         .add_user(&tenant, UserInfo::new_no_auth("test", "localhost"), false)
         .await?;

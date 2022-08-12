@@ -108,7 +108,7 @@ impl ClusterHelper for Cluster {
                             None,
                             Some(config.query.to_rpc_client_tls_config()),
                         )
-                            .await?,
+                        .await?,
                     ))),
                     false => Ok(FlightClient::new(FlightServiceClient::new(
                         ConnectionFactory::create_rpc_channel(
@@ -116,7 +116,7 @@ impl ClusterHelper for Cluster {
                             None,
                             None,
                         )
-                            .await?,
+                        .await?,
                     ))),
                 };
             }
@@ -167,7 +167,7 @@ impl ClusterDiscovery {
 
         match CLUSTER_DISCOVERY.set(cluster_discovery) {
             Ok(_) => Ok(()),
-            Err(_) => Err(ErrorCode::LogicalError("Cannot init SessionManager twice"))
+            Err(_) => Err(ErrorCode::LogicalError("Cannot init SessionManager twice")),
         }
     }
 
@@ -385,7 +385,7 @@ impl ClusterHeartbeat {
         }
     }
 
-    fn heartbeat_loop(&self, node: NodeInfo) -> impl Future<Output=()> + 'static {
+    fn heartbeat_loop(&self, node: NodeInfo) -> impl Future<Output = ()> + 'static {
         let shutdown = self.shutdown.clone();
         let shutdown_notify = self.shutdown_notify.clone();
         let cluster_api = self.cluster_api.clone();

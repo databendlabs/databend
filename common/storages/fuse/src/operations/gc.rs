@@ -19,12 +19,12 @@ use common_cache::Cache;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_fuse_meta::caches::CacheManager;
 use common_fuse_meta::meta::Location;
 use common_fuse_meta::meta::SnapshotId;
 use futures::TryStreamExt;
 use opendal::Operator;
 use tracing::warn;
-use common_fuse_meta::caches::CacheManager;
 
 use crate::io::MetaReaders;
 use crate::FuseTable;
@@ -127,20 +127,20 @@ impl FuseTable {
             segments_to_be_deleted.iter(),
             &blocks_referenced_by_gc_root,
         )
-            .await?;
+        .await?;
 
         self.collect(
             ctx.as_ref(),
             segments_to_be_deleted,
             snapshots_to_be_deleted,
         )
-            .await
+        .await
     }
 
     async fn blocks_of(
         &self,
         ctx: &dyn TableContext,
-        segments: impl Iterator<Item=&Location>,
+        segments: impl Iterator<Item = &Location>,
     ) -> Result<HashSet<String>> {
         let mut result = HashSet::new();
         let reader = MetaReaders::segment_info_reader(ctx);
@@ -172,7 +172,7 @@ impl FuseTable {
     async fn purge_blocks(
         &self,
         ctx: &dyn TableContext,
-        segments: impl Iterator<Item=&Location>,
+        segments: impl Iterator<Item = &Location>,
         root: &HashSet<String>,
     ) -> Result<()> {
         let reader = MetaReaders::segment_info_reader(ctx);

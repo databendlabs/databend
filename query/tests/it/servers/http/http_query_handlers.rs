@@ -70,7 +70,7 @@ use crate::tests::tls_constants::TEST_TLS_CLIENT_IDENTITY;
 use crate::tests::tls_constants::TEST_TLS_CLIENT_PASSWORD;
 use crate::tests::tls_constants::TEST_TLS_SERVER_CERT;
 use crate::tests::tls_constants::TEST_TLS_SERVER_KEY;
-use crate::tests::SessionManagerBuilder;
+use crate::tests::{ConfigBuilder};
 
 type EndpointType = HTTPSessionEndpoint<Route>;
 
@@ -428,16 +428,15 @@ async fn test_http_session() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 #[ignore = "flaky, sleep time unreliable"]
 async fn test_result_timeout() -> Result<()> {
-    let session_manager = SessionManagerBuilder::create()
-        .http_handler_result_time_out(200u64)
-        .build()
-        .unwrap();
+    SessionManager::init(
+        ConfigBuilder::create()
+            .http_handler_result_time_out(200u64)
+            .build()
+    )?;
+
     let ep = Route::new()
         .nest("/v1/query", query_route())
-        .with(HTTPSessionMiddleware {
-            kind: HttpHandlerKind::Query,
-            session_manager,
-        });
+        .with(HTTPSessionMiddleware { kind: HttpHandlerKind::Query });
 
     let sql = "select sleep(0.1)";
     let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": 0}});
@@ -459,13 +458,9 @@ async fn test_result_timeout() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_system_tables() -> Result<()> {
-    let session_manager = SessionManagerBuilder::create().build().unwrap();
     let ep = Route::new()
         .nest("/v1/query", query_route())
-        .with(HTTPSessionMiddleware {
-            kind: HttpHandlerKind::Query,
-            session_manager,
-        });
+        .with(HTTPSessionMiddleware { kind: HttpHandlerKind::Query });
 
     let sql = "select name from system.tables where database='system' order by name";
 
@@ -536,13 +531,11 @@ async fn test_insert() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_query_log() -> Result<()> {
-    let session_manager = SessionManagerBuilder::create().build().unwrap();
+    SessionManager::init(ConfigBuilder::create().build())?;
+
     let ep = Route::new()
         .nest("/v1/query", query_route())
-        .with(HTTPSessionMiddleware {
-            kind: HttpHandlerKind::Query,
-            session_manager,
-        });
+        .with(HTTPSessionMiddleware { kind: HttpHandlerKind::Query });
 
     let sql = "create table t1(a int)";
     let (status, result) = post_sql_to_endpoint(&ep, sql, 1).await?;
@@ -592,13 +585,9 @@ async fn test_query_log() -> Result<()> {
         result
     );
 
-    let session_manager = SessionManagerBuilder::create().build().unwrap();
     let ep = Route::new()
         .nest("/v1/query", query_route())
-        .with(HTTPSessionMiddleware {
-            kind: HttpHandlerKind::Query,
-            session_manager,
-        });
+        .with(HTTPSessionMiddleware { kind: HttpHandlerKind::Query });
 
     let sql = "select sleep(2)";
     let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": 0}});
@@ -679,12 +668,10 @@ async fn post_sql(sql: &str, wait_time_secs: u64) -> Result<(StatusCode, QueryRe
 }
 
 pub fn create_endpoint() -> EndpointType {
-    let session_manager = SessionManagerBuilder::create().build().unwrap();
     Route::new()
         .nest("/v1/query", query_route())
         .with(HTTPSessionMiddleware {
             kind: HttpHandlerKind::Query,
-            session_manager,
         })
 }
 
@@ -758,18 +745,17 @@ async fn test_auth_jwt() -> Result<()> {
         // Mounting the mock on the mock server - it's now effective!
         .mount(&server)
         .await;
-    let jwks_url = format!("http://{}{}", server.address(), json_path);
 
-    let session_manager = SessionManagerBuilder::create()
-        .jwt_key_file(jwks_url)
-        .build()
-        .unwrap();
+    // Setup mock jwks url
+    SessionManager::init(
+        ConfigBuilder::create()
+            .jwt_key_file(format!("http://{}{}", server.address(), json_path))
+            .build()
+    )?;
+
     let ep = Route::new()
         .nest("/v1/query", query_route())
-        .with(HTTPSessionMiddleware {
-            kind: HttpHandlerKind::Query,
-            session_manager,
-        });
+        .with(HTTPSessionMiddleware { kind: HttpHandlerKind::Query });
 
     let now = Some(Clock::now_since_epoch());
     let claims = JWTClaims {
@@ -852,19 +838,17 @@ async fn test_auth_jwt_with_create_user() -> Result<()> {
         // Mounting the mock on the mock server - it's now effective!
         .mount(&server)
         .await;
-    let jwks_url = format!("http://{}{}", server.address(), json_path);
 
-    let session_manager = SessionManagerBuilder::create()
-        .jwt_key_file(jwks_url)
-        .build()
-        .unwrap();
+    // Setup mock jwt
+    SessionManager::init(
+        ConfigBuilder::create()
+            .jwt_key_file(format!("http://{}{}", server.address(), json_path))
+            .build()
+    )?;
 
     let ep = Route::new()
         .nest("/v1/query", query_route())
-        .with(HTTPSessionMiddleware {
-            kind: HttpHandlerKind::Query,
-            session_manager,
-        });
+        .with(HTTPSessionMiddleware { kind: HttpHandlerKind::Query });
 
     let now = Some(Clock::now_since_epoch());
     let claims = JWTClaims {
@@ -894,12 +878,12 @@ async fn test_auth_jwt_with_create_user() -> Result<()> {
 async fn test_http_handler_tls_server() -> Result<()> {
     let address_str = format!("127.0.0.1:{}", get_free_tcp_port());
     let mut srv = HttpHandler::create(
-        SessionManagerBuilder::create()
+        HttpHandlerKind::Query,
+        ConfigBuilder::create()
             .http_handler_tls_server_key(TEST_SERVER_KEY)
             .http_handler_tls_server_cert(TEST_SERVER_CERT)
-            .build()?,
-        HttpHandlerKind::Query,
-    );
+            .build(),
+    )?;
 
     let listening = srv.start(address_str.parse()?).await?;
 
@@ -937,12 +921,12 @@ async fn test_http_handler_tls_server() -> Result<()> {
 async fn test_http_handler_tls_server_failed_case_1() -> Result<()> {
     let address_str = format!("127.0.0.1:{}", get_free_tcp_port());
     let mut srv = HttpHandler::create(
-        SessionManagerBuilder::create()
+        HttpHandlerKind::Query,
+        ConfigBuilder::create()
             .http_handler_tls_server_key(TEST_SERVER_KEY)
             .http_handler_tls_server_cert(TEST_SERVER_CERT)
-            .build()?,
-        HttpHandlerKind::Query,
-    );
+            .build(),
+    )?;
 
     let listening = srv.start(address_str.parse()?).await?;
 
@@ -962,13 +946,13 @@ async fn test_http_handler_tls_server_failed_case_1() -> Result<()> {
 async fn test_http_service_tls_server_mutual_tls() -> Result<()> {
     let address_str = format!("127.0.0.1:{}", get_free_tcp_port());
     let mut srv = HttpHandler::create(
-        SessionManagerBuilder::create()
+        HttpHandlerKind::Query,
+        ConfigBuilder::create()
             .http_handler_tls_server_key(TEST_TLS_SERVER_KEY)
             .http_handler_tls_server_cert(TEST_TLS_SERVER_CERT)
             .http_handler_tls_server_root_ca_cert(TEST_TLS_CA_CERT)
-            .build()?,
-        HttpHandlerKind::Query,
-    );
+            .build(),
+    )?;
     let listening = srv.start(address_str.parse()?).await?;
 
     // test cert is issued for "localhost"
@@ -1010,13 +994,13 @@ async fn test_http_service_tls_server_mutual_tls() -> Result<()> {
 async fn test_http_service_tls_server_mutual_tls_failed() -> Result<()> {
     let address_str = format!("127.0.0.1:{}", get_free_tcp_port());
     let mut srv = HttpHandler::create(
-        SessionManagerBuilder::create()
+        HttpHandlerKind::Query,
+        ConfigBuilder::create()
             .http_handler_tls_server_key(TEST_TLS_SERVER_KEY)
             .http_handler_tls_server_cert(TEST_TLS_SERVER_CERT)
             .http_handler_tls_server_root_ca_cert(TEST_TLS_CA_CERT)
-            .build()?,
-        HttpHandlerKind::Query,
-    );
+            .build(),
+    )?;
     let listening = srv.start(address_str.parse()?).await?;
 
     // test cert is issued for "localhost"
@@ -1204,17 +1188,16 @@ async fn test_download_killed() -> Result<()> {
 
 #[tokio::test]
 async fn test_no_download_in_management_mode() -> Result<()> {
-    let conf = crate::tests::ConfigBuilder::create()
-        .with_management_mode()
-        .config();
+    // Setup
+    SessionManager::init(
+        ConfigBuilder::create()
+            .with_management_mode()
+            .build()
+    )?;
 
-    SessionManager::init(conf.clone()).await?;
     let ep = Route::new()
         .nest("/v1/query", query_route())
-        .with(HTTPSessionMiddleware {
-            kind: HttpHandlerKind::Query,
-            session_manager: SessionManager::instance(),
-        });
+        .with(HTTPSessionMiddleware { kind: HttpHandlerKind::Query });
     let sql = "select 1";
     let (status, result) = post_sql_to_endpoint(&ep, sql, 1).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);

@@ -45,11 +45,11 @@ pub use metadata::TableEntry;
 pub use semantic::normalize_identifier;
 pub use semantic::IdentifierNormalizer;
 pub use semantic::NameResolutionContext;
-use crate::catalogs::CatalogManagerHelper;
 
 use self::plans::Plan;
 use super::optimizer::OptimizerConfig;
 use super::optimizer::OptimizerContext;
+use crate::catalogs::CatalogManagerHelper;
 use crate::sessions::TableContext;
 
 pub struct Planner {

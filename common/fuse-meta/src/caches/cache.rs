@@ -13,9 +13,11 @@
 // limitations under the License.
 
 use std::sync::Arc;
-use once_cell::sync::OnceCell;
+
 use common_config::QueryConfig;
 use common_exception::ErrorCode;
+use common_exception::Result;
+use once_cell::sync::OnceCell;
 
 use crate::caches::memory_cache::new_bytes_cache;
 use crate::caches::memory_cache::BloomIndexCache;
@@ -25,7 +27,6 @@ use crate::caches::new_item_cache;
 use crate::caches::ItemCache;
 use crate::caches::SegmentInfoCache;
 use crate::caches::TableSnapshotCache;
-use common_exception::Result;
 
 // default number of index meta cached, default 3000 items
 static DEFAULT_BLOOM_INDEX_META_CACHE_ITEMS: u64 = 3000;
@@ -61,7 +62,7 @@ impl CacheManager {
 
             match CACHE_MANAGER.set(Arc::new(cache_manager)) {
                 Ok(_) => Ok(()),
-                Err(_) => Err(ErrorCode::LogicalError("Cannot init CacheManager twice"))
+                Err(_) => Err(ErrorCode::LogicalError("Cannot init CacheManager twice")),
             }
         } else {
             let table_snapshot_cache = Self::new_item_cache(config.table_cache_snapshot_count);
@@ -81,7 +82,7 @@ impl CacheManager {
 
             match CACHE_MANAGER.set(Arc::new(cache_manager)) {
                 Ok(_) => Ok(()),
-                Err(_) => Err(ErrorCode::LogicalError("Cannot init CacheManager twice"))
+                Err(_) => Err(ErrorCode::LogicalError("Cannot init CacheManager twice")),
             }
         }
     }

@@ -17,14 +17,15 @@ use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::ops::Deref;
 use std::sync::Arc;
-use once_cell::sync::OnceCell;
 
 use common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
-use common_base::base::{GlobalIORuntime, Thread};
+use common_base::base::GlobalIORuntime;
+use common_base::base::Thread;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_grpc::ConnectionFactory;
+use once_cell::sync::OnceCell;
 use parking_lot::Mutex;
 use parking_lot::ReentrantMutex;
 
@@ -73,7 +74,9 @@ impl DataExchangeManager {
 
         match DATA_EXCHANGE_MANAGER.set(exchange_manager) {
             Ok(_) => Ok(()),
-            Err(_) => Err(ErrorCode::LogicalError("Cannot init DataExchangeManager twice"))
+            Err(_) => Err(ErrorCode::LogicalError(
+                "Cannot init DataExchangeManager twice",
+            )),
         }
     }
 
@@ -136,7 +139,7 @@ impl DataExchangeManager {
                     None,
                     Some(config.query.to_rpc_client_tls_config()),
                 )
-                    .await?,
+                .await?,
             ))),
             false => Ok(FlightClient::new(FlightServiceClient::new(
                 ConnectionFactory::create_rpc_channel(address.to_owned(), None, None).await?,

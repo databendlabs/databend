@@ -22,6 +22,7 @@ use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_fuse_meta::caches::CacheManager;
 use common_fuse_meta::meta::ClusterKey;
 use common_fuse_meta::meta::Statistics as FuseStatistics;
 use common_fuse_meta::meta::TableSnapshot;
@@ -41,7 +42,6 @@ use common_planners::Statistics;
 use common_planners::TruncateTablePlan;
 use common_storages_util::storage_context::StorageContext;
 use uuid::Uuid;
-use common_fuse_meta::caches::CacheManager;
 
 use crate::io::write_meta;
 use crate::io::MetaReaders;
@@ -284,7 +284,7 @@ impl Table for FuseTable {
             &new_snapshot,
             &mut new_table_meta,
         )
-            .await
+        .await
     }
 
     async fn drop_table_cluster_keys(
@@ -328,7 +328,7 @@ impl Table for FuseTable {
             &new_snapshot,
             &mut new_table_meta,
         )
-            .await
+        .await
     }
 
     #[tracing::instrument(level = "debug", name = "fuse_table_read_partitions", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]

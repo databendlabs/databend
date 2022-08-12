@@ -18,7 +18,8 @@ use std::sync::Arc;
 
 use tracing::debug;
 
-use crate::sessions::{Session, SessionManager};
+use crate::sessions::Session;
+use crate::sessions::SessionManager;
 
 /// SessionRef is the ptr of session.
 /// Remove it in session_manager when the current session is not referenced
