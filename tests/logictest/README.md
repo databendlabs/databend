@@ -158,6 +158,14 @@ complete.py can auto complete test file for you, It do as follow steps:
 1. Get SQLs from source-file, whether an SQL file or logictest file.
 2. Execute SQL one by one, if SQL fetch result, add statement query; if SQL fetch nothing, add statement ok; if SQL get an error, add statement error
 
+### Usage
+
+- Pre-run, you need start a mysql server or databend server
+- Use ./complete.py --source-file="xxx.sql" --dest-file="my-gen"  for SQL files(suffix name must be like *.sql)
+- Use ./complete.py --source-file="XXX.test" --fest-file="my-gen" for logictest files(suffix name not like *.sql)
+- If you want see what SQLs get from source-file, add --show-sql
+- Use command line to specify mysql host, user, port, password, database. Details in ./complete.py -h
+
 ### Acknowledgement
 - *tips* You can use mysql to auto-complete test suite, but make sure you know all grammar differences.
 - *tips* For mysql return bool as 1 and 0, this tool make it as int(I) in query type option.
