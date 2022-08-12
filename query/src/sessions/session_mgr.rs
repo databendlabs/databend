@@ -28,7 +28,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_metrics::label_counter;
 use common_storage::init_operator;
-use common_tracing::init_logging;
+use common_tracing::{init_logging, QueryLogger};
 use common_tracing::init_query_logger;
 use common_users::RoleCacheManager;
 use common_users::UserApiProvider;
@@ -58,22 +58,14 @@ use crate::Config;
 
 pub struct SessionManager {
     pub(in crate::sessions) conf: Config,
-
     pub(in crate::sessions) max_sessions: usize,
     pub(in crate::sessions) active_sessions: Arc<RwLock<HashMap<String, Arc<Session>>>>,
-    pub(in crate::sessions) query_logger: Arc<RwLock<Option<Arc<dyn Subscriber + Send + Sync>>>>,
     pub status: Arc<RwLock<SessionManagerStatus>>,
     storage_operator: Operator,
 
     // When typ is MySQL, insert into this map, key is id, val is MySQL connection id.
     pub(crate) mysql_conn_map: Arc<RwLock<HashMap<Option<u32>, String>>>,
     pub(in crate::sessions) mysql_basic_conn_id: AtomicU32,
-
-    /// log_guard preserve the nonblocking logger's guards so that our logger
-    /// can flushes spans/events on a drop
-    ///
-    /// This field should never be used except in `drop`.
-    _log_guards: Vec<WorkerGuard>,
 }
 
 static SESSION_MANAGER: OnceCell<Arc<SessionManager>> = OnceCell::new();
@@ -94,23 +86,6 @@ impl SessionManager {
     }
 
     pub async fn from_conf(conf: Config) -> Result<Arc<SessionManager>> {
-        let app_name = format!(
-            "databend-query-{}-{}",
-            conf.query.tenant_id, conf.query.cluster_id
-        );
-        let mut _log_guards = init_logging(app_name.as_str(), &conf.log);
-
-        let query_detail_name = format!("{}-{}", conf.query.tenant_id, conf.query.cluster_id);
-        let query_detail_dir = format!("{}/query-detail", conf.log.file.dir);
-        let (_guards, query_logger) = if conf.log.file.on {
-            let (_guards, query_logger) =
-                init_query_logger(query_detail_name.as_str(), query_detail_dir.as_str());
-            (_guards, Some(query_logger))
-        } else {
-            (Vec::new(), None)
-        };
-        _log_guards.extend(_guards);
-
         // NOTE: Magic happens here. We will add a layer upon original storage operator
         // so that all underlying storage operations will send to storage runtime.
         let storage_operator = Self::init_storage_operator(&conf)
@@ -119,7 +94,7 @@ impl SessionManager {
 
         let max_sessions = conf.query.max_active_sessions as usize;
         let active_sessions = Arc::new(RwLock::new(HashMap::with_capacity(max_sessions)));
-        let status = Arc::new(RwLock::new(Default::default()));
+        let status = Arc::new(RwLock::new(SessionManagerStatus::default()));
 
         let mysql_conn_map = Arc::new(RwLock::new(HashMap::with_capacity(max_sessions)));
 
@@ -127,12 +102,10 @@ impl SessionManager {
             conf,
             max_sessions,
             active_sessions,
-            query_logger: Arc::new(RwLock::new(query_logger)),
             status,
             storage_operator,
             mysql_conn_map,
             mysql_basic_conn_id: AtomicU32::new(9_u32.to_le() as u32),
-            _log_guards,
         }))
     }
 
@@ -356,9 +329,5 @@ impl SessionManager {
         })?;
 
         Ok(op)
-    }
-
-    pub fn get_query_logger(&self) -> Option<Arc<dyn Subscriber + Send + Sync>> {
-        self.query_logger.write().clone()
     }
 }

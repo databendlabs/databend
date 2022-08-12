@@ -31,6 +31,8 @@ use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::Layer;
 use tracing_subscriber::Registry;
+use common_exception::{ErrorCode, Result};
+use once_cell::sync::OnceCell;
 
 use crate::Config;
 
@@ -129,7 +131,7 @@ pub fn init_logging(name: &str, cfg: &Config) -> Vec<WorkerGuard> {
 
     // For tokio-console
     #[cfg(feature = "console")]
-    let subscriber = subscriber.with(console_subscriber::spawn());
+        let subscriber = subscriber.with(console_subscriber::spawn());
 
     // Enable log compatible layer to convert log record to tracing span.
     // We will ignore any errors that returned by this fucntions.
@@ -163,3 +165,56 @@ pub fn init_query_logger(
 
     (guards, Arc::new(subscriber))
 }
+
+pub struct QueryLogger {
+    subscriber: Option<Arc<dyn Subscriber + Send + Sync>>,
+
+    /// log_guard preserve the nonblocking logger's guards so that our logger
+    /// can flushes spans/events on a drop
+    ///
+    /// This field should never be used except in `drop`.
+    _log_guards: Vec<WorkerGuard>,
+}
+
+static QUERY_LOGGER: OnceCell<Arc<QueryLogger>> = OnceCell::new();
+
+impl QueryLogger {
+    pub fn init(app_name_shuffle: String, config: &Config) -> Result<()> {
+        let app_name = format!("databend-query-{}", app_name_shuffle);
+        let mut _log_guards = init_logging(app_name.as_str(), &config);
+        let query_detail_dir = format!("{}/query-detail", config.file.dir);
+
+        let query_logger = match config.file.on {
+            true => {
+                let (_guards, subscriber) = init_query_logger(&app_name_shuffle, &query_detail_dir);
+                _log_guards.extend(_guards);
+
+                Arc::new(QueryLogger {
+                    _log_guards,
+                    subscriber: Some(subscriber),
+                })
+            }
+            false => Arc::new(QueryLogger {
+                subscriber: None,
+                _log_guards: vec![],
+            })
+        };
+
+        match QUERY_LOGGER.set(query_logger) {
+            Ok(_) => Ok(()),
+            Err(_) => Err(ErrorCode::LogicalError("Cannot init QueryLogger twice"))
+        }
+    }
+
+    pub fn instance() -> Arc<QueryLogger> {
+        match QUERY_LOGGER.get() {
+            None => panic!("QueryLogger is not init"),
+            Some(query_logger) => query_logger.clone(),
+        }
+    }
+
+    pub fn get_subscriber(&self) -> Option<Arc<dyn Subscriber + Send + Sync>> {
+        self.subscriber.clone()
+    }
+}
+

@@ -21,7 +21,7 @@ use common_macros::databend_main;
 use common_meta_embedded::MetaEmbedded;
 use common_meta_grpc::MIN_METASRV_SEMVER;
 use common_metrics::init_default_metrics_recorder;
-use common_tracing::set_panic_hook;
+use common_tracing::{QueryLogger, set_panic_hook};
 use databend_query::api::{DataExchangeManager, HttpService};
 use databend_query::api::RpcService;
 use databend_query::metrics::MetricService;
@@ -250,6 +250,9 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
 
 async fn global_init(conf: &Config) -> Result<(), ErrorCode> {
     // The order of initialization is very important
+    let app_name_shuffle = format!("{}-{}", conf.query.tenant_id, conf.query.cluster_id);
+
+    QueryLogger::init(app_name_shuffle, &conf.log)?;
     GlobalIORuntime::init(conf.query.num_cpus as usize)?;
 
     // Cluster discovery.

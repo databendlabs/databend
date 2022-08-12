@@ -31,6 +31,7 @@ use serde_repr::Serialize_repr;
 use tracing::error;
 use tracing::info;
 use tracing::subscriber;
+use common_tracing::QueryLogger;
 
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
@@ -46,13 +47,13 @@ pub enum LogType {
 }
 
 fn date_str<S>(dt: &i32, s: S) -> std::result::Result<S::Ok, S::Error>
-where S: Serializer {
+    where S: Serializer {
     let t = NaiveDateTime::from_timestamp(i64::from(*dt) * 24 * 3600, 0);
     s.serialize_str(t.format("%Y-%m-%d").to_string().as_str())
 }
 
 fn datetime_str<S>(dt: &i64, s: S) -> std::result::Result<S::Ok, S::Error>
-where S: Serializer {
+    where S: Serializer {
     let t = NaiveDateTime::from_timestamp(
         dt / 1_000_000,
         u32::try_from((dt % 1_000_000) * 1000).unwrap_or(0),
@@ -230,7 +231,7 @@ impl InterpreterQueryLog {
             .await?;
 
         // info!("{}", serde_json::to_string(event)?);
-        match self.ctx.get_query_logger() {
+        match QueryLogger::instance().get_subscriber() {
             Some(logger) => {
                 let event_str = serde_json::to_string(event)?;
                 subscriber::with_default(logger, || {
