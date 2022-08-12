@@ -39,7 +39,6 @@ fn test_arithmetic() {
             DataType::UInt32,
             Column::from_data(vec![10u32, 20, 30]),
         ),
-        
         (
             "d",
             DataType::Float64,
