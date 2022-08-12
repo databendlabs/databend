@@ -16,8 +16,8 @@ use std::fs::File;
 use std::io::Write;
 use std::path::Path;
 
-use common_expression::types::{DataType, NumberTypeInfo};
-
+use common_expression::types::DataType;
+use common_expression::types::NumberTypeInfo;
 
 pub enum OP {
     Plus,
@@ -26,13 +26,11 @@ pub enum OP {
     Div,
     IntDiv,
     Modulo,
-    
+
     Super,
 }
 
-
 pub fn codegen_arithmetic_type_v2() {
-
     let dest = Path::new("common/expression/src/types");
     let path = dest.join("arithmetics_type.rs");
 
@@ -68,9 +66,9 @@ pub trait ResultTypeOfBinary {{
 pub trait ResultTypeOfUnary {{
     type Negate: Number;
 }}"
-    ).unwrap()
-    ;
-    
+    )
+    .unwrap();
+
     let lhs = vec![
         DataType::UInt8,
         DataType::UInt16,
@@ -84,17 +82,17 @@ pub trait ResultTypeOfUnary {{
         DataType::Float64,
     ];
     let rhs = lhs.clone();
-    
+
     for a in &lhs {
         for b in &rhs {
             let left = a.number_type_info().unwrap();
             let right = b.number_type_info().unwrap();
-        
-            let add_mul = arithmetic_coercion(left , right, OP::Plus);
-            let minus =arithmetic_coercion(left , right, OP::Minus);
-            let intdiv =arithmetic_coercion(left , right, OP::IntDiv);
-            let modulo = arithmetic_coercion(left , right, OP::Modulo);
-            let least_super = arithmetic_coercion(left , right, OP::Super);
+
+            let add_mul = arithmetic_coercion(left, right, OP::Plus);
+            let minus = arithmetic_coercion(left, right, OP::Minus);
+            let intdiv = arithmetic_coercion(left, right, OP::IntDiv);
+            let modulo = arithmetic_coercion(left, right, OP::Modulo);
+            let least_super = arithmetic_coercion(left, right, OP::Super);
             writeln!(
                 file,
                 "
@@ -112,8 +110,8 @@ impl ResultTypeOfBinary for ({}, {}) {{
                 to_primitive_str(intdiv),
                 to_primitive_str(modulo),
                 to_primitive_str(least_super),
-            ).unwrap()
-            ;
+            )
+            .unwrap();
         }
     }
 
@@ -127,46 +125,46 @@ impl ResultTypeOfUnary for {} {{
 }}",
             to_primitive_str(arg.clone()),
             to_primitive_str(negate),
-        ).unwrap()
-        ;
+        )
+        .unwrap();
     }
     file.flush().unwrap();
 }
 
 fn to_primitive_str(dt: DataType) -> &'static str {
     match dt {
-        DataType::UInt8 =>    "u8",
-        DataType::UInt16 =>   "u16",
-        DataType::UInt32 =>   "u32",
-        DataType::UInt64 =>   "u64",
-        DataType::Int8 =>     "i8",
-        DataType::Int16 =>    "i16",
-        DataType::Int32 =>    "i32",
-        DataType::Int64 =>    "i64",
-        DataType::Float32 =>   "f32",
-        DataType::Float64 =>  "f64",
+        DataType::UInt8 => "u8",
+        DataType::UInt16 => "u16",
+        DataType::UInt32 => "u32",
+        DataType::UInt64 => "u64",
+        DataType::Int8 => "i8",
+        DataType::Int16 => "i16",
+        DataType::Int32 => "i32",
+        DataType::Int64 => "i64",
+        DataType::Float32 => "f32",
+        DataType::Float64 => "f64",
         _ => panic!("unsupported data type"),
     }
 }
 
-fn arithmetic_coercion(a: NumberTypeInfo, b: NumberTypeInfo, op: OP) -> DataType{
+fn arithmetic_coercion(a: NumberTypeInfo, b: NumberTypeInfo, op: OP) -> DataType {
     let is_signed = a.is_signed || b.is_signed;
     let is_float = a.is_float || b.is_float;
     let bit_width = a.bit_width.max(b.bit_width);
-    
+
     match op {
-        OP::Plus | OP::Mul=>  {
+        OP::Plus | OP::Mul => {
             let info = NumberTypeInfo {
                 is_signed,
                 is_float,
                 bit_width: next_bit_width(bit_width),
             };
-            
+
             DataType::new_number(info)
-        },
+        }
         OP::Modulo => {
             if is_float {
-                 return DataType::Float64;  
+                return DataType::Float64;
             }
             let result_is_signed = a.is_signed;
             let right_size = b.bit_width;
@@ -175,7 +173,7 @@ fn arithmetic_coercion(a: NumberTypeInfo, b: NumberTypeInfo, op: OP) -> DataType
             } else {
                 right_size
             };
-            
+
             let info = NumberTypeInfo {
                 is_signed: result_is_signed,
                 is_float: false,
@@ -190,16 +188,16 @@ fn arithmetic_coercion(a: NumberTypeInfo, b: NumberTypeInfo, op: OP) -> DataType
                 bit_width: next_bit_width(bit_width),
             };
             DataType::new_number(info)
-        },
+        }
         OP::Div => DataType::Float64,
-        OP::IntDiv =>  {
+        OP::IntDiv => {
             let info = NumberTypeInfo {
                 is_signed,
                 is_float: false,
                 bit_width,
             };
             DataType::new_number(info)
-        },
+        }
         OP::Super => {
             let info = NumberTypeInfo {
                 is_signed,
@@ -207,18 +205,17 @@ fn arithmetic_coercion(a: NumberTypeInfo, b: NumberTypeInfo, op: OP) -> DataType
                 bit_width,
             };
             DataType::new_number(info)
-        },
+        }
     }
-
 }
 
 fn neg_coercion(a: NumberTypeInfo) -> DataType {
     let bit_width = if a.is_signed {
         a.bit_width
     } else {
-       next_bit_width(a.bit_width)
+        next_bit_width(a.bit_width)
     };
-    
+
     let info = NumberTypeInfo {
         is_float: a.is_float,
         is_signed: true,
@@ -227,11 +224,6 @@ fn neg_coercion(a: NumberTypeInfo) -> DataType {
     DataType::new_number(info)
 }
 
-
 const fn next_bit_width(width: u8) -> u8 {
-    if width < 64 { 
-        width * 2
-    } else {
-        64
-    }
+    if width < 64 { width * 2 } else { 64 }
 }

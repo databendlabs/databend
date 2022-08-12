@@ -13,6 +13,7 @@
 // limitations under the License.
 
 pub mod any;
+pub mod arithmetics_type;
 pub mod array;
 pub mod boolean;
 pub mod empty_array;
@@ -22,7 +23,6 @@ pub mod null;
 pub mod nullable;
 pub mod number;
 pub mod string;
-pub mod arithmetics_type;
 
 use std::fmt::Debug;
 use std::ops::Range;
