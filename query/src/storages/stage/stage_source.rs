@@ -120,7 +120,7 @@ impl StageSourceHelper {
         if stage.stage_type == StageType::Internal {
             ctx.get_storage_operator()
         } else {
-            Ok(init_operator(&stage.stage_params.storage).await?)
+            Ok(init_operator(&stage.stage_params.storage)?)
         }
     }
 
