@@ -34,6 +34,7 @@ use common_users::RoleCacheMgr;
 use common_users::UserApiProvider;
 use futures::future::Either;
 use futures::StreamExt;
+use once_cell::sync::OnceCell;
 use opendal::Operator;
 use parking_lot::RwLock;
 use tracing::debug;
@@ -84,7 +85,23 @@ pub struct SessionManager {
     _log_guards: Vec<WorkerGuard>,
 }
 
+static SESSION_MANAGER: OnceCell<Arc<SessionManager>> = OnceCell::new();
+
 impl SessionManager {
+    pub async fn init(conf: Config) -> Result<()> {
+        match SESSION_MANAGER.set(SessionManager::from_conf(conf).await?) {
+            Ok(_) => Ok(()),
+            Err(_) => Err(ErrorCode::LogicalError("Cannot init SessionManager twice"))
+        }
+    }
+
+    pub fn instance() -> Result<Arc<SessionManager>> {
+        match SESSION_MANAGER.get() {
+            None => Err(ErrorCode::LogicalError("SessionManager is not init")),
+            Some(session_manager) => Ok(session_manager.clone()),
+        }
+    }
+
     pub async fn from_conf(conf: Config) -> Result<Arc<SessionManager>> {
         let app_name = format!(
             "databend-query-{}-{}",
@@ -285,7 +302,7 @@ impl SessionManager {
             self.clone(),
             None,
         )
-        .await?;
+            .await?;
 
         let mut sessions = self.active_sessions.write();
         let v = sessions.get(&id);
@@ -352,7 +369,7 @@ impl SessionManager {
         self: &Arc<Self>,
         mut signal: SignalStream,
         timeout_secs: i32,
-    ) -> impl Future<Output = ()> {
+    ) -> impl Future<Output=()> {
         let active_sessions = self.active_sessions.clone();
         async move {
             info!(

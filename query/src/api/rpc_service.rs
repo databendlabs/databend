@@ -39,11 +39,11 @@ pub struct RpcService {
 }
 
 impl RpcService {
-    pub fn create(sessions: Arc<SessionManager>) -> Box<dyn DatabendQueryServer> {
-        Box::new(Self {
-            sessions,
+    pub fn create() -> Result<Box<dyn DatabendQueryServer>> {
+        Ok(Box::new(Self {
+            sessions: SessionManager::instance()?,
             abort_notify: Arc::new(Notify::new()),
-        })
+        }))
     }
 
     async fn listener_tcp(listening: SocketAddr) -> Result<(TcpListenerStream, SocketAddr)> {
@@ -54,7 +54,7 @@ impl RpcService {
         Ok((TcpListenerStream::new(listener), listener_addr))
     }
 
-    fn shutdown_notify(&self) -> impl Future<Output = ()> + 'static {
+    fn shutdown_notify(&self) -> impl Future<Output=()> + 'static {
         let notified = self.abort_notify.clone();
         async move {
             notified.notified().await;
@@ -83,7 +83,7 @@ impl RpcService {
                     ))
                 })?)
                 .map_err(|e| {
-                    ErrorCode::TLSConfigurationFailure(format!("failed to invoke tls_config: {e}",))
+                    ErrorCode::TLSConfigurationFailure(format!("failed to invoke tls_config: {e}", ))
                 })?
         } else {
             builder

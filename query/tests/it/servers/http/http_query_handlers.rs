@@ -664,8 +664,8 @@ async fn get_uri(ep: &EndpointType, uri: &str) -> Response {
             .typed_header(basic)
             .finish(),
     )
-    .await
-    .unwrap_or_else(|err| err.into_response())
+        .await
+        .unwrap_or_else(|err| err.into_response())
 }
 
 async fn get_uri_checked(ep: &EndpointType, uri: &str) -> Result<(StatusCode, QueryResponse)> {
@@ -1208,12 +1208,12 @@ async fn test_no_download_in_management_mode() -> Result<()> {
         .with_management_mode()
         .config();
 
-    let session_manager = SessionManager::from_conf(conf.clone()).await.unwrap();
+    SessionManager::init(conf.clone()).await?;
     let ep = Route::new()
         .nest("/v1/query", query_route())
         .with(HTTPSessionMiddleware {
             kind: HttpHandlerKind::Query,
-            session_manager,
+            session_manager: SessionManager::instance()?,
         });
     let sql = "select 1";
     let (status, result) = post_sql_to_endpoint(&ep, sql, 1).await?;

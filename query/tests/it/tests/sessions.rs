@@ -21,7 +21,8 @@ use databend_query::sessions::SessionManager;
 use databend_query::Config;
 
 async fn async_create_sessions(config: Config) -> Result<Arc<SessionManager>> {
-    let sessions = SessionManager::from_conf(config.clone()).await?;
+    SessionManager::init(config.clone()).await?;
+    let sessions = SessionManager::instance()?;
 
     let cluster_discovery = sessions.get_cluster_discovery();
     cluster_discovery.register_to_metastore(&config).await?;

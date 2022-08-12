@@ -47,14 +47,14 @@ pub struct MySQLHandler {
 }
 
 impl MySQLHandler {
-    pub fn create(sessions: Arc<SessionManager>) -> Box<dyn Server> {
+    pub fn create() -> Result<Box<dyn Server>> {
         let (abort_handle, registration) = AbortHandle::new_pair();
-        Box::new(MySQLHandler {
-            sessions,
+        Ok(Box::new(MySQLHandler {
             abort_handle,
+            sessions: SessionManager::instance()?,
             abort_registration: Some(registration),
             join_handle: None,
-        })
+        }))
     }
 
     async fn listener_tcp(listening: SocketAddr) -> Result<(TcpListenerStream, SocketAddr)> {
@@ -67,7 +67,7 @@ impl MySQLHandler {
         Ok((TcpListenerStream::new(listener), listener_addr))
     }
 
-    fn listen_loop(&self, stream: ListeningStream, rt: Arc<Runtime>) -> impl Future<Output = ()> {
+    fn listen_loop(&self, stream: ListeningStream, rt: Arc<Runtime>) -> impl Future<Output=()> {
         let sessions = self.sessions.clone();
         stream.for_each(move |accept_socket| {
             let executor = rt.clone();

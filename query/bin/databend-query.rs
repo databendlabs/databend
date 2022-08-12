@@ -34,6 +34,7 @@ use databend_query::sessions::SessionManager;
 use databend_query::Config;
 use databend_query::QUERY_SEMVER;
 use tracing::info;
+use common_exception::ErrorCode;
 
 #[databend_main]
 async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<()> {
@@ -75,8 +76,8 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
     init_default_metrics_recorder();
     set_panic_hook();
 
-    let session_manager = SessionManager::from_conf(conf.clone()).await?;
-    let mut shutdown_handle = ShutdownHandle::create(session_manager.clone());
+    global_init(&conf).await;
+    let mut shutdown_handle = ShutdownHandle::create()?;
 
     info!("Databend Query start with config: {:?}", conf);
 
@@ -84,7 +85,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
     {
         let hostname = conf.query.mysql_handler_host.clone();
         let listening = format!("{}:{}", hostname, conf.query.mysql_handler_port);
-        let mut handler = MySQLHandler::create(session_manager.clone());
+        let mut handler = MySQLHandler::create()?;
         let listening = handler.start(listening.parse()?).await?;
         shutdown_handle.add_service(handler);
 
@@ -101,7 +102,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
         let hostname = conf.query.clickhouse_http_handler_host.clone();
         let listening = format!("{}:{}", hostname, conf.query.clickhouse_http_handler_port);
 
-        let mut srv = HttpHandler::create(session_manager.clone(), HttpHandlerKind::Clickhouse);
+        let mut srv = HttpHandler::create(HttpHandlerKind::Clickhouse)?;
         let listening = srv.start(listening.parse()?).await?;
         shutdown_handle.add_service(srv);
 
@@ -117,7 +118,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
         let hostname = conf.query.http_handler_host.clone();
         let listening = format!("{}:{}", hostname, conf.query.http_handler_port);
 
-        let mut srv = HttpHandler::create(session_manager.clone(), HttpHandlerKind::Query);
+        let mut srv = HttpHandler::create(HttpHandlerKind::Query)?;
         let listening = srv.start(listening.parse()?).await?;
         shutdown_handle.add_service(srv);
 
@@ -131,7 +132,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
     // Metric API service.
     {
         let address = conf.query.metric_api_address.clone();
-        let mut srv = MetricService::create(session_manager.clone());
+        let mut srv = MetricService::create()?;
         let listening = srv.start(address.parse()?).await?;
         shutdown_handle.add_service(srv);
         info!("Listening for Metric API: {}/metrics", listening);
@@ -140,7 +141,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
     // Admin HTTP API service.
     {
         let address = conf.query.admin_api_address.clone();
-        let mut srv = HttpService::create(session_manager.clone());
+        let mut srv = HttpService::create()?;
         let listening = srv.start(address.parse()?).await?;
         shutdown_handle.add_service(srv);
         info!("Listening for Admin HTTP API: {}", listening);
@@ -149,7 +150,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
     // RPC API service.
     {
         let address = conf.query.flight_api_address.clone();
-        let mut srv = RpcService::create(session_manager.clone());
+        let mut srv = RpcService::create()?;
         let listening = srv.start(address.parse()?).await?;
         shutdown_handle.add_service(srv);
         info!("Listening for RPC API (interserver): {}", listening);
@@ -157,6 +158,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
 
     // Cluster register.
     {
+        let session_manager = SessionManager::instance()?;
         let cluster_discovery = session_manager.get_cluster_discovery();
         let register_to_metastore = cluster_discovery.register_to_metastore(&conf);
         register_to_metastore.await?;
@@ -168,6 +170,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
 
     // Async Insert Queue
     {
+        let session_manager = SessionManager::instance()?;
         let async_insert_queue = session_manager
             .clone()
             .get_async_insert_queue()
@@ -224,7 +227,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
                 "{}:{}",
                 conf.query.clickhouse_http_handler_host, conf.query.clickhouse_http_handler_port
             )
-            .parse()?
+                .parse()?
         )
     );
     println!("Databend HTTP");
@@ -239,7 +242,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
                 "{}:{}",
                 conf.query.http_handler_host, conf.query.http_handler_port
             )
-            .parse()?
+                .parse()?
         )
     );
 
@@ -247,6 +250,10 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
     shutdown_handle.wait_for_termination_request().await;
     info!("Shutdown server.");
     Ok(())
+}
+
+async fn global_init(conf: &Config) -> Result<(), ErrorCode> {
+    SessionManager::init(conf.clone()).await
 }
 
 fn run_cmd(conf: &Config) -> bool {

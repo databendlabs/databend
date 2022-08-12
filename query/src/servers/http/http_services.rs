@@ -74,12 +74,12 @@ pub struct HttpHandler {
 }
 
 impl HttpHandler {
-    pub fn create(session_manager: Arc<SessionManager>, kind: HttpHandlerKind) -> Box<dyn Server> {
-        Box::new(HttpHandler {
-            session_manager,
+    pub fn create(kind: HttpHandlerKind) -> Result<Box<dyn Server>> {
+        Ok(Box::new(HttpHandler {
+            session_manager: SessionManager::instance()?,
             shutdown_handler: HttpShutdownHandler::create("http handler".to_string()),
             kind,
-        })
+        }))
     }
 
     fn build_router(&self, sock: SocketAddr) -> impl Endpoint {
@@ -101,9 +101,9 @@ impl HttpHandler {
             kind: self.kind,
             session_manager: self.session_manager.clone(),
         })
-        .with(NormalizePath::new(TrailingSlash::Trim))
-        .with(CatchPanic::new())
-        .boxed()
+            .with(NormalizePath::new(TrailingSlash::Trim))
+            .with(CatchPanic::new())
+            .boxed()
     }
 
     fn build_tls(config: &Config) -> Result<RustlsConfig> {

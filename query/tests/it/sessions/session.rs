@@ -22,16 +22,16 @@ use databend_query::sessions::SessionType;
 async fn test_session() -> Result<()> {
     let conf = crate::tests::ConfigBuilder::create().config();
 
-    let session_manager = SessionManager::from_conf(conf.clone()).await.unwrap();
+    SessionManager::init(conf.clone()).await?;
 
     let session = Session::try_create(
         conf.clone(),
         String::from("test-001"),
         SessionType::Dummy,
-        session_manager,
+        SessionManager::instance()?,
         None,
     )
-    .await?;
+        .await?;
 
     // Tenant.
     {
@@ -61,16 +61,16 @@ async fn test_session_in_management_mode() -> Result<()> {
         .with_management_mode()
         .config();
 
-    let session_manager = SessionManager::from_conf(conf.clone()).await.unwrap();
+    SessionManager::init(conf.clone()).await?;
 
     let session = Session::try_create(
         conf.clone(),
         String::from("test-001"),
         SessionType::Dummy,
-        session_manager.clone(),
+        SessionManager::instance()?,
         None,
     )
-    .await?;
+        .await?;
 
     // Tenant.
     {
@@ -82,6 +82,7 @@ async fn test_session_in_management_mode() -> Result<()> {
         assert_eq!(&actual, "tenant2");
     }
 
+    let session_manager = SessionManager::instance()?;
     // test session leak
     let leak_id;
     {

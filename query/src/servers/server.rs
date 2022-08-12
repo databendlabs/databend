@@ -45,12 +45,12 @@ pub struct ShutdownHandle {
 }
 
 impl ShutdownHandle {
-    pub fn create(sessions: Arc<SessionManager>) -> ShutdownHandle {
-        ShutdownHandle {
-            sessions,
+    pub fn create() -> Result<ShutdownHandle> {
+        Ok(ShutdownHandle {
+            sessions: SessionManager::instance()?,
             services: vec![],
             shutdown: Arc::new(AtomicBool::new(false)),
-        }
+        })
     }
     async fn shutdown_services(&mut self, graceful: bool) {
         let mut shutdown_jobs = vec![];
@@ -81,8 +81,8 @@ impl ShutdownHandle {
 
                 info!("Received termination signal.");
                 if let Ok(false) =
-                    self.shutdown
-                        .compare_exchange(false, true, Ordering::SeqCst, Ordering::Acquire)
+                self.shutdown
+                    .compare_exchange(false, true, Ordering::SeqCst, Ordering::Acquire)
                 {
                     let shutdown_services = self.shutdown(stream);
                     shutdown_services.await;
@@ -99,8 +99,8 @@ impl ShutdownHandle {
 impl Drop for ShutdownHandle {
     fn drop(&mut self) {
         if let Ok(false) =
-            self.shutdown
-                .compare_exchange(false, true, Ordering::SeqCst, Ordering::Acquire)
+        self.shutdown
+            .compare_exchange(false, true, Ordering::SeqCst, Ordering::Acquire)
         {
             let signal_stream = DummySignalStream::create(SignalType::Exit);
             futures::executor::block_on(self.shutdown(signal_stream));

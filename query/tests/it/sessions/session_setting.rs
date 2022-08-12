@@ -22,16 +22,16 @@ use databend_query::sessions::SessionType;
 async fn test_session_setting() -> Result<()> {
     let conf = crate::tests::ConfigBuilder::create().config();
 
-    let session_manager = SessionManager::from_conf(conf.clone()).await.unwrap();
+    SessionManager::init(conf.clone()).await?;
 
     let session = Session::try_create(
         conf.clone(),
         String::from("test-001"),
         SessionType::Dummy,
-        session_manager,
+        SessionManager::instance()?,
         None,
     )
-    .await?;
+        .await?;
 
     // Settings.
     {

@@ -37,10 +37,10 @@ pub async fn metric_handler(prom_extension: Data<&PrometheusHandle>) -> impl Int
 
 impl MetricService {
     // TODO add session tls handler
-    pub fn create(_sessions: Arc<SessionManager>) -> Box<MetricService> {
-        Box::new(MetricService {
+    pub fn create() -> Result<Box<MetricService>> {
+        Ok(Box::new(MetricService {
             shutdown_handler: HttpShutdownHandler::create("metric api".to_string()),
-        })
+        }))
     }
 
     async fn start_without_tls(&mut self, listening: SocketAddr) -> Result<SocketAddr> {

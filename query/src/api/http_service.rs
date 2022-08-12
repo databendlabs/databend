@@ -42,16 +42,16 @@ pub struct HttpService {
 }
 
 impl HttpService {
-    pub fn create(sessions: Arc<SessionManager>) -> Box<HttpService> {
-        Box::new(HttpService {
-            sessions,
+    pub fn create() -> Result<Box<HttpService>> {
+        Ok(Box::new(HttpService {
+            sessions: SessionManager::instance()?,
             shutdown_handler: HttpShutdownHandler::create("http api".to_string()),
-        })
+        }))
     }
 
     fn build_router(&self) -> impl Endpoint {
         #[cfg_attr(not(feature = "memory-profiling"), allow(unused_mut))]
-        let mut route = Route::new()
+            let mut route = Route::new()
             .at("/v1/health", get(health_handler))
             .at("/v1/config", get(super::http::v1::config::config_handler))
             .at("/v1/logs", get(super::http::v1::logs::logs_handler))
