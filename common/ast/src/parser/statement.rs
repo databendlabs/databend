@@ -807,6 +807,20 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             })
         },
     );
+    let desc_share = map(
+        rule! {
+            //(DESC | DESCRIBE) ~ SHARE ~ ( #ident ~ "." )? ~ #ident
+            "abc" ~ SHARE ~ #ident
+        },
+        //|(_, _, tenant, share)| {
+        |(_, _, share)| {
+            Statement::DescShare(DescShareStmt {
+                // tenant: tenant.map(|(tenant, _)| tenant.name),
+                tenant: None,
+                share,
+            })
+        },
+    );
 
     let statement_body = alt((
         rule!(
@@ -900,6 +914,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             | #grant_share_object: "`GRANT { USAGE | SELECT | REFERENCE_USAGE } ON { DATABASE db | TABLE db.table } TO SHARE <share_name>`"
             | #revoke_share_object: "`REVOKE { USAGE | SELECT | REFERENCE_USAGE } ON { DATABASE db | TABLE db.table } FROM SHARE <share_name>`"
             | #alter_share_tenants: "`ALTER SHARE [IF EXISTS] <share_name> { ADD | REMOVE } TENANTS = tenant [, tenant, ...]`"
+            | #desc_share: "`{DESC | DESCRIBE} SHARE [tenant.]<share_name>`"
         ),
     ));
 

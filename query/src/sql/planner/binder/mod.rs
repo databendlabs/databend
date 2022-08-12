@@ -315,6 +315,9 @@ impl<'a> Binder {
             Statement::AlterShareTenants(stmt) => {
                 self.bind_alter_share_accounts(stmt).await?
             }
+            Statement::DescShare(stmt) => {
+                self.bind_desc_share(stmt).await?
+            }
         };
         Ok(plan)
     }
