@@ -39,6 +39,12 @@ fn test_arithmetic() {
             DataType::UInt32,
             Column::from_data(vec![10u32, 20, 30]),
         ),
+        
+        (
+            "d",
+            DataType::Float64,
+            Column::from_data(vec![10f64, -20f64, 30f64]),
+        ),
     ];
     test_add(file, columns);
     test_minus(file, columns);
@@ -52,6 +58,7 @@ fn test_add(file: &mut impl Write, columns: &[(&str, DataType, Column)]) {
     run_ast(file, "a2 + 10", columns);
     run_ast(file, "a2 + c", columns);
     run_ast(file, "c + b", columns);
+    run_ast(file, "c + d", columns);
 }
 
 fn test_minus(file: &mut impl Write, columns: &[(&str, DataType, Column)]) {
@@ -59,6 +66,7 @@ fn test_minus(file: &mut impl Write, columns: &[(&str, DataType, Column)]) {
     run_ast(file, "a2 - 10", columns);
     run_ast(file, "a2 - c", columns);
     run_ast(file, "c - b", columns);
+    run_ast(file, "c - d", columns);
 }
 
 fn test_mul(file: &mut impl Write, columns: &[(&str, DataType, Column)]) {
@@ -66,6 +74,7 @@ fn test_mul(file: &mut impl Write, columns: &[(&str, DataType, Column)]) {
     run_ast(file, "a2 * 10", columns);
     run_ast(file, "a2 * c", columns);
     run_ast(file, "c * b", columns);
+    run_ast(file, "c * d", columns);
 }
 
 fn test_div(file: &mut impl Write, columns: &[(&str, DataType, Column)]) {
@@ -73,6 +82,7 @@ fn test_div(file: &mut impl Write, columns: &[(&str, DataType, Column)]) {
     run_ast(file, "a2 / 10", columns);
     run_ast(file, "a2 / c", columns);
     run_ast(file, "divide(c, b)", columns);
+    run_ast(file, "c / d", columns);
 }
 
 fn test_intdiv(file: &mut impl Write, columns: &[(&str, DataType, Column)]) {
@@ -80,4 +90,5 @@ fn test_intdiv(file: &mut impl Write, columns: &[(&str, DataType, Column)]) {
     run_ast(file, "a2 div 10", columns);
     run_ast(file, "a2 div c", columns);
     run_ast(file, "c div b", columns);
+    run_ast(file, "c div d", columns);
 }
