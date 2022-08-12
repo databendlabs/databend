@@ -130,7 +130,7 @@ impl Display for AlterShareTenantsStmt<'_> {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DescShareStmt<'a> {
-    pub tenant: Option<String>,
+    pub tenant: Option<Identifier<'a>>,
     pub share: Identifier<'a>,
 }
 

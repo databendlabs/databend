@@ -684,13 +684,12 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
 
     let desc_stage = map(
         rule! {
-            (DESC | DESCRIBE) ~ STAGE ~ #ident
+        (DESC | DESCRIBE) ~ STAGE ~ #ident
         },
         |(_, _, stage_name)| Statement::DescribeStage {
             stage_name: stage_name.to_string(),
         },
     );
-
     let copy_into = map(
         rule! {
             COPY
@@ -810,17 +809,9 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let desc_share = map(
         rule! {
-            //(DESC | DESCRIBE) ~ SHARE ~ ( #ident ~ "." )? ~ #ident
-            "abc" ~ SHARE ~ #ident
+            (DESC | DESCRIBE) ~ SHARE ~ #peroid_separated_idents_1_to_2
         },
-        //|(_, _, tenant, share)| {
-        |(_, _, share)| {
-            Statement::DescShare(DescShareStmt {
-                // tenant: tenant.map(|(tenant, _)| tenant.name),
-                tenant: None,
-                share,
-            })
-        },
+        |(_, _, (tenant, share))| Statement::DescShare(DescShareStmt { tenant, share }),
     );
 
     let statement_body = alt((

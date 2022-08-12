@@ -1022,6 +1022,7 @@ impl TokenKind {
             // | TokenKind::OVERLAPS
             // | TokenKind::RETURNING
             | TokenKind::STAGE
+            | TokenKind::SHARE
             | TokenKind::TO
             | TokenKind::UNION
             | TokenKind::WHERE

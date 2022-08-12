@@ -15,11 +15,13 @@
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
+use common_datavalues::prelude::DataSchemaRef;
 use common_datavalues::prelude::Series;
 use common_datavalues::SeriesFrom;
 use common_exception::Result;
 use common_meta_api::ShareApi;
 use common_meta_app::share::GetShareGrantObjectReq;
+use common_meta_app::share::ShareGrantObjectName;
 use common_meta_app::share::ShareNameIdent;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
@@ -46,6 +48,10 @@ impl Interpreter for DescShareInterpreter {
         "DescShareInterpreter"
     }
 
+    fn schema(&self) -> DataSchemaRef {
+        self.plan.schema()
+    }
+
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         let user_mgr = self.ctx.get_user_manager();
         let meta_api = user_mgr.get_meta_store_client();
@@ -61,25 +67,29 @@ impl Interpreter for DescShareInterpreter {
         };
         let resp = meta_api.get_share_grant_objects(req).await?;
         let desc_schema = self.plan.schema();
-        println!("{:?}", resp);
 
         let mut names: Vec<String> = vec![];
         let mut kinds: Vec<String> = vec![];
         let mut shared_ons: Vec<String> = vec![];
         for entry in resp.objects.iter() {
-            kinds.push("kind".to_string());
-            names.push(entry.object.to_string());
+            match &entry.object {
+                ShareGrantObjectName::Database(db) => {
+                    kinds.push("DATABASE".to_string());
+                    names.push(db.clone());
+                }
+                ShareGrantObjectName::Table(db, table_name) => {
+                    kinds.push("TABLE".to_string());
+                    names.push(format!("{}.{}", db, table_name));
+                }
+            }
             shared_ons.push(entry.grant_on.to_string());
         }
 
-        println!("{:?}, {:?}", names.clone(), shared_ons.clone());
         let block = DataBlock::create(desc_schema.clone(), vec![
             Series::from_data(kinds),
             Series::from_data(names),
             Series::from_data(shared_ons),
         ]);
-        println!("block: {:?}", block);
-
         Ok(Box::pin(DataBlockStream::create(desc_schema, None, vec![
             block,
         ])))

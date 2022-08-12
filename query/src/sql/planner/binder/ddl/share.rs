@@ -137,10 +137,7 @@ impl<'a> Binder {
 
         let plan = DescSharePlan {
             share,
-            tenant: match tenant {
-                Some(tenant) => Some(tenant.clone()),
-                None => None,
-            },
+            tenant: tenant.as_ref().map(|tenant| tenant.to_string()),
         };
         Ok(Plan::DescShare(Box::new(plan)))
     }
