@@ -54,6 +54,7 @@ use parking_lot::Mutex;
 use parking_lot::RwLock;
 use tracing::debug;
 use tracing::Subscriber;
+use common_storage::StorageOperator;
 use common_tracing::QueryLogger;
 
 use crate::api::DataExchangeManager;
@@ -382,7 +383,7 @@ impl TableContext for QueryContext {
     }
     // Get the storage data accessor operator from the session manager.
     fn get_storage_operator(&self) -> Result<Operator> {
-        let operator = self.shared.session.get_storage_operator();
+        let operator = StorageOperator::instance();
 
         Ok(operator.layer(self.shared.dal_ctx.as_ref().clone()))
     }

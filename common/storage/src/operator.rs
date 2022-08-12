@@ -14,6 +14,8 @@
 
 use std::env;
 use std::io::Result;
+use std::sync::Arc;
+use once_cell::sync::OnceCell;
 
 use opendal::services::azblob;
 use opendal::services::fs;
@@ -21,12 +23,16 @@ use opendal::services::http;
 use opendal::services::memory;
 use opendal::services::s3;
 use opendal::Operator;
+use common_base::base::GlobalIORuntime;
+use common_contexts::DalRuntime;
+use common_exception::ErrorCode;
 
 use super::StorageAzblobConfig;
 use super::StorageFsConfig;
 use super::StorageParams;
 use super::StorageS3Config;
 use crate::config::StorageHttpConfig;
+use crate::StorageConfig;
 
 /// init_operator will init an opendal operator based on storage config.
 pub async fn init_operator(cfg: &StorageParams) -> Result<Operator> {
@@ -141,3 +147,41 @@ pub async fn init_s3_operator(cfg: &StorageS3Config) -> Result<Operator> {
 
     Ok(Operator::new(builder.finish().await?))
 }
+
+pub struct StorageOperator;
+
+static STORAGE_OPERATOR: OnceCell<Operator> = OnceCell::new();
+
+impl StorageOperator {
+    pub async fn init(conf: &StorageConfig) -> common_exception::Result<()> {
+        let io_runtime = GlobalIORuntime::instance();
+        let operator = init_operator(&conf.params).await?;
+        // Enable exponential backoff by default
+        let operator = operator.with_backoff(backon::ExponentialBackoff::default());
+
+        // OpenDAL will send a real request to underlying storage to check whether it works or not.
+        // If this check failed, it's highly possible that the users have configured it wrongly.
+        if let Err(cause) = operator.check().await {
+            return Err(ErrorCode::StorageUnavailable(format!(
+                "current configured storage is not available: {cause}"
+            )));
+        }
+
+        // NOTE: Magic happens here. We will add a layer upon original storage operator
+        // so that all underlying storage operations will send to storage runtime.
+        let operator = operator.layer(DalRuntime::new(io_runtime.inner()));
+
+        match STORAGE_OPERATOR.set(operator) {
+            Ok(_) => Ok(()),
+            Err(_) => Err(ErrorCode::LogicalError("Cannot init StorageOperator twice"))
+        }
+    }
+
+    pub fn instance() -> Operator {
+        match STORAGE_OPERATOR.get() {
+            None => panic!("StorageOperator is not init"),
+            Some(storage_operator) => storage_operator.clone(),
+        }
+    }
+}
+

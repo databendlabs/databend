@@ -35,6 +35,7 @@ pub use operator::init_http_operator;
 pub use operator::init_memory_operator;
 pub use operator::init_operator;
 pub use operator::init_s3_operator;
+pub use operator::StorageOperator;
 
 mod location;
 pub use location::parse_uri_location;

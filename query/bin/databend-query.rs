@@ -37,6 +37,7 @@ use tracing::info;
 use common_catalog::catalog::CatalogManager;
 use common_exception::ErrorCode;
 use common_fuse_meta::caches::CacheManager;
+use common_storage::StorageOperator;
 use common_users::{RoleCacheManager, UserApiProvider};
 use databend_query::catalogs::CatalogManagerHelper;
 use databend_query::clusters::ClusterDiscovery;
@@ -83,7 +84,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
     init_default_metrics_recorder();
     set_panic_hook();
 
-    global_init(&conf).await;
+    global_init(&conf).await?;
     let mut shutdown_handle = ShutdownHandle::create()?;
 
     info!("Databend Query start with config: {:?}", conf);
@@ -258,6 +259,7 @@ async fn global_init(conf: &Config) -> Result<(), ErrorCode> {
     // Cluster discovery.
     ClusterDiscovery::init(conf.clone()).await?;
 
+    StorageOperator::init(&conf.storage).await?;
     AsyncInsertManager::init(&conf)?;
     CacheManager::init(&conf.query)?;
     CatalogManager::init(conf).await?;

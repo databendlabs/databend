@@ -1702,7 +1702,12 @@ name = "common-storage"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "backon",
+ "common-base",
+ "common-contexts",
+ "common-exception",
  "globiter",
+ "once_cell",
  "opendal",
  "percent-encoding",
  "serde",

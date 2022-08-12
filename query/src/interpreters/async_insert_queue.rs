@@ -191,7 +191,6 @@ type EntryPtr = Arc<Entry>;
 type Queue = HashMap<InsertKey, InsertData>;
 type QueryIdToEntry = HashMap<String, EntryPtr>;
 
-#[derive(Clone)]
 pub struct AsyncInsertManager {
     async_runtime: Runtime,
     max_data_size: u64,
@@ -253,14 +252,15 @@ impl AsyncInsertManager {
         // stale timeout
         let stale_timeout = self.stale_timeout;
         if !stale_timeout.is_zero() {
+            let this = self.clone();
             self.async_runtime.spawn(async move {
                 let mut intv = interval_at(Instant::now() + stale_timeout, stale_timeout);
                 loop {
                     intv.tick().await;
-                    if self.queue.read().is_empty() {
+                    if this.queue.read().is_empty() {
                         continue;
                     }
-                    let timeout = self.clone().stale_check();
+                    let timeout = this.stale_check();
                     if timeout != busy_timeout {
                         intv = interval_at(Instant::now() + timeout, timeout);
                     }
@@ -373,7 +373,7 @@ impl AsyncInsertManager {
     ) -> Result<()> {
         let entry = self.get_entry(&query_id)?;
         let e = entry.clone();
-        self.async_runtime.as_ref().inner().spawn(async move {
+        self.async_runtime.spawn(async move {
             let mut intv = interval_at(Instant::now() + time_out, time_out);
             intv.tick().await;
             e.finish_with_timeout();
@@ -390,9 +390,10 @@ impl AsyncInsertManager {
         }
     }
 
-    fn schedule(self: Arc<Self>, key: InsertKey, data: InsertData) {
-        self.async_runtime.as_ref().inner().spawn(async {
-            match self.process(key, data.clone()).await {
+    fn schedule(self: &Arc<Self>, key: InsertKey, data: InsertData) {
+        let this = self.clone();
+        self.async_runtime.spawn(async {
+            match this.process(key, data.clone()).await {
                 Ok(_) => {
                     for entry in data.entries.into_iter() {
                         entry.finish();
@@ -457,7 +458,7 @@ impl AsyncInsertManager {
         timeout
     }
 
-    fn stale_check(self: Arc<Self>) -> Duration {
+    fn stale_check(self: &Arc<Self>) -> Duration {
         let mut keys = Vec::new();
         let mut queue = self.queue.write();
 

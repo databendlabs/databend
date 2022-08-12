@@ -27,6 +27,7 @@ use common_users::{RoleCacheManager, UserApiProvider};
 use futures::channel::*;
 use opendal::Operator;
 use parking_lot::RwLock;
+use common_storage::StorageOperator;
 
 use crate::catalogs::{CatalogManager, CatalogManagerHelper};
 use crate::clusters::ClusterDiscovery;
@@ -285,10 +286,6 @@ impl Session {
     pub fn get_memory_usage(self: &Arc<Self>) -> usize {
         // TODO(winter): use thread memory tracker
         0
-    }
-
-    pub fn get_storage_operator(self: &Arc<Self>) -> Operator {
-        self.session_mgr.get_storage_operator()
     }
 
     pub fn get_config(&self) -> Config {

@@ -27,7 +27,7 @@ use common_contexts::DalRuntime;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_metrics::label_counter;
-use common_storage::init_operator;
+use common_storage::{init_operator, StorageOperator};
 use common_tracing::{init_logging, QueryLogger};
 use common_tracing::init_query_logger;
 use common_users::RoleCacheManager;
@@ -61,7 +61,6 @@ pub struct SessionManager {
     pub(in crate::sessions) max_sessions: usize,
     pub(in crate::sessions) active_sessions: Arc<RwLock<HashMap<String, Arc<Session>>>>,
     pub status: Arc<RwLock<SessionManagerStatus>>,
-    storage_operator: Operator,
 
     // When typ is MySQL, insert into this map, key is id, val is MySQL connection id.
     pub(crate) mysql_conn_map: Arc<RwLock<HashMap<Option<u32>, String>>>,
@@ -86,12 +85,6 @@ impl SessionManager {
     }
 
     pub async fn from_conf(conf: Config) -> Result<Arc<SessionManager>> {
-        // NOTE: Magic happens here. We will add a layer upon original storage operator
-        // so that all underlying storage operations will send to storage runtime.
-        let storage_operator = Self::init_storage_operator(&conf)
-            .await?
-            .layer(DalRuntime::new(GlobalIORuntime::instance().inner()));
-
         let max_sessions = conf.query.max_active_sessions as usize;
         let active_sessions = Arc::new(RwLock::new(HashMap::with_capacity(max_sessions)));
         let status = Arc::new(RwLock::new(SessionManagerStatus::default()));
@@ -103,7 +96,6 @@ impl SessionManager {
             max_sessions,
             active_sessions,
             status,
-            storage_operator,
             mysql_conn_map,
             mysql_basic_conn_id: AtomicU32::new(9_u32.to_le() as u32),
         }))
@@ -111,10 +103,6 @@ impl SessionManager {
 
     pub fn get_conf(&self) -> Config {
         self.conf.clone()
-    }
-
-    pub fn get_storage_operator(self: &Arc<Self>) -> Operator {
-        self.storage_operator.clone()
     }
 
     pub async fn create_session(self: &Arc<Self>, typ: SessionType) -> Result<SessionRef> {
@@ -313,21 +301,5 @@ impl SessionManager {
                 false
             }
         }
-    }
-
-    // Init the storage operator by config.
-    async fn init_storage_operator(conf: &Config) -> Result<Operator> {
-        let op = init_operator(&conf.storage.params).await?;
-        // Enable exponential backoff by default
-        let op = op.with_backoff(backon::ExponentialBackoff::default());
-        // OpenDAL will send a real request to underlying storage to check whether it works or not.
-        // If this check failed, it's highly possible that the users have configured it wrongly.
-        op.check().await.map_err(|e| {
-            ErrorCode::StorageUnavailable(format!(
-                "current configured storage is not available: {e}"
-            ))
-        })?;
-
-        Ok(op)
     }
 }
