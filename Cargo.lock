@@ -1248,6 +1248,7 @@ dependencies = [
  "common-expression",
  "goldenfile",
  "match-template",
+ "num-traits",
 ]
 
 [[package]]

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_expression::types::arithmetics_type::ResultTypeOfBinary;
+use common_expression::types::arithmetics_type::ResultTypeOfUnary;
 use common_expression::types::number::*;
 use common_expression::types::DataType;
 use common_expression::vectorize_with_writer_2_arg;
@@ -55,9 +56,14 @@ pub fn register(registry: &mut FunctionRegistry) {
                                 "+",
                                 FunctionProperty::default(),
                                 |lhs, rhs| {
+                                    let lm: T =  num_traits::cast::cast(lhs.max)?;
+                                    let ln: T =  num_traits::cast::cast(lhs.min)?;
+                                    let rm: T =  num_traits::cast::cast(rhs.max)?;
+                                    let rn: T =  num_traits::cast::cast(rhs.min)?;
+
                                     Some(NumberDomain::<T> {
-                                        min: lhs.min as T + rhs.min as T,
-                                        max: lhs.max as T + rhs.max as T,
+                                        min: ln.d_checked_add(rn)?,
+                                        max: lm.d_checked_add(rm)?,
                                     })
                                 },
                                 |a, b| a as T + b as T,
@@ -70,9 +76,14 @@ pub fn register(registry: &mut FunctionRegistry) {
                                 "-",
                                 FunctionProperty::default(),
                                 |lhs, rhs| {
+                                    let lm: T =  num_traits::cast::cast(lhs.max)?;
+                                    let ln: T =  num_traits::cast::cast(lhs.min)?;
+                                    let rm: T =  num_traits::cast::cast(rhs.max)?;
+                                    let rn: T =  num_traits::cast::cast(rhs.min)?;
+
                                     Some(NumberDomain::<T> {
-                                        min: lhs.min as T - rhs.max as T,
-                                        max: lhs.max as T - rhs.min as T,
+                                        min: ln.d_checked_sub(rm)?,
+                                        max: lm.d_checked_sub(rn)?,
                                     })
                                 },
                                 |a, b| a as T - b as T,
@@ -85,9 +96,19 @@ pub fn register(registry: &mut FunctionRegistry) {
                                 "*",
                                 FunctionProperty::default(),
                                 |lhs, rhs| {
+                                    let lm: T =  num_traits::cast::cast(lhs.max)?;
+                                    let ln: T =  num_traits::cast::cast(lhs.min)?;
+                                    let rm: T =  num_traits::cast::cast(rhs.max)?;
+                                    let rn: T =  num_traits::cast::cast(rhs.min)?;
+
+                                    let x = lm.d_checked_mul(rm)?;
+                                    let y = lm.d_checked_mul(rn)?;
+                                    let m = ln.d_checked_mul(rm)?;
+                                    let n = ln.d_checked_mul(rn)?;
+
                                     Some(NumberDomain::<T> {
-                                        min: lhs.min as T * rhs.min as T,
-                                        max: lhs.max as T * rhs.max as T,
+                                        min: x.min(y).min(m).min(n),
+                                        max: x.max(y).max(m).max(n),
                                     })
                                 },
                                 |a, b| a as T * b as T,
