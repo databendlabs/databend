@@ -46,7 +46,7 @@ use common_planners::StageTableInfo;
 use common_planners::Statistics;
 use common_streams::AbortStream;
 use common_streams::SendableDataBlockStream;
-use common_users::RoleCacheMgr;
+use common_users::RoleCacheManager;
 use common_users::UserApiProvider;
 use futures::future::AbortHandle;
 use opendal::Operator;
@@ -167,7 +167,7 @@ impl QueryContext {
     }
 
     pub fn get_exchange_manager(&self) -> Arc<DataExchangeManager> {
-        self.shared.session.session_mgr.get_data_exchange_manager()
+        DataExchangeManager::instance()
     }
 
     pub fn try_create_abortable(&self, input: SendableDataBlockStream) -> Result<AbortStream> {

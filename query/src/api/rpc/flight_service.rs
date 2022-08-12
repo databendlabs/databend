@@ -35,6 +35,7 @@ use tonic::Request;
 use tonic::Response as RawResponse;
 use tonic::Status;
 use tonic::Streaming;
+use crate::api::DataExchangeManager;
 
 use crate::api::rpc::flight_actions::FlightAction;
 use crate::api::rpc::flight_client::FlightExchange;
@@ -43,15 +44,13 @@ use crate::sessions::SessionManager;
 use crate::sessions::SessionType;
 
 pub type FlightStream<T> =
-    Pin<Box<dyn Stream<Item = Result<T, tonic::Status>> + Send + Sync + 'static>>;
+Pin<Box<dyn Stream<Item=Result<T, tonic::Status>> + Send + Sync + 'static>>;
 
-pub struct DatabendQueryFlightService {
-    sessions: Arc<SessionManager>,
-}
+pub struct DatabendQueryFlightService;
 
 impl DatabendQueryFlightService {
-    pub fn create(sessions: Arc<SessionManager>) -> Self {
-        DatabendQueryFlightService { sessions }
+    pub fn create() -> Self {
+        DatabendQueryFlightService {}
     }
 }
 
@@ -110,8 +109,7 @@ impl FlightService for DatabendQueryFlightService {
                 let (tx, rx) = async_channel::bounded(1);
                 let exchange = FlightExchange::from_server(req, tx);
 
-                let exchange_manager = self.sessions.get_data_exchange_manager();
-                exchange_manager.handle_statistics_exchange(query_id, exchange)?;
+                DataExchangeManager::instance().handle_statistics_exchange(query_id, exchange)?;
                 Ok(RawResponse::new(Box::pin(rx)))
             }
             "exchange_fragment" => {
@@ -122,8 +120,7 @@ impl FlightService for DatabendQueryFlightService {
                 let (tx, rx) = async_channel::bounded(1);
                 let exchange = FlightExchange::from_server(req, tx);
 
-                let exchange_manager = self.sessions.get_data_exchange_manager();
-                exchange_manager.handle_exchange_fragment(query_id, source, fragment, exchange)?;
+                DataExchangeManager::instance().handle_exchange_fragment(query_id, source, fragment, exchange)?;
                 Ok(RawResponse::new(Box::pin(rx)))
             }
             exchange_type => Err(Status::unimplemented(format!(
@@ -144,26 +141,20 @@ impl FlightService for DatabendQueryFlightService {
 
         let action_result = match &flight_action {
             FlightAction::InitQueryFragmentsPlan(init_query_fragments_plan) => {
-                let session = self.sessions.create_session(SessionType::FlightRPC).await?;
+                let session = SessionManager::instance().create_session(SessionType::FlightRPC).await?;
                 let ctx = session.create_query_context().await?;
-                let exchange_manager = self.sessions.get_data_exchange_manager();
-                exchange_manager
-                    .init_query_fragments_plan(&ctx, &init_query_fragments_plan.executor_packet)?;
+                DataExchangeManager::instance().init_query_fragments_plan(&ctx, &init_query_fragments_plan.executor_packet)?;
 
                 FlightResult { body: vec![] }
             }
             FlightAction::InitNodesChannel(init_nodes_channel) => {
                 let publisher_packet = &init_nodes_channel.init_nodes_channel_packet;
-                let exchange_manager = self.sessions.get_data_exchange_manager();
-                exchange_manager
-                    .init_nodes_channel(publisher_packet)
-                    .await?;
+                DataExchangeManager::instance().init_nodes_channel(publisher_packet).await?;
 
                 FlightResult { body: vec![] }
             }
             FlightAction::ExecutePartialQuery(query_id) => {
-                let exchange_manager = self.sessions.get_data_exchange_manager();
-                exchange_manager.execute_partial_query(query_id)?;
+                DataExchangeManager::instance().execute_partial_query(query_id)?;
 
                 FlightResult { body: vec![] }
             }

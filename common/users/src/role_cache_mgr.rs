@@ -33,15 +33,15 @@ struct CachedRoles {
     cached_at: Instant,
 }
 
-pub struct RoleCacheMgr {
+pub struct RoleCacheManager {
     cache: Arc<RwLock<HashMap<String, CachedRoles>>>,
     polling_interval: Duration,
     polling_join_handle: Option<JoinHandle<()>>,
 }
 
-static ROLE_CACHE_MANAGER: OnceCell<Arc<RoleCacheMgr>> = OnceCell::new();
+static ROLE_CACHE_MANAGER: OnceCell<Arc<RoleCacheManager>> = OnceCell::new();
 
-impl RoleCacheMgr {
+impl RoleCacheManager {
     pub fn init() -> Result<()> {
         // Check that the user API has been initialized.
         let _instance = UserApiProvider::instance();
@@ -60,7 +60,7 @@ impl RoleCacheMgr {
         }
     }
 
-    pub fn instance() -> Arc<RoleCacheMgr> {
+    pub fn instance() -> Arc<RoleCacheManager> {
         match ROLE_CACHE_MANAGER.get() {
             None => panic!("RoleCacheManager is not init"),
             Some(role_cache_manager) => role_cache_manager.clone(),

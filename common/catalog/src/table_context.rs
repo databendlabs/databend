@@ -33,7 +33,7 @@ use common_planners::PlanNode;
 use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
 use common_settings::Settings;
-use common_users::RoleCacheMgr;
+use common_users::RoleCacheManager;
 use common_users::UserApiProvider;
 use opendal::Operator;
 use parking_lot::Mutex;

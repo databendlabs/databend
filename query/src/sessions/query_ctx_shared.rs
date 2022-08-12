@@ -26,7 +26,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::UserInfo;
 use common_planners::PlanNode;
-use common_users::RoleCacheMgr;
+use common_users::RoleCacheManager;
 use common_users::UserApiProvider;
 use futures::future::AbortHandle;
 use parking_lot::Mutex;

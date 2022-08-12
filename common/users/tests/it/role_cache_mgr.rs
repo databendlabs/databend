@@ -22,7 +22,7 @@ use common_meta_types::GrantObject;
 use common_meta_types::RoleInfo;
 use common_meta_types::UserPrivilegeSet;
 use common_users::role_util::find_all_related_roles;
-use common_users::RoleCacheMgr;
+use common_users::RoleCacheManager;
 use common_users::UserApiProvider;
 
 pub const CATALOG_DEFAULT: &str = "default";
@@ -31,7 +31,7 @@ pub const CATALOG_DEFAULT: &str = "default";
 async fn test_role_cache_mgr() -> Result<()> {
     let conf = RpcClientConf::default();
     UserApiProvider::init(conf).await?;
-    RoleCacheMgr::init()?;
+    RoleCacheManager::init()?;
 
     let mut role1 = RoleInfo::new("role1");
     role1.grants.grant_privileges(
@@ -40,7 +40,7 @@ async fn test_role_cache_mgr() -> Result<()> {
     );
     UserApiProvider::instance().add_role("tenant1", role1, false).await?;
 
-    let roles = RoleCacheMgr::instance()
+    let roles = RoleCacheManager::instance()
         .find_related_roles("tenant1", &["role1".to_string()])
         .await?;
     assert_eq!(roles.len(), 1);

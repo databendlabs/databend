@@ -23,7 +23,7 @@ use common_io::prelude::FormatSettings;
 use common_meta_types::GrantObject;
 use common_meta_types::UserInfo;
 use common_meta_types::UserPrivilegeType;
-use common_users::{RoleCacheMgr, UserApiProvider};
+use common_users::{RoleCacheManager, UserApiProvider};
 use futures::channel::*;
 use opendal::Operator;
 use parking_lot::RwLock;
@@ -253,7 +253,7 @@ impl Session {
         // TODO: take current role instead of all roles
         let all_roles = self.get_all_roles()?;
         let tenant = self.get_current_tenant();
-        let role_verified = RoleCacheMgr::instance()
+        let role_verified = RoleCacheManager::instance()
             .find_related_roles(&tenant, &all_roles)
             .await?
             .iter()

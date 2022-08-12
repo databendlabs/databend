@@ -22,7 +22,7 @@ use common_meta_embedded::MetaEmbedded;
 use common_meta_grpc::MIN_METASRV_SEMVER;
 use common_metrics::init_default_metrics_recorder;
 use common_tracing::set_panic_hook;
-use databend_query::api::HttpService;
+use databend_query::api::{DataExchangeManager, HttpService};
 use databend_query::api::RpcService;
 use databend_query::metrics::MetricService;
 use databend_query::servers::HttpHandler;
@@ -37,7 +37,7 @@ use tracing::info;
 use common_catalog::catalog::CatalogManager;
 use common_exception::ErrorCode;
 use common_fuse_meta::caches::CacheManager;
-use common_users::{RoleCacheMgr, UserApiProvider};
+use common_users::{RoleCacheManager, UserApiProvider};
 use databend_query::catalogs::CatalogManagerHelper;
 use databend_query::servers::http::v1::HttpQueryManager;
 
@@ -262,10 +262,10 @@ async fn global_init(conf: &Config) -> Result<(), ErrorCode> {
     CacheManager::init(&conf.query)?;
     CatalogManager::init(conf).await?;
     HttpQueryManager::init(conf).await?;
+    DataExchangeManager::init(conf.clone())?;
     SessionManager::init(conf.clone()).await?;
     UserApiProvider::init(conf.meta.to_meta_grpc_client_conf()).await?;
-
-    RoleCacheMgr::init()
+    RoleCacheManager::init()
 }
 
 fn run_cmd(conf: &Config) -> bool {

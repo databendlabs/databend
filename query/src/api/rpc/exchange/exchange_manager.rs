@@ -17,6 +17,7 @@ use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::ops::Deref;
 use std::sync::Arc;
+use once_cell::sync::OnceCell;
 
 use common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
 use common_base::base::Thread;
@@ -61,12 +62,26 @@ pub struct DataExchangeManager {
     queries_coordinator: ReentrantMutex<SyncUnsafeCell<HashMap<String, QueryCoordinator>>>,
 }
 
+static DATA_EXCHANGE_MANAGER: OnceCell<Arc<DataExchangeManager>> = OnceCell::new();
+
 impl DataExchangeManager {
-    pub fn create(config: Config) -> Arc<DataExchangeManager> {
-        Arc::new(DataExchangeManager {
+    pub fn init(config: Config) -> Result<()> {
+        let exchange_manager = Arc::new(DataExchangeManager {
             config,
             queries_coordinator: ReentrantMutex::new(SyncUnsafeCell::new(HashMap::new())),
-        })
+        });
+
+        match DATA_EXCHANGE_MANAGER.set(exchange_manager) {
+            Ok(_) => Ok(()),
+            Err(_) => Err(ErrorCode::LogicalError("Cannot init DataExchangeManager twice"))
+        }
+    }
+
+    pub fn instance() -> Arc<DataExchangeManager> {
+        match DATA_EXCHANGE_MANAGER.get() {
+            None => panic!("DataExchangeManager is not init"),
+            Some(data_exchange_manager) => data_exchange_manager.clone(),
+        }
     }
 
     // Create connections for cluster all nodes. We will push data through this connection.
@@ -121,7 +136,7 @@ impl DataExchangeManager {
                     None,
                     Some(config.query.to_rpc_client_tls_config()),
                 )
-                .await?,
+                    .await?,
             ))),
             false => Ok(FlightClient::new(FlightServiceClient::new(
                 ConnectionFactory::create_rpc_channel(address.to_owned(), None, None).await?,

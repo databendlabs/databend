@@ -71,7 +71,7 @@ impl RpcService {
 
     pub async fn start_with_incoming(&mut self, listener_stream: TcpListenerStream) -> Result<()> {
         let sessions = self.sessions.clone();
-        let flight_api_service = DatabendQueryFlightService::create(sessions);
+        let flight_api_service = DatabendQueryFlightService::create();
         let conf = self.sessions.get_conf();
         let builder = Server::builder();
         let mut builder = if conf.tls_rpc_server_enabled() {

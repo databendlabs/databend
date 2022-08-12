@@ -21,7 +21,7 @@ use common_meta_types::PrincipalIdentity;
 use common_planners::ShowGrantsPlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
-use common_users::RoleCacheMgr;
+use common_users::RoleCacheManager;
 
 use crate::interpreters::Interpreter;
 use crate::sessions::QueryContext;
@@ -69,7 +69,7 @@ impl Interpreter for ShowGrantsInterpreter {
                 }
             },
         };
-        let grant_list = RoleCacheMgr::instance()
+        let grant_list = RoleCacheManager::instance()
             .find_related_roles(&tenant, &grant_set.roles())
             .await?
             .into_iter()

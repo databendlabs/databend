@@ -30,7 +30,7 @@ use common_metrics::label_counter;
 use common_storage::init_operator;
 use common_tracing::init_logging;
 use common_tracing::init_query_logger;
-use common_users::RoleCacheMgr;
+use common_users::RoleCacheManager;
 use common_users::UserApiProvider;
 use futures::future::Either;
 use futures::StreamExt;
@@ -59,7 +59,6 @@ use crate::Config;
 pub struct SessionManager {
     pub(in crate::sessions) conf: Config,
     pub(in crate::sessions) discovery: Arc<ClusterDiscovery>,
-    pub(in crate::sessions) data_exchange_manager: Arc<DataExchangeManager>,
 
     pub(in crate::sessions) max_sessions: usize,
     pub(in crate::sessions) active_sessions: Arc<RwLock<HashMap<String, Arc<Session>>>>,
@@ -140,7 +139,6 @@ impl SessionManager {
 
         let mysql_conn_map = Arc::new(RwLock::new(HashMap::with_capacity(max_sessions)));
 
-        let exchange_manager = DataExchangeManager::create(conf.clone());
         let storage_runtime = Arc::new(storage_runtime);
 
         let async_insert_queue =
@@ -157,7 +155,6 @@ impl SessionManager {
             discovery,
             max_sessions,
             active_sessions,
-            data_exchange_manager: exchange_manager,
             query_logger: Arc::new(RwLock::new(query_logger)),
             status,
             storage_operator,
@@ -179,10 +176,6 @@ impl SessionManager {
 
     pub fn get_storage_operator(self: &Arc<Self>) -> Operator {
         self.storage_operator.clone()
-    }
-
-    pub fn get_data_exchange_manager(&self) -> Arc<DataExchangeManager> {
-        self.data_exchange_manager.clone()
     }
 
     pub fn get_storage_runtime(&self) -> Arc<Runtime> {

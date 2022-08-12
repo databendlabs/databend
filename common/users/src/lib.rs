@@ -25,6 +25,6 @@ pub mod role_cache_mgr;
 pub mod role_util;
 
 pub use jwt::*;
-pub use role_cache_mgr::RoleCacheMgr;
+pub use role_cache_mgr::RoleCacheManager;
 pub use user::CertifiedInfo;
 pub use user_api::UserApiProvider;
