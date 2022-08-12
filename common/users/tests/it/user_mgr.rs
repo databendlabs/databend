@@ -36,7 +36,8 @@ async fn test_user_manager() -> Result<()> {
     let hostname = "localhost";
     let hostname2 = "%";
     let pwd = "test-pwd";
-    let user_mgr = UserApiProvider::create_global(conf).await?;
+    UserApiProvider::init(conf).await?;
+    let user_mgr = UserApiProvider::instance();
 
     let auth_info = AuthInfo::Password {
         hash_value: Vec::from(pwd),
@@ -255,7 +256,8 @@ async fn test_user_manager_with_root_user() -> Result<()> {
     let hostname2 = "localhost";
     let hostname3 = "otherhost";
 
-    let user_mgr = UserApiProvider::create_global(conf).await?;
+    UserApiProvider::init(conf).await?;
+    let user_mgr = UserApiProvider::instance();
 
     // Get user via username `default` and hostname `127.0.0.1`.
     {

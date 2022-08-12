@@ -29,7 +29,8 @@ async fn test_role_manager() -> Result<()> {
 
     let tenant = "tenant1";
     let role_name = "test-role1".to_string();
-    let role_mgr = UserApiProvider::create_global(conf).await?;
+    UserApiProvider::init(conf).await?;
+    let role_mgr = UserApiProvider::instance();
 
     // add role
     {

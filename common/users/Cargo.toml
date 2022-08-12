@@ -23,6 +23,7 @@ common-meta-api = { path = "../meta/api" }
 common-meta-store = { path = "../meta/store" }
 common-meta-types = { path = "../meta/types" }
 common-tracing = { path = "../tracing" }
+once_cell = "1.12.0"
 
 # Github dependencies
 

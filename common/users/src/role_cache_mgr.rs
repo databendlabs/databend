@@ -33,7 +33,6 @@ struct CachedRoles {
 }
 
 pub struct RoleCacheMgr {
-    user_api: Arc<UserApiProvider>,
     cache: Arc<RwLock<HashMap<String, CachedRoles>>>,
     polling_interval: Duration,
     polling_join_handle: Option<JoinHandle<()>>,
@@ -42,7 +41,6 @@ pub struct RoleCacheMgr {
 impl RoleCacheMgr {
     pub fn new(user_api: Arc<UserApiProvider>) -> Self {
         let mut mgr = Self {
-            user_api,
             cache: Arc::new(RwLock::new(HashMap::new())),
             polling_interval: Duration::new(15, 0),
             polling_join_handle: None,
@@ -52,7 +50,6 @@ impl RoleCacheMgr {
     }
 
     pub fn background_polling(&mut self) {
-        let user_api = self.user_api.clone();
         let cache = self.cache.clone();
         let polling_interval = self.polling_interval;
         self.polling_join_handle = Some(tokio::spawn(async move {
@@ -62,7 +59,7 @@ impl RoleCacheMgr {
                     cached.keys().cloned().collect()
                 };
                 for tenant in tenants {
-                    match load_roles_data(&user_api, &tenant).await {
+                    match load_roles_data(&tenant).await {
                         Err(err) => {
                             warn!(
                                 "role_cache_mgr load roles data of tenant {} failed: {}",
@@ -115,7 +112,7 @@ impl RoleCacheMgr {
             }
         };
         if need_reload {
-            let data = load_roles_data(&self.user_api, tenant).await?;
+            let data = load_roles_data(tenant).await?;
             let mut cached = self.cache.write();
             cached.insert(tenant.to_string(), data);
         }
@@ -123,7 +120,8 @@ impl RoleCacheMgr {
     }
 }
 
-async fn load_roles_data(user_api: &Arc<UserApiProvider>, tenant: &str) -> Result<CachedRoles> {
+async fn load_roles_data(tenant: &str) -> Result<CachedRoles> {
+    let user_api = UserApiProvider::instance();
     let roles = user_api.get_roles(tenant).await?;
     let roles_map = roles
         .into_iter()

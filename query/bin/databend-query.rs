@@ -36,6 +36,8 @@ use databend_query::QUERY_SEMVER;
 use tracing::info;
 use common_catalog::catalog::CatalogManager;
 use common_exception::ErrorCode;
+use common_fuse_meta::caches::CacheManager;
+use common_users::UserApiProvider;
 use databend_query::catalogs::CatalogManagerHelper;
 use databend_query::servers::http::v1::HttpQueryManager;
 
@@ -256,9 +258,12 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
 }
 
 async fn global_init(conf: &Config) -> Result<(), ErrorCode> {
+    // The order of initialization is very important
+    CacheManager::init(&conf.query)?;
     CatalogManager::init(conf).await?;
     HttpQueryManager::init(conf).await?;
-    SessionManager::init(conf.clone()).await
+    SessionManager::init(conf.clone()).await?;
+    UserApiProvider::init(conf.meta.to_meta_grpc_client_conf()).await
 }
 
 fn run_cmd(conf: &Config) -> bool {

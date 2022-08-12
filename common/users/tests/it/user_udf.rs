@@ -28,7 +28,8 @@ async fn test_user_udf() -> Result<()> {
     let isempty = "isempty";
     let isnotempty = "isnotempty";
     let if_not_exists = false;
-    let user_mgr = UserApiProvider::create_global(conf).await?;
+    UserApiProvider::init(conf).await?;
+    let user_mgr = UserApiProvider::instance();
 
     // add isempty.
     {

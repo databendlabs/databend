@@ -89,7 +89,7 @@ impl QueryContextShared {
     ) -> Result<Arc<QueryContextShared>> {
         let conf = session.get_config();
 
-        let user_manager = session.session_mgr.get_user_api_provider();
+        let user_manager = UserApiProvider::instance();
 
         Ok(Arc::new(QueryContextShared {
             session,

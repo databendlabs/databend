@@ -1913,6 +1913,7 @@ dependencies = [
  "common-meta-types",
  "common-tracing",
  "jwtk",
+ "once_cell",
  "parking_lot 0.12.1",
  "pretty_assertions",
  "serde",

@@ -30,7 +30,8 @@ pub const CATALOG_DEFAULT: &str = "default";
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_role_cache_mgr() -> Result<()> {
     let conf = RpcClientConf::default();
-    let user_api = UserApiProvider::create_global(conf).await?;
+    UserApiProvider::init(conf).await?;
+    let user_api = UserApiProvider::instance();
 
     let mut role1 = RoleInfo::new("role1");
     role1.grants.grant_privileges(

@@ -68,7 +68,6 @@ pub struct SessionManager {
     storage_operator: Operator,
     storage_runtime: Arc<Runtime>,
 
-    user_api_provider: Arc<UserApiProvider>,
     role_cache_manager: Arc<RoleCacheMgr>,
     // When typ is MySQL, insert into this map, key is id, val is MySQL connection id.
     pub(crate) mysql_conn_map: Arc<RwLock<HashMap<Option<u32>, String>>>,
@@ -117,8 +116,6 @@ impl SessionManager {
         };
         _log_guards.extend(_guards);
 
-        CacheManager::init(&conf.query)?;
-
         // Cluster discovery.
         let discovery = ClusterDiscovery::create_global(conf.clone()).await?;
 
@@ -138,13 +135,12 @@ impl SessionManager {
             .await?
             .layer(DalRuntime::new(storage_runtime.inner()));
 
-        HttpQueryManager::init(&conf).await?;
         let max_sessions = conf.query.max_active_sessions as usize;
         let active_sessions = Arc::new(RwLock::new(HashMap::with_capacity(max_sessions)));
         let status = Arc::new(RwLock::new(Default::default()));
 
         let mysql_conn_map = Arc::new(RwLock::new(HashMap::with_capacity(max_sessions)));
-        let user_api_provider = UserApiProvider::create_global(conf.meta.to_meta_grpc_client_conf()).await?;
+        let user_api_provider = UserApiProvider::instance();
         let role_cache_manager = Arc::new(RoleCacheMgr::new(user_api_provider.clone()));
 
         let exchange_manager = DataExchangeManager::create(conf.clone());
@@ -169,7 +165,6 @@ impl SessionManager {
             status,
             storage_operator,
             storage_runtime,
-            user_api_provider,
             role_cache_manager,
             mysql_conn_map,
             mysql_basic_conn_id: AtomicU32::new(9_u32.to_le() as u32),
@@ -196,10 +191,6 @@ impl SessionManager {
 
     pub fn get_storage_runtime(&self) -> Arc<Runtime> {
         self.storage_runtime.clone()
-    }
-
-    pub fn get_user_api_provider(&self) -> Arc<UserApiProvider> {
-        self.user_api_provider.clone()
     }
 
     pub fn get_role_cache_manager(&self) -> Arc<RoleCacheMgr> {

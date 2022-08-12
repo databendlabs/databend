@@ -23,7 +23,7 @@ use common_io::prelude::FormatSettings;
 use common_meta_types::GrantObject;
 use common_meta_types::UserInfo;
 use common_meta_types::UserPrivilegeType;
-use common_users::RoleCacheMgr;
+use common_users::{RoleCacheMgr, UserApiProvider};
 use futures::channel::*;
 use opendal::Operator;
 use parking_lot::RwLock;
@@ -59,9 +59,8 @@ impl Session {
         mysql_connection_id: Option<u32>,
     ) -> Result<Arc<Session>> {
         let session_ctx = Arc::new(SessionContext::try_create(conf.clone())?);
-        let user_api = session_mgr.get_user_api_provider();
-        let session_settings =
-            Settings::try_create(&conf, user_api, session_ctx.get_current_tenant()).await?;
+        let user_api = UserApiProvider::instance();
+        let session_settings = Settings::try_create(&conf, user_api, session_ctx.get_current_tenant()).await?;
         let ref_count = Arc::new(AtomicUsize::new(0));
         let status = Arc::new(Default::default());
         Ok(Arc::new(Session {

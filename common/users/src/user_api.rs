@@ -13,8 +13,9 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use once_cell::sync::OnceCell;
 
-use common_exception::Result;
+use common_exception::{ErrorCode, Result};
 use common_grpc::RpcClientConf;
 use common_management::QuotaApi;
 use common_management::QuotaMgr;
@@ -37,13 +38,27 @@ pub struct UserApiProvider {
     client: Arc<dyn KVApi>,
 }
 
+static USER_API_PROVIDER: OnceCell<Arc<UserApiProvider>> = OnceCell::new();
+
 impl UserApiProvider {
-    pub async fn create_global(conf: RpcClientConf) -> Result<Arc<UserApiProvider>> {
+    pub async fn init(conf: RpcClientConf) -> Result<()> {
         let client = MetaStoreProvider::new(conf).try_get_meta_store().await?;
-        Ok(Arc::new(UserApiProvider {
+        let user_api_provider = Arc::new(UserApiProvider {
             meta: client.clone(),
             client: client.arc(),
-        }))
+        });
+
+        match USER_API_PROVIDER.set(user_api_provider) {
+            Ok(_) => Ok(()),
+            Err(_) => Err(ErrorCode::LogicalError("Cannot init UserApiProvider twice"))
+        }
+    }
+
+    pub fn instance() -> Arc<UserApiProvider> {
+        match USER_API_PROVIDER.get() {
+            None => panic!("UserApiProvider is not init"),
+            Some(user_api_provider) => user_api_provider.clone(),
+        }
     }
 
     pub fn get_user_api_client(&self, tenant: &str) -> Result<Arc<dyn UserApi>> {
