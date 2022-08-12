@@ -40,13 +40,14 @@ use crate::ErrorKind;
 pub fn statement(i: Input) -> IResult<StatementMsg> {
     let explain = map(
         rule! {
-            EXPLAIN ~ ( PIPELINE | GRAPH | FRAGMENTS )? ~ #statement
+            EXPLAIN ~ ( PIPELINE | GRAPH | FRAGMENTS | RAW )? ~ #statement
         },
         |(_, opt_kind, statement)| Statement::Explain {
             kind: match opt_kind.map(|token| token.kind) {
                 Some(TokenKind::PIPELINE) => ExplainKind::Pipeline,
                 Some(TokenKind::GRAPH) => ExplainKind::Graph,
                 Some(TokenKind::FRAGMENTS) => ExplainKind::Fragments,
+                Some(TokenKind::RAW) => ExplainKind::Raw,
                 None => ExplainKind::Syntax,
                 _ => unreachable!(),
             },
