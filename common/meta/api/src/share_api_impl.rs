@@ -809,7 +809,7 @@ async fn get_object_name_from_id(
         }
         ShareGrantObject::Table(table_id) => {
             let table_id_key = TableIdToName { table_id };
-            let (_db_name_seq, table_name): (_, Option<DBIdTableName>) =
+            let (_db_id_table_name_seq, table_name): (_, Option<DBIdTableName>) =
                 get_struct_value(kv_api, &table_id_key).await?;
             match table_name {
                 Some(table_name) => Ok(Some(ShareGrantObjectName::Table(
