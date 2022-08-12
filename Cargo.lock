@@ -1260,6 +1260,7 @@ dependencies = [
  "common-datavalues",
  "common-exception",
  "common-metrics",
+ "once_cell",
  "serde",
 ]
 

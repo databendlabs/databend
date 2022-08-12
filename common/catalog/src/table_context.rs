@@ -103,8 +103,6 @@ pub trait TableContext: Send + Sync {
     fn get_dal_metrics(&self) -> DalMetrics;
     /// Get the session running query.
     fn get_query_str(&self) -> String;
-    /// Get the storage cache manager
-    fn get_storage_cache_manager(&self) -> Arc<CacheManager>;
     // Get the storage data accessor operator from the session manager.
     fn get_storage_operator(&self) -> Result<Operator>;
     fn get_dal_context(&self) -> &DalContext;

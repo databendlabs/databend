@@ -48,7 +48,7 @@ async fn test_deletion_mutator_multiple_empty_segments() -> Result<()> {
     let ctx = fixture.ctx();
     let location_generator = TableMetaLocationGenerator::with_prefix("_prefix".to_owned());
 
-    let segment_info_cache = ctx.get_storage_cache_manager().get_table_segment_cache();
+    let segment_info_cache = CacheManager::instance().get_table_segment_cache();
     let data_accessor = ctx.get_storage_operator()?;
     let seg_writer = SegmentWriter::new(&data_accessor, &location_generator, &segment_info_cache);
 

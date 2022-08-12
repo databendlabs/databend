@@ -63,7 +63,6 @@ pub struct SessionManager {
 
     pub(in crate::sessions) max_sessions: usize,
     pub(in crate::sessions) active_sessions: Arc<RwLock<HashMap<String, Arc<Session>>>>,
-    pub(in crate::sessions) storage_cache_manager: Arc<CacheManager>,
     pub(in crate::sessions) query_logger: Arc<RwLock<Option<Arc<dyn Subscriber + Send + Sync>>>>,
     pub status: Arc<RwLock<SessionManagerStatus>>,
     storage_operator: Operator,
@@ -118,7 +117,7 @@ impl SessionManager {
         };
         _log_guards.extend(_guards);
 
-        let storage_cache_manager = Arc::new(CacheManager::init(&conf.query));
+        CacheManager::init(&conf.query)?;
 
         // Cluster discovery.
         let discovery = ClusterDiscovery::create_global(conf.clone()).await?;
@@ -145,8 +144,7 @@ impl SessionManager {
         let status = Arc::new(RwLock::new(Default::default()));
 
         let mysql_conn_map = Arc::new(RwLock::new(HashMap::with_capacity(max_sessions)));
-        let user_api_provider =
-            UserApiProvider::create_global(conf.meta.to_meta_grpc_client_conf()).await?;
+        let user_api_provider = UserApiProvider::create_global(conf.meta.to_meta_grpc_client_conf()).await?;
         let role_cache_manager = Arc::new(RoleCacheMgr::new(user_api_provider.clone()));
 
         let exchange_manager = DataExchangeManager::create(conf.clone());
@@ -167,7 +165,6 @@ impl SessionManager {
             max_sessions,
             active_sessions,
             data_exchange_manager: exchange_manager,
-            storage_cache_manager,
             query_logger: Arc::new(RwLock::new(query_logger)),
             status,
             storage_operator,
@@ -191,10 +188,6 @@ impl SessionManager {
 
     pub fn get_storage_operator(self: &Arc<Self>) -> Operator {
         self.storage_operator.clone()
-    }
-
-    pub fn get_storage_cache_manager(&self) -> Arc<CacheManager> {
-        self.storage_cache_manager.clone()
     }
 
     pub fn get_data_exchange_manager(&self) -> Arc<DataExchangeManager> {

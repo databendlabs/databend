@@ -392,10 +392,6 @@ impl TableContext for QueryContext {
     fn get_query_str(&self) -> String {
         self.shared.get_query_str()
     }
-    /// Get the storage cache manager
-    fn get_storage_cache_manager(&self) -> Arc<CacheManager> {
-        self.shared.session.session_mgr.get_storage_cache_manager()
-    }
     // Get the storage data accessor operator from the session manager.
     fn get_storage_operator(&self) -> Result<Operator> {
         let operator = self.shared.session.get_storage_operator();

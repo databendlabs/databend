@@ -12,7 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+use once_cell::sync::OnceCell;
 use common_config::QueryConfig;
+use common_exception::ErrorCode;
 
 use crate::caches::memory_cache::new_bytes_cache;
 use crate::caches::memory_cache::BloomIndexCache;
@@ -22,6 +25,7 @@ use crate::caches::new_item_cache;
 use crate::caches::ItemCache;
 use crate::caches::SegmentInfoCache;
 use crate::caches::TableSnapshotCache;
+use common_exception::Result;
 
 // default number of index meta cached, default 3000 items
 static DEFAULT_BLOOM_INDEX_META_CACHE_ITEMS: u64 = 3000;
@@ -38,19 +42,26 @@ pub struct CacheManager {
     tenant_id: String,
 }
 
+static CACHE_MANAGER: OnceCell<Arc<CacheManager>> = OnceCell::new();
+
 impl CacheManager {
     /// Initialize the caches according to the relevant configurations.
     ///
     /// For convenience, ids of cluster and tenant are also kept
-    pub fn init(config: &QueryConfig) -> CacheManager {
+    pub fn init(config: &QueryConfig) -> Result<()> {
         if !config.table_cache_enabled {
-            Self {
+            let cache_manager = Self {
                 table_snapshot_cache: None,
                 segment_info_cache: None,
                 bloom_index_cache: None,
                 bloom_index_meta_cache: None,
                 cluster_id: config.cluster_id.clone(),
                 tenant_id: config.tenant_id.clone(),
+            };
+
+            match CACHE_MANAGER.set(Arc::new(cache_manager)) {
+                Ok(_) => Ok(()),
+                Err(_) => Err(ErrorCode::LogicalError("Cannot init CacheManager twice"))
             }
         } else {
             let table_snapshot_cache = Self::new_item_cache(config.table_cache_snapshot_count);
@@ -58,14 +69,27 @@ impl CacheManager {
             let bloom_index_cache = Self::new_bytes_cache(DEFAULT_BLOOM_INDEX_META_CACHE_ITEMS);
             let bloom_index_meta_cache =
                 Self::new_item_cache(DEFAULT_BLOOM_INDEX_COLUMN_CACHE_SIZE);
-            Self {
+
+            let cache_manager = Self {
                 table_snapshot_cache,
                 segment_info_cache,
                 bloom_index_cache,
                 bloom_index_meta_cache,
                 cluster_id: config.cluster_id.clone(),
                 tenant_id: config.tenant_id.clone(),
+            };
+
+            match CACHE_MANAGER.set(Arc::new(cache_manager)) {
+                Ok(_) => Ok(()),
+                Err(_) => Err(ErrorCode::LogicalError("Cannot init CacheManager twice"))
             }
+        }
+    }
+
+    pub fn instance() -> Arc<CacheManager> {
+        match CACHE_MANAGER.get() {
+            None => panic!("CacheManager is not init"),
+            Some(cache_manager) => cache_manager.clone(),
         }
     }
 
