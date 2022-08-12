@@ -91,4 +91,11 @@ impl ExchangeParams {
             ExchangeParams::MergeExchange(exchange) => exchange.schema.clone(),
         }
     }
+
+    pub fn get_query_id(&self) -> String {
+        match self {
+            ExchangeParams::ShuffleExchange(exchange) => exchange.query_id.clone(),
+            ExchangeParams::MergeExchange(exchange) => exchange.query_id.clone(),
+        }
+    }
 }
