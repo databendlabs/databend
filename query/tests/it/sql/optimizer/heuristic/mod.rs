@@ -38,6 +38,8 @@ use databend_query::sql::Binder;
 use databend_query::sql::Metadata;
 use databend_query::sql::NameResolutionContext;
 use parking_lot::RwLock;
+use common_catalog::catalog::CatalogManager;
+use databend_query::catalogs::CatalogManagerHelper;
 
 pub(super) struct Suite {
     pub comment: String,
@@ -51,7 +53,7 @@ async fn run_test(ctx: Arc<QueryContext>, suite: &Suite) -> Result<String> {
     let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL, &bt)?;
     let binder = Binder::new(
         ctx.clone(),
-        ctx.get_catalogs()?,
+        CatalogManager::instance()?,
         NameResolutionContext::default(),
         Arc::new(RwLock::new(Metadata::create())),
     );

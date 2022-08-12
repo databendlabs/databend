@@ -32,6 +32,8 @@ use databend_query::sql::Metadata;
 use databend_query::sql::NameResolutionContext;
 use goldenfile::Mint;
 use parking_lot::RwLock;
+use common_catalog::catalog::CatalogManager;
+use databend_query::catalogs::CatalogManagerHelper;
 
 use crate::sql::optimizer::heuristic::run_suites;
 use crate::sql::optimizer::heuristic::Suite;
@@ -43,7 +45,7 @@ async fn run_cluster_test(ctx: Arc<QueryContext>, suite: &Suite) -> Result<Strin
     let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL, &bt)?;
     let binder = Binder::new(
         ctx.clone(),
-        ctx.get_catalogs()?,
+        CatalogManager::instance()?,
         NameResolutionContext::default(),
         Arc::new(RwLock::new(Metadata::create())),
     );

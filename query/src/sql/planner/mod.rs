@@ -35,6 +35,7 @@ mod semantic;
 
 pub use binder::Binder;
 pub use binder::ColumnBinding;
+use common_catalog::catalog::CatalogManager;
 pub use format::FormatTreeNode;
 pub use metadata::find_smallest_column;
 pub use metadata::ColumnEntry;
@@ -44,6 +45,7 @@ pub use metadata::TableEntry;
 pub use semantic::normalize_identifier;
 pub use semantic::IdentifierNormalizer;
 pub use semantic::NameResolutionContext;
+use crate::catalogs::CatalogManagerHelper;
 
 use self::plans::Plan;
 use super::optimizer::OptimizerConfig;
@@ -72,7 +74,7 @@ impl Planner {
         let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
         let binder = Binder::new(
             self.ctx.clone(),
-            self.ctx.get_catalogs()?,
+            CatalogManager::instance()?,
             name_resolution_ctx,
             metadata.clone(),
         );

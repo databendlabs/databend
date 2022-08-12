@@ -57,7 +57,7 @@ use tracing::Subscriber;
 
 use crate::api::DataExchangeManager;
 use crate::auth::AuthMgr;
-use crate::catalogs::Catalog;
+use crate::catalogs::{Catalog, CatalogManagerHelper};
 use crate::catalogs::CatalogManager;
 use crate::clusters::Cluster;
 use crate::servers::http::v1::HttpQueryHandle;
@@ -337,13 +337,8 @@ impl TableContext for QueryContext {
     fn get_fragment_id(&self) -> usize {
         self.fragment_id.fetch_add(1, Ordering::Release)
     }
-    fn get_catalogs(&self) -> Result<Arc<CatalogManager>> {
-        self.shared.get_catalogs()
-    }
     fn get_catalog(&self, catalog_name: &str) -> Result<Arc<dyn Catalog>> {
-        self.shared
-            .get_catalogs()?
-            .get_catalog(catalog_name.as_ref())
+        CatalogManager::instance()?.get_catalog(catalog_name.as_ref())
     }
     fn get_id(&self) -> String {
         self.shared.init_query_id.as_ref().read().clone()

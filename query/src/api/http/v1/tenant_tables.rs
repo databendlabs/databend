@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::Utc;
-use common_catalog::catalog::CATALOG_DEFAULT;
+use common_catalog::catalog::{CATALOG_DEFAULT, CatalogManager};
 use common_exception::Result;
 use poem::web::Data;
 use poem::web::Json;
@@ -24,6 +24,7 @@ use poem::web::Path;
 use poem::IntoResponse;
 use serde::Deserialize;
 use serde::Serialize;
+use crate::catalogs::CatalogManagerHelper;
 
 use crate::sessions::SessionManager;
 
@@ -45,12 +46,8 @@ pub struct TenantTableInfo {
     pub index_bytes: u64,
 }
 
-async fn load_tenant_tables(
-    session_mgr: &Arc<SessionManager>,
-    tenant: &str,
-) -> Result<Vec<TenantTableInfo>> {
-    let catalog = session_mgr
-        .get_catalog_manager()?
+async fn load_tenant_tables(tenant: &str) -> Result<Vec<TenantTableInfo>> {
+    let catalog = CatalogManager::instance()?
         .get_catalog(CATALOG_DEFAULT)?;
     let databases = catalog.list_databases(tenant).await?;
 
@@ -81,7 +78,7 @@ pub async fn list_tenant_tables_handler(
     Path(tenant): Path<String>,
     session_mgr: Data<&Arc<SessionManager>>,
 ) -> poem::Result<impl IntoResponse> {
-    let tables = load_tenant_tables(&session_mgr, &tenant)
+    let tables = load_tenant_tables(&tenant)
         .await
         .map_err(poem::error::InternalServerError)?;
     Ok(Json(TenantTablesResponse { tables }))
@@ -98,7 +95,7 @@ pub async fn list_tables_handler(
         return Ok(Json(TenantTablesResponse { tables: vec![] }));
     }
 
-    let tables = load_tenant_tables(&session_mgr, tenant)
+    let tables = load_tenant_tables(tenant)
         .await
         .map_err(poem::error::InternalServerError)?;
     Ok(Json(TenantTablesResponse { tables }))

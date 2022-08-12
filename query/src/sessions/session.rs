@@ -28,7 +28,7 @@ use futures::channel::*;
 use opendal::Operator;
 use parking_lot::RwLock;
 
-use crate::catalogs::CatalogManager;
+use crate::catalogs::{CatalogManager, CatalogManagerHelper};
 use crate::sessions::QueryContext;
 use crate::sessions::QueryContextShared;
 use crate::sessions::SessionContext;
@@ -287,10 +287,6 @@ impl Session {
 
     pub fn get_session_manager(self: &Arc<Self>) -> Arc<SessionManager> {
         self.session_mgr.clone()
-    }
-
-    pub fn get_catalogs(self: &Arc<Self>) -> Result<Arc<CatalogManager>> {
-        self.session_mgr.get_catalog_manager()
     }
 
     pub fn get_memory_usage(self: &Arc<Self>) -> usize {

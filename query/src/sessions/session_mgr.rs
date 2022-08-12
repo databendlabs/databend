@@ -196,10 +196,6 @@ impl SessionManager {
         self.http_query_manager.clone()
     }
 
-    pub fn get_catalog_manager(self: &Arc<Self>) -> Result<Arc<CatalogManager>> {
-        CatalogManager::instance()
-    }
-
     pub fn get_storage_operator(self: &Arc<Self>) -> Operator {
         self.storage_operator.clone()
     }

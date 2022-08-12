@@ -34,7 +34,7 @@ use parking_lot::RwLock;
 use uuid::Uuid;
 
 use crate::auth::AuthMgr;
-use crate::catalogs::CatalogManager;
+use crate::catalogs::{CatalogManager, CatalogManagerHelper};
 use crate::clusters::Cluster;
 use crate::servers::http::v1::HttpQueryHandle;
 use crate::sessions::query_affect::QueryAffect;
@@ -194,10 +194,6 @@ impl QueryContextShared {
         self.session.apply_changed_settings(changed_settings)
     }
 
-    pub fn get_catalogs(&self) -> Result<Arc<CatalogManager>> {
-        self.session.get_catalogs()
-    }
-
     pub async fn get_table(
         &self,
         catalog: &str,
@@ -228,7 +224,7 @@ impl QueryContextShared {
     ) -> Result<Arc<dyn Table>> {
         let tenant = self.get_tenant();
         let table_meta_key = (catalog.to_string(), database.to_string(), table.to_string());
-        let catalog = self.get_catalogs()?.get_catalog(catalog)?;
+        let catalog = CatalogManager::instance()?.get_catalog(catalog)?;
         let cache_table = catalog.get_table(tenant.as_str(), database, table).await?;
 
         let mut tables_refs = self.tables_refs.lock();

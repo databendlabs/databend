@@ -31,6 +31,7 @@ use common_ast::parser::tokenize_sql;
 use common_ast::Backtrace;
 use common_ast::Dialect;
 use common_ast::DisplayError;
+use common_catalog::catalog::CatalogManager;
 use common_datavalues::type_coercion::merge_types;
 use common_datavalues::ArrayType;
 use common_datavalues::BooleanType;
@@ -50,6 +51,7 @@ use common_functions::scalars::CastFunction;
 use common_functions::scalars::FunctionFactory;
 use common_functions::scalars::TupleFunction;
 use common_planners::validate_function_arg;
+use crate::catalogs::CatalogManagerHelper;
 
 use super::name_resolution::NameResolutionContext;
 use super::normalize_identifier;
@@ -1325,7 +1327,7 @@ impl<'a> TypeChecker<'a> {
     ) -> Result<Box<(Scalar, DataTypeImpl)>> {
         let mut binder = Binder::new(
             self.ctx.clone(),
-            self.ctx.get_catalogs()?,
+            CatalogManager::instance()?,
             self.name_resolution_ctx.clone(),
             self.metadata.clone(),
         );
