@@ -996,6 +996,8 @@ dependencies = [
  "ctrlc",
  "futures",
  "libc",
+ "num_cpus",
+ "once_cell",
  "parking_lot 0.12.1",
  "pprof",
  "serde",

@@ -23,7 +23,7 @@ use std::sync::Arc;
 
 use chrono_tz::Tz;
 use common_base::base::tokio::task::JoinHandle;
-use common_base::base::Progress;
+use common_base::base::{GlobalIORuntime, Progress};
 use common_base::base::ProgressValues;
 use common_base::base::Runtime;
 use common_base::base::TrySpawn;
@@ -62,7 +62,7 @@ use crate::catalogs::CatalogManager;
 use crate::clusters::Cluster;
 use crate::servers::http::v1::HttpQueryHandle;
 use crate::sessions::query_affect::QueryAffect;
-use crate::sessions::ProcessInfo;
+use crate::sessions::{ProcessInfo, SessionManager};
 use crate::sessions::QueryContextShared;
 use crate::sessions::SessionRef;
 use crate::sessions::Settings;
@@ -199,9 +199,7 @@ impl QueryContext {
 
     // Get one session by session id.
     pub async fn get_session_by_id(self: &Arc<Self>, id: &str) -> Option<SessionRef> {
-        self.shared
-            .session
-            .get_session_manager()
+        SessionManager::instance()
             .get_session_by_id(id)
             .await
     }
@@ -211,18 +209,14 @@ impl QueryContext {
         self: &Arc<Self>,
         conn_id: &Option<u32>,
     ) -> Option<String> {
-        self.shared
-            .session
-            .get_session_manager()
+        SessionManager::instance()
             .get_id_by_mysql_conn_id(conn_id)
             .await
     }
 
     // Get all the processes list info.
     pub async fn get_processes_info(self: &Arc<Self>) -> Vec<ProcessInfo> {
-        self.shared
-            .session
-            .get_session_manager()
+        SessionManager::instance()
             .processes_info()
             .await
     }
@@ -398,9 +392,6 @@ impl TableContext for QueryContext {
     fn get_dal_context(&self) -> &DalContext {
         self.shared.dal_ctx.as_ref()
     }
-    fn get_storage_runtime(&self) -> Arc<Runtime> {
-        self.shared.session.session_mgr.get_storage_runtime()
-    }
     fn push_precommit_block(&self, block: DataBlock) {
         let mut blocks = self.precommit_blocks.write();
         blocks.push(block);
@@ -438,9 +429,7 @@ impl TableContext for QueryContext {
 
     // Get all the processes list info.
     async fn get_processes_info(&self) -> Vec<ProcessInfo> {
-        self.shared
-            .session
-            .get_session_manager()
+        SessionManager::instance()
             .processes_info()
             .await
     }

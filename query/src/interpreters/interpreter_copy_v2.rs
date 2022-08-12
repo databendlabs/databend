@@ -27,6 +27,7 @@ use common_streams::SendableDataBlockStream;
 use futures::TryStreamExt;
 use regex::Regex;
 use tracing::info;
+use common_base::base::GlobalIORuntime;
 
 use super::append2table;
 use super::commit2table;
@@ -157,7 +158,7 @@ impl CopyInterpreterV2 {
         table.append2(ctx.clone(), &mut pipeline)?;
         pipeline.set_max_threads(settings.get_max_threads()? as usize);
 
-        let async_runtime = ctx.get_storage_runtime();
+        let async_runtime = GlobalIORuntime::instance();
         let query_need_abort = ctx.query_need_abort();
         let executor =
             PipelineCompleteExecutor::try_create(async_runtime, query_need_abort, pipeline)?;

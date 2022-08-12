@@ -20,7 +20,7 @@ use std::sync::Arc;
 use once_cell::sync::OnceCell;
 
 use common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
-use common_base::base::Thread;
+use common_base::base::{GlobalIORuntime, Thread};
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -560,7 +560,7 @@ impl QueryCoordinator {
             }
         }
 
-        let async_runtime = info.query_ctx.get_storage_runtime();
+        let async_runtime = GlobalIORuntime::instance();
         let query_need_abort = info.query_ctx.query_need_abort();
 
         let executor =

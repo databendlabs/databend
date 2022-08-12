@@ -22,6 +22,7 @@ use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use parking_lot::Mutex;
+use common_base::base::GlobalIORuntime;
 
 use crate::pipelines::executor::PipelineExecutor;
 use crate::pipelines::processors::port::OutputPort;
@@ -94,7 +95,7 @@ impl PipelinePushingExecutor {
         mut pipeline: Pipeline,
     ) -> Result<PipelinePushingExecutor> {
         let state = State::create();
-        let async_runtime = ctx.get_storage_runtime();
+        let async_runtime = GlobalIORuntime::instance();
         let sender = Self::wrap_pipeline(ctx, &mut pipeline)?;
         let executor = PipelineExecutor::create(async_runtime, query_need_abort, pipeline)?;
         Ok(PipelinePushingExecutor {

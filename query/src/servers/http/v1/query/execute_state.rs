@@ -19,7 +19,7 @@ use std::time::Instant;
 
 use common_base::base::tokio::sync::mpsc;
 use common_base::base::tokio::sync::RwLock;
-use common_base::base::ProgressValues;
+use common_base::base::{GlobalIORuntime, ProgressValues};
 use common_base::base::TrySpawn;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRefExt;
@@ -358,7 +358,7 @@ impl HttpQueryHandle {
             &mut build_res.main_pipeline,
         )?;
 
-        let async_runtime = ctx.get_storage_runtime();
+        let async_runtime = GlobalIORuntime::instance();
         build_res.set_max_threads(ctx.get_settings().get_max_threads()? as usize);
 
         build_res.main_pipeline.resize(1)?;

@@ -23,6 +23,7 @@ mod stoppable;
 mod string_func;
 mod thread;
 mod uniq_id;
+mod global_runtime;
 
 pub use net::get_free_tcp_port;
 pub use net::get_free_udp_port;
@@ -49,3 +50,4 @@ pub use tokio;
 pub use uniq_id::GlobalSequence;
 pub use uniq_id::GlobalUniqName;
 pub use uuid;
+pub use global_runtime::GlobalIORuntime;

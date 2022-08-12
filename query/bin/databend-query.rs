@@ -16,7 +16,7 @@ use std::env;
 use std::ops::Deref;
 use std::sync::Arc;
 
-use common_base::base::RuntimeTracker;
+use common_base::base::{GlobalIORuntime, RuntimeTracker};
 use common_macros::databend_main;
 use common_meta_embedded::MetaEmbedded;
 use common_meta_grpc::MIN_METASRV_SEMVER;
@@ -40,6 +40,7 @@ use common_fuse_meta::caches::CacheManager;
 use common_users::{RoleCacheManager, UserApiProvider};
 use databend_query::catalogs::CatalogManagerHelper;
 use databend_query::clusters::ClusterDiscovery;
+use databend_query::interpreters::AsyncInsertManager;
 use databend_query::servers::http::v1::HttpQueryManager;
 
 #[databend_main]
@@ -175,18 +176,8 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
 
     // Async Insert Queue
     {
-        let session_manager = SessionManager::instance();
-        let async_insert_queue = session_manager
-            .clone()
-            .get_async_insert_queue()
-            .read()
-            .clone()
-            .unwrap();
-        {
-            let mut queue = async_insert_queue.session_mgr.write();
-            *queue = Some(session_manager.clone());
-        }
-        async_insert_queue.clone().start().await;
+        let async_insert_queue = AsyncInsertManager::instance();
+        async_insert_queue.start().await;
         info!("Databend async insert has been enabled.")
     }
 
@@ -259,10 +250,12 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
 
 async fn global_init(conf: &Config) -> Result<(), ErrorCode> {
     // The order of initialization is very important
+    GlobalIORuntime::init(conf.query.num_cpus as usize)?;
 
     // Cluster discovery.
     ClusterDiscovery::init(conf.clone()).await?;
 
+    AsyncInsertManager::init(&conf)?;
     CacheManager::init(&conf.query)?;
     CatalogManager::init(conf).await?;
     HttpQueryManager::init(conf).await?;

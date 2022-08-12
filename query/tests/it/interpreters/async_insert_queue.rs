@@ -17,7 +17,7 @@ use std::thread;
 use std::time::Duration;
 use std::time::SystemTime;
 
-use common_base::base::tokio;
+use common_base::base::{GlobalIORuntime, tokio};
 use common_base::base::TrySpawn;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -36,7 +36,7 @@ pub async fn build_async_insert_queue(
     max_data_size: Option<u64>,
     busy_timeout: Option<u64>,
     stale_timeout: Option<u64>,
-) -> Result<(Arc<SessionManager>, Arc<AsyncInsertQueue>)> {
+) -> Result<(Arc<SessionManager>, Arc<AsyncInsertManager>)> {
     let mut conf = crate::tests::ConfigBuilder::create().config();
     if let Some(max_data_size) = max_data_size {
         conf.query.async_insert_max_data_size = max_data_size
@@ -48,22 +48,10 @@ pub async fn build_async_insert_queue(
         conf.query.async_insert_stale_timeout = stale_timeout;
     }
     let session_manager = SessionManagerBuilder::create_with_conf(conf.clone()).build()?;
+    let async_insert_manager = AsyncInsertManager::instance();
+    async_insert_manager.start().await;
 
-    let async_insert_queue = session_manager
-        .clone()
-        .get_async_insert_queue()
-        .read()
-        .clone()
-        .unwrap();
-    {
-        {
-            let mut queue = async_insert_queue.session_mgr.write();
-            *queue = Some(session_manager.clone());
-        }
-        async_insert_queue.clone().start().await;
-    }
-
-    Ok((session_manager.clone(), async_insert_queue.clone()))
+    Ok((session_manager.clone(), async_insert_manager.clone()))
 }
 
 pub async fn build_insert_plan(sql: &str, ctx: Arc<QueryContext>) -> Result<InsertPlan> {
@@ -115,7 +103,7 @@ async fn test_async_insert_queue() -> Result<()> {
         let queue1 = queue.clone();
         let queue2 = queue.clone();
 
-        let handler1 = context1.get_storage_runtime().spawn(async move {
+        let handler1 = GlobalIORuntime::instance().spawn(async move {
             let insert_plan =
                 build_insert_plan("insert into default.test(a) values(1);", context1.clone())
                     .await?;
@@ -136,12 +124,12 @@ async fn test_async_insert_queue() -> Result<()> {
                 .await
         });
 
-        let handler2 = context2.clone().get_storage_runtime().spawn(async move {
+        let handler2 = GlobalIORuntime::instance().spawn(async move {
             let insert_plan = build_insert_plan(
                 "insert into default.test(b) values('bbbb');",
                 context2.clone(),
             )
-            .await?;
+                .await?;
             queue2
                 .clone()
                 .push(Arc::new(insert_plan.to_owned()), context2.clone())

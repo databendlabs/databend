@@ -15,7 +15,7 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use common_base::base::Progress;
+use common_base::base::{GlobalIORuntime, Progress};
 use common_base::base::ProgressValues;
 use common_base::base::Runtime;
 use common_config::Config;
@@ -105,7 +105,6 @@ pub trait TableContext: Send + Sync {
     // Get the storage data accessor operator from the session manager.
     fn get_storage_operator(&self) -> Result<Operator>;
     fn get_dal_context(&self) -> &DalContext;
-    fn get_storage_runtime(&self) -> Arc<Runtime>;
     fn push_precommit_block(&self, block: DataBlock);
     fn consume_precommit_blocks(&self) -> Vec<DataBlock>;
     fn try_get_function_context(&self) -> Result<FunctionContext>;

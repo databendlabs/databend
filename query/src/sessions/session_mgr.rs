@@ -20,7 +20,7 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
 
-use common_base::base::tokio;
+use common_base::base::{GlobalIORuntime, tokio};
 use common_base::base::Runtime;
 use common_base::base::SignalStream;
 use common_contexts::DalRuntime;
@@ -46,7 +46,7 @@ use crate::api::DataExchangeManager;
 use crate::catalogs::CatalogManager;
 use crate::catalogs::CatalogManagerHelper;
 use crate::clusters::ClusterDiscovery;
-use crate::interpreters::AsyncInsertQueue;
+use crate::interpreters::AsyncInsertManager;
 use crate::servers::http::v1::HttpQueryManager;
 use crate::sessions::session::Session;
 use crate::sessions::session_ref::SessionRef;
@@ -64,12 +64,10 @@ pub struct SessionManager {
     pub(in crate::sessions) query_logger: Arc<RwLock<Option<Arc<dyn Subscriber + Send + Sync>>>>,
     pub status: Arc<RwLock<SessionManagerStatus>>,
     storage_operator: Operator,
-    storage_runtime: Arc<Runtime>,
 
     // When typ is MySQL, insert into this map, key is id, val is MySQL connection id.
     pub(crate) mysql_conn_map: Arc<RwLock<HashMap<Option<u32>, String>>>,
     pub(in crate::sessions) mysql_basic_conn_id: AtomicU32,
-    async_insert_queue: Arc<RwLock<Option<Arc<AsyncInsertQueue>>>>,
 
     /// log_guard preserve the nonblocking logger's guards so that our logger
     /// can flushes spans/events on a drop
@@ -113,38 +111,17 @@ impl SessionManager {
         };
         _log_guards.extend(_guards);
 
-        let storage_runtime = {
-            let mut storage_num_cpus = conf.storage.num_cpus as usize;
-            if storage_num_cpus == 0 {
-                // We need at least two threads to schedule.
-                storage_num_cpus = std::cmp::max(2, num_cpus::get() / 2)
-            }
-
-            Runtime::with_worker_threads(storage_num_cpus, Some("IO-worker".to_owned()))?
-        };
-
         // NOTE: Magic happens here. We will add a layer upon original storage operator
         // so that all underlying storage operations will send to storage runtime.
         let storage_operator = Self::init_storage_operator(&conf)
             .await?
-            .layer(DalRuntime::new(storage_runtime.inner()));
+            .layer(DalRuntime::new(GlobalIORuntime::instance().inner()));
 
         let max_sessions = conf.query.max_active_sessions as usize;
         let active_sessions = Arc::new(RwLock::new(HashMap::with_capacity(max_sessions)));
         let status = Arc::new(RwLock::new(Default::default()));
 
         let mysql_conn_map = Arc::new(RwLock::new(HashMap::with_capacity(max_sessions)));
-
-        let storage_runtime = Arc::new(storage_runtime);
-
-        let async_insert_queue =
-            Arc::new(RwLock::new(Some(Arc::new(AsyncInsertQueue::try_create(
-                Arc::new(RwLock::new(None)),
-                storage_runtime.clone(),
-                conf.clone().query.async_insert_max_data_size,
-                Duration::from_millis(conf.query.async_insert_busy_timeout),
-                Duration::from_millis(conf.query.async_insert_stale_timeout),
-            )))));
 
         Ok(Arc::new(SessionManager {
             conf,
@@ -153,10 +130,8 @@ impl SessionManager {
             query_logger: Arc::new(RwLock::new(query_logger)),
             status,
             storage_operator,
-            storage_runtime,
             mysql_conn_map,
             mysql_basic_conn_id: AtomicU32::new(9_u32.to_le() as u32),
-            async_insert_queue,
             _log_guards,
         }))
     }
@@ -167,10 +142,6 @@ impl SessionManager {
 
     pub fn get_storage_operator(self: &Arc<Self>) -> Operator {
         self.storage_operator.clone()
-    }
-
-    pub fn get_storage_runtime(&self) -> Arc<Runtime> {
-        self.storage_runtime.clone()
     }
 
     pub async fn create_session(self: &Arc<Self>, typ: SessionType) -> Result<SessionRef> {
@@ -385,10 +356,6 @@ impl SessionManager {
         })?;
 
         Ok(op)
-    }
-
-    pub fn get_async_insert_queue(&self) -> Arc<RwLock<Option<Arc<AsyncInsertQueue>>>> {
-        self.async_insert_queue.clone()
     }
 
     pub fn get_query_logger(&self) -> Option<Arc<dyn Subscriber + Send + Sync>> {

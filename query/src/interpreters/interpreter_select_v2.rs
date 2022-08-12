@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use common_base::base::GlobalIORuntime;
 
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
@@ -88,7 +89,7 @@ impl Interpreter for SelectInterpreterV2 {
                 &mut build_res.main_pipeline,
             )?;
 
-            let async_runtime = self.ctx.get_storage_runtime();
+            let async_runtime = GlobalIORuntime::instance();
             let query_need_abort = self.ctx.query_need_abort();
             build_res.set_max_threads(self.ctx.get_settings().get_max_threads()? as usize);
 
@@ -106,7 +107,7 @@ impl Interpreter for SelectInterpreterV2 {
                 schedule_query_v2(self.ctx.clone(), &self.bind_context.columns, &physical_plan)
                     .await?;
 
-            let async_runtime = self.ctx.get_storage_runtime();
+            let async_runtime = GlobalIORuntime::instance();
             let query_need_abort = self.ctx.query_need_abort();
 
             let executor = PipelinePullingExecutor::from_pipelines(

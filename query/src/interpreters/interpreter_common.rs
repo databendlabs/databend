@@ -17,7 +17,7 @@ use std::sync::Arc;
 
 use chrono::TimeZone;
 use chrono::Utc;
-use common_base::base::TrySpawn;
+use common_base::base::{GlobalIORuntime, TrySpawn};
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -57,7 +57,7 @@ pub fn append2table(
     }
 
     table.append2(ctx.clone(), &mut pipeline)?;
-    let async_runtime = ctx.get_storage_runtime();
+    let async_runtime = GlobalIORuntime::instance();
     let query_need_abort = ctx.query_need_abort();
 
     pipeline.set_max_threads(ctx.get_settings().get_max_threads()? as usize);
@@ -73,7 +73,7 @@ pub async fn commit2table(
     let append_entries = ctx.consume_precommit_blocks();
     // We must put the commit operation to global runtime, which will avoid the "dispatch dropped without returning error" in tower
     let catalog_name = ctx.get_current_catalog();
-    let handler = ctx.get_storage_runtime().spawn(async move {
+    let handler = GlobalIORuntime::instance().spawn(async move {
         table
             .commit_insertion(ctx, &catalog_name, append_entries, overwrite)
             .await

@@ -93,7 +93,7 @@ mod plan_schedulers;
 mod stream;
 
 pub use access::ManagementModeAccess;
-pub use async_insert_queue::AsyncInsertQueue;
+pub use async_insert_queue::AsyncInsertManager;
 pub use fragments::QueryFragmentAction;
 pub use fragments::QueryFragmentActions;
 pub use fragments::QueryFragmentsActions;

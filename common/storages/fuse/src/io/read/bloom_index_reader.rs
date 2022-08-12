@@ -72,7 +72,7 @@ impl BlockBloomFilterIndexReader for Location {
 mod util_v1 {
     use std::future::Future;
 
-    use common_base::base::Runtime;
+    use common_base::base::{GlobalIORuntime, Runtime};
     use common_base::base::TrySpawn;
     use common_fuse_meta::caches::CacheManager;
 
@@ -192,7 +192,7 @@ mod util_v1 {
         path: &str,
         dal: &Operator,
     ) -> Result<(Arc<Vec<u8>>, usize)> {
-        let storage_runtime = &ctx.get_storage_runtime();
+        let storage_runtime = GlobalIORuntime::instance();
         let cols = file_meta.row_groups[0].columns();
         if let Some((idx, col_meta)) = cols
             .iter()
@@ -212,7 +212,7 @@ mod util_v1 {
                             dal.clone(),
                             path.to_owned(),
                         )
-                            .execute_in_runtime(storage_runtime)
+                            .execute_in_runtime(&storage_runtime)
                             .await??,
                     );
                     cache.put(cache_key, bytes.clone());
@@ -225,7 +225,7 @@ mod util_v1 {
                         dal.clone(),
                         path.to_owned(),
                     )
-                        .execute_in_runtime(storage_runtime)
+                        .execute_in_runtime(&storage_runtime)
                         .await??,
                 );
                 Ok((bytes, idx))
@@ -245,7 +245,7 @@ mod util_v1 {
         path: &str,
         dal: &Operator,
     ) -> Result<Arc<FileMetaData>> {
-        let storage_runtime = &ctx.get_storage_runtime();
+        let storage_runtime = &GlobalIORuntime::instance();
         if let Some(bloom_index_meta_cache) = CacheManager::instance().get_bloom_index_meta_cache() {
             let cache = &mut bloom_index_meta_cache.write().await;
             if let Some(file_meta) = cache.get(path) {

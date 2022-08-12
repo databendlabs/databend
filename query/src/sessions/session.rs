@@ -282,10 +282,6 @@ impl Session {
             .apply_changed_settings(changed_settings)
     }
 
-    pub fn get_session_manager(self: &Arc<Self>) -> Arc<SessionManager> {
-        self.session_mgr.clone()
-    }
-
     pub fn get_memory_usage(self: &Arc<Self>) -> usize {
         // TODO(winter): use thread memory tracker
         0

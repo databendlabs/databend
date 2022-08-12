@@ -13,6 +13,7 @@
 //  limitations under the License.
 
 use std::sync::Arc;
+use common_base::base::GlobalIORuntime;
 
 use common_exception::Result;
 use common_planners::ReadDataSourcePlan;
@@ -45,7 +46,7 @@ impl<T: Table> TableStreamReadWrap for T {
         self.read2(ctx.clone(), plan, &mut pipeline)?;
 
         let settings = ctx.get_settings();
-        let async_runtime = ctx.get_storage_runtime();
+        let async_runtime = GlobalIORuntime::instance();
         let query_need_abort = ctx.query_need_abort();
         pipeline.set_max_threads(settings.get_max_threads()? as usize);
         let executor =
@@ -66,7 +67,7 @@ impl TableStreamReadWrap for dyn Table {
         self.read2(ctx.clone(), plan, &mut pipeline)?;
 
         let settings = ctx.get_settings();
-        let async_runtime = ctx.get_storage_runtime();
+        let async_runtime = GlobalIORuntime::instance();
         let query_need_abort = ctx.query_need_abort();
         pipeline.set_max_threads(settings.get_max_threads()? as usize);
         let executor =
