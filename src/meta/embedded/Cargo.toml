@@ -1,0 +1,34 @@
+[package]
+name = "common-meta-embedded"
+version = "0.1.0"
+description = "distributed meta data service"
+authors = ["Databend Authors <opensource@datafuselabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[lib]
+doctest = false
+test = false
+
+[features]
+io-uring = ["common-meta-sled-store/io-uring", "common-meta-raft-store/io-uring"]
+
+[dependencies]
+# Workspace dependencies
+common-base = { path = "../../common/base" }
+common-exception = { path = "../../common/exception" }
+common-meta-api = { path = "../api" }
+common-meta-raft-store = { path = "../raft-store" }
+common-meta-sled-store = { path = "../sled-store" }
+common-meta-types = { path = "../types" }
+common-tracing = { path = "../../common/tracing" }
+
+# Crates.io dependencies
+async-trait = "0.1.56"
+once_cell = "1.12.0"
+tempfile = "3.3.0"
+tracing = "0.1.35"
+
+[dev-dependencies]
+anyhow = "1.0.58"

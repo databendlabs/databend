@@ -100,7 +100,7 @@ hits_statements=(
 )
 
 for i in "${hits_statements[@]}"; do
-  echo "set enable_planner_v2 = 1; $i" | $MYSQL_CLIENT_CONNECT
+  echo "$i" | $MYSQL_CLIENT_CONNECT
 done
 
 ## Clean up

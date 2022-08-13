@@ -14,22 +14,22 @@ SELECT COUNT(*) FROM (SELECT * FROM random_table LIMIT 10);
 10
 
 statement query I
-SELECT COUNT(*) FROM (SELECT * FROM random_table LIMIT 10000);
+SELECT COUNT(*) FROM (SELECT * FROM random_table LIMIT 1000);
 
 ----
-10000
+1000
 
 statement query I
-SELECT COUNT(*) FROM (SELECT * FROM random_table LIMIT 60000);
+SELECT COUNT(*) FROM (SELECT * FROM random_table LIMIT 6000);
 
 ----
-60000
+6000
 
 statement query I
-SELECT COUNT(*) FROM (SELECT * FROM random_table LIMIT 87654);
+SELECT COUNT(*) FROM (SELECT * FROM random_table LIMIT 8765);
 
 ----
-87654
+8765
 
 statement query I
 SELECT COUNT(*) FROM random_table;

@@ -1,0 +1,221 @@
+// Copyright 2021 Datafuse Labs.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+use std::fmt::Display;
+
+use anyerror::AnyError;
+use common_meta_app::schema::DatabaseNameIdent;
+use common_meta_app::schema::TableNameIdent;
+use common_meta_types::app_error::AppError;
+use common_meta_types::app_error::UnknownDatabase;
+use common_meta_types::app_error::UnknownTable;
+use common_meta_types::txn_condition::Target;
+use common_meta_types::txn_op::Request;
+use common_meta_types::ConditionResult;
+use common_meta_types::MatchSeq;
+use common_meta_types::MetaError;
+use common_meta_types::Operation;
+use common_meta_types::TxnCondition;
+use common_meta_types::TxnDeleteRequest;
+use common_meta_types::TxnOp;
+use common_meta_types::TxnOpResponse;
+use common_meta_types::TxnPutRequest;
+use common_meta_types::TxnRequest;
+use common_meta_types::UpsertKVReq;
+use common_proto_conv::FromToProto;
+use tracing::debug;
+
+use crate::Id;
+use crate::KVApi;
+use crate::KVApiKey;
+
+pub const TXN_MAX_RETRY_TIMES: u32 = 10;
+
+/// Get value that its type is `u64`.
+///
+/// It expects the kv-value's type is `u64`, such as:
+/// `__fd_table/<db_id>/<table_name> -> (seq, table_id)`, or
+/// `__fd_database/<tenant>/<db_name> -> (seq, db_id)`.
+///
+/// It returns (seq, `u64` value).
+/// If not found, (0,0) is returned.
+pub async fn get_u64_value<T: KVApiKey>(
+    kv_api: &(impl KVApi + ?Sized),
+    key: &T,
+) -> Result<(u64, u64), MetaError> {
+    let res = kv_api.get_kv(&key.to_key()).await?;
+
+    if let Some(seq_v) = res {
+        Ok((seq_v.seq, *deserialize_u64(&seq_v.data)?))
+    } else {
+        Ok((0, 0))
+    }
+}
+
+/// Get a struct value.
+///
+/// It returns seq number and the data.
+pub async fn get_struct_value<K, T>(
+    kv_api: &(impl KVApi + ?Sized),
+    k: &K,
+) -> Result<(u64, Option<T>), MetaError>
+where
+    K: KVApiKey,
+    T: FromToProto,
+    T::PB: common_protos::prost::Message + Default,
+{
+    let res = kv_api.get_kv(&k.to_key()).await?;
+
+    if let Some(seq_v) = res {
+        Ok((seq_v.seq, Some(deserialize_struct(&seq_v.data)?)))
+    } else {
+        Ok((0, None))
+    }
+}
+
+pub fn serialize_u64(value: impl Into<Id>) -> Result<Vec<u8>, MetaError> {
+    let v = serde_json::to_vec(&*value.into()).map_err(meta_encode_err)?;
+    Ok(v)
+}
+
+pub fn deserialize_u64(v: &[u8]) -> Result<Id, MetaError> {
+    let id = serde_json::from_slice(v).map_err(meta_encode_err)?;
+    Ok(Id::new(id))
+}
+
+/// Generate an id on metasrv.
+///
+/// Ids are categorized by generators.
+/// Ids may not be consecutive.
+pub async fn fetch_id<T: KVApiKey>(kv_api: &impl KVApi, generator: T) -> Result<u64, MetaError> {
+    let res = kv_api
+        .upsert_kv(UpsertKVReq {
+            key: generator.to_key(),
+            seq: MatchSeq::Any,
+            value: Operation::Update(b"".to_vec()),
+            value_meta: None,
+        })
+        .await?;
+
+    // seq: MatchSeq::Any always succeeds
+    let seq_v = res.result.unwrap();
+    Ok(seq_v.seq)
+}
+
+pub fn serialize_struct<T>(value: &T) -> Result<Vec<u8>, MetaError>
+where
+    T: FromToProto + 'static,
+    T::PB: common_protos::prost::Message,
+{
+    let p = value.to_pb().map_err(meta_encode_err)?;
+    let mut buf = vec![];
+    common_protos::prost::Message::encode(&p, &mut buf).map_err(meta_encode_err)?;
+    Ok(buf)
+}
+
+pub fn deserialize_struct<T>(buf: &[u8]) -> Result<T, MetaError>
+where
+    T: FromToProto,
+    T::PB: common_protos::prost::Message + Default,
+{
+    let p: T::PB = common_protos::prost::Message::decode(buf).map_err(meta_encode_err)?;
+    let v: T = FromToProto::from_pb(p).map_err(meta_encode_err)?;
+
+    Ok(v)
+}
+
+pub fn meta_encode_err<E: std::error::Error + 'static>(e: E) -> MetaError {
+    MetaError::EncodeError(AnyError::new(&e))
+}
+
+pub async fn send_txn(
+    kv_api: &impl KVApi,
+    txn_req: TxnRequest,
+) -> Result<(bool, Vec<TxnOpResponse>), MetaError> {
+    let tx_reply = kv_api.transaction(txn_req).await?;
+    let res: Result<_, MetaError> = tx_reply.into();
+    let (succ, responses) = res?;
+    Ok((succ, responses))
+}
+
+/// Build a TxnCondition that compares the seq of a record.
+pub fn txn_cond_seq(key: &impl KVApiKey, op: ConditionResult, seq: u64) -> TxnCondition {
+    TxnCondition {
+        key: key.to_key(),
+        expected: op as i32,
+        target: Some(Target::Seq(seq)),
+    }
+}
+
+/// Build a txn operation that puts a record.
+pub fn txn_op_put(key: &impl KVApiKey, value: Vec<u8>) -> TxnOp {
+    TxnOp {
+        request: Some(Request::Put(TxnPutRequest {
+            key: key.to_key(),
+            value,
+            prev_value: true,
+        })),
+    }
+}
+
+/// Build a txn operation that deletes a record.
+pub fn txn_op_del(key: &impl KVApiKey) -> TxnOp {
+    TxnOp {
+        request: Some(Request::Delete(TxnDeleteRequest {
+            key: key.to_key(),
+            prev_value: true,
+        })),
+    }
+}
+
+/// Return OK if a db_id or db_meta exists by checking the seq.
+///
+/// Otherwise returns UnknownDatabase error
+pub fn db_has_to_exist(
+    seq: u64,
+    db_name_ident: &DatabaseNameIdent,
+    msg: impl Display,
+) -> Result<(), MetaError> {
+    if seq == 0 {
+        debug!(seq, ?db_name_ident, "db does not exist");
+
+        Err(MetaError::AppError(AppError::UnknownDatabase(
+            UnknownDatabase::new(
+                &db_name_ident.db_name,
+                format!("{}: {}", msg, db_name_ident),
+            ),
+        )))
+    } else {
+        Ok(())
+    }
+}
+
+/// Return OK if a table_id or table_meta exists by checking the seq.
+///
+/// Otherwise returns UnknownTable error
+pub fn table_has_to_exist(
+    seq: u64,
+    name_ident: &TableNameIdent,
+    ctx: impl Display,
+) -> Result<(), MetaError> {
+    if seq == 0 {
+        debug!(seq, ?name_ident, "does not exist");
+
+        Err(MetaError::AppError(AppError::UnknownTable(
+            UnknownTable::new(&name_ident.table_name, format!("{}: {}", ctx, name_ident)),
+        )))
+    } else {
+        Ok(())
+    }
+}

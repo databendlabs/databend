@@ -1,0 +1,14 @@
+onlyif mysql
+statement query I
+select "Engine" as engine from system.engines order by engine;
+
+----
+FUSE
+GITHUB
+MEMORY
+NULL
+RANDOM
+VIEW
+
+statement error 1065
+select engine from system.engines order by engine;

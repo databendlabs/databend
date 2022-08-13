@@ -1,4 +1,7 @@
 statement ok
+set enable_planner_v2 = 0;
+
+statement ok
 set max_threads=8;
 
 statement query T

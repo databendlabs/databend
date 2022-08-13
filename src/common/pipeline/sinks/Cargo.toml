@@ -1,0 +1,19 @@
+[package]
+name = "common-pipeline-sinks"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+doctest = false
+test = false
+
+[dependencies]
+common-base = { path = "../../base" }
+common-catalog = { path = "../../catalog" }
+common-datablocks = { path = "../../datablocks" }
+common-datavalues = { path = "../../datavalues" }
+common-exception = { path = "../../exception" }
+common-pipeline-core = { path = "../core" }
+
+async-trait = { git = "https://github.com/datafuse-extras/async-trait", rev = "f0b0fd5" }

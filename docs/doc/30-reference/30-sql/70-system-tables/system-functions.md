@@ -92,24 +92,24 @@ is_aggregate: 0
       syntax: 
      example: 
 *************************** 6. row ***************************
-        name: tostartofday
+        name: to_start_of_day
   is_builtin: 1
 is_aggregate: 0
   definition: 
     category: datetime
  description: Rounds down a date with time to the start of the day.
-      syntax: toStartOfDay(expr)
+      syntax: to_start_of_day(expr)
 
-     example: SELECT toStartOfDay(now());
+     example: SELECT to_start_of_day(now());
 +---------------------+
-| toStartOfDay(now()) |
+| to_start_of_day(now()) |
 +---------------------+
 | 2022-03-29 00:00:00 |
 +---------------------+
 
-SELECT toStartOfDay(to_datetime(1630812366));
+SELECT to_start_of_day(to_datetime(1630812366));
 +--------------------------------------+
-| toStartOfDay(to_datetime(1630812366)) |
+| to_start_of_day(to_datetime(1630812366)) |
 +--------------------------------------+
 | 2021-09-05 00:00:00                  |
 +--------------------------------------+
@@ -177,18 +177,18 @@ is_aggregate: 0
   definition: 
     category: datetime
  description: Converts a date with time to a UInt8 number containing the number of the second in the minute (0-59).
-      syntax: toSecond(expr)
+      syntax: to_second(expr)
 
-     example: SELECT toSecond(now());
+     example: SELECT to_second(now());
 +-----------------+
-| toSecond(now()) |
+| to_second(now()) |
 +-----------------+
 |              14 |
 +-----------------+
 
-SELECT toSecond(to_datetime(1630812366));
+SELECT to_second(to_datetime(1630812366));
 +----------------------------------+
-| toSecond(to_datetime(1630812366)) |
+| to_second(to_datetime(1630812366)) |
 +----------------------------------+
 |                                6 |
 +----------------------------------+

@@ -40,6 +40,7 @@ SELECT INET_ATON(NULL);
 ----
 NULL
 
+
 statement error 1060
 SELECT INET_ATON('hello');
 
@@ -49,7 +50,8 @@ SELECT TRY_INET_NTOA(167773449);
 ----
 10.0.5.9
 
-statement error 1007
+
+statement error 1065
 SELECT TRY_INET_NTOA('167773449');
 
 statement query T
@@ -64,7 +66,8 @@ SELECT INET_NTOA(167773449);
 ----
 10.0.5.9
 
-statement error 1007
+
+statement error 1065
 SELECT INET_NTOA('167773449'); 
 
 statement query T

@@ -19,9 +19,6 @@ metric_api_address = "0.0.0.0:7073"
 mysql_handler_host = "0.0.0.0"
 mysql_handler_port = 3309
 
-# Databend Query ClickHouse Handler.
-clickhouse_handler_host = "0.0.0.0"
-clickhouse_handler_port = 9003
 
 # Databend Query ClickHouse Handler.
 clickhouse_http_handler_host = "0.0.0.0"

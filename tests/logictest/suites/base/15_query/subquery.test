@@ -1,5 +1,4 @@
-statement ok
-set enable_planner_v2 = 1;
+
 
 statement ok
 DROP TABLE IF EXISTS c;
@@ -615,6 +614,16 @@ ORDER BY c.c_id
 5  0
 6  0
 
+statement query I
+select * from numbers(5) where exists(select * from numbers(1)) order by number;
+
+----
+0
+1
+2
+3
+4
+
 
 statement ok
 drop table o;
@@ -623,6 +632,17 @@ drop table o;
 statement ok
 drop table c;
 
+statement query I
+select * from (SELECT number AS a FROM numbers(10)) x where exists (select 1::UInt64 b);
 
-statement ok
-set enable_planner_v2 = 0;
+----
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
