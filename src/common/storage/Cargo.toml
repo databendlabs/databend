@@ -1,0 +1,17 @@
+[package]
+name = "common-storage"
+version = "0.1.0"
+authors = ["Databend Authors <opensource@datafuselabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[features]
+storage-hdfs = ["opendal/services-hdfs"]
+
+[dependencies]
+anyhow = "1.0.58"
+globiter = "0.1.0"
+opendal = { version = "0.12.0", features = ["retry", "services-http"] }
+percent-encoding = "2.1.0"
+serde = { version = "1.0.137", features = ["derive"] }
