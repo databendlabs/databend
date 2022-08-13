@@ -31,16 +31,16 @@ pub enum Deletion {
     Remains(DataBlock),
 }
 
-pub struct DeletionMutator<'a> {
-    base_mutator: BaseMutator<'a>,
+pub struct DeletionMutator {
+    base_mutator: BaseMutator,
     cluster_stats_gen: ClusterStatsGenerator,
 }
 
-impl<'a> DeletionMutator<'a> {
+impl DeletionMutator {
     pub fn try_create(
-        ctx: &'a Arc<dyn TableContext>,
-        location_generator: &'a TableMetaLocationGenerator,
-        base_snapshot: &'a TableSnapshot,
+        ctx: Arc<dyn TableContext>,
+        location_generator: TableMetaLocationGenerator,
+        base_snapshot: Arc<TableSnapshot>,
         cluster_stats_gen: ClusterStatsGenerator,
     ) -> Result<Self> {
         let base_mutator = BaseMutator::try_create(ctx, location_generator, base_snapshot)?;
@@ -69,9 +69,9 @@ impl<'a> DeletionMutator<'a> {
             None
         } else {
             let block_writer = BlockWriter::new(
-                self.base_mutator.ctx,
+                &self.base_mutator.ctx,
                 &self.base_mutator.data_accessor,
-                self.base_mutator.location_generator,
+                &self.base_mutator.location_generator,
             );
             let cluster_stats = self
                 .cluster_stats_gen

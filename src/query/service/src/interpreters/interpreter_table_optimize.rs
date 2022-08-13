@@ -21,9 +21,11 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
+use crate::pipelines::executor::PipelineCompleteExecutor;
+use crate::pipelines::Pipeline;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
-
+use crate::storages::fuse::FuseTable;
 pub struct OptimizeTableInterpreter {
     ctx: Arc<QueryContext>,
     plan: OptimizeTablePlan,
@@ -32,6 +34,55 @@ pub struct OptimizeTableInterpreter {
 impl OptimizeTableInterpreter {
     pub fn try_create(ctx: Arc<QueryContext>, plan: OptimizeTablePlan) -> Result<Self> {
         Ok(OptimizeTableInterpreter { ctx, plan })
+    }
+
+    #[tracing::instrument(level = "debug", name = "execute_recluster", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
+    async fn execute_recluster(
+        &self,
+        catalog_name: &String,
+        db_name: &String,
+        tbl_name: &String,
+    ) -> Result<()> {
+        let ctx = self.ctx.clone();
+        let settings = ctx.get_settings();
+
+        let mut pipeline = Pipeline::create();
+
+        let table = ctx.get_table(catalog_name, db_name, tbl_name).await?;
+        let tbl = FuseTable::try_from_table(table.as_ref())?;
+
+        let mutator = tbl.try_get_recluster_mutator(ctx.clone()).await?;
+        let mut mutator = if let Some(mutator) = mutator {
+            mutator
+        } else {
+            return Ok(());
+        };
+
+        let need_recluster = mutator.blocks_select().await?;
+
+        if !need_recluster {
+            return Ok(());
+        }
+
+        tbl.do_recluster(
+            ctx.clone(),
+            catalog_name.clone(),
+            mutator.clone(),
+            &mut pipeline,
+        )?;
+
+        pipeline.set_max_threads(settings.get_max_threads()? as usize);
+
+        let async_runtime = ctx.get_storage_runtime();
+        let query_need_abort = ctx.query_need_abort();
+        let executor =
+            PipelineCompleteExecutor::try_create(async_runtime, query_need_abort, pipeline)?;
+        executor.execute()?;
+        drop(executor);
+
+        let catalog_name = ctx.get_current_catalog();
+        mutator.commit_recluster(&catalog_name).await?;
+        Ok(())
     }
 }
 
@@ -43,10 +94,6 @@ impl Interpreter for OptimizeTableInterpreter {
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         let plan = &self.plan;
-        let mut table = self
-            .ctx
-            .get_table(&plan.catalog, &plan.database, &plan.table)
-            .await?;
 
         let action = &plan.action;
         let do_purge = matches!(
@@ -57,6 +104,20 @@ impl Interpreter for OptimizeTableInterpreter {
             action,
             OptimizeTableAction::Compact | OptimizeTableAction::All
         );
+        let do_recluster = matches!(
+            action,
+            OptimizeTableAction::Recluster | OptimizeTableAction::All
+        );
+
+        if do_recluster {
+            self.execute_recluster(&plan.catalog, &plan.database, &plan.table)
+                .await?;
+        }
+
+        let mut table = self
+            .ctx
+            .get_table(&plan.catalog, &plan.database, &plan.table)
+            .await?;
 
         if do_compact {
             // TODO(zhyass): clustering key.

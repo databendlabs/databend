@@ -545,6 +545,8 @@ pub enum TokenKind {
     QUARTER,
     #[token("QUERY", ignore(ascii_case))]
     QUERY,
+    #[token("RECLUSTER", ignore(ascii_case))]
+    RECLUSTER,
     #[token("RECORD_DELIMITER", ignore(ascii_case))]
     RECORD_DELIMITER,
     #[token("REFERENCE_USAGE", ignore(ascii_case))]

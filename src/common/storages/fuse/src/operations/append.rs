@@ -61,7 +61,7 @@ impl FuseTable {
             )
         })?;
 
-        let cluster_stats_gen = self.get_cluster_stats_gen(ctx.clone(), pipeline)?;
+        let cluster_stats_gen = self.get_cluster_stats_gen(ctx.clone(), pipeline, 0)?;
         if !self.cluster_keys.is_empty() {
             // sort
             let sort_descs: Vec<SortColumnDescription> = self
@@ -108,6 +108,7 @@ impl FuseTable {
         &self,
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
+        level: i32,
     ) -> Result<ClusterStatsGenerator> {
         if self.cluster_keys.is_empty() {
             return Ok(ClusterStatsGenerator::default());
@@ -166,6 +167,7 @@ impl FuseTable {
             self.cluster_key_meta.as_ref().unwrap().0,
             cluster_key_index,
             expression_executor,
+            level,
         ))
     }
 

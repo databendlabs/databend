@@ -433,6 +433,7 @@ pub enum OptimizeTableAction {
     All,
     Purge,
     Compact,
+    Recluster,
 }
 
 impl Display for OptimizeTableAction {
@@ -441,6 +442,7 @@ impl Display for OptimizeTableAction {
             OptimizeTableAction::All => write!(f, "ALL"),
             OptimizeTableAction::Purge => write!(f, "PURGE"),
             OptimizeTableAction::Compact => write!(f, "COMPACT"),
+            OptimizeTableAction::Recluster => write!(f, "RECLUSTER"),
         }
     }
 }

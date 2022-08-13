@@ -36,4 +36,5 @@ pub enum OptimizeTableAction {
     All,
     Purge,
     Compact,
+    Recluster,
 }

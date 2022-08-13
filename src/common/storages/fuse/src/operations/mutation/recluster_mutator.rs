@@ -21,21 +21,51 @@ use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_fuse_meta::meta::BlockMeta;
+use common_fuse_meta::meta::SegmentInfo;
 use common_fuse_meta::meta::TableSnapshot;
+use common_fuse_meta::meta::Versioned;
+use common_meta_app::schema::TableInfo;
 
 use crate::io::MetaReaders;
+use crate::io::TableMetaLocationGenerator;
+use crate::operations::mutation::BaseMutator;
+use crate::operations::AppendOperationLogEntry;
 use crate::sessions::TableContext;
+use crate::statistics::merge_statistics;
+use crate::FuseTable;
 
-pub struct ReclusterMutator<'a> {
-    ctx: &'a Arc<dyn TableContext>,
-    base_snapshot: &'a TableSnapshot,
+#[derive(Clone)]
+pub struct ReclusterMutator {
+    pub(crate) base_mutator: BaseMutator,
+    pub(crate) selected_blocks: Vec<BlockMeta>,
+    pub(crate) level: i32,
     threshold: f64,
+    table_info: TableInfo,
     row_per_block: usize,
 }
 
-impl<'a> ReclusterMutator<'a> {
-    async fn block_select_task(&mut self) -> Result<Vec<(usize, BlockMeta)>> {
-        let snapshot = self.base_snapshot;
+impl ReclusterMutator {
+    pub fn try_create(
+        ctx: Arc<dyn TableContext>,
+        location_generator: TableMetaLocationGenerator,
+        base_snapshot: Arc<TableSnapshot>,
+        threshold: f64,
+        table_info: TableInfo,
+        row_per_block: usize,
+    ) -> Result<Self> {
+        let base_mutator = BaseMutator::try_create(ctx, location_generator, base_snapshot)?;
+        Ok(Self {
+            base_mutator,
+            selected_blocks: Vec::new(),
+            level: 0,
+            threshold,
+            table_info,
+            row_per_block,
+        })
+    }
+
+    pub async fn blocks_select(&mut self) -> Result<bool> {
+        let snapshot = &self.base_mutator.base_snapshot;
 
         let default_cluster_key_id = snapshot
             .cluster_key_meta
@@ -46,7 +76,7 @@ impl<'a> ReclusterMutator<'a> {
             .0;
 
         let mut blocks_map = BTreeMap::new();
-        let reader = MetaReaders::segment_info_reader(self.ctx.as_ref());
+        let reader = MetaReaders::segment_info_reader(self.base_mutator.ctx.as_ref());
         for (idx, segment_location) in snapshot.segments.iter().enumerate() {
             let (x, ver) = (segment_location.0.clone(), segment_location.1);
             let segment = reader.read(x, None, ver).await?;
@@ -63,7 +93,11 @@ impl<'a> ReclusterMutator<'a> {
             });
         }
 
-        for block_metas in blocks_map.values() {
+        for (level, block_metas) in blocks_map.into_iter() {
+            if block_metas.len() <= 1 {
+                continue;
+            }
+
             let mut total_row_count = 0;
             let mut points_map: BTreeMap<Vec<DataValue>, (Vec<usize>, Vec<usize>)> =
                 BTreeMap::new();
@@ -82,7 +116,17 @@ impl<'a> ReclusterMutator<'a> {
             }
 
             if total_row_count <= self.row_per_block as u64 {
-                return Ok(block_metas.clone());
+                self.selected_blocks = block_metas
+                    .into_iter()
+                    .map(|(seg_idx, block_meta)| {
+                        self.base_mutator
+                            .add_mutation(seg_idx, block_meta.location.clone(), None);
+                        block_meta
+                    })
+                    .collect::<Vec<_>>();
+                self.level = level;
+
+                return Ok(true);
             }
 
             let mut max_depth = 0;
@@ -134,13 +178,56 @@ impl<'a> ReclusterMutator<'a> {
             }
             selected_idx.dedup();
 
-            let selected_blocks = selected_idx
+            self.selected_blocks = selected_idx
                 .iter()
-                .map(|idx| block_metas[*idx].clone())
+                .map(|idx| {
+                    let (seg_idx, block_meta) = block_metas[*idx].clone();
+                    self.base_mutator
+                        .add_mutation(seg_idx, block_meta.location.clone(), None);
+                    block_meta
+                })
                 .collect::<Vec<_>>();
-            return Ok(selected_blocks);
+            self.level = level;
+            return Ok(true);
         }
 
-        Ok(vec![])
+        Ok(false)
+    }
+
+    pub async fn commit_recluster(self, catalog_name: &str) -> Result<()> {
+        let ctx = self.base_mutator.ctx.clone();
+        let (mut segments, mut summary) = self.base_mutator.generate_segments().await?;
+
+        let append_entries = ctx.consume_precommit_blocks();
+        let append_log_entries = append_entries
+            .iter()
+            .map(AppendOperationLogEntry::try_from)
+            .collect::<Result<Vec<AppendOperationLogEntry>>>()?;
+
+        let (merged_segments, merged_summary) =
+            FuseTable::merge_append_operations(&append_log_entries)?;
+
+        let mut merged_segments = merged_segments
+            .into_iter()
+            .map(|loc| (loc, SegmentInfo::VERSION))
+            .collect();
+
+        segments.append(&mut merged_segments);
+        summary = merge_statistics(&summary, &merged_summary)?;
+
+        let (new_snapshot, loc) = self
+            .base_mutator
+            .into_new_snapshot(segments, summary)
+            .await?;
+
+        FuseTable::commit_to_meta_server(
+            ctx.as_ref(),
+            catalog_name,
+            &self.table_info,
+            loc,
+            &new_snapshot.summary,
+        )
+        .await?;
+        Ok(())
     }
 }

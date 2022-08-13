@@ -47,7 +47,10 @@ impl FuseTable {
 
                 let block_metas = BlockPruner::new(snapshot.clone())
                     .prune(&ctx, self.table_info.schema(), &push_downs)
-                    .await?;
+                    .await?
+                    .into_iter()
+                    .map(|(_, v)| v)
+                    .collect::<Vec<_>>();
 
                 let partitions_total = snapshot.summary.block_count as usize;
                 self.read_partitions_with_metas(ctx, push_downs, block_metas, partitions_total)
@@ -60,7 +63,7 @@ impl FuseTable {
         &self,
         ctx: Arc<dyn TableContext>,
         push_downs: Option<Extras>,
-        metas: Vec<(usize, BlockMeta)>,
+        block_metas: Vec<BlockMeta>,
         partitions_total: usize,
     ) -> Result<(Statistics, Partitions)> {
         let schema = self.table_info.schema();
@@ -68,7 +71,6 @@ impl FuseTable {
         let arrow_schema = schema.to_arrow();
         let column_leaves = ColumnLeaves::new_from_schema(&arrow_schema);
 
-        let block_metas = metas.into_iter().map(|(_, v)| v).collect::<Vec<_>>();
         let partitions_scanned = block_metas.len();
 
         let (mut statistics, parts) = Self::to_partitions(&block_metas, &column_leaves, push_downs);

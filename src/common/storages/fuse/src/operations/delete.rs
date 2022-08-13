@@ -73,9 +73,9 @@ impl FuseTable {
     ) -> Result<()> {
         let cluster_stats_gen = self.cluster_stats_gen(ctx.clone())?;
         let mut deletion_collector = DeletionMutator::try_create(
-            &ctx,
-            &self.meta_location_generator,
-            snapshot,
+            ctx.clone(),
+            self.meta_location_generator.clone(),
+            snapshot.clone(),
             cluster_stats_gen,
         )?;
         let schema = self.table_info.schema();
@@ -121,7 +121,7 @@ impl FuseTable {
     async fn commit_deletion(
         &self,
         ctx: &dyn TableContext,
-        del_holder: DeletionMutator<'_>,
+        del_holder: DeletionMutator,
         catalog_name: &str,
     ) -> Result<()> {
         let (new_snapshot, loc) = del_holder.into_new_snapshot().await?;
@@ -184,6 +184,7 @@ impl FuseTable {
             cluster_key_id,
             cluster_key_index,
             expression_executor,
+            0,
         ))
     }
 }

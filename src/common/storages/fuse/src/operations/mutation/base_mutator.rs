@@ -42,19 +42,19 @@ pub struct Replacement {
 pub type SegmentIndex = usize;
 
 #[derive(Clone)]
-pub struct BaseMutator<'a> {
+pub struct BaseMutator {
     mutations: HashMap<SegmentIndex, Vec<Replacement>>,
-    pub ctx: &'a Arc<dyn TableContext>,
-    pub location_generator: &'a TableMetaLocationGenerator,
+    pub ctx: Arc<dyn TableContext>,
+    pub location_generator: TableMetaLocationGenerator,
     pub data_accessor: Operator,
-    base_snapshot: &'a TableSnapshot,
+    pub base_snapshot: Arc<TableSnapshot>,
 }
 
-impl<'a> BaseMutator<'a> {
+impl BaseMutator {
     pub fn try_create(
-        ctx: &'a Arc<dyn TableContext>,
-        location_generator: &'a TableMetaLocationGenerator,
-        base_snapshot: &'a TableSnapshot,
+        ctx: Arc<dyn TableContext>,
+        location_generator: TableMetaLocationGenerator,
+        base_snapshot: Arc<TableSnapshot>,
     ) -> Result<Self> {
         let data_accessor = ctx.get_storage_operator()?;
         Ok(Self {
@@ -87,7 +87,7 @@ impl<'a> BaseMutator<'a> {
         summary: Statistics,
     ) -> Result<(TableSnapshot, String)> {
         let snapshot = self.base_snapshot;
-        let mut new_snapshot = TableSnapshot::from_previous(snapshot);
+        let mut new_snapshot = TableSnapshot::from_previous(&snapshot);
         new_snapshot.segments = segments;
         new_snapshot.summary = summary;
         // write down the new snapshot
@@ -100,11 +100,9 @@ impl<'a> BaseMutator<'a> {
     }
 
     pub async fn generate_segments(&self) -> Result<(Vec<Location>, Statistics)> {
-        let mut segments = self.base_snapshot.segments.clone();
-        // takes away the segments, they are being mutated
-        let mut segments_editor = HashMap::<_, _, RandomState>::from_iter(
-            std::mem::take(&mut segments).into_iter().enumerate(),
-        );
+        let segments = self.base_snapshot.segments.clone();
+        let mut segments_editor =
+            HashMap::<_, _, RandomState>::from_iter(segments.clone().into_iter().enumerate());
 
         let segment_reader = MetaReaders::segment_info_reader(self.ctx.as_ref());
 
@@ -114,7 +112,7 @@ impl<'a> BaseMutator<'a> {
             .get_table_segment_cache();
         let seg_writer = SegmentWriter::new(
             &self.data_accessor,
-            self.location_generator,
+            &self.location_generator,
             &segment_info_cache,
         );
 

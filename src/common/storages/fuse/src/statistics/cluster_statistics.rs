@@ -23,6 +23,7 @@ pub struct ClusterStatsGenerator {
     cluster_key_id: u32,
     cluster_key_index: Vec<usize>,
     expression_executor: Option<ExpressionExecutor>,
+    level: i32,
 }
 
 impl ClusterStatsGenerator {
@@ -30,11 +31,13 @@ impl ClusterStatsGenerator {
         cluster_key_id: u32,
         cluster_key_index: Vec<usize>,
         expression_executor: Option<ExpressionExecutor>,
+        level: i32,
     ) -> Self {
         Self {
             cluster_key_id,
             cluster_key_index,
             expression_executor,
+            level,
         }
     }
 
@@ -44,7 +47,7 @@ impl ClusterStatsGenerator {
         &self,
         data_block: &DataBlock,
     ) -> Result<(Option<ClusterStatistics>, DataBlock)> {
-        let cluster_stats = self.clusters_statistics(data_block, 0)?;
+        let cluster_stats = self.clusters_statistics(data_block, self.level)?;
 
         let mut block = data_block.clone();
         // Remove unused columns.
