@@ -62,6 +62,27 @@ impl FuseTable {
         })?;
 
         let cluster_stats_gen = self.get_cluster_stats_gen(ctx.clone(), pipeline)?;
+        if !self.cluster_keys.is_empty() {
+            // sort
+            let sort_descs: Vec<SortColumnDescription> = self
+                .cluster_keys
+                .iter()
+                .map(|expr| SortColumnDescription {
+                    column_name: expr.column_name(),
+                    asc: true,
+                    nulls_first: false,
+                })
+                .collect();
+
+            pipeline.add_transform(|transform_input_port, transform_output_port| {
+                TransformSortPartial::try_create(
+                    transform_input_port,
+                    transform_output_port,
+                    None,
+                    sort_descs.clone(),
+                )
+            })?;
+        }
 
         let mut sink_pipeline_builder = SinkPipeBuilder::create();
         for _ in 0..pipeline.output_len() {
@@ -83,7 +104,7 @@ impl FuseTable {
         Ok(())
     }
 
-    fn get_cluster_stats_gen(
+    pub fn get_cluster_stats_gen(
         &self,
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
@@ -140,26 +161,6 @@ impl FuseTable {
             executor.validate()?;
             expression_executor = Some(executor);
         }
-
-        // sort
-        let sort_descs: Vec<SortColumnDescription> = self
-            .cluster_keys
-            .iter()
-            .map(|expr| SortColumnDescription {
-                column_name: expr.column_name(),
-                asc: true,
-                nulls_first: false,
-            })
-            .collect();
-
-        pipeline.add_transform(|transform_input_port, transform_output_port| {
-            TransformSortPartial::try_create(
-                transform_input_port,
-                transform_output_port,
-                None,
-                sort_descs.clone(),
-            )
-        })?;
 
         Ok(ClusterStatsGenerator::new(
             self.cluster_key_meta.as_ref().unwrap().0,
