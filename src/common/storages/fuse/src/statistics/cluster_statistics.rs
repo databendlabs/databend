@@ -44,7 +44,7 @@ impl ClusterStatsGenerator {
         &self,
         data_block: &DataBlock,
     ) -> Result<(Option<ClusterStatistics>, DataBlock)> {
-        let cluster_stats = self.clusters_statistics(data_block)?;
+        let cluster_stats = self.clusters_statistics(data_block, 0)?;
 
         let mut block = data_block.clone();
         // Remove unused columns.
@@ -80,10 +80,14 @@ impl ClusterStatsGenerator {
             data_block.clone()
         };
 
-        self.clusters_statistics(&block)
+        self.clusters_statistics(&block, origin_stats.level)
     }
 
-    fn clusters_statistics(&self, data_block: &DataBlock) -> Result<Option<ClusterStatistics>> {
+    fn clusters_statistics(
+        &self,
+        data_block: &DataBlock,
+        level: i32,
+    ) -> Result<Option<ClusterStatistics>> {
         if self.cluster_key_index.is_empty() {
             return Ok(None);
         }
@@ -117,6 +121,7 @@ impl ClusterStatsGenerator {
             cluster_key_id: self.cluster_key_id,
             min,
             max,
+            level,
         }))
     }
 }

@@ -199,6 +199,7 @@ async fn test_ft_cluster_stats_with_stats() -> common_exception::Result<()> {
         cluster_key_id: 0,
         min: vec![DataValue::Int64(1)],
         max: vec![DataValue::Int64(5)],
+        level: 0,
     });
 
     let stats_gen = ClusterStatsGenerator::new(0, vec![0], None);
