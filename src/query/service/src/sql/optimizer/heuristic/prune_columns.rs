@@ -94,7 +94,7 @@ impl ColumnPruner {
                 let left = p.left_conditions.iter().fold(required.clone(), |acc, v| {
                     acc.union(&v.used_columns()).cloned().collect()
                 });
-                // Include columns referenced in left conditions
+                // Include columns referenced in right conditions
                 let right = p.right_conditions.iter().fold(required.clone(), |acc, v| {
                     acc.union(&v.used_columns()).cloned().collect()
                 });

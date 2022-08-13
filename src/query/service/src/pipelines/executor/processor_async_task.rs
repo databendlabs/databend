@@ -17,7 +17,10 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::task::Context;
 use std::task::Poll;
+use std::time::Duration;
+use std::time::Instant;
 
+use common_base::base::tokio::time::sleep;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_pipeline_core::processors::processor::ProcessorPtr;
@@ -55,6 +58,32 @@ impl ProcessorAsyncTask {
                 Either::Right((_, _)) => Err(ErrorCode::AbortedQuery(
                     "Aborted query, because the server is shutting down or the query was killed.",
                 )),
+            }
+        };
+
+        let wraning_processor = processor.clone();
+        let inner = async move {
+            let start = Instant::now();
+            let mut inner = inner.boxed();
+
+            loop {
+                unsafe {
+                    let interval = Box::pin(sleep(Duration::from_secs(5)));
+                    match futures::future::select(interval, inner).await {
+                        Either::Left((_, right)) => {
+                            inner = right;
+                            tracing::warn!(
+                                "Very slow processor async task, processor id: {:?}, name: {:?}, elapsed: {:?}",
+                                wraning_processor.id(),
+                                wraning_processor.name(),
+                                start.elapsed()
+                            );
+                        }
+                        Either::Right((res, _)) => {
+                            return res;
+                        }
+                    }
+                }
             }
         };
 

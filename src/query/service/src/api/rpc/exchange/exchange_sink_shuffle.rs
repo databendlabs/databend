@@ -15,115 +15,61 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use async_channel::TrySendError;
 use common_arrow::arrow::io::flight::serialize_batch;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::api::rpc::exchange::exchange_channel::FragmentSender;
+use crate::api::rpc::exchange::exchange_params::ExchangeParams;
 use crate::api::rpc::exchange::exchange_params::SerializeParams;
 use crate::api::rpc::exchange::exchange_params::ShuffleExchangeParams;
+use crate::api::rpc::flight_client::FlightExchange;
 use crate::api::rpc::packets::DataPacket;
 use crate::api::rpc::packets::FragmentData;
 use crate::pipelines::processors::port::InputPort;
-use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::Event;
 use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::Processor;
 use crate::sessions::QueryContext;
 
 struct OutputData {
-    pub data_block: Option<DataBlock>,
+    pub has_serialized_data: bool,
     pub serialized_blocks: Vec<Option<DataPacket>>,
 }
 
-pub struct ExchangePublisherSink<const HAS_OUTPUT: bool> {
-    ctx: Arc<QueryContext>,
-    fragment_id: usize,
-
+pub struct ExchangePublisherSink {
     serialize_params: SerializeParams,
     shuffle_exchange_params: ShuffleExchangeParams,
 
     input: Arc<InputPort>,
-    output: Arc<OutputPort>,
     input_data: Option<DataBlock>,
     output_data: Option<OutputData>,
-    peer_endpoint_publisher: Vec<Option<FragmentSender>>,
+    flight_exchanges: Vec<FlightExchange>,
 }
 
-impl<const HAS_OUTPUT: bool> ExchangePublisherSink<HAS_OUTPUT> {
+impl ExchangePublisherSink {
     pub fn try_create(
         ctx: Arc<QueryContext>,
-        fragment_id: usize,
         input: Arc<InputPort>,
-        output: Arc<OutputPort>,
-        shuffle_exchange_params: ShuffleExchangeParams,
+        params: &ShuffleExchangeParams,
     ) -> Result<ProcessorPtr> {
-        let serialize_params = shuffle_exchange_params.create_serialize_params()?;
-        Ok(ProcessorPtr::create(Box::new(ExchangePublisherSink::<
-            HAS_OUTPUT,
-        > {
-            ctx,
+        let exchange_params = ExchangeParams::ShuffleExchange(params.clone());
+        let exchange_manager = ctx.get_exchange_manager();
+        let flight_exchanges = exchange_manager.get_flight_exchanges(&exchange_params)?;
+
+        Ok(ProcessorPtr::create(Box::new(ExchangePublisherSink {
             input,
-            output,
-            fragment_id,
-            serialize_params,
-            shuffle_exchange_params,
+            flight_exchanges,
             input_data: None,
             output_data: None,
-            peer_endpoint_publisher: vec![],
+            shuffle_exchange_params: params.clone(),
+            serialize_params: params.create_serialize_params()?,
         })))
-    }
-
-    pub fn init(processor: &mut ProcessorPtr) -> Result<()> {
-        unsafe {
-            if let Some(exchange) = processor.as_any().downcast_mut::<Self>() {
-                exchange.peer_endpoint_publisher = exchange.get_peer_endpoint_publisher()?;
-            }
-
-            Ok(())
-        }
-    }
-
-    fn get_endpoint_publisher(&self, index: usize) -> Result<&FragmentSender> {
-        match &self.peer_endpoint_publisher[index] {
-            Some(tx) => Ok(tx),
-            None => Err(ErrorCode::LogicalError("Not found endpoint publisher.")),
-        }
-    }
-
-    fn get_peer_endpoint_publisher(&self) -> Result<Vec<Option<FragmentSender>>> {
-        let destination_ids = &self.shuffle_exchange_params.destination_ids;
-        let mut res = Vec::with_capacity(destination_ids.len());
-        let exchange_manager = self.ctx.get_exchange_manager();
-
-        for destination_id in destination_ids {
-            if destination_id != &self.shuffle_exchange_params.executor_id {
-                let id = self.fragment_id;
-                let query_id = &self.shuffle_exchange_params.query_id;
-                res.push(Some(exchange_manager.get_fragment_sink(
-                    query_id,
-                    id,
-                    destination_id,
-                )?));
-            } else {
-                if !HAS_OUTPUT {
-                    return Err(ErrorCode::LogicalError(
-                        "Has local output, but not found output port. It's a bug.",
-                    ));
-                }
-
-                res.push(None);
-            }
-        }
-
-        Ok(res)
     }
 }
 
 #[async_trait::async_trait]
-impl<const HAS_OUTPUT: bool> Processor for ExchangePublisherSink<HAS_OUTPUT> {
+impl Processor for ExchangePublisherSink {
     fn name(&self) -> &'static str {
         "ExchangeShuffleSink"
     }
@@ -133,63 +79,8 @@ impl<const HAS_OUTPUT: bool> Processor for ExchangePublisherSink<HAS_OUTPUT> {
     }
 
     fn event(&mut self) -> Result<Event> {
-        if HAS_OUTPUT {
-            if self.output.is_finished() {
-                self.input.finish();
-                self.peer_endpoint_publisher.clear();
-                return Ok(Event::Finished);
-            }
-
-            // This may cause other cluster nodes to idle.
-            if !self.output.can_push() {
-                self.input.set_not_need_data();
-                return Ok(Event::NeedConsume);
-            }
-        }
-
-        if let Some(mut output_data) = self.output_data.take() {
-            let mut pushed_data = false;
-            if HAS_OUTPUT {
-                // If has local data block, the push block to the output port
-                if let Some(data_block) = output_data.data_block.take() {
-                    pushed_data = true;
-                    self.output.push_data(Ok(data_block));
-                }
-            }
-
-            // When the sender is fast enough, we can try to send. If all of them are sent successfully, it will reduce the scheduling of the processor once.
-            let mut need_async_send = false;
-            for index in 0..output_data.serialized_blocks.len() {
-                if let Some(packet) = output_data.serialized_blocks[index].take() {
-                    let tx = self.get_endpoint_publisher(index)?;
-
-                    if let Err(try_error) = tx.try_send(packet) {
-                        match try_error {
-                            TrySendError::Closed(_) => {
-                                if HAS_OUTPUT {
-                                    self.output.finish();
-                                }
-
-                                self.peer_endpoint_publisher.clear();
-                                return Ok(Event::Finished);
-                            }
-                            TrySendError::Full(value) => {
-                                need_async_send = true;
-                                output_data.serialized_blocks[index] = Some(value);
-                            }
-                        };
-                    }
-                }
-            }
-
-            if need_async_send {
-                self.output_data = Some(output_data);
-                return Ok(Event::Async);
-            }
-
-            if HAS_OUTPUT && pushed_data {
-                return Ok(Event::NeedConsume);
-            }
+        if self.output_data.is_some() {
+            return Ok(Event::Async);
         }
 
         if self.input_data.is_some() {
@@ -197,11 +88,11 @@ impl<const HAS_OUTPUT: bool> Processor for ExchangePublisherSink<HAS_OUTPUT> {
         }
 
         if self.input.is_finished() {
-            if HAS_OUTPUT {
-                self.output.finish();
+            // No more data to sent.
+            for flight_exchange in &self.flight_exchanges {
+                flight_exchange.close_output();
             }
 
-            self.peer_endpoint_publisher.clear();
             return Ok(Event::Finished);
         }
 
@@ -220,39 +111,37 @@ impl<const HAS_OUTPUT: bool> Processor for ExchangePublisherSink<HAS_OUTPUT> {
 
             let scatted_blocks = scatter.execute(&data_block, 0)?;
             let mut output_data = OutputData {
-                data_block: None,
+                has_serialized_data: false,
                 serialized_blocks: vec![],
             };
 
-            for (index, data_block) in scatted_blocks.into_iter().enumerate() {
+            for data_block in scatted_blocks.into_iter() {
                 if data_block.is_empty() {
                     output_data.serialized_blocks.push(None);
                     continue;
                 }
 
-                if HAS_OUTPUT && index == self.serialize_params.local_executor_pos {
-                    output_data.data_block = Some(data_block);
-                    output_data.serialized_blocks.push(None);
-                } else {
-                    let chunks = data_block.try_into()?;
-                    let options = &self.serialize_params.options;
-                    let ipc_fields = &self.serialize_params.ipc_fields;
-                    let (dicts, values) = serialize_batch(&chunks, ipc_fields, options)?;
+                let chunks = data_block.try_into()?;
+                let options = &self.serialize_params.options;
+                let ipc_fields = &self.serialize_params.ipc_fields;
+                let (dicts, values) = serialize_batch(&chunks, ipc_fields, options)?;
 
-                    if !dicts.is_empty() {
-                        return Err(ErrorCode::UnImplement(
-                            "DatabendQuery does not implement dicts.",
-                        ));
-                    }
-
-                    let data = FragmentData::Data(self.fragment_id, values);
-                    output_data
-                        .serialized_blocks
-                        .push(Some(DataPacket::FragmentData(data)));
+                if !dicts.is_empty() {
+                    return Err(ErrorCode::UnImplement(
+                        "DatabendQuery does not implement dicts.",
+                    ));
                 }
+
+                output_data.has_serialized_data = true;
+                let data = FragmentData::create(values);
+                output_data
+                    .serialized_blocks
+                    .push(Some(DataPacket::FragmentData(data)));
             }
 
-            self.output_data = Some(output_data);
+            if output_data.has_serialized_data {
+                self.output_data = Some(output_data);
+            }
         }
 
         Ok(())
@@ -262,9 +151,9 @@ impl<const HAS_OUTPUT: bool> Processor for ExchangePublisherSink<HAS_OUTPUT> {
         if let Some(mut output_data) = self.output_data.take() {
             for index in 0..output_data.serialized_blocks.len() {
                 if let Some(output_packet) = output_data.serialized_blocks[index].take() {
-                    let tx = self.get_endpoint_publisher(index)?;
+                    let flight_exchange = &self.flight_exchanges[index];
 
-                    if tx.send(output_packet).await.is_err() {
+                    if flight_exchange.send(output_packet).await.is_err() {
                         return Err(ErrorCode::TokioError(
                             "Cannot send flight data to endpoint, because sender is closed.",
                         ));

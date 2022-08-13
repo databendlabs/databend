@@ -1,5 +1,4 @@
-statement ok
-set enable_planner_v2 = 1;
+
 
 statement error 2204
 DROP ROLE 'test-b'; 

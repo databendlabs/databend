@@ -14,11 +14,13 @@
 
 use std::env;
 use std::io;
+use std::sync::Arc;
 
 use opentelemetry::global;
 use opentelemetry::sdk::propagation::TraceContextPropagator;
 use sentry_tracing::EventFilter;
 use tracing::Level;
+use tracing::Subscriber;
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_appender::rolling::RollingFileAppender;
 use tracing_appender::rolling::Rotation;
@@ -137,4 +139,27 @@ pub fn init_logging(name: &str, cfg: &Config) -> Vec<WorkerGuard> {
     let _ = tracing::subscriber::set_global_default(subscriber);
 
     guards
+}
+
+pub fn init_query_logger(
+    log_name: &str,
+    dir: &str,
+) -> (Vec<WorkerGuard>, Arc<dyn Subscriber + Send + Sync>) {
+    let mut guards = vec![];
+
+    let rolling_appender = RollingFileAppender::new(Rotation::HOURLY, dir, log_name);
+    let (rolling_writer, rolling_writer_guard) = tracing_appender::non_blocking(rolling_appender);
+    let format = tracing_subscriber::fmt::format()
+        .without_time()
+        .with_target(false)
+        .with_level(false)
+        .compact();
+    guards.push(rolling_writer_guard);
+
+    let subscriber = tracing_subscriber::fmt()
+        .with_writer(rolling_writer)
+        .event_format(format)
+        .finish();
+
+    (guards, Arc::new(subscriber))
 }

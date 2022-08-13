@@ -399,8 +399,10 @@ impl<'a> JoinConditionResolver<'a> {
                 .join_context
                 .columns
                 .iter_mut()
-                .find(|col_binding| col_binding.column_name == join_key_name)
+                .filter(|col_binding| col_binding.column_name == join_key_name)
+                .nth(1)
             {
+                // Always make the second using column in the join_context invisible. in unqualified wildcard.
                 col_binding.visible_in_unqualified_wildcard = false;
             }
 

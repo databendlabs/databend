@@ -1,8 +1,8 @@
-set enable_planner_v2 = 1;
+
 select
     c_custkey,
     c_name,
-    sum(l_extendedprice * (1 - l_discount)) as revenue,
+    TRUNCATE(sum(l_extendedprice * (1 - l_discount)), 4) as revenue,
     c_acctbal,
     n_name,
     c_address,

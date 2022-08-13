@@ -114,7 +114,7 @@ use super::BindContext;
 use super::MetadataRef;
 use crate::sql::optimizer::SExpr;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Plan {
     // `SELECT` statement
     Query {
@@ -206,7 +206,7 @@ pub enum Plan {
     AlterShareTenants(Box<AlterShareTenantsPlan>),
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum RewriteKind {
     ShowSettings,
     ShowMetrics,

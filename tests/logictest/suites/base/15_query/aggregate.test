@@ -1,5 +1,4 @@
-statement ok
-set enable_planner_v2 = 1;
+
 
 -- # non-grouping column error
 statement error must appear in the GROUP BY clause or be used in an aggregate function
