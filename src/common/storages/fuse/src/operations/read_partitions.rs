@@ -44,40 +44,48 @@ impl FuseTable {
                 if let Some(result) = self.check_quick_path(&snapshot, &push_downs) {
                     return Ok(result);
                 }
-                let schema = self.table_info.schema();
-
-                let arrow_schema = schema.to_arrow();
-                let column_leaves = ColumnLeaves::new_from_schema(&arrow_schema);
 
                 let block_metas = BlockPruner::new(snapshot.clone())
-                    .prune(&ctx, schema, &push_downs)
-                    .await?
-                    .into_iter()
-                    .map(|(_, v)| v)
-                    .collect::<Vec<_>>();
+                    .prune(&ctx, self.table_info.schema(), &push_downs)
+                    .await?;
 
-                let partitions_scanned = block_metas.len();
                 let partitions_total = snapshot.summary.block_count as usize;
-
-                let (mut statistics, parts) =
-                    Self::to_partitions(&block_metas, &column_leaves, push_downs);
-
-                // Update planner statistics.
-                statistics.partitions_total = partitions_total;
-                statistics.partitions_scanned = partitions_scanned;
-
-                // Update context statistics.
-                ctx.get_dal_context()
-                    .get_metrics()
-                    .inc_partitions_total(partitions_total as u64);
-                ctx.get_dal_context()
-                    .get_metrics()
-                    .inc_partitions_scanned(partitions_scanned as u64);
-
-                Ok((statistics, parts))
+                self.read_partitions_with_metas(ctx, push_downs, block_metas, partitions_total)
             }
             None => Ok((Statistics::default(), vec![])),
         }
+    }
+
+    pub fn read_partitions_with_metas(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        push_downs: Option<Extras>,
+        metas: Vec<(usize, BlockMeta)>,
+        partitions_total: usize,
+    ) -> Result<(Statistics, Partitions)> {
+        let schema = self.table_info.schema();
+
+        let arrow_schema = schema.to_arrow();
+        let column_leaves = ColumnLeaves::new_from_schema(&arrow_schema);
+
+        let block_metas = metas.into_iter().map(|(_, v)| v).collect::<Vec<_>>();
+        let partitions_scanned = block_metas.len();
+
+        let (mut statistics, parts) = Self::to_partitions(&block_metas, &column_leaves, push_downs);
+
+        // Update planner statistics.
+        statistics.partitions_total = partitions_total;
+        statistics.partitions_scanned = partitions_scanned;
+
+        // Update context statistics.
+        ctx.get_dal_context()
+            .get_metrics()
+            .inc_partitions_total(partitions_total as u64);
+        ctx.get_dal_context()
+            .get_metrics()
+            .inc_partitions_scanned(partitions_scanned as u64);
+
+        Ok((statistics, parts))
     }
 
     pub fn to_partitions(
