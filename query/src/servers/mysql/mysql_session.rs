@@ -14,6 +14,7 @@
 
 use std::net::Shutdown;
 
+use common_base::base::tokio::io::BufWriter;
 use common_base::base::tokio::net::TcpStream;
 use common_base::base::Runtime;
 use common_base::base::Thread;
@@ -45,12 +46,10 @@ impl MySQLConnection {
                 let opts = IntermediaryOptions {
                     process_use_statement_on_query: true,
                 };
-                AsyncMysqlIntermediary::run_with_options(
-                    interactive_worker,
-                    non_blocking_stream,
-                    &opts,
-                )
-                .await
+                let (r, w) = non_blocking_stream.into_split();
+                // 100KB writ buffer
+                let w = BufWriter::with_capacity(100 * 1024, w);
+                AsyncMysqlIntermediary::run_with_options(interactive_worker, r, w, &opts).await
             });
             let _ = futures::executor::block_on(join_handle);
         });

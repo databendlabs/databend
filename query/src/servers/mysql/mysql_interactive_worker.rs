@@ -16,6 +16,7 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 use std::time::Instant;
 
+use common_base::base::tokio::io::AsyncWrite;
 use common_base::base::TrySpawn;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
@@ -75,12 +76,12 @@ fn has_result_set_by_plan_node(plan: &PlanNode) -> bool {
     matches!(plan, PlanNode::Explain(_) | PlanNode::Select(_))
 }
 
-struct InteractiveWorkerBase<W: std::io::Write> {
+struct InteractiveWorkerBase<W: AsyncWrite + Send + Unpin> {
     session: SessionRef,
     generic_hold: PhantomData<W>,
 }
 
-pub struct InteractiveWorker<W: std::io::Write> {
+pub struct InteractiveWorker<W: AsyncWrite + Send + Unpin> {
     base: InteractiveWorkerBase<W>,
     version: String,
     salt: [u8; 20],
@@ -88,7 +89,7 @@ pub struct InteractiveWorker<W: std::io::Write> {
 }
 
 #[async_trait::async_trait]
-impl<W: std::io::Write + Send + Sync> AsyncMysqlShim<W> for InteractiveWorker<W> {
+impl<W: AsyncWrite + Send + Sync + Unpin> AsyncMysqlShim<W> for InteractiveWorker<W> {
     type Error = ErrorCode;
 
     fn version(&self) -> &str {
@@ -150,10 +151,12 @@ impl<W: std::io::Write + Send + Sync> AsyncMysqlShim<W> for InteractiveWorker<W>
         writer: StatementMetaWriter<'a, W>,
     ) -> Result<()> {
         if self.base.session.is_aborting() {
-            writer.error(
-                ErrorKind::ER_ABORTING_CONNECTION,
-                "Aborting this connection. because we are try aborting server.".as_bytes(),
-            )?;
+            writer
+                .error(
+                    ErrorKind::ER_ABORTING_CONNECTION,
+                    "Aborting this connection. because we are try aborting server.".as_bytes(),
+                )
+                .await?;
 
             return Err(ErrorCode::AbortedSession(
                 "Aborting this connection. because we are try aborting server.",
@@ -170,10 +173,12 @@ impl<W: std::io::Write + Send + Sync> AsyncMysqlShim<W> for InteractiveWorker<W>
         writer: QueryResultWriter<'a, W>,
     ) -> Result<()> {
         if self.base.session.is_aborting() {
-            writer.error(
-                ErrorKind::ER_ABORTING_CONNECTION,
-                "Aborting this connection. because we are try aborting server.".as_bytes(),
-            )?;
+            writer
+                .error(
+                    ErrorKind::ER_ABORTING_CONNECTION,
+                    "Aborting this connection. because we are try aborting server.".as_bytes(),
+                )
+                .await?;
 
             return Err(ErrorCode::AbortedSession(
                 "Aborting this connection. because we are try aborting server.",
@@ -195,10 +200,12 @@ impl<W: std::io::Write + Send + Sync> AsyncMysqlShim<W> for InteractiveWorker<W>
         writer: QueryResultWriter<'a, W>,
     ) -> Result<()> {
         if self.base.session.is_aborting() {
-            writer.error(
-                ErrorKind::ER_ABORTING_CONNECTION,
-                "Aborting this connection. because we are try aborting server.".as_bytes(),
-            )?;
+            writer
+                .error(
+                    ErrorKind::ER_ABORTING_CONNECTION,
+                    "Aborting this connection. because we are try aborting server.".as_bytes(),
+                )
+                .await?;
 
             return Err(ErrorCode::AbortedSession(
                 "Aborting this connection. because we are try aborting server.",
@@ -211,7 +218,7 @@ impl<W: std::io::Write + Send + Sync> AsyncMysqlShim<W> for InteractiveWorker<W>
         let blocks = self.base.do_query(query).await;
 
         let format = self.base.session.get_format_settings()?;
-        let mut write_result = writer.write(blocks, &format);
+        let mut write_result = writer.write(blocks, &format).await;
 
         if let Err(cause) = write_result {
             let suffix = format!("(while in query {})", query);
@@ -232,21 +239,25 @@ impl<W: std::io::Write + Send + Sync> AsyncMysqlShim<W> for InteractiveWorker<W>
         writer: InitWriter<'a, W>,
     ) -> Result<()> {
         if self.base.session.is_aborting() {
-            writer.error(
-                ErrorKind::ER_ABORTING_CONNECTION,
-                "Aborting this connection. because we are try aborting server.".as_bytes(),
-            )?;
+            writer
+                .error(
+                    ErrorKind::ER_ABORTING_CONNECTION,
+                    "Aborting this connection. because we are try aborting server.".as_bytes(),
+                )
+                .await?;
 
             return Err(ErrorCode::AbortedSession(
                 "Aborting this connection. because we are try aborting server.",
             ));
         }
 
-        DFInitResultWriter::create(writer).write(self.base.do_init(database_name).await)
+        DFInitResultWriter::create(writer)
+            .write(self.base.do_init(database_name).await)
+            .await
     }
 }
 
-impl<W: std::io::Write> InteractiveWorkerBase<W> {
+impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
     async fn authenticate(&self, salt: &[u8], info: CertifiedInfo) -> Result<bool> {
         let user_name = &info.user_name;
         let client_ip = info.user_client_address.split(':').collect::<Vec<_>>()[0];
@@ -265,10 +276,12 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
     }
 
     async fn do_prepare(&mut self, _: &str, writer: StatementMetaWriter<'_, W>) -> Result<()> {
-        writer.error(
-            ErrorKind::ER_UNKNOWN_ERROR,
-            "Prepare is not support in Databend.".as_bytes(),
-        )?;
+        writer
+            .error(
+                ErrorKind::ER_UNKNOWN_ERROR,
+                "Prepare is not support in Databend.".as_bytes(),
+            )
+            .await?;
         Ok(())
     }
 
@@ -278,10 +291,12 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
         _: ParamParser<'_>,
         writer: QueryResultWriter<'_, W>,
     ) -> Result<()> {
-        writer.error(
-            ErrorKind::ER_UNKNOWN_ERROR,
-            "Execute is not support in Databend.".as_bytes(),
-        )?;
+        writer
+            .error(
+                ErrorKind::ER_UNKNOWN_ERROR,
+                "Execute is not support in Databend.".as_bytes(),
+            )
+            .await?;
         Ok(())
     }
 
@@ -467,7 +482,7 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
     }
 }
 
-impl<W: std::io::Write> InteractiveWorker<W> {
+impl<W: AsyncWrite + Send + Unpin> InteractiveWorker<W> {
     pub fn create(session: SessionRef, client_addr: String) -> InteractiveWorker<W> {
         let mut bs = vec![0u8; 20];
         let mut rng = rand::thread_rng();
