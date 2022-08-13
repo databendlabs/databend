@@ -5220,6 +5220,7 @@ dependencies = [
 [[package]]
 name = "opensrv-mysql"
 version = "0.1.0"
+source = "git+https://github.com/dantengsky/opensrv?branch=dev-mysql-streaming-resultset#65ce853eb976ebd940cce4d6f7a1325ff950056c"
 dependencies = [
  "async-trait 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)",
  "byteorder",

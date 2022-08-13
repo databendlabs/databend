@@ -24,7 +24,10 @@ use common_exception::Result;
 use common_exception::ToErrorCode;
 use common_io::prelude::*;
 use common_planners::PlanNode;
+use common_streams::DataBlockStream;
+use common_streams::SendableDataBlockStream;
 use common_users::CertifiedInfo;
+use futures_util::StreamExt;
 use metrics::histogram;
 use opensrv_mysql::AsyncMysqlShim;
 use opensrv_mysql::ErrorKind;
@@ -33,7 +36,6 @@ use opensrv_mysql::ParamParser;
 use opensrv_mysql::QueryResultWriter;
 use opensrv_mysql::StatementMetaWriter;
 use rand::RngCore;
-use tokio_stream::StreamExt;
 use tracing::error;
 use tracing::info;
 use tracing::Instrument;
@@ -314,14 +316,16 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
         match self.federated_server_command_check(query) {
             Some(data_block) => {
                 info!("Federated query: {}", query);
+                let has_result_set = data_block.num_rows() > 0;
                 if data_block.num_rows() > 0 {
                     info!("Federated response: {:?}", data_block);
                 }
                 let schema = data_block.schema().clone();
                 Ok(QueryResult::create(
-                    vec![data_block],
+                    DataBlockStream::create(schema.clone(), None, vec![data_block]).boxed(),
                     String::from(""),
-                    false,
+                    // false,
+                    has_result_set,
                     schema,
                 ))
             }
@@ -413,10 +417,11 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
     async fn exec_query(
         interpreter: Arc<dyn Interpreter>,
         context: &Arc<QueryContext>,
-    ) -> Result<(Vec<DataBlock>, String)> {
+    ) -> Result<(SendableDataBlockStream, String)> {
         let instant = Instant::now();
 
-        let query_result = context.try_spawn(
+        let query_result = context.try_spawn({
+            let ctx = context.clone();
             async move {
                 // Write start query log.
                 let _ = interpreter
@@ -429,33 +434,36 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
                     instant.elapsed()
                 );
 
-                let collector = data_stream.collect::<Result<Vec<DataBlock>>>();
-                let query_result = collector.await?;
+                // let collector = data_stream.collect::<Result<Vec<DataBlock>>>();
+                // let query_result = collector.await?;
+
+                // TODO decorated stream, with interpreter
                 // Write finish query log.
                 let _ = interpreter
                     .finish()
                     .await
                     .map_err(|e| error!("interpreter.finish.error: {:?}", e));
 
-                Ok::<Vec<DataBlock>, ErrorCode>(query_result)
+                let abortable_stream = ctx.try_create_abortable(data_stream)?.boxed();
+                Ok::<_, ErrorCode>(abortable_stream)
             }
-            .in_current_span(),
-        )?;
+            .in_current_span()
+        })?;
 
         let query_result = query_result.await.map_err_to_code(
             ErrorCode::TokioError,
             || "Cannot join handle from context's runtime",
         )?;
         query_result.map(|data| {
-            if data.is_empty() {
-                (data, "".to_string())
-            } else {
-                (data, Self::extra_info(context, instant))
-            }
+            // if data.is_empty() {
+            //    (data, "".to_string())
+            //} else {
+            (data, Self::extra_info(context, instant))
+            //}
         })
     }
 
-    fn extra_info(context: &Arc<QueryContext>, instant: Instant) -> String {
+    pub fn extra_info(context: &Arc<QueryContext>, instant: Instant) -> String {
         let progress = context.get_scan_progress_value();
         let seconds = instant.elapsed().as_nanos() as f64 / 1e9f64;
         format!(
@@ -509,5 +517,17 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorker<W> {
             ),
             client_addr,
         }
+    }
+}
+
+#[async_trait::async_trait]
+pub trait FinishCallback {
+    async fn finish(&self) -> Result<()>;
+}
+
+#[async_trait::async_trait]
+impl FinishCallback for Arc<dyn Interpreter> {
+    async fn finish(&self) -> Result<()> {
+        Interpreter::finish(self.as_ref()).await
     }
 }

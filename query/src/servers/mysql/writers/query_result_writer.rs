@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use common_base::base::tokio::io::AsyncWrite;
-use common_datablocks::DataBlock;
 use common_datavalues::prelude::TypeID;
 use common_datavalues::remove_nullable;
 use common_datavalues::DataField;
@@ -28,11 +27,14 @@ use common_exception::Result;
 use common_exception::ABORT_QUERY;
 use common_exception::ABORT_SESSION;
 use common_io::prelude::FormatSettings;
+use common_streams::DataBlockStream;
+use common_streams::SendableDataBlockStream;
+use futures_util::StreamExt;
 use opensrv_mysql::*;
 use tracing::error;
 
 pub struct QueryResult {
-    blocks: Vec<DataBlock>,
+    blocks: SendableDataBlockStream,
     extra_info: String,
     has_result_set: bool,
     schema: DataSchemaRef,
@@ -40,7 +42,7 @@ pub struct QueryResult {
 
 impl QueryResult {
     pub fn create(
-        blocks: Vec<DataBlock>,
+        blocks: SendableDataBlockStream,
         extra_info: String,
         has_result_set: bool,
         schema: DataSchemaRef,
@@ -54,11 +56,12 @@ impl QueryResult {
     }
 
     pub fn default() -> QueryResult {
+        let schema = DataSchemaRefExt::create(vec![]);
         QueryResult {
-            blocks: vec![DataBlock::empty()],
+            blocks: DataBlockStream::create(schema.clone(), None, vec![]).boxed(),
             extra_info: String::from(""),
             has_result_set: false,
-            schema: DataSchemaRefExt::create(vec![]),
+            schema,
         }
     }
 }
@@ -87,7 +90,7 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
     }
 
     async fn ok(
-        query_result: QueryResult,
+        mut query_result: QueryResult,
         dataset_writer: QueryResultWriter<'a, W>,
         format: &FormatSettings,
     ) -> Result<()> {
@@ -97,9 +100,14 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
             ..Default::default()
         };
 
-        if (!query_result.has_result_set && query_result.blocks.is_empty())
-            || (query_result.schema.num_fields() == 0)
-        {
+        // TODO investigate this
+        // if (!query_result.has_result_set && query_result.blocks.is_empty())
+        //    || (query_result.schema.num_fields() == 0)
+        //{
+        //    dataset_writer.completed(default_response).await?;
+        //    return Ok(());
+        //}
+        if (!query_result.has_result_set) || (query_result.schema.num_fields() == 0) {
             dataset_writer.completed(default_response).await?;
             return Ok(());
         }
@@ -153,7 +161,20 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
             Ok(columns) => {
                 let mut row_writer = dataset_writer.start(&columns).await?;
 
-                for block in &query_result.blocks {
+                let blocks = &mut query_result.blocks;
+                while let Some(block) = blocks.next().await {
+                    let block = match block {
+                        Err(e) => {
+                            row_writer
+                                .finish_error(
+                                    ErrorKind::ER_UNKNOWN_ERROR,
+                                    &e.to_string().as_bytes(),
+                                )
+                                .await?;
+                            return Ok(());
+                        }
+                        Ok(block) => block,
+                    };
                     match block.get_serializers() {
                         Ok(serializers) => {
                             let rows_size = block.column(0).len();
@@ -238,6 +259,7 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
                         }
                     }
                 }
+
                 row_writer.finish_with_info(&default_response.info).await?;
 
                 Ok(())
