@@ -70,8 +70,10 @@ select parse_json('{ "x" : "abc", "y" : false, "z": 10} ');
 ----
 {"x":"abc","y":false,"z":10}
 
+
 statement error 1010
 select parse_json('[1,'); 
+
 
 statement error 1010
 select parse_json('"ab'); 
@@ -90,17 +92,22 @@ select parse_json(parse_json('"\\\"abc\\\""'));
 ----
 "abc"
 
+
 statement error 1010
 select parse_json(parse_json('"abc"')); 
+
 
 statement error 1010
 select parse_json(to_date('2022-01-01')); 
 
+
 statement error 1028
 select parse_json(); 
 
+
 statement error 1028
 select parse_json('a', 'aa'); 
+
 
 statement error 1028
 select get(parse_json('a', 'aa')); 

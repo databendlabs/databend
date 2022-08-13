@@ -9,5 +9,4 @@ sleep 3
 nohup bin/databend-query --config-file=configs/databend-query.toml 2>&1 >query.log &
 sleep 3
 echo "Usage: mysql -h127.0.0.1 -P3307 -uroot"
-echo "or: clickhouse-client --port 9001"
 echo "or: curl -u root: --request POST '127.0.0.1:8001/v1/query/' --data-raw '{\"sql\": \"<your-query>\"}' -H 'Content-Type: application/json'"

@@ -50,13 +50,6 @@ gzip -d hits_1m.csv.gz
 curl -H "insert_sql:insert into hits format TSV"  -F  "upload=@./hits_1m.tsv"  -XPUT http://user1:abc123@127.0.0.1:8081/v1/streaming_load
 ```
 
-Or you can use the clickhouse-client command to load data into Databend:
-
-```shell title='Load CSV files into Databend'
-clickhouse-client --user user1 --password abc123 --host 127.0.0.1 --time --query "INSERT INTO hits FORMAT TSV" < hits_1m.tsv
-```
-
-
 ## Step 3. Queries
 
 Execute Queries:

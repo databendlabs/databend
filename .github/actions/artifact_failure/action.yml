@@ -18,6 +18,6 @@ runs:
           query/_logs*/
           store/_logs*/
           .databend/
-          query.log
+          query*.log
           metasrv.log
           nohup.out

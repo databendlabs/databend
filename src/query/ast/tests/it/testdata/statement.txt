@@ -1,0 +1,6182 @@
+---------- Input ----------
+show databases
+---------- Output ---------
+SHOW DATABASES
+---------- AST ------------
+ShowDatabases(
+    ShowDatabasesStmt {
+        limit: None,
+    },
+)
+
+
+---------- Input ----------
+show databases format TabSeparatedWithNamesAndTypes;
+---------- Output ---------
+SHOW DATABASES
+---------- AST ------------
+ShowDatabases(
+    ShowDatabasesStmt {
+        limit: None,
+    },
+)
+
+
+---------- FORMAT ------------
+Some(
+    "TabSeparatedWithNamesAndTypes",
+)
+---------- Input ----------
+show tables
+---------- Output ---------
+SHOW TABLES
+---------- AST ------------
+ShowTables(
+    ShowTablesStmt {
+        database: None,
+        full: false,
+        limit: None,
+        with_history: false,
+    },
+)
+
+
+---------- Input ----------
+show tables format TabSeparatedWithNamesAndTypes;
+---------- Output ---------
+SHOW TABLES
+---------- AST ------------
+ShowTables(
+    ShowTablesStmt {
+        database: None,
+        full: false,
+        limit: None,
+        with_history: false,
+    },
+)
+
+
+---------- FORMAT ------------
+Some(
+    "TabSeparatedWithNamesAndTypes",
+)
+---------- Input ----------
+show processlist;
+---------- Output ---------
+SHOW PROCESSLIST
+---------- AST ------------
+ShowProcessList
+
+
+---------- Input ----------
+show create table a.b;
+---------- Output ---------
+SHOW CREATE TABLE a.b
+---------- AST ------------
+ShowCreateTable(
+    ShowCreateTableStmt {
+        catalog: None,
+        database: Some(
+            Identifier {
+                name: "a",
+                quote: None,
+                span: Ident(18..19),
+            },
+        ),
+        table: Identifier {
+            name: "b",
+            quote: None,
+            span: Ident(20..21),
+        },
+    },
+)
+
+
+---------- Input ----------
+show create table a.b format TabSeparatedWithNamesAndTypes;
+---------- Output ---------
+SHOW CREATE TABLE a.b
+---------- AST ------------
+ShowCreateTable(
+    ShowCreateTableStmt {
+        catalog: None,
+        database: Some(
+            Identifier {
+                name: "a",
+                quote: None,
+                span: Ident(18..19),
+            },
+        ),
+        table: Identifier {
+            name: "b",
+            quote: None,
+            span: Ident(20..21),
+        },
+    },
+)
+
+
+---------- FORMAT ------------
+Some(
+    "TabSeparatedWithNamesAndTypes",
+)
+---------- Input ----------
+explain pipeline select a from b;
+---------- Output ---------
+EXPLAIN PIPELINE SELECT a FROM b
+---------- AST ------------
+Explain {
+    kind: Pipeline,
+    query: Query(
+        Query {
+            span: [
+                SELECT(17..23),
+                Ident(24..25),
+                FROM(26..30),
+                Ident(31..32),
+            ],
+            with: None,
+            body: Select(
+                SelectStmt {
+                    span: [
+                        SELECT(17..23),
+                        Ident(24..25),
+                        FROM(26..30),
+                        Ident(31..32),
+                    ],
+                    distinct: false,
+                    select_list: [
+                        AliasedExpr {
+                            expr: ColumnRef {
+                                span: [
+                                    Ident(24..25),
+                                ],
+                                database: None,
+                                table: None,
+                                column: Identifier {
+                                    name: "a",
+                                    quote: None,
+                                    span: Ident(24..25),
+                                },
+                            },
+                            alias: None,
+                        },
+                    ],
+                    from: [
+                        Table {
+                            span: [
+                                Ident(31..32),
+                            ],
+                            catalog: None,
+                            database: None,
+                            table: Identifier {
+                                name: "b",
+                                quote: None,
+                                span: Ident(31..32),
+                            },
+                            alias: None,
+                            travel_point: None,
+                        },
+                    ],
+                    selection: None,
+                    group_by: [],
+                    having: None,
+                },
+            ),
+            order_by: [],
+            limit: [],
+            offset: None,
+            format: None,
+        },
+    ),
+}
+
+
+---------- Input ----------
+describe a;
+---------- Output ---------
+DESCRIBE a
+---------- AST ------------
+DescribeTable(
+    DescribeTableStmt {
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "a",
+            quote: None,
+            span: Ident(9..10),
+        },
+    },
+)
+
+
+---------- Input ----------
+describe a format TabSeparatedWithNamesAndTypes;
+---------- Output ---------
+DESCRIBE a
+---------- AST ------------
+DescribeTable(
+    DescribeTableStmt {
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "a",
+            quote: None,
+            span: Ident(9..10),
+        },
+    },
+)
+
+
+---------- FORMAT ------------
+Some(
+    "TabSeparatedWithNamesAndTypes",
+)
+---------- Input ----------
+create table if not exists a.b (c integer not null default 1, b varchar);
+---------- Output ---------
+CREATE TABLE IF NOT EXISTS a.b (c Int32 NOT NULL DEFAULT 1, b STRING NOT NULL)
+---------- AST ------------
+CreateTable(
+    CreateTableStmt {
+        if_not_exists: true,
+        catalog: None,
+        database: Some(
+            Identifier {
+                name: "a",
+                quote: None,
+                span: Ident(27..28),
+            },
+        ),
+        table: Identifier {
+            name: "b",
+            quote: None,
+            span: Ident(29..30),
+        },
+        source: Some(
+            Columns(
+                [
+                    ColumnDefinition {
+                        name: Identifier {
+                            name: "c",
+                            quote: None,
+                            span: Ident(32..33),
+                        },
+                        data_type: Int32,
+                        default_expr: Some(
+                            Literal {
+                                span: [
+                                    LiteralInteger(59..60),
+                                ],
+                                lit: Integer(
+                                    1,
+                                ),
+                            },
+                        ),
+                        comment: None,
+                    },
+                    ColumnDefinition {
+                        name: Identifier {
+                            name: "b",
+                            quote: None,
+                            span: Ident(62..63),
+                        },
+                        data_type: String,
+                        default_expr: None,
+                        comment: None,
+                    },
+                ],
+            ),
+        ),
+        engine: None,
+        cluster_by: [],
+        table_options: {},
+        as_query: None,
+        transient: false,
+    },
+)
+
+
+---------- Input ----------
+create table if not exists a.b (c integer default 1 not null, b varchar) as select * from t;
+---------- Output ---------
+CREATE TABLE IF NOT EXISTS a.b (c Int32 NOT NULL DEFAULT 1, b STRING NOT NULL) AS SELECT * FROM t
+---------- AST ------------
+CreateTable(
+    CreateTableStmt {
+        if_not_exists: true,
+        catalog: None,
+        database: Some(
+            Identifier {
+                name: "a",
+                quote: None,
+                span: Ident(27..28),
+            },
+        ),
+        table: Identifier {
+            name: "b",
+            quote: None,
+            span: Ident(29..30),
+        },
+        source: Some(
+            Columns(
+                [
+                    ColumnDefinition {
+                        name: Identifier {
+                            name: "c",
+                            quote: None,
+                            span: Ident(32..33),
+                        },
+                        data_type: Int32,
+                        default_expr: Some(
+                            Literal {
+                                span: [
+                                    LiteralInteger(50..51),
+                                ],
+                                lit: Integer(
+                                    1,
+                                ),
+                            },
+                        ),
+                        comment: None,
+                    },
+                    ColumnDefinition {
+                        name: Identifier {
+                            name: "b",
+                            quote: None,
+                            span: Ident(62..63),
+                        },
+                        data_type: String,
+                        default_expr: None,
+                        comment: None,
+                    },
+                ],
+            ),
+        ),
+        engine: None,
+        cluster_by: [],
+        table_options: {},
+        as_query: Some(
+            Query {
+                span: [
+                    SELECT(76..82),
+                    Multiply(83..84),
+                    FROM(85..89),
+                    Ident(90..91),
+                ],
+                with: None,
+                body: Select(
+                    SelectStmt {
+                        span: [
+                            SELECT(76..82),
+                            Multiply(83..84),
+                            FROM(85..89),
+                            Ident(90..91),
+                        ],
+                        distinct: false,
+                        select_list: [
+                            QualifiedName(
+                                [
+                                    Star,
+                                ],
+                            ),
+                        ],
+                        from: [
+                            Table {
+                                span: [
+                                    Ident(90..91),
+                                ],
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    name: "t",
+                                    quote: None,
+                                    span: Ident(90..91),
+                                },
+                                alias: None,
+                                travel_point: None,
+                            },
+                        ],
+                        selection: None,
+                        group_by: [],
+                        having: None,
+                    },
+                ),
+                order_by: [],
+                limit: [],
+                offset: None,
+                format: None,
+            },
+        ),
+        transient: false,
+    },
+)
+
+
+---------- Input ----------
+create table if not exists a.b (c tuple(m integer, n string), d tuple(integer, string));
+---------- Output ---------
+CREATE TABLE IF NOT EXISTS a.b (c TUPLE(m Int32, n STRING) NOT NULL, d TUPLE(Int32, STRING) NOT NULL)
+---------- AST ------------
+CreateTable(
+    CreateTableStmt {
+        if_not_exists: true,
+        catalog: None,
+        database: Some(
+            Identifier {
+                name: "a",
+                quote: None,
+                span: Ident(27..28),
+            },
+        ),
+        table: Identifier {
+            name: "b",
+            quote: None,
+            span: Ident(29..30),
+        },
+        source: Some(
+            Columns(
+                [
+                    ColumnDefinition {
+                        name: Identifier {
+                            name: "c",
+                            quote: None,
+                            span: Ident(32..33),
+                        },
+                        data_type: Tuple {
+                            fields_name: Some(
+                                [
+                                    "m",
+                                    "n",
+                                ],
+                            ),
+                            fields_type: [
+                                Int32,
+                                String,
+                            ],
+                        },
+                        default_expr: None,
+                        comment: None,
+                    },
+                    ColumnDefinition {
+                        name: Identifier {
+                            name: "d",
+                            quote: None,
+                            span: Ident(62..63),
+                        },
+                        data_type: Tuple {
+                            fields_name: None,
+                            fields_type: [
+                                Int32,
+                                String,
+                            ],
+                        },
+                        default_expr: None,
+                        comment: None,
+                    },
+                ],
+            ),
+        ),
+        engine: None,
+        cluster_by: [],
+        table_options: {},
+        as_query: None,
+        transient: false,
+    },
+)
+
+
+---------- Input ----------
+create table a.b like c.d;
+---------- Output ---------
+CREATE TABLE a.b LIKE c.d
+---------- AST ------------
+CreateTable(
+    CreateTableStmt {
+        if_not_exists: false,
+        catalog: None,
+        database: Some(
+            Identifier {
+                name: "a",
+                quote: None,
+                span: Ident(13..14),
+            },
+        ),
+        table: Identifier {
+            name: "b",
+            quote: None,
+            span: Ident(15..16),
+        },
+        source: Some(
+            Like {
+                catalog: None,
+                database: Some(
+                    Identifier {
+                        name: "c",
+                        quote: None,
+                        span: Ident(22..23),
+                    },
+                ),
+                table: Identifier {
+                    name: "d",
+                    quote: None,
+                    span: Ident(24..25),
+                },
+            },
+        ),
+        engine: None,
+        cluster_by: [],
+        table_options: {},
+        as_query: None,
+        transient: false,
+    },
+)
+
+
+---------- Input ----------
+create table t like t2 engine = memory;
+---------- Output ---------
+CREATE TABLE t LIKE t2 ENGINE=MEMORY
+---------- AST ------------
+CreateTable(
+    CreateTableStmt {
+        if_not_exists: false,
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "t",
+            quote: None,
+            span: Ident(13..14),
+        },
+        source: Some(
+            Like {
+                catalog: None,
+                database: None,
+                table: Identifier {
+                    name: "t2",
+                    quote: None,
+                    span: Ident(20..22),
+                },
+            },
+        ),
+        engine: Some(
+            Memory,
+        ),
+        cluster_by: [],
+        table_options: {},
+        as_query: None,
+        transient: false,
+    },
+)
+
+
+---------- Input ----------
+truncate table a;
+---------- Output ---------
+TRUNCATE TABLE a
+---------- AST ------------
+TruncateTable(
+    TruncateTableStmt {
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "a",
+            quote: None,
+            span: Ident(15..16),
+        },
+        purge: false,
+    },
+)
+
+
+---------- Input ----------
+truncate table "a".b;
+---------- Output ---------
+TRUNCATE TABLE "a".b
+---------- AST ------------
+TruncateTable(
+    TruncateTableStmt {
+        catalog: None,
+        database: Some(
+            Identifier {
+                name: "a",
+                quote: Some(
+                    '"',
+                ),
+                span: QuotedString(15..18),
+            },
+        ),
+        table: Identifier {
+            name: "b",
+            quote: None,
+            span: Ident(19..20),
+        },
+        purge: false,
+    },
+)
+
+
+---------- Input ----------
+drop table a;
+---------- Output ---------
+DROP TABLE a
+---------- AST ------------
+DropTable(
+    DropTableStmt {
+        if_exists: false,
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "a",
+            quote: None,
+            span: Ident(11..12),
+        },
+        all: false,
+    },
+)
+
+
+---------- Input ----------
+drop table if exists a."b";
+---------- Output ---------
+DROP TABLE IF EXISTS a."b"
+---------- AST ------------
+DropTable(
+    DropTableStmt {
+        if_exists: true,
+        catalog: None,
+        database: Some(
+            Identifier {
+                name: "a",
+                quote: None,
+                span: Ident(21..22),
+            },
+        ),
+        table: Identifier {
+            name: "b",
+            quote: Some(
+                '"',
+            ),
+            span: QuotedString(23..26),
+        },
+        all: false,
+    },
+)
+
+
+---------- Input ----------
+use "a";
+---------- Output ---------
+USE "a"
+---------- AST ------------
+UseDatabase {
+    database: Identifier {
+        name: "a",
+        quote: Some(
+            '"',
+        ),
+        span: QuotedString(4..7),
+    },
+}
+
+
+---------- Input ----------
+create database if not exists a;
+---------- Output ---------
+CREATE DATABASE IF NOT EXISTS a
+---------- AST ------------
+CreateDatabase(
+    CreateDatabaseStmt {
+        if_not_exists: true,
+        catalog: None,
+        database: Identifier {
+            name: "a",
+            quote: None,
+            span: Ident(30..31),
+        },
+        engine: None,
+        options: [],
+    },
+)
+
+
+---------- Input ----------
+create database catalog.t engine = Default;
+---------- Output ---------
+CREATE DATABASE catalog.t ENGINE = DEFAULT
+---------- AST ------------
+CreateDatabase(
+    CreateDatabaseStmt {
+        if_not_exists: false,
+        catalog: Some(
+            Identifier {
+                name: "catalog",
+                quote: None,
+                span: Ident(16..23),
+            },
+        ),
+        database: Identifier {
+            name: "t",
+            quote: None,
+            span: Ident(24..25),
+        },
+        engine: Some(
+            Default,
+        ),
+        options: [],
+    },
+)
+
+
+---------- Input ----------
+create database t engine = Github(token='123456');
+---------- Output ---------
+CREATE DATABASE t ENGINE = GITHUB(token='123456')
+---------- AST ------------
+CreateDatabase(
+    CreateDatabaseStmt {
+        if_not_exists: false,
+        catalog: None,
+        database: Identifier {
+            name: "t",
+            quote: None,
+            span: Ident(16..17),
+        },
+        engine: Some(
+            Github(
+                "123456",
+            ),
+        ),
+        options: [],
+    },
+)
+
+
+---------- Input ----------
+create database t engine = Default;
+---------- Output ---------
+CREATE DATABASE t ENGINE = DEFAULT
+---------- AST ------------
+CreateDatabase(
+    CreateDatabaseStmt {
+        if_not_exists: false,
+        catalog: None,
+        database: Identifier {
+            name: "t",
+            quote: None,
+            span: Ident(16..17),
+        },
+        engine: Some(
+            Default,
+        ),
+        options: [],
+    },
+)
+
+
+---------- Input ----------
+drop database catalog.t;
+---------- Output ---------
+DROP DATABASE catalog.t
+---------- AST ------------
+DropDatabase(
+    DropDatabaseStmt {
+        if_exists: false,
+        catalog: Some(
+            Identifier {
+                name: "catalog",
+                quote: None,
+                span: Ident(14..21),
+            },
+        ),
+        database: Identifier {
+            name: "t",
+            quote: None,
+            span: Ident(22..23),
+        },
+    },
+)
+
+
+---------- Input ----------
+drop database if exists t;
+---------- Output ---------
+DROP DATABASE IF EXISTS t
+---------- AST ------------
+DropDatabase(
+    DropDatabaseStmt {
+        if_exists: true,
+        catalog: None,
+        database: Identifier {
+            name: "t",
+            quote: None,
+            span: Ident(24..25),
+        },
+    },
+)
+
+
+---------- Input ----------
+create table c(a DateTime null, b DateTime(3));
+---------- Output ---------
+CREATE TABLE c (a Timestamp NULL, b Timestamp(3) NOT NULL)
+---------- AST ------------
+CreateTable(
+    CreateTableStmt {
+        if_not_exists: false,
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "c",
+            quote: None,
+            span: Ident(13..14),
+        },
+        source: Some(
+            Columns(
+                [
+                    ColumnDefinition {
+                        name: Identifier {
+                            name: "a",
+                            quote: None,
+                            span: Ident(15..16),
+                        },
+                        data_type: Nullable(
+                            Timestamp {
+                                precision: None,
+                            },
+                        ),
+                        default_expr: None,
+                        comment: None,
+                    },
+                    ColumnDefinition {
+                        name: Identifier {
+                            name: "b",
+                            quote: None,
+                            span: Ident(32..33),
+                        },
+                        data_type: Timestamp {
+                            precision: Some(
+                                3,
+                            ),
+                        },
+                        default_expr: None,
+                        comment: None,
+                    },
+                ],
+            ),
+        ),
+        engine: None,
+        cluster_by: [],
+        table_options: {},
+        as_query: None,
+        transient: false,
+    },
+)
+
+
+---------- Input ----------
+create view v as select number % 3 as a from numbers(1000);
+---------- Output ---------
+CREATE VIEW v AS SELECT number % 3 AS a FROM numbers(1000)
+---------- AST ------------
+CreateView(
+    CreateViewStmt {
+        if_not_exists: false,
+        catalog: None,
+        database: None,
+        view: Identifier {
+            name: "v",
+            quote: None,
+            span: Ident(12..13),
+        },
+        query: Query {
+            span: [
+                SELECT(17..23),
+                Ident(24..30),
+                Modulo(31..32),
+                LiteralInteger(33..34),
+                AS(35..37),
+                Ident(38..39),
+                FROM(40..44),
+                Ident(45..52),
+                LParen(52..53),
+                LiteralInteger(53..57),
+                RParen(57..58),
+            ],
+            with: None,
+            body: Select(
+                SelectStmt {
+                    span: [
+                        SELECT(17..23),
+                        Ident(24..30),
+                        Modulo(31..32),
+                        LiteralInteger(33..34),
+                        AS(35..37),
+                        Ident(38..39),
+                        FROM(40..44),
+                        Ident(45..52),
+                        LParen(52..53),
+                        LiteralInteger(53..57),
+                        RParen(57..58),
+                    ],
+                    distinct: false,
+                    select_list: [
+                        AliasedExpr {
+                            expr: BinaryOp {
+                                span: [
+                                    Modulo(31..32),
+                                ],
+                                op: Modulo,
+                                left: ColumnRef {
+                                    span: [
+                                        Ident(24..30),
+                                    ],
+                                    database: None,
+                                    table: None,
+                                    column: Identifier {
+                                        name: "number",
+                                        quote: None,
+                                        span: Ident(24..30),
+                                    },
+                                },
+                                right: Literal {
+                                    span: [
+                                        LiteralInteger(33..34),
+                                    ],
+                                    lit: Integer(
+                                        3,
+                                    ),
+                                },
+                            },
+                            alias: Some(
+                                Identifier {
+                                    name: "a",
+                                    quote: None,
+                                    span: Ident(38..39),
+                                },
+                            ),
+                        },
+                    ],
+                    from: [
+                        TableFunction {
+                            span: [
+                                Ident(45..52),
+                                LParen(52..53),
+                                LiteralInteger(53..57),
+                                RParen(57..58),
+                            ],
+                            name: Identifier {
+                                name: "numbers",
+                                quote: None,
+                                span: Ident(45..52),
+                            },
+                            params: [
+                                Literal {
+                                    span: [
+                                        LiteralInteger(53..57),
+                                    ],
+                                    lit: Integer(
+                                        1000,
+                                    ),
+                                },
+                            ],
+                            alias: None,
+                        },
+                    ],
+                    selection: None,
+                    group_by: [],
+                    having: None,
+                },
+            ),
+            order_by: [],
+            limit: [],
+            offset: None,
+            format: None,
+        },
+    },
+)
+
+
+---------- Input ----------
+alter view v as select number % 3 as a from numbers(1000);
+---------- Output ---------
+ALTER VIEW v AS SELECT number % 3 AS a FROM numbers(1000)
+---------- AST ------------
+AlterView(
+    AlterViewStmt {
+        catalog: None,
+        database: None,
+        view: Identifier {
+            name: "v",
+            quote: None,
+            span: Ident(11..12),
+        },
+        query: Query {
+            span: [
+                SELECT(16..22),
+                Ident(23..29),
+                Modulo(30..31),
+                LiteralInteger(32..33),
+                AS(34..36),
+                Ident(37..38),
+                FROM(39..43),
+                Ident(44..51),
+                LParen(51..52),
+                LiteralInteger(52..56),
+                RParen(56..57),
+            ],
+            with: None,
+            body: Select(
+                SelectStmt {
+                    span: [
+                        SELECT(16..22),
+                        Ident(23..29),
+                        Modulo(30..31),
+                        LiteralInteger(32..33),
+                        AS(34..36),
+                        Ident(37..38),
+                        FROM(39..43),
+                        Ident(44..51),
+                        LParen(51..52),
+                        LiteralInteger(52..56),
+                        RParen(56..57),
+                    ],
+                    distinct: false,
+                    select_list: [
+                        AliasedExpr {
+                            expr: BinaryOp {
+                                span: [
+                                    Modulo(30..31),
+                                ],
+                                op: Modulo,
+                                left: ColumnRef {
+                                    span: [
+                                        Ident(23..29),
+                                    ],
+                                    database: None,
+                                    table: None,
+                                    column: Identifier {
+                                        name: "number",
+                                        quote: None,
+                                        span: Ident(23..29),
+                                    },
+                                },
+                                right: Literal {
+                                    span: [
+                                        LiteralInteger(32..33),
+                                    ],
+                                    lit: Integer(
+                                        3,
+                                    ),
+                                },
+                            },
+                            alias: Some(
+                                Identifier {
+                                    name: "a",
+                                    quote: None,
+                                    span: Ident(37..38),
+                                },
+                            ),
+                        },
+                    ],
+                    from: [
+                        TableFunction {
+                            span: [
+                                Ident(44..51),
+                                LParen(51..52),
+                                LiteralInteger(52..56),
+                                RParen(56..57),
+                            ],
+                            name: Identifier {
+                                name: "numbers",
+                                quote: None,
+                                span: Ident(44..51),
+                            },
+                            params: [
+                                Literal {
+                                    span: [
+                                        LiteralInteger(52..56),
+                                    ],
+                                    lit: Integer(
+                                        1000,
+                                    ),
+                                },
+                            ],
+                            alias: None,
+                        },
+                    ],
+                    selection: None,
+                    group_by: [],
+                    having: None,
+                },
+            ),
+            order_by: [],
+            limit: [],
+            offset: None,
+            format: None,
+        },
+    },
+)
+
+
+---------- Input ----------
+drop view v;
+---------- Output ---------
+DROP VIEW v
+---------- AST ------------
+DropView(
+    DropViewStmt {
+        if_exists: false,
+        catalog: None,
+        database: None,
+        view: Identifier {
+            name: "v",
+            quote: None,
+            span: Ident(10..11),
+        },
+    },
+)
+
+
+---------- Input ----------
+rename table d.t to e.s;
+---------- Output ---------
+RENAME TABLE d.t TO e.s
+---------- AST ------------
+RenameTable(
+    RenameTableStmt {
+        if_exists: false,
+        catalog: None,
+        database: Some(
+            Identifier {
+                name: "d",
+                quote: None,
+                span: Ident(13..14),
+            },
+        ),
+        table: Identifier {
+            name: "t",
+            quote: None,
+            span: Ident(15..16),
+        },
+        new_catalog: None,
+        new_database: Some(
+            Identifier {
+                name: "e",
+                quote: None,
+                span: Ident(20..21),
+            },
+        ),
+        new_table: Identifier {
+            name: "s",
+            quote: None,
+            span: Ident(22..23),
+        },
+    },
+)
+
+
+---------- Input ----------
+truncate table test;
+---------- Output ---------
+TRUNCATE TABLE test
+---------- AST ------------
+TruncateTable(
+    TruncateTableStmt {
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "test",
+            quote: None,
+            span: Ident(15..19),
+        },
+        purge: false,
+    },
+)
+
+
+---------- Input ----------
+truncate table test_db.test;
+---------- Output ---------
+TRUNCATE TABLE test_db.test
+---------- AST ------------
+TruncateTable(
+    TruncateTableStmt {
+        catalog: None,
+        database: Some(
+            Identifier {
+                name: "test_db",
+                quote: None,
+                span: Ident(15..22),
+            },
+        ),
+        table: Identifier {
+            name: "test",
+            quote: None,
+            span: Ident(23..27),
+        },
+        purge: false,
+    },
+)
+
+
+---------- Input ----------
+DROP table table1;
+---------- Output ---------
+DROP TABLE table1
+---------- AST ------------
+DropTable(
+    DropTableStmt {
+        if_exists: false,
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "table1",
+            quote: None,
+            span: Ident(11..17),
+        },
+        all: false,
+    },
+)
+
+
+---------- Input ----------
+DROP table IF EXISTS table1;
+---------- Output ---------
+DROP TABLE IF EXISTS table1
+---------- AST ------------
+DropTable(
+    DropTableStmt {
+        if_exists: true,
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "table1",
+            quote: None,
+            span: Ident(21..27),
+        },
+        all: false,
+    },
+)
+
+
+---------- Input ----------
+CREATE TABLE t(c1 int null, c2 bigint null, c3 varchar null);
+---------- Output ---------
+CREATE TABLE t (c1 Int32 NULL, c2 Int64 NULL, c3 STRING NULL)
+---------- AST ------------
+CreateTable(
+    CreateTableStmt {
+        if_not_exists: false,
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "t",
+            quote: None,
+            span: Ident(13..14),
+        },
+        source: Some(
+            Columns(
+                [
+                    ColumnDefinition {
+                        name: Identifier {
+                            name: "c1",
+                            quote: None,
+                            span: Ident(15..17),
+                        },
+                        data_type: Nullable(
+                            Int32,
+                        ),
+                        default_expr: None,
+                        comment: None,
+                    },
+                    ColumnDefinition {
+                        name: Identifier {
+                            name: "c2",
+                            quote: None,
+                            span: Ident(28..30),
+                        },
+                        data_type: Nullable(
+                            Int64,
+                        ),
+                        default_expr: None,
+                        comment: None,
+                    },
+                    ColumnDefinition {
+                        name: Identifier {
+                            name: "c3",
+                            quote: None,
+                            span: Ident(44..46),
+                        },
+                        data_type: Nullable(
+                            String,
+                        ),
+                        default_expr: None,
+                        comment: None,
+                    },
+                ],
+            ),
+        ),
+        engine: None,
+        cluster_by: [],
+        table_options: {},
+        as_query: None,
+        transient: false,
+    },
+)
+
+
+---------- Input ----------
+CREATE TABLE t(c1 int not null, c2 bigint not null, c3 varchar not null);
+---------- Output ---------
+CREATE TABLE t (c1 Int32 NOT NULL, c2 Int64 NOT NULL, c3 STRING NOT NULL)
+---------- AST ------------
+CreateTable(
+    CreateTableStmt {
+        if_not_exists: false,
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "t",
+            quote: None,
+            span: Ident(13..14),
+        },
+        source: Some(
+            Columns(
+                [
+                    ColumnDefinition {
+                        name: Identifier {
+                            name: "c1",
+                            quote: None,
+                            span: Ident(15..17),
+                        },
+                        data_type: Int32,
+                        default_expr: None,
+                        comment: None,
+                    },
+                    ColumnDefinition {
+                        name: Identifier {
+                            name: "c2",
+                            quote: None,
+                            span: Ident(32..34),
+                        },
+                        data_type: Int64,
+                        default_expr: None,
+                        comment: None,
+                    },
+                    ColumnDefinition {
+                        name: Identifier {
+                            name: "c3",
+                            quote: None,
+                            span: Ident(52..54),
+                        },
+                        data_type: String,
+                        default_expr: None,
+                        comment: None,
+                    },
+                ],
+            ),
+        ),
+        engine: None,
+        cluster_by: [],
+        table_options: {},
+        as_query: None,
+        transient: false,
+    },
+)
+
+
+---------- Input ----------
+CREATE TABLE t(c1 int default 1);
+---------- Output ---------
+CREATE TABLE t (c1 Int32 NOT NULL DEFAULT 1)
+---------- AST ------------
+CreateTable(
+    CreateTableStmt {
+        if_not_exists: false,
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "t",
+            quote: None,
+            span: Ident(13..14),
+        },
+        source: Some(
+            Columns(
+                [
+                    ColumnDefinition {
+                        name: Identifier {
+                            name: "c1",
+                            quote: None,
+                            span: Ident(15..17),
+                        },
+                        data_type: Int32,
+                        default_expr: Some(
+                            Literal {
+                                span: [
+                                    LiteralInteger(30..31),
+                                ],
+                                lit: Integer(
+                                    1,
+                                ),
+                            },
+                        ),
+                        comment: None,
+                    },
+                ],
+            ),
+        ),
+        engine: None,
+        cluster_by: [],
+        table_options: {},
+        as_query: None,
+        transient: false,
+    },
+)
+
+
+---------- Input ----------
+ALTER USER u1 IDENTIFIED BY '123456';
+---------- Output ---------
+ALTER USER 'u1'@'%' IDENTIFIED BY '123456'
+---------- AST ------------
+AlterUser(
+    AlterUserStmt {
+        user: Some(
+            UserIdentity {
+                username: "u1",
+                hostname: "%",
+            },
+        ),
+        auth_option: Some(
+            AuthOption {
+                auth_type: None,
+                password: Some(
+                    "123456",
+                ),
+            },
+        ),
+        user_options: [],
+    },
+)
+
+
+---------- Input ----------
+ALTER USER u1 WITH DEFAULT_ROLE = 'role1';
+---------- Output ---------
+ALTER USER 'u1'@'%' WITH DEFAULT_ROLE = 'role1'
+---------- AST ------------
+AlterUser(
+    AlterUserStmt {
+        user: Some(
+            UserIdentity {
+                username: "u1",
+                hostname: "%",
+            },
+        ),
+        auth_option: None,
+        user_options: [
+            DefaultRole(
+                "role1",
+            ),
+        ],
+    },
+)
+
+
+---------- Input ----------
+ALTER USER u1 WITH DEFAULT_ROLE = 'role1', TENANTSETTING;
+---------- Output ---------
+ALTER USER 'u1'@'%' WITH DEFAULT_ROLE = 'role1' TENANTSETTING
+---------- AST ------------
+AlterUser(
+    AlterUserStmt {
+        user: Some(
+            UserIdentity {
+                username: "u1",
+                hostname: "%",
+            },
+        ),
+        auth_option: None,
+        user_options: [
+            DefaultRole(
+                "role1",
+            ),
+            TenantSetting(
+                true,
+            ),
+        ],
+    },
+)
+
+
+---------- Input ----------
+CREATE USER u1 IDENTIFIED BY '123456' WITH DEFAULT_ROLE='role123', TENANTSETTING
+---------- Output ---------
+CREATE USER 'u1'@'%' IDENTIFIED BY '123456' WITH DEFAULT_ROLE = 'role123' TENANTSETTING
+---------- AST ------------
+CreateUser(
+    CreateUserStmt {
+        if_not_exists: false,
+        user: UserIdentity {
+            username: "u1",
+            hostname: "%",
+        },
+        auth_option: AuthOption {
+            auth_type: None,
+            password: Some(
+                "123456",
+            ),
+        },
+        user_options: [
+            DefaultRole(
+                "role123",
+            ),
+            TenantSetting(
+                true,
+            ),
+        ],
+    },
+)
+
+
+---------- Input ----------
+DROP database if exists db1;
+---------- Output ---------
+DROP DATABASE IF EXISTS db1
+---------- AST ------------
+DropDatabase(
+    DropDatabaseStmt {
+        if_exists: true,
+        catalog: None,
+        database: Identifier {
+            name: "db1",
+            quote: None,
+            span: Ident(24..27),
+        },
+    },
+)
+
+
+---------- Input ----------
+select distinct a, count(*) from t where a = 1 and b - 1 < a group by a having a = 1;
+---------- Output ---------
+SELECT DISTINCT a, COUNT(*) FROM t WHERE a = 1 AND b - 1 < a GROUP BY a HAVING a = 1
+---------- AST ------------
+Query(
+    Query {
+        span: [
+            SELECT(0..6),
+            DISTINCT(7..15),
+            Ident(16..17),
+            Comma(17..18),
+            COUNT(19..24),
+            LParen(24..25),
+            Multiply(25..26),
+            RParen(26..27),
+            FROM(28..32),
+            Ident(33..34),
+            WHERE(35..40),
+            Ident(41..42),
+            Eq(43..44),
+            LiteralInteger(45..46),
+            AND(47..50),
+            Ident(51..52),
+            Minus(53..54),
+            LiteralInteger(55..56),
+            Lt(57..58),
+            Ident(59..60),
+            GROUP(61..66),
+            BY(67..69),
+            Ident(70..71),
+            HAVING(72..78),
+            Ident(79..80),
+            Eq(81..82),
+            LiteralInteger(83..84),
+        ],
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: [
+                    SELECT(0..6),
+                    DISTINCT(7..15),
+                    Ident(16..17),
+                    Comma(17..18),
+                    COUNT(19..24),
+                    LParen(24..25),
+                    Multiply(25..26),
+                    RParen(26..27),
+                    FROM(28..32),
+                    Ident(33..34),
+                    WHERE(35..40),
+                    Ident(41..42),
+                    Eq(43..44),
+                    LiteralInteger(45..46),
+                    AND(47..50),
+                    Ident(51..52),
+                    Minus(53..54),
+                    LiteralInteger(55..56),
+                    Lt(57..58),
+                    Ident(59..60),
+                    GROUP(61..66),
+                    BY(67..69),
+                    Ident(70..71),
+                    HAVING(72..78),
+                    Ident(79..80),
+                    Eq(81..82),
+                    LiteralInteger(83..84),
+                ],
+                distinct: true,
+                select_list: [
+                    AliasedExpr {
+                        expr: ColumnRef {
+                            span: [
+                                Ident(16..17),
+                            ],
+                            database: None,
+                            table: None,
+                            column: Identifier {
+                                name: "a",
+                                quote: None,
+                                span: Ident(16..17),
+                            },
+                        },
+                        alias: None,
+                    },
+                    AliasedExpr {
+                        expr: CountAll {
+                            span: [
+                                COUNT(19..24),
+                                LParen(24..25),
+                                Multiply(25..26),
+                                RParen(26..27),
+                            ],
+                        },
+                        alias: None,
+                    },
+                ],
+                from: [
+                    Table {
+                        span: [
+                            Ident(33..34),
+                        ],
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            name: "t",
+                            quote: None,
+                            span: Ident(33..34),
+                        },
+                        alias: None,
+                        travel_point: None,
+                    },
+                ],
+                selection: Some(
+                    BinaryOp {
+                        span: [
+                            AND(47..50),
+                        ],
+                        op: And,
+                        left: BinaryOp {
+                            span: [
+                                Eq(43..44),
+                            ],
+                            op: Eq,
+                            left: ColumnRef {
+                                span: [
+                                    Ident(41..42),
+                                ],
+                                database: None,
+                                table: None,
+                                column: Identifier {
+                                    name: "a",
+                                    quote: None,
+                                    span: Ident(41..42),
+                                },
+                            },
+                            right: Literal {
+                                span: [
+                                    LiteralInteger(45..46),
+                                ],
+                                lit: Integer(
+                                    1,
+                                ),
+                            },
+                        },
+                        right: BinaryOp {
+                            span: [
+                                Lt(57..58),
+                            ],
+                            op: Lt,
+                            left: BinaryOp {
+                                span: [
+                                    Minus(53..54),
+                                ],
+                                op: Minus,
+                                left: ColumnRef {
+                                    span: [
+                                        Ident(51..52),
+                                    ],
+                                    database: None,
+                                    table: None,
+                                    column: Identifier {
+                                        name: "b",
+                                        quote: None,
+                                        span: Ident(51..52),
+                                    },
+                                },
+                                right: Literal {
+                                    span: [
+                                        LiteralInteger(55..56),
+                                    ],
+                                    lit: Integer(
+                                        1,
+                                    ),
+                                },
+                            },
+                            right: ColumnRef {
+                                span: [
+                                    Ident(59..60),
+                                ],
+                                database: None,
+                                table: None,
+                                column: Identifier {
+                                    name: "a",
+                                    quote: None,
+                                    span: Ident(59..60),
+                                },
+                            },
+                        },
+                    },
+                ),
+                group_by: [
+                    ColumnRef {
+                        span: [
+                            Ident(70..71),
+                        ],
+                        database: None,
+                        table: None,
+                        column: Identifier {
+                            name: "a",
+                            quote: None,
+                            span: Ident(70..71),
+                        },
+                    },
+                ],
+                having: Some(
+                    BinaryOp {
+                        span: [
+                            Eq(81..82),
+                        ],
+                        op: Eq,
+                        left: ColumnRef {
+                            span: [
+                                Ident(79..80),
+                            ],
+                            database: None,
+                            table: None,
+                            column: Identifier {
+                                name: "a",
+                                quote: None,
+                                span: Ident(79..80),
+                            },
+                        },
+                        right: Literal {
+                            span: [
+                                LiteralInteger(83..84),
+                            ],
+                            lit: Integer(
+                                1,
+                            ),
+                        },
+                    },
+                ),
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        format: None,
+    },
+)
+
+
+---------- Input ----------
+select * from t4;
+---------- Output ---------
+SELECT * FROM t4
+---------- AST ------------
+Query(
+    Query {
+        span: [
+            SELECT(0..6),
+            Multiply(7..8),
+            FROM(9..13),
+            Ident(14..16),
+        ],
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: [
+                    SELECT(0..6),
+                    Multiply(7..8),
+                    FROM(9..13),
+                    Ident(14..16),
+                ],
+                distinct: false,
+                select_list: [
+                    QualifiedName(
+                        [
+                            Star,
+                        ],
+                    ),
+                ],
+                from: [
+                    Table {
+                        span: [
+                            Ident(14..16),
+                        ],
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            name: "t4",
+                            quote: None,
+                            span: Ident(14..16),
+                        },
+                        alias: None,
+                        travel_point: None,
+                    },
+                ],
+                selection: None,
+                group_by: [],
+                having: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        format: None,
+    },
+)
+
+
+---------- Input ----------
+select * from aa.bb;
+---------- Output ---------
+SELECT * FROM aa.bb
+---------- AST ------------
+Query(
+    Query {
+        span: [
+            SELECT(0..6),
+            Multiply(7..8),
+            FROM(9..13),
+            Ident(14..16),
+            Period(16..17),
+            Ident(17..19),
+        ],
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: [
+                    SELECT(0..6),
+                    Multiply(7..8),
+                    FROM(9..13),
+                    Ident(14..16),
+                    Period(16..17),
+                    Ident(17..19),
+                ],
+                distinct: false,
+                select_list: [
+                    QualifiedName(
+                        [
+                            Star,
+                        ],
+                    ),
+                ],
+                from: [
+                    Table {
+                        span: [
+                            Ident(14..16),
+                            Period(16..17),
+                            Ident(17..19),
+                        ],
+                        catalog: None,
+                        database: Some(
+                            Identifier {
+                                name: "aa",
+                                quote: None,
+                                span: Ident(14..16),
+                            },
+                        ),
+                        table: Identifier {
+                            name: "bb",
+                            quote: None,
+                            span: Ident(17..19),
+                        },
+                        alias: None,
+                        travel_point: None,
+                    },
+                ],
+                selection: None,
+                group_by: [],
+                having: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        format: None,
+    },
+)
+
+
+---------- Input ----------
+select * from a, b, c;
+---------- Output ---------
+SELECT * FROM a, b, c
+---------- AST ------------
+Query(
+    Query {
+        span: [
+            SELECT(0..6),
+            Multiply(7..8),
+            FROM(9..13),
+            Ident(14..15),
+            Comma(15..16),
+            Ident(17..18),
+            Comma(18..19),
+            Ident(20..21),
+        ],
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: [
+                    SELECT(0..6),
+                    Multiply(7..8),
+                    FROM(9..13),
+                    Ident(14..15),
+                    Comma(15..16),
+                    Ident(17..18),
+                    Comma(18..19),
+                    Ident(20..21),
+                ],
+                distinct: false,
+                select_list: [
+                    QualifiedName(
+                        [
+                            Star,
+                        ],
+                    ),
+                ],
+                from: [
+                    Table {
+                        span: [
+                            Ident(14..15),
+                        ],
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            name: "a",
+                            quote: None,
+                            span: Ident(14..15),
+                        },
+                        alias: None,
+                        travel_point: None,
+                    },
+                    Table {
+                        span: [
+                            Ident(17..18),
+                        ],
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            name: "b",
+                            quote: None,
+                            span: Ident(17..18),
+                        },
+                        alias: None,
+                        travel_point: None,
+                    },
+                    Table {
+                        span: [
+                            Ident(20..21),
+                        ],
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            name: "c",
+                            quote: None,
+                            span: Ident(20..21),
+                        },
+                        alias: None,
+                        travel_point: None,
+                    },
+                ],
+                selection: None,
+                group_by: [],
+                having: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        format: None,
+    },
+)
+
+
+---------- Input ----------
+select * from a, b, c order by "db"."a"."c1";
+---------- Output ---------
+SELECT * FROM a, b, c ORDER BY "db"."a"."c1"
+---------- AST ------------
+Query(
+    Query {
+        span: [
+            SELECT(0..6),
+            Multiply(7..8),
+            FROM(9..13),
+            Ident(14..15),
+            Comma(15..16),
+            Ident(17..18),
+            Comma(18..19),
+            Ident(20..21),
+            ORDER(22..27),
+            BY(28..30),
+            QuotedString(31..35),
+            Period(35..36),
+            QuotedString(36..39),
+            Period(39..40),
+            QuotedString(40..44),
+        ],
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: [
+                    SELECT(0..6),
+                    Multiply(7..8),
+                    FROM(9..13),
+                    Ident(14..15),
+                    Comma(15..16),
+                    Ident(17..18),
+                    Comma(18..19),
+                    Ident(20..21),
+                ],
+                distinct: false,
+                select_list: [
+                    QualifiedName(
+                        [
+                            Star,
+                        ],
+                    ),
+                ],
+                from: [
+                    Table {
+                        span: [
+                            Ident(14..15),
+                        ],
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            name: "a",
+                            quote: None,
+                            span: Ident(14..15),
+                        },
+                        alias: None,
+                        travel_point: None,
+                    },
+                    Table {
+                        span: [
+                            Ident(17..18),
+                        ],
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            name: "b",
+                            quote: None,
+                            span: Ident(17..18),
+                        },
+                        alias: None,
+                        travel_point: None,
+                    },
+                    Table {
+                        span: [
+                            Ident(20..21),
+                        ],
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            name: "c",
+                            quote: None,
+                            span: Ident(20..21),
+                        },
+                        alias: None,
+                        travel_point: None,
+                    },
+                ],
+                selection: None,
+                group_by: [],
+                having: None,
+            },
+        ),
+        order_by: [
+            OrderByExpr {
+                expr: ColumnRef {
+                    span: [
+                        QuotedString(31..35),
+                        Period(35..36),
+                        QuotedString(36..39),
+                        Period(39..40),
+                        QuotedString(40..44),
+                    ],
+                    database: Some(
+                        Identifier {
+                            name: "db",
+                            quote: Some(
+                                '"',
+                            ),
+                            span: QuotedString(31..35),
+                        },
+                    ),
+                    table: Some(
+                        Identifier {
+                            name: "a",
+                            quote: Some(
+                                '"',
+                            ),
+                            span: QuotedString(36..39),
+                        },
+                    ),
+                    column: Identifier {
+                        name: "c1",
+                        quote: Some(
+                            '"',
+                        ),
+                        span: QuotedString(40..44),
+                    },
+                },
+                asc: None,
+                nulls_first: None,
+            },
+        ],
+        limit: [],
+        offset: None,
+        format: None,
+    },
+)
+
+
+---------- Input ----------
+select * from a join b on a.a = b.a;
+---------- Output ---------
+SELECT * FROM a INNER JOIN b ON a.a = b.a
+---------- AST ------------
+Query(
+    Query {
+        span: [
+            SELECT(0..6),
+            Multiply(7..8),
+            FROM(9..13),
+            Ident(14..15),
+            JOIN(16..20),
+            Ident(21..22),
+            ON(23..25),
+            Ident(26..27),
+            Period(27..28),
+            Ident(28..29),
+            Eq(30..31),
+            Ident(32..33),
+            Period(33..34),
+            Ident(34..35),
+        ],
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: [
+                    SELECT(0..6),
+                    Multiply(7..8),
+                    FROM(9..13),
+                    Ident(14..15),
+                    JOIN(16..20),
+                    Ident(21..22),
+                    ON(23..25),
+                    Ident(26..27),
+                    Period(27..28),
+                    Ident(28..29),
+                    Eq(30..31),
+                    Ident(32..33),
+                    Period(33..34),
+                    Ident(34..35),
+                ],
+                distinct: false,
+                select_list: [
+                    QualifiedName(
+                        [
+                            Star,
+                        ],
+                    ),
+                ],
+                from: [
+                    Join {
+                        span: [
+                            Ident(14..15),
+                            JOIN(16..20),
+                            Ident(21..22),
+                            ON(23..25),
+                            Ident(26..27),
+                            Period(27..28),
+                            Ident(28..29),
+                            Eq(30..31),
+                            Ident(32..33),
+                            Period(33..34),
+                            Ident(34..35),
+                        ],
+                        join: Join {
+                            op: Inner,
+                            condition: On(
+                                BinaryOp {
+                                    span: [
+                                        Eq(30..31),
+                                    ],
+                                    op: Eq,
+                                    left: ColumnRef {
+                                        span: [
+                                            Ident(26..27),
+                                            Period(27..28),
+                                            Ident(28..29),
+                                        ],
+                                        database: None,
+                                        table: Some(
+                                            Identifier {
+                                                name: "a",
+                                                quote: None,
+                                                span: Ident(26..27),
+                                            },
+                                        ),
+                                        column: Identifier {
+                                            name: "a",
+                                            quote: None,
+                                            span: Ident(28..29),
+                                        },
+                                    },
+                                    right: ColumnRef {
+                                        span: [
+                                            Ident(32..33),
+                                            Period(33..34),
+                                            Ident(34..35),
+                                        ],
+                                        database: None,
+                                        table: Some(
+                                            Identifier {
+                                                name: "b",
+                                                quote: None,
+                                                span: Ident(32..33),
+                                            },
+                                        ),
+                                        column: Identifier {
+                                            name: "a",
+                                            quote: None,
+                                            span: Ident(34..35),
+                                        },
+                                    },
+                                },
+                            ),
+                            left: Table {
+                                span: [
+                                    Ident(14..15),
+                                ],
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    name: "a",
+                                    quote: None,
+                                    span: Ident(14..15),
+                                },
+                                alias: None,
+                                travel_point: None,
+                            },
+                            right: Table {
+                                span: [
+                                    Ident(21..22),
+                                ],
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    name: "b",
+                                    quote: None,
+                                    span: Ident(21..22),
+                                },
+                                alias: None,
+                                travel_point: None,
+                            },
+                        },
+                    },
+                ],
+                selection: None,
+                group_by: [],
+                having: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        format: None,
+    },
+)
+
+
+---------- Input ----------
+select * from a left outer join b on a.a = b.a;
+---------- Output ---------
+SELECT * FROM a LEFT OUTER JOIN b ON a.a = b.a
+---------- AST ------------
+Query(
+    Query {
+        span: [
+            SELECT(0..6),
+            Multiply(7..8),
+            FROM(9..13),
+            Ident(14..15),
+            LEFT(16..20),
+            OUTER(21..26),
+            JOIN(27..31),
+            Ident(32..33),
+            ON(34..36),
+            Ident(37..38),
+            Period(38..39),
+            Ident(39..40),
+            Eq(41..42),
+            Ident(43..44),
+            Period(44..45),
+            Ident(45..46),
+        ],
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: [
+                    SELECT(0..6),
+                    Multiply(7..8),
+                    FROM(9..13),
+                    Ident(14..15),
+                    LEFT(16..20),
+                    OUTER(21..26),
+                    JOIN(27..31),
+                    Ident(32..33),
+                    ON(34..36),
+                    Ident(37..38),
+                    Period(38..39),
+                    Ident(39..40),
+                    Eq(41..42),
+                    Ident(43..44),
+                    Period(44..45),
+                    Ident(45..46),
+                ],
+                distinct: false,
+                select_list: [
+                    QualifiedName(
+                        [
+                            Star,
+                        ],
+                    ),
+                ],
+                from: [
+                    Join {
+                        span: [
+                            Ident(14..15),
+                            LEFT(16..20),
+                            OUTER(21..26),
+                            JOIN(27..31),
+                            Ident(32..33),
+                            ON(34..36),
+                            Ident(37..38),
+                            Period(38..39),
+                            Ident(39..40),
+                            Eq(41..42),
+                            Ident(43..44),
+                            Period(44..45),
+                            Ident(45..46),
+                        ],
+                        join: Join {
+                            op: LeftOuter,
+                            condition: On(
+                                BinaryOp {
+                                    span: [
+                                        Eq(41..42),
+                                    ],
+                                    op: Eq,
+                                    left: ColumnRef {
+                                        span: [
+                                            Ident(37..38),
+                                            Period(38..39),
+                                            Ident(39..40),
+                                        ],
+                                        database: None,
+                                        table: Some(
+                                            Identifier {
+                                                name: "a",
+                                                quote: None,
+                                                span: Ident(37..38),
+                                            },
+                                        ),
+                                        column: Identifier {
+                                            name: "a",
+                                            quote: None,
+                                            span: Ident(39..40),
+                                        },
+                                    },
+                                    right: ColumnRef {
+                                        span: [
+                                            Ident(43..44),
+                                            Period(44..45),
+                                            Ident(45..46),
+                                        ],
+                                        database: None,
+                                        table: Some(
+                                            Identifier {
+                                                name: "b",
+                                                quote: None,
+                                                span: Ident(43..44),
+                                            },
+                                        ),
+                                        column: Identifier {
+                                            name: "a",
+                                            quote: None,
+                                            span: Ident(45..46),
+                                        },
+                                    },
+                                },
+                            ),
+                            left: Table {
+                                span: [
+                                    Ident(14..15),
+                                ],
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    name: "a",
+                                    quote: None,
+                                    span: Ident(14..15),
+                                },
+                                alias: None,
+                                travel_point: None,
+                            },
+                            right: Table {
+                                span: [
+                                    Ident(32..33),
+                                ],
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    name: "b",
+                                    quote: None,
+                                    span: Ident(32..33),
+                                },
+                                alias: None,
+                                travel_point: None,
+                            },
+                        },
+                    },
+                ],
+                selection: None,
+                group_by: [],
+                having: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        format: None,
+    },
+)
+
+
+---------- Input ----------
+select * from a right outer join b on a.a = b.a;
+---------- Output ---------
+SELECT * FROM a RIGHT OUTER JOIN b ON a.a = b.a
+---------- AST ------------
+Query(
+    Query {
+        span: [
+            SELECT(0..6),
+            Multiply(7..8),
+            FROM(9..13),
+            Ident(14..15),
+            RIGHT(16..21),
+            OUTER(22..27),
+            JOIN(28..32),
+            Ident(33..34),
+            ON(35..37),
+            Ident(38..39),
+            Period(39..40),
+            Ident(40..41),
+            Eq(42..43),
+            Ident(44..45),
+            Period(45..46),
+            Ident(46..47),
+        ],
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: [
+                    SELECT(0..6),
+                    Multiply(7..8),
+                    FROM(9..13),
+                    Ident(14..15),
+                    RIGHT(16..21),
+                    OUTER(22..27),
+                    JOIN(28..32),
+                    Ident(33..34),
+                    ON(35..37),
+                    Ident(38..39),
+                    Period(39..40),
+                    Ident(40..41),
+                    Eq(42..43),
+                    Ident(44..45),
+                    Period(45..46),
+                    Ident(46..47),
+                ],
+                distinct: false,
+                select_list: [
+                    QualifiedName(
+                        [
+                            Star,
+                        ],
+                    ),
+                ],
+                from: [
+                    Join {
+                        span: [
+                            Ident(14..15),
+                            RIGHT(16..21),
+                            OUTER(22..27),
+                            JOIN(28..32),
+                            Ident(33..34),
+                            ON(35..37),
+                            Ident(38..39),
+                            Period(39..40),
+                            Ident(40..41),
+                            Eq(42..43),
+                            Ident(44..45),
+                            Period(45..46),
+                            Ident(46..47),
+                        ],
+                        join: Join {
+                            op: RightOuter,
+                            condition: On(
+                                BinaryOp {
+                                    span: [
+                                        Eq(42..43),
+                                    ],
+                                    op: Eq,
+                                    left: ColumnRef {
+                                        span: [
+                                            Ident(38..39),
+                                            Period(39..40),
+                                            Ident(40..41),
+                                        ],
+                                        database: None,
+                                        table: Some(
+                                            Identifier {
+                                                name: "a",
+                                                quote: None,
+                                                span: Ident(38..39),
+                                            },
+                                        ),
+                                        column: Identifier {
+                                            name: "a",
+                                            quote: None,
+                                            span: Ident(40..41),
+                                        },
+                                    },
+                                    right: ColumnRef {
+                                        span: [
+                                            Ident(44..45),
+                                            Period(45..46),
+                                            Ident(46..47),
+                                        ],
+                                        database: None,
+                                        table: Some(
+                                            Identifier {
+                                                name: "b",
+                                                quote: None,
+                                                span: Ident(44..45),
+                                            },
+                                        ),
+                                        column: Identifier {
+                                            name: "a",
+                                            quote: None,
+                                            span: Ident(46..47),
+                                        },
+                                    },
+                                },
+                            ),
+                            left: Table {
+                                span: [
+                                    Ident(14..15),
+                                ],
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    name: "a",
+                                    quote: None,
+                                    span: Ident(14..15),
+                                },
+                                alias: None,
+                                travel_point: None,
+                            },
+                            right: Table {
+                                span: [
+                                    Ident(33..34),
+                                ],
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    name: "b",
+                                    quote: None,
+                                    span: Ident(33..34),
+                                },
+                                alias: None,
+                                travel_point: None,
+                            },
+                        },
+                    },
+                ],
+                selection: None,
+                group_by: [],
+                having: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        format: None,
+    },
+)
+
+
+---------- Input ----------
+select * from a full outer join b on a.a = b.a;
+---------- Output ---------
+SELECT * FROM a FULL OUTER JOIN b ON a.a = b.a
+---------- AST ------------
+Query(
+    Query {
+        span: [
+            SELECT(0..6),
+            Multiply(7..8),
+            FROM(9..13),
+            Ident(14..15),
+            FULL(16..20),
+            OUTER(21..26),
+            JOIN(27..31),
+            Ident(32..33),
+            ON(34..36),
+            Ident(37..38),
+            Period(38..39),
+            Ident(39..40),
+            Eq(41..42),
+            Ident(43..44),
+            Period(44..45),
+            Ident(45..46),
+        ],
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: [
+                    SELECT(0..6),
+                    Multiply(7..8),
+                    FROM(9..13),
+                    Ident(14..15),
+                    FULL(16..20),
+                    OUTER(21..26),
+                    JOIN(27..31),
+                    Ident(32..33),
+                    ON(34..36),
+                    Ident(37..38),
+                    Period(38..39),
+                    Ident(39..40),
+                    Eq(41..42),
+                    Ident(43..44),
+                    Period(44..45),
+                    Ident(45..46),
+                ],
+                distinct: false,
+                select_list: [
+                    QualifiedName(
+                        [
+                            Star,
+                        ],
+                    ),
+                ],
+                from: [
+                    Join {
+                        span: [
+                            Ident(14..15),
+                            FULL(16..20),
+                            OUTER(21..26),
+                            JOIN(27..31),
+                            Ident(32..33),
+                            ON(34..36),
+                            Ident(37..38),
+                            Period(38..39),
+                            Ident(39..40),
+                            Eq(41..42),
+                            Ident(43..44),
+                            Period(44..45),
+                            Ident(45..46),
+                        ],
+                        join: Join {
+                            op: FullOuter,
+                            condition: On(
+                                BinaryOp {
+                                    span: [
+                                        Eq(41..42),
+                                    ],
+                                    op: Eq,
+                                    left: ColumnRef {
+                                        span: [
+                                            Ident(37..38),
+                                            Period(38..39),
+                                            Ident(39..40),
+                                        ],
+                                        database: None,
+                                        table: Some(
+                                            Identifier {
+                                                name: "a",
+                                                quote: None,
+                                                span: Ident(37..38),
+                                            },
+                                        ),
+                                        column: Identifier {
+                                            name: "a",
+                                            quote: None,
+                                            span: Ident(39..40),
+                                        },
+                                    },
+                                    right: ColumnRef {
+                                        span: [
+                                            Ident(43..44),
+                                            Period(44..45),
+                                            Ident(45..46),
+                                        ],
+                                        database: None,
+                                        table: Some(
+                                            Identifier {
+                                                name: "b",
+                                                quote: None,
+                                                span: Ident(43..44),
+                                            },
+                                        ),
+                                        column: Identifier {
+                                            name: "a",
+                                            quote: None,
+                                            span: Ident(45..46),
+                                        },
+                                    },
+                                },
+                            ),
+                            left: Table {
+                                span: [
+                                    Ident(14..15),
+                                ],
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    name: "a",
+                                    quote: None,
+                                    span: Ident(14..15),
+                                },
+                                alias: None,
+                                travel_point: None,
+                            },
+                            right: Table {
+                                span: [
+                                    Ident(32..33),
+                                ],
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    name: "b",
+                                    quote: None,
+                                    span: Ident(32..33),
+                                },
+                                alias: None,
+                                travel_point: None,
+                            },
+                        },
+                    },
+                ],
+                selection: None,
+                group_by: [],
+                having: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        format: None,
+    },
+)
+
+
+---------- Input ----------
+select * from a inner join b on a.a = b.a;
+---------- Output ---------
+SELECT * FROM a INNER JOIN b ON a.a = b.a
+---------- AST ------------
+Query(
+    Query {
+        span: [
+            SELECT(0..6),
+            Multiply(7..8),
+            FROM(9..13),
+            Ident(14..15),
+            INNER(16..21),
+            JOIN(22..26),
+            Ident(27..28),
+            ON(29..31),
+            Ident(32..33),
+            Period(33..34),
+            Ident(34..35),
+            Eq(36..37),
+            Ident(38..39),
+            Period(39..40),
+            Ident(40..41),
+        ],
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: [
+                    SELECT(0..6),
+                    Multiply(7..8),
+                    FROM(9..13),
+                    Ident(14..15),
+                    INNER(16..21),
+                    JOIN(22..26),
+                    Ident(27..28),
+                    ON(29..31),
+                    Ident(32..33),
+                    Period(33..34),
+                    Ident(34..35),
+                    Eq(36..37),
+                    Ident(38..39),
+                    Period(39..40),
+                    Ident(40..41),
+                ],
+                distinct: false,
+                select_list: [
+                    QualifiedName(
+                        [
+                            Star,
+                        ],
+                    ),
+                ],
+                from: [
+                    Join {
+                        span: [
+                            Ident(14..15),
+                            INNER(16..21),
+                            JOIN(22..26),
+                            Ident(27..28),
+                            ON(29..31),
+                            Ident(32..33),
+                            Period(33..34),
+                            Ident(34..35),
+                            Eq(36..37),
+                            Ident(38..39),
+                            Period(39..40),
+                            Ident(40..41),
+                        ],
+                        join: Join {
+                            op: Inner,
+                            condition: On(
+                                BinaryOp {
+                                    span: [
+                                        Eq(36..37),
+                                    ],
+                                    op: Eq,
+                                    left: ColumnRef {
+                                        span: [
+                                            Ident(32..33),
+                                            Period(33..34),
+                                            Ident(34..35),
+                                        ],
+                                        database: None,
+                                        table: Some(
+                                            Identifier {
+                                                name: "a",
+                                                quote: None,
+                                                span: Ident(32..33),
+                                            },
+                                        ),
+                                        column: Identifier {
+                                            name: "a",
+                                            quote: None,
+                                            span: Ident(34..35),
+                                        },
+                                    },
+                                    right: ColumnRef {
+                                        span: [
+                                            Ident(38..39),
+                                            Period(39..40),
+                                            Ident(40..41),
+                                        ],
+                                        database: None,
+                                        table: Some(
+                                            Identifier {
+                                                name: "b",
+                                                quote: None,
+                                                span: Ident(38..39),
+                                            },
+                                        ),
+                                        column: Identifier {
+                                            name: "a",
+                                            quote: None,
+                                            span: Ident(40..41),
+                                        },
+                                    },
+                                },
+                            ),
+                            left: Table {
+                                span: [
+                                    Ident(14..15),
+                                ],
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    name: "a",
+                                    quote: None,
+                                    span: Ident(14..15),
+                                },
+                                alias: None,
+                                travel_point: None,
+                            },
+                            right: Table {
+                                span: [
+                                    Ident(27..28),
+                                ],
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    name: "b",
+                                    quote: None,
+                                    span: Ident(27..28),
+                                },
+                                alias: None,
+                                travel_point: None,
+                            },
+                        },
+                    },
+                ],
+                selection: None,
+                group_by: [],
+                having: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        format: None,
+    },
+)
+
+
+---------- Input ----------
+select * from a left outer join b using(a);
+---------- Output ---------
+SELECT * FROM a LEFT OUTER JOIN b USING(a)
+---------- AST ------------
+Query(
+    Query {
+        span: [
+            SELECT(0..6),
+            Multiply(7..8),
+            FROM(9..13),
+            Ident(14..15),
+            LEFT(16..20),
+            OUTER(21..26),
+            JOIN(27..31),
+            Ident(32..33),
+            USING(34..39),
+            LParen(39..40),
+            Ident(40..41),
+            RParen(41..42),
+        ],
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: [
+                    SELECT(0..6),
+                    Multiply(7..8),
+                    FROM(9..13),
+                    Ident(14..15),
+                    LEFT(16..20),
+                    OUTER(21..26),
+                    JOIN(27..31),
+                    Ident(32..33),
+                    USING(34..39),
+                    LParen(39..40),
+                    Ident(40..41),
+                    RParen(41..42),
+                ],
+                distinct: false,
+                select_list: [
+                    QualifiedName(
+                        [
+                            Star,
+                        ],
+                    ),
+                ],
+                from: [
+                    Join {
+                        span: [
+                            Ident(14..15),
+                            LEFT(16..20),
+                            OUTER(21..26),
+                            JOIN(27..31),
+                            Ident(32..33),
+                            USING(34..39),
+                            LParen(39..40),
+                            Ident(40..41),
+                            RParen(41..42),
+                        ],
+                        join: Join {
+                            op: LeftOuter,
+                            condition: Using(
+                                [
+                                    Identifier {
+                                        name: "a",
+                                        quote: None,
+                                        span: Ident(40..41),
+                                    },
+                                ],
+                            ),
+                            left: Table {
+                                span: [
+                                    Ident(14..15),
+                                ],
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    name: "a",
+                                    quote: None,
+                                    span: Ident(14..15),
+                                },
+                                alias: None,
+                                travel_point: None,
+                            },
+                            right: Table {
+                                span: [
+                                    Ident(32..33),
+                                ],
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    name: "b",
+                                    quote: None,
+                                    span: Ident(32..33),
+                                },
+                                alias: None,
+                                travel_point: None,
+                            },
+                        },
+                    },
+                ],
+                selection: None,
+                group_by: [],
+                having: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        format: None,
+    },
+)
+
+
+---------- Input ----------
+select * from a right outer join b using(a);
+---------- Output ---------
+SELECT * FROM a RIGHT OUTER JOIN b USING(a)
+---------- AST ------------
+Query(
+    Query {
+        span: [
+            SELECT(0..6),
+            Multiply(7..8),
+            FROM(9..13),
+            Ident(14..15),
+            RIGHT(16..21),
+            OUTER(22..27),
+            JOIN(28..32),
+            Ident(33..34),
+            USING(35..40),
+            LParen(40..41),
+            Ident(41..42),
+            RParen(42..43),
+        ],
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: [
+                    SELECT(0..6),
+                    Multiply(7..8),
+                    FROM(9..13),
+                    Ident(14..15),
+                    RIGHT(16..21),
+                    OUTER(22..27),
+                    JOIN(28..32),
+                    Ident(33..34),
+                    USING(35..40),
+                    LParen(40..41),
+                    Ident(41..42),
+                    RParen(42..43),
+                ],
+                distinct: false,
+                select_list: [
+                    QualifiedName(
+                        [
+                            Star,
+                        ],
+                    ),
+                ],
+                from: [
+                    Join {
+                        span: [
+                            Ident(14..15),
+                            RIGHT(16..21),
+                            OUTER(22..27),
+                            JOIN(28..32),
+                            Ident(33..34),
+                            USING(35..40),
+                            LParen(40..41),
+                            Ident(41..42),
+                            RParen(42..43),
+                        ],
+                        join: Join {
+                            op: RightOuter,
+                            condition: Using(
+                                [
+                                    Identifier {
+                                        name: "a",
+                                        quote: None,
+                                        span: Ident(41..42),
+                                    },
+                                ],
+                            ),
+                            left: Table {
+                                span: [
+                                    Ident(14..15),
+                                ],
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    name: "a",
+                                    quote: None,
+                                    span: Ident(14..15),
+                                },
+                                alias: None,
+                                travel_point: None,
+                            },
+                            right: Table {
+                                span: [
+                                    Ident(33..34),
+                                ],
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    name: "b",
+                                    quote: None,
+                                    span: Ident(33..34),
+                                },
+                                alias: None,
+                                travel_point: None,
+                            },
+                        },
+                    },
+                ],
+                selection: None,
+                group_by: [],
+                having: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        format: None,
+    },
+)
+
+
+---------- Input ----------
+select * from a full outer join b using(a);
+---------- Output ---------
+SELECT * FROM a FULL OUTER JOIN b USING(a)
+---------- AST ------------
+Query(
+    Query {
+        span: [
+            SELECT(0..6),
+            Multiply(7..8),
+            FROM(9..13),
+            Ident(14..15),
+            FULL(16..20),
+            OUTER(21..26),
+            JOIN(27..31),
+            Ident(32..33),
+            USING(34..39),
+            LParen(39..40),
+            Ident(40..41),
+            RParen(41..42),
+        ],
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: [
+                    SELECT(0..6),
+                    Multiply(7..8),
+                    FROM(9..13),
+                    Ident(14..15),
+                    FULL(16..20),
+                    OUTER(21..26),
+                    JOIN(27..31),
+                    Ident(32..33),
+                    USING(34..39),
+                    LParen(39..40),
+                    Ident(40..41),
+                    RParen(41..42),
+                ],
+                distinct: false,
+                select_list: [
+                    QualifiedName(
+                        [
+                            Star,
+                        ],
+                    ),
+                ],
+                from: [
+                    Join {
+                        span: [
+                            Ident(14..15),
+                            FULL(16..20),
+                            OUTER(21..26),
+                            JOIN(27..31),
+                            Ident(32..33),
+                            USING(34..39),
+                            LParen(39..40),
+                            Ident(40..41),
+                            RParen(41..42),
+                        ],
+                        join: Join {
+                            op: FullOuter,
+                            condition: Using(
+                                [
+                                    Identifier {
+                                        name: "a",
+                                        quote: None,
+                                        span: Ident(40..41),
+                                    },
+                                ],
+                            ),
+                            left: Table {
+                                span: [
+                                    Ident(14..15),
+                                ],
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    name: "a",
+                                    quote: None,
+                                    span: Ident(14..15),
+                                },
+                                alias: None,
+                                travel_point: None,
+                            },
+                            right: Table {
+                                span: [
+                                    Ident(32..33),
+                                ],
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    name: "b",
+                                    quote: None,
+                                    span: Ident(32..33),
+                                },
+                                alias: None,
+                                travel_point: None,
+                            },
+                        },
+                    },
+                ],
+                selection: None,
+                group_by: [],
+                having: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        format: None,
+    },
+)
+
+
+---------- Input ----------
+select * from a inner join b using(a);
+---------- Output ---------
+SELECT * FROM a INNER JOIN b USING(a)
+---------- AST ------------
+Query(
+    Query {
+        span: [
+            SELECT(0..6),
+            Multiply(7..8),
+            FROM(9..13),
+            Ident(14..15),
+            INNER(16..21),
+            JOIN(22..26),
+            Ident(27..28),
+            USING(29..34),
+            LParen(34..35),
+            Ident(35..36),
+            RParen(36..37),
+        ],
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: [
+                    SELECT(0..6),
+                    Multiply(7..8),
+                    FROM(9..13),
+                    Ident(14..15),
+                    INNER(16..21),
+                    JOIN(22..26),
+                    Ident(27..28),
+                    USING(29..34),
+                    LParen(34..35),
+                    Ident(35..36),
+                    RParen(36..37),
+                ],
+                distinct: false,
+                select_list: [
+                    QualifiedName(
+                        [
+                            Star,
+                        ],
+                    ),
+                ],
+                from: [
+                    Join {
+                        span: [
+                            Ident(14..15),
+                            INNER(16..21),
+                            JOIN(22..26),
+                            Ident(27..28),
+                            USING(29..34),
+                            LParen(34..35),
+                            Ident(35..36),
+                            RParen(36..37),
+                        ],
+                        join: Join {
+                            op: Inner,
+                            condition: Using(
+                                [
+                                    Identifier {
+                                        name: "a",
+                                        quote: None,
+                                        span: Ident(35..36),
+                                    },
+                                ],
+                            ),
+                            left: Table {
+                                span: [
+                                    Ident(14..15),
+                                ],
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    name: "a",
+                                    quote: None,
+                                    span: Ident(14..15),
+                                },
+                                alias: None,
+                                travel_point: None,
+                            },
+                            right: Table {
+                                span: [
+                                    Ident(27..28),
+                                ],
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    name: "b",
+                                    quote: None,
+                                    span: Ident(27..28),
+                                },
+                                alias: None,
+                                travel_point: None,
+                            },
+                        },
+                    },
+                ],
+                selection: None,
+                group_by: [],
+                having: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        format: None,
+    },
+)
+
+
+---------- Input ----------
+select * from a where a.a = any (select b.a from b);
+---------- Output ---------
+SELECT * FROM a WHERE a.a = ANY (SELECT b.a FROM b)
+---------- AST ------------
+Query(
+    Query {
+        span: [
+            SELECT(0..6),
+            Multiply(7..8),
+            FROM(9..13),
+            Ident(14..15),
+            WHERE(16..21),
+            Ident(22..23),
+            Period(23..24),
+            Ident(24..25),
+            Eq(26..27),
+            ANY(28..31),
+            LParen(32..33),
+            SELECT(33..39),
+            Ident(40..41),
+            Period(41..42),
+            Ident(42..43),
+            FROM(44..48),
+            Ident(49..50),
+            RParen(50..51),
+        ],
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: [
+                    SELECT(0..6),
+                    Multiply(7..8),
+                    FROM(9..13),
+                    Ident(14..15),
+                    WHERE(16..21),
+                    Ident(22..23),
+                    Period(23..24),
+                    Ident(24..25),
+                    Eq(26..27),
+                    ANY(28..31),
+                    LParen(32..33),
+                    SELECT(33..39),
+                    Ident(40..41),
+                    Period(41..42),
+                    Ident(42..43),
+                    FROM(44..48),
+                    Ident(49..50),
+                    RParen(50..51),
+                ],
+                distinct: false,
+                select_list: [
+                    QualifiedName(
+                        [
+                            Star,
+                        ],
+                    ),
+                ],
+                from: [
+                    Table {
+                        span: [
+                            Ident(14..15),
+                        ],
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            name: "a",
+                            quote: None,
+                            span: Ident(14..15),
+                        },
+                        alias: None,
+                        travel_point: None,
+                    },
+                ],
+                selection: Some(
+                    BinaryOp {
+                        span: [
+                            Eq(26..27),
+                        ],
+                        op: Eq,
+                        left: ColumnRef {
+                            span: [
+                                Ident(22..23),
+                                Period(23..24),
+                                Ident(24..25),
+                            ],
+                            database: None,
+                            table: Some(
+                                Identifier {
+                                    name: "a",
+                                    quote: None,
+                                    span: Ident(22..23),
+                                },
+                            ),
+                            column: Identifier {
+                                name: "a",
+                                quote: None,
+                                span: Ident(24..25),
+                            },
+                        },
+                        right: Subquery {
+                            span: [
+                                ANY(28..31),
+                                LParen(32..33),
+                                SELECT(33..39),
+                                Ident(40..41),
+                                Period(41..42),
+                                Ident(42..43),
+                                FROM(44..48),
+                                Ident(49..50),
+                                RParen(50..51),
+                            ],
+                            modifier: Some(
+                                Any,
+                            ),
+                            subquery: Query {
+                                span: [
+                                    SELECT(33..39),
+                                    Ident(40..41),
+                                    Period(41..42),
+                                    Ident(42..43),
+                                    FROM(44..48),
+                                    Ident(49..50),
+                                ],
+                                with: None,
+                                body: Select(
+                                    SelectStmt {
+                                        span: [
+                                            SELECT(33..39),
+                                            Ident(40..41),
+                                            Period(41..42),
+                                            Ident(42..43),
+                                            FROM(44..48),
+                                            Ident(49..50),
+                                        ],
+                                        distinct: false,
+                                        select_list: [
+                                            AliasedExpr {
+                                                expr: ColumnRef {
+                                                    span: [
+                                                        Ident(40..41),
+                                                        Period(41..42),
+                                                        Ident(42..43),
+                                                    ],
+                                                    database: None,
+                                                    table: Some(
+                                                        Identifier {
+                                                            name: "b",
+                                                            quote: None,
+                                                            span: Ident(40..41),
+                                                        },
+                                                    ),
+                                                    column: Identifier {
+                                                        name: "a",
+                                                        quote: None,
+                                                        span: Ident(42..43),
+                                                    },
+                                                },
+                                                alias: None,
+                                            },
+                                        ],
+                                        from: [
+                                            Table {
+                                                span: [
+                                                    Ident(49..50),
+                                                ],
+                                                catalog: None,
+                                                database: None,
+                                                table: Identifier {
+                                                    name: "b",
+                                                    quote: None,
+                                                    span: Ident(49..50),
+                                                },
+                                                alias: None,
+                                                travel_point: None,
+                                            },
+                                        ],
+                                        selection: None,
+                                        group_by: [],
+                                        having: None,
+                                    },
+                                ),
+                                order_by: [],
+                                limit: [],
+                                offset: None,
+                                format: None,
+                            },
+                        },
+                    },
+                ),
+                group_by: [],
+                having: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        format: None,
+    },
+)
+
+
+---------- Input ----------
+select * from a where a.a = all (select b.a from b);
+---------- Output ---------
+SELECT * FROM a WHERE a.a = ALL (SELECT b.a FROM b)
+---------- AST ------------
+Query(
+    Query {
+        span: [
+            SELECT(0..6),
+            Multiply(7..8),
+            FROM(9..13),
+            Ident(14..15),
+            WHERE(16..21),
+            Ident(22..23),
+            Period(23..24),
+            Ident(24..25),
+            Eq(26..27),
+            ALL(28..31),
+            LParen(32..33),
+            SELECT(33..39),
+            Ident(40..41),
+            Period(41..42),
+            Ident(42..43),
+            FROM(44..48),
+            Ident(49..50),
+            RParen(50..51),
+        ],
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: [
+                    SELECT(0..6),
+                    Multiply(7..8),
+                    FROM(9..13),
+                    Ident(14..15),
+                    WHERE(16..21),
+                    Ident(22..23),
+                    Period(23..24),
+                    Ident(24..25),
+                    Eq(26..27),
+                    ALL(28..31),
+                    LParen(32..33),
+                    SELECT(33..39),
+                    Ident(40..41),
+                    Period(41..42),
+                    Ident(42..43),
+                    FROM(44..48),
+                    Ident(49..50),
+                    RParen(50..51),
+                ],
+                distinct: false,
+                select_list: [
+                    QualifiedName(
+                        [
+                            Star,
+                        ],
+                    ),
+                ],
+                from: [
+                    Table {
+                        span: [
+                            Ident(14..15),
+                        ],
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            name: "a",
+                            quote: None,
+                            span: Ident(14..15),
+                        },
+                        alias: None,
+                        travel_point: None,
+                    },
+                ],
+                selection: Some(
+                    BinaryOp {
+                        span: [
+                            Eq(26..27),
+                        ],
+                        op: Eq,
+                        left: ColumnRef {
+                            span: [
+                                Ident(22..23),
+                                Period(23..24),
+                                Ident(24..25),
+                            ],
+                            database: None,
+                            table: Some(
+                                Identifier {
+                                    name: "a",
+                                    quote: None,
+                                    span: Ident(22..23),
+                                },
+                            ),
+                            column: Identifier {
+                                name: "a",
+                                quote: None,
+                                span: Ident(24..25),
+                            },
+                        },
+                        right: Subquery {
+                            span: [
+                                ALL(28..31),
+                                LParen(32..33),
+                                SELECT(33..39),
+                                Ident(40..41),
+                                Period(41..42),
+                                Ident(42..43),
+                                FROM(44..48),
+                                Ident(49..50),
+                                RParen(50..51),
+                            ],
+                            modifier: Some(
+                                All,
+                            ),
+                            subquery: Query {
+                                span: [
+                                    SELECT(33..39),
+                                    Ident(40..41),
+                                    Period(41..42),
+                                    Ident(42..43),
+                                    FROM(44..48),
+                                    Ident(49..50),
+                                ],
+                                with: None,
+                                body: Select(
+                                    SelectStmt {
+                                        span: [
+                                            SELECT(33..39),
+                                            Ident(40..41),
+                                            Period(41..42),
+                                            Ident(42..43),
+                                            FROM(44..48),
+                                            Ident(49..50),
+                                        ],
+                                        distinct: false,
+                                        select_list: [
+                                            AliasedExpr {
+                                                expr: ColumnRef {
+                                                    span: [
+                                                        Ident(40..41),
+                                                        Period(41..42),
+                                                        Ident(42..43),
+                                                    ],
+                                                    database: None,
+                                                    table: Some(
+                                                        Identifier {
+                                                            name: "b",
+                                                            quote: None,
+                                                            span: Ident(40..41),
+                                                        },
+                                                    ),
+                                                    column: Identifier {
+                                                        name: "a",
+                                                        quote: None,
+                                                        span: Ident(42..43),
+                                                    },
+                                                },
+                                                alias: None,
+                                            },
+                                        ],
+                                        from: [
+                                            Table {
+                                                span: [
+                                                    Ident(49..50),
+                                                ],
+                                                catalog: None,
+                                                database: None,
+                                                table: Identifier {
+                                                    name: "b",
+                                                    quote: None,
+                                                    span: Ident(49..50),
+                                                },
+                                                alias: None,
+                                                travel_point: None,
+                                            },
+                                        ],
+                                        selection: None,
+                                        group_by: [],
+                                        having: None,
+                                    },
+                                ),
+                                order_by: [],
+                                limit: [],
+                                offset: None,
+                                format: None,
+                            },
+                        },
+                    },
+                ),
+                group_by: [],
+                having: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        format: None,
+    },
+)
+
+
+---------- Input ----------
+select * from a where a.a = some (select b.a from b);
+---------- Output ---------
+SELECT * FROM a WHERE a.a = SOME (SELECT b.a FROM b)
+---------- AST ------------
+Query(
+    Query {
+        span: [
+            SELECT(0..6),
+            Multiply(7..8),
+            FROM(9..13),
+            Ident(14..15),
+            WHERE(16..21),
+            Ident(22..23),
+            Period(23..24),
+            Ident(24..25),
+            Eq(26..27),
+            SOME(28..32),
+            LParen(33..34),
+            SELECT(34..40),
+            Ident(41..42),
+            Period(42..43),
+            Ident(43..44),
+            FROM(45..49),
+            Ident(50..51),
+            RParen(51..52),
+        ],
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: [
+                    SELECT(0..6),
+                    Multiply(7..8),
+                    FROM(9..13),
+                    Ident(14..15),
+                    WHERE(16..21),
+                    Ident(22..23),
+                    Period(23..24),
+                    Ident(24..25),
+                    Eq(26..27),
+                    SOME(28..32),
+                    LParen(33..34),
+                    SELECT(34..40),
+                    Ident(41..42),
+                    Period(42..43),
+                    Ident(43..44),
+                    FROM(45..49),
+                    Ident(50..51),
+                    RParen(51..52),
+                ],
+                distinct: false,
+                select_list: [
+                    QualifiedName(
+                        [
+                            Star,
+                        ],
+                    ),
+                ],
+                from: [
+                    Table {
+                        span: [
+                            Ident(14..15),
+                        ],
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            name: "a",
+                            quote: None,
+                            span: Ident(14..15),
+                        },
+                        alias: None,
+                        travel_point: None,
+                    },
+                ],
+                selection: Some(
+                    BinaryOp {
+                        span: [
+                            Eq(26..27),
+                        ],
+                        op: Eq,
+                        left: ColumnRef {
+                            span: [
+                                Ident(22..23),
+                                Period(23..24),
+                                Ident(24..25),
+                            ],
+                            database: None,
+                            table: Some(
+                                Identifier {
+                                    name: "a",
+                                    quote: None,
+                                    span: Ident(22..23),
+                                },
+                            ),
+                            column: Identifier {
+                                name: "a",
+                                quote: None,
+                                span: Ident(24..25),
+                            },
+                        },
+                        right: Subquery {
+                            span: [
+                                SOME(28..32),
+                                LParen(33..34),
+                                SELECT(34..40),
+                                Ident(41..42),
+                                Period(42..43),
+                                Ident(43..44),
+                                FROM(45..49),
+                                Ident(50..51),
+                                RParen(51..52),
+                            ],
+                            modifier: Some(
+                                Some,
+                            ),
+                            subquery: Query {
+                                span: [
+                                    SELECT(34..40),
+                                    Ident(41..42),
+                                    Period(42..43),
+                                    Ident(43..44),
+                                    FROM(45..49),
+                                    Ident(50..51),
+                                ],
+                                with: None,
+                                body: Select(
+                                    SelectStmt {
+                                        span: [
+                                            SELECT(34..40),
+                                            Ident(41..42),
+                                            Period(42..43),
+                                            Ident(43..44),
+                                            FROM(45..49),
+                                            Ident(50..51),
+                                        ],
+                                        distinct: false,
+                                        select_list: [
+                                            AliasedExpr {
+                                                expr: ColumnRef {
+                                                    span: [
+                                                        Ident(41..42),
+                                                        Period(42..43),
+                                                        Ident(43..44),
+                                                    ],
+                                                    database: None,
+                                                    table: Some(
+                                                        Identifier {
+                                                            name: "b",
+                                                            quote: None,
+                                                            span: Ident(41..42),
+                                                        },
+                                                    ),
+                                                    column: Identifier {
+                                                        name: "a",
+                                                        quote: None,
+                                                        span: Ident(43..44),
+                                                    },
+                                                },
+                                                alias: None,
+                                            },
+                                        ],
+                                        from: [
+                                            Table {
+                                                span: [
+                                                    Ident(50..51),
+                                                ],
+                                                catalog: None,
+                                                database: None,
+                                                table: Identifier {
+                                                    name: "b",
+                                                    quote: None,
+                                                    span: Ident(50..51),
+                                                },
+                                                alias: None,
+                                                travel_point: None,
+                                            },
+                                        ],
+                                        selection: None,
+                                        group_by: [],
+                                        having: None,
+                                    },
+                                ),
+                                order_by: [],
+                                limit: [],
+                                offset: None,
+                                format: None,
+                            },
+                        },
+                    },
+                ),
+                group_by: [],
+                having: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        format: None,
+    },
+)
+
+
+---------- Input ----------
+select * from a where a.a > (select b.a from b);
+---------- Output ---------
+SELECT * FROM a WHERE a.a > (SELECT b.a FROM b)
+---------- AST ------------
+Query(
+    Query {
+        span: [
+            SELECT(0..6),
+            Multiply(7..8),
+            FROM(9..13),
+            Ident(14..15),
+            WHERE(16..21),
+            Ident(22..23),
+            Period(23..24),
+            Ident(24..25),
+            Gt(26..27),
+            LParen(28..29),
+            SELECT(29..35),
+            Ident(36..37),
+            Period(37..38),
+            Ident(38..39),
+            FROM(40..44),
+            Ident(45..46),
+            RParen(46..47),
+        ],
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: [
+                    SELECT(0..6),
+                    Multiply(7..8),
+                    FROM(9..13),
+                    Ident(14..15),
+                    WHERE(16..21),
+                    Ident(22..23),
+                    Period(23..24),
+                    Ident(24..25),
+                    Gt(26..27),
+                    LParen(28..29),
+                    SELECT(29..35),
+                    Ident(36..37),
+                    Period(37..38),
+                    Ident(38..39),
+                    FROM(40..44),
+                    Ident(45..46),
+                    RParen(46..47),
+                ],
+                distinct: false,
+                select_list: [
+                    QualifiedName(
+                        [
+                            Star,
+                        ],
+                    ),
+                ],
+                from: [
+                    Table {
+                        span: [
+                            Ident(14..15),
+                        ],
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            name: "a",
+                            quote: None,
+                            span: Ident(14..15),
+                        },
+                        alias: None,
+                        travel_point: None,
+                    },
+                ],
+                selection: Some(
+                    BinaryOp {
+                        span: [
+                            Gt(26..27),
+                        ],
+                        op: Gt,
+                        left: ColumnRef {
+                            span: [
+                                Ident(22..23),
+                                Period(23..24),
+                                Ident(24..25),
+                            ],
+                            database: None,
+                            table: Some(
+                                Identifier {
+                                    name: "a",
+                                    quote: None,
+                                    span: Ident(22..23),
+                                },
+                            ),
+                            column: Identifier {
+                                name: "a",
+                                quote: None,
+                                span: Ident(24..25),
+                            },
+                        },
+                        right: Subquery {
+                            span: [
+                                LParen(28..29),
+                                SELECT(29..35),
+                                Ident(36..37),
+                                Period(37..38),
+                                Ident(38..39),
+                                FROM(40..44),
+                                Ident(45..46),
+                                RParen(46..47),
+                            ],
+                            modifier: None,
+                            subquery: Query {
+                                span: [
+                                    SELECT(29..35),
+                                    Ident(36..37),
+                                    Period(37..38),
+                                    Ident(38..39),
+                                    FROM(40..44),
+                                    Ident(45..46),
+                                ],
+                                with: None,
+                                body: Select(
+                                    SelectStmt {
+                                        span: [
+                                            SELECT(29..35),
+                                            Ident(36..37),
+                                            Period(37..38),
+                                            Ident(38..39),
+                                            FROM(40..44),
+                                            Ident(45..46),
+                                        ],
+                                        distinct: false,
+                                        select_list: [
+                                            AliasedExpr {
+                                                expr: ColumnRef {
+                                                    span: [
+                                                        Ident(36..37),
+                                                        Period(37..38),
+                                                        Ident(38..39),
+                                                    ],
+                                                    database: None,
+                                                    table: Some(
+                                                        Identifier {
+                                                            name: "b",
+                                                            quote: None,
+                                                            span: Ident(36..37),
+                                                        },
+                                                    ),
+                                                    column: Identifier {
+                                                        name: "a",
+                                                        quote: None,
+                                                        span: Ident(38..39),
+                                                    },
+                                                },
+                                                alias: None,
+                                            },
+                                        ],
+                                        from: [
+                                            Table {
+                                                span: [
+                                                    Ident(45..46),
+                                                ],
+                                                catalog: None,
+                                                database: None,
+                                                table: Identifier {
+                                                    name: "b",
+                                                    quote: None,
+                                                    span: Ident(45..46),
+                                                },
+                                                alias: None,
+                                                travel_point: None,
+                                            },
+                                        ],
+                                        selection: None,
+                                        group_by: [],
+                                        having: None,
+                                    },
+                                ),
+                                order_by: [],
+                                limit: [],
+                                offset: None,
+                                format: None,
+                            },
+                        },
+                    },
+                ),
+                group_by: [],
+                having: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        format: None,
+    },
+)
+
+
+---------- Input ----------
+select 1 from numbers(1) where ((1 = 1) or 1)
+---------- Output ---------
+SELECT 1 FROM numbers(1) WHERE 1 = 1 OR 1
+---------- AST ------------
+Query(
+    Query {
+        span: [
+            SELECT(0..6),
+            LiteralInteger(7..8),
+            FROM(9..13),
+            Ident(14..21),
+            LParen(21..22),
+            LiteralInteger(22..23),
+            RParen(23..24),
+            WHERE(25..30),
+            LParen(31..32),
+            LParen(32..33),
+            LiteralInteger(33..34),
+            Eq(35..36),
+            LiteralInteger(37..38),
+            RParen(38..39),
+            OR(40..42),
+            LiteralInteger(43..44),
+            RParen(44..45),
+        ],
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: [
+                    SELECT(0..6),
+                    LiteralInteger(7..8),
+                    FROM(9..13),
+                    Ident(14..21),
+                    LParen(21..22),
+                    LiteralInteger(22..23),
+                    RParen(23..24),
+                    WHERE(25..30),
+                    LParen(31..32),
+                    LParen(32..33),
+                    LiteralInteger(33..34),
+                    Eq(35..36),
+                    LiteralInteger(37..38),
+                    RParen(38..39),
+                    OR(40..42),
+                    LiteralInteger(43..44),
+                    RParen(44..45),
+                ],
+                distinct: false,
+                select_list: [
+                    AliasedExpr {
+                        expr: Literal {
+                            span: [
+                                LiteralInteger(7..8),
+                            ],
+                            lit: Integer(
+                                1,
+                            ),
+                        },
+                        alias: None,
+                    },
+                ],
+                from: [
+                    TableFunction {
+                        span: [
+                            Ident(14..21),
+                            LParen(21..22),
+                            LiteralInteger(22..23),
+                            RParen(23..24),
+                        ],
+                        name: Identifier {
+                            name: "numbers",
+                            quote: None,
+                            span: Ident(14..21),
+                        },
+                        params: [
+                            Literal {
+                                span: [
+                                    LiteralInteger(22..23),
+                                ],
+                                lit: Integer(
+                                    1,
+                                ),
+                            },
+                        ],
+                        alias: None,
+                    },
+                ],
+                selection: Some(
+                    BinaryOp {
+                        span: [
+                            OR(40..42),
+                        ],
+                        op: Or,
+                        left: BinaryOp {
+                            span: [
+                                Eq(35..36),
+                            ],
+                            op: Eq,
+                            left: Literal {
+                                span: [
+                                    LiteralInteger(33..34),
+                                ],
+                                lit: Integer(
+                                    1,
+                                ),
+                            },
+                            right: Literal {
+                                span: [
+                                    LiteralInteger(37..38),
+                                ],
+                                lit: Integer(
+                                    1,
+                                ),
+                            },
+                        },
+                        right: Literal {
+                            span: [
+                                LiteralInteger(43..44),
+                            ],
+                            lit: Integer(
+                                1,
+                            ),
+                        },
+                    },
+                ),
+                group_by: [],
+                having: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        format: None,
+    },
+)
+
+
+---------- Input ----------
+insert into t (c1, c2) values (1, 2), (3, 4);
+---------- Output ---------
+INSERT INTO t (c1, c2) VALUES (1, 2), (3, 4);
+---------- AST ------------
+Insert(
+    InsertStmt {
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "t",
+            quote: None,
+            span: Ident(12..13),
+        },
+        columns: [
+            Identifier {
+                name: "c1",
+                quote: None,
+                span: Ident(15..17),
+            },
+            Identifier {
+                name: "c2",
+                quote: None,
+                span: Ident(19..21),
+            },
+        ],
+        source: Values {
+            rest_tokens: [
+                LParen(30..31),
+                LiteralInteger(31..32),
+                Comma(32..33),
+                LiteralInteger(34..35),
+                RParen(35..36),
+                Comma(36..37),
+                LParen(38..39),
+                LiteralInteger(39..40),
+                Comma(40..41),
+                LiteralInteger(42..43),
+                RParen(43..44),
+                SemiColon(44..45),
+            ],
+        },
+        overwrite: false,
+    },
+)
+
+
+---------- Input ----------
+insert into table t format json;
+---------- Output ---------
+INSERT INTO t FORMAT json ;
+---------- AST ------------
+Insert(
+    InsertStmt {
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "t",
+            quote: None,
+            span: Ident(18..19),
+        },
+        columns: [],
+        source: Streaming {
+            format: "json",
+            rest_tokens: [
+                SemiColon(31..32),
+            ],
+        },
+        overwrite: false,
+    },
+)
+
+
+---------- Input ----------
+insert into table t select * from t2;
+---------- Output ---------
+INSERT INTO t SELECT * FROM t2
+---------- AST ------------
+Insert(
+    InsertStmt {
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "t",
+            quote: None,
+            span: Ident(18..19),
+        },
+        columns: [],
+        source: Select {
+            query: Query {
+                span: [
+                    SELECT(20..26),
+                    Multiply(27..28),
+                    FROM(29..33),
+                    Ident(34..36),
+                ],
+                with: None,
+                body: Select(
+                    SelectStmt {
+                        span: [
+                            SELECT(20..26),
+                            Multiply(27..28),
+                            FROM(29..33),
+                            Ident(34..36),
+                        ],
+                        distinct: false,
+                        select_list: [
+                            QualifiedName(
+                                [
+                                    Star,
+                                ],
+                            ),
+                        ],
+                        from: [
+                            Table {
+                                span: [
+                                    Ident(34..36),
+                                ],
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    name: "t2",
+                                    quote: None,
+                                    span: Ident(34..36),
+                                },
+                                alias: None,
+                                travel_point: None,
+                            },
+                        ],
+                        selection: None,
+                        group_by: [],
+                        having: None,
+                    },
+                ),
+                order_by: [],
+                limit: [],
+                offset: None,
+                format: None,
+            },
+        },
+        overwrite: false,
+    },
+)
+
+
+---------- Input ----------
+select parse_json('{"k1": [0, 1, 2]}').k1[0];
+---------- Output ---------
+SELECT parse_json('{"k1": [0, 1, 2]}').k1[0]
+---------- AST ------------
+Query(
+    Query {
+        span: [
+            SELECT(0..6),
+            Ident(7..17),
+            LParen(17..18),
+            QuotedString(18..37),
+            RParen(37..38),
+            Period(38..39),
+            Ident(39..41),
+            LBracket(41..42),
+            LiteralInteger(42..43),
+            RBracket(43..44),
+        ],
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: [
+                    SELECT(0..6),
+                    Ident(7..17),
+                    LParen(17..18),
+                    QuotedString(18..37),
+                    RParen(37..38),
+                    Period(38..39),
+                    Ident(39..41),
+                    LBracket(41..42),
+                    LiteralInteger(42..43),
+                    RBracket(43..44),
+                ],
+                distinct: false,
+                select_list: [
+                    AliasedExpr {
+                        expr: MapAccess {
+                            span: [
+                                LBracket(41..42),
+                                LiteralInteger(42..43),
+                                RBracket(43..44),
+                            ],
+                            expr: MapAccess {
+                                span: [
+                                    Period(38..39),
+                                    Ident(39..41),
+                                ],
+                                expr: FunctionCall {
+                                    span: [
+                                        Ident(7..17),
+                                        LParen(17..18),
+                                        QuotedString(18..37),
+                                        RParen(37..38),
+                                    ],
+                                    distinct: false,
+                                    name: Identifier {
+                                        name: "parse_json",
+                                        quote: None,
+                                        span: Ident(7..17),
+                                    },
+                                    args: [
+                                        Literal {
+                                            span: [
+                                                QuotedString(18..37),
+                                            ],
+                                            lit: String(
+                                                "{\"k1\": [0, 1, 2]}",
+                                            ),
+                                        },
+                                    ],
+                                    params: [],
+                                },
+                                accessor: Period {
+                                    key: Identifier {
+                                        name: "k1",
+                                        quote: None,
+                                        span: Ident(39..41),
+                                    },
+                                },
+                            },
+                            accessor: Bracket {
+                                key: Integer(
+                                    0,
+                                ),
+                            },
+                        },
+                        alias: None,
+                    },
+                ],
+                from: [],
+                selection: None,
+                group_by: [],
+                having: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        format: None,
+    },
+)
+
+
+---------- Input ----------
+CREATE STAGE IF NOT EXISTS test_stage url='s3://load/files/' credentials=(aws_key_id='1a2b3c' aws_secret_key='4x5y6z') file_format=(FORMAT = CSV compression = GZIP record_delimiter=',')
+---------- Output ---------
+CREATE STAGE IF NOT EXISTS test_stage URL = 's3://load/files/' CONNECTION = ( aws_key_id='1a2b3c' aws_secret_key='4x5y6z' ) FILE_FORMAT = ( compression = 'GZIP' format = 'CSV' record_delimiter = ',' )
+---------- AST ------------
+CreateStage(
+    CreateStageStmt {
+        if_not_exists: true,
+        stage_name: "test_stage",
+        location: Some(
+            UriLocation {
+                protocol: "s3",
+                name: "load",
+                path: "/files/",
+                connection: {
+                    "aws_key_id": "1a2b3c",
+                    "aws_secret_key": "4x5y6z",
+                },
+            },
+        ),
+        file_format_options: {
+            "compression": "GZIP",
+            "format": "CSV",
+            "record_delimiter": ",",
+        },
+        on_error: "",
+        size_limit: 0,
+        validation_mode: "",
+        comments: "",
+    },
+)
+
+
+---------- Input ----------
+list @stage_a;
+---------- Output ---------
+LIST @stage_a
+---------- AST ------------
+ListStage {
+    location: "stage_a",
+    pattern: "",
+}
+
+
+---------- Input ----------
+create user 'test-e'@'localhost' identified by 'password';
+---------- Output ---------
+CREATE USER 'test-e'@'localhost' IDENTIFIED BY 'password'
+---------- AST ------------
+CreateUser(
+    CreateUserStmt {
+        if_not_exists: false,
+        user: UserIdentity {
+            username: "test-e",
+            hostname: "localhost",
+        },
+        auth_option: AuthOption {
+            auth_type: None,
+            password: Some(
+                "password",
+            ),
+        },
+        user_options: [],
+    },
+)
+
+
+---------- Input ----------
+drop user if exists 'test-j'@'localhost';
+---------- Output ---------
+DROP USER IF EXISTS 'test-j'@'localhost'
+---------- AST ------------
+DropUser {
+    if_exists: true,
+    user: UserIdentity {
+        username: "test-j",
+        hostname: "localhost",
+    },
+}
+
+
+---------- Input ----------
+alter user 'test-e'@'localhost' identified by 'new-password';
+---------- Output ---------
+ALTER USER 'test-e'@'localhost' IDENTIFIED BY 'new-password'
+---------- AST ------------
+AlterUser(
+    AlterUserStmt {
+        user: Some(
+            UserIdentity {
+                username: "test-e",
+                hostname: "localhost",
+            },
+        ),
+        auth_option: Some(
+            AuthOption {
+                auth_type: None,
+                password: Some(
+                    "new-password",
+                ),
+            },
+        ),
+        user_options: [],
+    },
+)
+
+
+---------- Input ----------
+create role 'test'
+---------- Output ---------
+CREATE ROLE 'test'
+---------- AST ------------
+CreateRole {
+    if_not_exists: false,
+    role_name: "test",
+}
+
+
+---------- Input ----------
+drop role if exists 'test'
+---------- Output ---------
+DROP ROLE IF EXISTS 'test'
+---------- AST ------------
+DropRole {
+    if_exists: true,
+    role_name: "test",
+}
+
+
+---------- Input ----------
+ALTER TABLE t CLUSTER BY(c1);
+---------- Output ---------
+ALTER TABLE t CLUSTER BY c1
+---------- AST ------------
+AlterTable(
+    AlterTableStmt {
+        if_exists: false,
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "t",
+            quote: None,
+            span: Ident(12..13),
+        },
+        action: AlterTableClusterKey {
+            cluster_by: [
+                ColumnRef {
+                    span: [
+                        Ident(25..27),
+                    ],
+                    database: None,
+                    table: None,
+                    column: Identifier {
+                        name: "c1",
+                        quote: None,
+                        span: Ident(25..27),
+                    },
+                },
+            ],
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER TABLE t DROP CLUSTER KEY;
+---------- Output ---------
+ALTER TABLE t DROP CLUSTER KEY
+---------- AST ------------
+AlterTable(
+    AlterTableStmt {
+        if_exists: false,
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "t",
+            quote: None,
+            span: Ident(12..13),
+        },
+        action: DropTableClusterKey,
+    },
+)
+
+
+---------- Input ----------
+ALTER DATABASE IF EXISTS catalog.c RENAME TO a;
+---------- Output ---------
+ALTER DATABASE IF EXISTS catalog.c RENAME TO a
+---------- AST ------------
+AlterDatabase(
+    AlterDatabaseStmt {
+        if_exists: true,
+        catalog: Some(
+            Identifier {
+                name: "catalog",
+                quote: None,
+                span: Ident(25..32),
+            },
+        ),
+        database: Identifier {
+            name: "c",
+            quote: None,
+            span: Ident(33..34),
+        },
+        action: RenameDatabase {
+            new_db: Identifier {
+                name: "a",
+                quote: None,
+                span: Ident(45..46),
+            },
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER DATABASE c RENAME TO a;
+---------- Output ---------
+ALTER DATABASE c RENAME TO a
+---------- AST ------------
+AlterDatabase(
+    AlterDatabaseStmt {
+        if_exists: false,
+        catalog: None,
+        database: Identifier {
+            name: "c",
+            quote: None,
+            span: Ident(15..16),
+        },
+        action: RenameDatabase {
+            new_db: Identifier {
+                name: "a",
+                quote: None,
+                span: Ident(27..28),
+            },
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER DATABASE catalog.c RENAME TO a;
+---------- Output ---------
+ALTER DATABASE catalog.c RENAME TO a
+---------- AST ------------
+AlterDatabase(
+    AlterDatabaseStmt {
+        if_exists: false,
+        catalog: Some(
+            Identifier {
+                name: "catalog",
+                quote: None,
+                span: Ident(15..22),
+            },
+        ),
+        database: Identifier {
+            name: "c",
+            quote: None,
+            span: Ident(23..24),
+        },
+        action: RenameDatabase {
+            new_db: Identifier {
+                name: "a",
+                quote: None,
+                span: Ident(35..36),
+            },
+        },
+    },
+)
+
+
+---------- Input ----------
+CREATE TABLE t (a INT COMMENT 'col comment') COMMENT='table comment';
+---------- Output ---------
+CREATE TABLE t (a Int32 NOT NULL COMMENT 'col comment')comment='table comment'
+---------- AST ------------
+CreateTable(
+    CreateTableStmt {
+        if_not_exists: false,
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "t",
+            quote: None,
+            span: Ident(13..14),
+        },
+        source: Some(
+            Columns(
+                [
+                    ColumnDefinition {
+                        name: Identifier {
+                            name: "a",
+                            quote: None,
+                            span: Ident(16..17),
+                        },
+                        data_type: Int32,
+                        default_expr: None,
+                        comment: Some(
+                            "col comment",
+                        ),
+                    },
+                ],
+            ),
+        ),
+        engine: None,
+        cluster_by: [],
+        table_options: {
+            "comment": "table comment",
+        },
+        as_query: None,
+        transient: false,
+    },
+)
+
+
+---------- Input ----------
+GRANT SELECT, CREATE ON * TO 'test-grant'@'localhost';
+---------- Output ---------
+GRANT SELECT, CREATE ON * TO USER 'test-grant'@'localhost'
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Privs {
+            privileges: [
+                Select,
+                Create,
+            ],
+            level: Database(
+                None,
+            ),
+        },
+        principal: User(
+            UserIdentity {
+                username: "test-grant",
+                hostname: "localhost",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT SELECT, CREATE ON *.* TO 'test-grant'@'localhost';
+---------- Output ---------
+GRANT SELECT, CREATE ON *.* TO USER 'test-grant'@'localhost'
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Privs {
+            privileges: [
+                Select,
+                Create,
+            ],
+            level: Global,
+        },
+        principal: User(
+            UserIdentity {
+                username: "test-grant",
+                hostname: "localhost",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT SELECT, CREATE ON * TO USER 'test-grant'@'localhost';
+---------- Output ---------
+GRANT SELECT, CREATE ON * TO USER 'test-grant'@'localhost'
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Privs {
+            privileges: [
+                Select,
+                Create,
+            ],
+            level: Database(
+                None,
+            ),
+        },
+        principal: User(
+            UserIdentity {
+                username: "test-grant",
+                hostname: "localhost",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT SELECT, CREATE ON * TO ROLE 'role1';
+---------- Output ---------
+GRANT SELECT, CREATE ON * TO ROLE role1
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Privs {
+            privileges: [
+                Select,
+                Create,
+            ],
+            level: Database(
+                None,
+            ),
+        },
+        principal: Role(
+            "role1",
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT ALL ON *.* TO 'test-grant'@'localhost';
+---------- Output ---------
+GRANT ALL PRIVILEGES ON *.* TO USER 'test-grant'@'localhost'
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: ALL {
+            level: Global,
+        },
+        principal: User(
+            UserIdentity {
+                username: "test-grant",
+                hostname: "localhost",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT ALL ON *.* TO ROLE 'role2';
+---------- Output ---------
+GRANT ALL PRIVILEGES ON *.* TO ROLE role2
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: ALL {
+            level: Global,
+        },
+        principal: Role(
+            "role2",
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT ALL PRIVILEGES ON * TO 'test-grant'@'localhost';
+---------- Output ---------
+GRANT ALL PRIVILEGES ON * TO USER 'test-grant'@'localhost'
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: ALL {
+            level: Database(
+                None,
+            ),
+        },
+        principal: User(
+            UserIdentity {
+                username: "test-grant",
+                hostname: "localhost",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT ALL PRIVILEGES ON * TO ROLE 'role3';
+---------- Output ---------
+GRANT ALL PRIVILEGES ON * TO ROLE role3
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: ALL {
+            level: Database(
+                None,
+            ),
+        },
+        principal: Role(
+            "role3",
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT ROLE 'test' TO 'test-user';
+---------- Output ---------
+GRANT ROLE test TO USER 'test-user'@'%'
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Role {
+            role: "test",
+        },
+        principal: User(
+            UserIdentity {
+                username: "test-user",
+                hostname: "%",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT ROLE 'test' TO USER 'test-user';
+---------- Output ---------
+GRANT ROLE test TO USER 'test-user'@'%'
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Role {
+            role: "test",
+        },
+        principal: User(
+            UserIdentity {
+                username: "test-user",
+                hostname: "%",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT ROLE 'test' TO ROLE 'test-user';
+---------- Output ---------
+GRANT ROLE test TO ROLE test-user
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Role {
+            role: "test",
+        },
+        principal: Role(
+            "test-user",
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT SELECT ON db01.* TO 'test-grant'@'localhost';
+---------- Output ---------
+GRANT SELECT ON db01.* TO USER 'test-grant'@'localhost'
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Privs {
+            privileges: [
+                Select,
+            ],
+            level: Database(
+                Some(
+                    "db01",
+                ),
+            ),
+        },
+        principal: User(
+            UserIdentity {
+                username: "test-grant",
+                hostname: "localhost",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT SELECT ON db01.* TO USER 'test-grant'@'localhost';
+---------- Output ---------
+GRANT SELECT ON db01.* TO USER 'test-grant'@'localhost'
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Privs {
+            privileges: [
+                Select,
+            ],
+            level: Database(
+                Some(
+                    "db01",
+                ),
+            ),
+        },
+        principal: User(
+            UserIdentity {
+                username: "test-grant",
+                hostname: "localhost",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT SELECT ON db01.* TO ROLE 'role1'
+---------- Output ---------
+GRANT SELECT ON db01.* TO ROLE role1
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Privs {
+            privileges: [
+                Select,
+            ],
+            level: Database(
+                Some(
+                    "db01",
+                ),
+            ),
+        },
+        principal: Role(
+            "role1",
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT SELECT ON db01.tb1 TO 'test-grant'@'localhost';
+---------- Output ---------
+GRANT SELECT ON db01.tb1 TO USER 'test-grant'@'localhost'
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Privs {
+            privileges: [
+                Select,
+            ],
+            level: Table(
+                Some(
+                    "db01",
+                ),
+                "tb1",
+            ),
+        },
+        principal: User(
+            UserIdentity {
+                username: "test-grant",
+                hostname: "localhost",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT SELECT ON db01.tb1 TO USER 'test-grant'@'localhost';
+---------- Output ---------
+GRANT SELECT ON db01.tb1 TO USER 'test-grant'@'localhost'
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Privs {
+            privileges: [
+                Select,
+            ],
+            level: Table(
+                Some(
+                    "db01",
+                ),
+                "tb1",
+            ),
+        },
+        principal: User(
+            UserIdentity {
+                username: "test-grant",
+                hostname: "localhost",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT SELECT ON db01.tb1 TO ROLE 'role1';
+---------- Output ---------
+GRANT SELECT ON db01.tb1 TO ROLE role1
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Privs {
+            privileges: [
+                Select,
+            ],
+            level: Table(
+                Some(
+                    "db01",
+                ),
+                "tb1",
+            ),
+        },
+        principal: Role(
+            "role1",
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT SELECT ON tb1 TO ROLE 'role1';
+---------- Output ---------
+GRANT SELECT ON tb1 TO ROLE role1
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Privs {
+            privileges: [
+                Select,
+            ],
+            level: Table(
+                None,
+                "tb1",
+            ),
+        },
+        principal: Role(
+            "role1",
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT ALL ON tb1 TO 'u1';
+---------- Output ---------
+GRANT ALL PRIVILEGES ON tb1 TO USER 'u1'@'%'
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: ALL {
+            level: Table(
+                None,
+                "tb1",
+            ),
+        },
+        principal: User(
+            UserIdentity {
+                username: "u1",
+                hostname: "%",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+SHOW GRANTS;
+---------- Output ---------
+SHOW GRANTS
+---------- AST ------------
+ShowGrants {
+    principal: None,
+}
+
+
+---------- Input ----------
+SHOW GRANTS FOR 'test-grant'@'localhost';
+---------- Output ---------
+SHOW GRANTS FOR USER 'test-grant'@'localhost'
+---------- AST ------------
+ShowGrants {
+    principal: Some(
+        User(
+            UserIdentity {
+                username: "test-grant",
+                hostname: "localhost",
+            },
+        ),
+    ),
+}
+
+
+---------- Input ----------
+SHOW GRANTS FOR USER 'test-grant'@'localhost';
+---------- Output ---------
+SHOW GRANTS FOR USER 'test-grant'@'localhost'
+---------- AST ------------
+ShowGrants {
+    principal: Some(
+        User(
+            UserIdentity {
+                username: "test-grant",
+                hostname: "localhost",
+            },
+        ),
+    ),
+}
+
+
+---------- Input ----------
+SHOW GRANTS FOR ROLE 'role1';
+---------- Output ---------
+SHOW GRANTS FOR ROLE role1
+---------- AST ------------
+ShowGrants {
+    principal: Some(
+        Role(
+            "role1",
+        ),
+    ),
+}
+
+
+---------- Input ----------
+REVOKE SELECT, CREATE ON * FROM 'test-grant'@'localhost';
+---------- Output ---------
+REVOKE SELECT, CREATE ON * FROM USER 'test-grant'@'localhost'
+---------- AST ------------
+Revoke(
+    RevokeStmt {
+        source: Privs {
+            privileges: [
+                Select,
+                Create,
+            ],
+            level: Database(
+                None,
+            ),
+        },
+        principal: User(
+            UserIdentity {
+                username: "test-grant",
+                hostname: "localhost",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+REVOKE SELECT ON tb1 FROM ROLE 'role1';
+---------- Output ---------
+REVOKE SELECT ON tb1 FROM ROLE role1
+---------- AST ------------
+Revoke(
+    RevokeStmt {
+        source: Privs {
+            privileges: [
+                Select,
+            ],
+            level: Table(
+                None,
+                "tb1",
+            ),
+        },
+        principal: Role(
+            "role1",
+        ),
+    },
+)
+
+
+---------- Input ----------
+REVOKE ALL ON tb1 FROM 'u1';
+---------- Output ---------
+REVOKE ALL PRIVILEGES ON tb1 FROM USER 'u1'@'%'
+---------- AST ------------
+Revoke(
+    RevokeStmt {
+        source: ALL {
+            level: Table(
+                None,
+                "tb1",
+            ),
+        },
+        principal: User(
+            UserIdentity {
+                username: "u1",
+                hostname: "%",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+COPY INTO mytable
+                FROM 's3://mybucket/data.csv'
+                FILE_FORMAT = (
+                    type = 'CSV'
+                    field_delimiter = ','
+                    record_delimiter = '\n'
+                    skip_header = 1
+                )
+                size_limit=10;
+---------- Output ---------
+COPY INTO mytable FROM 's3://mybucket/data.csv' FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10
+---------- AST ------------
+Copy(
+    CopyStmt {
+        src: UriLocation(
+            UriLocation {
+                protocol: "s3",
+                name: "mybucket",
+                path: "/data.csv",
+                connection: {},
+            },
+        ),
+        dst: Table {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                name: "mytable",
+                quote: None,
+                span: Ident(10..17),
+            },
+        },
+        files: [],
+        pattern: "",
+        file_format: {
+            "field_delimiter": ",",
+            "record_delimiter": "\n",
+            "skip_header": "1",
+            "type": "CSV",
+        },
+        validation_mode: "",
+        size_limit: 10,
+    },
+)
+
+
+---------- Input ----------
+COPY INTO mytable
+                FROM 's3://mybucket/data.csv'
+                CONNECTION = (
+                    ENDPOINT_URL = 'http://127.0.0.1:9900'
+                )
+                FILE_FORMAT = (
+                    type = 'CSV'
+                    field_delimiter = ','
+                    record_delimiter = '\n'
+                    skip_header = 1
+                )
+                size_limit=10;
+---------- Output ---------
+COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( endpoint_url='http://127.0.0.1:9900' ) FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10
+---------- AST ------------
+Copy(
+    CopyStmt {
+        src: UriLocation(
+            UriLocation {
+                protocol: "s3",
+                name: "mybucket",
+                path: "/data.csv",
+                connection: {
+                    "endpoint_url": "http://127.0.0.1:9900",
+                },
+            },
+        ),
+        dst: Table {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                name: "mytable",
+                quote: None,
+                span: Ident(10..17),
+            },
+        },
+        files: [],
+        pattern: "",
+        file_format: {
+            "field_delimiter": ",",
+            "record_delimiter": "\n",
+            "skip_header": "1",
+            "type": "CSV",
+        },
+        validation_mode: "",
+        size_limit: 10,
+    },
+)
+
+
+---------- Input ----------
+COPY INTO mytable
+                FROM @my_stage
+                FILE_FORMAT = (
+                    type = 'CSV'
+                    field_delimiter = ','
+                    record_delimiter = '\n'
+                    skip_header = 1
+                )
+                size_limit=10;
+---------- Output ---------
+COPY INTO mytable FROM @my_stage/ FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10
+---------- AST ------------
+Copy(
+    CopyStmt {
+        src: StageLocation {
+            name: "my_stage",
+            path: "/",
+        },
+        dst: Table {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                name: "mytable",
+                quote: None,
+                span: Ident(10..17),
+            },
+        },
+        files: [],
+        pattern: "",
+        file_format: {
+            "field_delimiter": ",",
+            "record_delimiter": "\n",
+            "skip_header": "1",
+            "type": "CSV",
+        },
+        validation_mode: "",
+        size_limit: 10,
+    },
+)
+
+
+---------- Input ----------
+COPY INTO 's3://mybucket/data.csv'
+                FROM mytable
+                FILE_FORMAT = (
+                    type = 'CSV'
+                    field_delimiter = ','
+                    record_delimiter = '\n'
+                    skip_header = 1
+                )
+                size_limit=10;
+---------- Output ---------
+COPY INTO 's3://mybucket/data.csv' FROM mytable FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10
+---------- AST ------------
+Copy(
+    CopyStmt {
+        src: Table {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                name: "mytable",
+                quote: None,
+                span: Ident(56..63),
+            },
+        },
+        dst: UriLocation(
+            UriLocation {
+                protocol: "s3",
+                name: "mybucket",
+                path: "/data.csv",
+                connection: {},
+            },
+        ),
+        files: [],
+        pattern: "",
+        file_format: {
+            "field_delimiter": ",",
+            "record_delimiter": "\n",
+            "skip_header": "1",
+            "type": "CSV",
+        },
+        validation_mode: "",
+        size_limit: 10,
+    },
+)
+
+
+---------- Input ----------
+COPY INTO @my_stage
+                FROM mytable
+                FILE_FORMAT = (
+                    type = 'CSV'
+                    field_delimiter = ','
+                    record_delimiter = '\n'
+                    skip_header = 1
+                )
+                size_limit=10;
+---------- Output ---------
+COPY INTO @my_stage/ FROM mytable FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10
+---------- AST ------------
+Copy(
+    CopyStmt {
+        src: Table {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                name: "mytable",
+                quote: None,
+                span: Ident(41..48),
+            },
+        },
+        dst: StageLocation {
+            name: "my_stage",
+            path: "/",
+        },
+        files: [],
+        pattern: "",
+        file_format: {
+            "field_delimiter": ",",
+            "record_delimiter": "\n",
+            "skip_header": "1",
+            "type": "CSV",
+        },
+        validation_mode: "",
+        size_limit: 10,
+    },
+)
+
+
+---------- Input ----------
+COPY INTO mytable
+                FROM 's3://mybucket/data.csv'
+                CREDENTIALS = (
+                    AWS_KEY_ID = 'access_key'
+                    AWS_SECRET_KEY = 'secret_key'
+                )
+                ENCRYPTION = (
+                    MASTER_KEY = 'master_key'
+                )
+                FILE_FORMAT = (
+                    type = 'CSV'
+                    field_delimiter = ','
+                    record_delimiter = '\n'
+                    skip_header = 1
+                )
+                size_limit=10;
+---------- Output ---------
+COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( aws_key_id='access_key' aws_secret_key='secret_key' master_key='master_key' ) FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10
+---------- AST ------------
+Copy(
+    CopyStmt {
+        src: UriLocation(
+            UriLocation {
+                protocol: "s3",
+                name: "mybucket",
+                path: "/data.csv",
+                connection: {
+                    "aws_key_id": "access_key",
+                    "aws_secret_key": "secret_key",
+                    "master_key": "master_key",
+                },
+            },
+        ),
+        dst: Table {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                name: "mytable",
+                quote: None,
+                span: Ident(10..17),
+            },
+        },
+        files: [],
+        pattern: "",
+        file_format: {
+            "field_delimiter": ",",
+            "record_delimiter": "\n",
+            "skip_header": "1",
+            "type": "CSV",
+        },
+        validation_mode: "",
+        size_limit: 10,
+    },
+)
+
+
+---------- Input ----------
+COPY INTO mytable
+                FROM @external_stage/path/to/file.csv
+                FILE_FORMAT = (
+                    type = 'CSV'
+                    field_delimiter = ','
+                    record_delimiter = '\n'
+                    skip_header = 1
+                )
+                size_limit=10;
+---------- Output ---------
+COPY INTO mytable FROM @external_stage/path/to/file.csv FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10
+---------- AST ------------
+Copy(
+    CopyStmt {
+        src: StageLocation {
+            name: "external_stage",
+            path: "/path/to/file.csv",
+        },
+        dst: Table {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                name: "mytable",
+                quote: None,
+                span: Ident(10..17),
+            },
+        },
+        files: [],
+        pattern: "",
+        file_format: {
+            "field_delimiter": ",",
+            "record_delimiter": "\n",
+            "skip_header": "1",
+            "type": "CSV",
+        },
+        validation_mode: "",
+        size_limit: 10,
+    },
+)
+
+
+---------- Input ----------
+CALL system$test(a)
+---------- Output ---------
+CALL system$test(a)
+---------- AST ------------
+Call(
+    CallStmt {
+        name: "system$test",
+        args: [
+            "a",
+        ],
+    },
+)
+
+
+---------- Input ----------
+CALL system$test('a')
+---------- Output ---------
+CALL system$test(a)
+---------- AST ------------
+Call(
+    CallStmt {
+        name: "system$test",
+        args: [
+            "a",
+        ],
+    },
+)
+
+
+---------- Input ----------
+show settings like 'enable%'
+---------- Output ---------
+SHOW SETTINGS LIKE 'enable%'
+---------- AST ------------
+ShowSettings {
+    like: Some(
+        "enable%",
+    ),
+}
+
+
+---------- Input ----------
+PRESIGN @my_stage/path/to/file
+---------- Output ---------
+PRESIGN @my_stage/path/to/file EXPIRE = 3600
+---------- AST ------------
+Presign(
+    PresignStmt {
+        action: Download,
+        location: StageLocation {
+            name: "my_stage",
+            path: "/path/to/file",
+        },
+        expire: 3600s,
+    },
+)
+
+
+---------- Input ----------
+PRESIGN DOWNLOAD @my_stage/path/to/file
+---------- Output ---------
+PRESIGN @my_stage/path/to/file EXPIRE = 3600
+---------- AST ------------
+Presign(
+    PresignStmt {
+        action: Download,
+        location: StageLocation {
+            name: "my_stage",
+            path: "/path/to/file",
+        },
+        expire: 3600s,
+    },
+)
+
+
+---------- Input ----------
+PRESIGN UPLOAD @my_stage/path/to/file EXPIRE=7200
+---------- Output ---------
+PRESIGN @my_stage/path/to/file EXPIRE = 7200
+---------- AST ------------
+Presign(
+    PresignStmt {
+        action: Upload,
+        location: StageLocation {
+            name: "my_stage",
+            path: "/path/to/file",
+        },
+        expire: 7200s,
+    },
+)
+
+
+---------- Input ----------
+CREATE SHARE t COMMENT='share comment';
+---------- Output ---------
+CREATE SHARE t COMMENT = 'share comment'
+---------- AST ------------
+CreateShare(
+    CreateShareStmt {
+        if_not_exists: false,
+        share: Identifier {
+            name: "t",
+            quote: None,
+            span: Ident(13..14),
+        },
+        comment: Some(
+            "share comment",
+        ),
+    },
+)
+
+
+---------- Input ----------
+CREATE SHARE IF NOT EXISTS t;
+---------- Output ---------
+CREATE SHARE IF NOT EXISTS t
+---------- AST ------------
+CreateShare(
+    CreateShareStmt {
+        if_not_exists: true,
+        share: Identifier {
+            name: "t",
+            quote: None,
+            span: Ident(27..28),
+        },
+        comment: None,
+    },
+)
+
+
+---------- Input ----------
+DROP SHARE a;
+---------- Output ---------
+DROP SHARE a
+---------- AST ------------
+DropShare(
+    DropShareStmt {
+        if_exists: false,
+        share: Identifier {
+            name: "a",
+            quote: None,
+            span: Ident(11..12),
+        },
+    },
+)
+
+
+---------- Input ----------
+DROP SHARE IF EXISTS a;
+---------- Output ---------
+DROP SHARE IF EXISTS a
+---------- AST ------------
+DropShare(
+    DropShareStmt {
+        if_exists: true,
+        share: Identifier {
+            name: "a",
+            quote: None,
+            span: Ident(21..22),
+        },
+    },
+)
+
+
+---------- Input ----------
+GRANT USAGE ON DATABASE db1 TO SHARE a;
+---------- Output ---------
+GRANT USAGE ON DATABASE db1 TO SHARE a
+---------- AST ------------
+GrantShareObject(
+    GrantShareObjectStmt {
+        share: Identifier {
+            name: "a",
+            quote: None,
+            span: Ident(37..38),
+        },
+        object: Database(
+            "db1",
+        ),
+        privilege: Usage,
+    },
+)
+
+
+---------- Input ----------
+GRANT SELECT ON TABLE db1.tb1 TO SHARE a;
+---------- Output ---------
+GRANT SELECT ON TABLE db1.tb1 TO SHARE a
+---------- AST ------------
+GrantShareObject(
+    GrantShareObjectStmt {
+        share: Identifier {
+            name: "a",
+            quote: None,
+            span: Ident(39..40),
+        },
+        object: Table(
+            "db1",
+            "tb1",
+        ),
+        privilege: Select,
+    },
+)
+
+
+---------- Input ----------
+REVOKE USAGE ON DATABASE db1 FROM SHARE a;
+---------- Output ---------
+REVOKE USAGE ON DATABASE db1 FROM SHARE a
+---------- AST ------------
+RevokeShareObject(
+    RevokeShareObjectStmt {
+        share: Identifier {
+            name: "a",
+            quote: None,
+            span: Ident(40..41),
+        },
+        object: Database(
+            "db1",
+        ),
+        privilege: Usage,
+    },
+)
+
+
+---------- Input ----------
+REVOKE SELECT ON TABLE db1.tb1 FROM SHARE a;
+---------- Output ---------
+REVOKE SELECT ON TABLE db1.tb1 FROM SHARE a
+---------- AST ------------
+RevokeShareObject(
+    RevokeShareObjectStmt {
+        share: Identifier {
+            name: "a",
+            quote: None,
+            span: Ident(42..43),
+        },
+        object: Table(
+            "db1",
+            "tb1",
+        ),
+        privilege: Select,
+    },
+)
+
+
+---------- Input ----------
+ALTER SHARE a ADD TENANTS = b,c;
+---------- Output ---------
+ALTER SHARE a ADD TENANTS = b,c
+---------- AST ------------
+AlterShareTenants(
+    AlterShareTenantsStmt {
+        share: Identifier {
+            name: "a",
+            quote: None,
+            span: Ident(12..13),
+        },
+        if_exists: false,
+        tenants: [
+            Identifier {
+                name: "b",
+                quote: None,
+                span: Ident(28..29),
+            },
+            Identifier {
+                name: "c",
+                quote: None,
+                span: Ident(30..31),
+            },
+        ],
+        is_add: true,
+    },
+)
+
+
+---------- Input ----------
+ALTER SHARE IF EXISTS a ADD TENANTS = b,c;
+---------- Output ---------
+ALTER SHARE IF EXISTS a ADD TENANTS = b,c
+---------- AST ------------
+AlterShareTenants(
+    AlterShareTenantsStmt {
+        share: Identifier {
+            name: "a",
+            quote: None,
+            span: Ident(22..23),
+        },
+        if_exists: true,
+        tenants: [
+            Identifier {
+                name: "b",
+                quote: None,
+                span: Ident(38..39),
+            },
+            Identifier {
+                name: "c",
+                quote: None,
+                span: Ident(40..41),
+            },
+        ],
+        is_add: true,
+    },
+)
+
+
+---------- Input ----------
+ALTER SHARE IF EXISTS a REMOVE TENANTS = b,c;
+---------- Output ---------
+ALTER SHARE IF EXISTS a REMOVE TENANTS = b,c
+---------- AST ------------
+AlterShareTenants(
+    AlterShareTenantsStmt {
+        share: Identifier {
+            name: "a",
+            quote: None,
+            span: Ident(22..23),
+        },
+        if_exists: true,
+        tenants: [
+            Identifier {
+                name: "b",
+                quote: None,
+                span: Ident(41..42),
+            },
+            Identifier {
+                name: "c",
+                quote: None,
+                span: Ident(43..44),
+            },
+        ],
+        is_add: false,
+    },
+)
+
+

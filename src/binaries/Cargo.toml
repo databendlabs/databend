@@ -1,0 +1,82 @@
+[package]
+name = "databend-binaries"
+version = "0.1.0"
+description = "databend command line tools"
+authors = ["Databend Authors <opensource@datafuselabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[features]
+default = ["simd"]
+memory-profiling = ["databend-meta/memory-profiling", "databend-query/memory-profiling", "common-base/memory-profiling"]
+simd = ["databend-meta/simd", "databend-query/simd"]
+tokio-console = [
+    "databend-meta/tokio-console",
+    "databend-query/io-uring",
+    "common-base/tracing",
+    "common-tracing/console",
+]
+io-uring = [
+    "databend-meta/io-uring",
+    "databend-query/io-uring",
+    "common-meta-store/io-uring",
+    "common-meta-sled-store/io-uring",
+    "common-meta-raft-store/io-uring",
+]
+
+[dependencies]
+# Workspace dependencies
+common-base = { path = "../common/base" }
+common-exception = { path = "../common/exception" }
+common-grpc = { path = "../common/grpc" }
+common-macros = { path = "../common/macros" }
+common-meta-api = { path = "../meta/api" }
+common-meta-app = { path = "../meta/app" }
+common-meta-embedded = { path = "../meta/embedded" }
+common-meta-grpc = { path = "../meta/grpc" }
+common-meta-raft-store = { path = "../meta/raft-store" }
+common-meta-sled-store = { path = "../meta/sled-store" }
+common-meta-store = { path = "../meta/store" }
+common-meta-types = { path = "../meta/types" }
+common-metrics = { path = "../common/metrics" }
+common-tracing = { path = "../common/tracing" }
+databend-meta = { path = "../meta/service" }
+databend-query = { path = "../query/service" }
+
+# Crates.io dependencies
+anyhow = "1.0.58"
+clap = { version = "3.2.5", features = ["derive", "env"] }
+sentry = "0.27.0"
+serde = { version = "1.0.137", features = ["derive"] }
+serde_json = "1.0.81"
+tokio-stream = "0.1.9"
+tonic = "0.7.2"
+tracing = "0.1.35"
+url = "2.2.2"
+
+openraft = { git = "https://github.com/datafuselabs/openraft", rev = "v0.7.0-alpha.2" }
+
+[[bin]]
+name = "databend-meta"
+path = "meta/main.rs"
+doctest = false
+test = false
+
+[[bin]]
+name = "databend-metabench"
+path = "metabench/main.rs"
+doctest = false
+test = false
+
+[[bin]]
+name = "databend-metactl"
+path = "metactl/main.rs"
+doctest = false
+test = false
+
+[[bin]]
+name = "databend-query"
+path = "query/main.rs"
+doctest = false
+test = false

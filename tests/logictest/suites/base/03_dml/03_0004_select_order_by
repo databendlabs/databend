@@ -24,15 +24,6 @@ SELECT number%3 as c1, number%2 as c2 FROM numbers_mt (10) order by c1 desc, c2 
 0 1
 0 1
 
-statement query T
-EXPLAIN SELECT number%3 as c1, number%2 as c2 FROM numbers_mt (10) order by c1, number desc;
-
-----
-Projection: (number % 3) as c1:UInt8, (number % 2) as c2:UInt8
-  Sort: (number % 3):UInt8, number:UInt64
-    Expression: (number % 3):UInt8, (number % 2):UInt8, number:UInt64 (Before OrderBy)
-      ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0], order_by: [(number % 3), number]]
-
 statement query II
 SELECT number%3 as c1, number%2 as c2 FROM numbers_mt (10) order by c1, number desc;
 

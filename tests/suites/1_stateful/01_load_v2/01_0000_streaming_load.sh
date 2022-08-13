@@ -3,7 +3,7 @@
 CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../../../shell_env.sh
 
-echo "set enable_planner_v2 = 1;" | $MYSQL_CLIENT_CONNECT
+
 echo "drop table if exists ontime_streaming_load;" | $MYSQL_CLIENT_CONNECT
 ## create ontime table
 cat $CURDIR/../ddl/ontime.sql | sed 's/ontime/ontime_streaming_load/g' | $MYSQL_CLIENT_CONNECT
@@ -67,10 +67,24 @@ echo "select count(1), avg(Year), sum(DayOfWeek)  from ontime_streaming_load;" |
 echo "truncate table ontime_streaming_load" | $MYSQL_CLIENT_CONNECT
 
 
+# load parquet with less schema
+echo 'CREATE TABLE ontime_less
+(
+    Year                            SMALLINT UNSIGNED,
+    Quarter                         TINYINT UNSIGNED,
+    Month                           TINYINT UNSIGNED,
+    DayofMonth                      TINYINT UNSIGNED,
+    DayOfWeek                       TINYINT UNSIGNED
+)' | $MYSQL_CLIENT_CONNECT
+
+curl -s -H "insert_sql:insert into ontime_less format Parquet" -H "skip_header:1" -F "upload=@/tmp/ontime_200.parquet" -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load"  > /dev/null 2>&1
+echo "select count(1), avg(Year), sum(DayOfWeek)  from ontime_less;" | $MYSQL_CLIENT_CONNECT
+
 # load parquet with mismatch schema
-cat $CURDIR/../ddl/ontime.sql | sed 's/ontime/ontime_test1/g' | sed 's/DATE/VARCHAR/g' | $MYSQL_CLIENT_CONNECT
-curl -s -H "insert_sql:insert into ontime_test1 format Parquet" -H "skip_header:1" -F "upload=@/tmp/ontime_200.parquet" -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" | grep -c 'Code: 1024'
+cat $CURDIR/../ddl/ontime.sql | sed 's/ontime/ontime_test_mismatch/g' | sed 's/DATE/VARCHAR/g' | $MYSQL_CLIENT_CONNECT
+curl -s -H "insert_sql:insert into ontime_test_mismatch format Parquet" -H "skip_header:1" -F "upload=@/tmp/ontime_200.parquet" -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" | grep -c 'Code: 1024'
 
 
 echo "drop table ontime_streaming_load;" | $MYSQL_CLIENT_CONNECT
-echo "drop table ontime_test1;" | $MYSQL_CLIENT_CONNECT
+echo "drop table ontime_test_mismatch;" | $MYSQL_CLIENT_CONNECT
+echo "drop table ontime_less;" | $MYSQL_CLIENT_CONNECT

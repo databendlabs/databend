@@ -1,4 +1,4 @@
-set enable_planner_v2 = 1;
+
 select
     c_name,
     c_custkey,

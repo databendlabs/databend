@@ -8,25 +8,25 @@ statement query T
 select typeof(a) from (select -1 as a);
 
 ----
-TINYINT
+SMALLINT
 
 statement query T
 select typeof(a) from (select -128 as a);
 
 ----
-TINYINT
+SMALLINT
 
 statement query T
 select typeof(a) from (select -32768 as a);
 
 ----
-SMALLINT
+INT
 
 statement query T
 select typeof(a) from (select -2147483648 as a);
 
 ----
-INT
+BIGINT
 
 statement query T
 select typeof(a) from (select -9223372036854775808 as a);
@@ -58,9 +58,5 @@ select typeof(a) from (select 18446744073709551615 as a);
 ----
 BIGINT UNSIGNED
 
-statement query T
+statement error Unsupported literal value
 select typeof(a) from (select 1844674407370955161522 as a);
-
-----
-DOUBLE
-

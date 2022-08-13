@@ -12,10 +12,10 @@ Expected deployment time: **5 minutes ⏱**
 :::
 
 Meta server has a build version(`METASRV_COMMIT_VERSION`) and the minimal compatible version of meta client(`MIN_METACLI_SEMVER`),
-which are defined in `metasrv/src/version.rs`.
+which are defined in `src/meta/service/src/version.rs`.
 
 Meta client has a build version(`METACLI_COMMIT_SEMVER`) and the minimal compatible version of meta server(`MIN_METASRV_SEMVER`),
-which are defined in `common/meta/grpc/src/lib.rs`.
+which are defined in `src/meta/grpc/src/lib.rs`.
 
 These four versions defines compatibility between meta server and meta client.
 [Compatibility][Compatibility] explains how it works.
@@ -32,9 +32,9 @@ According to the algorithm [Compatibility][Compatibility] defines:
 
 
 Protocol related crates are(this list may not be exhausted if new types are introduced in future):
-- `common/protos`: defines the protobuf messages a meta client talks to a meta server.
-- `common/proto-conv`: defines how to convert metadata types in rust from and to protobuf messages.
-- `common/meta/types`: defines the rust types for metadata.
+- `src/meta/protos`: defines the protobuf messages a meta client talks to a meta server.
+- `src/meta/proto-conv`: defines how to convert metadata types in rust from and to protobuf messages.
+- `src/meta/types`: defines the rust types for metadata.
 
 
 [Compatibility]: https://databend.rs/doc/manage/upgrade/compatibility
