@@ -11,6 +11,7 @@ from http_connector import format_result
 
 target_dir = "./"
 
+
 def parse_sql_file(source_file):
     sqls = list()
     f = open(source_file, encoding='UTF-8')
@@ -34,12 +35,13 @@ def parse_sql_file(source_file):
     f.close()
     return sqls
 
+
 def parse_logictest_file(source_file):
     parsing_statement = False
     sqls = list()
     f = open(source_file, encoding='UTF-8')
-    sql_content = "" 
-        
+    sql_content = ""
+
     for line in f.readlines():
         if is_empty_line(line):
             if parsing_statement:
@@ -77,6 +79,7 @@ def parse_logictest_file(source_file):
 
     f.close()
     return sqls
+
 
 def get_sql_from_file(source_file):
     if ".sql" in os.path.basename(source_file):
@@ -118,7 +121,9 @@ def gen_suite_from_sql(sqls, dest_file):
                         continue
                     rows.append(str(v))
                 results.append(rows)
-            statements.append(f"statement query {options}\n{sql}\n\n----\n{format_result(results)}\n")
+            statements.append(
+                f"statement query {options}\n{sql}\n\n----\n{format_result(results)}\n"
+            )
         except mysql.connector.Error as err:
             statements.append(f"statement ok\n{sql}\n\n")
 
@@ -150,9 +155,11 @@ def run(args):
 
 
 if __name__ == '__main__':
-    parser = ArgumentParser(description='databend sqllogictest auto-complete tools(from *.sql files or logictest files)')
-    parser.add_argument('--source-file',
-                        help='Path to suites source file')
+    parser = ArgumentParser(
+        description=
+        'databend sqllogictest auto-complete tools(from *.sql files or logictest files)'
+    )
+    parser.add_argument('--source-file', help='Path to suites source file')
 
     parser.add_argument('--dest-file',
                         default="./auto",
@@ -163,25 +170,17 @@ if __name__ == '__main__':
                         default=False,
                         help='Show sql from source file')
 
-    parser.add_argument('--mysql-user',
-                        default="root",
-                        help='Mysql user')
+    parser.add_argument('--mysql-user', default="root", help='Mysql user')
 
-    parser.add_argument('--mysql-host',
-                        default="127.0.0.1",
-                        help='Mysql host')
+    parser.add_argument('--mysql-host', default="127.0.0.1", help='Mysql host')
 
-    parser.add_argument('--mysql-port',
-                        default="3307",
-                        help='Mysql port')
+    parser.add_argument('--mysql-port', default="3307", help='Mysql port')
 
-    parser.add_argument('--mysql-passwd',
-                        default="root",
-                        help='Mysql password')
+    parser.add_argument('--mysql-passwd', default="root", help='Mysql password')
 
     parser.add_argument('--mysql-database',
                         default="default",
                         help='Mysql default database')
-    
+
     args = parser.parse_args()
     run(args)

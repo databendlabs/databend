@@ -1722,6 +1722,7 @@ dependencies = [
  "common-planners",
  "common-storages-index",
  "common-storages-util",
+ "common-streams",
  "futures",
  "futures-util",
  "opendal",
