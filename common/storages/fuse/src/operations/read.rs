@@ -29,6 +29,7 @@ use common_pipeline_core::Pipeline;
 use common_pipeline_core::SourcePipeBuilder;
 use common_planners::Extras;
 use common_planners::PartInfoPtr;
+use common_planners::Projection;
 use common_planners::ReadDataSourcePlan;
 
 use crate::io::BlockReader;
@@ -39,14 +40,14 @@ impl FuseTable {
     pub fn create_block_reader(
         &self,
         ctx: &Arc<dyn TableContext>,
-        projection: Vec<usize>,
+        projection: Projection,
     ) -> Result<Arc<BlockReader>> {
         let operator = ctx.get_storage_operator()?;
         let table_schema = self.table_info.schema();
         BlockReader::create(operator, table_schema, projection)
     }
 
-    pub fn projection_of_push_downs(&self, push_downs: &Option<Extras>) -> Vec<usize> {
+    pub fn projection_of_push_downs(&self, push_downs: &Option<Extras>) -> Projection {
         if let Some(Extras {
             projection: Some(prj),
             ..
@@ -54,9 +55,10 @@ impl FuseTable {
         {
             prj.clone()
         } else {
-            (0..self.table_info.schema().fields().len())
+            let indices = (0..self.table_info.schema().fields().len())
                 .into_iter()
-                .collect::<Vec<usize>>()
+                .collect::<Vec<usize>>();
+            Projection::Columns(indices)
         }
     }
 

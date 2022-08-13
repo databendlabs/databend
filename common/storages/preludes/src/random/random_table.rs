@@ -22,6 +22,7 @@ use common_exception::Result;
 use common_meta_app::schema::TableInfo;
 use common_planners::Extras;
 use common_planners::Partitions;
+use common_planners::Projection;
 use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
 
@@ -100,7 +101,12 @@ impl Table for RandomTable {
                 let mut schema = self.schema();
                 if let Some(projection) = push_downs.projection {
                     // do projection on schema
-                    schema = Arc::new(schema.project(&projection));
+                    schema = match projection {
+                        Projection::Columns(indices) => Arc::new(schema.project(&indices)),
+                        Projection::InnerColumns(path_indices) => {
+                            Arc::new(schema.inner_project(&path_indices))
+                        }
+                    };
                 }
                 let limit = match push_downs.limit {
                     Some(limit) => limit,
@@ -149,7 +155,12 @@ impl Table for RandomTable {
         if let Some(extras) = push_downs {
             if let Some(projection) = extras.projection {
                 // do projection on schema
-                output_schema = Arc::new(output_schema.project(&projection));
+                output_schema = match projection {
+                    Projection::Columns(indices) => Arc::new(output_schema.project(&indices)),
+                    Projection::InnerColumns(path_indices) => {
+                        Arc::new(output_schema.inner_project(&path_indices))
+                    }
+                };
             }
         }
 

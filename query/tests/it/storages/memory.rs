@@ -76,11 +76,14 @@ async fn test_memorytable() -> Result<()> {
             vec![Some(vec![0usize]), Some(vec![1usize]), None]
                 .into_iter()
                 .map(|x| {
-                    x.map(|x| Extras {
-                        projection: Some(x),
-                        filters: vec![],
-                        limit: None,
-                        order_by: vec![],
+                    x.map(|x| {
+                        let proj = Projection::Columns(x);
+                        Extras {
+                            projection: Some(proj),
+                            filters: vec![],
+                            limit: None,
+                            order_by: vec![],
+                        }
                     })
                 })
                 .collect();

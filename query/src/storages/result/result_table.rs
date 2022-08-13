@@ -24,6 +24,7 @@ use common_meta_app::schema::TableMeta;
 use common_meta_types::UserIdentity;
 use common_planners::Extras;
 use common_planners::Partitions;
+use common_planners::Projection;
 use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
 use serde::Deserialize;
@@ -119,9 +120,10 @@ impl ResultTable {
         ctx: &Arc<dyn TableContext>,
         _push_downs: &Option<Extras>,
     ) -> Result<Arc<BlockReader>> {
-        let projection = (0..self.get_table_info().schema().fields().len())
+        let indices = (0..self.get_table_info().schema().fields().len())
             .into_iter()
             .collect::<Vec<usize>>();
+        let projection = Projection::Columns(indices);
 
         let operator = ctx.get_storage_operator()?;
         let table_schema = self.get_table_info().schema();

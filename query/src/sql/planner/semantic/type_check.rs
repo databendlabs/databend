@@ -35,13 +35,16 @@ use common_datavalues::type_coercion::merge_types;
 use common_datavalues::ArrayType;
 use common_datavalues::BooleanType;
 use common_datavalues::DataField;
+use common_datavalues::DataType;
 use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
 use common_datavalues::IntervalKind;
 use common_datavalues::IntervalType;
 use common_datavalues::NullType;
 use common_datavalues::StringType;
+use common_datavalues::StructType;
 use common_datavalues::TimestampType;
+use common_datavalues::TypeID;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::aggregates::AggregateFunctionFactory;
@@ -674,6 +677,41 @@ impl<'a> TypeChecker<'a> {
                 expr,
                 accessor,
             } => {
+                let mut exprs = Vec::new();
+                let mut accessores = Vec::new();
+                exprs.push(expr.clone());
+                accessores.push(accessor.clone());
+                while !exprs.is_empty() {
+                    let expr = exprs.pop().unwrap();
+                    match *expr {
+                        Expr::MapAccess { expr, accessor, .. } => {
+                            exprs.push(expr.clone());
+                            accessores.push(accessor.clone());
+                        }
+                        Expr::ColumnRef {
+                            ref database,
+                            ref table,
+                            ref column,
+                            ..
+                        } => {
+                            let box (_, data_type) = self.resolve(&*expr, None).await?;
+                            if data_type.data_type_id() != TypeID::Struct {
+                                break;
+                            }
+                            // if the column is StructColumn, pushdown map access to storage
+                            return self
+                                .resolve_map_access_pushdown(
+                                    data_type,
+                                    accessores,
+                                    database.clone(),
+                                    table.clone(),
+                                    column.clone(),
+                                )
+                                .await;
+                        }
+                        _ => break,
+                    }
+                }
                 let arg = match accessor {
                     MapAccessor::Bracket { key } => Expr::Literal {
                         span,
@@ -1610,6 +1648,97 @@ impl<'a> TypeChecker<'a> {
                 "No function matches the given name: {func_name}"
             ))))
         }
+    }
+
+    #[async_recursion::async_recursion]
+    async fn resolve_map_access_pushdown(
+        &mut self,
+        data_type: DataTypeImpl,
+        mut accessores: Vec<MapAccessor<'async_recursion>>,
+        database: Option<Identifier<'async_recursion>>,
+        table: Option<Identifier<'async_recursion>>,
+        column: Identifier<'async_recursion>,
+    ) -> Result<Box<(Scalar, DataTypeImpl)>> {
+        let mut names = Vec::new();
+        let column_name = normalize_identifier(&column, self.name_resolution_ctx).name;
+        names.push(column_name);
+        let mut data_types = Vec::new();
+        data_types.push(data_type.clone());
+
+        while !accessores.is_empty() {
+            let data_type = data_types.pop().unwrap();
+            let struct_type: StructType = data_type.try_into()?;
+            let inner_types = struct_type.types();
+            let inner_names = match struct_type.names() {
+                Some(inner_names) => inner_names.clone(),
+                None => (0..inner_types.len())
+                    .map(|i| format!("{}", i))
+                    .collect::<Vec<_>>(),
+            };
+
+            let accessor = accessores.pop().unwrap();
+            let accessor_lit = match accessor {
+                MapAccessor::Bracket { key } => key.clone(),
+                MapAccessor::Period { key } | MapAccessor::Colon { key } => {
+                    Literal::String(key.name.clone())
+                }
+            };
+
+            match accessor_lit {
+                Literal::Integer(idx) => {
+                    if idx as usize >= inner_types.len() {
+                        return Err(ErrorCode::SemanticError(format!(
+                            "tuple index {} is out of bounds for length {}",
+                            idx,
+                            inner_types.len()
+                        )));
+                    }
+                    let inner_name = inner_names.get(idx as usize).unwrap();
+                    let inner_type = inner_types.get(idx as usize).unwrap();
+                    names.push(inner_name.clone());
+                    data_types.push(inner_type.clone());
+                }
+                Literal::String(name) => match inner_names.iter().position(|k| k == &name) {
+                    Some(idx) => {
+                        let inner_name = inner_names.get(idx).unwrap();
+                        let inner_type = inner_types.get(idx).unwrap();
+                        names.push(inner_name.clone());
+                        data_types.push(inner_type.clone());
+                    }
+                    None => {
+                        return Err(ErrorCode::SemanticError(format!(
+                            "tuple name `{}` is not exist",
+                            name
+                        )));
+                    }
+                },
+                _ => unreachable!(),
+            }
+        }
+
+        let database = database
+            .as_ref()
+            .map(|ident| normalize_identifier(ident, self.name_resolution_ctx).name);
+        let table = table
+            .as_ref()
+            .map(|ident| normalize_identifier(ident, self.name_resolution_ctx).name);
+        let inner_column_name = names.join(":");
+
+        let result = self.bind_context.resolve_name(
+            database.as_deref(),
+            table.as_deref(),
+            inner_column_name.as_str(),
+            &column.span,
+            self.aliases,
+        )?;
+        let (scalar, data_type) = match result {
+            NameResolutionResult::Column(column) => {
+                let data_type = *column.data_type.clone();
+                (BoundColumnRef { column }.into(), data_type)
+            }
+            NameResolutionResult::Alias { scalar, .. } => (scalar.clone(), scalar.data_type()),
+        };
+        Ok(Box::new((scalar, data_type)))
     }
 
     fn clone_expr_with_replacement<F>(

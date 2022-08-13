@@ -23,6 +23,7 @@ use common_datavalues::Series;
 use common_exception::Result;
 use common_fuse_meta::meta::BlockMeta;
 use common_planners::Expression;
+use common_planners::Projection;
 
 use crate::operations::mutation::deletion_mutator::Deletion;
 use crate::pipelines::processors::transforms::ExpressionExecutor;
@@ -32,14 +33,14 @@ pub async fn delete_from_block(
     table: &FuseTable,
     block_meta: &BlockMeta,
     ctx: &Arc<dyn TableContext>,
-    filter_column_ids: Vec<usize>,
+    filter_column_proj: Projection,
     filter_expr: &Expression,
 ) -> Result<Deletion> {
     let mut filtering_whole_block = false;
 
     // extract the columns that are going to be filtered on
-    let col_ids = {
-        if filter_column_ids.is_empty() {
+    let proj = {
+        if filter_column_proj.is_empty() {
             // here the situation: filter_expr is not null, but filter_column_ids in not empty, which
             // indicates the expr being evaluated is unrelated to the value of rows:
             //   e.g.
@@ -50,14 +51,15 @@ pub async fn delete_from_block(
             //   for the whole block, whether all of the rows should be kept or dropped,
             //   we can just return from here, without accessing the block data
             filtering_whole_block = true;
-            all_the_columns_ids(table)
+            let all_col_ids = all_the_columns_ids(table);
+            Projection::Columns(all_col_ids)
         } else {
-            filter_column_ids
+            filter_column_proj
         }
     };
 
     // read the cols that we are going to filtering on
-    let reader = table.create_block_reader(ctx, col_ids)?;
+    let reader = table.create_block_reader(ctx, proj)?;
     let data_block = reader.read_with_block_meta(block_meta).await?;
 
     let schema = table.table_info.schema();
@@ -98,7 +100,8 @@ pub async fn delete_from_block(
     let whole_block = if filtering_whole_block {
         data_block
     } else {
-        let whole_table_proj = all_the_columns_ids(table);
+        let all_col_ids = all_the_columns_ids(table);
+        let whole_table_proj = Projection::Columns(all_col_ids);
         let whole_block_reader = table.create_block_reader(ctx, whole_table_proj)?;
         whole_block_reader.read_with_block_meta(block_meta).await?
     };
