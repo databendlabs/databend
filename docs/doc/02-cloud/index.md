@@ -23,7 +23,7 @@ To log in to your account, go to https://app.databend.com.
 
 Serverless warehouses can be automatically suspended in case of no activities for a specific period.
 
-<img src="/img/cloud/databend_cloud_warehouse.png"/>
+<img src="/img/cloud/databend-warehouse.gif"/>
 
 
 ### Databases
