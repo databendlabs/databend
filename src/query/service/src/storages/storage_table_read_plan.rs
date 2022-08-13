@@ -56,7 +56,7 @@ impl ToReadDataSourcePlan for dyn Table {
     ) -> Result<ReadDataSourcePlan> {
         let (statistics, parts) = self.read_partitions(ctx, push_downs.clone()).await?;
         let table_info = self.get_table_info();
-        let description = get_description(table_info, &statistics);
+        let description = statistics.get_description(table_info);
 
         let scan_fields = match (self.benefit_column_prune(), &push_downs) {
             (true, Some(push_downs)) => match &push_downs.projection {
@@ -98,25 +98,5 @@ impl ToReadDataSourcePlan for dyn Table {
             tbl_args: self.table_args(),
             push_downs,
         })
-    }
-}
-
-fn get_description(table_info: &TableInfo, statistics: &Statistics) -> String {
-    if statistics.read_rows > 0 {
-        format!(
-            "(Read from {} table, {} Read Rows:{}, Read Bytes:{}, Partitions Scanned:{}, Partitions Total:{})",
-            table_info.desc,
-            if statistics.is_exact {
-                "Exactly"
-            } else {
-                "Approximately"
-            },
-            statistics.read_rows,
-            statistics.read_bytes,
-            statistics.partitions_scanned,
-            statistics.partitions_total,
-        )
-    } else {
-        format!("(Read from {} table)", table_info.desc)
     }
 }
