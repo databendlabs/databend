@@ -18,10 +18,17 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
+use common_datavalues::ColumnRef;
+use common_datavalues::DataType;
+use common_datavalues::Series;
+use common_datavalues::StructColumn;
+use common_datavalues::TypeID;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::TableInfo;
 use common_planners::Extras;
 use common_planners::Partitions;
+use common_planners::Projection;
 use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
 use common_planners::TruncateTablePlan;
@@ -138,7 +145,13 @@ impl Table for MemoryTable {
             Some(push_downs) => {
                 let projection_filter: Box<dyn Fn(usize) -> bool> = match push_downs.projection {
                     Some(prj) => {
-                        let proj_cols = HashSet::<usize>::from_iter(prj);
+                        let col_ids = match prj {
+                            Projection::Columns(indices) => indices,
+                            Projection::InnerColumns(path_indices) => {
+                                path_indices.values().map(|i| i[0]).collect()
+                            }
+                        };
+                        let proj_cols = HashSet::<usize>::from_iter(col_ids);
                         Box::new(move |column_id: usize| proj_cols.contains(&column_id))
                     }
                     None => Box::new(|_: usize| true),
@@ -271,18 +284,51 @@ impl MemoryTableSource {
     fn projection(&self, data_block: DataBlock) -> Result<Option<DataBlock>> {
         if let Some(extras) = &self.extras {
             if let Some(projection) = &extras.projection {
-                let pruned_schema = data_block.schema().project(projection);
                 let raw_columns = data_block.columns();
-                let columns = projection
-                    .iter()
-                    .map(|idx| raw_columns[*idx].clone())
-                    .collect();
-
-                return Ok(Some(DataBlock::create(Arc::new(pruned_schema), columns)));
+                let pruned_data_block = match projection {
+                    Projection::Columns(indices) => {
+                        let pruned_schema = data_block.schema().project(indices);
+                        let columns = indices
+                            .iter()
+                            .map(|idx| raw_columns[*idx].clone())
+                            .collect();
+                        DataBlock::create(Arc::new(pruned_schema), columns)
+                    }
+                    Projection::InnerColumns(path_indices) => {
+                        let pruned_schema = data_block.schema().inner_project(path_indices);
+                        let mut columns = Vec::with_capacity(path_indices.len());
+                        let paths: Vec<&Vec<usize>> = path_indices.values().collect();
+                        for path in paths {
+                            let column = Self::traverse_paths(raw_columns, path)?;
+                            columns.push(column);
+                        }
+                        DataBlock::create(Arc::new(pruned_schema), columns)
+                    }
+                };
+                return Ok(Some(pruned_data_block));
             }
         }
 
         Ok(Some(data_block))
+    }
+
+    fn traverse_paths(columns: &[ColumnRef], path: &[usize]) -> Result<ColumnRef> {
+        if path.is_empty() {
+            return Err(ErrorCode::BadArguments("path should not be empty"));
+        }
+        let column = &columns[path[0]];
+        if path.len() == 1 {
+            return Ok(column.clone());
+        }
+        if column.data_type().data_type_id() == TypeID::Struct {
+            let struct_column: &StructColumn = Series::check_get(column)?;
+            let inner_columns = struct_column.values();
+            return Self::traverse_paths(inner_columns, &path[1..]);
+        }
+        Err(ErrorCode::BadArguments(format!(
+            "Unable to get column by paths: {:?}",
+            path
+        )))
     }
 }
 

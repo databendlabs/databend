@@ -321,6 +321,7 @@ impl SubqueryRewriter {
                         "marker".to_string(),
                         NullableType::new_impl(BooleanType::new_impl()),
                         None,
+                        None,
                     )
                 };
                 let join_plan = LogicalInnerJoin {
@@ -392,6 +393,7 @@ impl SubqueryRewriter {
                         "marker".to_string(),
                         NullableType::new_impl(BooleanType::new_impl()),
                         None,
+                        None,
                     )
                 };
                 let mark_join = LogicalInnerJoin {
@@ -442,6 +444,7 @@ impl SubqueryRewriter {
                                 column_entry.data_type.clone(),
                             ))
                         },
+                        None,
                         None,
                     ),
                 );

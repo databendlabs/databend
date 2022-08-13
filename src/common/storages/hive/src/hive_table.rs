@@ -36,6 +36,7 @@ use common_pipeline_sources::processors::sources::sync_source::SyncSourcer;
 use common_planners::Expression;
 use common_planners::Extras;
 use common_planners::Partitions;
+use common_planners::Projection;
 use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
 use common_planners::TruncateTablePlan;
@@ -132,15 +133,24 @@ impl HiveTable {
             ..
         }) = push_downs
         {
-            prj.clone()
+            match prj {
+                Projection::Columns(indices) => Some(indices.clone()),
+                Projection::InnerColumns(_) => None,
+            }
         } else {
-            (0..self.table_info.schema().fields().len())
+            let col_ids = (0..self.table_info.schema().fields().len())
                 .into_iter()
-                .collect::<Vec<usize>>()
+                .collect::<Vec<usize>>();
+            Some(col_ids)
         };
+        if projection.is_none() {
+            return Err(ErrorCode::UnImplement(
+                "does not support projection inner columns",
+            ));
+        }
 
         let (projection, partition_fields) =
-            self.filter_hive_partition_from_partition_keys(projection);
+            self.filter_hive_partition_from_partition_keys(projection.unwrap());
 
         let hive_partition_filler = if !partition_fields.is_empty() {
             Some(HivePartitionFiller::create(partition_fields))
