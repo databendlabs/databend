@@ -108,7 +108,9 @@ impl HiveParquetBlockReader {
         let column_meta: Vec<&ColumnChunkMetaData> = row_group
             .columns()
             .iter()
-            .filter(|x| x.descriptor().path_in_schema[0] == field_name)
+            .filter(|x| {
+                x.descriptor().path_in_schema[0].to_lowercase() == field_name.to_lowercase()
+            })
             .collect();
         if column_meta.is_empty() {
             return Err(ErrorCode::ParquetError(format!(
