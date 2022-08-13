@@ -18,6 +18,8 @@ base64 = "0.13.0"
 bstr = "0.2.17"
 match-template = "0.0.1"
 num-traits = "0.2.15"
+geo-types = "0.7.6"
+h3ron = "0.14.0"
 
 [dev-dependencies]
 comfy-table = "6"

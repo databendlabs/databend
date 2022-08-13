@@ -209,6 +209,13 @@ pub fn transform_literal(lit: ASTLiteral) -> Literal {
                 unimplemented!()
             }
         }
+        ASTLiteral::Float(f) => {
+            if f < f32::MAX as f64 {
+                Literal::Float32(f as f32)
+            } else {
+                Literal::Float64(f)
+            }
+        }
         ASTLiteral::String(s) => Literal::String(s.as_bytes().to_vec()),
         ASTLiteral::Boolean(b) => Literal::Boolean(b),
         ASTLiteral::Null => Literal::Null,

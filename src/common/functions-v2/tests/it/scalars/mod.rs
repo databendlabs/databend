@@ -30,6 +30,7 @@ use common_functions_v2::scalars::builtin_functions;
 mod arithmetic;
 mod boolean;
 mod control;
+mod geos;
 mod parser;
 mod string;
 

@@ -1,0 +1,9 @@
+ast            : geo_to_h3(37.79506683, 55.71290588, 15)
+raw expr       : geo_to_h3(37.795067_f32, 55.712906_f32, 15_u8)
+checked expr   : geo_to_h3<Float64, Float64, UInt8>(CAST(37.795067_f32 AS Float64), CAST(55.712906_f32 AS Float64), 15_u8)
+optimized expr : geo_to_h3<Float64, Float64, UInt8>(37.795066833496094_f64, 55.71290588378906_f64, 15_u8)
+output type    : UInt64
+output domain  : Unknown
+output         : 644325524701193974
+
+

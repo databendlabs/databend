@@ -17,6 +17,7 @@ use common_expression::FunctionRegistry;
 mod arithmetic;
 mod boolean;
 mod control;
+mod geos;
 mod string;
 
 pub fn builtin_functions() -> FunctionRegistry {
@@ -25,5 +26,6 @@ pub fn builtin_functions() -> FunctionRegistry {
     control::register(&mut registry);
     string::register(&mut registry);
     arithmetic::register(&mut registry);
+    geos::register(&mut registry);
     registry
 }

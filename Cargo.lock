@@ -1247,9 +1247,11 @@ dependencies = [
  "comfy-table",
  "common-ast",
  "common-expression",
+ "geo-types",
  "goldenfile",
  "match-template",
  "num-traits",
+ "h3ron",
 ]
 
 [[package]]
