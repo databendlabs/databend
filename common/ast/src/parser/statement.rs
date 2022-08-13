@@ -809,9 +809,9 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let desc_share = map(
         rule! {
-            (DESC | DESCRIBE) ~ SHARE ~ #peroid_separated_idents_1_to_2
+            (DESC | DESCRIBE) ~ SHARE ~ #ident
         },
-        |(_, _, (tenant, share))| Statement::DescShare(DescShareStmt { tenant, share }),
+        |(_, _, share)| Statement::DescShare(DescShareStmt { share }),
     );
 
     let statement_body = alt((

@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::DataSchemaRef;
+use common_datavalues::prelude::DataSchemaRefExt;
 use common_datavalues::prelude::Series;
 use common_datavalues::SeriesFrom;
 use common_exception::Result;
@@ -57,15 +58,20 @@ impl Interpreter for DescShareInterpreter {
         let meta_api = user_mgr.get_meta_store_client();
         let req = GetShareGrantObjectReq {
             share_name: ShareNameIdent {
-                tenant: match &self.plan.tenant {
-                    Some(tenant) => tenant.clone(),
-                    None => self.ctx.get_tenant(),
-                },
+                tenant: self.ctx.get_tenant(),
                 share_name: self.plan.share.clone(),
             },
             object: None,
         };
         let resp = meta_api.get_share_grant_objects(req).await?;
+        if resp.objects.is_empty() {
+            return Ok(Box::pin(DataBlockStream::create(
+                DataSchemaRefExt::create(vec![]),
+                None,
+                vec![],
+            )));
+        }
+
         let desc_schema = self.plan.schema();
 
         let mut names: Vec<String> = vec![];

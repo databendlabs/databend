@@ -131,14 +131,11 @@ impl<'a> Binder {
         &mut self,
         stmt: &DescShareStmt<'a>,
     ) -> Result<Plan> {
-        let DescShareStmt { share, tenant } = stmt;
+        let DescShareStmt { share } = stmt;
 
         let share = normalize_identifier(share, &self.name_resolution_ctx).name;
 
-        let plan = DescSharePlan {
-            share,
-            tenant: tenant.as_ref().map(|tenant| tenant.to_string()),
-        };
+        let plan = DescSharePlan { share };
         Ok(Plan::DescShare(Box::new(plan)))
     }
 }

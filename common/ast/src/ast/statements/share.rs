@@ -130,16 +130,13 @@ impl Display for AlterShareTenantsStmt<'_> {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DescShareStmt<'a> {
-    pub tenant: Option<Identifier<'a>>,
     pub share: Identifier<'a>,
 }
 
 impl Display for DescShareStmt<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "DESC SHARE ")?;
-        if let Some(tenant) = &self.tenant {
-            write!(f, "{}.", tenant)?;
-        }
+
         write!(f, "{}", self.share)?;
 
         Ok(())

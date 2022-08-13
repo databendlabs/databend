@@ -126,7 +126,6 @@ impl AlterShareTenantsPlan {
 // desc share
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct DescSharePlan {
-    pub tenant: Option<String>,
     pub share: String,
 }
 

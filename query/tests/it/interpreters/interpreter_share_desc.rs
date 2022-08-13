@@ -39,15 +39,7 @@ async fn test_desc_share_interpreter() -> Result<()> {
         let (plan, _, _) = planner.plan_sql(query).await?;
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         assert_eq!(executor.name(), "DescShareInterpreter");
-        let stream = executor.execute().await?;
-        let result = stream.try_collect::<Vec<_>>().await?;
-        let expected = vec![
-            "+------+------+-----------+",
-            "| Kind | Name | Shared_on |",
-            "+------+------+-----------+",
-            "+------+------+-----------+",
-        ];
-        common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
+        assert!(executor.execute().await.is_ok());
     }
 
     Ok(())
