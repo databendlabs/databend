@@ -12,10 +12,12 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+pub mod base_mutator;
 pub mod block_filter;
 pub mod compact_mutator;
 pub mod deletion_mutator;
 
+pub use base_mutator::BaseMutator;
 pub use block_filter::delete_from_block;
 pub use compact_mutator::CompactMutator;
 pub use deletion_mutator::DeletionMutator;

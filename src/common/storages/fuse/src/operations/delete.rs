@@ -27,7 +27,7 @@ use tracing::debug;
 
 use crate::operations::mutation::delete_from_block;
 use crate::operations::mutation::deletion_mutator::Deletion;
-use crate::operations::mutation::deletion_mutator::DeletionMutator;
+use crate::operations::mutation::DeletionMutator;
 use crate::pruning::BlockPruner;
 use crate::statistics::ClusterStatsGenerator;
 use crate::FuseTable;
