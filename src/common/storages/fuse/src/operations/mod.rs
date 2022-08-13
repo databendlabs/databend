@@ -20,6 +20,7 @@ mod fuse_sink;
 mod gc;
 mod mutation;
 mod navigate;
+mod recluster;
 mod operation_log;
 mod read;
 mod read_partitions;
