@@ -1,39 +1,37 @@
 # Query
-/common/arrow/         @datafuselabs/databend-query-reviewer
-/common/arrow/         @datafuselabs/databend-query-reviewer
-/common/datablocks/    @datafuselabs/databend-query-reviewer
-/common/datavalues/    @datafuselabs/databend-query-reviewer
-/common/functions/     @datafuselabs/databend-query-reviewer
-/common/io/            @datafuselabs/databend-query-reviewer
-/common/management/    @datafuselabs/databend-query-reviewer
-/common/streams/       @datafuselabs/databend-query-reviewer
+/src/common/arrow/         @datafuselabs/databend-query-reviewer
+/src/common/datablocks/    @datafuselabs/databend-query-reviewer
+/src/common/datavalues/    @datafuselabs/databend-query-reviewer
+/src/common/functions/     @datafuselabs/databend-query-reviewer
+/src/common/io/            @datafuselabs/databend-query-reviewer
+/src/common/management/    @datafuselabs/databend-query-reviewer
+/src/common/streams/       @datafuselabs/databend-query-reviewer
 
 # Executor
-/query/src/clusters/   @datafuselabs/databend-executor-reviewer
-/query/src/pipelines/  @datafuselabs/databend-executor-reviewer
-/query/src/api/rpc/    @datafuselabs/databend-executor-reviewer
-/common/base/          @datafuselabs/databend-executor-reviewer
-/common/exception/     @datafuselabs/databend-executor-reviewer
-/common/planners/      @datafuselabs/databend-executor-reviewer
+/src/query/service/src/clusters/   @datafuselabs/databend-executor-reviewer
+/src/query/service/src/pipelines/  @datafuselabs/databend-executor-reviewer
+/src/query/service/src/api/rpc/    @datafuselabs/databend-executor-reviewer
+/src/common/base/                  @datafuselabs/databend-executor-reviewer
+/src/common/exception/             @datafuselabs/databend-executor-reviewer
+/src/common/planners/              @datafuselabs/databend-executor-reviewer
 
 # Planner
-/common/ast/           @datafuselabs/databend-planner-reviewer
-/query/src/optimizers/ @datafuselabs/databend-planner-reviewer
+/src/query/ast/                       @datafuselabs/databend-planner-reviewer
+/src/query/service/src/optimizers/    @datafuselabs/databend-planner-reviewer
 
 # MetaSrv
-/metasrv/              @datafuselabs/databend-meta-reviewer
-/common/meta/          @datafuselabs/databend-meta-reviewer
-/common/grpc/          @datafuselabs/databend-meta-reviewer
-/common/protos/proto   @drmingdrmer
+/src/meta/                @datafuselabs/databend-meta-reviewer
+/src/common/grpc/         @datafuselabs/databend-meta-reviewer
+/src/meta/protos/proto    @drmingdrmer
 
 # Storage
-/common/cache/         @datafuselabs/databend-storage-reviewer
-/query/src/catalogs/   @datafuselabs/databend-storage-reviewer
-/query/src/storages/   @datafuselabs/databend-storage-reviewer
+/src/common/cache/                 @datafuselabs/databend-storage-reviewer
+/src/query/service/src/catalogs/   @datafuselabs/databend-storage-reviewer
+/src/query/service/src/storages/   @datafuselabs/databend-storage-reviewer
 
 
 # API and handler
-/query/src/servers/    @datafuselabs/databend-api-reviewer
+/src/query/service/src/servers/    @datafuselabs/databend-api-reviewer
 
 # Website
 /website/              @datafuselabs/databend-document-reviewer

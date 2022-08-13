@@ -1132,14 +1132,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "common-dep-hack"
-version = "0.1.0"
-dependencies = [
- "axum",
- "openssl-src",
-]
-
-[[package]]
 name = "common-exception"
 version = "0.1.0"
 dependencies = [
@@ -1930,6 +1922,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-workspace-hack"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "openssl-src",
+]
+
+[[package]]
 name = "concurrent-queue"
 version = "1.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2334,6 +2334,38 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3ee2393c4a91429dffb4bedf19f4d6abf27d8a732c8ce4980305d782e5426d57"
 
 [[package]]
+name = "databend-binaries"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap 3.2.15",
+ "common-base",
+ "common-exception",
+ "common-grpc",
+ "common-macros",
+ "common-meta-api",
+ "common-meta-app",
+ "common-meta-embedded",
+ "common-meta-grpc",
+ "common-meta-raft-store",
+ "common-meta-sled-store",
+ "common-meta-store",
+ "common-meta-types",
+ "common-metrics",
+ "common-tracing",
+ "databend-meta",
+ "databend-query",
+ "openraft",
+ "sentry",
+ "serde",
+ "serde_json",
+ "tokio-stream",
+ "tonic",
+ "tracing",
+ "url",
+]
+
+[[package]]
 name = "databend-meta"
 version = "0.1.0"
 dependencies = [
@@ -2348,12 +2380,10 @@ dependencies = [
  "common-exception",
  "common-grpc",
  "common-http",
- "common-macros",
  "common-meta-api",
  "common-meta-grpc",
  "common-meta-raft-store",
  "common-meta-sled-store",
- "common-meta-store",
  "common-meta-types",
  "common-tracing",
  "env_logger",
@@ -2368,7 +2398,6 @@ dependencies = [
  "regex",
  "reqwest",
  "semver",
- "sentry",
  "serde",
  "serde-bridge",
  "serde_json",
@@ -2382,42 +2411,6 @@ dependencies = [
  "tracing",
  "tracing-appender",
  "tracing-subscriber",
-]
-
-[[package]]
-name = "databend-metabench"
-version = "0.1.0"
-dependencies = [
- "clap 3.2.15",
- "common-base",
- "common-meta-api",
- "common-meta-app",
- "common-meta-grpc",
- "common-meta-types",
- "databend-meta",
- "serde",
-]
-
-[[package]]
-name = "databend-metactl"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "clap 3.2.15",
- "common-base",
- "common-meta-api",
- "common-meta-grpc",
- "common-meta-raft-store",
- "common-meta-sled-store",
- "common-meta-types",
- "common-tracing",
- "databend-meta",
- "openraft",
- "serde",
- "serde_json",
- "tokio-stream",
- "tonic",
- "url",
 ]
 
 [[package]]
@@ -2461,7 +2454,6 @@ dependencies = [
  "common-http",
  "common-io",
  "common-legacy-parser",
- "common-macros",
  "common-management",
  "common-meta-api",
  "common-meta-app",
@@ -2526,7 +2518,6 @@ dependencies = [
  "rsa",
  "segment-tree",
  "semver",
- "sentry",
  "serde",
  "serde-bridge",
  "serde_json",
