@@ -3948,6 +3948,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "isahc-opendal-workaround"
+version = "2.0.0-opendal.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a813d052bdd0c4f0376bf7d5e217614933d1271e922651e4f1fd3943d42395e9"
+dependencies = [
+ "async-channel",
+ "castaway",
+ "crossbeam-utils",
+ "curl",
+ "curl-sys",
+ "encoding_rs",
+ "event-listener",
+ "futures-lite",
+ "http",
+ "log",
+ "mime",
+ "once_cell",
+ "polling",
+ "slab",
+ "sluice",
+ "tracing",
+ "tracing-futures",
+ "url",
+ "waker-fn",
+]
+
+[[package]]
 name = "itertools"
 version = "0.10.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4959,9 +4986,9 @@ checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
 
 [[package]]
 name = "opendal"
-version = "0.11.4"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f795048c5dfeedf0ccf718e0000f848fc41daf8f68e2d0eb7687c68da481d725"
+checksum = "9facd3f01e493eb20d0ca2324c77c4cead41c3cf1e2e5f4414ffdbb1710b5343"
 dependencies = [
  "anyhow",
  "async-compat",
@@ -4974,8 +5001,7 @@ dependencies = [
  "futures",
  "hdrs",
  "http",
- "hyper",
- "hyper-tls",
+ "isahc-opendal-workaround",
  "log",
  "md5",
  "metrics 0.20.1",
