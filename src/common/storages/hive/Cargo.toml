@@ -1,0 +1,38 @@
+[package]
+name = "common-storages-hive"
+version = "0.1.0"
+edition = "2021"
+authors = ["Databend Authors <opensource@datafuselabs.com>"]
+license = "Apache-2.0"
+publish = false
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+doctest = false
+test = false
+
+[dependencies]
+common-arrow = { path = "../../arrow" }
+common-base = { path = "../../base" }
+common-catalog = { path = "../../catalog" }
+common-datablocks = { path = "../../datablocks" }
+common-datavalues = { path = "../../datavalues" }
+common-exception = { path = "../../exception" }
+common-fuse-meta = { path = "../../fuse-meta" }
+common-hive-meta-store = { path = "../../hive-meta-store" }
+common-meta-app = { path = "../../../meta/app" }
+common-meta-types = { path = "../../../meta/types" }
+common-pipeline-core = { path = "../../pipeline/core" }
+common-pipeline-sources = { path = "../../pipeline/sources" }
+common-planners = { path = "../../planners" }
+common-storages-index = { path = "../index" }
+common-storages-util = { path = "../util" }
+
+async-recursion = "1.0.0"
+async-trait = "0.1.56"
+futures = "0.3.21"
+opendal = { version = "0.12.0", features = ["retry"] }
+serde = { version = "1.0.137", features = ["derive"] }
+thrift = "0.15.0"
+tracing = "0.1.35"
+typetag = "0.1.8"
