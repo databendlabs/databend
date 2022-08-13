@@ -32,7 +32,6 @@ use databend_query::storages::fuse::statistics::reducers;
 use databend_query::storages::fuse::statistics::BlockStatistics;
 use databend_query::storages::fuse::statistics::ClusterStatsGenerator;
 use databend_query::storages::fuse::statistics::StatisticsAccumulator;
-use opendal::Accessor;
 use opendal::Operator;
 
 use crate::storages::fuse::table_test_fixture::TestFixture;
@@ -147,9 +146,7 @@ async fn test_accumulator() -> common_exception::Result<()> {
     let ctx = fixture.ctx();
     let mut stats_acc = StatisticsAccumulator::new();
 
-    let mut builder = opendal::services::memory::Backend::build();
-    let accessor: Arc<dyn Accessor> = builder.finish().await?;
-    let operator = Operator::new(accessor);
+    let operator = Operator::new(opendal::services::memory::Builder::default().build()?);
     let table_ctx: Arc<dyn TableContext> = ctx;
     let loc_generator = TableMetaLocationGenerator::with_prefix("/".to_owned());
 
