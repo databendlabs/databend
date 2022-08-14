@@ -20,12 +20,14 @@ use std::sync::Arc;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_datavalues::prelude::*;
 use common_datavalues::with_match_integer_type_id;
+use common_datavalues::with_match_float_type_id;
 use common_exception::Result;
 use common_io::prelude::*;
 
 use super::aggregate_distinct_state::AggregateDistinctIntegerState;
 use super::aggregate_distinct_state::AggregateDistinctState;
 use super::aggregate_distinct_state::AggregateDistinctStringState;
+use super::aggregate_distinct_state::AggregateDistinctFloatState;
 use super::aggregate_distinct_state::DataGroupValues;
 use super::aggregate_distinct_state::DistinctStateFunc;
 use super::aggregate_function::AggregateFunction;
@@ -191,7 +193,7 @@ pub fn try_create(
         _ => arguments.clone(),
     };
     let nested = nested_creator(nested_name, params, nested_arguments)?;
-    if arguments.len() == 0 {
+    if arguments.len() == 1 {
         let data_type = arguments[0].data_type().clone();
         let phid = data_type.data_type_id();
         if phid.is_integer() {
@@ -224,7 +226,23 @@ pub fn try_create(
                 _state: PhantomData,
             }));
         }
-        if phid.is_floating() {}
+        if phid.is_floating() {
+            with_match_float_type_id!(phid, |$T| {
+                return Ok(Arc::new(AggregateDistinctCombinator::<
+                    $T,
+                    AggregateDistinctFloatState<$T>,
+                > {
+                    nested_name: nested_name.to_owned(),
+                    arguments,
+                    nested,
+                    name,
+                    _s: PhantomData,
+                    _state: PhantomData,
+                }));
+            }, {
+                panic!("Unsupported type for AggregateDistinctFloatState");
+            })
+        }
     }
     Ok(Arc::new(AggregateDistinctCombinator::<
         DataGroupValues,

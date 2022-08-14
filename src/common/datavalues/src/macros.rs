@@ -307,6 +307,23 @@ macro_rules! with_match_integer_type_id {
 }
 
 #[macro_export]
+macro_rules! with_match_float_type_id {
+    ($key_type:expr, | $_:tt $T:ident | $body:tt,  $nbody:tt) => {{
+        macro_rules! __with_ty__ {
+            ( $_ $T:ident ) => {
+                $body
+            };
+        }
+
+        match $key_type {
+            TypeID::Float32 => __with_ty__! { f32 },
+            TypeID::Float64 => __with_ty__! { f64 },
+            _ => $nbody,
+        }
+    }};
+}
+
+#[macro_export]
 macro_rules! with_match_integer_types_error {
     ($key_type:expr, | $_:tt $T:ident | $body:tt) => {{
         macro_rules! __with_ty__ {

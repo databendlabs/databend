@@ -193,8 +193,9 @@ where T: PrimitiveType + std::hash::Hash + Eq + DFTryFrom<DataValue>
     }
 
     fn add(&mut self, columns: &[ColumnRef], row: usize) -> Result<()> {
-        let value = columns.get(0).map(|s| s.get(row)).unwrap();
-        self.set.insert(DFTryFrom::try_from(value).unwrap());
+        let array: &PrimitiveColumn<T> = unsafe { Series::static_cast(&columns[0]) };
+        let v = unsafe { array.value_unchecked(row)};
+        self.set.insert(v);
         Ok(())
     }
 
@@ -205,15 +206,16 @@ where T: PrimitiveType + std::hash::Hash + Eq + DFTryFrom<DataValue>
         input_rows: usize,
     ) -> Result<()> {
         for row in 0..input_rows {
-            let value = columns.get(0).map(|s| s.get(row)).unwrap();
+            let array: &PrimitiveColumn<T> = unsafe { Series::static_cast(&columns[0]) };
+            let value = unsafe { array.value_unchecked(row)};
             match validity {
                 Some(v) => {
                     if v.get_bit(row) {
-                        self.set.insert(DFTryFrom::try_from(value).unwrap());
+                        self.set.insert(value);
                     }
                 }
                 None => {
-                    self.set.insert(DFTryFrom::try_from(value).unwrap());
+                    self.set.insert(value);
                 }
             }
         }
@@ -268,9 +270,10 @@ where T: PrimitiveType + num_traits::Float
     }
 
     fn add(&mut self, columns: &[ColumnRef], row: usize) -> Result<()> {
-        let value = columns.get(0).map(|s| s.get(row)).unwrap();
+        let array: &PrimitiveColumn<T> = unsafe { Series::static_cast(&columns[0]) };
+        let v = unsafe { array.value_unchecked(row)};
         self.set
-            .insert(OrderedFloat(DFTryFrom::try_from(value).unwrap()));
+            .insert(OrderedFloat(v));
         Ok(())
     }
 
@@ -281,17 +284,18 @@ where T: PrimitiveType + num_traits::Float
         input_rows: usize,
     ) -> Result<()> {
         for row in 0..input_rows {
-            let value = columns.get(0).map(|s| s.get(row)).unwrap();
+            let array: &PrimitiveColumn<T> = unsafe { Series::static_cast(&columns[0]) };
+            let value = unsafe { array.value_unchecked(row)};
             match validity {
                 Some(v) => {
                     if v.get_bit(row) {
                         self.set
-                            .insert(OrderedFloat(DFTryFrom::try_from(value).unwrap()));
+                            .insert(OrderedFloat(value));
                     }
                 }
                 None => {
                     self.set
-                        .insert(OrderedFloat(DFTryFrom::try_from(value).unwrap()));
+                        .insert(OrderedFloat(value));
                 }
             }
         }
