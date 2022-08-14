@@ -11,18 +11,20 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 use std::collections::hash_map::RandomState;
 use std::collections::HashSet;
 use std::convert::TryFrom;
+use std::hash::Hash;
+use std::marker::PhantomData;
+use std::marker::Send;
+use std::marker::Sync;
 
 use bytes::BytesMut;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_datavalues::prelude::*;
-use common_datavalues::DFTryFrom;
 use common_exception::Result;
 use common_io::prelude::*;
-use ordered_float::OrderedFloat;
+use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -51,12 +53,10 @@ pub struct DataGroupValues(Vec<DataGroupValue>);
 pub struct AggregateDistinctState {
     set: HashSet<DataGroupValues, RandomState>,
 }
-pub struct AggregateDistinctIntegerState<T: PrimitiveType + std::hash::Hash + Eq> {
-    set: HashSet<T, RandomState>,
-}
 
-pub struct AggregateDistinctFloatState<T: PrimitiveType + num_traits::Float> {
-    set: HashSet<OrderedFloat<T>, RandomState>,
+pub struct AggregateDistinctPrimitiveState<T: PrimitiveType, E: From<T>> {
+    set: HashSet<E, RandomState>,
+    _t: PhantomData<T>,
 }
 
 pub struct AggregateDistinctStringState {
@@ -166,160 +166,6 @@ impl DistinctStateFunc<DataGroupValues> for AggregateDistinctState {
     }
 }
 
-impl<T> DistinctStateFunc<T> for AggregateDistinctIntegerState<T>
-where T: PrimitiveType + std::hash::Hash + Eq + DFTryFrom<DataValue>
-{
-    fn new() -> Self {
-        AggregateDistinctIntegerState {
-            set: HashSet::new(),
-        }
-    }
-
-    fn serialize(&self, writer: &mut BytesMut) -> Result<()> {
-        serialize_into_buf(writer, &self.set)
-    }
-
-    fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()> {
-        self.set = deserialize_from_slice(reader)?;
-        Ok(())
-    }
-
-    fn is_empty(&self) -> bool {
-        self.set.is_empty()
-    }
-
-    fn len(&self) -> usize {
-        self.set.len()
-    }
-
-    fn add(&mut self, columns: &[ColumnRef], row: usize) -> Result<()> {
-        let array: &PrimitiveColumn<T> = unsafe { Series::static_cast(&columns[0]) };
-        let v = unsafe { array.value_unchecked(row) };
-        self.set.insert(v);
-        Ok(())
-    }
-
-    fn batch_add(
-        &mut self,
-        columns: &[ColumnRef],
-        validity: Option<&Bitmap>,
-        input_rows: usize,
-    ) -> Result<()> {
-        for row in 0..input_rows {
-            let array: &PrimitiveColumn<T> = unsafe { Series::static_cast(&columns[0]) };
-            let value = unsafe { array.value_unchecked(row) };
-            match validity {
-                Some(v) => {
-                    if v.get_bit(row) {
-                        self.set.insert(value);
-                    }
-                }
-                None => {
-                    self.set.insert(value);
-                }
-            }
-        }
-        Ok(())
-    }
-    fn merge(&mut self, rhs: &Self) -> Result<()> {
-        self.set.extend(rhs.set.clone());
-        Ok(())
-    }
-
-    fn build_columns(&self, fields: &[DataField]) -> Result<Vec<ColumnRef>> {
-        let mut results = Vec::with_capacity(self.set.len());
-        self.set.iter().for_each(|group_values| {
-            results.push(*group_values);
-        });
-
-        let data_type = fields[0].data_type();
-        let columns = results
-            .iter()
-            .map(|v| DataValue::try_from(*v).unwrap())
-            .collect::<Vec<DataValue>>();
-        let array = columns.as_slice();
-        let column = data_type.create_column(array).unwrap();
-        Ok((&[column]).to_vec())
-    }
-}
-
-impl<T> DistinctStateFunc<T> for AggregateDistinctFloatState<T>
-where T: PrimitiveType + num_traits::Float
-{
-    fn new() -> Self {
-        AggregateDistinctFloatState {
-            set: HashSet::new(),
-        }
-    }
-
-    fn serialize(&self, writer: &mut BytesMut) -> Result<()> {
-        serialize_into_buf(writer, &self.set)
-    }
-
-    fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()> {
-        self.set = deserialize_from_slice(reader)?;
-        Ok(())
-    }
-
-    fn is_empty(&self) -> bool {
-        self.set.is_empty()
-    }
-
-    fn len(&self) -> usize {
-        self.set.len()
-    }
-
-    fn add(&mut self, columns: &[ColumnRef], row: usize) -> Result<()> {
-        let array: &PrimitiveColumn<T> = unsafe { Series::static_cast(&columns[0]) };
-        let v = unsafe { array.value_unchecked(row) };
-        self.set.insert(OrderedFloat(v));
-        Ok(())
-    }
-
-    fn batch_add(
-        &mut self,
-        columns: &[ColumnRef],
-        validity: Option<&Bitmap>,
-        input_rows: usize,
-    ) -> Result<()> {
-        for row in 0..input_rows {
-            let array: &PrimitiveColumn<T> = unsafe { Series::static_cast(&columns[0]) };
-            let value = unsafe { array.value_unchecked(row) };
-            match validity {
-                Some(v) => {
-                    if v.get_bit(row) {
-                        self.set.insert(OrderedFloat(value));
-                    }
-                }
-                None => {
-                    self.set.insert(OrderedFloat(value));
-                }
-            }
-        }
-        Ok(())
-    }
-    fn merge(&mut self, rhs: &Self) -> Result<()> {
-        self.set.extend(rhs.set.clone());
-        Ok(())
-    }
-
-    fn build_columns(&self, fields: &[DataField]) -> Result<Vec<ColumnRef>> {
-        let mut results = Vec::with_capacity(self.set.len());
-        self.set.iter().for_each(|group_values| {
-            results.push(*group_values);
-        });
-
-        let data_type = fields[0].data_type();
-        let columns = results
-            .iter()
-            .map(|v| DataValue::try_from(v.into_inner()).unwrap())
-            .collect::<Vec<DataValue>>();
-        let array = columns.as_slice();
-        let column = data_type.create_column(array).unwrap();
-        Ok((&[column]).to_vec())
-    }
-}
-
 impl DistinctStateFunc<Vec<u8>> for AggregateDistinctStringState {
     fn new() -> Self {
         AggregateDistinctStringState {
@@ -377,16 +223,89 @@ impl DistinctStateFunc<Vec<u8>> for AggregateDistinctStringState {
         Ok(())
     }
 
-    fn build_columns(&self, fields: &[DataField]) -> Result<Vec<ColumnRef>> {
-        let mut results = Vec::with_capacity(self.set.len());
-        self.set.iter().for_each(|group_values| {
-            results.push(group_values.clone());
+    fn build_columns(&self, _fields: &[DataField]) -> Result<Vec<ColumnRef>> {
+        let mut result = Vec::with_capacity(self.set.len());
+        self.set.iter().for_each(|v| {
+            result.push(v.as_slice());
         });
+        let columns = StringColumn::from_iterator(result.into_iter());
+        Ok(vec![columns.arc()])
+    }
+}
 
+impl<T, E> DistinctStateFunc<T> for AggregateDistinctPrimitiveState<T, E>
+where
+    T: PrimitiveType,
+    E: From<T> + Into<T> + Hash + Eq + Sync + Send + Serialize + Clone + DeserializeOwned,
+{
+    fn new() -> Self {
+        AggregateDistinctPrimitiveState {
+            set: HashSet::new(),
+            _t: PhantomData,
+        }
+    }
+
+    fn serialize(&self, writer: &mut BytesMut) -> Result<()> {
+        serialize_into_buf(writer, &self.set)
+    }
+
+    fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()> {
+        self.set = deserialize_from_slice(reader)?;
+        Ok(())
+    }
+
+    fn is_empty(&self) -> bool {
+        self.set.is_empty()
+    }
+
+    fn len(&self) -> usize {
+        self.set.len()
+    }
+
+    fn add(&mut self, columns: &[ColumnRef], row: usize) -> Result<()> {
+        let array: &PrimitiveColumn<T> = unsafe { Series::static_cast(&columns[0]) };
+        let v = unsafe { array.value_unchecked(row) };
+        self.set.insert(E::from(v));
+        Ok(())
+    }
+
+    fn batch_add(
+        &mut self,
+        columns: &[ColumnRef],
+        validity: Option<&Bitmap>,
+        input_rows: usize,
+    ) -> Result<()> {
+        for row in 0..input_rows {
+            let array: &PrimitiveColumn<T> = unsafe { Series::static_cast(&columns[0]) };
+            let value = unsafe { array.value_unchecked(row) };
+            match validity {
+                Some(v) => {
+                    if v.get_bit(row) {
+                        self.set.insert(E::from(value));
+                    }
+                }
+                None => {
+                    self.set.insert(E::from(value));
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn merge(&mut self, rhs: &Self) -> Result<()> {
+        self.set.extend(rhs.set.clone());
+        Ok(())
+    }
+
+    fn build_columns(&self, fields: &[DataField]) -> Result<Vec<ColumnRef>> {
+        let mut results: Vec<T> = Vec::with_capacity(self.set.len());
+        self.set.iter().for_each(|v| {
+            results.push(v.clone().into());
+        });
         let data_type = fields[0].data_type();
         let columns = results
             .iter()
-            .map(|v| DataValue::String(v.clone()))
+            .map(|v| DataValue::try_from(*v).unwrap())
             .collect::<Vec<DataValue>>();
         let array = columns.as_slice();
         let column = data_type.create_column(array).unwrap();

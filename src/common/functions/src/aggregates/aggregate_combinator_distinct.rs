@@ -19,13 +19,12 @@ use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::Bitmap;
 use common_datavalues::prelude::*;
-use common_datavalues::with_match_float_type_id;
-use common_datavalues::with_match_integer_type_id;
+use common_datavalues::with_match_primitive_type_id_2;
 use common_exception::Result;
 use common_io::prelude::*;
+use ordered_float::OrderedFloat;
 
-use super::aggregate_distinct_state::AggregateDistinctFloatState;
-use super::aggregate_distinct_state::AggregateDistinctIntegerState;
+use super::aggregate_distinct_state::AggregateDistinctPrimitiveState;
 use super::aggregate_distinct_state::AggregateDistinctState;
 use super::aggregate_distinct_state::AggregateDistinctStringState;
 use super::aggregate_distinct_state::DataGroupValues;
@@ -196,11 +195,11 @@ pub fn try_create(
     if arguments.len() == 1 {
         let data_type = arguments[0].data_type().clone();
         let phid = data_type.data_type_id();
-        if phid.is_integer() {
-            with_match_integer_type_id!(phid, |$T| {
+        if phid.is_numeric() {
+            with_match_primitive_type_id_2!(phid, |$T |$E|  {
                 return Ok(Arc::new(AggregateDistinctCombinator::<
                     $T,
-                    AggregateDistinctIntegerState<$T>,
+                    AggregateDistinctPrimitiveState<$T, $E>,
                 > {
                     nested_name: nested_name.to_owned(),
                     arguments,
@@ -210,7 +209,7 @@ pub fn try_create(
                     _state: PhantomData,
                 }));
             }, {
-                panic!("Unsupported type for AggregateDistinctIntegerState");
+                panic!("Unsupported type for AggregateDistinctPrimitiveState");
             })
         }
         if phid.is_string() {
@@ -225,23 +224,6 @@ pub fn try_create(
                 _s: PhantomData,
                 _state: PhantomData,
             }));
-        }
-        if phid.is_floating() {
-            with_match_float_type_id!(phid, |$T| {
-                return Ok(Arc::new(AggregateDistinctCombinator::<
-                    $T,
-                    AggregateDistinctFloatState<$T>,
-                > {
-                    nested_name: nested_name.to_owned(),
-                    arguments,
-                    nested,
-                    name,
-                    _s: PhantomData,
-                    _state: PhantomData,
-                }));
-            }, {
-                panic!("Unsupported type for AggregateDistinctFloatState");
-            })
         }
     }
     Ok(Arc::new(AggregateDistinctCombinator::<

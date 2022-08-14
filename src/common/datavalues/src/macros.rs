@@ -255,6 +255,33 @@ macro_rules! with_match_primitive_type_id {
 }
 
 #[macro_export]
+macro_rules! with_match_primitive_type_id_2 {
+    ($key_type:expr, | $_:tt $T:ident| $_a:tt $E:ident | $body:tt,  $nbody:tt) => {{
+        macro_rules! __with_ty__ {
+            ( $_ $T:ident, $_a $E:ident ) => {
+                $body
+            };
+        }
+        type orderF32 = OrderedFloat<f32>;
+        type orderF64 = OrderedFloat<f64>;
+        match $key_type {
+            TypeID::Int8 => __with_ty__! { i8, i8 },
+            TypeID::Int16 => __with_ty__! { i16, i16 },
+            TypeID::Int32 => __with_ty__! { i32, i32 },
+            TypeID::Int64 => __with_ty__! { i64, i64 },
+            TypeID::UInt8 => __with_ty__! { u8, u8 },
+            TypeID::UInt16 => __with_ty__! { u16, u16 },
+            TypeID::UInt32 => __with_ty__! { u32, u32 },
+            TypeID::UInt64 => __with_ty__! { u64, u64 },
+            TypeID::Float32 => __with_ty__! { f32, orderF32 },
+            TypeID::Float64 => __with_ty__! { f64, orderF64 },
+
+            _ => $nbody,
+        }
+    }};
+}
+
+#[macro_export]
 macro_rules! with_match_primitive_types_error {
     ($key_type:expr, | $_:tt $T:ident | $body:tt) => {{
         macro_rules! __with_ty__ {
@@ -301,23 +328,6 @@ macro_rules! with_match_integer_type_id {
             TypeID::UInt32 => __with_ty__! { u32 },
             TypeID::UInt64 => __with_ty__! { u64 },
 
-            _ => $nbody,
-        }
-    }};
-}
-
-#[macro_export]
-macro_rules! with_match_float_type_id {
-    ($key_type:expr, | $_:tt $T:ident | $body:tt,  $nbody:tt) => {{
-        macro_rules! __with_ty__ {
-            ( $_ $T:ident ) => {
-                $body
-            };
-        }
-
-        match $key_type {
-            TypeID::Float32 => __with_ty__! { f32 },
-            TypeID::Float64 => __with_ty__! { f64 },
             _ => $nbody,
         }
     }};
