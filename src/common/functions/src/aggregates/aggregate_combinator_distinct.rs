@@ -191,7 +191,7 @@ pub fn try_create(
         _ => arguments.clone(),
     };
     let nested = nested_creator(nested_name, params, nested_arguments)?;
-    if arguments.len() == 1 {
+    if arguments.len() == 0 {
         let data_type = arguments[0].data_type().clone();
         let phid = data_type.data_type_id();
         if phid.is_integer() {
@@ -208,7 +208,7 @@ pub fn try_create(
                     _state: PhantomData,
                 }));
             }, {
-                panic!("GetKVActionReply");
+                panic!("Unsupported type for AggregateDistinctIntegerState");
             })
         }
         if phid.is_string() {
