@@ -26,13 +26,13 @@ pub trait ResultTypeOfUnary: Sized {
     type Negate: Number;
     
     fn checked_add(self, _rhs: Self) -> Option<Self>;
-    
+
     fn checked_sub(self, _rhs: Self) -> Option<Self>;
-    
+
     fn checked_mul(self, _rhs: Self) -> Option<Self>;
-    
+
     fn checked_div(self, _rhs: Self) -> Option<Self>;
-    
+
     fn checked_rem(self, _rhs: Self) -> Option<Self>;
 }
 
@@ -738,23 +738,23 @@ impl ResultTypeOfBinary for (f64, f64) {
 
 impl ResultTypeOfUnary for u8 {
     type Negate = i16;
-    
+
     fn checked_add(self, rhs: Self) -> Option<Self> {
         self.checked_add(rhs)
     }
-    
+
     fn checked_sub(self, rhs: Self) -> Option<Self> {
         self.checked_sub(rhs)
     }
-    
+
     fn checked_mul(self, rhs: Self) -> Option<Self> {
         self.checked_mul(rhs)
     }
-    
+
     fn checked_div(self, rhs: Self) -> Option<Self> {
         self.checked_div(rhs)
     }
-    
+
     fn checked_rem(self, rhs: Self) -> Option<Self> {
         self.checked_rem(rhs)
     }
@@ -762,23 +762,23 @@ impl ResultTypeOfUnary for u8 {
 
 impl ResultTypeOfUnary for u16 {
     type Negate = i32;
-    
+
     fn checked_add(self, rhs: Self) -> Option<Self> {
         self.checked_add(rhs)
     }
-    
+
     fn checked_sub(self, rhs: Self) -> Option<Self> {
         self.checked_sub(rhs)
     }
-    
+
     fn checked_mul(self, rhs: Self) -> Option<Self> {
         self.checked_mul(rhs)
     }
-    
+
     fn checked_div(self, rhs: Self) -> Option<Self> {
         self.checked_div(rhs)
     }
-    
+
     fn checked_rem(self, rhs: Self) -> Option<Self> {
         self.checked_rem(rhs)
     }
@@ -786,23 +786,23 @@ impl ResultTypeOfUnary for u16 {
 
 impl ResultTypeOfUnary for u32 {
     type Negate = i64;
-    
+
     fn checked_add(self, rhs: Self) -> Option<Self> {
         self.checked_add(rhs)
     }
-    
+
     fn checked_sub(self, rhs: Self) -> Option<Self> {
         self.checked_sub(rhs)
     }
-    
+
     fn checked_mul(self, rhs: Self) -> Option<Self> {
         self.checked_mul(rhs)
     }
-    
+
     fn checked_div(self, rhs: Self) -> Option<Self> {
         self.checked_div(rhs)
     }
-    
+
     fn checked_rem(self, rhs: Self) -> Option<Self> {
         self.checked_rem(rhs)
     }
@@ -810,23 +810,23 @@ impl ResultTypeOfUnary for u32 {
 
 impl ResultTypeOfUnary for u64 {
     type Negate = i64;
-    
+
     fn checked_add(self, rhs: Self) -> Option<Self> {
         self.checked_add(rhs)
     }
-    
+
     fn checked_sub(self, rhs: Self) -> Option<Self> {
         self.checked_sub(rhs)
     }
-    
+
     fn checked_mul(self, rhs: Self) -> Option<Self> {
         self.checked_mul(rhs)
     }
-    
+
     fn checked_div(self, rhs: Self) -> Option<Self> {
         self.checked_div(rhs)
     }
-    
+
     fn checked_rem(self, rhs: Self) -> Option<Self> {
         self.checked_rem(rhs)
     }
@@ -834,23 +834,23 @@ impl ResultTypeOfUnary for u64 {
 
 impl ResultTypeOfUnary for i8 {
     type Negate = i8;
-    
+
     fn checked_add(self, rhs: Self) -> Option<Self> {
         self.checked_add(rhs)
     }
-    
+
     fn checked_sub(self, rhs: Self) -> Option<Self> {
         self.checked_sub(rhs)
     }
-    
+
     fn checked_mul(self, rhs: Self) -> Option<Self> {
         self.checked_mul(rhs)
     }
-    
+
     fn checked_div(self, rhs: Self) -> Option<Self> {
         self.checked_div(rhs)
     }
-    
+
     fn checked_rem(self, rhs: Self) -> Option<Self> {
         self.checked_rem(rhs)
     }
@@ -858,23 +858,23 @@ impl ResultTypeOfUnary for i8 {
 
 impl ResultTypeOfUnary for i16 {
     type Negate = i16;
-    
+
     fn checked_add(self, rhs: Self) -> Option<Self> {
         self.checked_add(rhs)
     }
-    
+
     fn checked_sub(self, rhs: Self) -> Option<Self> {
         self.checked_sub(rhs)
     }
-    
+
     fn checked_mul(self, rhs: Self) -> Option<Self> {
         self.checked_mul(rhs)
     }
-    
+
     fn checked_div(self, rhs: Self) -> Option<Self> {
         self.checked_div(rhs)
     }
-    
+
     fn checked_rem(self, rhs: Self) -> Option<Self> {
         self.checked_rem(rhs)
     }
@@ -882,23 +882,23 @@ impl ResultTypeOfUnary for i16 {
 
 impl ResultTypeOfUnary for i32 {
     type Negate = i32;
-    
+
     fn checked_add(self, rhs: Self) -> Option<Self> {
         self.checked_add(rhs)
     }
-    
+
     fn checked_sub(self, rhs: Self) -> Option<Self> {
         self.checked_sub(rhs)
     }
-    
+
     fn checked_mul(self, rhs: Self) -> Option<Self> {
         self.checked_mul(rhs)
     }
-    
+
     fn checked_div(self, rhs: Self) -> Option<Self> {
         self.checked_div(rhs)
     }
-    
+
     fn checked_rem(self, rhs: Self) -> Option<Self> {
         self.checked_rem(rhs)
     }
@@ -906,23 +906,23 @@ impl ResultTypeOfUnary for i32 {
 
 impl ResultTypeOfUnary for i64 {
     type Negate = i64;
-    
+
     fn checked_add(self, rhs: Self) -> Option<Self> {
         self.checked_add(rhs)
     }
-    
+
     fn checked_sub(self, rhs: Self) -> Option<Self> {
         self.checked_sub(rhs)
     }
-    
+
     fn checked_mul(self, rhs: Self) -> Option<Self> {
         self.checked_mul(rhs)
     }
-    
+
     fn checked_div(self, rhs: Self) -> Option<Self> {
         self.checked_div(rhs)
     }
-    
+
     fn checked_rem(self, rhs: Self) -> Option<Self> {
         self.checked_rem(rhs)
     }
@@ -930,23 +930,23 @@ impl ResultTypeOfUnary for i64 {
 
 impl ResultTypeOfUnary for f32 {
     type Negate = f32;
-    
+
     fn checked_add(self, rhs: Self) -> Option<Self> {
         Some(self + rhs)
     }
-    
+
     fn checked_sub(self, rhs: Self) -> Option<Self> {
         Some(self - rhs)
     }
-    
+
     fn checked_mul(self, rhs: Self) -> Option<Self> {
         Some(self * rhs)
     }
-    
+
     fn checked_div(self, rhs: Self) -> Option<Self> {
         Some(self / rhs)
     }
-    
+
     fn checked_rem(self, rhs: Self) -> Option<Self> {
         Some(self % rhs)
     }
@@ -954,23 +954,23 @@ impl ResultTypeOfUnary for f32 {
 
 impl ResultTypeOfUnary for f64 {
     type Negate = f64;
-    
+
     fn checked_add(self, rhs: Self) -> Option<Self> {
         Some(self + rhs)
     }
-    
+
     fn checked_sub(self, rhs: Self) -> Option<Self> {
         Some(self - rhs)
     }
-    
+
     fn checked_mul(self, rhs: Self) -> Option<Self> {
         Some(self * rhs)
     }
-    
+
     fn checked_div(self, rhs: Self) -> Option<Self> {
         Some(self / rhs)
     }
-    
+
     fn checked_rem(self, rhs: Self) -> Option<Self> {
         Some(self % rhs)
     }

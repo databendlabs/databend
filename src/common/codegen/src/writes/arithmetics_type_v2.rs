@@ -66,13 +66,13 @@ pub trait ResultTypeOfUnary: Sized {{
     type Negate: Number;
     
     fn checked_add(self, _rhs: Self) -> Option<Self>;
-    
+
     fn checked_sub(self, _rhs: Self) -> Option<Self>;
-    
+
     fn checked_mul(self, _rhs: Self) -> Option<Self>;
-    
+
     fn checked_div(self, _rhs: Self) -> Option<Self>;
-    
+
     fn checked_rem(self, _rhs: Self) -> Option<Self>;
 }}"
     )
@@ -131,23 +131,23 @@ impl ResultTypeOfBinary for ({}, {}) {{
                     "
 impl ResultTypeOfUnary for {} {{
     type Negate = {};
-    
+
     fn checked_add(self, rhs: Self) -> Option<Self> {{
         Some(self + rhs)
     }}
-    
+
     fn checked_sub(self, rhs: Self) -> Option<Self> {{
         Some(self - rhs)
     }}
-    
+
     fn checked_mul(self, rhs: Self) -> Option<Self> {{
         Some(self * rhs)
     }}
-    
+
     fn checked_div(self, rhs: Self) -> Option<Self> {{
         Some(self / rhs)
     }}
-    
+
     fn checked_rem(self, rhs: Self) -> Option<Self> {{
         Some(self % rhs)
     }}
@@ -164,23 +164,23 @@ impl ResultTypeOfUnary for {} {{
                     "
 impl ResultTypeOfUnary for {} {{
     type Negate = {};
-    
+
     fn checked_add(self, rhs: Self) -> Option<Self> {{
         self.checked_add(rhs)
     }}
-    
+
     fn checked_sub(self, rhs: Self) -> Option<Self> {{
         self.checked_sub(rhs)
     }}
-    
+
     fn checked_mul(self, rhs: Self) -> Option<Self> {{
         self.checked_mul(rhs)
     }}
-    
+
     fn checked_div(self, rhs: Self) -> Option<Self> {{
         self.checked_div(rhs)
     }}
-    
+
     fn checked_rem(self, rhs: Self) -> Option<Self> {{
         self.checked_rem(rhs)
     }}
