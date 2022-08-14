@@ -19,15 +19,15 @@ use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::Bitmap;
 use common_datavalues::prelude::*;
-use common_datavalues::with_match_integer_type_id;
 use common_datavalues::with_match_float_type_id;
+use common_datavalues::with_match_integer_type_id;
 use common_exception::Result;
 use common_io::prelude::*;
 
+use super::aggregate_distinct_state::AggregateDistinctFloatState;
 use super::aggregate_distinct_state::AggregateDistinctIntegerState;
 use super::aggregate_distinct_state::AggregateDistinctState;
 use super::aggregate_distinct_state::AggregateDistinctStringState;
-use super::aggregate_distinct_state::AggregateDistinctFloatState;
 use super::aggregate_distinct_state::DataGroupValues;
 use super::aggregate_distinct_state::DistinctStateFunc;
 use super::aggregate_function::AggregateFunction;
