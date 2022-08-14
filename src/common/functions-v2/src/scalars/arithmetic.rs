@@ -156,9 +156,9 @@ pub fn register(registry: &mut FunctionRegistry) {
                             );
                         }
                     }
-                    _ => {}
+                    _ => unreachable!(),
                 }),
-                _ => {}
+                _ => unreachable!(),
             });
         }
     }
