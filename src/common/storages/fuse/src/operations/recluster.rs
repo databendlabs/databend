@@ -46,6 +46,10 @@ impl FuseTable {
         &self,
         ctx: Arc<dyn TableContext>,
     ) -> Result<Option<ReclusterMutator>> {
+        if self.cluster_key_meta.is_none() {
+            return Ok(None);
+        }
+
         let snapshot_opt = self.read_table_snapshot(ctx.as_ref()).await?;
         let snapshot = if let Some(val) = snapshot_opt {
             val
@@ -82,7 +86,7 @@ impl FuseTable {
         Ok(Some(mutator))
     }
 
-    pub fn do_recluster(
+    pub fn recluster(
         &self,
         ctx: Arc<dyn TableContext>,
         catalog: String,

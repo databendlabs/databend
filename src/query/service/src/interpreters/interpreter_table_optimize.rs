@@ -36,22 +36,13 @@ impl OptimizeTableInterpreter {
         Ok(OptimizeTableInterpreter { ctx, plan })
     }
 
-    #[tracing::instrument(level = "debug", name = "execute_recluster", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
-    async fn execute_recluster(
-        &self,
-        catalog_name: &String,
-        db_name: &String,
-        tbl_name: &String,
-    ) -> Result<()> {
+    async fn execute_recluster(&self, catalog_name: &String, table: &FuseTable) -> Result<()> {
         let ctx = self.ctx.clone();
         let settings = ctx.get_settings();
 
         let mut pipeline = Pipeline::create();
 
-        let table = ctx.get_table(catalog_name, db_name, tbl_name).await?;
-        let tbl = FuseTable::try_from_table(table.as_ref())?;
-
-        let mutator = tbl.try_get_recluster_mutator(ctx.clone()).await?;
+        let mutator = table.try_get_recluster_mutator(ctx.clone()).await?;
         let mut mutator = if let Some(mutator) = mutator {
             mutator
         } else {
@@ -64,7 +55,7 @@ impl OptimizeTableInterpreter {
             return Ok(());
         }
 
-        tbl.do_recluster(
+        table.recluster(
             ctx.clone(),
             catalog_name.clone(),
             mutator.clone(),
@@ -102,25 +93,37 @@ impl Interpreter for OptimizeTableInterpreter {
         );
         let do_compact = matches!(
             action,
-            OptimizeTableAction::Compact | OptimizeTableAction::All
+            OptimizeTableAction::Compact
+                | OptimizeTableAction::Recluster
+                | OptimizeTableAction::All
         );
         let do_recluster = matches!(
             action,
             OptimizeTableAction::Recluster | OptimizeTableAction::All
         );
 
-        if do_recluster {
-            self.execute_recluster(&plan.catalog, &plan.database, &plan.table)
-                .await?;
-        }
-
         let mut table = self
             .ctx
             .get_table(&plan.catalog, &plan.database, &plan.table)
             .await?;
 
+        if do_recluster {
+            match FuseTable::try_from_table(table.as_ref()) {
+                Ok(tbl) => {
+                    self.execute_recluster(&plan.catalog, tbl).await?;
+                    // refresh table context.
+                    let tenant = self.ctx.get_tenant();
+                    table = self
+                        .ctx
+                        .get_catalog(&plan.catalog)?
+                        .get_table(tenant.as_str(), &plan.database, &plan.table)
+                        .await?;
+                }
+                Err(_) => {}
+            };
+        }
+
         if do_compact {
-            // TODO(zhyass): clustering key.
             table.compact(self.ctx.clone(), self.plan.clone()).await?;
             if do_purge {
                 // currently, context caches the table, we have to "refresh"
