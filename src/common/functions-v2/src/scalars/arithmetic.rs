@@ -23,10 +23,8 @@ use common_expression::FunctionRegistry;
 use common_expression::NumberDomain;
 
 pub fn register(registry: &mut FunctionRegistry) {
-    registry.register_aliases("+", &["plus", "add"]);
-    registry.register_aliases("-", &["minus"]);
-    registry.register_aliases("*", &["multiply"]);
-    registry.register_aliases("/", &["divide"]);
+    registry.register_aliases("plus", &["add"]);
+    registry.register_aliases("minus", &["substract"]);
     registry.register_aliases("div", &["intdiv"]);
 
     // TODO support modulo
@@ -53,7 +51,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                         {
                             type T = <(L, R) as ResultTypeOfBinary>::AddMul;
                             registry.register_2_arg::<NumberType<L>, NumberType<R>, NumberType<T>, _, _>(
-                                "+",
+                                "plus",
                                 FunctionProperty::default(),
                                 |lhs, rhs| {
                                     let lm: T =  num_traits::cast::cast(lhs.max)?;
@@ -62,8 +60,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                                     let rn: T =  num_traits::cast::cast(rhs.min)?;
 
                                     Some(NumberDomain::<T> {
-                                        min: ln.d_checked_add(rn)?,
-                                        max: lm.d_checked_add(rm)?,
+                                        min: ln.checked_add(rn)?,
+                                        max: lm.checked_add(rm)?,
                                     })
                                 },
                                 |a, b| a as T + b as T,
@@ -73,7 +71,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                         {
                             type T = <(L, R) as ResultTypeOfBinary>::Minus;
                             registry.register_2_arg::<NumberType<L>, NumberType<R>, NumberType<T>, _, _>(
-                                "-",
+                                "minus",
                                 FunctionProperty::default(),
                                 |lhs, rhs| {
                                     let lm: T =  num_traits::cast::cast(lhs.max)?;
@@ -82,8 +80,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                                     let rn: T =  num_traits::cast::cast(rhs.min)?;
 
                                     Some(NumberDomain::<T> {
-                                        min: ln.d_checked_sub(rm)?,
-                                        max: lm.d_checked_sub(rn)?,
+                                        min: ln.checked_sub(rm)?,
+                                        max: lm.checked_sub(rn)?,
                                     })
                                 },
                                 |a, b| a as T - b as T,
@@ -93,7 +91,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                         {
                             type T = <(L, R) as ResultTypeOfBinary>::AddMul;
                             registry.register_2_arg::<NumberType<L>, NumberType<R>, NumberType<T>, _, _>(
-                                "*",
+                                "multiply",
                                 FunctionProperty::default(),
                                 |lhs, rhs| {
                                     let lm: T =  num_traits::cast::cast(lhs.max)?;
@@ -101,10 +99,10 @@ pub fn register(registry: &mut FunctionRegistry) {
                                     let rm: T =  num_traits::cast::cast(rhs.max)?;
                                     let rn: T =  num_traits::cast::cast(rhs.min)?;
 
-                                    let x = lm.d_checked_mul(rm)?;
-                                    let y = lm.d_checked_mul(rn)?;
-                                    let m = ln.d_checked_mul(rm)?;
-                                    let n = ln.d_checked_mul(rn)?;
+                                    let x = lm.checked_mul(rm)?;
+                                    let y = lm.checked_mul(rn)?;
+                                    let m = ln.checked_mul(rm)?;
+                                    let n = ln.checked_mul(rn)?;
 
                                     Some(NumberDomain::<T> {
                                         min: x.min(y).min(m).min(n),
@@ -118,10 +116,23 @@ pub fn register(registry: &mut FunctionRegistry) {
                         {
                             type T = f64;
                             registry.register_2_arg::<NumberType<L>, NumberType<R>, NumberType<T>, _, _>(
-                                "/",
+                                "divide",
                                 FunctionProperty::default(),
-                                |_lhs, _rhs| {
-                                    None
+                                |lhs, rhs| {
+                                    let lm: T =  num_traits::cast::cast(lhs.max)?;
+                                    let ln: T =  num_traits::cast::cast(lhs.min)?;
+                                    let rm: T =  num_traits::cast::cast(rhs.max)?;
+                                    let rn: T =  num_traits::cast::cast(rhs.min)?;
+
+                                    let x = lm.checked_div(rm)?;
+                                    let y = lm.checked_div(rn)?;
+                                    let m = ln.checked_div(rm)?;
+                                    let n = ln.checked_div(rn)?;
+
+                                    Some(NumberDomain::<T> {
+                                        min: x.min(y).min(m).min(n),
+                                        max: x.max(y).max(m).max(n),
+                                    })
                                 },
                                 |a, b| a as T / b as T,
                             );

@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_ast::ast::BinaryOperator;
 use common_ast::ast::Literal as ASTLiteral;
+use common_ast::ast::UnaryOperator;
 use common_ast::parser::parse_expr;
 use common_ast::parser::token::Token;
 use common_ast::parser::tokenize_sql;
@@ -161,12 +163,12 @@ pub fn transform_expr(ast: common_ast::ast::Expr, columns: &[(&str, DataType)]) 
     }
 }
 
-fn transform_unary_op(op: common_ast::ast::UnaryOperator) -> String {
+fn transform_unary_op(op: UnaryOperator) -> String {
     op.to_string().to_lowercase()
 }
 
-fn transform_binary_op(op: common_ast::ast::BinaryOperator) -> String {
-    op.to_string().to_lowercase()
+fn transform_binary_op(op: BinaryOperator) -> String {
+    format!("{op:?}").to_lowercase()
 }
 
 fn transform_data_type(target_type: common_ast::ast::TypeName) -> DataType {

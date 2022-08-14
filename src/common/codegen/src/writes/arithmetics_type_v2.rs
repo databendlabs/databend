@@ -31,7 +31,7 @@ pub enum OP {
 }
 
 pub fn codegen_arithmetic_type_v2() {
-    let dest = Path::new("common/expression/src/types");
+    let dest = Path::new("src/common/expression/src/types");
     let path = dest.join("arithmetics_type.rs");
 
     let mut file = File::create(&path).expect("open");
@@ -60,31 +60,20 @@ pub trait ResultTypeOfBinary: Sized {{
     type Minus: Number;
     type IntDiv: Number;
     type Modulo: Number;
-    type LeastSuper: Number;
 }}
 
 pub trait ResultTypeOfUnary: Sized {{
     type Negate: Number;
     
-    fn d_checked_add(self, _rhs: Self) -> Option<Self> {{
-        None
-    }}
+    fn checked_add(self, _rhs: Self) -> Option<Self>;
     
-    fn d_checked_sub(self, _rhs: Self) -> Option<Self> {{
-        None
-    }}
+    fn checked_sub(self, _rhs: Self) -> Option<Self>;
     
-    fn d_checked_mul(self, _rhs: Self) -> Option<Self> {{
-        None
-    }}
+    fn checked_mul(self, _rhs: Self) -> Option<Self>;
     
-    fn d_checked_div(self, _rhs: Self) -> Option<Self> {{
-        None
-    }}
+    fn checked_div(self, _rhs: Self) -> Option<Self>;
     
-    fn d_checked_rem(self, _rhs: Self) -> Option<Self> {{
-        None
-    }}
+    fn checked_rem(self, _rhs: Self) -> Option<Self>;
 }}"
     )
     .unwrap();
@@ -112,7 +101,6 @@ pub trait ResultTypeOfUnary: Sized {{
             let minus = arithmetic_coercion(left, right, OP::Minus);
             let intdiv = arithmetic_coercion(left, right, OP::IntDiv);
             let modulo = arithmetic_coercion(left, right, OP::Modulo);
-            let least_super = arithmetic_coercion(left, right, OP::Super);
             writeln!(
                 file,
                 "
@@ -121,7 +109,6 @@ impl ResultTypeOfBinary for ({}, {}) {{
     type Minus = {};
     type IntDiv = {};
     type Modulo = {};
-    type LeastSuper = {};
 }}",
                 to_primitive_str(a.clone()),
                 to_primitive_str(b.clone()),
@@ -129,7 +116,6 @@ impl ResultTypeOfBinary for ({}, {}) {{
                 to_primitive_str(minus),
                 to_primitive_str(intdiv),
                 to_primitive_str(modulo),
-                to_primitive_str(least_super),
             )
             .unwrap();
         }
@@ -145,6 +131,26 @@ impl ResultTypeOfBinary for ({}, {}) {{
                     "
 impl ResultTypeOfUnary for {} {{
     type Negate = {};
+    
+    fn checked_add(self, rhs: Self) -> Option<Self> {{
+        Some(self + rhs)
+    }}
+    
+    fn checked_sub(self, rhs: Self) -> Option<Self> {{
+        Some(self - rhs)
+    }}
+    
+    fn checked_mul(self, rhs: Self) -> Option<Self> {{
+        Some(self * rhs)
+    }}
+    
+    fn checked_div(self, rhs: Self) -> Option<Self> {{
+        Some(self / rhs)
+    }}
+    
+    fn checked_rem(self, rhs: Self) -> Option<Self> {{
+        Some(self % rhs)
+    }}
 }}",
                     to_primitive_str(arg.clone()),
                     to_primitive_str(negate),
@@ -159,23 +165,23 @@ impl ResultTypeOfUnary for {} {{
 impl ResultTypeOfUnary for {} {{
     type Negate = {};
     
-    fn d_checked_add(self, rhs: Self) -> Option<Self> {{
+    fn checked_add(self, rhs: Self) -> Option<Self> {{
         self.checked_add(rhs)
     }}
     
-    fn d_checked_sub(self, rhs: Self) -> Option<Self> {{
+    fn checked_sub(self, rhs: Self) -> Option<Self> {{
         self.checked_sub(rhs)
     }}
     
-    fn d_checked_mul(self, rhs: Self) -> Option<Self> {{
+    fn checked_mul(self, rhs: Self) -> Option<Self> {{
         self.checked_mul(rhs)
     }}
     
-    fn d_checked_div(self, rhs: Self) -> Option<Self> {{
+    fn checked_div(self, rhs: Self) -> Option<Self> {{
         self.checked_div(rhs)
     }}
     
-    fn d_checked_rem(self, rhs: Self) -> Option<Self> {{
+    fn checked_rem(self, rhs: Self) -> Option<Self> {{
         self.checked_rem(rhs)
     }}
 }}",

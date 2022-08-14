@@ -20,31 +20,20 @@ pub trait ResultTypeOfBinary: Sized {
     type Minus: Number;
     type IntDiv: Number;
     type Modulo: Number;
-    type LeastSuper: Number;
 }
 
 pub trait ResultTypeOfUnary: Sized {
     type Negate: Number;
-
-    fn d_checked_add(self, _rhs: Self) -> Option<Self> {
-        None
-    }
-
-    fn d_checked_sub(self, _rhs: Self) -> Option<Self> {
-        None
-    }
-
-    fn d_checked_mul(self, _rhs: Self) -> Option<Self> {
-        None
-    }
-
-    fn d_checked_div(self, _rhs: Self) -> Option<Self> {
-        None
-    }
-
-    fn d_checked_rem(self, _rhs: Self) -> Option<Self> {
-        None
-    }
+    
+    fn checked_add(self, _rhs: Self) -> Option<Self>;
+    
+    fn checked_sub(self, _rhs: Self) -> Option<Self>;
+    
+    fn checked_mul(self, _rhs: Self) -> Option<Self>;
+    
+    fn checked_div(self, _rhs: Self) -> Option<Self>;
+    
+    fn checked_rem(self, _rhs: Self) -> Option<Self>;
 }
 
 impl ResultTypeOfBinary for (u8, u8) {
@@ -52,7 +41,6 @@ impl ResultTypeOfBinary for (u8, u8) {
     type Minus = i16;
     type IntDiv = u8;
     type Modulo = u8;
-    type LeastSuper = u8;
 }
 
 impl ResultTypeOfBinary for (u8, u16) {
@@ -60,7 +48,6 @@ impl ResultTypeOfBinary for (u8, u16) {
     type Minus = i32;
     type IntDiv = u16;
     type Modulo = u16;
-    type LeastSuper = u16;
 }
 
 impl ResultTypeOfBinary for (u8, u32) {
@@ -68,7 +55,6 @@ impl ResultTypeOfBinary for (u8, u32) {
     type Minus = i64;
     type IntDiv = u32;
     type Modulo = u32;
-    type LeastSuper = u32;
 }
 
 impl ResultTypeOfBinary for (u8, u64) {
@@ -76,7 +62,6 @@ impl ResultTypeOfBinary for (u8, u64) {
     type Minus = i64;
     type IntDiv = u64;
     type Modulo = u64;
-    type LeastSuper = u64;
 }
 
 impl ResultTypeOfBinary for (u8, i8) {
@@ -84,7 +69,6 @@ impl ResultTypeOfBinary for (u8, i8) {
     type Minus = i16;
     type IntDiv = i8;
     type Modulo = u8;
-    type LeastSuper = i8;
 }
 
 impl ResultTypeOfBinary for (u8, i16) {
@@ -92,7 +76,6 @@ impl ResultTypeOfBinary for (u8, i16) {
     type Minus = i32;
     type IntDiv = i16;
     type Modulo = u16;
-    type LeastSuper = i16;
 }
 
 impl ResultTypeOfBinary for (u8, i32) {
@@ -100,7 +83,6 @@ impl ResultTypeOfBinary for (u8, i32) {
     type Minus = i64;
     type IntDiv = i32;
     type Modulo = u32;
-    type LeastSuper = i32;
 }
 
 impl ResultTypeOfBinary for (u8, i64) {
@@ -108,7 +90,6 @@ impl ResultTypeOfBinary for (u8, i64) {
     type Minus = i64;
     type IntDiv = i64;
     type Modulo = u64;
-    type LeastSuper = i64;
 }
 
 impl ResultTypeOfBinary for (u8, f32) {
@@ -116,7 +97,6 @@ impl ResultTypeOfBinary for (u8, f32) {
     type Minus = f64;
     type IntDiv = i32;
     type Modulo = f64;
-    type LeastSuper = f32;
 }
 
 impl ResultTypeOfBinary for (u8, f64) {
@@ -124,7 +104,6 @@ impl ResultTypeOfBinary for (u8, f64) {
     type Minus = f64;
     type IntDiv = i64;
     type Modulo = f64;
-    type LeastSuper = f64;
 }
 
 impl ResultTypeOfBinary for (u16, u8) {
@@ -132,7 +111,6 @@ impl ResultTypeOfBinary for (u16, u8) {
     type Minus = i32;
     type IntDiv = u16;
     type Modulo = u8;
-    type LeastSuper = u16;
 }
 
 impl ResultTypeOfBinary for (u16, u16) {
@@ -140,7 +118,6 @@ impl ResultTypeOfBinary for (u16, u16) {
     type Minus = i32;
     type IntDiv = u16;
     type Modulo = u16;
-    type LeastSuper = u16;
 }
 
 impl ResultTypeOfBinary for (u16, u32) {
@@ -148,7 +125,6 @@ impl ResultTypeOfBinary for (u16, u32) {
     type Minus = i64;
     type IntDiv = u32;
     type Modulo = u32;
-    type LeastSuper = u32;
 }
 
 impl ResultTypeOfBinary for (u16, u64) {
@@ -156,7 +132,6 @@ impl ResultTypeOfBinary for (u16, u64) {
     type Minus = i64;
     type IntDiv = u64;
     type Modulo = u64;
-    type LeastSuper = u64;
 }
 
 impl ResultTypeOfBinary for (u16, i8) {
@@ -164,7 +139,6 @@ impl ResultTypeOfBinary for (u16, i8) {
     type Minus = i32;
     type IntDiv = i16;
     type Modulo = u8;
-    type LeastSuper = i16;
 }
 
 impl ResultTypeOfBinary for (u16, i16) {
@@ -172,7 +146,6 @@ impl ResultTypeOfBinary for (u16, i16) {
     type Minus = i32;
     type IntDiv = i16;
     type Modulo = u16;
-    type LeastSuper = i16;
 }
 
 impl ResultTypeOfBinary for (u16, i32) {
@@ -180,7 +153,6 @@ impl ResultTypeOfBinary for (u16, i32) {
     type Minus = i64;
     type IntDiv = i32;
     type Modulo = u32;
-    type LeastSuper = i32;
 }
 
 impl ResultTypeOfBinary for (u16, i64) {
@@ -188,7 +160,6 @@ impl ResultTypeOfBinary for (u16, i64) {
     type Minus = i64;
     type IntDiv = i64;
     type Modulo = u64;
-    type LeastSuper = i64;
 }
 
 impl ResultTypeOfBinary for (u16, f32) {
@@ -196,7 +167,6 @@ impl ResultTypeOfBinary for (u16, f32) {
     type Minus = f64;
     type IntDiv = i32;
     type Modulo = f64;
-    type LeastSuper = f32;
 }
 
 impl ResultTypeOfBinary for (u16, f64) {
@@ -204,7 +174,6 @@ impl ResultTypeOfBinary for (u16, f64) {
     type Minus = f64;
     type IntDiv = i64;
     type Modulo = f64;
-    type LeastSuper = f64;
 }
 
 impl ResultTypeOfBinary for (u32, u8) {
@@ -212,7 +181,6 @@ impl ResultTypeOfBinary for (u32, u8) {
     type Minus = i64;
     type IntDiv = u32;
     type Modulo = u8;
-    type LeastSuper = u32;
 }
 
 impl ResultTypeOfBinary for (u32, u16) {
@@ -220,7 +188,6 @@ impl ResultTypeOfBinary for (u32, u16) {
     type Minus = i64;
     type IntDiv = u32;
     type Modulo = u16;
-    type LeastSuper = u32;
 }
 
 impl ResultTypeOfBinary for (u32, u32) {
@@ -228,7 +195,6 @@ impl ResultTypeOfBinary for (u32, u32) {
     type Minus = i64;
     type IntDiv = u32;
     type Modulo = u32;
-    type LeastSuper = u32;
 }
 
 impl ResultTypeOfBinary for (u32, u64) {
@@ -236,7 +202,6 @@ impl ResultTypeOfBinary for (u32, u64) {
     type Minus = i64;
     type IntDiv = u64;
     type Modulo = u64;
-    type LeastSuper = u64;
 }
 
 impl ResultTypeOfBinary for (u32, i8) {
@@ -244,7 +209,6 @@ impl ResultTypeOfBinary for (u32, i8) {
     type Minus = i64;
     type IntDiv = i32;
     type Modulo = u8;
-    type LeastSuper = i32;
 }
 
 impl ResultTypeOfBinary for (u32, i16) {
@@ -252,7 +216,6 @@ impl ResultTypeOfBinary for (u32, i16) {
     type Minus = i64;
     type IntDiv = i32;
     type Modulo = u16;
-    type LeastSuper = i32;
 }
 
 impl ResultTypeOfBinary for (u32, i32) {
@@ -260,7 +223,6 @@ impl ResultTypeOfBinary for (u32, i32) {
     type Minus = i64;
     type IntDiv = i32;
     type Modulo = u32;
-    type LeastSuper = i32;
 }
 
 impl ResultTypeOfBinary for (u32, i64) {
@@ -268,7 +230,6 @@ impl ResultTypeOfBinary for (u32, i64) {
     type Minus = i64;
     type IntDiv = i64;
     type Modulo = u64;
-    type LeastSuper = i64;
 }
 
 impl ResultTypeOfBinary for (u32, f32) {
@@ -276,7 +237,6 @@ impl ResultTypeOfBinary for (u32, f32) {
     type Minus = f64;
     type IntDiv = i32;
     type Modulo = f64;
-    type LeastSuper = f32;
 }
 
 impl ResultTypeOfBinary for (u32, f64) {
@@ -284,7 +244,6 @@ impl ResultTypeOfBinary for (u32, f64) {
     type Minus = f64;
     type IntDiv = i64;
     type Modulo = f64;
-    type LeastSuper = f64;
 }
 
 impl ResultTypeOfBinary for (u64, u8) {
@@ -292,7 +251,6 @@ impl ResultTypeOfBinary for (u64, u8) {
     type Minus = i64;
     type IntDiv = u64;
     type Modulo = u8;
-    type LeastSuper = u64;
 }
 
 impl ResultTypeOfBinary for (u64, u16) {
@@ -300,7 +258,6 @@ impl ResultTypeOfBinary for (u64, u16) {
     type Minus = i64;
     type IntDiv = u64;
     type Modulo = u16;
-    type LeastSuper = u64;
 }
 
 impl ResultTypeOfBinary for (u64, u32) {
@@ -308,7 +265,6 @@ impl ResultTypeOfBinary for (u64, u32) {
     type Minus = i64;
     type IntDiv = u64;
     type Modulo = u32;
-    type LeastSuper = u64;
 }
 
 impl ResultTypeOfBinary for (u64, u64) {
@@ -316,7 +272,6 @@ impl ResultTypeOfBinary for (u64, u64) {
     type Minus = i64;
     type IntDiv = u64;
     type Modulo = u64;
-    type LeastSuper = u64;
 }
 
 impl ResultTypeOfBinary for (u64, i8) {
@@ -324,7 +279,6 @@ impl ResultTypeOfBinary for (u64, i8) {
     type Minus = i64;
     type IntDiv = i64;
     type Modulo = u8;
-    type LeastSuper = i64;
 }
 
 impl ResultTypeOfBinary for (u64, i16) {
@@ -332,7 +286,6 @@ impl ResultTypeOfBinary for (u64, i16) {
     type Minus = i64;
     type IntDiv = i64;
     type Modulo = u16;
-    type LeastSuper = i64;
 }
 
 impl ResultTypeOfBinary for (u64, i32) {
@@ -340,7 +293,6 @@ impl ResultTypeOfBinary for (u64, i32) {
     type Minus = i64;
     type IntDiv = i64;
     type Modulo = u32;
-    type LeastSuper = i64;
 }
 
 impl ResultTypeOfBinary for (u64, i64) {
@@ -348,7 +300,6 @@ impl ResultTypeOfBinary for (u64, i64) {
     type Minus = i64;
     type IntDiv = i64;
     type Modulo = u64;
-    type LeastSuper = i64;
 }
 
 impl ResultTypeOfBinary for (u64, f32) {
@@ -356,7 +307,6 @@ impl ResultTypeOfBinary for (u64, f32) {
     type Minus = f64;
     type IntDiv = i64;
     type Modulo = f64;
-    type LeastSuper = f64;
 }
 
 impl ResultTypeOfBinary for (u64, f64) {
@@ -364,7 +314,6 @@ impl ResultTypeOfBinary for (u64, f64) {
     type Minus = f64;
     type IntDiv = i64;
     type Modulo = f64;
-    type LeastSuper = f64;
 }
 
 impl ResultTypeOfBinary for (i8, u8) {
@@ -372,7 +321,6 @@ impl ResultTypeOfBinary for (i8, u8) {
     type Minus = i16;
     type IntDiv = i8;
     type Modulo = i16;
-    type LeastSuper = i8;
 }
 
 impl ResultTypeOfBinary for (i8, u16) {
@@ -380,7 +328,6 @@ impl ResultTypeOfBinary for (i8, u16) {
     type Minus = i32;
     type IntDiv = i16;
     type Modulo = i32;
-    type LeastSuper = i16;
 }
 
 impl ResultTypeOfBinary for (i8, u32) {
@@ -388,7 +335,6 @@ impl ResultTypeOfBinary for (i8, u32) {
     type Minus = i64;
     type IntDiv = i32;
     type Modulo = i64;
-    type LeastSuper = i32;
 }
 
 impl ResultTypeOfBinary for (i8, u64) {
@@ -396,7 +342,6 @@ impl ResultTypeOfBinary for (i8, u64) {
     type Minus = i64;
     type IntDiv = i64;
     type Modulo = i64;
-    type LeastSuper = i64;
 }
 
 impl ResultTypeOfBinary for (i8, i8) {
@@ -404,7 +349,6 @@ impl ResultTypeOfBinary for (i8, i8) {
     type Minus = i16;
     type IntDiv = i8;
     type Modulo = i16;
-    type LeastSuper = i8;
 }
 
 impl ResultTypeOfBinary for (i8, i16) {
@@ -412,7 +356,6 @@ impl ResultTypeOfBinary for (i8, i16) {
     type Minus = i32;
     type IntDiv = i16;
     type Modulo = i32;
-    type LeastSuper = i16;
 }
 
 impl ResultTypeOfBinary for (i8, i32) {
@@ -420,7 +363,6 @@ impl ResultTypeOfBinary for (i8, i32) {
     type Minus = i64;
     type IntDiv = i32;
     type Modulo = i64;
-    type LeastSuper = i32;
 }
 
 impl ResultTypeOfBinary for (i8, i64) {
@@ -428,7 +370,6 @@ impl ResultTypeOfBinary for (i8, i64) {
     type Minus = i64;
     type IntDiv = i64;
     type Modulo = i64;
-    type LeastSuper = i64;
 }
 
 impl ResultTypeOfBinary for (i8, f32) {
@@ -436,7 +377,6 @@ impl ResultTypeOfBinary for (i8, f32) {
     type Minus = f64;
     type IntDiv = i32;
     type Modulo = f64;
-    type LeastSuper = f32;
 }
 
 impl ResultTypeOfBinary for (i8, f64) {
@@ -444,7 +384,6 @@ impl ResultTypeOfBinary for (i8, f64) {
     type Minus = f64;
     type IntDiv = i64;
     type Modulo = f64;
-    type LeastSuper = f64;
 }
 
 impl ResultTypeOfBinary for (i16, u8) {
@@ -452,7 +391,6 @@ impl ResultTypeOfBinary for (i16, u8) {
     type Minus = i32;
     type IntDiv = i16;
     type Modulo = i16;
-    type LeastSuper = i16;
 }
 
 impl ResultTypeOfBinary for (i16, u16) {
@@ -460,7 +398,6 @@ impl ResultTypeOfBinary for (i16, u16) {
     type Minus = i32;
     type IntDiv = i16;
     type Modulo = i32;
-    type LeastSuper = i16;
 }
 
 impl ResultTypeOfBinary for (i16, u32) {
@@ -468,7 +405,6 @@ impl ResultTypeOfBinary for (i16, u32) {
     type Minus = i64;
     type IntDiv = i32;
     type Modulo = i64;
-    type LeastSuper = i32;
 }
 
 impl ResultTypeOfBinary for (i16, u64) {
@@ -476,7 +412,6 @@ impl ResultTypeOfBinary for (i16, u64) {
     type Minus = i64;
     type IntDiv = i64;
     type Modulo = i64;
-    type LeastSuper = i64;
 }
 
 impl ResultTypeOfBinary for (i16, i8) {
@@ -484,7 +419,6 @@ impl ResultTypeOfBinary for (i16, i8) {
     type Minus = i32;
     type IntDiv = i16;
     type Modulo = i16;
-    type LeastSuper = i16;
 }
 
 impl ResultTypeOfBinary for (i16, i16) {
@@ -492,7 +426,6 @@ impl ResultTypeOfBinary for (i16, i16) {
     type Minus = i32;
     type IntDiv = i16;
     type Modulo = i32;
-    type LeastSuper = i16;
 }
 
 impl ResultTypeOfBinary for (i16, i32) {
@@ -500,7 +433,6 @@ impl ResultTypeOfBinary for (i16, i32) {
     type Minus = i64;
     type IntDiv = i32;
     type Modulo = i64;
-    type LeastSuper = i32;
 }
 
 impl ResultTypeOfBinary for (i16, i64) {
@@ -508,7 +440,6 @@ impl ResultTypeOfBinary for (i16, i64) {
     type Minus = i64;
     type IntDiv = i64;
     type Modulo = i64;
-    type LeastSuper = i64;
 }
 
 impl ResultTypeOfBinary for (i16, f32) {
@@ -516,7 +447,6 @@ impl ResultTypeOfBinary for (i16, f32) {
     type Minus = f64;
     type IntDiv = i32;
     type Modulo = f64;
-    type LeastSuper = f32;
 }
 
 impl ResultTypeOfBinary for (i16, f64) {
@@ -524,7 +454,6 @@ impl ResultTypeOfBinary for (i16, f64) {
     type Minus = f64;
     type IntDiv = i64;
     type Modulo = f64;
-    type LeastSuper = f64;
 }
 
 impl ResultTypeOfBinary for (i32, u8) {
@@ -532,7 +461,6 @@ impl ResultTypeOfBinary for (i32, u8) {
     type Minus = i64;
     type IntDiv = i32;
     type Modulo = i16;
-    type LeastSuper = i32;
 }
 
 impl ResultTypeOfBinary for (i32, u16) {
@@ -540,7 +468,6 @@ impl ResultTypeOfBinary for (i32, u16) {
     type Minus = i64;
     type IntDiv = i32;
     type Modulo = i32;
-    type LeastSuper = i32;
 }
 
 impl ResultTypeOfBinary for (i32, u32) {
@@ -548,7 +475,6 @@ impl ResultTypeOfBinary for (i32, u32) {
     type Minus = i64;
     type IntDiv = i32;
     type Modulo = i64;
-    type LeastSuper = i32;
 }
 
 impl ResultTypeOfBinary for (i32, u64) {
@@ -556,7 +482,6 @@ impl ResultTypeOfBinary for (i32, u64) {
     type Minus = i64;
     type IntDiv = i64;
     type Modulo = i64;
-    type LeastSuper = i64;
 }
 
 impl ResultTypeOfBinary for (i32, i8) {
@@ -564,7 +489,6 @@ impl ResultTypeOfBinary for (i32, i8) {
     type Minus = i64;
     type IntDiv = i32;
     type Modulo = i16;
-    type LeastSuper = i32;
 }
 
 impl ResultTypeOfBinary for (i32, i16) {
@@ -572,7 +496,6 @@ impl ResultTypeOfBinary for (i32, i16) {
     type Minus = i64;
     type IntDiv = i32;
     type Modulo = i32;
-    type LeastSuper = i32;
 }
 
 impl ResultTypeOfBinary for (i32, i32) {
@@ -580,7 +503,6 @@ impl ResultTypeOfBinary for (i32, i32) {
     type Minus = i64;
     type IntDiv = i32;
     type Modulo = i64;
-    type LeastSuper = i32;
 }
 
 impl ResultTypeOfBinary for (i32, i64) {
@@ -588,7 +510,6 @@ impl ResultTypeOfBinary for (i32, i64) {
     type Minus = i64;
     type IntDiv = i64;
     type Modulo = i64;
-    type LeastSuper = i64;
 }
 
 impl ResultTypeOfBinary for (i32, f32) {
@@ -596,7 +517,6 @@ impl ResultTypeOfBinary for (i32, f32) {
     type Minus = f64;
     type IntDiv = i32;
     type Modulo = f64;
-    type LeastSuper = f32;
 }
 
 impl ResultTypeOfBinary for (i32, f64) {
@@ -604,7 +524,6 @@ impl ResultTypeOfBinary for (i32, f64) {
     type Minus = f64;
     type IntDiv = i64;
     type Modulo = f64;
-    type LeastSuper = f64;
 }
 
 impl ResultTypeOfBinary for (i64, u8) {
@@ -612,7 +531,6 @@ impl ResultTypeOfBinary for (i64, u8) {
     type Minus = i64;
     type IntDiv = i64;
     type Modulo = i16;
-    type LeastSuper = i64;
 }
 
 impl ResultTypeOfBinary for (i64, u16) {
@@ -620,7 +538,6 @@ impl ResultTypeOfBinary for (i64, u16) {
     type Minus = i64;
     type IntDiv = i64;
     type Modulo = i32;
-    type LeastSuper = i64;
 }
 
 impl ResultTypeOfBinary for (i64, u32) {
@@ -628,7 +545,6 @@ impl ResultTypeOfBinary for (i64, u32) {
     type Minus = i64;
     type IntDiv = i64;
     type Modulo = i64;
-    type LeastSuper = i64;
 }
 
 impl ResultTypeOfBinary for (i64, u64) {
@@ -636,7 +552,6 @@ impl ResultTypeOfBinary for (i64, u64) {
     type Minus = i64;
     type IntDiv = i64;
     type Modulo = i64;
-    type LeastSuper = i64;
 }
 
 impl ResultTypeOfBinary for (i64, i8) {
@@ -644,7 +559,6 @@ impl ResultTypeOfBinary for (i64, i8) {
     type Minus = i64;
     type IntDiv = i64;
     type Modulo = i16;
-    type LeastSuper = i64;
 }
 
 impl ResultTypeOfBinary for (i64, i16) {
@@ -652,7 +566,6 @@ impl ResultTypeOfBinary for (i64, i16) {
     type Minus = i64;
     type IntDiv = i64;
     type Modulo = i32;
-    type LeastSuper = i64;
 }
 
 impl ResultTypeOfBinary for (i64, i32) {
@@ -660,7 +573,6 @@ impl ResultTypeOfBinary for (i64, i32) {
     type Minus = i64;
     type IntDiv = i64;
     type Modulo = i64;
-    type LeastSuper = i64;
 }
 
 impl ResultTypeOfBinary for (i64, i64) {
@@ -668,7 +580,6 @@ impl ResultTypeOfBinary for (i64, i64) {
     type Minus = i64;
     type IntDiv = i64;
     type Modulo = i64;
-    type LeastSuper = i64;
 }
 
 impl ResultTypeOfBinary for (i64, f32) {
@@ -676,7 +587,6 @@ impl ResultTypeOfBinary for (i64, f32) {
     type Minus = f64;
     type IntDiv = i64;
     type Modulo = f64;
-    type LeastSuper = f64;
 }
 
 impl ResultTypeOfBinary for (i64, f64) {
@@ -684,7 +594,6 @@ impl ResultTypeOfBinary for (i64, f64) {
     type Minus = f64;
     type IntDiv = i64;
     type Modulo = f64;
-    type LeastSuper = f64;
 }
 
 impl ResultTypeOfBinary for (f32, u8) {
@@ -692,7 +601,6 @@ impl ResultTypeOfBinary for (f32, u8) {
     type Minus = f64;
     type IntDiv = i32;
     type Modulo = f64;
-    type LeastSuper = f32;
 }
 
 impl ResultTypeOfBinary for (f32, u16) {
@@ -700,7 +608,6 @@ impl ResultTypeOfBinary for (f32, u16) {
     type Minus = f64;
     type IntDiv = i32;
     type Modulo = f64;
-    type LeastSuper = f32;
 }
 
 impl ResultTypeOfBinary for (f32, u32) {
@@ -708,7 +615,6 @@ impl ResultTypeOfBinary for (f32, u32) {
     type Minus = f64;
     type IntDiv = i32;
     type Modulo = f64;
-    type LeastSuper = f32;
 }
 
 impl ResultTypeOfBinary for (f32, u64) {
@@ -716,7 +622,6 @@ impl ResultTypeOfBinary for (f32, u64) {
     type Minus = f64;
     type IntDiv = i64;
     type Modulo = f64;
-    type LeastSuper = f64;
 }
 
 impl ResultTypeOfBinary for (f32, i8) {
@@ -724,7 +629,6 @@ impl ResultTypeOfBinary for (f32, i8) {
     type Minus = f64;
     type IntDiv = i32;
     type Modulo = f64;
-    type LeastSuper = f32;
 }
 
 impl ResultTypeOfBinary for (f32, i16) {
@@ -732,7 +636,6 @@ impl ResultTypeOfBinary for (f32, i16) {
     type Minus = f64;
     type IntDiv = i32;
     type Modulo = f64;
-    type LeastSuper = f32;
 }
 
 impl ResultTypeOfBinary for (f32, i32) {
@@ -740,7 +643,6 @@ impl ResultTypeOfBinary for (f32, i32) {
     type Minus = f64;
     type IntDiv = i32;
     type Modulo = f64;
-    type LeastSuper = f32;
 }
 
 impl ResultTypeOfBinary for (f32, i64) {
@@ -748,7 +650,6 @@ impl ResultTypeOfBinary for (f32, i64) {
     type Minus = f64;
     type IntDiv = i64;
     type Modulo = f64;
-    type LeastSuper = f64;
 }
 
 impl ResultTypeOfBinary for (f32, f32) {
@@ -756,7 +657,6 @@ impl ResultTypeOfBinary for (f32, f32) {
     type Minus = f64;
     type IntDiv = i32;
     type Modulo = f64;
-    type LeastSuper = f32;
 }
 
 impl ResultTypeOfBinary for (f32, f64) {
@@ -764,7 +664,6 @@ impl ResultTypeOfBinary for (f32, f64) {
     type Minus = f64;
     type IntDiv = i64;
     type Modulo = f64;
-    type LeastSuper = f64;
 }
 
 impl ResultTypeOfBinary for (f64, u8) {
@@ -772,7 +671,6 @@ impl ResultTypeOfBinary for (f64, u8) {
     type Minus = f64;
     type IntDiv = i64;
     type Modulo = f64;
-    type LeastSuper = f64;
 }
 
 impl ResultTypeOfBinary for (f64, u16) {
@@ -780,7 +678,6 @@ impl ResultTypeOfBinary for (f64, u16) {
     type Minus = f64;
     type IntDiv = i64;
     type Modulo = f64;
-    type LeastSuper = f64;
 }
 
 impl ResultTypeOfBinary for (f64, u32) {
@@ -788,7 +685,6 @@ impl ResultTypeOfBinary for (f64, u32) {
     type Minus = f64;
     type IntDiv = i64;
     type Modulo = f64;
-    type LeastSuper = f64;
 }
 
 impl ResultTypeOfBinary for (f64, u64) {
@@ -796,7 +692,6 @@ impl ResultTypeOfBinary for (f64, u64) {
     type Minus = f64;
     type IntDiv = i64;
     type Modulo = f64;
-    type LeastSuper = f64;
 }
 
 impl ResultTypeOfBinary for (f64, i8) {
@@ -804,7 +699,6 @@ impl ResultTypeOfBinary for (f64, i8) {
     type Minus = f64;
     type IntDiv = i64;
     type Modulo = f64;
-    type LeastSuper = f64;
 }
 
 impl ResultTypeOfBinary for (f64, i16) {
@@ -812,7 +706,6 @@ impl ResultTypeOfBinary for (f64, i16) {
     type Minus = f64;
     type IntDiv = i64;
     type Modulo = f64;
-    type LeastSuper = f64;
 }
 
 impl ResultTypeOfBinary for (f64, i32) {
@@ -820,7 +713,6 @@ impl ResultTypeOfBinary for (f64, i32) {
     type Minus = f64;
     type IntDiv = i64;
     type Modulo = f64;
-    type LeastSuper = f64;
 }
 
 impl ResultTypeOfBinary for (f64, i64) {
@@ -828,7 +720,6 @@ impl ResultTypeOfBinary for (f64, i64) {
     type Minus = f64;
     type IntDiv = i64;
     type Modulo = f64;
-    type LeastSuper = f64;
 }
 
 impl ResultTypeOfBinary for (f64, f32) {
@@ -836,7 +727,6 @@ impl ResultTypeOfBinary for (f64, f32) {
     type Minus = f64;
     type IntDiv = i64;
     type Modulo = f64;
-    type LeastSuper = f64;
 }
 
 impl ResultTypeOfBinary for (f64, f64) {
@@ -844,205 +734,244 @@ impl ResultTypeOfBinary for (f64, f64) {
     type Minus = f64;
     type IntDiv = i64;
     type Modulo = f64;
-    type LeastSuper = f64;
 }
 
 impl ResultTypeOfUnary for u8 {
     type Negate = i16;
-
-    fn d_checked_add(self, rhs: Self) -> Option<Self> {
+    
+    fn checked_add(self, rhs: Self) -> Option<Self> {
         self.checked_add(rhs)
     }
-
-    fn d_checked_sub(self, rhs: Self) -> Option<Self> {
+    
+    fn checked_sub(self, rhs: Self) -> Option<Self> {
         self.checked_sub(rhs)
     }
-
-    fn d_checked_mul(self, rhs: Self) -> Option<Self> {
+    
+    fn checked_mul(self, rhs: Self) -> Option<Self> {
         self.checked_mul(rhs)
     }
-
-    fn d_checked_div(self, rhs: Self) -> Option<Self> {
+    
+    fn checked_div(self, rhs: Self) -> Option<Self> {
         self.checked_div(rhs)
     }
-
-    fn d_checked_rem(self, rhs: Self) -> Option<Self> {
+    
+    fn checked_rem(self, rhs: Self) -> Option<Self> {
         self.checked_rem(rhs)
     }
 }
 
 impl ResultTypeOfUnary for u16 {
     type Negate = i32;
-
-    fn d_checked_add(self, rhs: Self) -> Option<Self> {
+    
+    fn checked_add(self, rhs: Self) -> Option<Self> {
         self.checked_add(rhs)
     }
-
-    fn d_checked_sub(self, rhs: Self) -> Option<Self> {
+    
+    fn checked_sub(self, rhs: Self) -> Option<Self> {
         self.checked_sub(rhs)
     }
-
-    fn d_checked_mul(self, rhs: Self) -> Option<Self> {
+    
+    fn checked_mul(self, rhs: Self) -> Option<Self> {
         self.checked_mul(rhs)
     }
-
-    fn d_checked_div(self, rhs: Self) -> Option<Self> {
+    
+    fn checked_div(self, rhs: Self) -> Option<Self> {
         self.checked_div(rhs)
     }
-
-    fn d_checked_rem(self, rhs: Self) -> Option<Self> {
+    
+    fn checked_rem(self, rhs: Self) -> Option<Self> {
         self.checked_rem(rhs)
     }
 }
 
 impl ResultTypeOfUnary for u32 {
     type Negate = i64;
-
-    fn d_checked_add(self, rhs: Self) -> Option<Self> {
+    
+    fn checked_add(self, rhs: Self) -> Option<Self> {
         self.checked_add(rhs)
     }
-
-    fn d_checked_sub(self, rhs: Self) -> Option<Self> {
+    
+    fn checked_sub(self, rhs: Self) -> Option<Self> {
         self.checked_sub(rhs)
     }
-
-    fn d_checked_mul(self, rhs: Self) -> Option<Self> {
+    
+    fn checked_mul(self, rhs: Self) -> Option<Self> {
         self.checked_mul(rhs)
     }
-
-    fn d_checked_div(self, rhs: Self) -> Option<Self> {
+    
+    fn checked_div(self, rhs: Self) -> Option<Self> {
         self.checked_div(rhs)
     }
-
-    fn d_checked_rem(self, rhs: Self) -> Option<Self> {
+    
+    fn checked_rem(self, rhs: Self) -> Option<Self> {
         self.checked_rem(rhs)
     }
 }
 
 impl ResultTypeOfUnary for u64 {
     type Negate = i64;
-
-    fn d_checked_add(self, rhs: Self) -> Option<Self> {
+    
+    fn checked_add(self, rhs: Self) -> Option<Self> {
         self.checked_add(rhs)
     }
-
-    fn d_checked_sub(self, rhs: Self) -> Option<Self> {
+    
+    fn checked_sub(self, rhs: Self) -> Option<Self> {
         self.checked_sub(rhs)
     }
-
-    fn d_checked_mul(self, rhs: Self) -> Option<Self> {
+    
+    fn checked_mul(self, rhs: Self) -> Option<Self> {
         self.checked_mul(rhs)
     }
-
-    fn d_checked_div(self, rhs: Self) -> Option<Self> {
+    
+    fn checked_div(self, rhs: Self) -> Option<Self> {
         self.checked_div(rhs)
     }
-
-    fn d_checked_rem(self, rhs: Self) -> Option<Self> {
+    
+    fn checked_rem(self, rhs: Self) -> Option<Self> {
         self.checked_rem(rhs)
     }
 }
 
 impl ResultTypeOfUnary for i8 {
     type Negate = i8;
-
-    fn d_checked_add(self, rhs: Self) -> Option<Self> {
+    
+    fn checked_add(self, rhs: Self) -> Option<Self> {
         self.checked_add(rhs)
     }
-
-    fn d_checked_sub(self, rhs: Self) -> Option<Self> {
+    
+    fn checked_sub(self, rhs: Self) -> Option<Self> {
         self.checked_sub(rhs)
     }
-
-    fn d_checked_mul(self, rhs: Self) -> Option<Self> {
+    
+    fn checked_mul(self, rhs: Self) -> Option<Self> {
         self.checked_mul(rhs)
     }
-
-    fn d_checked_div(self, rhs: Self) -> Option<Self> {
+    
+    fn checked_div(self, rhs: Self) -> Option<Self> {
         self.checked_div(rhs)
     }
-
-    fn d_checked_rem(self, rhs: Self) -> Option<Self> {
+    
+    fn checked_rem(self, rhs: Self) -> Option<Self> {
         self.checked_rem(rhs)
     }
 }
 
 impl ResultTypeOfUnary for i16 {
     type Negate = i16;
-
-    fn d_checked_add(self, rhs: Self) -> Option<Self> {
+    
+    fn checked_add(self, rhs: Self) -> Option<Self> {
         self.checked_add(rhs)
     }
-
-    fn d_checked_sub(self, rhs: Self) -> Option<Self> {
+    
+    fn checked_sub(self, rhs: Self) -> Option<Self> {
         self.checked_sub(rhs)
     }
-
-    fn d_checked_mul(self, rhs: Self) -> Option<Self> {
+    
+    fn checked_mul(self, rhs: Self) -> Option<Self> {
         self.checked_mul(rhs)
     }
-
-    fn d_checked_div(self, rhs: Self) -> Option<Self> {
+    
+    fn checked_div(self, rhs: Self) -> Option<Self> {
         self.checked_div(rhs)
     }
-
-    fn d_checked_rem(self, rhs: Self) -> Option<Self> {
+    
+    fn checked_rem(self, rhs: Self) -> Option<Self> {
         self.checked_rem(rhs)
     }
 }
 
 impl ResultTypeOfUnary for i32 {
     type Negate = i32;
-
-    fn d_checked_add(self, rhs: Self) -> Option<Self> {
+    
+    fn checked_add(self, rhs: Self) -> Option<Self> {
         self.checked_add(rhs)
     }
-
-    fn d_checked_sub(self, rhs: Self) -> Option<Self> {
+    
+    fn checked_sub(self, rhs: Self) -> Option<Self> {
         self.checked_sub(rhs)
     }
-
-    fn d_checked_mul(self, rhs: Self) -> Option<Self> {
+    
+    fn checked_mul(self, rhs: Self) -> Option<Self> {
         self.checked_mul(rhs)
     }
-
-    fn d_checked_div(self, rhs: Self) -> Option<Self> {
+    
+    fn checked_div(self, rhs: Self) -> Option<Self> {
         self.checked_div(rhs)
     }
-
-    fn d_checked_rem(self, rhs: Self) -> Option<Self> {
+    
+    fn checked_rem(self, rhs: Self) -> Option<Self> {
         self.checked_rem(rhs)
     }
 }
 
 impl ResultTypeOfUnary for i64 {
     type Negate = i64;
-
-    fn d_checked_add(self, rhs: Self) -> Option<Self> {
+    
+    fn checked_add(self, rhs: Self) -> Option<Self> {
         self.checked_add(rhs)
     }
-
-    fn d_checked_sub(self, rhs: Self) -> Option<Self> {
+    
+    fn checked_sub(self, rhs: Self) -> Option<Self> {
         self.checked_sub(rhs)
     }
-
-    fn d_checked_mul(self, rhs: Self) -> Option<Self> {
+    
+    fn checked_mul(self, rhs: Self) -> Option<Self> {
         self.checked_mul(rhs)
     }
-
-    fn d_checked_div(self, rhs: Self) -> Option<Self> {
+    
+    fn checked_div(self, rhs: Self) -> Option<Self> {
         self.checked_div(rhs)
     }
-
-    fn d_checked_rem(self, rhs: Self) -> Option<Self> {
+    
+    fn checked_rem(self, rhs: Self) -> Option<Self> {
         self.checked_rem(rhs)
     }
 }
 
 impl ResultTypeOfUnary for f32 {
     type Negate = f32;
+    
+    fn checked_add(self, rhs: Self) -> Option<Self> {
+        Some(self + rhs)
+    }
+    
+    fn checked_sub(self, rhs: Self) -> Option<Self> {
+        Some(self - rhs)
+    }
+    
+    fn checked_mul(self, rhs: Self) -> Option<Self> {
+        Some(self * rhs)
+    }
+    
+    fn checked_div(self, rhs: Self) -> Option<Self> {
+        Some(self / rhs)
+    }
+    
+    fn checked_rem(self, rhs: Self) -> Option<Self> {
+        Some(self % rhs)
+    }
 }
 
 impl ResultTypeOfUnary for f64 {
     type Negate = f64;
+    
+    fn checked_add(self, rhs: Self) -> Option<Self> {
+        Some(self + rhs)
+    }
+    
+    fn checked_sub(self, rhs: Self) -> Option<Self> {
+        Some(self - rhs)
+    }
+    
+    fn checked_mul(self, rhs: Self) -> Option<Self> {
+        Some(self * rhs)
+    }
+    
+    fn checked_div(self, rhs: Self) -> Option<Self> {
+        Some(self / rhs)
+    }
+    
+    fn checked_rem(self, rhs: Self) -> Option<Self> {
+        Some(self % rhs)
+    }
 }
