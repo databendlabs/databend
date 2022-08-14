@@ -217,7 +217,7 @@ impl SessionManager {
         self: &Arc<Self>,
         mut signal: SignalStream,
         timeout_secs: i32,
-    ) -> impl Future<Output = ()> {
+    ) -> impl Future<Output=()> {
         let active_sessions = self.active_sessions.clone();
         async move {
             info!(

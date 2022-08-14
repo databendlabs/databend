@@ -89,7 +89,7 @@ impl MultiFileSplitter {
         let op = match &self.storage_operator {
             OperatorInfo::Op(op) => op.clone(),
             OperatorInfo::Cfg(cfg) => {
-                let op = init_operator(cfg).await?;
+                let op = init_operator(cfg)?;
                 self.storage_operator = OperatorInfo::Op(op.clone());
                 op
             }

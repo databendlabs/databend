@@ -34,21 +34,21 @@ use crate::config::StorageHttpConfig;
 use crate::StorageConfig;
 
 /// init_operator will init an opendal operator based on storage config.
-pub async fn init_operator(cfg: &StorageParams) -> Result<Operator> {
+pub fn init_operator(cfg: &StorageParams) -> Result<Operator> {
     Ok(match &cfg {
-        StorageParams::Azblob(cfg) => init_azblob_operator(cfg).await?,
-        StorageParams::Fs(cfg) => init_fs_operator(cfg).await?,
+        StorageParams::Azblob(cfg) => init_azblob_operator(cfg)?,
+        StorageParams::Fs(cfg) => init_fs_operator(cfg)?,
         #[cfg(feature = "storage-hdfs")]
-        StorageParams::Hdfs(cfg) => init_hdfs_operator(cfg).await?,
-        StorageParams::Http(cfg) => init_http_operator(cfg).await?,
-        StorageParams::Memory => init_memory_operator().await?,
-        StorageParams::S3(cfg) => init_s3_operator(cfg).await?,
+        StorageParams::Hdfs(cfg) => init_hdfs_operator(cfg)?,
+        StorageParams::Http(cfg) => init_http_operator(cfg)?,
+        StorageParams::Memory => init_memory_operator()?,
+        StorageParams::S3(cfg) => init_s3_operator(cfg)?,
     })
 }
 
 /// init_azblob_operator will init an opendal azblob operator.
-pub async fn init_azblob_operator(cfg: &StorageAzblobConfig) -> Result<Operator> {
-    let mut builder = azblob::Backend::build();
+pub fn init_azblob_operator(cfg: &StorageAzblobConfig) -> Result<Operator> {
+    let mut builder = azblob::Builder::default();
 
     // Endpoint
     builder.endpoint(&cfg.endpoint_url);
@@ -63,12 +63,12 @@ pub async fn init_azblob_operator(cfg: &StorageAzblobConfig) -> Result<Operator>
     builder.account_name(&cfg.account_name);
     builder.account_key(&cfg.account_key);
 
-    Ok(Operator::new(builder.finish().await?))
+    Ok(Operator::new(builder.build()?))
 }
 
 /// init_fs_operator will init a opendal fs operator.
-pub async fn init_fs_operator(cfg: &StorageFsConfig) -> Result<Operator> {
-    let mut builder = fs::Backend::build();
+pub fn init_fs_operator(cfg: &StorageFsConfig) -> Result<Operator> {
+    let mut builder = fs::Builder::default();
 
     let mut path = cfg.root.clone();
     if !path.starts_with('/') {
@@ -76,15 +76,15 @@ pub async fn init_fs_operator(cfg: &StorageFsConfig) -> Result<Operator> {
     }
     builder.root(&path);
 
-    Ok(Operator::new(builder.finish().await?))
+    Ok(Operator::new(builder.build()?))
 }
 
 /// init_hdfs_operator will init an opendal hdfs operator.
 #[cfg(feature = "storage-hdfs")]
-pub async fn init_hdfs_operator(cfg: &super::StorageHdfsConfig) -> Result<Operator> {
+pub fn init_hdfs_operator(cfg: &super::StorageHdfsConfig) -> Result<Operator> {
     use opendal::services::hdfs;
 
-    let mut builder = hdfs::Backend::build();
+    let mut builder = hdfs::Builder::default();
 
     // Endpoint.
     builder.name_node(&cfg.name_node);
@@ -92,11 +92,11 @@ pub async fn init_hdfs_operator(cfg: &super::StorageHdfsConfig) -> Result<Operat
     // Root
     builder.root(&cfg.root);
 
-    Ok(Operator::new(builder.finish().await?))
+    Ok(Operator::new(builder.build()?))
 }
 
-pub async fn init_http_operator(cfg: &StorageHttpConfig) -> Result<Operator> {
-    let mut builder = http::Backend::build();
+pub fn init_http_operator(cfg: &StorageHttpConfig) -> Result<Operator> {
+    let mut builder = http::Builder::default();
 
     // Endpoint.
     builder.endpoint(&cfg.endpoint_url);
@@ -104,19 +104,19 @@ pub async fn init_http_operator(cfg: &StorageHttpConfig) -> Result<Operator> {
     // Update index.
     builder.extend_index(cfg.paths.iter().map(|v| v.as_str()));
 
-    Ok(Operator::new(builder.finish().await?))
+    Ok(Operator::new(builder.build()?))
 }
 
 /// init_memory_operator will init a opendal memory operator.
-pub async fn init_memory_operator() -> Result<Operator> {
-    let mut builder = memory::Backend::build();
+pub fn init_memory_operator() -> Result<Operator> {
+    let mut builder = memory::Builder::default();
 
-    Ok(Operator::new(builder.finish().await?))
+    Ok(Operator::new(builder.build()?))
 }
 
 /// init_s3_operator will init a opendal s3 operator with input s3 config.
-pub async fn init_s3_operator(cfg: &StorageS3Config) -> Result<Operator> {
-    let mut builder = s3::Backend::build();
+pub fn init_s3_operator(cfg: &StorageS3Config) -> Result<Operator> {
+    let mut builder = s3::Builder::default();
 
     // Endpoint.
     builder.endpoint(&cfg.endpoint_url);
@@ -144,7 +144,7 @@ pub async fn init_s3_operator(cfg: &StorageS3Config) -> Result<Operator> {
         builder.enable_virtual_host_style();
     }
 
-    Ok(Operator::new(builder.finish().await?))
+    Ok(Operator::new(builder.build()?))
 }
 
 pub struct StorageOperator;
@@ -154,7 +154,7 @@ static STORAGE_OPERATOR: OnceCell<Operator> = OnceCell::new();
 impl StorageOperator {
     pub async fn init(conf: &StorageConfig) -> common_exception::Result<()> {
         let io_runtime = GlobalIORuntime::instance();
-        let operator = init_operator(&conf.params).await?;
+        let operator = init_operator(&conf.params)?;
         // Enable exponential backoff by default
         let operator = operator.with_backoff(backon::ExponentialBackoff::default());
 

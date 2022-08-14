@@ -56,10 +56,9 @@ async fn test_parse_csv_delimiter() -> Result<()> {
             ]);
 
             let local = Operator::new(
-                fs::Backend::build()
+                fs::Builder::default()
                     .root(dir.path().to_str().unwrap())
-                    .finish()
-                    .await
+                    .build()
                     .unwrap(),
             );
 
@@ -121,10 +120,9 @@ async fn test_parse_csv_text() -> Result<()> {
     ]);
 
     let local = Operator::new(
-        fs::Backend::build()
+        fs::Builder::default()
             .root(dir.path().to_str().unwrap())
-            .finish()
-            .await
+            .build()
             .unwrap(),
     );
 
