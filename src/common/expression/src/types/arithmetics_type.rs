@@ -24,7 +24,7 @@ pub trait ResultTypeOfBinary: Sized {
 
 pub trait ResultTypeOfUnary: Sized {
     type Negate: Number;
-    
+
     fn checked_add(self, _rhs: Self) -> Option<Self>;
 
     fn checked_sub(self, _rhs: Self) -> Option<Self>;
