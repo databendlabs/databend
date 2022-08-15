@@ -28,7 +28,6 @@ use sqlparser::ast::SelectItem;
 use tracing::debug;
 
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
 use crate::sql::statements::analyzer_expr::ExpressionAnalyzer;
 use crate::sql::statements::query::QueryASTIR;
 use crate::sql::statements::DfQueryStatement;
@@ -42,10 +41,8 @@ pub struct QueryNormalizer {
 /// Replace alias in query and collect aggregate functions
 impl QueryNormalizer {
     async fn try_create(ctx: Arc<QueryContext>) -> Result<QueryNormalizer> {
-        let tenant = ctx.get_tenant();
-        let udfs = ctx.get_user_manager().get_udfs(&tenant).await?;
         Ok(QueryNormalizer {
-            expression_analyzer: ExpressionAnalyzer::create_with_udfs_support(ctx, udfs),
+            expression_analyzer: ExpressionAnalyzer::create(ctx),
             aliases_map: HashMap::new(),
             query_ast_ir: QueryASTIR {
                 filter_predicate: None,
