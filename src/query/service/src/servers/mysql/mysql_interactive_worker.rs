@@ -46,6 +46,7 @@ use crate::interpreters::InterpreterFactoryV2;
 use crate::interpreters::InterpreterQueryLog;
 use crate::servers::mysql::writers::DFInitResultWriter;
 use crate::servers::mysql::writers::DFQueryResultWriter;
+use crate::servers::mysql::writers::ProgressReporter;
 use crate::servers::mysql::writers::QueryResult;
 use crate::servers::mysql::MySQLFederated;
 use crate::servers::mysql::MYSQL_VERSION;
@@ -323,7 +324,7 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
                 let schema = data_block.schema().clone();
                 Ok(QueryResult::create(
                     DataBlockStream::create(schema.clone(), None, vec![data_block]).boxed(),
-                    String::from(""),
+                    None,
                     has_result,
                     schema,
                 ))
@@ -412,11 +413,14 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
         }
     }
 
-    #[tracing::instrument(level = "debug", skip(interpreter, context))]
+    //#[tracing::instrument(level = "debug", skip(interpreter, context))]
     async fn exec_query(
         interpreter: Arc<dyn Interpreter>,
         context: &Arc<QueryContext>,
-    ) -> Result<(SendableDataBlockStream, String)> {
+    ) -> Result<(
+        SendableDataBlockStream,
+        Option<Box<dyn ProgressReporter + Send>>,
+    )> {
         let instant = Instant::now();
 
         let query_result = context.try_spawn({
@@ -427,24 +431,29 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
                     .start()
                     .await
                     .map_err(|e| error!("interpreter.start.error: {:?}", e));
-                let data_stream = interpreter.execute().await?;
+                let mut data_stream = interpreter.execute().await?;
                 histogram!(
                     super::mysql_metrics::METRIC_INTERPRETER_USEDTIME,
                     instant.elapsed()
                 );
 
-                // let catch_unwind_stream = data_stream.catch_unwind().boxed();
-                // let collector = data_stream.collect::<Result<Vec<DataBlock>>>();
-                // let query_result = collector.await?;
+                // Wrap the data stream, log finish event at the end of stream
+                let intercepted_stream = async_stream::stream! {
 
-                // TODO decorated stream, with interpreter
-                // Write finish query log.
-                let _ = interpreter
-                    .finish()
-                    .await
-                    .map_err(|e| error!("interpreter.finish.error: {:?}", e));
+                    while let Some(item) = data_stream.next().await {
+                        yield item
+                    };
 
-                let abortable_stream = ctx.try_create_abortable(data_stream)?.boxed();
+                    // Write finish query log.
+                    if let Err(e) = interpreter.finish().await {
+                        // Errors will only be traced, but not propagated
+                        tracing::warn!("interpreter.finish.error: {:?}", e);
+                    }
+                };
+
+                let abortable_stream = ctx
+                    .try_create_abortable(intercepted_stream.boxed())?
+                    .boxed();
                 Ok::<_, ErrorCode>(abortable_stream)
             }
             .in_current_span()
@@ -454,26 +463,9 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
             ErrorCode::TokioError,
             || "Cannot join handle from context's runtime",
         )?;
-        query_result.map(|data| {
-            // if data.is_empty() {
-            //    (data, "".to_string())
-            //} else {
-            (data, Self::extra_info(context, instant))
-            //}
-        })
-    }
-
-    pub fn extra_info(context: &Arc<QueryContext>, instant: Instant) -> String {
-        let progress = context.get_scan_progress_value();
-        let seconds = instant.elapsed().as_nanos() as f64 / 1e9f64;
-        format!(
-            "Read {} rows, {} in {:.3} sec., {} rows/sec., {}/sec.",
-            progress.rows,
-            convert_byte_size(progress.bytes as f64),
-            seconds,
-            convert_number_size((progress.rows as f64) / (seconds as f64)),
-            convert_byte_size((progress.bytes as f64) / (seconds as f64)),
-        )
+        let reporter = Box::new(ContextProgressReporter::new(context.clone(), instant))
+            as Box<dyn ProgressReporter + Send>;
+        query_result.map(|data| (data, Some(reporter)))
     }
 
     async fn do_init(&mut self, database_name: &str) -> Result<()> {
@@ -520,14 +512,28 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorker<W> {
     }
 }
 
-#[async_trait::async_trait]
-pub trait FinishCallback {
-    async fn finish(&self) -> Result<()>;
+struct ContextProgressReporter {
+    context: Arc<QueryContext>,
+    instant: Instant,
 }
 
-#[async_trait::async_trait]
-impl FinishCallback for Arc<dyn Interpreter> {
-    async fn finish(&self) -> Result<()> {
-        Interpreter::finish(self.as_ref()).await
+impl ContextProgressReporter {
+    fn new(context: Arc<QueryContext>, instant: Instant) -> Self {
+        Self { context, instant }
+    }
+}
+
+impl ProgressReporter for ContextProgressReporter {
+    fn progress_info(&self) -> String {
+        let progress = self.context.get_scan_progress_value();
+        let seconds = self.instant.elapsed().as_nanos() as f64 / 1e9f64;
+        format!(
+            "Read {} rows, {} in {:.3} sec., {} rows/sec., {}/sec.",
+            progress.rows,
+            convert_byte_size(progress.bytes as f64),
+            seconds,
+            convert_number_size((progress.rows as f64) / (seconds as f64)),
+            convert_byte_size((progress.bytes as f64) / (seconds as f64)),
+        )
     }
 }

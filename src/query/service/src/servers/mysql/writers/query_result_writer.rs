@@ -33,9 +33,18 @@ use futures_util::StreamExt;
 use opensrv_mysql::*;
 use tracing::error;
 
+/// Reports progress information as string, intend to be put into the mysql Ok packet.
+/// Mainly for decoupling with concrete type like `QueryContext`
+///
+/// Something like  
+/// "Read x rows, y MiB in z sec., A million rows/sec., B MiB/sec."
+pub trait ProgressReporter {
+    fn progress_info(&self) -> String;
+}
+
 pub struct QueryResult {
     blocks: SendableDataBlockStream,
-    extra_info: String,
+    extra_info: Option<Box<dyn ProgressReporter + Send>>,
     has_result_set: bool,
     schema: DataSchemaRef,
 }
@@ -43,7 +52,7 @@ pub struct QueryResult {
 impl QueryResult {
     pub fn create(
         blocks: SendableDataBlockStream,
-        extra_info: String,
+        extra_info: Option<Box<dyn ProgressReporter + Send>>,
         has_result_set: bool,
         schema: DataSchemaRef,
     ) -> QueryResult {
@@ -59,7 +68,7 @@ impl QueryResult {
         let schema = DataSchemaRefExt::create(vec![]);
         QueryResult {
             blocks: DataBlockStream::create(schema.clone(), None, vec![]).boxed(),
-            extra_info: String::from(""),
+            extra_info: None,
             has_result_set: false,
             schema,
         }
@@ -95,19 +104,9 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
         format: &FormatSettings,
     ) -> Result<()> {
         // XXX: num_columns == 0 may is error?
-        let default_response = OkResponse {
-            info: query_result.extra_info,
-            ..Default::default()
-        };
 
-        // if (!query_result.has_result_set) || (query_result.schema.num_fields() == 0) {
         if !query_result.has_result_set {
-            dataset_writer.completed(default_response).await?;
-            eprintln!(
-                "writing HERE, has_result_set {}, num_fields {}",
-                query_result.has_result_set,
-                query_result.schema.num_fields()
-            );
+            dataset_writer.completed(OkResponse::default()).await?;
             return Ok(());
         }
 
@@ -259,7 +258,11 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
                     }
                 }
 
-                row_writer.finish_with_info(&default_response.info).await?;
+                let info = query_result
+                    .extra_info
+                    .map(|r| r.progress_info())
+                    .unwrap_or_default();
+                row_writer.finish_with_info(&info).await?;
 
                 Ok(())
             }
