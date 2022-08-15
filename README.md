@@ -172,7 +172,7 @@ docker run --net=host  datafuselabs/databend
 ## Contributing
 
 Databend is an open source project, you can help with ideas, code, or documentation, we appreciate any efforts that help us to make the project better!
-Once the code been merged, your name will be stored in the **system.contributors** table forever.
+Once the code is merged, your name will be stored in the **system.contributors** table forever.
 
 To get started with contributing:
 
@@ -201,6 +201,6 @@ Databend is licensed under [Apache 2.0](LICENSE).
 ## Acknowledgement
 
 - Databend is inspired by [ClickHouse](https://github.com/clickhouse/clickhouse) and [Snowflake](https://docs.snowflake.com/en/user-guide/intro-key-concepts.html#snowflake-architecture), its computing model is based on [apache-arrow](https://arrow.apache.org/).
-- The [documentation website](https://databend.rs) hosted by [Vercel](https://vercel.com/?utm_source=databend&utm_campaign=oss).
+- The [documentation website](https://databend.rs) is hosted by [Vercel](https://vercel.com/?utm_source=databend&utm_campaign=oss).
 - Thanks to [Mergify](https://mergify.com/) for sponsoring advanced features like Batch Merge.
 - Thanks to [QingCloud](https://qingcloud.com) for sponsoring CI resources.

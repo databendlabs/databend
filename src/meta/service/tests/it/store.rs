@@ -28,6 +28,7 @@ use common_meta_sled_store::openraft::EffectiveMembership;
 use common_meta_sled_store::openraft::LogId;
 use common_meta_sled_store::openraft::Membership;
 use common_meta_sled_store::openraft::RaftStorage;
+use common_meta_sled_store::openraft::StorageHelper;
 use common_meta_types::AppliedState;
 use common_meta_types::LogEntry;
 use databend_meta::store::MetaRaftStore;
@@ -122,7 +123,10 @@ async fn test_meta_store_restart() -> anyhow::Result<()> {
             sto.read_hard_state().await?
         );
 
-        assert_eq!(LogId::new(1, 1), sto.get_log_id(1).await?);
+        assert_eq!(
+            LogId::new(1, 1),
+            StorageHelper::new(&sto).get_log_id(1).await?
+        );
         assert_eq!(Some(LogId::new(1, 2)), sto.last_applied_state().await?.0);
     }
     Ok(())

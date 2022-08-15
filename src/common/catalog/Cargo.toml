@@ -27,5 +27,5 @@ common-users = { path = "../users" }
 
 async-trait = "0.1.56"
 dyn-clone = "1.0.6"
-opendal = { version = "0.11.4", features = ["retry"] }
+opendal = { version = "0.12.0", features = ["retry"] }
 parking_lot = "0.12.1"
