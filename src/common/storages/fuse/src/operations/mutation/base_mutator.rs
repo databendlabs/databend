@@ -43,11 +43,11 @@ pub type SegmentIndex = usize;
 
 #[derive(Clone)]
 pub struct BaseMutator {
-    mutations: HashMap<SegmentIndex, Vec<Replacement>>,
-    pub ctx: Arc<dyn TableContext>,
-    pub location_generator: TableMetaLocationGenerator,
-    pub data_accessor: Operator,
-    pub base_snapshot: Arc<TableSnapshot>,
+    pub(crate) mutations: HashMap<SegmentIndex, Vec<Replacement>>,
+    pub(crate) ctx: Arc<dyn TableContext>,
+    pub(crate) location_generator: TableMetaLocationGenerator,
+    pub(crate) data_accessor: Operator,
+    pub(crate) base_snapshot: Arc<TableSnapshot>,
 }
 
 impl BaseMutator {

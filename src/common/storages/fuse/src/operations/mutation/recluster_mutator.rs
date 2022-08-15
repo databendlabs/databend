@@ -15,6 +15,7 @@
 use std::cmp;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_datavalues::prelude::*;
@@ -36,9 +37,9 @@ use crate::FuseTable;
 
 #[derive(Clone)]
 pub struct ReclusterMutator {
-    pub(crate) base_mutator: BaseMutator,
-    pub(crate) selected_blocks: Vec<BlockMeta>,
-    pub(crate) level: i32,
+    pub base_mutator: BaseMutator,
+    pub selected_blocks: Vec<BlockMeta>,
+    pub level: i32,
     threshold: f64,
     table_info: TableInfo,
     row_per_block: usize,
@@ -165,18 +166,18 @@ impl ReclusterMutator {
             }
 
             // find the max point, gather the blocks.
-            let mut selected_idx = Vec::new();
+            let mut selected_idx = HashSet::new();
             let mut find = false;
             for overlap in point_overlaps {
                 if overlap.len() == max_depth {
-                    let mut blocks = overlap.clone();
-                    selected_idx.append(&mut blocks);
+                    overlap.iter().for_each(|&idx| {
+                        selected_idx.insert(idx);
+                    });
                     find = true;
                 } else if find {
                     break;
                 }
             }
-            selected_idx.dedup();
 
             self.selected_blocks = selected_idx
                 .iter()

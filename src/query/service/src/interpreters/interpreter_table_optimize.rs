@@ -36,43 +36,54 @@ impl OptimizeTableInterpreter {
         Ok(OptimizeTableInterpreter { ctx, plan })
     }
 
-    async fn execute_recluster(&self, catalog_name: &String, table: &FuseTable) -> Result<()> {
+    async fn execute_recluster(&self, catalog: &str, database: &str, tbl_name: &str) -> Result<()> {
         let ctx = self.ctx.clone();
         let settings = ctx.get_settings();
+        let tenant = self.ctx.get_tenant();
 
-        let mut pipeline = Pipeline::create();
+        loop {
+            let table = self
+                .ctx
+                .get_catalog(catalog)?
+                .get_table(tenant.as_str(), database, tbl_name)
+                .await?;
+            let table = FuseTable::try_from_table(table.as_ref())?;
 
-        let mutator = table.try_get_recluster_mutator(ctx.clone()).await?;
-        let mut mutator = if let Some(mutator) = mutator {
-            mutator
-        } else {
-            return Ok(());
-        };
+            let mut pipeline = Pipeline::create();
 
-        let need_recluster = mutator.blocks_select().await?;
+            let mutator = table.try_get_recluster_mutator(ctx.clone()).await?;
+            let mut mutator = if let Some(mutator) = mutator {
+                mutator
+            } else {
+                break;
+            };
 
-        if !need_recluster {
-            return Ok(());
+            let need_recluster = mutator.blocks_select().await?;
+
+            if !need_recluster {
+                break;
+            }
+
+            table.recluster(
+                ctx.clone(),
+                catalog.to_owned(),
+                mutator.clone(),
+                &mut pipeline,
+            )?;
+
+            pipeline.set_max_threads(settings.get_max_threads()? as usize);
+
+            let async_runtime = ctx.get_storage_runtime();
+            let query_need_abort = ctx.query_need_abort();
+            let executor =
+                PipelineCompleteExecutor::try_create(async_runtime, query_need_abort, pipeline)?;
+            executor.execute()?;
+            drop(executor);
+
+            let catalog_name = ctx.get_current_catalog();
+            mutator.commit_recluster(&catalog_name).await?;
         }
 
-        table.recluster(
-            ctx.clone(),
-            catalog_name.clone(),
-            mutator.clone(),
-            &mut pipeline,
-        )?;
-
-        pipeline.set_max_threads(settings.get_max_threads()? as usize);
-
-        let async_runtime = ctx.get_storage_runtime();
-        let query_need_abort = ctx.query_need_abort();
-        let executor =
-            PipelineCompleteExecutor::try_create(async_runtime, query_need_abort, pipeline)?;
-        executor.execute()?;
-        drop(executor);
-
-        let catalog_name = ctx.get_current_catalog();
-        mutator.commit_recluster(&catalog_name).await?;
         Ok(())
     }
 }
@@ -102,33 +113,23 @@ impl Interpreter for OptimizeTableInterpreter {
             OptimizeTableAction::Recluster | OptimizeTableAction::All
         );
 
+        if do_recluster {
+            self.execute_recluster(&plan.catalog, &plan.database, &plan.table)
+                .await?;
+        }
+
+        let tenant = self.ctx.get_tenant();
         let mut table = self
             .ctx
-            .get_table(&plan.catalog, &plan.database, &plan.table)
+            .get_catalog(&plan.catalog)?
+            .get_table(tenant.as_str(), &plan.database, &plan.table)
             .await?;
-
-        if do_recluster {
-            match FuseTable::try_from_table(table.as_ref()) {
-                Ok(tbl) => {
-                    self.execute_recluster(&plan.catalog, tbl).await?;
-                    // refresh table context.
-                    let tenant = self.ctx.get_tenant();
-                    table = self
-                        .ctx
-                        .get_catalog(&plan.catalog)?
-                        .get_table(tenant.as_str(), &plan.database, &plan.table)
-                        .await?;
-                }
-                Err(_) => {}
-            };
-        }
 
         if do_compact {
             table.compact(self.ctx.clone(), self.plan.clone()).await?;
             if do_purge {
                 // currently, context caches the table, we have to "refresh"
                 // the table by using the catalog API directly
-                let tenant = self.ctx.get_tenant();
                 table = self
                     .ctx
                     .get_catalog(&plan.catalog)?
