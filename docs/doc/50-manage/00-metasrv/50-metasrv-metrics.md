@@ -25,6 +25,8 @@ These metrics describe the status of the `metasrv`. All these metrics are prefix
 | leader_changes    | Number of leader changes seen.                    | Counter |
 | applying_snapshot | Whether or not statemachine is applying snapshot. | Gauge   |
 | proposals_applied | Total number of consensus proposals applied.      | Gauge   |
+| last_log_index    | Index of the last log entry..                     | Gauge   |
+| current_term      | Current term.                                     | Gauge   |
 | proposals_pending | Total number of pending proposals.                | Gauge   |
 | proposals_failed  | Total number of failed proposals.                 | Counter |
 | watchers          | Total number of active watchers.                  | Gauge   |
@@ -36,6 +38,8 @@ These metrics describe the status of the `metasrv`. All these metrics are prefix
 If and only if the node state is `Follower` or `Leader` , `node_is_health` is 1, otherwise is 0.
 
 `proposals_applied` records the total number of applied write requests.
+
+`last_log_index` records the last log index has been appended to this Raft node's log, `current_term` records the current term of the Raft node.
 
 `proposals_pending` indicates how many proposals are queued to commit currently.Rising pending proposals suggests there is a high client load or the member cannot commit proposals.
 
