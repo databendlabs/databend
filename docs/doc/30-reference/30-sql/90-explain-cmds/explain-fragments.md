@@ -2,7 +2,7 @@
 title: EXPLAIN FRAGMENTS
 ---
 
-Shows the logical fragmented execution plan of a SQL statement. 
+Shows the distributed execution plan of a SQL statement. 
 
 This command transforms the execution plan of a SQL statement into plan fragments where you can see the process of retrieving the data you need from Databend.
 
