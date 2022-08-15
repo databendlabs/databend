@@ -45,7 +45,7 @@ use crate::metrics::incr_meta_metrics_snapshot_send_failures_to_peer;
 use crate::metrics::incr_meta_metrics_snapshot_send_inflights_to_peer;
 use crate::metrics::incr_meta_metrics_snapshot_send_success_to_peer;
 use crate::metrics::sample_meta_metrics_snapshot_sent;
-use crate::store::MetaRaftStore;
+use crate::store::RaftStore;
 
 struct ChannelManager {}
 
@@ -68,13 +68,13 @@ impl ItemManager for ChannelManager {
 }
 
 pub struct Network {
-    sto: Arc<MetaRaftStore>,
+    sto: Arc<RaftStore>,
 
     conn_pool: Pool<ChannelManager>,
 }
 
 impl Network {
-    pub fn new(sto: Arc<MetaRaftStore>) -> Network {
+    pub fn new(sto: Arc<RaftStore>) -> Network {
         let mgr = ChannelManager {};
         Network {
             sto,

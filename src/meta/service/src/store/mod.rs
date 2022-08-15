@@ -12,8 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod meta_raft_store;
+mod store_bare;
 mod to_storage_error;
 
-pub use meta_raft_store::MetaRaftStore;
+use common_meta_sled_store::openraft::StoreExt;
+use common_meta_types::AppliedState;
+use common_meta_types::LogEntry;
+pub use store_bare::RaftStoreBare;
 pub use to_storage_error::ToStorageError;
+
+/// Implements `RaftStorage` and provides defensive check.
+///
+/// It is used to discover unexpected invalid data read or write, which is potentially a bug.
+pub(crate) type RaftStore = StoreExt<LogEntry, AppliedState, RaftStoreBare>;
+
+// Uncomment this to disable defensive check
+// pub(crate) type RaftStore = raft_store_impl::RaftStore;
