@@ -1249,9 +1249,9 @@ dependencies = [
  "common-expression",
  "geo-types",
  "goldenfile",
+ "h3ron",
  "match-template",
  "num-traits",
- "h3ron",
 ]
 
 [[package]]
