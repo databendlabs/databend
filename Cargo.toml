@@ -100,4 +100,4 @@ rustc-demangle = { opt-level = 3 }
 [patch.crates-io]
 parquet2 = { version = "0.14.1", optional = true, git = "https://github.com/datafuse-extras/parquet2", rev = "3a468fc3c4" }
 
-opensrv-mysql = { version = "0.1.0", git = "https://github.com/dantengsky/opensrv", branch = "dev-mysql-streaming-resultset" }
+opensrv-mysql = { version = "0.2.0", git = "https://github.com/dantengsky/opensrv", branch = "dev-mysql-streaming-resultset" }

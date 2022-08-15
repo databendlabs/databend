@@ -5077,8 +5077,8 @@ dependencies = [
 
 [[package]]
 name = "opensrv-mysql"
-version = "0.1.0"
-source = "git+https://github.com/dantengsky/opensrv?branch=dev-mysql-streaming-resultset#65ce853eb976ebd940cce4d6f7a1325ff950056c"
+version = "0.2.0"
+source = "git+https://github.com/dantengsky/opensrv?branch=dev-mysql-streaming-resultset#b6968b109c3c9a361e4dc79ca1602667940241e5"
 dependencies = [
  "async-trait 0.1.57",
  "byteorder",
