@@ -38,6 +38,7 @@ use crate::sql::planner::binder::BindContext;
 use crate::sql::planner::binder::Binder;
 use crate::sql::plans::BoundColumnRef;
 use crate::sql::plans::Filter;
+use crate::sql::plans::Union;
 use crate::sql::plans::JoinType;
 use crate::sql::plans::Scalar;
 
@@ -312,10 +313,23 @@ impl<'a> Binder {
                 // Transfer Except to Anti join
                 self.bind_except(left_bind_context, right_bind_context, left_expr, right_expr)
             }
+            (SetOperator::Union, true) => {
+                self.bind_union(left_expr, right_expr)
+            }
             _ => Err(ErrorCode::UnImplement(
                 "Unsupported query type, currently, databend only support intersect distinct and except distinct",
             )),
         }
+    }
+
+    fn bind_union(
+        &mut self,
+        left_expr: SExpr,
+        right_expr: SExpr,
+    ) -> Result<SExpr> {
+        let union_plan = Union {};
+        let new_expr = SExpr::create_binary(union_plan.into(), left_expr, right_expr);
+        Ok(new_expr)
     }
 
     fn bind_intersect(

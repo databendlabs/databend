@@ -18,6 +18,7 @@ use common_exception::Result;
 use super::aggregate::Aggregate;
 use super::eval_scalar::EvalScalar;
 use super::filter::Filter;
+use super::union::Union;
 use super::hash_join::PhysicalHashJoin;
 use super::limit::Limit;
 use super::logical_get::LogicalGet;
@@ -103,6 +104,7 @@ pub enum RelOperator {
     Sort(Sort),
     Limit(Limit),
     Exchange(Exchange),
+    Union(Union),
 
     Pattern(PatternPlan),
 }
@@ -122,6 +124,7 @@ impl Operator for RelOperator {
             RelOperator::Limit(rel_op) => rel_op.rel_op(),
             RelOperator::Pattern(rel_op) => rel_op.rel_op(),
             RelOperator::Exchange(rel_op) => rel_op.rel_op(),
+            RelOperator::Union(rel_op) => rel_op.rel_op(),
         }
     }
 
@@ -139,6 +142,7 @@ impl Operator for RelOperator {
             RelOperator::Limit(rel_op) => rel_op.is_physical(),
             RelOperator::Pattern(rel_op) => rel_op.is_physical(),
             RelOperator::Exchange(rel_op) => rel_op.is_physical(),
+            RelOperator::Union(rel_op) => rel_op.is_physical(),
         }
     }
 
@@ -156,6 +160,7 @@ impl Operator for RelOperator {
             RelOperator::Limit(rel_op) => rel_op.is_logical(),
             RelOperator::Pattern(rel_op) => rel_op.is_logical(),
             RelOperator::Exchange(rel_op) => rel_op.is_logical(),
+            RelOperator::Union(rel_op) => rel_op.is_logical(),
         }
     }
 
@@ -173,6 +178,7 @@ impl Operator for RelOperator {
             RelOperator::Limit(rel_op) => rel_op.as_logical(),
             RelOperator::Pattern(rel_op) => rel_op.as_logical(),
             RelOperator::Exchange(rel_op) => rel_op.as_logical(),
+            RelOperator::Union(rel_op) => rel_op.as_logical(),
         }
     }
 
@@ -190,6 +196,7 @@ impl Operator for RelOperator {
             RelOperator::Limit(rel_op) => rel_op.as_physical(),
             RelOperator::Pattern(rel_op) => rel_op.as_physical(),
             RelOperator::Exchange(rel_op) => rel_op.as_physical(),
+            RelOperator::Union(rel_op) => rel_op.as_physical(),
         }
     }
 }
