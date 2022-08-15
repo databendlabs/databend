@@ -65,7 +65,7 @@ impl Interpreter for CallInterpreter {
 
         let name = plan.name.clone();
         let func = ProcedureFactory::instance().get(name)?;
-        let last_schema = func.result_schema();
+        let last_schema = func.schema();
         {
             let mut schema = self.schema.write().unwrap();
             *schema = Some(last_schema);

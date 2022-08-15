@@ -53,7 +53,6 @@ impl MetaReaders {
         )
     }
 
-    // pub fn table_snapshot_reader(ctx: &dyn TableContext) -> TableSnapshotReader {
     pub fn table_snapshot_reader(ctx: Arc<dyn TableContext>) -> TableSnapshotReader {
         TableSnapshotReader::new(
             ctx.get_storage_cache_manager().get_table_snapshot_cache(),

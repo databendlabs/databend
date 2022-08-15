@@ -33,14 +33,14 @@ use crate::sessions::TableContext;
 
 #[async_trait::async_trait]
 pub trait Procedure: Sync + Send {
-    fn procedure_name(&self) -> &str;
+    fn name(&self) -> &str;
 
-    fn procedure_features(&self) -> ProcedureFeatures;
+    fn features(&self) -> ProcedureFeatures;
 
     fn validate(&self, ctx: Arc<QueryContext>, args: &[String]) -> Result<()> {
-        let features = self.procedure_features();
+        let features = self.features();
         validate_function_arg(
-            self.procedure_name(),
+            self.name(),
             args.len(),
             features.variadic_arguments,
             features.num_arguments,
@@ -48,7 +48,7 @@ pub trait Procedure: Sync + Send {
         if features.management_mode_required && !ctx.get_config().query.management_mode {
             return Err(ErrorCode::ManagementModePermissionDenied(format!(
                 "Access denied: '{}' only used in management-mode",
-                self.procedure_name()
+                self.name()
             )));
         }
         if let Some(user_option_flag) = features.user_option_flag {
@@ -56,7 +56,7 @@ pub trait Procedure: Sync + Send {
             if !user_info.has_option_flag(user_option_flag) {
                 return Err(ErrorCode::PermissionDenied(format!(
                     "Access denied: '{}' requires user {} option flag",
-                    self.procedure_name(),
+                    self.name(),
                     user_option_flag
                 )));
             }
@@ -71,17 +71,23 @@ pub trait Procedure: Sync + Send {
         pipeline: &mut Pipeline,
     ) -> Result<()>;
 
-    fn result_schema(&self) -> Arc<DataSchema>;
+    fn schema(&self) -> Arc<DataSchema>;
 }
 
+/// Procedure that returns all the data in one DataBlock
+/// For procedures that returns a small amount of data only.
+/// If procedure may return a large amount of data, please use [StreamProcedure]
+///
+/// Technically, it is not [Procedure] but a builder of procedure.
+/// The method `into_procedure` is be used while registering to [ProcedureFactory],
 #[async_trait::async_trait]
-pub trait ProcedureBlock {
+pub trait OneBlockProcedure {
     fn into_procedure(self) -> Box<dyn Procedure>
     where
         Self: Send + Sync,
         Self: Sized + 'static,
     {
-        Box::new(BlockProcedure(self))
+        Box::new(impls::OneBlockProcedureWrapper(self))
     }
 
     fn name(&self) -> &str;
@@ -93,8 +99,12 @@ pub trait ProcedureBlock {
     fn schema(&self) -> Arc<DataSchema>;
 }
 
+/// Procedure that returns data as [SendableBlockStream]
+///
+/// Technically, it is not [Procedure] but a builder of procedure.
+/// The method `into_procedure` is be used while registering to [ProcedureFactory],
 #[async_trait::async_trait]
-pub trait ProcedureStream
+pub trait StreamProcedure
 where Self: Sized
 {
     fn into_procedure(self) -> Box<dyn Procedure>
@@ -102,7 +112,7 @@ where Self: Sized
         Self: Send + Sync,
         Self: Sized + 'static,
     {
-        Box::new(StreamProcedureWrapper(self))
+        Box::new(impls::StreamProcedureWrapper(self))
     }
 
     fn name(&self) -> &str;
@@ -118,84 +128,91 @@ where Self: Sized
     fn schema(&self) -> Arc<DataSchema>;
 }
 
-struct BlockProcedure<T>(pub T);
+mod impls {
 
-#[async_trait::async_trait]
-impl<T> Procedure for BlockProcedure<T>
-where T: ProcedureBlock + Sync + Send
-{
-    fn procedure_name(&self) -> &str {
-        self.0.name()
+    use super::*;
+
+    // To avoid implementation conflicts, introduce a new type
+    pub(in self::super) struct OneBlockProcedureWrapper<T>(pub T);
+
+    #[async_trait::async_trait]
+    impl<T> Procedure for OneBlockProcedureWrapper<T>
+    where T: OneBlockProcedure + Sync + Send
+    {
+        fn name(&self) -> &str {
+            self.0.name()
+        }
+
+        fn features(&self) -> ProcedureFeatures {
+            self.0.features()
+        }
+
+        async fn eval(
+            &self,
+            ctx: Arc<QueryContext>,
+            args: Vec<String>,
+            pipeline: &mut Pipeline,
+        ) -> Result<()> {
+            self.validate(ctx.clone(), &args)?;
+            let block = self.0.all_data(ctx.clone(), args).await?;
+            let output = OutputPort::create();
+            let source = StreamSource::create(
+                ctx,
+                Some(DataBlockStream::create(self.0.schema(), None, vec![block]).boxed()),
+                output.clone(),
+            )?;
+
+            pipeline.add_pipe(Pipe::SimplePipe {
+                inputs_port: vec![],
+                outputs_port: vec![output],
+                processors: vec![source],
+            });
+
+            Ok(())
+        }
+
+        fn schema(&self) -> Arc<DataSchema> {
+            self.0.schema()
+        }
     }
 
-    fn procedure_features(&self) -> ProcedureFeatures {
-        self.0.features()
-    }
+    // To avoid implementation conflicts, introduce a new type
+    pub(in self::super) struct StreamProcedureWrapper<T>(pub T);
 
-    async fn eval(
-        &self,
-        ctx: Arc<QueryContext>,
-        args: Vec<String>,
-        pipeline: &mut Pipeline,
-    ) -> Result<()> {
-        self.validate(ctx.clone(), &args)?;
-        let block = self.0.all_data(ctx.clone(), args).await?;
-        let output = OutputPort::create();
-        let source = StreamSource::create(
-            ctx,
-            Some(DataBlockStream::create(self.0.schema(), None, vec![block]).boxed()),
-            output.clone(),
-        )?;
+    #[async_trait::async_trait]
+    impl<T> Procedure for StreamProcedureWrapper<T>
+    where T: StreamProcedure + Sync + Send
+    {
+        fn name(&self) -> &str {
+            self.0.name()
+        }
 
-        pipeline.add_pipe(Pipe::SimplePipe {
-            inputs_port: vec![],
-            outputs_port: vec![output],
-            processors: vec![source],
-        });
+        fn features(&self) -> ProcedureFeatures {
+            self.0.features()
+        }
 
-        Ok(())
-    }
+        async fn eval(
+            &self,
+            ctx: Arc<QueryContext>,
+            args: Vec<String>,
+            pipeline: &mut Pipeline,
+        ) -> Result<()> {
+            self.validate(ctx.clone(), &args)?;
+            let block_stream = self.0.data_stream(ctx.clone(), args).await?;
+            let output = OutputPort::create();
+            let source = StreamSource::create(ctx, Some(block_stream), output.clone())?;
 
-    fn result_schema(&self) -> Arc<DataSchema> {
-        self.0.schema()
-    }
-}
+            pipeline.add_pipe(Pipe::SimplePipe {
+                inputs_port: vec![],
+                outputs_port: vec![output],
+                processors: vec![source],
+            });
 
-struct StreamProcedureWrapper<T>(pub T);
+            Ok(())
+        }
 
-#[async_trait::async_trait]
-impl<T> Procedure for StreamProcedureWrapper<T>
-where T: ProcedureStream + Sync + Send
-{
-    fn procedure_name(&self) -> &str {
-        self.0.name()
-    }
-
-    fn procedure_features(&self) -> ProcedureFeatures {
-        self.0.features()
-    }
-
-    async fn eval(
-        &self,
-        ctx: Arc<QueryContext>,
-        args: Vec<String>,
-        pipeline: &mut Pipeline,
-    ) -> Result<()> {
-        self.validate(ctx.clone(), &args)?;
-        let block_stream = self.0.data_stream(ctx.clone(), args).await?;
-        let output = OutputPort::create();
-        let source = StreamSource::create(ctx, Some(block_stream), output.clone())?;
-
-        pipeline.add_pipe(Pipe::SimplePipe {
-            inputs_port: vec![],
-            outputs_port: vec![output],
-            processors: vec![source],
-        });
-
-        Ok(())
-    }
-
-    fn result_schema(&self) -> Arc<DataSchema> {
-        self.0.schema()
+        fn schema(&self) -> Arc<DataSchema> {
+            self.0.schema()
+        }
     }
 }

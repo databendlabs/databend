@@ -18,8 +18,8 @@ use common_datablocks::DataBlock;
 use common_datavalues::DataSchema;
 use common_exception::Result;
 
+use crate::procedures::OneBlockProcedure;
 use crate::procedures::Procedure;
-use crate::procedures::ProcedureBlock;
 use crate::procedures::ProcedureFeatures;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
@@ -35,7 +35,7 @@ impl FuseSegmentProcedure {
 }
 
 #[async_trait::async_trait]
-impl ProcedureBlock for FuseSegmentProcedure {
+impl OneBlockProcedure for FuseSegmentProcedure {
     fn name(&self) -> &str {
         "FUSE_SEGMENT"
     }

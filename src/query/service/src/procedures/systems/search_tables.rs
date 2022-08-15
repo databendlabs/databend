@@ -24,8 +24,8 @@ use futures::TryStreamExt;
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreter;
 use crate::optimizers::Optimizers;
+use crate::procedures::OneBlockProcedure;
 use crate::procedures::Procedure;
-use crate::procedures::ProcedureBlock;
 use crate::procedures::ProcedureFeatures;
 use crate::sessions::QueryContext;
 use crate::sql::PlanParser;
@@ -40,7 +40,7 @@ impl SearchTablesProcedure {
 }
 
 #[async_trait::async_trait]
-impl ProcedureBlock for SearchTablesProcedure {
+impl OneBlockProcedure for SearchTablesProcedure {
     fn name(&self) -> &str {
         "SEARCH_TABLES"
     }

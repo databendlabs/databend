@@ -18,7 +18,7 @@ use common_datavalues::DataSchema;
 use common_exception::Result;
 use common_streams::SendableDataBlockStream;
 
-use crate::procedures::procedure::ProcedureStream;
+use crate::procedures::procedure::StreamProcedure;
 use crate::procedures::Procedure;
 use crate::procedures::ProcedureFeatures;
 use crate::sessions::QueryContext;
@@ -35,7 +35,7 @@ impl FuseSnapshotProcedure {
 }
 
 #[async_trait::async_trait]
-impl ProcedureStream for FuseSnapshotProcedure {
+impl StreamProcedure for FuseSnapshotProcedure {
     fn name(&self) -> &str {
         "FUSE_SNAPSHOT"
     }

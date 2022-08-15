@@ -124,6 +124,7 @@ impl Table for FuseSnapshotTable {
             limit,
         );
 
+        // the underlying stream may returns a single empty block, which carries the schema
         let source = StreamSourceNoSkipEmpty::create(ctx, Some(snapshot_stream), output.clone())?;
 
         pipeline.add_pipe(Pipe::SimplePipe {

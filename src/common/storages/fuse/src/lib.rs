@@ -21,7 +21,6 @@ mod fuse_part;
 mod fuse_table;
 pub mod io;
 pub mod operations;
-// pub mod procedures;
 pub mod pruning;
 pub mod statistics;
 pub mod table_functions;
