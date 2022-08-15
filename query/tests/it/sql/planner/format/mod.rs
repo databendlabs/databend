@@ -138,6 +138,7 @@ fn test_format() {
                     table_index: tab1,
                     columns: Default::default(),
                     push_down_predicates: None,
+                    limit: None,
                 }
                 .into(),
             ),
@@ -147,6 +148,7 @@ fn test_format() {
                 table_index: tab1,
                 columns: Default::default(),
                 push_down_predicates: None,
+                limit: None,
             }
             .into(),
         ),

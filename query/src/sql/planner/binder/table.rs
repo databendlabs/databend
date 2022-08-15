@@ -252,6 +252,7 @@ impl<'a> Binder {
                     table_index,
                     columns: columns.into_iter().map(|col| col.column_index).collect(),
                     push_down_predicates: None,
+                    limit: None,
                 }
                 .into(),
             ),

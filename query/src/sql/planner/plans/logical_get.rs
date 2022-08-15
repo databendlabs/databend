@@ -28,8 +28,8 @@ use crate::sql::IndexType;
 pub struct LogicalGet {
     pub table_index: IndexType,
     pub columns: ColumnSet,
-
     pub push_down_predicates: Option<Vec<Scalar>>,
+    pub limit: Option<usize>,
 }
 
 impl Operator for LogicalGet {
