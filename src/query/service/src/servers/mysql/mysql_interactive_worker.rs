@@ -316,16 +316,15 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
         match self.federated_server_command_check(query) {
             Some(data_block) => {
                 info!("Federated query: {}", query);
-                let has_result_set = data_block.num_rows() > 0;
                 if data_block.num_rows() > 0 {
                     info!("Federated response: {:?}", data_block);
                 }
+                let has_result = data_block.num_rows() > 0;
                 let schema = data_block.schema().clone();
                 Ok(QueryResult::create(
                     DataBlockStream::create(schema.clone(), None, vec![data_block]).boxed(),
                     String::from(""),
-                    // false,
-                    has_result_set,
+                    has_result,
                     schema,
                 ))
             }
@@ -342,7 +341,7 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
                     Ok((_, h)) => h.clone(),
                     Err(_) => vec![],
                 };
-                let mut has_result_set = false;
+                let mut has_result_set = true;
                 let interpreter = if use_planner_v2(&settings, &stmts_hints)? {
                     let mut planner = Planner::new(context.clone());
                     planner.plan_sql(query).await.and_then(|v| {
@@ -434,6 +433,7 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
                     instant.elapsed()
                 );
 
+                // let catch_unwind_stream = data_stream.catch_unwind().boxed();
                 // let collector = data_stream.collect::<Result<Vec<DataBlock>>>();
                 // let query_result = collector.await?;
 

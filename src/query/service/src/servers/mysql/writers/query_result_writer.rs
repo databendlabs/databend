@@ -100,15 +100,14 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
             ..Default::default()
         };
 
-        // TODO investigate this
-        // if (!query_result.has_result_set && query_result.blocks.is_empty())
-        //    || (query_result.schema.num_fields() == 0)
-        //{
-        //    dataset_writer.completed(default_response).await?;
-        //    return Ok(());
-        //}
-        if (!query_result.has_result_set) || (query_result.schema.num_fields() == 0) {
+        // if (!query_result.has_result_set) || (query_result.schema.num_fields() == 0) {
+        if !query_result.has_result_set {
             dataset_writer.completed(default_response).await?;
+            eprintln!(
+                "writing HERE, has_result_set {}, num_fields {}",
+                query_result.has_result_set,
+                query_result.schema.num_fields()
+            );
             return Ok(());
         }
 
