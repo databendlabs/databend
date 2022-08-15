@@ -84,15 +84,13 @@ pub fn optimize(
             metadata,
             rewrite_kind,
         }),
-        Plan::Explain { kind, plan } => {
-            if kind == ExplainKind::Raw {
-                return Ok(Plan::Explain { kind, plan });
-            }
-            Ok(Plan::Explain {
+        Plan::Explain { kind, plan } => match kind {
+            ExplainKind::Raw | ExplainKind::Syntax(_) => Ok(Plan::Explain { kind, plan }),
+            _ => Ok(Plan::Explain {
                 kind,
                 plan: Box::new(optimize(ctx, opt_ctx, *plan)?),
-            })
-        }
+            }),
+        },
         Plan::Copy(v) => {
             Ok(Plan::Copy(Box::new(match *v {
                 CopyPlanV2::IntoStage {
