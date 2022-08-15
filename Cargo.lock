@@ -935,6 +935,7 @@ name = "codegen"
 version = "0.1.0"
 dependencies = [
  "common-datavalues",
+ "common-expression",
  "serde",
  "serde_json",
 ]
@@ -991,7 +992,6 @@ dependencies = [
  "pratt",
  "pretty_assertions",
  "regex",
- "sqlparser",
  "thiserror",
  "url",
 ]
@@ -1248,6 +1248,8 @@ dependencies = [
  "common-ast",
  "common-expression",
  "goldenfile",
+ "match-template",
+ "num-traits",
 ]
 
 [[package]]
@@ -1334,11 +1336,9 @@ name = "common-legacy-parser"
 version = "0.1.0"
 dependencies = [
  "async-trait 0.1.57",
- "common-ast",
  "common-datavalues",
  "common-exception",
  "common-functions",
- "common-meta-types",
  "common-planners",
  "sqlparser",
 ]
@@ -1357,7 +1357,6 @@ name = "common-management"
 version = "0.1.0"
 dependencies = [
  "async-trait 0.1.57",
- "common-ast",
  "common-base",
  "common-datavalues",
  "common-exception",
@@ -1800,7 +1799,6 @@ dependencies = [
  "chrono",
  "clap 3.2.17",
  "common-arrow",
- "common-ast",
  "common-base",
  "common-building",
  "common-cache",
