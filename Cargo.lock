@@ -981,7 +981,6 @@ dependencies = [
  "pratt",
  "pretty_assertions",
  "regex",
- "sqlparser",
  "thiserror",
  "url",
 ]
@@ -1324,11 +1323,9 @@ name = "common-legacy-parser"
 version = "0.1.0"
 dependencies = [
  "async-trait 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)",
- "common-ast",
  "common-datavalues",
  "common-exception",
  "common-functions",
- "common-meta-types",
  "common-planners",
  "sqlparser",
 ]
