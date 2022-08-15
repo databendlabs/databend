@@ -257,7 +257,7 @@ impl<'a> Binder {
                     parameters: parameters.iter().map(|v| v.to_string()).collect(),
                     ..Default::default()
                 };
-                validator.verify_definition_expr(&definition)?;
+                validator.verify_definition_expr(definition)?;
                 let udf =  UserDefinedFunction {
                     name: validator.name,
                     parameters: validator.parameters,
@@ -281,7 +281,7 @@ impl<'a> Binder {
                     parameters: parameters.iter().map(|v| v.to_string()).collect(),
                     ..Default::default()
                 };
-                validator.verify_definition_expr(&definition)?;
+                validator.verify_definition_expr(definition)?;
                 let udf =  UserDefinedFunction {
                     name: validator.name,
                     parameters: validator.parameters,
