@@ -199,7 +199,7 @@ select * from clustering_information('db_09_0008','t09_0008');
 ((a+1)) 1 0 0.0 1.0 {"00001":1}
 
 statement query II
-select * from t order by a;
+select * from t09_0008 order by a;
 
 ----
 1 1
