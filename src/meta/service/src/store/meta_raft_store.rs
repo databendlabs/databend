@@ -34,6 +34,7 @@ use common_meta_sled_store::openraft::EffectiveMembership;
 use common_meta_sled_store::openraft::ErrorSubject;
 use common_meta_sled_store::openraft::ErrorVerb;
 use common_meta_sled_store::openraft::StateMachineChanges;
+use common_meta_sled_store::openraft::StorageHelper;
 use common_meta_types::error_context::WithContext;
 use common_meta_types::AppliedState;
 use common_meta_types::Endpoint;
@@ -104,6 +105,12 @@ pub struct MetaRaftStore {
 
     /// The current snapshot.
     pub current_snapshot: RwLock<Option<Snapshot>>,
+}
+
+impl AsRef<MetaRaftStore> for MetaRaftStore {
+    fn as_ref(&self) -> &MetaRaftStore {
+        self
+    }
 }
 
 impl Opened for MetaRaftStore {
@@ -613,7 +620,10 @@ impl MetaRaftStore {
 
     pub async fn get_voters(&self) -> MetaResult<Vec<Node>> {
         let sm = self.state_machine.read().await;
-        let ms = self.get_membership().await.expect("get membership config");
+        let ms = StorageHelper::new(self)
+            .get_membership()
+            .await
+            .expect("get membership config");
 
         match ms {
             Some(membership) => {
@@ -631,7 +641,10 @@ impl MetaRaftStore {
 
     pub async fn get_non_voters(&self) -> MetaResult<Vec<Node>> {
         let sm = self.state_machine.read().await;
-        let ms = self.get_membership().await.expect("get membership config");
+        let ms = StorageHelper::new(self)
+            .get_membership()
+            .await
+            .expect("get membership config");
 
         match ms {
             Some(membership) => {
@@ -661,7 +674,10 @@ impl MetaRaftStore {
     pub async fn list_non_voters(&self) -> HashSet<NodeId> {
         // TODO(xp): consistency
         let mut rst = HashSet::new();
-        let membership = self.get_membership().await.expect("fail to get membership");
+        let membership = StorageHelper::new(self)
+            .get_membership()
+            .await
+            .expect("get membership config");
 
         let membership = match membership {
             None => {
