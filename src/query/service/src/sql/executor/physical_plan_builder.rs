@@ -130,6 +130,7 @@ impl PhysicalPlanBuilder {
                 let push_downs = Extras {
                     projection: Some(projection),
                     filters: push_down_filters.unwrap_or_default(),
+                    limit: scan.limit.clone(),
                     ..Default::default()
                 };
 
