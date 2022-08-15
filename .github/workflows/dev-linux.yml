@@ -145,7 +145,7 @@ jobs:
           dirs: ${{ matrix.dirs }}
 
   test_sqllogic_cluster_linux:
-    timeout-minutes: 15
+    timeout-minutes: 30
     name: test_sqllogic_${{ matrix.dirs }}_cluster_linux
     runs-on: [self-hosted, X64, Linux, development]
     needs: build_gnu
