@@ -24,6 +24,7 @@ pub struct ClusterStatsGenerator {
     cluster_key_index: Vec<usize>,
     expression_executor: Option<ExpressionExecutor>,
     level: i32,
+    row_per_block: usize,
 }
 
 impl ClusterStatsGenerator {
@@ -32,12 +33,14 @@ impl ClusterStatsGenerator {
         cluster_key_index: Vec<usize>,
         expression_executor: Option<ExpressionExecutor>,
         level: i32,
+        row_per_block: usize,
     ) -> Self {
         Self {
             cluster_key_id,
             cluster_key_index,
             expression_executor,
             level,
+            row_per_block,
         }
     }
 
@@ -119,6 +122,12 @@ impl ClusterStatsGenerator {
             }
             max.push(right);
         }
+
+        let level = if min == max && data_block.num_rows() == self.row_per_block {
+            -1
+        } else {
+            level
+        };
 
         Ok(Some(ClusterStatistics {
             cluster_key_id: self.cluster_key_id,

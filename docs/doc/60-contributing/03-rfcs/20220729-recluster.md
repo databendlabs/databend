@@ -59,14 +59,14 @@ Tip:
 ```
 1. The cluster key may be created or altered when the table has data, so there may be blocks that are not sorted according to the cluster key. Consider temporarily ignoring such blocks when doing recluster.
 
-2. If the cluster key of a block has only one value (the maximum and minimum values are equal, reaching the constant state) and its row_num is 1000_000, set its level to -1 and filter it out when doing recluster.
+2. If the cluster key of a block has only one value (the maximum and minimum values are equal, reaching the constant state) and its row_num is 1_000_000, set its level to -1 and filter it out when doing recluster.
 
 3. The selected blocks maybe need to consider the total size, otherwise the sorting may be out of memory.
 ```
 
 ### Block Merge
 
-Sort and merge the collected blocks. After the merged block exceeds a certain threshold (1000_000 rows), it will be divided into multiple blocks. The newly generated block is put into the next level.
+Sort and merge the collected blocks. After the merged block exceeds a certain threshold (1_000_000 rows), it will be divided into multiple blocks. The newly generated block is put into the next level.
 
 Organize the blocks and generate new segments and snapshot, and finally update table meta. If there is a new DML execution during this period, the current workflow will fail to commit and return an error. We need to consider the specific processing flow later.
 

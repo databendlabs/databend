@@ -116,8 +116,12 @@ impl FuseTable {
         ctx.try_set_partitions(plan.parts.clone())?;
         self.do_read2(ctx.clone(), &plan, pipeline)?;
 
-        let cluster_stats_gen =
-            self.get_cluster_stats_gen(ctx.clone(), pipeline, mutator.level + 1)?;
+        let cluster_stats_gen = self.get_cluster_stats_gen(
+            ctx.clone(),
+            pipeline,
+            mutator.level + 1,
+            mutator.row_per_block,
+        )?;
 
         // sort
         let sort_descs: Vec<SortColumnDescription> = self

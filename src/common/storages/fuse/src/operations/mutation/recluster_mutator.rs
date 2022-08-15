@@ -40,9 +40,9 @@ pub struct ReclusterMutator {
     pub base_mutator: BaseMutator,
     pub selected_blocks: Vec<BlockMeta>,
     pub level: i32,
+    pub row_per_block: usize,
     threshold: f64,
     table_info: TableInfo,
-    row_per_block: usize,
 }
 
 impl ReclusterMutator {
