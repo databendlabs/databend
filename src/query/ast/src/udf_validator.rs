@@ -45,6 +45,7 @@ impl UDFValidator {
         }
         let expr_params = &self.expr_params;
         let parameters = self.parameters.iter().cloned().collect::<HashSet<_>>();
+
         let params_not_declared: HashSet<_> = parameters.difference(expr_params).collect();
         let params_not_used: HashSet<_> = expr_params.difference(&parameters).collect();
 
@@ -69,8 +70,14 @@ impl UDFValidator {
 }
 
 impl<'ast> Visitor<'ast> for UDFValidator {
-    fn visit_identifier(&mut self, ident: &'ast crate::ast::Identifier<'ast>) {
-        self.expr_params.insert(ident.to_string());
+    fn visit_column_ref(
+        &mut self,
+        _span: &'ast [Token<'ast>],
+        _database: &'ast Option<Identifier<'ast>>,
+        _table: &'ast Option<Identifier<'ast>>,
+        column: &'ast Identifier<'ast>,
+    ) {
+        self.expr_params.insert(column.to_string());
     }
 
     fn visit_function_call(
@@ -78,12 +85,17 @@ impl<'ast> Visitor<'ast> for UDFValidator {
         _span: &'ast [Token<'ast>],
         _distinct: bool,
         name: &'ast Identifier<'ast>,
-        _args: &'ast [Expr<'ast>],
+        args: &'ast [Expr<'ast>],
         _params: &'ast [Literal],
     ) {
         let name = name.to_string();
         if !is_builtin_function(&name) && self.name.eq_ignore_ascii_case(&name) {
             self.has_recursive = true;
+            return;
+        }
+
+        for arg in args {
+            walk_expr(self, arg);
         }
     }
 }
