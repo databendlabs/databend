@@ -935,6 +935,7 @@ name = "codegen"
 version = "0.1.0"
 dependencies = [
  "common-datavalues",
+ "common-expression",
  "serde",
  "serde_json",
 ]
@@ -1247,6 +1248,8 @@ dependencies = [
  "common-ast",
  "common-expression",
  "goldenfile",
+ "match-template",
+ "num-traits",
 ]
 
 [[package]]
