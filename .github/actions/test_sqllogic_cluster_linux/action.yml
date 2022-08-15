@@ -28,7 +28,7 @@ runs:
       run: |
         bash ./scripts/setup/dev_setup.sh -yd
 
-    - name: Run sqllogic Tests with Cluster mode 
+    - name: Run sqllogic Tests with Cluster mode
       shell: bash
       run: |
         bash ./scripts/ci/ci-run-sqllogic-tests-cluster.sh ${{ inputs.dirs }}
