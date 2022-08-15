@@ -158,7 +158,7 @@ Execute [COPY](../30-reference/30-sql/10-dml/dml-copy-into-table.md) to load sta
 <TabItem value="csv" label="CSV">
 
 ```sql
-COPY INTO books FROM '@my_int_stage' files=('books.csv') file_format = (type = 'CSV' field_delimiter = ','  record_delimiter = '\n' skip_header = 0);
+COPY INTO books FROM @my_int_stage files=('books.csv') file_format = (type = 'CSV' field_delimiter = ','  record_delimiter = '\n' skip_header = 0);
 ```
 
 :::tip
@@ -182,7 +182,7 @@ COPY INTO books FROM '@my_int_stage' files=('books.csv') file_format = (type = '
 <TabItem value="parquet" label="Parquet">
 
 ```sql
-COPY INTO books FROM '@my_int_stage' files=('books.parquet') file_format = (type = 'Parquet');
+COPY INTO books FROM @my_int_stage files=('books.parquet') file_format = (type = 'Parquet');
 ```
 
 </TabItem>
