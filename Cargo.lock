@@ -1354,7 +1354,6 @@ name = "common-management"
 version = "0.1.0"
 dependencies = [
  "async-trait 0.1.57",
- "common-ast",
  "common-base",
  "common-datavalues",
  "common-exception",
@@ -1797,7 +1796,6 @@ dependencies = [
  "chrono",
  "clap 3.2.17",
  "common-arrow",
- "common-ast",
  "common-base",
  "common-building",
  "common-cache",
