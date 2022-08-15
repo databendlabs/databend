@@ -19,7 +19,6 @@ use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::Bitmap;
 use common_datavalues::prelude::*;
-use common_datavalues::with_match_primitive_type_id_2;
 use common_exception::Result;
 use common_io::prelude::*;
 use ordered_float::OrderedFloat;
@@ -29,6 +28,7 @@ use super::aggregate_distinct_state::AggregateDistinctState;
 use super::aggregate_distinct_state::AggregateDistinctStringState;
 use super::aggregate_distinct_state::DataGroupValues;
 use super::aggregate_distinct_state::DistinctStateFunc;
+use super::aggregate_distinct_state::KeysRef;
 use super::aggregate_function::AggregateFunction;
 use super::aggregate_function_factory::AggregateFunctionCreator;
 use super::aggregate_function_factory::AggregateFunctionDescription;
@@ -178,6 +178,33 @@ pub fn try_create_uniq(
     try_create(nested_name, params, arguments, &creator)
 }
 
+#[macro_export]
+macro_rules! dispatch_primitive_type_id {
+    ($key_type:expr, | $_:tt $T:ident| $_a:tt $E:ident | $body:tt,  $nbody:tt) => {{
+        macro_rules! __with_ty__ {
+            ( $_ $T:ident, $_a $E:ident ) => {
+                $body
+            };
+        }
+        type OrderF32 = OrderedFloat<f32>;
+        type OrderF64 = OrderedFloat<f64>;
+        match $key_type {
+            TypeID::Int8 => __with_ty__! { i8, i8 },
+            TypeID::Int16 => __with_ty__! { i16, i16 },
+            TypeID::Int32 => __with_ty__! { i32, i32 },
+            TypeID::Int64 => __with_ty__! { i64, i64 },
+            TypeID::UInt8 => __with_ty__! { u8, u8 },
+            TypeID::UInt16 => __with_ty__! { u16, u16 },
+            TypeID::UInt32 => __with_ty__! { u32, u32 },
+            TypeID::UInt64 => __with_ty__! { u64, u64 },
+            TypeID::Float32 => __with_ty__! { f32, OrderF32 },
+            TypeID::Float64 => __with_ty__! { f64, OrderF64 },
+
+            _ => $nbody,
+        }
+    }};
+}
+
 pub fn try_create(
     nested_name: &str,
     params: Vec<DataValue>,
@@ -196,7 +223,7 @@ pub fn try_create(
         let data_type = arguments[0].data_type().clone();
         let phid = data_type.data_type_id();
         if phid.is_numeric() {
-            with_match_primitive_type_id_2!(phid, |$T |$E|  {
+            dispatch_primitive_type_id!(phid, |$T |$E|  {
                 return Ok(Arc::new(AggregateDistinctCombinator::<
                     $T,
                     AggregateDistinctPrimitiveState<$T, $E>,
@@ -209,12 +236,12 @@ pub fn try_create(
                     _state: PhantomData,
                 }));
             }, {
-                panic!("Unsupported type for AggregateDistinctPrimitiveState");
+                unreachable!()
             })
         }
         if phid.is_string() {
             return Ok(Arc::new(AggregateDistinctCombinator::<
-                Vec<u8>,
+                KeysRef,
                 AggregateDistinctStringState,
             > {
                 nested_name: nested_name.to_owned(),

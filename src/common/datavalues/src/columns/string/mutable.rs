@@ -69,6 +69,10 @@ impl MutableStringColumn {
         &mut self.offsets
     }
 
+    pub fn values_offsets(&self) -> (&Vec<u8>, &Vec<i64>) {
+        (&self.values, &self.offsets)
+    }
+
     #[inline]
     pub fn add_offset(&mut self, offset: usize) {
         self.last_size += offset;
@@ -77,6 +81,15 @@ impl MutableStringColumn {
 
     pub fn pop_offset(&mut self) -> Option<usize> {
         self.offsets.pop().map(|offset| offset as usize)
+    }
+
+    /// # Safety
+    /// Assumes that the `i < self.len`.
+    #[inline]
+    pub unsafe fn value_unchecked(&self, i: usize) -> &[u8] {
+        let start = *self.offsets.get_unchecked(i) as usize;
+        let end = *self.offsets.get_unchecked(i + 1) as usize;
+        self.values.get_unchecked(start..end)
     }
 }
 

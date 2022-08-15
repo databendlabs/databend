@@ -24,7 +24,6 @@ use common_arrow::arrow::bitmap::Bitmap;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_io::prelude::*;
-use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -44,7 +43,7 @@ pub trait DistinctStateFunc<S>: Send + Sync {
         input_rows: usize,
     ) -> Result<()>;
     fn merge(&mut self, rhs: &Self) -> Result<()>;
-    fn build_columns(&self, fields: &[DataField]) -> Result<Vec<ColumnRef>>;
+    fn build_columns(&mut self, fields: &[DataField]) -> Result<Vec<ColumnRef>>;
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Hash, Clone)]
@@ -60,7 +59,8 @@ pub struct AggregateDistinctPrimitiveState<T: PrimitiveType, E: From<T>> {
 }
 
 pub struct AggregateDistinctStringState {
-    set: HashSet<Vec<u8>, RandomState>,
+    set: HashSet<KeysRef, RandomState>,
+    holder: MutableStringColumn,
 }
 
 impl DistinctStateFunc<DataGroupValues> for AggregateDistinctState {
@@ -137,7 +137,7 @@ impl DistinctStateFunc<DataGroupValues> for AggregateDistinctState {
         Ok(())
     }
 
-    fn build_columns(&self, fields: &[DataField]) -> Result<Vec<ColumnRef>> {
+    fn build_columns(&mut self, fields: &[DataField]) -> Result<Vec<ColumnRef>> {
         let mut results = Vec::with_capacity(self.set.len());
         self.set.iter().for_each(|group_values| {
             let mut v = Vec::with_capacity(group_values.0.len());
@@ -166,19 +166,32 @@ impl DistinctStateFunc<DataGroupValues> for AggregateDistinctState {
     }
 }
 
-impl DistinctStateFunc<Vec<u8>> for AggregateDistinctStringState {
+impl DistinctStateFunc<KeysRef> for AggregateDistinctStringState {
     fn new() -> Self {
         AggregateDistinctStringState {
             set: HashSet::new(),
+            holder: MutableStringColumn::with_capacity(0),
         }
     }
 
     fn serialize(&self, writer: &mut BytesMut) -> Result<()> {
-        serialize_into_buf(writer, &self.set)
+        let (values, offsets) = self.holder.values_offsets();
+        serialize_into_buf(writer, offsets)?;
+        serialize_into_buf(writer, values)
     }
 
     fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()> {
-        self.set = deserialize_from_slice(reader)?;
+        let offsets: Vec<i64> = deserialize_from_slice(reader)?;
+        let values: Vec<u8> = deserialize_from_slice(reader)?;
+
+        self.holder = MutableStringColumn::from_data(values, offsets);
+        self.set = HashSet::with_capacity(self.holder.len());
+
+        for index in 0..self.holder.len() {
+            let data = unsafe { self.holder.value_unchecked(index) };
+            let key = KeysRef::create(data.as_ptr() as usize, data.len());
+            self.set.insert(key);
+        }
         Ok(())
     }
 
@@ -191,8 +204,16 @@ impl DistinctStateFunc<Vec<u8>> for AggregateDistinctStringState {
     }
 
     fn add(&mut self, columns: &[ColumnRef], row: usize) -> Result<()> {
-        let value = columns.get(0).map(|s| s.get(row)).unwrap();
-        self.set.insert(value.as_string().unwrap());
+        let column: &StringColumn = unsafe { Series::static_cast(&columns[0]) };
+        let data = column.get_data(row);
+        let mut key = KeysRef::create(data.as_ptr() as usize, data.len());
+
+        if !self.set.contains(&key) {
+            self.holder.push(data);
+            let data = unsafe { self.holder.value_unchecked(self.holder.len() - 1) };
+            key = KeysRef::create(data.as_ptr() as usize, data.len());
+            self.set.insert(key);
+        }
         Ok(())
     }
 
@@ -202,16 +223,32 @@ impl DistinctStateFunc<Vec<u8>> for AggregateDistinctStringState {
         validity: Option<&Bitmap>,
         input_rows: usize,
     ) -> Result<()> {
+        let column: &StringColumn = unsafe { Series::static_cast(&columns[0]) };
+
         for row in 0..input_rows {
-            let value = columns.get(0).map(|s| s.get(row)).unwrap();
             match validity {
                 Some(v) => {
                     if v.get_bit(row) {
-                        self.set.insert(value.as_string().unwrap());
+                        let data = column.get_data(row);
+                        let mut key = KeysRef::create(data.as_ptr() as usize, data.len());
+                        if !self.set.contains(&key) {
+                            self.holder.push(data);
+                            let data =
+                                unsafe { self.holder.value_unchecked(self.holder.len() - 1) };
+                            key = KeysRef::create(data.as_ptr() as usize, data.len());
+                            self.set.insert(key);
+                        }
                     }
                 }
                 None => {
-                    self.set.insert(value.as_string().unwrap());
+                    let data = column.get_data(row);
+                    let mut key = KeysRef::create(data.as_ptr() as usize, data.len());
+                    if !self.set.contains(&key) {
+                        self.holder.push(data);
+                        let data = unsafe { self.holder.value_unchecked(self.holder.len() - 1) };
+                        key = KeysRef::create(data.as_ptr() as usize, data.len());
+                        self.set.insert(key);
+                    }
                 }
             }
         }
@@ -223,20 +260,16 @@ impl DistinctStateFunc<Vec<u8>> for AggregateDistinctStringState {
         Ok(())
     }
 
-    fn build_columns(&self, _fields: &[DataField]) -> Result<Vec<ColumnRef>> {
-        let mut result = Vec::with_capacity(self.set.len());
-        self.set.iter().for_each(|v| {
-            result.push(v.as_slice());
-        });
-        let columns = StringColumn::from_iterator(result.into_iter());
-        Ok(vec![columns.arc()])
+    fn build_columns(&mut self, _fields: &[DataField]) -> Result<Vec<ColumnRef>> {
+        let c = self.holder.finish();
+        Ok(vec![c.arc()])
     }
 }
 
 impl<T, E> DistinctStateFunc<T> for AggregateDistinctPrimitiveState<T, E>
 where
-    T: PrimitiveType,
-    E: From<T> + Into<T> + Hash + Eq + Sync + Send + Serialize + Clone + DeserializeOwned,
+    T: PrimitiveType + From<E>,
+    E: From<T> + Hash + Eq + Sync + Send + Clone + std::fmt::Debug,
 {
     fn new() -> Self {
         AggregateDistinctPrimitiveState {
@@ -246,11 +279,22 @@ where
     }
 
     fn serialize(&self, writer: &mut BytesMut) -> Result<()> {
-        serialize_into_buf(writer, &self.set)
+        writer.write_uvarint(self.set.len() as u64)?;
+        for value in &self.set {
+            let t: T = value.clone().into();
+            serialize_into_buf(writer, &t)?
+        }
+        Ok(())
     }
 
     fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()> {
-        self.set = deserialize_from_slice(reader)?;
+        let size = reader.read_uvarint()?;
+        self.set = HashSet::with_capacity(size as usize);
+        for _ in 0..size {
+            let t: T = deserialize_from_slice(reader)?;
+            let e = E::from(t);
+            self.set.insert(e);
+        }
         Ok(())
     }
 
@@ -275,8 +319,8 @@ where
         validity: Option<&Bitmap>,
         input_rows: usize,
     ) -> Result<()> {
+        let array: &PrimitiveColumn<T> = unsafe { Series::static_cast(&columns[0]) };
         for row in 0..input_rows {
-            let array: &PrimitiveColumn<T> = unsafe { Series::static_cast(&columns[0]) };
             let value = unsafe { array.value_unchecked(row) };
             match validity {
                 Some(v) => {
@@ -297,18 +341,45 @@ where
         Ok(())
     }
 
-    fn build_columns(&self, fields: &[DataField]) -> Result<Vec<ColumnRef>> {
-        let mut results: Vec<T> = Vec::with_capacity(self.set.len());
-        self.set.iter().for_each(|v| {
-            results.push(v.clone().into());
-        });
-        let data_type = fields[0].data_type();
-        let columns = results
-            .iter()
-            .map(|v| DataValue::try_from(*v).unwrap())
-            .collect::<Vec<DataValue>>();
-        let array = columns.as_slice();
-        let column = data_type.create_column(array).unwrap();
-        Ok((&[column]).to_vec())
+    fn build_columns(&mut self, _fields: &[DataField]) -> Result<Vec<ColumnRef>> {
+        let values: Vec<T> = self.set.iter().map(|e| e.clone().into()).collect();
+        let result = PrimitiveColumn::<T>::new_from_vec(values);
+        Ok(vec![result.arc()])
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct KeysRef {
+    pub length: usize,
+    pub address: usize,
+}
+
+impl KeysRef {
+    pub fn create(address: usize, length: usize) -> KeysRef {
+        KeysRef { length, address }
+    }
+}
+
+impl Eq for KeysRef {}
+
+impl PartialEq for KeysRef {
+    fn eq(&self, other: &Self) -> bool {
+        if self.length != other.length {
+            return false;
+        }
+
+        unsafe {
+            let self_value = std::slice::from_raw_parts(self.address as *const u8, self.length);
+            let other_value = std::slice::from_raw_parts(other.address as *const u8, other.length);
+            self_value == other_value
+        }
+    }
+}
+
+impl Hash for KeysRef {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        let self_value =
+            unsafe { std::slice::from_raw_parts(self.address as *const u8, self.length) };
+        self_value.hash(state);
     }
 }
