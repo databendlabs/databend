@@ -34,7 +34,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::FileSplit;
 use common_io::prelude::FormatSettings;
-use similar_asserts::Diff;
+use similar_asserts::traits::MakeDiff;
 
 use crate::FormatFactory;
 use crate::InputFormat;
@@ -135,7 +135,8 @@ impl InputFormat for ParquetInputFormat {
             {
                 let tf = DataField::from(m);
                 if remove_nullable(tf.data_type()) != remove_nullable(f.data_type()) {
-                    let diff = Diff::from_debug(f, m, "expected_field", "infer_field");
+                    let pair = (f, m);
+                    let diff = pair.make_diff("expected_field", "infer_field");
                     return Err(ErrorCode::ParquetError(format!(
                         "parquet schema mismatch, differ: {}",
                         diff
