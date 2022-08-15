@@ -32,17 +32,15 @@ use databend_query::sessions::TableContext;
 use databend_query::storages::StorageContext;
 use databend_query::Config;
 
-use crate::tests::SessionManagerBuilder;
+use crate::tests::GlobalServices;
 
 pub async fn create_query_context() -> Result<Arc<QueryContext>> {
-    let sessions = SessionManagerBuilder::create().build()?;
-    create_query_context_with_session(sessions).await
+    GlobalServices::setup(crate::tests::ConfigBuilder::create().build()).await?;
+    create_query_context_with_session().await
 }
 
-pub async fn create_query_context_with_session(
-    sessions: Arc<SessionManager>,
-) -> Result<Arc<QueryContext>> {
-    let dummy_session = sessions.create_session(SessionType::Dummy).await?;
+pub async fn create_query_context_with_session() -> Result<Arc<QueryContext>> {
+    let dummy_session = SessionManager::instance().create_session(SessionType::Dummy).await?;
 
     // Set user with all privileges
     let mut user_info = UserInfo::new("root", "127.0.0.1", AuthInfo::Password {
@@ -57,7 +55,10 @@ pub async fn create_query_context_with_session(
     dummy_session.set_current_user(user_info);
 
     let context = QueryContext::create_from_shared(
-        QueryContextShared::try_create((*dummy_session).clone(), Cluster::empty()).await?,
+        QueryContextShared::try_create(
+            (*dummy_session).clone(),
+            Cluster::empty(),
+        ).await?,
     );
 
     context.get_settings().set_max_threads(8)?;
@@ -68,7 +69,9 @@ pub async fn create_query_context_with_config(
     config: Config,
     current_user: Option<UserInfo>,
 ) -> Result<Arc<QueryContext>> {
-    let sessions = SessionManagerBuilder::create_with_conf(config.clone()).build()?;
+    GlobalServices::setup(config).await?;
+
+    let sessions = SessionManager::instance();
     let dummy_session = sessions.create_session(SessionType::Dummy).await?;
 
     let mut user_info = UserInfo::new("root", "127.0.0.1", AuthInfo::Password {
@@ -85,7 +88,10 @@ pub async fn create_query_context_with_config(
     dummy_session.set_current_user(user_info);
 
     let context = QueryContext::create_from_shared(
-        QueryContextShared::try_create((*dummy_session).clone(), Cluster::empty()).await?,
+        QueryContextShared::try_create(
+            (*dummy_session).clone(),
+            Cluster::empty(),
+        ).await?,
     );
 
     context.get_settings().set_max_threads(8)?;
@@ -140,8 +146,8 @@ impl Default for ClusterDescriptor {
 pub async fn create_query_context_with_cluster(
     desc: ClusterDescriptor,
 ) -> Result<Arc<QueryContext>> {
-    let sessions = SessionManagerBuilder::create().build()?;
-    let dummy_session = sessions.create_session(SessionType::Dummy).await?;
+    GlobalServices::setup(crate::tests::ConfigBuilder::create().build()).await?;
+    let dummy_session = SessionManager::instance().create_session(SessionType::Dummy).await?;
 
     let local_id = desc.local_node_id;
     let nodes = desc.cluster_nodes_list;

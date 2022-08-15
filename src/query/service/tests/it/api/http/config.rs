@@ -24,14 +24,13 @@ use poem::Request;
 use poem::Route;
 use pretty_assertions::assert_eq; // for `app.oneshot()`
 
-use crate::tests::SessionManagerBuilder;
+use crate::tests::GlobalServices;
 
 #[tokio::test]
 async fn test_config() -> common_exception::Result<()> {
-    let sessions = SessionManagerBuilder::create().build()?;
+    GlobalServices::setup(crate::tests::ConfigBuilder::create().build()).await?;
     let cluster_router = Route::new()
-        .at("/v1/config", get(config_handler))
-        .data(sessions);
+        .at("/v1/config", get(config_handler));
 
     let response = cluster_router
         .call(

@@ -34,17 +34,16 @@ use crate::tests::tls_constants::TEST_CA_CERT;
 use crate::tests::tls_constants::TEST_CN_NAME;
 use crate::tests::tls_constants::TEST_SERVER_CERT;
 use crate::tests::tls_constants::TEST_SERVER_KEY;
-use crate::tests::SessionManagerBuilder;
+use crate::tests::{ConfigBuilder, GlobalServices};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_tls_rpc_server() -> Result<()> {
-    let mut rpc_service = RpcService {
-        abort_notify: Arc::new(Notify::new()),
-        sessions: SessionManagerBuilder::create()
+    let mut rpc_service = RpcService::create(
+        ConfigBuilder::create()
             .rpc_tls_server_key(TEST_SERVER_KEY)
             .rpc_tls_server_cert(TEST_SERVER_CERT)
-            .build()?,
-    };
+            .build()
+    )?;
 
     let mut listener_address = SocketAddr::from_str("127.0.0.1:0")?;
     listener_address = rpc_service.start(listener_address).await?;
@@ -75,11 +74,11 @@ async fn test_tls_rpc_server_invalid_server_config() -> Result<()> {
     // setup, invalid cert locations
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let mut srv = RpcService {
-        abort_notify: Arc::new(Notify::new()),
-        sessions: SessionManagerBuilder::create()
+        config: ConfigBuilder::create()
             .rpc_tls_server_key("../tests/data/certs/none.key")
             .rpc_tls_server_cert("../tests/data/certs/none.pem")
-            .build()?,
+            .build(),
+        abort_notify: Arc::new(Default::default()),
     };
     let stream = TcpListenerStream::new(listener);
     let r = srv.start_with_incoming(stream).await;

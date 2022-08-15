@@ -13,13 +13,23 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use once_cell::sync::OnceCell;
 
 use common_base::base::tokio::runtime::Runtime;
-use common_base::base::Thread;
+use common_base::base::{GlobalIORuntime, Thread};
+use common_catalog::catalog::CatalogManager;
 use common_exception::Result;
+use common_fuse_meta::caches::CacheManager;
+use common_storage::StorageOperator;
+use common_tracing::QueryLogger;
+use common_users::{RoleCacheManager, UserApiProvider};
+use databend_query::api::DataExchangeManager;
+use databend_query::catalogs::CatalogManagerHelper;
 use databend_query::clusters::ClusterDiscovery;
 use databend_query::sessions::SessionManager;
 use databend_query::Config;
+use databend_query::interpreters::AsyncInsertManager;
+use databend_query::servers::http::v1::HttpQueryManager;
 
 async fn async_create_sessions(config: Config) -> Result<Arc<SessionManager>> {
     ClusterDiscovery::init(config.clone()).await?;
@@ -35,94 +45,40 @@ fn sync_create_sessions(config: Config) -> Result<Arc<SessionManager>> {
     runtime.block_on(async_create_sessions(config))
 }
 
-pub struct SessionManagerBuilder {
+pub struct GlobalServices {
     config: Config,
 }
 
-#[allow(dead_code)]
-impl SessionManagerBuilder {
-    pub fn create() -> SessionManagerBuilder {
-        let conf = crate::tests::ConfigBuilder::create().config();
+static INITIALIZED: OnceCell<bool> = OnceCell::new();
 
-        SessionManagerBuilder::create_with_conf(conf)
+impl GlobalServices {
+    pub async fn setup(config: Config) -> Result<()> {
+        if let Some(_) = INITIALIZED.get() {
+            return Ok(());
+        }
+
+        INITIALIZED.set(true).unwrap();
+        // The order of initialization is very important
+        let app_name_shuffle = format!("{}-{}", config.query.tenant_id, config.query.cluster_id);
+
+        QueryLogger::init(app_name_shuffle, &config.log)?;
+        GlobalIORuntime::init(config.query.num_cpus as usize)?;
+
+        // Cluster discovery.
+        ClusterDiscovery::init(config.clone()).await?;
+
+        StorageOperator::init(&config.storage).await?;
+        AsyncInsertManager::init(&config)?;
+        CacheManager::init(&config.query)?;
+        CatalogManager::init(&config).await?;
+        HttpQueryManager::init(&config).await?;
+        DataExchangeManager::init(config.clone())?;
+        SessionManager::init(config.clone())?;
+        UserApiProvider::init(config.meta.to_meta_grpc_client_conf()).await?;
+        RoleCacheManager::init()
     }
 
-    pub fn create_with_conf(config: Config) -> SessionManagerBuilder {
-        SessionManagerBuilder { config }
-    }
-
-    pub fn max_sessions(self, max_sessions: u64) -> SessionManagerBuilder {
-        let mut new_config = self.config;
-        new_config.query.max_active_sessions = max_sessions;
-        SessionManagerBuilder::create_with_conf(new_config)
-    }
-
-    pub fn rpc_tls_server_key(self, value: impl Into<String>) -> SessionManagerBuilder {
-        let mut new_config = self.config;
-        new_config.query.rpc_tls_server_key = value.into();
-        SessionManagerBuilder::create_with_conf(new_config)
-    }
-
-    pub fn rpc_tls_server_cert(self, value: impl Into<String>) -> SessionManagerBuilder {
-        let mut new_config = self.config;
-        new_config.query.rpc_tls_server_cert = value.into();
-        SessionManagerBuilder::create_with_conf(new_config)
-    }
-
-    pub fn jwt_key_file(self, value: impl Into<String>) -> SessionManagerBuilder {
-        let mut new_config = self.config;
-        new_config.query.jwt_key_file = value.into();
-        SessionManagerBuilder::create_with_conf(new_config)
-    }
-
-    pub fn http_handler_result_time_out(self, value: impl Into<u64>) -> SessionManagerBuilder {
-        let mut new_config = self.config;
-        new_config.query.http_handler_result_timeout_millis = value.into();
-        SessionManagerBuilder::create_with_conf(new_config)
-    }
-
-    pub fn http_handler_tls_server_key(self, value: impl Into<String>) -> SessionManagerBuilder {
-        let mut new_config = self.config;
-        new_config.query.http_handler_tls_server_key = value.into();
-        SessionManagerBuilder::create_with_conf(new_config)
-    }
-
-    pub fn http_handler_tls_server_cert(self, value: impl Into<String>) -> SessionManagerBuilder {
-        let mut new_config = self.config;
-        new_config.query.http_handler_tls_server_cert = value.into();
-        SessionManagerBuilder::create_with_conf(new_config)
-    }
-
-    pub fn http_handler_tls_server_root_ca_cert(
-        self,
-        value: impl Into<String>,
-    ) -> SessionManagerBuilder {
-        let mut new_config = self.config;
-        new_config.query.http_handler_tls_server_root_ca_cert = value.into();
-        SessionManagerBuilder::create_with_conf(new_config)
-    }
-
-    pub fn api_tls_server_key(self, value: impl Into<String>) -> SessionManagerBuilder {
-        let mut new_config = self.config;
-        new_config.query.api_tls_server_key = value.into();
-        SessionManagerBuilder::create_with_conf(new_config)
-    }
-
-    pub fn api_tls_server_cert(self, value: impl Into<String>) -> SessionManagerBuilder {
-        let mut new_config = self.config;
-        new_config.query.api_tls_server_cert = value.into();
-        SessionManagerBuilder::create_with_conf(new_config)
-    }
-
-    pub fn api_tls_server_root_ca_cert(self, value: impl Into<String>) -> SessionManagerBuilder {
-        let mut new_config = self.config;
-        new_config.query.api_tls_server_root_ca_cert = value.into();
-        SessionManagerBuilder::create_with_conf(new_config)
-    }
-
-    pub fn build(self) -> Result<Arc<SessionManager>> {
-        let config = self.config;
-        let handle = Thread::spawn(move || sync_create_sessions(config));
-        handle.join().unwrap()
+    pub fn create_with_conf(config: Config) -> GlobalServices {
+        GlobalServices { config }
     }
 }

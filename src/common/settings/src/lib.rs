@@ -223,7 +223,7 @@ impl Settings {
             },
         ];
 
-        let settings = Arc::new(RwLock::new(HashMap::default()));
+        let settings: Arc<RwLock<HashMap<String, SettingValue>>> = Arc::new(RwLock::new(HashMap::default()));
 
         // Initial settings.
         {

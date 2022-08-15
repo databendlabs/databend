@@ -160,7 +160,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
     // RPC API service.
     {
         let address = conf.query.flight_api_address.clone();
-        let mut srv = RpcService::create()?;
+        let mut srv = RpcService::create(conf.clone())?;
         let listening = srv.start(address.parse()?).await?;
         shutdown_handle.add_service(srv);
         info!("Listening for RPC API (interserver): {}", listening);

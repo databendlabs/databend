@@ -30,18 +30,17 @@ use tracing::info;
 
 use crate::api::rpc::DatabendQueryFlightService;
 use crate::servers::Server as DatabendQueryServer;
-use crate::sessions::SessionManager;
 use crate::Config;
 
 pub struct RpcService {
-    pub sessions: Arc<SessionManager>,
+    pub config: Config,
     pub abort_notify: Arc<Notify>,
 }
 
 impl RpcService {
-    pub fn create() -> Result<Box<dyn DatabendQueryServer>> {
+    pub fn create(config: Config) -> Result<Box<dyn DatabendQueryServer>> {
         Ok(Box::new(Self {
-            sessions: SessionManager::instance(),
+            config,
             abort_notify: Arc::new(Notify::new()),
         }))
     }
@@ -54,7 +53,7 @@ impl RpcService {
         Ok((TcpListenerStream::new(listener), listener_addr))
     }
 
-    fn shutdown_notify(&self) -> impl Future<Output = ()> + 'static {
+    fn shutdown_notify(&self) -> impl Future<Output=()> + 'static {
         let notified = self.abort_notify.clone();
         async move {
             notified.notified().await;
@@ -70,20 +69,18 @@ impl RpcService {
     }
 
     pub async fn start_with_incoming(&mut self, listener_stream: TcpListenerStream) -> Result<()> {
-        let _sessions = self.sessions.clone();
         let flight_api_service = DatabendQueryFlightService::create();
-        let conf = self.sessions.get_conf();
         let builder = Server::builder();
-        let mut builder = if conf.tls_rpc_server_enabled() {
+        let mut builder = if self.config.tls_rpc_server_enabled() {
             info!("databend query tls rpc enabled");
             builder
-                .tls_config(Self::server_tls_config(&conf).await.map_err(|e| {
+                .tls_config(Self::server_tls_config(&self.config).await.map_err(|e| {
                     ErrorCode::TLSConfigurationFailure(format!(
                         "failed to load server tls config: {e}",
                     ))
                 })?)
                 .map_err(|e| {
-                    ErrorCode::TLSConfigurationFailure(format!("failed to invoke tls_config: {e}",))
+                    ErrorCode::TLSConfigurationFailure(format!("failed to invoke tls_config: {e}", ))
                 })?
         } else {
             builder

@@ -21,7 +21,7 @@ use databend_query::api::http::v1::instance_status::instance_status_handler;
 use databend_query::api::http::v1::instance_status::InstanceStatus;
 use databend_query::interpreters::Interpreter;
 use databend_query::interpreters::InterpreterFactory;
-use databend_query::sessions::SessionManager;
+use databend_query::sessions::{QueryContext, SessionManager};
 use databend_query::sessions::SessionType;
 use databend_query::sessions::TableContext;
 use databend_query::sql::PlanParser;
@@ -37,9 +37,9 @@ use poem::Request;
 use poem::Route;
 use pretty_assertions::assert_eq;
 
-use crate::tests::SessionManagerBuilder;
+use crate::tests::{create_query_context, GlobalServices};
 
-async fn get_status(ep: &AddDataEndpoint<Route, Arc<SessionManager>>) -> InstanceStatus {
+async fn get_status(ep: &Route) -> InstanceStatus {
     let response = ep
         .call(
             Request::builder()
@@ -55,26 +55,23 @@ async fn get_status(ep: &AddDataEndpoint<Route, Arc<SessionManager>>) -> Instanc
     serde_json::from_str::<InstanceStatus>(&String::from_utf8_lossy(&body)).unwrap()
 }
 
-async fn run_query(sessions: Arc<SessionManager>) -> Result<Arc<dyn Interpreter>> {
+async fn run_query(query_ctx: &Arc<QueryContext>) -> Result<Arc<dyn Interpreter>> {
     let sql = "select * from numbers(1)";
-    let session = sessions.create_session(SessionType::HTTPQuery).await?;
-    let ctx = session.create_query_context().await?;
-    ctx.attach_query_str(sql);
-    let user = ctx
+    query_ctx.attach_query_str(sql);
+    let user = query_ctx
         .get_user_manager()
         .get_user("test", UserIdentity::new("root", "localhost"))
         .await?;
-    session.set_current_user(user);
-    let plan = PlanParser::parse(ctx.clone(), sql).await?;
-    InterpreterFactory::get(ctx.clone(), plan)
+    query_ctx.set_current_user(user);
+    let plan = PlanParser::parse(query_ctx.clone(), sql).await?;
+    InterpreterFactory::get(query_ctx.clone(), plan)
 }
 
 #[tokio::test]
 async fn test_status() -> Result<()> {
-    let sessions = SessionManagerBuilder::create().build()?;
+    let query_ctx = create_query_context().await?;
     let ep = Route::new()
-        .at("/v1/status", get(instance_status_handler))
-        .data(sessions.clone());
+        .at("/v1/status", get(instance_status_handler));
 
     let status = get_status(&ep).await;
     assert_eq!(
@@ -87,7 +84,7 @@ async fn test_status() -> Result<()> {
         "before running"
     );
 
-    let interpreter = run_query(sessions.clone()).await?;
+    let interpreter = run_query(&query_ctx).await?;
     interpreter.start().await?;
     let status = get_status(&ep).await;
     assert_eq!(

@@ -76,6 +76,16 @@ impl ConfigBuilder {
         self
     }
 
+    pub fn rpc_tls_server_key(mut self, value: impl Into<String>) -> ConfigBuilder {
+        self.conf.query.rpc_tls_server_key = value.into();
+        self
+    }
+
+    pub fn rpc_tls_server_cert(mut self, value: impl Into<String>) -> ConfigBuilder {
+        self.conf.query.rpc_tls_server_cert = value.into();
+        self
+    }
+
     pub fn build(self) -> Config {
         self.conf
     }

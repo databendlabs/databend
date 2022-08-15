@@ -42,7 +42,6 @@ use crate::Config;
 pub struct Session {
     pub(in crate::sessions) id: String,
     pub(in crate::sessions) typ: RwLock<SessionType>,
-    pub(in crate::sessions) session_mgr: Arc<SessionManager>,
     pub(in crate::sessions) ref_count: Arc<AtomicUsize>,
     pub(in crate::sessions) session_ctx: Arc<SessionContext>,
     session_settings: Settings,
@@ -59,14 +58,12 @@ impl Session {
     ) -> Result<Arc<Session>> {
         let session_ctx = Arc::new(SessionContext::try_create(conf.clone())?);
         let user_api = UserApiProvider::instance();
-        let session_settings =
-            Settings::try_create(&conf, user_api, session_ctx.get_current_tenant()).await?;
+        let session_settings = Settings::try_create(&conf, user_api, session_ctx.get_current_tenant()).await?;
         let ref_count = Arc::new(AtomicUsize::new(0));
         let status = Arc::new(Default::default());
         Ok(Arc::new(Session {
             id,
             typ: RwLock::new(typ),
-            session_mgr: SessionManager::instance(),
             ref_count,
             session_ctx,
             session_settings,
@@ -180,7 +177,7 @@ impl Session {
     }
 
     pub fn attach<F>(self: &Arc<Self>, host: Option<SocketAddr>, io_shutdown: F)
-    where F: FnOnce() + Send + 'static {
+        where F: FnOnce() + Send + 'static {
         let (tx, rx) = oneshot::channel();
         self.session_ctx.set_client_host(host);
         self.session_ctx.set_io_shutdown_tx(Some(tx));
@@ -289,7 +286,7 @@ impl Session {
     }
 
     pub fn get_config(&self) -> Config {
-        self.session_mgr.get_conf()
+        SessionManager::instance().get_conf()
     }
 
     pub fn get_status(self: &Arc<Self>) -> Arc<RwLock<SessionStatus>> {

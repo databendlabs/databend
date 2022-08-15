@@ -24,7 +24,7 @@ use databend_query::sessions::SessionContext;
 use databend_query::sessions::SessionType;
 use databend_query::Config;
 
-use crate::tests::SessionManagerBuilder;
+use crate::tests::{create_query_context, GlobalServices};
 
 #[tokio::test]
 async fn test_session_context() -> Result<()> {
@@ -73,24 +73,6 @@ async fn test_session_context() -> Result<()> {
         assert!(val.is_some());
 
         let val = session_ctx.take_io_shutdown_tx();
-        assert!(val.is_none());
-    }
-
-    // context shared.
-    {
-        let sessions = SessionManagerBuilder::create().build()?;
-        let dummy_session = sessions.create_session(SessionType::Dummy).await?;
-        let shared =
-            QueryContextShared::try_create((*dummy_session).clone(), Cluster::empty()).await?;
-
-        session_ctx.set_query_context_shared(Some(shared.clone()));
-        let val = session_ctx.get_query_context_shared();
-        assert_eq!(shared.get_config(), val.unwrap().get_config());
-
-        let val = session_ctx.take_query_context_shared();
-        assert_eq!(shared.get_config(), val.unwrap().get_config());
-
-        let val = session_ctx.get_query_context_shared();
         assert!(val.is_none());
     }
 

@@ -27,14 +27,13 @@ use poem::Request;
 use poem::Route;
 use pretty_assertions::assert_eq;
 
-use crate::tests::SessionManagerBuilder;
+use crate::tests::GlobalServices;
 
 #[tokio::test]
 async fn test_cluster() -> Result<()> {
-    let sessions = SessionManagerBuilder::create().build()?;
+    GlobalServices::setup(crate::tests::ConfigBuilder::create().build()).await?;
     let cluster_router = Route::new()
-        .at("/v1/cluster/list", get(cluster_list_handler))
-        .data(sessions);
+        .at("/v1/cluster/list", get(cluster_list_handler));
 
     // List Node
     {

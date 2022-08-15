@@ -25,15 +25,14 @@ use poem::Request;
 use poem::Route;
 use pretty_assertions::assert_eq;
 
-use crate::tests::SessionManagerBuilder;
+use crate::tests::GlobalServices;
 
 #[tokio::test]
 async fn test_logs() -> Result<()> {
-    let sessions = SessionManagerBuilder::create().build()?;
+    GlobalServices::setup(crate::tests::ConfigBuilder::create().build()).await?;
 
     let test_router = Route::new()
-        .at("/v1/logs", get(logs_handler))
-        .data(sessions);
+        .at("/v1/logs", get(logs_handler));
     {
         let response = test_router
             .call(
