@@ -6180,3 +6180,35 @@ AlterShareTenants(
 )
 
 
+---------- Input ----------
+DESC SHARE b;
+---------- Output ---------
+DESC SHARE b
+---------- AST ------------
+DescShare(
+    DescShareStmt {
+        share: Identifier {
+            name: "b",
+            quote: None,
+            span: Ident(11..12),
+        },
+    },
+)
+
+
+---------- Input ----------
+DESCRIBE SHARE b;
+---------- Output ---------
+DESC SHARE b
+---------- AST ------------
+DescShare(
+    DescShareStmt {
+        share: Identifier {
+            name: "b",
+            quote: None,
+            span: Ident(15..16),
+        },
+    },
+)
+
+

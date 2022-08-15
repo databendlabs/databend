@@ -61,10 +61,6 @@ impl PlanParser {
         ExpressionParser::parse_expr(expr)
     }
 
-    pub fn parse_exprs(expr: &str) -> Result<Vec<Expression>> {
-        ExpressionParser::parse_exprs(expr)
-    }
-
     pub async fn parse_with_hint(
         query: &str,
         ctx: Arc<QueryContext>,

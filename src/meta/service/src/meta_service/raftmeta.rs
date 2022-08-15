@@ -67,7 +67,9 @@ use crate::meta_service::RaftServiceImpl;
 use crate::metrics::incr_meta_metrics_leader_change;
 use crate::metrics::incr_meta_metrics_read_failed;
 use crate::metrics::set_meta_metrics_current_leader;
+use crate::metrics::set_meta_metrics_current_term;
 use crate::metrics::set_meta_metrics_is_leader;
+use crate::metrics::set_meta_metrics_last_log_index;
 use crate::metrics::set_meta_metrics_node_is_health;
 use crate::metrics::set_meta_metrics_proposals_applied;
 use crate::network::Network;
@@ -446,6 +448,10 @@ impl MetaNode {
                             if let Some(last_applied) = mm.last_applied {
                                 set_meta_metrics_proposals_applied(last_applied.index);
                             }
+                            if let Some(last_log_index) = mm.last_log_index {
+                                set_meta_metrics_last_log_index(last_log_index);
+                            }
+                            set_meta_metrics_current_term(mm.current_term);
                         } else {
                             // shutting down
                             break;

@@ -51,6 +51,7 @@ mod interpreter_select_v2;
 mod interpreter_setting;
 mod interpreter_share_alter_tenants;
 mod interpreter_share_create;
+mod interpreter_share_desc;
 mod interpreter_share_drop;
 mod interpreter_share_grant_object;
 mod interpreter_share_revoke_object;
