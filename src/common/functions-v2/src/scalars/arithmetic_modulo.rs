@@ -62,7 +62,7 @@ where
                 let mut builder: Vec<O> = Vec::with_capacity(arg2.len());
                 let iter = arg1.iter().zip(arg2.iter());
                 for (val1, val2) in iter {
-                    builder.push(apply(&val1, val2)?);
+                    builder.push(apply(val1, val2)?);
                 }
                 Ok(Value::Column(builder.into()))
             }
