@@ -721,7 +721,7 @@ drop table if exists temp;
 
 
 statement ok
-create table temp (a int) engine = Memory;
+create table temp (a int) engine = FUSE;
 
 
 statement ok
@@ -1392,12 +1392,12 @@ statement query TTTTTTT
 SELECT database, table, name, type, default_kind as default_type, default_expression, comment FROM system.columns  WHERE database LIKE 'system'  AND table LIKE 'settings' ORDER BY name;
 
 ----
-system settings default VARCHAR   
-system settings description VARCHAR   
-system settings level VARCHAR   
-system settings name VARCHAR   
-system settings type VARCHAR   
-system settings value VARCHAR   
+system settings default VARCHAR
+system settings description VARCHAR
+system settings level VARCHAR
+system settings name VARCHAR
+system settings type VARCHAR
+system settings value VARCHAR
 
 
 statement ok

@@ -116,20 +116,8 @@ class HttpConnector(object):
 
     def query(self, statement, session):
         url = f"http://{self._host}:{self._port}/v1/query/"
-
-        def parseSQL(sql):
-            # for cases like:
-            # select "false"::boolean = not "true"::boolean;  => select 'false'::boolean = not 'true'::boolean;
-            # SELECT parse_json('"false"')::boolean;          => SELECT parse_json('\"false\"')::boolean;
-            if '"' in sql:
-                if '\'' in sql:
-                    return str.replace(sql, '"', '\\\"')  # "  -> \"
-                return str.replace(sql, "\"", "'")  # "  -> '
-            else:
-                return sql  # do nothing
-
-        log.debug(f"http sql: {parseSQL(statement)}")
-        query_sql = {'sql': parseSQL(statement), "string_fields": True}
+        log.debug(f"http sql: {statement}")
+        query_sql = {'sql': statement, "string_fields": True}
         if session is not None:
             query_sql['session'] = session
         log.debug(f"http headers {self.make_headers()}")
