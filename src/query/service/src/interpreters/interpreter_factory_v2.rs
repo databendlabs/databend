@@ -18,6 +18,7 @@ use common_exception::Result;
 use common_planners::EmptyPlan;
 use common_planners::PlanNode;
 
+use super::interpreter_share_desc::DescShareInterpreter;
 use super::interpreter_user_stage_describe::DescribeUserStageInterpreter;
 use super::interpreter_user_stage_drop::DropUserStageInterpreter;
 use super::*;
@@ -271,6 +272,7 @@ impl InterpreterFactoryV2 {
                 ctx,
                 *p.clone(),
             )?)),
+            Plan::DescShare(p) => Ok(Arc::new(DescShareInterpreter::try_create(ctx, *p.clone())?)),
         }
     }
 }

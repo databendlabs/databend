@@ -5056,8 +5056,8 @@ dependencies = [
 
 [[package]]
 name = "openraft"
-version = "0.7.0-alpha.2"
-source = "git+https://github.com/datafuselabs/openraft?rev=v0.7.0-alpha.3#701e73481b5a28df894aadf36bf243f0506bf036"
+version = "0.7.0-alpha.4"
+source = "git+https://github.com/datafuselabs/openraft?rev=v0.7.0-alpha.4#b0abc4b067d65cbf3449b35a5de3db27ef3872f4"
 dependencies = [
  "anyerror",
  "anyhow",
@@ -7897,7 +7897,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
  "cfg-if",
- "rand 0.8.5",
+ "rand 0.7.3",
  "static_assertions",
 ]
 

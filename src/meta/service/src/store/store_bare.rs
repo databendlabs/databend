@@ -70,7 +70,7 @@ use crate::Opened;
 ///       hard_state
 ///   log
 ///   state_machine
-pub struct MetaRaftStore {
+pub struct RaftStoreBare {
     /// The ID of the Raft node for which this storage instances is configured.
     /// ID is also stored in raft_state. Since `id` never changes, this is a cache for fast access.
     pub id: NodeId,
@@ -107,30 +107,30 @@ pub struct MetaRaftStore {
     pub current_snapshot: RwLock<Option<Snapshot>>,
 }
 
-impl AsRef<MetaRaftStore> for MetaRaftStore {
-    fn as_ref(&self) -> &MetaRaftStore {
+impl AsRef<RaftStoreBare> for RaftStoreBare {
+    fn as_ref(&self) -> &RaftStoreBare {
         self
     }
 }
 
-impl Opened for MetaRaftStore {
+impl Opened for RaftStoreBare {
     /// If the instance is opened(true) from an existent state(e.g. load from fs) or created(false).
     fn is_opened(&self) -> bool {
         self.is_opened
     }
 }
 
-impl MetaRaftStore {
+impl RaftStoreBare {
     /// Open an existent `metasrv` instance or create an new one:
     /// 1. If `open` is `Some`, try to open an existent one.
     /// 2. If `create` is `Some`, try to create one.
     /// Otherwise it panic
-    #[tracing::instrument(level = "debug", skip(config,open,create), fields(config_id=%config.config_id))]
+    #[tracing::instrument(level = "debug", skip_all, fields(config_id=%config.config_id))]
     pub async fn open_create(
         config: &RaftConfig,
         open: Option<()>,
         create: Option<()>,
-    ) -> MetaResult<MetaRaftStore> {
+    ) -> MetaResult<RaftStoreBare> {
         info!("open: {:?}, create: {:?}", open, create);
 
         let db = get_sled_db();
@@ -287,7 +287,7 @@ impl MetaRaftStore {
 }
 
 #[async_trait]
-impl RaftStorage<LogEntry, AppliedState> for MetaRaftStore {
+impl RaftStorage<LogEntry, AppliedState> for RaftStoreBare {
     type SnapshotData = Cursor<Vec<u8>>;
 
     #[tracing::instrument(level = "debug", skip(self, hs), fields(id=self.id))]
@@ -611,7 +611,7 @@ impl RaftStorage<LogEntry, AppliedState> for MetaRaftStore {
     }
 }
 
-impl MetaRaftStore {
+impl RaftStoreBare {
     pub async fn get_node(&self, node_id: &NodeId) -> MetaResult<Option<Node>> {
         let sm = self.state_machine.read().await;
 
