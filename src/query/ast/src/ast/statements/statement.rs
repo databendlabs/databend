@@ -165,6 +165,7 @@ pub enum Statement<'a> {
     RevokeShareObject(RevokeShareObjectStmt<'a>),
     AlterShareTenants(AlterShareTenantsStmt<'a>),
     DescShare(DescShareStmt<'a>),
+    ShowShares(ShowSharesStmt),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -373,6 +374,7 @@ impl<'a> Display for Statement<'a> {
             Statement::RevokeShareObject(stmt) => write!(f, "{stmt}")?,
             Statement::AlterShareTenants(stmt) => write!(f, "{stmt}")?,
             Statement::DescShare(stmt) => write!(f, "{stmt}")?,
+            Statement::ShowShares(stmt) => write!(f, "{stmt}")?,
         }
         Ok(())
     }

@@ -6212,3 +6212,13 @@ DescShare(
 )
 
 
+---------- Input ----------
+SHOW SHARES;
+---------- Output ---------
+SHOW SHARES
+---------- AST ------------
+ShowShares(
+    ShowSharesStmt,
+)
+
+
