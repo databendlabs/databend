@@ -51,7 +51,6 @@ use openraft::LogId;
 use openraft::RaftStorage;
 use openraft::SnapshotMeta;
 use openraft::StorageError;
-use tracing::debug;
 use tracing::error;
 use tracing::info;
 
@@ -185,7 +184,7 @@ impl RaftStoreBare {
 
         let new_sm_id = sm_id + 1;
 
-        debug!("snapshot data len: {}", data.len());
+        info!("snapshot data len: {}", data.len());
 
         let snap: SerializableSnapshot = serde_json::from_slice(data)?;
 
@@ -455,7 +454,7 @@ impl RaftStorage<LogEntry, AppliedState> for RaftStoreBare {
             *current_snapshot = Some(snapshot);
         }
 
-        debug!(snapshot_size = snapshot_size, "log compaction complete");
+        info!(snapshot_size = snapshot_size, "log compaction complete");
 
         Ok(openraft::storage::Snapshot {
             meta: snap_meta,
@@ -477,7 +476,7 @@ impl RaftStorage<LogEntry, AppliedState> for RaftStoreBare {
     ) -> Result<StateMachineChanges, StorageError> {
         // TODO(xp): disallow installing a snapshot with smaller last_applied.
 
-        debug!(
+        info!(
             { snapshot_size = snapshot.get_ref().len() },
             "decoding snapshot for installation"
         );
@@ -488,7 +487,7 @@ impl RaftStorage<LogEntry, AppliedState> for RaftStoreBare {
             data: snapshot.into_inner(),
         };
 
-        debug!("snapshot meta: {:?}", meta);
+        info!("snapshot meta: {:?}", meta);
 
         // Replace state machine with the new one
         let res = self.install_snapshot(&new_snapshot.data).await;
