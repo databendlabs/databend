@@ -16,7 +16,14 @@ class ClickhouseConnector():
                 user="root",
                 password="",
                 database=default_database):
-        self._uri = f"clickhouse+http://{user}:{password}@{host}:{port}/{database}"
+
+        protocol = os.getenv("QUERY_CLICKHOUSE_HANDLER_PROTOCAL")
+        if protocol is None:
+            if port == "443" or port == "8443":
+                protocol = "https"
+            else:
+                protocol = "http"
+        self._uri = f"clickhouse+http://{user}:{password}@{host}:{port}/{database}?protocol={protocol}"
         log.debug(self._uri)
         e = environs.Env()
         self._additonal_headers = dict()

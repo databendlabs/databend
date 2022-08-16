@@ -32,6 +32,7 @@ use common_meta_types::Node;
 use common_meta_types::NodeId;
 use openraft::raft::ClientWriteRequest;
 use tracing::debug;
+use tracing::info;
 
 use crate::meta_service::ForwardRequestBody;
 use crate::meta_service::JoinRequest;
@@ -216,14 +217,14 @@ impl<'a> MetaLeader<'a> {
     /// TODO(xp): elaborate the UnknownError, e.g. LeaderLostError
     #[tracing::instrument(level = "debug", skip(self, entry))]
     pub async fn write(&self, entry: LogEntry) -> Result<AppliedState, MetaError> {
-        debug!(entry = debug(&entry), "write LogEntry");
+        info!("write LogEntry: {:?}", entry);
         let write_rst = self
             .meta_node
             .raft
             .client_write(ClientWriteRequest::new(EntryPayload::Normal(entry)))
             .await;
 
-        debug!("raft.client_write rst: {:?}", write_rst);
+        info!("raft.client_write rst: {:?}", write_rst);
 
         match write_rst {
             Ok(resp) => {

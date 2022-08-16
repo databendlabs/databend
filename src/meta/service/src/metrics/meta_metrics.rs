@@ -101,6 +101,24 @@ pub static PROPOSALS_APPLIED: Lazy<Gauge> = Lazy::new(|| {
     .expect("meta metric cannot be created")
 });
 
+pub static LAST_LOG_INDEX: Lazy<Gauge> = Lazy::new(|| {
+    Gauge::with_opts(
+        Opts::new("last_log_index", "Index of the last log entry.")
+            .namespace(META_NAMESPACE)
+            .subsystem(SERVER_SUBSYSTEM),
+    )
+    .expect("meta metric cannot be created")
+});
+
+pub static CURRENT_TERM: Lazy<Gauge> = Lazy::new(|| {
+    Gauge::with_opts(
+        Opts::new("current_term", "Current term.")
+            .namespace(META_NAMESPACE)
+            .subsystem(SERVER_SUBSYSTEM),
+    )
+    .expect("meta metric cannot be created")
+});
+
 pub static PROPOSALS_PENDING: Lazy<IntGauge> = Lazy::new(|| {
     IntGauge::with_opts(
         Opts::new("proposals_pending", "Total number of pending proposals.")
@@ -422,6 +440,14 @@ fn init_meta_recorder() {
         .expect("collector can be registered");
 
     REGISTRY
+        .register(Box::new(LAST_LOG_INDEX.clone()))
+        .expect("collector can be registered");
+
+    REGISTRY
+        .register(Box::new(CURRENT_TERM.clone()))
+        .expect("collector can be registered");
+
+    REGISTRY
         .register(Box::new(PROPOSALS_PENDING.clone()))
         .expect("collector can be registered");
 
@@ -540,6 +566,14 @@ pub fn incr_meta_metrics_applying_snapshot(cnt: i64) {
 
 pub fn set_meta_metrics_proposals_applied(proposals_applied: u64) {
     PROPOSALS_APPLIED.set(proposals_applied as f64);
+}
+
+pub fn set_meta_metrics_last_log_index(last_log_index: u64) {
+    LAST_LOG_INDEX.set(last_log_index as f64);
+}
+
+pub fn set_meta_metrics_current_term(current_term: u64) {
+    CURRENT_TERM.set(current_term as f64);
 }
 
 pub fn incr_meta_metrics_proposals_pending(cnt: i64) {

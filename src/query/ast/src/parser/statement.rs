@@ -690,7 +690,6 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             stage_name: stage_name.to_string(),
         },
     );
-
     let copy_into = map(
         rule! {
             COPY
@@ -808,6 +807,12 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             })
         },
     );
+    let desc_share = map(
+        rule! {
+            (DESC | DESCRIBE) ~ SHARE ~ #ident
+        },
+        |(_, _, share)| Statement::DescShare(DescShareStmt { share }),
+    );
 
     let statement_body = alt((
         rule!(
@@ -901,6 +906,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             | #grant_share_object: "`GRANT { USAGE | SELECT | REFERENCE_USAGE } ON { DATABASE db | TABLE db.table } TO SHARE <share_name>`"
             | #revoke_share_object: "`REVOKE { USAGE | SELECT | REFERENCE_USAGE } ON { DATABASE db | TABLE db.table } FROM SHARE <share_name>`"
             | #alter_share_tenants: "`ALTER SHARE [IF EXISTS] <share_name> { ADD | REMOVE } TENANTS = tenant [, tenant, ...]`"
+            | #desc_share: "`{DESC | DESCRIBE} SHARE <share_name>`"
         ),
     ));
 
