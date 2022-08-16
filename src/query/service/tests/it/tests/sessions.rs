@@ -66,6 +66,7 @@ impl GlobalServices {
 
         // Cluster discovery.
         ClusterDiscovery::init(config.clone()).await?;
+        ClusterDiscovery::instance().register_to_metastore(&config).await?;
 
         StorageOperator::init(&config.storage).await?;
         AsyncInsertManager::init(&config)?;

@@ -37,7 +37,7 @@ use poem::Request;
 use poem::Route;
 use pretty_assertions::assert_eq;
 
-use crate::tests::{create_query_context, GlobalServices};
+use crate::tests::{create_query_context, create_query_context_with_type, GlobalServices};
 
 async fn get_status(ep: &Route) -> InstanceStatus {
     let response = ep
@@ -69,7 +69,7 @@ async fn run_query(query_ctx: &Arc<QueryContext>) -> Result<Arc<dyn Interpreter>
 
 #[tokio::test]
 async fn test_status() -> Result<()> {
-    let query_ctx = create_query_context().await?;
+    let query_ctx = create_query_context_with_type(SessionType::HTTPQuery).await?;
     let ep = Route::new()
         .at("/v1/status", get(instance_status_handler));
 

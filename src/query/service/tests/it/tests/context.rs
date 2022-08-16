@@ -36,11 +36,16 @@ use crate::tests::GlobalServices;
 
 pub async fn create_query_context() -> Result<Arc<QueryContext>> {
     GlobalServices::setup(crate::tests::ConfigBuilder::create().build()).await?;
-    create_query_context_with_session().await
+    create_query_context_with_session(SessionType::Dummy).await
 }
 
-pub async fn create_query_context_with_session() -> Result<Arc<QueryContext>> {
-    let dummy_session = SessionManager::instance().create_session(SessionType::Dummy).await?;
+pub async fn create_query_context_with_type(typ: SessionType) -> Result<Arc<QueryContext>> {
+    GlobalServices::setup(crate::tests::ConfigBuilder::create().build()).await?;
+    create_query_context_with_session(typ).await
+}
+
+async fn create_query_context_with_session(typ: SessionType) -> Result<Arc<QueryContext>> {
+    let dummy_session = SessionManager::instance().create_session(typ).await?;
 
     // Set user with all privileges
     let mut user_info = UserInfo::new("root", "127.0.0.1", AuthInfo::Password {
