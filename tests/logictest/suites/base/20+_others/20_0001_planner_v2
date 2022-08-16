@@ -1389,7 +1389,7 @@ select user(), currentuser(), current_user();
 
 
 statement query TTTT
-SELECT database, table, name, type, default_kind as default_type, default_expression, comment FROM system.columns  WHERE database LIKE 'system'  AND table LIKE 'settings' ORDER BY name;
+SELECT database, table, name, type FROM system.columns  WHERE database LIKE 'system'  AND table LIKE 'settings' ORDER BY name;
 
 ----
 system settings default VARCHAR
