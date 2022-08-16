@@ -34,6 +34,7 @@ use common_meta_sled_store::openraft::EffectiveMembership;
 use common_meta_sled_store::openraft::ErrorSubject;
 use common_meta_sled_store::openraft::ErrorVerb;
 use common_meta_sled_store::openraft::StateMachineChanges;
+use common_meta_sled_store::openraft::StorageHelper;
 use common_meta_types::error_context::WithContext;
 use common_meta_types::AppliedState;
 use common_meta_types::Endpoint;
@@ -50,7 +51,6 @@ use openraft::LogId;
 use openraft::RaftStorage;
 use openraft::SnapshotMeta;
 use openraft::StorageError;
-use tracing::debug;
 use tracing::error;
 use tracing::info;
 
@@ -69,7 +69,7 @@ use crate::Opened;
 ///       hard_state
 ///   log
 ///   state_machine
-pub struct MetaRaftStore {
+pub struct RaftStoreBare {
     /// The ID of the Raft node for which this storage instances is configured.
     /// ID is also stored in raft_state. Since `id` never changes, this is a cache for fast access.
     pub id: NodeId,
@@ -106,24 +106,30 @@ pub struct MetaRaftStore {
     pub current_snapshot: RwLock<Option<Snapshot>>,
 }
 
-impl Opened for MetaRaftStore {
+impl AsRef<RaftStoreBare> for RaftStoreBare {
+    fn as_ref(&self) -> &RaftStoreBare {
+        self
+    }
+}
+
+impl Opened for RaftStoreBare {
     /// If the instance is opened(true) from an existent state(e.g. load from fs) or created(false).
     fn is_opened(&self) -> bool {
         self.is_opened
     }
 }
 
-impl MetaRaftStore {
+impl RaftStoreBare {
     /// Open an existent `metasrv` instance or create an new one:
     /// 1. If `open` is `Some`, try to open an existent one.
     /// 2. If `create` is `Some`, try to create one.
     /// Otherwise it panic
-    #[tracing::instrument(level = "debug", skip(config,open,create), fields(config_id=%config.config_id))]
+    #[tracing::instrument(level = "debug", skip_all, fields(config_id=%config.config_id))]
     pub async fn open_create(
         config: &RaftConfig,
         open: Option<()>,
         create: Option<()>,
-    ) -> MetaResult<MetaRaftStore> {
+    ) -> MetaResult<RaftStoreBare> {
         info!("open: {:?}, create: {:?}", open, create);
 
         let db = get_sled_db();
@@ -178,7 +184,7 @@ impl MetaRaftStore {
 
         let new_sm_id = sm_id + 1;
 
-        debug!("snapshot data len: {}", data.len());
+        info!("snapshot data len: {}", data.len());
 
         let snap: SerializableSnapshot = serde_json::from_slice(data)?;
 
@@ -280,7 +286,7 @@ impl MetaRaftStore {
 }
 
 #[async_trait]
-impl RaftStorage<LogEntry, AppliedState> for MetaRaftStore {
+impl RaftStorage<LogEntry, AppliedState> for RaftStoreBare {
     type SnapshotData = Cursor<Vec<u8>>;
 
     #[tracing::instrument(level = "debug", skip(self, hs), fields(id=self.id))]
@@ -448,7 +454,7 @@ impl RaftStorage<LogEntry, AppliedState> for MetaRaftStore {
             *current_snapshot = Some(snapshot);
         }
 
-        debug!(snapshot_size = snapshot_size, "log compaction complete");
+        info!(snapshot_size = snapshot_size, "log compaction complete");
 
         Ok(openraft::storage::Snapshot {
             meta: snap_meta,
@@ -470,7 +476,7 @@ impl RaftStorage<LogEntry, AppliedState> for MetaRaftStore {
     ) -> Result<StateMachineChanges, StorageError> {
         // TODO(xp): disallow installing a snapshot with smaller last_applied.
 
-        debug!(
+        info!(
             { snapshot_size = snapshot.get_ref().len() },
             "decoding snapshot for installation"
         );
@@ -481,7 +487,7 @@ impl RaftStorage<LogEntry, AppliedState> for MetaRaftStore {
             data: snapshot.into_inner(),
         };
 
-        debug!("snapshot meta: {:?}", meta);
+        info!("snapshot meta: {:?}", meta);
 
         // Replace state machine with the new one
         let res = self.install_snapshot(&new_snapshot.data).await;
@@ -604,7 +610,7 @@ impl RaftStorage<LogEntry, AppliedState> for MetaRaftStore {
     }
 }
 
-impl MetaRaftStore {
+impl RaftStoreBare {
     pub async fn get_node(&self, node_id: &NodeId) -> MetaResult<Option<Node>> {
         let sm = self.state_machine.read().await;
 
@@ -613,7 +619,10 @@ impl MetaRaftStore {
 
     pub async fn get_voters(&self) -> MetaResult<Vec<Node>> {
         let sm = self.state_machine.read().await;
-        let ms = self.get_membership().await.expect("get membership config");
+        let ms = StorageHelper::new(self)
+            .get_membership()
+            .await
+            .expect("get membership config");
 
         match ms {
             Some(membership) => {
@@ -631,7 +640,10 @@ impl MetaRaftStore {
 
     pub async fn get_non_voters(&self) -> MetaResult<Vec<Node>> {
         let sm = self.state_machine.read().await;
-        let ms = self.get_membership().await.expect("get membership config");
+        let ms = StorageHelper::new(self)
+            .get_membership()
+            .await
+            .expect("get membership config");
 
         match ms {
             Some(membership) => {
@@ -661,7 +673,10 @@ impl MetaRaftStore {
     pub async fn list_non_voters(&self) -> HashSet<NodeId> {
         // TODO(xp): consistency
         let mut rst = HashSet::new();
-        let membership = self.get_membership().await.expect("fail to get membership");
+        let membership = StorageHelper::new(self)
+            .get_membership()
+            .await
+            .expect("get membership config");
 
         let membership = match membership {
             None => {

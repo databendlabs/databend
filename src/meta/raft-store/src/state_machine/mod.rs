@@ -25,7 +25,6 @@ pub use state_machine_meta::StateMachineMetaValue;
 
 pub mod client_last_resp;
 pub mod log_meta;
-pub mod placement;
 pub mod sm;
 mod sm_kv_api_impl;
 pub mod snapshot;

@@ -27,6 +27,8 @@ use common_grpc::DNSResolver;
 use common_meta_raft_store::config::RaftConfig;
 use common_meta_raft_store::state_machine::StateMachine;
 use common_meta_sled_store::openraft;
+use common_meta_sled_store::openraft::DefensiveCheck;
+use common_meta_sled_store::openraft::StoreExt;
 use common_meta_types::protobuf::raft_service_client::RaftServiceClient;
 use common_meta_types::protobuf::raft_service_server::RaftServiceServer;
 use common_meta_types::protobuf::WatchRequest;
@@ -67,11 +69,14 @@ use crate::meta_service::RaftServiceImpl;
 use crate::metrics::incr_meta_metrics_leader_change;
 use crate::metrics::incr_meta_metrics_read_failed;
 use crate::metrics::set_meta_metrics_current_leader;
+use crate::metrics::set_meta_metrics_current_term;
 use crate::metrics::set_meta_metrics_is_leader;
+use crate::metrics::set_meta_metrics_last_log_index;
 use crate::metrics::set_meta_metrics_node_is_health;
 use crate::metrics::set_meta_metrics_proposals_applied;
 use crate::network::Network;
-use crate::store::MetaRaftStore;
+use crate::store::RaftStore;
+use crate::store::RaftStoreBare;
 use crate::watcher::WatcherManager;
 use crate::watcher::WatcherStreamSender;
 use crate::Opened;
@@ -102,11 +107,11 @@ pub struct MetaNodeStatus {
 }
 
 // MetaRaft is a impl of the generic Raft handling meta data R/W.
-pub type MetaRaft = Raft<LogEntry, AppliedState, Network, MetaRaftStore>;
+pub type MetaRaft = Raft<LogEntry, AppliedState, Network, RaftStore>;
 
 // MetaNode is the container of meta data related components and threads, such as storage, the raft node and a raft-state monitor.
 pub struct MetaNode {
-    pub sto: Arc<MetaRaftStore>,
+    pub sto: Arc<RaftStore>,
     pub watcher: WatcherManager,
     pub raft: MetaRaft,
     pub running_tx: watch::Sender<()>,
@@ -124,7 +129,7 @@ impl Opened for MetaNode {
 pub struct MetaNodeBuilder {
     node_id: Option<NodeId>,
     raft_config: Option<Config>,
-    sto: Option<Arc<MetaRaftStore>>,
+    sto: Option<Arc<RaftStore>>,
     monitor_metrics: bool,
     endpoint: Option<Endpoint>,
 }
@@ -193,7 +198,7 @@ impl MetaNodeBuilder {
     }
 
     #[must_use]
-    pub fn sto(mut self, sto: Arc<MetaRaftStore>) -> Self {
+    pub fn sto(mut self, sto: Arc<RaftStore>) -> Self {
         self.sto = Some(sto);
         self
     }
@@ -325,9 +330,11 @@ impl MetaNode {
             config.no_sync = true;
         }
 
-        let sto = MetaRaftStore::open_create(&config, open, create).await?;
+        let sto = RaftStoreBare::open_create(&config, open, create).await?;
+        let sto = Arc::new(StoreExt::new(sto));
+        sto.set_defensive(true);
+
         let is_open = sto.is_opened();
-        let sto = Arc::new(sto);
 
         let mut builder = MetaNode::builder(&config).sto(sto.clone());
         // config.id only used for the first time
@@ -446,6 +453,10 @@ impl MetaNode {
                             if let Some(last_applied) = mm.last_applied {
                                 set_meta_metrics_proposals_applied(last_applied.index);
                             }
+                            if let Some(last_log_index) = mm.last_log_index {
+                                set_meta_metrics_last_log_index(last_log_index);
+                            }
+                            set_meta_metrics_current_term(mm.current_term);
                         } else {
                             // shutting down
                             break;

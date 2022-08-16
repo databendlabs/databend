@@ -127,3 +127,16 @@ impl Display for AlterShareTenantsStmt<'_> {
         Ok(())
     }
 }
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DescShareStmt<'a> {
+    pub share: Identifier<'a>,
+}
+
+impl Display for DescShareStmt<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "DESC SHARE {}", self.share)?;
+
+        Ok(())
+    }
+}

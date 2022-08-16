@@ -23,7 +23,7 @@ educe = "0.4"
 enum-as-inner = "0.4"
 itertools = "0.10"
 match-template = "0.0.1"
-num-traits = "0.2"
+num-traits = "0.2.15"
 ordered-float = { version = "3.0", features = ["serde"] }
 serde = "1.0"
 

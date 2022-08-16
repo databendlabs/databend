@@ -13,7 +13,6 @@ test = false
 
 [dependencies]
 common-arrow = { path = "../../arrow" }
-common-ast = { path = "../../../query/ast" }
 common-base = { path = "../../base" }
 common-cache = { path = "../../cache" }
 common-catalog = { path = "../../catalog" }
@@ -50,7 +49,7 @@ itertools = "0.10.3"
 num_cpus = "1.13.1"
 octocrab = "0.16.0"
 once_cell = "1.12.0"
-opendal = { version = "0.11.4", features = ["retry"] }
+opendal = { version = "0.12.0", features = ["retry"] }
 parking_lot = "0.12.1"
 reqwest = "0.11.11"
 semver = "1.0.10"
