@@ -32,7 +32,7 @@ use crate::values::Scalar;
 use crate::NumberDomain;
 use crate::ScalarRef;
 
-pub trait Number: Debug + Clone + PartialEq + 'static {
+pub trait Number: Copy + Debug + Clone + PartialEq + 'static {
     type Storage: NumCast + Copy + From<Self::OrderedStorage> + NativeType;
     type OrderedStorage: NumCast + Copy + From<Self::Storage> + Ord;
 

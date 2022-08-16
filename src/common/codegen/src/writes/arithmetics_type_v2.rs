@@ -60,6 +60,7 @@ pub trait ResultTypeOfBinary: Sized {{
     type Minus: Number;
     type IntDiv: Number;
     type Modulo: Number;
+    type LeastSuper: Number;
 }}
 
 pub trait ResultTypeOfUnary: Sized {{
@@ -101,6 +102,8 @@ pub trait ResultTypeOfUnary: Sized {{
             let minus = arithmetic_coercion(left, right, OP::Minus);
             let intdiv = arithmetic_coercion(left, right, OP::IntDiv);
             let modulo = arithmetic_coercion(left, right, OP::Modulo);
+            let least_super = arithmetic_coercion(left, right, OP::Super);
+
             writeln!(
                 file,
                 "
@@ -109,6 +112,7 @@ impl ResultTypeOfBinary for ({}, {}) {{
     type Minus = {};
     type IntDiv = {};
     type Modulo = {};
+    type LeastSuper = {};
 }}",
                 to_primitive_str(a.clone()),
                 to_primitive_str(b.clone()),
@@ -116,6 +120,7 @@ impl ResultTypeOfBinary for ({}, {}) {{
                 to_primitive_str(minus),
                 to_primitive_str(intdiv),
                 to_primitive_str(modulo),
+                to_primitive_str(least_super),
             )
             .unwrap();
         }
