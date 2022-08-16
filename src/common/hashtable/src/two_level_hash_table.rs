@@ -136,6 +136,23 @@ impl<Key: HashTableKeyable, Entity: HashTableEntity<Key>, Grower: HashTableGrowe
         TwoLevelHashTable { hash_tables }
     }
 
+    pub fn with_capacity(capacity: usize) -> TwoLevelHashTable<Key, Entity, Grower> {
+        let per_capcity = (capacity / NUM_BUCKETS).max(1 << 8);
+        let mut hash_tables: Vec<HashTable<Key, Entity, Grower>> = Vec::with_capacity(NUM_BUCKETS);
+        for _ in 0..NUM_BUCKETS {
+            hash_tables.push(HashTable::<Key, Entity, Grower>::with_capacity(per_capcity));
+        }
+        TwoLevelHashTable { hash_tables }
+    }
+
+    pub fn inner_hash_tables(&self) -> &[HashTable<Key, Entity, Grower>] {
+        self.hash_tables.as_slice()
+    }
+
+    pub fn inner_hash_tables_mut(&mut self) -> &mut [HashTable<Key, Entity, Grower>] {
+        self.hash_tables.as_mut_slice()
+    }
+
     #[inline(always)]
     pub fn len(&self) -> usize {
         self.hash_tables

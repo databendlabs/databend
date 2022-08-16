@@ -1206,6 +1206,7 @@ dependencies = [
  "common-datablocks",
  "common-datavalues",
  "common-exception",
+ "common-hashtable",
  "common-io",
  "crc32fast",
  "dyn-clone",
@@ -1288,6 +1289,7 @@ dependencies = [
 name = "common-hashtable"
 version = "0.1.0"
 dependencies = [
+ "ordered-float 3.0.0",
  "primitive-types",
  "rand 0.8.5",
 ]
