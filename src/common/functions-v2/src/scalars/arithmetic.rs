@@ -22,6 +22,8 @@ use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
 use common_expression::NumberDomain;
 
+use super::arithmetic_modulo::vectorize_modulo;
+
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_aliases("plus", &["add"]);
     registry.register_aliases("minus", &["substract"]);
@@ -154,6 +156,43 @@ pub fn register(registry: &mut FunctionRegistry) {
                                     Ok(())
                                 }),
                             );
+                        }
+
+                        {
+                            type M = <(L, R) as ResultTypeOfBinary>::LeastSuper;
+                            type T = <(L, R) as ResultTypeOfBinary>::Modulo;
+
+                            let rtype = M::data_type();
+                            // slow path for modulo
+                            if !matches!(
+                                rtype,
+                                DataType::UInt8
+                                    | DataType::UInt16
+                                    | DataType::UInt32
+                                    | DataType::UInt64
+                            ) {
+                                registry.register_passthrough_nullable_2_arg::<NumberType<L>, NumberType<R>,  NumberType<T>,_, _>(
+                                "modulo",
+                                FunctionProperty::default(),
+                                |_, _| None,
+                                vectorize_with_writer_2_arg::<NumberType<L>, NumberType<R>,  NumberType<T>>(
+                                        |a, b, output| {
+                                        let b = b as f64;
+                                        if std::intrinsics::unlikely(b == 0.0) {
+                                                return Err("Modulo by zero".to_string());
+                                        }
+                                        output.push((a as M % b as M) as T);
+                                        Ok(())
+                                    }),
+                                );
+                            } else {
+                                registry.register_passthrough_nullable_2_arg::<NumberType<L>, NumberType<R>, NumberType<T>, _, _>(
+                                "modulo",
+                                FunctionProperty::default(),
+                                |_, _| None,
+                                vectorize_modulo::<L, R, M, T>()
+                                );
+                            }
                         }
                     }
                     _ => unreachable!(),

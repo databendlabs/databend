@@ -50,6 +50,7 @@ fn test_arithmetic() {
     test_mul(file, columns);
     test_div(file, columns);
     test_intdiv(file, columns);
+    test_modulo(file, columns);
 }
 
 fn test_add(file: &mut impl Write, columns: &[(&str, DataType, Column)]) {
@@ -90,4 +91,12 @@ fn test_intdiv(file: &mut impl Write, columns: &[(&str, DataType, Column)]) {
     run_ast(file, "a2 div c", columns);
     run_ast(file, "c div b", columns);
     run_ast(file, "c div d", columns);
+}
+
+fn test_modulo(file: &mut impl Write, columns: &[(&str, DataType, Column)]) {
+    run_ast(file, "a  % b", columns);
+    run_ast(file, "a2 % 10", columns);
+    run_ast(file, "a2 % c", columns);
+    run_ast(file, "c % b", columns);
+    run_ast(file, "c % d", columns);
 }
