@@ -337,6 +337,20 @@ impl WrongShareObject {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[error("WrongShare: {share_name} has the wrong format")]
+pub struct WrongShare {
+    share_name: String,
+}
+
+impl WrongShare {
+    pub fn new(share_name: impl Into<String>) -> Self {
+        Self {
+            share_name: share_name.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
 #[error("UnknownShare: {share_name} while {context}")]
 pub struct UnknownShare {
     share_name: String,
@@ -455,6 +469,9 @@ pub enum AppError {
 
     #[error(transparent)]
     WrongShareObject(#[from] WrongShareObject),
+
+    #[error(transparent)]
+    WrongShare(#[from] WrongShare),
 }
 
 impl AppErrorMessage for UnknownDatabase {
@@ -562,6 +579,12 @@ impl AppErrorMessage for WrongShareObject {
     }
 }
 
+impl AppErrorMessage for WrongShare {
+    fn message(&self) -> String {
+        format!("share {} has the wrong format", self.share_name)
+    }
+}
+
 impl AppErrorMessage for TxnRetryMaxTimes {
     fn message(&self) -> String {
         format!(
@@ -636,6 +659,7 @@ impl From<AppError> for ErrorCode {
             }
             AppError::UnknownShareAccounts(err) => ErrorCode::UnknownShareAccounts(err.message()),
             AppError::WrongShareObject(err) => ErrorCode::WrongShareObject(err.message()),
+            AppError::WrongShare(err) => ErrorCode::WrongShare(err.message()),
             AppError::TxnRetryMaxTimes(err) => ErrorCode::TxnRetryMaxTimes(err.message()),
         }
     }

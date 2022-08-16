@@ -31,6 +31,7 @@ pub use share::RevokeShareObjectReply;
 pub use share::RevokeShareObjectReq;
 pub use share::ShareAccountMeta;
 pub use share::ShareAccountNameIdent;
+pub use share::ShareAccountReply;
 pub use share::ShareGrantEntry;
 pub use share::ShareGrantObject;
 pub use share::ShareGrantObjectName;
