@@ -20,7 +20,7 @@ use futures::TryStreamExt;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_show_users_interpreter() -> Result<()> {
-    let (_guard, ctx) = crate::tests::create_query_context().await?;
+    let ctx = crate::tests::create_query_context().await?;
     let mut planner = Planner::new(ctx.clone());
 
     {

@@ -62,8 +62,6 @@ pub struct SettingValue {
 #[derive(Clone)]
 pub struct Settings {
     settings: Arc<RwLock<HashMap<String, SettingValue>>>,
-    #[allow(dead_code)]
-    user_api: Arc<UserApiProvider>,
     // TODO verify this, will tenant change during the lifetime of a given session?
     //#[allow(dead_code)]
     // session_ctx: Arc<T>,
@@ -75,7 +73,39 @@ impl Settings {
         conf: &Config,
         user_api: Arc<UserApiProvider>,
         tenant: String,
-    ) -> Result<Settings> {
+    ) -> Result<Arc<Settings>> {
+        let settings = Self::default_settings(&tenant);
+
+        let ret = {
+            // Overwrite settings from metasrv
+            let global_settings = user_api
+                .get_setting_api_client(&tenant)?
+                .get_settings()
+                .await?;
+
+            for global_setting in global_settings {
+                let name = global_setting.name;
+                let val = String::from_utf8(global_setting.value.as_string()?).unwrap();
+                settings.set_settings(name, val, true)?;
+            }
+            settings
+        };
+
+        // Overwrite settings from conf.
+        {
+            // Set max threads.
+            let cpus = if conf.query.num_cpus == 0 {
+                num_cpus::get() as u64
+            } else {
+                conf.query.num_cpus
+            };
+            ret.set_max_threads(cpus)?;
+        }
+
+        Ok(ret)
+    }
+
+    pub fn default_settings(tenant: &str) -> Arc<Settings> {
         let values = vec![
             // max_block_size
             SettingValue {
@@ -234,38 +264,7 @@ impl Settings {
             }
         }
 
-        let ret = {
-            // Overwrite settings from metasrv
-            let global_settings = user_api
-                .get_setting_api_client(&tenant)?
-                .get_settings()
-                .await?;
-
-            let settings = Settings {
-                settings,
-                user_api,
-                tenant,
-            };
-            for global_setting in global_settings {
-                let name = global_setting.name;
-                let val = String::from_utf8(global_setting.value.as_string()?).unwrap();
-                settings.set_settings(name, val, true)?;
-            }
-            settings
-        };
-
-        // Overwrite settings from conf.
-        {
-            // Set max threads.
-            let cpus = if conf.query.num_cpus == 0 {
-                num_cpus::get() as u64
-            } else {
-                conf.query.num_cpus
-            };
-            ret.set_max_threads(cpus)?;
-        }
-
-        Ok(ret)
+        Arc::new(Settings { tenant: tenant.to_string(), settings })
     }
 
     // Get max_block_size.
@@ -438,7 +437,7 @@ impl Settings {
         if is_global {
             let tenant = self.tenant.as_str();
             let _ = futures::executor::block_on(
-                self.user_api
+                UserApiProvider::instance()
                     .get_setting_api_client(tenant)?
                     .set_setting(setting.user_setting.clone()),
             )?;
@@ -457,7 +456,7 @@ impl Settings {
 
         if is_global {
             let _ = futures::executor::block_on(
-                self.user_api
+                UserApiProvider::instance()
                     .get_setting_api_client(&self.tenant)?
                     .set_setting(setting.user_setting.clone()),
             )?;
@@ -507,7 +506,6 @@ impl Settings {
         }
         Settings {
             settings: new_settings,
-            user_api: self.user_api.clone(),
             tenant: self.tenant.clone(),
         }
     }

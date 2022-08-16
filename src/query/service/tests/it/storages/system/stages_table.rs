@@ -23,7 +23,7 @@ use futures::TryStreamExt;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_stages_table() -> Result<()> {
-    let (_guard, ctx) = crate::tests::create_query_context().await?;
+    let ctx = crate::tests::create_query_context().await?;
     let tenant = ctx.get_tenant();
     let user_mgr = ctx.get_user_manager();
 

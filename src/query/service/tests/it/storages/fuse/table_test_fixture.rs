@@ -318,7 +318,7 @@ pub async fn test_drive(test_db: Option<&str>, test_tbl: Option<&str>) -> Result
 }
 
 pub async fn test_drive_with_args(tbl_args: TableArgs) -> Result<()> {
-    let (_guard, ctx) = crate::tests::create_query_context().await?;
+    let ctx = crate::tests::create_query_context().await?;
     let mut stream = test_drive_with_args_and_ctx(tbl_args, ctx).await?;
 
     while let Some(res) = stream.next().await {

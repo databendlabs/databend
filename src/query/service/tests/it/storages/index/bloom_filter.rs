@@ -51,7 +51,7 @@ async fn test_bloom_add_find_string() -> Result<()> {
 
     let mut bloom = BloomFilter::with_rate(4, 0.000001, create_seed());
 
-    let (_guard, ctx) = create_query_context().await?;
+    let ctx = create_query_context().await?;
     bloom.add(col, ctx.clone())?;
     assert!(bloom.find(
         DataValue::String(b"Alice".to_vec()),
@@ -115,7 +115,7 @@ async fn test_bloom_interval() -> Result<()> {
 
     let mut bloom = BloomFilter::with_rate(6, 0.000001, create_seed());
 
-    let (_guard, ctx) = create_query_context().await?;
+    let ctx = create_query_context().await?;
     // this case false positive not exist
     bloom.add(col, ctx.clone())?;
     assert!(bloom.find(
@@ -149,7 +149,7 @@ async fn test_bloom_u8() -> Result<()> {
     let col = block.column(0);
 
     let mut bloom = BloomFilter::with_rate(10, 0.000001, create_seed());
-    let (_guard, ctx) = create_query_context().await?;
+    let ctx = create_query_context().await?;
     bloom.add(col, ctx.clone())?;
 
     let buf = bloom.to_vec()?;
@@ -183,7 +183,7 @@ async fn test_bloom_f64_serialization() -> Result<()> {
     let col = block.column(0);
 
     let mut bloom = BloomFilter::with_rate(10, 0.000001, create_seed());
-    let (_guard, ctx) = create_query_context().await?;
+    let ctx = create_query_context().await?;
     bloom.add(col, ctx.clone())?;
 
     let buf = bloom.to_vec()?;
@@ -224,7 +224,7 @@ async fn create_bloom(
     let schema = DataSchemaRefExt::create(vec![DataField::new("num", data_type)]);
     let block = DataBlock::create(schema, vec![column]);
     let col = block.column(0);
-    let (_guard, ctx) = create_query_context().await?;
+    let ctx = create_query_context().await?;
     bloom.add(col, ctx)?;
     Ok(bloom)
 }
@@ -291,7 +291,7 @@ fn create_blocks() -> Vec<DataBlock> {
 async fn create_bloom_indexer() -> Result<BloomFilterIndexer> {
     let blocks = create_blocks();
     let block_refs = blocks.iter().collect::<Vec<_>>();
-    let (_guard, ctx) = create_query_context().await?;
+    let ctx = create_query_context().await?;
     BloomFilterIndexer::try_create_with_seed(&block_refs, create_seed(), ctx)
 }
 

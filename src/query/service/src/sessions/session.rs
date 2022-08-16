@@ -27,6 +27,8 @@ use common_users::RoleCacheManager;
 use common_users::UserApiProvider;
 use futures::channel::*;
 use parking_lot::RwLock;
+use common_catalog::catalog::CatalogManager;
+use crate::catalogs::CatalogManagerHelper;
 
 use crate::clusters::ClusterDiscovery;
 use crate::servers::http::v1::HttpQueryManager;
@@ -44,30 +46,25 @@ pub struct Session {
     pub(in crate::sessions) typ: RwLock<SessionType>,
     pub(in crate::sessions) ref_count: Arc<AtomicUsize>,
     pub(in crate::sessions) session_ctx: Arc<SessionContext>,
-    session_settings: Settings,
     status: Arc<RwLock<SessionStatus>>,
     pub(in crate::sessions) mysql_connection_id: Option<u32>,
 }
 
 impl Session {
-    pub async fn try_create(
-        conf: Config,
+    pub fn try_create(
         id: String,
         typ: SessionType,
+        session_ctx: Arc<SessionContext>,
         mysql_connection_id: Option<u32>,
     ) -> Result<Arc<Session>> {
-        let session_ctx = Arc::new(SessionContext::try_create(conf.clone())?);
-        let user_api = UserApiProvider::instance();
-        let session_settings = Settings::try_create(&conf, user_api, session_ctx.get_current_tenant()).await?;
         let ref_count = Arc::new(AtomicUsize::new(0));
         let status = Arc::new(Default::default());
         Ok(Arc::new(Session {
             id,
             typ: RwLock::new(typ),
+            status,
             ref_count,
             session_ctx,
-            session_settings,
-            status,
             mysql_connection_id,
         }))
     }
@@ -139,17 +136,19 @@ impl Session {
 
     pub async fn get_shared_query_context(self: &Arc<Self>) -> Result<Arc<QueryContextShared>> {
         let discovery = ClusterDiscovery::instance();
+        let catalog_manager = CatalogManager::instance();
 
+        let config = self.get_config();
         let session = self.clone();
         let cluster = discovery.discover().await?;
-        let shared = QueryContextShared::try_create(session, cluster).await?;
+        let shared = QueryContextShared::try_create(config, session, cluster, catalog_manager).await?;
         self.session_ctx
             .set_query_context_shared(Some(shared.clone()));
         Ok(shared)
     }
 
     pub fn get_format_settings(&self) -> Result<FormatSettings> {
-        let settings = &self.session_settings;
+        let settings = &self.session_ctx.get_settings();
         let mut format = FormatSettings {
             record_delimiter: settings.get_record_delimiter()?,
             field_delimiter: settings.get_field_delimiter()?,
@@ -268,16 +267,15 @@ impl Session {
     }
 
     pub fn get_settings(self: &Arc<Self>) -> Arc<Settings> {
-        Arc::new(self.session_settings.clone())
+        self.session_ctx.get_settings()
     }
 
     pub fn get_changed_settings(self: &Arc<Self>) -> Arc<Settings> {
-        Arc::new(self.session_settings.get_changed_settings())
+        self.session_ctx.get_changed_settings()
     }
 
     pub fn apply_changed_settings(self: &Arc<Self>, changed_settings: Arc<Settings>) -> Result<()> {
-        self.session_settings
-            .apply_changed_settings(changed_settings)
+        self.session_ctx.apply_changed_settings(changed_settings)
     }
 
     pub fn get_memory_usage(self: &Arc<Self>) -> usize {

@@ -33,6 +33,8 @@ pub trait CatalogManagerHelper {
 
     fn instance() -> Arc<CatalogManager>;
 
+    async fn try_create(conf: &Config) -> Result<Arc<CatalogManager>>;
+
     fn destroy();
 
     async fn register_build_in_catalogs(&mut self, conf: &Config) -> Result<()>;
@@ -46,6 +48,22 @@ static CATALOG_MANAGER: OnceCell<Arc<CatalogManager>> = OnceCell::new();
 #[async_trait::async_trait]
 impl CatalogManagerHelper for CatalogManager {
     async fn init(conf: &Config) -> Result<()> {
+        let catalog_manager = Self::try_create(conf).await?;
+
+        match CATALOG_MANAGER.set(catalog_manager) {
+            Ok(_) => Ok(()),
+            Err(_) => Err(ErrorCode::LogicalError("Cannot init SessionManager twice")),
+        }
+    }
+
+    fn instance() -> Arc<CatalogManager> {
+        match CATALOG_MANAGER.get() {
+            None => panic!("CatalogManager is not init"),
+            Some(catalog_manager) => catalog_manager.clone(),
+        }
+    }
+
+    async fn try_create(conf: &Config) -> Result<Arc<CatalogManager>> {
         let mut catalog_manager = CatalogManager {
             catalogs: HashMap::new(),
         };
@@ -57,17 +75,7 @@ impl CatalogManagerHelper for CatalogManager {
             catalog_manager.register_external_catalogs(conf)?;
         }
 
-        match CATALOG_MANAGER.set(Arc::new(catalog_manager)) {
-            Ok(_) => Ok(()),
-            Err(_) => Err(ErrorCode::LogicalError("Cannot init SessionManager twice")),
-        }
-    }
-
-    fn instance() -> Arc<CatalogManager> {
-        match CATALOG_MANAGER.get() {
-            None => panic!("CatalogManager is not init"),
-            Some(catalog_manager) => catalog_manager.clone(),
-        }
+        Ok(Arc::new(catalog_manager))
     }
 
     fn destroy() {

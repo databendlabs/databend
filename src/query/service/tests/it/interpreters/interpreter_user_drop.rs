@@ -24,7 +24,7 @@ use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_drop_user_interpreter() -> Result<()> {
-    let (_guard, ctx) = crate::tests::create_query_context().await?;
+    let ctx = crate::tests::create_query_context().await?;
     let mut planner = Planner::new(ctx.clone());
 
     let tenant = ctx.get_tenant();

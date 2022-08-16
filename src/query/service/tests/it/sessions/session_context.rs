@@ -17,6 +17,7 @@ use std::net::SocketAddr;
 use common_base::base::tokio;
 use common_exception::Result;
 use common_meta_types::UserInfo;
+use common_settings::Settings;
 use databend_query::clusters::Cluster;
 use databend_query::clusters::ClusterHelper;
 use databend_query::sessions::QueryContextShared;
@@ -29,7 +30,9 @@ use crate::tests::{create_query_context, TestGlobalServices};
 #[tokio::test]
 async fn test_session_context() -> Result<()> {
     let conf = Config::load()?;
-    let session_ctx = SessionContext::try_create(conf)?;
+    let tenant = &conf.query.tenant_id;
+    let settings = Settings::default_settings(tenant);
+    let session_ctx = SessionContext::try_create(conf, settings)?;
 
     // Abort status.
     {

@@ -249,7 +249,7 @@ async fn test_user_manager() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_user_manager_with_root_user() -> Result<()> {
     let conf = RpcClientConf::default();
-    UserApiProvider::init(conf).await?;
+    let user_mgr = UserApiProvider::try_create(conf).await?;
 
     let tenant = "test";
     let username1 = "default";
@@ -258,8 +258,6 @@ async fn test_user_manager_with_root_user() -> Result<()> {
     let hostname1 = "127.0.0.1";
     let hostname2 = "localhost";
     let hostname3 = "otherhost";
-
-    let user_mgr = UserApiProvider::instance();
 
     // Get user via username `default` and hostname `127.0.0.1`.
     {
@@ -385,6 +383,5 @@ async fn test_user_manager_with_root_user() -> Result<()> {
         );
     }
 
-    UserApiProvider::destroy();
     Ok(())
 }

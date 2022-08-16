@@ -34,24 +34,16 @@ use databend_query::servers::http::v1::HttpQueryManager;
 
 pub struct TestGlobalServices;
 
-static INITIALIZED: AtomicUsize = AtomicUsize::new(0);
+static INITIALIZED: OnceCell<()> = OnceCell::new();
 
 impl TestGlobalServices {
     pub async fn setup(config: Config) -> Result<TestGlobalServices> {
-        if INITIALIZED.fetch_add(1, Ordering::Relaxed) != 0 {
+        if INITIALIZED.set(()).is_err() {
             return Ok(TestGlobalServices);
         }
 
         GlobalServices::init(config.clone()).await?;
         ClusterDiscovery::instance().register_to_metastore(&config).await?;
         Ok(TestGlobalServices)
-    }
-}
-
-impl Drop for TestGlobalServices {
-    fn drop(&mut self) {
-        if INITIALIZED.fetch_sub(1, Ordering::Relaxed) == 1 {
-            GlobalServices::destroy();
-        }
     }
 }

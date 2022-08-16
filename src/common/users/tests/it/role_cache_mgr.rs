@@ -30,25 +30,21 @@ pub const CATALOG_DEFAULT: &str = "default";
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_role_cache_mgr() -> Result<()> {
     let conf = RpcClientConf::default();
-    UserApiProvider::init(conf).await?;
-    RoleCacheManager::init()?;
+    let user_manager = UserApiProvider::try_create(conf).await?;
+    let role_cache_manager = RoleCacheManager::try_create(user_manager.clone())?;
 
     let mut role1 = RoleInfo::new("role1");
     role1.grants.grant_privileges(
         &GrantObject::Database(CATALOG_DEFAULT.to_owned(), "db1".to_string()),
         UserPrivilegeSet::available_privileges_on_database(),
     );
-    UserApiProvider::instance()
-        .add_role("tenant1", role1, false)
-        .await?;
+    user_manager.add_role("tenant1", role1, false).await?;
 
-    let roles = RoleCacheManager::instance()
+    let roles = role_cache_manager
         .find_related_roles("tenant1", &["role1".to_string()])
         .await?;
     assert_eq!(roles.len(), 1);
 
-    RoleCacheManager::destroy();
-    UserApiProvider::destroy();
     Ok(())
 }
 

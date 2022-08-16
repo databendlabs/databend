@@ -43,16 +43,20 @@ static USER_API_PROVIDER: OnceCell<Arc<UserApiProvider>> = OnceCell::new();
 
 impl UserApiProvider {
     pub async fn init(conf: RpcClientConf) -> Result<()> {
-        let client = MetaStoreProvider::new(conf).try_get_meta_store().await?;
-        let user_api_provider = Arc::new(UserApiProvider {
-            meta: client.clone(),
-            client: client.arc(),
-        });
+        let user_api_provider = Self::try_create(conf).await?;
 
         match USER_API_PROVIDER.set(user_api_provider) {
             Ok(_) => Ok(()),
             Err(_) => Err(ErrorCode::LogicalError("Cannot init UserApiProvider twice")),
         }
+    }
+
+    pub async fn try_create(conf: RpcClientConf) -> Result<Arc<UserApiProvider>> {
+        let client = MetaStoreProvider::new(conf).try_get_meta_store().await?;
+        Ok(Arc::new(UserApiProvider {
+            meta: client.clone(),
+            client: client.arc(),
+        }))
     }
 
     pub fn instance() -> Arc<UserApiProvider> {

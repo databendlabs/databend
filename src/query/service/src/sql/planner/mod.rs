@@ -74,7 +74,8 @@ impl Planner {
         let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
         let binder = Binder::new(
             self.ctx.clone(),
-            CatalogManager::instance(),
+            self.ctx.get_catalog_manager()?,
+            // CatalogManager::instance(),
             name_resolution_ctx,
             metadata.clone(),
         );

@@ -17,15 +17,12 @@ use common_exception::Result;
 use databend_query::clusters::ClusterDiscovery;
 use databend_query::clusters::ClusterHelper;
 use pretty_assertions::assert_eq;
+use crate::tests::TestGlobalServices;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_single_cluster_discovery() -> Result<()> {
-    let conf = crate::tests::ConfigBuilder::create().config();
+    TestGlobalServices::setup(crate::tests::ConfigBuilder::create().build()).await?;
 
-    ClusterDiscovery::init(conf.clone()).await?;
-    ClusterDiscovery::instance()
-        .register_to_metastore(&conf)
-        .await?;
     let discover_cluster = ClusterDiscovery::instance().discover().await?;
 
     let discover_cluster_nodes = discover_cluster.get_nodes();

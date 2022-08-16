@@ -14,6 +14,7 @@
 
 use std::ops::Deref;
 use std::sync::Arc;
+use common_catalog::catalog::CatalogManager;
 
 use common_exception::Result;
 use common_meta_embedded::MetaEmbedded;
@@ -23,9 +24,11 @@ use common_meta_types::NodeInfo;
 use common_meta_types::PasswordHashMethod;
 use common_meta_types::UserInfo;
 use common_meta_types::UserPrivilegeSet;
+use common_settings::Settings;
+use databend_query::catalogs::CatalogManagerHelper;
 use databend_query::clusters::Cluster;
 use databend_query::clusters::ClusterHelper;
-use databend_query::sessions::QueryContext;
+use databend_query::sessions::{QueryContext, Session, SessionContext};
 use databend_query::sessions::QueryContextShared;
 use databend_query::sessions::SessionManager;
 use databend_query::sessions::SessionType;
@@ -49,9 +52,9 @@ impl Deref for TestQueryContextGuard {
     }
 }
 
-pub async fn create_query_context() -> Result<(TestGlobalServices, Arc<QueryContext>)> {
-    let test_guard = TestGlobalServices::setup(crate::tests::ConfigBuilder::create().build()).await?;
-    Ok((test_guard, create_query_context_with_session(SessionType::Dummy).await?))
+pub async fn create_query_context() -> Result<Arc<QueryContext>> {
+    TestGlobalServices::setup(crate::tests::ConfigBuilder::create().build()).await?;
+    create_query_context_with_session(SessionType::Dummy).await
 }
 
 pub async fn create_query_context_with_type(typ: SessionType) -> Result<TestQueryContextGuard> {
@@ -63,7 +66,18 @@ pub async fn create_query_context_with_type(typ: SessionType) -> Result<TestQuer
 }
 
 async fn create_query_context_with_session(typ: SessionType) -> Result<Arc<QueryContext>> {
-    let dummy_session = SessionManager::instance().create_session(typ).await?;
+    let config = crate::tests::ConfigBuilder::create().build();
+
+    let catalog_manager = CatalogManager::try_create(&config).await?;
+    let dummy_session = Session::try_create(
+        String::from("dummy_session"),
+        typ,
+        SessionContext::try_create(
+            config.clone(),
+            Settings::default_settings(&config.query.tenant_id.clone()),
+        )?,
+        Some(9),
+    )?;
 
     // Set user with all privileges
     let mut user_info = UserInfo::new("root", "127.0.0.1", AuthInfo::Password {
@@ -79,8 +93,10 @@ async fn create_query_context_with_session(typ: SessionType) -> Result<Arc<Query
 
     let context = QueryContext::create_from_shared(
         QueryContextShared::try_create(
-            (*dummy_session).clone(),
+            config,
+            dummy_session,
             Cluster::empty(),
+            catalog_manager,
         ).await?,
     );
 
@@ -92,7 +108,8 @@ pub async fn create_query_context_with_config(
     config: Config,
     current_user: Option<UserInfo>,
 ) -> Result<(TestGlobalServices, Arc<QueryContext>)> {
-    let test_guard = TestGlobalServices::setup(config).await?;
+    let catalog_manager = CatalogManager::try_create(&config).await?;
+    let test_guard = TestGlobalServices::setup(config.clone()).await?;
 
     let sessions = SessionManager::instance();
     let dummy_session = sessions.create_session(SessionType::Dummy).await?;
@@ -112,8 +129,10 @@ pub async fn create_query_context_with_config(
 
     let context = QueryContext::create_from_shared(
         QueryContextShared::try_create(
+            config,
             (*dummy_session).clone(),
             Cluster::empty(),
+            catalog_manager,
         ).await?,
     );
 
@@ -167,14 +186,21 @@ impl Default for ClusterDescriptor {
 }
 
 pub async fn create_query_context_with_cluster(desc: ClusterDescriptor) -> Result<(TestGlobalServices, Arc<QueryContext>)> {
-    let test_guard = TestGlobalServices::setup(crate::tests::ConfigBuilder::create().build()).await?;
+    let config = crate::tests::ConfigBuilder::create().build();
+    let catalog_manager = CatalogManager::try_create(&config).await?;
+    let test_guard = TestGlobalServices::setup(config).await?;
     let dummy_session = SessionManager::instance().create_session(SessionType::Dummy).await?;
 
     let local_id = desc.local_node_id;
     let nodes = desc.cluster_nodes_list;
 
     let context = QueryContext::create_from_shared(
-        QueryContextShared::try_create((*dummy_session).clone(), Cluster::create(nodes, local_id))
+        QueryContextShared::try_create(
+            dummy_session.get_config(),
+            (*dummy_session).clone(),
+            Cluster::create(nodes, local_id),
+            catalog_manager,
+        )
             .await?,
     );
 

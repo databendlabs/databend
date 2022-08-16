@@ -34,7 +34,7 @@ use crate::tests::create_query_context;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_create_simple_pipeline() -> Result<()> {
-    let (_guard, ctx) = create_query_context().await?;
+    let ctx = create_query_context().await?;
     assert_eq!(
         format!("{:?}", create_simple_pipeline(ctx)?),
         "digraph {\
@@ -51,7 +51,7 @@ async fn test_create_simple_pipeline() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_create_parallel_simple_pipeline() -> Result<()> {
-    let (_guard, ctx) = create_query_context().await?;
+    let ctx = create_query_context().await?;
     assert_eq!(
         format!("{:?}", create_parallel_simple_pipeline(ctx)?),
         "digraph {\
@@ -73,7 +73,7 @@ async fn test_create_parallel_simple_pipeline() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_create_resize_pipeline() -> Result<()> {
-    let (_guard, ctx) = create_query_context().await?;
+    let ctx = create_query_context().await?;
     assert_eq!(
         format!("{:?}", create_resize_pipeline(ctx)?),
         "digraph {\
@@ -103,7 +103,7 @@ async fn test_create_resize_pipeline() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_simple_pipeline_init_queue() -> Result<()> {
-    let (_guard, ctx) = create_query_context().await?;
+    let ctx = create_query_context().await?;
     unsafe {
         assert_eq!(
             format!("{:?}", create_simple_pipeline(ctx)?.init_schedule_queue()?),
@@ -120,7 +120,7 @@ async fn test_simple_pipeline_init_queue() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_parallel_simple_pipeline_init_queue() -> Result<()> {
-    let (_guard, ctx) = create_query_context().await?;
+    let ctx = create_query_context().await?;
     unsafe {
         assert_eq!(
             format!(
@@ -141,7 +141,7 @@ async fn test_parallel_simple_pipeline_init_queue() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_resize_pipeline_init_queue() -> Result<()> {
-    let (_guard, ctx) = create_query_context().await?;
+    let ctx = create_query_context().await?;
     unsafe {
         assert_eq!(
             format!("{:?}", create_resize_pipeline(ctx)?.init_schedule_queue()?),

@@ -31,10 +31,12 @@ use once_cell::sync::OnceCell;
 use parking_lot::RwLock;
 use tracing::debug;
 use tracing::info;
+use common_settings::Settings;
+use common_users::UserApiProvider;
 
 use crate::sessions::session::Session;
 use crate::sessions::session_ref::SessionRef;
-use crate::sessions::ProcessInfo;
+use crate::sessions::{ProcessInfo, SessionContext};
 use crate::sessions::SessionManagerStatus;
 use crate::sessions::SessionType;
 use crate::Config;
@@ -125,7 +127,12 @@ impl SessionManager {
                 );
             }
         }
-        let session = Session::try_create(config.clone(), id, typ, mysql_conn_id).await?;
+
+        let tenant = config.query.tenant_id.clone();
+        let user_api = UserApiProvider::instance();
+        let session_settings = Settings::try_create(&config, user_api, tenant).await?;
+        let session_ctx = SessionContext::try_create(config.clone(), session_settings)?;
+        let session = Session::try_create(id, typ, session_ctx, mysql_conn_id)?;
 
         let mut sessions = self.active_sessions.write();
         if sessions.len() < self.max_sessions {
@@ -160,8 +167,11 @@ impl SessionManager {
             }
         }
 
-        let session =
-            Session::try_create(config.clone(), id.clone(), SessionType::FlightRPC, None).await?;
+        let tenant = config.query.tenant_id.clone();
+        let user_api = UserApiProvider::instance();
+        let session_settings = Settings::try_create(&config, user_api, tenant).await?;
+        let session_ctx = SessionContext::try_create(config.clone(), session_settings)?;
+        let session = Session::try_create(id.clone(), SessionType::FlightRPC, session_ctx, None)?;
 
         let mut sessions = self.active_sessions.write();
         let v = sessions.get(&id);

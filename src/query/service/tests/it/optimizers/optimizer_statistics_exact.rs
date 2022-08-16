@@ -27,7 +27,7 @@ use crate::optimizers::optimizer::*;
 
 #[tokio::test]
 async fn test_statistics_exact_optimizer() -> Result<()> {
-    let (_guard, ctx) = crate::tests::create_query_context().await?;
+    let ctx = crate::tests::create_query_context().await?;
 
     let total = ctx.get_settings().get_max_block_size()? as u64;
     let statistics = Statistics::new_exact(

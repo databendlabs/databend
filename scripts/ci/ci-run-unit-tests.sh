@@ -6,4 +6,4 @@ SCRIPT_PATH="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd)"
 cd "$SCRIPT_PATH/../../" || exit
 
 echo "Starting unit tests"
-env "MACOSX_DEPLOYMENT_TARGET=10.7" "RUST_TEST_THREADS=1" cargo test
+env "MACOSX_DEPLOYMENT_TARGET=10.7" cargo test

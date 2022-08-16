@@ -33,6 +33,7 @@ use databend_query::sql::Metadata;
 use databend_query::sql::NameResolutionContext;
 use goldenfile::Mint;
 use parking_lot::RwLock;
+use common_catalog::table_context::TableContext;
 
 use crate::sql::optimizer::heuristic::run_suites;
 use crate::sql::optimizer::heuristic::Suite;
@@ -44,7 +45,8 @@ async fn run_cluster_test(ctx: Arc<QueryContext>, suite: &Suite) -> Result<Strin
     let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL, &bt)?;
     let binder = Binder::new(
         ctx.clone(),
-        CatalogManager::instance(),
+        ctx.get_catalog_manager()?,
+        // CatalogManager::instance(),
         NameResolutionContext::default(),
         Arc::new(RwLock::new(Metadata::create())),
     );
@@ -78,7 +80,7 @@ pub async fn test_heuristic_optimizer_exchange() -> Result<()> {
     let mut mint = Mint::new("tests/it/sql/optimizer/heuristic/testdata/");
     let mut file = mint.new_goldenfile("exchange.test")?;
 
-    let (_guard, ctx) = create_query_context().await?;
+    let ctx = create_query_context().await?;
 
     let suites = vec![
         Suite {

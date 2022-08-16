@@ -21,7 +21,7 @@ use pretty_assertions::assert_eq;
 
 #[tokio::test]
 async fn test_use_interpreter() -> Result<()> {
-    let (_guard, ctx) = crate::tests::create_query_context().await?;
+    let ctx = crate::tests::create_query_context().await?;
     let mut planner = Planner::new(ctx.clone());
 
     let query = "USE default";
@@ -37,7 +37,7 @@ async fn test_use_interpreter() -> Result<()> {
 
 #[tokio::test]
 async fn test_use_database_interpreter_error() -> Result<()> {
-    let (_guard, ctx) = crate::tests::create_query_context().await?;
+    let ctx = crate::tests::create_query_context().await?;
     let mut planner = Planner::new(ctx.clone());
 
     let query = "USE xx";

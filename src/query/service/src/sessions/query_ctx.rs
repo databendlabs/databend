@@ -322,8 +322,13 @@ impl TableContext for QueryContext {
     fn get_fragment_id(&self) -> usize {
         self.fragment_id.fetch_add(1, Ordering::Release)
     }
+
+    fn get_catalog_manager(&self) -> Result<Arc<CatalogManager>> {
+        Ok(self.shared.catalog_manager.clone())
+    }
+
     fn get_catalog(&self, catalog_name: &str) -> Result<Arc<dyn Catalog>> {
-        CatalogManager::instance().get_catalog(catalog_name.as_ref())
+        self.shared.catalog_manager.get_catalog(catalog_name.as_ref())
     }
     fn get_id(&self) -> String {
         self.shared.init_query_id.as_ref().read().clone()

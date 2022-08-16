@@ -35,6 +35,7 @@ struct CachedRoles {
 }
 
 pub struct RoleCacheManager {
+    user_manager: Arc<UserApiProvider>,
     cache: Arc<RwLock<HashMap<String, CachedRoles>>>,
     polling_interval: Duration,
     polling_join_handle: Option<JoinHandle<()>>,
@@ -45,22 +46,28 @@ static ROLE_CACHE_MANAGER: OnceCell<Arc<RoleCacheManager>> = OnceCell::new();
 impl RoleCacheManager {
     pub fn init() -> Result<()> {
         // Check that the user API has been initialized.
-        let _instance = UserApiProvider::instance();
+        let instance = UserApiProvider::instance();
 
-        let mut role_cache_manager = Self {
-            cache: Arc::new(RwLock::new(HashMap::new())),
-            polling_interval: Duration::new(15, 0),
-            polling_join_handle: None,
-        };
+        let role_cache_manager = Self::try_create(instance)?;
 
-        role_cache_manager.background_polling();
-
-        match ROLE_CACHE_MANAGER.set(Arc::new(role_cache_manager)) {
+        match ROLE_CACHE_MANAGER.set(role_cache_manager) {
             Ok(_) => Ok(()),
             Err(_) => Err(ErrorCode::LogicalError(
                 "Cannot init RoleCacheManager twice",
             )),
         }
+    }
+
+    pub fn try_create(user_manager: Arc<UserApiProvider>) -> Result<Arc<RoleCacheManager>> {
+        let mut role_cache_manager = Self {
+            user_manager,
+            polling_join_handle: None,
+            cache: Arc::new(RwLock::new(HashMap::new())),
+            polling_interval: Duration::new(15, 0),
+        };
+
+        role_cache_manager.background_polling();
+        Ok(Arc::new(role_cache_manager))
     }
 
     pub fn instance() -> Arc<RoleCacheManager> {
@@ -84,6 +91,7 @@ impl RoleCacheManager {
     pub fn background_polling(&mut self) {
         let cache = self.cache.clone();
         let polling_interval = self.polling_interval;
+        let user_manager = self.user_manager.clone();
         self.polling_join_handle = Some(tokio::spawn(async move {
             loop {
                 let tenants: Vec<String> = {
@@ -91,7 +99,7 @@ impl RoleCacheManager {
                     cached.keys().cloned().collect()
                 };
                 for tenant in tenants {
-                    match load_roles_data(&tenant).await {
+                    match load_roles_data(&user_manager, &tenant).await {
                         Err(err) => {
                             warn!(
                                 "role_cache_mgr load roles data of tenant {} failed: {}",
@@ -144,7 +152,7 @@ impl RoleCacheManager {
             }
         };
         if need_reload {
-            let data = load_roles_data(tenant).await?;
+            let data = load_roles_data(&self.user_manager, tenant).await?;
             let mut cached = self.cache.write();
             cached.insert(tenant.to_string(), data);
         }
@@ -152,8 +160,7 @@ impl RoleCacheManager {
     }
 }
 
-async fn load_roles_data(tenant: &str) -> Result<CachedRoles> {
-    let user_api = UserApiProvider::instance();
+async fn load_roles_data(user_api: &Arc<UserApiProvider>, tenant: &str) -> Result<CachedRoles> {
     let roles = user_api.get_roles(tenant).await?;
     let roles_map = roles
         .into_iter()

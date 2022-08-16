@@ -24,7 +24,7 @@ use futures::TryStreamExt;
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_metrics_table() -> Result<()> {
     init_default_metrics_recorder();
-    let (_guard, ctx) = crate::tests::create_query_context().await?;
+    let ctx = crate::tests::create_query_context().await?;
     let table = MetricsTable::create(1);
     let source_plan = table.read_plan(ctx.clone(), None).await?;
 

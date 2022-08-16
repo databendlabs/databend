@@ -21,7 +21,7 @@ use pretty_assertions::assert_eq;
 
 #[tokio::test]
 async fn test_drop_table_cluster_key_interpreter() -> Result<()> {
-    let (_guard, ctx) = crate::tests::create_query_context().await?;
+    let ctx = crate::tests::create_query_context().await?;
     let mut planner = Planner::new(ctx.clone());
 
     // Create table.

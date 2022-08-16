@@ -198,7 +198,7 @@ async fn test_expression_transform_optimizer() -> Result<()> {
     ];
 
     for test in tests {
-        let (_guard, ctx) = crate::tests::create_query_context().await?;
+        let ctx = crate::tests::create_query_context().await?;
         let plan = PlanParser::parse(ctx.clone(), test.query).await?;
         let mut optimizer = ExprTransformOptimizer::create(ctx);
         let optimized = optimizer.optimize(&plan)?;

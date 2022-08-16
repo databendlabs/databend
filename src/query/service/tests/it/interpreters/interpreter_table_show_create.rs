@@ -21,7 +21,7 @@ use pretty_assertions::assert_eq;
 
 #[tokio::test]
 async fn interpreter_show_create_table_test() -> Result<()> {
-    let (_guard, ctx) = crate::tests::create_query_context().await?;
+    let ctx = crate::tests::create_query_context().await?;
     let mut planner = Planner::new(ctx.clone());
 
     struct Case<'a> {
@@ -91,7 +91,7 @@ async fn interpreter_show_create_table_test() -> Result<()> {
 
 #[tokio::test]
 async fn interpreter_show_create_table_with_comments_test() -> Result<()> {
-    let (_guard, ctx) = crate::tests::create_query_context().await?;
+    let ctx = crate::tests::create_query_context().await?;
     let _planner = Planner::new(ctx.clone());
 
     struct Case<'a> {

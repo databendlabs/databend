@@ -22,14 +22,13 @@ use pretty_assertions::assert_eq;
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_user_udf() -> Result<()> {
     let conf = RpcClientConf::default();
-    UserApiProvider::init(conf).await?;
+    let user_mgr = UserApiProvider::try_create(conf).await?;
 
     let tenant = "test";
     let description = "this is a description";
     let isempty = "isempty";
     let isnotempty = "isnotempty";
     let if_not_exists = false;
-    let user_mgr = UserApiProvider::instance();
 
     // add isempty.
     {
@@ -83,6 +82,5 @@ async fn test_user_udf() -> Result<()> {
         assert!(res.is_ok());
     }
 
-    UserApiProvider::destroy();
     Ok(())
 }
