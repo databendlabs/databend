@@ -1388,7 +1388,7 @@ select user(), currentuser(), current_user();
 'root'@'127.0.0.1' 'root'@'127.0.0.1' 'root'@'127.0.0.1'
 
 
-statement query TTTTTTT
+statement query TTTT
 SELECT database, table, name, type, default_kind as default_type, default_expression, comment FROM system.columns  WHERE database LIKE 'system'  AND table LIKE 'settings' ORDER BY name;
 
 ----
