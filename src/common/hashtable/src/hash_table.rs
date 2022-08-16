@@ -94,14 +94,23 @@ impl<Key: HashTableKeyable, Entity: HashTableEntity<Key>, Grower: HashTableGrowe
     HashTable<Key, Entity, Grower>
 {
     pub fn create() -> HashTable<Key, Entity, Grower> {
-        let size = (1 << 8) * mem::size_of::<Entity>();
+        Self::with_capacity(1 << 8)
+    }
+
+    pub fn with_capacity(capacity: usize) -> HashTable<Key, Entity, Grower> {
+        let mut grower = Grower::default();
+        while (grower.max_size() as usize) < capacity {
+            grower.increase_size();
+        }
+
+        let size = grower.max_size() as usize * mem::size_of::<Entity>();
         unsafe {
             let layout = Layout::from_size_align_unchecked(size, mem::align_of::<Entity>());
             let raw_ptr = std::alloc::alloc_zeroed(layout);
             let entities_ptr = raw_ptr as *mut Entity;
             HashTable {
                 size: 0,
-                grower: Default::default(),
+                grower,
                 entities: entities_ptr,
                 entities_raw: raw_ptr,
                 zero_entity: None,

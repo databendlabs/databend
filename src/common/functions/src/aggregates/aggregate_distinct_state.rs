@@ -23,6 +23,9 @@ use bytes::BytesMut;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_hashtable::HashTableEntity;
+use common_hashtable::HashTableKeyable;
+use common_hashtable::TwoLevelHashSet;
 use common_io::prelude::*;
 use serde::Deserialize;
 use serde::Serialize;
@@ -53,9 +56,10 @@ pub struct AggregateDistinctState {
     set: HashSet<DataGroupValues, RandomState>,
 }
 
-pub struct AggregateDistinctPrimitiveState<T: PrimitiveType, E: From<T>> {
-    set: HashSet<E, RandomState>,
+pub struct AggregateDistinctPrimitiveState<T: PrimitiveType, E: From<T> + HashTableKeyable> {
+    set: TwoLevelHashSet<E>,
     _t: PhantomData<T>,
+    inserted: bool,
 }
 
 pub struct AggregateDistinctStringState {
@@ -269,19 +273,20 @@ impl DistinctStateFunc<KeysRef> for AggregateDistinctStringState {
 impl<T, E> DistinctStateFunc<T> for AggregateDistinctPrimitiveState<T, E>
 where
     T: PrimitiveType + From<E>,
-    E: From<T> + Hash + Eq + Sync + Send + Clone + std::fmt::Debug,
+    E: From<T> + Sync + Send + Clone + std::fmt::Debug + HashTableKeyable,
 {
     fn new() -> Self {
         AggregateDistinctPrimitiveState {
-            set: HashSet::new(),
+            set: TwoLevelHashSet::create(),
             _t: PhantomData,
+            inserted: false,
         }
     }
 
     fn serialize(&self, writer: &mut BytesMut) -> Result<()> {
         writer.write_uvarint(self.set.len() as u64)?;
-        for value in &self.set {
-            let t: T = value.clone().into();
+        for value in self.set.iter() {
+            let t: T = value.get_key().clone().into();
             serialize_into_buf(writer, &t)?
         }
         Ok(())
@@ -289,11 +294,11 @@ where
 
     fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()> {
         let size = reader.read_uvarint()?;
-        self.set = HashSet::with_capacity(size as usize);
+        self.set = TwoLevelHashSet::with_capacity(size as usize);
         for _ in 0..size {
             let t: T = deserialize_from_slice(reader)?;
             let e = E::from(t);
-            self.set.insert(e);
+            let _ = self.set.insert_key(&e, &mut self.inserted);
         }
         Ok(())
     }
@@ -309,7 +314,7 @@ where
     fn add(&mut self, columns: &[ColumnRef], row: usize) -> Result<()> {
         let array: &PrimitiveColumn<T> = unsafe { Series::static_cast(&columns[0]) };
         let v = unsafe { array.value_unchecked(row) };
-        self.set.insert(E::from(v));
+        self.set.insert_key(&E::from(v), &mut self.inserted);
         Ok(())
     }
 
@@ -320,16 +325,18 @@ where
         input_rows: usize,
     ) -> Result<()> {
         let array: &PrimitiveColumn<T> = unsafe { Series::static_cast(&columns[0]) };
-        for row in 0..input_rows {
-            let value = unsafe { array.value_unchecked(row) };
-            match validity {
-                Some(v) => {
-                    if v.get_bit(row) {
-                        self.set.insert(E::from(value));
+        match validity {
+            Some(bitmap) => {
+                for (t, v) in array.iter().zip(bitmap.iter()) {
+                    if v {
+                        self.set.insert_key(&E::from(*t), &mut self.inserted);
                     }
                 }
-                None => {
-                    self.set.insert(E::from(value));
+            }
+            None => {
+                for row in 0..input_rows {
+                    let v = unsafe { array.value_unchecked(row) };
+                    self.set.insert_key(&E::from(v), &mut self.inserted);
                 }
             }
         }
@@ -337,12 +344,25 @@ where
     }
 
     fn merge(&mut self, rhs: &Self) -> Result<()> {
-        self.set.extend(rhs.set.clone());
+        let lhs = self.set.inner_hash_tables_mut();
+        let rhs = rhs.set.inner_hash_tables();
+
+        // TODO: parallelize this
+        for (a, b) in lhs.iter_mut().zip(rhs.iter()) {
+            for value in b.iter() {
+                a.insert_key(value.get_key(), &mut self.inserted);
+            }
+        }
+
         Ok(())
     }
 
     fn build_columns(&mut self, _fields: &[DataField]) -> Result<Vec<ColumnRef>> {
-        let values: Vec<T> = self.set.iter().map(|e| e.clone().into()).collect();
+        let values: Vec<T> = self
+            .set
+            .iter()
+            .map(|e| e.get_key().clone().into())
+            .collect();
         let result = PrimitiveColumn::<T>::new_from_vec(values);
         Ok(vec![result.arc()])
     }

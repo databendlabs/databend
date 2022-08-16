@@ -1206,6 +1206,7 @@ dependencies = [
  "common-datablocks",
  "common-datavalues",
  "common-exception",
+ "common-hashtable",
  "common-io",
  "crc32fast",
  "dyn-clone",
@@ -1289,6 +1290,7 @@ dependencies = [
 name = "common-hashtable"
 version = "0.1.0"
 dependencies = [
+ "ordered-float 3.0.0",
  "primitive-types",
  "rand 0.8.5",
 ]
@@ -5056,7 +5058,7 @@ dependencies = [
 [[package]]
 name = "openraft"
 version = "0.7.0-alpha.4"
-source = "git+https://github.com/datafuselabs/openraft?rev=v0.7.0-alpha.4#b0abc4b067d65cbf3449b35a5de3db27ef3872f4"
+source = "git+https://github.com/datafuselabs/openraft?rev=v0.7.0-alpha.5#f1cc23fab4ef4b6cd58630c3311b3e930c479d48"
 dependencies = [
  "anyerror",
  "anyhow",
