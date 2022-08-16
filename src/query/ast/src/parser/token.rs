@@ -387,6 +387,8 @@ pub enum TokenKind {
     FILE_FORMAT,
     #[token("FILES", ignore(ascii_case))]
     FILES,
+    #[token("FINAL", ignore(ascii_case))]
+    FINAL,
     #[token("FLOAT", ignore(ascii_case))]
     FLOAT,
     #[token("FLOAT32", ignore(ascii_case))]

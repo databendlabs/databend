@@ -699,6 +699,7 @@ impl<'a> Binder {
             AstOptimizeTableAction::Purge => OptimizeTableAction::Purge,
             AstOptimizeTableAction::Compact => OptimizeTableAction::Compact,
             AstOptimizeTableAction::Recluster => OptimizeTableAction::Recluster,
+            AstOptimizeTableAction::ReclusterFinal => OptimizeTableAction::ReclusterFinal,
         });
 
         Ok(Plan::OptimizeTable(Box::new(OptimizeTablePlan {

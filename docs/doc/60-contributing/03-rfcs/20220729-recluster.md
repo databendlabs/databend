@@ -32,10 +32,10 @@ The workflow of a recluster operation is divided into two tasks, block selection
 ### syntax
 
 ```sql
-optimize table tbl_name recluster 
+optimize table tbl_name recluster [final]
 ```
 
-Optimization is performed until the table is well clustered enough.
+If specify `final`, optimization is performed until the table is well clustered enough. Otherwise, the recluster workflow will only run once.
 
 The optimize statement should be triggered by DML on the table.
 

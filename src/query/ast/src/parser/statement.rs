@@ -1219,6 +1219,10 @@ pub fn optimize_table_action(i: Input) -> IResult<OptimizeTableAction> {
         value(OptimizeTableAction::Purge, rule! { PURGE }),
         value(OptimizeTableAction::Compact, rule! { COMPACT }),
         value(OptimizeTableAction::Recluster, rule! { RECLUSTER }),
+        value(
+            OptimizeTableAction::ReclusterFinal,
+            rule! { RECLUSTER ~ FINAL },
+        ),
     ))(i)
 }
 

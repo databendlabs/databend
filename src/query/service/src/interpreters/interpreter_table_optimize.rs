@@ -36,55 +36,58 @@ impl OptimizeTableInterpreter {
         Ok(OptimizeTableInterpreter { ctx, plan })
     }
 
-    async fn execute_recluster(&self, catalog: &str, database: &str, tbl_name: &str) -> Result<()> {
+    async fn execute_recluster(
+        &self,
+        catalog: &str,
+        database: &str,
+        tbl_name: &str,
+    ) -> Result<bool> {
         let ctx = self.ctx.clone();
         let settings = ctx.get_settings();
         let tenant = self.ctx.get_tenant();
 
-        loop {
-            let table = self
-                .ctx
-                .get_catalog(catalog)?
-                .get_table(tenant.as_str(), database, tbl_name)
-                .await?;
-            let table = FuseTable::try_from_table(table.as_ref())?;
+        let table = self
+            .ctx
+            .get_catalog(catalog)?
+            .get_table(tenant.as_str(), database, tbl_name)
+            .await?;
+        let table = FuseTable::try_from_table(table.as_ref())?;
 
-            let mut pipeline = Pipeline::create();
+        let mut pipeline = Pipeline::create();
 
-            let mutator = table.try_get_recluster_mutator(ctx.clone()).await?;
-            let mut mutator = if let Some(mutator) = mutator {
-                mutator
-            } else {
-                break;
-            };
+        let mutator = table.try_get_recluster_mutator(ctx.clone()).await?;
+        let mut mutator = if let Some(mutator) = mutator {
+            mutator
+        } else {
+            return Ok(true);
+        };
 
-            let need_recluster = mutator.blocks_select().await?;
+        let need_recluster = mutator.blocks_select().await?;
 
-            if !need_recluster {
-                break;
-            }
-
-            table.recluster(
-                ctx.clone(),
-                catalog.to_owned(),
-                mutator.clone(),
-                &mut pipeline,
-            )?;
-
-            pipeline.set_max_threads(settings.get_max_threads()? as usize);
-
-            let async_runtime = ctx.get_storage_runtime();
-            let query_need_abort = ctx.query_need_abort();
-            let executor =
-                PipelineCompleteExecutor::try_create(async_runtime, query_need_abort, pipeline)?;
-            executor.execute()?;
-            drop(executor);
-
-            let catalog_name = ctx.get_current_catalog();
-            mutator.commit_recluster(&catalog_name).await?;
+        if !need_recluster {
+            return Ok(true);
         }
 
-        Ok(())
+        table.recluster(
+            ctx.clone(),
+            catalog.to_owned(),
+            mutator.clone(),
+            &mut pipeline,
+        )?;
+
+        pipeline.set_max_threads(settings.get_max_threads()? as usize);
+
+        let async_runtime = ctx.get_storage_runtime();
+        let query_need_abort = ctx.query_need_abort();
+        let executor =
+            PipelineCompleteExecutor::try_create(async_runtime, query_need_abort, pipeline)?;
+        executor.execute()?;
+        drop(executor);
+
+        let catalog_name = ctx.get_current_catalog();
+        mutator.commit_recluster(&catalog_name).await?;
+
+        Ok(false)
     }
 }
 
@@ -110,12 +113,22 @@ impl Interpreter for OptimizeTableInterpreter {
         );
         let do_recluster = matches!(
             action,
-            OptimizeTableAction::Recluster | OptimizeTableAction::All
+            OptimizeTableAction::Recluster
+                | OptimizeTableAction::All
+                | OptimizeTableAction::ReclusterFinal
         );
 
         if do_recluster {
-            self.execute_recluster(&plan.catalog, &plan.database, &plan.table)
-                .await?;
+            let mut finish = self
+                .execute_recluster(&plan.catalog, &plan.database, &plan.table)
+                .await?
+                || matches!(action, OptimizeTableAction::Recluster);
+
+            while !finish {
+                finish = self
+                    .execute_recluster(&plan.catalog, &plan.database, &plan.table)
+                    .await?;
+            }
         }
 
         let tenant = self.ctx.get_tenant();
