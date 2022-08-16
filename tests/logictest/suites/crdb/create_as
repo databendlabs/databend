@@ -1,0 +1,81 @@
+statement ok
+DROP TABLE if exists stock;
+
+statement ok
+CREATE TABLE stock (item TEXT, quantity INT);
+
+statement ok
+INSERT into stock VALUES ('cups', 10), ('plates', 15), ('forks', 30);
+
+statement query TI
+SELECT * FROM stock;
+
+----
+cups 10
+plates 15
+forks 30
+
+statement ok
+DROP TABLE if exists runningOut;
+
+statement ok
+CREATE TABLE runningOut AS SELECT * FROM stock WHERE quantity < 12;
+
+statement query TI
+SELECT * FROM runningOut;
+
+----
+cups 10
+
+statement query TI
+SELECT * FROM runningOut;
+
+----
+cups 10
+
+statement ok
+DROP TABLE IF EXISTS itemColors;
+
+statement ok
+CREATE TABLE itemColors (color TEXT);
+
+statement ok
+INSERT INTO itemColors VALUES ('blue'), ('red'), ('green');
+
+statement query T
+SELECT * FROM  itemColors;
+
+----
+blue
+red
+green
+
+statement ok
+CREATE DATABASE IF NOT EXISTS smtng;
+
+statement ok
+DROP TABLE IF EXISTS smtng.something;
+
+statement ok
+CREATE TABLE smtng.something AS SELECT * FROM stock;
+
+statement query TI
+SELECT * FROM smtng.something;
+
+----
+cups 10
+plates 15
+forks 30
+
+statement ok
+CREATE TABLE IF NOT EXISTS smtng.something AS SELECT * FROM stock;
+
+statement query TI
+SELECT * FROM smtng.something ORDER BY 1 LIMIT 1;
+
+----
+cups 10
+
+-- CREATE TABLE itemTypes AS (SELECT item, color FROM stock, itemColors);
+-- CREATE TABLE unionstock AS SELECT * FROM stock UNION VALUES ('spoons', 25), ('knives', 50);
+-- CREATE TABLE t AS SELECT a, b, EXISTS(SELECT c FROM cd WHERE cd.c=ab.a) FROM ab;

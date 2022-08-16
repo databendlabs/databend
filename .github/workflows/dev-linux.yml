@@ -138,6 +138,7 @@ jobs:
         dirs:
           - "base"
           - "ydb"
+          - "crdb"
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_sqllogic_standalone_linux
