@@ -108,14 +108,14 @@ impl Interpreter for OptimizeTableInterpreter {
         let do_compact = matches!(
             action,
             OptimizeTableAction::Compact
-                | OptimizeTableAction::Recluster
+                | OptimizeTableAction::ReclusterFinal
                 | OptimizeTableAction::All
         );
         let do_recluster = matches!(
             action,
             OptimizeTableAction::Recluster
-                | OptimizeTableAction::All
                 | OptimizeTableAction::ReclusterFinal
+                | OptimizeTableAction::All
         );
 
         if do_recluster {
