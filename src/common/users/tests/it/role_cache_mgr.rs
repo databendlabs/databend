@@ -46,6 +46,9 @@ async fn test_role_cache_mgr() -> Result<()> {
         .find_related_roles("tenant1", &["role1".to_string()])
         .await?;
     assert_eq!(roles.len(), 1);
+
+    RoleCacheManager::destroy();
+    UserApiProvider::destroy();
     Ok(())
 }
 

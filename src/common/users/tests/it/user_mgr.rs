@@ -30,13 +30,13 @@ use pretty_assertions::assert_eq;
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_user_manager() -> Result<()> {
     let conf = RpcClientConf::default();
+    UserApiProvider::init(conf).await?;
 
     let tenant = "test";
     let username = "test-user1";
     let hostname = "localhost";
     let hostname2 = "%";
     let pwd = "test-pwd";
-    UserApiProvider::init(conf).await?;
     let user_mgr = UserApiProvider::instance();
 
     let auth_info = AuthInfo::Password {
@@ -241,12 +241,15 @@ async fn test_user_manager() -> Result<()> {
         // ErrorCode::UnknownUser
         assert_eq!(not_exist.err().unwrap().code(), 2201)
     }
+
+    UserApiProvider::destroy();
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_user_manager_with_root_user() -> Result<()> {
     let conf = RpcClientConf::default();
+    UserApiProvider::init(conf).await?;
 
     let tenant = "test";
     let username1 = "default";
@@ -256,7 +259,6 @@ async fn test_user_manager_with_root_user() -> Result<()> {
     let hostname2 = "localhost";
     let hostname3 = "otherhost";
 
-    UserApiProvider::init(conf).await?;
     let user_mgr = UserApiProvider::instance();
 
     // Get user via username `default` and hostname `127.0.0.1`.
@@ -383,5 +385,6 @@ async fn test_user_manager_with_root_user() -> Result<()> {
         );
     }
 
+    UserApiProvider::destroy();
     Ok(())
 }
