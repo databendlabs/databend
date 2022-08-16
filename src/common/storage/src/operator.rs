@@ -182,4 +182,15 @@ impl StorageOperator {
             Some(storage_operator) => storage_operator.clone(),
         }
     }
+
+    pub fn destroy() {
+        unsafe {
+            let const_ptr = &STORAGE_OPERATOR as *const OnceCell<Operator>;
+            let mut_ptr = const_ptr as *mut OnceCell<Operator>;
+
+            if let Some(storage_operator) = (*mut_ptr).take() {
+                drop(storage_operator);
+            }
+        }
+    }
 }

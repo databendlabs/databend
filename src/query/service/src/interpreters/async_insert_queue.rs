@@ -75,8 +75,8 @@ impl PartialEq for InsertKey {
     fn eq(&self, other: &Self) -> bool {
         self.plan.eq(&other.plan)
             && self
-                .get_serialized_changed_settings()
-                .eq(&other.get_serialized_changed_settings())
+            .get_serialized_changed_settings()
+            .eq(&other.get_serialized_changed_settings())
     }
 }
 
@@ -235,6 +235,18 @@ impl AsyncInsertManager {
         }
     }
 
+    pub fn destroy() {
+        unsafe {
+            let const_ptr = &ASYNC_INSERT_MANAGER as *const OnceCell<Arc<AsyncInsertManager>>;
+            let mut_ptr = const_ptr as *mut OnceCell<Arc<AsyncInsertManager>>;
+
+            if let Some(async_insert_manager) = (*mut_ptr).take() {
+                // TODO: shutdown background thread in drop.
+                drop(async_insert_manager);
+            }
+        }
+    }
+
     pub async fn start(self: &Arc<Self>) {
         // TODO: need refactor this code.
         let this = self.clone();
@@ -305,7 +317,7 @@ impl AsyncInsertManager {
                     ctx.query_need_abort(),
                     pipeline,
                 )
-                .unwrap();
+                    .unwrap();
                 executor.execute()?;
                 drop(executor);
                 let blocks = ctx.consume_precommit_blocks();

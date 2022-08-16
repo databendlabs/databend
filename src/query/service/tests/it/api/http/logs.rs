@@ -25,11 +25,12 @@ use poem::Request;
 use poem::Route;
 use pretty_assertions::assert_eq;
 
-use crate::tests::GlobalServices;
+use crate::tests::TestGlobalServices;
 
 #[tokio::test]
 async fn test_logs() -> Result<()> {
-    GlobalServices::setup(crate::tests::ConfigBuilder::create().build()).await?;
+    let config = crate::tests::ConfigBuilder::create().build();
+    let _test_exit_guard = TestGlobalServices::setup(config).await?;
 
     let test_router = Route::new()
         .at("/v1/logs", get(logs_handler));

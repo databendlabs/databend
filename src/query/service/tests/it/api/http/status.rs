@@ -37,7 +37,7 @@ use poem::Request;
 use poem::Route;
 use pretty_assertions::assert_eq;
 
-use crate::tests::{create_query_context, create_query_context_with_type, GlobalServices};
+use crate::tests::{create_query_context, create_query_context_with_type, TestGlobalServices};
 
 async fn get_status(ep: &Route) -> InstanceStatus {
     let response = ep

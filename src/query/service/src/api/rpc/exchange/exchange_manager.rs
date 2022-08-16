@@ -87,6 +87,17 @@ impl DataExchangeManager {
         }
     }
 
+    pub fn destroy() {
+        unsafe {
+            let const_ptr = &DATA_EXCHANGE_MANAGER as *const OnceCell<Arc<DataExchangeManager>>;
+            let mut_ptr = const_ptr as *mut OnceCell<Arc<DataExchangeManager>>;
+
+            if let Some(data_exchange_manager) = (*mut_ptr).take() {
+                drop(data_exchange_manager);
+            }
+        }
+    }
+
     // Create connections for cluster all nodes. We will push data through this connection.
     pub async fn init_nodes_channel(&self, packet: &InitNodesChannelPacket) -> Result<()> {
         let mut request_exchanges = vec![];
@@ -139,7 +150,7 @@ impl DataExchangeManager {
                     None,
                     Some(config.query.to_rpc_client_tls_config()),
                 )
-                .await?,
+                    .await?,
             ))),
             false => Ok(FlightClient::new(FlightServiceClient::new(
                 ConnectionFactory::create_rpc_channel(address.to_owned(), None, None).await?,

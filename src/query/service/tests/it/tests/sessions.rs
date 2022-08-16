@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use once_cell::sync::OnceCell;
 
 use common_base::base::tokio::runtime::Runtime;
@@ -27,59 +28,30 @@ use databend_query::api::DataExchangeManager;
 use databend_query::catalogs::CatalogManagerHelper;
 use databend_query::clusters::ClusterDiscovery;
 use databend_query::sessions::SessionManager;
-use databend_query::Config;
+use databend_query::{Config, GlobalServices};
 use databend_query::interpreters::AsyncInsertManager;
 use databend_query::servers::http::v1::HttpQueryManager;
 
-async fn async_create_sessions(config: Config) -> Result<Arc<SessionManager>> {
-    ClusterDiscovery::init(config.clone()).await?;
-    SessionManager::init(config.clone())?;
+pub struct TestGlobalServices;
 
-    let cluster_discovery = ClusterDiscovery::instance();
-    cluster_discovery.register_to_metastore(&config).await?;
-    Ok(SessionManager::instance())
-}
+static INITIALIZED: AtomicUsize = AtomicUsize::new(0);
 
-fn sync_create_sessions(config: Config) -> Result<Arc<SessionManager>> {
-    let runtime = Runtime::new()?;
-    runtime.block_on(async_create_sessions(config))
-}
-
-pub struct GlobalServices {
-    config: Config,
-}
-
-static INITIALIZED: OnceCell<bool> = OnceCell::new();
-
-impl GlobalServices {
-    pub async fn setup(config: Config) -> Result<()> {
-        if let Some(_) = INITIALIZED.get() {
-            return Ok(());
+impl TestGlobalServices {
+    pub async fn setup(config: Config) -> Result<TestGlobalServices> {
+        if INITIALIZED.fetch_add(1, Ordering::Relaxed) != 0 {
+            return Ok(TestGlobalServices);
         }
 
-        INITIALIZED.set(true).unwrap();
-        // The order of initialization is very important
-        let app_name_shuffle = format!("{}-{}", config.query.tenant_id, config.query.cluster_id);
-
-        QueryLogger::init(app_name_shuffle, &config.log)?;
-        GlobalIORuntime::init(config.query.num_cpus as usize)?;
-
-        // Cluster discovery.
-        ClusterDiscovery::init(config.clone()).await?;
+        GlobalServices::init(config.clone()).await?;
         ClusterDiscovery::instance().register_to_metastore(&config).await?;
-
-        StorageOperator::init(&config.storage).await?;
-        AsyncInsertManager::init(&config)?;
-        CacheManager::init(&config.query)?;
-        CatalogManager::init(&config).await?;
-        HttpQueryManager::init(&config).await?;
-        DataExchangeManager::init(config.clone())?;
-        SessionManager::init(config.clone())?;
-        UserApiProvider::init(config.meta.to_meta_grpc_client_conf()).await?;
-        RoleCacheManager::init()
+        Ok(TestGlobalServices)
     }
+}
 
-    pub fn create_with_conf(config: Config) -> GlobalServices {
-        GlobalServices { config }
+impl Drop for TestGlobalServices {
+    fn drop(&mut self) {
+        if INITIALIZED.fetch_sub(1, Ordering::Relaxed) == 1 {
+            GlobalServices::destroy();
+        }
     }
 }

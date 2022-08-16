@@ -39,7 +39,7 @@ use databend_query::servers::MySQLHandler;
 use databend_query::servers::Server;
 use databend_query::servers::ShutdownHandle;
 use databend_query::sessions::SessionManager;
-use databend_query::Config;
+use databend_query::{Config, GlobalServices};
 use databend_query::QUERY_SEMVER;
 use tracing::info;
 use common_storage::StorageOperator;
@@ -86,7 +86,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
     init_default_metrics_recorder();
     set_panic_hook();
 
-    global_init(&conf).await?;
+    let _global_guard = GlobalServices::init_with_guard(conf.clone()).await?;
     let mut shutdown_handle = ShutdownHandle::create()?;
 
     info!("Databend Query start with config: {:?}", conf);
@@ -249,27 +249,6 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
     shutdown_handle.wait_for_termination_request().await;
     info!("Shutdown server.");
     Ok(())
-}
-
-async fn global_init(conf: &Config) -> Result<(), ErrorCode> {
-    // The order of initialization is very important
-    let app_name_shuffle = format!("{}-{}", conf.query.tenant_id, conf.query.cluster_id);
-
-    QueryLogger::init(app_name_shuffle, &conf.log)?;
-    GlobalIORuntime::init(conf.query.num_cpus as usize)?;
-
-    // Cluster discovery.
-    ClusterDiscovery::init(conf.clone()).await?;
-
-    StorageOperator::init(&conf.storage).await?;
-    AsyncInsertManager::init(conf)?;
-    CacheManager::init(&conf.query)?;
-    CatalogManager::init(conf).await?;
-    HttpQueryManager::init(conf).await?;
-    DataExchangeManager::init(conf.clone())?;
-    SessionManager::init(conf.clone())?;
-    UserApiProvider::init(conf.meta.to_meta_grpc_client_conf()).await?;
-    RoleCacheManager::init()
 }
 
 fn run_cmd(conf: &Config) -> bool {

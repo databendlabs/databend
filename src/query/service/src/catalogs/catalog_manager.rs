@@ -33,6 +33,8 @@ pub trait CatalogManagerHelper {
 
     fn instance() -> Arc<CatalogManager>;
 
+    fn destroy();
+
     async fn register_build_in_catalogs(&mut self, conf: &Config) -> Result<()>;
 
     #[cfg(feature = "hive")]
@@ -65,6 +67,17 @@ impl CatalogManagerHelper for CatalogManager {
         match CATALOG_MANAGER.get() {
             None => panic!("CatalogManager is not init"),
             Some(catalog_manager) => catalog_manager.clone(),
+        }
+    }
+
+    fn destroy() {
+        unsafe {
+            let const_ptr = &CATALOG_MANAGER as *const OnceCell<Arc<CatalogManager>>;
+            let mut_ptr = const_ptr as *mut OnceCell<Arc<CatalogManager>>;
+
+            if let Some(catalog_manager) = (*mut_ptr).take() {
+                drop(catalog_manager);
+            }
         }
     }
 

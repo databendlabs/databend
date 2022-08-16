@@ -94,6 +94,17 @@ impl CacheManager {
         }
     }
 
+    pub fn destroy() {
+        unsafe {
+            let const_ptr = &CACHE_MANAGER as *const OnceCell<Arc<CacheManager>>;
+            let mut_ptr = const_ptr as *mut OnceCell<Arc<CacheManager>>;
+
+            if let Some(cache_manager) = (*mut_ptr).take() {
+                drop(cache_manager);
+            }
+        }
+    }
+
     pub fn get_table_snapshot_cache(&self) -> Option<TableSnapshotCache> {
         self.table_snapshot_cache.clone()
     }

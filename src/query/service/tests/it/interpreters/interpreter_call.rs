@@ -24,7 +24,7 @@ use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_call_interpreter() -> Result<()> {
-    let ctx = crate::tests::create_query_context().await?;
+    let (_guard, ctx) = crate::tests::create_query_context().await?;
     let mut planner = Planner::new(ctx.clone());
 
     let query = "call system$test()";
@@ -42,7 +42,7 @@ async fn test_call_interpreter() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_call_fuse_snapshot_interpreter() -> Result<()> {
-    let ctx = crate::tests::create_query_context().await?;
+    let (_guard, ctx) = crate::tests::create_query_context().await?;
     let mut planner = Planner::new(ctx.clone());
 
     // NumberArgumentsNotMatch
@@ -108,7 +108,7 @@ async fn test_call_fuse_snapshot_interpreter() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_call_clustering_information_interpreter() -> Result<()> {
-    let ctx = crate::tests::create_query_context().await?;
+    let (_guard, ctx) = crate::tests::create_query_context().await?;
     let mut planner = Planner::new(ctx.clone());
 
     // NumberArgumentsNotMatch
@@ -197,7 +197,7 @@ async fn test_call_clustering_information_interpreter() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_call_tenant_quota_interpreter() -> Result<()> {
-    let ctx = crate::tests::create_query_context().await?;
+    let (_guard, ctx) = crate::tests::create_query_context().await?;
     let mut planner = Planner::new(ctx.clone());
 
     // Access denied
@@ -219,7 +219,7 @@ async fn test_call_tenant_quota_interpreter() -> Result<()> {
     user_info
         .option
         .set_option_flag(UserOptionFlag::TenantSetting);
-    let ctx = crate::tests::create_query_context_with_config(conf.clone(), Some(user_info)).await?;
+    let (_guard, ctx) = crate::tests::create_query_context_with_config(conf.clone(), Some(user_info)).await?;
 
     // current tenant
     {

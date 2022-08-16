@@ -32,4 +32,15 @@ impl GlobalIORuntime {
             Some(global_runtime) => global_runtime.clone(),
         }
     }
+
+    pub fn destroy() {
+        unsafe {
+            let const_ptr = &GLOBAL_RUNTIME as *const OnceCell<Arc<Runtime>>;
+            let mut_ptr = const_ptr as *mut OnceCell<Arc<Runtime>>;
+
+            if let Some(global_runtime) = (*mut_ptr).take() {
+                drop(global_runtime);
+            }
+        }
+    }
 }

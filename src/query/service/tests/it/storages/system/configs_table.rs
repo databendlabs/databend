@@ -31,7 +31,7 @@ use wiremock::ResponseTemplate;
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_configs_table() -> Result<()> {
     let conf = crate::tests::ConfigBuilder::create().config();
-    let ctx = crate::tests::create_query_context_with_config(conf, None).await?;
+    let (_guard, ctx) = crate::tests::create_query_context_with_config(conf, None).await?;
     ctx.get_settings().set_max_threads(8)?;
 
     let table = ConfigsTable::create(1);
@@ -148,7 +148,7 @@ async fn test_configs_table_redact() -> Result<()> {
         secret_access_key: "secret_access_key".to_string(),
         ..Default::default()
     });
-    let ctx = crate::tests::create_query_context_with_config(conf, None).await?;
+    let (_guard, ctx) = crate::tests::create_query_context_with_config(conf, None).await?;
     ctx.get_settings().set_max_threads(8)?;
 
     let table = ConfigsTable::create(1);

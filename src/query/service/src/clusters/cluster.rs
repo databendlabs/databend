@@ -178,6 +178,17 @@ impl ClusterDiscovery {
         }
     }
 
+    pub fn destroy() {
+        unsafe {
+            let const_ptr = &CLUSTER_DISCOVERY as *const OnceCell<Arc<ClusterDiscovery>>;
+            let mut_ptr = const_ptr as *mut OnceCell<Arc<ClusterDiscovery>>;
+
+            if let Some(cluster_discovery) = (*mut_ptr).take() {
+                drop(cluster_discovery);
+            }
+        }
+    }
+
     fn create_provider(
         cfg: &Config,
         api: Arc<dyn KVApi>,

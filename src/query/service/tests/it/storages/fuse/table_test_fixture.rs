@@ -58,6 +58,7 @@ use tempfile::TempDir;
 use tokio_stream::StreamExt;
 use uuid::Uuid;
 use walkdir::WalkDir;
+use crate::tests::TestQueryContextGuard;
 
 pub struct TestFixture {
     _tmp_dir: TempDir,
@@ -76,7 +77,7 @@ impl TestFixture {
             root: tmp_dir.path().to_str().unwrap().to_string(),
         });
 
-        let ctx = crate::tests::create_query_context_with_config(conf, None)
+        let (_guard, ctx) = crate::tests::create_query_context_with_config(conf, None)
             .await
             .unwrap();
 
@@ -151,7 +152,7 @@ impl TestFixture {
                     // database id is required for FUSE
                     (OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned()),
                 ]
-                .into(),
+                    .into(),
                 default_cluster_key: Some("(id)".to_string()),
                 cluster_keys: vec!["(id)".to_string()],
                 default_cluster_key_id: Some(0),
@@ -177,7 +178,7 @@ impl TestFixture {
                     // database id is required for FUSE
                     (OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned()),
                 ]
-                .into(),
+                    .into(),
                 ..Default::default()
             },
             as_select: None,
@@ -317,7 +318,7 @@ pub async fn test_drive(test_db: Option<&str>, test_tbl: Option<&str>) -> Result
 }
 
 pub async fn test_drive_with_args(tbl_args: TableArgs) -> Result<()> {
-    let ctx = crate::tests::create_query_context().await?;
+    let (_guard, ctx) = crate::tests::create_query_context().await?;
     let mut stream = test_drive_with_args_and_ctx(tbl_args, ctx).await?;
 
     while let Some(res) = stream.next().await {
@@ -511,5 +512,5 @@ pub async fn history_should_have_only_one_item(
         execute_query(fixture.ctx(), qry.as_str()).await,
         expected,
     )
-    .await
+        .await
 }

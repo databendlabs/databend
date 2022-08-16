@@ -73,6 +73,17 @@ impl HttpQueryManager {
         }
     }
 
+    pub fn destroy() {
+        unsafe {
+            let const_ptr = &HTTP_QUERIES_MANAGER as *const OnceCell<Arc<HttpQueryManager>>;
+            let mut_ptr = const_ptr as *mut OnceCell<Arc<HttpQueryManager>>;
+
+            if let Some(http_queries_manager) = (*mut_ptr).take() {
+                drop(http_queries_manager);
+            }
+        }
+    }
+
     pub(crate) async fn try_create_query(
         self: &Arc<Self>,
         ctx: &HttpQueryContext,

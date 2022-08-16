@@ -62,6 +62,17 @@ impl UserApiProvider {
         }
     }
 
+    pub fn destroy() {
+        unsafe {
+            let const_ptr = &USER_API_PROVIDER as *const OnceCell<Arc<UserApiProvider>>;
+            let mut_ptr = const_ptr as *mut OnceCell<Arc<UserApiProvider>>;
+
+            if let Some(user_api_provider) = (*mut_ptr).take() {
+                drop(user_api_provider);
+            }
+        }
+    }
+
     pub fn get_user_api_client(&self, tenant: &str) -> Result<Arc<dyn UserApi>> {
         Ok(Arc::new(UserMgr::create(self.client.clone(), tenant)?))
     }

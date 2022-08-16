@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::ops::Deref;
 use std::sync::Arc;
 
 use common_exception::Result;
@@ -32,16 +33,33 @@ use databend_query::sessions::TableContext;
 use databend_query::storages::StorageContext;
 use databend_query::Config;
 
-use crate::tests::GlobalServices;
+use crate::tests::TestGlobalServices;
 
-pub async fn create_query_context() -> Result<Arc<QueryContext>> {
-    GlobalServices::setup(crate::tests::ConfigBuilder::create().build()).await?;
-    create_query_context_with_session(SessionType::Dummy).await
+// #[derive(Clone)]
+pub struct TestQueryContextGuard {
+    inner: Arc<QueryContext>,
+    test_guard: TestGlobalServices,
 }
 
-pub async fn create_query_context_with_type(typ: SessionType) -> Result<Arc<QueryContext>> {
-    GlobalServices::setup(crate::tests::ConfigBuilder::create().build()).await?;
-    create_query_context_with_session(typ).await
+impl Deref for TestQueryContextGuard {
+    type Target = Arc<QueryContext>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+pub async fn create_query_context() -> Result<(TestGlobalServices, Arc<QueryContext>)> {
+    let test_guard = TestGlobalServices::setup(crate::tests::ConfigBuilder::create().build()).await?;
+    Ok((test_guard, create_query_context_with_session(SessionType::Dummy).await?))
+}
+
+pub async fn create_query_context_with_type(typ: SessionType) -> Result<TestQueryContextGuard> {
+    let test_guard = TestGlobalServices::setup(crate::tests::ConfigBuilder::create().build()).await?;
+    Ok(TestQueryContextGuard {
+        test_guard,
+        inner: create_query_context_with_session(typ).await?,
+    })
 }
 
 async fn create_query_context_with_session(typ: SessionType) -> Result<Arc<QueryContext>> {
@@ -73,8 +91,8 @@ async fn create_query_context_with_session(typ: SessionType) -> Result<Arc<Query
 pub async fn create_query_context_with_config(
     config: Config,
     current_user: Option<UserInfo>,
-) -> Result<Arc<QueryContext>> {
-    GlobalServices::setup(config).await?;
+) -> Result<(TestGlobalServices, Arc<QueryContext>)> {
+    let test_guard = TestGlobalServices::setup(config).await?;
 
     let sessions = SessionManager::instance();
     let dummy_session = sessions.create_session(SessionType::Dummy).await?;
@@ -100,7 +118,7 @@ pub async fn create_query_context_with_config(
     );
 
     context.get_settings().set_max_threads(8)?;
-    Ok(context)
+    Ok((test_guard, context))
 }
 
 pub async fn create_storage_context() -> Result<StorageContext> {
@@ -148,10 +166,8 @@ impl Default for ClusterDescriptor {
     }
 }
 
-pub async fn create_query_context_with_cluster(
-    desc: ClusterDescriptor,
-) -> Result<Arc<QueryContext>> {
-    GlobalServices::setup(crate::tests::ConfigBuilder::create().build()).await?;
+pub async fn create_query_context_with_cluster(desc: ClusterDescriptor) -> Result<(TestGlobalServices, Arc<QueryContext>)> {
+    let test_guard = TestGlobalServices::setup(crate::tests::ConfigBuilder::create().build()).await?;
     let dummy_session = SessionManager::instance().create_session(SessionType::Dummy).await?;
 
     let local_id = desc.local_node_id;
@@ -163,5 +179,5 @@ pub async fn create_query_context_with_cluster(
     );
 
     context.get_settings().set_max_threads(8)?;
-    Ok(context)
+    Ok((test_guard, context))
 }

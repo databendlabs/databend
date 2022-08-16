@@ -44,7 +44,9 @@ pub mod table_functions;
 
 mod config;
 mod version;
+mod global_services;
 
 pub use config::Config;
 pub use version::DATABEND_COMMIT_VERSION;
 pub use version::QUERY_SEMVER;
+pub use global_services::GlobalServices;

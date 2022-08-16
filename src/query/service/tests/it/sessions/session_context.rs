@@ -24,7 +24,7 @@ use databend_query::sessions::SessionContext;
 use databend_query::sessions::SessionType;
 use databend_query::Config;
 
-use crate::tests::{create_query_context, GlobalServices};
+use crate::tests::{create_query_context, TestGlobalServices};
 
 #[tokio::test]
 async fn test_session_context() -> Result<()> {

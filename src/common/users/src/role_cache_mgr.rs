@@ -70,6 +70,17 @@ impl RoleCacheManager {
         }
     }
 
+    pub fn destroy() {
+        unsafe {
+            let const_ptr = &ROLE_CACHE_MANAGER as *const OnceCell<Arc<RoleCacheManager>>;
+            let mut_ptr = const_ptr as *mut OnceCell<Arc<RoleCacheManager>>;
+
+            if let Some(role_cache_manager) = (*mut_ptr).take() {
+                drop(role_cache_manager);
+            }
+        }
+    }
+
     pub fn background_polling(&mut self) {
         let cache = self.cache.clone();
         let polling_interval = self.polling_interval;

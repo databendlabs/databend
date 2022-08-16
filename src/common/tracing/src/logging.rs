@@ -12,8 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cell::UnsafeCell;
 use std::env;
 use std::io;
+use std::mem::MaybeUninit;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
@@ -132,7 +134,7 @@ pub fn init_logging(name: &str, cfg: &Config) -> Vec<WorkerGuard> {
 
     // For tokio-console
     #[cfg(feature = "console")]
-    let subscriber = subscriber.with(console_subscriber::spawn());
+        let subscriber = subscriber.with(console_subscriber::spawn());
 
     // Enable log compatible layer to convert log record to tracing span.
     // We will ignore any errors that returned by this fucntions.
@@ -211,6 +213,17 @@ impl QueryLogger {
         match QUERY_LOGGER.get() {
             None => panic!("QueryLogger is not init"),
             Some(query_logger) => query_logger.clone(),
+        }
+    }
+
+    pub fn destroy() {
+        unsafe {
+            let const_ptr = &QUERY_LOGGER as *const OnceCell<Arc<QueryLogger>>;
+            let mut_ptr = const_ptr as *mut OnceCell<Arc<QueryLogger>>;
+
+            if let Some(query_logger) = (*mut_ptr).take() {
+                drop(query_logger);
+            }
         }
     }
 

@@ -77,6 +77,17 @@ impl SessionManager {
         }
     }
 
+    pub fn destroy() {
+        unsafe {
+            let const_ptr = &SESSION_MANAGER as *const OnceCell<Arc<SessionManager>>;
+            let mut_ptr = const_ptr as *mut OnceCell<Arc<SessionManager>>;
+
+            if let Some(session_manager) = (*mut_ptr).take() {
+                drop(session_manager);
+            }
+        }
+    }
+
     pub fn get_conf(&self) -> Config {
         self.conf.clone()
     }

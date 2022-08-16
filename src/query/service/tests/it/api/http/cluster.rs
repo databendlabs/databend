@@ -27,11 +27,12 @@ use poem::Request;
 use poem::Route;
 use pretty_assertions::assert_eq;
 
-use crate::tests::GlobalServices;
+use crate::tests::TestGlobalServices;
 
 #[tokio::test]
 async fn test_cluster() -> Result<()> {
-    GlobalServices::setup(crate::tests::ConfigBuilder::create().build()).await?;
+    let config = crate::tests::ConfigBuilder::create().build();
+    let _test_exit_guard = TestGlobalServices::setup(config).await?;
     let cluster_router = Route::new()
         .at("/v1/cluster/list", get(cluster_list_handler));
 
