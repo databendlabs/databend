@@ -27,6 +27,7 @@ use common_expression::RemoteExpr;
 use common_expression::Value;
 use common_functions_v2::scalars::builtin_functions;
 
+mod arithmetic;
 mod boolean;
 mod control;
 mod parser;

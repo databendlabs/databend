@@ -1,6 +1,7 @@
 #!/bin/bash
 # Copyright 2020-2021 The Databend Authors.
 # SPDX-License-Identifier: Apache-2.0.
+set -e
 
 echo "Starting standalone DatabendQuery and DatabendMeta"
 ./scripts/ci/deploy/databend-query-standalone-embedded-meta.sh
@@ -16,3 +17,6 @@ echo "Run suites using argument: $RUN_DIR"
 
 echo "Starting databend-sqllogic tests"
 python3 main.py $RUN_DIR
+
+echo "Starting databend-sqllogic mode standalone"
+python3 main.py --suite suites/mode --run-dir standalone

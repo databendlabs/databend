@@ -77,8 +77,9 @@ pub fn serialize_into_buf<W: bytes::BufMut, T: serde::Serialize>(
 /// bincode deserialize_from wrap with optimized config
 #[inline]
 pub fn deserialize_from_slice<T: serde::de::DeserializeOwned>(slice: &mut &[u8]) -> Result<T> {
-    let (value, _) = bincode::serde::decode_from_slice(slice, bincode::config::standard())?;
-
+    let (value, bytes_read) =
+        bincode::serde::decode_from_slice(slice, bincode::config::standard())?;
+    *slice = &slice[bytes_read..];
     Ok(value)
 }
 

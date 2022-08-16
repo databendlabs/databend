@@ -15,6 +15,8 @@
 use std::sync::Arc;
 
 use common_datavalues::chrono::Utc;
+use common_datavalues::prelude::*;
+use common_datavalues::DataField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_meta_app::share::CreateShareReq;
@@ -118,5 +120,21 @@ pub struct AlterShareTenantsPlan {
 impl AlterShareTenantsPlan {
     pub fn schema(&self) -> DataSchemaRef {
         Arc::new(DataSchema::empty())
+    }
+}
+
+// desc share
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct DescSharePlan {
+    pub share: String,
+}
+
+impl DescSharePlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::new(vec![
+            DataField::new("Kind", Vu8::to_data_type()),
+            DataField::new("Name", Vu8::to_data_type()),
+            DataField::new("Shared_on", Vu8::to_data_type()),
+        ]))
     }
 }

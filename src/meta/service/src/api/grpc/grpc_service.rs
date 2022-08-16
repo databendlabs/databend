@@ -44,7 +44,7 @@ use tonic::Request;
 use tonic::Response;
 use tonic::Status;
 use tonic::Streaming;
-use tracing::debug;
+use tracing::info;
 
 use crate::executor::ActionHandler;
 use crate::meta_service::meta_service_impl::GrpcStream;
@@ -156,7 +156,7 @@ impl MetaService for MetaServiceImpl {
 
         add_meta_metrics_meta_request_inflights(1);
 
-        debug!("Receive write_action: {:?}", action);
+        info!("Receive write_action: {:?}", action);
 
         let body = self.action_handler.execute_write(action).await;
 
@@ -177,7 +177,7 @@ impl MetaService for MetaServiceImpl {
 
         add_meta_metrics_meta_request_inflights(1);
 
-        debug!("Receive read_action: {:?}", action);
+        info!("Receive read_action: {:?}", action);
 
         let res = self.action_handler.execute_read(action).await;
 
@@ -239,7 +239,7 @@ impl MetaService for MetaServiceImpl {
 
         let request = request.into_inner();
 
-        debug!("Receive txn_request: {:?}", request);
+        info!("Receive txn_request: {:?}", request);
 
         let body = self.action_handler.execute_txn(request).await;
         add_meta_metrics_meta_request_inflights(-1);

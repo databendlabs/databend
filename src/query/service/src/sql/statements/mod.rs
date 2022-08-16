@@ -27,7 +27,7 @@ mod statement_select_convert;
 mod value_source;
 
 pub use analyzer_expr::ExpressionAnalyzer;
-pub use analyzer_expr_sync::ExpressionSyncAnalyzer;
+pub use analyzer_expr_sync::*;
 pub use analyzer_statement::AnalyzableStatement;
 pub use analyzer_statement::AnalyzedResult;
 pub use analyzer_statement::QueryAnalyzeState;

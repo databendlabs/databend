@@ -21,6 +21,7 @@ use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
 use common_ast::Backtrace;
 use common_ast::Dialect;
+use common_ast::UDFValidator;
 use common_datavalues::DataTypeImpl;
 use common_exception::Result;
 use common_meta_types::UserDefinedFunction;
@@ -250,28 +251,48 @@ impl<'a> Binder {
                 parameters,
                 definition,
                 description,
-            } => Plan::CreateUDF(Box::new(CreateUserUDFPlan {
-                if_not_exists: *if_not_exists,
-                udf: UserDefinedFunction {
-                    name: udf_name.to_string(),
+            } => {
+                let mut validator = UDFValidator {
+                    name : udf_name.to_string(),
                     parameters: parameters.iter().map(|v| v.to_string()).collect(),
+                    ..Default::default()
+                };
+                validator.verify_definition_expr(definition)?;
+                let udf =  UserDefinedFunction {
+                    name: validator.name,
+                    parameters: validator.parameters,
                     definition: definition.to_string(),
                     description: description.clone().unwrap_or_default(),
-                },
-            })),
+                };
+
+                Plan::CreateUDF(Box::new(CreateUserUDFPlan {
+                    if_not_exists: *if_not_exists,
+                    udf
+                }))
+            },
             Statement::AlterUDF {
                 udf_name,
                 parameters,
                 definition,
                 description,
-            } => Plan::AlterUDF(Box::new(AlterUserUDFPlan {
-                udf: UserDefinedFunction {
-                    name: udf_name.to_string(),
+            } => {
+                let mut validator = UDFValidator {
+                    name : udf_name.to_string(),
                     parameters: parameters.iter().map(|v| v.to_string()).collect(),
+                    ..Default::default()
+                };
+                validator.verify_definition_expr(definition)?;
+                let udf =  UserDefinedFunction {
+                    name: validator.name,
+                    parameters: validator.parameters,
                     definition: definition.to_string(),
                     description: description.clone().unwrap_or_default(),
-                },
-            })),
+                };
+
+                Plan::AlterUDF(Box::new(AlterUserUDFPlan {
+                    udf,
+                }))
+            }
             Statement::DropUDF {
                 if_exists,
                 udf_name,
@@ -314,6 +335,9 @@ impl<'a> Binder {
             }
             Statement::AlterShareTenants(stmt) => {
                 self.bind_alter_share_accounts(stmt).await?
+            }
+            Statement::DescShare(stmt) => {
+                self.bind_desc_share(stmt).await?
             }
         };
         Ok(plan)
