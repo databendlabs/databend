@@ -1,0 +1,34 @@
+name: "Test sqllogic Cluster Linux"
+description: "Running sqllogic tests in cluster mode"
+inputs:
+  profile:
+    description: "The profile for this test"
+    required: true
+    default: "debug"
+  target:
+    description: ""
+    required: true
+    default: "x86_64-unknown-linux-gnu"
+  dirs:
+    description: "logic test suites dirs"
+    required: true
+    default: ""
+runs:
+  using: "composite"
+  steps:
+    - name: Download artifact
+      uses: ./.github/actions/artifact_download
+      with:
+        profile: ${{ inputs.profile }}
+        sha: ${{ github.sha }}
+        target: ${{ inputs.target }}
+
+    - name: Test setup
+      shell: bash
+      run: |
+        bash ./scripts/setup/dev_setup.sh -yd
+
+    - name: Run sqllogic Tests with Cluster mode
+      shell: bash
+      run: |
+        bash ./scripts/ci/ci-run-sqllogic-tests-cluster.sh ${{ inputs.dirs }}
