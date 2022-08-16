@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use ordered_float::OrderedFloat;
 use primitive_types::U256;
 use primitive_types::U512;
 
@@ -116,6 +117,42 @@ impl HashTableKeyable for U512 {
     }
     #[inline(always)]
     fn set_key(&mut self, new_value: &U512) {
+        *self = *new_value;
+    }
+}
+
+impl HashTableKeyable for OrderedFloat<f32> {
+    const BEFORE_EQ_HASH: bool = false;
+
+    #[inline(always)]
+    fn is_zero(&self) -> bool {
+        self.is_nan()
+    }
+
+    #[inline(always)]
+    fn fast_hash(&self) -> u64 {
+        self.to_bits() as u64
+    }
+    #[inline(always)]
+    fn set_key(&mut self, new_value: &OrderedFloat<f32>) {
+        *self = *new_value;
+    }
+}
+
+impl HashTableKeyable for OrderedFloat<f64> {
+    const BEFORE_EQ_HASH: bool = false;
+
+    #[inline(always)]
+    fn is_zero(&self) -> bool {
+        self.is_nan()
+    }
+
+    #[inline(always)]
+    fn fast_hash(&self) -> u64 {
+        self.to_bits() as u64
+    }
+    #[inline(always)]
+    fn set_key(&mut self, new_value: &OrderedFloat<f64>) {
         *self = *new_value;
     }
 }
