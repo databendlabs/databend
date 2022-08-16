@@ -14,8 +14,8 @@ test = false
 # Workspace dependencies
 
 # Crates.io dependencies
-primitive-types = "0.11.1"
 ordered-float = "3.0.0"
+primitive-types = "0.11.1"
 
 [dev-dependencies]
 rand = "0.8.5"
