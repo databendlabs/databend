@@ -48,6 +48,32 @@ impl Operator for Union {
     }
 }
 
+impl LogicalOperator for Union {
+    fn derive_relational_prop<'a>(&self, rel_expr: &RelExpr<'a>) -> Result<RelationalProperty> {
+        let left_prop = rel_expr.derive_relational_prop_child(0)?;
+        let right_prop = rel_expr.derive_relational_prop_child(1)?;
+
+        // Derive output columns
+        let mut output_columns = left_prop.output_columns;
+        output_columns = output_columns
+            .union(&right_prop.output_columns)
+            .cloned()
+            .collect();
+
+        // Derive outer columns
+        let mut outer_columns = left_prop.outer_columns;
+        outer_columns = outer_columns
+            .union(&right_prop.outer_columns)
+            .cloned()
+            .collect();
+
+        Ok(RelationalProperty {
+            output_columns,
+            outer_columns,
+        })
+    }
+}
+
 impl PhysicalOperator for Union {
     fn derive_physical_prop<'a>(&self, _rel_expr: &RelExpr<'a>) -> Result<PhysicalProperty> {
         todo!()
@@ -59,12 +85,6 @@ impl PhysicalOperator for Union {
         _child_index: usize,
         _required: &RequiredProperty,
     ) -> Result<RequiredProperty> {
-        todo!()
-    }
-}
-
-impl LogicalOperator for Union {
-    fn derive_relational_prop<'a>(&self, _rel_expr: &RelExpr<'a>) -> Result<RelationalProperty> {
         todo!()
     }
 }

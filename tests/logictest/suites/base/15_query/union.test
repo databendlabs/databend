@@ -1,0 +1,88 @@
+statement ok
+DROP TABLE IF EXISTS data2013;
+
+statement ok
+DROP TABLE IF EXISTS data2014;
+
+statement ok
+DROP TABLE IF EXISTS data2015;
+
+statement ok
+CREATE TABLE data2013 (name String, value UInt32);
+
+statement ok
+CREATE TABLE data2014 (name String, value UInt32);
+
+statement ok
+CREATE TABLE data2015 (data_name String, data_value UInt32);
+
+statement ok
+CREATE TABLE data2016 (name String, value UInt32);
+
+statement ok
+INSERT INTO data2013(name,value) VALUES('Alice', 1000), ('Bob', 2000), ('Carol', 5000);
+
+
+statement ok
+INSERT INTO data2014(name,value) VALUES('Alice', 2000), ('Bob', 2000), ('Dennis', 35000);
+
+statement ok
+INSERT INTO data2015(data_name, data_value) VALUES('Foo', 42), ('Bar', 1);
+
+statement query I
+SELECT val FROM
+(SELECT value AS val FROM data2013 WHERE name = 'Alice'
+UNION ALL
+SELECT value AS val FROM data2014 WHERE name = 'Alice')
+ORDER BY val ASC;
+
+----
+1000
+2000
+
+statement query IT
+SELECT val, name FROM
+(SELECT value AS val, value AS val_1, name FROM data2013 WHERE name = 'Alice'
+UNION ALL
+SELECT value AS val, value, name FROM data2014 WHERE name = 'Alice')
+ORDER BY val ASC;
+
+----
+1000 Alice
+2000 Alice
+
+statement query TI
+select * from data2013 union all select * from data2015 order by value;
+
+----
+Bar 1
+Foo 42
+Alice 1000
+Bob 2000
+Carol 5000
+
+statement query I
+select value from data2016 union all select data_value from data2015 order by value;
+
+----
+1
+42
+
+statement query I
+select data_value from data2015 union all select value from data2016 order by data_value;
+
+----
+1
+42
+
+statement ok
+DROP TABLE data2013;
+
+statement ok
+DROP TABLE data2014;
+
+statement ok
+DROP TABLE data2015;
+
+statement ok
+DROP TABLE data2016;

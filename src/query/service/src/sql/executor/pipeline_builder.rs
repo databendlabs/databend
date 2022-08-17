@@ -513,6 +513,7 @@ impl PipelineBuilder {
             processors: vec![TransformMergeBlock::create(
                 input_port.clone(),
                 output_port.clone(),
+                union.left.output_schema()?,
                 union_receiver,
             )],
             outputs_port: vec![output_port],

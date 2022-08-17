@@ -28,5 +28,4 @@ pub use pipeline_complete_executor::PipelineCompleteExecutor;
 pub use pipeline_executor::FinishedCallback;
 pub use pipeline_executor::PipelineExecutor;
 pub use pipeline_pulling_executor::PipelinePullingExecutor;
-pub use pipeline_pulling_executor::PullingSink;
 pub use pipeline_pushing_executor::PipelinePushingExecutor;

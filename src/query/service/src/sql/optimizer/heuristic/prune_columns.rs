@@ -115,6 +115,7 @@ impl ColumnPruner {
                     )?,
                 ))
             }
+
             RelOperator::Project(p) => {
                 let mut used: ColumnSet = p.columns.intersection(&required).cloned().collect();
                 if used.is_empty() {
@@ -223,6 +224,8 @@ impl ColumnPruner {
                 RelOperator::Limit(p.clone()),
                 self.keep_required_columns(expr.child(0)?, required)?,
             )),
+
+            RelOperator::Union(_) => Ok(expr.clone()),
 
             _ => Err(ErrorCode::LogicalError(
                 "Attempting to prune columns of a physical plan is not allowed",

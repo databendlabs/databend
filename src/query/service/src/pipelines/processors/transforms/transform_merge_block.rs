@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use common_base::base::tokio::sync::mpsc::Receiver;
 use common_datablocks::DataBlock;
+use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
@@ -31,6 +32,7 @@ pub struct TransformMergeBlock {
 
     input_data: Option<DataBlock>,
     output_data: Option<DataBlock>,
+    schema: DataSchemaRef,
 
     receiver: Receiver<Option<DataBlock>>,
     receiver_result: Option<DataBlock>,
@@ -40,6 +42,7 @@ impl TransformMergeBlock {
     pub fn create(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
+        schema: DataSchemaRef,
         receiver: Receiver<Option<DataBlock>>,
     ) -> ProcessorPtr {
         ProcessorPtr::create(Box::new(TransformMergeBlock {
@@ -48,6 +51,7 @@ impl TransformMergeBlock {
             output,
             input_data: None,
             output_data: None,
+            schema,
             receiver,
             receiver_result: None,
         }))
@@ -105,16 +109,16 @@ impl Processor for TransformMergeBlock {
     fn process(&mut self) -> Result<()> {
         if let Some(input_data) = self.input_data.take() {
             if let Some(receiver_result) = self.receiver_result.take() {
-                let data_block = DataBlock::create(
-                    input_data.schema().clone(),
-                    receiver_result.columns().to_vec(),
-                );
+                let data_block =
+                    DataBlock::create(self.schema.clone(), receiver_result.columns().to_vec());
                 self.output_data = Some(DataBlock::concat_blocks(&vec![input_data, data_block])?);
             } else {
                 self.output_data = Some(input_data);
             }
         } else if let Some(receiver_result) = self.receiver_result.take() {
-            self.output_data = Some(receiver_result);
+            let data_block =
+                DataBlock::create(self.schema.clone(), receiver_result.columns().to_vec());
+            self.output_data = Some(data_block);
         }
 
         Ok(())

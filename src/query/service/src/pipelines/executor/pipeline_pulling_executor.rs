@@ -184,7 +184,7 @@ impl Drop for PipelinePullingExecutor {
     }
 }
 
-pub struct PullingSink {
+struct PullingSink {
     sender: SyncSender<Result<Option<DataBlock>>>,
 }
 
