@@ -59,13 +59,13 @@ select get_path(parse_json('{"attr":[{"name": 1}, {"name": 2}]}'), 'attr[0].name
 1
 
 statement query T
-select get_path(parse_json('{"attr":[{"name": 1}, {"name": 2}]}'), 'attr[1]:name');
+select get_path(parse_json('{"attr":[{"name": 1}, {"name": 2}]}'), 'attr[1]: name');
 
 ----
 2
 
 statement query T
-select get_path(parse_json('{"customer":{"id": 1, "name":"databend", "extras":["ext", "test"]}}'), 'customer:id');
+select get_path(parse_json('{"customer":{"id": 1, "name":"databend", "extras":["ext", "test"]}}'), 'customer: id');
 
 ----
 1
@@ -99,13 +99,13 @@ select json_extract_path_text('{"attr":[{"name": 1}, {"name": 2}]}', 'attr[0].na
 1
 
 statement query T
-select json_extract_path_text('{"attr":[{"name": 1}, {"name": 2}]}', 'attr[1]:name');
+select json_extract_path_text('{"attr":[{"name": 1}, {"name": 2}]}', 'attr[1]: name');
 
 ----
 2
 
 statement query T
-select json_extract_path_text('{"customer":{"id": 1, "name":"databend", "extras":["ext", "test"]}}', 'customer:id');
+select json_extract_path_text('{"customer":{"id": 1, "name":"databend", "extras":["ext", "test"]}}', 'customer: id');
 
 ----
 1
