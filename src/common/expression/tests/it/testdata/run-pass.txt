@@ -503,7 +503,7 @@ output         : []
 ast            : create_array(null, true)
 raw expr       : create_array(NULL, true)
 checked expr   : create_array<T0=Boolean NULL><T0, T0>(CAST(NULL AS Boolean NULL), CAST(true AS Boolean NULL))
-optimized expr : create_array<T0=Boolean NULL><T0, T0>(NULL, true)
+optimized expr : [NULL, true]
 output type    : Array(Boolean NULL)
 output domain  : [{TRUE} ∪ {NULL}]
 output         : [NULL, true]

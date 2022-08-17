@@ -91,7 +91,7 @@ select * from numbers(5) where number in (1, 3);
 
 
 statement query T
-select parse_json('{"k1": [0, 1, 2]}'):k1[2];
+select parse_json('{"k1": [0, 1, 2]}'): k1[2];
 
 ----
 2
@@ -105,7 +105,7 @@ select parse_json('{"k1": [0, 1, 2]}')['k1'][2];
 
 
 statement query T
-select parse_json('{"k1": {"k2": [0, 1, 2]}}'):k1.k2[2];
+select parse_json('{"k1": {"k2": [0, 1, 2]}}'): k1.k2[2];
 
 ----
 2
@@ -721,7 +721,7 @@ drop table if exists temp;
 
 
 statement ok
-create table temp (a int) engine = Memory;
+create table temp (a int) engine = FUSE;
 
 
 statement ok
@@ -1388,16 +1388,16 @@ select user(), currentuser(), current_user();
 'root'@'127.0.0.1' 'root'@'127.0.0.1' 'root'@'127.0.0.1'
 
 
-statement query TTTTTTT
-SELECT database, table, name, type, default_kind as default_type, default_expression, comment FROM system.columns  WHERE database LIKE 'system'  AND table LIKE 'settings' ORDER BY name;
+statement query TTTT
+SELECT database, table, name, type FROM system.columns  WHERE database LIKE 'system'  AND table LIKE 'settings' ORDER BY name;
 
 ----
-system settings default VARCHAR   
-system settings description VARCHAR   
-system settings level VARCHAR   
-system settings name VARCHAR   
-system settings type VARCHAR   
-system settings value VARCHAR   
+system settings default VARCHAR
+system settings description VARCHAR
+system settings level VARCHAR
+system settings name VARCHAR
+system settings type VARCHAR
+system settings value VARCHAR
 
 
 statement ok

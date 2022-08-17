@@ -23,5 +23,5 @@ common-streams = { path = "../../streams" }
 async-trait = { git = "https://github.com/datafuse-extras/async-trait", rev = "f0b0fd5" }
 futures = "0.3.21"
 futures-util = "0.3.21"
-opendal = { version = "0.12.0", features = ["retry"] }
+opendal = { version = "0.13.0", features = ["layers-retry", "compress"] }
 parking_lot = "0.12.1"
