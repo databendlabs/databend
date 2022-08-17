@@ -1741,6 +1741,7 @@ dependencies = [
  "common-planners",
  "common-storages-index",
  "common-storages-util",
+ "common-streams",
  "futures",
  "futures-util",
  "opendal",
@@ -5086,9 +5087,9 @@ dependencies = [
 
 [[package]]
 name = "opensrv-mysql"
-version = "0.1.0"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8bcb5fc2fda7e5e5f8478cd637285bbdd6196a9601e32293d0897e469a7dd020"
+checksum = "e4c24c12fd688cb5aa5b1a54c6ccb2e30fb9b5132debb0e89fcb432b3f73db8f"
 dependencies = [
  "async-trait 0.1.57",
  "byteorder",

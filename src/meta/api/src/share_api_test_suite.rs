@@ -72,11 +72,11 @@ impl ShareApiTestSuite {
 
         info!("--- show share when there are no share");
         {
-            let req = ShowShareReq {
+            let req = ShowSharesReq {
                 tenant: tenant.to_string(),
             };
 
-            let res = mt.show_share(req).await;
+            let res = mt.show_shares(req).await;
             info!("show share res: {:?}", res);
             assert!(res.is_ok());
             let resp = res.unwrap();
@@ -108,11 +108,11 @@ impl ShareApiTestSuite {
 
         info!("--- show share again");
         {
-            let req = ShowShareReq {
+            let req = ShowSharesReq {
                 tenant: tenant.to_string(),
             };
 
-            let res = mt.show_share(req).await;
+            let res = mt.show_shares(req).await;
             info!("show share res: {:?}", res);
             assert!(res.is_ok());
             let resp = res.unwrap();
@@ -281,11 +281,11 @@ impl ShareApiTestSuite {
         // test show share api
         info!("--- show share check account information");
         {
-            let req = ShowShareReq {
+            let req = ShowSharesReq {
                 tenant: tenant.to_string(),
             };
 
-            let res = mt.show_share(req).await;
+            let res = mt.show_shares(req).await;
             info!("show share res: {:?}", res);
             assert!(res.is_ok());
             let resp = res.unwrap();

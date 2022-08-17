@@ -16,7 +16,7 @@ fi
 echo "Run suites using argument: $RUN_DIR"
 
 echo "Starting databend-sqllogic tests"
-python3 main.py $RUN_DIR
+python3 main.py --skip-dir=mode $RUN_DIR
 
 echo "Starting databend-sqllogic mode standalone"
 python3 main.py --suite suites/mode --run-dir standalone

@@ -295,11 +295,17 @@ impl JoinHashTable {
         input: &DataBlock,
         _probe_state: &mut ProbeState,
     ) -> Result<Vec<DataBlock>> {
-        let chunks = self.row_space.chunks.read().unwrap();
-        let build_blocks = (*chunks)
+        let build_blocks = self.row_space.datablocks();
+        let num_rows = build_blocks
             .iter()
-            .map(|chunk| chunk.data_block.clone())
-            .collect::<Vec<DataBlock>>();
+            .fold(0, |acc, block| acc + block.num_rows());
+        if build_blocks.is_empty() || num_rows == 0 {
+            let mut fields = input.schema().fields().to_vec();
+            fields.extend(self.row_space.schema().fields().clone());
+            return Ok(vec![DataBlock::empty_with_schema(
+                DataSchemaRefExt::create(fields.clone()),
+            )]);
+        }
         let build_block = DataBlock::concat_blocks(&build_blocks)?;
         let mut results: Vec<DataBlock> = Vec::with_capacity(input.num_rows());
         for i in 0..input.num_rows() {

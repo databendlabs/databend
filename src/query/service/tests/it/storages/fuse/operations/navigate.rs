@@ -79,7 +79,7 @@ async fn test_fuse_navigate() -> Result<()> {
     // 2. grab the history
     let table = fixture.latest_default_table().await?;
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-    let reader = MetaReaders::table_snapshot_reader(ctx.as_ref());
+    let reader = MetaReaders::table_snapshot_reader(ctx.clone());
     let loc = fuse_table.snapshot_loc().unwrap();
     assert_eq!(second_snapshot, loc);
     let version = TableMetaLocationGenerator::snapshot_version(loc.as_str());
@@ -100,7 +100,7 @@ async fn test_fuse_navigate() -> Result<()> {
         .sub(chrono::Duration::milliseconds(1));
     // navigate from the instant that is just one ms before the timestamp of the latest snapshot
     let tbl = fuse_table
-        .navigate_to_time_point(ctx.as_ref(), instant)
+        .navigate_to_time_point(ctx.clone(), instant)
         .await?;
 
     // check we got the snapshot of the first insertion
@@ -113,9 +113,7 @@ async fn test_fuse_navigate() -> Result<()> {
         .unwrap()
         .sub(chrono::Duration::milliseconds(1));
     // navigate from the instant that is just one ms before the timestamp of the last insertion
-    let res = fuse_table
-        .navigate_to_time_point(ctx.as_ref(), instant)
-        .await;
+    let res = fuse_table.navigate_to_time_point(ctx, instant).await;
     match res {
         Ok(_) => panic!("historical data should not exist"),
         Err(e) => assert_eq!(e.code(), ErrorCode::table_historical_data_not_found_code()),
@@ -142,7 +140,7 @@ async fn test_fuse_historical_table_is_read_only() -> Result<()> {
     let table = fixture.latest_default_table().await?;
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
     let loc = fuse_table.snapshot_loc().unwrap();
-    let reader = MetaReaders::table_snapshot_reader(ctx.as_ref());
+    let reader = MetaReaders::table_snapshot_reader(ctx.clone());
     let version = TableMetaLocationGenerator::snapshot_version(loc.as_str());
     let snapshots: Vec<_> = reader
         .snapshot_history(loc, version, fuse_table.meta_location_generator().clone())
@@ -155,7 +153,7 @@ async fn test_fuse_historical_table_is_read_only() -> Result<()> {
         .unwrap()
         .add(chrono::Duration::milliseconds(1));
     let tbl = fuse_table
-        .navigate_to_time_point(ctx.as_ref(), instant)
+        .navigate_to_time_point(ctx.clone(), instant)
         .await?;
 
     // check append2

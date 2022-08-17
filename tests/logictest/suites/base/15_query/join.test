@@ -466,3 +466,22 @@ select * from numbers(10) x join (select 1::UInt64 number) y on x.number = y.num
 
 ----
 1 1
+
+statement ok
+CREATE TABLE onecolumn (x INT NULL);
+
+statement ok
+INSERT INTO onecolumn(x) VALUES (44), (NULL), (42);
+
+statement ok
+CREATE TABLE empty (x INT);
+
+statement ok
+SELECT * FROM onecolumn AS a(x) CROSS JOIN empty AS b(y);
+
+statement ok
+drop table onecolumn;
+
+statement ok
+drop table empty;
+

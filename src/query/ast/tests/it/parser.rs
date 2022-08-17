@@ -270,6 +270,7 @@ fn test_statement() {
         r#"ALTER SHARE IF EXISTS a REMOVE TENANTS = b,c;"#,
         r#"DESC SHARE b;"#,
         r#"DESCRIBE SHARE b;"#,
+        r#"SHOW SHARES;"#,
     ];
 
     for case in cases {

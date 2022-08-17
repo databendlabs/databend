@@ -273,6 +273,10 @@ impl InterpreterFactoryV2 {
                 *p.clone(),
             )?)),
             Plan::DescShare(p) => Ok(Arc::new(DescShareInterpreter::try_create(ctx, *p.clone())?)),
+            Plan::ShowShares(p) => Ok(Arc::new(ShowSharesInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
         }
     }
 }
