@@ -1,7 +1,4 @@
 statement ok
-SET enable_planner_v2=1;
-
-statement ok
 DROP USER IF EXISTS 'test-user';
 
 statement ok
@@ -32,7 +29,7 @@ statement ok
 CREATE DATABASE b;
 
 statement error 2201
-REVOKE ROLE 'test' FROM 'test-user'; 
+REVOKE ROLE 'test' FROM 'test-user';
 
 statement ok
 CREATE USER 'test-user' IDENTIFIED BY 'password';
@@ -44,7 +41,7 @@ statement ok
 CREATE ROLE 'test';
 
 statement error 2204
-REVOKE ROLE 'test' FROM ROLE 'test-role'; 
+REVOKE ROLE 'test' FROM ROLE 'test-role';
 
 statement ok
 CREATE ROLE 'test-role';
@@ -96,7 +93,3 @@ DROP DATABASE a;
 
 statement ok
 DROP DATABASE b;
-
-statement ok
-SET enable_planner_v2=0;
-

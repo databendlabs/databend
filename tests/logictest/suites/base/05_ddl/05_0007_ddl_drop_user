@@ -1,5 +1,8 @@
+statement ok
+set enable_planner_v2=1;
+
 statement error 2201
-DROP USER 'test-j'@'localhost'; 
+DROP USER 'test-j'@'localhost';
 
 statement ok
 DROP USER IF EXISTS 'test-j'@'localhost';
