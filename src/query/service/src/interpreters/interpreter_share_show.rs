@@ -80,31 +80,23 @@ impl Interpreter for ShowSharesInterpreter {
             names.push(entry.share_name.share_name.clone());
             kinds.push("INBOUND".to_string());
             created_ons.push(entry.create_on.to_string());
-            database_names.push(
-                entry
-                    .database_name
-                    .map_or("".to_string(), |database_name| database_name),
-            );
+            database_names.push(entry.database_name.unwrap_or_default());
             from.push(entry.share_name.tenant.clone());
             to.push(tenant.clone());
-            comments.push(entry.comment.map_or("".to_string(), |comment| comment));
+            comments.push(entry.comment.unwrap_or_default());
         }
         for entry in resp.outbound_accounts {
             names.push(entry.share_name.share_name.clone());
             kinds.push("OUTBOUND".to_string());
             created_ons.push(entry.create_on.to_string());
-            database_names.push(
-                entry
-                    .database_name
-                    .map_or("".to_string(), |database_name| database_name),
-            );
+            database_names.push(entry.database_name.unwrap_or_default());
             from.push(entry.share_name.tenant.clone());
             to.push(
                 entry
                     .accounts
                     .map_or("".to_string(), |accounts| accounts.join(",")),
             );
-            comments.push(entry.comment.map_or("".to_string(), |comment| comment));
+            comments.push(entry.comment.unwrap_or_default());
         }
 
         let block = DataBlock::create(desc_schema.clone(), vec![
