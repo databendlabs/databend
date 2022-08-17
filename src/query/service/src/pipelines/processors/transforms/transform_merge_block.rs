@@ -84,7 +84,7 @@ impl Processor for TransformMergeBlock {
             return Ok(Event::NeedConsume);
         }
 
-        if self.input_data.is_some() {
+        if self.input_data.is_some() || self.receiver_result.is_some() {
             return Ok(Event::Sync);
         }
 
@@ -103,9 +103,7 @@ impl Processor for TransformMergeBlock {
     }
 
     fn process(&mut self) -> Result<()> {
-        dbg!("come here");
         if let Some(input_data) = self.input_data.take() {
-            dbg!(&input_data);
             if let Some(receiver_result) = self.receiver_result.take() {
                 let data_block = DataBlock::create(
                     input_data.schema().clone(),
@@ -116,7 +114,6 @@ impl Processor for TransformMergeBlock {
                 self.output_data = Some(input_data);
             }
         } else if let Some(receiver_result) = self.receiver_result.take() {
-            dbg!(&receiver_result);
             self.output_data = Some(receiver_result);
         }
 
