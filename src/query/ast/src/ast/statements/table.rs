@@ -131,12 +131,13 @@ impl Display for CreateTableStmt<'_> {
         }
 
         if let Some(engine) = &self.engine {
-            write!(f, " ENGINE={engine}")?;
+            write!(f, " ENGINE = {engine}")?;
         }
 
         if !self.cluster_by.is_empty() {
-            write!(f, " CLUSTER BY ")?;
+            write!(f, " CLUSTER BY (")?;
             write_comma_separated_list(f, &self.cluster_by)?;
+            write!(f, ")")?
         }
 
         // Format table options

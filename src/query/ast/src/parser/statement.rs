@@ -38,20 +38,27 @@ use crate::util::*;
 use crate::ErrorKind;
 
 pub fn statement(i: Input) -> IResult<StatementMsg> {
-    let explain = map(
+    let explain = map_res(
         rule! {
-            EXPLAIN ~ ( PIPELINE | GRAPH | FRAGMENTS | RAW )? ~ #statement
+            EXPLAIN ~ ( SYNTAX | PIPELINE | GRAPH | FRAGMENTS | RAW )? ~ #statement
         },
-        |(_, opt_kind, statement)| Statement::Explain {
-            kind: match opt_kind.map(|token| token.kind) {
-                Some(TokenKind::PIPELINE) => ExplainKind::Pipeline,
-                Some(TokenKind::GRAPH) => ExplainKind::Graph,
-                Some(TokenKind::FRAGMENTS) => ExplainKind::Fragments,
-                Some(TokenKind::RAW) => ExplainKind::Raw,
-                None => ExplainKind::Syntax,
-                _ => unreachable!(),
-            },
-            query: Box::new(statement.stmt),
+        |(_, opt_kind, statement)| {
+            Ok(Statement::Explain {
+                kind: match opt_kind.map(|token| token.kind) {
+                    Some(TokenKind::SYNTAX) => {
+                        let pretty_stmt = pretty_statement(statement.stmt.clone(), 10)
+                            .map_err(|_| ErrorKind::Other("invalid statement"))?;
+                        ExplainKind::Syntax(pretty_stmt)
+                    }
+                    Some(TokenKind::PIPELINE) => ExplainKind::Pipeline,
+                    Some(TokenKind::GRAPH) => ExplainKind::Graph,
+                    Some(TokenKind::FRAGMENTS) => ExplainKind::Fragments,
+                    Some(TokenKind::RAW) => ExplainKind::Raw,
+                    None => ExplainKind::Plan,
+                    _ => unreachable!(),
+                },
+                query: Box::new(statement.stmt),
+            })
         },
     );
     let insert = map(
