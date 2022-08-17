@@ -95,12 +95,16 @@ impl KVApiKey for ShareAccountNameIdent {
     const PREFIX: &'static str = PREFIX_SHARE_ACCOUNT_ID;
 
     fn to_key(&self) -> String {
-        format!(
-            "{}/{}/{}",
-            Self::PREFIX,
-            escape(&self.account),
-            self.share_id,
-        )
+        if self.share_id != 0 {
+            format!(
+                "{}/{}/{}",
+                Self::PREFIX,
+                escape(&self.account),
+                self.share_id,
+            )
+        } else {
+            format!("{}/{}/", Self::PREFIX, escape(&self.account),)
+        }
     }
 
     fn from_key(s: &str) -> Result<Self, KVApiKeyError> {
