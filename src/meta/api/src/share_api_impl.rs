@@ -22,34 +22,7 @@ use common_meta_app::schema::TableId;
 use common_meta_app::schema::TableIdToName;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TableNameIdent;
-use common_meta_app::share::AddShareAccountsReply;
-use common_meta_app::share::AddShareAccountsReq;
-use common_meta_app::share::CreateShareReply;
-use common_meta_app::share::CreateShareReq;
-use common_meta_app::share::DropShareReply;
-use common_meta_app::share::DropShareReq;
-use common_meta_app::share::GetShareGrantObjectReply;
-use common_meta_app::share::GetShareGrantObjectReq;
-use common_meta_app::share::GrantShareObjectReply;
-use common_meta_app::share::GrantShareObjectReq;
-use common_meta_app::share::RemoveShareAccountsReply;
-use common_meta_app::share::RemoveShareAccountsReq;
-use common_meta_app::share::RevokeShareObjectReply;
-use common_meta_app::share::RevokeShareObjectReq;
-use common_meta_app::share::ShareAccountMeta;
-use common_meta_app::share::ShareAccountNameIdent;
-use common_meta_app::share::ShareAccountReply;
-use common_meta_app::share::ShareGrantEntry;
-use common_meta_app::share::ShareGrantObject;
-use common_meta_app::share::ShareGrantObjectName;
-use common_meta_app::share::ShareGrantObjectSeqAndId;
-use common_meta_app::share::ShareGrantReplyObject;
-use common_meta_app::share::ShareId;
-use common_meta_app::share::ShareIdToName;
-use common_meta_app::share::ShareMeta;
-use common_meta_app::share::ShareNameIdent;
-use common_meta_app::share::ShowShareReply;
-use common_meta_app::share::ShowShareReq;
+use common_meta_app::share::*;
 use common_meta_types::app_error::AppError;
 use common_meta_types::app_error::ShareAccountsAlreadyExists;
 use common_meta_types::app_error::ShareAlreadyExists;
@@ -293,7 +266,7 @@ impl<KV: KVApi> ShareApi for KV {
         )))
     }
 
-    async fn add_share_accounts(
+    async fn add_share_tenants(
         &self,
         req: AddShareAccountsReq,
     ) -> MetaResult<AddShareAccountsReply> {
@@ -305,8 +278,7 @@ impl<KV: KVApi> ShareApi for KV {
             retry += 1;
 
             let res =
-                get_share_or_err(self, name_key, format!("add_share_accounts: {}", &name_key))
-                    .await;
+                get_share_or_err(self, name_key, format!("add_share_tenants: {}", &name_key)).await;
 
             let (share_id_seq, share_id, share_meta_seq, mut share_meta) = match res {
                 Ok(x) => x,
@@ -384,7 +356,7 @@ impl<KV: KVApi> ShareApi for KV {
                     name = debug(&name_key),
                     id = debug(&id_key),
                     succ = display(succ),
-                    "add_share_accounts"
+                    "add_share_tenants"
                 );
 
                 if succ {
@@ -394,11 +366,11 @@ impl<KV: KVApi> ShareApi for KV {
         }
 
         Err(MetaError::AppError(AppError::TxnRetryMaxTimes(
-            TxnRetryMaxTimes::new("add_share_accounts", TXN_MAX_RETRY_TIMES),
+            TxnRetryMaxTimes::new("add_share_tenants", TXN_MAX_RETRY_TIMES),
         )))
     }
 
-    async fn remove_share_accounts(
+    async fn remove_share_tenants(
         &self,
         req: RemoveShareAccountsReq,
     ) -> MetaResult<RemoveShareAccountsReply> {
@@ -413,7 +385,7 @@ impl<KV: KVApi> ShareApi for KV {
             let res = get_share_or_err(
                 self,
                 name_key,
-                format!("remove_share_accounts: {}", &name_key),
+                format!("remove_share_tenants: {}", &name_key),
             )
             .await;
 
@@ -443,7 +415,7 @@ impl<KV: KVApi> ShareApi for KV {
                     let res = get_share_account_meta_or_err(
                         self,
                         &share_account_key,
-                        format!("remove_share_accounts: {}", share_id),
+                        format!("remove_share_tenants: {}", share_id),
                     )
                     .await;
 
@@ -498,7 +470,7 @@ impl<KV: KVApi> ShareApi for KV {
                 debug!(
                     id = debug(&id_key),
                     succ = display(succ),
-                    "remove_share_accounts"
+                    "remove_share_tenants"
                 );
 
                 if succ {
@@ -508,7 +480,7 @@ impl<KV: KVApi> ShareApi for KV {
         }
 
         Err(MetaError::AppError(AppError::TxnRetryMaxTimes(
-            TxnRetryMaxTimes::new("remove_share_accounts", TXN_MAX_RETRY_TIMES),
+            TxnRetryMaxTimes::new("remove_share_tenants", TXN_MAX_RETRY_TIMES),
         )))
     }
 
@@ -558,17 +530,26 @@ impl<KV: KVApi> ShareApi for KV {
                 let id_key = ShareId { share_id };
                 // modify the share_meta add privilege
                 let object = ShareGrantObject::new(&seq_and_id);
-                share_meta.grant_object_privileges(object, req.privilege, req.grant_on);
+
+                // modify share_ids
+                let res = get_object_shared_by_share_ids(self, &object).await?;
+                let share_ids_seq = res.0;
+                let mut share_ids: ObjectSharedByShareIds = res.1;
+                share_ids.add(share_id);
+
+                share_meta.grant_object_privileges(object.clone(), req.privilege, req.grant_on);
 
                 // condition
                 let mut condition: Vec<TxnCondition> = vec![
                     txn_cond_seq(share_name_key, Eq, share_id_seq),
                     txn_cond_seq(&id_key, Eq, share_meta_seq),
+                    txn_cond_seq(&object, Eq, share_ids_seq),
                 ];
                 add_txn_condition(&seq_and_id, &mut condition);
                 // if_then
                 let mut if_then = vec![
                     txn_op_put(&id_key, serialize_struct(&share_meta)?), /* (share_id) -> share_meta */
+                    txn_op_put(&object, serialize_struct(&share_ids)?),  /* (object) -> share_ids */
                 ];
                 add_grant_object_txn_if_then(share_id, seq_and_id, &mut if_then)?;
 
@@ -644,18 +625,29 @@ impl<KV: KVApi> ShareApi for KV {
                 let id_key = ShareId { share_id };
                 // modify the share_meta add privilege
                 let object = ShareGrantObject::new(&seq_and_id);
-                let _ =
-                    share_meta.revoke_object_privileges(object, req.privilege, req.update_on)?;
+                let _ = share_meta.revoke_object_privileges(
+                    object.clone(),
+                    req.privilege,
+                    req.update_on,
+                )?;
+
+                // modify share_ids
+                let res = get_object_shared_by_share_ids(self, &object).await?;
+                let share_ids_seq = res.0;
+                let mut share_ids: ObjectSharedByShareIds = res.1;
+                share_ids.remove(share_id);
 
                 // condition
                 let mut condition: Vec<TxnCondition> = vec![
                     txn_cond_seq(share_name_key, Eq, share_id_seq),
                     txn_cond_seq(&id_key, Eq, share_meta_seq),
+                    txn_cond_seq(&object, Eq, share_ids_seq),
                 ];
                 add_txn_condition(&seq_and_id, &mut condition);
                 // if_then
                 let mut if_then = vec![
                     txn_op_put(&id_key, serialize_struct(&share_meta)?), /* (share_id) -> share_meta */
+                    txn_op_put(&object, serialize_struct(&share_ids)?),  /* (object) -> share_ids */
                 ];
 
                 if let ShareGrantObjectSeqAndId::Database(_seq, db_id, mut db_meta) = seq_and_id {
@@ -737,26 +729,11 @@ impl<KV: KVApi> ShareApi for KV {
             }
         };
 
-        let entries = match req.object {
-            Some(object_name) => {
-                let seq_and_id =
-                    get_share_object_seq_and_id(self, &object_name, &share_name_key.tenant).await?;
-                let object = ShareGrantObject::new(&seq_and_id);
-                let entry = share_meta.get_grant_entry(object);
-                match entry {
-                    Some(entry) => vec![entry],
-                    None => vec![],
-                }
-            }
-            None => {
-                let mut entries = Vec::new();
-                for entry in share_meta.entries {
-                    entries.push(entry.1);
-                }
-                entries.push(share_meta.database.unwrap());
-                entries
-            }
-        };
+        let mut entries = Vec::new();
+        for entry in share_meta.entries {
+            entries.push(entry.1);
+        }
+        entries.push(share_meta.database.unwrap());
 
         let mut objects = vec![];
         for entry in entries {
@@ -775,6 +752,144 @@ impl<KV: KVApi> ShareApi for KV {
             share_name: req.share_name,
             objects,
         })
+    }
+
+    // Return all the grant tenants of the share
+    async fn get_grant_tenants_of_share(
+        &self,
+        req: GetShareGrantTenantsReq,
+    ) -> MetaResult<GetShareGrantTenantsReply> {
+        let reply = get_outbound_shared_accounts_by_name(self, &req.share_name).await?;
+
+        Ok(GetShareGrantTenantsReply {
+            accounts: reply.accounts.unwrap_or_default(),
+        })
+    }
+
+    // Return all the grant privileges of the object
+    async fn get_grant_privileges_of_object(
+        &self,
+        req: GetObjectGrantPrivilegesReq,
+    ) -> MetaResult<GetObjectGrantPrivilegesReply> {
+        let entries = match req.object {
+            ShareGrantObjectName::Database(db_name) => {
+                let db_name_key = DatabaseNameIdent {
+                    tenant: req.tenant,
+                    db_name: db_name.clone(),
+                };
+                let (db_seq, db_id) = get_u64_value(self, &db_name_key).await?;
+                db_has_to_exist(
+                    db_seq,
+                    &db_name_key,
+                    format!("get_grant_privileges_of_object: {}", db_name_key),
+                )?;
+                let object = ShareGrantObject::Database(db_id);
+                let (_seq, share_ids) = get_object_shared_by_share_ids(self, &object).await?;
+                let mut entries = vec![];
+                for share_id in share_ids.share_ids.iter() {
+                    let (_seq, share_name) = get_share_id_to_name_or_err(
+                        self,
+                        *share_id,
+                        format!("get_grant_privileges_of_object: {}", &share_id),
+                    )
+                    .await?;
+
+                    let (_seq, share_meta) = get_share_meta_by_id_or_err(
+                        self,
+                        *share_id,
+                        format!("get_grant_privileges_of_object: {}", &share_id),
+                    )
+                    .await?;
+
+                    entries.push((
+                        share_meta.get_grant_entry(object.clone()),
+                        share_name.share_name,
+                    ));
+                }
+
+                entries
+            }
+            ShareGrantObjectName::Table(db_name, table_name) => {
+                let db_name_key = DatabaseNameIdent {
+                    tenant: req.tenant.clone(),
+                    db_name: db_name.clone(),
+                };
+                let (db_seq, db_id) = get_u64_value(self, &db_name_key).await?;
+                db_has_to_exist(
+                    db_seq,
+                    &db_name_key,
+                    format!("get_grant_privileges_of_object: {}", db_name_key),
+                )?;
+
+                let table_name_key = DBIdTableName {
+                    db_id,
+                    table_name: table_name.clone(),
+                };
+                let (table_seq, table_id) = get_u64_value(self, &table_name_key).await?;
+                table_has_to_exist(
+                    table_seq,
+                    &TableNameIdent {
+                        tenant: req.tenant.clone(),
+                        db_name: db_name.clone(),
+                        table_name,
+                    },
+                    format!("get_grant_privileges_of_object: {}", table_name_key),
+                )?;
+
+                let object = ShareGrantObject::Table(table_id);
+                let (_seq, share_ids) = get_object_shared_by_share_ids(self, &object).await?;
+                let mut entries = vec![];
+                for share_id in share_ids.share_ids.iter() {
+                    let (_seq, share_name) = get_share_id_to_name_or_err(
+                        self,
+                        *share_id,
+                        format!("get_grant_privileges_of_object: {}", &share_id),
+                    )
+                    .await?;
+
+                    let (_seq, share_meta) = get_share_meta_by_id_or_err(
+                        self,
+                        *share_id,
+                        format!("get_grant_privileges_of_object: {}", &share_id),
+                    )
+                    .await?;
+
+                    entries.push((
+                        share_meta.get_grant_entry(object.clone()),
+                        share_name.share_name,
+                    ));
+                }
+
+                entries
+            }
+        };
+        let mut privileges = vec![];
+        for (entry, share_name) in entries {
+            match entry {
+                Some(entry) => {
+                    privileges.push(ObjectGrantPrivilege {
+                        share_name,
+                        privileges: entry.privileges,
+                        grant_on: entry.grant_on,
+                    });
+                }
+                None => {}
+            }
+        }
+        Ok(GetObjectGrantPrivilegesReply { privileges })
+    }
+}
+
+async fn get_object_shared_by_share_ids(
+    kv_api: &(impl KVApi + ?Sized),
+    object: &ShareGrantObject,
+) -> Result<(u64, ObjectSharedByShareIds), MetaError> {
+    let (seq, share_ids): (u64, Option<ObjectSharedByShareIds>) =
+        get_struct_value(kv_api, object).await?;
+
+    match share_ids {
+        Some(share_ids) => Ok((seq, share_ids)),
+        None => Ok((0, ObjectSharedByShareIds::default())),
     }
 }
 
