@@ -35,7 +35,7 @@ impl Series {
     /// Get a pointer to the underlying data of this Series.
     /// Can be useful for fast comparisons.
     /// # Safety
-    /// Assumes that the `column` is  T.
+    /// Assumes that the `column` is T.
     pub unsafe fn static_cast<T: Any>(column: &ColumnRef) -> &T {
         let object = column.as_ref();
         debug_assert!(object.as_any().is::<T>());
