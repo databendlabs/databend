@@ -14,6 +14,7 @@
 
 use std::net::Shutdown;
 
+use common_base::base::tokio::io::BufWriter;
 use common_base::base::tokio::net::TcpStream;
 use common_base::base::Runtime;
 use common_base::base::Thread;
@@ -27,6 +28,9 @@ use tracing::error;
 
 use crate::servers::mysql::mysql_interactive_worker::InteractiveWorker;
 use crate::sessions::SessionRef;
+
+// default size of resultset write buffer: 100KB
+const DEFAULT_RESULT_SET_WRITE_BUFFER_SIZE: usize = 100 * 1024;
 
 pub struct MySQLConnection;
 
@@ -45,12 +49,9 @@ impl MySQLConnection {
                 let opts = IntermediaryOptions {
                     process_use_statement_on_query: true,
                 };
-                AsyncMysqlIntermediary::run_with_options(
-                    interactive_worker,
-                    non_blocking_stream,
-                    &opts,
-                )
-                .await
+                let (r, w) = non_blocking_stream.into_split();
+                let w = BufWriter::with_capacity(DEFAULT_RESULT_SET_WRITE_BUFFER_SIZE, w);
+                AsyncMysqlIntermediary::run_with_options(interactive_worker, r, w, &opts).await
             });
             let _ = futures::executor::block_on(join_handle);
         });
