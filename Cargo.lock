@@ -124,6 +124,12 @@ dependencies = [
 
 [[package]]
 name = "arrayvec"
+version = "0.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "23b62fc65de8e4e7f52534fb52b0f3ed04746ae267519eef2a83941e8085068b"
+
+[[package]]
+name = "arrayvec"
 version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8da52d66c7071e2e3fa2a1e5c6d088fec47b593032b254f5e980de8ea54454d6"
@@ -935,6 +941,7 @@ name = "codegen"
 version = "0.1.0"
 dependencies = [
  "common-datavalues",
+ "common-expression",
  "serde",
  "serde_json",
 ]
@@ -989,9 +996,9 @@ dependencies = [
  "nom",
  "nom-rule",
  "pratt",
+ "pretty",
  "pretty_assertions",
  "regex",
- "sqlparser",
  "thiserror",
  "url",
 ]
@@ -1206,6 +1213,7 @@ dependencies = [
  "common-datablocks",
  "common-datavalues",
  "common-exception",
+ "common-hashtable",
  "common-io",
  "crc32fast",
  "dyn-clone",
@@ -1248,6 +1256,9 @@ dependencies = [
  "common-ast",
  "common-expression",
  "goldenfile",
+ "match-template",
+ "num-traits",
+ "strength_reduce",
 ]
 
 [[package]]
@@ -1286,6 +1297,7 @@ dependencies = [
 name = "common-hashtable"
 version = "0.1.0"
 dependencies = [
+ "ordered-float 3.0.0",
  "primitive-types",
  "rand 0.8.5",
 ]
@@ -1334,11 +1346,9 @@ name = "common-legacy-parser"
 version = "0.1.0"
 dependencies = [
  "async-trait 0.1.57",
- "common-ast",
  "common-datavalues",
  "common-exception",
  "common-functions",
- "common-meta-types",
  "common-planners",
  "sqlparser",
 ]
@@ -1357,7 +1367,6 @@ name = "common-management"
 version = "0.1.0"
 dependencies = [
  "async-trait 0.1.57",
- "common-ast",
  "common-base",
  "common-datavalues",
  "common-exception",
@@ -1732,6 +1741,7 @@ dependencies = [
  "common-planners",
  "common-storages-index",
  "common-storages-util",
+ "common-streams",
  "futures",
  "futures-util",
  "opendal",
@@ -1800,7 +1810,6 @@ dependencies = [
  "chrono",
  "clap 3.2.17",
  "common-arrow",
- "common-ast",
  "common-base",
  "common-building",
  "common-cache",
@@ -5056,8 +5065,8 @@ dependencies = [
 
 [[package]]
 name = "openraft"
-version = "0.7.0-alpha.2"
-source = "git+https://github.com/datafuselabs/openraft?rev=v0.7.0-alpha.3#701e73481b5a28df894aadf36bf243f0506bf036"
+version = "0.7.0-alpha.4"
+source = "git+https://github.com/datafuselabs/openraft?rev=v0.7.0-alpha.5#f1cc23fab4ef4b6cd58630c3311b3e930c479d48"
 dependencies = [
  "anyerror",
  "anyhow",
@@ -5078,9 +5087,9 @@ dependencies = [
 
 [[package]]
 name = "opensrv-mysql"
-version = "0.1.0"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8bcb5fc2fda7e5e5f8478cd637285bbdd6196a9601e32293d0897e469a7dd020"
+checksum = "e4c24c12fd688cb5aa5b1a54c6ccb2e30fb9b5132debb0e89fcb432b3f73db8f"
 dependencies = [
  "async-trait 0.1.57",
  "byteorder",
@@ -5708,6 +5717,18 @@ checksum = "4d86de6de25020a36c6d3643a86d9a6a9f552107c0559c60ea03551b5e16c032"
 dependencies = [
  "predicates-core",
  "termtree",
+]
+
+[[package]]
+name = "pretty"
+version = "0.11.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "83f3aa1e3ca87d3b124db7461265ac176b40c277f37e503eaa29c9c75c037846"
+dependencies = [
+ "arrayvec 0.5.2",
+ "log",
+ "typed-arena",
+ "unicode-segmentation",
 ]
 
 [[package]]
@@ -7900,6 +7921,12 @@ dependencies = [
  "rand 0.8.5",
  "static_assertions",
 ]
+
+[[package]]
+name = "typed-arena"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0685c84d5d54d1c26f7d3eb96cd41550adb97baed141a761cf335d3d33bcd0ae"
 
 [[package]]
 name = "typed-headers"

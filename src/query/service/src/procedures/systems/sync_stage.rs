@@ -21,6 +21,7 @@ use common_exception::Result;
 use common_meta_types::StageType;
 
 use crate::interpreters::list_files_from_dal;
+use crate::procedures::OneBlockProcedure;
 use crate::procedures::Procedure;
 use crate::procedures::ProcedureFeatures;
 use crate::sessions::QueryContext;
@@ -30,12 +31,12 @@ pub struct SyncStageFileProcedure;
 
 impl SyncStageFileProcedure {
     pub fn try_create() -> Result<Box<dyn Procedure>> {
-        Ok(Box::new(SyncStageFileProcedure {}))
+        Ok(SyncStageFileProcedure {}.into_procedure())
     }
 }
 
 #[async_trait::async_trait]
-impl Procedure for SyncStageFileProcedure {
+impl OneBlockProcedure for SyncStageFileProcedure {
     fn name(&self) -> &str {
         "SYNC_STAGE_FILE"
     }
@@ -44,7 +45,7 @@ impl Procedure for SyncStageFileProcedure {
         ProcedureFeatures::default().num_arguments(2)
     }
 
-    async fn inner_eval(&self, ctx: Arc<QueryContext>, args: Vec<String>) -> Result<DataBlock> {
+    async fn all_data(&self, ctx: Arc<QueryContext>, args: Vec<String>) -> Result<DataBlock> {
         let stage_name = args[0].clone();
         let path = args[1].clone();
         let path = path.trim_start_matches('/');

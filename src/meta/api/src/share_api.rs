@@ -26,13 +26,13 @@ use common_meta_app::share::RemoveShareAccountsReply;
 use common_meta_app::share::RemoveShareAccountsReq;
 use common_meta_app::share::RevokeShareObjectReply;
 use common_meta_app::share::RevokeShareObjectReq;
-use common_meta_app::share::ShowShareReply;
-use common_meta_app::share::ShowShareReq;
+use common_meta_app::share::ShowSharesReply;
+use common_meta_app::share::ShowSharesReq;
 use common_meta_types::MetaResult;
 
 #[async_trait::async_trait]
 pub trait ShareApi: Sync + Send {
-    async fn show_share(&self, req: ShowShareReq) -> MetaResult<ShowShareReply>;
+    async fn show_shares(&self, req: ShowSharesReq) -> MetaResult<ShowSharesReply>;
     async fn create_share(&self, req: CreateShareReq) -> MetaResult<CreateShareReply>;
 
     async fn drop_share(&self, req: DropShareReq) -> MetaResult<DropShareReply>;

@@ -53,16 +53,28 @@ impl Display for ShareAccountNameIdent {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct ShowShareReq {
-    pub share_name: ShareNameIdent,
+pub struct ShowSharesReq {
+    pub tenant: String,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct ShowShareReply {
+pub struct ShareAccountReply {
     pub share_name: ShareNameIdent,
-    pub share_id: u64,
-    pub share_meta: ShareMeta,
-    pub share_account_meta: Vec<ShareAccountMeta>,
+    pub database_name: Option<String>,
+    // for outbound share account, it is the time share has been created.
+    // for inbound share account, it is the time accounts has been added to the share.
+    pub create_on: DateTime<Utc>,
+    // if is inbound share, then accounts is None
+    pub accounts: Option<Vec<String>>,
+    pub comment: Option<String>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct ShowSharesReply {
+    // sharing to other accounts(outbound shares)
+    pub outbound_accounts: Vec<ShareAccountReply>,
+    // be shared by other accounts(inbound shares)
+    pub inbound_accounts: Vec<ShareAccountReply>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]

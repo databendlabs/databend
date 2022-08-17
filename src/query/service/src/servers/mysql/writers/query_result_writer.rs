@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datablocks::DataBlock;
+use common_base::base::tokio::io::AsyncWrite;
 use common_datavalues::prelude::TypeID;
 use common_datavalues::remove_nullable;
 use common_datavalues::DataField;
@@ -27,20 +27,32 @@ use common_exception::Result;
 use common_exception::ABORT_QUERY;
 use common_exception::ABORT_SESSION;
 use common_io::prelude::FormatSettings;
+use common_streams::DataBlockStream;
+use common_streams::SendableDataBlockStream;
+use futures_util::StreamExt;
 use opensrv_mysql::*;
 use tracing::error;
 
+/// Reports progress information as string, intend to be put into the mysql Ok packet.
+/// Mainly for decoupling with concrete type like `QueryContext`
+///
+/// Something like  
+/// "Read x rows, y MiB in z sec., A million rows/sec., B MiB/sec."
+pub trait ProgressReporter {
+    fn progress_info(&self) -> String;
+}
+
 pub struct QueryResult {
-    blocks: Vec<DataBlock>,
-    extra_info: String,
+    blocks: SendableDataBlockStream,
+    extra_info: Option<Box<dyn ProgressReporter + Send>>,
     has_result_set: bool,
     schema: DataSchemaRef,
 }
 
 impl QueryResult {
     pub fn create(
-        blocks: Vec<DataBlock>,
-        extra_info: String,
+        blocks: SendableDataBlockStream,
+        extra_info: Option<Box<dyn ProgressReporter + Send>>,
         has_result_set: bool,
         schema: DataSchemaRef,
     ) -> QueryResult {
@@ -53,53 +65,48 @@ impl QueryResult {
     }
 
     pub fn default() -> QueryResult {
+        let schema = DataSchemaRefExt::create(vec![]);
         QueryResult {
-            blocks: vec![DataBlock::empty()],
-            extra_info: String::from(""),
+            blocks: DataBlockStream::create(schema.clone(), None, vec![]).boxed(),
+            extra_info: None,
             has_result_set: false,
-            schema: DataSchemaRefExt::create(vec![]),
+            schema,
         }
     }
 }
 
-pub struct DFQueryResultWriter<'a, W: std::io::Write> {
+pub struct DFQueryResultWriter<'a, W: AsyncWrite + Send + Unpin> {
     inner: Option<QueryResultWriter<'a, W>>,
 }
 
-impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
+impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
     pub fn create(inner: QueryResultWriter<'a, W>) -> DFQueryResultWriter<'a, W> {
         DFQueryResultWriter::<'a, W> { inner: Some(inner) }
     }
 
-    pub fn write(
+    pub async fn write(
         &mut self,
         query_result: Result<QueryResult>,
         format: &FormatSettings,
     ) -> Result<()> {
         if let Some(writer) = self.inner.take() {
             match query_result {
-                Ok(query_result) => Self::ok(query_result, writer, format)?,
-                Err(error) => Self::err(&error, writer)?,
+                Ok(query_result) => Self::ok(query_result, writer, format).await?,
+                Err(error) => Self::err(&error, writer).await?,
             }
         }
         Ok(())
     }
 
-    fn ok(
-        query_result: QueryResult,
+    async fn ok(
+        mut query_result: QueryResult,
         dataset_writer: QueryResultWriter<'a, W>,
         format: &FormatSettings,
     ) -> Result<()> {
         // XXX: num_columns == 0 may is error?
-        let default_response = OkResponse {
-            info: query_result.extra_info,
-            ..Default::default()
-        };
 
-        if (!query_result.has_result_set && query_result.blocks.is_empty())
-            || (query_result.schema.num_fields() == 0)
-        {
-            dataset_writer.completed(default_response)?;
+        if !query_result.has_result_set {
+            dataset_writer.completed(OkResponse::default()).await?;
             return Ok(());
         }
 
@@ -148,11 +155,24 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
 
         let tz = format.timezone;
         match convert_schema(&query_result.schema) {
-            Err(error) => Self::err(&error, dataset_writer),
+            Err(error) => Self::err(&error, dataset_writer).await,
             Ok(columns) => {
-                let mut row_writer = dataset_writer.start(&columns)?;
+                let mut row_writer = dataset_writer.start(&columns).await?;
 
-                for block in &query_result.blocks {
+                let blocks = &mut query_result.blocks;
+                while let Some(block) = blocks.next().await {
+                    let block = match block {
+                        Err(e) => {
+                            row_writer
+                                .finish_error(
+                                    ErrorKind::ER_UNKNOWN_ERROR,
+                                    &e.to_string().as_bytes(),
+                                )
+                                .await?;
+                            return Ok(());
+                        }
+                        Ok(block) => block,
+                    };
                     match block.get_serializers() {
                         Ok(serializers) => {
                             let rows_size = block.column(0).len();
@@ -223,34 +243,45 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
                                         }
                                     }
                                 }
-                                row_writer.end_row()?;
+                                row_writer.end_row().await?;
                             }
                         }
                         Err(e) => {
-                            row_writer.finish_error(
-                                ErrorKind::ER_UNKNOWN_ERROR,
-                                &e.to_string().as_bytes(),
-                            )?;
+                            row_writer
+                                .finish_error(
+                                    ErrorKind::ER_UNKNOWN_ERROR,
+                                    &e.to_string().as_bytes(),
+                                )
+                                .await?;
                             return Ok(());
                         }
                     }
                 }
-                row_writer.finish_with_info(&default_response.info)?;
+
+                let info = query_result
+                    .extra_info
+                    .map(|r| r.progress_info())
+                    .unwrap_or_default();
+                row_writer.finish_with_info(&info).await?;
 
                 Ok(())
             }
         }
     }
 
-    fn err(error: &ErrorCode, writer: QueryResultWriter<'a, W>) -> Result<()> {
+    async fn err(error: &ErrorCode, writer: QueryResultWriter<'a, W>) -> Result<()> {
         if error.code() != ABORT_QUERY && error.code() != ABORT_SESSION {
             error!("OnQuery Error: {:?}", error);
-            writer.error(ErrorKind::ER_UNKNOWN_ERROR, error.to_string().as_bytes())?;
+            writer
+                .error(ErrorKind::ER_UNKNOWN_ERROR, error.to_string().as_bytes())
+                .await?;
         } else {
-            writer.error(
-                ErrorKind::ER_ABORTING_CONNECTION,
-                error.to_string().as_bytes(),
-            )?;
+            writer
+                .error(
+                    ErrorKind::ER_ABORTING_CONNECTION,
+                    error.to_string().as_bytes(),
+                )
+                .await?;
         }
 
         Ok(())

@@ -17,6 +17,7 @@ mod procedure;
 mod procedure_factory;
 pub mod systems;
 
+pub use procedure::OneBlockProcedure;
 pub use procedure::Procedure;
 pub use procedure_factory::ProcedureFactory;
 pub use procedure_factory::ProcedureFeatures;

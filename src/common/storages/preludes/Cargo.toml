@@ -13,7 +13,6 @@ test = false
 
 [dependencies]
 common-arrow = { path = "../../arrow" }
-common-ast = { path = "../../../query/ast" }
 common-base = { path = "../../base" }
 common-cache = { path = "../../cache" }
 common-catalog = { path = "../../catalog" }

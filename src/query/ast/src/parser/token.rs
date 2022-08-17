@@ -605,6 +605,8 @@ pub enum TokenKind {
     SNAPSHOT,
     #[token("STAGE", ignore(ascii_case))]
     STAGE,
+    #[token("SYNTAX", ignore(ascii_case))]
+    SYNTAX,
     #[token("USAGE", ignore(ascii_case))]
     USAGE,
     #[token("UPDATE", ignore(ascii_case))]
@@ -613,6 +615,8 @@ pub enum TokenKind {
     UPLOAD,
     #[token("SHARE", ignore(ascii_case))]
     SHARE,
+    #[token("SHARES", ignore(ascii_case))]
+    SHARES,
     #[token("SUPER", ignore(ascii_case))]
     SUPER,
     #[token("STATUS", ignore(ascii_case))]
@@ -860,6 +864,7 @@ impl TokenKind {
             // | TokenKind::SESSION_USER
             // | TokenKind::SETOF
             | TokenKind::SHARE
+            | TokenKind::SHARES
             | TokenKind::SMALLINT
             | TokenKind::SOME
             | TokenKind::SUBSTRING
@@ -1022,6 +1027,8 @@ impl TokenKind {
             // | TokenKind::OVERLAPS
             // | TokenKind::RETURNING
             | TokenKind::STAGE
+            | TokenKind::SHARE
+            | TokenKind::SHARES
             | TokenKind::TO
             | TokenKind::UNION
             | TokenKind::WHERE

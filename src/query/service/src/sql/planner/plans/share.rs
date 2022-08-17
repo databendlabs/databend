@@ -15,6 +15,8 @@
 use std::sync::Arc;
 
 use common_datavalues::chrono::Utc;
+use common_datavalues::prelude::*;
+use common_datavalues::DataField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_meta_app::share::CreateShareReq;
@@ -118,5 +120,39 @@ pub struct AlterShareTenantsPlan {
 impl AlterShareTenantsPlan {
     pub fn schema(&self) -> DataSchemaRef {
         Arc::new(DataSchema::empty())
+    }
+}
+
+// desc share
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct DescSharePlan {
+    pub share: String,
+}
+
+impl DescSharePlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::new(vec![
+            DataField::new("Kind", Vu8::to_data_type()),
+            DataField::new("Name", Vu8::to_data_type()),
+            DataField::new("Shared_on", Vu8::to_data_type()),
+        ]))
+    }
+}
+
+// show share
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct ShowSharesPlan {}
+
+impl ShowSharesPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::new(vec![
+            DataField::new("Created_on", Vu8::to_data_type()),
+            DataField::new("Kind", Vu8::to_data_type()),
+            DataField::new("Name", Vu8::to_data_type()),
+            DataField::new("Database_name", Vu8::to_data_type()),
+            DataField::new("From", Vu8::to_data_type()),
+            DataField::new("To", Vu8::to_data_type()),
+            DataField::new("Comment", Vu8::to_data_type()),
+        ]))
     }
 }

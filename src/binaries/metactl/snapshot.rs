@@ -208,7 +208,7 @@ async fn init_new_cluster(
         },
     };
 
-    // contruct Membership log entry
+    // construct Membership log entry
     {
         // insert last membership log
         log_id.index += 1;
