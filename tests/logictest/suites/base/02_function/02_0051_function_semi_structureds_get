@@ -11,13 +11,13 @@ select get(parse_json('[2.71, 3.14]'), 2);
 NULL
 
 statement query T
-select get(parse_json('{"aa": 1, "aA":2, "Aa":3}'), 'aA');
+select get(parse_json('{"aa": 1, "aA": 2, "Aa": 3}'), 'aA');
 
 ----
 2
 
 statement query T
-select get(parse_json('{"aa": 1, "aA":2, "Aa":3}'), 'AA');
+select get(parse_json('{"aa": 1, "aA": 2, "Aa": 3}'), 'AA');
 
 ----
 NULL
