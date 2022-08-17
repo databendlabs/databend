@@ -739,8 +739,7 @@ async fn test_auth_jwt() -> Result<()> {
     let rsa_components = key_pair.public_key().to_components();
     let e = encode_config(rsa_components.e, URL_SAFE_NO_PAD);
     let n = encode_config(rsa_components.n, URL_SAFE_NO_PAD);
-    let j =
-        serde_json::json!({"keys": [ {"kty": "RSA", "kid": kid, "e": e, "n": n, } ] }).to_string();
+    let j = serde_json::json!({"keys": [ {"kty": "RSA", "kid": kid, "e": e, "n": n, } ] }).to_string();
 
     let server = MockServer::start().await;
     let json_path = "/jwks.json";

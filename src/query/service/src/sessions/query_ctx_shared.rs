@@ -77,6 +77,7 @@ pub struct QueryContextShared {
     pub(in crate::sessions) tables_refs: Arc<Mutex<HashMap<DatabaseAndTable, Arc<dyn Table>>>>,
     pub(in crate::sessions) dal_ctx: Arc<DalContext>,
     pub(in crate::sessions) auth_manager: Arc<AuthMgr>,
+    pub(in crate::sessions) user_manager: Arc<UserApiProvider>,
     pub(in crate::sessions) affect: Arc<Mutex<Option<QueryAffect>>>,
     pub(in crate::sessions) catalog_manager: Arc<CatalogManager>,
     pub(in crate::sessions) query_need_abort: Arc<AtomicBool>,
@@ -87,11 +88,13 @@ impl QueryContextShared {
         config: Config,
         session: Arc<Session>,
         cluster_cache: Arc<Cluster>,
+        user_manager: Arc<UserApiProvider>,
         catalog_manager: Arc<CatalogManager>,
     ) -> Result<Arc<QueryContextShared>> {
         Ok(Arc::new(QueryContextShared {
             session,
             cluster_cache,
+            user_manager,
             catalog_manager,
             init_query_id: Arc::new(RwLock::new(Uuid::new_v4().to_string())),
             scan_progress: Arc::new(Progress::create()),
@@ -169,7 +172,7 @@ impl QueryContextShared {
     }
 
     pub fn get_user_manager(&self) -> Arc<UserApiProvider> {
-        UserApiProvider::instance()
+        self.user_manager.clone()
     }
 
     pub fn get_auth_manager(&self) -> Arc<AuthMgr> {

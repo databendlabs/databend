@@ -136,12 +136,13 @@ impl Session {
 
     pub async fn get_shared_query_context(self: &Arc<Self>) -> Result<Arc<QueryContextShared>> {
         let discovery = ClusterDiscovery::instance();
+        let user_manager = UserApiProvider::instance();
         let catalog_manager = CatalogManager::instance();
 
         let config = self.get_config();
         let session = self.clone();
         let cluster = discovery.discover().await?;
-        let shared = QueryContextShared::try_create(config, session, cluster, catalog_manager).await?;
+        let shared = QueryContextShared::try_create(config, session, cluster, user_manager, catalog_manager).await?;
         self.session_ctx
             .set_query_context_shared(Some(shared.clone()));
         Ok(shared)
