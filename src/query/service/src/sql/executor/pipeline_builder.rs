@@ -21,7 +21,6 @@ use common_datablocks::SortColumnDescription;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
-
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::aggregates::AggregateFunctionFactory;
@@ -29,7 +28,6 @@ use common_functions::aggregates::AggregateFunctionRef;
 use common_functions::scalars::FunctionFactory;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::Pipe;
-
 use common_pipeline_sinks::processors::sinks::UnionReceiveSink;
 
 use super::AggregateFinal;
@@ -48,7 +46,6 @@ use crate::evaluator::Evaluator;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::transforms::ExpressionTransformV2;
 use crate::pipelines::processors::transforms::HashJoinDesc;
-
 use crate::pipelines::processors::transforms::TransformFilterV2;
 use crate::pipelines::processors::transforms::TransformMarkJoin;
 use crate::pipelines::processors::transforms::TransformMergeBlock;
@@ -62,7 +59,6 @@ use crate::pipelines::processors::SinkBuildHashTable;
 use crate::pipelines::processors::Sinker;
 use crate::pipelines::processors::SortMergeCompactor;
 use crate::pipelines::processors::TransformAggregator;
-
 use crate::pipelines::processors::TransformHashJoinProbe;
 use crate::pipelines::processors::TransformLimit;
 use crate::pipelines::processors::TransformSortMerge;
@@ -513,6 +509,7 @@ impl PipelineBuilder {
         let mut inputs_port = Vec::with_capacity(self.main_pipeline.output_len());
         let mut outputs_port = Vec::with_capacity(self.main_pipeline.output_len());
         let mut processors = Vec::with_capacity(self.main_pipeline.output_len());
+        self.main_pipeline.resize(1)?;
         for _ in 0..self.main_pipeline.output_len() {
             let transform_input_port = InputPort::create();
             let transform_output_port = OutputPort::create();

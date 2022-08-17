@@ -24,12 +24,16 @@ use crate::processors::sinks::Sink;
 use crate::processors::sinks::Sinker;
 
 pub struct UnionReceiveSink {
+    input_blocks: Vec<DataBlock>,
     sender: Sender<DataBlock>,
 }
 
 impl UnionReceiveSink {
     pub fn create(sender: Sender<DataBlock>, input: Arc<InputPort>) -> ProcessorPtr {
-        Sinker::create(input, UnionReceiveSink { sender })
+        Sinker::create(input, UnionReceiveSink {
+            input_blocks: vec![],
+            sender,
+        })
     }
 }
 
@@ -37,8 +41,15 @@ impl UnionReceiveSink {
 impl Sink for UnionReceiveSink {
     const NAME: &'static str = "UnionReceiveSink";
 
+    fn on_finish(&mut self) -> Result<()> {
+        self.sender
+            .send(DataBlock::concat_blocks(&self.input_blocks)?)
+            .ok();
+        Ok(())
+    }
+
     fn consume(&mut self, data_block: DataBlock) -> Result<()> {
-        self.sender.send(data_block).ok();
+        self.input_blocks.push(data_block);
         Ok(())
     }
 }

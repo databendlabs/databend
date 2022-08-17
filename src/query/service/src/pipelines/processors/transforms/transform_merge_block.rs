@@ -24,7 +24,6 @@ use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 
-
 pub struct TransformMergeBlock {
     initialized: bool,
     input: Arc<InputPort>,
@@ -105,6 +104,7 @@ impl Processor for TransformMergeBlock {
 
     fn process(&mut self) -> Result<()> {
         if let Some(input_data) = self.input_data.take() {
+            dbg!(input_data.clone());
             if let Some(receiver_result) = self.receiver_result.take() {
                 dbg!(receiver_result.clone());
                 let data_block = DataBlock::create(
