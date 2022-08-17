@@ -4,6 +4,7 @@ select unhex('616263');
 ----
 abc
 
+
 statement error 1054
 select unhex('hello'); 
 

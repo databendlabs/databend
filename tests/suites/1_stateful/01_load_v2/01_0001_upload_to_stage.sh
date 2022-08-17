@@ -3,7 +3,7 @@
 CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../../../shell_env.sh
 
-echo "set enable_planner_v2 = 1;" | $MYSQL_CLIENT_CONNECT
+
 echo "drop stage if exists s2;" | $MYSQL_CLIENT_CONNECT
 echo "CREATE STAGE if not exists s2;" | $MYSQL_CLIENT_CONNECT
 echo "list @s2" | $MYSQL_CLIENT_CONNECT

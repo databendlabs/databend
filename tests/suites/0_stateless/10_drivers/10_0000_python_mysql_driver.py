@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS t1(a String, b String, c String, d String, e String, 
 
 client1.run(sqls)
 
-sql1 = "INSERT INTO db1.t1(a) VALUES(%s);" % ('\"Test Some Inser\\"\'`ts\"')
+sql1 = "INSERT INTO db1.t1(a) VALUES(%s);" % ("'Test Some Inser\"\\'`ts'")
 client1.run(sql1)
 sql2 = "INSERT INTO db1.t1(a) VALUES(%s);" % ("'Test Some Inser\"\\'`ts'")
 client1.run(sql2)
@@ -40,7 +40,7 @@ res = mycursor.fetchall()
 assert res == [('t1',)]
 
 sql3 = "SELECT COUNT(*) FROM db1.t1 WHERE a = %s" % (
-    "\"Test Some Inser\\\"'`ts\"")
+    "'Test Some Inser\"\\'`ts'")
 mycursor.execute(sql3)
 res = mycursor.fetchall()
 for row in res:

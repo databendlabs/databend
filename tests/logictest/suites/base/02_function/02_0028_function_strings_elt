@@ -1,3 +1,4 @@
+
 statement error 1102
 SELECT ELT(0, 'a', 'b', 'c'); 
 
@@ -18,6 +19,7 @@ SELECT ELT(3, 'a', 'b', 'c');
 
 ----
 c
+
 
 statement error 1102
 SELECT ELT(4, 'a', 'b', 'c'); 

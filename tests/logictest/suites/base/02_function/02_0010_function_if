@@ -73,10 +73,10 @@ multi-if
 statement error 1028
 select multi_if(number = 4, 3) from numbers(1); 
 
-statement error 1010
+statement error 1065
 select multi_if(number = 4, 3, number = 5, null, number = 6, 'a', null) from numbers(10); 
 
-statement error 1028
+statement error 1065
 select multi_if(number = 4, 3, number = 2, 4) from numbers(1); 
 
 statement query IIII

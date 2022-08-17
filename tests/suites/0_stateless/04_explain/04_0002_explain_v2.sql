@@ -1,5 +1,7 @@
-set enable_planner_v2 = 1;
+
 select '===Explain===';
+drop table if exists t1;
+drop table if exists t2;
 create table t1(a int, b int);
 create table t2(a int, b int);
 explain select t1.a from t1 where a > 0;

@@ -1,0 +1,36 @@
+name: "Test fuse-table format in an old query is compatible with new query"
+description: "Download old binaries and current binaries, write data with old query, read data with new query"
+inputs:
+  profile:
+    description: ""
+    required: true
+    default: "debug"
+  target:
+    description: ""
+    required: true
+    default: "x86_64-unknown-linux-gnu"
+runs:
+  using: "composite"
+  steps:
+    - name: Setup Build Tool
+      uses: ./.github/actions/setup_build_tool
+
+    - name: Download artifact
+      uses: ./.github/actions/artifact_download
+      with:
+        profile: ${{ inputs.profile }}
+        sha: ${{ github.sha }}
+        target: ${{ inputs.target }}
+        path: ./bins/current
+
+    - name: Test compatibility
+      shell: bash
+      run: |
+        build-tool bash ./tests/fuse-compat/test-fuse-compat.sh 0.7.150
+        build-tool bash ./tests/fuse-compat/test-fuse-compat.sh 0.7.151
+
+    - name: Upload failure
+      if: failure()
+      uses: ./.github/actions/artifact_failure
+      with:
+        name: test-compat

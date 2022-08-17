@@ -1,5 +1,5 @@
 ---
-title: toDayOfWeek
+title: to_day_of_week
 ---
 
 Converts a date or date with time to a UInt8 number containing the number of the day of the week (Monday is 1, and Sunday is 7).
@@ -7,7 +7,7 @@ Converts a date or date with time to a UInt8 number containing the number of the
 ## Syntax
 
 ```sql
-toDayOfWeek( <expr> )
+to_day_of_week( <expr> )
 ```
 
 ## Arguments
@@ -22,16 +22,16 @@ toDayOfWeek( <expr> )
 ## Examples
 
 ```sql
-SELECT toDayOfWeek(to_date(18869));
+SELECT to_day_of_week(to_date(18869));
 +----------------------------+
-| toDayOfWeek(to_date(18869)) |
+| to_day_of_week(to_date(18869)) |
 +----------------------------+
 |                          1 |
 +----------------------------+
 
-SELECT toDayOfWeek(now());
+SELECT to_day_of_week(now());
 +--------------------+
-| toDayOfWeek(now()) |
+| to_day_of_week(now()) |
 +--------------------+
 |                  2 |
 +--------------------+

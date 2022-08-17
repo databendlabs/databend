@@ -100,7 +100,7 @@ class LogicError(Exception):
         self.runner = runner
 
     def __str__(self):
-        return f"Ruuner: {self.runner}\nErrorType: {self.errorType}\nMessage: {self.message}"
+        return f"Runner: {self.runner}\nErrorType: {self.errorType}\nMessage: {self.message}"
 
 
 class Statement:
@@ -352,8 +352,12 @@ class SuiteRunner(object):
 
     # expect the query just return ok
     def assert_execute_ok(self, statement):
-        actual = safe_execute(lambda: self.execute_ok(statement.text),
-                              statement)
+        try:
+            actual = safe_execute(lambda: self.execute_ok(statement.text), statement)
+        except Exception as err:
+            raise LogicError(runner=self.kind,
+                             message=str(err),
+                             errorType="statement ok execute with exception")
         if actual is not None:
             raise LogicError(runner=self.kind,
                              message=str(statement),
@@ -377,7 +381,12 @@ class SuiteRunner(object):
         if statement.s_type.query_type == "skipped":
             log.debug(f"{statement.text} statement is skipped")
             return
-        actual = safe_execute(lambda: self.execute_query(statement), statement)
+        try:
+            actual = safe_execute(lambda: self.execute_query(statement), statement)
+        except Exception as err:
+            raise LogicError(runner=self.kind,
+                             message=str(err),
+                             errorType="statement query execute with exception")
         try:
             f = format_value(actual, len(statement.s_type.query_type))
         except Exception:
@@ -410,19 +419,24 @@ class SuiteRunner(object):
 
     # expect the query just return error
     def assert_execute_error(self, statement):
-        actual = safe_execute(lambda: self.execute_error(statement.text),
-                              statement)
+        try:
+            actual = safe_execute(lambda: self.execute_error(statement.text), statement)
+        except Exception as err:
+            raise LogicError(runner=self.kind,
+                             message=str(err),
+                             errorType="statement error execute with exception")
         if actual is None:
-            raise LogicError(message=f"{str(statement)}",
-                             errorType="statement error get no error message",
-                             runner=self.kind)
+            raise LogicError(
+                message=
+                f"expected error {statement.s_type.expect_error}, but got ok on statement: {statement.text} ",
+                errorType="Error code mismatch",
+                runner=self.kind)
         match = re.search(statement.s_type.expect_error, actual.msg)
         if match is None:
             raise LogicError(
                 message=
                 f"\n expected error regex is {statement.s_type.expect_error}\n actual found {actual}{str(statement)}",
-                errorType=
-                f"statement error get error message not equal to expected",
+                errorType="Error code mismatch",
                 runner=self.kind)
 
     def run_sql_suite(self):

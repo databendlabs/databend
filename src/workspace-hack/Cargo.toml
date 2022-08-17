@@ -1,0 +1,14 @@
+[package]
+name = "common-workspace-hack"
+version = "0.1.0"
+edition = "2021"
+
+[package.metadata.cargo-udeps.ignore]
+normal = ["openssl-src", "axum"]
+
+[dependencies]
+openssl-src = { version = "111.22" }
+# axum has yanked the latest version, we can remove this after
+# new version released.
+# ref: https://github.com/datafuselabs/databend/issues/6996
+axum = "=0.5.13"

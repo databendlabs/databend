@@ -56,7 +56,6 @@ def nonterminals(expansion):
 
 
 prepare_sqls = [
-    "SET enable_planner_v2 = 1;",
     "drop table if exists t1;",
     "drop table if exists t2;",
     "drop table if exists t3;",
