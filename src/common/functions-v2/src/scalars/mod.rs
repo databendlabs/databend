@@ -19,6 +19,7 @@ mod arithmetic_modulo;
 mod boolean;
 mod control;
 mod string;
+mod string_multi_args;
 
 pub fn builtin_functions() -> FunctionRegistry {
     let mut registry = FunctionRegistry::new();

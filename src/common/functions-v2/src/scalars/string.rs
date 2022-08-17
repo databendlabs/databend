@@ -13,26 +13,24 @@
 // limitations under the License.
 
 use std::io::Write;
-use std::sync::Arc;
 
 use bstr::ByteSlice;
-use common_expression::Column;
-use common_expression::Scalar;
 use common_expression::types::string::StringColumn;
 use common_expression::types::string::StringColumnBuilder;
-use common_expression::types::DataType;
 use common_expression::types::GenericMap;
 use common_expression::types::NumberType;
 use common_expression::types::StringType;
-use common_expression::Function;
 use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
-use common_expression::FunctionSignature;
 use common_expression::NumberDomain;
 use common_expression::Value;
 use common_expression::ValueRef;
 
+use super::string_multi_args;
+
 pub fn register(registry: &mut FunctionRegistry) {
+    string_multi_args::register(registry);
+
     registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
         "upper",
         FunctionProperty::default(),
@@ -318,42 +316,6 @@ pub fn register(registry: &mut FunctionRegistry) {
             },
         ),
     );
-
-    registry.register_function_factory("concat", |_, args_type| {
-        Some(Arc::new(Function {
-            signature: FunctionSignature {
-                name: "concat",
-                args_type: vec![DataType::String; args_type.len()],
-                return_type: DataType::String,
-                property: FunctionProperty::default(),
-            },
-            calc_domain: Box::new(|_, _| None),
-            eval: Box::new(|args, _generics| {
-                let len = args.iter().find_map(|arg| match arg {
-                    ValueRef::Column(col) => Some(col.len()),
-                    _ => None,
-                });
-                let args = args
-                    .iter()
-                    .map(|arg| arg.try_downcast::<StringType>().unwrap())
-                    .collect::<Vec<_>>();
-                let len = len.unwrap_or(1);
-
-                let mut builder = StringColumnBuilder::with_capacity(len, 0);
-                for idx in 0..len {
-                    for arg in &args {
-                        unsafe { builder.put_slice(arg.index_unchecked(idx)) }
-                        builder.commit_row();
-                    }
-                }
-
-                match len {
-                    1 => Ok(Value::Scalar(Scalar::String(builder.build_scalar()))),
-                    _ => Ok(Value::Column(Column::String(builder.build()))),
-                }
-            }),
-        }))
-    });
 }
 
 // Vectorize string to string function with customer estimate_bytes.
