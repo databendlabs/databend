@@ -38,6 +38,7 @@ use futures::StreamExt;
 use opendal::layers::LoggingLayer;
 use opendal::layers::MetricsLayer;
 use opendal::layers::RetryLayer;
+use opendal::layers::TracingLayer;
 use opendal::Operator;
 use parking_lot::RwLock;
 use tracing::debug;
@@ -418,6 +419,7 @@ impl SessionManager {
         let op = init_operator(&conf.storage.params)?
             .layer(RetryLayer::new(ExponentialBackoff::default()))
             .layer(LoggingLayer)
+            .layer(TracingLayer)
             .layer(MetricsLayer);
         // OpenDAL will send a real request to underlying storage to check whether it works or not.
         // If this check failed, it's highly possible that the users have configured it wrongly.
