@@ -140,3 +140,14 @@ impl Display for DescShareStmt<'_> {
         Ok(())
     }
 }
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ShowSharesStmt {}
+
+impl Display for ShowSharesStmt {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "SHOW SHARES")?;
+
+        Ok(())
+    }
+}

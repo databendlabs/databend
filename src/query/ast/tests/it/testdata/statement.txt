@@ -536,7 +536,7 @@ CreateTable(
 ---------- Input ----------
 create table t like t2 engine = memory;
 ---------- Output ---------
-CREATE TABLE t LIKE t2 ENGINE=MEMORY
+CREATE TABLE t LIKE t2 ENGINE = MEMORY
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
@@ -6209,6 +6209,16 @@ DescShare(
             span: Ident(15..16),
         },
     },
+)
+
+
+---------- Input ----------
+SHOW SHARES;
+---------- Output ---------
+SHOW SHARES
+---------- AST ------------
+ShowShares(
+    ShowSharesStmt,
 )
 
 

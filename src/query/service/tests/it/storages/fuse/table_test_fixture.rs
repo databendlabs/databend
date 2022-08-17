@@ -331,7 +331,7 @@ pub async fn test_drive_with_args(tbl_args: TableArgs) -> Result<()> {
 
 pub async fn test_drive_with_args_and_ctx(
     tbl_args: TableArgs,
-    ctx: std::sync::Arc<QueryContext>,
+    ctx: Arc<QueryContext>,
 ) -> Result<SendableDataBlockStream> {
     let func = FuseSnapshotTable::create("system", "fuse_snapshot", 1, tbl_args)?;
     let source_plan = func
@@ -345,7 +345,7 @@ pub async fn test_drive_with_args_and_ctx(
 
 pub async fn test_drive_clustering_information(
     tbl_args: TableArgs,
-    ctx: std::sync::Arc<QueryContext>,
+    ctx: Arc<QueryContext>,
 ) -> Result<SendableDataBlockStream> {
     let func = ClusteringInformationTable::create("system", "clustering_information", 1, tbl_args)?;
     let source_plan = func

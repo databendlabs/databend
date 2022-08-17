@@ -205,6 +205,7 @@ pub enum Plan {
     RevokeShareObject(Box<RevokeShareObjectPlan>),
     AlterShareTenants(Box<AlterShareTenantsPlan>),
     DescShare(Box<DescSharePlan>),
+    ShowShares(Box<ShowSharesPlan>),
 }
 
 #[derive(Clone, Debug)]
@@ -281,6 +282,7 @@ impl Display for Plan {
             Plan::RevokeShareObject(_) => write!(f, "RevokeShareObject"),
             Plan::AlterShareTenants(_) => write!(f, "AlterShareTenants"),
             Plan::DescShare(_) => write!(f, "DescShare"),
+            Plan::ShowShares(_) => write!(f, "ShowShares"),
         }
     }
 }
@@ -349,6 +351,7 @@ impl Plan {
             Plan::RevokeShareObject(plan) => plan.schema(),
             Plan::AlterShareTenants(plan) => plan.schema(),
             Plan::DescShare(plan) => plan.schema(),
+            Plan::ShowShares(plan) => plan.schema(),
         }
     }
 }

@@ -53,7 +53,7 @@ impl Display for ShareAccountNameIdent {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct ShowShareReq {
+pub struct ShowSharesReq {
     pub tenant: String,
 }
 
@@ -70,7 +70,7 @@ pub struct ShareAccountReply {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct ShowShareReply {
+pub struct ShowSharesReply {
     // sharing to other accounts(outbound shares)
     pub outbound_accounts: Vec<ShareAccountReply>,
     // be shared by other accounts(inbound shares)
