@@ -1564,7 +1564,7 @@ name = "common-metrics"
 version = "0.1.0"
 dependencies = [
  "common-exception",
- "metrics",
+ "metrics 0.19.0",
  "metrics-exporter-prometheus",
  "once_cell",
  "parking_lot 0.12.1",
@@ -2502,7 +2502,7 @@ dependencies = [
  "jwtk",
  "lz4",
  "maplit",
- "metrics",
+ "metrics 0.19.0",
  "mysql_async",
  "naive-cityhash",
  "nom",
@@ -4455,7 +4455,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "142c53885123b68d94108295a09d4afe1a1388ed95b54d5dacd9a454753030f2"
 dependencies = [
  "ahash",
- "metrics-macros",
+ "metrics-macros 0.5.1",
+]
+
+[[package]]
+name = "metrics"
+version = "0.20.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7b9b8653cec6897f73b519a43fba5ee3d50f62fe9af80b428accdcc093b4a849"
+dependencies = [
+ "ahash",
+ "metrics-macros 0.6.0",
+ "portable-atomic",
 ]
 
 [[package]]
@@ -4465,7 +4476,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "953cbbb6f9ba4b9304f4df79b98cdc9d14071ed93065a9fca11c00c5d9181b66"
 dependencies = [
  "indexmap",
- "metrics",
+ "metrics 0.19.0",
  "metrics-util",
  "parking_lot 0.11.2",
  "quanta",
@@ -4484,6 +4495,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "metrics-macros"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "731f8ecebd9f3a4aa847dfe75455e4757a45da40a7793d2f0b1f9b6ed18b23f3"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "metrics-util"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4493,7 +4515,7 @@ dependencies = [
  "crossbeam-epoch",
  "crossbeam-utils",
  "hashbrown 0.11.2",
- "metrics",
+ "metrics 0.19.0",
  "num_cpus",
  "parking_lot 0.11.2",
  "quanta",
@@ -4987,6 +5009,7 @@ dependencies = [
  "isahc-opendal-workaround",
  "log",
  "md5",
+ "metrics 0.20.1",
  "once_cell",
  "parking_lot 0.12.1",
  "percent-encoding",
@@ -4999,6 +5022,7 @@ dependencies = [
  "thiserror",
  "time 0.3.13",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -5585,6 +5609,12 @@ name = "pom"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "60f6ce597ecdcc9a098e7fddacb1065093a3d66446fa16c675e7e71d1b5c28e6"
+
+[[package]]
+name = "portable-atomic"
+version = "0.3.13"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b303a15aeda678da614ab23306232dbd282d532f8c5919cedd41b66b9dc96560"
 
 [[package]]
 name = "pprof"

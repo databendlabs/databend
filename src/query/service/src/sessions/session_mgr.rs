@@ -35,6 +35,8 @@ use common_users::RoleCacheMgr;
 use common_users::UserApiProvider;
 use futures::future::Either;
 use futures::StreamExt;
+use opendal::layers::LoggingLayer;
+use opendal::layers::MetricsLayer;
 use opendal::layers::RetryLayer;
 use opendal::Operator;
 use parking_lot::RwLock;
@@ -414,7 +416,9 @@ impl SessionManager {
     async fn init_storage_operator(conf: &Config) -> Result<Operator> {
         // Enable exponential backoff by default
         let op = init_operator(&conf.storage.params)?
-            .layer(RetryLayer::new(ExponentialBackoff::default()));
+            .layer(RetryLayer::new(ExponentialBackoff::default()))
+            .layer(LoggingLayer)
+            .layer(MetricsLayer);
         // OpenDAL will send a real request to underlying storage to check whether it works or not.
         // If this check failed, it's highly possible that the users have configured it wrongly.
         op.check().await.map_err(|e| {
