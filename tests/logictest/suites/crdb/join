@@ -165,9 +165,9 @@ drop table if exists empty;
 statement ok
 CREATE TABLE empty (x INT);
 
--- TODO CROSS JOIN empty  Can't concat empty blocks 
--- statement query
--- SELECT * FROM onecolumn AS a(x) CROSS JOIN empty AS b(y);
+-- bug(#7149) fix by https://github.com/datafuselabs/databend/pull/7150
+statement ok
+SELECT * FROM onecolumn AS a(x) CROSS JOIN empty AS b(y);
 
 statement ok
 SELECT * FROM empty AS a CROSS JOIN onecolumn AS b;
