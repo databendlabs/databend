@@ -2,7 +2,7 @@
 select
     cntrycode,
     count(*) as numcust,
-    truncate(sum(c_acctbal),1) as totacctbal
+    to_int64(sum(c_acctbal)) as totacctbal
 from
     (
         select
