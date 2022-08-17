@@ -12,22 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_meta_app::share::AddShareAccountsReply;
-use common_meta_app::share::AddShareAccountsReq;
-use common_meta_app::share::CreateShareReply;
-use common_meta_app::share::CreateShareReq;
-use common_meta_app::share::DropShareReply;
-use common_meta_app::share::DropShareReq;
-use common_meta_app::share::GetShareGrantObjectReply;
-use common_meta_app::share::GetShareGrantObjectReq;
-use common_meta_app::share::GrantShareObjectReply;
-use common_meta_app::share::GrantShareObjectReq;
-use common_meta_app::share::RemoveShareAccountsReply;
-use common_meta_app::share::RemoveShareAccountsReq;
-use common_meta_app::share::RevokeShareObjectReply;
-use common_meta_app::share::RevokeShareObjectReq;
-use common_meta_app::share::ShowSharesReply;
-use common_meta_app::share::ShowSharesReq;
+use common_meta_app::share::*;
 use common_meta_types::MetaResult;
 
 #[async_trait::async_trait]
@@ -46,11 +31,11 @@ pub trait ShareApi: Sync + Send {
         req: RevokeShareObjectReq,
     ) -> MetaResult<RevokeShareObjectReply>;
 
-    async fn add_share_accounts(
+    async fn add_share_tenants(
         &self,
         req: AddShareAccountsReq,
     ) -> MetaResult<AddShareAccountsReply>;
-    async fn remove_share_accounts(
+    async fn remove_share_tenants(
         &self,
         req: RemoveShareAccountsReq,
     ) -> MetaResult<RemoveShareAccountsReply>;
@@ -59,4 +44,16 @@ pub trait ShareApi: Sync + Send {
         &self,
         req: GetShareGrantObjectReq,
     ) -> MetaResult<GetShareGrantObjectReply>;
+
+    // Return all the grant tenants of the share
+    async fn get_grant_tenants_of_share(
+        &self,
+        req: GetShareGrantTenantsReq,
+    ) -> MetaResult<GetShareGrantTenantsReply>;
+
+    // Return all the grant privileges of the object
+    async fn get_grant_privileges_of_object(
+        &self,
+        req: GetObjectGrantPrivilegesReq,
+    ) -> MetaResult<GetObjectGrantPrivilegesReply>;
 }

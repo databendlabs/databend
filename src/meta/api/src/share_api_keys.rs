@@ -15,6 +15,7 @@
 //! Defines structured keys used by ShareApi
 
 use common_meta_app::share::ShareAccountNameIdent;
+use common_meta_app::share::ShareGrantObject;
 use common_meta_app::share::ShareId;
 use common_meta_app::share::ShareIdToName;
 use common_meta_app::share::ShareNameIdent;
@@ -30,11 +31,54 @@ use crate::KVApiKey;
 use crate::KVApiKeyError;
 
 const PREFIX_SHARE: &str = "__fd_share";
+const PREFIX_SHARE_BY: &str = "__fd_share_by";
 const PREFIX_SHARE_ID: &str = "__fd_share_id";
 const PREFIX_SHARE_ID_TO_NAME: &str = "__fd_share_id_to_name";
 const PREFIX_SHARE_ACCOUNT_ID: &str = "__fd_share_account_id";
 
 pub(crate) const ID_GEN_SHARE: &str = "share_id";
+
+/// __fd_share_by/{db|table}/<object_id> -> ObjectSharedByShareIds
+impl KVApiKey for ShareGrantObject {
+    const PREFIX: &'static str = PREFIX_SHARE_BY;
+
+    fn to_key(&self) -> String {
+        match *self {
+            ShareGrantObject::Database(db_id) => {
+                format!("{}/db/{}", Self::PREFIX, db_id,)
+            }
+            ShareGrantObject::Table(tbl_id) => {
+                format!("{}/table/{}", Self::PREFIX, tbl_id,)
+            }
+        }
+    }
+
+    fn from_key(s: &str) -> Result<Self, KVApiKeyError> {
+        let mut elts = s.split('/');
+
+        let prefix = check_segment_present(elts.next(), 0, s)?;
+        check_segment(prefix, 0, Self::PREFIX)?;
+
+        let kind = check_segment_present(elts.next(), 1, s)?;
+        if kind != "db" && kind != "table" {
+            return Err(KVApiKeyError::InvalidSegment {
+                i: 1,
+                expect: "db or table".to_string(),
+                got: kind.to_string(),
+            });
+        }
+
+        let id = decode_id(check_segment_present(elts.next(), 2, s)?)?;
+
+        check_segment_absent(elts.next(), 3, s)?;
+
+        if kind == "db" {
+            Ok(ShareGrantObject::Database(id))
+        } else {
+            Ok(ShareGrantObject::Table(id))
+        }
+    }
+}
 
 /// __fd_share/<tenant>/<share_name> -> <share_id>
 impl KVApiKey for ShareNameIdent {
