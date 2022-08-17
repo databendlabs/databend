@@ -1564,7 +1564,7 @@ name = "common-metrics"
 version = "0.1.0"
 dependencies = [
  "common-exception",
- "metrics 0.19.0",
+ "metrics",
  "metrics-exporter-prometheus",
  "once_cell",
  "parking_lot 0.12.1",
@@ -2502,7 +2502,7 @@ dependencies = [
  "jwtk",
  "lz4",
  "maplit",
- "metrics 0.19.0",
+ "metrics",
  "mysql_async",
  "naive-cityhash",
  "nom",
@@ -4455,18 +4455,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "142c53885123b68d94108295a09d4afe1a1388ed95b54d5dacd9a454753030f2"
 dependencies = [
  "ahash",
- "metrics-macros 0.5.1",
-]
-
-[[package]]
-name = "metrics"
-version = "0.20.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7b9b8653cec6897f73b519a43fba5ee3d50f62fe9af80b428accdcc093b4a849"
-dependencies = [
- "ahash",
- "metrics-macros 0.6.0",
- "portable-atomic",
+ "metrics-macros",
 ]
 
 [[package]]
@@ -4476,7 +4465,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "953cbbb6f9ba4b9304f4df79b98cdc9d14071ed93065a9fca11c00c5d9181b66"
 dependencies = [
  "indexmap",
- "metrics 0.19.0",
+ "metrics",
  "metrics-util",
  "parking_lot 0.11.2",
  "quanta",
@@ -4495,17 +4484,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "metrics-macros"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "731f8ecebd9f3a4aa847dfe75455e4757a45da40a7793d2f0b1f9b6ed18b23f3"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
 name = "metrics-util"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4515,7 +4493,7 @@ dependencies = [
  "crossbeam-epoch",
  "crossbeam-utils",
  "hashbrown 0.11.2",
- "metrics 0.19.0",
+ "metrics",
  "num_cpus",
  "parking_lot 0.11.2",
  "quanta",
@@ -4541,51 +4519,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
 
 [[package]]
-name = "minitrace"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8a07fdf302cc0591c97eb45939550ddaddd9962e400c20b319aa16c244cb1f16"
-dependencies = [
- "crossbeam",
- "futures",
- "minitrace-macro",
- "minstant",
- "once_cell",
- "parking_lot 0.11.2",
- "pin-project",
- "retain_mut",
-]
-
-[[package]]
-name = "minitrace-macro"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4132dfe6097f4a90c0bbb34be0687c38d14303dd2e74f8442ae80e9bc5a34c47"
-dependencies = [
- "proc-macro-error",
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
 name = "miniz_oxide"
 version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6f5c75688da582b8ffc1f1799e9db273f32133c49e048f614d22ec3256773ccc"
 dependencies = [
  "adler",
-]
-
-[[package]]
-name = "minstant"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2cb320648b7883b43ce5dfbc5c6f4a84038194c3f67b4fcb7d05c994e6006557"
-dependencies = [
- "ctor",
- "libc",
- "wasi 0.7.0",
 ]
 
 [[package]]
@@ -5030,9 +4969,9 @@ checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
 
 [[package]]
 name = "opendal"
-version = "0.12.0"
+version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9facd3f01e493eb20d0ca2324c77c4cead41c3cf1e2e5f4414ffdbb1710b5343"
+checksum = "0c060aacce95fbe4a415b4ec6855d2c02b93b407eae07f8ceba3c475fedaed21"
 dependencies = [
  "anyhow",
  "async-compat",
@@ -5048,8 +4987,6 @@ dependencies = [
  "isahc-opendal-workaround",
  "log",
  "md5",
- "metrics 0.20.1",
- "minitrace",
  "once_cell",
  "parking_lot 0.12.1",
  "percent-encoding",
@@ -5058,6 +4995,7 @@ dependencies = [
  "radix_trie",
  "reqsign",
  "serde",
+ "serde_json",
  "thiserror",
  "time 0.3.13",
  "tokio",
@@ -5647,12 +5585,6 @@ name = "pom"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "60f6ce597ecdcc9a098e7fddacb1065093a3d66446fa16c675e7e71d1b5c28e6"
-
-[[package]]
-name = "portable-atomic"
-version = "0.3.12"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8aa09d53386a2226b0d1d8c1110c1e25d029d37cce6fcfdf9e1d4d26a6ab3326"
 
 [[package]]
 name = "pprof"
@@ -8164,12 +8096,6 @@ dependencies = [
  "log",
  "try-lock",
 ]
-
-[[package]]
-name = "wasi"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b89c3ce4ce14bdc6fb6beaf9ec7928ca331de5df7e5ea278375642a2f478570d"
 
 [[package]]
 name = "wasi"

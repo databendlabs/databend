@@ -20,6 +20,7 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
 
+use backon::ExponentialBackoff;
 use common_base::base::tokio;
 use common_base::base::Runtime;
 use common_base::base::SignalStream;
@@ -34,6 +35,7 @@ use common_users::RoleCacheMgr;
 use common_users::UserApiProvider;
 use futures::future::Either;
 use futures::StreamExt;
+use opendal::layers::RetryLayer;
 use opendal::Operator;
 use parking_lot::RwLock;
 use tracing::debug;
@@ -410,9 +412,9 @@ impl SessionManager {
 
     // Init the storage operator by config.
     async fn init_storage_operator(conf: &Config) -> Result<Operator> {
-        let op = init_operator(&conf.storage.params)?;
         // Enable exponential backoff by default
-        let op = op.with_backoff(backon::ExponentialBackoff::default());
+        let op = init_operator(&conf.storage.params)?
+            .layer(RetryLayer::new(ExponentialBackoff::default()));
         // OpenDAL will send a real request to underlying storage to check whether it works or not.
         // If this check failed, it's highly possible that the users have configured it wrongly.
         op.check().await.map_err(|e| {
