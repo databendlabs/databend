@@ -49,7 +49,7 @@ impl Operator for Union {
 }
 
 impl PhysicalOperator for Union {
-    fn derive_physical_prop<'a>(&self, rel_expr: &RelExpr<'a>) -> Result<PhysicalProperty> {
+    fn derive_physical_prop<'a>(&self, _rel_expr: &RelExpr<'a>) -> Result<PhysicalProperty> {
         todo!()
     }
 
@@ -57,14 +57,14 @@ impl PhysicalOperator for Union {
         &self,
         _rel_expr: &RelExpr<'a>,
         _child_index: usize,
-        required: &RequiredProperty,
+        _required: &RequiredProperty,
     ) -> Result<RequiredProperty> {
         todo!()
     }
 }
 
 impl LogicalOperator for Union {
-    fn derive_relational_prop<'a>(&self, rel_expr: &RelExpr<'a>) -> Result<RelationalProperty> {
+    fn derive_relational_prop<'a>(&self, _rel_expr: &RelExpr<'a>) -> Result<RelationalProperty> {
         todo!()
     }
 }
