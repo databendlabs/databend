@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Mutex;
+
 use common_arrow::arrow::bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use itertools::Itertools;
@@ -35,11 +37,19 @@ use crate::values::Value;
 use crate::with_number_type;
 
 pub struct Evaluator<'a> {
-    pub input_columns: &'a Chunk,
-    pub context: FunctionContext,
+    input_columns: &'a Chunk,
+    #[allow(dead_code)]
+    context: FunctionContext,
 }
 
 impl<'a> Evaluator<'a> {
+    pub fn new(input_columns: &'a Chunk, context: FunctionContext) -> Self {
+        Evaluator {
+            input_columns,
+            context,
+        }
+    }
+
     pub fn run(&self, expr: &Expr) -> Result<Value<AnyType>> {
         let result = match expr {
             Expr::Constant { scalar, .. } => Ok(Value::Scalar(scalar.clone())),
@@ -108,13 +118,18 @@ impl<'a> Evaluator<'a> {
 
         #[cfg(debug_assertions)]
         if result.is_err() {
-            assert_eq!(
-                ConstantFolder::new(&self.input_columns.domains())
-                    .fold(expr)
-                    .1,
-                None,
-                "domain calculation should not return any domain for expressions that are possible to fail"
-            );
+            static RECURSING: Mutex<bool> = Mutex::new(false);
+            if !*RECURSING.lock().unwrap() {
+                *RECURSING.lock().unwrap() = true;
+                assert_eq!(
+                    ConstantFolder::new(&self.input_columns.domains(), FunctionContext::default())
+                        .fold(expr)
+                        .1,
+                    None,
+                    "domain calculation should not return any domain for expressions that are possible to fail"
+                );
+                *RECURSING.lock().unwrap() = false;
+            }
         }
 
         result
@@ -420,11 +435,15 @@ impl<'a> Evaluator<'a> {
 
 pub struct ConstantFolder<'a> {
     input_domains: &'a [Domain],
+    context: FunctionContext,
 }
 
 impl<'a> ConstantFolder<'a> {
-    pub fn new(input_domains: &'a [Domain]) -> Self {
-        ConstantFolder { input_domains }
+    pub fn new(input_domains: &'a [Domain], context: FunctionContext) -> Self {
+        ConstantFolder {
+            input_domains,
+            context,
+        }
     }
 
     pub fn fold(&self, expr: &Expr) -> (Expr, Option<Domain>) {
@@ -494,33 +513,51 @@ impl<'a> ConstantFolder<'a> {
                 generics,
                 args,
             } => {
-                let (mut args_expr, mut args_domain) = (Vec::new(), Vec::new());
-
+                let (mut args_expr, mut args_domain) = (Vec::new(), Some(Vec::new()));
                 for arg in args {
                     let (expr, domain) = self.fold(arg);
-                    if let Some(domain) = domain {
-                        args_expr.push(expr);
-                        args_domain.push(domain);
-                    } else {
-                        return (expr, None);
-                    }
+                    args_expr.push(expr);
+                    args_domain = args_domain.zip(domain).map(|(mut domains, domain)| {
+                        domains.push(domain);
+                        domains
+                    });
                 }
 
-                let func_domain = (function.calc_domain)(&args_domain, generics);
-                let func_expr = func_domain
-                    .as_ref()
-                    .and_then(Domain::as_singleton)
-                    .map(|scalar| Expr::Constant {
-                        span: span.clone(),
-                        scalar,
-                    })
-                    .unwrap_or_else(|| Expr::FunctionCall {
-                        span: span.clone(),
-                        id: id.clone(),
-                        function: function.clone(),
-                        generics: generics.clone(),
-                        args: args_expr,
-                    });
+                let func_domain =
+                    args_domain.and_then(|domains| (function.calc_domain)(&domains, generics));
+                let all_args_is_scalar = args_expr.iter().all(|arg| arg.as_constant().is_some());
+
+                let func_expr = Expr::FunctionCall {
+                    span: span.clone(),
+                    id: id.clone(),
+                    function: function.clone(),
+                    generics: generics.clone(),
+                    args: args_expr,
+                };
+
+                if let Some(scalar) = func_domain.as_ref().and_then(Domain::as_singleton) {
+                    return (
+                        Expr::Constant {
+                            span: span.clone(),
+                            scalar,
+                        },
+                        func_domain,
+                    );
+                }
+
+                if all_args_is_scalar {
+                    let chunk = Chunk::empty();
+                    let evaluator = Evaluator::new(&chunk, self.context.clone());
+                    if let Ok(Value::Scalar(scalar)) = evaluator.run(&func_expr) {
+                        return (
+                            Expr::Constant {
+                                span: span.clone(),
+                                scalar,
+                            },
+                            func_domain,
+                        );
+                    }
+                }
 
                 (func_expr, func_domain)
             }

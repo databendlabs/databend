@@ -17,4 +17,5 @@ mod query_result_writer;
 
 pub use self::init_result_writer::DFInitResultWriter;
 pub use self::query_result_writer::DFQueryResultWriter;
+pub use self::query_result_writer::ProgressReporter;
 pub use self::query_result_writer::QueryResult;

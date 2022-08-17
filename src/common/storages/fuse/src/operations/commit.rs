@@ -88,7 +88,7 @@ impl FuseTable {
         let catalog_name = catalog_name.as_ref();
         loop {
             match tbl
-                .try_commit(ctx.as_ref(), catalog_name, &operation_log, overwrite)
+                .try_commit(ctx.clone(), catalog_name, &operation_log, overwrite)
                 .await
             {
                 Ok(_) => {
@@ -156,12 +156,12 @@ impl FuseTable {
     #[inline]
     pub async fn try_commit(
         &self,
-        ctx: &dyn TableContext,
+        ctx: Arc<dyn TableContext>,
         catalog_name: &str,
         operation_log: &TableOperationLog,
         overwrite: bool,
     ) -> Result<()> {
-        let prev = self.read_table_snapshot(ctx).await?;
+        let prev = self.read_table_snapshot(ctx.clone()).await?;
         let prev_version = self.snapshot_format_version();
         let prev_timestamp = prev.as_ref().and_then(|v| v.timestamp);
         let schema = self.table_info.meta.schema.as_ref().clone();
@@ -207,8 +207,13 @@ impl FuseTable {
             index_data_bytes: new_snapshot.summary.index_size,
         };
 
-        self.update_table_meta(ctx, catalog_name, &new_snapshot, &mut new_table_meta)
-            .await
+        self.update_table_meta(
+            ctx.as_ref(),
+            catalog_name,
+            &new_snapshot,
+            &mut new_table_meta,
+        )
+        .await
     }
 
     fn merge_table_operations(

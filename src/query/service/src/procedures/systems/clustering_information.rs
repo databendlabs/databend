@@ -18,6 +18,7 @@ use common_datablocks::DataBlock;
 use common_datavalues::DataSchema;
 use common_exception::Result;
 
+use crate::procedures::OneBlockProcedure;
 use crate::procedures::Procedure;
 use crate::procedures::ProcedureFeatures;
 use crate::sessions::QueryContext;
@@ -30,12 +31,12 @@ pub struct ClusteringInformationProcedure {}
 
 impl ClusteringInformationProcedure {
     pub fn try_create() -> Result<Box<dyn Procedure>> {
-        Ok(Box::new(ClusteringInformationProcedure {}))
+        Ok(ClusteringInformationProcedure {}.into_procedure())
     }
 }
 
 #[async_trait::async_trait]
-impl Procedure for ClusteringInformationProcedure {
+impl OneBlockProcedure for ClusteringInformationProcedure {
     fn name(&self) -> &str {
         "CLUSTERING_INFORMATION"
     }
@@ -45,7 +46,7 @@ impl Procedure for ClusteringInformationProcedure {
         ProcedureFeatures::default().num_arguments(2)
     }
 
-    async fn inner_eval(&self, ctx: Arc<QueryContext>, args: Vec<String>) -> Result<DataBlock> {
+    async fn all_data(&self, ctx: Arc<QueryContext>, args: Vec<String>) -> Result<DataBlock> {
         let database_name = args[0].clone();
         let table_name = args[1].clone();
         let tenant_id = ctx.get_tenant();

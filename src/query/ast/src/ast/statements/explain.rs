@@ -14,9 +14,10 @@
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ExplainKind {
-    Syntax,
+    Syntax(String),
     Graph,
     Pipeline,
     Fragments,
     Raw,
+    Plan,
 }

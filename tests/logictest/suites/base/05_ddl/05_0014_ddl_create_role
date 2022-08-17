@@ -1,3 +1,5 @@
+
+
 statement ok
 CREATE ROLE 'test-a';
 
@@ -5,5 +7,11 @@ statement error 2202
 CREATE ROLE 'test-a'; 
 
 statement ok
+CREATE ROLE IF NOT EXISTS 'test-a';
+
+statement ok
 DROP ROLE 'test-a';
+
+statement ok
+set enable_planner_v2 = 0;
 

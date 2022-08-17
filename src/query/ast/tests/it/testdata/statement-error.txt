@@ -244,7 +244,7 @@ error:
   --> SQL:1:6
   |
 1 | SHOW GRANT FOR ROLE role1;
-  |      ^^^^^ expected `SETTINGS`, `STAGES`, `ENGINES`, `PROCESSLIST`, `METRICS`, `FUNCTIONS`, or 10 more ...
+  |      ^^^^^ expected `SETTINGS`, `STAGES`, `ENGINES`, `PROCESSLIST`, `METRICS`, `FUNCTIONS`, or 11 more ...
 
 
 ---------- Input ----------
