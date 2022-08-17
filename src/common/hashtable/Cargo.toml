@@ -14,6 +14,7 @@ test = false
 # Workspace dependencies
 
 # Crates.io dependencies
+ordered-float = "3.0.0"
 primitive-types = "0.11.1"
 
 [dev-dependencies]

@@ -36,6 +36,7 @@ use openraft::RaftNetwork;
 use tonic::client::GrpcService;
 use tonic::transport::channel::Channel;
 use tracing::debug;
+use tracing::info;
 
 use crate::metrics::incr_meta_metrics_active_peers;
 use crate::metrics::incr_meta_metrics_fail_connections_to_peer;
@@ -45,7 +46,7 @@ use crate::metrics::incr_meta_metrics_snapshot_send_failures_to_peer;
 use crate::metrics::incr_meta_metrics_snapshot_send_inflights_to_peer;
 use crate::metrics::incr_meta_metrics_snapshot_send_success_to_peer;
 use crate::metrics::sample_meta_metrics_snapshot_sent;
-use crate::store::MetaRaftStore;
+use crate::store::RaftStore;
 
 struct ChannelManager {}
 
@@ -68,13 +69,13 @@ impl ItemManager for ChannelManager {
 }
 
 pub struct Network {
-    sto: Arc<MetaRaftStore>,
+    sto: Arc<RaftStore>,
 
     conn_pool: Pool<ChannelManager>,
 }
 
 impl Network {
-    pub fn new(sto: Arc<MetaRaftStore>) -> Network {
+    pub fn new(sto: Arc<RaftStore>) -> Network {
         let mgr = ChannelManager {};
         Network {
             sto,
@@ -150,7 +151,7 @@ impl RaftNetwork<LogEntry> for Network {
         target: NodeId,
         rpc: InstallSnapshotRequest,
     ) -> anyhow::Result<InstallSnapshotResponse> {
-        debug!("install_snapshot req to: id={}", target);
+        info!("install_snapshot req to: id={}", target);
 
         let start = Instant::now();
         let (mut client, endpoint) = self.make_client(&target).await?;
@@ -160,7 +161,7 @@ impl RaftNetwork<LogEntry> for Network {
         incr_meta_metrics_snapshot_send_inflights_to_peer(&target, 1);
 
         let resp = client.install_snapshot(req).await;
-        debug!("install_snapshot resp from: id={}: {:?}", target, resp);
+        info!("install_snapshot resp from: id={}: {:?}", target, resp);
 
         if resp.is_err() {
             incr_meta_metrics_sent_failure_to_peer(&target);
@@ -182,7 +183,7 @@ impl RaftNetwork<LogEntry> for Network {
 
     #[tracing::instrument(level = "debug", skip(self), fields(id=self.sto.id))]
     async fn send_vote(&self, target: NodeId, rpc: VoteRequest) -> anyhow::Result<VoteResponse> {
-        debug!("vote: req to: target={} {:?}", target, rpc);
+        info!("vote: req to: target={} {:?}", target, rpc);
 
         let (mut client, endpoint) = self.make_client(&target).await?;
         let req = common_tracing::inject_span_to_tonic_request(rpc);
@@ -190,7 +191,7 @@ impl RaftNetwork<LogEntry> for Network {
         self.incr_meta_metrics_sent_bytes_to_peer(&target, req.get_ref());
 
         let resp = client.vote(req).await;
-        debug!("vote: resp from target={} {:?}", target, resp);
+        info!("vote: resp from target={} {:?}", target, resp);
 
         if resp.is_err() {
             incr_meta_metrics_sent_failure_to_peer(&target);

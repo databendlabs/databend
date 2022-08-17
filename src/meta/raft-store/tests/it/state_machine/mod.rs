@@ -38,7 +38,6 @@ use tracing::info;
 use crate::init_raft_store_ut;
 use crate::testing::new_raft_test_context;
 
-mod placement;
 mod schema_api_impl;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]

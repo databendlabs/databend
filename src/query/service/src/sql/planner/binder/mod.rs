@@ -339,6 +339,9 @@ impl<'a> Binder {
             Statement::DescShare(stmt) => {
                 self.bind_desc_share(stmt).await?
             }
+            Statement::ShowShares(stmt) => {
+                self.bind_show_shares(stmt).await?
+            }
         };
         Ok(plan)
     }

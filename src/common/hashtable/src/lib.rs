@@ -37,8 +37,12 @@ mod hash_table_key;
 mod two_level_hash_table;
 
 pub type HashMap<Key, Value> = HashTable<Key, KeyValueEntity<Key, Value>, SingleLevelGrower>;
+pub type HashSet<Key> = HashTable<Key, KeyValueEntity<Key, ()>, SingleLevelGrower>;
+
 pub type TwoLevelHashMap<Key, Value> =
     TwoLevelHashTable<Key, KeyValueEntity<Key, Value>, TwoLevelGrower>;
+pub type TwoLevelHashSet<Key> = TwoLevelHashTable<Key, KeyValueEntity<Key, ()>, TwoLevelGrower>;
+
 pub type HashMapIteratorKind<Key, Value> = HashTableIteratorKind<Key, KeyValueEntity<Key, Value>>;
 pub type HashMapKind<Key, Value> =
     HashTableKind<Key, KeyValueEntity<Key, Value>, SingleLevelGrower, TwoLevelGrower>;

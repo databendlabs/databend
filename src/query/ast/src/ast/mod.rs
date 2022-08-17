@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod expr;
+mod format;
 mod query;
 mod statements;
 
@@ -20,6 +21,7 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 
 pub use expr::*;
+pub use format::*;
 pub use query::*;
 pub use statements::*;
 
