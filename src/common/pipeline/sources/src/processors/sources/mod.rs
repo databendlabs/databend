@@ -34,6 +34,7 @@ pub use file_splitter::FileSplitterState;
 pub use multi_file_splitter::MultiFileSplitter;
 pub use multi_file_splitter::OperatorInfo;
 pub use stream_source::StreamSource;
+pub use stream_source::StreamSourceNoSkipEmpty;
 pub use stream_source_v2::StreamSourceV2;
 pub use sync_source::SyncSource;
 pub use sync_source::SyncSourcer;

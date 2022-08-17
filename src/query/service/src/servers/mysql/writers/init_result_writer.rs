@@ -12,39 +12,42 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_base::base::tokio::io::AsyncWrite;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use opensrv_mysql::*;
 use tracing::error;
 
-pub struct DFInitResultWriter<'a, W: std::io::Write> {
+pub struct DFInitResultWriter<'a, W: AsyncWrite + Send + Unpin> {
     inner: Option<InitWriter<'a, W>>,
 }
 
-impl<'a, W: std::io::Write> DFInitResultWriter<'a, W> {
+impl<'a, W: AsyncWrite + Send + Unpin> DFInitResultWriter<'a, W> {
     pub fn create(inner: InitWriter<'a, W>) -> DFInitResultWriter<'a, W> {
         DFInitResultWriter::<'a, W> { inner: Some(inner) }
     }
 
-    pub fn write(&mut self, query_result: Result<()>) -> Result<()> {
+    pub async fn write(&mut self, query_result: Result<()>) -> Result<()> {
         if let Some(writer) = self.inner.take() {
             match query_result {
-                Ok(_) => Self::ok(writer)?,
-                Err(error) => Self::err(&error, writer)?,
+                Ok(_) => Self::ok(writer).await?,
+                Err(error) => Self::err(&error, writer).await?,
             }
         }
 
         Ok(())
     }
 
-    fn ok(writer: InitWriter<'a, W>) -> Result<()> {
-        writer.ok()?;
+    async fn ok(writer: InitWriter<'a, W>) -> Result<()> {
+        writer.ok().await?;
         Ok(())
     }
 
-    fn err(error: &ErrorCode, writer: InitWriter<'a, W>) -> Result<()> {
+    async fn err(error: &ErrorCode, writer: InitWriter<'a, W>) -> Result<()> {
         error!("OnInit Error: {:?}", error);
-        writer.error(ErrorKind::ER_UNKNOWN_ERROR, error.to_string().as_bytes())?;
+        writer
+            .error(ErrorKind::ER_UNKNOWN_ERROR, error.to_string().as_bytes())
+            .await?;
         Ok(())
     }
 }

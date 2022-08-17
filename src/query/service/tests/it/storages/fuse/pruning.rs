@@ -142,7 +142,7 @@ async fn test_block_pruner() -> Result<()> {
         .get(OPT_KEY_SNAPSHOT_LOCATION)
         .unwrap();
 
-    let reader = MetaReaders::table_snapshot_reader(ctx.as_ref());
+    let reader = MetaReaders::table_snapshot_reader(ctx.clone());
     let snapshot = reader.read(snapshot_loc.as_str(), None, 1).await?;
 
     // nothing will be pruned
@@ -276,7 +276,7 @@ async fn test_block_pruner_monotonic() -> Result<()> {
         .options()
         .get(OPT_KEY_SNAPSHOT_LOCATION)
         .unwrap();
-    let reader = MetaReaders::table_snapshot_reader(ctx.as_ref());
+    let reader = MetaReaders::table_snapshot_reader(ctx.clone());
     let snapshot = reader.read(snapshot_loc.as_str(), None, 1).await?;
 
     // a + b > 20; some blocks pruned
