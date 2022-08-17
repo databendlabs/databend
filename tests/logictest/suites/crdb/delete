@@ -1,0 +1,192 @@
+statement ok
+drop table if exists kv;
+
+statement ok
+drop table if exists unindexed;
+
+statement ok
+CREATE TABLE kv (  k INT,  v INT);
+
+statement ok
+CREATE TABLE unindexed (  k INT,  v INT);
+
+statement ok
+INSERT INTO kv VALUES (1, 2), (3, 4), (5, 6), (7, 8);
+
+statement ok
+INSERT INTO unindexed VALUES (1, 2), (3, 4), (5, 6), (7, 8);
+
+statement query II
+SELECT * FROM kv;
+
+----
+1 2
+3 4
+5 6
+7 8
+
+statement ok
+drop view if exists kview;
+
+statement ok
+CREATE VIEW kview AS SELECT k,v FROM kv;
+
+statement query II
+SELECT * FROM kview;
+
+----
+1 2
+3 4
+5 6
+7 8
+
+statement error 1002
+DELETE FROM kview;
+
+statement query II
+SELECT * FROM kview;
+
+----
+1 2
+3 4
+5 6
+7 8
+
+statement ok
+DELETE FROM kv WHERE k=3 OR v=6;
+
+statement query II
+SELECT * FROM kv;
+
+----
+1 2
+7 8
+
+statement ok
+DELETE FROM kv WHERE k=5;
+
+statement ok
+DELETE FROM kv;
+
+statement ok 
+SELECT * FROM kv;
+
+statement error 1065
+DELETE FROM kv WHERE nonexistent = 1;
+
+statement ok
+DELETE FROM unindexed WHERE k=3 OR v=6;
+
+statement query II
+SELECT * FROM unindexed;
+
+----
+1 2
+7 8
+
+statement ok
+DELETE FROM unindexed;
+
+statement ok 
+SELECT * FROM unindexed;
+
+statement ok
+INSERT INTO unindexed VALUES (1, 2), (3, 4), (5, 6), (7, 8);
+
+statement ok
+DELETE FROM unindexed WHERE k=3 or v=6;
+
+statement ok
+DELETE FROM unindexed;
+
+statement ok
+INSERT INTO unindexed VALUES (1, 2), (3, 4), (5, 6), (7, 8);
+
+statement query II
+SELECT k, v FROM unindexed;
+
+----
+1 2
+3 4
+5 6
+7 8
+
+statement ok
+DELETE FROM unindexed;
+
+statement ok
+INSERT INTO unindexed VALUES (1, 2), (3, 4), (5, 6), (7, 8);
+
+statement ok
+DELETE FROM unindexed WHERE k >= 4;
+
+statement query II
+SELECT k, v FROM unindexed;
+
+----
+1 2
+3 4
+
+statement ok
+DELETE FROM unindexed;
+
+statement ok 
+SELECT k, v FROM unindexed;
+
+statement ok
+INSERT INTO unindexed VALUES (1, 2), (3, 4), (5, 6), (7, 8);
+
+statement ok
+DELETE FROM unindexed WHERE k >= 4;
+
+statement query II
+SELECT k, v FROM unindexed;
+
+----
+1 2
+3 4
+
+statement ok
+DELETE FROM unindexed WHERE k >= 7;
+
+statement query II
+SELECT k, v FROM unindexed;
+
+----
+1 2
+3 4
+
+statement ok
+DELETE FROM unindexed WHERE k <=3;
+
+statement ok 
+SELECT k, v FROM unindexed;
+
+statement ok
+INSERT INTO unindexed VALUES (1, 9), (8, 2), (3, 7), (6, 4);
+
+statement ok
+DELETE FROM unindexed WHERE k > 1 AND v < 7;
+
+statement ok
+DELETE FROM unindexed;
+
+-- DDL alter add is no support
+-- statement ok
+-- drop table if exists family;
+
+-- statement ok
+-- CREATE TABLE family (    x INT,    y INT);
+
+-- statement ok
+-- INSERT INTO family VALUES (1, 1), (2, 2), (3, 3);
+
+-- statement error 1105
+-- ALTER TABLE family ADD z INT;
+
+-- statement ok
+-- DELETE FROM family WHERE x=2;
+
+-- statement error 1105
+-- SELECT x, y, z FROM family;
+
