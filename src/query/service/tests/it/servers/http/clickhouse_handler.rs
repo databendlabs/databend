@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use common_exception::Result;
 
 use common_base::base::tokio;
 use databend_query::servers::http::middleware::HTTPSessionEndpoint;
@@ -31,8 +32,9 @@ use poem::EndpointExt;
 use poem::Request;
 use poem::Route;
 use pretty_assertions::assert_eq;
+use databend_query::auth::AuthMgr;
 
-use crate::tests::ConfigBuilder;
+use crate::tests::{ConfigBuilder, TestGlobalServices};
 
 macro_rules! assert_error {
     ($body:expr, $msg:expr$(,)?) => {{
@@ -48,7 +50,7 @@ macro_rules! assert_ok {
 
 #[tokio::test]
 async fn test_select() -> PoemResult<()> {
-    let server = Server::new();
+    let server = Server::new().await.unwrap();
 
     {
         let (status, body) = server.get("bad sql").await;
@@ -99,7 +101,7 @@ async fn test_select() -> PoemResult<()> {
 
 #[tokio::test]
 async fn test_insert_values() -> PoemResult<()> {
-    let server = Server::new();
+    let server = Server::new().await.unwrap();
     {
         let (status, body) = server.post("create table t1(a int, b string)", "").await;
         assert_eq!(status, StatusCode::OK);
@@ -125,7 +127,7 @@ async fn test_insert_values() -> PoemResult<()> {
 
 #[tokio::test]
 async fn test_output_formats() -> PoemResult<()> {
-    let server = Server::new();
+    let server = Server::new().await.unwrap();
     {
         let (status, body) = server
             .post("create table t1(a int, b string null)", "")
@@ -165,7 +167,7 @@ async fn test_output_formats() -> PoemResult<()> {
 
 #[tokio::test]
 async fn test_output_format_compress() -> PoemResult<()> {
-    let server = Server::new();
+    let server = Server::new().await.unwrap();
     let sql = "select 1 format TabSeparated";
     let (status, body) = server
         .get_response_bytes(
@@ -184,7 +186,7 @@ async fn test_output_format_compress() -> PoemResult<()> {
 
 #[tokio::test]
 async fn test_insert_format_values() -> PoemResult<()> {
-    let server = Server::new();
+    let server = Server::new().await.unwrap();
     {
         let (status, body) = server.post("create table t1(a int, b string)", "").await;
         assert_eq!(status, StatusCode::OK);
@@ -210,7 +212,7 @@ async fn test_insert_format_values() -> PoemResult<()> {
 
 #[tokio::test]
 async fn test_insert_format_ndjson() -> PoemResult<()> {
-    let server = Server::new();
+    let server = Server::new().await.unwrap();
     {
         let (status, body) = server
             .post("create table t1(a int, b string null)", "")
@@ -262,7 +264,7 @@ async fn test_insert_format_ndjson() -> PoemResult<()> {
 
 #[tokio::test]
 async fn test_settings() -> PoemResult<()> {
-    let server = Server::new();
+    let server = Server::new().await.unwrap();
 
     // unknown setting
     {
@@ -315,7 +317,7 @@ async fn test_settings() -> PoemResult<()> {
 
 #[tokio::test]
 async fn test_multi_partition() -> PoemResult<()> {
-    let server = Server::new();
+    let server = Server::new().await.unwrap();
     {
         let sql = "create table tb2(id int, c1 varchar) Engine=Fuse;";
         let (status, body) = server.get(sql).await;
@@ -408,14 +410,18 @@ struct Server {
 }
 
 impl Server {
-    pub fn new() -> Self {
-        SessionManager::init(ConfigBuilder::create().build()).unwrap();
+    pub async fn new() -> Result<Self> {
+        let config = ConfigBuilder::create().build();
+        TestGlobalServices::setup(config.clone()).await?;
+
+        let session_middleware = HTTPSessionMiddleware::create(
+            HttpHandlerKind::Clickhouse,
+            AuthMgr::create(config.clone()).await?,
+        );
         let endpoint = Route::new()
             .nest("/", clickhouse_router())
-            .with(HTTPSessionMiddleware {
-                kind: HttpHandlerKind::Clickhouse,
-            });
-        Server { endpoint }
+            .with(session_middleware);
+        Ok(Server { endpoint })
     }
 
     pub async fn get_response_bytes(&self, req: Request) -> (StatusCode, Vec<u8>) {

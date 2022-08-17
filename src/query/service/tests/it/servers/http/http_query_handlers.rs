@@ -60,6 +60,7 @@ use wiremock::matchers::path;
 use wiremock::Mock;
 use wiremock::MockServer;
 use wiremock::ResponseTemplate;
+use databend_query::auth::AuthMgr;
 
 use crate::tests::tls_constants::TEST_CA_CERT;
 use crate::tests::tls_constants::TEST_CN_NAME;
@@ -70,7 +71,7 @@ use crate::tests::tls_constants::TEST_TLS_CLIENT_IDENTITY;
 use crate::tests::tls_constants::TEST_TLS_CLIENT_PASSWORD;
 use crate::tests::tls_constants::TEST_TLS_SERVER_CERT;
 use crate::tests::tls_constants::TEST_TLS_SERVER_KEY;
-use crate::tests::ConfigBuilder;
+use crate::tests::{ConfigBuilder, TestGlobalServices};
 
 type EndpointType = HTTPSessionEndpoint<Route>;
 
@@ -95,7 +96,7 @@ async fn expect_end(ep: &EndpointType, result: QueryResponse) -> Result<()> {
 
 async fn test_simple_sql(v2: u64) -> Result<()> {
     let sql = "select * from system.tables limit 10";
-    let ep = create_endpoint();
+    let ep = create_endpoint().await?;
     let (status, result) = post_sql_to_endpoint_new_session(&ep, sql, 1, v2).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     assert!(result.error.is_none(), "{:?}", result.error);
@@ -174,7 +175,7 @@ async fn test_simple_sql_v2() -> Result<()> {
 async fn test_return_when_finish(v2: u64) -> Result<()> {
     let wait_time_secs = 5;
     let sql = "create table t1(a int)";
-    let ep = create_endpoint();
+    let ep = create_endpoint().await?;
     let (status, result) = post_sql_to_endpoint_new_session(&ep, sql, wait_time_secs, v2).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     assert_eq!(result.state, ExecuteStateKind::Succeeded, "{:?}", result);
@@ -257,7 +258,7 @@ async fn test_return_when_finish_v2() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_wait_time_secs() -> Result<()> {
-    let ep = create_endpoint();
+    let ep = create_endpoint().await?;
     let sql = "select sleep(0.001)";
     let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": 0}});
 
@@ -305,7 +306,7 @@ async fn test_wait_time_secs() -> Result<()> {
 #[tokio::test]
 async fn test_buffer_size() -> Result<()> {
     let rows = 100;
-    let ep = create_endpoint();
+    let ep = create_endpoint().await?;
     let sql = format!("select * from numbers({})", rows);
 
     for buf_size in [0, 99, 100, 101] {
@@ -324,7 +325,7 @@ async fn test_buffer_size() -> Result<()> {
 }
 
 async fn test_pagination(v2: u64) -> Result<()> {
-    let ep = create_endpoint();
+    let ep = create_endpoint().await?;
     let sql = "select * from numbers(10)";
     let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": 1, "max_rows_per_page": 2}, "session": { "settings": {"enable_planner_v2": v2.to_string()}}});
 
@@ -392,7 +393,7 @@ async fn test_pagination_v2() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_http_session() -> Result<()> {
-    let ep = create_endpoint();
+    let ep = create_endpoint().await?;
     let json =
         serde_json::json!({"sql":  "use system", "session": {"keep_server_session_secs": 10}});
 
@@ -428,17 +429,20 @@ async fn test_http_session() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 #[ignore = "flaky, sleep time unreliable"]
 async fn test_result_timeout() -> Result<()> {
-    SessionManager::init(
-        ConfigBuilder::create()
-            .http_handler_result_time_out(200u64)
-            .build(),
-    )?;
+    let config = ConfigBuilder::create()
+        .http_handler_result_time_out(200u64)
+        .build();
+
+    TestGlobalServices::setup(config.clone()).await?;
+
+    let session_middleware = HTTPSessionMiddleware::create(
+        HttpHandlerKind::Query,
+        AuthMgr::create(config.clone()).await?,
+    );
 
     let ep = Route::new()
         .nest("/v1/query", query_route())
-        .with(HTTPSessionMiddleware {
-            kind: HttpHandlerKind::Query,
-        });
+        .with(session_middleware);
 
     let sql = "select sleep(0.1)";
     let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": 0}});
@@ -460,11 +464,13 @@ async fn test_result_timeout() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_system_tables() -> Result<()> {
+    let session_middleware = HTTPSessionMiddleware::create(
+        HttpHandlerKind::Query,
+        AuthMgr::create(ConfigBuilder::create().build()).await?,
+    );
     let ep = Route::new()
         .nest("/v1/query", query_route())
-        .with(HTTPSessionMiddleware {
-            kind: HttpHandlerKind::Query,
-        });
+        .with(session_middleware);
 
     let sql = "select name from system.tables where database='system' order by name";
 
@@ -509,7 +515,7 @@ async fn test_system_tables() -> Result<()> {
 
 #[tokio::test]
 async fn test_insert() -> Result<()> {
-    let route = create_endpoint();
+    let route = create_endpoint().await?;
 
     let sqls = vec![
         ("create table t(a int) engine=fuse", 0, 0),
@@ -535,13 +541,17 @@ async fn test_insert() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_query_log() -> Result<()> {
-    SessionManager::init(ConfigBuilder::create().build())?;
+    let config = ConfigBuilder::create().build();
+    TestGlobalServices::setup(config.clone()).await?;
+
+    let session_middleware = HTTPSessionMiddleware::create(
+        HttpHandlerKind::Query,
+        AuthMgr::create(config.clone()).await?,
+    );
 
     let ep = Route::new()
         .nest("/v1/query", query_route())
-        .with(HTTPSessionMiddleware {
-            kind: HttpHandlerKind::Query,
-        });
+        .with(session_middleware);
 
     let sql = "create table t1(a int)";
     let (status, result) = post_sql_to_endpoint(&ep, sql, 1).await?;
@@ -591,11 +601,14 @@ async fn test_query_log() -> Result<()> {
         result
     );
 
+    let session_middleware = HTTPSessionMiddleware::create(
+        HttpHandlerKind::Query,
+        AuthMgr::create(config.clone()).await?,
+    );
+
     let ep = Route::new()
         .nest("/v1/query", query_route())
-        .with(HTTPSessionMiddleware {
-            kind: HttpHandlerKind::Query,
-        });
+        .with(session_middleware);
 
     let sql = "select sleep(2)";
     let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": 0}});
@@ -661,8 +674,8 @@ async fn get_uri(ep: &EndpointType, uri: &str) -> Response {
             .typed_header(basic)
             .finish(),
     )
-    .await
-    .unwrap_or_else(|err| err.into_response())
+        .await
+        .unwrap_or_else(|err| err.into_response())
 }
 
 async fn get_uri_checked(ep: &EndpointType, uri: &str) -> Result<(StatusCode, QueryResponse)> {
@@ -675,16 +688,20 @@ async fn post_sql(sql: &str, wait_time_secs: u64) -> Result<(StatusCode, QueryRe
     post_json(&json).await
 }
 
-pub fn create_endpoint() -> EndpointType {
-    Route::new()
+pub async fn create_endpoint() -> Result<EndpointType> {
+    let config = ConfigBuilder::create().build();
+    let session_middleware = HTTPSessionMiddleware::create(
+        HttpHandlerKind::Query,
+        AuthMgr::create(config).await?,
+    );
+
+    Ok(Route::new()
         .nest("/v1/query", query_route())
-        .with(HTTPSessionMiddleware {
-            kind: HttpHandlerKind::Query,
-        })
+        .with(session_middleware))
 }
 
 async fn post_json(json: &serde_json::Value) -> Result<(StatusCode, QueryResponse)> {
-    let ep = create_endpoint();
+    let ep = create_endpoint().await?;
     post_json_to_endpoint(&ep, json).await
 }
 
@@ -754,17 +771,19 @@ async fn test_auth_jwt() -> Result<()> {
         .await;
 
     // Setup mock jwks url
-    SessionManager::init(
-        ConfigBuilder::create()
-            .jwt_key_file(format!("http://{}{}", server.address(), json_path))
-            .build(),
-    )?;
+    let config = ConfigBuilder::create()
+        .jwt_key_file(format!("http://{}{}", server.address(), json_path))
+        .build();
+    TestGlobalServices::setup(config.clone()).await?;
+
+    let session_middleware = HTTPSessionMiddleware::create(
+        HttpHandlerKind::Query,
+        AuthMgr::create(config.clone()).await?,
+    );
 
     let ep = Route::new()
         .nest("/v1/query", query_route())
-        .with(HTTPSessionMiddleware {
-            kind: HttpHandlerKind::Query,
-        });
+        .with(session_middleware);
 
     let now = Some(Clock::now_since_epoch());
     let claims = JWTClaims {
@@ -849,17 +868,16 @@ async fn test_auth_jwt_with_create_user() -> Result<()> {
         .await;
 
     // Setup mock jwt
-    SessionManager::init(
-        ConfigBuilder::create()
-            .jwt_key_file(format!("http://{}{}", server.address(), json_path))
-            .build(),
-    )?;
+    let config = ConfigBuilder::create().jwt_key_file(format!("http://{}{}", server.address(), json_path)).build();
+    TestGlobalServices::setup(config.clone()).await?;
 
+    let session_middleware = HTTPSessionMiddleware::create(
+        HttpHandlerKind::Query,
+        AuthMgr::create(config).await?,
+    );
     let ep = Route::new()
         .nest("/v1/query", query_route())
-        .with(HTTPSessionMiddleware {
-            kind: HttpHandlerKind::Query,
-        });
+        .with(session_middleware);
 
     let now = Some(Clock::now_since_epoch());
     let claims = JWTClaims {
@@ -1039,7 +1057,7 @@ pub async fn download(ep: &EndpointType, query_id: &str) -> Response {
 }
 
 async fn test_download(v2: u64) -> Result<()> {
-    let ep = create_endpoint();
+    let ep = create_endpoint().await?;
 
     let sql = "select number, number + 1 from numbers(2)";
     let (status, result) = post_sql_to_endpoint_new_session(&ep, sql, 1, v2).await?;
@@ -1113,7 +1131,7 @@ async fn test_download_v2() -> Result<()> {
 
 #[tokio::test]
 async fn test_download_non_select() -> Result<()> {
-    let ep = create_endpoint();
+    let ep = create_endpoint().await?;
     let sql = "show databases";
     let (status, result) = post_sql_to_endpoint(&ep, sql, 1).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
@@ -1133,7 +1151,7 @@ async fn test_download_non_select() -> Result<()> {
 }
 
 async fn test_download_failed(v2: u64) -> Result<()> {
-    let ep = create_endpoint();
+    let ep = create_endpoint().await?;
     let sql = "xxx";
     let (status, result) = post_sql_to_endpoint_new_session(&ep, sql, 1, v2).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
@@ -1158,7 +1176,7 @@ async fn test_download_failed_v2() -> Result<()> {
 
 #[tokio::test]
 async fn test_download_killed() -> Result<()> {
-    let ep = create_endpoint();
+    let ep = create_endpoint().await?;
 
     // detached query can download result
     let sql = "select sleep(0.1)";
@@ -1200,13 +1218,17 @@ async fn test_download_killed() -> Result<()> {
 #[tokio::test]
 async fn test_no_download_in_management_mode() -> Result<()> {
     // Setup
-    SessionManager::init(ConfigBuilder::create().with_management_mode().build())?;
+    let config = ConfigBuilder::create().with_management_mode().build();
+    TestGlobalServices::setup(config.clone()).await?;
+
+    let session_middleware = HTTPSessionMiddleware::create(
+        HttpHandlerKind::Query,
+        AuthMgr::create(config.clone()).await?,
+    );
 
     let ep = Route::new()
         .nest("/v1/query", query_route())
-        .with(HTTPSessionMiddleware {
-            kind: HttpHandlerKind::Query,
-        });
+        .with(session_middleware);
     let sql = "select 1";
     let (status, result) = post_sql_to_endpoint(&ep, sql, 1).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
@@ -1221,7 +1243,7 @@ async fn test_no_download_in_management_mode() -> Result<()> {
 
 #[tokio::test]
 async fn test_func_object_keys() -> Result<()> {
-    let route = create_endpoint();
+    let route = create_endpoint().await?;
 
     let sqls = vec![
         (
@@ -1251,7 +1273,7 @@ async fn test_func_object_keys() -> Result<()> {
 
 #[tokio::test]
 async fn test_multi_partition() -> Result<()> {
-    let route = create_endpoint();
+    let route = create_endpoint().await?;
 
     let sqls = vec![
         ("create table tb2(id int, c1 varchar) Engine=Fuse;", 0),
@@ -1274,7 +1296,7 @@ async fn test_multi_partition() -> Result<()> {
 
 #[tokio::test]
 async fn test_affect() -> Result<()> {
-    let route = create_endpoint();
+    let route = create_endpoint().await?;
 
     let sqls = vec![
         (

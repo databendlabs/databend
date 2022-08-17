@@ -28,10 +28,12 @@ use common_meta_types::UserInfo;
 use common_planners::PlanNode;
 use common_users::UserApiProvider;
 use futures::future::AbortHandle;
+use opendal::Operator;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 use uuid::Uuid;
 use common_catalog::catalog::Catalog;
+use common_storage::StorageOperator;
 
 use crate::auth::AuthMgr;
 use crate::catalogs::CatalogManager;
@@ -57,6 +59,7 @@ type DatabaseAndTable = (String, String, String);
 ///     FROM table_name_4;
 /// For each subquery, they will share a runtime, session, progress, init_query_id
 pub struct QueryContextShared {
+    pub(in crate::sessions) config: Config,
     /// scan_progress for scan metrics of datablocks (uncompressed)
     pub(in crate::sessions) scan_progress: Arc<Progress>,
     /// write_progress for write/commit metrics of datablocks (uncompressed)
@@ -81,6 +84,7 @@ pub struct QueryContextShared {
     pub(in crate::sessions) affect: Arc<Mutex<Option<QueryAffect>>>,
     pub(in crate::sessions) catalog_manager: Arc<CatalogManager>,
     pub(in crate::sessions) query_need_abort: Arc<AtomicBool>,
+    pub(in crate::sessions) storage_operator: Operator,
 }
 
 impl QueryContextShared {
@@ -90,12 +94,15 @@ impl QueryContextShared {
         cluster_cache: Arc<Cluster>,
         user_manager: Arc<UserApiProvider>,
         catalog_manager: Arc<CatalogManager>,
+        storage_operator: Operator,
     ) -> Result<Arc<QueryContextShared>> {
         Ok(Arc::new(QueryContextShared {
             session,
             cluster_cache,
             user_manager,
             catalog_manager,
+            storage_operator,
+            config: config.clone(),
             init_query_id: Arc::new(RwLock::new(Uuid::new_v4().to_string())),
             scan_progress: Arc::new(Progress::create()),
             result_progress: Arc::new(Progress::create()),
@@ -110,7 +117,7 @@ impl QueryContextShared {
             running_plan: Arc::new(RwLock::new(None)),
             tables_refs: Arc::new(Mutex::new(HashMap::new())),
             dal_ctx: Arc::new(Default::default()),
-            auth_manager: Arc::new(AuthMgr::create(config).await?),
+            auth_manager: AuthMgr::create(config).await?,
             query_need_abort: Arc::new(AtomicBool::new(false)),
             affect: Arc::new(Mutex::new(None)),
         }))
@@ -281,7 +288,7 @@ impl QueryContextShared {
     }
 
     pub fn get_config(&self) -> Config {
-        self.session.get_config()
+        self.config.clone()
     }
 
     pub fn get_connection_id(&self) -> String {

@@ -153,6 +153,15 @@ static STORAGE_OPERATOR: OnceCell<Operator> = OnceCell::new();
 
 impl StorageOperator {
     pub async fn init(conf: &StorageConfig) -> common_exception::Result<()> {
+        let operator = Self::try_create(conf).await?;
+
+        match STORAGE_OPERATOR.set(operator) {
+            Ok(_) => Ok(()),
+            Err(_) => Err(ErrorCode::LogicalError("Cannot init StorageOperator twice")),
+        }
+    }
+
+    pub async fn try_create(conf: &StorageConfig) -> common_exception::Result<Operator> {
         let io_runtime = GlobalIORuntime::instance();
         let operator = init_operator(&conf.params)?;
         // Enable exponential backoff by default
@@ -168,12 +177,7 @@ impl StorageOperator {
 
         // NOTE: Magic happens here. We will add a layer upon original storage operator
         // so that all underlying storage operations will send to storage runtime.
-        let operator = operator.layer(DalRuntime::new(io_runtime.inner()));
-
-        match STORAGE_OPERATOR.set(operator) {
-            Ok(_) => Ok(()),
-            Err(_) => Err(ErrorCode::LogicalError("Cannot init StorageOperator twice")),
-        }
+        Ok(operator.layer(DalRuntime::new(io_runtime.inner())))
     }
 
     pub fn instance() -> Operator {

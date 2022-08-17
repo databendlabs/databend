@@ -25,6 +25,7 @@ use common_meta_types::PasswordHashMethod;
 use common_meta_types::UserInfo;
 use common_meta_types::UserPrivilegeSet;
 use common_settings::Settings;
+use common_storage::StorageOperator;
 use common_users::UserApiProvider;
 use databend_query::catalogs::CatalogManagerHelper;
 use databend_query::clusters::Cluster;
@@ -70,6 +71,7 @@ async fn create_query_context_with_session(typ: SessionType) -> Result<Arc<Query
     let config = crate::tests::ConfigBuilder::create().build();
 
     let catalog_manager = CatalogManager::try_create(&config).await?;
+    let storage_operator = StorageOperator::try_create(&config.storage).await?;
     let dummy_session = Session::try_create(
         String::from("dummy_session"),
         typ,
@@ -100,6 +102,7 @@ async fn create_query_context_with_session(typ: SessionType) -> Result<Arc<Query
             Cluster::empty(),
             user_manager,
             catalog_manager,
+            storage_operator,
         ).await?,
     );
 
@@ -109,35 +112,46 @@ async fn create_query_context_with_session(typ: SessionType) -> Result<Arc<Query
 
 pub async fn create_query_context_with_config(
     config: Config,
-    current_user: Option<UserInfo>,
+    mut current_user: Option<UserInfo>,
 ) -> Result<(TestGlobalServices, Arc<QueryContext>)> {
-    let catalog_manager = CatalogManager::try_create(&config).await?;
     let test_guard = TestGlobalServices::setup(config.clone()).await?;
 
-    let sessions = SessionManager::instance();
-    let dummy_session = sessions.create_session(SessionType::Dummy).await?;
+    let catalog_manager = CatalogManager::try_create(&config).await?;
+    let storage_operator = StorageOperator::try_create(&config.storage).await?;
+    let dummy_session = Session::try_create(
+        String::from("dummy_session"),
+        SessionType::Dummy,
+        SessionContext::try_create(
+            config.clone(),
+            Settings::default_settings(&config.query.tenant_id.clone()),
+        )?,
+        Some(9),
+    )?;
 
-    let mut user_info = UserInfo::new("root", "127.0.0.1", AuthInfo::Password {
-        hash_method: PasswordHashMethod::Sha256,
-        hash_value: Vec::from("pass"),
-    });
-    user_info.grants.grant_privileges(
-        &GrantObject::Global,
-        UserPrivilegeSet::available_privileges_on_global(),
-    );
-    if let Some(user) = current_user {
-        user_info = user;
+    if current_user.is_none() {
+        let mut user_info = UserInfo::new("root", "127.0.0.1", AuthInfo::Password {
+            hash_method: PasswordHashMethod::Sha256,
+            hash_value: Vec::from("pass"),
+        });
+
+        user_info.grants.grant_privileges(
+            &GrantObject::Global,
+            UserPrivilegeSet::available_privileges_on_global(),
+        );
+
+        current_user = Some(user_info);
     }
-    dummy_session.set_current_user(user_info);
 
+    dummy_session.set_current_user(current_user.unwrap());
     let user_manager = UserApiProvider::try_create(config.meta.to_meta_grpc_client_conf()).await?;
     let context = QueryContext::create_from_shared(
         QueryContextShared::try_create(
             config,
-            (*dummy_session).clone(),
+            dummy_session,
             Cluster::empty(),
             user_manager,
             catalog_manager,
+            storage_operator,
         ).await?,
     );
 
@@ -193,6 +207,7 @@ impl Default for ClusterDescriptor {
 pub async fn create_query_context_with_cluster(desc: ClusterDescriptor) -> Result<(TestGlobalServices, Arc<QueryContext>)> {
     let config = crate::tests::ConfigBuilder::create().build();
     let catalog_manager = CatalogManager::try_create(&config).await?;
+    let storage_operator = StorageOperator::try_create(&config.storage).await?;
     let test_guard = TestGlobalServices::setup(config.clone()).await?;
     let dummy_session = SessionManager::instance().create_session(SessionType::Dummy).await?;
 
@@ -202,11 +217,12 @@ pub async fn create_query_context_with_cluster(desc: ClusterDescriptor) -> Resul
     let user_manager = UserApiProvider::try_create(config.meta.to_meta_grpc_client_conf()).await?;
     let context = QueryContext::create_from_shared(
         QueryContextShared::try_create(
-            dummy_session.get_config(),
+            config,
             (*dummy_session).clone(),
             Cluster::create(nodes, local_id),
             user_manager,
             catalog_manager,
+            storage_operator,
         )
             .await?,
     );

@@ -28,6 +28,7 @@ use common_users::UserApiProvider;
 use futures::channel::*;
 use parking_lot::RwLock;
 use common_catalog::catalog::CatalogManager;
+use common_storage::StorageOperator;
 use crate::catalogs::CatalogManagerHelper;
 
 use crate::clusters::ClusterDiscovery;
@@ -138,11 +139,20 @@ impl Session {
         let discovery = ClusterDiscovery::instance();
         let user_manager = UserApiProvider::instance();
         let catalog_manager = CatalogManager::instance();
+        let storage_operator = StorageOperator::instance();
 
         let config = self.get_config();
         let session = self.clone();
         let cluster = discovery.discover().await?;
-        let shared = QueryContextShared::try_create(config, session, cluster, user_manager, catalog_manager).await?;
+        let shared = QueryContextShared::try_create(
+            config,
+            session,
+            cluster,
+            user_manager,
+            catalog_manager,
+            storage_operator,
+        ).await?;
+
         self.session_ctx
             .set_query_context_shared(Some(shared.clone()));
         Ok(shared)

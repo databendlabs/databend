@@ -120,6 +120,7 @@ impl Table for TracingTable {
         let output = OutputPort::create();
         let log_files = Self::log_files(ctx.clone())?;
         debug!("listed log files: {:?}", log_files);
+        println!("listed log files: {:?}", log_files);
         let schema = self.table_info.schema();
         let max_block_size = settings.get_max_block_size()? as usize;
 

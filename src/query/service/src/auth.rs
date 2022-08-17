@@ -43,10 +43,10 @@ pub enum Credential {
 }
 
 impl AuthMgr {
-    pub async fn create(cfg: Config) -> Result<Self> {
-        Ok(AuthMgr {
+    pub async fn create(cfg: Config) -> Result<Arc<AuthMgr>> {
+        Ok(Arc::new(AuthMgr {
             jwt_auth: JwtAuthenticator::try_create(cfg.query.jwt_key_file).await?,
-        })
+        }))
     }
 
     pub async fn auth(&self, session: SessionRef, credential: &Credential) -> Result<()> {

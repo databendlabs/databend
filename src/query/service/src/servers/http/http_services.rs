@@ -14,6 +14,7 @@
 
 use std::net::SocketAddr;
 use std::path::Path;
+use std::sync::Arc;
 
 use common_exception::Result;
 use common_http::HttpShutdownHandler;
@@ -28,6 +29,7 @@ use poem::Endpoint;
 use poem::EndpointExt;
 use poem::Route;
 use tracing::info;
+use crate::auth::AuthMgr;
 
 use super::v1::upload_to_stage;
 use crate::servers::http::middleware::HTTPSessionMiddleware;
@@ -36,6 +38,7 @@ use crate::servers::http::v1::query_route;
 use crate::servers::http::v1::streaming_load;
 use crate::servers::Server;
 use crate::Config;
+use crate::sessions::SessionManager;
 
 #[derive(Copy, Clone)]
 pub enum HttpHandlerKind {
@@ -81,7 +84,7 @@ impl HttpHandler {
         }))
     }
 
-    fn build_router(&self, sock: SocketAddr) -> impl Endpoint {
+    async fn build_router(&self, config: Config, sock: SocketAddr) -> Result<impl Endpoint> {
         let ep = match self.kind {
             HttpHandlerKind::Query => Route::new()
                 .at(
@@ -96,10 +99,14 @@ impl HttpHandler {
                 .at("/v1/upload_to_stage", put(upload_to_stage)),
             HttpHandlerKind::Clickhouse => Route::new().nest("/", clickhouse_router()),
         };
-        ep.with(HTTPSessionMiddleware { kind: self.kind })
+
+        let auth_manager = AuthMgr::create(config).await?;
+        let session_middleware = HTTPSessionMiddleware::create(self.kind, auth_manager);
+        Ok(ep.with(session_middleware)
             .with(NormalizePath::new(TrailingSlash::Trim))
             .with(CatchPanic::new())
             .boxed()
+        )
     }
 
     fn build_tls(config: &Config) -> Result<RustlsConfig> {
@@ -123,14 +130,16 @@ impl HttpHandler {
         info!("Http Handler TLS enabled");
 
         let tls_config = Self::build_tls(&self.config)?;
+        let router = self.build_router(self.config.clone(), listening).await?;
         self.shutdown_handler
-            .start_service(listening, Some(tls_config), self.build_router(listening))
+            .start_service(listening, Some(tls_config), router)
             .await
     }
 
     async fn start_without_tls(&mut self, listening: SocketAddr) -> Result<SocketAddr> {
+        let router = self.build_router(self.config.clone(), listening).await?;
         self.shutdown_handler
-            .start_service(listening, None, self.build_router(listening))
+            .start_service(listening, None, router)
             .await
     }
 }

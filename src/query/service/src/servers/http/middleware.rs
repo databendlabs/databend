@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use headers::authorization::Basic;
@@ -29,13 +30,20 @@ use tracing::info;
 use tracing::warn;
 
 use super::v1::HttpQueryContext;
-use crate::auth::Credential;
+use crate::auth::{AuthMgr, Credential};
 use crate::servers::HttpHandlerKind;
 use crate::sessions::SessionManager;
 use crate::sessions::SessionType;
 
 pub struct HTTPSessionMiddleware {
     pub kind: HttpHandlerKind,
+    pub auth_manager: Arc<AuthMgr>,
+}
+
+impl HTTPSessionMiddleware {
+    pub fn create(kind: HttpHandlerKind, auth_manager: Arc<AuthMgr>) -> HTTPSessionMiddleware {
+        HTTPSessionMiddleware { kind, auth_manager }
+    }
 }
 
 fn get_credential(req: &Request, kind: HttpHandlerKind) -> Result<Credential> {
@@ -103,6 +111,7 @@ impl<E: Endpoint> Middleware<E> for HTTPSessionMiddleware {
         HTTPSessionEndpoint {
             ep,
             kind: self.kind,
+            auth_manager: self.auth_manager.clone(),
         }
     }
 }
@@ -110,6 +119,7 @@ impl<E: Endpoint> Middleware<E> for HTTPSessionMiddleware {
 pub struct HTTPSessionEndpoint<E> {
     ep: E,
     pub kind: HttpHandlerKind,
+    pub auth_manager: Arc<AuthMgr>,
 }
 
 impl<E> HTTPSessionEndpoint<E> {
@@ -122,9 +132,8 @@ impl<E> HTTPSessionEndpoint<E> {
             let tenant_id = tenant_id.to_str().unwrap().to_string();
             session.set_current_tenant(tenant_id);
         }
-        ctx.get_auth_manager()
-            .auth(ctx.get_current_session(), &credential)
-            .await?;
+
+        self.auth_manager.auth(ctx.get_current_session(), &credential).await?;
 
         Ok(HttpQueryContext::new(session))
     }
