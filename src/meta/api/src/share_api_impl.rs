@@ -48,8 +48,8 @@ use common_meta_app::share::ShareId;
 use common_meta_app::share::ShareIdToName;
 use common_meta_app::share::ShareMeta;
 use common_meta_app::share::ShareNameIdent;
-use common_meta_app::share::ShowShareReply;
-use common_meta_app::share::ShowShareReq;
+use common_meta_app::share::ShowSharesReply;
+use common_meta_app::share::ShowSharesReq;
 use common_meta_types::app_error::AppError;
 use common_meta_types::app_error::ShareAccountsAlreadyExists;
 use common_meta_types::app_error::ShareAlreadyExists;
@@ -91,7 +91,7 @@ use crate::TXN_MAX_RETRY_TIMES;
 #[async_trait::async_trait]
 impl<KV: KVApi> ShareApi for KV {
     #[tracing::instrument(level = "debug", ret, err, skip_all)]
-    async fn show_share(&self, req: ShowShareReq) -> MetaResult<ShowShareReply> {
+    async fn show_shares(&self, req: ShowSharesReq) -> MetaResult<ShowSharesReply> {
         debug!(req = debug(&req), "ShareApi: {}", func_name!());
 
         // Get all outbound share accounts.
@@ -100,7 +100,7 @@ impl<KV: KVApi> ShareApi for KV {
         // Get all inbound share accounts.
         let inbound_accounts = get_inbound_shared_accounts_by_tenant(self, &req.tenant).await?;
 
-        Ok(ShowShareReply {
+        Ok(ShowSharesReply {
             outbound_accounts,
             inbound_accounts,
         })
