@@ -605,6 +605,8 @@ pub enum TokenKind {
     SNAPSHOT,
     #[token("STAGE", ignore(ascii_case))]
     STAGE,
+    #[token("SYNTAX", ignore(ascii_case))]
+    SYNTAX,
     #[token("USAGE", ignore(ascii_case))]
     USAGE,
     #[token("UPDATE", ignore(ascii_case))]
