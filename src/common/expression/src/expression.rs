@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use educe::Educe;
+use enum_as_inner::EnumAsInner;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -55,7 +56,7 @@ pub enum RawExpr {
     },
 }
 
-#[derive(Debug, Clone, Educe)]
+#[derive(Debug, Clone, Educe, EnumAsInner)]
 #[educe(PartialEq)]
 pub enum Expr {
     Constant {
