@@ -76,6 +76,19 @@ select data_value from data2015 union all select value from data2016 order by da
 42
 
 statement ok
+INSERT INTO data2013(name,value) VALUES('Alice', 1000);
+
+statement query I
+select value from data2013 union select data_value from data2015 order by value;
+
+----
+1
+42
+1000
+2000
+5000
+
+statement ok
 DROP TABLE data2013;
 
 statement ok
