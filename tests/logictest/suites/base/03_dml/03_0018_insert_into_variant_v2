@@ -90,10 +90,10 @@ statement ok
 CREATE TABLE IF NOT EXISTS t3(id Int null, obj Object null) Engine = Fuse;
 
 statement error 1010
-INSERT INTO t3 SELECT 1, parse_json('["a","b","c"]');  
+INSERT INTO t3 SELECT 1, parse_json('["a","b","c"]');
 
 statement ok
-INSERT INTO t3 SELECT 1, parse_json('{"a":1,"b":{"k":2},"c":[10,11,12]}');
+INSERT INTO t3 SELECT 1, parse_json('{"a": 1,"b":{"k": 2},"c": [10,11,12]}');
 
 statement query IT
 select * from t3;
@@ -206,7 +206,7 @@ statement ok
 CREATE TABLE IF NOT EXISTS t5(id Int null, m Map null) Engine = Fuse;
 
 statement error 1010
-INSERT INTO t5 SELECT 1, parse_json('["a","b","c"]');  
+INSERT INTO t5 SELECT 1, parse_json('["a","b","c"]');
 
 statement ok
 INSERT INTO t5 SELECT 1, parse_json('{"a":2,"b":{"k":2},"c":[10,11,12]}');
