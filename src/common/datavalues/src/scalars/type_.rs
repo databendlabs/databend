@@ -29,7 +29,7 @@ where for<'a> Self::ColumnType: ScalarColumn<RefItem<'a> = Self::RefType<'a>>
     where Self: 'a;
 
     /// Viewer is associated with scalar value
-    /// the big difference bewtween column is that Viewer may be nullable && constant
+    /// the big difference between column is that Viewer may be nullable && constant
     type Viewer<'a>: ScalarViewer<'a, ScalarItem = Self>
     where Self: 'a;
 
