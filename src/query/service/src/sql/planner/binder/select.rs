@@ -38,9 +38,9 @@ use crate::sql::planner::binder::BindContext;
 use crate::sql::planner::binder::Binder;
 use crate::sql::plans::BoundColumnRef;
 use crate::sql::plans::Filter;
-use crate::sql::plans::Union;
 use crate::sql::plans::JoinType;
 use crate::sql::plans::Scalar;
+use crate::sql::plans::Union;
 
 // A normalized IR for `SELECT` clause.
 #[derive(Debug, Default)]
@@ -314,7 +314,7 @@ impl<'a> Binder {
                 self.bind_except(left_bind_context, right_bind_context, left_expr, right_expr)
             }
             (SetOperator::Union, true) => {
-                self.bind_union(left_expr, right_expr)
+                Ok((self.bind_union(left_expr, right_expr)?, left_bind_context))
             }
             _ => Err(ErrorCode::UnImplement(
                 "Unsupported query type, currently, databend only support intersect distinct and except distinct",
@@ -322,11 +322,7 @@ impl<'a> Binder {
         }
     }
 
-    fn bind_union(
-        &mut self,
-        left_expr: SExpr,
-        right_expr: SExpr,
-    ) -> Result<SExpr> {
+    fn bind_union(&mut self, left_expr: SExpr, right_expr: SExpr) -> Result<SExpr> {
         let union_plan = Union {};
         let new_expr = SExpr::create_binary(union_plan.into(), left_expr, right_expr);
         Ok(new_expr)

@@ -12,12 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
-use crate::sql::optimizer::{PhysicalProperty, RelationalProperty, RelExpr, RequiredProperty};
-use crate::sql::plans::{LogicalOperator, Operator, PhysicalOperator, RelOp};
 use common_exception::Result;
 
+use crate::sql::optimizer::PhysicalProperty;
+use crate::sql::optimizer::RelExpr;
+use crate::sql::optimizer::RelationalProperty;
+use crate::sql::optimizer::RequiredProperty;
+use crate::sql::plans::LogicalOperator;
+use crate::sql::plans::Operator;
+use crate::sql::plans::PhysicalOperator;
+use crate::sql::plans::RelOp;
 
+#[derive(Clone, Debug)]
 pub struct Union;
 
 impl Operator for Union {

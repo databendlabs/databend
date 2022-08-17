@@ -18,7 +18,6 @@ use common_exception::Result;
 use super::aggregate::Aggregate;
 use super::eval_scalar::EvalScalar;
 use super::filter::Filter;
-use super::union::Union;
 use super::hash_join::PhysicalHashJoin;
 use super::limit::Limit;
 use super::logical_get::LogicalGet;
@@ -27,6 +26,7 @@ use super::pattern::PatternPlan;
 use super::physical_scan::PhysicalScan;
 use super::project::Project;
 use super::sort::Sort;
+use super::union::Union;
 use crate::sql::optimizer::PhysicalProperty;
 use crate::sql::optimizer::RelExpr;
 use crate::sql::optimizer::RelationalProperty;
@@ -83,6 +83,7 @@ pub enum RelOp {
     Sort,
     Limit,
     Exchange,
+    Union,
 
     // Pattern
     Pattern,
@@ -425,6 +426,25 @@ impl TryFrom<RelOperator> for Exchange {
         } else {
             Err(ErrorCode::LogicalError(
                 "Cannot downcast RelOperator to Exchange",
+            ))
+        }
+    }
+}
+
+impl From<Union> for RelOperator {
+    fn from(v: Union) -> Self {
+        Self::Union(v)
+    }
+}
+
+impl TryFrom<RelOperator> for Union {
+    type Error = ErrorCode;
+    fn try_from(value: RelOperator) -> Result<Self> {
+        if let RelOperator::Union(value) = value {
+            Ok(value)
+        } else {
+            Err(ErrorCode::LogicalError(
+                "Cannot downcast RelOperator to Union",
             ))
         }
     }

@@ -282,6 +282,19 @@ impl ExchangeSink {
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct Union {
+    pub left: Box<PhysicalPlan>,
+    pub right: Box<PhysicalPlan>,
+    pub schema: DataSchemaRef,
+}
+
+impl Union {
+    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+        Ok(self.schema.clone())
+    }
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub enum PhysicalPlan {
     TableScan(TableScan),
     Filter(Filter),
@@ -293,6 +306,7 @@ pub enum PhysicalPlan {
     Limit(Limit),
     HashJoin(HashJoin),
     Exchange(Exchange),
+    Union(Union),
 
     /// Synthesized by fragmenter
     ExchangeSource(ExchangeSource),
@@ -322,6 +336,7 @@ impl PhysicalPlan {
             PhysicalPlan::Exchange(plan) => plan.output_schema(),
             PhysicalPlan::ExchangeSource(plan) => plan.output_schema(),
             PhysicalPlan::ExchangeSink(plan) => plan.output_schema(),
+            PhysicalPlan::Union(plan) => plan.output_schema(),
         }
     }
 
@@ -341,6 +356,9 @@ impl PhysicalPlan {
             PhysicalPlan::Exchange(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::ExchangeSource(_) => Box::new(std::iter::empty()),
             PhysicalPlan::ExchangeSink(plan) => Box::new(std::iter::once(plan.input.as_ref())),
+            PhysicalPlan::Union(plan) => Box::new(
+                std::iter::once(plan.left.as_ref()).chain(std::iter::once(plan.right.as_ref())),
+            ),
         }
     }
 }

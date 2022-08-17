@@ -14,15 +14,23 @@
 
 use std::sync::Arc;
 
+use common_base::base::tokio::sync::broadcast::channel;
+use common_base::base::tokio::sync::broadcast::Receiver;
+use common_datablocks::DataBlock;
 use common_datablocks::SortColumnDescription;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
+use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::aggregates::AggregateFunctionRef;
 use common_functions::scalars::FunctionFactory;
+use common_pipeline_core::processors::port::OutputPort;
+use common_pipeline_core::Pipe;
+use common_pipeline_sinks::processors::sinks::SyncSenderSink;
+use common_pipeline_sinks::processors::sinks::UnionReceiveSink;
 
 use super::AggregateFinal;
 use super::AggregatePartial;
@@ -40,8 +48,10 @@ use crate::evaluator::Evaluator;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::transforms::ExpressionTransformV2;
 use crate::pipelines::processors::transforms::HashJoinDesc;
+use crate::pipelines::processors::transforms::SubqueryReceiver;
 use crate::pipelines::processors::transforms::TransformFilterV2;
 use crate::pipelines::processors::transforms::TransformMarkJoin;
+use crate::pipelines::processors::transforms::TransformMergeBlock;
 use crate::pipelines::processors::transforms::TransformProject;
 use crate::pipelines::processors::transforms::TransformRename;
 use crate::pipelines::processors::AggregatorParams;
@@ -52,6 +62,7 @@ use crate::pipelines::processors::SinkBuildHashTable;
 use crate::pipelines::processors::Sinker;
 use crate::pipelines::processors::SortMergeCompactor;
 use crate::pipelines::processors::TransformAggregator;
+use crate::pipelines::processors::TransformCreateSets;
 use crate::pipelines::processors::TransformHashJoinProbe;
 use crate::pipelines::processors::TransformLimit;
 use crate::pipelines::processors::TransformSortMerge;
@@ -65,6 +76,7 @@ use crate::sql::executor::physical_plan::ColumnID;
 use crate::sql::executor::physical_plan::PhysicalPlan;
 use crate::sql::executor::AggregateFunctionDesc;
 use crate::sql::executor::PhysicalScalar;
+use crate::sql::executor::Union;
 use crate::sql::plans::JoinType;
 use crate::sql::ColumnBinding;
 
@@ -113,6 +125,7 @@ impl PipelineBuilder {
             PhysicalPlan::HashJoin(join) => self.build_join(join),
             PhysicalPlan::ExchangeSink(sink) => self.build_exchange_sink(sink),
             PhysicalPlan::ExchangeSource(source) => self.build_exchange_source(source),
+            PhysicalPlan::Union(union) => self.build_union(union),
             PhysicalPlan::Exchange(_) => Err(ErrorCode::LogicalError(
                 "Invalid physical plan with PhysicalPlan::Exchange",
             )),
@@ -471,5 +484,53 @@ impl PipelineBuilder {
     pub fn build_exchange_sink(&mut self, exchange_sink: &ExchangeSink) -> Result<()> {
         // ExchangeSink will be appended by `ExchangeManager::execute_pipeline`
         self.build_pipeline(&exchange_sink.input)
+    }
+
+    fn expand_union(&mut self, plan: &PhysicalPlan) -> Result<Receiver<DataBlock>> {
+        let union_ctx = QueryContext::create_from(self.ctx.clone());
+        let pipeline_builder = PipelineBuilder::create(union_ctx);
+        let mut build_res = pipeline_builder.finalize(plan)?;
+
+        assert!(build_res.main_pipeline.is_pulling_pipeline()?);
+
+        build_res.main_pipeline.resize(1)?;
+        let (tx, rx) = channel(1);
+        let input = InputPort::create();
+        build_res.main_pipeline.add_pipe(Pipe::SimplePipe {
+            outputs_port: vec![],
+            inputs_port: vec![input.clone()],
+            processors: vec![UnionReceiveSink::create(tx, input)],
+        });
+        self.pipelines.push(build_res.main_pipeline);
+        self.pipelines
+            .extend(build_res.sources_pipelines.into_iter());
+        Ok(rx)
+    }
+
+    pub fn build_union(&mut self, union: &Union) -> Result<()> {
+        self.build_pipeline(&union.left)?;
+        let union_receiver = self.expand_union(&union.right)?;
+        let mut inputs_port = Vec::with_capacity(self.main_pipeline.output_len());
+        let mut outputs_port = Vec::with_capacity(self.main_pipeline.output_len());
+        let mut processors = Vec::with_capacity(self.main_pipeline.output_len());
+        for _ in 0..self.main_pipeline.output_len() {
+            let transform_input_port = InputPort::create();
+            let transform_output_port = OutputPort::create();
+
+            inputs_port.push(transform_input_port.clone());
+            outputs_port.push(transform_output_port.clone());
+            processors.push(TransformMergeBlock::create(
+                transform_input_port,
+                transform_output_port,
+                union_receiver.resubscribe(),
+            ));
+        }
+
+        self.main_pipeline.add_pipe(Pipe::SimplePipe {
+            processors,
+            inputs_port,
+            outputs_port,
+        });
+        Ok(())
     }
 }
