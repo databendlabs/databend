@@ -15,7 +15,7 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use common_base::base::tokio::sync::broadcast::Receiver;
+use common_base::base::tokio::sync::mpsc::Receiver;
 use common_datablocks::DataBlock;
 use common_exception::Result;
 use common_pipeline_core::processors::port::InputPort;
@@ -32,7 +32,7 @@ pub struct TransformMergeBlock {
     input_data: Option<DataBlock>,
     output_data: Option<DataBlock>,
 
-    receiver: Receiver<DataBlock>,
+    receiver: Receiver<Option<DataBlock>>,
     receiver_result: Option<DataBlock>,
 }
 
@@ -40,7 +40,7 @@ impl TransformMergeBlock {
     pub fn create(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
-        receiver: Receiver<DataBlock>,
+        receiver: Receiver<Option<DataBlock>>,
     ) -> ProcessorPtr {
         ProcessorPtr::create(Box::new(TransformMergeBlock {
             initialized: false,
@@ -103,10 +103,10 @@ impl Processor for TransformMergeBlock {
     }
 
     fn process(&mut self) -> Result<()> {
+        dbg!("come here");
         if let Some(input_data) = self.input_data.take() {
-            dbg!(input_data.clone());
+            dbg!(&input_data);
             if let Some(receiver_result) = self.receiver_result.take() {
-                dbg!(receiver_result.clone());
                 let data_block = DataBlock::create(
                     input_data.schema().clone(),
                     receiver_result.columns().to_vec(),
@@ -115,6 +115,9 @@ impl Processor for TransformMergeBlock {
             } else {
                 self.output_data = Some(input_data);
             }
+        } else if let Some(receiver_result) = self.receiver_result.take() {
+            dbg!(&receiver_result);
+            self.output_data = Some(receiver_result);
         }
 
         Ok(())
@@ -123,7 +126,7 @@ impl Processor for TransformMergeBlock {
     async fn async_process(&mut self) -> Result<()> {
         if !self.initialized {
             self.initialized = true;
-            self.receiver_result = self.receiver.recv().await.ok();
+            self.receiver_result = self.receiver.recv().await.unwrap_or(None);
         }
         Ok(())
     }

@@ -14,8 +14,8 @@
 
 use std::sync::Arc;
 
-use common_base::base::tokio::sync::broadcast::channel;
-use common_base::base::tokio::sync::broadcast::Receiver;
+use common_base::base::tokio::sync::mpsc::channel;
+use common_base::base::tokio::sync::mpsc::Receiver;
 use common_datablocks::DataBlock;
 use common_datablocks::SortColumnDescription;
 use common_datavalues::DataField;
@@ -482,7 +482,7 @@ impl PipelineBuilder {
         self.build_pipeline(&exchange_sink.input)
     }
 
-    fn expand_union(&mut self, plan: &PhysicalPlan) -> Result<Receiver<DataBlock>> {
+    fn expand_union(&mut self, plan: &PhysicalPlan) -> Result<Receiver<Option<DataBlock>>> {
         let union_ctx = QueryContext::create_from(self.ctx.clone());
         let pipeline_builder = PipelineBuilder::create(union_ctx);
         let mut build_res = pipeline_builder.finalize(plan)?;
@@ -506,27 +506,17 @@ impl PipelineBuilder {
     pub fn build_union(&mut self, union: &Union) -> Result<()> {
         self.build_pipeline(&union.left)?;
         let union_receiver = self.expand_union(&union.right)?;
-        let mut inputs_port = Vec::with_capacity(self.main_pipeline.output_len());
-        let mut outputs_port = Vec::with_capacity(self.main_pipeline.output_len());
-        let mut processors = Vec::with_capacity(self.main_pipeline.output_len());
         self.main_pipeline.resize(1)?;
-        for _ in 0..self.main_pipeline.output_len() {
-            let transform_input_port = InputPort::create();
-            let transform_output_port = OutputPort::create();
-
-            inputs_port.push(transform_input_port.clone());
-            outputs_port.push(transform_output_port.clone());
-            processors.push(TransformMergeBlock::create(
-                transform_input_port,
-                transform_output_port,
-                union_receiver.resubscribe(),
-            ));
-        }
-
+        let input_port = InputPort::create();
+        let output_port = OutputPort::create();
         self.main_pipeline.add_pipe(Pipe::SimplePipe {
-            processors,
-            inputs_port,
-            outputs_port,
+            processors: vec![TransformMergeBlock::create(
+                input_port.clone(),
+                output_port.clone(),
+                union_receiver,
+            )],
+            outputs_port: vec![output_port],
+            inputs_port: vec![input_port],
         });
         Ok(())
     }

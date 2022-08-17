@@ -14,8 +14,9 @@
 
 use std::sync::Arc;
 
-use common_base::base::tokio::sync::broadcast::Sender;
+use common_base::base::tokio::sync::mpsc::Sender;
 use common_datablocks::DataBlock;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
@@ -25,11 +26,11 @@ use crate::processors::sinks::Sinker;
 
 pub struct UnionReceiveSink {
     input_blocks: Vec<DataBlock>,
-    sender: Sender<DataBlock>,
+    sender: Sender<Option<DataBlock>>,
 }
 
 impl UnionReceiveSink {
-    pub fn create(sender: Sender<DataBlock>, input: Arc<InputPort>) -> ProcessorPtr {
+    pub fn create(sender: Sender<Option<DataBlock>>, input: Arc<InputPort>) -> ProcessorPtr {
         Sinker::create(input, UnionReceiveSink {
             input_blocks: vec![],
             sender,
@@ -42,9 +43,15 @@ impl Sink for UnionReceiveSink {
     const NAME: &'static str = "UnionReceiveSink";
 
     fn on_finish(&mut self) -> Result<()> {
-        self.sender
-            .send(DataBlock::concat_blocks(&self.input_blocks)?)
-            .ok();
+        let send_blocks = if self.input_blocks.is_empty() {
+            None
+        } else {
+            Some(DataBlock::concat_blocks(&self.input_blocks)?)
+        };
+        if let Err(_) = self.sender.try_send(send_blocks) {
+            return Err(ErrorCode::UnexpectedError("UnionReceiveSink sender failed"));
+        };
+
         Ok(())
     }
 
