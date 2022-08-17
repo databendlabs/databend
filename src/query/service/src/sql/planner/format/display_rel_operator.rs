@@ -14,11 +14,11 @@
 
 use std::fmt::Display;
 
+use common_ast::ast::FormatTreeNode;
 use common_datavalues::format_data_type_sql;
 use common_functions::scalars::FunctionFactory;
 use itertools::Itertools;
 
-use super::FormatTreeNode;
 use crate::sql::optimizer::SExpr;
 use crate::sql::plans::Aggregate;
 use crate::sql::plans::AggregateMode;

@@ -85,7 +85,9 @@ pub fn optimize(
             rewrite_kind,
         }),
         Plan::Explain { kind, plan } => match kind {
-            ExplainKind::Raw | ExplainKind::Syntax(_) => Ok(Plan::Explain { kind, plan }),
+            ExplainKind::Raw | ExplainKind::Ast(_) | ExplainKind::Syntax(_) => {
+                Ok(Plan::Explain { kind, plan })
+            }
             _ => Ok(Plan::Explain {
                 kind,
                 plan: Box::new(optimize(ctx, opt_ctx, *plan)?),

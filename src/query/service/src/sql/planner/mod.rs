@@ -34,7 +34,6 @@ mod semantic;
 
 pub use binder::Binder;
 pub use binder::ColumnBinding;
-pub use format::FormatTreeNode;
 pub use metadata::find_smallest_column;
 pub use metadata::ColumnEntry;
 pub use metadata::Metadata;
