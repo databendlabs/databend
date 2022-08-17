@@ -99,7 +99,7 @@ INSERT INTO t3 SELECT 1, parse_json('["a","b","c"]');
 statement ok
 -- Note: `:1` will be compiled into %(1)s in sqlalchemy, so we used a space to separate this sql
 -- https://github.com/datafuselabs/databend/pull/7143
-INSERT INTO t3 SELECT 1, parse_json('{"a": 1,"b":{"k": 2},"c":[10,11,12]}');
+INSERT INTO t3 SELECT 1, parse_json('{"a": 1,"b":{"k": 2},"c": [10,11,12]}');
 
 statement query IT
 select * from t3;
@@ -215,13 +215,13 @@ statement error 1010
 INSERT INTO t5 SELECT 1, parse_json('["a","b","c"]');
 
 statement ok
-INSERT INTO t5 SELECT 1, parse_json('{"a":2,"b":{"k":2},"c":[10,11,12]}');
+INSERT INTO t5 SELECT 1, parse_json('{"a": 2,"b":{"k": 2},"c": [10,11,12]}');
 
 statement ok
-INSERT INTO t5 SELECT 2, parse_json('{"a":true,"b":{"k":false},"c":[1,2,3]}');
+INSERT INTO t5 SELECT 2, parse_json('{"a": true,"b": {"k": false},"c": [1,2,3]}');
 
 statement ok
-INSERT INTO t5 SELECT 3, parse_json('{"a":"v","b":{"k":"vv"},"c":[]}');
+INSERT INTO t5 SELECT 3, parse_json('{"a": "v","b": {"k": "vv"},"c": []}');
 
 statement query IT
 select * from t5 order by id asc;
