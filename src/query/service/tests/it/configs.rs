@@ -403,7 +403,7 @@ fn test_env_config_gcs() -> Result<()> {
                 configured.storage.gcs.gcs_endpoint_url
             );
             assert_eq!("gcs.bucket", configured.storage.gcs.gcs_bucket);
-            assert_eq!("/path/to/dir", configured.storage.gcs.gcs_root);
+            assert_eq!("/path/to/root", configured.storage.gcs.gcs_root);
             assert_eq!("gcs.credential", configured.storage.gcs.credential);
 
             // Storage type is gcs, fs related value should stay default.
