@@ -203,19 +203,19 @@ NULL
 statement ok
 SELECT * FROM empty AS a(x) LEFT OUTER JOIN onecolumn AS b(y) ON a.x = b.y;
 
-statement ok 
+statement ok
 SELECT * FROM empty AS a LEFT OUTER JOIN onecolumn AS b USING(x);
 
-statement ok 
+statement ok
 SELECT * FROM onecolumn AS a(x) RIGHT OUTER JOIN empty AS b(y) ON a.x = b.y;
 
-statement ok 
+statement ok
 SELECT * FROM onecolumn AS a RIGHT OUTER JOIN empty AS b USING(x);
 
-statement ok 
+statement ok
 SELECT * FROM empty AS a(x) FULL OUTER JOIN onecolumn AS b(y) ON a.x = b.y ORDER BY b.y;
 
-statement ok 
+statement ok
 SELECT * FROM empty AS a FULL OUTER JOIN onecolumn AS b USING(x) ORDER BY x;
 
 -- statement query
@@ -224,10 +224,10 @@ SELECT * FROM empty AS a FULL OUTER JOIN onecolumn AS b USING(x) ORDER BY x;
 -- statement query
 -- SELECT * FROM onecolumn AS a FULL OUTER JOIN empty AS b USING(x) ORDER BY x;
 
--- statement query 
+-- statement query
 -- SELECT * FROM empty AS a(x) FULL OUTER JOIN onecolumn AS b(y) ON a.x = b.y ORDER BY b.y;
 
--- statement query 
+-- statement query
 -- SELECT * FROM empty AS a FULL OUTER JOIN onecolumn AS b USING(x) ORDER BY x;
 
 statement ok
@@ -418,7 +418,7 @@ drop table if exists othertype;
 statement ok
 CREATE TABLE othertype (x TEXT);
 
-statement error 1010
+statement ok
 SELECT * FROM (onecolumn AS a JOIN othertype AS b USING(x));
 
 statement error 1065
@@ -870,10 +870,10 @@ NULL 45 45
 -- statement query
 -- SELECT * FROM (VALUES (1, 2)) a(a1,a2) FULL JOIN (VALUES (3, 4)) b(b1,b2) ON a1=b1 ORDER BY a2;
 
--- statement ok 
+-- statement ok
 -- drop table if exists abcd
 
--- statement ok 
+-- statement ok
 -- drop table if exists dxby
 
 -- statement ok

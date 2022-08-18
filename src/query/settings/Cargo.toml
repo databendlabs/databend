@@ -9,6 +9,7 @@ doctest = false
 test = false
 
 [dependencies]
+common-ast = { path = "../../query/ast" }
 common-config = { path = "../config" }
 common-datavalues = { path = "../datavalues" }
 common-exception = { path = "../../common/exception" }
