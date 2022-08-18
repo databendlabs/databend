@@ -110,8 +110,7 @@ impl GithubDataGetter for RepoInfoTable {
         let license_array: Vec<Vec<u8>> = vec![
             repo.license
                 .as_ref()
-                .map(|l| l.key.as_str())
-                .unwrap_or("No license")
+                .map_or("No license", |l| l.key.as_str())
                 .as_bytes()
                 .to_vec(),
         ];

@@ -36,4 +36,8 @@ pub enum OptimizeTableAction {
     All,
     Purge,
     Compact,
+    // The recluster workflow only run once.
+    Recluster,
+    // If specify `final`, optimization is performed until the table is well clustered enough.
+    ReclusterFinal,
 }

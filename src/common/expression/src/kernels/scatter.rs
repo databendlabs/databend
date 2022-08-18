@@ -152,7 +152,7 @@ impl Column {
                             .map(|field| field.remove(index))
                             .collect();
                         Column::Tuple {
-                            len: fields.first().map(|f| f.len()).unwrap_or(0),
+                            len: fields.first().map_or(0, |f| f.len()),
                             fields,
                         }
                     })

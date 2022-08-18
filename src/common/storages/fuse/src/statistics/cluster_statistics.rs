@@ -23,6 +23,8 @@ pub struct ClusterStatsGenerator {
     cluster_key_id: u32,
     cluster_key_index: Vec<usize>,
     expression_executor: Option<ExpressionExecutor>,
+    level: i32,
+    row_per_block: usize,
 }
 
 impl ClusterStatsGenerator {
@@ -30,11 +32,15 @@ impl ClusterStatsGenerator {
         cluster_key_id: u32,
         cluster_key_index: Vec<usize>,
         expression_executor: Option<ExpressionExecutor>,
+        level: i32,
+        row_per_block: usize,
     ) -> Self {
         Self {
             cluster_key_id,
             cluster_key_index,
             expression_executor,
+            level,
+            row_per_block,
         }
     }
 
@@ -44,7 +50,7 @@ impl ClusterStatsGenerator {
         &self,
         data_block: &DataBlock,
     ) -> Result<(Option<ClusterStatistics>, DataBlock)> {
-        let cluster_stats = self.clusters_statistics(data_block)?;
+        let cluster_stats = self.clusters_statistics(data_block, self.level)?;
 
         let mut block = data_block.clone();
         // Remove unused columns.
@@ -80,10 +86,14 @@ impl ClusterStatsGenerator {
             data_block.clone()
         };
 
-        self.clusters_statistics(&block)
+        self.clusters_statistics(&block, origin_stats.level)
     }
 
-    fn clusters_statistics(&self, data_block: &DataBlock) -> Result<Option<ClusterStatistics>> {
+    fn clusters_statistics(
+        &self,
+        data_block: &DataBlock,
+        level: i32,
+    ) -> Result<Option<ClusterStatistics>> {
         if self.cluster_key_index.is_empty() {
             return Ok(None);
         }
@@ -113,10 +123,17 @@ impl ClusterStatsGenerator {
             max.push(right);
         }
 
+        let level = if min == max && data_block.num_rows() == self.row_per_block {
+            -1
+        } else {
+            level
+        };
+
         Ok(Some(ClusterStatistics {
             cluster_key_id: self.cluster_key_id,
             min,
             max,
+            level,
         }))
     }
 }

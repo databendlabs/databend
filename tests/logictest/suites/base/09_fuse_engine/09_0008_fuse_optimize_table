@@ -175,6 +175,42 @@ statement ok
 optimize table m compact;
 
 statement ok
+create table t09_0008(a int, b int) cluster by(a+1);
+
+statement ok
+insert into t09_0008 values(1,1),(3,3);
+
+statement ok
+insert into t09_0008 values(2,2),(4,4);
+
+statement query TIIFFT
+select * from clustering_information('db_09_0008','t09_0008');
+
+----
+((a+1)) 2 0 1.0 2.0 {"00002":2}
+
+statement ok
+optimize table t09_0008 recluster;
+
+statement query TIIFFT
+select * from clustering_information('db_09_0008','t09_0008');
+
+----
+((a+1)) 1 0 0.0 1.0 {"00001":1}
+
+statement query II
+select * from t09_0008 order by a;
+
+----
+1 1
+2 2
+3 3
+4 4
+
+statement ok
+DROP Table t09_0008;
+
+statement ok
 DROP TABLE m;
 
 statement ok
