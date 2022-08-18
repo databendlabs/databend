@@ -39,10 +39,9 @@ Project: [number (#0)]
 select t.number from numbers(1) as t, numbers(1) as t1 where t.number = cast(t1.number as string)
 ----
 Project: [number (#0)]
-    Filter: [t.number (#0) = CAST(t1.number (#1) AS VARCHAR)]
-        CrossJoin
-            Scan: default.system.numbers, filters: []
-            Scan: default.system.numbers, filters: []
+    HashJoin: INNER, build keys: [CAST(CAST(t1.number (#1) AS VARCHAR) AS DOUBLE)], probe keys: [CAST(t.number (#0) AS DOUBLE)], join filters: []
+        Scan: default.system.numbers, filters: []
+        Scan: default.system.numbers, filters: []
 
 
 # Join multiple tables
