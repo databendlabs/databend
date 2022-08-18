@@ -27,7 +27,7 @@ common-meta-types = { path = "../../../meta/types" }
 common-pipeline-core = { path = "../../../common/pipeline/core" }
 common-pipeline-sources = { path = "../../../common/pipeline/sources" }
 common-pipeline-transforms = { path = "../../../common/pipeline/transforms" }
-common-planners = { path = "../../../common/planners" }
+common-planners = { path = "../../planners" }
 common-storages-index = { path = "../index" }
 common-storages-util = { path = "../util" }
 common-streams = { path = "../../../common/streams" }

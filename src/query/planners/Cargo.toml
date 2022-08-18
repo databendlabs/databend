@@ -12,10 +12,10 @@ test = false
 
 [dependencies] # In alphabetical order
 # Workspace dependencies
-common-datablocks = { path = "../datablocks" }
-common-datavalues = { path = "../datavalues" }
-common-exception = { path = "../exception" }
-common-functions = { path = "../functions" }
+common-datablocks = { path = "../../common/datablocks" }
+common-datavalues = { path = "../../common/datavalues" }
+common-exception = { path = "../../common/exception" }
+common-functions = { path = "../../common/functions" }
 common-meta-app = { path = "../../meta/app" }
 common-meta-types = { path = "../../meta/types" }
 

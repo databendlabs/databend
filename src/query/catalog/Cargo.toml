@@ -21,7 +21,7 @@ common-io = { path = "../../common/io" }
 common-meta-app = { path = "../../meta/app" }
 common-meta-types = { path = "../../meta/types" }
 common-pipeline-core = { path = "../../common/pipeline/core" }
-common-planners = { path = "../../common/planners" }
+common-planners = { path = "../planners" }
 common-settings = { path = "../settings" }
 common-users = { path = "../users" }
 
