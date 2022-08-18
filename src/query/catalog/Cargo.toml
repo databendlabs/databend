@@ -22,7 +22,7 @@ common-meta-app = { path = "../../meta/app" }
 common-meta-types = { path = "../../meta/types" }
 common-pipeline-core = { path = "../../common/pipeline/core" }
 common-planners = { path = "../../common/planners" }
-common-settings = { path = "../../common/settings" }
+common-settings = { path = "../settings" }
 common-users = { path = "../users" }
 
 async-trait = "0.1.56"

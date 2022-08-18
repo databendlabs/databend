@@ -35,6 +35,7 @@ members = [
     "src/query/ast",
     "src/query/codegen",
     "src/query/catalog",
+    "src/query/settings",
     "src/query/storages/fuse",
     "src/query/storages/hive",
     "src/query/storages/index",
