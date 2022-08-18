@@ -69,7 +69,7 @@ impl FlightClient {
     }
 
     pub async fn request_server_exchange(&mut self, query_id: &str) -> Result<FlightExchange> {
-        let (tx, rx) = async_channel::bounded(1);
+        let (tx, rx) = async_channel::unbounded();
         Ok(FlightExchange::from_client(
             tx,
             self.inner
@@ -90,7 +90,7 @@ impl FlightClient {
         source: &str,
         fragment_id: usize,
     ) -> Result<FlightExchange> {
-        let (tx, rx) = async_channel::bounded(1);
+        let (tx, rx) = async_channel::unbounded();
         Ok(FlightExchange::from_client(
             tx,
             self.inner
