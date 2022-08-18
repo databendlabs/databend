@@ -12,7 +12,7 @@ test = false
 common-base = { path = "../../common/base" }
 common-exception = { path = "../../common/exception" }
 common-grpc = { path = "../../common/grpc" }
-common-hive-meta-store = { path = "../../common/hive-meta-store", optional = true }
+common-hive-meta-store = { path = "../storages/hive-meta-store", optional = true }
 common-storage = { path = "../../common/storage" }
 common-tracing = { path = "../../common/tracing" }
 

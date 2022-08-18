@@ -18,8 +18,6 @@ members = [
     "src/common/metrics",
     "src/common/tracing",
     "src/common/storage",
-    "src/common/fuse-meta",
-    "src/common/hive-meta-store",
 
     # Query
     "src/query/ast",
@@ -41,7 +39,9 @@ members = [
     "src/query/planners",
     "src/query/settings",
     "src/query/storages/fuse",
+    "src/query/storages/fuse-meta",
     "src/query/storages/hive",
+    "src/query/storages/hive-meta-store",
     "src/query/storages/index",
     "src/query/storages/preludes",
     "src/query/storages/util",

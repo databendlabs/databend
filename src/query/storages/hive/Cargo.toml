@@ -18,8 +18,8 @@ common-catalog = { path = "../../catalog" }
 common-datablocks = { path = "../../datablocks" }
 common-datavalues = { path = "../../datavalues" }
 common-exception = { path = "../../../common/exception" }
-common-fuse-meta = { path = "../../../common/fuse-meta" }
-common-hive-meta-store = { path = "../../../common/hive-meta-store" }
+common-fuse-meta = { path = "../fuse-meta" }
+common-hive-meta-store = { path = "../hive-meta-store" }
 common-meta-app = { path = "../../../meta/app" }
 common-meta-types = { path = "../../../meta/types" }
 common-pipeline-core = { path = "../../pipeline/core" }

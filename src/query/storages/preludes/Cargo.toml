@@ -22,7 +22,7 @@ common-datablocks = { path = "../../datablocks" }
 common-datavalues = { path = "../../datavalues" }
 common-exception = { path = "../../../common/exception" }
 common-functions = { path = "../../functions" }
-common-fuse-meta = { path = "../../../common/fuse-meta" }
+common-fuse-meta = { path = "../fuse-meta" }
 common-grpc = { path = "../../../common/grpc" }
 common-meta-app = { path = "../../../meta/app" }
 common-meta-types = { path = "../../../meta/types" }

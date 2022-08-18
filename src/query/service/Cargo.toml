@@ -39,10 +39,10 @@ common-datavalues = { path = "../datavalues" }
 common-exception = { path = "../../common/exception" }
 common-formats = { path = "../formats" }
 common-functions = { path = "../functions" }
-common-fuse-meta = { path = "../../common/fuse-meta" }
+common-fuse-meta = { path = "../storages/fuse-meta" }
 common-grpc = { path = "../../common/grpc" }
 common-hashtable = { path = "../../common/hashtable" }
-common-hive-meta-store = { path = "../../common/hive-meta-store", optional = true }
+common-hive-meta-store = { path = "../storages/hive-meta-store", optional = true }
 common-http = { path = "../../common/http" }
 common-io = { path = "../../common/io" }
 common-legacy-parser = { path = "../legacy-parser" }
