@@ -14,6 +14,8 @@ Hello, everyone! I'm Xuanwo. Today, on behalf of the Databend community, I would
 
 Development of Databend v0.8 started on March 28th, with 5000+ commits and 4600+ file changes. In the last 5 months, the community of 120+ contributors added 420K lines of code and removed 160K lines, equivalent to rewriting Databend once. In this release, the community made significant improvements to the SQL Planner framework and migrated all SQL statements to the new Planner, providing full JOIN and subquery support.
 
+[Click here to download Databend v0.8](https://github.com/datafuselabs/databend/releases/tag/v0.8.0-nightly)
+
 Let's see what has been done in v0.8.
 
 ## What's Databend?
@@ -215,4 +217,4 @@ Please check the [Release proposal: Nightly v0.9](https://github.com/datafuselab
 
 ## Get going now!
 
-Visit the release log (link) and download the latest version (link) to learn more, and feel free to submit feedback using [Github Issues](https://github.com/datafuselabs/databend/issues) if you encounter problems!
+Visit the [release log](https://github.com/datafuselabs/databend/releases/tag/v0.8.0-nightly) and [download the latest version](https://github.com/datafuselabs/databend/releases/tag/v0.8.0-nightly) to learn more, and feel free to submit feedback using [Github Issues](https://github.com/datafuselabs/databend/issues) if you encounter problems!
