@@ -11,7 +11,7 @@ test = false
 [dependencies]
 common-datavalues = { path = "../../common/datavalues" }
 common-exception = { path = "../../common/exception" }
-common-functions = { path = "../../common/functions" }
+common-functions = { path = "../functions" }
 common-planners = { path = "../planners" }
 
 async-trait = "0.1.56"

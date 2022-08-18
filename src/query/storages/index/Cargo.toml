@@ -16,7 +16,7 @@ common-catalog = { path = "../../catalog" }
 common-datablocks = { path = "../../../common/datablocks" }
 common-datavalues = { path = "../../../common/datavalues" }
 common-exception = { path = "../../../common/exception" }
-common-functions = { path = "../../../common/functions" }
+common-functions = { path = "../../functions" }
 common-fuse-meta = { path = "../../../common/fuse-meta" }
 common-pipeline-transforms = { path = "../../pipeline/transforms" }
 common-planners = { path = "../../planners" }

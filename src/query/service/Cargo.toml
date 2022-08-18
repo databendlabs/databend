@@ -38,7 +38,7 @@ common-datablocks = { path = "../../common/datablocks" }
 common-datavalues = { path = "../../common/datavalues" }
 common-exception = { path = "../../common/exception" }
 common-formats = { path = "../../common/formats" }
-common-functions = { path = "../../common/functions" }
+common-functions = { path = "../functions" }
 common-fuse-meta = { path = "../../common/fuse-meta" }
 common-grpc = { path = "../../common/grpc" }
 common-hashtable = { path = "../../common/hashtable" }
