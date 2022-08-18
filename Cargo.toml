@@ -16,7 +16,6 @@ members = [
     "src/common/io",
     "src/common/macros",
     "src/common/metrics",
-    "src/common/streams",
     "src/common/tracing",
     "src/common/storage",
     "src/common/fuse-meta",
@@ -46,6 +45,7 @@ members = [
     "src/query/storages/index",
     "src/query/storages/preludes",
     "src/query/storages/util",
+    "src/query/streams",
     "src/query/users",
     # databend-query
     "src/query/service",

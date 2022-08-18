@@ -18,7 +18,7 @@ common-io = { path = "../../../common/io" }
 common-meta-types = { path = "../../../meta/types" }
 common-pipeline-core = { path = "../core" }
 common-storage = { path = "../../../common/storage" }
-common-streams = { path = "../../../common/streams" }
+common-streams = { path = "../../streams" }
 
 async-trait = { git = "https://github.com/datafuse-extras/async-trait", rev = "f0b0fd5" }
 futures = "0.3.21"
