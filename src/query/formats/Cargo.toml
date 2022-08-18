@@ -12,11 +12,11 @@ test = false
 
 [dependencies] # In alphabetical order
 # Workspace dependencies
-common-arrow = { path = "../arrow" }
-common-datablocks = { path = "../datablocks" }
-common-datavalues = { path = "../datavalues" }
-common-exception = { path = "../exception" }
-common-io = { path = "../io" }
+common-arrow = { path = "../../common/arrow" }
+common-datablocks = { path = "../../common/datablocks" }
+common-datavalues = { path = "../../common/datavalues" }
+common-exception = { path = "../../common/exception" }
+common-io = { path = "../../common/io" }
 
 # Crates.io dependencies
 once_cell = "1.12.0"

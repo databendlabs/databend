@@ -13,7 +13,7 @@ common-base = { path = "../../../common/base" }
 common-catalog = { path = "../../catalog" }
 common-datablocks = { path = "../../../common/datablocks" }
 common-exception = { path = "../../../common/exception" }
-common-formats = { path = "../../../common/formats" }
+common-formats = { path = "../../formats" }
 common-io = { path = "../../../common/io" }
 common-meta-types = { path = "../../../meta/types" }
 common-pipeline-core = { path = "../core" }
