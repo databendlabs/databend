@@ -47,8 +47,8 @@ jobs:
               return
             }
 
-            if ("${{ github.event.inputs.message }}") {
-              let tag = "${{ github.event.inputs.message }}";
+            if ("${{ github.event.inputs.tags }}") {
+              let tag = "${{ github.event.inputs.tags }}";
               core.setOutput('tag', tag);
               console.log(`This event triggered by workflow_dispatch with a tag ${tag}, return directly.`)
               return
