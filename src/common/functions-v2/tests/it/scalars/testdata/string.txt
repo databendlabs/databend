@@ -1612,8 +1612,9 @@ evaluation (internal):
 ast            : concat('5', '3', '4')
 raw expr       : concat("5", "3", "4")
 checked expr   : concat<String, String, String>("5", "3", "4")
+optimized expr : "534"
 output type    : String
-output domain  : Unknown
+output domain  : {"5"..}
 output         : "534"
 
 
@@ -1622,7 +1623,7 @@ raw expr       : concat(NULL, "3", "4")
 checked expr   : concat<String NULL, String NULL, String NULL>(CAST(NULL AS String NULL), CAST("3" AS String NULL), CAST("4" AS String NULL))
 optimized expr : NULL
 output type    : String NULL
-output domain  : {NULL}
+output domain  : Unknown
 output         : NULL
 
 
@@ -1634,7 +1635,7 @@ evaluation:
 |        | a                     | Output       |
 +--------+-----------------------+--------------+
 | Type   | String                | String       |
-| Domain | {"   abc"..="abc   "} | Unknown      |
+| Domain | {"   abc"..="abc   "} | {"   abc"..} |
 | Row 0  | "abc"                 | "abc3"       |
 | Row 1  | "   abc"              | "   abc3"    |
 | Row 2  | "   abc   "           | "   abc   3" |
@@ -1652,13 +1653,13 @@ evaluation (internal):
 ast            : concat(a, '3')
 raw expr       : concat(ColumnRef(0)::String NULL, "3")
 checked expr   : concat<String NULL, String NULL>(ColumnRef(0), CAST("3" AS String NULL))
-optimized expr : NULL
+optimized expr : concat<String NULL, String NULL>(ColumnRef(0), "3")
 evaluation:
 +--------+----------------------+-------------+
 |        | a                    | Output      |
 +--------+----------------------+-------------+
 | Type   | String NULL          | String NULL |
-| Domain | {"a"..="d"} ∪ {NULL} | {NULL}      |
+| Domain | {"a"..="d"} ∪ {NULL} | Unknown     |
 | Row 0  | "a"                  | "a3"        |
 | Row 1  | "b"                  | "b3"        |
 | Row 2  | NULL                 | NULL        |
@@ -1676,8 +1677,9 @@ evaluation (internal):
 ast            : concat_ws('-', '3', '4')
 raw expr       : concat_ws("-", "3", "4")
 checked expr   : concat_ws<String, String, String>("-", "3", "4")
+optimized expr : "3-4"
 output type    : String
-output domain  : Unknown
+output domain  : {"3"..}
 output         : "3-4"
 
 
@@ -1686,7 +1688,7 @@ raw expr       : concat_ws(NULL, "3", "4")
 checked expr   : concat_ws<String NULL, String NULL, String NULL>(CAST(NULL AS String NULL), CAST("3" AS String NULL), CAST("4" AS String NULL))
 optimized expr : NULL
 output type    : String NULL
-output domain  : {NULL}
+output domain  : Unknown
 output         : NULL
 
 
@@ -1698,7 +1700,7 @@ evaluation:
 |        | a           | Output  |
 +--------+-------------+---------+
 | Type   | String      | String  |
-| Domain | {","..="-"} | Unknown |
+| Domain | {","..="-"} | {"3"..} |
 | Row 0  | ","         | "3"     |
 | Row 1  | "-"         | "3"     |
 | Row 2  | ","         | "3"     |
@@ -1716,13 +1718,13 @@ evaluation (internal):
 ast            : concat_ws(a, '3')
 raw expr       : concat_ws(ColumnRef(0)::String NULL, "3")
 checked expr   : concat_ws<String NULL, String NULL>(ColumnRef(0), CAST("3" AS String NULL))
-optimized expr : NULL
+optimized expr : concat_ws<String NULL, String NULL>(ColumnRef(0), "3")
 evaluation:
 +--------+----------------------+-------------+
 |        | a                    | Output      |
 +--------+----------------------+-------------+
 | Type   | String NULL          | String NULL |
-| Domain | {"a"..="d"} ∪ {NULL} | {NULL}      |
+| Domain | {"a"..="d"} ∪ {NULL} | Unknown     |
 +--------+----------------------+-------------+
 evaluation (internal):
 +--------+-----------------------------------------------------------------------------------------------------------------------------------------+

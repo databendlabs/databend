@@ -31,6 +31,7 @@ use common_expression::FunctionRegistry;
 use common_expression::FunctionSignature;
 use common_expression::NullableDomain;
 use common_expression::Scalar;
+use common_expression::StringDomain;
 use common_expression::Value;
 use common_expression::ValueRef;
 
@@ -39,11 +40,17 @@ pub fn register(registry: &mut FunctionRegistry) {
         Some(Arc::new(Function {
             signature: FunctionSignature {
                 name: "concat",
-                args_type: vec![DataType::String; args_type.len()],
+                args_type: vec![DataType::String; args_type.len().max(1)],
                 return_type: DataType::String,
                 property: FunctionProperty::default(),
             },
-            calc_domain: Box::new(|_, _| None),
+            calc_domain: Box::new(|args_domain, _| {
+                let domain = args_domain[0].as_string().unwrap();
+                Some(Domain::String(StringDomain {
+                    min: domain.min.clone(),
+                    max: None,
+                }))
+            }),
             eval: Box::new(|args, _generics| {
                 let len = args.iter().find_map(|arg| match arg {
                     ValueRef::Column(col) => Some(col.len()),
@@ -76,27 +83,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         Some(Arc::new(Function {
             signature: FunctionSignature {
                 name: "concat",
-                args_type: vec![DataType::Nullable(Box::new(DataType::String)); args_type.len()],
+                args_type: vec![DataType::Nullable(Box::new(DataType::String)); args_type.len().max(1)],
                 return_type: DataType::Nullable(Box::new(DataType::String)),
                 property: FunctionProperty::default(),
             },
-            calc_domain: Box::new(|args_domain, _| {
-                Some(args_domain.iter().fold(
-                    Domain::Nullable(NullableDomain {
-                        has_null: false,
-                        value: None,
-                    }),
-                    |acc, x| {
-                        let x = x.as_nullable().unwrap();
-                        let acc = acc.as_nullable().unwrap();
-
-                        Domain::Nullable(NullableDomain {
-                            has_null: acc.has_null | x.has_null,
-                            value: None,
-                        })
-                    },
-                ))
-            }),
+            calc_domain: Box::new(|_, _|  None),
             eval: Box::new(|args, _generics| {
                 type T = NullableType<StringType>;
                 let len = args.iter().find_map(|arg| match arg {
@@ -111,7 +102,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                         ValueRef::Scalar(None) => return Ok(Value::Scalar(T::upcast_scalar(None))),
                         ValueRef::Column(c) => {
                             bitmap = match bitmap {
-                                Some(m) =>  Some(common_arrow::arrow::bitmap::and(&m, &c.validity)),
+                                Some(m) => Some(common_arrow::arrow::bitmap::and(&m, &c.validity)),
                                 None => Some(c.validity),
                             };
                             inner_args.push(ValueRef::Column(c.column.clone()));
@@ -149,15 +140,18 @@ pub fn register(registry: &mut FunctionRegistry) {
         Some(Arc::new(Function {
             signature: FunctionSignature {
                 name: "concat_ws",
-                args_type: vec![DataType::String; args_type.len()],
+                args_type: vec![DataType::String; args_type.len().max(2)],
                 return_type: DataType::String,
                 property: FunctionProperty::default(),
             },
-            calc_domain: Box::new(|_, _| None),
+            calc_domain: Box::new(|args_domain, _| {
+                let domain = args_domain[1].as_string().unwrap();
+                Some(Domain::String(StringDomain {
+                    min: domain.min.clone(),
+                    max: None,
+                }))
+            }),
             eval: Box::new(|args, _generics| {
-                if args.len() < 2 {
-                    return Err(format!("concat_ws requires at least two arguments"));
-                }
                 let len = args.iter().find_map(|arg| match arg {
                     ValueRef::Column(col) => Some(col.len()),
                     _ => None,
@@ -210,22 +204,12 @@ pub fn register(registry: &mut FunctionRegistry) {
         Some(Arc::new(Function {
             signature: FunctionSignature {
                 name: "concat_ws",
-                args_type: vec![DataType::Nullable(Box::new(DataType::String)); args_type.len()],
+                args_type: vec![DataType::Nullable(Box::new(DataType::String)); args_type.len().max(2)],
                 return_type: DataType::Nullable(Box::new(DataType::String)),
                 property: FunctionProperty::default(),
             },
-            calc_domain: Box::new(|args_domain, _| {
-                let first = (&args_domain[0]).as_nullable().unwrap();
-                Some(Domain::Nullable(NullableDomain {
-                            has_null: first.has_null,
-                            value: None,
-                }))
-            }),
+            calc_domain: Box::new(|_, _|  None),
             eval: Box::new(|args, _generics| {
-                if args.len() < 2 {
-                    return Err(format!("concat_ws requires at least two arguments"));
-                }
-
                 type T = NullableType<StringType>;
                 let len = args.iter().find_map(|arg| match arg {
                     ValueRef::Column(col) => Some(col.len()),
@@ -271,7 +255,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                             unsafe {
                                 match new_args[0].index_unchecked(idx) {
                                     Some(v) => {
-                                        for (arg_index, arg) in new_args.iter().skip(1).enumerate() {
+                                        for (arg_index, arg) in new_args.iter().skip(1).enumerate()
+                                        {
                                             match arg.index_unchecked(idx) {
                                                 Some(s) if arg_index != 0 => {
                                                     builder.put_slice(v);
