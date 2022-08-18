@@ -12,9 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::ops::BitAnd;
 use std::sync::Arc;
 
-use common_arrow::arrow::bitmap::Bitmap;
+use common_arrow::arrow::bitmap::MutableBitmap;
 use common_expression::types::nullable::NullableColumn;
 use common_expression::types::string::StringColumnBuilder;
 use common_expression::types::ArgType;
@@ -99,7 +100,9 @@ pub fn register(registry: &mut FunctionRegistry) {
                     ValueRef::Column(col) => Some(col.len()),
                     _ => None,
                 });
-                let mut bitmap: Option<Bitmap> = None;
+
+                let size = len.unwrap_or(1);
+                let mut bitmap: Option<MutableBitmap> = None;
                 let mut inner_args: Vec<ValueRef<StringType>> = Vec::with_capacity(args.len());
                 for arg in args {
                     let col = arg.try_downcast::<T>().unwrap();
@@ -107,15 +110,14 @@ pub fn register(registry: &mut FunctionRegistry) {
                         ValueRef::Scalar(None) => return Ok(Value::Scalar(T::upcast_scalar(None))),
                         ValueRef::Column(c) => {
                             bitmap = match bitmap {
-                                Some(m) => Some(common_arrow::arrow::bitmap::and(&m, &c.validity)),
-                                None => Some(c.validity),
+                                Some(m) => Some(m.bitand(&c.validity)),
+                                None => Some(c.validity.clone().make_mut()),
                             };
                             inner_args.push(ValueRef::Column(c.column.clone()));
                         }
                         ValueRef::Scalar(Some(s)) => inner_args.push(ValueRef::Scalar(s)),
                     }
                 }
-                let size = len.unwrap_or(1);
                 let mut builder = StringColumnBuilder::with_capacity(size, 0);
                 for idx in 0..size {
                     for arg in &inner_args {
@@ -128,7 +130,9 @@ pub fn register(registry: &mut FunctionRegistry) {
                     Some(len) => {
                         let n = NullableColumn::<StringType> {
                             column: builder.build(),
-                            validity: bitmap.unwrap_or_else(|| constant_bitmap(true, len).into()),
+                            validity: bitmap
+                                .map(|m| m.into())
+                                .unwrap_or_else(|| constant_bitmap(true, len).into()),
                         };
                         let c = T::upcast_column(n);
                         Ok(Value::Column(c))

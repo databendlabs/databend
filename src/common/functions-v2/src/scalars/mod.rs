@@ -26,6 +26,7 @@ pub fn builtin_functions() -> FunctionRegistry {
     boolean::register(&mut registry);
     control::register(&mut registry);
     string::register(&mut registry);
+    string_multi_args::register(&mut registry);
     arithmetic::register(&mut registry);
     registry
 }

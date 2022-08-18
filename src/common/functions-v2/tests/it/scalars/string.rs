@@ -349,7 +349,7 @@ fn test_trim(file: &mut impl Write) {
 fn test_concat(file: &mut impl Write) {
     run_ast(file, "concat('5', '3', '4')", &[]);
     run_ast(file, "concat(NULL, '3', '4')", &[]);
-    run_ast(file, "concat(a, '3')", &[(
+    run_ast(file, "concat(a, '3', '4', '5')", &[(
         "a",
         DataType::String,
         Column::from_data(&["abc", "   abc", "   abc   ", "abc   "]),
@@ -363,7 +363,7 @@ fn test_concat(file: &mut impl Write) {
 
     run_ast(file, "concat_ws('-', '3', '4')", &[]);
     run_ast(file, "concat_ws(NULL, '3', '4')", &[]);
-    run_ast(file, "concat_ws(a, '3')", &[(
+    run_ast(file, "concat_ws(a, '3', '4', '5')", &[(
         "a",
         DataType::String,
         Column::from_data(&[",", "-", ",", "-"]),

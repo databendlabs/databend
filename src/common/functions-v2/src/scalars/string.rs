@@ -26,11 +26,7 @@ use common_expression::NumberDomain;
 use common_expression::Value;
 use common_expression::ValueRef;
 
-use super::string_multi_args;
-
 pub fn register(registry: &mut FunctionRegistry) {
-    string_multi_args::register(registry);
-
     registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
         "upper",
         FunctionProperty::default(),
