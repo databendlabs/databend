@@ -10,7 +10,7 @@ test = false
 
 [dependencies]
 common-base = { path = "../../base" }
-common-catalog = { path = "../../catalog" }
+common-catalog = { path = "../../../query/catalog" }
 common-datablocks = { path = "../../datablocks" }
 common-exception = { path = "../../exception" }
 common-formats = { path = "../../formats" }

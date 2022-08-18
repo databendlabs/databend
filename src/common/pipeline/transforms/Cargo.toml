@@ -9,7 +9,7 @@ doctest = false
 test = false
 
 [dependencies]
-common-catalog = { path = "../../catalog" }
+common-catalog = { path = "../../../query/catalog" }
 common-datablocks = { path = "../../datablocks" }
 common-datavalues = { path = "../../datavalues" }
 common-exception = { path = "../../exception" }

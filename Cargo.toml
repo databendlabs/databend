@@ -8,7 +8,6 @@ members = [
     "src/common/base",
     "src/common/building",
     "src/common/cache",
-    "src/common/catalog",
     "src/common/config",
     "src/common/contexts",
     "src/common/datablocks",
@@ -38,6 +37,7 @@ members = [
     # Query
     "src/query/ast",
     "src/query/codegen",
+    "src/query/catalog",
     # databend-query
     "src/query/service",
 

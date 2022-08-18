@@ -1,0 +1,31 @@
+[package]
+name = "common-catalog"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+doctest = false
+test = false
+
+[dependencies]
+common-base = { path = "../../common/base" }
+common-config = { path = "../../common/config" }
+common-contexts = { path = "../../common/contexts" }
+common-datablocks = { path = "../../common/datablocks" }
+common-datavalues = { path = "../../common/datavalues" }
+common-exception = { path = "../../common/exception" }
+common-functions = { path = "../../common/functions" }
+common-fuse-meta = { path = "../../common/fuse-meta" }
+common-io = { path = "../../common/io" }
+common-meta-app = { path = "../../meta/app" }
+common-meta-types = { path = "../../meta/types" }
+common-pipeline-core = { path = "../../common/pipeline/core" }
+common-planners = { path = "../../common/planners" }
+common-settings = { path = "../../common/settings" }
+common-users = { path = "../../common/users" }
+
+async-trait = "0.1.56"
+dyn-clone = "1.0.6"
+opendal = { version = "0.13.0", features = ["layers-retry"] }
+parking_lot = "0.12.1"
