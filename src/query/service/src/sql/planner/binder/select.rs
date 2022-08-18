@@ -292,7 +292,8 @@ impl<'a> Binder {
                 .zip(right_bind_context.columns.iter_mut())
             {
                 if left_col.data_type != right_col.data_type {
-                    let coercion_type = compare_coercion(&left_col.data_type, &right_col.data_type)?;
+                    let coercion_type =
+                        compare_coercion(&left_col.data_type, &right_col.data_type)?;
                     left_col.data_type = Box::new(coercion_type.clone());
                     right_col.data_type = Box::new(coercion_type);
                 }
