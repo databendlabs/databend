@@ -24,9 +24,9 @@ common-fuse-meta = { path = "../../../common/fuse-meta" }
 common-legacy-parser = { path = "../../../common/legacy-parser" }
 common-meta-app = { path = "../../../meta/app" }
 common-meta-types = { path = "../../../meta/types" }
-common-pipeline-core = { path = "../../../common/pipeline/core" }
-common-pipeline-sources = { path = "../../../common/pipeline/sources" }
-common-pipeline-transforms = { path = "../../../common/pipeline/transforms" }
+common-pipeline-core = { path = "../../pipeline/core" }
+common-pipeline-sources = { path = "../../pipeline/sources" }
+common-pipeline-transforms = { path = "../../pipeline/transforms" }
 common-planners = { path = "../../planners" }
 common-storages-index = { path = "../index" }
 common-storages-util = { path = "../util" }

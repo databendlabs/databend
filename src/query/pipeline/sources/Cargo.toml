@@ -9,16 +9,16 @@ doctest = false
 test = false
 
 [dependencies]
-common-base = { path = "../../base" }
-common-catalog = { path = "../../../query/catalog" }
-common-datablocks = { path = "../../datablocks" }
-common-exception = { path = "../../exception" }
-common-formats = { path = "../../formats" }
-common-io = { path = "../../io" }
+common-base = { path = "../../../common/base" }
+common-catalog = { path = "../../catalog" }
+common-datablocks = { path = "../../../common/datablocks" }
+common-exception = { path = "../../../common/exception" }
+common-formats = { path = "../../../common/formats" }
+common-io = { path = "../../../common/io" }
 common-meta-types = { path = "../../../meta/types" }
 common-pipeline-core = { path = "../core" }
-common-storage = { path = "../../storage" }
-common-streams = { path = "../../streams" }
+common-storage = { path = "../../../common/storage" }
+common-streams = { path = "../../../common/streams" }
 
 async-trait = { git = "https://github.com/datafuse-extras/async-trait", rev = "f0b0fd5" }
 futures = "0.3.21"

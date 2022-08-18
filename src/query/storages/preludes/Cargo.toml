@@ -27,10 +27,10 @@ common-grpc = { path = "../../../common/grpc" }
 common-meta-app = { path = "../../../meta/app" }
 common-meta-types = { path = "../../../meta/types" }
 common-metrics = { path = "../../../common/metrics" }
-common-pipeline-core = { path = "../../../common/pipeline/core" }
-common-pipeline-sinks = { path = "../../../common/pipeline/sinks" }
-common-pipeline-sources = { path = "../../../common/pipeline/sources" }
-common-pipeline-transforms = { path = "../../../common/pipeline/transforms" }
+common-pipeline-core = { path = "../../pipeline/core" }
+common-pipeline-sinks = { path = "../../pipeline/sinks" }
+common-pipeline-sources = { path = "../../pipeline/sources" }
+common-pipeline-transforms = { path = "../../pipeline/transforms" }
 common-planners = { path = "../../planners" }
 common-storage = { path = "../../../common/storage" }
 common-storages-util = { path = "../util" }

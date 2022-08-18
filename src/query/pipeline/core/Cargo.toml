@@ -12,10 +12,10 @@ doctest = false
 test = false
 
 [dependencies]
-common-datablocks = { path = "../../datablocks" }
-common-datavalues = { path = "../../datavalues" }
-common-exception = { path = "../../exception" }
-common-io = { path = "../../io" }
+common-datablocks = { path = "../../../common/datablocks" }
+common-datavalues = { path = "../../../common/datavalues" }
+common-exception = { path = "../../../common/exception" }
+common-io = { path = "../../../common/io" }
 
 async-trait = "0.1.56"
 futures = "0.3.21"
