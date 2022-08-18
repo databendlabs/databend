@@ -105,6 +105,12 @@ allow_insecure = false
 [storage.fs]
 data_path = "_data"
 
+[storage.gcs]
+endpoint_url = "https://storage.googleapis.com"
+bucket = ""
+root = ""
+credential = ""
+
 [storage.s3]
 region = ""
 endpoint_url = "https://s3.amazonaws.com"

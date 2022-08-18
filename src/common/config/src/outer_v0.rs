@@ -24,6 +24,7 @@ use common_exception::Result;
 use common_storage::StorageAzblobConfig as InnerStorageAzblobConfig;
 use common_storage::StorageConfig as InnerStorageConfig;
 use common_storage::StorageFsConfig as InnerStorageFsConfig;
+use common_storage::StorageGcsConfig as InnerStorageGcsConfig;
 use common_storage::StorageHdfsConfig as InnerStorageHdfsConfig;
 use common_storage::StorageParams;
 use common_storage::StorageS3Config as InnerStorageS3Config;
@@ -176,6 +177,10 @@ pub struct StorageConfig {
     #[clap(flatten)]
     pub fs: FsStorageConfig,
 
+    // GCS backend config
+    #[clap(flatten)]
+    pub gcs: GcsStorageConfig,
+
     // S3 storage backend config.
     #[clap(flatten)]
     pub s3: S3StorageConfig,
@@ -202,6 +207,7 @@ impl From<InnerStorageConfig> for StorageConfig {
             storage_type: "".to_string(),
             allow_insecure: inner.allow_insecure,
             fs: Default::default(),
+            gcs: Default::default(),
             s3: Default::default(),
             azblob: Default::default(),
             hdfs: Default::default(),
@@ -228,6 +234,10 @@ impl From<InnerStorageConfig> for StorageConfig {
                 cfg.storage_type = "s3".to_string();
                 cfg.s3 = v.into()
             }
+            StorageParams::Gcs(v) => {
+                cfg.storage_type = "gcs".to_string();
+                cfg.gcs = v.into()
+            }
             v => unreachable!("{v:?} should not be used as storage backend"),
         }
 
@@ -246,6 +256,7 @@ impl TryInto<InnerStorageConfig> for StorageConfig {
                 match self.storage_type.as_str() {
                     "azblob" => StorageParams::Azblob(self.azblob.try_into()?),
                     "fs" => StorageParams::Fs(self.fs.try_into()?),
+                    "gcs" => StorageParams::Gcs(self.gcs.try_into()?),
                     #[cfg(feature = "storage-hdfs")]
                     "hdfs" => StorageParams::Hdfs(self.hdfs.try_into()?),
                     "memory" => StorageParams::Memory,
@@ -285,6 +296,63 @@ impl TryInto<InnerStorageFsConfig> for FsStorageConfig {
     fn try_into(self) -> Result<InnerStorageFsConfig> {
         Ok(InnerStorageFsConfig {
             root: self.data_path,
+        })
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize, Args)]
+#[serde(default)]
+pub struct GcsStorageConfig {
+    #[clap(
+        long = "storage-gcs-endpoint-url",
+        default_value = "https://storage.googleapis.com"
+    )]
+    pub endpoint_url: String,
+    #[clap(long = "storage-gcs-bucket", default_value_t)]
+    pub bucket: String,
+    #[clap(long = "storage-gcs-root", default_value_t)]
+    pub root: String,
+    #[clap(long = "storage-gcs-credential", default_value_t)]
+    pub credential: String,
+}
+
+impl Default for GcsStorageConfig {
+    fn default() -> Self {
+        InnerStorageGcsConfig::default().into()
+    }
+}
+
+impl Debug for GcsStorageConfig {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_struct("GcsStorageConfig")
+            .field("endpoint_url", &self.endpoint_url)
+            .field("root", &self.root)
+            .field("bucket", &self.bucket)
+            .field("credential", &mask_string(&self.credential, 3))
+            .finish()
+    }
+}
+
+impl From<InnerStorageGcsConfig> for GcsStorageConfig {
+    fn from(inner: InnerStorageGcsConfig) -> Self {
+        Self {
+            endpoint_url: inner.endpoint_url,
+            bucket: inner.bucket,
+            root: inner.root,
+            credential: inner.credential,
+        }
+    }
+}
+
+impl TryInto<InnerStorageGcsConfig> for GcsStorageConfig {
+    type Error = ErrorCode;
+
+    fn try_into(self) -> std::result::Result<InnerStorageGcsConfig, Self::Error> {
+        Ok(InnerStorageGcsConfig {
+            endpoint_url: self.endpoint_url,
+            bucket: self.bucket,
+            root: self.root,
+            credential: self.credential,
         })
     }
 }
