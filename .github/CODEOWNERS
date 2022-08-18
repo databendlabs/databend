@@ -1,36 +1,42 @@
 # Query
 /src/common/arrow/         @datafuselabs/databend-query-reviewer
-/src/common/datablocks/    @datafuselabs/databend-query-reviewer
-/src/common/datavalues/    @datafuselabs/databend-query-reviewer
-/src/common/functions/     @datafuselabs/databend-query-reviewer
+/src/common/hashtable/     @datafuselabs/databend-query-reviewer
 /src/common/io/            @datafuselabs/databend-query-reviewer
-/src/common/management/    @datafuselabs/databend-query-reviewer
-/src/common/streams/       @datafuselabs/databend-query-reviewer
+/src/query/datablocks/     @datafuselabs/databend-query-reviewer
+/src/query/datavalues/     @datafuselabs/databend-query-reviewer
+/src/query/functions/      @datafuselabs/databend-query-reviewer
+/src/query/management/     @datafuselabs/databend-query-reviewer
+/src/query/streams/        @datafuselabs/databend-query-reviewer
 
 # Executor
+/src/common/base/                  @datafuselabs/databend-executor-reviewer
+/src/common/exception/             @datafuselabs/databend-executor-reviewer
+/src/query/planners/               @datafuselabs/databend-executor-reviewer
 /src/query/service/src/clusters/   @datafuselabs/databend-executor-reviewer
 /src/query/service/src/pipelines/  @datafuselabs/databend-executor-reviewer
 /src/query/service/src/api/rpc/    @datafuselabs/databend-executor-reviewer
-/src/common/base/                  @datafuselabs/databend-executor-reviewer
-/src/common/exception/             @datafuselabs/databend-executor-reviewer
-/src/common/planners/              @datafuselabs/databend-executor-reviewer
 
 # Planner
 /src/query/ast/                       @datafuselabs/databend-planner-reviewer
 /src/query/service/src/optimizers/    @datafuselabs/databend-planner-reviewer
 
 # MetaSrv
-/src/meta/                @datafuselabs/databend-meta-reviewer
 /src/common/grpc/         @datafuselabs/databend-meta-reviewer
+/src/meta/                @datafuselabs/databend-meta-reviewer
 /src/meta/protos/proto    @drmingdrmer
 
 # Storage
 /src/common/cache/                 @datafuselabs/databend-storage-reviewer
+/src/common/contexts/              @datafuselabs/databend-storage-reviewer
+/src/common/storage/               @datafuselabs/databend-storage-reviewer
+/src/query/catalog/                @datafuselabs/databend-storage-reviewer
+/src/query/storages/               @datafuselabs/databend-storage-reviewer
 /src/query/service/src/catalogs/   @datafuselabs/databend-storage-reviewer
 /src/query/service/src/storages/   @datafuselabs/databend-storage-reviewer
 
 
 # API and handler
+/src/common/http/                  @datafuselabs/databend-api-reviewer
 /src/query/service/src/servers/    @datafuselabs/databend-api-reviewer
 
 # Website
