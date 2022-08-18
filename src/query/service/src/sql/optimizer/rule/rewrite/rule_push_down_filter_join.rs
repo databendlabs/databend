@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::type_coercion::merge_types;
+use common_datavalues::type_coercion::compare_coercion;
 use common_exception::Result;
 
 use crate::sql::binder::wrap_cast_if_needed;
@@ -108,7 +108,7 @@ impl Rule for RulePushDownFilterJoin {
                 JoinCondition::Both { left, right } => {
                     let left_type = left.data_type();
                     let right_type = right.data_type();
-                    let join_key_type = merge_types(&left_type, &right_type);
+                    let join_key_type = compare_coercion(&left_type, &right_type);
 
                     // We have to check if left_type and right_type can be coerced to
                     // a super type. If the coercion is failed, we cannot push the

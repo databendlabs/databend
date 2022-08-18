@@ -229,6 +229,12 @@ pub fn numerical_unary_arithmetic_coercion(
 
 // coercion rules for compare operations. This is a superset of all numerical coercion rules.
 pub fn compare_coercion(lhs_type: &DataTypeImpl, rhs_type: &DataTypeImpl) -> Result<DataTypeImpl> {
+    if lhs_type.is_nullable() || rhs_type.is_nullable() {
+        let lhs_type = remove_nullable(lhs_type);
+        let rhs_type = remove_nullable(rhs_type);
+        let result = compare_coercion(&lhs_type, &rhs_type)?;
+        return Ok(wrap_nullable(&result));
+    }
     let lhs_id = lhs_type.data_type_id();
     let rhs_id = rhs_type.data_type_id();
 
