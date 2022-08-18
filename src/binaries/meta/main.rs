@@ -52,13 +52,10 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
     let bend_sentry_env = env::var("DATABEND_SENTRY_DSN").unwrap_or_else(|_| "".to_string());
     if !bend_sentry_env.is_empty() {
         // NOTE: `traces_sample_rate` is 0.0 by default, which disable sentry tracing
-        let traces_sample_rate = env::var("SENTRY_TRACES_SAMPLE_RATE")
-            .ok()
-            .map(|s| {
-                s.parse()
-                    .unwrap_or_else(|_| panic!("`{}` was defined but could not be parsed", s))
-            })
-            .unwrap_or(0.0);
+        let traces_sample_rate = env::var("SENTRY_TRACES_SAMPLE_RATE").ok().map_or(0.0, |s| {
+            s.parse()
+                .unwrap_or_else(|_| panic!("`{}` was defined but could not be parsed", s))
+        });
         _sentry_guard = Some(sentry::init((bend_sentry_env, sentry::ClientOptions {
             release: common_tracing::databend_semver!(),
             traces_sample_rate,

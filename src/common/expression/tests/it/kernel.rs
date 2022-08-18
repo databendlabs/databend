@@ -114,7 +114,7 @@ pub fn test_pass() {
 }
 
 fn run_filter(file: &mut impl Write, predicate: Column, columns: &[Column]) {
-    let len = columns.get(0).map(|c| c.len()).unwrap_or(1);
+    let len = columns.get(0).map_or(1, |c| c.len());
     let columns = columns.iter().map(|c| Value::Column(c.clone())).collect();
 
     let chunk = Chunk::new(columns, len);
@@ -139,7 +139,7 @@ fn run_concat(file: &mut impl Write, columns: Vec<Vec<Column>>) {
     let chunks: Vec<Chunk> = columns
         .iter()
         .map(|cs| {
-            let num_rows = cs.get(0).map(|c| c.len()).unwrap_or(1);
+            let num_rows = cs.get(0).map_or(1, |c| c.len());
             let cs = cs.iter().map(|c| Value::Column(c.clone())).collect();
             Chunk::new(cs, num_rows)
         })
@@ -163,7 +163,7 @@ fn run_concat(file: &mut impl Write, columns: Vec<Vec<Column>>) {
 }
 
 fn run_take(file: &mut impl Write, indices: &[u32], columns: &[Column]) {
-    let len = columns.get(0).map(|c| c.len()).unwrap_or(1);
+    let len = columns.get(0).map_or(1, |c| c.len());
     let columns = columns.iter().map(|c| Value::Column(c.clone())).collect();
     let chunk = Chunk::new(columns, len);
 
@@ -183,7 +183,7 @@ fn run_take(file: &mut impl Write, indices: &[u32], columns: &[Column]) {
 }
 
 fn run_scatter(file: &mut impl Write, columns: &[Column], indices: &[u32], scatter_size: usize) {
-    let len = columns.get(0).map(|c| c.len()).unwrap_or(1);
+    let len = columns.get(0).map_or(1, |c| c.len());
     let columns = columns.iter().map(|c| Value::Column(c.clone())).collect();
     let chunk = Chunk::new(columns, len);
 

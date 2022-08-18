@@ -20,7 +20,7 @@ use common_exception::Result;
 use common_meta_app::schema::TableStatistics;
 use common_planners::OptimizeTablePlan;
 
-use super::mutation::CompactMutator;
+use crate::operations::mutation::CompactMutator;
 use crate::FuseTable;
 use crate::DEFAULT_BLOCK_PER_SEGMENT;
 use crate::DEFAULT_ROW_PER_BLOCK;

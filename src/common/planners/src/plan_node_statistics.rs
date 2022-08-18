@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_meta_app::schema::TableInfo;
+
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Clone, Debug, Default)]
 pub struct Statistics {
     /// Total rows of the query read.
@@ -66,5 +68,25 @@ impl Statistics {
 
     pub fn clear(&mut self) {
         *self = Self::default();
+    }
+
+    pub fn get_description(&self, table_info: &TableInfo) -> String {
+        if self.read_rows > 0 {
+            format!(
+                "(Read from {} table, {} Read Rows:{}, Read Bytes:{}, Partitions Scanned:{}, Partitions Total:{})",
+                table_info.desc,
+                if self.is_exact {
+                    "Exactly"
+                } else {
+                    "Approximately"
+                },
+                self.read_rows,
+                self.read_bytes,
+                self.partitions_scanned,
+                self.partitions_total,
+            )
+        } else {
+            format!("(Read from {} table)", table_info.desc)
+        }
     }
 }
