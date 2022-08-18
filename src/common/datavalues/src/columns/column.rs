@@ -106,7 +106,7 @@ pub trait Column: Send + Sync {
     fn get(&self, index: usize) -> DataValue;
 
     fn get_checked(&self, index: usize) -> Result<DataValue> {
-        if index > self.len() {
+        if index >= self.len() {
             return Err(ErrorCode::BadDataArrayLength(format!(
                 "Index out of bounds: {}, col size: {}",
                 index,

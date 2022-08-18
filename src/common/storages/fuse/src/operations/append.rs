@@ -22,9 +22,9 @@ use common_exception::Result;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::Pipeline;
 use common_pipeline_core::SinkPipeBuilder;
-use common_pipeline_transforms::processors::transforms::transform_compact::TransformCompact;
 use common_pipeline_transforms::processors::transforms::BlockCompactor;
 use common_pipeline_transforms::processors::transforms::ExpressionTransform;
+use common_pipeline_transforms::processors::transforms::TransformCompact;
 use common_pipeline_transforms::processors::transforms::TransformSortPartial;
 use common_pipeline_transforms::processors::ExpressionExecutor;
 use common_planners::Expression;
@@ -61,7 +61,29 @@ impl FuseTable {
             )
         })?;
 
-        let cluster_stats_gen = self.get_cluster_stats_gen(ctx.clone(), pipeline)?;
+        let cluster_stats_gen =
+            self.get_cluster_stats_gen(ctx.clone(), pipeline, 0, max_row_per_block)?;
+        if !self.cluster_keys.is_empty() {
+            // sort
+            let sort_descs: Vec<SortColumnDescription> = self
+                .cluster_keys
+                .iter()
+                .map(|expr| SortColumnDescription {
+                    column_name: expr.column_name(),
+                    asc: true,
+                    nulls_first: false,
+                })
+                .collect();
+
+            pipeline.add_transform(|transform_input_port, transform_output_port| {
+                TransformSortPartial::try_create(
+                    transform_input_port,
+                    transform_output_port,
+                    None,
+                    sort_descs.clone(),
+                )
+            })?;
+        }
 
         let mut sink_pipeline_builder = SinkPipeBuilder::create();
         for _ in 0..pipeline.output_len() {
@@ -83,10 +105,12 @@ impl FuseTable {
         Ok(())
     }
 
-    fn get_cluster_stats_gen(
+    pub fn get_cluster_stats_gen(
         &self,
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
+        level: i32,
+        row_per_block: usize,
     ) -> Result<ClusterStatsGenerator> {
         if self.cluster_keys.is_empty() {
             return Ok(ClusterStatsGenerator::default());
@@ -141,30 +165,12 @@ impl FuseTable {
             expression_executor = Some(executor);
         }
 
-        // sort
-        let sort_descs: Vec<SortColumnDescription> = self
-            .cluster_keys
-            .iter()
-            .map(|expr| SortColumnDescription {
-                column_name: expr.column_name(),
-                asc: true,
-                nulls_first: false,
-            })
-            .collect();
-
-        pipeline.add_transform(|transform_input_port, transform_output_port| {
-            TransformSortPartial::try_create(
-                transform_input_port,
-                transform_output_port,
-                None,
-                sort_descs.clone(),
-            )
-        })?;
-
         Ok(ClusterStatsGenerator::new(
             self.cluster_key_meta.as_ref().unwrap().0,
             cluster_key_index,
             expression_executor,
+            level,
+            row_per_block,
         ))
     }
 

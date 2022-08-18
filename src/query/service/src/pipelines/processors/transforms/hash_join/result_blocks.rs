@@ -652,7 +652,7 @@ impl JoinHashTable {
         valids: &Option<Bitmap>,
         i: usize,
     ) -> Option<*mut KeyValueEntity<Key, Vec<RowPtr>>> {
-        if valids.as_ref().map(|v| v.get_bit(i)).unwrap_or(true) {
+        if valids.as_ref().map_or(true, |v| v.get_bit(i)) {
             return hash_table.find_key(&key);
         }
         None

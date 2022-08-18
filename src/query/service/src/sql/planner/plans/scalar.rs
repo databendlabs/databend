@@ -487,8 +487,7 @@ impl ScalarExpr for FunctionCall {
     fn is_deterministic(&self) -> bool {
         FunctionFactory::instance()
             .get_features(&self.func_name)
-            .map(|feature| feature.is_deterministic)
-            .unwrap_or(false)
+            .map_or(false, |feature| feature.is_deterministic)
             && self.arguments.iter().all(|arg| arg.is_deterministic())
     }
 }

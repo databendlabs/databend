@@ -694,13 +694,13 @@ impl<'a> Binder {
             .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
             .unwrap_or_else(|| self.ctx.get_current_database());
         let table = normalize_identifier(table, &self.name_resolution_ctx).name;
-        let action = action
-            .map(|v| match v {
-                AstOptimizeTableAction::All => OptimizeTableAction::All,
-                AstOptimizeTableAction::Purge => OptimizeTableAction::Purge,
-                AstOptimizeTableAction::Compact => OptimizeTableAction::Compact,
-            })
-            .unwrap_or(OptimizeTableAction::Purge);
+        let action = action.map_or(OptimizeTableAction::Purge, |v| match v {
+            AstOptimizeTableAction::All => OptimizeTableAction::All,
+            AstOptimizeTableAction::Purge => OptimizeTableAction::Purge,
+            AstOptimizeTableAction::Compact => OptimizeTableAction::Compact,
+            AstOptimizeTableAction::Recluster => OptimizeTableAction::Recluster,
+            AstOptimizeTableAction::ReclusterFinal => OptimizeTableAction::ReclusterFinal,
+        });
 
         Ok(Plan::OptimizeTable(Box::new(OptimizeTablePlan {
             catalog,

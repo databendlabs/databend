@@ -129,6 +129,7 @@ jobs:
       - uses: ./.github/actions/test_sqllogic_standalone_macos
         with:
           profile: release
+          dirs: "base ydb"
 
   test_sqllogic_standalone_linux:
     runs-on: ubuntu-latest
@@ -138,3 +139,4 @@ jobs:
       - uses: ./.github/actions/test_sqllogic_standalone_linux
         with:
           profile: release
+          dirs: "base ydb"

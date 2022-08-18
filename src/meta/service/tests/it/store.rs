@@ -153,7 +153,10 @@ async fn test_meta_store_build_snapshot() -> anyhow::Result<()> {
     }
 
     let curr_snap = sto.build_snapshot().await?;
-    assert_eq!(LogId { term: 1, index: 9 }, curr_snap.meta.last_log_id);
+    assert_eq!(
+        Some(LogId { term: 1, index: 9 }),
+        curr_snap.meta.last_log_id
+    );
 
     info!("--- check snapshot");
     {
@@ -194,7 +197,10 @@ async fn test_meta_store_current_snapshot() -> anyhow::Result<()> {
     info!("--- check get_current_snapshot");
 
     let curr_snap = sto.get_current_snapshot().await?.unwrap();
-    assert_eq!(LogId { term: 1, index: 9 }, curr_snap.meta.last_log_id);
+    assert_eq!(
+        Some(LogId { term: 1, index: 9 }),
+        curr_snap.meta.last_log_id
+    );
 
     info!("--- check snapshot");
     {
