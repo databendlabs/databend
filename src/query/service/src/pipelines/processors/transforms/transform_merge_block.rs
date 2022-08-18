@@ -26,7 +26,7 @@ use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 
 pub struct TransformMergeBlock {
-    initialized: bool,
+    finished: bool,
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
 
@@ -39,14 +39,14 @@ pub struct TransformMergeBlock {
 }
 
 impl TransformMergeBlock {
-    pub fn create(
+    pub fn try_create(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         schema: DataSchemaRef,
         receiver: Receiver<DataBlock>,
-    ) -> ProcessorPtr {
-        ProcessorPtr::create(Box::new(TransformMergeBlock {
-            initialized: false,
+    ) -> Result<ProcessorPtr> {
+        Ok(ProcessorPtr::create(Box::new(TransformMergeBlock {
+            finished: false,
             input,
             output,
             input_data: None,
@@ -54,7 +54,7 @@ impl TransformMergeBlock {
             schema,
             receiver,
             receiver_result: None,
-        }))
+        })))
     }
 }
 
@@ -69,10 +69,6 @@ impl Processor for TransformMergeBlock {
     }
 
     fn event(&mut self) -> Result<Event> {
-        if !self.initialized {
-            return Ok(Event::Async);
-        }
-
         if self.output.is_finished() {
             self.input.finish();
             return Ok(Event::Finished);
@@ -92,7 +88,15 @@ impl Processor for TransformMergeBlock {
             return Ok(Event::Sync);
         }
 
+        if let Ok(result) = self.receiver.try_recv() {
+            self.receiver_result = Some(result);
+            return Ok(Event::Sync);
+        }
+
         if self.input.is_finished() {
+            if !self.finished {
+                return Ok(Event::Async);
+            }
             self.output.finish();
             return Ok(Event::Finished);
         }
@@ -125,17 +129,12 @@ impl Processor for TransformMergeBlock {
     }
 
     async fn async_process(&mut self) -> Result<()> {
-        if !self.initialized {
-            self.initialized = true;
-            let mut results = vec![];
-            while let Some(result) = self.receiver.recv().await.ok() {
-                results.push(result);
+        if !self.finished {
+            if let Ok(result) = self.receiver.recv().await {
+                self.receiver_result = Some(result);
+                return Ok(());
             }
-            if results.is_empty() {
-                self.receiver_result = None;
-            } else {
-                self.receiver_result = Some(DataBlock::concat_blocks(&results)?);
-            }
+            self.finished = true;
         }
         Ok(())
     }

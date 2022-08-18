@@ -27,11 +27,11 @@ use crate::processors::sinks::AsyncSink;
 use crate::processors::sinks::AsyncSinker;
 
 pub struct UnionReceiveSink {
-    sender: Sender<DataBlock>,
+    sender: Option<Sender<DataBlock>>,
 }
 
 impl UnionReceiveSink {
-    pub fn create(sender: Sender<DataBlock>, input: Arc<InputPort>) -> ProcessorPtr {
+    pub fn create(sender: Option<Sender<DataBlock>>, input: Arc<InputPort>) -> ProcessorPtr {
         AsyncSinker::create(input, UnionReceiveSink { sender })
     }
 }
@@ -41,16 +41,17 @@ impl AsyncSink for UnionReceiveSink {
     const NAME: &'static str = "UnionReceiveSink";
 
     async fn on_finish(&mut self) -> Result<()> {
-        self.sender.close();
+        drop(self.sender.take());
         Ok(())
     }
 
     #[unboxed_simple]
     async fn consume(&mut self, data_block: DataBlock) -> Result<()> {
-        dbg!("come here");
-        if self.sender.send(data_block).await.is_err() {
-            return Err(ErrorCode::UnexpectedError("UnionReceiveSink sender failed"));
-        };
+        if let Some(sender) = self.sender.as_ref() {
+            if sender.send(data_block).await.is_err() {
+                return Err(ErrorCode::UnexpectedError("UnionReceiveSink sender failed"));
+            };
+        }
         Ok(())
     }
 }

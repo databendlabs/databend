@@ -25,7 +25,6 @@ use common_exception::Result;
 use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::aggregates::AggregateFunctionRef;
 use common_functions::scalars::FunctionFactory;
-use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::Pipe;
 use common_pipeline_sinks::processors::sinks::UnionReceiveSink;
 
@@ -488,13 +487,21 @@ impl PipelineBuilder {
 
         assert!(build_res.main_pipeline.is_pulling_pipeline()?);
 
-        build_res.main_pipeline.resize(1)?;
         let (tx, rx) = async_channel::unbounded();
-        let input = InputPort::create();
+        let mut inputs_port = Vec::with_capacity(build_res.main_pipeline.output_len());
+        let mut processors = Vec::with_capacity(build_res.main_pipeline.output_len());
+        for _ in 0..build_res.main_pipeline.output_len() {
+            let input_port = InputPort::create();
+            processors.push(UnionReceiveSink::create(
+                Some(tx.clone()),
+                input_port.clone(),
+            ));
+            inputs_port.push(input_port);
+        }
         build_res.main_pipeline.add_pipe(Pipe::SimplePipe {
             outputs_port: vec![],
-            inputs_port: vec![input.clone()],
-            processors: vec![UnionReceiveSink::create(tx, input)],
+            inputs_port,
+            processors,
         });
         self.pipelines.push(build_res.main_pipeline);
         self.pipelines
@@ -505,27 +512,15 @@ impl PipelineBuilder {
     pub fn build_union(&mut self, union: &Union) -> Result<()> {
         self.build_pipeline(&union.left)?;
         let union_receiver = self.expand_union(&union.right)?;
-        let mut inputs_port = Vec::with_capacity(self.main_pipeline.output_len());
-        let mut outputs_port = Vec::with_capacity(self.main_pipeline.output_len());
-        let mut processors = Vec::with_capacity(self.main_pipeline.output_len());
-        for _ in 0..self.main_pipeline.output_len() {
-            let input_port = InputPort::create();
-            let output_port = OutputPort::create();
-            let processor = TransformMergeBlock::create(
-                input_port.clone(),
-                output_port.clone(),
-                union.left.output_schema()?,
-                union_receiver.clone(),
-            );
-            inputs_port.push(input_port);
-            outputs_port.push(output_port);
-            processors.push(processor);
-        }
-        self.main_pipeline.add_pipe(Pipe::SimplePipe {
-            processors,
-            outputs_port,
-            inputs_port,
-        });
+        self.main_pipeline
+            .add_transform(|transform_input_port, transform_output_port| {
+                TransformMergeBlock::try_create(
+                    transform_input_port,
+                    transform_output_port,
+                    union.left.output_schema()?,
+                    union_receiver.clone(),
+                )
+            })?;
         Ok(())
     }
 }
