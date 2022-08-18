@@ -114,7 +114,7 @@ impl SExpr {
     pub fn replace_children(&self, children: Vec<SExpr>) -> Self {
         Self {
             plan: self.plan.clone(),
-            original_group: self.original_group.clone(),
+            original_group: self.original_group,
             applied_rules: self.applied_rules.clone(),
             children,
         }
