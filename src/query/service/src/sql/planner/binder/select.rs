@@ -26,7 +26,7 @@ use common_ast::ast::SelectTarget;
 use common_ast::ast::SetExpr;
 use common_ast::ast::SetOperator;
 use common_ast::ast::TableReference;
-use common_datavalues::type_coercion::merge_types;
+use common_datavalues::type_coercion::compare_coercion;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -292,7 +292,7 @@ impl<'a> Binder {
                 .zip(right_bind_context.columns.iter_mut())
             {
                 if left_col.data_type != right_col.data_type {
-                    let coercion_type = merge_types(&left_col.data_type, &right_col.data_type)?;
+                    let coercion_type = compare_coercion(&left_col.data_type, &right_col.data_type)?;
                     left_col.data_type = Box::new(coercion_type.clone());
                     right_col.data_type = Box::new(coercion_type);
                 }
