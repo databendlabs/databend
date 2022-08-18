@@ -62,7 +62,7 @@ impl RulePushDownLimitOuterJoin {
                     ),
                     SExpr::create_leaf(
                         PatternPlan {
-                            plan_type: RelOP::Pattern,
+                            plan_type: RelOp::Pattern,
                         }
                         .into(),
                     ),
@@ -78,11 +78,11 @@ impl Rule for RulePushDownLimitOuterJoin {
     }
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformState) -> common_exception::Result<()> {
-        let limit: Limit = s_expr.plan().clone().into()?;
+        let limit: Limit = s_expr.plan().clone().try_into()?;
         if let Some(mut count) = limit.limit {
             count += limit.offset;
             let child = s_expr.child(0)?;
-            let join: LogicalInnerJoin = child.plan().clone().into();
+            let join: LogicalInnerJoin = child.plan().clone().try_into()?;
             match join.join_type {
                 JoinType::Left | JoinType::Full => state.add_result(child.replace_children(vec![
                     SExpr::create_unary(
