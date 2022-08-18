@@ -14,6 +14,7 @@
 
 use common_exception::Result;
 
+use crate::sql::optimizer::Distribution;
 use crate::sql::optimizer::PhysicalProperty;
 use crate::sql::optimizer::RelExpr;
 use crate::sql::optimizer::RelationalProperty;
@@ -76,15 +77,17 @@ impl LogicalOperator for Union {
 
 impl PhysicalOperator for Union {
     fn derive_physical_prop<'a>(&self, _rel_expr: &RelExpr<'a>) -> Result<PhysicalProperty> {
-        todo!()
+        Ok(PhysicalProperty {
+            distribution: Distribution::Serial,
+        })
     }
 
     fn compute_required_prop_child<'a>(
         &self,
         _rel_expr: &RelExpr<'a>,
         _child_index: usize,
-        _required: &RequiredProperty,
+        required: &RequiredProperty,
     ) -> Result<RequiredProperty> {
-        todo!()
+        Ok(required.clone())
     }
 }

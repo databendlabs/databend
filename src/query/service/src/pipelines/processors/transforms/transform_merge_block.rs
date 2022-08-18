@@ -115,7 +115,7 @@ impl Processor for TransformMergeBlock {
             if let Some(receiver_result) = self.receiver_result.take() {
                 let data_block =
                     DataBlock::create(self.schema.clone(), receiver_result.columns().to_vec());
-                self.output_data = Some(DataBlock::concat_blocks(&vec![input_data, data_block])?);
+                self.output_data = Some(DataBlock::concat_blocks(&[input_data, data_block])?);
             } else {
                 self.output_data = Some(input_data);
             }

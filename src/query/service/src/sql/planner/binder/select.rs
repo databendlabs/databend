@@ -338,7 +338,7 @@ impl<'a> Binder {
         let mut new_expr = SExpr::create_binary(union_plan.into(), left_expr, right_expr);
         if distinct {
             new_expr = self.bind_distinct(
-                &bind_context,
+                bind_context,
                 bind_context.all_column_bindings(),
                 &mut HashMap::new(),
                 new_expr,
