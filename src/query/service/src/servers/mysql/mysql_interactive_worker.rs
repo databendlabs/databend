@@ -67,6 +67,8 @@ fn has_result_set_by_plan(plan: &Plan) -> bool {
             | Plan::Call(_)
             | Plan::ShowCreateDatabase(_)
             | Plan::ShowCreateTable(_)
+            | Plan::DescShare(_)
+            | Plan::ShowShares(_)
             | Plan::DescribeTable(_)
             | Plan::ShowGrants(_)
             | Plan::ListStage(_)
