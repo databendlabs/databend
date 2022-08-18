@@ -33,6 +33,7 @@ members = [
     "src/query/catalog",
     "src/query/expression",
     "src/query/functions-v2",
+    "src/query/legacy-parser",
     "src/query/management",
     "src/query/pipeline/core",
     "src/query/pipeline/sinks",

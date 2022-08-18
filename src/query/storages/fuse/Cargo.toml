@@ -21,7 +21,7 @@ common-datavalues = { path = "../../../common/datavalues" }
 common-exception = { path = "../../../common/exception" }
 common-functions = { path = "../../../common/functions" }
 common-fuse-meta = { path = "../../../common/fuse-meta" }
-common-legacy-parser = { path = "../../../common/legacy-parser" }
+common-legacy-parser = { path = "../../legacy-parser" }
 common-meta-app = { path = "../../../meta/app" }
 common-meta-types = { path = "../../../meta/types" }
 common-pipeline-core = { path = "../../pipeline/core" }
