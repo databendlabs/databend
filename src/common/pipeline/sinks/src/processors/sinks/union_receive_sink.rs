@@ -14,15 +14,17 @@
 
 use std::sync::Arc;
 
-use common_base::base::tokio::sync::mpsc::Sender;
+use async_channel::Sender;
+use async_trait::async_trait;
+use async_trait::unboxed_simple;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 
-use crate::processors::sinks::Sink;
-use crate::processors::sinks::Sinker;
+use crate::processors::sinks::AsyncSink;
+use crate::processors::sinks::AsyncSinker;
 
 pub struct UnionReceiveSink {
     input_blocks: Vec<DataBlock>,
@@ -31,31 +33,32 @@ pub struct UnionReceiveSink {
 
 impl UnionReceiveSink {
     pub fn create(sender: Sender<Option<DataBlock>>, input: Arc<InputPort>) -> ProcessorPtr {
-        Sinker::create(input, UnionReceiveSink {
+        AsyncSinker::create(input, UnionReceiveSink {
             input_blocks: vec![],
             sender,
         })
     }
 }
 
-#[async_trait::async_trait]
-impl Sink for UnionReceiveSink {
+#[async_trait]
+impl AsyncSink for UnionReceiveSink {
     const NAME: &'static str = "UnionReceiveSink";
 
-    fn on_finish(&mut self) -> Result<()> {
+    async fn on_finish(&mut self) -> Result<()> {
         let send_blocks = if self.input_blocks.is_empty() {
             None
         } else {
             Some(DataBlock::concat_blocks(&self.input_blocks)?)
         };
-        if let Err(_) = self.sender.try_send(send_blocks) {
+        if let Err(_) = self.sender.send(send_blocks).await {
             return Err(ErrorCode::UnexpectedError("UnionReceiveSink sender failed"));
         };
-
+        self.sender.close();
         Ok(())
     }
 
-    fn consume(&mut self, data_block: DataBlock) -> Result<()> {
+    #[unboxed_simple]
+    async fn consume(&mut self, data_block: DataBlock) -> Result<()> {
         self.input_blocks.push(data_block);
         Ok(())
     }

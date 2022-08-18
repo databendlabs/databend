@@ -15,7 +15,7 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use common_base::base::tokio::sync::mpsc::Receiver;
+use async_channel::Receiver;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;

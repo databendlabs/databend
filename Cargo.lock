@@ -1599,6 +1599,7 @@ dependencies = [
 name = "common-pipeline-sinks"
 version = "0.1.0"
 dependencies = [
+ "async-channel",
  "async-trait 0.1.56",
  "common-base",
  "common-catalog",

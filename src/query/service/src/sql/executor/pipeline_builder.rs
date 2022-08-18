@@ -14,8 +14,7 @@
 
 use std::sync::Arc;
 
-use common_base::base::tokio::sync::mpsc::channel;
-use common_base::base::tokio::sync::mpsc::Receiver;
+use async_channel::Receiver;
 use common_datablocks::DataBlock;
 use common_datablocks::SortColumnDescription;
 use common_datavalues::DataField;
@@ -490,7 +489,7 @@ impl PipelineBuilder {
         assert!(build_res.main_pipeline.is_pulling_pipeline()?);
 
         build_res.main_pipeline.resize(1)?;
-        let (tx, rx) = channel(1);
+        let (tx, rx) = async_channel::bounded(1);
         let input = InputPort::create();
         build_res.main_pipeline.add_pipe(Pipe::SimplePipe {
             outputs_port: vec![],
@@ -506,18 +505,26 @@ impl PipelineBuilder {
     pub fn build_union(&mut self, union: &Union) -> Result<()> {
         self.build_pipeline(&union.left)?;
         let union_receiver = self.expand_union(&union.right)?;
-        self.main_pipeline.resize(1)?;
-        let input_port = InputPort::create();
-        let output_port = OutputPort::create();
-        self.main_pipeline.add_pipe(Pipe::SimplePipe {
-            processors: vec![TransformMergeBlock::create(
+        let mut inputs_port = Vec::with_capacity(self.main_pipeline.output_len());
+        let mut outputs_port = Vec::with_capacity(self.main_pipeline.output_len());
+        let mut processors = Vec::with_capacity(self.main_pipeline.output_len());
+        for _ in 0..self.main_pipeline.output_len() {
+            let input_port = InputPort::create();
+            let output_port = OutputPort::create();
+            let processor = TransformMergeBlock::create(
                 input_port.clone(),
                 output_port.clone(),
                 union.left.output_schema()?,
-                union_receiver,
-            )],
-            outputs_port: vec![output_port],
-            inputs_port: vec![input_port],
+                union_receiver.clone(),
+            );
+            inputs_port.push(input_port);
+            outputs_port.push(output_port);
+            processors.push(processor);
+        }
+        self.main_pipeline.add_pipe(Pipe::SimplePipe {
+            processors,
+            outputs_port,
+            inputs_port,
         });
         Ok(())
     }
