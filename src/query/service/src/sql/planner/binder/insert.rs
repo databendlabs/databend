@@ -24,7 +24,6 @@ use common_ast::parser::parse_comma_separated_exprs;
 use common_ast::parser::token::Token;
 use common_ast::parser::tokenize_sql;
 use common_ast::Backtrace;
-use common_ast::Dialect;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_datavalues::DataSchemaRef;
@@ -345,11 +344,13 @@ impl<'a> ValueSourceV2<'a> {
                 let buf = reader.get_checkpoint_buffer();
 
                 let sql = std::str::from_utf8(buf).unwrap();
+                let settings = self.ctx.get_settings();
+                let sql_dialect = settings.get_sql_dialect()?;
                 let tokens = tokenize_sql(sql)?;
                 let backtrace = Backtrace::new();
                 let exprs = parse_comma_separated_exprs(
                     &tokens[1..tokens.len() as usize],
-                    Dialect::PostgreSQL,
+                    sql_dialect,
                     &backtrace,
                 )?;
 

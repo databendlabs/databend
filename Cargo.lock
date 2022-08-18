@@ -1694,6 +1694,7 @@ dependencies = [
 name = "common-settings"
 version = "0.1.0"
 dependencies = [
+ "common-ast",
  "common-config",
  "common-datavalues",
  "common-exception",
