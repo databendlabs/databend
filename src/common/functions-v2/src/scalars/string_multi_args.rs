@@ -92,7 +92,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Nullable(Box::new(DataType::String)),
                 property: FunctionProperty::default(),
             },
-            calc_domain: Box::new(|_, _|  None),
+            calc_domain: Box::new(|_, _| None),
             eval: Box::new(|args, _generics| {
                 type T = NullableType<StringType>;
                 let len = args.iter().find_map(|arg| match arg {
@@ -128,7 +128,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                     Some(len) => {
                         let n = NullableColumn::<StringType> {
                             column: builder.build(),
-                            validity: bitmap.unwrap_or(constant_bitmap(true, len).into()),
+                            validity: bitmap.unwrap_or_else(|| constant_bitmap(true, len).into()),
                         };
                         let c = T::upcast_column(n);
                         Ok(Value::Column(c))
@@ -219,7 +219,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Nullable(Box::new(DataType::String)),
                 property: FunctionProperty::default(),
             },
-            calc_domain: Box::new(|_, _|  None),
+            calc_domain: Box::new(|_, _| None),
             eval: Box::new(|args, _generics| {
                 type T = NullableType<StringType>;
                 let len = args.iter().find_map(|arg| match arg {

@@ -172,7 +172,7 @@ impl<'a, T: ValueType> ValueRef<'a, T> {
         }
     }
 
-     /// # Safety
+    /// # Safety
     pub unsafe fn index_unchecked(&'a self, index: usize) -> T::ScalarRef<'a> {
         match self {
             ValueRef::Scalar(scalar) => scalar.clone(),
@@ -379,22 +379,22 @@ impl Column {
     /// Assumes that the `index` is not out of range.
     pub unsafe fn index_unchecked(&self, index: usize) -> ScalarRef {
         match self {
-            Column::Null { .. } =>ScalarRef::Null,
-            Column::EmptyArray { .. } =>ScalarRef::EmptyArray,
-            Column::Int8(col) => ScalarRef::Int8(col.get_unchecked(index).clone()),
-            Column::Int16(col) =>ScalarRef::Int16(col.get_unchecked(index).clone()),
-            Column::Int32(col) =>ScalarRef::Int32(col.get_unchecked(index).clone()),
-            Column::Int64(col) => ScalarRef::Int64(col.get_unchecked(index).clone()),
-            Column::UInt8(col) => ScalarRef::UInt8(col.get_unchecked(index).clone()),
-            Column::UInt16(col) => ScalarRef::UInt16(col.get_unchecked(index).clone()),
-            Column::UInt32(col) => ScalarRef::UInt32(col.get_unchecked(index).clone()),
-            Column::UInt64(col) => ScalarRef::UInt64(col.get_unchecked(index).clone()),
-            Column::Float32(col) => ScalarRef::Float32(col.get_unchecked(index).clone()),
-            Column::Float64(col) => ScalarRef::Float64(col.get_unchecked(index).clone()),
+            Column::Null { .. } => ScalarRef::Null,
+            Column::EmptyArray { .. } => ScalarRef::EmptyArray,
+            Column::Int8(col) => ScalarRef::Int8(*col.get_unchecked(index)),
+            Column::Int16(col) => ScalarRef::Int16(*col.get_unchecked(index)),
+            Column::Int32(col) => ScalarRef::Int32(*col.get_unchecked(index)),
+            Column::Int64(col) => ScalarRef::Int64(*col.get_unchecked(index)),
+            Column::UInt8(col) => ScalarRef::UInt8(*col.get_unchecked(index)),
+            Column::UInt16(col) => ScalarRef::UInt16(*col.get_unchecked(index)),
+            Column::UInt32(col) => ScalarRef::UInt32(*col.get_unchecked(index)),
+            Column::UInt64(col) => ScalarRef::UInt64(*col.get_unchecked(index)),
+            Column::Float32(col) => ScalarRef::Float32(*col.get_unchecked(index)),
+            Column::Float64(col) => ScalarRef::Float64(*col.get_unchecked(index)),
             Column::Boolean(col) => ScalarRef::Boolean(col.get_bit_unchecked(index)),
             Column::String(col) => ScalarRef::String(col.index_unchecked(index)),
             Column::Array(col) => ScalarRef::Array(col.index_unchecked(index)),
-            Column::Nullable(col) =>col.index_unchecked(index).unwrap_or(ScalarRef::Null),
+            Column::Nullable(col) => col.index_unchecked(index).unwrap_or(ScalarRef::Null),
             Column::Tuple { fields, .. } => ScalarRef::Tuple(
                 fields
                     .iter()
