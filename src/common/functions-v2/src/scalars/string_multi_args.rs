@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::Bitmap;
-use common_arrow::arrow::bitmap::MutableBitmap;
 use common_expression::types::nullable::NullableColumn;
 use common_expression::types::string::StringColumnBuilder;
 use common_expression::types::ArgType;
@@ -111,9 +110,10 @@ pub fn register(registry: &mut FunctionRegistry) {
                     match col {
                         ValueRef::Scalar(None) => return Ok(Value::Scalar(T::upcast_scalar(None))),
                         ValueRef::Column(c) => {
-                            bitmap
-                                .as_mut()
-                                .map(|m| *m = common_arrow::arrow::bitmap::and(m, &c.validity));
+                            bitmap = match bitmap {
+                                Some(m) =>  Some(common_arrow::arrow::bitmap::and(&m, &c.validity)),
+                                None => Some(c.validity),
+                            };
                             inner_args.push(ValueRef::Column(c.column.clone()));
                         }
                         ValueRef::Scalar(Some(s)) => inner_args.push(ValueRef::Scalar(s)),
@@ -173,8 +173,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                 match &args[0] {
                     ValueRef::Scalar(v) => {
                         for idx in 0..size {
-                            for arg in &args {
-                                if idx != 0 {
+                            for (arg_index, arg) in args.iter().skip(1).enumerate() {
+                                if arg_index != 0 {
                                     builder.put_slice(v);
                                 }
                                 unsafe { builder.put_slice(arg.index_unchecked(idx)) }
@@ -184,8 +184,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                     }
                     ValueRef::Column(c) => {
                         for idx in 0..size {
-                            for arg in &args {
-                                if idx != 0 {
+                            for (arg_index, arg) in args.iter().skip(1).enumerate() {
+                                if arg_index != 0 {
                                     unsafe {
                                         builder.put_slice(c.index_unchecked(idx));
                                     }
@@ -215,21 +215,11 @@ pub fn register(registry: &mut FunctionRegistry) {
                 property: FunctionProperty::default(),
             },
             calc_domain: Box::new(|args_domain, _| {
-                Some(args_domain.iter().fold(
-                    Domain::Nullable(NullableDomain {
-                        has_null: false,
-                        value: None,
-                    }),
-                    |acc, x| {
-                        let x = x.as_nullable().unwrap();
-                        let acc = acc.as_nullable().unwrap();
-
-                        Domain::Nullable(NullableDomain {
-                            has_null: acc.has_null | x.has_null,
+                let first = (&args_domain[0]).as_nullable().unwrap();
+                Some(Domain::Nullable(NullableDomain {
+                            has_null: first.has_null,
                             value: None,
-                        })
-                    },
-                ))
+                }))
             }),
             eval: Box::new(|args, _generics| {
                 if args.len() < 2 {
@@ -258,10 +248,10 @@ pub fn register(registry: &mut FunctionRegistry) {
                         nullable_builder.validity.extend_constant(size, true);
 
                         for idx in 0..size {
-                            for arg in &new_args[1..] {
+                            for (arg_index, arg) in new_args.iter().skip(1).enumerate() {
                                 unsafe {
                                     match arg.index_unchecked(idx) {
-                                        Some(s) if idx != 0 => {
+                                        Some(s) if arg_index != 0 => {
                                             builder.put_slice(v);
                                             builder.put_slice(s);
                                         }
@@ -281,9 +271,9 @@ pub fn register(registry: &mut FunctionRegistry) {
                             unsafe {
                                 match new_args[0].index_unchecked(idx) {
                                     Some(v) => {
-                                        for arg in &new_args[1..] {
+                                        for (arg_index, arg) in new_args.iter().skip(1).enumerate() {
                                             match arg.index_unchecked(idx) {
-                                                Some(s) if idx != 0 => {
+                                                Some(s) if arg_index != 0 => {
                                                     builder.put_slice(v);
                                                     builder.put_slice(s);
                                                 }

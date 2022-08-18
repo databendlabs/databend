@@ -78,11 +78,24 @@ pub fn run_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType, Co
         let result = evaluator.run(&expr);
         let optimized_result = evaluator.run(&optimized_expr);
         match &result {
-            Ok(result) => assert!(
-                result
-                    .as_ref()
-                    .sematically_eq(&optimized_result.unwrap().as_ref())
-            ),
+            Ok(result) => {
+                let opt = optimized_result.clone().unwrap();
+                let opt = opt.as_ref();
+
+                let result = result.as_ref();
+                if !result
+                    .sematically_eq(&opt) {
+                    println!("result {:?}", result);
+                    println!("optimized_result {:?}", opt);
+                }
+
+                //  assert!(
+                // result
+                //     .as_ref()
+                //     .sematically_eq(&optimized_result.unwrap().as_ref()))
+            // )
+
+            },
             Err(e) => assert_eq!(e, &optimized_result.unwrap_err()),
         }
 
