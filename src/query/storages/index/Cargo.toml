@@ -12,14 +12,14 @@ doctest = false
 test = false
 
 [dependencies]
-common-catalog = { path = "../../../query/catalog" }
-common-datablocks = { path = "../../datablocks" }
-common-datavalues = { path = "../../datavalues" }
-common-exception = { path = "../../exception" }
-common-functions = { path = "../../functions" }
-common-fuse-meta = { path = "../../fuse-meta" }
-common-pipeline-transforms = { path = "../../pipeline/transforms" }
-common-planners = { path = "../../planners" }
+common-catalog = { path = "../../catalog" }
+common-datablocks = { path = "../../../common/datablocks" }
+common-datavalues = { path = "../../../common/datavalues" }
+common-exception = { path = "../../../common/exception" }
+common-functions = { path = "../../../common/functions" }
+common-fuse-meta = { path = "../../../common/fuse-meta" }
+common-pipeline-transforms = { path = "../../../common/pipeline/transforms" }
+common-planners = { path = "../../../common/planners" }
 
 bincode = { version = "2.0.0-rc.1", features = ["serde", "std", "alloc"] }
 bit-vec = { version = "0.6.3", features = ["serde_std"] }

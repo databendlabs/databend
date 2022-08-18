@@ -12,9 +12,9 @@ doctest = false
 test = false
 
 [dependencies]
-common-base = { path = "../../base" }
-common-datablocks = { path = "../../datablocks" }
-common-exception = { path = "../../exception" }
+common-base = { path = "../../../common/base" }
+common-datablocks = { path = "../../../common/datablocks" }
+common-exception = { path = "../../../common/exception" }
 common-meta-api = { path = "../../../meta/api" }
 
 backoff = { version = "0.4.0", features = ["futures", "tokio"] }

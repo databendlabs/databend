@@ -12,25 +12,25 @@ doctest = false
 test = false
 
 [dependencies]
-common-arrow = { path = "../../arrow" }
-common-base = { path = "../../base" }
-common-cache = { path = "../../cache" }
-common-catalog = { path = "../../../query/catalog" }
-common-datablocks = { path = "../../datablocks" }
-common-datavalues = { path = "../../datavalues" }
-common-exception = { path = "../../exception" }
-common-functions = { path = "../../functions" }
-common-fuse-meta = { path = "../../fuse-meta" }
-common-legacy-parser = { path = "../../legacy-parser" }
+common-arrow = { path = "../../../common/arrow" }
+common-base = { path = "../../../common/base" }
+common-cache = { path = "../../../common/cache" }
+common-catalog = { path = "../../../common/../query/catalog" }
+common-datablocks = { path = "../../../common/datablocks" }
+common-datavalues = { path = "../../../common/datavalues" }
+common-exception = { path = "../../../common/exception" }
+common-functions = { path = "../../../common/functions" }
+common-fuse-meta = { path = "../../../common/fuse-meta" }
+common-legacy-parser = { path = "../../../common/legacy-parser" }
 common-meta-app = { path = "../../../meta/app" }
 common-meta-types = { path = "../../../meta/types" }
-common-pipeline-core = { path = "../../pipeline/core" }
-common-pipeline-sources = { path = "../../pipeline/sources" }
-common-pipeline-transforms = { path = "../../pipeline/transforms" }
-common-planners = { path = "../../planners" }
+common-pipeline-core = { path = "../../../common/pipeline/core" }
+common-pipeline-sources = { path = "../../../common/pipeline/sources" }
+common-pipeline-transforms = { path = "../../../common/pipeline/transforms" }
+common-planners = { path = "../../../common/planners" }
 common-storages-index = { path = "../index" }
 common-storages-util = { path = "../util" }
-common-streams = { path = "../../streams" }
+common-streams = { path = "../../../common/streams" }
 
 async-trait = { git = "https://github.com/datafuse-extras/async-trait", rev = "f0b0fd5" }
 backoff = { version = "0.4.0", features = ["futures", "tokio"] }

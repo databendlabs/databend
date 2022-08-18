@@ -29,14 +29,17 @@ members = [
     "src/common/streams",
     "src/common/tracing",
     "src/common/storage",
-    "src/common/storages/hive",
-    "src/common/storages/index",
     "src/common/fuse-meta",
 
     # Query
     "src/query/ast",
     "src/query/codegen",
     "src/query/catalog",
+    "src/query/storages/fuse",
+    "src/query/storages/hive",
+    "src/query/storages/index",
+    "src/query/storages/preludes",
+    "src/query/storages/util",
     "src/query/users",
     # databend-query
     "src/query/service",

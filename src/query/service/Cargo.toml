@@ -63,11 +63,11 @@ common-pipeline-transforms = { path = "../../common/pipeline/transforms" }
 common-planners = { path = "../../common/planners" }
 common-settings = { path = "../../common/settings" }
 common-storage = { path = "../../common/storage" }
-common-storages-fuse = { path = "../../common/storages/fuse" }
-common-storages-hive = { path = "../../common/storages/hive", optional = true }
-common-storages-index = { path = "../../common/storages/index" }
-common-storages-preludes = { path = "../../common/storages/preludes" }
-common-storages-util = { path = "../../common/storages/util" }
+common-storages-fuse = { path = "../storages/fuse" }
+common-storages-hive = { path = "../storages/hive", optional = true }
+common-storages-index = { path = "../storages/index" }
+common-storages-preludes = { path = "../storages/preludes" }
+common-storages-util = { path = "../storages/util" }
 common-streams = { path = "../../common/streams" }
 common-tracing = { path = "../../common/tracing" }
 common-users = { path = "../users" }
