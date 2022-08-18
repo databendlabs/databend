@@ -29,7 +29,6 @@ use common_expression::Function;
 use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
 use common_expression::FunctionSignature;
-use common_expression::NullableDomain;
 use common_expression::Scalar;
 use common_expression::StringDomain;
 use common_expression::Value;
@@ -37,10 +36,13 @@ use common_expression::ValueRef;
 
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_function_factory("concat", |_, args_type| {
+        if args_type.is_empty() {
+            return None;
+        }
         Some(Arc::new(Function {
             signature: FunctionSignature {
                 name: "concat",
-                args_type: vec![DataType::String; args_type.len().max(1)],
+                args_type: vec![DataType::String; args_type.len()],
                 return_type: DataType::String,
                 property: FunctionProperty::default(),
             },
@@ -80,10 +82,13 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     // nullable concat
     registry.register_function_factory("concat", |_, args_type| {
+        if args_type.is_empty() {
+            return None;
+        }
         Some(Arc::new(Function {
             signature: FunctionSignature {
                 name: "concat",
-                args_type: vec![DataType::Nullable(Box::new(DataType::String)); args_type.len().max(1)],
+                args_type: vec![DataType::Nullable(Box::new(DataType::String)); args_type.len()],
                 return_type: DataType::Nullable(Box::new(DataType::String)),
                 property: FunctionProperty::default(),
             },
@@ -137,10 +142,13 @@ pub fn register(registry: &mut FunctionRegistry) {
     });
 
     registry.register_function_factory("concat_ws", |_, args_type| {
+        if args_type.len() < 2 {
+            return None;
+        }
         Some(Arc::new(Function {
             signature: FunctionSignature {
                 name: "concat_ws",
-                args_type: vec![DataType::String; args_type.len().max(2)],
+                args_type: vec![DataType::String; args_type.len()],
                 return_type: DataType::String,
                 property: FunctionProperty::default(),
             },
@@ -201,10 +209,13 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     // nullable concat ws
     registry.register_function_factory("concat_ws", |_, args_type| {
+        if args_type.len() < 2 {
+            return None;
+        }
         Some(Arc::new(Function {
             signature: FunctionSignature {
                 name: "concat_ws",
-                args_type: vec![DataType::Nullable(Box::new(DataType::String)); args_type.len().max(2)],
+                args_type: vec![DataType::Nullable(Box::new(DataType::String)); args_type.len()],
                 return_type: DataType::Nullable(Box::new(DataType::String)),
                 property: FunctionProperty::default(),
             },
