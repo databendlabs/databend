@@ -396,7 +396,7 @@ fn try_extract_inner(column: &ColumnRef) -> Result<(&ColumnRef, Bitmap)> {
     let first_flag = if all_is_null {
         false
     } else {
-        validity.map(|c| c.get_bit(0)).unwrap_or(true)
+        validity.map_or(true, |c| c.get_bit(0))
     };
 
     let (column, validity) = if column.is_const() {

@@ -191,23 +191,19 @@ impl StateMachine {
     /// - and a snapshot id that uniquely identifies this snapshot.
     pub fn build_snapshot(
         &self,
-    ) -> std::result::Result<(SerializableSnapshot, LogId, String), MetaStorageError> {
+    ) -> Result<(SerializableSnapshot, Option<LogId>, String), MetaStorageError> {
         let last_applied = self.get_last_applied()?;
-
-        // NOTE: An initialize node/cluster always has the first log contains membership config.
-
-        let last_applied =
-            last_applied.expect("not allowed to build snapshot with empty state machine");
 
         let snapshot_idx = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs();
 
-        let snapshot_id = format!(
-            "{}-{}-{}",
-            last_applied.term, last_applied.index, snapshot_idx
-        );
+        let snapshot_id = if let Some(last) = last_applied {
+            format!("{}-{}-{}", last.term, last.index, snapshot_idx)
+        } else {
+            format!("--{}", snapshot_idx)
+        };
 
         let view = self.sm_tree.tree.iter();
 

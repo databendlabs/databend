@@ -97,7 +97,7 @@ pub struct RaftConfig {
 
     /// The node id to leave from the cluster.
     ///
-    /// It will be ignored if `--leave` is absent.
+    /// It will be ignored if `--leave-via` is absent.
     pub leave_id: Option<NodeId>,
 
     /// The node id. Only used when this server is not initialized,

@@ -57,8 +57,7 @@ impl TryFrom<ast::WindowFrame> for WindowFrame {
         let start_bound = value.start_bound.into();
         let end_bound = value
             .end_bound
-            .map(WindowFrameBound::from)
-            .unwrap_or(WindowFrameBound::CurrentRow);
+            .map_or(WindowFrameBound::CurrentRow, WindowFrameBound::from);
 
         if let WindowFrameBound::Following(None) = start_bound {
             Err(ErrorCode::LogicalError(

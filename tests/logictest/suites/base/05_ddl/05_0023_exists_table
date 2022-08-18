@@ -1,17 +1,17 @@
 statement ok
-DROP DATABASE IF EXISTS db_05_0023;
+DROP DATABASE IF EXISTS db_05_0023_v2;
 
 statement ok
-CREATE DATABASE db_05_0023;
+CREATE DATABASE db_05_0023_v2;
 
 statement ok
-USE db_05_0023;
+USE db_05_0023_v2;
 
 statement ok
 EXISTS TABLE t;
 
 statement ok
-EXISTS TABLE db_05_0023.t;
+EXISTS TABLE db_05_0023_v2.t;
 
 statement ok
 CREATE TABLE t(c1 int) ENGINE = Fuse;
@@ -20,17 +20,17 @@ statement ok
 EXISTS TABLE t;
 
 statement ok
-EXISTS TABLE db_05_0023.t;
+EXISTS TABLE db_05_0023_v2.t;
 
 statement ok
 DROP TABLE t ALL;
 
 statement ok
-EXISTS TABLE db_05_0023.t;
+EXISTS TABLE db_05_0023_v2.t;
 
 statement ok
 EXISTS TABLE t;
 
 statement ok
-DROP database db_05_0023;
+DROP database db_05_0023_v2;
 
