@@ -174,6 +174,13 @@ fn test_env_config_s3() -> Result<()> {
             ("STORAGE_S3_ACCESS_KEY_ID", Some("us.key.id")),
             ("STORAGE_S3_SECRET_ACCESS_KEY", Some("us.key")),
             ("STORAGE_S3_BUCKET", Some("us.bucket")),
+            (
+                "STORAGE_GCS_ENDPOINT_URL",
+                Some("http://gcs.storage.cname_map.local"),
+            ),
+            ("STORAGE_GCS_BUCKET", Some("gcs.bucket")),
+            ("STORAGE_GCS_ROOT", Some("/path/to/root")),
+            ("STORAGE_GCS_CREDENTIAL", Some("gcs.credential")),
             ("QUERY_TABLE_ENGINE_MEMORY_ENABLED", Some("true")),
             ("QUERY_DATABASE_ENGINE_GITHUB_ENABLED", Some("false")),
             ("CONFIG_FILE", None),
@@ -202,6 +209,15 @@ fn test_env_config_s3() -> Result<()> {
 
             // config of fs should not be loaded, take default value.
             assert_eq!("_data", configured.storage.fs.data_path);
+
+            // Storage type is fs, gcs related value should be default.
+            assert_eq!(
+                "https://storage.googleapis.com",
+                configured.storage.gcs.gcs_endpoint_url
+            );
+            assert_eq!("", configured.storage.gcs.gcs_bucket);
+            assert_eq!("", configured.storage.gcs.gcs_root);
+            assert_eq!("", configured.storage.gcs.credential);
 
             assert_eq!("us.region", configured.storage.s3.region);
             assert_eq!("http://127.0.0.1:10024", configured.storage.s3.endpoint_url);
@@ -254,6 +270,13 @@ fn test_env_config_fs() -> Result<()> {
             ("STORAGE_S3_ACCESS_KEY_ID", Some("us.key.id")),
             ("STORAGE_S3_SECRET_ACCESS_KEY", Some("us.key")),
             ("STORAGE_S3_BUCKET", Some("us.bucket")),
+            (
+                "STORAGE_GCS_ENDPOINT_URL",
+                Some("http://gcs.storage.cname_map.local"),
+            ),
+            ("STORAGE_GCS_BUCKET", Some("gcs.bucket")),
+            ("STORAGE_GCS_ROOT", Some("/path/to/root")),
+            ("STORAGE_GCS_CREDENTIAL", Some("gcs.credential")),
             ("QUERY_TABLE_ENGINE_MEMORY_ENABLED", Some("true")),
             ("QUERY_DATABASE_ENGINE_GITHUB_ENABLED", Some("false")),
             ("CONFIG_FILE", None),
@@ -283,6 +306,110 @@ fn test_env_config_fs() -> Result<()> {
             assert_eq!("/tmp/test", configured.storage.fs.data_path);
 
             // Storage type is fs, s3 related value should be default.
+            assert_eq!("", configured.storage.s3.region);
+            assert_eq!(
+                "https://s3.amazonaws.com",
+                configured.storage.s3.endpoint_url
+            );
+
+            // Storage type is fs, gcs related value should be default.
+            assert_eq!(
+                "https://storage.googleapis.com",
+                configured.storage.gcs.gcs_endpoint_url
+            );
+            assert_eq!("", configured.storage.gcs.gcs_bucket);
+            assert_eq!("", configured.storage.gcs.gcs_root);
+            assert_eq!("", configured.storage.gcs.credential);
+
+            assert!(configured.query.table_engine_memory_enabled);
+            assert!(!configured.query.database_engine_github_enabled);
+
+            assert!(configured.query.table_cache_enabled);
+            assert_eq!(512, configured.query.table_memory_cache_mb_size);
+            assert_eq!("_cache_env", configured.query.table_disk_cache_root);
+            assert_eq!(512, configured.query.table_disk_cache_mb_size);
+        },
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_env_config_gcs() -> Result<()> {
+    temp_env::with_vars(
+        vec![
+            ("LOG_LEVEL", Some("DEBUG")),
+            ("QUERY_TENANT_ID", Some("tenant-1")),
+            ("QUERY_CLUSTER_ID", Some("cluster-1")),
+            ("QUERY_MYSQL_HANDLER_HOST", Some("127.0.0.1")),
+            ("QUERY_MYSQL_HANDLER_PORT", Some("3306")),
+            ("QUERY_MAX_ACTIVE_SESSIONS", Some("255")),
+            ("QUERY_CLICKHOUSE_HANDLER_HOST", Some("1.2.3.4")),
+            ("QUERY_CLICKHOUSE_HANDLER_PORT", Some("9000")),
+            ("QUERY_CLICKHOUSE_HTTP_HANDLER_HOST", Some("1.2.3.4")),
+            ("QUERY_CLICKHOUSE_HTTP_HANDLER_PORT", Some("8124")),
+            ("QUERY_HTTP_HANDLER_HOST", Some("1.2.3.4")),
+            ("QUERY_HTTP_HANDLER_PORT", Some("8001")),
+            ("QUERY_FLIGHT_API_ADDRESS", Some("1.2.3.4:9091")),
+            ("QUERY_ADMIN_API_ADDRESS", Some("1.2.3.4:8081")),
+            ("QUERY_METRIC_API_ADDRESS", Some("1.2.3.4:7071")),
+            ("QUERY_TABLE_CACHE_ENABLED", Some("true")),
+            ("QUERY_TABLE_MEMORY_CACHE_MB_SIZE", Some("512")),
+            ("QUERY_TABLE_DISK_CACHE_ROOT", Some("_cache_env")),
+            ("QUERY_TABLE_DISK_CACHE_MB_SIZE", Some("512")),
+            ("STORAGE_TYPE", Some("gcs")),
+            ("STORAGE_NUM_CPUS", Some("16")),
+            ("STORAGE_FS_DATA_PATH", Some("/tmp/test")),
+            ("STORAGE_S3_REGION", Some("us.region")),
+            ("STORAGE_S3_ENDPOINT_URL", Some("http://127.0.0.1:10024")),
+            ("STORAGE_S3_ACCESS_KEY_ID", Some("us.key.id")),
+            ("STORAGE_S3_SECRET_ACCESS_KEY", Some("us.key")),
+            ("STORAGE_S3_BUCKET", Some("us.bucket")),
+            (
+                "STORAGE_GCS_ENDPOINT_URL",
+                Some("http://gcs.storage.cname_map.local"),
+            ),
+            ("STORAGE_GCS_BUCKET", Some("gcs.bucket")),
+            ("STORAGE_GCS_ROOT", Some("/path/to/root")),
+            ("STORAGE_GCS_CREDENTIAL", Some("gcs.credential")),
+            ("QUERY_TABLE_ENGINE_MEMORY_ENABLED", Some("true")),
+            ("QUERY_DATABASE_ENGINE_GITHUB_ENABLED", Some("false")),
+            ("CONFIG_FILE", None),
+        ],
+        || {
+            let configured = Config::load().expect("must success").into_outer();
+
+            assert_eq!("DEBUG", configured.log.level);
+
+            assert_eq!("tenant-1", configured.query.tenant_id);
+            assert_eq!("cluster-1", configured.query.cluster_id);
+            assert_eq!("127.0.0.1", configured.query.mysql_handler_host);
+            assert_eq!(3306, configured.query.mysql_handler_port);
+            assert_eq!(255, configured.query.max_active_sessions);
+            assert_eq!("1.2.3.4", configured.query.clickhouse_http_handler_host);
+            assert_eq!(8124, configured.query.clickhouse_http_handler_port);
+            assert_eq!("1.2.3.4", configured.query.http_handler_host);
+            assert_eq!(8001, configured.query.http_handler_port);
+
+            assert_eq!("1.2.3.4:9091", configured.query.flight_api_address);
+            assert_eq!("1.2.3.4:8081", configured.query.admin_api_address);
+            assert_eq!("1.2.3.4:7071", configured.query.metric_api_address);
+
+            assert_eq!("gcs", configured.storage.storage_type);
+            assert_eq!(16, configured.storage.storage_num_cpus);
+
+            assert_eq!(
+                "http://gcs.storage.cname_map.local",
+                configured.storage.gcs.gcs_endpoint_url
+            );
+            assert_eq!("gcs.bucket", configured.storage.gcs.gcs_bucket);
+            assert_eq!("/path/to/dir", configured.storage.gcs.gcs_root);
+            assert_eq!("gcs.credential", configured.storage.gcs.credential);
+
+            // Storage type is gcs, fs related value should stay default.
+            assert_eq!("_data", configured.storage.fs.data_path);
+
+            // Storage type is gcs, s3 related value should be default.
             assert_eq!("", configured.storage.s3.region);
             assert_eq!(
                 "https://s3.amazonaws.com",

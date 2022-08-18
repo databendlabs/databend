@@ -307,11 +307,17 @@ pub struct GcsStorageConfig {
         long = "storage-gcs-endpoint-url",
         default_value = "https://storage.googleapis.com"
     )]
-    pub endpoint_url: String,
+    #[serde(rename = "endpoint_url")]
+    pub gcs_endpoint_url: String,
+
     #[clap(long = "storage-gcs-bucket", default_value_t)]
-    pub bucket: String,
+    #[serde(rename = "bucket")]
+    pub gcs_bucket: String,
+
     #[clap(long = "storage-gcs-root", default_value_t)]
-    pub root: String,
+    #[serde(rename = "root")]
+    pub gcs_root: String,
+
     #[clap(long = "storage-gcs-credential", default_value_t)]
     pub credential: String,
 }
@@ -325,9 +331,9 @@ impl Default for GcsStorageConfig {
 impl Debug for GcsStorageConfig {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.debug_struct("GcsStorageConfig")
-            .field("endpoint_url", &self.endpoint_url)
-            .field("root", &self.root)
-            .field("bucket", &self.bucket)
+            .field("endpoint_url", &self.gcs_endpoint_url)
+            .field("root", &self.gcs_root)
+            .field("bucket", &self.gcs_bucket)
             .field("credential", &mask_string(&self.credential, 3))
             .finish()
     }
@@ -336,9 +342,9 @@ impl Debug for GcsStorageConfig {
 impl From<InnerStorageGcsConfig> for GcsStorageConfig {
     fn from(inner: InnerStorageGcsConfig) -> Self {
         Self {
-            endpoint_url: inner.endpoint_url,
-            bucket: inner.bucket,
-            root: inner.root,
+            gcs_endpoint_url: inner.endpoint_url,
+            gcs_bucket: inner.bucket,
+            gcs_root: inner.root,
             credential: inner.credential,
         }
     }
@@ -349,9 +355,9 @@ impl TryInto<InnerStorageGcsConfig> for GcsStorageConfig {
 
     fn try_into(self) -> std::result::Result<InnerStorageGcsConfig, Self::Error> {
         Ok(InnerStorageGcsConfig {
-            endpoint_url: self.endpoint_url,
-            bucket: self.bucket,
-            root: self.root,
+            endpoint_url: self.gcs_endpoint_url,
+            bucket: self.gcs_bucket,
+            root: self.gcs_root,
             credential: self.credential,
         })
     }
