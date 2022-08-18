@@ -759,11 +759,9 @@ impl<KV: KVApi> ShareApi for KV {
         &self,
         req: GetShareGrantTenantsReq,
     ) -> MetaResult<GetShareGrantTenantsReply> {
-        let tenants = get_outbound_share_tenants_by_name(self, &req.share_name).await?;
+        let accounts = get_outbound_share_tenants_by_name(self, &req.share_name).await?;
 
-        Ok(GetShareGrantTenantsReply {
-            accounts: tenants.clone(),
-        })
+        Ok(GetShareGrantTenantsReply { accounts })
     }
 
     // Return all the grant privileges of the object

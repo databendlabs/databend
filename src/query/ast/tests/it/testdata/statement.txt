@@ -6254,7 +6254,7 @@ ShowObjectGrantPrivileges(
 ---------- Input ----------
 SHOW GRANTS OF SHARE t;
 ---------- Output ---------
-SHOW GRANTS OF SHARE t;
+SHOW GRANTS OF SHARE t
 ---------- AST ------------
 ShowGrantsOfShare(
     ShowGrantsOfShareStmt {
