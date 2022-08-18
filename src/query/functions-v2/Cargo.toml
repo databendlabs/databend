@@ -22,5 +22,5 @@ strength_reduce = "0.2.3"
 
 [dev-dependencies]
 comfy-table = "6"
-common-ast = { path = "../../query/ast" }
+common-ast = { path = "../ast" }
 goldenfile = "1.4"

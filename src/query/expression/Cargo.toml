@@ -11,8 +11,8 @@ test = false
 
 [dependencies] # In alphabetical order
 # Workspace dependencies
-common-arrow = { path = "../arrow" }
-common-exception = { path = "../exception" }
+common-arrow = { path = "../../common/arrow" }
+common-exception = { path = "../../common/exception" }
 
 # Github dependencies
 
@@ -28,5 +28,5 @@ ordered-float = { version = "3.0", features = ["serde"] }
 serde = "1.0"
 
 [dev-dependencies]
-common-ast = { path = "../../query/ast" }
+common-ast = { path = "../ast" }
 goldenfile = "1.4"
