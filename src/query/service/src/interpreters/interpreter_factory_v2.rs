@@ -277,6 +277,12 @@ impl InterpreterFactoryV2 {
                 ctx,
                 *p.clone(),
             )?)),
+            Plan::ShowObjectGrantPrivileges(p) => Ok(Arc::new(
+                ShowObjectGrantPrivilegesInterpreter::try_create(ctx, *p.clone())?,
+            )),
+            Plan::ShowGrantTenantsOfShare(p) => Ok(Arc::new(
+                ShowGrantTenantsOfShareInterpreter::try_create(ctx, *p.clone())?,
+            )),
         }
     }
 }

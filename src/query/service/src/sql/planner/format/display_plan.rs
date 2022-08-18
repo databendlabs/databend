@@ -101,6 +101,8 @@ impl Plan {
             Plan::AlterShareTenants(p) => Ok(format!("{:?}", p)),
             Plan::DescShare(p) => Ok(format!("{:?}", p)),
             Plan::ShowShares(p) => Ok(format!("{:?}", p)),
+            Plan::ShowObjectGrantPrivileges(p) => Ok(format!("{:?}", p)),
+            Plan::ShowGrantTenantsOfShare(p) => Ok(format!("{:?}", p)),
         }
     }
 }

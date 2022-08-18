@@ -6222,3 +6222,44 @@ ShowShares(
 )
 
 
+---------- Input ----------
+SHOW GRANTS ON TABLE db1.tb1;
+---------- Output ---------
+SHOW GRANTS ON TABLE db1.tb1
+---------- AST ------------
+ShowObjectGrantPrivileges(
+    ShowObjectGrantPrivilegesStmt {
+        object: Table(
+            "db1",
+            "tb1",
+        ),
+    },
+)
+
+
+---------- Input ----------
+SHOW GRANTS ON DATABASE db;
+---------- Output ---------
+SHOW GRANTS ON DATABASE db
+---------- AST ------------
+ShowObjectGrantPrivileges(
+    ShowObjectGrantPrivilegesStmt {
+        object: Database(
+            "db",
+        ),
+    },
+)
+
+
+---------- Input ----------
+SHOW GRANTS OF SHARE t;
+---------- Output ---------
+SHOW GRANTS OF SHARE t;
+---------- AST ------------
+ShowGrantsOfShare(
+    ShowGrantsOfShareStmt {
+        share_name: "t",
+    },
+)
+
+

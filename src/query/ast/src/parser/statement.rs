@@ -37,6 +37,12 @@ use crate::rule;
 use crate::util::*;
 use crate::ErrorKind;
 
+pub enum ShowGrantOption {
+    PrincipalIdentity(PrincipalIdentity),
+    ShareGrantObjectName(ShareGrantObjectName),
+    ShareName(String),
+}
+
 pub fn statement(i: Input) -> IResult<StatementMsg> {
     let explain = map_res(
         rule! {
@@ -544,10 +550,19 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let show_grants = map(
         rule! {
-            SHOW ~ GRANTS ~ (FOR ~ #grant_option)?
+            SHOW ~ GRANTS ~ #show_grant_option?
         },
-        |(_, _, opt_principal)| Statement::ShowGrants {
-            principal: opt_principal.map(|(_, principal)| principal),
+        |(_, _, show_grant_option)| match show_grant_option {
+            Some(ShowGrantOption::PrincipalIdentity(principal)) => Statement::ShowGrants {
+                principal: Some(principal),
+            },
+            Some(ShowGrantOption::ShareGrantObjectName(object)) => {
+                Statement::ShowObjectGrantPrivileges(ShowObjectGrantPrivilegesStmt { object })
+            }
+            Some(ShowGrantOption::ShareName(share_name)) => {
+                Statement::ShowGrantsOfShare(ShowGrantsOfShareStmt { share_name })
+            }
+            None => Statement::ShowGrants { principal: None },
         },
     );
     let revoke = map(
@@ -906,7 +921,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         ),
         rule!(
             #grant : "`GRANT { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } TO { [ROLE <role_name>] | [USER] <user> }`"
-            | #show_grants : "`SHOW GRANTS [FOR  { ROLE <role_name> | [USER] <user> }]`"
+            | #show_grants : "`SHOW GRANTS {FOR  { ROLE <role_name> | USER <user> }] | ON {DATABASE <db_name> | TABLE <db_name>.<table_name>} }`"
             | #revoke : "`REVOKE { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } FROM { [ROLE <role_name>] | [USER] <user> }`"
         ),
         rule!(
@@ -1143,6 +1158,35 @@ pub fn grant_level(i: Input) -> IResult<AccountMgrLevel> {
         #global : "*.*"
         | #db : "<database>.*"
         | #table : "<database>.<table>"
+    )(i)
+}
+
+pub fn show_grant_option(i: Input) -> IResult<ShowGrantOption> {
+    let grant_role = map(
+        rule! {
+            FOR ~ #grant_option
+        },
+        |(_, opt_principal)| ShowGrantOption::PrincipalIdentity(opt_principal),
+    );
+
+    let share_object_name = map(
+        rule! {
+            ON ~ #grant_share_object_name
+        },
+        |(_, object_name)| ShowGrantOption::ShareGrantObjectName(object_name),
+    );
+
+    let share_name = map(
+        rule! {
+            OF ~ SHARE ~ #ident
+        },
+        |(_, _, share_name)| ShowGrantOption::ShareName(share_name.to_string()),
+    );
+
+    rule!(
+        #grant_role: "FOR  { ROLE <role_name> | [USER] <user> }"
+        | #share_object_name: "ON {DATABASE <db_name> | TABLE <db_name>.<table_name>}"
+        | #share_name: "OF SHARE <share_name>"
     )(i)
 }
 

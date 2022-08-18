@@ -151,3 +151,29 @@ impl Display for ShowSharesStmt {
         Ok(())
     }
 }
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ShowObjectGrantPrivilegesStmt {
+    pub object: ShareGrantObjectName,
+}
+
+impl Display for ShowObjectGrantPrivilegesStmt {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "SHOW GRANTS ON {}", self.object)?;
+
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ShowGrantsOfShareStmt {
+    pub share_name: String,
+}
+
+impl Display for ShowGrantsOfShareStmt {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "SHOW GRANTS OF SHARE {}", self.share_name)?;
+
+        Ok(())
+    }
+}
