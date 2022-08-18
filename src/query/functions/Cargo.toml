@@ -12,8 +12,8 @@ doctest = false
 [dependencies] # In alphabetical order
 # Workspace dependencies
 common-arrow = { path = "../../common/arrow" }
-common-datablocks = { path = "../../common/datablocks" }
-common-datavalues = { path = "../../common/datavalues" }
+common-datablocks = { path = "../datablocks" }
+common-datavalues = { path = "../datavalues" }
 common-exception = { path = "../../common/exception" }
 common-hashtable = { path = "../../common/hashtable" }
 common-io = { path = "../../common/io" }

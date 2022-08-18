@@ -14,8 +14,8 @@ test = false
 # Workspace dependencies
 common-arrow = { path = "../arrow" }
 common-base = { path = "../base" }
-common-datablocks = { path = "../datablocks" }
-common-datavalues = { path = "../datavalues" }
+common-datablocks = { path = "../../query/datablocks" }
+common-datavalues = { path = "../../query/datavalues" }
 common-exception = { path = "../exception" }
 common-io = { path = "../io" }
 

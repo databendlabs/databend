@@ -11,7 +11,7 @@ doctest = false
 test = false
 
 [dependencies]
-common-datavalues = { path = "../../common/datavalues" }
+common-datavalues = { path = "../../query/datavalues" }
 common-meta-types = { path = "../types" }
 
 enumflags2 = { version = "0.7.5", features = ["serde"] }

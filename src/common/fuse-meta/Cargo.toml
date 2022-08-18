@@ -13,8 +13,8 @@ common-arrow = { path = "../arrow" }
 common-base = { path = "../base" }
 common-cache = { path = "../cache" }
 common-config = { path = "../config" }
-common-datablocks = { path = "../datablocks" }
-common-datavalues = { path = "../datavalues" }
+common-datablocks = { path = "../../query/datablocks" }
+common-datavalues = { path = "../../query/datavalues" }
 common-exception = { path = "../exception" }
 common-metrics = { path = "../metrics" }
 

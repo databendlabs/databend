@@ -11,8 +11,8 @@ test = false
 [dependencies]
 common-base = { path = "../../../common/base" }
 common-catalog = { path = "../../catalog" }
-common-datablocks = { path = "../../../common/datablocks" }
-common-datavalues = { path = "../../../common/datavalues" }
+common-datablocks = { path = "../../datablocks" }
+common-datavalues = { path = "../../datavalues" }
 common-exception = { path = "../../../common/exception" }
 common-pipeline-core = { path = "../core" }
 

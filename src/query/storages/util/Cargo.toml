@@ -13,7 +13,7 @@ test = false
 
 [dependencies]
 common-base = { path = "../../../common/base" }
-common-datablocks = { path = "../../../common/datablocks" }
+common-datablocks = { path = "../../datablocks" }
 common-exception = { path = "../../../common/exception" }
 common-meta-api = { path = "../../../meta/api" }
 

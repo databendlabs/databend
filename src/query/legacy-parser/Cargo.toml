@@ -9,7 +9,7 @@ doctest = false
 test = false
 
 [dependencies]
-common-datavalues = { path = "../../common/datavalues" }
+common-datavalues = { path = "../datavalues" }
 common-exception = { path = "../../common/exception" }
 common-functions = { path = "../functions" }
 common-planners = { path = "../planners" }

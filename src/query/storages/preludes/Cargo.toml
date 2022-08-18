@@ -18,8 +18,8 @@ common-cache = { path = "../../../common/cache" }
 common-catalog = { path = "../../catalog" }
 common-config = { path = "../../../common/config" }
 common-contexts = { path = "../../../common/contexts" }
-common-datablocks = { path = "../../../common/datablocks" }
-common-datavalues = { path = "../../../common/datavalues" }
+common-datablocks = { path = "../../datablocks" }
+common-datavalues = { path = "../../datavalues" }
 common-exception = { path = "../../../common/exception" }
 common-functions = { path = "../../functions" }
 common-fuse-meta = { path = "../../../common/fuse-meta" }

@@ -12,9 +12,9 @@ test = false
 
 [dependencies] # In alphabetical order
 # Workspace dependencies
-common-arrow = { path = "../arrow" }
-common-exception = { path = "../exception" }
-common-io = { path = "../io" }
+common-arrow = { path = "../../common/arrow" }
+common-exception = { path = "../../common/exception" }
+common-io = { path = "../../common/io" }
 primitive-types = "0.11.1"
 
 # Github dependencies

@@ -14,7 +14,7 @@ test = false
 
 [dependencies]
 common-base = { path = "../../common/base" }
-common-datavalues = { path = "../../common/datavalues" }
+common-datavalues = { path = "../datavalues" }
 common-exception = { path = "../../common/exception" }
 common-functions = { path = "../functions" }
 common-io = { path = "../../common/io" }
