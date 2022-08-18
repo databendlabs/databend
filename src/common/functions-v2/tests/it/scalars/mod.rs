@@ -55,7 +55,7 @@ pub fn run_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType, Co
             .map(|(_, _, col)| col.domain())
             .collect::<Vec<_>>();
 
-        let constant_folder = ConstantFolder::new(&input_domains);
+        let constant_folder = ConstantFolder::new(&input_domains, FunctionContext::default());
         let (optimized_expr, output_domain) = constant_folder.fold(&expr);
 
         let num_rows = columns.iter().map(|col| col.2.len()).max().unwrap_or(0);
@@ -71,10 +71,7 @@ pub fn run_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType, Co
             test_arrow_conversion(col);
         });
 
-        let evaluator = Evaluator {
-            input_columns: &chunk,
-            context: FunctionContext::default(),
-        };
+        let evaluator = Evaluator::new(&chunk, FunctionContext::default());
         let result = evaluator.run(&expr);
         let optimized_result = evaluator.run(&optimized_expr);
         match &result {

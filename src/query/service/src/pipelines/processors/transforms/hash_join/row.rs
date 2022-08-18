@@ -56,6 +56,10 @@ impl RowSpace {
         }
     }
 
+    pub fn schema(&self) -> DataSchemaRef {
+        self.data_schema.clone()
+    }
+
     pub fn push_cols(&self, data_block: DataBlock, cols: ColumnVector) -> Result<()> {
         let chunk = Chunk {
             data_block,

@@ -38,7 +38,7 @@ where for<'a> Self::OwnedItem: Scalar<RefType<'a> = Self::RefItem<'a>>
     /// Get iterator of this column.
     fn scalar_iter(&self) -> Self::Iterator<'_>;
 
-    /// Bulid array from slice
+    /// Build array from slice
     fn from_slice(data: &[Self::RefItem<'_>]) -> Self {
         let mut builder = Self::Builder::with_capacity(data.len());
         for item in data {

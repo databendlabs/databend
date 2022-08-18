@@ -61,7 +61,6 @@ impl Interpreter for DescShareInterpreter {
                 tenant: self.ctx.get_tenant(),
                 share_name: self.plan.share.clone(),
             },
-            object: None,
         };
         let resp = meta_api.get_share_grant_objects(req).await?;
         if resp.objects.is_empty() {
