@@ -70,7 +70,7 @@ common-storages-preludes = { path = "../../common/storages/preludes" }
 common-storages-util = { path = "../../common/storages/util" }
 common-streams = { path = "../../common/streams" }
 common-tracing = { path = "../../common/tracing" }
-common-users = { path = "../../common/users" }
+common-users = { path = "../users" }
 
 # Github dependencies
 async-trait = { git = "https://github.com/datafuse-extras/async-trait", rev = "f0b0fd5" }

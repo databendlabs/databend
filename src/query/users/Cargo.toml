@@ -15,14 +15,14 @@ io-uring = ["common-meta-store/io-uring"]
 
 [dependencies] # In alphabetical order
 # Workspace dependencies
-common-base = { path = "../base" }
-common-exception = { path = "../exception" }
-common-grpc = { path = "../grpc" }
-common-management = { path = "../management" }
+common-base = { path = "../../common/base" }
+common-exception = { path = "../../common/exception" }
+common-grpc = { path = "../../common/grpc" }
+common-management = { path = "../../common/management" }
 common-meta-api = { path = "../../meta/api" }
 common-meta-store = { path = "../../meta/store" }
 common-meta-types = { path = "../../meta/types" }
-common-tracing = { path = "../tracing" }
+common-tracing = { path = "../../common/tracing" }
 
 # Github dependencies
 
