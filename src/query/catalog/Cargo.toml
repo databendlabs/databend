@@ -10,7 +10,7 @@ test = false
 
 [dependencies]
 common-base = { path = "../../common/base" }
-common-config = { path = "../../common/config" }
+common-config = { path = "../config" }
 common-contexts = { path = "../../common/contexts" }
 common-datablocks = { path = "../datablocks" }
 common-datavalues = { path = "../datavalues" }

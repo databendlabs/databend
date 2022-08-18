@@ -9,12 +9,12 @@ doctest = false
 test = false
 
 [dependencies]
-common-base = { path = "../base" }
-common-exception = { path = "../exception" }
-common-grpc = { path = "../grpc" }
-common-hive-meta-store = { path = "../hive-meta-store", optional = true }
-common-storage = { path = "../storage" }
-common-tracing = { path = "../tracing" }
+common-base = { path = "../../common/base" }
+common-exception = { path = "../../common/exception" }
+common-grpc = { path = "../../common/grpc" }
+common-hive-meta-store = { path = "../../common/hive-meta-store", optional = true }
+common-storage = { path = "../../common/storage" }
+common-tracing = { path = "../../common/tracing" }
 
 clap = { version = "3.2.5", features = ["derive", "env"] }
 once_cell = "1.12.0"

@@ -9,7 +9,7 @@ doctest = false
 test = false
 
 [dependencies]
-common-config = { path = "../../common/config" }
+common-config = { path = "../config" }
 common-datavalues = { path = "../datavalues" }
 common-exception = { path = "../../common/exception" }
 common-meta-types = { path = "../../meta/types" }

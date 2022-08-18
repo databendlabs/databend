@@ -16,7 +16,7 @@ common-arrow = { path = "../../../common/arrow" }
 common-base = { path = "../../../common/base" }
 common-cache = { path = "../../../common/cache" }
 common-catalog = { path = "../../catalog" }
-common-config = { path = "../../../common/config" }
+common-config = { path = "../../config" }
 common-contexts = { path = "../../../common/contexts" }
 common-datablocks = { path = "../../datablocks" }
 common-datavalues = { path = "../../datavalues" }
