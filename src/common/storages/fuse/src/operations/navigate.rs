@@ -30,7 +30,7 @@ use crate::OPT_KEY_SNAPSHOT_LOCATION;
 impl FuseTable {
     pub async fn navigate_to_time_point(
         &self,
-        ctx: &dyn TableContext,
+        ctx: Arc<dyn TableContext>,
         time_point: DateTime<Utc>,
     ) -> Result<Arc<FuseTable>> {
         self.find(ctx, |snapshot| {
@@ -44,7 +44,7 @@ impl FuseTable {
     }
     pub async fn navigate_to_snapshot(
         &self,
-        ctx: &dyn TableContext,
+        ctx: Arc<dyn TableContext>,
         snapshot_id: &str,
     ) -> Result<Arc<FuseTable>> {
         self.find(ctx, |snapshot| {
@@ -58,7 +58,7 @@ impl FuseTable {
         .await
     }
 
-    pub async fn find<P>(&self, ctx: &dyn TableContext, mut pred: P) -> Result<Arc<FuseTable>>
+    pub async fn find<P>(&self, ctx: Arc<dyn TableContext>, mut pred: P) -> Result<Arc<FuseTable>>
     where P: FnMut(&TableSnapshot) -> bool {
         let snapshot_location = if let Some(loc) = self.snapshot_loc() {
             loc

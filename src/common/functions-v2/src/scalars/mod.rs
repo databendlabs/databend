@@ -14,6 +14,8 @@
 
 use common_expression::FunctionRegistry;
 
+mod arithmetic;
+mod arithmetic_modulo;
 mod boolean;
 mod control;
 mod string;
@@ -23,5 +25,6 @@ pub fn builtin_functions() -> FunctionRegistry {
     boolean::register(&mut registry);
     control::register(&mut registry);
     string::register(&mut registry);
+    arithmetic::register(&mut registry);
     registry
 }

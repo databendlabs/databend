@@ -91,10 +91,11 @@ use ConditionResult::Eq;
 
 use crate::db_has_to_exist;
 use crate::deserialize_struct;
-use crate::deserialize_u64;
 use crate::fetch_id;
 use crate::get_struct_value;
 use crate::get_u64_value;
+use crate::list_keys;
+use crate::list_u64_value;
 use crate::meta_encode_err;
 use crate::send_txn;
 use crate::serialize_struct;
@@ -2094,54 +2095,6 @@ fn table_has_to_not_exist(
             TableAlreadyExists::new(&name_ident.table_name, format!("{}: {}", ctx, name_ident)),
         )))
     }
-}
-
-/// List kvs whose value's type is `u64`.
-///
-/// It expects the kv-value' type is `u64`, such as:
-/// `__fd_table/<db_id>/<table_name> -> (seq, table_id)`, or
-/// `__fd_database/<tenant>/<db_name> -> (seq, db_id)`.
-///
-/// It returns a vec of structured key(such as DatabaseNameIdent) and a vec of `u64`.
-async fn list_u64_value<K: KVApiKey>(
-    kv_api: &impl KVApi,
-    key: &K,
-) -> Result<(Vec<K>, Vec<u64>), MetaError> {
-    let res = kv_api.prefix_list_kv(&key.to_key()).await?;
-
-    let n = res.len();
-
-    let mut structured_keys = Vec::with_capacity(n);
-    let mut values = Vec::with_capacity(n);
-
-    for (str_key, seqv) in res.iter() {
-        let id = *deserialize_u64(&seqv.data).map_err(meta_encode_err)?;
-        values.push(id);
-
-        // Parse key and get db_name:
-
-        let struct_key = K::from_key(str_key).map_err(meta_encode_err)?;
-        structured_keys.push(struct_key);
-    }
-
-    Ok((structured_keys, values))
-}
-
-/// It returns a vec of structured key(such as DatabaseNameIdent), such as:
-/// all the `db_name` with prefix `__fd_database/<tenant>/`.
-async fn list_keys<K: KVApiKey>(kv_api: &impl KVApi, key: &K) -> Result<Vec<K>, MetaError> {
-    let res = kv_api.prefix_list_kv(&key.to_key()).await?;
-
-    let n = res.len();
-
-    let mut structured_keys = Vec::with_capacity(n);
-
-    for (str_key, _seq_id) in res.iter() {
-        let struct_key = K::from_key(str_key).map_err(meta_encode_err)?;
-        structured_keys.push(struct_key);
-    }
-
-    Ok(structured_keys)
 }
 
 /// Get the count of tables for one tenant by listing databases and table ids.

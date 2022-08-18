@@ -13,6 +13,7 @@
 // limitations under the License.
 
 pub mod any;
+pub mod arithmetics_type;
 pub mod array;
 pub mod boolean;
 pub mod empty_array;

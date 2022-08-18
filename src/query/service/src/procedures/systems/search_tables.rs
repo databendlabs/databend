@@ -24,6 +24,7 @@ use futures::TryStreamExt;
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreter;
 use crate::optimizers::Optimizers;
+use crate::procedures::OneBlockProcedure;
 use crate::procedures::Procedure;
 use crate::procedures::ProcedureFeatures;
 use crate::sessions::QueryContext;
@@ -34,12 +35,12 @@ pub struct SearchTablesProcedure {}
 
 impl SearchTablesProcedure {
     pub fn try_create() -> Result<Box<dyn Procedure>> {
-        Ok(Box::new(SearchTablesProcedure {}))
+        Ok(SearchTablesProcedure {}.into_procedure())
     }
 }
 
 #[async_trait::async_trait]
-impl Procedure for SearchTablesProcedure {
+impl OneBlockProcedure for SearchTablesProcedure {
     fn name(&self) -> &str {
         "SEARCH_TABLES"
     }
@@ -50,7 +51,7 @@ impl Procedure for SearchTablesProcedure {
             .management_mode_required(true)
     }
 
-    async fn inner_eval(&self, ctx: Arc<QueryContext>, args: Vec<String>) -> Result<DataBlock> {
+    async fn all_data(&self, ctx: Arc<QueryContext>, args: Vec<String>) -> Result<DataBlock> {
         let query = format!(
             "SELECT * FROM system.tables WHERE name like '%{}%' ORDER BY database, name",
             args[0]

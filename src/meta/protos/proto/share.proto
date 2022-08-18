@@ -81,3 +81,10 @@ message ShareAccountMeta {
   string share_on = 3;
   optional string accept_on = 4;
 }
+
+message ObjectSharedByShareIds {
+  uint64 ver = 100;
+  uint64 min_compatible = 101;
+
+  repeated uint64 share_ids = 1;
+}

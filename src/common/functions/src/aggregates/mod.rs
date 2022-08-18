@@ -32,6 +32,7 @@ mod aggregate_combinator;
 mod aggregate_combinator_distinct;
 mod aggregate_combinator_if;
 mod aggregate_covariance;
+mod aggregate_distinct_state;
 mod aggregate_min_max;
 mod aggregate_null_result;
 mod aggregate_retention;

@@ -36,7 +36,7 @@ use crate::FUSE_OPT_KEY_ROW_PER_BLOCK;
 
 impl FuseTable {
     pub async fn do_delete(&self, ctx: Arc<dyn TableContext>, plan: &DeletePlan) -> Result<()> {
-        let snapshot_opt = self.read_table_snapshot(ctx.as_ref()).await?;
+        let snapshot_opt = self.read_table_snapshot(ctx.clone()).await?;
 
         // check if table is empty
         let snapshot = if let Some(val) = snapshot_opt {

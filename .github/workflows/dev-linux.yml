@@ -138,9 +138,25 @@ jobs:
         dirs:
           - "base"
           - "ydb"
+          - "crdb"
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_sqllogic_standalone_linux
+        with:
+          dirs: ${{ matrix.dirs }}
+
+  test_sqllogic_cluster_linux:
+    timeout-minutes: 30
+    name: test_sqllogic_${{ matrix.dirs }}_cluster_linux
+    runs-on: [self-hosted, X64, Linux, development]
+    needs: build_gnu
+    strategy:
+      matrix:
+        dirs:
+          - "base"
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ./.github/actions/test_sqllogic_cluster_linux
         with:
           dirs: ${{ matrix.dirs }}
 

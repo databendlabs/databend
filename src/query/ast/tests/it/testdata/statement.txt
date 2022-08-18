@@ -536,7 +536,7 @@ CreateTable(
 ---------- Input ----------
 create table t like t2 engine = memory;
 ---------- Output ---------
-CREATE TABLE t LIKE t2 ENGINE=MEMORY
+CREATE TABLE t LIKE t2 ENGINE = MEMORY
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
@@ -6177,6 +6177,48 @@ AlterShareTenants(
         ],
         is_add: false,
     },
+)
+
+
+---------- Input ----------
+DESC SHARE b;
+---------- Output ---------
+DESC SHARE b
+---------- AST ------------
+DescShare(
+    DescShareStmt {
+        share: Identifier {
+            name: "b",
+            quote: None,
+            span: Ident(11..12),
+        },
+    },
+)
+
+
+---------- Input ----------
+DESCRIBE SHARE b;
+---------- Output ---------
+DESC SHARE b
+---------- AST ------------
+DescShare(
+    DescShareStmt {
+        share: Identifier {
+            name: "b",
+            quote: None,
+            span: Ident(15..16),
+        },
+    },
+)
+
+
+---------- Input ----------
+SHOW SHARES;
+---------- Output ---------
+SHOW SHARES
+---------- AST ------------
+ShowShares(
+    ShowSharesStmt,
 )
 
 

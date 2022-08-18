@@ -352,8 +352,13 @@ class SuiteRunner(object):
 
     # expect the query just return ok
     def assert_execute_ok(self, statement):
-        actual = safe_execute(lambda: self.execute_ok(statement.text),
-                              statement)
+        try:
+            actual = safe_execute(lambda: self.execute_ok(statement.text),
+                                  statement)
+        except Exception as err:
+            raise LogicError(runner=self.kind,
+                             message=str(err),
+                             errorType="statement ok execute with exception")
         if actual is not None:
             raise LogicError(runner=self.kind,
                              message=str(statement),
@@ -377,7 +382,13 @@ class SuiteRunner(object):
         if statement.s_type.query_type == "skipped":
             log.debug(f"{statement.text} statement is skipped")
             return
-        actual = safe_execute(lambda: self.execute_query(statement), statement)
+        try:
+            actual = safe_execute(lambda: self.execute_query(statement),
+                                  statement)
+        except Exception as err:
+            raise LogicError(runner=self.kind,
+                             message=str(err),
+                             errorType="statement query execute with exception")
         try:
             f = format_value(actual, len(statement.s_type.query_type))
         except Exception:
@@ -410,8 +421,13 @@ class SuiteRunner(object):
 
     # expect the query just return error
     def assert_execute_error(self, statement):
-        actual = safe_execute(lambda: self.execute_error(statement.text),
-                              statement)
+        try:
+            actual = safe_execute(lambda: self.execute_error(statement.text),
+                                  statement)
+        except Exception as err:
+            raise LogicError(runner=self.kind,
+                             message=str(err),
+                             errorType="statement error execute with exception")
         if actual is None:
             raise LogicError(
                 message=

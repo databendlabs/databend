@@ -24,6 +24,7 @@ use common_exception::Result;
 use common_meta_types::TenantQuota;
 use common_meta_types::UserOptionFlag;
 
+use crate::procedures::OneBlockProcedure;
 use crate::procedures::Procedure;
 use crate::procedures::ProcedureFeatures;
 use crate::sessions::QueryContext;
@@ -33,12 +34,12 @@ pub struct TenantQuotaProcedure;
 
 impl TenantQuotaProcedure {
     pub fn try_create() -> Result<Box<dyn Procedure>> {
-        Ok(Box::new(TenantQuotaProcedure {}))
+        Ok(TenantQuotaProcedure {}.into_procedure())
     }
 }
 
 #[async_trait::async_trait]
-impl Procedure for TenantQuotaProcedure {
+impl OneBlockProcedure for TenantQuotaProcedure {
     fn name(&self) -> &str {
         "TENANT_QUOTA"
     }
@@ -55,7 +56,7 @@ impl Procedure for TenantQuotaProcedure {
     /// max_tables_per_database: u32
     /// max_stages: u32
     /// max_files_per_stage: u32
-    async fn inner_eval(&self, ctx: Arc<QueryContext>, args: Vec<String>) -> Result<DataBlock> {
+    async fn all_data(&self, ctx: Arc<QueryContext>, args: Vec<String>) -> Result<DataBlock> {
         let mut tenant = ctx.get_tenant();
         if !args.is_empty() {
             let user_info = ctx.get_current_user()?;

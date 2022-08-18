@@ -1,13 +1,13 @@
-statement query I 
+statement query I
 SELECT 1;
 
 ----
 1
 
 statement error 1065
-SELECT x; 
+SELECT x;
 
-statement query T 
+statement query T
 SELECT 'a';
 
 ----
@@ -54,12 +54,28 @@ SELECT NOT(TRUE);
 ----
 0
 
-statement query T 
+statement query T
 SELECT 'That\'s good.';
 
 ----
 That's good.
 
 statement error 1065
-SELECT *; 
+SELECT *;
 
+
+
+statement query T
+SELECT 'That\'s good.';
+
+----
+That's good.
+
+statement error 1065
+SELECT *;
+
+statement query BB
+select 'false'::boolean = not 'true'::boolean, parse_json('"false"')::boolean;
+
+----
+1	0

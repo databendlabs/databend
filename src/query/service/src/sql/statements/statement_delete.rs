@@ -74,10 +74,7 @@ impl AnalyzableStatement for DfDeleteStatement {
         if tbl_info.engine() == VIEW_ENGINE {
             return Err(ErrorCode::SemanticError("Delete from view not allowed"));
         }
-
-        let tenant = ctx.get_tenant();
-        let udfs = ctx.get_user_manager().get_udfs(&tenant).await?;
-        let analyzer = ExpressionAnalyzer::create_with_udfs_support(ctx, udfs);
+        let analyzer = ExpressionAnalyzer::create(ctx);
         let mut require_columns = HashSet::new();
         let selection = if let Some(predicate) = &self.selection {
             let mut pred_expr = analyzer.analyze(predicate).await?;

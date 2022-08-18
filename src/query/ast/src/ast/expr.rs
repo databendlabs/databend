@@ -819,7 +819,10 @@ impl<'a> Display for Expr<'a> {
                 }
                 write!(f, " END")?;
             }
-            Expr::Exists { subquery, .. } => {
+            Expr::Exists { not, subquery, .. } => {
+                if *not {
+                    write!(f, "NOT ")?;
+                }
                 write!(f, "EXISTS ({subquery})")?;
             }
             Expr::Subquery {

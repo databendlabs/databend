@@ -38,20 +38,27 @@ use crate::util::*;
 use crate::ErrorKind;
 
 pub fn statement(i: Input) -> IResult<StatementMsg> {
-    let explain = map(
+    let explain = map_res(
         rule! {
-            EXPLAIN ~ ( PIPELINE | GRAPH | FRAGMENTS | RAW )? ~ #statement
+            EXPLAIN ~ ( SYNTAX | PIPELINE | GRAPH | FRAGMENTS | RAW )? ~ #statement
         },
-        |(_, opt_kind, statement)| Statement::Explain {
-            kind: match opt_kind.map(|token| token.kind) {
-                Some(TokenKind::PIPELINE) => ExplainKind::Pipeline,
-                Some(TokenKind::GRAPH) => ExplainKind::Graph,
-                Some(TokenKind::FRAGMENTS) => ExplainKind::Fragments,
-                Some(TokenKind::RAW) => ExplainKind::Raw,
-                None => ExplainKind::Syntax,
-                _ => unreachable!(),
-            },
-            query: Box::new(statement.stmt),
+        |(_, opt_kind, statement)| {
+            Ok(Statement::Explain {
+                kind: match opt_kind.map(|token| token.kind) {
+                    Some(TokenKind::SYNTAX) => {
+                        let pretty_stmt = pretty_statement(statement.stmt.clone(), 10)
+                            .map_err(|_| ErrorKind::Other("invalid statement"))?;
+                        ExplainKind::Syntax(pretty_stmt)
+                    }
+                    Some(TokenKind::PIPELINE) => ExplainKind::Pipeline,
+                    Some(TokenKind::GRAPH) => ExplainKind::Graph,
+                    Some(TokenKind::FRAGMENTS) => ExplainKind::Fragments,
+                    Some(TokenKind::RAW) => ExplainKind::Raw,
+                    None => ExplainKind::Plan,
+                    _ => unreachable!(),
+                },
+                query: Box::new(statement.stmt),
+            })
         },
     );
     let insert = map(
@@ -690,7 +697,6 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             stage_name: stage_name.to_string(),
         },
     );
-
     let copy_into = map(
         rule! {
             COPY
@@ -808,6 +814,18 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             })
         },
     );
+    let desc_share = map(
+        rule! {
+            (DESC | DESCRIBE) ~ SHARE ~ #ident
+        },
+        |(_, _, share)| Statement::DescShare(DescShareStmt { share }),
+    );
+    let show_shares = map(
+        rule! {
+            SHOW ~ SHARES
+        },
+        |(_, _)| Statement::ShowShares(ShowSharesStmt {}),
+    );
 
     let statement_body = alt((
         rule!(
@@ -901,6 +919,8 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             | #grant_share_object: "`GRANT { USAGE | SELECT | REFERENCE_USAGE } ON { DATABASE db | TABLE db.table } TO SHARE <share_name>`"
             | #revoke_share_object: "`REVOKE { USAGE | SELECT | REFERENCE_USAGE } ON { DATABASE db | TABLE db.table } FROM SHARE <share_name>`"
             | #alter_share_tenants: "`ALTER SHARE [IF EXISTS] <share_name> { ADD | REMOVE } TENANTS = tenant [, tenant, ...]`"
+            | #desc_share: "`{DESC | DESCRIBE} SHARE <share_name>`"
+            | #show_shares: "`SHOW SHARES`"
         ),
     ));
 

@@ -33,6 +33,7 @@ mod interpreter_role_grant;
 mod interpreter_role_revoke;
 mod interpreter_select;
 mod interpreter_setting;
+mod interpreter_share_desc;
 mod interpreter_show_databases;
 mod interpreter_show_engines;
 mod interpreter_show_functions;

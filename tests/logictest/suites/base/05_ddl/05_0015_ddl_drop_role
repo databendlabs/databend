@@ -1,5 +1,5 @@
 statement error 2204
-DROP ROLE 'test-b'; 
+DROP ROLE 'test-b';
 
 statement ok
 DROP ROLE IF EXISTS 'test-b';
@@ -11,7 +11,7 @@ statement ok
 DROP ROLE 'test-b';
 
 statement error 2204
-DROP ROLE 'test-b'; 
+DROP ROLE 'test-b';
 
 statement ok
 DROP ROLE IF EXISTS 'test-b';

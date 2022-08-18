@@ -20,19 +20,7 @@ use common_meta_app::schema::DatabaseMeta;
 use common_meta_app::schema::DatabaseNameIdent;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TableNameIdent;
-use common_meta_app::share::AddShareAccountsReq;
-use common_meta_app::share::CreateShareReq;
-use common_meta_app::share::DropShareReq;
-use common_meta_app::share::GetShareGrantObjectReq;
-use common_meta_app::share::GrantShareObjectReq;
-use common_meta_app::share::RemoveShareAccountsReq;
-use common_meta_app::share::RevokeShareObjectReq;
-use common_meta_app::share::ShareAccountNameIdent;
-use common_meta_app::share::ShareGrantObject;
-use common_meta_app::share::ShareGrantObjectName;
-use common_meta_app::share::ShareGrantObjectPrivilege;
-use common_meta_app::share::ShareNameIdent;
-use common_meta_app::share::ShowShareReq;
+use common_meta_app::share::*;
 use enumflags2::BitFlags;
 use tracing::info;
 
@@ -65,6 +53,9 @@ impl ShareApiTestSuite {
         suite.share_add_remove_account(&b.build().await).await?;
         suite.share_grant_revoke_object(&b.build().await).await?;
         suite.get_share_grant_objects(&b.build().await).await?;
+        suite
+            .get_grant_privileges_of_object(&b.build().await)
+            .await?;
 
         Ok(())
     }
@@ -81,18 +72,16 @@ impl ShareApiTestSuite {
 
         info!("--- show share when there are no share");
         {
-            let req = ShowShareReq {
-                share_name: share_name.clone(),
+            let req = ShowSharesReq {
+                tenant: tenant.to_string(),
             };
 
-            let res = mt.show_share(req).await;
+            let res = mt.show_shares(req).await;
             info!("show share res: {:?}", res);
-            assert!(res.is_err());
-            let err = res.unwrap_err();
-            assert_eq!(
-                ErrorCode::UnknownShare("").code(),
-                ErrorCode::from(err).code()
-            );
+            assert!(res.is_ok());
+            let resp = res.unwrap();
+            assert!(resp.inbound_accounts.is_empty());
+            assert!(resp.outbound_accounts.is_empty());
         }
 
         info!("--- create share1");
@@ -117,82 +106,18 @@ impl ShareApiTestSuite {
             assert_eq!(share_name, share_name_ret)
         }
 
-        info!("--- create share1 again with if_not_exists=false");
+        info!("--- show share again");
         {
-            let req = CreateShareReq {
-                if_not_exists: false,
-                share_name: share_name.clone(),
-                comment: None,
-                create_on,
+            let req = ShowSharesReq {
+                tenant: tenant.to_string(),
             };
 
-            let res = mt.create_share(req).await;
-            info!("create share res: {:?}", res);
-            let err = res.unwrap_err();
-            assert_eq!(
-                ErrorCode::ShareAlreadyExists("").code(),
-                ErrorCode::from(err).code()
-            );
-        }
-
-        info!("--- create share1 again with if_not_exists=true");
-        {
-            let req = CreateShareReq {
-                if_not_exists: true,
-                share_name: share_name.clone(),
-                comment: None,
-                create_on,
-            };
-
-            let res = mt.create_share(req).await;
-            info!("create share res: {:?}", res);
-            let res = res.unwrap();
-            assert_eq!(1, res.share_id, "first share id is 1");
-        }
-
-        info!("--- show share in current database");
-        {
-            let req = ShowShareReq {
-                share_name: share_name.clone(),
-            };
-
-            let res = mt.show_share(req).await;
+            let res = mt.show_shares(req).await;
             info!("show share res: {:?}", res);
-            let res = res.unwrap();
-            assert_eq!(1, res.share_id, "share id should be 1");
-        }
-
-        info!("--- drop share1 with if_exists=true");
-        {
-            let req = DropShareReq {
-                if_exists: true,
-                share_name: share_name.clone(),
-            };
-
-            let res = mt.drop_share(req).await;
             assert!(res.is_ok());
-
-            let ret = get_share_id_to_name_or_err(mt.as_kv_api(), share_id, "").await;
-            let err = ret.unwrap_err();
-            assert_eq!(
-                ErrorCode::UnknownShareId("").code(),
-                ErrorCode::from(err).code()
-            );
-        }
-
-        info!("--- drop share1 again with if_exists=false");
-        {
-            let req = DropShareReq {
-                if_exists: false,
-                share_name: share_name.clone(),
-            };
-
-            let res = mt.drop_share(req).await;
-            let err = res.unwrap_err();
-            assert_eq!(
-                ErrorCode::UnknownShare("").code(),
-                ErrorCode::from(err).code()
-            );
+            let resp = res.unwrap();
+            assert!(resp.inbound_accounts.is_empty());
+            assert_eq!(resp.outbound_accounts.len(), 1);
         }
 
         Ok(())
@@ -204,13 +129,26 @@ impl ShareApiTestSuite {
         mt: &MT,
     ) -> anyhow::Result<()> {
         let tenant = "tenant1";
+        let tenant2 = "tenant2";
         let share1 = "share1";
+        let share2 = "share2";
         let account = "account1";
         let account2 = "account2";
         let share_name = ShareNameIdent {
             tenant: tenant.to_string(),
             share_name: share1.to_string(),
         };
+        let share_name2 = ShareNameIdent {
+            tenant: tenant.to_string(),
+            share_name: share2.to_string(),
+        };
+        let share_name3 = ShareNameIdent {
+            tenant: tenant2.to_string(),
+            share_name: share2.to_string(),
+        };
+        let comment1 = "comment1";
+        let comment2 = "comment2";
+        let comment3 = "comment3";
         let share_id: u64;
         let share_on = Utc::now();
         let create_on = Utc::now();
@@ -226,7 +164,7 @@ impl ShareApiTestSuite {
             };
 
             // get share meta and check account has been added
-            let res = mt.add_share_accounts(req).await;
+            let res = mt.add_share_tenants(req).await;
             assert!(res.is_err());
             let err = res.unwrap_err();
             assert_eq!(
@@ -240,7 +178,7 @@ impl ShareApiTestSuite {
                 accounts: vec![account2.to_string()],
             };
 
-            let res = mt.remove_share_accounts(req).await;
+            let res = mt.remove_share_tenants(req).await;
             assert!(res.is_err());
             let err = res.unwrap_err();
             assert_eq!(
@@ -249,12 +187,12 @@ impl ShareApiTestSuite {
             );
         }
 
-        info!("--- prepare share1");
+        info!("--- prepare share1 share2 share3");
         {
             let req = CreateShareReq {
                 if_not_exists: false,
                 share_name: share_name.clone(),
-                comment: None,
+                comment: Some(comment1.to_string()),
                 create_on,
             };
 
@@ -263,6 +201,26 @@ impl ShareApiTestSuite {
             let res = res.unwrap();
             assert_eq!(1, res.share_id, "first database id is 1");
             share_id = res.share_id;
+
+            let req = CreateShareReq {
+                if_not_exists: false,
+                share_name: share_name2.clone(),
+                comment: Some(comment2.to_string()),
+                create_on,
+            };
+
+            let res = mt.create_share(req).await;
+            info!("add share account res: {:?}", res);
+
+            let req = CreateShareReq {
+                if_not_exists: false,
+                share_name: share_name3.clone(),
+                comment: Some(comment3.to_string()),
+                create_on,
+            };
+
+            let res = mt.create_share(req).await;
+            info!("add share account res: {:?}", res);
         }
 
         info!("--- add account account1");
@@ -275,7 +233,7 @@ impl ShareApiTestSuite {
             };
 
             // get share meta and check account has been added
-            let res = mt.add_share_accounts(req).await;
+            let res = mt.add_share_tenants(req).await;
             info!("add share account res: {:?}", res);
             assert!(res.is_ok());
 
@@ -293,29 +251,71 @@ impl ShareApiTestSuite {
             assert_eq!(share_account_meta.share_id, share_id);
             assert_eq!(share_account_meta.account, account.to_string());
             assert_eq!(share_account_meta.share_on, share_on);
+
+            // get_grant_tenants_of_share
+            let req = GetShareGrantTenantsReq {
+                share_name: share_name.clone(),
+            };
+            let resp = mt.get_grant_tenants_of_share(req).await;
+            assert!(resp.is_ok());
+            let resp = resp.unwrap();
+            assert_eq!(resp.accounts.len(), 1);
+            assert_eq!(resp.accounts[0], account.to_string());
+        }
+
+        info!("--- share tenant2.share2 to tenant1");
+        {
+            let req = AddShareAccountsReq {
+                share_name: share_name3.clone(),
+                share_on,
+                if_exists,
+                accounts: vec![tenant.to_string()],
+            };
+
+            // get share meta and check account has been added
+            let res = mt.add_share_tenants(req).await;
+            info!("add share account res: {:?}", res);
+            assert!(res.is_ok());
         }
 
         // test show share api
         info!("--- show share check account information");
         {
-            let req = ShowShareReq {
-                share_name: share_name.clone(),
+            let req = ShowSharesReq {
+                tenant: tenant.to_string(),
             };
 
-            let res = mt.show_share(req).await;
+            let res = mt.show_shares(req).await;
             info!("show share res: {:?}", res);
             assert!(res.is_ok());
-            let res = res.unwrap();
+            let resp = res.unwrap();
+            assert_eq!(resp.inbound_accounts.len(), 1);
+            assert_eq!(resp.inbound_accounts[0].share_name, share_name3.clone());
+            assert_eq!(resp.inbound_accounts[0].create_on, share_on.clone());
+            assert_eq!(resp.inbound_accounts[0].comment, Some(comment3.to_string()));
 
-            let meta = res.share_meta;
-            assert!(meta.has_account(&account.to_string()));
-
-            let account_meta = res.share_account_meta.get(0);
-            assert!(account_meta.is_some());
-            let share_account_meta = account_meta.unwrap();
-            assert_eq!(share_account_meta.share_id, share_id);
-            assert_eq!(share_account_meta.account, account.to_string());
-            assert_eq!(share_account_meta.share_on, share_on);
+            assert_eq!(resp.outbound_accounts.len(), 2);
+            assert_eq!(resp.outbound_accounts[0].share_name, share_name.clone());
+            assert_eq!(resp.outbound_accounts[0].create_on, create_on.clone());
+            assert_eq!(
+                resp.outbound_accounts[0].comment,
+                Some(comment1.to_string())
+            );
+            assert_eq!(resp.outbound_accounts[1].share_name, share_name2.clone());
+            assert_eq!(resp.outbound_accounts[1].create_on, create_on.clone());
+            assert_eq!(
+                resp.outbound_accounts[1].comment,
+                Some(comment2.to_string())
+            );
+            assert!(resp.outbound_accounts[0].accounts.is_some());
+            assert!(resp.outbound_accounts[1].accounts.is_some());
+            let accounts = resp.outbound_accounts[0].accounts.as_ref().unwrap();
+            assert_eq!(accounts.len(), 1);
+            assert_eq!(accounts[0], account.to_string());
+            assert_eq!(
+                resp.outbound_accounts[1].accounts.as_ref().unwrap().len(),
+                0
+            );
         }
 
         info!("--- add account account1 again");
@@ -327,7 +327,7 @@ impl ShareApiTestSuite {
                 accounts: vec![account.to_string()],
             };
 
-            let res = mt.add_share_accounts(req).await;
+            let res = mt.add_share_tenants(req).await;
             info!("add share account res: {:?}", res);
             let err = res.unwrap_err();
             assert_eq!(
@@ -345,35 +345,13 @@ impl ShareApiTestSuite {
                 accounts: vec![account2.to_string()],
             };
 
-            let res = mt.add_share_accounts(req).await;
+            let res = mt.add_share_tenants(req).await;
             info!("add share account res: {:?}", res);
             assert!(res.is_ok());
 
             let (_share_meta_seq, share_meta) =
                 get_share_meta_by_id_or_err(mt.as_kv_api(), share_id, "").await?;
             assert!(share_meta.has_account(&account2.to_string()));
-        }
-
-        info!("--- show share again");
-        {
-            let req = ShowShareReq {
-                share_name: share_name.clone(),
-            };
-
-            let res = mt.show_share(req).await;
-            info!("show share res: {:?}", res);
-            assert!(res.is_ok());
-            let res = res.unwrap();
-
-            let meta = res.share_meta;
-            assert!(meta.has_account(&account.to_string()));
-            assert!(meta.has_account(&account2.to_string()));
-
-            assert_eq!(
-                res.share_account_meta.len(),
-                2,
-                "there should be 2 share accounts"
-            );
         }
 
         info!("--- remove account account2");
@@ -384,7 +362,7 @@ impl ShareApiTestSuite {
                 accounts: vec![account2.to_string()],
             };
 
-            let res = mt.remove_share_accounts(req).await;
+            let res = mt.remove_share_tenants(req).await;
             info!("remove share account res: {:?}", res);
             assert!(res.is_ok());
 
@@ -792,7 +770,6 @@ impl ShareApiTestSuite {
         {
             let req = GetShareGrantObjectReq {
                 share_name: share_name.clone(),
-                object: None,
             };
 
             let res = mt.get_share_grant_objects(req).await;
@@ -824,7 +801,6 @@ impl ShareApiTestSuite {
         {
             let req = GetShareGrantObjectReq {
                 share_name: share_name.clone(),
-                object: None,
             };
 
             let res = mt.get_share_grant_objects(req).await;
@@ -861,19 +837,6 @@ impl ShareApiTestSuite {
             info!("create table res: {:?}", res);
         }
 
-        info!("--- get share with db1");
-        {
-            let req = GetShareGrantObjectReq {
-                share_name: share_name.clone(),
-                object: Some(ShareGrantObjectName::Database(db_name.to_string())),
-            };
-
-            let res = mt.get_share_grant_objects(req).await;
-            info!("get_share_grant_objects res: {:?}", res);
-            let res = res.unwrap();
-            assert!(res.objects.is_empty());
-        }
-
         info!("--- share db1 and table1");
         {
             let req = GrantShareObjectReq {
@@ -899,49 +862,183 @@ impl ShareApiTestSuite {
             info!("grant object res: {:?}", res);
         }
 
-        info!("--- get share with db1");
-        {
-            let name = ShareGrantObjectName::Database(db_name.to_string());
-            let req = GetShareGrantObjectReq {
-                share_name: share_name.clone(),
-                object: Some(name.clone()),
-            };
-
-            let res = mt.get_share_grant_objects(req).await;
-            info!("get_share_grant_objects res: {:?}", res);
-            let res = res.unwrap();
-            assert_eq!(res.objects.len(), 1);
-            let entry = res.objects.get(0).unwrap();
-            assert_eq!(entry.object, name,);
-        }
-
-        info!("--- get share with table1");
-        {
-            let name = ShareGrantObjectName::Table(db_name.to_string(), tbl_name.to_string());
-            let req = GetShareGrantObjectReq {
-                share_name: share_name.clone(),
-                object: Some(name.clone()),
-            };
-
-            let res = mt.get_share_grant_objects(req).await;
-            info!("get_share_grant_objects res: {:?}", res);
-            let res = res.unwrap();
-            assert_eq!(res.objects.len(), 1);
-            let entry = res.objects.get(0).unwrap();
-            assert_eq!(entry.object, name);
-        }
-
         info!("--- get all share objects");
         {
             let req = GetShareGrantObjectReq {
                 share_name: share_name.clone(),
-                object: None,
             };
 
             let res = mt.get_share_grant_objects(req).await;
             info!("get_share_grant_objects res: {:?}", res);
             let res = res.unwrap();
             assert_eq!(res.objects.len(), 2);
+        }
+
+        Ok(())
+    }
+
+    #[tracing::instrument(level = "debug", skip_all)]
+    async fn get_grant_privileges_of_object<MT: ShareApi + AsKVApi + SchemaApi>(
+        &self,
+        mt: &MT,
+    ) -> anyhow::Result<()> {
+        let tenant1 = "tenant1";
+        let share1 = "share1";
+        let share2 = "share2";
+        let db_name = "db1";
+        let tbl_name = "table1";
+
+        let share_name1 = ShareNameIdent {
+            tenant: tenant1.to_string(),
+            share_name: share1.to_string(),
+        };
+        let share_name2 = ShareNameIdent {
+            tenant: tenant1.to_string(),
+            share_name: share2.to_string(),
+        };
+
+        info!("--- get unknown object");
+        {
+            let req = GetObjectGrantPrivilegesReq {
+                tenant: tenant1.to_string(),
+                object: ShareGrantObjectName::Database("db".to_string()),
+            };
+
+            let res = mt.get_grant_privileges_of_object(req).await;
+            info!("get_share_grant_objects res: {:?}", res);
+            let err = res.unwrap_err();
+            assert_eq!(
+                ErrorCode::UnknownDatabase("").code(),
+                ErrorCode::from(err).code()
+            );
+
+            let req = GetObjectGrantPrivilegesReq {
+                tenant: tenant1.to_string(),
+                object: ShareGrantObjectName::Table("db".to_string(), "table".to_string()),
+            };
+
+            let res = mt.get_grant_privileges_of_object(req).await;
+            info!("get_share_grant_objects res: {:?}", res);
+            let err = res.unwrap_err();
+            assert_eq!(
+                ErrorCode::UnknownDatabase("").code(),
+                ErrorCode::from(err).code()
+            );
+        }
+
+        info!("--- create share1 and share2");
+        let create_on = Utc::now();
+        let grant_on = Utc::now();
+        {
+            let req = CreateShareReq {
+                if_not_exists: false,
+                share_name: share_name1.clone(),
+                comment: None,
+                create_on,
+            };
+
+            let res = mt.create_share(req).await;
+            assert!(res.is_ok());
+
+            let req = CreateShareReq {
+                if_not_exists: false,
+                share_name: share_name2.clone(),
+                comment: None,
+                create_on,
+            };
+
+            let res = mt.create_share(req).await;
+            assert!(res.is_ok());
+        }
+
+        info!("--- create db1,table1");
+        {
+            let plan = CreateDatabaseReq {
+                if_not_exists: false,
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant1.to_string(),
+                    db_name: db_name.to_string(),
+                },
+                meta: DatabaseMeta::default(),
+            };
+
+            let res = mt.create_database(plan).await?;
+            info!("create database res: {:?}", res);
+
+            let req = CreateTableReq {
+                if_not_exists: false,
+                name_ident: TableNameIdent {
+                    tenant: tenant1.to_string(),
+                    db_name: db_name.to_string(),
+                    table_name: tbl_name.to_string(),
+                },
+                table_meta: TableMeta::default(),
+            };
+
+            let res = mt.create_table(req.clone()).await?;
+            info!("create table res: {:?}", res);
+        }
+
+        info!("--- share db1 and table1");
+        {
+            let req = GrantShareObjectReq {
+                share_name: share_name1.clone(),
+                object: ShareGrantObjectName::Database(db_name.to_string()),
+                grant_on,
+                privilege: ShareGrantObjectPrivilege::Usage,
+            };
+
+            let res = mt.grant_share_object(req).await?;
+            info!("grant object res: {:?}", res);
+
+            let req = GrantShareObjectReq {
+                share_name: share_name2.clone(),
+                object: ShareGrantObjectName::Database(db_name.to_string()),
+                grant_on,
+                privilege: ShareGrantObjectPrivilege::Usage,
+            };
+
+            let res = mt.grant_share_object(req).await?;
+            info!("grant object res: {:?}", res);
+
+            let tbl_ob_name =
+                ShareGrantObjectName::Table(db_name.to_string(), tbl_name.to_string());
+            let req = GrantShareObjectReq {
+                share_name: share_name1.clone(),
+                object: tbl_ob_name.clone(),
+                grant_on,
+                privilege: ShareGrantObjectPrivilege::Usage,
+            };
+
+            let res = mt.grant_share_object(req).await?;
+            info!("grant object res: {:?}", res);
+        }
+
+        info!("--- get_grant_privileges_of_object of db and table");
+        {
+            let req = GetObjectGrantPrivilegesReq {
+                tenant: tenant1.to_string(),
+                object: ShareGrantObjectName::Database(db_name.to_string()),
+            };
+
+            let res = mt.get_grant_privileges_of_object(req).await;
+            assert!(res.is_ok());
+            let res = res.unwrap();
+            assert_eq!(res.privileges.len(), 2);
+            assert_eq!(&res.privileges[0].share_name, share1);
+            assert_eq!(res.privileges[0].grant_on, grant_on);
+
+            let req = GetObjectGrantPrivilegesReq {
+                tenant: tenant1.to_string(),
+                object: ShareGrantObjectName::Table(db_name.to_string(), tbl_name.to_string()),
+            };
+
+            let res = mt.get_grant_privileges_of_object(req).await;
+            assert!(res.is_ok());
+            let res = res.unwrap();
+            assert_eq!(res.privileges.len(), 1);
+            assert_eq!(&res.privileges[0].share_name, share1);
+            assert_eq!(res.privileges[0].grant_on, grant_on);
         }
 
         Ok(())

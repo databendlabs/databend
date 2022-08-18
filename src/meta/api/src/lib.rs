@@ -46,6 +46,8 @@ pub use kv_api_utils::deserialize_u64;
 pub use kv_api_utils::fetch_id;
 pub use kv_api_utils::get_struct_value;
 pub use kv_api_utils::get_u64_value;
+pub use kv_api_utils::list_keys;
+pub use kv_api_utils::list_u64_value;
 pub use kv_api_utils::meta_encode_err;
 pub use kv_api_utils::send_txn;
 pub use kv_api_utils::serialize_struct;

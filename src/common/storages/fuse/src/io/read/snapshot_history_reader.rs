@@ -22,67 +22,15 @@ use futures_util::stream;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::TableSnapshotReader;
 
-impl<'a> TableSnapshotReader<'a> {
-    pub async fn read_snapshot_history(
-        &self,
-        latest_snapshot_location: Option<impl AsRef<str>>,
-        format_version: u64,
-        location_gen: TableMetaLocationGenerator,
-        limit: Option<usize>,
-    ) -> common_exception::Result<Vec<Arc<TableSnapshot>>> {
-        let mut snapshots = vec![];
-        let mut l = limit.map_or(u64::MAX, |v| v as u64);
-
-        if l == 0 {
-            return Ok(snapshots);
-        }
-
-        if let Some(loc) = latest_snapshot_location {
-            let mut ver = format_version;
-            let mut loc = loc.as_ref().to_string();
-            loop {
-                let snapshot = match self.read(loc, None, ver).await {
-                    Ok(s) => s,
-                    Err(e) => {
-                        if e.code() == ErrorCode::storage_not_found_code() {
-                            break;
-                        } else {
-                            return Err(e);
-                        }
-                    }
-                };
-                if let Some((id, v)) = snapshot.prev_snapshot_id {
-                    ver = v;
-                    loc = location_gen.snapshot_location_from_uuid(&id, v)?;
-                    snapshots.push(snapshot);
-
-                    // break if reach the limit
-                    l -= 1;
-                    if l == 0 {
-                        break;
-                    }
-                } else {
-                    snapshots.push(snapshot);
-                    break;
-                }
-            }
-        }
-
-        Ok(snapshots)
-    }
-
+pub type TableSnapshotStream =
+    Pin<Box<dyn stream::Stream<Item = common_exception::Result<Arc<TableSnapshot>>> + Send>>;
+impl TableSnapshotReader {
     pub fn snapshot_history(
-        &'a self,
+        self,
         location: String,
         format_version: u64,
         location_gen: TableMetaLocationGenerator,
-    ) -> Pin<
-        Box<
-            dyn futures::stream::Stream<Item = common_exception::Result<Arc<TableSnapshot>>>
-                + 'a
-                + Send,
-        >,
-    > {
+    ) -> TableSnapshotStream {
         let stream = stream::try_unfold(
             (self, location_gen, Some((location, format_version))),
             |(reader, gen, next)| async move {

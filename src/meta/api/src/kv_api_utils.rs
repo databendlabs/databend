@@ -84,6 +84,56 @@ where
     }
 }
 
+/// It returns a vec of structured key(such as DatabaseNameIdent), such as:
+/// all the `db_name` with prefix `__fd_database/<tenant>/`.
+pub async fn list_keys<K: KVApiKey>(
+    kv_api: &(impl KVApi + ?Sized),
+    key: &K,
+) -> Result<Vec<K>, MetaError> {
+    let res = kv_api.prefix_list_kv(&key.to_key()).await?;
+
+    let n = res.len();
+
+    let mut structured_keys = Vec::with_capacity(n);
+
+    for (str_key, _seq_id) in res.iter() {
+        let struct_key = K::from_key(str_key).map_err(meta_encode_err)?;
+        structured_keys.push(struct_key);
+    }
+
+    Ok(structured_keys)
+}
+
+/// List kvs whose value's type is `u64`.
+///
+/// It expects the kv-value' type is `u64`, such as:
+/// `__fd_table/<db_id>/<table_name> -> (seq, table_id)`, or
+/// `__fd_database/<tenant>/<db_name> -> (seq, db_id)`.
+///
+/// It returns a vec of structured key(such as DatabaseNameIdent) and a vec of `u64`.
+pub async fn list_u64_value<K: KVApiKey>(
+    kv_api: &(impl KVApi + ?Sized),
+    key: &K,
+) -> Result<(Vec<K>, Vec<u64>), MetaError> {
+    let res = kv_api.prefix_list_kv(&key.to_key()).await?;
+
+    let n = res.len();
+
+    let mut structured_keys = Vec::with_capacity(n);
+    let mut values = Vec::with_capacity(n);
+
+    for (str_key, seqv) in res.iter() {
+        let id = *deserialize_u64(&seqv.data).map_err(meta_encode_err)?;
+        values.push(id);
+
+        // Parse key
+        let struct_key = K::from_key(str_key).map_err(meta_encode_err)?;
+        structured_keys.push(struct_key);
+    }
+
+    Ok((structured_keys, values))
+}
+
 pub fn serialize_u64(value: impl Into<Id>) -> Result<Vec<u8>, MetaError> {
     let v = serde_json::to_vec(&*value.into()).map_err(meta_encode_err)?;
     Ok(v)

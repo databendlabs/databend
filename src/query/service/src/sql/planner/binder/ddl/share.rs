@@ -21,10 +21,12 @@ use crate::sql::binder::Binder;
 use crate::sql::normalize_identifier;
 use crate::sql::plans::AlterShareTenantsPlan;
 use crate::sql::plans::CreateSharePlan;
+use crate::sql::plans::DescSharePlan;
 use crate::sql::plans::DropSharePlan;
 use crate::sql::plans::GrantShareObjectPlan;
 use crate::sql::plans::Plan;
 use crate::sql::plans::RevokeShareObjectPlan;
+use crate::sql::plans::ShowSharesPlan;
 
 impl<'a> Binder {
     pub(in crate::sql::planner::binder) async fn bind_create_share(
@@ -124,5 +126,24 @@ impl<'a> Binder {
             accounts: tenants.iter().map(|v| v.to_string()).collect_vec(),
         };
         Ok(Plan::AlterShareTenants(Box::new(plan)))
+    }
+
+    pub(in crate::sql::planner::binder) async fn bind_desc_share(
+        &mut self,
+        stmt: &DescShareStmt<'a>,
+    ) -> Result<Plan> {
+        let DescShareStmt { share } = stmt;
+
+        let share = normalize_identifier(share, &self.name_resolution_ctx).name;
+
+        let plan = DescSharePlan { share };
+        Ok(Plan::DescShare(Box::new(plan)))
+    }
+
+    pub(in crate::sql::planner::binder) async fn bind_show_shares(
+        &mut self,
+        _stmt: &ShowSharesStmt,
+    ) -> Result<Plan> {
+        Ok(Plan::ShowShares(Box::new(ShowSharesPlan {})))
     }
 }

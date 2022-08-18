@@ -59,7 +59,7 @@ impl Interpreter for AlterShareTenantsInterpreter {
                 accounts: self.plan.accounts.clone(),
                 share_on: Utc::now(),
             };
-            meta_api.add_share_accounts(req).await?;
+            meta_api.add_share_tenants(req).await?;
         } else {
             let req = RemoveShareAccountsReq {
                 share_name: ShareNameIdent {
@@ -69,7 +69,7 @@ impl Interpreter for AlterShareTenantsInterpreter {
                 if_exists: self.plan.if_exists,
                 accounts: self.plan.accounts.clone(),
             };
-            meta_api.remove_share_accounts(req).await?;
+            meta_api.remove_share_tenants(req).await?;
         }
 
         Ok(Box::pin(DataBlockStream::create(

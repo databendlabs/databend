@@ -15,29 +15,18 @@
 use std::convert::TryFrom;
 use std::sync::Arc;
 
-use async_trait::async_trait;
-use common_ast::udfs::UDFDefinition;
-use common_ast::udfs::UDFExprTraverser;
-use common_ast::udfs::UDFExprVisitor;
-use common_ast::udfs::UDFFetcher;
-use common_ast::udfs::UDFParser;
-use common_ast::udfs::UDFTransformer;
 use common_datavalues::prelude::*;
 use common_datavalues::type_coercion::merge_types;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::aggregates::AggregateFunctionFactory;
-use common_functions::is_builtin_function;
-use common_meta_types::UserDefinedFunction;
+use common_legacy_parser::analyzer_expr_sync::*;
 use common_planners::Expression;
-use sqlparser::ast::DateTimeField;
 use sqlparser::ast::Expr;
 use sqlparser::ast::FunctionArgExpr;
 use sqlparser::ast::Ident;
 use sqlparser::ast::Query;
-use sqlparser::ast::UnaryOperator;
 use sqlparser::ast::Value;
-use sqlparser::ast::WindowSpec;
 
 use crate::context_function::ContextFunction;
 use crate::sessions::QueryContext;
@@ -48,72 +37,22 @@ use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
 use crate::sql::statements::DfQueryStatement;
 use crate::sql::PlanParser;
-use crate::sql::SQLCommon;
 
 #[derive(Clone)]
 pub struct ExpressionAnalyzer {
     context: Arc<QueryContext>,
-    udfs: Vec<UserDefinedFunction>,
 }
 
 impl ExpressionAnalyzer {
     pub fn create(context: Arc<QueryContext>) -> ExpressionAnalyzer {
-        ExpressionAnalyzer {
-            context,
-            udfs: vec![],
-        }
-    }
-
-    pub fn create_with_udfs_support(
-        context: Arc<QueryContext>,
-        udfs: Vec<UserDefinedFunction>,
-    ) -> ExpressionAnalyzer {
-        ExpressionAnalyzer { context, udfs }
-    }
-
-    pub fn analyze_sync(&self, expr: &Expr) -> Result<Expression> {
-        let mut stack = Vec::new();
-
-        // Build RPN for expr. Because async function unsupported recursion
-        for rpn_item in &ExprRPNBuilder::build(expr, self.udfs.clone())? {
-            match rpn_item {
-                ExprRPNItem::Value(v) => Self::analyze_value(
-                    v,
-                    &mut stack,
-                    self.context.get_current_session().get_type(),
-                )?,
-                ExprRPNItem::Identifier(v) => self.analyze_identifier(v, &mut stack)?,
-                ExprRPNItem::QualifiedIdentifier(v) => self.analyze_identifiers(v, &mut stack)?,
-                ExprRPNItem::Function(v) => self.analyze_function(v, &mut stack)?,
-                ExprRPNItem::Wildcard => self.analyze_wildcard(&mut stack)?,
-                ExprRPNItem::Cast(v, pg_style) => self.analyze_cast(v, *pg_style, &mut stack)?,
-                ExprRPNItem::Between(negated) => self.analyze_between(*negated, &mut stack)?,
-                ExprRPNItem::InList(v) => self.analyze_inlist(v, &mut stack)?,
-                ExprRPNItem::MapAccess(v) => self.analyze_map_access(v, &mut stack)?,
-                ExprRPNItem::Array(v) => self.analyze_array(*v, &mut stack)?,
-
-                _ => {
-                    return Err(ErrorCode::LogicalError(format!(
-                        "Logical error: can't analyze {:?} in sync mode, it's a bug",
-                        expr
-                    )));
-                }
-            }
-        }
-
-        match stack.len() {
-            1 => Ok(stack.remove(0)),
-            _ => Err(ErrorCode::LogicalError(
-                "Logical error: this is expr rpn bug.",
-            )),
-        }
+        ExpressionAnalyzer { context }
     }
 
     pub async fn analyze(&self, expr: &Expr) -> Result<Expression> {
         let mut stack = Vec::new();
 
         // Build RPN for expr. Because async function unsupported recursion
-        for rpn_item in &ExprRPNBuilder::build(expr, self.udfs.clone())? {
+        for rpn_item in &ExprRPNBuilder::build(expr)? {
             match rpn_item {
                 ExprRPNItem::Value(v) => Self::analyze_value(
                     v,
@@ -142,9 +81,9 @@ impl ExpressionAnalyzer {
         }
     }
 
-    pub fn analyze_function_arg(&self, arg_expr: &FunctionArgExpr) -> Result<Expression> {
+    pub async fn analyze_function_arg(&self, arg_expr: &FunctionArgExpr) -> Result<Expression> {
         match arg_expr {
-            FunctionArgExpr::Expr(expr) => self.analyze_sync(expr),
+            FunctionArgExpr::Expr(expr) => self.analyze(expr).await,
             FunctionArgExpr::Wildcard => Ok(Expression::Wildcard),
             FunctionArgExpr::QualifiedWildcard(_) => Err(ErrorCode::SyntaxException(std::format!(
                 "Unsupported arg statement: {}",
@@ -607,285 +546,6 @@ impl ExpressionAnalyzer {
             ArrayType::new_impl(inner_type),
         );
         args.push(array_value);
-        Ok(())
-    }
-}
-
-enum OperatorKind {
-    Unary,
-    Binary,
-    Other,
-}
-
-struct FunctionExprInfo {
-    name: String,
-    distinct: bool,
-    args_count: usize,
-    kind: OperatorKind,
-    parameters: Vec<Value>,
-    over: Option<WindowSpec>,
-}
-
-struct InListInfo {
-    list_size: usize,
-    negated: bool,
-}
-
-enum ExprRPNItem {
-    Value(Value),
-    Identifier(Ident),
-    QualifiedIdentifier(Vec<Ident>),
-    Function(FunctionExprInfo),
-    Wildcard,
-    Exists(Box<Query>),
-    Subquery(Box<Query>),
-    Cast(DataTypeImpl, bool),
-    Between(bool),
-    InList(InListInfo),
-    MapAccess(Vec<Value>),
-    Array(usize),
-}
-
-impl ExprRPNItem {
-    pub fn function(name: String, args_count: usize) -> ExprRPNItem {
-        ExprRPNItem::Function(FunctionExprInfo {
-            name,
-            distinct: false,
-            args_count,
-            kind: OperatorKind::Other,
-            parameters: Vec::new(),
-            over: None,
-        })
-    }
-
-    pub fn binary_operator(name: String) -> ExprRPNItem {
-        ExprRPNItem::Function(FunctionExprInfo {
-            name,
-            distinct: false,
-            args_count: 2,
-            kind: OperatorKind::Binary,
-            parameters: Vec::new(),
-            over: None,
-        })
-    }
-
-    pub fn unary_operator(name: String) -> ExprRPNItem {
-        ExprRPNItem::Function(FunctionExprInfo {
-            name,
-            distinct: false,
-            args_count: 1,
-            kind: OperatorKind::Unary,
-            parameters: Vec::new(),
-            over: None,
-        })
-    }
-}
-
-struct ExprRPNBuilder {
-    rpn: Vec<ExprRPNItem>,
-    udfs: Vec<UserDefinedFunction>,
-}
-
-impl ExprRPNBuilder {
-    pub fn build(expr: &Expr, udfs: Vec<UserDefinedFunction>) -> Result<Vec<ExprRPNItem>> {
-        let mut builder = ExprRPNBuilder {
-            rpn: Vec::new(),
-            udfs,
-        };
-        UDFExprTraverser::accept(expr, &mut builder)?;
-        Ok(builder.rpn)
-    }
-
-    fn process_expr(&mut self, expr: &Expr) -> Result<()> {
-        match expr {
-            Expr::Value(value) => {
-                self.rpn.push(ExprRPNItem::Value(value.clone()));
-            }
-            Expr::Identifier(ident) => {
-                self.rpn.push(ExprRPNItem::Identifier(ident.clone()));
-            }
-            Expr::CompoundIdentifier(idents) => {
-                self.rpn
-                    .push(ExprRPNItem::QualifiedIdentifier(idents.to_vec()));
-            }
-            Expr::IsNull(_) => {
-                self.rpn
-                    .push(ExprRPNItem::function(String::from("is_null"), 1));
-            }
-            Expr::IsNotNull(_) => {
-                self.rpn
-                    .push(ExprRPNItem::function(String::from("is_not_null"), 1));
-            }
-            Expr::UnaryOp { op, .. } => {
-                match op {
-                    UnaryOperator::Plus => {}
-                    // In order to distinguish it from binary addition.
-                    UnaryOperator::Minus => self
-                        .rpn
-                        .push(ExprRPNItem::unary_operator("NEGATE".to_string())),
-                    _ => self.rpn.push(ExprRPNItem::unary_operator(op.to_string())),
-                }
-            }
-            Expr::BinaryOp { op, .. } => {
-                self.rpn.push(ExprRPNItem::binary_operator(op.to_string()));
-            }
-            Expr::Exists(subquery) => {
-                self.rpn.push(ExprRPNItem::Exists(subquery.clone()));
-            }
-            Expr::Subquery(subquery) => {
-                self.rpn.push(ExprRPNItem::Subquery(subquery.clone()));
-            }
-            Expr::Function(function) => {
-                self.rpn.push(ExprRPNItem::Function(FunctionExprInfo {
-                    name: function.name.to_string(),
-                    distinct: function.distinct,
-                    args_count: function.args.len(),
-                    kind: OperatorKind::Other,
-                    parameters: function.params.to_owned(),
-                    over: function.over.clone(),
-                }));
-            }
-            Expr::Cast {
-                data_type,
-                pg_style,
-                ..
-            } => {
-                self.rpn.push(ExprRPNItem::Cast(
-                    SQLCommon::make_data_type(data_type)?,
-                    *pg_style,
-                ));
-            }
-            Expr::TryCast { data_type, .. } => {
-                let mut ty = SQLCommon::make_data_type(data_type)?;
-                if ty.can_inside_nullable() {
-                    ty = NullableType::new_impl(ty)
-                }
-                self.rpn.push(ExprRPNItem::Cast(ty, false));
-            }
-            Expr::TypedString { data_type, value } => {
-                self.rpn.push(ExprRPNItem::Value(Value::SingleQuotedString(
-                    value.to_string(),
-                )));
-                self.rpn.push(ExprRPNItem::Cast(
-                    SQLCommon::make_data_type(data_type)?,
-                    false,
-                ));
-            }
-            Expr::Position { .. } => {
-                let name = String::from("position");
-                self.rpn.push(ExprRPNItem::function(name, 2));
-            }
-            Expr::Substring {
-                substring_from,
-                substring_for,
-                ..
-            } => {
-                if substring_from.is_none() {
-                    self.rpn
-                        .push(ExprRPNItem::Value(Value::Number(String::from("1"), false)));
-                }
-
-                let name = String::from("substring");
-                match substring_for {
-                    None => self.rpn.push(ExprRPNItem::function(name, 2)),
-                    Some(_) => {
-                        self.rpn.push(ExprRPNItem::function(name, 3));
-                    }
-                }
-            }
-            Expr::Between { negated, .. } => {
-                self.rpn.push(ExprRPNItem::Between(*negated));
-            }
-            Expr::Tuple(exprs) => {
-                let len = exprs.len();
-
-                if len > 1 {
-                    self.rpn
-                        .push(ExprRPNItem::function(String::from("tuple"), len));
-                }
-            }
-            Expr::InList {
-                expr: _,
-                list,
-                negated,
-            } => self.rpn.push(ExprRPNItem::InList(InListInfo {
-                list_size: list.len(),
-                negated: *negated,
-            })),
-            Expr::Extract { field, .. } => match field {
-                DateTimeField::Year => self
-                    .rpn
-                    .push(ExprRPNItem::function(String::from("to_year"), 1)),
-                DateTimeField::Month => self
-                    .rpn
-                    .push(ExprRPNItem::function(String::from("to_month"), 1)),
-                DateTimeField::Day => self
-                    .rpn
-                    .push(ExprRPNItem::function(String::from("to_day_of_month"), 1)),
-                DateTimeField::Hour => self
-                    .rpn
-                    .push(ExprRPNItem::function(String::from("to_hour"), 1)),
-                DateTimeField::Minute => self
-                    .rpn
-                    .push(ExprRPNItem::function(String::from("to_minute"), 1)),
-                DateTimeField::Second => self
-                    .rpn
-                    .push(ExprRPNItem::function(String::from("to_second"), 1)),
-            },
-            Expr::MapAccess { keys, .. } => {
-                self.rpn.push(ExprRPNItem::MapAccess(keys.to_owned()));
-            }
-            Expr::Trim { trim_where, .. } => match trim_where {
-                None => self
-                    .rpn
-                    .push(ExprRPNItem::function(String::from("trim"), 1)),
-                Some(_) => {
-                    self.rpn
-                        .push(ExprRPNItem::function(String::from("trim"), 2));
-                }
-            },
-            Expr::Array(exprs) => {
-                self.rpn.push(ExprRPNItem::Array(exprs.len()));
-            }
-            _ => (),
-        }
-
-        Ok(())
-    }
-}
-
-#[async_trait]
-impl UDFFetcher for ExprRPNBuilder {
-    fn get_udf_definition(&self, name: &str) -> Result<UDFDefinition> {
-        let udf = self.udfs.iter().find(|udf| udf.name == name);
-
-        if let Some(udf) = udf {
-            let mut udf_parser = UDFParser::default();
-            let definition = udf_parser.parse(&udf.name, &udf.parameters, &udf.definition)?;
-            return Ok(UDFDefinition::new(udf.parameters.clone(), definition));
-        }
-        Err(ErrorCode::UnknownUDF(format!("Unknown Function {}", name)))
-    }
-}
-
-#[async_trait]
-impl UDFExprVisitor for ExprRPNBuilder {
-    fn pre_visit(&mut self, expr: &Expr) -> Result<Expr> {
-        if let Expr::Function(function) = expr {
-            if !is_builtin_function(&function.name.to_string()) {
-                return UDFTransformer::transform_function(function, self);
-            }
-        }
-
-        Ok(expr.clone())
-    }
-
-    fn post_visit(&mut self, expr: &Expr) -> Result<()> {
-        self.process_expr(expr)
-    }
-
-    fn visit_wildcard(&mut self) -> Result<()> {
-        self.rpn.push(ExprRPNItem::Wildcard);
         Ok(())
     }
 }
