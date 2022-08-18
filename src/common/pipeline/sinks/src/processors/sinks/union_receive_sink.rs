@@ -27,16 +27,12 @@ use crate::processors::sinks::AsyncSink;
 use crate::processors::sinks::AsyncSinker;
 
 pub struct UnionReceiveSink {
-    input_blocks: Vec<DataBlock>,
-    sender: Sender<Option<DataBlock>>,
+    sender: Sender<DataBlock>,
 }
 
 impl UnionReceiveSink {
-    pub fn create(sender: Sender<Option<DataBlock>>, input: Arc<InputPort>) -> ProcessorPtr {
-        AsyncSinker::create(input, UnionReceiveSink {
-            input_blocks: vec![],
-            sender,
-        })
+    pub fn create(sender: Sender<DataBlock>, input: Arc<InputPort>) -> ProcessorPtr {
+        AsyncSinker::create(input, UnionReceiveSink { sender })
     }
 }
 
@@ -45,21 +41,16 @@ impl AsyncSink for UnionReceiveSink {
     const NAME: &'static str = "UnionReceiveSink";
 
     async fn on_finish(&mut self) -> Result<()> {
-        let send_blocks = if self.input_blocks.is_empty() {
-            None
-        } else {
-            Some(DataBlock::concat_blocks(&self.input_blocks)?)
-        };
-        if let Err(_) = self.sender.send(send_blocks).await {
-            return Err(ErrorCode::UnexpectedError("UnionReceiveSink sender failed"));
-        };
         self.sender.close();
         Ok(())
     }
 
     #[unboxed_simple]
     async fn consume(&mut self, data_block: DataBlock) -> Result<()> {
-        self.input_blocks.push(data_block);
+        dbg!("come here");
+        if self.sender.send(data_block).await.is_err() {
+            return Err(ErrorCode::UnexpectedError("UnionReceiveSink sender failed"));
+        };
         Ok(())
     }
 }

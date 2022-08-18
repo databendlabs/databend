@@ -481,7 +481,7 @@ impl PipelineBuilder {
         self.build_pipeline(&exchange_sink.input)
     }
 
-    fn expand_union(&mut self, plan: &PhysicalPlan) -> Result<Receiver<Option<DataBlock>>> {
+    fn expand_union(&mut self, plan: &PhysicalPlan) -> Result<Receiver<DataBlock>> {
         let union_ctx = QueryContext::create_from(self.ctx.clone());
         let pipeline_builder = PipelineBuilder::create(union_ctx);
         let mut build_res = pipeline_builder.finalize(plan)?;
@@ -489,7 +489,7 @@ impl PipelineBuilder {
         assert!(build_res.main_pipeline.is_pulling_pipeline()?);
 
         build_res.main_pipeline.resize(1)?;
-        let (tx, rx) = async_channel::bounded(1);
+        let (tx, rx) = async_channel::unbounded();
         let input = InputPort::create();
         build_res.main_pipeline.add_pipe(Pipe::SimplePipe {
             outputs_port: vec![],

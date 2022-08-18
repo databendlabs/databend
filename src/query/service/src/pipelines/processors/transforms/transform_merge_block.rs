@@ -34,7 +34,7 @@ pub struct TransformMergeBlock {
     output_data: Option<DataBlock>,
     schema: DataSchemaRef,
 
-    receiver: Receiver<Option<DataBlock>>,
+    receiver: Receiver<DataBlock>,
     receiver_result: Option<DataBlock>,
 }
 
@@ -43,7 +43,7 @@ impl TransformMergeBlock {
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         schema: DataSchemaRef,
-        receiver: Receiver<Option<DataBlock>>,
+        receiver: Receiver<DataBlock>,
     ) -> ProcessorPtr {
         ProcessorPtr::create(Box::new(TransformMergeBlock {
             initialized: false,
@@ -127,7 +127,15 @@ impl Processor for TransformMergeBlock {
     async fn async_process(&mut self) -> Result<()> {
         if !self.initialized {
             self.initialized = true;
-            self.receiver_result = self.receiver.recv().await.unwrap_or(None);
+            let mut results = vec![];
+            while let Some(result) = self.receiver.recv().await.ok() {
+                results.push(result);
+            }
+            if results.is_empty() {
+                self.receiver_result = None;
+            } else {
+                self.receiver_result = Some(DataBlock::concat_blocks(&results)?);
+            }
         }
         Ok(())
     }
