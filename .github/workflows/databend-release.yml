@@ -8,6 +8,11 @@ on:
     # Release at 00:00 UTC+8
     - cron: '0 16 * * *'
   workflow_dispatch:
+    inputs:
+      tags:
+        description: The tags to be released
+        required: false
+        type: string
 
 permissions:
   id-token: write
@@ -42,6 +47,13 @@ jobs:
               return
             }
 
+            if ("${{ github.event.inputs.message }}") {
+              let tag = "${{ github.event.inputs.message }}";
+              core.setOutput('tag', tag);
+              console.log(`This event triggered by workflow_dispatch with a tag ${tag}, return directly.`)
+              return
+            }
+
             let tag = "${{ steps.get-latest-tag.outputs.tag }}";
             let result = /v(\d+)\.(\d+)\.(\d+)/g.exec(tag);
             if (result === null) {
@@ -56,6 +68,8 @@ jobs:
             console.log(`This event is triggered, return generated ${next_tag}.`)
             core.setOutput('tag', next_tag)
       - name: Create github release if not exist
+        # Allow this action failure
+        continue-on-error: true
         # Reference: https://cli.github.com/manual/gh_release_create
         run: |
           echo "Create a release for ${{ steps.generated-tag.outputs.tag }}"
