@@ -922,12 +922,7 @@ async fn get_outbound_share_tenants_by_name(
     kv_api: &(impl KVApi + ?Sized),
     share_name: &ShareNameIdent,
 ) -> Result<Vec<GetShareGrantTenants>, MetaError> {
-    let res = get_share_or_err(
-        kv_api,
-        share_name,
-        format!("get_share: {}", share_name.clone()),
-    )
-    .await?;
+    let res = get_share_or_err(kv_api, share_name, format!("get_share: {share_name}")).await?;
     let (_share_id_seq, share_id, _share_meta_seq, share_meta) = res;
 
     let mut accounts = vec![];
@@ -940,10 +935,7 @@ async fn get_outbound_share_tenants_by_name(
         let (_seq, meta) = get_share_account_meta_or_err(
             kv_api,
             &share_account_key,
-            format!(
-                "get_outbound_share_tenants_by_name's account: {}/{}",
-                share_id, account
-            ),
+            format!("get_outbound_share_tenants_by_name's account: {share_id}/{account}"),
         )
         .await?;
 
