@@ -31,7 +31,7 @@ use crate::pipelines::executor::executor_worker_context::ExecutorWorkerContext;
 use crate::pipelines::pipeline::Pipeline;
 
 pub type FinishedCallback =
-    Arc<Box<dyn Fn(&Option<ErrorCode>) -> Result<()> + Send + Sync + 'static>>;
+Arc<Box<dyn Fn(&Option<ErrorCode>) -> Result<()> + Send + Sync + 'static>>;
 
 pub struct PipelineExecutor {
     threads_num: usize,
@@ -177,7 +177,9 @@ impl PipelineExecutor {
 
         for thread_num in 0..threads_size {
             let this = self.clone();
-            let name = format!("PipelineExecutor-{}", thread_num);
+            let name = std::thread::current().name().map(|name| name.to_string())
+                .unwrap_or(format!("PipelineExecutor-{}", thread_num));
+            // format!("PipelineExecutor-{}", thread_num);
             thread_join_handles.push(Thread::named_spawn(Some(name), move || unsafe {
                 let this_clone = this.clone();
                 let try_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(

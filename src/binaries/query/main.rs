@@ -86,7 +86,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
     init_default_metrics_recorder();
     set_panic_hook();
 
-    let _global_guard = GlobalServices::init_with_guard(conf.clone()).await?;
+    GlobalServices::init(conf.clone()).await?;
     let mut shutdown_handle = ShutdownHandle::create()?;
 
     info!("Databend Query start with config: {:?}", conf);
@@ -95,7 +95,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
     {
         let hostname = conf.query.mysql_handler_host.clone();
         let listening = format!("{}:{}", hostname, conf.query.mysql_handler_port);
-        let mut handler = MySQLHandler::create()?;
+        let mut handler = MySQLHandler::create(SessionManager::instance())?;
         let listening = handler.start(listening.parse()?).await?;
         shutdown_handle.add_service(handler);
 

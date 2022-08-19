@@ -24,18 +24,17 @@ use common_exception::Result;
 #[cfg(feature = "hive")]
 use common_storages_hive::CATALOG_HIVE;
 use once_cell::sync::OnceCell;
+use common_base::base::SingletonInstance;
 
 use crate::catalogs::DatabaseCatalog;
 
 #[async_trait::async_trait]
 pub trait CatalogManagerHelper {
-    async fn init(conf: &Config) -> Result<()>;
+    async fn init(conf: &Config, v: SingletonInstance<Arc<CatalogManager>>) -> Result<()>;
 
     fn instance() -> Arc<CatalogManager>;
 
     async fn try_create(conf: &Config) -> Result<Arc<CatalogManager>>;
-
-    fn destroy();
 
     async fn register_build_in_catalogs(&mut self, conf: &Config) -> Result<()>;
 
@@ -43,23 +42,25 @@ pub trait CatalogManagerHelper {
     fn register_external_catalogs(&mut self, conf: &Config) -> Result<()>;
 }
 
-static CATALOG_MANAGER: OnceCell<Arc<CatalogManager>> = OnceCell::new();
+static CATALOG_MANAGER: OnceCell<SingletonInstance<Arc<CatalogManager>>> = OnceCell::new();
 
 #[async_trait::async_trait]
 impl CatalogManagerHelper for CatalogManager {
-    async fn init(conf: &Config) -> Result<()> {
-        let catalog_manager = Self::try_create(conf).await?;
+    async fn init(conf: &Config, v: SingletonInstance<Arc<CatalogManager>>) -> Result<()> {
+        v.init(Self::try_create(conf).await?)?;
 
-        match CATALOG_MANAGER.set(catalog_manager) {
-            Ok(_) => Ok(()),
-            Err(_) => Err(ErrorCode::LogicalError("Cannot init SessionManager twice")),
-        }
+        CATALOG_MANAGER.set(v).ok();
+        Ok(())
+        // match CATALOG_MANAGER.set(v) {
+        //     Ok(_) => Ok(()),
+        //     Err(_) => Err(ErrorCode::LogicalError("Cannot init SessionManager twice")),
+        // }
     }
 
     fn instance() -> Arc<CatalogManager> {
         match CATALOG_MANAGER.get() {
             None => panic!("CatalogManager is not init"),
-            Some(catalog_manager) => catalog_manager.clone(),
+            Some(catalog_manager) => catalog_manager.get(),
         }
     }
 
@@ -76,17 +77,6 @@ impl CatalogManagerHelper for CatalogManager {
         }
 
         Ok(Arc::new(catalog_manager))
-    }
-
-    fn destroy() {
-        unsafe {
-            let const_ptr = &CATALOG_MANAGER as *const OnceCell<Arc<CatalogManager>>;
-            let mut_ptr = const_ptr as *mut OnceCell<Arc<CatalogManager>>;
-
-            if let Some(catalog_manager) = (*mut_ptr).take() {
-                drop(catalog_manager);
-            }
-        }
     }
 
     async fn register_build_in_catalogs(&mut self, conf: &Config) -> Result<()> {

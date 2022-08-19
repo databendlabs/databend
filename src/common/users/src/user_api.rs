@@ -33,22 +33,25 @@ use common_meta_api::KVApi;
 use common_meta_store::MetaStore;
 use common_meta_store::MetaStoreProvider;
 use once_cell::sync::OnceCell;
+use common_base::base::SingletonInstance;
 
 pub struct UserApiProvider {
     meta: MetaStore,
     client: Arc<dyn KVApi>,
 }
 
-static USER_API_PROVIDER: OnceCell<Arc<UserApiProvider>> = OnceCell::new();
+static USER_API_PROVIDER: OnceCell<SingletonInstance<Arc<UserApiProvider>>> = OnceCell::new();
 
 impl UserApiProvider {
-    pub async fn init(conf: RpcClientConf) -> Result<()> {
-        let user_api_provider = Self::try_create(conf).await?;
+    pub async fn init(conf: RpcClientConf, v: SingletonInstance<Arc<UserApiProvider>>) -> Result<()> {
+        v.init(Self::try_create(conf).await?)?;
 
-        match USER_API_PROVIDER.set(user_api_provider) {
-            Ok(_) => Ok(()),
-            Err(_) => Err(ErrorCode::LogicalError("Cannot init UserApiProvider twice")),
-        }
+        USER_API_PROVIDER.set(v).ok();
+        Ok(())
+        // match USER_API_PROVIDER.set(v) {
+        //     Ok(_) => Ok(()),
+        //     Err(_) => Err(ErrorCode::LogicalError("Cannot init UserApiProvider twice")),
+        // }
     }
 
     pub async fn try_create(conf: RpcClientConf) -> Result<Arc<UserApiProvider>> {
@@ -62,18 +65,7 @@ impl UserApiProvider {
     pub fn instance() -> Arc<UserApiProvider> {
         match USER_API_PROVIDER.get() {
             None => panic!("UserApiProvider is not init"),
-            Some(user_api_provider) => user_api_provider.clone(),
-        }
-    }
-
-    pub fn destroy() {
-        unsafe {
-            let const_ptr = &USER_API_PROVIDER as *const OnceCell<Arc<UserApiProvider>>;
-            let mut_ptr = const_ptr as *mut OnceCell<Arc<UserApiProvider>>;
-
-            if let Some(user_api_provider) = (*mut_ptr).take() {
-                drop(user_api_provider);
-            }
+            Some(user_api_provider) => user_api_provider.get(),
         }
     }
 

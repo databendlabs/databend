@@ -22,7 +22,7 @@ use common_base::base::tokio::sync::Notify;
 use common_base::base::tokio::time::interval_at;
 use common_base::base::tokio::time::Duration;
 use common_base::base::tokio::time::Instant;
-use common_base::base::GlobalIORuntime;
+use common_base::base::{GlobalIORuntime, SingletonInstance};
 use common_base::base::ProgressValues;
 use common_base::base::Runtime;
 use common_base::base::TrySpawn;
@@ -202,48 +202,38 @@ pub struct AsyncInsertManager {
     current_processing_insert: Arc<RwLock<QueryIdToEntry>>,
 }
 
-static ASYNC_INSERT_MANAGER: OnceCell<Arc<AsyncInsertManager>> = OnceCell::new();
+static ASYNC_INSERT_MANAGER: OnceCell<SingletonInstance<Arc<AsyncInsertManager>>> = OnceCell::new();
 
 impl AsyncInsertManager {
-    pub fn init(config: &Config) -> Result<()> {
+    pub fn init(config: &Config, v: SingletonInstance<Arc<AsyncInsertManager>>) -> Result<()> {
         let max_data_size = config.query.async_insert_max_data_size;
         let busy_timeout = Duration::from_millis(config.query.async_insert_busy_timeout);
         let stale_timeout = Duration::from_millis(config.query.async_insert_stale_timeout);
         let async_runtime = Runtime::with_worker_threads(2, Some(String::from("Async-Insert")))?;
 
-        let async_insert_manager = Arc::new(AsyncInsertManager {
+        v.init(Arc::new(AsyncInsertManager {
             busy_timeout,
             stale_timeout,
             max_data_size,
             async_runtime,
             queue: Arc::new(RwLock::new(Queue::default())),
             current_processing_insert: Arc::new(RwLock::new(QueryIdToEntry::default())),
-        });
+        }))?;
 
-        match ASYNC_INSERT_MANAGER.set(async_insert_manager) {
-            Ok(_) => Ok(()),
-            Err(_) => Err(ErrorCode::LogicalError(
-                "Cannot init AsyncInsertManager twice",
-            )),
-        }
+        ASYNC_INSERT_MANAGER.set(v).ok();
+        Ok(())
+        // match ASYNC_INSERT_MANAGER.set(v) {
+        //     Ok(_) => Ok(()),
+        //     Err(_) => Err(ErrorCode::LogicalError(
+        //         "Cannot init AsyncInsertManager twice",
+        //     )),
+        // }
     }
 
     pub fn instance() -> Arc<AsyncInsertManager> {
         match ASYNC_INSERT_MANAGER.get() {
             None => panic!("AsyncInsertManager is not init"),
-            Some(async_insert_manager) => async_insert_manager.clone(),
-        }
-    }
-
-    pub fn destroy() {
-        unsafe {
-            let const_ptr = &ASYNC_INSERT_MANAGER as *const OnceCell<Arc<AsyncInsertManager>>;
-            let mut_ptr = const_ptr as *mut OnceCell<Arc<AsyncInsertManager>>;
-
-            if let Some(async_insert_manager) = (*mut_ptr).take() {
-                // TODO: shutdown background thread in drop.
-                drop(async_insert_manager);
-            }
+            Some(async_insert_manager) => async_insert_manager.get(),
         }
     }
 

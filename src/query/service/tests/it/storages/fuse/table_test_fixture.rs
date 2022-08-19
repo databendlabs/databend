@@ -58,7 +58,6 @@ use tempfile::TempDir;
 use tokio_stream::StreamExt;
 use uuid::Uuid;
 use walkdir::WalkDir;
-use crate::tests::TestQueryContextGuard;
 
 pub struct TestFixture {
     _tmp_dir: TempDir,
@@ -77,7 +76,7 @@ impl TestFixture {
             root: tmp_dir.path().to_str().unwrap().to_string(),
         });
 
-        let (_guard, ctx) = crate::tests::create_query_context_with_config(conf, None)
+        let ctx = crate::tests::create_query_context_with_config(conf, None)
             .await
             .unwrap();
 

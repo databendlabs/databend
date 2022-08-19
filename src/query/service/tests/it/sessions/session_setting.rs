@@ -18,17 +18,12 @@ use common_settings::Settings;
 use databend_query::sessions::{Session, SessionContext};
 use databend_query::sessions::SessionManager;
 use databend_query::sessions::SessionType;
+use crate::tests::TestGlobalServices;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_session_setting() -> Result<()> {
-    let conf = crate::tests::ConfigBuilder::create().build();
-
-    let id = String::from("dummy");
-    let typ = SessionType::Dummy;
-    let tenant = conf.query.tenant_id.clone();
-    let session_settings = Settings::default_settings(&tenant);
-    let session_ctx = SessionContext::try_create(conf.clone(), session_settings)?;
-    let session = Session::try_create(id, typ, session_ctx, None)?;
+    TestGlobalServices::setup(crate::tests::ConfigBuilder::create().build()).await?;
+    let session = SessionManager::instance().create_session(SessionType::Dummy).await?;
 
     // Settings.
     {

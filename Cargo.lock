@@ -1895,6 +1895,7 @@ dependencies = [
 name = "common-tracing"
 version = "0.1.0"
 dependencies = [
+ "common-base",
  "common-exception",
  "console-subscriber",
  "once_cell",

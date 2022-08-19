@@ -19,7 +19,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
-use common_base::base::tokio;
+use common_base::base::{SingletonInstance, tokio};
 use common_base::base::tokio::sync::Mutex;
 use common_base::base::tokio::sync::Notify;
 use common_base::base::tokio::task::JoinHandle;
@@ -133,7 +133,7 @@ impl ClusterHelper for Cluster {
     }
 }
 
-static CLUSTER_DISCOVERY: OnceCell<Arc<ClusterDiscovery>> = OnceCell::new();
+static CLUSTER_DISCOVERY: OnceCell<SingletonInstance<Arc<ClusterDiscovery>>> = OnceCell::new();
 
 impl ClusterDiscovery {
     const METRIC_LABEL_FUNCTION: &'static str = "function";
@@ -146,12 +146,12 @@ impl ClusterDiscovery {
         }
     }
 
-    pub async fn init(cfg: Config) -> Result<()> {
+    pub async fn init(cfg: Config, v: SingletonInstance<Arc<ClusterDiscovery>>) -> Result<()> {
         let local_id = GlobalUniqName::unique();
         let meta_client = ClusterDiscovery::create_meta_client(&cfg).await?;
         let (lift_time, provider) = Self::create_provider(&cfg, meta_client)?;
 
-        let cluster_discovery = Arc::new(ClusterDiscovery {
+        v.init(Arc::new(ClusterDiscovery {
             local_id: local_id.clone(),
             api_provider: provider.clone(),
             heartbeat: Mutex::new(ClusterHeartbeat::create(
@@ -163,29 +163,20 @@ impl ClusterDiscovery {
             cluster_id: cfg.query.cluster_id.clone(),
             tenant_id: cfg.query.tenant_id.clone(),
             flight_address: cfg.query.flight_api_address.clone(),
-        });
+        }))?;
 
-        match CLUSTER_DISCOVERY.set(cluster_discovery) {
-            Ok(_) => Ok(()),
-            Err(_) => Err(ErrorCode::LogicalError("Cannot init SessionManager twice")),
-        }
+        CLUSTER_DISCOVERY.set(v).ok();
+        Ok(())
+        // match CLUSTER_DISCOVERY.set(v) {
+        //     Ok(_) => Ok(()),
+        //     Err(_) => Err(ErrorCode::LogicalError("Cannot init SessionManager twice")),
+        // }
     }
 
     pub fn instance() -> Arc<ClusterDiscovery> {
         match CLUSTER_DISCOVERY.get() {
             None => panic!("ClusterDiscovery is not init"),
-            Some(cluster_discovery) => cluster_discovery.clone(),
-        }
-    }
-
-    pub fn destroy() {
-        unsafe {
-            let const_ptr = &CLUSTER_DISCOVERY as *const OnceCell<Arc<ClusterDiscovery>>;
-            let mut_ptr = const_ptr as *mut OnceCell<Arc<ClusterDiscovery>>;
-
-            if let Some(cluster_discovery) = (*mut_ptr).take() {
-                drop(cluster_discovery);
-            }
+            Some(cluster_discovery) => cluster_discovery.get(),
         }
     }
 

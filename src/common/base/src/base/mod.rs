@@ -24,6 +24,7 @@ mod stoppable;
 mod string_func;
 mod thread;
 mod uniq_id;
+mod singleton_instance;
 
 pub use global_runtime::GlobalIORuntime;
 pub use net::get_free_tcp_port;
@@ -51,3 +52,5 @@ pub use tokio;
 pub use uniq_id::GlobalSequence;
 pub use uniq_id::GlobalUniqName;
 pub use uuid;
+pub use singleton_instance::SingletonInstance;
+pub use singleton_instance::SingletonInstanceImpl;

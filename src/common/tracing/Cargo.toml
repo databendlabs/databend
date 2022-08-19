@@ -15,6 +15,7 @@ console = ["console-subscriber"]
 
 [dependencies] # In alphabetical order
 # Workspace dependencies
+common-base = { path = "../base" }
 common-exception = { path = "../exception" }
 
 # Crates.io dependencies

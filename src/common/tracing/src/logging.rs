@@ -36,6 +36,7 @@ use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::Layer;
 use tracing_subscriber::Registry;
+use common_base::base::SingletonInstance;
 
 use crate::Config;
 
@@ -179,15 +180,19 @@ pub struct QueryLogger {
     _log_guards: Vec<WorkerGuard>,
 }
 
-static QUERY_LOGGER: OnceCell<Arc<QueryLogger>> = OnceCell::new();
+static QUERY_LOGGER: OnceCell<SingletonInstance<Arc<QueryLogger>>> = OnceCell::new();
 
 impl QueryLogger {
-    pub fn init(app_name_shuffle: String, config: &Config) -> Result<()> {
+    pub fn init(
+        app_name_shuffle: String,
+        config: &Config,
+        v: SingletonInstance<Arc<QueryLogger>>,
+    ) -> Result<()> {
         let app_name = format!("databend-query-{}", app_name_shuffle);
         let mut _log_guards = init_logging(app_name.as_str(), config);
         let query_detail_dir = format!("{}/query-detail", config.file.dir);
 
-        let query_logger = match config.file.on {
+        v.init(match config.file.on {
             true => {
                 let (_guards, subscriber) = init_query_logger(&app_name_shuffle, &query_detail_dir);
                 _log_guards.extend(_guards);
@@ -201,29 +206,20 @@ impl QueryLogger {
                 subscriber: None,
                 _log_guards: vec![],
             }),
-        };
+        })?;
 
-        match QUERY_LOGGER.set(query_logger) {
-            Ok(_) => Ok(()),
-            Err(_) => Err(ErrorCode::LogicalError("Cannot init QueryLogger twice")),
-        }
+        QUERY_LOGGER.set(v).ok();
+        Ok(())
+        // match QUERY_LOGGER.set(v) {
+        //     Ok(_) => Ok(()),
+        //     Err(_) => Err(ErrorCode::LogicalError("Cannot init QueryLogger twice")),
+        // }
     }
 
     pub fn instance() -> Arc<QueryLogger> {
         match QUERY_LOGGER.get() {
             None => panic!("QueryLogger is not init"),
-            Some(query_logger) => query_logger.clone(),
-        }
-    }
-
-    pub fn destroy() {
-        unsafe {
-            let const_ptr = &QUERY_LOGGER as *const OnceCell<Arc<QueryLogger>>;
-            let mut_ptr = const_ptr as *mut OnceCell<Arc<QueryLogger>>;
-
-            if let Some(query_logger) = (*mut_ptr).take() {
-                drop(query_logger);
-            }
+            Some(query_logger) => query_logger.get(),
         }
     }
 

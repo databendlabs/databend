@@ -48,8 +48,28 @@ impl ConfigBuilder {
         self
     }
 
+    pub fn max_active_sessions(mut self, value: u64) -> ConfigBuilder {
+        self.conf.query.max_active_sessions = value;
+        self
+    }
+
     pub fn jwt_key_file(mut self, value: impl Into<String>) -> ConfigBuilder {
         self.conf.query.jwt_key_file = value.into();
+        self
+    }
+
+    pub fn async_insert_busy_timeout(mut self, value: u64) -> ConfigBuilder {
+        self.conf.query.async_insert_busy_timeout = value;
+        self
+    }
+
+    pub fn async_insert_max_data_size(mut self, value: u64) -> ConfigBuilder {
+        self.conf.query.async_insert_max_data_size = value;
+        self
+    }
+
+    pub fn async_insert_stale_timeout(mut self, value: u64) -> ConfigBuilder {
+        self.conf.query.async_insert_stale_timeout = value;
         self
     }
 

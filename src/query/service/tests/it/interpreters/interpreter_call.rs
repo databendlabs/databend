@@ -219,7 +219,7 @@ async fn test_call_tenant_quota_interpreter() -> Result<()> {
     user_info
         .option
         .set_option_flag(UserOptionFlag::TenantSetting);
-    let (_guard, ctx) = crate::tests::create_query_context_with_config(conf.clone(), Some(user_info)).await?;
+    let ctx = crate::tests::create_query_context_with_config(conf.clone(), Some(user_info)).await?;
 
     // current tenant
     {

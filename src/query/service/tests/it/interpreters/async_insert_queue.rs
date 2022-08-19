@@ -31,28 +31,7 @@ use databend_query::sessions::TableContext;
 use databend_query::sql::*;
 use futures::TryStreamExt;
 
-use crate::tests::TestGlobalServices;
-
-pub async fn setup_async_queue(
-    max_data_size: Option<u64>,
-    busy_timeout: Option<u64>,
-    stale_timeout: Option<u64>,
-) -> Result<TestGlobalServices> {
-    let mut conf = crate::tests::ConfigBuilder::create().config();
-    if let Some(max_data_size) = max_data_size {
-        conf.query.async_insert_max_data_size = max_data_size
-    }
-    if let Some(busy_timeout) = busy_timeout {
-        conf.query.async_insert_busy_timeout = busy_timeout;
-    }
-    if let Some(stale_timeout) = stale_timeout {
-        conf.query.async_insert_stale_timeout = stale_timeout;
-    }
-
-    let res = TestGlobalServices::setup(conf.clone()).await?;
-    AsyncInsertManager::instance().start().await;
-    Ok(res)
-}
+use crate::tests::{ConfigBuilder, TestGlobalServices};
 
 pub async fn build_insert_plan(sql: &str, ctx: Arc<QueryContext>) -> Result<InsertPlan> {
     let plan = PlanParser::parse(ctx.clone(), sql).await?;
@@ -64,8 +43,9 @@ pub async fn build_insert_plan(sql: &str, ctx: Arc<QueryContext>) -> Result<Inse
 
 #[tokio::test]
 async fn test_async_insert_queue() -> Result<()> {
-    let _guard1 = setup_async_queue(None, None, None).await?;
     let ctx = crate::tests::create_query_context().await?;
+
+    AsyncInsertManager::instance().start().await;
     let mut planner = Planner::new(ctx.clone());
 
     // Create table
@@ -175,8 +155,15 @@ async fn test_async_insert_queue() -> Result<()> {
 
 #[tokio::test]
 async fn test_async_insert_queue_max_data_size() -> Result<()> {
-    let guard1 = setup_async_queue(Some(1), None, None).await?;
-    let ctx = crate::tests::create_query_context().await?;
+    let ctx = crate::tests::create_query_context_with_config(
+        ConfigBuilder::create()
+            .async_insert_max_data_size(1)
+            .build(),
+        None,
+    ).await?;
+
+    AsyncInsertManager::instance().start().await;
+
     let mut planner = Planner::new(ctx.clone());
 
     // Create table
@@ -218,8 +205,14 @@ async fn test_async_insert_queue_max_data_size() -> Result<()> {
 
 #[tokio::test]
 async fn test_async_insert_queue_busy_timeout() -> Result<()> {
-    let guard1 = setup_async_queue(None, Some(900), None).await?;
-    let ctx = crate::tests::create_query_context().await?;
+    let ctx = crate::tests::create_query_context_with_config(
+        ConfigBuilder::create()
+            .async_insert_busy_timeout(900)
+            .build(),
+        None,
+    ).await?;
+
+    AsyncInsertManager::instance().start().await;
     let mut planner = Planner::new(ctx.clone());
 
     // Create table
@@ -261,8 +254,15 @@ async fn test_async_insert_queue_busy_timeout() -> Result<()> {
 
 #[tokio::test]
 async fn test_async_insert_queue_stale_timeout() -> Result<()> {
-    let _guard1 = setup_async_queue(None, Some(900), Some(300)).await?;
-    let ctx = crate::tests::create_query_context().await?;
+    let ctx = crate::tests::create_query_context_with_config(
+        ConfigBuilder::create()
+            .async_insert_busy_timeout(900)
+            .async_insert_stale_timeout(300)
+            .build(),
+        None,
+    ).await?;
+
+    AsyncInsertManager::instance().start().await;
     let mut planner = Planner::new(ctx.clone());
 
     // Create table
@@ -304,8 +304,14 @@ async fn test_async_insert_queue_stale_timeout() -> Result<()> {
 
 #[tokio::test]
 async fn test_async_insert_queue_wait_timeout() -> Result<()> {
-    let _guard1 = setup_async_queue(None, Some(2000), None).await?;
-    let ctx = crate::tests::create_query_context().await?;
+    let ctx = crate::tests::create_query_context_with_config(
+        ConfigBuilder::create()
+            .async_insert_busy_timeout(2000)
+            .build(),
+        None,
+    ).await?;
+
+    AsyncInsertManager::instance().start().await;
     let mut planner = Planner::new(ctx.clone());
 
     // Create table
@@ -346,8 +352,9 @@ async fn test_async_insert_queue_wait_timeout() -> Result<()> {
 
 #[tokio::test]
 async fn test_async_insert_queue_no_wait() -> Result<()> {
-    let _guard1 = setup_async_queue(None, None, None).await?;
     let ctx = crate::tests::create_query_context().await?;
+
+    AsyncInsertManager::instance().start().await;
     let mut planner = Planner::new(ctx.clone());
 
     // Create table

@@ -53,7 +53,7 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
 
     let mut conf = crate::tests::ConfigBuilder::create().config();
     conf.query.jwt_key_file = jwks_url.clone();
-    let (_guard, ctx) = crate::tests::create_query_context_with_config(conf, None).await?;
+    let ctx = crate::tests::create_query_context_with_config(conf, None).await?;
     let user_mgr = ctx.get_user_manager();
     let auth_mgr = ctx.get_auth_manager();
     let tenant = "test";
@@ -241,7 +241,7 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
         .with_management_mode()
         .config();
     conf.query.jwt_key_file = jwks_url;
-    let (_guard, ctx) = crate::tests::create_query_context_with_config(conf, None).await?;
+    let ctx = crate::tests::create_query_context_with_config(conf, None).await?;
     let auth_mgr = ctx.get_auth_manager();
 
     // with create user in other tenant

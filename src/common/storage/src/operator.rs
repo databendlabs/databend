@@ -15,7 +15,7 @@
 use std::env;
 use std::io::Result;
 
-use common_base::base::GlobalIORuntime;
+use common_base::base::{GlobalIORuntime, SingletonInstance};
 use common_contexts::DalRuntime;
 use common_exception::ErrorCode;
 use once_cell::sync::OnceCell;
@@ -149,16 +149,18 @@ pub fn init_s3_operator(cfg: &StorageS3Config) -> Result<Operator> {
 
 pub struct StorageOperator;
 
-static STORAGE_OPERATOR: OnceCell<Operator> = OnceCell::new();
+static STORAGE_OPERATOR: OnceCell<SingletonInstance<Operator>> = OnceCell::new();
 
 impl StorageOperator {
-    pub async fn init(conf: &StorageConfig) -> common_exception::Result<()> {
-        let operator = Self::try_create(conf).await?;
+    pub async fn init(conf: &StorageConfig, v: SingletonInstance<Operator>) -> common_exception::Result<()> {
+        v.init(Self::try_create(conf).await?)?;
 
-        match STORAGE_OPERATOR.set(operator) {
-            Ok(_) => Ok(()),
-            Err(_) => Err(ErrorCode::LogicalError("Cannot init StorageOperator twice")),
-        }
+        STORAGE_OPERATOR.set(v).ok();
+        Ok(())
+        // match STORAGE_OPERATOR.set(v) {
+        //     Ok(_) => Ok(()),
+        //     Err(_) => Err(ErrorCode::LogicalError("Cannot init StorageOperator twice")),
+        // }
     }
 
     pub async fn try_create(conf: &StorageConfig) -> common_exception::Result<Operator> {
@@ -183,18 +185,7 @@ impl StorageOperator {
     pub fn instance() -> Operator {
         match STORAGE_OPERATOR.get() {
             None => panic!("StorageOperator is not init"),
-            Some(storage_operator) => storage_operator.clone(),
-        }
-    }
-
-    pub fn destroy() {
-        unsafe {
-            let const_ptr = &STORAGE_OPERATOR as *const OnceCell<Operator>;
-            let mut_ptr = const_ptr as *mut OnceCell<Operator>;
-
-            if let Some(storage_operator) = (*mut_ptr).take() {
-                drop(storage_operator);
-            }
+            Some(storage_operator) => storage_operator.get(),
         }
     }
 }

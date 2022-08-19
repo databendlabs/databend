@@ -20,7 +20,7 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
 
-use common_base::base::tokio;
+use common_base::base::{SingletonInstance, tokio};
 use common_base::base::SignalStream;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -52,41 +52,36 @@ pub struct SessionManager {
     pub(in crate::sessions) mysql_basic_conn_id: AtomicU32,
 }
 
-static SESSION_MANAGER: OnceCell<Arc<SessionManager>> = OnceCell::new();
+static SESSION_MANAGER: OnceCell<SingletonInstance<Arc<SessionManager>>> = OnceCell::new();
 
 impl SessionManager {
-    pub fn init(conf: Config) -> Result<()> {
+    pub fn init(conf: Config, v: SingletonInstance<Arc<SessionManager>>) -> Result<()> {
+        v.init(Self::create(conf))?;
+
+        SESSION_MANAGER.set(v).ok();
+        Ok(())
+        // match SESSION_MANAGER.set(v) {
+        //     Ok(_) => Ok(()),
+        //     Err(_) => Err(ErrorCode::LogicalError("Cannot init SessionManager twice")),
+        // }
+    }
+
+    pub fn create(conf: Config) -> Arc<SessionManager> {
         let max_sessions = conf.query.max_active_sessions as usize;
-        let session_manager = Arc::new(SessionManager {
+        Arc::new(SessionManager {
             conf,
             max_sessions,
             mysql_basic_conn_id: AtomicU32::new(9_u32.to_le() as u32),
             status: Arc::new(RwLock::new(SessionManagerStatus::default())),
             mysql_conn_map: Arc::new(RwLock::new(HashMap::with_capacity(max_sessions))),
             active_sessions: Arc::new(RwLock::new(HashMap::with_capacity(max_sessions))),
-        });
-
-        match SESSION_MANAGER.set(session_manager) {
-            Ok(_) => Ok(()),
-            Err(_) => Err(ErrorCode::LogicalError("Cannot init SessionManager twice")),
-        }
+        })
     }
 
     pub fn instance() -> Arc<SessionManager> {
         match SESSION_MANAGER.get() {
             None => panic!("SessionManager is not init"),
-            Some(session_manager) => session_manager.clone(),
-        }
-    }
-
-    pub fn destroy() {
-        unsafe {
-            let const_ptr = &SESSION_MANAGER as *const OnceCell<Arc<SessionManager>>;
-            let mut_ptr = const_ptr as *mut OnceCell<Arc<SessionManager>>;
-
-            if let Some(session_manager) = (*mut_ptr).take() {
-                drop(session_manager);
-            }
+            Some(session_manager) => session_manager.get(),
         }
     }
 

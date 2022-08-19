@@ -19,7 +19,7 @@ use std::ops::Deref;
 use std::sync::Arc;
 
 use common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
-use common_base::base::GlobalIORuntime;
+use common_base::base::{GlobalIORuntime, SingletonInstance};
 use common_base::base::Thread;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
@@ -63,38 +63,29 @@ pub struct DataExchangeManager {
     queries_coordinator: ReentrantMutex<SyncUnsafeCell<HashMap<String, QueryCoordinator>>>,
 }
 
-static DATA_EXCHANGE_MANAGER: OnceCell<Arc<DataExchangeManager>> = OnceCell::new();
+static DATA_EXCHANGE_MANAGER: OnceCell<SingletonInstance<Arc<DataExchangeManager>>> = OnceCell::new();
 
 impl DataExchangeManager {
-    pub fn init(config: Config) -> Result<()> {
-        let exchange_manager = Arc::new(DataExchangeManager {
+    pub fn init(config: Config, v: SingletonInstance<Arc<DataExchangeManager>>) -> Result<()> {
+        v.init(Arc::new(DataExchangeManager {
             config,
             queries_coordinator: ReentrantMutex::new(SyncUnsafeCell::new(HashMap::new())),
-        });
+        }))?;
 
-        match DATA_EXCHANGE_MANAGER.set(exchange_manager) {
-            Ok(_) => Ok(()),
-            Err(_) => Err(ErrorCode::LogicalError(
-                "Cannot init DataExchangeManager twice",
-            )),
-        }
+        DATA_EXCHANGE_MANAGER.set(v).ok();
+        Ok(())
+        // match DATA_EXCHANGE_MANAGER.set(v) {
+        //     Ok(_) => Ok(()),
+        //     Err(_) => Err(ErrorCode::LogicalError(
+        //         "Cannot init DataExchangeManager twice",
+        //     )),
+        // }
     }
 
     pub fn instance() -> Arc<DataExchangeManager> {
         match DATA_EXCHANGE_MANAGER.get() {
             None => panic!("DataExchangeManager is not init"),
-            Some(data_exchange_manager) => data_exchange_manager.clone(),
-        }
-    }
-
-    pub fn destroy() {
-        unsafe {
-            let const_ptr = &DATA_EXCHANGE_MANAGER as *const OnceCell<Arc<DataExchangeManager>>;
-            let mut_ptr = const_ptr as *mut OnceCell<Arc<DataExchangeManager>>;
-
-            if let Some(data_exchange_manager) = (*mut_ptr).take() {
-                drop(data_exchange_manager);
-            }
+            Some(data_exchange_manager) => data_exchange_manager.get(),
         }
     }
 

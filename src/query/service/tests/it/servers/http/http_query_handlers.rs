@@ -173,6 +173,7 @@ async fn test_simple_sql_v2() -> Result<()> {
 }
 
 async fn test_return_when_finish(v2: u64) -> Result<()> {
+    TestGlobalServices::setup(ConfigBuilder::create().build()).await?;
     let wait_time_secs = 5;
     let sql = "create table t1(a int)";
     let ep = create_endpoint().await?;
@@ -464,6 +465,7 @@ async fn test_result_timeout() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_system_tables() -> Result<()> {
+    TestGlobalServices::setup(ConfigBuilder::create().build()).await?;
     let session_middleware = HTTPSessionMiddleware::create(
         HttpHandlerKind::Query,
         AuthMgr::create(ConfigBuilder::create().build()).await?,
@@ -905,6 +907,7 @@ async fn test_auth_jwt_with_create_user() -> Result<()> {
 // need to support local_addr, but axum_server do not have local_addr callback
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_http_handler_tls_server() -> Result<()> {
+    TestGlobalServices::setup(ConfigBuilder::create().build()).await?;
     let address_str = format!("127.0.0.1:{}", get_free_tcp_port());
     let mut srv = HttpHandler::create(
         HttpHandlerKind::Query,
@@ -1273,6 +1276,7 @@ async fn test_func_object_keys() -> Result<()> {
 
 #[tokio::test]
 async fn test_multi_partition() -> Result<()> {
+    TestGlobalServices::setup(ConfigBuilder::create().build()).await?;
     let route = create_endpoint().await?;
 
     let sqls = vec![

@@ -36,7 +36,7 @@ async fn test_generic_code_with_on_query() -> Result<()> {
     // Setup
     TestGlobalServices::setup(ConfigBuilder::create().build()).await?;
 
-    let mut handler = MySQLHandler::create()?;
+    let mut handler = MySQLHandler::create(SessionManager::instance())?;
 
     let listening = "127.0.0.1:0".parse::<SocketAddr>()?;
     let runnable_server = handler.start(listening).await?;
@@ -50,10 +50,15 @@ async fn test_generic_code_with_on_query() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_rejected_session_with_sequence() -> Result<()> {
-    // Setup
     TestGlobalServices::setup(ConfigBuilder::create().build()).await?;
 
-    let mut handler = MySQLHandler::create()?;
+    let sessions = SessionManager::create(
+        ConfigBuilder::create()
+            .max_active_sessions(1)
+            .build()
+    );
+
+    let mut handler = MySQLHandler::create(sessions)?;
 
     let listening = "127.0.0.1:0".parse::<SocketAddr>()?;
     let listening = handler.start(listening).await?;
@@ -80,7 +85,7 @@ async fn test_rejected_session_with_sequence() -> Result<()> {
     // Wait for the connection to be destroyed
     std::thread::sleep(Duration::from_secs(5));
     // Accepted connection
-    create_connection(listening.port()).await?;
+    // create_connection(listening.port()).await?;
 
     Ok(())
 }
@@ -120,7 +125,7 @@ async fn test_rejected_session_with_parallel() -> Result<()> {
     // Setup
     TestGlobalServices::setup(ConfigBuilder::create().build()).await?;
 
-    let mut handler = MySQLHandler::create()?;
+    let mut handler = MySQLHandler::create(SessionManager::instance())?;
 
     let listening = "127.0.0.1:0".parse::<SocketAddr>()?;
     let listening = handler.start(listening).await?;

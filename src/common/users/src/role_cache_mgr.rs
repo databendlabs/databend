@@ -17,7 +17,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
-use common_base::base::tokio;
+use common_base::base::{SingletonInstance, tokio};
 use common_base::base::tokio::task::JoinHandle;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -41,21 +41,23 @@ pub struct RoleCacheManager {
     polling_join_handle: Option<JoinHandle<()>>,
 }
 
-static ROLE_CACHE_MANAGER: OnceCell<Arc<RoleCacheManager>> = OnceCell::new();
+static ROLE_CACHE_MANAGER: OnceCell<SingletonInstance<Arc<RoleCacheManager>>> = OnceCell::new();
 
 impl RoleCacheManager {
-    pub fn init() -> Result<()> {
+    pub fn init(v: SingletonInstance<Arc<RoleCacheManager>>) -> Result<()> {
         // Check that the user API has been initialized.
         let instance = UserApiProvider::instance();
 
-        let role_cache_manager = Self::try_create(instance)?;
+        v.init(Self::try_create(instance)?)?;
 
-        match ROLE_CACHE_MANAGER.set(role_cache_manager) {
-            Ok(_) => Ok(()),
-            Err(_) => Err(ErrorCode::LogicalError(
-                "Cannot init RoleCacheManager twice",
-            )),
-        }
+        ROLE_CACHE_MANAGER.set(v).ok();
+        Ok(())
+        // match ROLE_CACHE_MANAGER.set(v) {
+        //     Ok(_) => Ok(()),
+        //     Err(_) => Err(ErrorCode::LogicalError(
+        //         "Cannot init RoleCacheManager twice",
+        //     )),
+        // }
     }
 
     pub fn try_create(user_manager: Arc<UserApiProvider>) -> Result<Arc<RoleCacheManager>> {
@@ -73,18 +75,7 @@ impl RoleCacheManager {
     pub fn instance() -> Arc<RoleCacheManager> {
         match ROLE_CACHE_MANAGER.get() {
             None => panic!("RoleCacheManager is not init"),
-            Some(role_cache_manager) => role_cache_manager.clone(),
-        }
-    }
-
-    pub fn destroy() {
-        unsafe {
-            let const_ptr = &ROLE_CACHE_MANAGER as *const OnceCell<Arc<RoleCacheManager>>;
-            let mut_ptr = const_ptr as *mut OnceCell<Arc<RoleCacheManager>>;
-
-            if let Some(role_cache_manager) = (*mut_ptr).take() {
-                drop(role_cache_manager);
-            }
+            Some(role_cache_manager) => role_cache_manager.get(),
         }
     }
 

@@ -40,47 +40,20 @@ use databend_query::Config;
 
 use crate::tests::TestGlobalServices;
 
-// #[derive(Clone)]
-pub struct TestQueryContextGuard {
-    inner: Arc<QueryContext>,
-    test_guard: TestGlobalServices,
-}
-
-impl Deref for TestQueryContextGuard {
-    type Target = Arc<QueryContext>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.inner
-    }
-}
-
 pub async fn create_query_context() -> Result<Arc<QueryContext>> {
     TestGlobalServices::setup(crate::tests::ConfigBuilder::create().build()).await?;
     create_query_context_with_session(SessionType::Dummy).await
 }
 
-pub async fn create_query_context_with_type(typ: SessionType) -> Result<TestQueryContextGuard> {
-    let test_guard = TestGlobalServices::setup(crate::tests::ConfigBuilder::create().build()).await?;
-    Ok(TestQueryContextGuard {
-        test_guard,
-        inner: create_query_context_with_session(typ).await?,
-    })
+pub async fn create_query_context_with_type(typ: SessionType) -> Result<Arc<QueryContext>> {
+    TestGlobalServices::setup(crate::tests::ConfigBuilder::create().build()).await?;
+    create_query_context_with_session(typ).await
 }
 
 async fn create_query_context_with_session(typ: SessionType) -> Result<Arc<QueryContext>> {
-    let config = crate::tests::ConfigBuilder::create().build();
+    TestGlobalServices::setup(crate::tests::ConfigBuilder::create().build()).await?;
 
-    let catalog_manager = CatalogManager::try_create(&config).await?;
-    let storage_operator = StorageOperator::try_create(&config.storage).await?;
-    let dummy_session = Session::try_create(
-        String::from("dummy_session"),
-        typ,
-        SessionContext::try_create(
-            config.clone(),
-            Settings::default_settings(&config.query.tenant_id.clone()),
-        )?,
-        Some(9),
-    )?;
+    let dummy_session = SessionManager::instance().create_session(typ).await?;
 
     // Set user with all privileges
     let mut user_info = UserInfo::new("root", "127.0.0.1", AuthInfo::Password {
@@ -94,39 +67,15 @@ async fn create_query_context_with_session(typ: SessionType) -> Result<Arc<Query
 
     dummy_session.set_current_user(user_info);
 
-    let user_manager = UserApiProvider::try_create(config.meta.to_meta_grpc_client_conf()).await?;
-    let context = QueryContext::create_from_shared(
-        QueryContextShared::try_create(
-            config,
-            dummy_session,
-            Cluster::empty(),
-            user_manager,
-            catalog_manager,
-            storage_operator,
-        ).await?,
-    );
-
-    context.get_settings().set_max_threads(8)?;
-    Ok(context)
+    let dummy_query_context = dummy_session.create_query_context().await?;
+    dummy_query_context.get_settings().set_max_threads(8)?;
+    Ok(dummy_query_context)
 }
 
-pub async fn create_query_context_with_config(
-    config: Config,
-    mut current_user: Option<UserInfo>,
-) -> Result<(TestGlobalServices, Arc<QueryContext>)> {
-    let test_guard = TestGlobalServices::setup(config.clone()).await?;
+pub async fn create_query_context_with_config(config: Config, mut current_user: Option<UserInfo>) -> Result<Arc<QueryContext>> {
+    TestGlobalServices::setup(config).await?;
 
-    let catalog_manager = CatalogManager::try_create(&config).await?;
-    let storage_operator = StorageOperator::try_create(&config.storage).await?;
-    let dummy_session = Session::try_create(
-        String::from("dummy_session"),
-        SessionType::Dummy,
-        SessionContext::try_create(
-            config.clone(),
-            Settings::default_settings(&config.query.tenant_id.clone()),
-        )?,
-        Some(9),
-    )?;
+    let dummy_session = SessionManager::instance().create_session(SessionType::Dummy).await?;
 
     if current_user.is_none() {
         let mut user_info = UserInfo::new("root", "127.0.0.1", AuthInfo::Password {
@@ -143,20 +92,10 @@ pub async fn create_query_context_with_config(
     }
 
     dummy_session.set_current_user(current_user.unwrap());
-    let user_manager = UserApiProvider::try_create(config.meta.to_meta_grpc_client_conf()).await?;
-    let context = QueryContext::create_from_shared(
-        QueryContextShared::try_create(
-            config,
-            dummy_session,
-            Cluster::empty(),
-            user_manager,
-            catalog_manager,
-            storage_operator,
-        ).await?,
-    );
+    let dummy_query_context = dummy_session.create_query_context().await?;
 
-    context.get_settings().set_max_threads(8)?;
-    Ok((test_guard, context))
+    dummy_query_context.get_settings().set_max_threads(8)?;
+    Ok(dummy_query_context)
 }
 
 pub async fn create_storage_context() -> Result<StorageContext> {
@@ -204,29 +143,11 @@ impl Default for ClusterDescriptor {
     }
 }
 
-pub async fn create_query_context_with_cluster(desc: ClusterDescriptor) -> Result<(TestGlobalServices, Arc<QueryContext>)> {
+pub async fn create_query_context_with_cluster(desc: ClusterDescriptor) -> Result<Arc<QueryContext>> {
     let config = crate::tests::ConfigBuilder::create().build();
-    let catalog_manager = CatalogManager::try_create(&config).await?;
-    let storage_operator = StorageOperator::try_create(&config.storage).await?;
-    let test_guard = TestGlobalServices::setup(config.clone()).await?;
+    TestGlobalServices::setup(config.clone()).await?;
     let dummy_session = SessionManager::instance().create_session(SessionType::Dummy).await?;
-
-    let local_id = desc.local_node_id;
-    let nodes = desc.cluster_nodes_list;
-
-    let user_manager = UserApiProvider::try_create(config.meta.to_meta_grpc_client_conf()).await?;
-    let context = QueryContext::create_from_shared(
-        QueryContextShared::try_create(
-            config,
-            (*dummy_session).clone(),
-            Cluster::create(nodes, local_id),
-            user_manager,
-            catalog_manager,
-            storage_operator,
-        )
-            .await?,
-    );
-
-    context.get_settings().set_max_threads(8)?;
-    Ok((test_guard, context))
+    let dummy_query_context = dummy_session.create_query_context().await?;
+    dummy_query_context.get_settings().set_max_threads(8)?;
+    Ok(dummy_query_context)
 }
