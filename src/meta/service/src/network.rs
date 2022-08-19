@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::ops::Deref;
+use std::ops::DerefMut;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
@@ -68,6 +70,62 @@ impl ItemManager for ChannelManager {
     }
 }
 
+/// Client for raft protocol communication
+pub struct RaftClient {
+    target: NodeId,
+    endpoint: Endpoint,
+    endpoint_str: String,
+    inner: RaftServiceClient<Channel>,
+}
+
+impl Deref for RaftClient {
+    type Target = RaftServiceClient<Channel>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl DerefMut for RaftClient {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
+    }
+}
+
+impl Drop for RaftClient {
+    fn drop(&mut self) {
+        incr_meta_metrics_active_peers(&self.target, &self.endpoint_str, -1);
+    }
+}
+
+impl RaftClient {
+    pub fn new(target: NodeId, endpoint: Endpoint, channel: Channel) -> Self {
+        let endpoint_str = endpoint.to_string();
+
+        debug!(
+            "RaftClient::new: target: {} endpoint: {}",
+            target, endpoint_str
+        );
+
+        incr_meta_metrics_active_peers(&target, &endpoint_str, 1);
+
+        Self {
+            target,
+            endpoint,
+            endpoint_str,
+            inner: RaftServiceClient::new(channel),
+        }
+    }
+
+    pub fn endpoint(&self) -> &Endpoint {
+        &self.endpoint
+    }
+
+    pub fn endpoint_str(&self) -> &str {
+        &self.endpoint_str
+    }
+}
+
 pub struct Network {
     sto: Arc<RaftStore>,
 
@@ -84,10 +142,7 @@ impl Network {
     }
 
     #[tracing::instrument(level = "debug", skip(self), fields(id=self.sto.id))]
-    pub async fn make_client(
-        &self,
-        target: &NodeId,
-    ) -> anyhow::Result<(RaftServiceClient<Channel>, Endpoint)> {
+    pub async fn make_client(&self, target: &NodeId) -> anyhow::Result<RaftClient> {
         let endpoint = self.sto.get_node_endpoint(target).await?;
         let addr = format!("http://{}", endpoint);
 
@@ -95,15 +150,13 @@ impl Network {
 
         match self.conn_pool.get(&addr).await {
             Ok(channel) => {
-                incr_meta_metrics_active_peers(target, &endpoint.clone().into(), 1);
-                let client = RaftServiceClient::new(channel);
-
+                let client = RaftClient::new(*target, endpoint, channel);
                 debug!("connected: target={}: {}", target, addr);
 
-                Ok((client, endpoint))
+                Ok(client)
             }
             Err(err) => {
-                incr_meta_metrics_fail_connections_to_peer(target, &endpoint.into());
+                incr_meta_metrics_fail_connections_to_peer(target, &endpoint.to_string());
                 Err(err.into())
             }
         }
@@ -129,7 +182,7 @@ impl RaftNetwork<LogEntry> for Network {
             rpc.summary()
         );
 
-        let (mut client, endpoint) = self.make_client(&target).await?;
+        let mut client = self.make_client(&target).await?;
 
         let req = common_tracing::inject_span_to_tonic_request(rpc);
 
@@ -144,7 +197,6 @@ impl RaftNetwork<LogEntry> for Network {
         let resp = resp?;
         let mes = resp.into_inner();
         let resp = serde_json::from_str(&mes.data)?;
-        incr_meta_metrics_active_peers(&target, &endpoint.into(), -1);
 
         Ok(resp)
     }
@@ -162,7 +214,7 @@ impl RaftNetwork<LogEntry> for Network {
         );
 
         let start = Instant::now();
-        let (mut client, endpoint) = self.make_client(&target).await?;
+        let mut client = self.make_client(&target).await?;
         let req = common_tracing::inject_span_to_tonic_request(rpc);
 
         self.incr_meta_metrics_sent_bytes_to_peer(&target, req.get_ref());
@@ -184,7 +236,6 @@ impl RaftNetwork<LogEntry> for Network {
         let resp = serde_json::from_str(&mes.data)?;
 
         sample_meta_metrics_snapshot_sent(&target, start.elapsed().as_secs() as f64);
-        incr_meta_metrics_active_peers(&target, &endpoint.into(), -1);
 
         Ok(resp)
     }
@@ -193,7 +244,7 @@ impl RaftNetwork<LogEntry> for Network {
     async fn send_vote(&self, target: NodeId, rpc: VoteRequest) -> anyhow::Result<VoteResponse> {
         info!("send_vote: target: {} rpc: {}", target, rpc.summary());
 
-        let (mut client, endpoint) = self.make_client(&target).await?;
+        let mut client = self.make_client(&target).await?;
         let req = common_tracing::inject_span_to_tonic_request(rpc);
 
         self.incr_meta_metrics_sent_bytes_to_peer(&target, req.get_ref());
@@ -208,7 +259,6 @@ impl RaftNetwork<LogEntry> for Network {
         let resp = resp?;
         let mes = resp.into_inner();
         let resp = serde_json::from_str(&mes.data)?;
-        incr_meta_metrics_active_peers(&target, &endpoint.into(), -1);
 
         Ok(resp)
     }
