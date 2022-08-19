@@ -17,12 +17,14 @@ use std::fmt::Debug;
 use std::net::Ipv4Addr;
 use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
+use std::time::Duration;
 
 use common_base::base::tokio;
 use common_base::base::tokio::sync::watch;
 use common_base::base::tokio::sync::Mutex;
 use common_base::base::tokio::sync::RwLockReadGuard;
 use common_base::base::tokio::task::JoinHandle;
+use common_grpc::ConnectionFactory;
 use common_grpc::DNSResolver;
 use common_meta_raft_store::config::RaftConfig;
 use common_meta_raft_store::state_machine::StateMachine;
@@ -571,16 +573,26 @@ impl MetaNode {
         let advertise_endpoint = conf.raft_api_advertise_host_endpoint();
         #[allow(clippy::never_loop)]
         for addr in addrs {
-            info!("try to join cluster via {}...", addr);
+            let timeout = Some(Duration::from_millis(1_000));
+            info!(
+                "try to join cluster via {}, timeout: {:?}...",
+                addr, timeout
+            );
 
-            let conn_res = RaftServiceClient::connect(format!("http://{}", addr)).await;
-            let mut raft_client = match conn_res {
+            if addr == &conf.raft_api_advertise_host_string() {
+                info!("avoid join via self: {}", addr);
+                continue;
+            }
+
+            let chan_res = ConnectionFactory::create_rpc_channel(addr, timeout, None).await;
+            let chan = match chan_res {
                 Ok(c) => c,
                 Err(e) => {
                     error!("connect to {} join cluster fail: {:?}", addr, e);
                     continue;
                 }
             };
+            let mut raft_client = RaftServiceClient::new(chan);
 
             let req = ForwardRequest {
                 forward_to_leader: 1,
@@ -592,6 +604,8 @@ impl MetaNode {
             };
 
             let join_res = raft_client.forward(req.clone()).await;
+            info!("join cluster result: {:?}", join_res);
+
             match join_res {
                 Ok(r) => {
                     let reply = r.into_inner();
@@ -836,6 +850,7 @@ impl MetaNode {
         let forward = req.forward_to_leader;
 
         let l = self.as_leader().await;
+        debug!("as_leader: is_err: {}", l.is_err());
         let res = match l {
             Ok(l) => l.handle_forwardable_req(req.clone()).await,
             Err(e) => Err(MetaRaftError::ForwardToLeader(e).into()),
@@ -880,6 +895,7 @@ impl MetaNode {
     #[tracing::instrument(level = "debug", skip(self))]
     pub async fn as_leader(&self) -> Result<MetaLeader<'_>, ForwardToLeader> {
         let curr_leader = self.get_leader().await;
+        debug!("curr_leader: {:?}", curr_leader);
         if curr_leader == self.sto.id {
             return Ok(MetaLeader::new(self));
         }
