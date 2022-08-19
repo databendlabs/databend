@@ -16,5 +16,5 @@ common-exception = { path = "../../exception" }
 common-pipeline-core = { path = "../core" }
 common-planners = { path = "../../planners" }
 
-async-trait = { git = "https://github.com/datafuse-extras/async-trait", rev = "f0b0fd5" }
+async-trait = { version = "0.1.0", package = "async-trait-fn" }
 tracing = "0.1.35"
