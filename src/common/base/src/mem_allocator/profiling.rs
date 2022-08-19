@@ -27,7 +27,7 @@ const OPT_PROF: &[u8] = b"opt.prof\0";
 pub fn dump_profile(tmp_file_path: &str) -> Result<Vec<u8>, Box<dyn Error>> {
     // precheck
     if !is_prof_enabled()? {
-        return Err("opt.prof is not ON, 
+        return Err("opt.prof is not ON,
                    please start the application with proper MALLOC env.
                    e.g.  MALLOC_CONF=prof:true "
             .into());

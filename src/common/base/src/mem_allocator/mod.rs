@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod allocators;
+mod allocators_mmap;
 
 pub use allocators::Allocator;
 

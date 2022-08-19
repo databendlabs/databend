@@ -38,6 +38,7 @@ mod platform {
         pub use super::ffi::realloc;
     }
 
+    #[derive(Default)]
     pub struct Allocator;
 
     // The minimum alignment guaranteed by the architecture. This value is used to

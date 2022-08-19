@@ -23,9 +23,9 @@ use bytes::BytesMut;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_hashtable::HashSet as CommonHashSet;
 use common_hashtable::HashTableEntity;
 use common_hashtable::HashTableKeyable;
-use common_hashtable::TwoLevelHashSet;
 use common_io::prelude::*;
 use serde::Deserialize;
 use serde::Serialize;
@@ -57,7 +57,7 @@ pub struct AggregateDistinctState {
 }
 
 pub struct AggregateDistinctPrimitiveState<T: PrimitiveType, E: From<T> + HashTableKeyable> {
-    set: TwoLevelHashSet<E>,
+    set: CommonHashSet<E>,
     _t: PhantomData<T>,
     inserted: bool,
 }
@@ -277,7 +277,7 @@ where
 {
     fn new() -> Self {
         AggregateDistinctPrimitiveState {
-            set: TwoLevelHashSet::create(),
+            set: CommonHashSet::create(),
             _t: PhantomData,
             inserted: false,
         }
@@ -294,7 +294,7 @@ where
 
     fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()> {
         let size = reader.read_uvarint()?;
-        self.set = TwoLevelHashSet::with_capacity(size as usize);
+        self.set = CommonHashSet::with_capacity(size as usize);
         for _ in 0..size {
             let t: T = deserialize_from_slice(reader)?;
             let e = E::from(t);
@@ -344,16 +344,9 @@ where
     }
 
     fn merge(&mut self, rhs: &Self) -> Result<()> {
-        let lhs = self.set.inner_hash_tables_mut();
-        let rhs = rhs.set.inner_hash_tables();
-
-        // TODO: parallelize this
-        for (a, b) in lhs.iter_mut().zip(rhs.iter()) {
-            for value in b.iter() {
-                a.insert_key(value.get_key(), &mut self.inserted);
-            }
+        for value in rhs.set.iter() {
+            self.set.insert_key(value.get_key(), &mut self.inserted);
         }
-
         Ok(())
     }
 
