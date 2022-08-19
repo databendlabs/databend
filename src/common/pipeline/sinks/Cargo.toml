@@ -16,6 +16,5 @@ common-datavalues = { path = "../../datavalues" }
 common-exception = { path = "../../exception" }
 common-pipeline-core = { path = "../core" }
 
-async-trait = { git = "https://github.com/datafuse-extras/async-trait", rev = "f0b0fd5" }
-
 async-channel = "1.7.1"
+async-trait = { version = "0.1.0", package = "async-trait-fn" }
