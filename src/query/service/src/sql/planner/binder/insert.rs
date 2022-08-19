@@ -450,11 +450,20 @@ async fn exprs_to_datavalue<'a>(
     bind_context: &BindContext,
     metadata: MetadataRef,
 ) -> Result<Vec<DataValue>> {
+    let mut scalars = Vec::with_capacity(schema.num_fields());
     if exprs.len() != schema.num_fields() {
-        return Err(ErrorCode::BadDataValueType(
-            "Expression size not match schema num of cols".to_string(),
-        ));
+        if exprs.len() != schema.num_fields_without_default_expr() {
+            return Err(ErrorCode::BadDataValueType(
+                "Expression size not match schema num of cols".to_string(),
+            ));
+        } else {
+            // Fill the missing expr to exprs
+            for field in schema.fields().iter() {
+
+            }
+        }
     }
+
     let mut expressions = Vec::with_capacity(exprs.len());
     for (i, expr) in exprs.iter().enumerate() {
         let mut scalar_binder = ScalarBinder::new(

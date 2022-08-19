@@ -63,6 +63,7 @@ impl DataSchema {
         self.fields.len()
     }
 
+
     #[inline]
     pub fn has_field(&self, name: &str) -> bool {
         for i in 0..self.fields.len() {
@@ -71,6 +72,10 @@ impl DataSchema {
             }
         }
         false
+    }
+
+    pub fn num_fields_without_default_expr(&self) -> usize {
+        self.fields.iter().filter(|f| f.default_expr().is_none()).count()
     }
 
     pub fn fields_map(&self) -> BTreeMap<usize, DataField> {
