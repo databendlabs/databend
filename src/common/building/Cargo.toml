@@ -11,10 +11,9 @@ doctest = false
 test = false
 
 [dependencies]
-cargo-license = { git = "https://github.com/datafuse-extras/cargo-license", rev = "f1ce4a2" }
-
 anyhow = "1.0.58"
-cargo_metadata = "0.14.2"
+cargo-license = "0.5.1"
+cargo_metadata = "0.15.0"
 git2 = { version = "0.14.4", default-features = false }
 tracing = "0.1.35"
 vergen = "7.2.1"
