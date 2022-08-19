@@ -1,7 +1,7 @@
 
 # Sqllogic test
 
-The database return right with different handlers, for example mysql and http
+The database return right with different handlers, for example MySQL and http
 
 # Usage
 
@@ -82,6 +82,7 @@ Runner supported: mysql handler, http handler, clickhouse handler.
     - T text   
     - F floating point
     - I integer
+    - R regex
   - query_label If different runner return inconsistency, you can write like this(suppose that mysql handler is get different result)
 
 This is a query demo(query_label is optional):
@@ -115,6 +116,29 @@ select number, number + 1, number + 999 from numbers(10);
      9    10  1008
 ```
 
+## How to use regex in logic test
+
+1. Regular expressions are implemented in regex_type.py. Additions can be made as needed but modifications require particular care.
+```
+regex_type_map = {
+    "ANYTHING": ".*",
+    "DATE": "\d\d\d\d-\d\d-\d\d \d\d:\d\d:\d\d[.]\d\d\d [+-]\d\d\d\d",
+}
+```
+
+2. A demo of regex likes:
+```
+statement query TTTRRTIIII
+SELECT * FROM system.tables WHERE database='db1';
+
+----
+db1 t1 FUSE $ANYTHING $DATE NULL	0	0	0	0
+```
+
+### limitation
+
+The space is used to split results into columns, space in regex expression should specify the number, do not use `( )+` or `( )*`. Do not contain space in the expected result of regex expression: ANYTHING, it should be written as a single column.
+
 ## Write logic test tips
 
 1. skipif  help you skip test of given handler
@@ -147,29 +171,29 @@ select 1;
 ```
 
 ### Acknowledgement
-- *tips* If you do not care about result, use statement ok instead of statement query
+- *tips* If you do not care about results, use statement ok instead of statement query
 - *tips* Add ORDER BY to ensure that the order of returned results is always consistent
-- *warning* A statement query need result, and even if you want to skip a case, you still need to keep the results in the test content
+- *warning* A statement query need results, and even if you want to skip a case, you still need to keep the results in the test content
 
 ## Tools
 
 complete.py can auto complete test file for you, It do as follow steps:
 
 1. Get SQLs from source-file, whether an SQL file or logictest file.
-2. Execute SQL one by one, if SQL fetch result, add statement query; if SQL fetch nothing, add statement ok; if SQL get an error, add statement error
+2. Execute SQL one by one, if SQL fetches results, add statement query; if SQL fetches nothing, add statement ok; if SQL gets an error, add statement error.
 
 ### Usage
 
-- Pre-run, you need start a mysql server or databend server
-- Use ./complete.py --source-file="xxx.sql" --dest-file="my-gen"  for SQL files(suffix name must be like *.sql)
-- Use ./complete.py --source-file="XXX.test" --fest-file="my-gen" for logictest files(suffix name not like *.sql)
-- If you want see what SQLs get from source-file, add --show-sql
-- Use command line to specify mysql host, user, port, password, database. Details in ./complete.py -h
+- Pre-run, you need to start databend server or mysql server
+- Use `./complete.py --source-file="xxx.sql" --dest-file="my-gen"`  for SQL files(suffix name must be like *.sql)
+- Use `./complete.py --source-file="xxx.test" --fest-file="my-gen"` for logictest files(suffix name not like *.sql, maybe like *.test)
+- If you want to see what SQLs get from source-file, add --show-sql
+- Use the command line to specify host, user, port, password and database. Details in `./complete.py -h`
 
 ### Acknowledgement
-- *tips* You can use mysql to auto-complete test suite, but make sure you know all grammar differences.
-- *tips* For mysql return bool as 1 and 0, this tool make it as int(I) in query type option.
-- *warning* No multi handlers use in auto complete tool(mysql only), if handlers return differs, manual fix it please.
+- *tips* You can use MYSQL syntax to auto-complete test suite, but make sure you know all grammar differences.
+- *tips* MYSQL return bool as 1 and 0, this tool make it as `int(I)` in query type option.
+- *warning* No multi handlers use in the auto-complete tool(MYSQL only), if handlers return a difference, manual fix it, please.
 
 # Learn More
 
