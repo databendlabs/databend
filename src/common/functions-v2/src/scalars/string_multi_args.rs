@@ -247,20 +247,16 @@ pub fn register(registry: &mut FunctionRegistry) {
                         nullable_builder.validity.extend_constant(size, true);
 
                         for idx in 0..size {
-                            let mut need_sep = false;
-                            for arg in new_args.iter().skip(1) {
-                                unsafe {
-                                    match arg.index_unchecked(idx) {
-                                        Some(s) => {
-                                            if need_sep {
-                                                builder.put_slice(v);
-                                            }
-                                            builder.put_slice(s);
-                                            need_sep = true;
-                                        }
-                                        _ => {}
-                                    }
+                            for (i, s) in new_args
+                                .iter()
+                                .skip(1)
+                                .filter_map(|arg| unsafe { arg.index_unchecked(idx) })
+                                .enumerate()
+                            {
+                                if i != 0 {
+                                    builder.put_slice(v);
                                 }
+                                builder.put_slice(s);
                             }
                             builder.commit_row();
                         }
@@ -274,15 +270,19 @@ pub fn register(registry: &mut FunctionRegistry) {
                             unsafe {
                                 match new_args[0].index_unchecked(idx) {
                                     Some(v) => {
-                                        for (arg_index, arg) in new_args.iter().skip(1).enumerate()
-                                        {
-                                            match arg.index_unchecked(idx) {
-                                                Some(s) if arg_index != 0 => {
+                                        for idx in 0..size {
+                                            for (i, s) in new_args
+                                                .iter()
+                                                .skip(1)
+                                                .filter_map(|arg| arg.index_unchecked(idx))
+                                                .enumerate()
+                                            {
+                                                if i != 0 {
                                                     builder.put_slice(v);
-                                                    builder.put_slice(s);
                                                 }
-                                                _ => {}
+                                                builder.put_slice(s);
                                             }
+                                            builder.commit_row();
                                         }
                                         builder.commit_row();
                                         validity.push(true);
