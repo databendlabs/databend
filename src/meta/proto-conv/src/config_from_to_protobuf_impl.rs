@@ -14,6 +14,7 @@
 
 use common_protos::pb;
 use common_storage::StorageFsConfig;
+use common_storage::StorageGcsConfig;
 use common_storage::StorageS3Config;
 
 use crate::check_ver;
@@ -55,6 +56,33 @@ impl FromToProto for StorageS3Config {
             master_key: self.master_key.clone(),
             disable_credential_loader: self.disable_credential_loader,
             enable_virtual_host_style: self.enable_virtual_host_style,
+        })
+    }
+}
+
+impl FromToProto for StorageGcsConfig {
+    type PB = pb::GcsStorageConfig;
+
+    fn from_pb(p: Self::PB) -> Result<Self, Incompatible>
+    where Self: Sized {
+        check_ver(p.version, p.min_compatible)?;
+
+        Ok(StorageGcsConfig {
+            credential: p.credential,
+            endpoint_url: p.endpoint_url,
+            bucket: p.bucket,
+            root: p.root,
+        })
+    }
+
+    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
+        Ok(pb::GcsStorageConfig {
+            version: VER,
+            min_compatible: MIN_COMPATIBLE_VER,
+            credential: self.credential.clone(),
+            endpoint_url: self.endpoint_url.clone(),
+            bucket: self.bucket.clone(),
+            root: self.root.clone(),
         })
     }
 }
