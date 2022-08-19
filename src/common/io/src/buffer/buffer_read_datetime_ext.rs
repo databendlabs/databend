@@ -70,7 +70,7 @@ where R: BufferRead
     }
 
     fn read_timestamp_text(&mut self, tz: &Tz) -> Result<DateTime<Tz>> {
-        // Date YYYY-MM-DD
+        // Date Part YYYY-MM-DD
         let mut buf = vec![0; DATE_LEN];
         self.read_exact(buf.as_mut_slice())?;
         let mut v = std::str::from_utf8(buf.as_slice())
@@ -89,7 +89,6 @@ where R: BufferRead
             })?;
         let mut dt = tz.from_local_datetime(&d.and_hms(0, 0, 0)).unwrap();
 
-        buf.clear();
         let less_1000 = |dt: DateTime<Tz>| {
             // convert timestamp less than `1000-01-01 00:00:00` to `1000-01-01 00:00:00`
             if dt.year() < 1000 {
@@ -98,133 +97,103 @@ where R: BufferRead
                 Ok(dt)
             }
         };
+
+        // Time Part
+        buf.clear();
         if self.ignore(|b| b == b' ' || b == b'T').unwrap() {
-            // Time HH:mm:ss
+            // HH:mm:ss
+            let get_time = |buf: &mut Vec<u8>, size| {
+                if size > 0 && size < 3 {
+                    Ok(lexical_core::FromLexical::from_lexical(buf.as_slice()).unwrap())
+                } else {
+                    Err(ErrorCode::BadBytes(
+                        "err with parse time part. Format like this:[03:00:00]",
+                    ))
+                }
+            };
             let mut buf = Vec::with_capacity(2);
-            let size = self.keep_read(&mut buf, |f| (b'0'..=b'9').contains(&f))?;
-            if buf.is_empty() || size > 2 {
-                return Err(ErrorCode::BadBytes(
-                    "err with parse time part. Format like this:[03:00:00]",
-                ));
+            let mut times = Vec::with_capacity(3);
+            loop {
+                buf.clear();
+                let size = self.keep_read(&mut buf, |f| (b'0'..=b'9').contains(&f))?;
+                match get_time(&mut buf, size) {
+                    Ok(time) => times.push(time),
+                    Err(e) => return Err(e),
+                }
+                if times.len() == 3 {
+                    break;
+                }
+                self.must_ignore_byte(b':')?;
             }
-            let hour = lexical_core::FromLexical::from_lexical(buf.as_slice());
-            match hour {
-                Ok(hour) => {
-                    if self.ignore_byte(b':')? {
-                        buf.clear();
-                        let size = self.keep_read(&mut buf, |f| (b'0'..=b'9').contains(&f))?;
-                        if size == 0 {
-                            return Err(ErrorCode::BadBytes(
-                                "err with parse time part. Format like this:[03:00:00]",
-                            ));
-                        }
-                        let min: u32 =
-                            lexical_core::FromLexical::from_lexical(buf.as_slice()).unwrap();
-                        if size > 0 && size < 3 && self.ignore_byte(b':')? {
-                            buf.clear();
-                            let size = self.keep_read(&mut buf, |f| (b'0'..=b'9').contains(&f))?;
-                            if size == 0 {
-                                return Err(ErrorCode::BadBytes(
-                                    "err with parse time part. Format like this:[03:00:00]",
-                                ));
-                            }
-                            let sec: u32 =
-                                lexical_core::FromLexical::from_lexical(buf.as_slice()).unwrap();
-                            if size > 0 && size < 3 {
-                                buf.clear();
-                                dt = tz.from_local_datetime(&d.and_hms(hour, min, sec)).unwrap();
-                            } else {
-                                return Err(ErrorCode::BadBytes(
-                                    "err with parse time part. Format like this:[03:00:00]",
-                                ));
-                            }
-                        } else {
-                            return Err(ErrorCode::BadBytes(
-                                "err with parse time part. Format like this:[03:00:00]",
-                            ));
-                        }
-                    } else {
-                        return Err(ErrorCode::BadBytes(
-                            "err with parse time part. Format like this:[03:00:00]",
-                        ));
-                    }
+            dt = tz
+                .from_local_datetime(&d.and_hms(times[0], times[1], times[2]))
+                .unwrap();
 
-                    // ms .microseconds
-                    let dt = if self.ignore_byte(b'.')? {
-                        buf.clear();
-                        let size = self.keep_read(&mut buf, |f| (b'0'..=b'9').contains(&f))?;
-                        if size == 0 {
-                            return Err(ErrorCode::BadBytes(
-                                "err with parse micros second, format like this:[.123456]",
-                            ));
-                        }
-                        let scales: i64 =
-                            lexical_core::FromLexical::from_lexical(buf.as_slice()).unwrap();
-
-                        if size >= 9 {
-                            dt.checked_add_signed(Duration::nanoseconds(scales))
-                                .unwrap()
-                        } else if size >= 6 {
-                            dt.checked_add_signed(Duration::microseconds(scales))
-                                .unwrap()
-                        } else if size >= 3 {
-                            dt.checked_add_signed(Duration::milliseconds(scales))
-                                .unwrap()
-                        } else {
-                            dt
-                        }
-                    } else {
-                        dt
-                    };
-
-                    // Timezone 2022-02-02T03:00:03.123[z/Z[+/-08:00]]
-                    buf.clear();
-                    let calc_offset = |current_tz_sec: i64, val_tz_sec: i64, dt: &DateTime<Tz>| {
-                        let offset = (current_tz_sec - val_tz_sec) * 1000 * 1000;
-                        let mut ts = dt.timestamp_micros();
-                        ts += offset;
-                        // TODO: need support timestamp_micros in chrono-0.4.22/src/offset/mod.rs
-                        // use like tz.timestamp_nanos()
-                        let (mut secs, mut micros) = (ts / 1_000_000, ts % 1_000_000);
-                        if ts < 0 {
-                            secs -= 1;
-                            micros += 1_000_000;
-                        }
-                        Ok(tz.timestamp_opt(secs, (micros as u32) * 1000).unwrap())
-                    };
-                    if self.ignore(|b| b == b'z' || b == b'Z')? {
-                        // ISO 8601 The Z on the end means UTC (that is, an offset-from-UTC of zero hours-minutes-seconds).
-                        if dt.year() < 1000 {
-                            Ok(tz.from_utc_datetime(
-                                &NaiveDate::from_ymd(1000, 1, 1).and_hms(0, 0, 0),
-                            ))
-                        } else {
-                            let current_tz = dt.offset().fix().local_minus_utc();
-                            calc_offset(current_tz.into(), 0, &dt)
-                        }
-                    } else if self.ignore_byte(b'+')? {
-                        self.parse_time_offset(tz, &mut buf, &dt, false, calc_offset)
-                    } else if self.ignore_byte(b'-')? {
-                        self.parse_time_offset(tz, &mut buf, &dt, true, calc_offset)
-                    } else {
-                        less_1000(dt)
-                    }
+            // ms .microseconds
+            let dt = if self.ignore_byte(b'.')? {
+                buf.clear();
+                let size = self.keep_read(&mut buf, |f| (b'0'..=b'9').contains(&f))?;
+                if size == 0 {
+                    return Err(ErrorCode::BadBytes(
+                        "err with parse micros second, format like this:[.123456]",
+                    ));
                 }
-                Err(err) => {
-                    if err.is_invalid_digit() {
-                        // only date part
-                        buf.clear();
-                        less_1000(dt)
-                    } else {
-                        Err(ErrorCode::BadBytes(format!("err with {:?}", err)))
-                    }
+                let scales: i64 = lexical_core::FromLexical::from_lexical(buf.as_slice()).unwrap();
+
+                if size >= 9 {
+                    dt.checked_add_signed(Duration::nanoseconds(scales))
+                        .unwrap()
+                } else if size >= 6 {
+                    dt.checked_add_signed(Duration::microseconds(scales))
+                        .unwrap()
+                } else if size >= 3 {
+                    dt.checked_add_signed(Duration::milliseconds(scales))
+                        .unwrap()
+                } else {
+                    dt
                 }
+            } else {
+                dt
+            };
+
+            // Timezone 2022-02-02T03:00:03.123[z/Z[+/-08:00]]
+            buf.clear();
+            let calc_offset = |current_tz_sec: i64, val_tz_sec: i64, dt: &DateTime<Tz>| {
+                let offset = (current_tz_sec - val_tz_sec) * 1000 * 1000;
+                let mut ts = dt.timestamp_micros();
+                ts += offset;
+                // TODO: need support timestamp_micros in chrono-0.4.22/src/offset/mod.rs
+                // use like tz.timestamp_nanos()
+                let (mut secs, mut micros) = (ts / 1_000_000, ts % 1_000_000);
+                if ts < 0 {
+                    secs -= 1;
+                    micros += 1_000_000;
+                }
+                Ok(tz.timestamp_opt(secs, (micros as u32) * 1000).unwrap())
+            };
+            if self.ignore(|b| b == b'z' || b == b'Z')? {
+                // ISO 8601 The Z on the end means UTC (that is, an offset-from-UTC of zero hours-minutes-seconds).
+                if dt.year() < 1000 {
+                    Ok(tz.from_utc_datetime(&NaiveDate::from_ymd(1000, 1, 1).and_hms(0, 0, 0)))
+                } else {
+                    let current_tz = dt.offset().fix().local_minus_utc();
+                    calc_offset(current_tz.into(), 0, &dt)
+                }
+            } else if self.ignore_byte(b'+')? {
+                self.parse_time_offset(tz, &mut buf, &dt, false, calc_offset)
+            } else if self.ignore_byte(b'-')? {
+                self.parse_time_offset(tz, &mut buf, &dt, true, calc_offset)
+            } else {
+                // only datetime part
+                less_1000(dt)
             }
         } else {
+            // only date part
             less_1000(dt)
         }
     }
 
+    // Only support HH:mm format
     fn parse_time_offset(
         &mut self,
         tz: &Tz,
@@ -234,6 +203,7 @@ where R: BufferRead
         calc_offset: impl Fn(i64, i64, &DateTime<Tz>) -> Result<DateTime<Tz>>,
     ) -> Result<DateTime<Tz>> {
         if self.keep_read(buf, |f| (b'0'..=b'9').contains(&f))? != 2 {
+            // +0800 will err in there
             return Err(ErrorCode::BadBytes(
                 "err with parse timezone, format like this:[+08:00]",
             ));
@@ -243,6 +213,7 @@ where R: BufferRead
             buf.clear();
             self.ignore_byte(b':')?;
             if self.keep_read(buf, |f| (b'0'..=b'9').contains(&f))? != 2 {
+                // +08[other byte]00 will err in there, e.g. +08-00
                 return Err(ErrorCode::BadBytes(
                     "err with parse timezone, format like this:[+08:00]",
                 ));

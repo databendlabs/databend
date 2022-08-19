@@ -48,7 +48,6 @@ fn test_read_datetime_ext() -> Result<()> {
         res.push(format!("{:?}", time));
         reader.ignore_byte(b',')?;
     }
-    println!("res is {:?} and expected is {:?}", res, expected);
     assert_eq!(res, expected);
 
     let mut reader = BufferReader::new("2009-01-01,1000-01-01".as_bytes());
