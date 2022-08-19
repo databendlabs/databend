@@ -573,7 +573,7 @@ impl MetaNode {
         let advertise_endpoint = conf.raft_api_advertise_host_endpoint();
         #[allow(clippy::never_loop)]
         for addr in addrs {
-            let timeout = Some(Duration::from_millis(1_000));
+            let timeout = Some(Duration::from_millis(3_000));
             info!(
                 "try to join cluster via {}, timeout: {:?}...",
                 addr, timeout
