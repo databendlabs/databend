@@ -1,0 +1,24 @@
+statement ok
+DROP DATABASE IF EXISTS show_shares;
+
+statement ok
+CREATE DATABASE show_shares;
+
+statement ok
+USE show_shares;
+
+statement ok
+drop share if exists test_share;
+
+statement ok
+create share test_share;
+
+statement query RTTTTTT
+show shares;
+
+----
+$DATE_IN_SHARE  OUTBOUND  test_share  test_tenant
+
+statement ok
+DROP DATABASE IF EXISTS show_shares;
+
