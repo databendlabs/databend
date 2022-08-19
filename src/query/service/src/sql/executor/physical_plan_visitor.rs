@@ -27,7 +27,7 @@ use super::PhysicalPlan;
 use super::Project;
 use super::Sort;
 use super::TableScan;
-use crate::sql::executor::Union;
+use crate::sql::executor::UnionAll;
 
 pub trait PhysicalPlanReplacer {
     fn replace(&mut self, plan: &PhysicalPlan) -> Result<PhysicalPlan> {
@@ -44,7 +44,7 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::Exchange(plan) => self.replace_exchange(plan),
             PhysicalPlan::ExchangeSource(plan) => self.replace_exchange_source(plan),
             PhysicalPlan::ExchangeSink(plan) => self.replace_exchange_sink(plan),
-            PhysicalPlan::Union(plan) => self.replace_union(plan),
+            PhysicalPlan::UnionAll(plan) => self.replace_union(plan),
         }
     }
 
@@ -163,10 +163,10 @@ pub trait PhysicalPlanReplacer {
         }))
     }
 
-    fn replace_union(&mut self, plan: &Union) -> Result<PhysicalPlan> {
+    fn replace_union(&mut self, plan: &UnionAll) -> Result<PhysicalPlan> {
         let left = self.replace(&plan.left)?;
         let right = self.replace(&plan.right)?;
-        Ok(PhysicalPlan::Union(Union {
+        Ok(PhysicalPlan::UnionAll(UnionAll {
             left: Box::new(left),
             right: Box::new(right),
             schema: plan.schema.clone(),
@@ -217,7 +217,7 @@ impl PhysicalPlan {
                 PhysicalPlan::ExchangeSink(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
-                PhysicalPlan::Union(plan) => {
+                PhysicalPlan::UnionAll(plan) => {
                     Self::traverse(&plan.left, pre_visit, visit, post_visit);
                     Self::traverse(&plan.right, pre_visit, visit, post_visit);
                 }

@@ -225,7 +225,7 @@ impl ColumnPruner {
                 self.keep_required_columns(expr.child(0)?, required)?,
             )),
 
-            RelOperator::Union(_) => Ok(expr.clone()),
+            RelOperator::UnionAll(_) => Ok(expr.clone()),
 
             _ => Err(ErrorCode::LogicalError(
                 "Attempting to prune columns of a physical plan is not allowed",

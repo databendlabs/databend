@@ -70,7 +70,7 @@ use crate::sql::executor::physical_plan::ColumnID;
 use crate::sql::executor::physical_plan::PhysicalPlan;
 use crate::sql::executor::AggregateFunctionDesc;
 use crate::sql::executor::PhysicalScalar;
-use crate::sql::executor::Union;
+use crate::sql::executor::UnionAll;
 use crate::sql::plans::JoinType;
 use crate::sql::ColumnBinding;
 
@@ -119,7 +119,7 @@ impl PipelineBuilder {
             PhysicalPlan::HashJoin(join) => self.build_join(join),
             PhysicalPlan::ExchangeSink(sink) => self.build_exchange_sink(sink),
             PhysicalPlan::ExchangeSource(source) => self.build_exchange_source(source),
-            PhysicalPlan::Union(union) => self.build_union(union),
+            PhysicalPlan::UnionAll(union_all) => self.build_union_all(union_all),
             PhysicalPlan::Exchange(_) => Err(ErrorCode::LogicalError(
                 "Invalid physical plan with PhysicalPlan::Exchange",
             )),
@@ -480,7 +480,7 @@ impl PipelineBuilder {
         self.build_pipeline(&exchange_sink.input)
     }
 
-    fn expand_union(&mut self, plan: &PhysicalPlan) -> Result<Receiver<DataBlock>> {
+    fn expand_union_all(&mut self, plan: &PhysicalPlan) -> Result<Receiver<DataBlock>> {
         let union_ctx = QueryContext::create_from(self.ctx.clone());
         let pipeline_builder = PipelineBuilder::create(union_ctx);
         let mut build_res = pipeline_builder.finalize(plan)?;
@@ -509,16 +509,16 @@ impl PipelineBuilder {
         Ok(rx)
     }
 
-    pub fn build_union(&mut self, union: &Union) -> Result<()> {
-        self.build_pipeline(&union.left)?;
-        let union_receiver = self.expand_union(&union.right)?;
+    pub fn build_union_all(&mut self, union_all: &UnionAll) -> Result<()> {
+        self.build_pipeline(&union_all.left)?;
+        let union_all_receiver = self.expand_union_all(&union_all.right)?;
         self.main_pipeline
             .add_transform(|transform_input_port, transform_output_port| {
                 TransformMergeBlock::try_create(
                     transform_input_port,
                     transform_output_port,
-                    union.left.output_schema()?,
-                    union_receiver.clone(),
+                    union_all.left.output_schema()?,
+                    union_all_receiver.clone(),
                 )
             })?;
         Ok(())

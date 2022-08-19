@@ -25,11 +25,11 @@ use crate::sql::plans::PhysicalOperator;
 use crate::sql::plans::RelOp;
 
 #[derive(Clone, Debug)]
-pub struct Union;
+pub struct UnionAll;
 
-impl Operator for Union {
+impl Operator for UnionAll {
     fn rel_op(&self) -> RelOp {
-        RelOp::Union
+        RelOp::UnionAll
     }
 
     fn is_physical(&self) -> bool {
@@ -49,7 +49,7 @@ impl Operator for Union {
     }
 }
 
-impl LogicalOperator for Union {
+impl LogicalOperator for UnionAll {
     fn derive_relational_prop<'a>(&self, rel_expr: &RelExpr<'a>) -> Result<RelationalProperty> {
         let left_prop = rel_expr.derive_relational_prop_child(0)?;
         let right_prop = rel_expr.derive_relational_prop_child(1)?;
@@ -75,7 +75,7 @@ impl LogicalOperator for Union {
     }
 }
 
-impl PhysicalOperator for Union {
+impl PhysicalOperator for UnionAll {
     fn derive_physical_prop<'a>(&self, _rel_expr: &RelExpr<'a>) -> Result<PhysicalProperty> {
         Ok(PhysicalProperty {
             distribution: Distribution::Serial,

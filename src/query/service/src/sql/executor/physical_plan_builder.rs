@@ -41,7 +41,7 @@ use crate::sql::executor::ExpressionBuilderWithoutRenaming;
 use crate::sql::executor::PhysicalPlan;
 use crate::sql::executor::PhysicalScalar;
 use crate::sql::executor::SortDesc;
-use crate::sql::executor::Union;
+use crate::sql::executor::UnionAll;
 use crate::sql::optimizer::SExpr;
 use crate::sql::plans::AggregateMode;
 use crate::sql::plans::Exchange;
@@ -324,10 +324,10 @@ impl PhysicalPlanBuilder {
                     keys,
                 }))
             }
-            RelOperator::Union(_) => {
+            RelOperator::UnionAll(_) => {
                 let left = self.build(s_expr.child(0)?).await?;
                 let schema = left.output_schema()?;
-                Ok(PhysicalPlan::Union(Union {
+                Ok(PhysicalPlan::UnionAll(UnionAll {
                     left: Box::new(left),
                     right: Box::new(self.build(s_expr.child(1)?).await?),
                     schema,

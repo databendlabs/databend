@@ -119,11 +119,13 @@ impl SubqueryRewriter {
                 Ok(SExpr::create_unary(plan.into(), input))
             }
 
-            RelOperator::LogicalInnerJoin(_) | RelOperator::Union(_) => Ok(SExpr::create_binary(
-                s_expr.plan().clone(),
-                self.rewrite(s_expr.child(0)?)?,
-                self.rewrite(s_expr.child(1)?)?,
-            )),
+            RelOperator::LogicalInnerJoin(_) | RelOperator::UnionAll(_) => {
+                Ok(SExpr::create_binary(
+                    s_expr.plan().clone(),
+                    self.rewrite(s_expr.child(0)?)?,
+                    self.rewrite(s_expr.child(1)?)?,
+                ))
+            }
 
             RelOperator::Project(_) | RelOperator::Limit(_) | RelOperator::Sort(_) => Ok(
                 SExpr::create_unary(s_expr.plan().clone(), self.rewrite(s_expr.child(0)?)?),

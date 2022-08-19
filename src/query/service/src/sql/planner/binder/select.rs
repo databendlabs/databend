@@ -40,7 +40,7 @@ use crate::sql::plans::BoundColumnRef;
 use crate::sql::plans::Filter;
 use crate::sql::plans::JoinType;
 use crate::sql::plans::Scalar;
-use crate::sql::plans::Union;
+use crate::sql::plans::UnionAll;
 
 // A normalized IR for `SELECT` clause.
 #[derive(Debug, Default)]
@@ -334,7 +334,7 @@ impl<'a> Binder {
         right_expr: SExpr,
         distinct: bool,
     ) -> Result<SExpr> {
-        let union_plan = Union {};
+        let union_plan = UnionAll {};
         let mut new_expr = SExpr::create_binary(union_plan.into(), left_expr, right_expr);
         if distinct {
             new_expr = self.bind_distinct(

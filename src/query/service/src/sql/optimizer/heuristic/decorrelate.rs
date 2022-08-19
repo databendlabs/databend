@@ -51,7 +51,7 @@ use crate::sql::plans::Scalar;
 use crate::sql::plans::ScalarItem;
 use crate::sql::plans::SubqueryExpr;
 use crate::sql::plans::SubqueryType;
-use crate::sql::plans::Union;
+use crate::sql::plans::UnionAll;
 use crate::sql::ColumnBinding;
 use crate::sql::IndexType;
 use crate::sql::MetadataRef;
@@ -632,13 +632,13 @@ impl SubqueryRewriter {
                 Ok(SExpr::create_unary(plan.plan().clone(), flatten_plan))
             }
 
-            RelOperator::Union(_) => {
+            RelOperator::UnionAll(_) => {
                 let left_flatten_plan =
                     self.flatten(plan.child(0)?, correlated_columns, flatten_info)?;
                 let right_flatten_plan =
                     self.flatten(plan.child(1)?, correlated_columns, flatten_info)?;
                 Ok(SExpr::create_binary(
-                    Union {}.into(),
+                    UnionAll {}.into(),
                     left_flatten_plan,
                     right_flatten_plan,
                 ))

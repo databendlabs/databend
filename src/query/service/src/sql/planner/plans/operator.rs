@@ -26,7 +26,7 @@ use super::pattern::PatternPlan;
 use super::physical_scan::PhysicalScan;
 use super::project::Project;
 use super::sort::Sort;
-use super::union::Union;
+use super::union_all::UnionAll;
 use crate::sql::optimizer::PhysicalProperty;
 use crate::sql::optimizer::RelExpr;
 use crate::sql::optimizer::RelationalProperty;
@@ -83,7 +83,7 @@ pub enum RelOp {
     Sort,
     Limit,
     Exchange,
-    Union,
+    UnionAll,
 
     // Pattern
     Pattern,
@@ -105,7 +105,7 @@ pub enum RelOperator {
     Sort(Sort),
     Limit(Limit),
     Exchange(Exchange),
-    Union(Union),
+    UnionAll(UnionAll),
 
     Pattern(PatternPlan),
 }
@@ -125,7 +125,7 @@ impl Operator for RelOperator {
             RelOperator::Limit(rel_op) => rel_op.rel_op(),
             RelOperator::Pattern(rel_op) => rel_op.rel_op(),
             RelOperator::Exchange(rel_op) => rel_op.rel_op(),
-            RelOperator::Union(rel_op) => rel_op.rel_op(),
+            RelOperator::UnionAll(rel_op) => rel_op.rel_op(),
         }
     }
 
@@ -143,7 +143,7 @@ impl Operator for RelOperator {
             RelOperator::Limit(rel_op) => rel_op.is_physical(),
             RelOperator::Pattern(rel_op) => rel_op.is_physical(),
             RelOperator::Exchange(rel_op) => rel_op.is_physical(),
-            RelOperator::Union(rel_op) => rel_op.is_physical(),
+            RelOperator::UnionAll(rel_op) => rel_op.is_physical(),
         }
     }
 
@@ -161,7 +161,7 @@ impl Operator for RelOperator {
             RelOperator::Limit(rel_op) => rel_op.is_logical(),
             RelOperator::Pattern(rel_op) => rel_op.is_logical(),
             RelOperator::Exchange(rel_op) => rel_op.is_logical(),
-            RelOperator::Union(rel_op) => rel_op.is_logical(),
+            RelOperator::UnionAll(rel_op) => rel_op.is_logical(),
         }
     }
 
@@ -179,7 +179,7 @@ impl Operator for RelOperator {
             RelOperator::Limit(rel_op) => rel_op.as_logical(),
             RelOperator::Pattern(rel_op) => rel_op.as_logical(),
             RelOperator::Exchange(rel_op) => rel_op.as_logical(),
-            RelOperator::Union(rel_op) => rel_op.as_logical(),
+            RelOperator::UnionAll(rel_op) => rel_op.as_logical(),
         }
     }
 
@@ -197,7 +197,7 @@ impl Operator for RelOperator {
             RelOperator::Limit(rel_op) => rel_op.as_physical(),
             RelOperator::Pattern(rel_op) => rel_op.as_physical(),
             RelOperator::Exchange(rel_op) => rel_op.as_physical(),
-            RelOperator::Union(rel_op) => rel_op.as_physical(),
+            RelOperator::UnionAll(rel_op) => rel_op.as_physical(),
         }
     }
 }
@@ -431,20 +431,20 @@ impl TryFrom<RelOperator> for Exchange {
     }
 }
 
-impl From<Union> for RelOperator {
-    fn from(v: Union) -> Self {
-        Self::Union(v)
+impl From<UnionAll> for RelOperator {
+    fn from(v: UnionAll) -> Self {
+        Self::UnionAll(v)
     }
 }
 
-impl TryFrom<RelOperator> for Union {
+impl TryFrom<RelOperator> for UnionAll {
     type Error = ErrorCode;
     fn try_from(value: RelOperator) -> Result<Self> {
-        if let RelOperator::Union(value) = value {
+        if let RelOperator::UnionAll(value) = value {
             Ok(value)
         } else {
             Err(ErrorCode::LogicalError(
-                "Cannot downcast RelOperator to Union",
+                "Cannot downcast RelOperator to UnionAll",
             ))
         }
     }
