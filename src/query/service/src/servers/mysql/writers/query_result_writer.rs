@@ -167,7 +167,6 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
             query_result.schema.as_ref()
         };
 
-        // match convert_schema(&query_result.schema) {
         match convert_schema(result_schema) {
             Err(error) => Self::err(&error, dataset_writer).await,
             Ok(columns) => {
