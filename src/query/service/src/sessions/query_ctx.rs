@@ -260,11 +260,9 @@ impl TableContext for QueryContext {
             SourceInfo::TableSource(table_info) => {
                 self.build_table_by_table_info(&plan.catalog, table_info, plan.tbl_args.clone())
             }
-            SourceInfo::StageSource(s3_table_info) => self.build_external_by_table_info(
-                &plan.catalog,
-                s3_table_info,
-                plan.tbl_args.clone(),
-            ),
+            SourceInfo::StageSource(stage_info) => {
+                self.build_external_by_table_info(&plan.catalog, stage_info, plan.tbl_args.clone())
+            }
         }
     }
     fn get_scan_progress(&self) -> Arc<Progress> {

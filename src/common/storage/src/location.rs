@@ -26,6 +26,7 @@ use crate::config::STORAGE_S3_DEFAULT_ENDPOINT;
 use crate::StorageAzblobConfig;
 use crate::StorageParams;
 use crate::StorageS3Config;
+use crate::STORAGE_GCS_DEFAULT_ENDPOINT;
 
 #[derive(Clone, Debug)]
 pub struct UriLocation {
@@ -75,7 +76,7 @@ pub fn parse_uri_location(l: &UriLocation) -> Result<(StorageParams, String)> {
                 .connection
                 .get("endpoint_url")
                 .cloned()
-                .unwrap_or_default(),
+                .unwrap_or_else(|| STORAGE_GCS_DEFAULT_ENDPOINT.to_string()),
             bucket: l.name.clone(),
             root: l.path.clone(),
             credential: l.connection.get("credential").cloned().unwrap_or_default(),

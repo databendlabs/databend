@@ -12,18 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
-
 use common_base::base::tokio;
 use common_exception::Result;
-use common_meta_types::StageParams;
 use common_meta_types::StageType;
 use common_meta_types::UserStageInfo;
-use common_storage::StorageParams;
-use common_storage::StorageS3Config;
 use databend_query::sessions::TableContext;
 use databend_query::sql::statements::parse_stage_location;
-use databend_query::sql::statements::parse_uri_location;
 use pretty_assertions::assert_eq;
 
 use crate::tests::create_query_context;
