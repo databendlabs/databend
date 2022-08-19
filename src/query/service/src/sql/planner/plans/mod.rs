@@ -31,6 +31,7 @@ mod project;
 mod scalar;
 pub mod share;
 mod sort;
+mod union_all;
 
 use std::fmt::Display;
 use std::sync::Arc;
@@ -109,6 +110,7 @@ pub use scalar::*;
 pub use share::*;
 pub use sort::Sort;
 pub use sort::SortItem;
+pub use union_all::UnionAll;
 
 use super::BindContext;
 use super::MetadataRef;
