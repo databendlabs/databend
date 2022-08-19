@@ -1,15 +1,5 @@
-ERROR 1105 (HY000) at line 4: Code: 2302, displayText = Table 'test_tb' already exists.
-ERROR 1105 (HY000) at line 12: Code: 1005, displayText = error:
---> SQL:1:35
-|
-1 | grant SELECT on TABLE show_shares TO SHARE test_share
-| -----           -----             ^^ expected `.`
-| |               |
-| |               while parsing TABLE <database>.<table>
-| while parsing `GRANT { USAGE | SELECT | REFERENCE_USAGE } ON { DATABASE db | TABLE db.table } TO SHARE <share_name>`
-
-.
 yyyy-mm-dd HH:MM:SS	OUTBOUND	test_share	show_shares	test_tenant	x	comment
+TABLE	show_shares.test_tb	yyyy-mm-dd HH:MM:SS
 DATABASE	show_shares	yyyy-mm-dd HH:MM:SS
 yyyy-mm-dd HH:MM:SS	Usage	test_share
-ERROR 1105 (HY000) at line 16: Code: 1025, displayText = Unknown table 'test_tb'.
+yyyy-mm-dd HH:MM:SS	Select	test_share
