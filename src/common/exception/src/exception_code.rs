@@ -233,6 +233,7 @@ build_exceptions! {
     // Variable error codes.
     UnknownVariable(2801),
     OnlySupportAsciiChars(2802),
+    WrongValueForVariable(2803),
 
     // Tenant quota error codes.
     IllegalTenantQuotaFormat(2901),
