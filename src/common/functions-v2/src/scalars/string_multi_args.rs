@@ -247,12 +247,16 @@ pub fn register(registry: &mut FunctionRegistry) {
                         nullable_builder.validity.extend_constant(size, true);
 
                         for idx in 0..size {
-                            for (arg_index, arg) in new_args.iter().skip(1).enumerate() {
+                            let mut need_sep = false;
+                            for arg in new_args.iter().skip(1) {
                                 unsafe {
                                     match arg.index_unchecked(idx) {
-                                        Some(s) if arg_index != 0 => {
-                                            builder.put_slice(v);
+                                        Some(s) => {
+                                            if need_sep {
+                                                builder.put_slice(v);
+                                            }
                                             builder.put_slice(s);
+                                            need_sep = true;
                                         }
                                         _ => {}
                                     }

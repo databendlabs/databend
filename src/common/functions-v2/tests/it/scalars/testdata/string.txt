@@ -1674,13 +1674,13 @@ evaluation (internal):
 +--------+---------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 
-ast            : concat_ws('-', '3', '4')
-raw expr       : concat_ws("-", "3", "4")
-checked expr   : concat_ws<String, String, String>("-", "3", "4")
-optimized expr : "3-4"
-output type    : String
-output domain  : {"3"..}
-output         : "3-4"
+ast            : concat_ws('-', '3', null, '4', null, '5')
+raw expr       : concat_ws("-", "3", NULL, "4", NULL, "5")
+checked expr   : concat_ws<String NULL, String NULL, String NULL, String NULL, String NULL, String NULL>(CAST("-" AS String NULL), CAST("3" AS String NULL), CAST(NULL AS String NULL), CAST("4" AS String NULL), CAST(NULL AS String NULL), CAST("5" AS String NULL))
+optimized expr : "3-4-5"
+output type    : String NULL
+output domain  : Unknown
+output         : "3-4-5"
 
 
 ast            : concat_ws(NULL, '3', '4')
