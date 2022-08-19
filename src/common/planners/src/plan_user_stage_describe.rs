@@ -25,6 +25,7 @@ impl DescribeUserStagePlan {
             DataField::new("stage_type", Vu8::to_data_type()),
             DataField::new("stage_params", Vu8::to_data_type()),
             DataField::new("copy_options", Vu8::to_data_type()),
+            DataField::new("number_of_files", u64::to_data_type()),
             DataField::new("file_format_options", Vu8::to_data_type()),
             DataField::new("comment", Vu8::to_data_type()),
         ])
