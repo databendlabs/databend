@@ -12,10 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::pin::Pin;
+
 use common_base::base::tokio::io::AsyncWrite;
 use common_datavalues::prelude::TypeID;
 use common_datavalues::remove_nullable;
 use common_datavalues::DataField;
+use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
@@ -99,7 +102,7 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
     }
 
     async fn ok(
-        mut query_result: QueryResult,
+        query_result: QueryResult,
         dataset_writer: QueryResultWriter<'a, W>,
         format: &FormatSettings,
     ) -> Result<()> {
@@ -149,17 +152,27 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
             })
         }
 
-        fn convert_schema(schema: &DataSchemaRef) -> Result<Vec<Column>> {
+        fn convert_schema(schema: &DataSchema) -> Result<Vec<Column>> {
             schema.fields().iter().map(make_column_from_field).collect()
         }
 
         let tz = format.timezone;
-        match convert_schema(&query_result.schema) {
+
+        let mut peekable = query_result.blocks.peekable();
+        let result_schema = if let Some(Ok(block)) = Pin::new(&mut peekable).peek().await {
+            // Prefer the schema carried by data block (if any) to the schema of QueryResult,
+            // since schema of QueryResult might be empty, for some interpreters.
+            block.schema().as_ref()
+        } else {
+            query_result.schema.as_ref()
+        };
+
+        // match convert_schema(&query_result.schema) {
+        match convert_schema(result_schema) {
             Err(error) => Self::err(&error, dataset_writer).await,
             Ok(columns) => {
                 let mut row_writer = dataset_writer.start(&columns).await?;
-
-                let blocks = &mut query_result.blocks;
+                let blocks = &mut peekable;
                 while let Some(block) = blocks.next().await {
                     let block = match block {
                         Err(e) => {
