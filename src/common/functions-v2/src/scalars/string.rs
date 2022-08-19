@@ -187,8 +187,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 max: domain
                     .max
                     .as_ref()
-                    .map(|v| v.first().cloned().unwrap_or_default())
-                    .unwrap_or(u8::MAX),
+                    .map_or(u8::MAX, |v| v.first().cloned().unwrap_or_default()),
             })
         },
         |val| val.first().cloned().unwrap_or_default(),

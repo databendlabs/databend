@@ -19,7 +19,7 @@ use common_ast::ast::Expr;
 use common_ast::ast::Join;
 use common_ast::ast::JoinCondition;
 use common_ast::ast::JoinOperator;
-use common_datavalues::type_coercion::merge_types;
+use common_datavalues::type_coercion::compare_coercion;
 use common_datavalues::wrap_nullable;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -445,7 +445,7 @@ impl<'a> JoinConditionResolver<'a> {
         // Bump types of left conditions and right conditions
         let left_type = left.data_type();
         let right_type = right.data_type();
-        let least_super_type = merge_types(&left_type, &right_type)?;
+        let least_super_type = compare_coercion(&left_type, &right_type)?;
         left = wrap_cast_if_needed(left, &least_super_type);
         right = wrap_cast_if_needed(right, &least_super_type);
 

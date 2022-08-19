@@ -120,8 +120,7 @@ fn find_at(str: &[u8], substr: &[u8], pos: u64) -> u64 {
         str[p..]
             .windows(substr.len())
             .position(|w| w == substr)
-            .map(|i| i + 1 + p)
-            .unwrap_or(0) as u64
+            .map_or(0, |i| i + 1 + p) as u64
     } else {
         0_u64
     }

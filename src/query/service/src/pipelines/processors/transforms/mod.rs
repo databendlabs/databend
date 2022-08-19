@@ -20,6 +20,7 @@ use common_pipeline_transforms::processors::transforms::transform;
 use common_pipeline_transforms::processors::transforms::transform_block_compact;
 use common_pipeline_transforms::processors::transforms::transform_compact;
 use common_pipeline_transforms::processors::transforms::transform_expression;
+use common_pipeline_transforms::processors::transforms::transform_sort_merge;
 use common_pipeline_transforms::processors::transforms::transform_sort_partial;
 mod transform_cast_schema;
 mod transform_create_sets;
@@ -33,10 +34,10 @@ mod transform_limit_by;
 mod transform_mark_join;
 mod transform_project;
 mod transform_rename;
-mod transform_sort_merge;
 mod transform_window_func;
 
 pub mod group_by;
+mod transform_merge_block;
 
 pub use aggregator::AggregatorParams;
 pub use aggregator::AggregatorTransformParams;
@@ -75,6 +76,7 @@ pub use transform_limit::TransformLimit;
 pub use transform_limit_by::TransformLimitBy;
 pub use transform_mark_join::MarkJoinCompactor;
 pub use transform_mark_join::TransformMarkJoin;
+pub use transform_merge_block::TransformMergeBlock;
 pub use transform_project::TransformProject;
 pub use transform_rename::TransformRename;
 pub use transform_sort_merge::SortMergeCompactor;

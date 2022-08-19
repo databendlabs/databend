@@ -150,9 +150,7 @@ impl Table for ResultTable {
         let meta_location = self.locations.get_meta_location();
         let meta_data = data_accessor.object(&meta_location).read().await?;
         let meta: ResultTableMeta = serde_json::from_slice(&meta_data)?;
-        let limit = push_downs
-            .map(|e| e.limit.unwrap_or(usize::MAX))
-            .unwrap_or(usize::MAX);
+        let limit = push_downs.map_or(usize::MAX, |e| e.limit.unwrap_or(usize::MAX));
         match meta.storage {
             ResultStorageInfo::FuseSegment(seg) => {
                 Ok(FuseTable::all_columns_partitions(&seg.blocks, limit))

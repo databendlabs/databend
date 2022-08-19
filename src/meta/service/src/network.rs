@@ -117,13 +117,17 @@ impl Network {
 
 #[async_trait]
 impl RaftNetwork<LogEntry> for Network {
-    #[tracing::instrument(level = "debug", skip(self), fields(id=self.sto.id, rpc=%rpc.summary()))]
+    #[tracing::instrument(level = "debug", skip_all, fields(id=self.sto.id, target=target))]
     async fn send_append_entries(
         &self,
         target: NodeId,
         rpc: AppendEntriesRequest<LogEntry>,
     ) -> anyhow::Result<AppendEntriesResponse> {
-        debug!("append_entries req to: id={}: {:?}", target, rpc);
+        debug!(
+            "send_append_entries target: {}, rpc: {}",
+            target,
+            rpc.summary()
+        );
 
         let (mut client, endpoint) = self.make_client(&target).await?;
 
@@ -145,13 +149,17 @@ impl RaftNetwork<LogEntry> for Network {
         Ok(resp)
     }
 
-    #[tracing::instrument(level = "debug", skip(self), fields(id=self.sto.id, rpc=%rpc.summary()))]
+    #[tracing::instrument(level = "debug", skip_all, fields(id=self.sto.id, target=target))]
     async fn send_install_snapshot(
         &self,
         target: NodeId,
         rpc: InstallSnapshotRequest,
     ) -> anyhow::Result<InstallSnapshotResponse> {
-        info!("install_snapshot req to: id={}", target);
+        info!(
+            "send_install_snapshot target: {}, rpc: {}",
+            target,
+            rpc.summary()
+        );
 
         let start = Instant::now();
         let (mut client, endpoint) = self.make_client(&target).await?;
@@ -181,9 +189,9 @@ impl RaftNetwork<LogEntry> for Network {
         Ok(resp)
     }
 
-    #[tracing::instrument(level = "debug", skip(self), fields(id=self.sto.id))]
+    #[tracing::instrument(level = "debug", skip_all, fields(id=self.sto.id, target=target))]
     async fn send_vote(&self, target: NodeId, rpc: VoteRequest) -> anyhow::Result<VoteResponse> {
-        info!("vote: req to: target={} {:?}", target, rpc);
+        info!("send_vote: target: {} rpc: {}", target, rpc.summary());
 
         let (mut client, endpoint) = self.make_client(&target).await?;
         let req = common_tracing::inject_span_to_tonic_request(rpc);
