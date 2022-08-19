@@ -139,10 +139,7 @@ async fn test_http_service_cluster_state() -> common_exception::Result<()> {
     tc1.config.admin_tls_server_key = TEST_SERVER_KEY.to_owned();
     tc1.config.admin_tls_server_cert = TEST_SERVER_CERT.to_owned();
 
-    let meta_node = MetaNode::start(&tc0.config).await?;
-    meta_node
-        .join_cluster(&tc0.config.raft_config, tc0.config.grpc_api_address)
-        .await?;
+    let _meta_node0 = MetaNode::start(&tc0.config).await?;
 
     let meta_node1 = MetaNode::start(&tc1.config).await?;
     meta_node1

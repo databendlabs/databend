@@ -16,8 +16,7 @@ use std::io::Write;
 
 use common_expression::types::DataType;
 use common_expression::Column;
-use common_expression::ColumnBuilder;
-use common_expression::ScalarRef;
+use common_expression::ColumnFrom;
 use goldenfile::Mint;
 
 use super::run_ast;
@@ -43,6 +42,7 @@ fn test_string() {
     test_trim_trailing(file);
     test_trim_both(file);
     test_trim(file);
+    test_concat(file);
 }
 
 fn test_upper(file: &mut impl Write) {
@@ -53,7 +53,7 @@ fn test_upper(file: &mut impl Write) {
     run_ast(file, "ucase(a)", &[(
         "a",
         DataType::String,
-        build_string_column(&["Abc", "Dobrý den", "ß😀山"]),
+        Column::from_data(&["Abc", "Dobrý den", "ß😀山"]),
     )]);
 }
 
@@ -65,7 +65,7 @@ fn test_lower(file: &mut impl Write) {
     run_ast(file, "lcase(a)", &[(
         "a",
         DataType::String,
-        build_string_column(&["Abc", "DOBRÝ DEN", "İ😀山"]),
+        Column::from_data(&["Abc", "DOBRÝ DEN", "İ😀山"]),
     )]);
 }
 
@@ -75,7 +75,7 @@ fn test_bit_length(file: &mut impl Write) {
     run_ast(file, "bit_length(a)", &[(
         "a",
         DataType::String,
-        build_string_column(&["latin", "кириллица", "кириллица and latin"]),
+        Column::from_data(&["latin", "кириллица", "кириллица and latin"]),
     )]);
 }
 
@@ -85,7 +85,7 @@ fn test_octet_length(file: &mut impl Write) {
     run_ast(file, "length(a)", &[(
         "a",
         DataType::String,
-        build_string_column(&["latin", "кириллица", "кириллица and latin"]),
+        Column::from_data(&["latin", "кириллица", "кириллица and latin"]),
     )]);
 }
 
@@ -95,7 +95,7 @@ fn test_char_length(file: &mut impl Write) {
     run_ast(file, "character_length(a)", &[(
         "a",
         DataType::String,
-        build_string_column(&["latin", "кириллица", "кириллица and latin"]),
+        Column::from_data(&["latin", "кириллица", "кириллица and latin"]),
     )]);
 }
 
@@ -106,7 +106,7 @@ fn test_to_base64(file: &mut impl Write) {
     run_ast(file, "to_base64(a)", &[(
         "a",
         DataType::String,
-        build_string_column(&["Abc", "123"]),
+        Column::from_data(&["Abc", "123"]),
     )]);
 }
 
@@ -117,7 +117,7 @@ fn test_from_base64(file: &mut impl Write) {
     run_ast(file, "from_base64(a)", &[(
         "a",
         DataType::String,
-        build_string_column(&["QWJj", "MTIz"]),
+        Column::from_data(&["QWJj", "MTIz"]),
     )])
 }
 
@@ -137,7 +137,7 @@ fn test_quote(file: &mut impl Write) {
     run_ast(file, "quote(a)", &[(
         "a",
         DataType::String,
-        build_string_column(&[r#"a\0b"#, r#"a\'b"#, r#"a\nb"#]),
+        Column::from_data(&[r#"a\0b"#, r#"a\'b"#, r#"a\nb"#]),
     )])
 }
 
@@ -152,7 +152,7 @@ fn test_reverse(file: &mut impl Write) {
     run_ast(file, "reverse(a)", &[(
         "a",
         DataType::String,
-        build_string_column(&["abc", "a", ""]),
+        Column::from_data(&["abc", "a", ""]),
     )])
 }
 
@@ -167,12 +167,12 @@ fn test_ascii(file: &mut impl Write) {
     run_ast(file, "ascii(a)", &[(
         "a",
         DataType::String,
-        build_string_column(&["1", "123", "-1", "你好"]),
+        Column::from_data(&["1", "123", "-1", "你好"]),
     )]);
     run_ast(file, "ascii(b)", &[(
         "b",
         DataType::String,
-        build_string_column(&[""]),
+        Column::from_data(&[""]),
     )]);
 }
 
@@ -183,7 +183,7 @@ fn test_ltrim(file: &mut impl Write) {
     run_ast(file, "ltrim(a)", &[(
         "a",
         DataType::String,
-        build_string_column(&["abc", "   abc", "   abc   ", "abc   "]),
+        Column::from_data(&["abc", "   abc", "   abc   ", "abc   "]),
     )]);
 }
 
@@ -194,7 +194,7 @@ fn test_rtrim(file: &mut impl Write) {
     run_ast(file, "rtrim(a)", &[(
         "a",
         DataType::String,
-        build_string_column(&["abc", "   abc", "   abc   ", "abc   "]),
+        Column::from_data(&["abc", "   abc", "   abc   ", "abc   "]),
     )]);
 }
 
@@ -210,9 +210,9 @@ fn test_trim_leading(file: &mut impl Write) {
         (
             "a",
             DataType::String,
-            build_string_column(&["aabbaa", "bbccbb", "ccddcc"]),
+            Column::from_data(&["aabbaa", "bbccbb", "ccddcc"]),
         ),
-        ("b", DataType::String, build_string_column(&["a", "b", "c"])),
+        ("b", DataType::String, Column::from_data(&["a", "b", "c"])),
     ];
 
     run_ast(file, "trim_leading(a, 'a')", &table);
@@ -232,9 +232,9 @@ fn test_trim_trailing(file: &mut impl Write) {
         (
             "a",
             DataType::String,
-            build_string_column(&["aabbaa", "bbccbb", "ccddcc"]),
+            Column::from_data(&["aabbaa", "bbccbb", "ccddcc"]),
         ),
-        ("b", DataType::String, build_string_column(&["a", "b", "c"])),
+        ("b", DataType::String, Column::from_data(&["a", "b", "c"])),
     ];
 
     run_ast(file, "trim_trailing(a, 'b')", &table);
@@ -254,9 +254,9 @@ fn test_trim_both(file: &mut impl Write) {
         (
             "a",
             DataType::String,
-            build_string_column(&["aabbaa", "bbccbb", "ccddcc"]),
+            Column::from_data(&["aabbaa", "bbccbb", "ccddcc"]),
         ),
-        ("b", DataType::String, build_string_column(&["a", "b", "c"])),
+        ("b", DataType::String, Column::from_data(&["a", "b", "c"])),
     ];
 
     run_ast(file, "trim_both(a, 'a')", &table);
@@ -302,9 +302,9 @@ fn test_trim_with_from(file: &mut impl Write, trim_where: &str) {
         (
             "a",
             DataType::String,
-            build_string_column(&["aabbaa", "bbccbb", "ccddcc"]),
+            Column::from_data(&["aabbaa", "bbccbb", "ccddcc"]),
         ),
-        ("b", DataType::String, build_string_column(&["a", "b", "c"])),
+        ("b", DataType::String, Column::from_data(&["a", "b", "c"])),
     ];
 
     run_ast(
@@ -337,7 +337,7 @@ fn test_trim(file: &mut impl Write) {
     run_ast(file, "trim(a)", &[(
         "a",
         DataType::String,
-        build_string_column(&["abc", "   abc", "   abc   ", "abc   "]),
+        Column::from_data(&["abc", "   abc", "   abc   ", "abc   "]),
     )]);
 
     // TRIM([[BOTH | LEADING | TRAILING] <expr> FROM] <expr>)
@@ -346,10 +346,32 @@ fn test_trim(file: &mut impl Write) {
     test_trim_with_from(file, "trailing");
 }
 
-fn build_string_column(strings: &[&str]) -> Column {
-    let mut builder = ColumnBuilder::with_capacity(&DataType::String, strings.len());
-    for s in strings {
-        builder.push(ScalarRef::String(s.as_bytes()));
-    }
-    builder.build()
+fn test_concat(file: &mut impl Write) {
+    run_ast(file, "concat('5', '3', '4')", &[]);
+    run_ast(file, "concat(NULL, '3', '4')", &[]);
+    run_ast(file, "concat(a, '3', '4', '5')", &[(
+        "a",
+        DataType::String,
+        Column::from_data(&["abc", "   abc", "   abc   ", "abc   "]),
+    )]);
+
+    run_ast(file, "concat(a, '3')", &[(
+        "a",
+        DataType::Nullable(Box::new(DataType::String)),
+        Column::from_data_with_validity(&["a", "b", "c", "d"], vec![true, true, false, true]),
+    )]);
+
+    run_ast(file, "concat_ws('-', '3', null, '4', null, '5')", &[]);
+    run_ast(file, "concat_ws(NULL, '3', '4')", &[]);
+    run_ast(file, "concat_ws(a, '3', '4', '5')", &[(
+        "a",
+        DataType::String,
+        Column::from_data(&[",", "-", ",", "-"]),
+    )]);
+
+    run_ast(file, "concat_ws(a, '3')", &[(
+        "a",
+        DataType::Nullable(Box::new(DataType::String)),
+        Column::from_data_with_validity(&["a", "b", "c", "d"], vec![true, true, false, true]),
+    )]);
 }
