@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::{Display, Formatter};
 use common_ast::ast::BinaryOperator;
 use common_datavalues::BooleanType;
 use common_datavalues::DataTypeImpl;
@@ -560,5 +561,15 @@ impl ScalarExpr for SubqueryExpr {
 impl PartialEq for SubqueryExpr {
     fn eq(&self, _other: &Self) -> bool {
         false
+    }
+}
+
+impl Display for Scalar {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Scalar::ConstantExpr(constant_expr) => write!(f, "{}", constant_expr.value),
+            Scalar::CastExpr(cast_expr) => write!(f, "{}", cast_expr.argument),
+            _ => unimplemented!("Unimplemented display for scalar"),
+        }
     }
 }

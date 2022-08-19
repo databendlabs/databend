@@ -225,7 +225,7 @@ async fn exprs_to_datavalue(
     schema: &DataSchemaRef,
     ctx: Arc<QueryContext>,
 ) -> Result<Vec<DataValue>> {
-    if exprs.len() != schema.num_fields() {
+    if exprs.len() != schema.num_fields_without_default_expr() {
         return Err(ErrorCode::BadDataValueType(
             "Expression size not match schema num of cols".to_string(),
         ));
