@@ -311,7 +311,7 @@ impl MetaNode {
     /// Optionally boot a single node cluster.
     /// 1. If `open` is `Some`, try to open an existent one.
     /// 2. If `create` is `Some`, try to create an one in non-voter mode.
-    #[tracing::instrument(level = "debug", skip(config), fields(config_id=config.config_id.as_str()))]
+    #[tracing::instrument(level = "debug", skip_all)]
     pub async fn open_create_boot(
         config: &RaftConfig,
         open: Option<()>,
@@ -319,6 +319,11 @@ impl MetaNode {
         is_initialize: bool,
         node: Node,
     ) -> MetaResult<Arc<MetaNode>> {
+        info!(
+            "open_create_boot, config: {:?}, open: {:?}, create: {:?}, is_initialize: {}, node: {:?}",
+            config, open, create, is_initialize, node
+        );
+
         let mut config = config.clone();
 
         // Always disable fsync on mac.
