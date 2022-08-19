@@ -152,6 +152,10 @@ impl RaftConfig {
         format!("{}:{}", self.raft_listen_host, self.raft_api_port)
     }
 
+    pub fn raft_api_advertise_host_string(&self) -> String {
+        format!("{}:{}", self.raft_advertise_host, self.raft_api_port)
+    }
+
     pub fn raft_api_listen_host_endpoint(&self) -> Endpoint {
         Endpoint {
             addr: self.raft_listen_host.clone(),
