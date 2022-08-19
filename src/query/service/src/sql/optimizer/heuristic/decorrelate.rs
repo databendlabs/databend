@@ -14,7 +14,7 @@
 
 use std::collections::HashSet;
 
-use common_datavalues::type_coercion::merge_types;
+use common_datavalues::type_coercion::compare_coercion;
 use common_datavalues::BooleanType;
 use common_datavalues::DataTypeImpl;
 use common_datavalues::NullableType;
@@ -171,7 +171,7 @@ impl SubqueryRewriter {
                 }
 
                 JoinCondition::Both { left, right } => {
-                    let join_type = merge_types(&left.data_type(), &right.data_type())?;
+                    let join_type = compare_coercion(&left.data_type(), &right.data_type())?;
                     let left = wrap_cast_if_needed(left.clone(), &join_type);
                     let right = wrap_cast_if_needed(right.clone(), &join_type);
                     left_conditions.push(left);

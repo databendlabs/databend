@@ -21,6 +21,7 @@ max_threads  11  16  SESSION  The maximum number of threads to execute the reque
 quoted_ident_case_sensitive  1  1  SESSION  Case sensitivity of quoted identifiers, default value: 1 (aka case-sensitive)  UInt64
 record_delimiter  "\n"  "\n"  SESSION  Format record_delimiter, default value: "\n"  String
 skip_header  0  0  SESSION  Whether to skip the input header, default value: 0  UInt64
+sql_dialect  PostgreSQL  PostgreSQL  SESSION  SQL dialect, support "PostgreSQL" and "MySQL", default value: "PostgreSQL"  String
 storage_read_buffer_size  1048576  1048576  SESSION  The size of buffer in bytes for buffered reader of dal. By default, it is 1MB.  UInt64
 timezone  UTC  UTC  SESSION  Timezone, default value: UTC,  String
 unquoted_ident_case_sensitive  0  0  SESSION  Case sensitivity of unquoted identifiers, default value: 0 (aka case-insensitive)  UInt64

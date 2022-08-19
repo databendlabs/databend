@@ -88,6 +88,7 @@ impl SyncSystemTable for ConfigsTable {
         let mut storage_config = config.storage;
         storage_config.s3.access_key_id = mask_string(&storage_config.s3.access_key_id, 3);
         storage_config.s3.secret_access_key = mask_string(&storage_config.s3.secret_access_key, 3);
+        storage_config.gcs.credential = mask_string(&storage_config.gcs.credential, 3);
         storage_config.azblob.account_name = mask_string(&storage_config.azblob.account_name, 3);
         storage_config.azblob.account_key = mask_string(&storage_config.azblob.account_key, 3);
         let storage_config_value = serde_json::to_value(storage_config)?;

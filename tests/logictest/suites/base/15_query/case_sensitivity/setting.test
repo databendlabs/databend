@@ -83,6 +83,38 @@ statement ok
 set quoted_ident_case_sensitive = 1; 
 
 onlyif mysql
+statement error 2803
+set sql_dialect = 'xx';
+
+onlyif mysql
+statement ok
+create table t(a string);
+
+onlyif mysql
+statement ok
+set sql_dialect = 'mysql';
+
+onlyif mysql
+statement ok
+select "a";
+
+onlyif mysql
+statement ok
+insert into t values("a");
+
+onlyif mysql
+statement ok
+set sql_dialect = 'postgresql';
+
+onlyif mysql
+statement error 1065
+select "a";
+
+onlyif mysql
+statement error 1065
+insert into t values("a");
+
+onlyif mysql
 statement ok
 drop table if exists "T";
 

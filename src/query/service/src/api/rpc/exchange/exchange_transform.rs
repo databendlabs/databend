@@ -123,6 +123,16 @@ impl ExchangeTransform {
             }
         }
     }
+
+    async fn send_packet(output_packet: DataPacket, exchange: FlightExchange) -> Result<()> {
+        if exchange.send(output_packet).await.is_err() {
+            return Err(ErrorCode::TokioError(
+                "Cannot send flight data to endpoint, because sender is closed.",
+            ));
+        }
+
+        Ok(())
+    }
 }
 
 #[async_trait::async_trait]
@@ -257,19 +267,15 @@ impl Processor for ExchangeTransform {
 
     async fn async_process(&mut self) -> Result<()> {
         if let Some(mut output_data) = self.output_data.take() {
+            let mut futures = Vec::with_capacity(output_data.serialized_blocks.len());
             for index in 0..output_data.serialized_blocks.len() {
                 if let Some(output_packet) = output_data.serialized_blocks[index].take() {
-                    if self.flight_exchanges[index]
-                        .send(output_packet)
-                        .await
-                        .is_err()
-                    {
-                        return Err(ErrorCode::TokioError(
-                            "Cannot send flight data to endpoint, because sender is closed.",
-                        ));
-                    }
+                    let exchange = self.flight_exchanges[index].clone();
+                    futures.push(Self::send_packet(output_packet, exchange));
                 }
             }
+
+            futures::future::try_join_all(futures).await?;
         }
 
         if self.wait_channel_closed && !self.finished {
