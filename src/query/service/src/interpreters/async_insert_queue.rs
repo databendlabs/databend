@@ -25,7 +25,7 @@ use common_base::base::tokio::time::Instant;
 use common_base::base::GlobalIORuntime;
 use common_base::base::ProgressValues;
 use common_base::base::Runtime;
-use common_base::base::SingletonInstance;
+use common_base::base::Singleton;
 use common_base::base::TrySpawn;
 use common_config::Config;
 use common_datablocks::DataBlock;
@@ -203,10 +203,10 @@ pub struct AsyncInsertManager {
     current_processing_insert: Arc<RwLock<QueryIdToEntry>>,
 }
 
-static ASYNC_INSERT_MANAGER: OnceCell<SingletonInstance<Arc<AsyncInsertManager>>> = OnceCell::new();
+static ASYNC_INSERT_MANAGER: OnceCell<Singleton<Arc<AsyncInsertManager>>> = OnceCell::new();
 
 impl AsyncInsertManager {
-    pub fn init(config: &Config, v: SingletonInstance<Arc<AsyncInsertManager>>) -> Result<()> {
+    pub fn init(config: &Config, v: Singleton<Arc<AsyncInsertManager>>) -> Result<()> {
         let max_data_size = config.query.async_insert_max_data_size;
         let busy_timeout = Duration::from_millis(config.query.async_insert_busy_timeout);
         let stale_timeout = Duration::from_millis(config.query.async_insert_stale_timeout);
@@ -223,12 +223,6 @@ impl AsyncInsertManager {
 
         ASYNC_INSERT_MANAGER.set(v).ok();
         Ok(())
-        // match ASYNC_INSERT_MANAGER.set(v) {
-        //     Ok(_) => Ok(()),
-        //     Err(_) => Err(ErrorCode::LogicalError(
-        //         "Cannot init AsyncInsertManager twice",
-        //     )),
-        // }
     }
 
     pub fn instance() -> Arc<AsyncInsertManager> {

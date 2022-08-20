@@ -16,7 +16,7 @@ use std::env;
 use std::io;
 use std::sync::Arc;
 
-use common_base::base::SingletonInstance;
+use common_base::base::Singleton;
 use common_exception::Result;
 use once_cell::sync::OnceCell;
 use opentelemetry::global;
@@ -177,13 +177,13 @@ pub struct QueryLogger {
     _log_guards: Vec<WorkerGuard>,
 }
 
-static QUERY_LOGGER: OnceCell<SingletonInstance<Arc<QueryLogger>>> = OnceCell::new();
+static QUERY_LOGGER: OnceCell<Singleton<Arc<QueryLogger>>> = OnceCell::new();
 
 impl QueryLogger {
     pub fn init(
         app_name_shuffle: String,
         config: &Config,
-        v: SingletonInstance<Arc<QueryLogger>>,
+        v: Singleton<Arc<QueryLogger>>,
     ) -> Result<()> {
         let app_name = format!("databend-query-{}", app_name_shuffle);
         let mut _log_guards = init_logging(app_name.as_str(), config);
@@ -207,10 +207,6 @@ impl QueryLogger {
 
         QUERY_LOGGER.set(v).ok();
         Ok(())
-        // match QUERY_LOGGER.set(v) {
-        //     Ok(_) => Ok(()),
-        //     Err(_) => Err(ErrorCode::LogicalError("Cannot init QueryLogger twice")),
-        // }
     }
 
     pub fn instance() -> Arc<QueryLogger> {

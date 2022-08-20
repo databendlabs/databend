@@ -30,8 +30,7 @@ use crate::tests::TestGlobalServices;
 
 #[tokio::test]
 async fn test_cluster() -> Result<()> {
-    let config = crate::tests::ConfigBuilder::create().build();
-    TestGlobalServices::setup(config).await?;
+    TestGlobalServices::setup(crate::tests::ConfigBuilder::create().build()).await?;
     let cluster_router = Route::new().at("/v1/cluster/list", get(cluster_list_handler));
 
     // List Node

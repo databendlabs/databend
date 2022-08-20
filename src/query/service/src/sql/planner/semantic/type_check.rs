@@ -1363,7 +1363,6 @@ impl<'a> TypeChecker<'a> {
         let mut binder = Binder::new(
             self.ctx.clone(),
             self.ctx.get_catalog_manager()?,
-            // CatalogManager::instance(),
             self.name_resolution_ctx.clone(),
             self.metadata.clone(),
         );

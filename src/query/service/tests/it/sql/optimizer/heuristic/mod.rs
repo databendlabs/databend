@@ -52,7 +52,6 @@ async fn run_test(ctx: Arc<QueryContext>, suite: &Suite) -> Result<String> {
     let binder = Binder::new(
         ctx.clone(),
         ctx.get_catalog_manager()?,
-        // CatalogManager::instance(),
         NameResolutionContext::default(),
         Arc::new(RwLock::new(Metadata::create())),
     );

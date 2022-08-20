@@ -19,7 +19,7 @@ use std::time::Instant;
 
 use common_base::base::tokio;
 use common_base::base::tokio::task::JoinHandle;
-use common_base::base::SingletonInstance;
+use common_base::base::Singleton;
 use common_exception::Result;
 use common_meta_types::RoleInfo;
 use once_cell::sync::OnceCell;
@@ -41,10 +41,10 @@ pub struct RoleCacheManager {
     polling_join_handle: Option<JoinHandle<()>>,
 }
 
-static ROLE_CACHE_MANAGER: OnceCell<SingletonInstance<Arc<RoleCacheManager>>> = OnceCell::new();
+static ROLE_CACHE_MANAGER: OnceCell<Singleton<Arc<RoleCacheManager>>> = OnceCell::new();
 
 impl RoleCacheManager {
-    pub fn init(v: SingletonInstance<Arc<RoleCacheManager>>) -> Result<()> {
+    pub fn init(v: Singleton<Arc<RoleCacheManager>>) -> Result<()> {
         // Check that the user API has been initialized.
         let instance = UserApiProvider::instance();
 
@@ -52,12 +52,6 @@ impl RoleCacheManager {
 
         ROLE_CACHE_MANAGER.set(v).ok();
         Ok(())
-        // match ROLE_CACHE_MANAGER.set(v) {
-        //     Ok(_) => Ok(()),
-        //     Err(_) => Err(ErrorCode::LogicalError(
-        //         "Cannot init RoleCacheManager twice",
-        //     )),
-        // }
     }
 
     pub fn try_create(user_manager: Arc<UserApiProvider>) -> Result<Arc<RoleCacheManager>> {

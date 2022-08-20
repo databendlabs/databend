@@ -17,7 +17,7 @@ use std::io::Result;
 
 use backon::ExponentialBackoff;
 use common_base::base::GlobalIORuntime;
-use common_base::base::SingletonInstance;
+use common_base::base::Singleton;
 use common_contexts::DalRuntime;
 use common_exception::ErrorCode;
 use once_cell::sync::OnceCell;
@@ -172,21 +172,17 @@ pub fn init_s3_operator(cfg: &StorageS3Config) -> Result<Operator> {
 
 pub struct StorageOperator;
 
-static STORAGE_OPERATOR: OnceCell<SingletonInstance<Operator>> = OnceCell::new();
+static STORAGE_OPERATOR: OnceCell<Singleton<Operator>> = OnceCell::new();
 
 impl StorageOperator {
     pub async fn init(
         conf: &StorageConfig,
-        v: SingletonInstance<Operator>,
+        v: Singleton<Operator>,
     ) -> common_exception::Result<()> {
         v.init(Self::try_create(conf).await?)?;
 
         STORAGE_OPERATOR.set(v).ok();
         Ok(())
-        // match STORAGE_OPERATOR.set(v) {
-        //     Ok(_) => Ok(()),
-        //     Err(_) => Err(ErrorCode::LogicalError("Cannot init StorageOperator twice")),
-        // }
     }
 
     pub async fn try_create(conf: &StorageConfig) -> common_exception::Result<Operator> {

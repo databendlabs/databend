@@ -73,7 +73,6 @@ impl Planner {
         let binder = Binder::new(
             self.ctx.clone(),
             self.ctx.get_catalog_manager()?,
-            // CatalogManager::instance(),
             name_resolution_ctx,
             metadata.clone(),
         );

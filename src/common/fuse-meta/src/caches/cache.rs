@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_base::base::SingletonInstance;
+use common_base::base::Singleton;
 use common_config::QueryConfig;
 use common_exception::Result;
 use once_cell::sync::OnceCell;
@@ -43,13 +43,13 @@ pub struct CacheManager {
     tenant_id: String,
 }
 
-static CACHE_MANAGER: OnceCell<SingletonInstance<Arc<CacheManager>>> = OnceCell::new();
+static CACHE_MANAGER: OnceCell<Singleton<Arc<CacheManager>>> = OnceCell::new();
 
 impl CacheManager {
     /// Initialize the caches according to the relevant configurations.
     ///
     /// For convenience, ids of cluster and tenant are also kept
-    pub fn init(config: &QueryConfig, v: SingletonInstance<Arc<CacheManager>>) -> Result<()> {
+    pub fn init(config: &QueryConfig, v: Singleton<Arc<CacheManager>>) -> Result<()> {
         if !config.table_cache_enabled {
             v.init(Arc::new(Self {
                 table_snapshot_cache: None,
@@ -61,11 +61,6 @@ impl CacheManager {
             }))?;
 
             CACHE_MANAGER.set(v).ok();
-            Ok(())
-            // match CACHE_MANAGER.set(v) {
-            //     Ok(_) => Ok(()),
-            //     Err(_) => Err(ErrorCode::LogicalError("Cannot init CacheManager twice")),
-            // }
         } else {
             let table_snapshot_cache = Self::new_item_cache(config.table_cache_snapshot_count);
             let segment_info_cache = Self::new_item_cache(config.table_cache_segment_count);
@@ -83,12 +78,9 @@ impl CacheManager {
             }))?;
 
             CACHE_MANAGER.set(v).ok();
-            Ok(())
-            // match CACHE_MANAGER.set(v) {
-            //     Ok(_) => Ok(()),
-            //     Err(_) => Err(ErrorCode::LogicalError("Cannot init CacheManager twice")),
-            // }
         }
+
+        Ok(())
     }
 
     pub fn instance() -> Arc<CacheManager> {

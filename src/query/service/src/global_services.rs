@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use common_base::base::GlobalIORuntime;
 use common_base::base::Runtime;
-use common_base::base::SingletonInstanceImpl;
+use common_base::base::SingletonImpl;
 use common_catalog::catalog::CatalogManager;
 use common_config::Config;
 use common_exception::Result;
@@ -82,7 +82,7 @@ impl GlobalServices {
     }
 }
 
-impl SingletonInstanceImpl<Arc<Runtime>> for GlobalServices {
+impl SingletonImpl<Arc<Runtime>> for GlobalServices {
     fn get(&self) -> Arc<Runtime> {
         unsafe {
             match &*self.global_runtime.get() {
@@ -100,7 +100,7 @@ impl SingletonInstanceImpl<Arc<Runtime>> for GlobalServices {
     }
 }
 
-impl SingletonInstanceImpl<Arc<QueryLogger>> for GlobalServices {
+impl SingletonImpl<Arc<QueryLogger>> for GlobalServices {
     fn get(&self) -> Arc<QueryLogger> {
         unsafe {
             match &*self.query_logger.get() {
@@ -118,7 +118,7 @@ impl SingletonInstanceImpl<Arc<QueryLogger>> for GlobalServices {
     }
 }
 
-impl SingletonInstanceImpl<Arc<ClusterDiscovery>> for GlobalServices {
+impl SingletonImpl<Arc<ClusterDiscovery>> for GlobalServices {
     fn get(&self) -> Arc<ClusterDiscovery> {
         unsafe {
             match &*self.cluster_discovery.get() {
@@ -136,7 +136,7 @@ impl SingletonInstanceImpl<Arc<ClusterDiscovery>> for GlobalServices {
     }
 }
 
-impl SingletonInstanceImpl<Operator> for GlobalServices {
+impl SingletonImpl<Operator> for GlobalServices {
     fn get(&self) -> Operator {
         unsafe {
             match &*self.storage_operator.get() {
@@ -154,7 +154,7 @@ impl SingletonInstanceImpl<Operator> for GlobalServices {
     }
 }
 
-impl SingletonInstanceImpl<Arc<AsyncInsertManager>> for GlobalServices {
+impl SingletonImpl<Arc<AsyncInsertManager>> for GlobalServices {
     fn get(&self) -> Arc<AsyncInsertManager> {
         unsafe {
             match &*self.async_insert_manager.get() {
@@ -173,7 +173,7 @@ impl SingletonInstanceImpl<Arc<AsyncInsertManager>> for GlobalServices {
     }
 }
 
-impl SingletonInstanceImpl<Arc<CacheManager>> for GlobalServices {
+impl SingletonImpl<Arc<CacheManager>> for GlobalServices {
     fn get(&self) -> Arc<CacheManager> {
         unsafe {
             match &*self.cache_manager.get() {
@@ -191,7 +191,7 @@ impl SingletonInstanceImpl<Arc<CacheManager>> for GlobalServices {
     }
 }
 
-impl SingletonInstanceImpl<Arc<CatalogManager>> for GlobalServices {
+impl SingletonImpl<Arc<CatalogManager>> for GlobalServices {
     fn get(&self) -> Arc<CatalogManager> {
         unsafe {
             match &*self.catalog_manager.get() {
@@ -209,7 +209,7 @@ impl SingletonInstanceImpl<Arc<CatalogManager>> for GlobalServices {
     }
 }
 
-impl SingletonInstanceImpl<Arc<HttpQueryManager>> for GlobalServices {
+impl SingletonImpl<Arc<HttpQueryManager>> for GlobalServices {
     fn get(&self) -> Arc<HttpQueryManager> {
         unsafe {
             match &*self.http_query_manager.get() {
@@ -227,7 +227,7 @@ impl SingletonInstanceImpl<Arc<HttpQueryManager>> for GlobalServices {
     }
 }
 
-impl SingletonInstanceImpl<Arc<DataExchangeManager>> for GlobalServices {
+impl SingletonImpl<Arc<DataExchangeManager>> for GlobalServices {
     fn get(&self) -> Arc<DataExchangeManager> {
         unsafe {
             match &*self.data_exchange_manager.get() {
@@ -246,7 +246,7 @@ impl SingletonInstanceImpl<Arc<DataExchangeManager>> for GlobalServices {
     }
 }
 
-impl SingletonInstanceImpl<Arc<SessionManager>> for GlobalServices {
+impl SingletonImpl<Arc<SessionManager>> for GlobalServices {
     fn get(&self) -> Arc<SessionManager> {
         unsafe {
             match &*self.session_manager.get() {
@@ -264,7 +264,7 @@ impl SingletonInstanceImpl<Arc<SessionManager>> for GlobalServices {
     }
 }
 
-impl SingletonInstanceImpl<Arc<UserApiProvider>> for GlobalServices {
+impl SingletonImpl<Arc<UserApiProvider>> for GlobalServices {
     fn get(&self) -> Arc<UserApiProvider> {
         unsafe {
             match &*self.users_manager.get() {
@@ -282,7 +282,7 @@ impl SingletonInstanceImpl<Arc<UserApiProvider>> for GlobalServices {
     }
 }
 
-impl SingletonInstanceImpl<Arc<RoleCacheManager>> for GlobalServices {
+impl SingletonImpl<Arc<RoleCacheManager>> for GlobalServices {
     fn get(&self) -> Arc<RoleCacheManager> {
         unsafe {
             match &*self.users_role_manager.get() {

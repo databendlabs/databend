@@ -3,15 +3,15 @@ use std::sync::Arc;
 use common_exception::Result;
 use once_cell::sync::OnceCell;
 
-use crate::base::singleton_instance::SingletonInstance;
+use crate::base::singleton_instance::Singleton;
 use crate::base::Runtime;
 
 pub struct GlobalIORuntime;
 
-static GLOBAL_RUNTIME: OnceCell<SingletonInstance<Arc<Runtime>>> = OnceCell::new();
+static GLOBAL_RUNTIME: OnceCell<Singleton<Arc<Runtime>>> = OnceCell::new();
 
 impl GlobalIORuntime {
-    pub fn init(num_cpus: usize, v: SingletonInstance<Arc<Runtime>>) -> Result<()> {
+    pub fn init(num_cpus: usize, v: Singleton<Arc<Runtime>>) -> Result<()> {
         let thread_num = std::cmp::max(num_cpus, num_cpus::get() / 2);
         let thread_num = std::cmp::max(2, thread_num);
 
@@ -30,10 +30,6 @@ impl GlobalIORuntime {
 
         GLOBAL_RUNTIME.set(v.clone()).ok();
         Ok(())
-        // match GLOBAL_RUNTIME.set(v.clone()) {
-        //     Ok(_) => Ok(()),
-        //     Err(_) => Err(ErrorCode::LogicalError("Cannot init GlobalRuntime twice")),
-        // }
     }
 
     pub fn instance() -> Arc<Runtime> {

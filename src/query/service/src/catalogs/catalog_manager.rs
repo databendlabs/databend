@@ -15,7 +15,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_base::base::SingletonInstance;
+use common_base::base::Singleton;
 use common_catalog::catalog::Catalog;
 pub use common_catalog::catalog::CatalogManager;
 use common_catalog::catalog::CATALOG_DEFAULT;
@@ -29,7 +29,7 @@ use crate::catalogs::DatabaseCatalog;
 
 #[async_trait::async_trait]
 pub trait CatalogManagerHelper {
-    async fn init(conf: &Config, v: SingletonInstance<Arc<CatalogManager>>) -> Result<()>;
+    async fn init(conf: &Config, v: Singleton<Arc<CatalogManager>>) -> Result<()>;
 
     fn instance() -> Arc<CatalogManager>;
 
@@ -41,19 +41,15 @@ pub trait CatalogManagerHelper {
     fn register_external_catalogs(&mut self, conf: &Config) -> Result<()>;
 }
 
-static CATALOG_MANAGER: OnceCell<SingletonInstance<Arc<CatalogManager>>> = OnceCell::new();
+static CATALOG_MANAGER: OnceCell<Singleton<Arc<CatalogManager>>> = OnceCell::new();
 
 #[async_trait::async_trait]
 impl CatalogManagerHelper for CatalogManager {
-    async fn init(conf: &Config, v: SingletonInstance<Arc<CatalogManager>>) -> Result<()> {
+    async fn init(conf: &Config, v: Singleton<Arc<CatalogManager>>) -> Result<()> {
         v.init(Self::try_create(conf).await?)?;
 
         CATALOG_MANAGER.set(v).ok();
         Ok(())
-        // match CATALOG_MANAGER.set(v) {
-        //     Ok(_) => Ok(()),
-        //     Err(_) => Err(ErrorCode::LogicalError("Cannot init SessionManager twice")),
-        // }
     }
 
     fn instance() -> Arc<CatalogManager> {

@@ -20,7 +20,7 @@ use std::sync::Arc;
 
 use common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
 use common_base::base::GlobalIORuntime;
-use common_base::base::SingletonInstance;
+use common_base::base::Singleton;
 use common_base::base::Thread;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
@@ -64,11 +64,11 @@ pub struct DataExchangeManager {
     queries_coordinator: ReentrantMutex<SyncUnsafeCell<HashMap<String, QueryCoordinator>>>,
 }
 
-static DATA_EXCHANGE_MANAGER: OnceCell<SingletonInstance<Arc<DataExchangeManager>>> =
+static DATA_EXCHANGE_MANAGER: OnceCell<Singleton<Arc<DataExchangeManager>>> =
     OnceCell::new();
 
 impl DataExchangeManager {
-    pub fn init(config: Config, v: SingletonInstance<Arc<DataExchangeManager>>) -> Result<()> {
+    pub fn init(config: Config, v: Singleton<Arc<DataExchangeManager>>) -> Result<()> {
         v.init(Arc::new(DataExchangeManager {
             config,
             queries_coordinator: ReentrantMutex::new(SyncUnsafeCell::new(HashMap::new())),
@@ -76,12 +76,6 @@ impl DataExchangeManager {
 
         DATA_EXCHANGE_MANAGER.set(v).ok();
         Ok(())
-        // match DATA_EXCHANGE_MANAGER.set(v) {
-        //     Ok(_) => Ok(()),
-        //     Err(_) => Err(ErrorCode::LogicalError(
-        //         "Cannot init DataExchangeManager twice",
-        //     )),
-        // }
     }
 
     pub fn instance() -> Arc<DataExchangeManager> {

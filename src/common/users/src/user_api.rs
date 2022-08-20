@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_base::base::SingletonInstance;
+use common_base::base::Singleton;
 use common_exception::Result;
 use common_grpc::RpcClientConf;
 use common_management::QuotaApi;
@@ -39,21 +39,17 @@ pub struct UserApiProvider {
     client: Arc<dyn KVApi>,
 }
 
-static USER_API_PROVIDER: OnceCell<SingletonInstance<Arc<UserApiProvider>>> = OnceCell::new();
+static USER_API_PROVIDER: OnceCell<Singleton<Arc<UserApiProvider>>> = OnceCell::new();
 
 impl UserApiProvider {
     pub async fn init(
         conf: RpcClientConf,
-        v: SingletonInstance<Arc<UserApiProvider>>,
+        v: Singleton<Arc<UserApiProvider>>,
     ) -> Result<()> {
         v.init(Self::try_create(conf).await?)?;
 
         USER_API_PROVIDER.set(v).ok();
         Ok(())
-        // match USER_API_PROVIDER.set(v) {
-        //     Ok(_) => Ok(()),
-        //     Err(_) => Err(ErrorCode::LogicalError("Cannot init UserApiProvider twice")),
-        // }
     }
 
     pub async fn try_create(conf: RpcClientConf) -> Result<Arc<UserApiProvider>> {

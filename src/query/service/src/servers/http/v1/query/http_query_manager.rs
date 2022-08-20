@@ -19,7 +19,7 @@ use std::time::Duration;
 use common_base::base::tokio;
 use common_base::base::tokio::sync::RwLock;
 use common_base::base::tokio::time::sleep;
-use common_base::base::SingletonInstance;
+use common_base::base::Singleton;
 use common_exception::Result;
 use once_cell::sync::OnceCell;
 use parking_lot::Mutex;
@@ -46,10 +46,10 @@ pub struct HttpQueryManager {
     pub(crate) config: HttpQueryConfig,
 }
 
-static HTTP_QUERIES_MANAGER: OnceCell<SingletonInstance<Arc<HttpQueryManager>>> = OnceCell::new();
+static HTTP_QUERIES_MANAGER: OnceCell<Singleton<Arc<HttpQueryManager>>> = OnceCell::new();
 
 impl HttpQueryManager {
-    pub async fn init(cfg: &Config, v: SingletonInstance<Arc<HttpQueryManager>>) -> Result<()> {
+    pub async fn init(cfg: &Config, v: Singleton<Arc<HttpQueryManager>>) -> Result<()> {
         v.init(Arc::new(HttpQueryManager {
             queries: Arc::new(RwLock::new(HashMap::new())),
             sessions: Mutex::new(ExpiringMap::default()),
@@ -60,12 +60,6 @@ impl HttpQueryManager {
 
         HTTP_QUERIES_MANAGER.set(v).ok();
         Ok(())
-        // match HTTP_QUERIES_MANAGER.set(v) {
-        //     Ok(_) => Ok(()),
-        //     Err(_) => Err(ErrorCode::LogicalError(
-        //         "Cannot init HttpQueryManager twice",
-        //     )),
-        // }
     }
 
     pub fn instance() -> Arc<HttpQueryManager> {

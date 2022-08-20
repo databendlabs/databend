@@ -22,7 +22,7 @@ use std::time::Duration;
 
 use common_base::base::tokio;
 use common_base::base::SignalStream;
-use common_base::base::SingletonInstance;
+use common_base::base::Singleton;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_metrics::label_counter;
@@ -54,18 +54,14 @@ pub struct SessionManager {
     pub(in crate::sessions) mysql_basic_conn_id: AtomicU32,
 }
 
-static SESSION_MANAGER: OnceCell<SingletonInstance<Arc<SessionManager>>> = OnceCell::new();
+static SESSION_MANAGER: OnceCell<Singleton<Arc<SessionManager>>> = OnceCell::new();
 
 impl SessionManager {
-    pub fn init(conf: Config, v: SingletonInstance<Arc<SessionManager>>) -> Result<()> {
+    pub fn init(conf: Config, v: Singleton<Arc<SessionManager>>) -> Result<()> {
         v.init(Self::create(conf))?;
 
         SESSION_MANAGER.set(v).ok();
         Ok(())
-        // match SESSION_MANAGER.set(v) {
-        //     Ok(_) => Ok(()),
-        //     Err(_) => Err(ErrorCode::LogicalError("Cannot init SessionManager twice")),
-        // }
     }
 
     pub fn create(conf: Config) -> Arc<SessionManager> {

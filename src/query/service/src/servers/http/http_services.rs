@@ -68,7 +68,6 @@ echo '{}' | curl -u root: '{:?}/?query=INSERT%20INTO%20test%20FORMAT%20JSONEachR
 
 pub struct HttpHandler {
     config: Config,
-    // session_manager: Arc<SessionManager>,
     shutdown_handler: HttpShutdownHandler,
     kind: HttpHandlerKind,
 }

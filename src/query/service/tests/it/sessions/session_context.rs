@@ -18,8 +18,9 @@ use common_base::base::tokio;
 use common_exception::Result;
 use common_meta_types::UserInfo;
 use common_settings::Settings;
-use databend_query::sessions::SessionContext;
+use databend_query::sessions::{SessionContext, SessionManager, SessionType};
 use databend_query::Config;
+use crate::tests::{ConfigBuilder, TestGlobalServices};
 
 #[tokio::test]
 async fn test_session_context() -> Result<()> {

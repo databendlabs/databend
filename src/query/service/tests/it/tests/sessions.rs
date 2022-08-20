@@ -17,7 +17,7 @@ use std::sync::Arc;
 
 use common_base::base::GlobalIORuntime;
 use common_base::base::Runtime;
-use common_base::base::SingletonInstanceImpl;
+use common_base::base::SingletonImpl;
 use common_catalog::catalog::CatalogManager;
 use common_exception::Result;
 use common_fuse_meta::caches::CacheManager;
@@ -105,7 +105,7 @@ impl TestGlobalServices {
     }
 }
 
-impl SingletonInstanceImpl<Arc<Runtime>> for TestGlobalServices {
+impl SingletonImpl<Arc<Runtime>> for TestGlobalServices {
     fn get(&self) -> Arc<Runtime> {
         match std::thread::current().name() {
             None => panic!("Global runtime is not init"),
@@ -128,7 +128,7 @@ impl SingletonInstanceImpl<Arc<Runtime>> for TestGlobalServices {
     }
 }
 
-impl SingletonInstanceImpl<Arc<QueryLogger>> for TestGlobalServices {
+impl SingletonImpl<Arc<QueryLogger>> for TestGlobalServices {
     fn get(&self) -> Arc<QueryLogger> {
         match std::thread::current().name() {
             None => panic!("QueryLogger is not init"),
@@ -151,7 +151,7 @@ impl SingletonInstanceImpl<Arc<QueryLogger>> for TestGlobalServices {
     }
 }
 
-impl SingletonInstanceImpl<Arc<ClusterDiscovery>> for TestGlobalServices {
+impl SingletonImpl<Arc<ClusterDiscovery>> for TestGlobalServices {
     fn get(&self) -> Arc<ClusterDiscovery> {
         match std::thread::current().name() {
             None => panic!("ClusterDiscovery is not init"),
@@ -174,7 +174,7 @@ impl SingletonInstanceImpl<Arc<ClusterDiscovery>> for TestGlobalServices {
     }
 }
 
-impl SingletonInstanceImpl<Operator> for TestGlobalServices {
+impl SingletonImpl<Operator> for TestGlobalServices {
     fn get(&self) -> Operator {
         match std::thread::current().name() {
             None => panic!("Operator is not init"),
@@ -197,7 +197,7 @@ impl SingletonInstanceImpl<Operator> for TestGlobalServices {
     }
 }
 
-impl SingletonInstanceImpl<Arc<AsyncInsertManager>> for TestGlobalServices {
+impl SingletonImpl<Arc<AsyncInsertManager>> for TestGlobalServices {
     fn get(&self) -> Arc<AsyncInsertManager> {
         match std::thread::current().name() {
             None => panic!("AsyncInsertManager is not init"),
@@ -220,7 +220,7 @@ impl SingletonInstanceImpl<Arc<AsyncInsertManager>> for TestGlobalServices {
     }
 }
 
-impl SingletonInstanceImpl<Arc<CacheManager>> for TestGlobalServices {
+impl SingletonImpl<Arc<CacheManager>> for TestGlobalServices {
     fn get(&self) -> Arc<CacheManager> {
         match std::thread::current().name() {
             None => panic!("CacheManager is not init"),
@@ -246,7 +246,7 @@ impl SingletonInstanceImpl<Arc<CacheManager>> for TestGlobalServices {
     }
 }
 
-impl SingletonInstanceImpl<Arc<CatalogManager>> for TestGlobalServices {
+impl SingletonImpl<Arc<CatalogManager>> for TestGlobalServices {
     fn get(&self) -> Arc<CatalogManager> {
         match std::thread::current().name() {
             None => panic!("CatalogManager is not init"),
@@ -269,7 +269,7 @@ impl SingletonInstanceImpl<Arc<CatalogManager>> for TestGlobalServices {
     }
 }
 
-impl SingletonInstanceImpl<Arc<HttpQueryManager>> for TestGlobalServices {
+impl SingletonImpl<Arc<HttpQueryManager>> for TestGlobalServices {
     fn get(&self) -> Arc<HttpQueryManager> {
         match std::thread::current().name() {
             None => panic!("HttpQueryManager is not init"),
@@ -292,7 +292,7 @@ impl SingletonInstanceImpl<Arc<HttpQueryManager>> for TestGlobalServices {
     }
 }
 
-impl SingletonInstanceImpl<Arc<DataExchangeManager>> for TestGlobalServices {
+impl SingletonImpl<Arc<DataExchangeManager>> for TestGlobalServices {
     fn get(&self) -> Arc<DataExchangeManager> {
         match std::thread::current().name() {
             None => panic!("DataExchangeManager is not init"),
@@ -315,7 +315,7 @@ impl SingletonInstanceImpl<Arc<DataExchangeManager>> for TestGlobalServices {
     }
 }
 
-impl SingletonInstanceImpl<Arc<SessionManager>> for TestGlobalServices {
+impl SingletonImpl<Arc<SessionManager>> for TestGlobalServices {
     fn get(&self) -> Arc<SessionManager> {
         match std::thread::current().name() {
             None => panic!("SessionManager is not init"),
@@ -338,7 +338,7 @@ impl SingletonInstanceImpl<Arc<SessionManager>> for TestGlobalServices {
     }
 }
 
-impl SingletonInstanceImpl<Arc<UserApiProvider>> for TestGlobalServices {
+impl SingletonImpl<Arc<UserApiProvider>> for TestGlobalServices {
     fn get(&self) -> Arc<UserApiProvider> {
         match std::thread::current().name() {
             None => panic!("UserApiProvider is not init"),
@@ -361,7 +361,7 @@ impl SingletonInstanceImpl<Arc<UserApiProvider>> for TestGlobalServices {
     }
 }
 
-impl SingletonInstanceImpl<Arc<RoleCacheManager>> for TestGlobalServices {
+impl SingletonImpl<Arc<RoleCacheManager>> for TestGlobalServices {
     fn get(&self) -> Arc<RoleCacheManager> {
         match std::thread::current().name() {
             None => panic!("RoleCacheManager is not init"),

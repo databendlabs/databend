@@ -82,7 +82,7 @@ async fn test_rejected_session_with_sequence() -> Result<()> {
     // Wait for the connection to be destroyed
     std::thread::sleep(Duration::from_secs(5));
     // Accepted connection
-    // create_connection(listening.port()).await?;
+    create_connection(listening.port()).await?;
 
     Ok(())
 }

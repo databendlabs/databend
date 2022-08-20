@@ -15,22 +15,16 @@
 use common_base::base::tokio;
 use common_exception::Result;
 use common_settings::Settings;
-use databend_query::sessions::Session;
+use databend_query::sessions::{Session, SessionManager};
 use databend_query::sessions::SessionContext;
 use databend_query::sessions::SessionType;
 
-use crate::tests::ConfigBuilder;
+use crate::tests::{ConfigBuilder, TestGlobalServices};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_session() -> Result<()> {
-    let conf = ConfigBuilder::create().build();
-
-    let typ = SessionType::Dummy;
-    let id = String::from("test-001");
-    let tenant = &conf.query.tenant_id;
-    let session_settings = Settings::default_settings(tenant);
-    let session_ctx = SessionContext::try_create(conf, session_settings)?;
-    let session = Session::try_create(id, typ, session_ctx, None)?;
+    TestGlobalServices::setup(ConfigBuilder::create().build().clone()).await?;
+    let session = SessionManager::instance().create_session(SessionType::Dummy).await?;
 
     // Tenant.
     {
@@ -56,14 +50,8 @@ async fn test_session() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_session_in_management_mode() -> Result<()> {
-    let conf = ConfigBuilder::create().with_management_mode().build();
-
-    let typ = SessionType::Dummy;
-    let id = String::from("test-001");
-    let tenant = &conf.query.tenant_id;
-    let session_settings = Settings::default_settings(tenant);
-    let session_ctx = SessionContext::try_create(conf, session_settings)?;
-    let session = Session::try_create(id, typ, session_ctx, None)?;
+    TestGlobalServices::setup(ConfigBuilder::create().with_management_mode().build()).await?;
+    let session = SessionManager::instance().create_session(SessionType::Dummy).await?;
 
     // Tenant.
     {
@@ -75,25 +63,24 @@ async fn test_session_in_management_mode() -> Result<()> {
         assert_eq!(&actual, "tenant2");
     }
 
-    // let session_manager = SessionManager::instance();
-    // // test session leak
-    // let leak_id;
-    // {
-    //     let leak_session = session_manager.create_session(SessionType::Dummy).await?;
-    //     leak_id = leak_session.get_id();
-    //     assert!(
-    //         session_manager
-    //             .get_session_by_id(leak_id.as_str())
-    //             .await
-    //             .is_some()
-    //     );
-    // }
-    // assert!(
-    //     session_manager
-    //         .get_session_by_id(leak_id.as_str())
-    //         .await
-    //         .is_none()
-    // );
+    // test session leak
+    let leak_id;
+    {
+        let leak_session = SessionManager::instance().create_session(SessionType::Dummy).await?;
+        leak_id = leak_session.get_id();
+        assert!(
+            SessionManager::instance()
+                .get_session_by_id(leak_id.as_str())
+                .await
+                .is_some()
+        );
+    }
+    assert!(
+        SessionManager::instance()
+            .get_session_by_id(leak_id.as_str())
+            .await
+            .is_none()
+    );
 
     Ok(())
 }

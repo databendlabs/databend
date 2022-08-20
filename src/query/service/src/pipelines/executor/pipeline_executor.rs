@@ -181,7 +181,6 @@ impl PipelineExecutor {
                 .name()
                 .map(|name| name.to_string())
                 .unwrap_or(format!("PipelineExecutor-{}", thread_num));
-            // format!("PipelineExecutor-{}", thread_num);
             thread_join_handles.push(Thread::named_spawn(Some(name), move || unsafe {
                 let this_clone = this.clone();
                 let try_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(

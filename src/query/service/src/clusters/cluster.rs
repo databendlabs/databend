@@ -28,7 +28,7 @@ use common_base::base::DummySignalStream;
 use common_base::base::GlobalUniqName;
 use common_base::base::SignalStream;
 use common_base::base::SignalType;
-use common_base::base::SingletonInstance;
+use common_base::base::Singleton;
 pub use common_catalog::cluster_info::Cluster;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -134,7 +134,7 @@ impl ClusterHelper for Cluster {
     }
 }
 
-static CLUSTER_DISCOVERY: OnceCell<SingletonInstance<Arc<ClusterDiscovery>>> = OnceCell::new();
+static CLUSTER_DISCOVERY: OnceCell<Singleton<Arc<ClusterDiscovery>>> = OnceCell::new();
 
 impl ClusterDiscovery {
     const METRIC_LABEL_FUNCTION: &'static str = "function";
@@ -147,7 +147,7 @@ impl ClusterDiscovery {
         }
     }
 
-    pub async fn init(cfg: Config, v: SingletonInstance<Arc<ClusterDiscovery>>) -> Result<()> {
+    pub async fn init(cfg: Config, v: Singleton<Arc<ClusterDiscovery>>) -> Result<()> {
         let local_id = GlobalUniqName::unique();
         let meta_client = ClusterDiscovery::create_meta_client(&cfg).await?;
         let (lift_time, provider) = Self::create_provider(&cfg, meta_client)?;
@@ -168,10 +168,6 @@ impl ClusterDiscovery {
 
         CLUSTER_DISCOVERY.set(v).ok();
         Ok(())
-        // match CLUSTER_DISCOVERY.set(v) {
-        //     Ok(_) => Ok(()),
-        //     Err(_) => Err(ErrorCode::LogicalError("Cannot init SessionManager twice")),
-        // }
     }
 
     pub fn instance() -> Arc<ClusterDiscovery> {
