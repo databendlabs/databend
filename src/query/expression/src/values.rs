@@ -164,6 +164,21 @@ impl<'a, T: ValueType> ValueRef<'a, T> {
             }
         }
     }
+
+    pub fn index(&'a self, index: usize) -> Option<T::ScalarRef<'a>> {
+        match self {
+            ValueRef::Scalar(scalar) => Some(scalar.clone()),
+            ValueRef::Column(col) => T::index_column(col, index),
+        }
+    }
+
+    /// # Safety
+    pub unsafe fn index_unchecked(&'a self, index: usize) -> T::ScalarRef<'a> {
+        match self {
+            ValueRef::Scalar(scalar) => scalar.clone(),
+            ValueRef::Column(c) => T::index_column_unchecked(c, index),
+        }
+    }
 }
 
 impl<'a, T: ValueType> Value<T> {
@@ -190,13 +205,6 @@ impl<'a> ValueRef<'a, AnyType> {
             ValueRef::Scalar(scalar) => ValueRef::Scalar(T::try_downcast_scalar(scalar)?),
             ValueRef::Column(col) => ValueRef::Column(T::try_downcast_column(col)?),
         })
-    }
-
-    pub fn index(&self, index: usize) -> Option<ScalarRef<'_>> {
-        match self {
-            ValueRef::Scalar(scalar) => Some(scalar.clone()),
-            ValueRef::Column(col) => col.index(index),
-        }
     }
 
     pub fn domain(&self) -> Domain {
@@ -364,6 +372,35 @@ impl Column {
                     .map(|field| field.index(index))
                     .collect::<Option<Vec<_>>>()?,
             )),
+        }
+    }
+
+    /// # Safety
+    /// Assumes that the `index` is not out of range.
+    pub unsafe fn index_unchecked(&self, index: usize) -> ScalarRef {
+        match self {
+            Column::Null { .. } => ScalarRef::Null,
+            Column::EmptyArray { .. } => ScalarRef::EmptyArray,
+            Column::Int8(col) => ScalarRef::Int8(*col.get_unchecked(index)),
+            Column::Int16(col) => ScalarRef::Int16(*col.get_unchecked(index)),
+            Column::Int32(col) => ScalarRef::Int32(*col.get_unchecked(index)),
+            Column::Int64(col) => ScalarRef::Int64(*col.get_unchecked(index)),
+            Column::UInt8(col) => ScalarRef::UInt8(*col.get_unchecked(index)),
+            Column::UInt16(col) => ScalarRef::UInt16(*col.get_unchecked(index)),
+            Column::UInt32(col) => ScalarRef::UInt32(*col.get_unchecked(index)),
+            Column::UInt64(col) => ScalarRef::UInt64(*col.get_unchecked(index)),
+            Column::Float32(col) => ScalarRef::Float32(*col.get_unchecked(index)),
+            Column::Float64(col) => ScalarRef::Float64(*col.get_unchecked(index)),
+            Column::Boolean(col) => ScalarRef::Boolean(col.get_bit_unchecked(index)),
+            Column::String(col) => ScalarRef::String(col.index_unchecked(index)),
+            Column::Array(col) => ScalarRef::Array(col.index_unchecked(index)),
+            Column::Nullable(col) => col.index_unchecked(index).unwrap_or(ScalarRef::Null),
+            Column::Tuple { fields, .. } => ScalarRef::Tuple(
+                fields
+                    .iter()
+                    .map(|field| field.index_unchecked(index))
+                    .collect::<Vec<_>>(),
+            ),
         }
     }
 

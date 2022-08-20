@@ -73,7 +73,6 @@ common-tracing = { path = "../../common/tracing" }
 common-users = { path = "../users" }
 
 # Github dependencies
-async-trait = { git = "https://github.com/datafuse-extras/async-trait", rev = "f0b0fd5" }
 sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "7f246e3" }
 
 # Crates.io dependencies
@@ -82,6 +81,7 @@ async-channel = "1.6.1"
 async-compat = "0.2.1"
 async-recursion = "1.0.0"
 async-stream = "0.3.3"
+async-trait = { version = "0.1.0", package = "async-trait-fn" }
 backoff = { version = "0.4.0", features = ["futures", "tokio"] }
 backon = "0.0.2"
 base64 = "0.13.0"

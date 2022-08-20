@@ -32,6 +32,7 @@ use crate::sql::executor::PhysicalScalar;
 use crate::sql::executor::Project;
 use crate::sql::executor::Sort;
 use crate::sql::executor::TableScan;
+use crate::sql::executor::UnionAll;
 use crate::sql::plans::JoinType;
 
 impl PhysicalPlan {
@@ -62,6 +63,7 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
             PhysicalPlan::Exchange(exchange) => write!(f, "{}", exchange)?,
             PhysicalPlan::ExchangeSource(source) => write!(f, "{}", source)?,
             PhysicalPlan::ExchangeSink(sink) => write!(f, "{}", sink)?,
+            PhysicalPlan::UnionAll(union_all) => write!(f, "{}", union_all)?,
         }
 
         for node in self.node.children() {
@@ -303,5 +305,11 @@ impl Display for ExchangeSink {
             "Exchange Sink: fragment id: [{:?}]",
             self.destination_fragment_id
         )
+    }
+}
+
+impl Display for UnionAll {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "UnionAll")
     }
 }

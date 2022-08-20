@@ -41,8 +41,6 @@ async fn test_user_stage_interpreter() -> Result<()> {
         let query = "DESC STAGE test_stage";
         let (plan, _, _) = planner.plan_sql(query).await?;
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
-        assert_eq!(executor.name(), "DescribeUserStageInterpreter");
-
         let mut stream = executor.execute().await?;
         let mut blocks = vec![];
 

@@ -20,7 +20,7 @@ common-pipeline-core = { path = "../core" }
 common-storage = { path = "../../../common/storage" }
 common-streams = { path = "../../streams" }
 
-async-trait = { git = "https://github.com/datafuse-extras/async-trait", rev = "f0b0fd5" }
+async-trait = { version = "0.1.0", package = "async-trait-fn" }
 futures = "0.3.21"
 futures-util = "0.3.21"
 opendal = { version = "0.13.0", features = ["layers-retry", "compress"] }

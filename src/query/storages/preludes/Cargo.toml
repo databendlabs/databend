@@ -39,7 +39,7 @@ common-tracing = { path = "../../../common/tracing" }
 common-users = { path = "../../users" }
 
 async-stream = "0.3.3"
-async-trait = { git = "https://github.com/datafuse-extras/async-trait", rev = "f0b0fd5" }
+async-trait = { version = "0.1.0", package = "async-trait-fn" }
 backoff = { version = "0.4.0", features = ["futures", "tokio"] }
 chrono = "0.4.19"
 clap = { version = "3.2.5", features = ["derive", "env"] }

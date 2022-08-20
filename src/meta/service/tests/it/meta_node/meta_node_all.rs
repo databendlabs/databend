@@ -279,14 +279,7 @@ async fn test_meta_node_join() -> anyhow::Result<()> {
     let node_id = 2;
     let tc2 = MetaSrvTestContext::new(node_id);
 
-    let mn2 = MetaNode::open_create_boot(
-        &tc2.config.raft_config,
-        None,
-        Some(()),
-        false,
-        tc2.config.get_node(),
-    )
-    .await?;
+    let mn2 = MetaNode::open_create_boot(&tc2.config.raft_config, None, Some(()), None).await?;
 
     info!("--- join non-voter 2 to cluster by leader");
 
@@ -317,14 +310,7 @@ async fn test_meta_node_join() -> anyhow::Result<()> {
 
     let node_id = 3;
     let tc3 = MetaSrvTestContext::new(node_id);
-    let mn3 = MetaNode::open_create_boot(
-        &tc3.config.raft_config,
-        None,
-        Some(()),
-        false,
-        tc3.config.get_node(),
-    )
-    .await?;
+    let mn3 = MetaNode::open_create_boot(&tc3.config.raft_config, None, Some(()), None).await?;
 
     info!("--- join node-3 by sending rpc `join` to a non-leader");
     {
@@ -361,38 +347,10 @@ async fn test_meta_node_join() -> anyhow::Result<()> {
 
     info!("--- re-open all meta node");
 
-    let mn0 = MetaNode::open_create_boot(
-        &tc0.config.raft_config,
-        Some(()),
-        None,
-        false,
-        tc0.config.get_node(),
-    )
-    .await?;
-    let mn1 = MetaNode::open_create_boot(
-        &tc1.config.raft_config,
-        Some(()),
-        None,
-        false,
-        tc1.config.get_node(),
-    )
-    .await?;
-    let mn2 = MetaNode::open_create_boot(
-        &tc2.config.raft_config,
-        Some(()),
-        None,
-        false,
-        tc2.config.get_node(),
-    )
-    .await?;
-    let mn3 = MetaNode::open_create_boot(
-        &tc3.config.raft_config,
-        Some(()),
-        None,
-        false,
-        tc3.config.get_node(),
-    )
-    .await?;
+    let mn0 = MetaNode::open_create_boot(&tc0.config.raft_config, Some(()), None, None).await?;
+    let mn1 = MetaNode::open_create_boot(&tc1.config.raft_config, Some(()), None, None).await?;
+    let mn2 = MetaNode::open_create_boot(&tc2.config.raft_config, Some(()), None, None).await?;
+    let mn3 = MetaNode::open_create_boot(&tc3.config.raft_config, Some(()), None, None).await?;
 
     let all = vec![mn0, mn1, mn2, mn3];
 
@@ -437,22 +395,8 @@ async fn test_meta_node_leave() -> anyhow::Result<()> {
     let tc0 = &tcs[0];
     let tc2 = &tcs[2];
 
-    let mn0 = MetaNode::open_create_boot(
-        &tc0.config.raft_config,
-        Some(()),
-        None,
-        false,
-        tc0.config.get_node(),
-    )
-    .await?;
-    let mn2 = MetaNode::open_create_boot(
-        &tc2.config.raft_config,
-        Some(()),
-        None,
-        false,
-        tc2.config.get_node(),
-    )
-    .await?;
+    let mn0 = MetaNode::open_create_boot(&tc0.config.raft_config, Some(()), None, None).await?;
+    let mn2 = MetaNode::open_create_boot(&tc2.config.raft_config, Some(()), None, None).await?;
 
     let all = vec![mn0, mn2];
 
@@ -483,14 +427,7 @@ async fn test_meta_node_join_rejoin() -> anyhow::Result<()> {
     let node_id = 1;
     let tc1 = MetaSrvTestContext::new(node_id);
 
-    let mn1 = MetaNode::open_create_boot(
-        &tc1.config.raft_config,
-        None,
-        Some(()),
-        false,
-        tc1.config.get_node(),
-    )
-    .await?;
+    let mn1 = MetaNode::open_create_boot(&tc1.config.raft_config, None, Some(()), None).await?;
 
     info!("--- join non-voter 1 to cluster");
 
@@ -521,14 +458,7 @@ async fn test_meta_node_join_rejoin() -> anyhow::Result<()> {
     let node_id = 2;
     let tc2 = MetaSrvTestContext::new(node_id);
 
-    let mn2 = MetaNode::open_create_boot(
-        &tc2.config.raft_config,
-        None,
-        Some(()),
-        false,
-        tc2.config.get_node(),
-    )
-    .await?;
+    let mn2 = MetaNode::open_create_boot(&tc2.config.raft_config, None, Some(()), None).await?;
 
     info!("--- join node-2 by sending rpc `join` to a non-leader");
     {
@@ -678,9 +608,7 @@ async fn test_meta_node_restart_single_node() -> anyhow::Result<()> {
 
     let raft_conf = &tc.config.raft_config;
 
-    let node = tc.config.get_node();
-
-    let leader = MetaNode::open_create_boot(raft_conf, Some(()), None, false, node).await?;
+    let leader = MetaNode::open_create_boot(raft_conf, Some(()), None, None).await?;
 
     log_index += 1;
 
@@ -833,15 +761,8 @@ async fn start_meta_node_non_voter(
     let addr = tc.config.raft_config.raft_api_addr().await?;
 
     let raft_conf = &tc.config.raft_config;
-    let grpc_addr = tc.config.grpc_api_address.clone();
 
-    let node = Node {
-        name: raft_conf.id.to_string(),
-        endpoint: raft_conf.raft_api_advertise_host_endpoint(),
-        grpc_api_addr: Some(grpc_addr),
-    };
-
-    let mn = MetaNode::open_create_boot(raft_conf, None, Some(()), false, node).await?;
+    let mn = MetaNode::open_create_boot(raft_conf, None, Some(()), None).await?;
 
     assert!(!mn.is_opened());
 

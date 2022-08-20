@@ -32,7 +32,7 @@ common-storages-index = { path = "../index" }
 common-storages-util = { path = "../util" }
 common-streams = { path = "../../streams" }
 
-async-trait = { git = "https://github.com/datafuse-extras/async-trait", rev = "f0b0fd5" }
+async-trait = { version = "0.1.0", package = "async-trait-fn" }
 backoff = { version = "0.4.0", features = ["futures", "tokio"] }
 chrono = "0.4.19"
 futures = "0.3.21"
