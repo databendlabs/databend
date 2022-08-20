@@ -480,13 +480,13 @@ async fn exprs_to_datavalue<'a>(
     }
 
     let dummy = DataSchemaRefExt::create(vec![DataField::new("dummy", u8::to_data_type())]);
-    let one_row_block = DataBlock::create(dummy.clone(), vec![Series::from_data(vec![1u8])]);
+    let one_row_block = DataBlock::create(dummy, vec![Series::from_data(vec![1u8])]);
     let func_ctx = ctx.try_get_function_context()?;
     let mut expression_transform = ExpressionTransformV2 {
         expressions,
         func_ctx,
     };
     let res = expression_transform.transform(one_row_block)?;
-    let datavalues: Vec<DataValue> = res.columns().iter().map(|col| col.get(0)).collect();
+    let datavalues: Vec<DataValue> = res.columns().iter().skip(1).map(|col| col.get(0)).collect();
     Ok(datavalues)
 }
