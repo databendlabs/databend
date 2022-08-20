@@ -104,6 +104,11 @@ select to_datetime('0999-12-31 23:59:59');
 ----
 1000-01-01 00:00:00.000000
 
+statement query T
+select to_datetime('2022-12-31T23:59:59+00:00');
+
+----
+2022-12-31 23:59:59.000000
 
 statement query B
 select typeof(today() + 3) = 'DATE';
@@ -111,15 +116,11 @@ select typeof(today() + 3) = 'DATE';
 ----
 1
 
-
-
 statement query B
 select typeof(today() - 3) = 'DATE';
 
 ----
 1
-
-
 
 statement query B
 select typeof(now() - 3) = 'TIMESTAMP(6)';
@@ -127,15 +128,11 @@ select typeof(now() - 3) = 'TIMESTAMP(6)';
 ----
 1
 
-
-
 statement query B
 select typeof(to_datetime(1640019661000000)) = 'TIMESTAMP(6)';
 
 ----
 1
-
-
 
 statement query B
 select today() + 1 - today() = 1;
@@ -143,15 +140,11 @@ select today() + 1 - today() = 1;
 ----
 1
 
-
-
 statement query B
 select typeof(today() - today()) = 'INT';
 
 ----
 1
-
-
 
 statement query B
 select typeof(now() - now()) = 'INT';
@@ -159,15 +152,11 @@ select typeof(now() - now()) = 'INT';
 ----
 1
 
-
-
 statement query B
 select sum(today() + number - today()) = 45 from numbers(10);
 
 ----
 1
-
-
 
 statement query B
 select today() - 1 = yesterday();
@@ -175,15 +164,11 @@ select today() - 1 = yesterday();
 ----
 1
 
-
-
 statement query B
 select today() - yesterday()  = 1;
 
 ----
 1
-
-
 
 statement query B
 select today() + 1 = tomorrow();
@@ -198,8 +183,6 @@ select tomorrow() - today() = 1;
 
 ----
 1
-
-
 
 statement query I
 select to_yyyymm(to_datetime(1630833797000000));
@@ -219,15 +202,11 @@ select to_yyyymm(to_datetime(1630833797000000))  =  202109;
 ----
 1
 
-
-
 statement query B
 select to_yyyymm(to_date(18875))  =  202109;
 
 ----
 1
-
-
 
 statement query T
 select time_slot(to_datetime(1630320462000000));
@@ -271,8 +250,6 @@ select time_slot(now()) <= now();
 ----
 1
 
-
-
 statement query I
 select to_yyyymmddhhmmss(to_datetime(1630833797000000));
 
@@ -291,15 +268,11 @@ select to_yyyymmddhhmmss(to_datetime(1630833797000000))  =  20210905092317;
 ----
 1
 
-
-
 statement query B
 select to_yyyymmddhhmmss(to_date(18875))  =  20210905000000;
 
 ----
 1
-
-
 
 statement query I
 select to_yyyymmdd(to_datetime(1630833797000000));
@@ -319,15 +292,11 @@ select to_yyyymmdd(to_datetime(1630833797000000))  =  20210905;
 ----
 1
 
-
-
 statement query B
 select to_yyyymmdd(to_date(18875))  =  20210905;
 
 ----
 1
-
-
 
 statement query T
 select to_start_of_year(to_datetime(1630812366000000));
@@ -893,8 +862,6 @@ select to_datetime('2022-04-01 06:50:20')   < '2022-04-02 04:50:20';
 ----
 1
 
-
-
 statement ok
 drop table if exists ts;
 
@@ -902,7 +869,19 @@ statement ok
 create table ts(a DateTime(6), b DateTime, c Date);
 
 statement ok
+insert into ts values('2022-02-03 00:00:00', '2022-02-03', today());
+
+statement query B
+select to_datetime(a) = to_datetime(b) from ts;
+
+----
+1
+
+statement ok
 drop table if exists ts;
+
+statement ok
+drop table if exists t;
 
 statement ok
 create table t(a datetime, b DateTime(3), c Date);
@@ -922,6 +901,13 @@ insert into t values('10000-01-01 00:00:00', '2022-04-02 15:10:28.221', '2020-10
 statement ok
 insert into t values('2022-04-02 15:10:28.221', '2022-04-02 15:10:28.223', '0999-10-10');
 
+statement ok
+insert into t values('2022-04-02T15:10:28+08:13', '2022-04-02T15:10:28.223-08:00', '2022-04-02');
+
+statement ok
+insert into t values('2022-04-02T15:10:28-08:13', '2022-04-02T15:10:28.223+08:00', '2022-04-02');
+
+skipif clickhouse
 statement error 1010
 insert into t values('2022-04-02 15:10:28.221', '2022-04-02 15:10:28.221', '10000-10-10'); 
 
@@ -929,10 +915,12 @@ statement query TTT
 select * from t order by b;
 
 ----
-2022-04-02 15:10:28.000000 2022-04-02 15:10:28.000 1000-01-01
-2022-04-02 15:10:28.221000 2022-04-02 15:10:28.221 9999-12-31
-1000-01-01 00:00:00.000000 2022-04-02 15:10:28.222 2020-10-10
-2022-04-02 15:10:28.221000 2022-04-02 15:10:28.223 1000-01-01
+2022-04-02 23:23:28.000000  2022-04-02 07:10:28.223  2022-04-02
+2022-04-02 15:10:28.000000  2022-04-02 15:10:28.000  1000-01-01
+2022-04-02 15:10:28.221000  2022-04-02 15:10:28.221  9999-12-31
+1000-01-01 00:00:00.000000  2022-04-02 15:10:28.222  2020-10-10
+2022-04-02 15:10:28.221000  2022-04-02 15:10:28.223  1000-01-01
+2022-04-02 06:57:28.000000  2022-04-02 23:10:28.223  2022-04-02
 
 statement ok
 drop table t;
