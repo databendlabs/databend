@@ -114,7 +114,17 @@ impl PipelinePullingExecutor {
         let state = self.state.clone();
         let threads_executor = self.executor.clone();
         let thread_function = Self::thread_function(state, threads_executor);
-        let thread_name = std::thread::current().name().map(|x| x.to_string());
+        let mut thread_name = Some(String::from("PullingExecutor"));
+
+        #[cfg(debug_assertions)]
+        {
+            if matches!(std::env::var("UNIT_TEST"), Ok(var_value) if var_value == "TRUE") {
+                if let Some(cur_thread_name) = std::thread::current().name() {
+                    thread_name = Some(cur_thread_name.to_string());
+                }
+            }
+        }
+
         Thread::named_spawn(thread_name, thread_function);
     }
 

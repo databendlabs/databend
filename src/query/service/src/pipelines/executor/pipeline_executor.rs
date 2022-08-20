@@ -177,11 +177,18 @@ impl PipelineExecutor {
 
         for thread_num in 0..threads_size {
             let this = self.clone();
-            let name = std::thread::current()
-                .name()
-                .map(|name| name.to_string())
-                .unwrap_or(format!("PipelineExecutor-{}", thread_num));
-            thread_join_handles.push(Thread::named_spawn(Some(name), move || unsafe {
+            let mut name = Some(format!("PipelineExecutor-{}", thread_num));
+
+            #[cfg(debug_assertions)]
+            {
+                if matches!(std::env::var("UNIT_TEST"), Ok(var_value) if var_value == "TRUE") {
+                    if let Some(cur_thread_name) = std::thread::current().name() {
+                        name = Some(cur_thread_name.to_string());
+                    }
+                }
+            }
+
+            thread_join_handles.push(Thread::named_spawn(name, move || unsafe {
                 let this_clone = this.clone();
                 let try_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(
                     move || -> Result<()> {

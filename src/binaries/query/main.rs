@@ -32,7 +32,6 @@ use databend_query::servers::HttpHandlerKind;
 use databend_query::servers::MySQLHandler;
 use databend_query::servers::Server;
 use databend_query::servers::ShutdownHandle;
-use databend_query::sessions::SessionManager;
 use databend_query::Config;
 use databend_query::GlobalServices;
 use databend_query::QUERY_SEMVER;
@@ -84,7 +83,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
     {
         let hostname = conf.query.mysql_handler_host.clone();
         let listening = format!("{}:{}", hostname, conf.query.mysql_handler_port);
-        let mut handler = MySQLHandler::create(SessionManager::instance())?;
+        let mut handler = MySQLHandler::create()?;
         let listening = handler.start(listening.parse()?).await?;
         shutdown_handle.add_service(handler);
 

@@ -14,17 +14,18 @@
 
 use common_base::base::tokio;
 use common_exception::Result;
-use common_settings::Settings;
-use databend_query::sessions::{Session, SessionManager};
-use databend_query::sessions::SessionContext;
+use databend_query::sessions::SessionManager;
 use databend_query::sessions::SessionType;
 
-use crate::tests::{ConfigBuilder, TestGlobalServices};
+use crate::tests::ConfigBuilder;
+use crate::tests::TestGlobalServices;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_session() -> Result<()> {
     TestGlobalServices::setup(ConfigBuilder::create().build().clone()).await?;
-    let session = SessionManager::instance().create_session(SessionType::Dummy).await?;
+    let session = SessionManager::instance()
+        .create_session(SessionType::Dummy)
+        .await?;
 
     // Tenant.
     {
@@ -51,7 +52,9 @@ async fn test_session() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_session_in_management_mode() -> Result<()> {
     TestGlobalServices::setup(ConfigBuilder::create().with_management_mode().build()).await?;
-    let session = SessionManager::instance().create_session(SessionType::Dummy).await?;
+    let session = SessionManager::instance()
+        .create_session(SessionType::Dummy)
+        .await?;
 
     // Tenant.
     {
@@ -66,7 +69,9 @@ async fn test_session_in_management_mode() -> Result<()> {
     // test session leak
     let leak_id;
     {
-        let leak_session = SessionManager::instance().create_session(SessionType::Dummy).await?;
+        let leak_session = SessionManager::instance()
+            .create_session(SessionType::Dummy)
+            .await?;
         leak_id = leak_session.get_id();
         assert!(
             SessionManager::instance()

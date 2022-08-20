@@ -64,8 +64,7 @@ pub struct DataExchangeManager {
     queries_coordinator: ReentrantMutex<SyncUnsafeCell<HashMap<String, QueryCoordinator>>>,
 }
 
-static DATA_EXCHANGE_MANAGER: OnceCell<Singleton<Arc<DataExchangeManager>>> =
-    OnceCell::new();
+static DATA_EXCHANGE_MANAGER: OnceCell<Singleton<Arc<DataExchangeManager>>> = OnceCell::new();
 
 impl DataExchangeManager {
     pub fn init(config: Config, v: Singleton<Arc<DataExchangeManager>>) -> Result<()> {

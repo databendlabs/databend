@@ -121,17 +121,34 @@ impl Runtime {
     pub fn with_default_worker_threads() -> Result<Self> {
         let tracker = RuntimeTracker::create();
         let mut runtime_builder = Self::tracker_builder(tracker.clone());
+
+        #[cfg(debug_assertions)]
+        {
+            if matches!(std::env::var("UNIT_TEST"), Ok(var_value) if var_value == "TRUE") {
+                if let Some(thread_name) = std::thread::current().name() {
+                    runtime_builder.thread_name(thread_name);
+                }
+            }
+        }
+
         Self::create(tracker, &mut runtime_builder)
     }
 
-    pub fn with_worker_threads(workers: usize, thread_name: Option<String>) -> Result<Self> {
+    pub fn with_worker_threads(workers: usize, mut thread_name: Option<String>) -> Result<Self> {
         let tracker = RuntimeTracker::create();
         let mut runtime_builder = Self::tracker_builder(tracker.clone());
 
-        if let Some(thread_name) = std::thread::current().name() {
-            runtime_builder.thread_name(thread_name.to_string());
-        } else if let Some(v) = thread_name {
-            runtime_builder.thread_name(v);
+        #[cfg(debug_assertions)]
+        {
+            if matches!(std::env::var("UNIT_TEST"), Ok(var_value) if var_value == "TRUE") {
+                if let Some(cur_thread_name) = std::thread::current().name() {
+                    thread_name = Some(cur_thread_name.to_string());
+                }
+            }
+        }
+
+        if let Some(thread_name) = thread_name {
+            runtime_builder.thread_name(thread_name);
         }
 
         Self::create(tracker, runtime_builder.worker_threads(workers))

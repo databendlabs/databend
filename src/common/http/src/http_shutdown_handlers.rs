@@ -80,8 +80,11 @@ impl HttpShutdownHandler {
 
         let (tx, rx) = oneshot::channel();
         let join_handle = common_base::base::tokio::spawn(
-            poem::Server::new_with_acceptor(acceptor)
-                .run_with_graceful_shutdown(ep, rx.map(|_| ()), None)
+            poem::Server::new_with_acceptor(acceptor).run_with_graceful_shutdown(
+                ep,
+                rx.map(|_| ()),
+                None,
+            ),
         );
         self.join_handle = Some(join_handle);
         self.abort_handle = Some(tx);

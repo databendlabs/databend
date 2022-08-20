@@ -59,6 +59,7 @@ static GLOBAL: OnceCell<Arc<TestGlobalServices>> = OnceCell::new();
 
 impl TestGlobalServices {
     pub async fn setup(config: Config) -> Result<()> {
+        std::env::set_var("UNIT_TEST", "TRUE");
         let global_services = GLOBAL.get_or_init(|| {
             Arc::new(TestGlobalServices {
                 global_runtime: Mutex::new(HashMap::new()),

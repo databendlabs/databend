@@ -17,27 +17,27 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use common_base::base::tokio;
+use common_base::base::Runtime;
+use common_base::base::TrySpawn;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
 use databend_query::servers::MySQLHandler;
-use databend_query::sessions::SessionManager;
 use mysql_async::prelude::FromRow;
 use mysql_async::prelude::Queryable;
 use mysql_async::FromRowError;
 use mysql_async::Row;
 use tokio::sync::Barrier;
-use tokio::task::JoinHandle;
 
 use crate::tests::ConfigBuilder;
 use crate::tests::TestGlobalServices;
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test(flavor = "current_thread")]
 async fn test_generic_code_with_on_query() -> Result<()> {
     // Setup
     TestGlobalServices::setup(ConfigBuilder::create().build()).await?;
 
-    let mut handler = MySQLHandler::create(SessionManager::instance())?;
+    let mut handler = MySQLHandler::create()?;
 
     let listening = "127.0.0.1:0".parse::<SocketAddr>()?;
     let runnable_server = handler.start(listening).await?;
@@ -49,13 +49,11 @@ async fn test_generic_code_with_on_query() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test(flavor = "current_thread")]
 async fn test_rejected_session_with_sequence() -> Result<()> {
-    TestGlobalServices::setup(ConfigBuilder::create().build()).await?;
+    TestGlobalServices::setup(ConfigBuilder::create().max_active_sessions(1).build()).await?;
 
-    let sessions = SessionManager::create(ConfigBuilder::create().max_active_sessions(1).build());
-
-    let mut handler = MySQLHandler::create(sessions)?;
+    let mut handler = MySQLHandler::create()?;
 
     let listening = "127.0.0.1:0".parse::<SocketAddr>()?;
     let listening = handler.start(listening).await?;
@@ -80,14 +78,14 @@ async fn test_rejected_session_with_sequence() -> Result<()> {
     }
 
     // Wait for the connection to be destroyed
-    std::thread::sleep(Duration::from_secs(5));
+    tokio::time::sleep(Duration::from_secs(5)).await;
     // Accepted connection
     create_connection(listening.port()).await?;
 
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[tokio::test(flavor = "current_thread")]
 async fn test_rejected_session_with_parallel() -> Result<()> {
     enum CreateServerResult {
         Accept,
@@ -98,31 +96,29 @@ async fn test_rejected_session_with_parallel() -> Result<()> {
         port: u16,
         start_barrier: Arc<Barrier>,
         destroy_barrier: Arc<Barrier>,
-    ) -> JoinHandle<CreateServerResult> {
-        tokio::spawn(async move {
-            start_barrier.wait().await;
-            match create_connection(port).await {
-                Ok(_conn) => {
-                    destroy_barrier.wait().await;
-                    CreateServerResult::Accept
-                }
-                Err(error) => {
-                    destroy_barrier.wait().await;
-                    assert_eq!(error.code(), 1067);
-                    assert_eq!(
-                        error.message(),
-                        "Reject connection, cause: Server error: `ERROR HY000 (1815): The current accept connection has exceeded max_active_sessions config'"
-                    );
-                    CreateServerResult::Rejected
-                }
+    ) -> CreateServerResult {
+        start_barrier.wait().await;
+        match create_connection(port).await {
+            Ok(_conn) => {
+                destroy_barrier.wait().await;
+                CreateServerResult::Accept
             }
-        })
+            Err(error) => {
+                destroy_barrier.wait().await;
+                assert_eq!(error.code(), 1067);
+                assert_eq!(
+                    error.message(),
+                    "Reject connection, cause: Server error: `ERROR HY000 (1815): The current accept connection has exceeded max_active_sessions config'"
+                );
+                CreateServerResult::Rejected
+            }
+        }
     }
 
     // Setup
     TestGlobalServices::setup(ConfigBuilder::create().max_active_sessions(1).build()).await?;
 
-    let mut handler = MySQLHandler::create(SessionManager::instance())?;
+    let mut handler = MySQLHandler::create()?;
 
     let listening = "127.0.0.1:0".parse::<SocketAddr>()?;
     let listening = handler.start(listening).await?;
@@ -130,12 +126,14 @@ async fn test_rejected_session_with_parallel() -> Result<()> {
     let start_barriers = Arc::new(Barrier::new(3));
     let destroy_barriers = Arc::new(Barrier::new(3));
 
+    let runtime = Runtime::with_worker_threads(2, None)?;
     let mut join_handlers = Vec::with_capacity(3);
     for _ in 0..3 {
+        let port = listening.port();
         let start_barrier = start_barriers.clone();
         let destroy_barrier = destroy_barriers.clone();
 
-        join_handlers.push(connect_server(listening.port(), start_barrier, destroy_barrier).await);
+        join_handlers.push(runtime.spawn(connect_server(port, start_barrier, destroy_barrier)));
     }
 
     let mut accept = 0;

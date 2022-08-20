@@ -42,10 +42,7 @@ pub struct UserApiProvider {
 static USER_API_PROVIDER: OnceCell<Singleton<Arc<UserApiProvider>>> = OnceCell::new();
 
 impl UserApiProvider {
-    pub async fn init(
-        conf: RpcClientConf,
-        v: Singleton<Arc<UserApiProvider>>,
-    ) -> Result<()> {
+    pub async fn init(conf: RpcClientConf, v: Singleton<Arc<UserApiProvider>>) -> Result<()> {
         v.init(Self::try_create(conf).await?)?;
 
         USER_API_PROVIDER.set(v).ok();
