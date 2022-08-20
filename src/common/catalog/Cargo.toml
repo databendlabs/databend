@@ -16,7 +16,6 @@ common-datablocks = { path = "../datablocks" }
 common-datavalues = { path = "../datavalues" }
 common-exception = { path = "../exception" }
 common-functions = { path = "../functions" }
-common-fuse-meta = { path = "../fuse-meta" }
 common-io = { path = "../io" }
 common-meta-app = { path = "../../meta/app" }
 common-meta-types = { path = "../../meta/types" }
