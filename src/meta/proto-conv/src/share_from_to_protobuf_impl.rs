@@ -30,6 +30,27 @@ use crate::Incompatible;
 use crate::MIN_COMPATIBLE_VER;
 use crate::VER;
 
+impl FromToProto for mt::ObjectSharedByShareIds {
+    type PB = pb::ObjectSharedByShareIds;
+    fn from_pb(p: pb::ObjectSharedByShareIds) -> Result<Self, Incompatible> {
+        check_ver(p.ver, p.min_compatible)?;
+
+        let v = Self {
+            share_ids: BTreeSet::from_iter(p.share_ids.iter().copied()),
+        };
+        Ok(v)
+    }
+
+    fn to_pb(&self) -> Result<pb::ObjectSharedByShareIds, Incompatible> {
+        let p = pb::ObjectSharedByShareIds {
+            ver: VER,
+            min_compatible: MIN_COMPATIBLE_VER,
+            share_ids: Vec::from_iter(self.share_ids.iter().copied()),
+        };
+        Ok(p)
+    }
+}
+
 impl FromToProto for mt::ShareNameIdent {
     type PB = pb::ShareNameIdent;
     fn from_pb(p: pb::ShareNameIdent) -> Result<Self, Incompatible> {

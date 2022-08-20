@@ -29,7 +29,6 @@ use common_planners::AlterUserUDFPlan;
 use common_planners::CallPlan;
 use common_planners::CreateRolePlan;
 use common_planners::CreateUserUDFPlan;
-use common_planners::DescribeUserStagePlan;
 use common_planners::DropRolePlan;
 use common_planners::DropUserPlan;
 use common_planners::DropUserStagePlan;
@@ -212,11 +211,7 @@ impl<'a> Binder {
             Statement::ListStage { location, pattern } => {
                 self.bind_list_stage(location, pattern).await?
             }
-            Statement::DescribeStage { stage_name } => {
-                Plan::DescribeStage(Box::new(DescribeUserStagePlan {
-                    name: stage_name.clone(),
-                }))
-            }
+            Statement::DescribeStage { stage_name } => self.bind_rewrite_to_query(bind_context, format!("SELECT * FROM system.stages WHERE name = '{stage_name}'").as_str(), RewriteKind::DescribeStage).await?,
             Statement::CreateStage(stmt) => self.bind_create_stage(stmt).await?,
             Statement::DropStage {
                 stage_name,
@@ -338,6 +333,9 @@ impl<'a> Binder {
             }
             Statement::DescShare(stmt) => {
                 self.bind_desc_share(stmt).await?
+            }
+            Statement::ShowShares(stmt) => {
+                self.bind_show_shares(stmt).await?
             }
         };
         Ok(plan)

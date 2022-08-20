@@ -21,6 +21,7 @@ use common_exception::ErrorCode;
 use once_cell::sync::OnceCell;
 use opendal::services::azblob;
 use opendal::services::fs;
+use opendal::services::gcs;
 use opendal::services::http;
 use opendal::services::memory;
 use opendal::services::s3;
@@ -30,6 +31,7 @@ use super::StorageAzblobConfig;
 use super::StorageFsConfig;
 use super::StorageParams;
 use super::StorageS3Config;
+use crate::config::StorageGcsConfig;
 use crate::config::StorageHttpConfig;
 use crate::StorageConfig;
 
@@ -38,6 +40,7 @@ pub fn init_operator(cfg: &StorageParams) -> Result<Operator> {
     Ok(match &cfg {
         StorageParams::Azblob(cfg) => init_azblob_operator(cfg)?,
         StorageParams::Fs(cfg) => init_fs_operator(cfg)?,
+        StorageParams::Gcs(cfg) => init_gcs_operator(cfg)?,
         #[cfg(feature = "storage-hdfs")]
         StorageParams::Hdfs(cfg) => init_hdfs_operator(cfg)?,
         StorageParams::Http(cfg) => init_http_operator(cfg)?,
@@ -77,6 +80,20 @@ pub fn init_fs_operator(cfg: &StorageFsConfig) -> Result<Operator> {
     builder.root(&path);
 
     Ok(Operator::new(builder.build()?))
+}
+
+/// init_gcs_operator will init a opendal gcs operator.
+pub fn init_gcs_operator(cfg: &StorageGcsConfig) -> Result<Operator> {
+    let mut builder = gcs::Builder::default();
+
+    let accessor = builder
+        .endpoint(&cfg.endpoint_url)
+        .bucket(&cfg.bucket)
+        .root(&cfg.root)
+        .credential(&cfg.credential)
+        .build()?;
+
+    Ok(Operator::new(accessor))
 }
 
 /// init_hdfs_operator will init an opendal hdfs operator.

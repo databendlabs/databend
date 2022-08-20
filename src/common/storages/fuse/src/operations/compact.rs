@@ -20,7 +20,7 @@ use common_exception::Result;
 use common_meta_app::schema::TableStatistics;
 use common_planners::OptimizeTablePlan;
 
-use super::mutation::CompactMutator;
+use crate::operations::mutation::CompactMutator;
 use crate::FuseTable;
 use crate::DEFAULT_BLOCK_PER_SEGMENT;
 use crate::DEFAULT_ROW_PER_BLOCK;
@@ -33,7 +33,7 @@ impl FuseTable {
         ctx: Arc<dyn TableContext>,
         plan: &OptimizeTablePlan,
     ) -> Result<()> {
-        let snapshot_opt = self.read_table_snapshot(ctx.as_ref()).await?;
+        let snapshot_opt = self.read_table_snapshot(ctx.clone()).await?;
         let snapshot = if let Some(val) = snapshot_opt {
             val
         } else {

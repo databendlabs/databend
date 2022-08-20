@@ -15,15 +15,18 @@
 use common_expression::FunctionRegistry;
 
 mod arithmetic;
+mod arithmetic_modulo;
 mod boolean;
 mod control;
 mod string;
+mod string_multi_args;
 
 pub fn builtin_functions() -> FunctionRegistry {
     let mut registry = FunctionRegistry::new();
     boolean::register(&mut registry);
     control::register(&mut registry);
     string::register(&mut registry);
+    string_multi_args::register(&mut registry);
     arithmetic::register(&mut registry);
     registry
 }

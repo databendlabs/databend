@@ -117,7 +117,7 @@ impl FuseTable {
     #[tracing::instrument(level = "debug", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     pub(crate) async fn read_table_snapshot(
         &self,
-        ctx: &dyn TableContext,
+        ctx: Arc<dyn TableContext>,
     ) -> Result<Option<Arc<TableSnapshot>>> {
         if let Some(loc) = self.snapshot_loc() {
             let reader = MetaReaders::table_snapshot_reader(ctx);
@@ -258,7 +258,7 @@ impl Table for FuseTable {
         let cluster_key_meta = new_table_meta.cluster_key();
         let schema = self.schema().as_ref().clone();
 
-        let prev = self.read_table_snapshot(ctx.as_ref()).await?;
+        let prev = self.read_table_snapshot(ctx.clone()).await?;
         let prev_version = self.snapshot_format_version();
         let prev_timestamp = prev.as_ref().and_then(|v| v.timestamp);
         let prev_snapshot_id = prev.as_ref().map(|v| (v.snapshot_id, prev_version));
@@ -302,7 +302,7 @@ impl Table for FuseTable {
 
         let schema = self.schema().as_ref().clone();
 
-        let prev = self.read_table_snapshot(ctx.as_ref()).await?;
+        let prev = self.read_table_snapshot(ctx.clone()).await?;
         let prev_version = self.snapshot_format_version();
         let prev_timestamp = prev.as_ref().and_then(|v| v.timestamp);
         let prev_snapshot_id = prev.as_ref().map(|v| (v.snapshot_id, prev_version));
@@ -407,12 +407,12 @@ impl Table for FuseTable {
         point: &NavigationPoint,
     ) -> Result<Arc<dyn Table>> {
         match point {
-            NavigationPoint::SnapshotID(snapshot_id) => Ok(self
-                .navigate_to_snapshot(ctx.as_ref(), snapshot_id.as_str())
-                .await?),
-            NavigationPoint::TimePoint(time_point) => Ok(self
-                .navigate_to_time_point(ctx.as_ref(), *time_point)
-                .await?),
+            NavigationPoint::SnapshotID(snapshot_id) => {
+                Ok(self.navigate_to_snapshot(ctx, snapshot_id.as_str()).await?)
+            }
+            NavigationPoint::TimePoint(time_point) => {
+                Ok(self.navigate_to_time_point(ctx, *time_point).await?)
+            }
         }
     }
 

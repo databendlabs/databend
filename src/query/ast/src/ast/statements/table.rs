@@ -131,12 +131,13 @@ impl Display for CreateTableStmt<'_> {
         }
 
         if let Some(engine) = &self.engine {
-            write!(f, " ENGINE={engine}")?;
+            write!(f, " ENGINE = {engine}")?;
         }
 
         if !self.cluster_by.is_empty() {
-            write!(f, " CLUSTER BY ")?;
+            write!(f, " CLUSTER BY (")?;
             write_comma_separated_list(f, &self.cluster_by)?;
+            write!(f, ")")?
         }
 
         // Format table options
@@ -433,6 +434,8 @@ pub enum OptimizeTableAction {
     All,
     Purge,
     Compact,
+    Recluster,
+    ReclusterFinal,
 }
 
 impl Display for OptimizeTableAction {
@@ -441,6 +444,8 @@ impl Display for OptimizeTableAction {
             OptimizeTableAction::All => write!(f, "ALL"),
             OptimizeTableAction::Purge => write!(f, "PURGE"),
             OptimizeTableAction::Compact => write!(f, "COMPACT"),
+            OptimizeTableAction::Recluster => write!(f, "RECLUSTER"),
+            OptimizeTableAction::ReclusterFinal => write!(f, "RECLUSTER FINAL"),
         }
     }
 }

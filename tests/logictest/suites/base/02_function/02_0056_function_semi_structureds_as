@@ -69,7 +69,7 @@ select as_object(parse_json('{"a":"b"}'));
 {"a":"b"}
 
 statement query T
-select as_object(parse_json('{"k":123}'));
+select as_object(parse_json('{"k": 123}'));
 
 ----
 {"k":123}

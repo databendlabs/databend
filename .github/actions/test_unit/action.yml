@@ -16,7 +16,7 @@ runs:
     - shell: bash
       run: cargo -Z sparse-registry test --no-fail-fast
       env:
-        RUST_TEST_THREADS: "1"
+        RUST_TEST_THREADS: "2"
         RUST_LOG: ERROR
         RUST_BACKTRACE: full
         # RUSTFLAGS: '-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Zpanic_abort_tests --cfg tokio_unstable'

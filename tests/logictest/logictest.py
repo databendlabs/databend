@@ -353,7 +353,8 @@ class SuiteRunner(object):
     # expect the query just return ok
     def assert_execute_ok(self, statement):
         try:
-            actual = safe_execute(lambda: self.execute_ok(statement.text), statement)
+            actual = safe_execute(lambda: self.execute_ok(statement.text),
+                                  statement)
         except Exception as err:
             raise LogicError(runner=self.kind,
                              message=str(err),
@@ -382,7 +383,8 @@ class SuiteRunner(object):
             log.debug(f"{statement.text} statement is skipped")
             return
         try:
-            actual = safe_execute(lambda: self.execute_query(statement), statement)
+            actual = safe_execute(lambda: self.execute_query(statement),
+                                  statement)
         except Exception as err:
             raise LogicError(runner=self.kind,
                              message=str(err),
@@ -420,7 +422,8 @@ class SuiteRunner(object):
     # expect the query just return error
     def assert_execute_error(self, statement):
         try:
-            actual = safe_execute(lambda: self.execute_error(statement.text), statement)
+            actual = safe_execute(lambda: self.execute_error(statement.text),
+                                  statement)
         except Exception as err:
             raise LogicError(runner=self.kind,
                              message=str(err),

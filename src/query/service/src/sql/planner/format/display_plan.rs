@@ -68,7 +68,6 @@ impl Plan {
 
             // Stages
             Plan::ListStage(s) => Ok(format!("{:?}", s)),
-            Plan::DescribeStage(s) => Ok(format!("{:?}", s)),
             Plan::CreateStage(create_stage) => Ok(format!("{:?}", create_stage)),
             Plan::DropStage(s) => Ok(format!("{:?}", s)),
             Plan::RemoveStage(s) => Ok(format!("{:?}", s)),
@@ -100,6 +99,7 @@ impl Plan {
             Plan::RevokeShareObject(p) => Ok(format!("{:?}", p)),
             Plan::AlterShareTenants(p) => Ok(format!("{:?}", p)),
             Plan::DescShare(p) => Ok(format!("{:?}", p)),
+            Plan::ShowShares(p) => Ok(format!("{:?}", p)),
         }
     }
 }

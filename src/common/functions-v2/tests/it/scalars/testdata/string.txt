@@ -1,6 +1,7 @@
 ast            : upper('Abc')
 raw expr       : upper("Abc")
 checked expr   : upper<String>("Abc")
+optimized expr : "ABC"
 output type    : String
 output domain  : Unknown
 output         : "ABC"
@@ -9,6 +10,7 @@ output         : "ABC"
 ast            : upper('Dobrý den')
 raw expr       : upper("Dobrý den")
 checked expr   : upper<String>("Dobrý den")
+optimized expr : "DOBRÝ DEN"
 output type    : String
 output domain  : Unknown
 output         : "DOBRÝ DEN"
@@ -17,6 +19,7 @@ output         : "DOBRÝ DEN"
 ast            : upper('ß😀山')
 raw expr       : upper("ß😀山")
 checked expr   : upper<String>("ß😀山")
+optimized expr : "SS😀山"
 output type    : String
 output domain  : Unknown
 output         : "SS😀山"
@@ -56,6 +59,7 @@ evaluation (internal):
 ast            : lower('Abc')
 raw expr       : lower("Abc")
 checked expr   : lower<String>("Abc")
+optimized expr : "abc"
 output type    : String
 output domain  : Unknown
 output         : "abc"
@@ -64,6 +68,7 @@ output         : "abc"
 ast            : lower('DOBRÝ DEN')
 raw expr       : lower("DOBRÝ DEN")
 checked expr   : lower<String>("DOBRÝ DEN")
+optimized expr : "dobrý den"
 output type    : String
 output domain  : Unknown
 output         : "dobrý den"
@@ -72,6 +77,7 @@ output         : "dobrý den"
 ast            : lower('İ😀山')
 raw expr       : lower("İ😀山")
 checked expr   : lower<String>("İ😀山")
+optimized expr : "i\u{307}😀山"
 output type    : String
 output domain  : Unknown
 output         : "i\u{307}😀山"
@@ -111,6 +117,7 @@ evaluation (internal):
 ast            : bit_length('latin')
 raw expr       : bit_length("latin")
 checked expr   : bit_length<String>("latin")
+optimized expr : 40_u64
 output type    : UInt64
 output domain  : Unknown
 output         : 40
@@ -150,6 +157,7 @@ evaluation (internal):
 ast            : octet_length('latin')
 raw expr       : octet_length("latin")
 checked expr   : octet_length<String>("latin")
+optimized expr : 5_u64
 output type    : UInt64
 output domain  : Unknown
 output         : 5
@@ -189,6 +197,7 @@ evaluation (internal):
 ast            : char_length('latin')
 raw expr       : char_length("latin")
 checked expr   : char_length<String>("latin")
+optimized expr : 5_u64
 output type    : UInt64
 output domain  : Unknown
 output         : 5
@@ -228,6 +237,7 @@ evaluation (internal):
 ast            : to_base64('Abc')
 raw expr       : to_base64("Abc")
 checked expr   : to_base64<String>("Abc")
+optimized expr : "QWJj"
 output type    : String
 output domain  : Unknown
 output         : "QWJj"
@@ -236,6 +246,7 @@ output         : "QWJj"
 ast            : to_base64('123')
 raw expr       : to_base64("123")
 checked expr   : to_base64<String>("123")
+optimized expr : "MTIz"
 output type    : String
 output domain  : Unknown
 output         : "MTIz"
@@ -274,6 +285,7 @@ evaluation (internal):
 ast            : from_base64('QWJj')
 raw expr       : from_base64("QWJj")
 checked expr   : from_base64<String>("QWJj")
+optimized expr : "Abc"
 output type    : String
 output domain  : Unknown
 output         : "Abc"
@@ -282,6 +294,7 @@ output         : "Abc"
 ast            : from_base64('MTIz')
 raw expr       : from_base64("MTIz")
 checked expr   : from_base64<String>("MTIz")
+optimized expr : "123"
 output type    : String
 output domain  : Unknown
 output         : "123"
@@ -320,6 +333,7 @@ evaluation (internal):
 ast            : quote('a\0b')
 raw expr       : quote("a\0b")
 checked expr   : quote<String>("a\0b")
+optimized expr : "a\\0b"
 output type    : String
 output domain  : Unknown
 output         : "a\\0b"
@@ -328,6 +342,7 @@ output         : "a\\0b"
 ast            : quote('a\'b')
 raw expr       : quote("a'b")
 checked expr   : quote<String>("a'b")
+optimized expr : "a\\'b"
 output type    : String
 output domain  : Unknown
 output         : "a\\'b"
@@ -336,6 +351,7 @@ output         : "a\\'b"
 ast            : quote('a\"b')
 raw expr       : quote("a\"b")
 checked expr   : quote<String>("a\"b")
+optimized expr : "a\\\"b"
 output type    : String
 output domain  : Unknown
 output         : "a\\\"b"
@@ -344,6 +360,7 @@ output         : "a\\\"b"
 ast            : quote('a\bb')
 raw expr       : quote("a\u{8}b")
 checked expr   : quote<String>("a\u{8}b")
+optimized expr : "a\\bb"
 output type    : String
 output domain  : Unknown
 output         : "a\\bb"
@@ -352,6 +369,7 @@ output         : "a\\bb"
 ast            : quote('a\nb')
 raw expr       : quote("a\nb")
 checked expr   : quote<String>("a\nb")
+optimized expr : "a\\nb"
 output type    : String
 output domain  : Unknown
 output         : "a\\nb"
@@ -360,6 +378,7 @@ output         : "a\\nb"
 ast            : quote('a\rb')
 raw expr       : quote("a\rb")
 checked expr   : quote<String>("a\rb")
+optimized expr : "a\\rb"
 output type    : String
 output domain  : Unknown
 output         : "a\\rb"
@@ -368,6 +387,7 @@ output         : "a\\rb"
 ast            : quote('a\tb')
 raw expr       : quote("a\tb")
 checked expr   : quote<String>("a\tb")
+optimized expr : "a\\tb"
 output type    : String
 output domain  : Unknown
 output         : "a\\tb"
@@ -376,6 +396,7 @@ output         : "a\\tb"
 ast            : quote('a\\b')
 raw expr       : quote("a\\b")
 checked expr   : quote<String>("a\\b")
+optimized expr : "a\\\\b"
 output type    : String
 output domain  : Unknown
 output         : "a\\\\b"
@@ -384,6 +405,7 @@ output         : "a\\\\b"
 ast            : quote('你好')
 raw expr       : quote("你好")
 checked expr   : quote<String>("你好")
+optimized expr : "你好"
 output type    : String
 output domain  : Unknown
 output         : "你好"
@@ -392,6 +414,7 @@ output         : "你好"
 ast            : quote('ß😀山')
 raw expr       : quote("ß😀山")
 checked expr   : quote<String>("ß😀山")
+optimized expr : "ß😀山"
 output type    : String
 output domain  : Unknown
 output         : "ß😀山"
@@ -400,6 +423,7 @@ output         : "ß😀山"
 ast            : quote('Dobrý den')
 raw expr       : quote("Dobrý den")
 checked expr   : quote<String>("Dobrý den")
+optimized expr : "Dobrý den"
 output type    : String
 output domain  : Unknown
 output         : "Dobrý den"
@@ -439,6 +463,7 @@ evaluation (internal):
 ast            : reverse('abc')
 raw expr       : reverse("abc")
 checked expr   : reverse<String>("abc")
+optimized expr : "cba"
 output type    : String
 output domain  : Unknown
 output         : "cba"
@@ -447,6 +472,7 @@ output         : "cba"
 ast            : reverse('a')
 raw expr       : reverse("a")
 checked expr   : reverse<String>("a")
+optimized expr : "a"
 output type    : String
 output domain  : Unknown
 output         : "a"
@@ -455,6 +481,7 @@ output         : "a"
 ast            : reverse('')
 raw expr       : reverse("")
 checked expr   : reverse<String>("")
+optimized expr : ""
 output type    : String
 output domain  : Unknown
 output         : ""
@@ -463,6 +490,7 @@ output         : ""
 ast            : reverse('你好')
 raw expr       : reverse("你好")
 checked expr   : reverse<String>("你好")
+optimized expr : "��堽�"
 output type    : String
 output domain  : Unknown
 output         : "��堽�"
@@ -471,6 +499,7 @@ output         : "��堽�"
 ast            : reverse('ß😀山')
 raw expr       : reverse("ß😀山")
 checked expr   : reverse<String>("ß😀山")
+optimized expr : "��倘���"
 output type    : String
 output domain  : Unknown
 output         : "��倘���"
@@ -479,6 +508,7 @@ output         : "��倘���"
 ast            : reverse('Dobrý den')
 raw expr       : reverse("Dobrý den")
 checked expr   : reverse<String>("Dobrý den")
+optimized expr : "ned ��rboD"
 output type    : String
 output domain  : Unknown
 output         : "ned ��rboD"
@@ -625,6 +655,7 @@ evaluation (internal):
 ast            : ltrim('   abc   ')
 raw expr       : ltrim("   abc   ")
 checked expr   : ltrim<String>("   abc   ")
+optimized expr : "abc   "
 output type    : String
 output domain  : Unknown
 output         : "abc   "
@@ -633,6 +664,7 @@ output         : "abc   "
 ast            : ltrim('  ')
 raw expr       : ltrim("  ")
 checked expr   : ltrim<String>("  ")
+optimized expr : ""
 output type    : String
 output domain  : Unknown
 output         : ""
@@ -673,6 +705,7 @@ evaluation (internal):
 ast            : rtrim('   abc   ')
 raw expr       : rtrim("   abc   ")
 checked expr   : rtrim<String>("   abc   ")
+optimized expr : "   abc"
 output type    : String
 output domain  : Unknown
 output         : "   abc"
@@ -681,6 +714,7 @@ output         : "   abc"
 ast            : rtrim('  ')
 raw expr       : rtrim("  ")
 checked expr   : rtrim<String>("  ")
+optimized expr : ""
 output type    : String
 output domain  : Unknown
 output         : ""
@@ -721,6 +755,7 @@ evaluation (internal):
 ast            : trim_leading('aaabbaaa', 'a')
 raw expr       : trim_leading("aaabbaaa", "a")
 checked expr   : trim_leading<String, String>("aaabbaaa", "a")
+optimized expr : "bbaaa"
 output type    : String
 output domain  : Unknown
 output         : "bbaaa"
@@ -729,6 +764,7 @@ output         : "bbaaa"
 ast            : trim_leading('aaabbaaa', 'aa')
 raw expr       : trim_leading("aaabbaaa", "aa")
 checked expr   : trim_leading<String, String>("aaabbaaa", "aa")
+optimized expr : "abbaaa"
 output type    : String
 output domain  : Unknown
 output         : "abbaaa"
@@ -737,6 +773,7 @@ output         : "abbaaa"
 ast            : trim_leading('aaaaaaaa', 'a')
 raw expr       : trim_leading("aaaaaaaa", "a")
 checked expr   : trim_leading<String, String>("aaaaaaaa", "a")
+optimized expr : ""
 output type    : String
 output domain  : Unknown
 output         : ""
@@ -745,6 +782,7 @@ output         : ""
 ast            : trim_leading('aaabbaaa', 'b')
 raw expr       : trim_leading("aaabbaaa", "b")
 checked expr   : trim_leading<String, String>("aaabbaaa", "b")
+optimized expr : "aaabbaaa"
 output type    : String
 output domain  : Unknown
 output         : "aaabbaaa"
@@ -840,6 +878,7 @@ evaluation (internal):
 ast            : trim_trailing('aaabbaaa', 'a')
 raw expr       : trim_trailing("aaabbaaa", "a")
 checked expr   : trim_trailing<String, String>("aaabbaaa", "a")
+optimized expr : "aaabb"
 output type    : String
 output domain  : Unknown
 output         : "aaabb"
@@ -848,6 +887,7 @@ output         : "aaabb"
 ast            : trim_trailing('aaabbaaa', 'aa')
 raw expr       : trim_trailing("aaabbaaa", "aa")
 checked expr   : trim_trailing<String, String>("aaabbaaa", "aa")
+optimized expr : "aaabba"
 output type    : String
 output domain  : Unknown
 output         : "aaabba"
@@ -856,6 +896,7 @@ output         : "aaabba"
 ast            : trim_trailing('aaaaaaaa', 'a')
 raw expr       : trim_trailing("aaaaaaaa", "a")
 checked expr   : trim_trailing<String, String>("aaaaaaaa", "a")
+optimized expr : ""
 output type    : String
 output domain  : Unknown
 output         : ""
@@ -864,6 +905,7 @@ output         : ""
 ast            : trim_trailing('aaabbaaa', 'b')
 raw expr       : trim_trailing("aaabbaaa", "b")
 checked expr   : trim_trailing<String, String>("aaabbaaa", "b")
+optimized expr : "aaabbaaa"
 output type    : String
 output domain  : Unknown
 output         : "aaabbaaa"
@@ -959,6 +1001,7 @@ evaluation (internal):
 ast            : trim_both('aaabbaaa', 'a')
 raw expr       : trim_both("aaabbaaa", "a")
 checked expr   : trim_both<String, String>("aaabbaaa", "a")
+optimized expr : "bb"
 output type    : String
 output domain  : Unknown
 output         : "bb"
@@ -967,6 +1010,7 @@ output         : "bb"
 ast            : trim_both('aaabbaaa', 'aa')
 raw expr       : trim_both("aaabbaaa", "aa")
 checked expr   : trim_both<String, String>("aaabbaaa", "aa")
+optimized expr : "abba"
 output type    : String
 output domain  : Unknown
 output         : "abba"
@@ -975,6 +1019,7 @@ output         : "abba"
 ast            : trim_both('aaaaaaaa', 'a')
 raw expr       : trim_both("aaaaaaaa", "a")
 checked expr   : trim_both<String, String>("aaaaaaaa", "a")
+optimized expr : ""
 output type    : String
 output domain  : Unknown
 output         : ""
@@ -983,6 +1028,7 @@ output         : ""
 ast            : trim_both('aaabbaaa', 'b')
 raw expr       : trim_both("aaabbaaa", "b")
 checked expr   : trim_both<String, String>("aaabbaaa", "b")
+optimized expr : "aaabbaaa"
 output type    : String
 output domain  : Unknown
 output         : "aaabbaaa"
@@ -1078,6 +1124,7 @@ evaluation (internal):
 ast            : trim('   abc   ')
 raw expr       : trim("   abc   ")
 checked expr   : trim<String>("   abc   ")
+optimized expr : "abc"
 output type    : String
 output domain  : Unknown
 output         : "abc"
@@ -1086,6 +1133,7 @@ output         : "abc"
 ast            : trim('  ')
 raw expr       : trim("  ")
 checked expr   : trim<String>("  ")
+optimized expr : ""
 output type    : String
 output domain  : Unknown
 output         : ""
@@ -1126,6 +1174,7 @@ evaluation (internal):
 ast            : trim(both 'a' from 'aaabbaaa')
 raw expr       : trim_both("aaabbaaa", "a")
 checked expr   : trim_both<String, String>("aaabbaaa", "a")
+optimized expr : "bb"
 output type    : String
 output domain  : Unknown
 output         : "bb"
@@ -1134,6 +1183,7 @@ output         : "bb"
 ast            : trim(both 'aa' from 'aaabbaaa')
 raw expr       : trim_both("aaabbaaa", "aa")
 checked expr   : trim_both<String, String>("aaabbaaa", "aa")
+optimized expr : "abba"
 output type    : String
 output domain  : Unknown
 output         : "abba"
@@ -1142,6 +1192,7 @@ output         : "abba"
 ast            : trim(both 'a' from 'aaaaaaaa')
 raw expr       : trim_both("aaaaaaaa", "a")
 checked expr   : trim_both<String, String>("aaaaaaaa", "a")
+optimized expr : ""
 output type    : String
 output domain  : Unknown
 output         : ""
@@ -1150,6 +1201,7 @@ output         : ""
 ast            : trim(both 'b' from 'aaabbaaa')
 raw expr       : trim_both("aaabbaaa", "b")
 checked expr   : trim_both<String, String>("aaabbaaa", "b")
+optimized expr : "aaabbaaa"
 output type    : String
 output domain  : Unknown
 output         : "aaabbaaa"
@@ -1268,6 +1320,7 @@ evaluation (internal):
 ast            : trim(leading 'a' from 'aaabbaaa')
 raw expr       : trim_leading("aaabbaaa", "a")
 checked expr   : trim_leading<String, String>("aaabbaaa", "a")
+optimized expr : "bbaaa"
 output type    : String
 output domain  : Unknown
 output         : "bbaaa"
@@ -1276,6 +1329,7 @@ output         : "bbaaa"
 ast            : trim(leading 'aa' from 'aaabbaaa')
 raw expr       : trim_leading("aaabbaaa", "aa")
 checked expr   : trim_leading<String, String>("aaabbaaa", "aa")
+optimized expr : "abbaaa"
 output type    : String
 output domain  : Unknown
 output         : "abbaaa"
@@ -1284,6 +1338,7 @@ output         : "abbaaa"
 ast            : trim(leading 'a' from 'aaaaaaaa')
 raw expr       : trim_leading("aaaaaaaa", "a")
 checked expr   : trim_leading<String, String>("aaaaaaaa", "a")
+optimized expr : ""
 output type    : String
 output domain  : Unknown
 output         : ""
@@ -1292,6 +1347,7 @@ output         : ""
 ast            : trim(leading 'b' from 'aaabbaaa')
 raw expr       : trim_leading("aaabbaaa", "b")
 checked expr   : trim_leading<String, String>("aaabbaaa", "b")
+optimized expr : "aaabbaaa"
 output type    : String
 output domain  : Unknown
 output         : "aaabbaaa"
@@ -1410,6 +1466,7 @@ evaluation (internal):
 ast            : trim(trailing 'a' from 'aaabbaaa')
 raw expr       : trim_trailing("aaabbaaa", "a")
 checked expr   : trim_trailing<String, String>("aaabbaaa", "a")
+optimized expr : "aaabb"
 output type    : String
 output domain  : Unknown
 output         : "aaabb"
@@ -1418,6 +1475,7 @@ output         : "aaabb"
 ast            : trim(trailing 'aa' from 'aaabbaaa')
 raw expr       : trim_trailing("aaabbaaa", "aa")
 checked expr   : trim_trailing<String, String>("aaabbaaa", "aa")
+optimized expr : "aaabba"
 output type    : String
 output domain  : Unknown
 output         : "aaabba"
@@ -1426,6 +1484,7 @@ output         : "aaabba"
 ast            : trim(trailing 'a' from 'aaaaaaaa')
 raw expr       : trim_trailing("aaaaaaaa", "a")
 checked expr   : trim_trailing<String, String>("aaaaaaaa", "a")
+optimized expr : ""
 output type    : String
 output domain  : Unknown
 output         : ""
@@ -1434,6 +1493,7 @@ output         : ""
 ast            : trim(trailing 'b' from 'aaabbaaa')
 raw expr       : trim_trailing("aaabbaaa", "b")
 checked expr   : trim_trailing<String, String>("aaabbaaa", "b")
+optimized expr : "aaabbaaa"
 output type    : String
 output domain  : Unknown
 output         : "aaabbaaa"
@@ -1547,5 +1607,131 @@ evaluation (internal):
 | b      | String(StringColumn { data: [97, 98, 99], offsets: [0, 1, 2, 3] })                                                                 |
 | Output | String(StringColumn { data: [97, 98, 97, 98, 97, 97, 98, 97], offsets: [0, 2, 5, 8] })                                             |
 +--------+------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : concat('5', '3', '4')
+raw expr       : concat("5", "3", "4")
+checked expr   : concat<String, String, String>("5", "3", "4")
+optimized expr : "534"
+output type    : String
+output domain  : {"5"..}
+output         : "534"
+
+
+ast            : concat(NULL, '3', '4')
+raw expr       : concat(NULL, "3", "4")
+checked expr   : concat<String NULL, String NULL, String NULL>(CAST(NULL AS String NULL), CAST("3" AS String NULL), CAST("4" AS String NULL))
+optimized expr : NULL
+output type    : String NULL
+output domain  : Unknown
+output         : NULL
+
+
+ast            : concat(a, '3', '4', '5')
+raw expr       : concat(ColumnRef(0)::String, "3", "4", "5")
+checked expr   : concat<String, String, String, String>(ColumnRef(0), "3", "4", "5")
+evaluation:
++--------+-----------------------+----------------+
+|        | a                     | Output         |
++--------+-----------------------+----------------+
+| Type   | String                | String         |
+| Domain | {"   abc"..="abc   "} | {"   abc"..}   |
+| Row 0  | "abc"                 | "abc345"       |
+| Row 1  | "   abc"              | "   abc345"    |
+| Row 2  | "   abc   "           | "   abc   345" |
+| Row 3  | "abc   "              | "abc   345"    |
++--------+-----------------------+----------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                                                                         |
++--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| a      | String(StringColumn { data: [97, 98, 99, 32, 32, 32, 97, 98, 99, 32, 32, 32, 97, 98, 99, 32, 32, 32, 97, 98, 99, 32, 32, 32], offsets: [0, 3, 9, 18, 24] })                                                  |
+| Output | String(StringColumn { data: [97, 98, 99, 51, 52, 53, 32, 32, 32, 97, 98, 99, 51, 52, 53, 32, 32, 32, 97, 98, 99, 32, 32, 32, 51, 52, 53, 97, 98, 99, 32, 32, 32, 51, 52, 53], offsets: [0, 6, 15, 27, 36] }) |
++--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : concat(a, '3')
+raw expr       : concat(ColumnRef(0)::String NULL, "3")
+checked expr   : concat<String NULL, String NULL>(ColumnRef(0), CAST("3" AS String NULL))
+optimized expr : concat<String NULL, String NULL>(ColumnRef(0), "3")
+evaluation:
++--------+----------------------+-------------+
+|        | a                    | Output      |
++--------+----------------------+-------------+
+| Type   | String NULL          | String NULL |
+| Domain | {"a"..="d"} ∪ {NULL} | Unknown     |
+| Row 0  | "a"                  | "a3"        |
+| Row 1  | "b"                  | "b3"        |
+| Row 2  | NULL                 | NULL        |
+| Row 3  | "d"                  | "d3"        |
++--------+----------------------+-------------+
+evaluation (internal):
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                    |
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------------+
+| a      | Nullable(NullableColumn { column: String(StringColumn { data: [97, 98, 99, 100], offsets: [0, 1, 2, 3, 4] }), validity: [0b____1011] })                 |
+| Output | Nullable(NullableColumn { column: String(StringColumn { data: [97, 51, 98, 51, 99, 51, 100, 51], offsets: [0, 2, 4, 6, 8] }), validity: [0b____1011] }) |
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : concat_ws('-', '3', null, '4', null, '5')
+raw expr       : concat_ws("-", "3", NULL, "4", NULL, "5")
+checked expr   : concat_ws<String NULL, String NULL, String NULL, String NULL, String NULL, String NULL>(CAST("-" AS String NULL), CAST("3" AS String NULL), CAST(NULL AS String NULL), CAST("4" AS String NULL), CAST(NULL AS String NULL), CAST("5" AS String NULL))
+optimized expr : "3-4-5"
+output type    : String NULL
+output domain  : Unknown
+output         : "3-4-5"
+
+
+ast            : concat_ws(NULL, '3', '4')
+raw expr       : concat_ws(NULL, "3", "4")
+checked expr   : concat_ws<String NULL, String NULL, String NULL>(CAST(NULL AS String NULL), CAST("3" AS String NULL), CAST("4" AS String NULL))
+optimized expr : NULL
+output type    : String NULL
+output domain  : Unknown
+output         : NULL
+
+
+ast            : concat_ws(a, '3', '4', '5')
+raw expr       : concat_ws(ColumnRef(0)::String, "3", "4", "5")
+checked expr   : concat_ws<String, String, String, String>(ColumnRef(0), "3", "4", "5")
+evaluation:
++--------+-------------+---------+
+|        | a           | Output  |
++--------+-------------+---------+
+| Type   | String      | String  |
+| Domain | {","..="-"} | {"3"..} |
+| Row 0  | ","         | "3,4,5" |
+| Row 1  | "-"         | "3-4-5" |
+| Row 2  | ","         | "3,4,5" |
+| Row 3  | "-"         | "3-4-5" |
++--------+-------------+---------+
+evaluation (internal):
++--------+----------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                         |
++--------+----------------------------------------------------------------------------------------------------------------------------------------------+
+| a      | String(StringColumn { data: [44, 45, 44, 45], offsets: [0, 1, 2, 3, 4] })                                                                    |
+| Output | String(StringColumn { data: [51, 44, 52, 44, 53, 51, 45, 52, 45, 53, 51, 44, 52, 44, 53, 51, 45, 52, 45, 53], offsets: [0, 5, 10, 15, 20] }) |
++--------+----------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : concat_ws(a, '3')
+raw expr       : concat_ws(ColumnRef(0)::String NULL, "3")
+checked expr   : concat_ws<String NULL, String NULL>(ColumnRef(0), CAST("3" AS String NULL))
+optimized expr : concat_ws<String NULL, String NULL>(ColumnRef(0), "3")
+evaluation:
++--------+----------------------+-------------+
+|        | a                    | Output      |
++--------+----------------------+-------------+
+| Type   | String NULL          | String NULL |
+| Domain | {"a"..="d"} ∪ {NULL} | Unknown     |
++--------+----------------------+-------------+
+evaluation (internal):
++--------+-----------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                    |
++--------+-----------------------------------------------------------------------------------------------------------------------------------------+
+| a      | Nullable(NullableColumn { column: String(StringColumn { data: [97, 98, 99, 100], offsets: [0, 1, 2, 3, 4] }), validity: [0b____1011] }) |
+| Output | Nullable(NullableColumn { column: String(StringColumn { data: [], offsets: [0] }), validity: [] })                                      |
++--------+-----------------------------------------------------------------------------------------------------------------------------------------+
 
 

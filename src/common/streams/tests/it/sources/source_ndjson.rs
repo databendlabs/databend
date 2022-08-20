@@ -28,11 +28,17 @@ async fn test_source_ndjson() -> Result<()> {
         DataField::new("a", i8::to_data_type()),
         DataField::new("b", Vu8::to_data_type()),
         DataField::new("c", f64::to_data_type()),
+        DataField::new("d", ArrayType::new_impl(i64::to_data_type())),
+        DataField::new(
+            "e",
+            StructType::new_impl(None, vec![i64::to_data_type(), Vu8::to_data_type()]),
+        ),
+        DataField::new("f", VariantValue::to_data_type()),
     ]);
 
-    let bytes = r#"{"x":false, "a":1, "b":"1", "c":1.0}
-    {"x":true, "a":2, "b":"2", "c":2.0}
-    {"x":false, "a":3, "b":"3", "c":3.0}
+    let bytes = r#"{"x":false, "a":1, "b":"1", "c":1.0, "d":[1,2], "e":{"a":1,"b":"x"}, "f":"abc"}
+    {"x":true, "a":2, "b":"2", "c":2.0, "d":[3,4], "e":{"a":2,"b":"y"}, "f":[1,2,3]}
+    {"x":false, "a":3, "b":"3", "c":3.0, "d":[5,6], "e":{"a":3,"b":"z"}, "f":{"k":"v"}}
     "#
     .as_bytes();
 
@@ -44,13 +50,13 @@ async fn test_source_ndjson() -> Result<()> {
         // for each block, the content is the same of `sample_block`
         assert_blocks_eq(
             vec![
-                "+-------+---+---+---+",
-                "| x     | a | b | c |",
-                "+-------+---+---+---+",
-                "| false | 1 | 1 | 1 |",
-                "| true  | 2 | 2 | 2 |",
-                "| false | 3 | 3 | 3 |",
-                "+-------+---+---+---+",
+                "+-------+---+---+---+--------+--------+-----------+",
+                "| x     | a | b | c | d      | e      | f         |",
+                "+-------+---+---+---+--------+--------+-----------+",
+                "| false | 1 | 1 | 1 | [1, 2] | (1, x) | \"abc\"     |",
+                "| true  | 2 | 2 | 2 | [3, 4] | (2, y) | [1,2,3]   |",
+                "| false | 3 | 3 | 3 | [5, 6] | (3, z) | {\"k\":\"v\"} |",
+                "+-------+---+---+---+--------+--------+-----------+",
             ],
             &[block],
         );

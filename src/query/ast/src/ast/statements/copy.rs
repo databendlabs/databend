@@ -46,14 +46,6 @@ impl Display for CopyStmt<'_> {
         write!(f, " INTO {}", self.dst)?;
         write!(f, " FROM {}", self.src)?;
 
-        if !self.file_format.is_empty() {
-            write!(f, " FILE_FORMAT = (")?;
-            for (k, v) in self.file_format.iter() {
-                write!(f, " {} = '{}'", k, v)?;
-            }
-            write!(f, " )")?;
-        }
-
         if !self.files.is_empty() {
             write!(f, " FILES = (")?;
             write_quoted_comma_separated_list(f, &self.files)?;
@@ -64,12 +56,20 @@ impl Display for CopyStmt<'_> {
             write!(f, " PATTERN = '{}'", self.pattern)?;
         }
 
-        if self.size_limit != 0 {
-            write!(f, " SIZE_LIMIT = {}", self.size_limit)?;
+        if !self.file_format.is_empty() {
+            write!(f, " FILE_FORMAT = (")?;
+            for (k, v) in self.file_format.iter() {
+                write!(f, " {} = '{}'", k, v)?;
+            }
+            write!(f, " )")?;
         }
 
         if !self.validation_mode.is_empty() {
             write!(f, "VALIDATION_MODE = {}", self.validation_mode)?;
+        }
+
+        if self.size_limit != 0 {
+            write!(f, " SIZE_LIMIT = {}", self.size_limit)?;
         }
 
         Ok(())

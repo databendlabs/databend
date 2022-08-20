@@ -228,10 +228,12 @@ build_exceptions! {
     ShareAccountsAlreadyExists(2708),
     UnknownShareAccounts(2709),
     WrongShareObject(2710),
+    WrongShare(2711),
 
     // Variable error codes.
     UnknownVariable(2801),
     OnlySupportAsciiChars(2802),
+    WrongValueForVariable(2803),
 
     // Tenant quota error codes.
     IllegalTenantQuotaFormat(2901),

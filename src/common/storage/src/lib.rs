@@ -20,15 +20,18 @@ mod config;
 pub use config::StorageAzblobConfig;
 pub use config::StorageConfig;
 pub use config::StorageFsConfig;
+pub use config::StorageGcsConfig;
 pub use config::StorageHdfsConfig;
 pub use config::StorageHttpConfig;
 pub use config::StorageParams;
 pub use config::StorageS3Config;
+pub use config::STORAGE_GCS_DEFAULT_ENDPOINT;
 pub use config::STORAGE_S3_DEFAULT_ENDPOINT;
 
 mod operator;
 pub use operator::init_azblob_operator;
 pub use operator::init_fs_operator;
+pub use operator::init_gcs_operator;
 #[cfg(feature = "storage-hdfs")]
 pub use operator::init_hdfs_operator;
 pub use operator::init_http_operator;

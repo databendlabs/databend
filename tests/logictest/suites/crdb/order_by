@@ -1,0 +1,452 @@
+statement ok
+drop table if exists t;
+
+statement ok
+CREATE TABLE t (  a INT,  b INT,  c BOOLEAN NULL);
+
+statement ok
+INSERT INTO t VALUES (1, 9, true), (2, 8, false), (3, 7, NULL);
+
+statement query I
+SELECT c FROM t ORDER BY c;
+
+----
+0
+1
+NULL
+
+statement query I
+SELECT c FROM t ORDER BY c;
+
+----
+0
+1
+NULL
+
+statement query I
+SELECT c FROM t ORDER BY c DESC;
+
+----
+1
+0
+NULL
+
+statement query II
+SELECT a, b FROM t ORDER BY b;
+
+----
+3 7
+2 8
+1 9
+
+statement query II
+SELECT a, b FROM t ORDER BY b DESC;
+
+----
+1 9
+2 8
+3 7
+
+statement query I
+SELECT a FROM t ORDER BY 1 DESC;
+
+----
+3
+2
+1
+
+statement query II
+SELECT a, b FROM t ORDER BY b DESC LIMIT 2;
+
+----
+1 9
+2 8
+
+statement query II
+SELECT DISTINCT c, b FROM t ORDER BY b DESC LIMIT 2;
+
+----
+1 9
+0 8
+
+statement query II
+SELECT a AS foo, b FROM t ORDER BY foo DESC;
+
+----
+3 7
+2 8
+1 9
+
+statement query II
+SELECT a AS foo, b AS foo FROM t ORDER BY foo;
+
+----
+1 9
+2 8
+3 7
+
+statement query II
+SELECT a AS foo, (a) AS foo FROM t ORDER BY foo LIMIT 1;
+
+----
+1 1
+
+onlyif mysql
+statement query II
+SELECT a AS "foo.bar", b FROM t ORDER BY "foo.bar" DESC;
+
+----
+3 7
+2 8
+1 9
+
+statement query II
+SELECT a AS foo, b FROM t ORDER BY a DESC;
+
+----
+3 7
+2 8
+1 9
+
+statement query I
+SELECT b FROM t ORDER BY a DESC;
+
+----
+7
+8
+9
+
+statement ok
+INSERT INTO t(a,b) VALUES (4, 7), (5, 7);
+
+statement query II
+SELECT a, b FROM t WHERE b = 7 ORDER BY b, a;
+
+----
+3 7
+4 7
+5 7
+
+statement query II
+SELECT a, b FROM t ORDER BY b, a DESC;
+
+----
+5 7
+4 7
+3 7
+2 8
+1 9
+
+statement query III
+SELECT a, b, a+b AS ab FROM t WHERE b = 7 ORDER BY ab DESC, a;
+
+----
+5 7 12
+4 7 11
+3 7 10
+
+statement query I
+SELECT a FROM t ORDER BY a+b DESC, a;
+
+----
+5
+4
+1
+2
+3
+
+statement query I
+SELECT a FROM t ORDER BY (((a)));
+
+----
+1
+2
+3
+4
+5
+
+statement query I
+(((SELECT a FROM t))) ORDER BY a DESC LIMIT 4;
+
+----
+5
+4
+3
+2
+
+statement error 1005
+((SELECT a FROM t ORDER BY a)) ORDER BY a;
+
+statement error 1065
+SELECT CASE a WHEN 1 THEN b ELSE c END as val FROM t ORDER BY val;
+
+statement error 1065
+SELECT * FROM t ORDER BY 0;
+
+statement query III
+SELECT * FROM t ORDER BY true,a;
+
+----
+1 9 1
+2 8 0
+3 7 NULL
+4 7 NULL
+5 7 NULL
+
+statement query III
+SELECT * FROM t ORDER BY "a";
+
+----
+1 9 1
+2 8 0
+3 7 NULL
+4 7 NULL
+5 7 NULL
+
+statement query III
+SELECT * FROM t ORDER BY 2.5,a;
+
+----
+1 9 1
+2 8 0
+3 7 NULL
+4 7 NULL
+5 7 NULL
+
+statement error 1065
+SELECT * FROM t ORDER BY foo;
+
+statement error 1065
+SELECT a FROM t ORDER BY a.b;
+
+statement ok
+drop table if exists abc;
+
+statement ok
+CREATE TABLE abc (  a INT,  b INT,  c INT,  d VARCHAR);
+
+statement ok
+INSERT INTO abc VALUES (1, 2, 3, 'one'), (4, 5, 6, 'Two');
+
+statement query T
+SELECT d FROM abc ORDER BY lower(d);
+
+----
+one
+Two
+
+statement query I
+SELECT a FROM abc ORDER BY a DESC;
+
+----
+4
+1
+
+statement query I
+SELECT a FROM abc ORDER BY a DESC LIMIT 1;
+
+----
+4
+
+statement query I
+SELECT a FROM abc ORDER BY a DESC OFFSET 1;
+
+----
+1
+
+statement ok
+drop table if exists bar;
+
+statement ok
+CREATE TABLE bar (id INT, baz STRING NULL);
+
+statement ok
+INSERT INTO bar VALUES (0, NULL), (1, NULL);
+
+statement query IT
+SELECT * FROM bar ORDER BY baz, id;
+
+----
+0 NULL
+1 NULL
+
+statement ok
+drop table if exists abcd;
+
+statement ok
+CREATE TABLE abcd (  a INT,  b INT,  c INT,  d INT);
+
+statement ok
+INSERT INTO abcd VALUES (1, 4, 2, 3), (2, 3, 4, 1), (3, 2, 1, 2), (4, 4, 1, 1);
+
+statement query I
+SELECT a+b FROM (SELECT * FROM abcd ORDER BY d);
+
+----
+5
+8
+5
+5
+
+statement query I
+SELECT b+d FROM (SELECT * FROM abcd ORDER BY a,d);
+
+----
+7
+4
+4
+5
+
+statement ok
+drop table if exists store;
+
+statement ok
+CREATE TABLE store (  id INT, baz STRING NULL, extra INT);
+
+statement ok
+INSERT INTO store VALUES (0, NULL, 10), (1, NULL, 5);
+
+statement query ITI
+SELECT * FROM store ORDER BY baz, extra;
+
+----
+1  NULL  5
+0  NULL  10
+
+statement ok
+drop table if exists xy;
+
+statement ok
+CREATE TABLE xy(x INT NULL, y INT NULL);
+
+statement ok
+INSERT INTO xy VALUES (2, NULL), (NULL, 6), (2, 5), (4, 8);
+
+statement query IT
+SELECT x, y FROM xy ORDER BY y NULLS FIRST;
+
+----
+2 NULL
+2 5
+NULL 6
+4 8
+
+statement query II
+SELECT x, y FROM xy ORDER BY y NULLS LAST;
+
+----
+2 5
+NULL 6
+4 8
+2 NULL
+
+statement query IT
+SELECT x, y FROM xy ORDER BY y DESC NULLS FIRST;
+
+----
+2 NULL
+4 8
+NULL 6
+2 5
+
+statement query II
+SELECT x, y FROM xy ORDER BY y DESC NULLS LAST;
+
+----
+4 8
+NULL 6
+2 5
+2 NULL
+
+statement query II
+SELECT x, y FROM xy ORDER BY y NULLS LAST;
+
+----
+2 5
+NULL 6
+4 8
+2 NULL
+
+statement ok
+INSERT INTO xy VALUES (NULL, NULL);
+
+statement query TI
+SELECT x, y FROM xy ORDER BY x NULLS FIRST, y NULLS LAST;
+
+----
+NULL 6
+NULL NULL
+2 5
+2 NULL
+4 8
+
+statement query IT
+SELECT x, y FROM xy ORDER BY x NULLS LAST, y DESC NULLS FIRST;
+
+----
+2 NULL
+2 5
+4 8
+NULL 6
+NULL NULL
+
+statement query II
+SELECT x, y FROM xy ORDER BY x, y;
+
+----
+2 5
+2 NULL
+4 8
+NULL 6
+NULL NULL
+
+statement query IT
+SELECT x, y FROM xy ORDER BY x, y DESC NULLS FIRST;
+
+----
+2 NULL
+2 5
+4 8
+NULL 6
+NULL NULL
+
+statement query IT
+SELECT x, y FROM xy ORDER BY x NULLS LAST, y DESC NULLS FIRST;
+
+----
+2 NULL
+2 5
+4 8
+NULL 6
+NULL NULL
+
+statement query TT
+SELECT x, y FROM xy ORDER BY x NULLS FIRST, y DESC NULLS LAST;
+
+----
+NULL NULL
+NULL 6
+2 5
+2 NULL
+4 8
+
+statement query TT
+SELECT x, y FROM xy ORDER BY x NULLS FIRST, y DESC;
+
+----
+NULL NULL
+NULL 6
+2 5
+2 NULL
+4 8
+
+statement query TI
+SELECT x, y FROM xy ORDER BY x NULLS FIRST, y DESC NULLS FIRST;
+
+----
+NULL 6
+NULL NULL
+2 NULL
+2 5
+4 8
+

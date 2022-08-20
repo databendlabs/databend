@@ -31,7 +31,7 @@ use crate::FuseTable;
 
 impl FuseTable {
     pub async fn do_gc(&self, ctx: &Arc<dyn TableContext>, keep_last_snapshot: bool) -> Result<()> {
-        let r = self.read_table_snapshot(ctx.as_ref()).await;
+        let r = self.read_table_snapshot(ctx.clone()).await;
         let snapshot_opt = match r {
             Err(e) if e.code() == ErrorCode::storage_not_found_code() => {
                 // concurrent gc: someone else has already collected this snapshot, ignore it
@@ -54,7 +54,7 @@ impl FuseTable {
             return Ok(());
         };
 
-        let reader = MetaReaders::table_snapshot_reader(ctx.as_ref());
+        let reader = MetaReaders::table_snapshot_reader(ctx.clone());
 
         let (prev_id, prev_ver) = if let Some((id, ver)) = last_snapshot.prev_snapshot_id {
             (id, ver)

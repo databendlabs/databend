@@ -45,9 +45,16 @@ pub struct ClusterStatistics {
     pub cluster_key_id: u32,
     pub min: Vec<DataValue>,
     pub max: Vec<DataValue>,
+    // The number of times the data in that block has been clustered. New blocks has zero level.
+    #[serde(default = "default_level")]
+    pub level: i32,
 }
 
 fn default_cluster_key_id() -> u32 {
+    0
+}
+
+fn default_level() -> i32 {
     0
 }
 

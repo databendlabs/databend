@@ -27,14 +27,16 @@ use tracing::debug;
 
 use crate::operations::mutation::delete_from_block;
 use crate::operations::mutation::deletion_mutator::Deletion;
-use crate::operations::mutation::deletion_mutator::DeletionMutator;
+use crate::operations::mutation::DeletionMutator;
 use crate::pruning::BlockPruner;
 use crate::statistics::ClusterStatsGenerator;
 use crate::FuseTable;
+use crate::DEFAULT_ROW_PER_BLOCK;
+use crate::FUSE_OPT_KEY_ROW_PER_BLOCK;
 
 impl FuseTable {
     pub async fn do_delete(&self, ctx: Arc<dyn TableContext>, plan: &DeletePlan) -> Result<()> {
-        let snapshot_opt = self.read_table_snapshot(ctx.as_ref()).await?;
+        let snapshot_opt = self.read_table_snapshot(ctx.clone()).await?;
 
         // check if table is empty
         let snapshot = if let Some(val) = snapshot_opt {
@@ -73,9 +75,9 @@ impl FuseTable {
     ) -> Result<()> {
         let cluster_stats_gen = self.cluster_stats_gen(ctx.clone())?;
         let mut deletion_collector = DeletionMutator::try_create(
-            &ctx,
-            &self.meta_location_generator,
-            snapshot,
+            ctx.clone(),
+            self.meta_location_generator.clone(),
+            snapshot.clone(),
             cluster_stats_gen,
         )?;
         let schema = self.table_info.schema();
@@ -121,7 +123,7 @@ impl FuseTable {
     async fn commit_deletion(
         &self,
         ctx: &dyn TableContext,
-        del_holder: DeletionMutator<'_>,
+        del_holder: DeletionMutator,
         catalog_name: &str,
     ) -> Result<()> {
         let (new_snapshot, loc) = del_holder.into_new_snapshot().await?;
@@ -180,10 +182,14 @@ impl FuseTable {
             expression_executor = Some(executor);
         }
 
+        let row_per_block = self.get_option(FUSE_OPT_KEY_ROW_PER_BLOCK, DEFAULT_ROW_PER_BLOCK);
+
         Ok(ClusterStatsGenerator::new(
             cluster_key_id,
             cluster_key_index,
             expression_executor,
+            0,
+            row_per_block,
         ))
     }
 }
