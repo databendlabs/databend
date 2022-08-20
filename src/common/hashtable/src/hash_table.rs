@@ -18,14 +18,22 @@ use std::alloc::Layout;
 use std::marker::PhantomData;
 use std::mem;
 
+use common_base::mem_allocator::Allocator as AllocatorTrait;
+
 use crate::hash_table_grower::HashTableGrower;
 use crate::HashTableEntity;
 use crate::HashTableIteratorKind;
 use crate::HashTableKeyable;
 
-pub struct HashTable<Key: HashTableKeyable, Entity: HashTableEntity<Key>, Grower: HashTableGrower> {
+pub struct HashTable<
+    Key: HashTableKeyable,
+    Entity: HashTableEntity<Key>,
+    Grower: HashTableGrower,
+    Allocator: AllocatorTrait,
+> {
     size: usize,
     grower: Grower,
+    allocator: Allocator,
     entities: *mut Entity,
     entities_raw: *mut u8,
     zero_entity: Option<*mut Entity>,
@@ -41,7 +49,8 @@ unsafe impl<
     Key: HashTableKeyable + Send,
     Entity: HashTableEntity<Key> + Send,
     Grower: HashTableGrower,
-> Send for HashTable<Key, Entity, Grower>
+    Allocator: AllocatorTrait,
+> Send for HashTable<Key, Entity, Grower, Allocator>
 {
 }
 
@@ -49,12 +58,17 @@ unsafe impl<
     Key: HashTableKeyable + Sync,
     Entity: HashTableEntity<Key> + Sync,
     Grower: HashTableGrower,
-> Sync for HashTable<Key, Entity, Grower>
+    Allocator: AllocatorTrait,
+> Sync for HashTable<Key, Entity, Grower, Allocator>
 {
 }
 
-impl<Key: HashTableKeyable, Entity: HashTableEntity<Key>, Grower: HashTableGrower> Drop
-    for HashTable<Key, Entity, Grower>
+impl<
+    Key: HashTableKeyable,
+    Entity: HashTableEntity<Key>,
+    Grower: HashTableGrower,
+    Allocator: AllocatorTrait,
+> Drop for HashTable<Key, Entity, Grower, Allocator>
 {
     fn drop(&mut self) {
         unsafe {
@@ -72,7 +86,8 @@ impl<Key: HashTableKeyable, Entity: HashTableEntity<Key>, Grower: HashTableGrowe
 
             let size = item_size * mem::size_of::<Entity>();
             let layout = Layout::from_size_align_unchecked(size, std::mem::align_of::<Entity>());
-            std::alloc::dealloc(self.entities_raw, layout);
+
+            self.allocator.deallocx(self.entities_raw, layout);
 
             if let Some(zero_entity) = self.zero_entity_raw {
                 if std::mem::needs_drop::<Entity>() && !self.entity_swapped {
@@ -90,14 +105,18 @@ impl<Key: HashTableKeyable, Entity: HashTableEntity<Key>, Grower: HashTableGrowe
     }
 }
 
-impl<Key: HashTableKeyable, Entity: HashTableEntity<Key>, Grower: HashTableGrower>
-    HashTable<Key, Entity, Grower>
+impl<
+    Key: HashTableKeyable,
+    Entity: HashTableEntity<Key>,
+    Grower: HashTableGrower,
+    Allocator: AllocatorTrait + Default,
+> HashTable<Key, Entity, Grower, Allocator>
 {
-    pub fn create() -> HashTable<Key, Entity, Grower> {
+    pub fn create() -> HashTable<Key, Entity, Grower, Allocator> {
         Self::with_capacity(1 << 8)
     }
 
-    pub fn with_capacity(capacity: usize) -> HashTable<Key, Entity, Grower> {
+    pub fn with_capacity(capacity: usize) -> HashTable<Key, Entity, Grower, Allocator> {
         let mut grower = Grower::default();
         while (grower.max_size() as usize) < capacity {
             grower.increase_size();
@@ -106,7 +125,8 @@ impl<Key: HashTableKeyable, Entity: HashTableEntity<Key>, Grower: HashTableGrowe
         let size = grower.max_size() as usize * mem::size_of::<Entity>();
         unsafe {
             let layout = Layout::from_size_align_unchecked(size, mem::align_of::<Entity>());
-            let raw_ptr = std::alloc::alloc_zeroed(layout);
+            let mut allocator = Allocator::default();
+            let raw_ptr = allocator.allocx(layout, true);
             let entities_ptr = raw_ptr as *mut Entity;
             HashTable {
                 size: 0,
@@ -117,6 +137,7 @@ impl<Key: HashTableKeyable, Entity: HashTableEntity<Key>, Grower: HashTableGrowe
                 zero_entity_raw: None,
                 generics_hold: PhantomData::default(),
                 entity_swapped: false,
+                allocator,
             }
         }
     }
@@ -256,6 +277,7 @@ impl<Key: HashTableKeyable, Entity: HashTableEntity<Key>, Grower: HashTableGrowe
 
                     self.size += 1;
                     *inserted = true;
+
                     self.zero_entity_raw = Some(std::alloc::alloc_zeroed(layout));
                     self.zero_entity = Some(self.zero_entity_raw.unwrap() as *mut Entity);
                     self.zero_entity.unwrap().set_key_and_hash(key, hash_value);
@@ -278,11 +300,10 @@ impl<Key: HashTableKeyable, Entity: HashTableEntity<Key>, Grower: HashTableGrowe
             let new_size = (new_grower.max_size() as usize) * std::mem::size_of::<Entity>();
             let layout =
                 Layout::from_size_align_unchecked(new_size, std::mem::align_of::<Entity>());
-            self.entities_raw = std::alloc::realloc(self.entities_raw, layout, new_size);
+            self.entities_raw = self
+                .allocator
+                .reallocx(self.entities_raw, layout, new_size, true);
             self.entities = self.entities_raw as *mut Entity;
-            self.entities
-                .offset(self.grower.max_size())
-                .write_bytes(0, (new_grower.max_size() - self.grower.max_size()) as usize);
             self.grower = new_grower;
 
             for index in 0..old_size {

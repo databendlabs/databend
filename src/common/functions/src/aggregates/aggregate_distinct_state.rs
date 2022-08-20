@@ -23,7 +23,7 @@ use bytes::BytesMut;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_hashtable::HashSet as CommonHashSet;
+use common_hashtable::HashSetWithStackMemory;
 use common_hashtable::HashTableEntity;
 use common_hashtable::HashTableKeyable;
 use common_io::prelude::*;
@@ -57,7 +57,7 @@ pub struct AggregateDistinctState {
 }
 
 pub struct AggregateDistinctPrimitiveState<T: PrimitiveType, E: From<T> + HashTableKeyable> {
-    set: CommonHashSet<E>,
+    set: HashSetWithStackMemory<{16 * 8}, E>,
     _t: PhantomData<T>,
     inserted: bool,
 }
@@ -277,7 +277,7 @@ where
 {
     fn new() -> Self {
         AggregateDistinctPrimitiveState {
-            set: CommonHashSet::create(),
+            set: HashSetWithStackMemory::create(),
             _t: PhantomData,
             inserted: false,
         }
@@ -294,7 +294,7 @@ where
 
     fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()> {
         let size = reader.read_uvarint()?;
-        self.set = CommonHashSet::with_capacity(size as usize);
+        self.set = HashSetWithStackMemory::with_capacity(size as usize);
         for _ in 0..size {
             let t: T = deserialize_from_slice(reader)?;
             let e = E::from(t);

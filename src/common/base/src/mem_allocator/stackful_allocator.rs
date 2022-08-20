@@ -20,20 +20,16 @@ use std::alloc::Layout;
 use std::ptr;
 
 
-use super::Allocator;
-use super::mmap_allocator::MmapAllocator;
+use super::Allocator as AllocatorTrait;
 
 /// Implementation of std::alloc::Allocator whose backend is mmap(2)
 #[derive(Debug, Clone, Copy)]
-pub struct StackfulAllocator<
-    const INIT_BYTES: usize,
-    const MMAP_POPULATE: bool,
-> {
-    allocator: MmapAllocator<MMAP_POPULATE>,
+pub struct StackfulAllocator< const INIT_BYTES: usize, Allocator: AllocatorTrait>  {
+    allocator: Allocator,
     stack_bytes: [u8; INIT_BYTES],
 }
 
-impl<const INIT_BYTES: usize,const MMAP_POPULATE: bool> Default for  StackfulAllocator<INIT_BYTES, MMAP_POPULATE> {
+impl<const INIT_BYTES: usize, Allocator: AllocatorTrait + Default> Default for  StackfulAllocator<INIT_BYTES,  Allocator> {
     fn default() -> Self {
         Self { allocator: Default::default(), stack_bytes: [0; INIT_BYTES] }
     }
@@ -43,8 +39,8 @@ impl<const INIT_BYTES: usize,const MMAP_POPULATE: bool> Default for  StackfulAll
 /// # Safety
 ///
 /// We should guarantee that the stack is only used as inner memory, such as HashSet
-unsafe impl<const INIT_BYTES: usize,const MMAP_POPULATE: bool> Allocator
-    for StackfulAllocator<INIT_BYTES, MMAP_POPULATE>
+unsafe impl<const INIT_BYTES: usize, Allocator: AllocatorTrait> AllocatorTrait
+    for StackfulAllocator<INIT_BYTES, Allocator>
 {
     unsafe fn allocx(&mut self, layout: Layout, clear_mem: bool) -> *mut u8 {
        if layout.size() <= INIT_BYTES {
@@ -88,8 +84,8 @@ mod tests {
     use std::mem;
 
     use super::*;
-    use crate::mem_allocator::Allocator as AllocatorTrait;
-    type ALOC = StackfulAllocator<1024, true>;
+    use crate::mem_allocator::{Allocator as AllocatorTrait, MmapAllocator};
+    type ALOC = StackfulAllocator<1024, MmapAllocator<true>>;
 
     #[test]
     fn default() {

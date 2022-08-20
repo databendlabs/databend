@@ -14,6 +14,8 @@
 //
 // Reference the ClickHouse HashTable to implement the Databend HashTable
 
+use common_base::mem_allocator::Allocator as AllocatorTrait;
+
 use crate::HashTable;
 use crate::HashTableEntity;
 use crate::HashTableGrower;
@@ -29,9 +31,10 @@ pub enum HashTableKind<
     Entity: HashTableEntity<Key>,
     SingleLevelGrower: HashTableGrower,
     TwoLevelGrower: HashTableGrower,
+    Allocator: AllocatorTrait,
 > {
-    HashTable(HashTable<Key, Entity, SingleLevelGrower>),
-    TwoLevelHashTable(TwoLevelHashTable<Key, Entity, TwoLevelGrower>),
+    HashTable(HashTable<Key, Entity, SingleLevelGrower, Allocator>),
+    TwoLevelHashTable(TwoLevelHashTable<Key, Entity, TwoLevelGrower, Allocator>),
 }
 
 impl<
@@ -39,7 +42,8 @@ impl<
     Entity: HashTableEntity<Key>,
     SingleLevelGrower: HashTableGrower,
     TwoLevelGrower: HashTableGrower,
-> HashTableKind<Key, Entity, SingleLevelGrower, TwoLevelGrower>
+    Allocator: AllocatorTrait + Default,
+> HashTableKind<Key, Entity, SingleLevelGrower, TwoLevelGrower, Allocator>
 {
     pub fn create_hash_table() -> Self {
         Self::HashTable(HashTable::create())
@@ -119,37 +123,46 @@ pub struct TwoLevelHashTable<
     Key: HashTableKeyable,
     Entity: HashTableEntity<Key>,
     Grower: HashTableGrower,
+    Allocator: AllocatorTrait,
 > {
-    hash_tables: Vec<HashTable<Key, Entity, Grower>>,
+    hash_tables: Vec<HashTable<Key, Entity, Grower, Allocator>>,
 }
 
-impl<Key: HashTableKeyable, Entity: HashTableEntity<Key>, Grower: HashTableGrower>
-    TwoLevelHashTable<Key, Entity, Grower>
+impl<
+    Key: HashTableKeyable,
+    Entity: HashTableEntity<Key>,
+    Grower: HashTableGrower,
+    Allocator: AllocatorTrait + Default,
+> TwoLevelHashTable<Key, Entity, Grower, Allocator>
 {
-    pub fn create() -> TwoLevelHashTable<Key, Entity, Grower> {
-        let mut hash_tables: Vec<HashTable<Key, Entity, Grower>> = Vec::with_capacity(NUM_BUCKETS);
+    pub fn create() -> TwoLevelHashTable<Key, Entity, Grower, Allocator> {
+        let mut hash_tables: Vec<HashTable<Key, Entity, Grower, Allocator>> =
+            Vec::with_capacity(NUM_BUCKETS);
 
         for _ in 0..NUM_BUCKETS {
-            hash_tables.push(HashTable::<Key, Entity, Grower>::create());
+            hash_tables.push(HashTable::<Key, Entity, Grower, Allocator>::create());
         }
 
         TwoLevelHashTable { hash_tables }
     }
 
-    pub fn with_capacity(capacity: usize) -> TwoLevelHashTable<Key, Entity, Grower> {
+    pub fn with_capacity(capacity: usize) -> TwoLevelHashTable<Key, Entity, Grower, Allocator> {
         let per_capcity = (capacity / NUM_BUCKETS).max(1 << 8);
-        let mut hash_tables: Vec<HashTable<Key, Entity, Grower>> = Vec::with_capacity(NUM_BUCKETS);
+        let mut hash_tables: Vec<HashTable<Key, Entity, Grower, Allocator>> =
+            Vec::with_capacity(NUM_BUCKETS);
         for _ in 0..NUM_BUCKETS {
-            hash_tables.push(HashTable::<Key, Entity, Grower>::with_capacity(per_capcity));
+            hash_tables.push(HashTable::<Key, Entity, Grower, Allocator>::with_capacity(
+                per_capcity,
+            ));
         }
         TwoLevelHashTable { hash_tables }
     }
 
-    pub fn inner_hash_tables(&self) -> &[HashTable<Key, Entity, Grower>] {
+    pub fn inner_hash_tables(&self) -> &[HashTable<Key, Entity, Grower, Allocator>] {
         self.hash_tables.as_slice()
     }
 
-    pub fn inner_hash_tables_mut(&mut self) -> &mut [HashTable<Key, Entity, Grower>] {
+    pub fn inner_hash_tables_mut(&mut self) -> &mut [HashTable<Key, Entity, Grower, Allocator>] {
         self.hash_tables.as_mut_slice()
     }
 

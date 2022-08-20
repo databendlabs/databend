@@ -19,6 +19,8 @@ mod je_allocator;
 use std::alloc::Layout;
 
 pub use je_allocator::JEAllocator;
+pub use mmap_allocator::MmapAllocator;
+pub use stackful_allocator::StackfulAllocator;
 
 #[cfg(feature = "memory-profiling")]
 mod profiling;
