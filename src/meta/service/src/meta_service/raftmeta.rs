@@ -318,12 +318,11 @@ impl MetaNode {
         config: &RaftConfig,
         open: Option<()>,
         create: Option<()>,
-        is_initialize: bool,
-        node: Node,
+        initialize_cluster: Option<Node>,
     ) -> MetaResult<Arc<MetaNode>> {
         info!(
-            "open_create_boot, config: {:?}, open: {:?}, create: {:?}, is_initialize: {}, node: {:?}",
-            config, open, create, is_initialize, node
+            "open_create_boot, config: {:?}, open: {:?}, create: {:?}, initialize_cluster: {:?}",
+            config, open, create, initialize_cluster
         );
 
         let mut config = config.clone();
@@ -341,14 +340,11 @@ impl MetaNode {
         let sto = Arc::new(StoreExt::new(sto));
         sto.set_defensive(true);
 
-        let is_open = sto.is_opened();
-
-        let mut builder = MetaNode::builder(&config).sto(sto.clone());
         // config.id only used for the first time
-        let self_node_id = if is_open { sto.id } else { config.id };
+        let self_node_id = if sto.is_opened() { sto.id } else { config.id };
 
-        // use ip:port to start grpc listening
-        builder = builder
+        let builder = MetaNode::builder(&config)
+            .sto(sto.clone())
             .node_id(self_node_id)
             .endpoint(config.raft_api_listen_host_endpoint());
         let mn = builder.build().await?;
@@ -356,7 +352,11 @@ impl MetaNode {
         info!("MetaNode started: {:?}", config);
 
         // init_cluster with advertise_host other than listen_host
-        if !is_open && is_initialize {
+        if mn.is_opened() {
+            return Ok(mn);
+        }
+
+        if let Some(node) = initialize_cluster {
             mn.init_cluster(node).await?;
         }
         Ok(mn)
@@ -630,26 +630,28 @@ impl MetaNode {
     async fn do_start(conf: &MetaConfig) -> Result<Arc<MetaNode>, MetaError> {
         let raft_conf = &conf.raft_config;
 
-        let node = conf.get_node();
+        let initialize_cluster = if raft_conf.single {
+            Some(conf.get_node())
+        } else {
+            None
+        };
 
         if raft_conf.single {
-            let mn = MetaNode::open_create_boot(raft_conf, Some(()), Some(()), true, node).await?;
+            let mn = MetaNode::open_create_boot(raft_conf, Some(()), Some(()), initialize_cluster)
+                .await?;
             return Ok(mn);
         }
 
         if !raft_conf.join.is_empty() {
             // Bring up a new node, join it into a cluster
 
-            let mn = MetaNode::open_create_boot(raft_conf, Some(()), Some(()), false, node).await?;
-
-            if mn.is_opened() {
-                return Ok(mn);
-            }
+            let mn = MetaNode::open_create_boot(raft_conf, Some(()), Some(()), initialize_cluster)
+                .await?;
             return Ok(mn);
         }
         // open mode
 
-        let mn = MetaNode::open_create_boot(raft_conf, Some(()), None, false, node).await?;
+        let mn = MetaNode::open_create_boot(raft_conf, Some(()), None, initialize_cluster).await?;
         Ok(mn)
     }
 
@@ -657,15 +659,9 @@ impl MetaNode {
     /// For every cluster this func should be called exactly once.
     #[tracing::instrument(level = "debug", skip(config), fields(config_id=config.raft_config.config_id.as_str()))]
     pub async fn boot(config: &MetaConfig) -> MetaResult<Arc<MetaNode>> {
-        // 1. Bring a node up as non voter, start the grpc service for raft communication.
-        // 2. Initialize itself as leader, because it is the only one in the new cluster.
-        // 3. Add itself to the cluster storage by committing an `add-node` log so that the cluster members(only this node) is persisted.
-
-        let raft_conf = &config.raft_config;
-
-        let node = config.get_node();
-
-        let mn = Self::open_create_boot(raft_conf, None, Some(()), true, node).await?;
+        let mn =
+            Self::open_create_boot(&config.raft_config, None, Some(()), Some(config.get_node()))
+                .await?;
 
         Ok(mn)
     }
