@@ -19,7 +19,8 @@ use std::ops::Deref;
 use std::sync::Arc;
 
 use common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
-use common_base::base::{GlobalIORuntime, SingletonInstance};
+use common_base::base::GlobalIORuntime;
+use common_base::base::SingletonInstance;
 use common_base::base::Thread;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
@@ -63,7 +64,8 @@ pub struct DataExchangeManager {
     queries_coordinator: ReentrantMutex<SyncUnsafeCell<HashMap<String, QueryCoordinator>>>,
 }
 
-static DATA_EXCHANGE_MANAGER: OnceCell<SingletonInstance<Arc<DataExchangeManager>>> = OnceCell::new();
+static DATA_EXCHANGE_MANAGER: OnceCell<SingletonInstance<Arc<DataExchangeManager>>> =
+    OnceCell::new();
 
 impl DataExchangeManager {
     pub fn init(config: Config, v: SingletonInstance<Arc<DataExchangeManager>>) -> Result<()> {
@@ -141,7 +143,7 @@ impl DataExchangeManager {
                     None,
                     Some(config.query.to_rpc_client_tls_config()),
                 )
-                    .await?,
+                .await?,
             ))),
             false => Ok(FlightClient::new(FlightServiceClient::new(
                 ConnectionFactory::create_rpc_channel(address.to_owned(), None, None).await?,

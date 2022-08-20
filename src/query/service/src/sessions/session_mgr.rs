@@ -20,26 +20,25 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
 
-use common_base::base::{SingletonInstance, tokio};
-use backon::ExponentialBackoff;
-use common_base::base::Runtime;
+use common_base::base::tokio;
 use common_base::base::SignalStream;
+use common_base::base::SingletonInstance;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_metrics::label_counter;
+use common_settings::Settings;
+use common_users::UserApiProvider;
 use futures::future::Either;
 use futures::StreamExt;
 use once_cell::sync::OnceCell;
-use opendal::Operator;
 use parking_lot::RwLock;
 use tracing::debug;
 use tracing::info;
-use common_settings::Settings;
-use common_users::UserApiProvider;
 
 use crate::sessions::session::Session;
 use crate::sessions::session_ref::SessionRef;
-use crate::sessions::{ProcessInfo, SessionContext};
+use crate::sessions::ProcessInfo;
+use crate::sessions::SessionContext;
 use crate::sessions::SessionManagerStatus;
 use crate::sessions::SessionType;
 use crate::Config;
@@ -236,7 +235,7 @@ impl SessionManager {
         self: &Arc<Self>,
         mut signal: SignalStream,
         timeout_secs: i32,
-    ) -> impl Future<Output=()> {
+    ) -> impl Future<Output = ()> {
         let active_sessions = self.active_sessions.clone();
         async move {
             info!(

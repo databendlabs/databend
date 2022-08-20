@@ -43,7 +43,6 @@ use common_planners::ReadDataSourcePlan;
 use common_planners::SourceInfo;
 use common_planners::StageTableInfo;
 use common_planners::Statistics;
-use common_storage::StorageOperator;
 use common_streams::AbortStream;
 use common_streams::SendableDataBlockStream;
 use common_users::UserApiProvider;
@@ -57,7 +56,6 @@ use crate::api::DataExchangeManager;
 use crate::auth::AuthMgr;
 use crate::catalogs::Catalog;
 use crate::catalogs::CatalogManager;
-use crate::catalogs::CatalogManagerHelper;
 use crate::clusters::Cluster;
 use crate::servers::http::v1::HttpQueryHandle;
 use crate::sessions::query_affect::QueryAffect;
@@ -328,7 +326,9 @@ impl TableContext for QueryContext {
     }
 
     fn get_catalog(&self, catalog_name: &str) -> Result<Arc<dyn Catalog>> {
-        self.shared.catalog_manager.get_catalog(catalog_name.as_ref())
+        self.shared
+            .catalog_manager
+            .get_catalog(catalog_name.as_ref())
     }
     fn get_id(&self) -> String {
         self.shared.init_query_id.as_ref().read().clone()
@@ -433,9 +433,9 @@ impl TrySpawn for QueryContext {
     /// Spawns a new asynchronous task, returning a tokio::JoinHandle for it.
     /// The task will run in the current context thread_pool not the global.
     fn try_spawn<T>(&self, task: T) -> Result<JoinHandle<T::Output>>
-        where
-            T: Future + Send + 'static,
-            T::Output: Send + 'static,
+    where
+        T: Future + Send + 'static,
+        T::Output: Send + 'static,
     {
         Ok(self.shared.try_get_runtime()?.spawn(task))
     }

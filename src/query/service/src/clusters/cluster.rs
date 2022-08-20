@@ -19,7 +19,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
-use common_base::base::{SingletonInstance, tokio};
+use common_base::base::tokio;
 use common_base::base::tokio::sync::Mutex;
 use common_base::base::tokio::sync::Notify;
 use common_base::base::tokio::task::JoinHandle;
@@ -28,6 +28,7 @@ use common_base::base::DummySignalStream;
 use common_base::base::GlobalUniqName;
 use common_base::base::SignalStream;
 use common_base::base::SignalType;
+use common_base::base::SingletonInstance;
 pub use common_catalog::cluster_info::Cluster;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -108,7 +109,7 @@ impl ClusterHelper for Cluster {
                             None,
                             Some(config.query.to_rpc_client_tls_config()),
                         )
-                            .await?,
+                        .await?,
                     ))),
                     false => Ok(FlightClient::new(FlightServiceClient::new(
                         ConnectionFactory::create_rpc_channel(
@@ -116,7 +117,7 @@ impl ClusterHelper for Cluster {
                             None,
                             None,
                         )
-                            .await?,
+                        .await?,
                     ))),
                 };
             }
@@ -387,7 +388,7 @@ impl ClusterHeartbeat {
         }
     }
 
-    fn heartbeat_loop(&self, node: NodeInfo) -> impl Future<Output=()> + 'static {
+    fn heartbeat_loop(&self, node: NodeInfo) -> impl Future<Output = ()> + 'static {
         let shutdown = self.shutdown.clone();
         let shutdown_notify = self.shutdown_notify.clone();
         let cluster_api = self.cluster_api.clone();

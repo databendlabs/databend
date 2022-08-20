@@ -34,7 +34,6 @@ mod semantic;
 
 pub use binder::Binder;
 pub use binder::ColumnBinding;
-use common_catalog::catalog::CatalogManager;
 pub use format::FormatTreeNode;
 pub use metadata::find_smallest_column;
 pub use metadata::ColumnEntry;
@@ -48,7 +47,6 @@ pub use semantic::NameResolutionContext;
 use self::plans::Plan;
 use super::optimizer::OptimizerConfig;
 use super::optimizer::OptimizerContext;
-use crate::catalogs::CatalogManagerHelper;
 use crate::sessions::TableContext;
 
 pub struct Planner {

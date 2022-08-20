@@ -31,18 +31,18 @@ pub trait TrySpawn {
     /// It allows to return an error before spawning the task.
     #[track_caller]
     fn try_spawn<T>(&self, task: T) -> Result<JoinHandle<T::Output>>
-        where
-            T: Future + Send + 'static,
-            T::Output: Send + 'static;
+    where
+        T: Future + Send + 'static,
+        T::Output: Send + 'static;
 
     /// Spawns a new asynchronous task, returning a tokio::JoinHandle for it.
     ///
     /// A default impl of this method just calls `try_spawn` and just panics if there is an error.
     #[track_caller]
     fn spawn<T>(&self, task: T) -> JoinHandle<T::Output>
-        where
-            T: Future + Send + 'static,
-            T::Output: Send + 'static,
+    where
+        T: Future + Send + 'static,
+        T::Output: Send + 'static,
     {
         self.try_spawn(task).unwrap()
     }
@@ -51,18 +51,18 @@ pub trait TrySpawn {
 impl<S: TrySpawn> TrySpawn for Arc<S> {
     #[track_caller]
     fn try_spawn<T>(&self, task: T) -> Result<JoinHandle<T::Output>>
-        where
-            T: Future + Send + 'static,
-            T::Output: Send + 'static,
+    where
+        T: Future + Send + 'static,
+        T::Output: Send + 'static,
     {
         self.as_ref().try_spawn(task)
     }
 
     #[track_caller]
     fn spawn<T>(&self, task: T) -> JoinHandle<T::Output>
-        where
-            T: Future + Send + 'static,
-            T::Output: Send + 'static,
+    where
+        T: Future + Send + 'static,
+        T::Output: Send + 'static,
     {
         self.as_ref().spawn(task)
     }
@@ -149,9 +149,9 @@ impl Runtime {
 impl TrySpawn for Runtime {
     #[track_caller]
     fn try_spawn<T>(&self, task: T) -> Result<JoinHandle<T::Output>>
-        where
-            T: Future + Send + 'static,
-            T::Output: Send + 'static,
+    where
+        T: Future + Send + 'static,
+        T::Output: Send + 'static,
     {
         Ok(self.handle.spawn(task))
     }

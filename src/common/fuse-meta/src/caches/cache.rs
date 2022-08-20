@@ -14,11 +14,10 @@
 
 use std::sync::Arc;
 
+use common_base::base::SingletonInstance;
 use common_config::QueryConfig;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use once_cell::sync::OnceCell;
-use common_base::base::SingletonInstance;
 
 use crate::caches::memory_cache::new_bytes_cache;
 use crate::caches::memory_cache::BloomIndexCache;

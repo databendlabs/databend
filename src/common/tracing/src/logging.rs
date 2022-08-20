@@ -12,13 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cell::UnsafeCell;
 use std::env;
 use std::io;
-use std::mem::MaybeUninit;
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
+use common_base::base::SingletonInstance;
 use common_exception::Result;
 use once_cell::sync::OnceCell;
 use opentelemetry::global;
@@ -36,7 +34,6 @@ use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::Layer;
 use tracing_subscriber::Registry;
-use common_base::base::SingletonInstance;
 
 use crate::Config;
 
@@ -135,7 +132,7 @@ pub fn init_logging(name: &str, cfg: &Config) -> Vec<WorkerGuard> {
 
     // For tokio-console
     #[cfg(feature = "console")]
-        let subscriber = subscriber.with(console_subscriber::spawn());
+    let subscriber = subscriber.with(console_subscriber::spawn());
 
     // Enable log compatible layer to convert log record to tracing span.
     // We will ignore any errors that returned by this fucntions.

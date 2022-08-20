@@ -29,7 +29,8 @@ use mysql_async::Row;
 use tokio::sync::Barrier;
 use tokio::task::JoinHandle;
 
-use crate::tests::{ConfigBuilder, TestGlobalServices};
+use crate::tests::ConfigBuilder;
+use crate::tests::TestGlobalServices;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_generic_code_with_on_query() -> Result<()> {
@@ -52,11 +53,7 @@ async fn test_generic_code_with_on_query() -> Result<()> {
 async fn test_rejected_session_with_sequence() -> Result<()> {
     TestGlobalServices::setup(ConfigBuilder::create().build()).await?;
 
-    let sessions = SessionManager::create(
-        ConfigBuilder::create()
-            .max_active_sessions(1)
-            .build()
-    );
+    let sessions = SessionManager::create(ConfigBuilder::create().max_active_sessions(1).build());
 
     let mut handler = MySQLHandler::create(sessions)?;
 
@@ -123,11 +120,7 @@ async fn test_rejected_session_with_parallel() -> Result<()> {
     }
 
     // Setup
-    TestGlobalServices::setup(
-        ConfigBuilder::create()
-            .max_active_sessions(1)
-            .build()
-    ).await?;
+    TestGlobalServices::setup(ConfigBuilder::create().max_active_sessions(1).build()).await?;
 
     let mut handler = MySQLHandler::create(SessionManager::instance())?;
 
@@ -173,7 +166,7 @@ struct EmptyRow;
 
 impl FromRow for EmptyRow {
     fn from_row_opt(_: Row) -> std::result::Result<Self, FromRowError>
-        where Self: Sized {
+    where Self: Sized {
         Ok(EmptyRow)
     }
 }

@@ -283,7 +283,8 @@ impl Settings {
             },
         ];
 
-        let settings: Arc<RwLock<HashMap<String, SettingValue>>> = Arc::new(RwLock::new(HashMap::default()));
+        let settings: Arc<RwLock<HashMap<String, SettingValue>>> =
+            Arc::new(RwLock::new(HashMap::default()));
 
         // Initial settings.
         {
@@ -294,7 +295,10 @@ impl Settings {
             }
         }
 
-        Arc::new(Settings { tenant: tenant.to_string(), settings })
+        Arc::new(Settings {
+            tenant: tenant.to_string(),
+            settings,
+        })
     }
 
     // Get max_block_size.

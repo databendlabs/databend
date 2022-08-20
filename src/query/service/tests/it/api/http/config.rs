@@ -19,7 +19,6 @@ use poem::http::Method;
 use poem::http::StatusCode;
 use poem::http::Uri;
 use poem::Endpoint;
-use poem::EndpointExt;
 use poem::Request;
 use poem::Route;
 use pretty_assertions::assert_eq; // for `app.oneshot()`
@@ -28,10 +27,8 @@ use crate::tests::TestGlobalServices;
 
 #[tokio::test]
 async fn test_config() -> common_exception::Result<()> {
-    let config = crate::tests::ConfigBuilder::create().build();
-    let _test_exit_guard = TestGlobalServices::setup(config).await?;
-    let cluster_router = Route::new()
-        .at("/v1/config", get(config_handler));
+    TestGlobalServices::setup(crate::tests::ConfigBuilder::create().build()).await?;
+    let cluster_router = Route::new().at("/v1/config", get(config_handler));
 
     let response = cluster_router
         .call(

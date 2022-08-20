@@ -25,13 +25,12 @@ use common_exception::Result;
 use common_planners::InsertPlan;
 use common_planners::PlanNode::Insert;
 use databend_query::interpreters::*;
-use databend_query::sessions::{QueryContext, SessionType};
-use databend_query::sessions::SessionManager;
+use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContext;
 use databend_query::sql::*;
 use futures::TryStreamExt;
 
-use crate::tests::{ConfigBuilder, TestGlobalServices};
+use crate::tests::ConfigBuilder;
 
 pub async fn build_insert_plan(sql: &str, ctx: Arc<QueryContext>) -> Result<InsertPlan> {
     let plan = PlanParser::parse(ctx.clone(), sql).await?;
@@ -80,8 +79,8 @@ async fn test_async_insert_queue() -> Result<()> {
     {
         let context1 = ctx.clone();
         let context2 = ctx.clone();
-        let queue1 = AsyncInsertManager::instance().clone();
-        let queue2 = AsyncInsertManager::instance().clone();
+        let queue1 = AsyncInsertManager::instance();
+        let queue2 = AsyncInsertManager::instance();
 
         let handler1 = GlobalIORuntime::instance().spawn(async move {
             let insert_plan =
@@ -109,7 +108,7 @@ async fn test_async_insert_queue() -> Result<()> {
                 "insert into default.test(b) values('bbbb');",
                 context2.clone(),
             )
-                .await?;
+            .await?;
             queue2
                 .clone()
                 .push(Arc::new(insert_plan.to_owned()), context2.clone())
@@ -160,7 +159,8 @@ async fn test_async_insert_queue_max_data_size() -> Result<()> {
             .async_insert_max_data_size(1)
             .build(),
         None,
-    ).await?;
+    )
+    .await?;
 
     AsyncInsertManager::instance().start().await;
 
@@ -210,7 +210,8 @@ async fn test_async_insert_queue_busy_timeout() -> Result<()> {
             .async_insert_busy_timeout(900)
             .build(),
         None,
-    ).await?;
+    )
+    .await?;
 
     AsyncInsertManager::instance().start().await;
     let mut planner = Planner::new(ctx.clone());
@@ -260,7 +261,8 @@ async fn test_async_insert_queue_stale_timeout() -> Result<()> {
             .async_insert_stale_timeout(300)
             .build(),
         None,
-    ).await?;
+    )
+    .await?;
 
     AsyncInsertManager::instance().start().await;
     let mut planner = Planner::new(ctx.clone());
@@ -309,7 +311,8 @@ async fn test_async_insert_queue_wait_timeout() -> Result<()> {
             .async_insert_busy_timeout(2000)
             .build(),
         None,
-    ).await?;
+    )
+    .await?;
 
     AsyncInsertManager::instance().start().await;
     let mut planner = Planner::new(ctx.clone());

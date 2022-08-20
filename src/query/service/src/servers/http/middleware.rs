@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::sync::Arc;
+
 use common_exception::ErrorCode;
 use common_exception::Result;
 use headers::authorization::Basic;
@@ -30,7 +31,8 @@ use tracing::info;
 use tracing::warn;
 
 use super::v1::HttpQueryContext;
-use crate::auth::{AuthMgr, Credential};
+use crate::auth::AuthMgr;
+use crate::auth::Credential;
 use crate::servers::HttpHandlerKind;
 use crate::sessions::SessionManager;
 use crate::sessions::SessionType;
@@ -133,7 +135,9 @@ impl<E> HTTPSessionEndpoint<E> {
             session.set_current_tenant(tenant_id);
         }
 
-        self.auth_manager.auth(ctx.get_current_session(), &credential).await?;
+        self.auth_manager
+            .auth(ctx.get_current_session(), &credential)
+            .await?;
 
         Ok(HttpQueryContext::new(session))
     }

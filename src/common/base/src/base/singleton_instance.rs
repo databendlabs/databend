@@ -1,4 +1,5 @@
 use std::sync::Arc;
+
 use common_exception::Result;
 
 pub trait SingletonInstanceImpl<T>: Send + Sync {
@@ -8,4 +9,3 @@ pub trait SingletonInstanceImpl<T>: Send + Sync {
 }
 
 pub type SingletonInstance<T> = Arc<dyn SingletonInstanceImpl<T>>;
-

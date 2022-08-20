@@ -24,12 +24,8 @@ use common_meta_types::GrantObject;
 use common_meta_types::UserInfo;
 use common_meta_types::UserPrivilegeType;
 use common_users::RoleCacheManager;
-use common_users::UserApiProvider;
 use futures::channel::*;
 use parking_lot::RwLock;
-use common_catalog::catalog::CatalogManager;
-use common_storage::StorageOperator;
-use crate::catalogs::CatalogManagerHelper;
 
 use crate::clusters::ClusterDiscovery;
 use crate::servers::http::v1::HttpQueryManager;
@@ -175,7 +171,7 @@ impl Session {
     }
 
     pub fn attach<F>(self: &Arc<Self>, host: Option<SocketAddr>, io_shutdown: F)
-        where F: FnOnce() + Send + 'static {
+    where F: FnOnce() + Send + 'static {
         let (tx, rx) = oneshot::channel();
         self.session_ctx.set_client_host(host);
         self.session_ctx.set_io_shutdown_tx(Some(tx));

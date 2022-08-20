@@ -85,11 +85,9 @@ impl HttpShutdownHandler {
         });
         let join_handle = common_base::base::tokio::spawn(async move {
             println!("thread name {:?}", std::thread::current().name());
-            poem::Server::new_with_acceptor(acceptor).run_with_graceful_shutdown(
-                ep,
-                rx.map(|_| ()),
-                None,
-            ).await
+            poem::Server::new_with_acceptor(acceptor)
+                .run_with_graceful_shutdown(ep, rx.map(|_| ()), None)
+                .await
         });
         self.join_handle = Some(join_handle);
         self.abort_handle = Some(tx);

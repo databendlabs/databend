@@ -15,8 +15,8 @@
 use common_base::base::tokio;
 use common_exception::Result;
 use common_settings::Settings;
-use databend_query::sessions::{Session, SessionContext};
-use databend_query::sessions::SessionManager;
+use databend_query::sessions::Session;
+use databend_query::sessions::SessionContext;
 use databend_query::sessions::SessionType;
 
 use crate::tests::ConfigBuilder;
@@ -27,9 +27,9 @@ async fn test_session() -> Result<()> {
 
     let typ = SessionType::Dummy;
     let id = String::from("test-001");
-    let tenant = &conf.query.tenant_id.clone();
+    let tenant = &conf.query.tenant_id;
     let session_settings = Settings::default_settings(tenant);
-    let session_ctx = SessionContext::try_create(conf.clone(), session_settings)?;
+    let session_ctx = SessionContext::try_create(conf, session_settings)?;
     let session = Session::try_create(id, typ, session_ctx, None)?;
 
     // Tenant.
@@ -60,9 +60,9 @@ async fn test_session_in_management_mode() -> Result<()> {
 
     let typ = SessionType::Dummy;
     let id = String::from("test-001");
-    let tenant = &conf.query.tenant_id.clone();
+    let tenant = &conf.query.tenant_id;
     let session_settings = Settings::default_settings(tenant);
-    let session_ctx = SessionContext::try_create(conf.clone(), session_settings)?;
+    let session_ctx = SessionContext::try_create(conf, session_settings)?;
     let session = Session::try_create(id, typ, session_ctx, None)?;
 
     // Tenant.

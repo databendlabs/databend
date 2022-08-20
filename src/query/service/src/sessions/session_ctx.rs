@@ -19,9 +19,9 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_meta_types::UserInfo;
+use common_settings::Settings;
 use futures::channel::oneshot::Sender;
 use parking_lot::RwLock;
-use common_settings::Settings;
 
 use crate::sessions::QueryContextShared;
 use crate::Config;

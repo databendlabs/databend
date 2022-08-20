@@ -14,25 +14,27 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use once_cell::sync::OnceCell;
-use opendal::Operator;
-use parking_lot::Mutex;
 
-use common_base::base::{GlobalIORuntime, Runtime, SingletonInstanceImpl, Thread};
+use common_base::base::GlobalIORuntime;
+use common_base::base::Runtime;
+use common_base::base::SingletonInstanceImpl;
 use common_catalog::catalog::CatalogManager;
 use common_exception::Result;
 use common_fuse_meta::caches::CacheManager;
 use common_storage::StorageOperator;
 use common_tracing::QueryLogger;
-use common_users::{RoleCacheManager, UserApiProvider};
+use common_users::RoleCacheManager;
+use common_users::UserApiProvider;
 use databend_query::api::DataExchangeManager;
 use databend_query::catalogs::CatalogManagerHelper;
 use databend_query::clusters::ClusterDiscovery;
-use databend_query::sessions::SessionManager;
-use databend_query::Config;
 use databend_query::interpreters::AsyncInsertManager;
 use databend_query::servers::http::v1::HttpQueryManager;
+use databend_query::sessions::SessionManager;
+use databend_query::Config;
+use once_cell::sync::OnceCell;
+use opendal::Operator;
+use parking_lot::Mutex;
 
 pub struct TestGlobalServices {
     global_runtime: Mutex<HashMap<String, Arc<Runtime>>>,
@@ -90,10 +92,16 @@ impl TestGlobalServices {
         HttpQueryManager::init(&config, global_services.clone()).await?;
         DataExchangeManager::init(config.clone(), global_services.clone())?;
         SessionManager::init(config.clone(), global_services.clone())?;
-        UserApiProvider::init(config.meta.to_meta_grpc_client_conf(), global_services.clone()).await?;
+        UserApiProvider::init(
+            config.meta.to_meta_grpc_client_conf(),
+            global_services.clone(),
+        )
+        .await?;
         RoleCacheManager::init(global_services.clone())?;
 
-        ClusterDiscovery::instance().register_to_metastore(&config).await
+        ClusterDiscovery::instance()
+            .register_to_metastore(&config)
+            .await
     }
 }
 
@@ -104,7 +112,7 @@ impl SingletonInstanceImpl<Arc<Runtime>> for TestGlobalServices {
             Some(name) => match self.global_runtime.lock().get(name) {
                 None => panic!("Global runtime is not init"),
                 Some(global_runtime) => global_runtime.clone(),
-            }
+            },
         }
     }
 
@@ -127,7 +135,7 @@ impl SingletonInstanceImpl<Arc<QueryLogger>> for TestGlobalServices {
             Some(name) => match self.query_logger.lock().get(name) {
                 None => panic!("QueryLogger is not init"),
                 Some(query_logger) => query_logger.clone(),
-            }
+            },
         }
     }
 
@@ -150,7 +158,7 @@ impl SingletonInstanceImpl<Arc<ClusterDiscovery>> for TestGlobalServices {
             Some(name) => match self.cluster_discovery.lock().get(name) {
                 None => panic!("ClusterDiscovery is not init"),
                 Some(cluster_discovery) => cluster_discovery.clone(),
-            }
+            },
         }
     }
 
@@ -173,7 +181,7 @@ impl SingletonInstanceImpl<Operator> for TestGlobalServices {
             Some(name) => match self.storage_operator.lock().get(name) {
                 None => panic!("Operator is not init"),
                 Some(storage_operator) => storage_operator.clone(),
-            }
+            },
         }
     }
 
@@ -196,7 +204,7 @@ impl SingletonInstanceImpl<Arc<AsyncInsertManager>> for TestGlobalServices {
             Some(name) => match self.async_insert_manager.lock().get(name) {
                 None => panic!("AsyncInsertManager is not init"),
                 Some(async_insert_manager) => async_insert_manager.clone(),
-            }
+            },
         }
     }
 
@@ -217,9 +225,12 @@ impl SingletonInstanceImpl<Arc<CacheManager>> for TestGlobalServices {
         match std::thread::current().name() {
             None => panic!("CacheManager is not init"),
             Some(name) => match self.cache_manager.lock().get(name) {
-                None => panic!("CacheManager is not init {:?}", std::thread::current().name()),
+                None => panic!(
+                    "CacheManager is not init {:?}",
+                    std::thread::current().name()
+                ),
                 Some(cache_manager) => cache_manager.clone(),
-            }
+            },
         }
     }
 
@@ -242,7 +253,7 @@ impl SingletonInstanceImpl<Arc<CatalogManager>> for TestGlobalServices {
             Some(name) => match self.catalog_manager.lock().get(name) {
                 None => panic!("CatalogManager is not init"),
                 Some(catalog_manager) => catalog_manager.clone(),
-            }
+            },
         }
     }
 
@@ -265,7 +276,7 @@ impl SingletonInstanceImpl<Arc<HttpQueryManager>> for TestGlobalServices {
             Some(name) => match self.http_query_manager.lock().get(name) {
                 None => panic!("HttpQueryManager is not init"),
                 Some(http_query_manager) => http_query_manager.clone(),
-            }
+            },
         }
     }
 
@@ -288,7 +299,7 @@ impl SingletonInstanceImpl<Arc<DataExchangeManager>> for TestGlobalServices {
             Some(name) => match self.data_exchange_manager.lock().get(name) {
                 None => panic!("DataExchangeManager is not init"),
                 Some(data_exchange_manager) => data_exchange_manager.clone(),
-            }
+            },
         }
     }
 
@@ -311,7 +322,7 @@ impl SingletonInstanceImpl<Arc<SessionManager>> for TestGlobalServices {
             Some(name) => match self.session_manager.lock().get(name) {
                 None => panic!("SessionManager is not init"),
                 Some(session_manager) => session_manager.clone(),
-            }
+            },
         }
     }
 
@@ -334,7 +345,7 @@ impl SingletonInstanceImpl<Arc<UserApiProvider>> for TestGlobalServices {
             Some(name) => match self.users_manager.lock().get(name) {
                 None => panic!("UserApiProvider is not init"),
                 Some(users_manager) => users_manager.clone(),
-            }
+            },
         }
     }
 
@@ -357,7 +368,7 @@ impl SingletonInstanceImpl<Arc<RoleCacheManager>> for TestGlobalServices {
             Some(name) => match self.users_role_manager.lock().get(name) {
                 None => panic!("RoleCacheManager is not init"),
                 Some(users_role_manager) => users_role_manager.clone(),
-            }
+            },
         }
     }
 

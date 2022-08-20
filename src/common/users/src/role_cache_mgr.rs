@@ -17,9 +17,9 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
-use common_base::base::{SingletonInstance, tokio};
+use common_base::base::tokio;
 use common_base::base::tokio::task::JoinHandle;
-use common_exception::ErrorCode;
+use common_base::base::SingletonInstance;
 use common_exception::Result;
 use common_meta_types::RoleInfo;
 use once_cell::sync::OnceCell;

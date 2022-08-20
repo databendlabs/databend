@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_base::base::{GlobalIORuntime, Runtime};
+use common_base::base::GlobalIORuntime;
 use common_exception::Result;
 use common_planners::ReadDataSourcePlan;
 use common_streams::SendableDataBlockStream;

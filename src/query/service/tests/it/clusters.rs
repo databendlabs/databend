@@ -12,18 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-use std::time::Duration;
-use once_cell::sync::OnceCell;
 use common_base::base::tokio;
-use common_exception::{ErrorCode, Result};
+use common_exception::Result;
 use databend_query::clusters::ClusterDiscovery;
 use databend_query::clusters::ClusterHelper;
 use pretty_assertions::assert_eq;
-use common_base::base::tokio::runtime::Handle;
-use common_catalog::cluster_info::Cluster;
-use databend_query::GlobalServices;
-use crate::tests::{ConfigBuilder, TestGlobalServices};
+
+use crate::tests::TestGlobalServices;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_single_cluster_discovery() -> Result<()> {

@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
+use common_base::base::SingletonInstance;
 use common_exception::Result;
 use common_grpc::RpcClientConf;
 use common_management::QuotaApi;
@@ -33,7 +33,6 @@ use common_meta_api::KVApi;
 use common_meta_store::MetaStore;
 use common_meta_store::MetaStoreProvider;
 use once_cell::sync::OnceCell;
-use common_base::base::SingletonInstance;
 
 pub struct UserApiProvider {
     meta: MetaStore,
@@ -43,7 +42,10 @@ pub struct UserApiProvider {
 static USER_API_PROVIDER: OnceCell<SingletonInstance<Arc<UserApiProvider>>> = OnceCell::new();
 
 impl UserApiProvider {
-    pub async fn init(conf: RpcClientConf, v: SingletonInstance<Arc<UserApiProvider>>) -> Result<()> {
+    pub async fn init(
+        conf: RpcClientConf,
+        v: SingletonInstance<Arc<UserApiProvider>>,
+    ) -> Result<()> {
         v.init(Self::try_create(conf).await?)?;
 
         USER_API_PROVIDER.set(v).ok();

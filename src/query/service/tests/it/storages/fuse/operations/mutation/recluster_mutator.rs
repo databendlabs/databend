@@ -21,6 +21,7 @@ use common_datavalues::DataSchema;
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_fuse_meta::caches::CacheManager;
 use common_fuse_meta::meta::BlockMeta;
 use common_fuse_meta::meta::ClusterStatistics;
 use common_fuse_meta::meta::SegmentInfo;
@@ -33,7 +34,6 @@ use databend_query::storages::fuse::io::SegmentWriter;
 use databend_query::storages::fuse::io::TableMetaLocationGenerator;
 use databend_query::storages::fuse::operations::ReclusterMutator;
 use uuid::Uuid;
-use common_fuse_meta::caches::CacheManager;
 
 use crate::storages::fuse::table_test_fixture::TestFixture;
 

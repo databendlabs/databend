@@ -67,7 +67,7 @@ impl MySQLHandler {
         Ok((TcpListenerStream::new(listener), listener_addr))
     }
 
-    fn listen_loop(&self, stream: ListeningStream, rt: Arc<Runtime>) -> impl Future<Output=()> {
+    fn listen_loop(&self, stream: ListeningStream, rt: Arc<Runtime>) -> impl Future<Output = ()> {
         let sessions = self.sessions.clone();
         stream.for_each(move |accept_socket| {
             let executor = rt.clone();

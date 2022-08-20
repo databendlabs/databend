@@ -15,16 +15,15 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use common_base::base::SingletonInstance;
 use common_catalog::catalog::Catalog;
 pub use common_catalog::catalog::CatalogManager;
 use common_catalog::catalog::CATALOG_DEFAULT;
 use common_config::Config;
-use common_exception::ErrorCode;
 use common_exception::Result;
 #[cfg(feature = "hive")]
 use common_storages_hive::CATALOG_HIVE;
 use once_cell::sync::OnceCell;
-use common_base::base::SingletonInstance;
 
 use crate::catalogs::DatabaseCatalog;
 

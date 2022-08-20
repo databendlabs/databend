@@ -14,7 +14,6 @@
 
 use std::net::SocketAddr;
 use std::path::Path;
-use std::sync::Arc;
 
 use common_exception::Result;
 use common_http::HttpShutdownHandler;
@@ -29,16 +28,15 @@ use poem::Endpoint;
 use poem::EndpointExt;
 use poem::Route;
 use tracing::info;
-use crate::auth::AuthMgr;
 
 use super::v1::upload_to_stage;
+use crate::auth::AuthMgr;
 use crate::servers::http::middleware::HTTPSessionMiddleware;
 use crate::servers::http::v1::clickhouse_router;
 use crate::servers::http::v1::query_route;
 use crate::servers::http::v1::streaming_load;
 use crate::servers::Server;
 use crate::Config;
-use crate::sessions::SessionManager;
 
 #[derive(Copy, Clone)]
 pub enum HttpHandlerKind {
@@ -102,11 +100,11 @@ impl HttpHandler {
 
         let auth_manager = AuthMgr::create(config).await?;
         let session_middleware = HTTPSessionMiddleware::create(self.kind, auth_manager);
-        Ok(ep.with(session_middleware)
+        Ok(ep
+            .with(session_middleware)
             .with(NormalizePath::new(TrailingSlash::Trim))
             .with(CatchPanic::new())
-            .boxed()
-        )
+            .boxed())
     }
 
     fn build_tls(config: &Config) -> Result<RustlsConfig> {

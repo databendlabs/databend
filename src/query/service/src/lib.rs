@@ -43,10 +43,10 @@ pub mod storages;
 pub mod table_functions;
 
 mod config;
-mod version;
 mod global_services;
+mod version;
 
 pub use config::Config;
+pub use global_services::GlobalServices;
 pub use version::DATABEND_COMMIT_VERSION;
 pub use version::QUERY_SEMVER;
-pub use global_services::GlobalServices;

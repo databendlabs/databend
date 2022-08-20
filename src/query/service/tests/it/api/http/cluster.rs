@@ -22,7 +22,6 @@ use poem::http::Method;
 use poem::http::StatusCode;
 use poem::http::Uri;
 use poem::Endpoint;
-use poem::EndpointExt;
 use poem::Request;
 use poem::Route;
 use pretty_assertions::assert_eq;
@@ -33,8 +32,7 @@ use crate::tests::TestGlobalServices;
 async fn test_cluster() -> Result<()> {
     let config = crate::tests::ConfigBuilder::create().build();
     TestGlobalServices::setup(config).await?;
-    let cluster_router = Route::new()
-        .at("/v1/cluster/list", get(cluster_list_handler));
+    let cluster_router = Route::new().at("/v1/cluster/list", get(cluster_list_handler));
 
     // List Node
     {

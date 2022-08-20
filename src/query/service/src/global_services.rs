@@ -1,23 +1,25 @@
 use std::cell::UnsafeCell;
 use std::sync::Arc;
-use once_cell::sync::OnceCell;
-use opendal::Operator;
-use common_base::base::{GlobalIORuntime, Runtime, SingletonInstance, SingletonInstanceImpl};
-use common_base::base::tokio::task::LocalSet;
+
+use common_base::base::GlobalIORuntime;
+use common_base::base::Runtime;
+use common_base::base::SingletonInstanceImpl;
 use common_catalog::catalog::CatalogManager;
 use common_config::Config;
 use common_exception::Result;
 use common_fuse_meta::caches::CacheManager;
 use common_storage::StorageOperator;
 use common_tracing::QueryLogger;
-use common_users::{RoleCacheManager, UserApiProvider};
+use common_users::RoleCacheManager;
+use common_users::UserApiProvider;
+use opendal::Operator;
+
 use crate::api::DataExchangeManager;
 use crate::catalogs::CatalogManagerHelper;
 use crate::clusters::ClusterDiscovery;
 use crate::interpreters::AsyncInsertManager;
 use crate::servers::http::v1::HttpQueryManager;
 use crate::sessions::SessionManager;
-
 
 pub struct GlobalServices {
     global_runtime: UnsafeCell<Option<Arc<Runtime>>>,
@@ -71,7 +73,11 @@ impl GlobalServices {
         HttpQueryManager::init(&config, global_services.clone()).await?;
         DataExchangeManager::init(config.clone(), global_services.clone())?;
         SessionManager::init(config.clone(), global_services.clone())?;
-        UserApiProvider::init(config.meta.to_meta_grpc_client_conf(), global_services.clone()).await?;
+        UserApiProvider::init(
+            config.meta.to_meta_grpc_client_conf(),
+            global_services.clone(),
+        )
+        .await?;
         RoleCacheManager::init(global_services.clone())
     }
 }
@@ -160,7 +166,8 @@ impl SingletonInstanceImpl<Arc<AsyncInsertManager>> for GlobalServices {
 
     fn init(&self, value: Arc<AsyncInsertManager>) -> Result<()> {
         unsafe {
-            *(self.async_insert_manager.get() as *mut Option<Arc<AsyncInsertManager>>) = Some(value);
+            *(self.async_insert_manager.get() as *mut Option<Arc<AsyncInsertManager>>) =
+                Some(value);
             Ok(())
         }
     }
@@ -232,7 +239,8 @@ impl SingletonInstanceImpl<Arc<DataExchangeManager>> for GlobalServices {
 
     fn init(&self, value: Arc<DataExchangeManager>) -> Result<()> {
         unsafe {
-            *(self.data_exchange_manager.get() as *mut Option<Arc<DataExchangeManager>>) = Some(value);
+            *(self.data_exchange_manager.get() as *mut Option<Arc<DataExchangeManager>>) =
+                Some(value);
             Ok(())
         }
     }
@@ -291,4 +299,3 @@ impl SingletonInstanceImpl<Arc<RoleCacheManager>> for GlobalServices {
         }
     }
 }
-

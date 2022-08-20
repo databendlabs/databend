@@ -22,9 +22,10 @@ use common_base::base::tokio::sync::Notify;
 use common_base::base::tokio::time::interval_at;
 use common_base::base::tokio::time::Duration;
 use common_base::base::tokio::time::Instant;
-use common_base::base::{GlobalIORuntime, SingletonInstance};
+use common_base::base::GlobalIORuntime;
 use common_base::base::ProgressValues;
 use common_base::base::Runtime;
+use common_base::base::SingletonInstance;
 use common_base::base::TrySpawn;
 use common_config::Config;
 use common_datablocks::DataBlock;
@@ -75,8 +76,8 @@ impl PartialEq for InsertKey {
     fn eq(&self, other: &Self) -> bool {
         self.plan.eq(&other.plan)
             && self
-            .get_serialized_changed_settings()
-            .eq(&other.get_serialized_changed_settings())
+                .get_serialized_changed_settings()
+                .eq(&other.get_serialized_changed_settings())
     }
 }
 
@@ -307,7 +308,7 @@ impl AsyncInsertManager {
                     ctx.query_need_abort(),
                     pipeline,
                 )
-                    .unwrap();
+                .unwrap();
                 executor.execute()?;
                 drop(executor);
                 let blocks = ctx.consume_precommit_blocks();

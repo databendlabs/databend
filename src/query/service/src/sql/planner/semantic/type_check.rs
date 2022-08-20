@@ -30,7 +30,6 @@ use common_ast::parser::token::Token;
 use common_ast::parser::tokenize_sql;
 use common_ast::Backtrace;
 use common_ast::DisplayError;
-use common_catalog::catalog::CatalogManager;
 use common_datavalues::type_coercion::merge_types;
 use common_datavalues::ArrayType;
 use common_datavalues::BooleanType;
@@ -56,7 +55,6 @@ use common_planners::validate_function_arg;
 
 use super::name_resolution::NameResolutionContext;
 use super::normalize_identifier;
-use crate::catalogs::CatalogManagerHelper;
 use crate::evaluator::Evaluator;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;

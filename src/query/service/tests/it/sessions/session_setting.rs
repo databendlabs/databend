@@ -14,16 +14,17 @@
 
 use common_base::base::tokio;
 use common_exception::Result;
-use common_settings::Settings;
-use databend_query::sessions::{Session, SessionContext};
 use databend_query::sessions::SessionManager;
 use databend_query::sessions::SessionType;
+
 use crate::tests::TestGlobalServices;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_session_setting() -> Result<()> {
     TestGlobalServices::setup(crate::tests::ConfigBuilder::create().build()).await?;
-    let session = SessionManager::instance().create_session(SessionType::Dummy).await?;
+    let session = SessionManager::instance()
+        .create_session(SessionType::Dummy)
+        .await?;
 
     // Settings.
     {

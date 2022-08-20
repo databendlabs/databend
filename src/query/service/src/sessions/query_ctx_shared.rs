@@ -26,14 +26,13 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::UserInfo;
 use common_planners::PlanNode;
+use common_storage::StorageOperator;
 use common_users::UserApiProvider;
 use futures::future::AbortHandle;
 use opendal::Operator;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 use uuid::Uuid;
-use common_catalog::catalog::Catalog;
-use common_storage::StorageOperator;
 
 use crate::auth::AuthMgr;
 use crate::catalogs::CatalogManager;

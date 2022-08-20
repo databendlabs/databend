@@ -26,10 +26,9 @@ use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
 use common_ast::Backtrace;
 use common_ast::Dialect;
-use common_catalog::catalog::CatalogManager;
+use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use databend_query::catalogs::CatalogManagerHelper;
 use databend_query::sessions::QueryContext;
 use databend_query::sql::optimizer::HeuristicOptimizer;
 use databend_query::sql::optimizer::RuleID;
@@ -39,7 +38,6 @@ use databend_query::sql::Binder;
 use databend_query::sql::Metadata;
 use databend_query::sql::NameResolutionContext;
 use parking_lot::RwLock;
-use common_catalog::table_context::TableContext;
 
 pub(super) struct Suite {
     pub comment: String,
@@ -83,7 +81,7 @@ async fn run_test(ctx: Arc<QueryContext>, suite: &Suite) -> Result<String> {
     Ok(result)
 }
 
-pub(super) async fn run_suites<'a, Fut: Future<Output=Result<String>>>(
+pub(super) async fn run_suites<'a, Fut: Future<Output = Result<String>>>(
     ctx: Arc<QueryContext>,
     file: &mut std::fs::File,
     suites: &'a [Suite],

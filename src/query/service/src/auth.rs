@@ -133,7 +133,9 @@ impl AuthMgr {
                     user_info.grants.grant_role(role);
                 }
             }
-            UserApiProvider::instance().ensure_builtin_roles(&tenant).await?;
+            UserApiProvider::instance()
+                .ensure_builtin_roles(&tenant)
+                .await?;
             UserApiProvider::instance()
                 .add_user(&tenant, user_info.clone(), true)
                 .await?;

@@ -16,35 +16,27 @@ use std::env;
 use std::ops::Deref;
 use std::sync::Arc;
 
-use common_base::base::GlobalIORuntime;
 use common_base::base::RuntimeTracker;
-use common_exception::ErrorCode;
 use common_macros::databend_main;
 use common_meta_embedded::MetaEmbedded;
 use common_meta_grpc::MIN_METASRV_SEMVER;
 use common_metrics::init_default_metrics_recorder;
 use common_tracing::set_panic_hook;
-use common_tracing::QueryLogger;
-use databend_query::api::DataExchangeManager;
 use databend_query::api::HttpService;
 use databend_query::api::RpcService;
-use databend_query::catalogs::{CatalogManager, CatalogManagerHelper};
 use databend_query::clusters::ClusterDiscovery;
 use databend_query::interpreters::AsyncInsertManager;
 use databend_query::metrics::MetricService;
-use databend_query::servers::http::v1::HttpQueryManager;
 use databend_query::servers::HttpHandler;
 use databend_query::servers::HttpHandlerKind;
 use databend_query::servers::MySQLHandler;
 use databend_query::servers::Server;
 use databend_query::servers::ShutdownHandle;
 use databend_query::sessions::SessionManager;
-use databend_query::{Config, GlobalServices};
+use databend_query::Config;
+use databend_query::GlobalServices;
 use databend_query::QUERY_SEMVER;
 use tracing::info;
-use common_storage::StorageOperator;
-use common_users::{RoleCacheManager, UserApiProvider};
-use databend_query::storages::cache::CacheManager;
 
 #[databend_main]
 async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<()> {
@@ -223,7 +215,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
                 "{}:{}",
                 conf.query.clickhouse_http_handler_host, conf.query.clickhouse_http_handler_port
             )
-                .parse()?
+            .parse()?
         )
     );
     println!("Databend HTTP");
@@ -238,7 +230,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
                 "{}:{}",
                 conf.query.http_handler_host, conf.query.http_handler_port
             )
-                .parse()?
+            .parse()?
         )
     );
 

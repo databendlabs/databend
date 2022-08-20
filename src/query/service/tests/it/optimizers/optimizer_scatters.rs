@@ -204,7 +204,7 @@ async fn test_scatter_optimizer() -> Result<()> {
                 .with_node("dummy_local", "127.0.0.1:9090")
                 .with_local_id("dummy_local"),
         )
-            .await?;
+        .await?;
 
         let plan = PlanParser::parse(ctx.clone(), test.query).await?;
         let mut optimizer = ScattersOptimizer::create(ctx);

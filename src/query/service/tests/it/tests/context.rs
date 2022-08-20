@@ -12,9 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::ops::Deref;
 use std::sync::Arc;
-use common_catalog::catalog::CatalogManager;
 
 use common_exception::Result;
 use common_meta_embedded::MetaEmbedded;
@@ -24,13 +22,9 @@ use common_meta_types::NodeInfo;
 use common_meta_types::PasswordHashMethod;
 use common_meta_types::UserInfo;
 use common_meta_types::UserPrivilegeSet;
-use common_settings::Settings;
-use common_storage::StorageOperator;
-use common_users::UserApiProvider;
-use databend_query::catalogs::CatalogManagerHelper;
 use databend_query::clusters::Cluster;
 use databend_query::clusters::ClusterHelper;
-use databend_query::sessions::{QueryContext, Session, SessionContext};
+use databend_query::sessions::QueryContext;
 use databend_query::sessions::QueryContextShared;
 use databend_query::sessions::SessionManager;
 use databend_query::sessions::SessionType;
@@ -72,10 +66,15 @@ async fn create_query_context_with_session(typ: SessionType) -> Result<Arc<Query
     Ok(dummy_query_context)
 }
 
-pub async fn create_query_context_with_config(config: Config, mut current_user: Option<UserInfo>) -> Result<Arc<QueryContext>> {
+pub async fn create_query_context_with_config(
+    config: Config,
+    mut current_user: Option<UserInfo>,
+) -> Result<Arc<QueryContext>> {
     TestGlobalServices::setup(config).await?;
 
-    let dummy_session = SessionManager::instance().create_session(SessionType::Dummy).await?;
+    let dummy_session = SessionManager::instance()
+        .create_session(SessionType::Dummy)
+        .await?;
 
     if current_user.is_none() {
         let mut user_info = UserInfo::new("root", "127.0.0.1", AuthInfo::Password {
@@ -143,10 +142,14 @@ impl Default for ClusterDescriptor {
     }
 }
 
-pub async fn create_query_context_with_cluster(desc: ClusterDescriptor) -> Result<Arc<QueryContext>> {
+pub async fn create_query_context_with_cluster(
+    desc: ClusterDescriptor,
+) -> Result<Arc<QueryContext>> {
     let config = crate::tests::ConfigBuilder::create().build();
     TestGlobalServices::setup(config.clone()).await?;
-    let dummy_session = SessionManager::instance().create_session(SessionType::Dummy).await?;
+    let dummy_session = SessionManager::instance()
+        .create_session(SessionType::Dummy)
+        .await?;
     let local_id = desc.local_node_id;
     let nodes = desc.cluster_nodes_list;
 
@@ -155,7 +158,8 @@ pub async fn create_query_context_with_cluster(desc: ClusterDescriptor) -> Resul
             config,
             (*dummy_session).clone(),
             Cluster::create(nodes, local_id),
-        ).await?
+        )
+        .await?,
     );
 
     dummy_query_context.get_settings().set_max_threads(8)?;

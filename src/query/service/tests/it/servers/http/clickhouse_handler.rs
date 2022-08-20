@@ -13,14 +13,14 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use common_exception::Result;
 
 use common_base::base::tokio;
+use common_exception::Result;
+use databend_query::auth::AuthMgr;
 use databend_query::servers::http::middleware::HTTPSessionEndpoint;
 use databend_query::servers::http::middleware::HTTPSessionMiddleware;
 use databend_query::servers::http::v1::clickhouse_router;
 use databend_query::servers::HttpHandlerKind;
-use databend_query::sessions::SessionManager;
 use http::Uri;
 use poem::error::Result as PoemResult;
 use poem::http::Method;
@@ -32,9 +32,9 @@ use poem::EndpointExt;
 use poem::Request;
 use poem::Route;
 use pretty_assertions::assert_eq;
-use databend_query::auth::AuthMgr;
 
-use crate::tests::{ConfigBuilder, TestGlobalServices};
+use crate::tests::ConfigBuilder;
+use crate::tests::TestGlobalServices;
 
 macro_rules! assert_error {
     ($body:expr, $msg:expr$(,)?) => {{

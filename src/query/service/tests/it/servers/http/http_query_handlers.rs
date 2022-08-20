@@ -25,6 +25,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_users::CustomClaims;
 use common_users::EnsureUser;
+use databend_query::auth::AuthMgr;
 use databend_query::servers::http::middleware::HTTPSessionEndpoint;
 use databend_query::servers::http::middleware::HTTPSessionMiddleware;
 use databend_query::servers::http::v1::make_final_uri;
@@ -37,7 +38,6 @@ use databend_query::servers::http::v1::QueryResponse;
 use databend_query::servers::HttpHandler;
 use databend_query::servers::HttpHandlerKind;
 use databend_query::sessions::QueryAffect;
-use databend_query::sessions::SessionManager;
 use headers::Header;
 use jwt_simple::algorithms::RS256KeyPair;
 use jwt_simple::algorithms::RSAKeyPairLike;
@@ -60,7 +60,6 @@ use wiremock::matchers::path;
 use wiremock::Mock;
 use wiremock::MockServer;
 use wiremock::ResponseTemplate;
-use databend_query::auth::AuthMgr;
 
 use crate::tests::tls_constants::TEST_CA_CERT;
 use crate::tests::tls_constants::TEST_CN_NAME;
@@ -71,7 +70,8 @@ use crate::tests::tls_constants::TEST_TLS_CLIENT_IDENTITY;
 use crate::tests::tls_constants::TEST_TLS_CLIENT_PASSWORD;
 use crate::tests::tls_constants::TEST_TLS_SERVER_CERT;
 use crate::tests::tls_constants::TEST_TLS_SERVER_KEY;
-use crate::tests::{ConfigBuilder, TestGlobalServices};
+use crate::tests::ConfigBuilder;
+use crate::tests::TestGlobalServices;
 
 type EndpointType = HTTPSessionEndpoint<Route>;
 
@@ -677,8 +677,8 @@ async fn get_uri(ep: &EndpointType, uri: &str) -> Response {
             .typed_header(basic)
             .finish(),
     )
-        .await
-        .unwrap_or_else(|err| err.into_response())
+    .await
+    .unwrap_or_else(|err| err.into_response())
 }
 
 async fn get_uri_checked(ep: &EndpointType, uri: &str) -> Result<(StatusCode, QueryResponse)> {
@@ -694,10 +694,8 @@ async fn post_sql(sql: &str, wait_time_secs: u64) -> Result<(StatusCode, QueryRe
 pub async fn create_endpoint() -> Result<EndpointType> {
     let config = ConfigBuilder::create().build();
     TestGlobalServices::setup(config.clone()).await?;
-    let session_middleware = HTTPSessionMiddleware::create(
-        HttpHandlerKind::Query,
-        AuthMgr::create(config).await?,
-    );
+    let session_middleware =
+        HTTPSessionMiddleware::create(HttpHandlerKind::Query, AuthMgr::create(config).await?);
 
     Ok(Route::new()
         .nest("/v1/query", query_route())
@@ -760,7 +758,8 @@ async fn test_auth_jwt() -> Result<()> {
     let rsa_components = key_pair.public_key().to_components();
     let e = encode_config(rsa_components.e, URL_SAFE_NO_PAD);
     let n = encode_config(rsa_components.n, URL_SAFE_NO_PAD);
-    let j = serde_json::json!({"keys": [ {"kty": "RSA", "kid": kid, "e": e, "n": n, } ] }).to_string();
+    let j =
+        serde_json::json!({"keys": [ {"kty": "RSA", "kid": kid, "e": e, "n": n, } ] }).to_string();
 
     let server = MockServer::start().await;
     let json_path = "/jwks.json";
@@ -872,13 +871,13 @@ async fn test_auth_jwt_with_create_user() -> Result<()> {
         .await;
 
     // Setup mock jwt
-    let config = ConfigBuilder::create().jwt_key_file(format!("http://{}{}", server.address(), json_path)).build();
+    let config = ConfigBuilder::create()
+        .jwt_key_file(format!("http://{}{}", server.address(), json_path))
+        .build();
     TestGlobalServices::setup(config.clone()).await?;
 
-    let session_middleware = HTTPSessionMiddleware::create(
-        HttpHandlerKind::Query,
-        AuthMgr::create(config).await?,
-    );
+    let session_middleware =
+        HTTPSessionMiddleware::create(HttpHandlerKind::Query, AuthMgr::create(config).await?);
     let ep = Route::new()
         .nest("/v1/query", query_route())
         .with(session_middleware);

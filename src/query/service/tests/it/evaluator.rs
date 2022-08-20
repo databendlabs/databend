@@ -53,7 +53,7 @@ async fn test_scalar_evaluator() -> Result<()> {
                                     visible_in_unqualified_wildcard: false,
                                 },
                             }
-                                .into(),
+                            .into(),
                             BoundColumnRef {
                                 column: ColumnBinding {
                                     database_name: None,
@@ -64,24 +64,24 @@ async fn test_scalar_evaluator() -> Result<()> {
                                     visible_in_unqualified_wildcard: false,
                                 },
                             }
-                                .into(),
+                            .into(),
                         ],
                         func_name: "plus".to_string(),
                         arg_types: vec![Int32Type::new_impl(), Int32Type::new_impl()],
                         return_type: Box::new(Int32Type::new_impl()),
                     }
-                        .into(),
+                    .into(),
                     ConstantExpr {
                         value: DataValue::Int64(2),
                         data_type: Box::new(Int64Type::new_impl()),
                     }
-                        .into(),
+                    .into(),
                 ],
                 func_name: "pow".to_string(),
                 arg_types: vec![Int64Type::new_impl(), Int64Type::new_impl()],
                 return_type: Box::new(Float64Type::new_impl()),
             }
-                .into(),
+            .into(),
         ],
         arg_types: vec![Float64Type::new_impl()],
         return_type: Box::new(Float64Type::new_impl()),
@@ -126,23 +126,23 @@ async fn test_eval_const() -> Result<()> {
                         value: DataValue::Int64(1),
                         data_type: Box::new(Int32Type::new_impl()),
                     }
-                        .into(),
+                    .into(),
                     ConstantExpr {
                         value: DataValue::Int64(3),
                         data_type: Box::new(Int32Type::new_impl()),
                     }
-                        .into(),
+                    .into(),
                 ],
                 func_name: "plus".to_string(),
                 arg_types: vec![Int32Type::new_impl(), Int32Type::new_impl()],
                 return_type: Box::new(Int32Type::new_impl()),
             }
-                .into(),
+            .into(),
             ConstantExpr {
                 value: DataValue::Int64(2),
                 data_type: Box::new(Int32Type::new_impl()),
             }
-                .into(),
+            .into(),
         ],
         func_name: "pow".to_string(),
         arg_types: vec![Int32Type::new_impl(), Int32Type::new_impl()],

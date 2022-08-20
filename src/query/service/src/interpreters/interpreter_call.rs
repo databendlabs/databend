@@ -14,8 +14,8 @@
 
 use std::sync::Arc;
 use std::sync::RwLock;
-use common_base::base::GlobalIORuntime;
 
+use common_base::base::GlobalIORuntime;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 use common_pipeline_core::Pipeline;

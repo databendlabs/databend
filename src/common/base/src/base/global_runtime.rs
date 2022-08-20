@@ -1,11 +1,10 @@
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
 use common_exception::Result;
 use once_cell::sync::OnceCell;
 
+use crate::base::singleton_instance::SingletonInstance;
 use crate::base::Runtime;
-use crate::base::singleton_instance::{SingletonInstance, SingletonInstanceImpl};
 
 pub struct GlobalIORuntime;
 

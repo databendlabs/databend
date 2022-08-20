@@ -16,10 +16,10 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use common_base::base::{SingletonInstance, tokio};
+use common_base::base::tokio;
 use common_base::base::tokio::sync::RwLock;
 use common_base::base::tokio::time::sleep;
-use common_exception::ErrorCode;
+use common_base::base::SingletonInstance;
 use common_exception::Result;
 use once_cell::sync::OnceCell;
 use parking_lot::Mutex;

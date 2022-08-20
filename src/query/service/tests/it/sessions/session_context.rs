@@ -18,14 +18,8 @@ use common_base::base::tokio;
 use common_exception::Result;
 use common_meta_types::UserInfo;
 use common_settings::Settings;
-use databend_query::clusters::Cluster;
-use databend_query::clusters::ClusterHelper;
-use databend_query::sessions::QueryContextShared;
 use databend_query::sessions::SessionContext;
-use databend_query::sessions::SessionType;
 use databend_query::Config;
-
-use crate::tests::{create_query_context, TestGlobalServices};
 
 #[tokio::test]
 async fn test_session_context() -> Result<()> {

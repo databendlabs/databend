@@ -15,10 +15,16 @@
 use std::env;
 use std::io::Result;
 
-use common_base::base::{GlobalIORuntime, SingletonInstance};
+use backon::ExponentialBackoff;
+use common_base::base::GlobalIORuntime;
+use common_base::base::SingletonInstance;
 use common_contexts::DalRuntime;
 use common_exception::ErrorCode;
 use once_cell::sync::OnceCell;
+use opendal::layers::LoggingLayer;
+use opendal::layers::MetricsLayer;
+use opendal::layers::RetryLayer;
+use opendal::layers::TracingLayer;
 use opendal::services::azblob;
 use opendal::services::fs;
 use opendal::services::gcs;
@@ -169,7 +175,10 @@ pub struct StorageOperator;
 static STORAGE_OPERATOR: OnceCell<SingletonInstance<Operator>> = OnceCell::new();
 
 impl StorageOperator {
-    pub async fn init(conf: &StorageConfig, v: SingletonInstance<Operator>) -> common_exception::Result<()> {
+    pub async fn init(
+        conf: &StorageConfig,
+        v: SingletonInstance<Operator>,
+    ) -> common_exception::Result<()> {
         v.init(Self::try_create(conf).await?)?;
 
         STORAGE_OPERATOR.set(v).ok();
@@ -182,9 +191,11 @@ impl StorageOperator {
 
     pub async fn try_create(conf: &StorageConfig) -> common_exception::Result<Operator> {
         let io_runtime = GlobalIORuntime::instance();
-        let operator = init_operator(&conf.params)?;
-        // Enable exponential backoff by default
-        let operator = operator.with_backoff(backon::ExponentialBackoff::default());
+        let operator = init_operator(&conf.params)?
+            .layer(RetryLayer::new(ExponentialBackoff::default()))
+            .layer(LoggingLayer)
+            .layer(TracingLayer)
+            .layer(MetricsLayer);
 
         // OpenDAL will send a real request to underlying storage to check whether it works or not.
         // If this check failed, it's highly possible that the users have configured it wrongly.

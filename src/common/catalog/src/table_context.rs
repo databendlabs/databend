@@ -35,7 +35,8 @@ use common_users::UserApiProvider;
 use opendal::Operator;
 use parking_lot::Mutex;
 
-use crate::catalog::{Catalog, CatalogManager};
+use crate::catalog::Catalog;
+use crate::catalog::CatalogManager;
 use crate::cluster_info::Cluster;
 use crate::table::Table;
 
