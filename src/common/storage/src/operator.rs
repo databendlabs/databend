@@ -173,7 +173,8 @@ impl StorageOperator {
         // If this check failed, it's highly possible that the users have configured it wrongly.
         if let Err(cause) = operator.check().await {
             return Err(ErrorCode::StorageUnavailable(format!(
-                "current configured storage is not available: {cause}"
+                "current configured storage is not available: config: {:?}, cause: {cause}",
+                conf
             )));
         }
 

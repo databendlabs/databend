@@ -130,9 +130,9 @@ async fn test_configs_table() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_configs_table_redact() -> Result<()> {
-    let mock_server = MockServer::start().await;
+    let mock_server = MockServer::builder().start().await;
     Mock::given(method("HEAD"))
         .and(path("/test/.opendal"))
         .respond_with(ResponseTemplate::new(404))
@@ -158,7 +158,7 @@ async fn test_configs_table_redact() -> Result<()> {
     let stream = table.read(ctx, &source_plan).await?;
     let result = stream.try_collect::<Vec<_>>().await?;
     let block = &result[0];
-    // assert_eq!(block.num_columns(), 4);
+    assert_eq!(block.num_columns(), 4);
 
     let endpoint_url_link = format!(
         "| storage | s3.endpoint_url                      | {:<24}  |             |",

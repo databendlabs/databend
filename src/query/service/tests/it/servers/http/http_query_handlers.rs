@@ -259,6 +259,7 @@ async fn test_return_when_finish_v2() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_wait_time_secs() -> Result<()> {
+    TestGlobalServices::setup(ConfigBuilder::create().build()).await?;
     let ep = create_endpoint().await?;
     let sql = "select sleep(0.001)";
     let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": 0}});
@@ -692,6 +693,7 @@ async fn post_sql(sql: &str, wait_time_secs: u64) -> Result<(StatusCode, QueryRe
 
 pub async fn create_endpoint() -> Result<EndpointType> {
     let config = ConfigBuilder::create().build();
+    TestGlobalServices::setup(config.clone()).await?;
     let session_middleware = HTTPSessionMiddleware::create(
         HttpHandlerKind::Query,
         AuthMgr::create(config).await?,
@@ -905,7 +907,7 @@ async fn test_auth_jwt_with_create_user() -> Result<()> {
 }
 
 // need to support local_addr, but axum_server do not have local_addr callback
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test(flavor = "current_thread")]
 async fn test_http_handler_tls_server() -> Result<()> {
     TestGlobalServices::setup(ConfigBuilder::create().build()).await?;
     let address_str = format!("127.0.0.1:{}", get_free_tcp_port());
@@ -974,17 +976,17 @@ async fn test_http_handler_tls_server_failed_case_1() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test(flavor = "current_thread")]
 async fn test_http_service_tls_server_mutual_tls() -> Result<()> {
+    let config = ConfigBuilder::create()
+        .http_handler_tls_server_key(TEST_TLS_SERVER_KEY)
+        .http_handler_tls_server_cert(TEST_TLS_SERVER_CERT)
+        .http_handler_tls_server_root_ca_cert(TEST_TLS_CA_CERT)
+        .build();
+
+    TestGlobalServices::setup(config.clone()).await?;
     let address_str = format!("127.0.0.1:{}", get_free_tcp_port());
-    let mut srv = HttpHandler::create(
-        HttpHandlerKind::Query,
-        ConfigBuilder::create()
-            .http_handler_tls_server_key(TEST_TLS_SERVER_KEY)
-            .http_handler_tls_server_cert(TEST_TLS_SERVER_CERT)
-            .http_handler_tls_server_root_ca_cert(TEST_TLS_CA_CERT)
-            .build(),
-    )?;
+    let mut srv = HttpHandler::create(HttpHandlerKind::Query, config.clone())?;
     let listening = srv.start(address_str.parse()?).await?;
 
     // test cert is issued for "localhost"

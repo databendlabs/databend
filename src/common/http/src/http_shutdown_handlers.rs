@@ -79,13 +79,18 @@ impl HttpShutdownHandler {
         }
 
         let (tx, rx) = oneshot::channel();
-        let join_handle = common_base::base::tokio::spawn(
+        println!("thread name 1 {:?}", std::thread::current().name());
+        common_base::base::tokio::runtime::Handle::current().spawn(async move {
+            println!("thread name 2 {:?}", std::thread::current().name());
+        });
+        let join_handle = common_base::base::tokio::spawn(async move {
+            println!("thread name {:?}", std::thread::current().name());
             poem::Server::new_with_acceptor(acceptor).run_with_graceful_shutdown(
                 ep,
                 rx.map(|_| ()),
                 None,
-            ),
-        );
+            ).await
+        });
         self.join_handle = Some(join_handle);
         self.abort_handle = Some(tx);
         Ok(addr)

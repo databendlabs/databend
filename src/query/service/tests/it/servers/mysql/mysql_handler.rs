@@ -123,7 +123,11 @@ async fn test_rejected_session_with_parallel() -> Result<()> {
     }
 
     // Setup
-    TestGlobalServices::setup(ConfigBuilder::create().build()).await?;
+    TestGlobalServices::setup(
+        ConfigBuilder::create()
+            .max_active_sessions(1)
+            .build()
+    ).await?;
 
     let mut handler = MySQLHandler::create(SessionManager::instance())?;
 

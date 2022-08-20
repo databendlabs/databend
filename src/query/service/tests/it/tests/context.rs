@@ -147,7 +147,17 @@ pub async fn create_query_context_with_cluster(desc: ClusterDescriptor) -> Resul
     let config = crate::tests::ConfigBuilder::create().build();
     TestGlobalServices::setup(config.clone()).await?;
     let dummy_session = SessionManager::instance().create_session(SessionType::Dummy).await?;
-    let dummy_query_context = dummy_session.create_query_context().await?;
+    let local_id = desc.local_node_id;
+    let nodes = desc.cluster_nodes_list;
+
+    let dummy_query_context = QueryContext::create_from_shared(
+        QueryContextShared::try_create(
+            config,
+            (*dummy_session).clone(),
+            Cluster::create(nodes, local_id),
+        ).await?
+    );
+
     dummy_query_context.get_settings().set_max_threads(8)?;
     Ok(dummy_query_context)
 }

@@ -90,7 +90,7 @@ async fn test_http_service_tls_server_failed_case_1() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test(flavor = "current_thread")]
 async fn test_http_service_tls_server_mutual_tls() -> Result<()> {
     let addr_str = format!("127.0.0.1:{}", get_free_tcp_port());
     let mut srv = HttpService::create(
