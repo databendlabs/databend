@@ -18,13 +18,9 @@ use std::io::Write;
 use bstr::ByteSlice;
 use common_expression::types::string::StringColumn;
 use common_expression::types::string::StringColumnBuilder;
-use common_expression::types::DataType;
 use common_expression::types::GenericMap;
 use common_expression::types::NumberType;
 use common_expression::types::StringType;
-use common_expression::with_float_number_mapped_type;
-use common_expression::with_signed_number_mapped_type;
-use common_expression::with_unsigned_number_mapped_type;
 use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
 use common_expression::NumberDomain;
@@ -344,115 +340,11 @@ pub fn register(registry: &mut FunctionRegistry) {
     );
 
     // number to string functions
-    let all_numerics_types = &[
-        DataType::UInt8,
-        DataType::UInt16,
-        DataType::UInt32,
-        DataType::UInt64,
-        DataType::Int8,
-        DataType::Int16,
-        DataType::Int32,
-        DataType::Int64,
-        DataType::Float32,
-        DataType::Float64,
-    ];
+    register_bin(registry);
 
-    for dtype in all_numerics_types {
-        with_unsigned_number_mapped_type!(T, match dtype {
-            DataType::T => {
-                registry.register_1_arg::<NumberType<T>, StringType, _, _>(
-                    "bin",
-                    FunctionProperty::default(),
-                    |_| None,
-                    |val| format!("{:b}", val as u64).as_bytes().to_vec(),
-                );
-                registry.register_1_arg::<NumberType<T>, StringType, _, _>(
-                    "oct",
-                    FunctionProperty::default(),
-                    |_| None,
-                    |val| (val as u64).oct_string().as_bytes().to_vec(),
-                );
-                registry.register_1_arg::<NumberType<T>, StringType, _, _>(
-                    "hex",
-                    FunctionProperty::default(),
-                    |_| None,
-                    |val| format!("{:x}", val as u64).as_bytes().to_vec(),
-                );
-            }
-            _ => {}
-        });
-        with_signed_number_mapped_type!(T, match dtype {
-            DataType::T => {
-                registry.register_1_arg::<NumberType<T>, StringType, _, _>(
-                    "bin",
-                    FunctionProperty::default(),
-                    |_| None,
-                    |val| format!("{:b}", val as i64).as_bytes().to_vec(),
-                );
-                registry.register_1_arg::<NumberType<T>, StringType, _, _>(
-                    "oct",
-                    FunctionProperty::default(),
-                    |_| None,
-                    |val| (val as i64).oct_string().as_bytes().to_vec(),
-                );
-                registry.register_1_arg::<NumberType<T>, StringType, _, _>(
-                    "hex",
-                    FunctionProperty::default(),
-                    |_| None,
-                    |val| format!("{:x}", val as i64).as_bytes().to_vec(),
-                );
-            }
-            _ => {}
-        });
-        with_float_number_mapped_type!(T, match dtype {
-            DataType::T => {
-                registry.register_1_arg::<NumberType<T>, StringType, _, _>(
-                    "bin",
-                    FunctionProperty::default(),
-                    |_| None,
-                    |val| {
-                        let val = val as f64;
-                        let ret = if val.ge(&0f64) {
-                            format!(
-                                "{:b}",
-                                val.max(i64::MIN as f64).min(i64::MAX as f64).round() as i64
-                            )
-                        } else {
-                            format!(
-                                "{:b}",
-                                val.max(u64::MIN as f64).min(u64::MAX as f64).round() as u64
-                            )
-                        };
-                        ret.as_bytes().to_vec()
-                    },
-                );
-                registry.register_1_arg::<NumberType<T>, StringType, _, _>(
-                    "oct",
-                    FunctionProperty::default(),
-                    |_| None,
-                    |val| (val as i64).oct_string().as_bytes().to_vec(),
-                );
-            }
-            _ => {}
-        });
-    }
+    register_oct(registry);
 
-    registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
-        "hex",
-        FunctionProperty::default(),
-        |_| None,
-        vectorize_string_to_string(
-            |col| col.data.len() * 2,
-            |val, writer| {
-                let mut buffer = vec![0u8; val.len() * 2];
-                let buff = &mut buffer[0..val.len() * 2];
-                let _ = hex::encode_to_slice(val, buff);
-                writer.put_slice(buff);
-                writer.commit_row();
-                Ok(())
-            },
-        ),
-    );
+    register_hex(registry);
 
     registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
         "unhex",
@@ -549,4 +441,91 @@ fn vectorize_string_to_string_2_arg(
             Ok(Value::Column(builder.build()))
         }
     }
+}
+
+fn register_bin(registry: &mut FunctionRegistry) {
+    registry.register_1_arg::<NumberType<u64>, StringType, _, _>(
+        "bin",
+        FunctionProperty::default(),
+        |_| None,
+        |val| format!("{:b}", val).as_bytes().to_vec(),
+    );
+    registry.register_1_arg::<NumberType<i64>, StringType, _, _>(
+        "bin",
+        FunctionProperty::default(),
+        |_| None,
+        |val| format!("{:b}", val).as_bytes().to_vec(),
+    );
+    registry.register_1_arg::<NumberType<f64>, StringType, _, _>(
+        "bin",
+        FunctionProperty::default(),
+        |_| None,
+        |val| {
+            let val = val as f64;
+            let ret = if val.ge(&0f64) {
+                format!(
+                    "{:b}",
+                    val.max(i64::MIN as f64).min(i64::MAX as f64).round() as i64
+                )
+            } else {
+                format!(
+                    "{:b}",
+                    val.max(u64::MIN as f64).min(u64::MAX as f64).round() as u64
+                )
+            };
+            ret.as_bytes().to_vec()
+        },
+    );
+}
+
+fn register_oct(registry: &mut FunctionRegistry) {
+    registry.register_1_arg::<NumberType<u64>, StringType, _, _>(
+        "oct",
+        FunctionProperty::default(),
+        |_| None,
+        |val| val.oct_string().as_bytes().to_vec(),
+    );
+    registry.register_1_arg::<NumberType<i64>, StringType, _, _>(
+        "oct",
+        FunctionProperty::default(),
+        |_| None,
+        |val| val.oct_string().as_bytes().to_vec(),
+    );
+    registry.register_1_arg::<NumberType<f64>, StringType, _, _>(
+        "oct",
+        FunctionProperty::default(),
+        |_| None,
+        |val| (val as i64).oct_string().as_bytes().to_vec(),
+    );
+}
+
+fn register_hex(registry: &mut FunctionRegistry) {
+    registry.register_1_arg::<NumberType<u64>, StringType, _, _>(
+        "hex",
+        FunctionProperty::default(),
+        |_| None,
+        |val| format!("{:x}", val).as_bytes().to_vec(),
+    );
+    registry.register_1_arg::<NumberType<i64>, StringType, _, _>(
+        "hex",
+        FunctionProperty::default(),
+        |_| None,
+        |val| format!("{:x}", val).as_bytes().to_vec(),
+    );
+    registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
+        "hex",
+        FunctionProperty::default(),
+        |_| None,
+        vectorize_string_to_string(
+            |col| col.data.len() * 2,
+            |val, writer| {
+                let mut buffer = vec![0u8; val.len() * 2];
+                let buff = &mut buffer[0..val.len() * 2];
+                let _ = hex::encode_to_slice(val, buff);
+                writer.put_slice(buff);
+                writer.commit_row();
+                Ok(())
+            },
+        ),
+    );
 }
