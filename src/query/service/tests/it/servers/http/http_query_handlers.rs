@@ -162,12 +162,12 @@ async fn test_simple_sql(v2: u64) -> Result<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "current_thread")]
 async fn test_simple_sql_v1() -> Result<()> {
     test_simple_sql(0).await
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "current_thread")]
 async fn test_simple_sql_v2() -> Result<()> {
     test_simple_sql(1).await
 }
@@ -202,12 +202,12 @@ async fn test_return_when_finish(v2: u64) -> Result<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "current_thread")]
 async fn test_return_when_finish_v1() -> Result<()> {
     test_return_when_finish(0).await
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "current_thread")]
 async fn test_return_when_finish_v2() -> Result<()> {
     test_return_when_finish(1).await
 }
@@ -215,7 +215,7 @@ async fn test_return_when_finish_v2() -> Result<()> {
 // ref: query_log not recored correctly.
 // It could be uncommented when we remove SEE_YOU_AGAIN stmt
 
-// #[tokio::test]
+// #[tokio::test(flavor = "current_thread")]
 // async fn test_bad_sql() -> Result<()> {
 //     let sql = "bad sql";
 //     let ep = create_endpoint();
@@ -257,7 +257,7 @@ async fn test_return_when_finish_v2() -> Result<()> {
 //     Ok(())
 // }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test(flavor = "current_thread")]
 async fn test_wait_time_secs() -> Result<()> {
     TestGlobalServices::setup(ConfigBuilder::create().build()).await?;
     let ep = create_endpoint().await?;
@@ -305,7 +305,7 @@ async fn test_wait_time_secs() -> Result<()> {
     unreachable!("'{}' run for more than 3 secs", sql);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "current_thread")]
 async fn test_buffer_size() -> Result<()> {
     let rows = 100;
     let ep = create_endpoint().await?;
@@ -383,12 +383,12 @@ async fn test_pagination(v2: u64) -> Result<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "current_thread")]
 async fn test_pagination_v1() -> Result<()> {
     test_pagination(0).await
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "current_thread")]
 async fn test_pagination_v2() -> Result<()> {
     test_pagination(1).await
 }
@@ -516,7 +516,7 @@ async fn test_system_tables() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "current_thread")]
 async fn test_insert() -> Result<()> {
     let route = create_endpoint().await?;
 
@@ -1123,17 +1123,17 @@ async fn test_download(v2: u64) -> Result<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "current_thread")]
 async fn test_download_v1() -> Result<()> {
     test_download(0).await
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "current_thread")]
 async fn test_download_v2() -> Result<()> {
     test_download(1).await
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "current_thread")]
 async fn test_download_non_select() -> Result<()> {
     let ep = create_endpoint().await?;
     let sql = "show databases";
@@ -1168,17 +1168,17 @@ async fn test_download_failed(v2: u64) -> Result<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "current_thread")]
 async fn test_download_failed_v1() -> Result<()> {
     test_download_failed(0).await
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "current_thread")]
 async fn test_download_failed_v2() -> Result<()> {
     test_download_failed(1).await
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "current_thread")]
 async fn test_download_killed() -> Result<()> {
     let ep = create_endpoint().await?;
 
@@ -1219,7 +1219,7 @@ async fn test_download_killed() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "current_thread")]
 async fn test_no_download_in_management_mode() -> Result<()> {
     // Setup
     let config = ConfigBuilder::create().with_management_mode().build();
@@ -1245,7 +1245,7 @@ async fn test_no_download_in_management_mode() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "current_thread")]
 async fn test_func_object_keys() -> Result<()> {
     let route = create_endpoint().await?;
 
@@ -1275,7 +1275,7 @@ async fn test_func_object_keys() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "current_thread")]
 async fn test_multi_partition() -> Result<()> {
     TestGlobalServices::setup(ConfigBuilder::create().build()).await?;
     let route = create_endpoint().await?;
@@ -1299,7 +1299,7 @@ async fn test_multi_partition() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "current_thread")]
 async fn test_affect() -> Result<()> {
     let route = create_endpoint().await?;
 

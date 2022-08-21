@@ -98,12 +98,8 @@ impl TestGlobalServices {
                         let remove_id = lru_queue.pop_front().unwrap();
 
                         if !lru_queue.contains(&remove_id) {
-                            if remove_id != thread_name {
-                                // drop(lru_queue);
-                                global_services.remove_services(&remove_id);
-                            } else {
-                                lru_queue.push_back(remove_id);
-                            }
+                            // drop(lru_queue);
+                            global_services.remove_services(&remove_id);
                         }
                     }
                 }
