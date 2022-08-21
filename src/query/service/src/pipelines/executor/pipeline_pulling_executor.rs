@@ -118,6 +118,7 @@ impl PipelinePullingExecutor {
 
         #[cfg(debug_assertions)]
         {
+            // We need to pass the thread name in the unit test, because the thread name is the test name
             if matches!(std::env::var("UNIT_TEST"), Ok(var_value) if var_value == "TRUE") {
                 if let Some(cur_thread_name) = std::thread::current().name() {
                     thread_name = Some(cur_thread_name.to_string());

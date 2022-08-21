@@ -130,7 +130,7 @@ impl TestGlobalServices {
             config.meta.to_meta_grpc_client_conf(),
             global_services.clone(),
         )
-            .await?;
+        .await?;
         RoleCacheManager::init(global_services.clone())?;
 
         ClusterDiscovery::instance()
