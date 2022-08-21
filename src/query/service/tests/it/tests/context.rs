@@ -35,12 +35,10 @@ use databend_query::Config;
 use crate::tests::TestGlobalServices;
 
 pub async fn create_query_context() -> Result<Arc<QueryContext>> {
-    TestGlobalServices::setup(crate::tests::ConfigBuilder::create().build()).await?;
     create_query_context_with_session(SessionType::Dummy).await
 }
 
 pub async fn create_query_context_with_type(typ: SessionType) -> Result<Arc<QueryContext>> {
-    TestGlobalServices::setup(crate::tests::ConfigBuilder::create().build()).await?;
     create_query_context_with_session(typ).await
 }
 

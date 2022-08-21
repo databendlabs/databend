@@ -16,6 +16,7 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::hash::Hash;
+use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
 use common_base::base::tokio::sync::Notify;
@@ -201,6 +202,7 @@ pub struct AsyncInsertManager {
     stale_timeout: Duration,
     queue: Arc<RwLock<Queue>>,
     current_processing_insert: Arc<RwLock<QueryIdToEntry>>,
+    finished: AtomicBool,
 }
 
 static ASYNC_INSERT_MANAGER: OnceCell<Singleton<Arc<AsyncInsertManager>>> = OnceCell::new();
@@ -217,6 +219,7 @@ impl AsyncInsertManager {
             stale_timeout,
             max_data_size,
             async_runtime,
+            finished: AtomicBool::new(false),
             queue: Arc::new(RwLock::new(Queue::default())),
             current_processing_insert: Arc::new(RwLock::new(QueryIdToEntry::default())),
         }))?;
@@ -232,6 +235,11 @@ impl AsyncInsertManager {
         }
     }
 
+    pub fn shutdown(self: &Arc<Self>) {
+        self.finished
+            .store(true, std::sync::atomic::Ordering::Release);
+    }
+
     pub async fn start(self: &Arc<Self>) {
         // TODO: need refactor this code.
         let this = self.clone();
@@ -239,7 +247,7 @@ impl AsyncInsertManager {
         let busy_timeout = this.busy_timeout;
         self.async_runtime.spawn(async move {
             let mut intv = interval_at(Instant::now() + busy_timeout, busy_timeout);
-            loop {
+            while !this.finished.load(std::sync::atomic::Ordering::Relaxed) {
                 intv.tick().await;
                 if this.queue.read().is_empty() {
                     continue;
@@ -256,7 +264,7 @@ impl AsyncInsertManager {
             let this = self.clone();
             self.async_runtime.spawn(async move {
                 let mut intv = interval_at(Instant::now() + stale_timeout, stale_timeout);
-                loop {
+                while !this.finished.load(std::sync::atomic::Ordering::Relaxed) {
                     intv.tick().await;
                     if this.queue.read().is_empty() {
                         continue;

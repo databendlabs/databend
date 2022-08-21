@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::collections::VecDeque;
 use std::sync::Arc;
 
 use common_base::base::GlobalIORuntime;
@@ -22,6 +23,7 @@ use common_catalog::catalog::CatalogManager;
 use common_exception::Result;
 use common_fuse_meta::caches::CacheManager;
 use common_storage::StorageOperator;
+use common_tracing::set_panic_hook;
 use common_tracing::QueryLogger;
 use common_users::RoleCacheManager;
 use common_users::UserApiProvider;
@@ -36,6 +38,10 @@ use once_cell::sync::OnceCell;
 use opendal::Operator;
 use parking_lot::Mutex;
 
+/// Hard code, in order to make each test share the global service instance, we made some hack code
+///   - We use thread names as key to store global service instances, because rust test passes the test name through the thread name
+///   - We created an LRU queue to store the last ten global service instances, because the tests may run in parallel
+///   - In the debug version, we enable the transfer of thread names by environment variables.
 pub struct TestGlobalServices {
     global_runtime: Mutex<HashMap<String, Arc<Runtime>>>,
     query_logger: Mutex<HashMap<String, Arc<QueryLogger>>>,
@@ -49,6 +55,8 @@ pub struct TestGlobalServices {
     session_manager: Mutex<HashMap<String, Arc<SessionManager>>>,
     users_manager: Mutex<HashMap<String, Arc<UserApiProvider>>>,
     users_role_manager: Mutex<HashMap<String, Arc<RoleCacheManager>>>,
+
+    lru_queue: Mutex<VecDeque<String>>,
 }
 
 unsafe impl Send for TestGlobalServices {}
@@ -59,6 +67,7 @@ static GLOBAL: OnceCell<Arc<TestGlobalServices>> = OnceCell::new();
 
 impl TestGlobalServices {
     pub async fn setup(config: Config) -> Result<()> {
+        set_panic_hook();
         std::env::set_var("UNIT_TEST", "TRUE");
         let global_services = GLOBAL.get_or_init(|| {
             Arc::new(TestGlobalServices {
@@ -74,8 +83,32 @@ impl TestGlobalServices {
                 session_manager: Mutex::new(HashMap::new()),
                 users_manager: Mutex::new(HashMap::new()),
                 users_role_manager: Mutex::new(HashMap::new()),
+                lru_queue: Mutex::new(VecDeque::new()),
             })
         });
+
+        {
+            match std::thread::current().name() {
+                None => panic!("thread name is none"),
+                Some(thread_name) => {
+                    let mut lru_queue = global_services.lru_queue.lock();
+                    lru_queue.push_back(thread_name.to_string());
+
+                    if lru_queue.len() >= 10 {
+                        let remove_id = lru_queue.pop_front().unwrap();
+
+                        if !lru_queue.contains(&remove_id) {
+                            if remove_id != thread_name {
+                                // drop(lru_queue);
+                                global_services.remove_services(&remove_id);
+                            } else {
+                                lru_queue.push_back(remove_id);
+                            }
+                        }
+                    }
+                }
+            }
+        }
 
         // The order of initialization is very important
         let app_name_shuffle = format!("{}-{}", config.query.tenant_id, config.query.cluster_id);
@@ -97,12 +130,65 @@ impl TestGlobalServices {
             config.meta.to_meta_grpc_client_conf(),
             global_services.clone(),
         )
-        .await?;
+            .await?;
         RoleCacheManager::init(global_services.clone())?;
 
         ClusterDiscovery::instance()
             .register_to_metastore(&config)
             .await
+    }
+
+    pub fn remove_services(&self, key: &str) {
+        {
+            let mut global_runtime = self.global_runtime.lock();
+            global_runtime.remove(key);
+        }
+        {
+            let mut query_logger = self.query_logger.lock();
+            query_logger.remove(key);
+        }
+        {
+            let mut cluster_discovery = self.cluster_discovery.lock();
+            cluster_discovery.remove(key);
+        }
+        {
+            let mut storage_operator = self.storage_operator.lock();
+            storage_operator.remove(key);
+        }
+        {
+            let mut async_insert_manager = self.async_insert_manager.lock();
+            if let Some(async_insert_manager) = async_insert_manager.remove(key) {
+                async_insert_manager.shutdown();
+            }
+        }
+        {
+            let mut cache_manager = self.cache_manager.lock();
+            cache_manager.remove(key);
+        }
+        {
+            let mut catalog_manager = self.catalog_manager.lock();
+            catalog_manager.remove(key);
+        }
+        {
+            let mut http_query_manager = self.http_query_manager.lock();
+            http_query_manager.remove(key);
+        }
+        {
+            let mut data_exchange_manager = self.data_exchange_manager.lock();
+            data_exchange_manager.remove(key);
+        }
+        {
+            let mut session_manager = self.session_manager.lock();
+            session_manager.remove(key);
+        }
+        {
+            let mut users_role_manager = self.users_role_manager.lock();
+            users_role_manager.remove(key);
+        }
+        {
+            let mut users_manager = self.users_manager.lock();
+            users_manager.remove(key);
+        }
     }
 }
 
