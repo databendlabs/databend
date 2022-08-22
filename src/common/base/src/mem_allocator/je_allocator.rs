@@ -177,9 +177,9 @@ mod platform {
             clear_mem: bool,
         ) -> *mut u8 {
             if clear_mem {
-                Self::realloc(ptr, layout, new_size)
-            } else {
                 Self::realloc_zeroed(ptr, layout, new_size)
+            } else {
+                Self::realloc(ptr, layout, new_size)
             }
         }
     }
