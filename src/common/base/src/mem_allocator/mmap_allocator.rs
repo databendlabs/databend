@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -130,7 +130,7 @@ unsafe impl<const MMAP_POPULATE: bool> AllocatorTrait for MmapAllocator<MMAP_POP
             if layout.align() > page_size() {
                 self.allocator.reallocx(ptr, layout, new_size, clear_mem)
             } else {
-                mremap(
+                mremapx(
                     ptr as *mut c_void,
                     layout.size(),
                     new_size,
@@ -148,6 +148,32 @@ unsafe impl<const MMAP_POPULATE: bool> AllocatorTrait for MmapAllocator<MMAP_POP
             new_buf
         }
     }
+}
+
+#[inline]
+unsafe fn mremapx(
+    old_address: *mut c_void,
+    old_size: size_t,
+    new_size: size_t,
+    flags: c_int,
+    mmap_prot: c_int,
+) -> *mut c_void {
+    #[cfg(not(target_os = "linux"))]
+    {
+        const ADDR: *mut c_void = ptr::null_mut::<c_void>();
+        const FD: c_int = -1; // Should be -1 if flags includes MAP_ANONYMOUS. See `man 2 mmap`
+        const OFFSET: off_t = 0; // Should be 0 if flags includes MAP_ANONYMOUS. See `man 2 mmap`
+
+        let new_address = mmap(ADDR, new_size, mmap_prot, flags, FD, OFFSET);
+        std::ptr::copy_nonoverlapping(
+            old_address as *const u8,
+            new_address as *mut u8,
+            old_size as usize,
+        );
+        return new_address;
+    }
+    #[cfg(target_os = "linux")]
+    mremap(old_address, old_size, new_size, flags, mmap_prot)
 }
 
 extern "C" {
