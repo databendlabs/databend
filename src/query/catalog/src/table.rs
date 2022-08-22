@@ -29,7 +29,6 @@ use common_pipeline_core::Pipeline;
 use common_planners::DeletePlan;
 use common_planners::Expression;
 use common_planners::Extras;
-use common_planners::OptimizeTablePlan;
 use common_planners::Partitions;
 use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
@@ -186,14 +185,6 @@ pub trait Table: Sync + Send {
     async fn delete(&self, _ctx: Arc<dyn TableContext>, _delete_plan: DeletePlan) -> Result<()> {
         Err(ErrorCode::UnImplement(format!(
             "table {},  of engine type {}, does not support DELETE FROM",
-            self.name(),
-            self.get_table_info().engine(),
-        )))
-    }
-
-    async fn compact(&self, _ctx: Arc<dyn TableContext>, _plan: OptimizeTablePlan) -> Result<()> {
-        Err(ErrorCode::UnImplement(format!(
-            "table {},  of engine type {}, does not support compact",
             self.name(),
             self.get_table_info().engine(),
         )))

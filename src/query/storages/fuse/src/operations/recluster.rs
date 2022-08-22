@@ -29,8 +29,8 @@ use common_pipeline_transforms::processors::transforms::TransformSortPartial;
 use common_planners::ReadDataSourcePlan;
 use common_planners::SourceInfo;
 
-use crate::operations::mutation::ReclusterMutator;
 use crate::operations::FuseTableSink;
+use crate::operations::ReclusterMutator;
 use crate::FuseTable;
 use crate::DEFAULT_AVG_DEPTH_THRESHOLD;
 use crate::DEFAULT_BLOCK_PER_SEGMENT;
@@ -157,8 +157,8 @@ impl FuseTable {
             )
         })?;
 
-        let max_row_per_block = self.get_option(FUSE_OPT_KEY_ROW_PER_BLOCK, DEFAULT_ROW_PER_BLOCK);
-        let min_rows_per_block = (max_row_per_block as f64 * 0.8) as usize;
+        let max_rows_per_block = self.get_option(FUSE_OPT_KEY_ROW_PER_BLOCK, DEFAULT_ROW_PER_BLOCK);
+        let min_rows_per_block = (max_rows_per_block as f64 * 0.8) as usize;
         let max_bytes_per_block = self.get_option(
             FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD,
             DEFAULT_BLOCK_SIZE_IN_MEM_SIZE_THRESHOLD,
@@ -173,7 +173,7 @@ impl FuseTable {
             TransformCompact::try_create(
                 transform_input_port,
                 transform_output_port,
-                BlockCompactor::new(max_row_per_block, min_rows_per_block, max_bytes_per_block),
+                BlockCompactor::new(max_rows_per_block, min_rows_per_block, max_bytes_per_block),
             )
         })?;
 
