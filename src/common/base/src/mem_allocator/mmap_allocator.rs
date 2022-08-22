@@ -113,7 +113,6 @@ unsafe impl<const MMAP_POPULATE: bool> AllocatorTrait for MmapAllocator<MMAP_POP
         new_size: usize,
         clear_mem: bool,
     ) -> *mut u8 {
-        use libc::MREMAP_MAYMOVE;
         use libc::PROT_READ;
         use libc::PROT_WRITE;
 
@@ -134,7 +133,7 @@ unsafe impl<const MMAP_POPULATE: bool> AllocatorTrait for MmapAllocator<MMAP_POP
                     ptr as *mut c_void,
                     layout.size(),
                     new_size,
-                    MREMAP_MAYMOVE,
+                    0,
                     PROT_READ | PROT_WRITE,
                 ) as *mut u8
             }
@@ -173,7 +172,13 @@ unsafe fn mremapx(
         return new_address;
     }
     #[cfg(target_os = "linux")]
-    mremap(old_address, old_size, new_size, flags, mmap_prot)
+    mremap(
+        old_address,
+        old_size,
+        new_size,
+        flags | libc::MREMAP_MAYMOVE,
+        mmap_prot,
+    )
 }
 
 extern "C" {
@@ -188,6 +193,7 @@ extern "C" {
 
     fn munmap(addr: *mut c_void, length: size_t);
 
+    #[cfg(target_os = "linux")]
     fn mremap(
         old_address: *mut c_void,
         old_size: size_t,
