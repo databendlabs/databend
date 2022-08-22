@@ -375,8 +375,6 @@ fn test_load_old_user() -> anyhow::Result<()> {
 
         let got = mt::UserStageInfo::from_pb(p).map_err(print_err)?;
 
-        println!("got stage: {:?}", got);
-
         let want = test_fs_stage_info();
 
         assert_eq!(want, got);
@@ -402,8 +400,6 @@ fn test_load_old_user() -> anyhow::Result<()> {
 
         let got = mt::UserStageInfo::from_pb(p).map_err(print_err)?;
 
-        println!("got stage: {:?}", got);
-
         let want = test_s3_stage_info();
 
         assert_eq!(want, got);
@@ -427,8 +423,6 @@ fn test_load_old_user() -> anyhow::Result<()> {
                 .map_err(print_err)?;
 
         let got = mt::UserStageInfo::from_pb(p).map_err(print_err)?;
-
-        println!("got stage: {:?}", got);
 
         let want = test_gcs_stage_info();
 
