@@ -15,9 +15,9 @@ MULTI_IF( <cond1>, <expr1>, [<cond2>, <expr2> ..], <expr_else>)
 
 | Arguments   | Description |
 | ----------- | ----------- |
-| `<cond_n>` | The condition for evaluation that can be true or false. |
-| `<expr_n>` | The expression to return if cond_n is met. |
-| `<expr_else>` | The expression to return if all conditions are not met. |
+| `<cond_n>` | The condition for evaluation that can be true, false or NULL. |
+| `<expr_n>` | The expression to return if cond_n is true. |
+| `<expr_else>` | The expression to return if all conditions are false or null. |
 
 ## Return Type
 
