@@ -1,6 +1,6 @@
 Code: 4000, displayText = invalid data (Expected to have char '.)
 Error occurs at row: 1:
-	Column: 0, Name: a, Type: Timestamp, Parsed text: "<SINGLE QUOTE>19892-02-03 15:23:2"
+	Column: 0, Name: a, Type: Timestamp, Parsed text: "<SINGLE QUOTE>19892-02-0"
 	ERROR: DateTime must be in YYYY-MM-DD hh:mm:ss format.
 .
 
@@ -20,9 +20,9 @@ Error occurs at row: 0:
 	Error: There is no line feed. "H" found instead.
 .
 
-Code: 1046, displayText = Cannot parse value:"'2023-04-08 01:01:0" to DateTime type, cause: input contains invalid characters
+Code: 1046, displayText = Cannot parse value:'2023-04-0 to Date type, cause: input contains invalid characters
 Error occurs at row: 0:
-	Column: 0, Name: a, Type: Timestamp, Parsed text: "<SINGLE QUOTE>2023-04-08 01:01:0"
+	Column: 0, Name: a, Type: Timestamp, Parsed text: "<SINGLE QUOTE>2023-04-0"
 	ERROR: DateTime must be in YYYY-MM-DD hh:mm:ss format.
 .
 

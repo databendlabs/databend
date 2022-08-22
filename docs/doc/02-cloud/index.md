@@ -3,7 +3,15 @@ title: Try Databend Cloud (Beta) Free
 sidebar_label: Databend Cloud
 ---
 
-[Databend Cloud](https://app.databend.com) is a powerful data cloud for everyone, which is built on top of the open-source project Databend with **Simplicity**, **Elasticity**, **Security**, and **Low Cost**.
+[Databend Cloud](https://www.databend.com) is a powerful data cloud for everyone, which is built on top of the open-source project Databend with **Simplicity**, **Elasticity**, **Security**, and **Low Cost**.
+
+- [Get Started for Free](https://www.databend.com/apply)
+- [Databend Cloud Documentation](https://www.databend.com/docs)
+- [Architecture Overview](https://www.databend.com/docs)
+- [Organizations & Users](https://www.databend.com/docs/organizations-users/manage-your-organization/)
+- [Working with Warehouses](https://www.databend.com/docs/working-with-warehouses/understanding-warehouse)
+- [Connecting to BI Tools](https://www.databend.com/docs/connecting-to-bi-tools/about-this-guide)
+- [Developing with Databend Cloud](https://www.databend.com/docs/developing-with-databend-cloud/about-this-guide)
 
 
 ## Create a Databend Cloud Account

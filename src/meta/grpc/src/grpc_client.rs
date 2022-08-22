@@ -601,6 +601,7 @@ impl MetaGrpcClient {
     }
 
     async fn auto_sync_endpoints(self: Arc<Self>, mut cancel_tx: OneSend<()>) {
+        debug!("start auto sync endpoints");
         if let Some(interval) = self.auto_sync_interval {
             loop {
                 select! {

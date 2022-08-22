@@ -31,6 +31,7 @@ mod project;
 mod scalar;
 pub mod share;
 mod sort;
+mod union_all;
 
 use std::fmt::Display;
 use std::sync::Arc;
@@ -56,7 +57,6 @@ use common_planners::CreateUserUDFPlan;
 use common_planners::CreateViewPlan;
 use common_planners::DeletePlan;
 use common_planners::DescribeTablePlan;
-use common_planners::DescribeUserStagePlan;
 use common_planners::DropDatabasePlan;
 use common_planners::DropRolePlan;
 use common_planners::DropTableClusterKeyPlan;
@@ -109,6 +109,7 @@ pub use scalar::*;
 pub use share::*;
 pub use sort::Sort;
 pub use sort::SortItem;
+pub use union_all::UnionAll;
 
 use super::BindContext;
 use super::MetadataRef;
@@ -186,7 +187,6 @@ pub enum Plan {
 
     // Stages
     ListStage(Box<ListPlan>),
-    DescribeStage(Box<DescribeUserStagePlan>),
     CreateStage(Box<CreateUserStagePlan>),
     DropStage(Box<DropUserStagePlan>),
     RemoveStage(Box<RemoveUserStagePlan>),
@@ -223,6 +223,7 @@ pub enum RewriteKind {
 
     ShowUsers,
     ShowStages,
+    DescribeStage,
     ShowRoles,
 }
 
@@ -258,7 +259,6 @@ impl Display for Plan {
             Plan::CreateRole(_) => write!(f, "CreateRole"),
             Plan::DropRole(_) => write!(f, "DropRole"),
             Plan::ListStage(_) => write!(f, "ListStage"),
-            Plan::DescribeStage(_) => write!(f, "DescribeStage"),
             Plan::CreateStage(_) => write!(f, "CreateStage"),
             Plan::DropStage(_) => write!(f, "DropStage"),
             Plan::RemoveStage(_) => write!(f, "RemoveStage"),
@@ -330,7 +330,6 @@ impl Plan {
             Plan::GrantPriv(plan) => plan.schema(),
             Plan::ShowGrants(plan) => plan.schema(),
             Plan::ListStage(plan) => plan.schema(),
-            Plan::DescribeStage(plan) => plan.schema(),
             Plan::CreateStage(plan) => plan.schema(),
             Plan::DropStage(plan) => plan.schema(),
             Plan::RemoveStage(plan) => plan.schema(),
