@@ -35,6 +35,7 @@ use common_planners::Statistics;
 use common_planners::TruncateTablePlan;
 
 use crate::table_context::TableContext;
+use crate::table_mutator::TableMutator;
 
 #[async_trait::async_trait]
 pub trait Table: Sync + Send {
@@ -185,6 +186,32 @@ pub trait Table: Sync + Send {
     async fn delete(&self, _ctx: Arc<dyn TableContext>, _delete_plan: DeletePlan) -> Result<()> {
         Err(ErrorCode::UnImplement(format!(
             "table {},  of engine type {}, does not support DELETE FROM",
+            self.name(),
+            self.get_table_info().engine(),
+        )))
+    }
+
+    async fn compact(
+        &self,
+        _ctx: Arc<dyn TableContext>,
+        _catalog: String,
+        _pipeline: &mut Pipeline,
+    ) -> Result<Option<Arc<dyn TableMutator>>> {
+        Err(ErrorCode::UnImplement(format!(
+            "table {},  of engine type {}, does not support compact",
+            self.name(),
+            self.get_table_info().engine(),
+        )))
+    }
+
+    async fn recluster(
+        &self,
+        _ctx: Arc<dyn TableContext>,
+        _catalog: String,
+        _pipeline: &mut Pipeline,
+    ) -> Result<Option<Arc<dyn TableMutator>>> {
+        Err(ErrorCode::UnImplement(format!(
+            "table {},  of engine type {}, does not support recluster",
             self.name(),
             self.get_table_info().engine(),
         )))

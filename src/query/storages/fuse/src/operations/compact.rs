@@ -14,8 +14,6 @@
 
 use std::sync::Arc;
 
-use common_catalog::table::Table;
-use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::Pipeline;
@@ -29,6 +27,9 @@ use super::FuseTableSink;
 use crate::operations::CompactMutator;
 use crate::statistics::ClusterStatsGenerator;
 use crate::FuseTable;
+use crate::Table;
+use crate::TableContext;
+use crate::TableMutator;
 use crate::DEFAULT_BLOCK_PER_SEGMENT;
 use crate::DEFAULT_BLOCK_SIZE_IN_MEM_SIZE_THRESHOLD;
 use crate::DEFAULT_ROW_PER_BLOCK;
@@ -37,22 +38,35 @@ use crate::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 use crate::FUSE_OPT_KEY_ROW_PER_BLOCK;
 
 impl FuseTable {
-    pub async fn compact(
+    pub(crate) async fn do_compact(
         &self,
         ctx: Arc<dyn TableContext>,
         catalog: String,
-        mutator: CompactMutator,
         pipeline: &mut Pipeline,
-    ) -> Result<()> {
-        if mutator.selected_blocks.is_empty() {
-            return Ok(());
+    ) -> Result<Option<Arc<dyn TableMutator>>> {
+        let snapshot_opt = self.read_table_snapshot(ctx.clone()).await?;
+        let base_snapshot = if let Some(val) = snapshot_opt {
+            val
+        } else {
+            // no snapshot, no compaction.
+            return Ok(None);
+        };
+
+        if base_snapshot.summary.block_count <= 1 {
+            return Ok(None);
+        }
+
+        let mut mutator = CompactMutator::try_create(ctx.clone(), base_snapshot, self)?;
+        let need_compact = mutator.blocks_select().await?;
+        if !need_compact {
+            return Ok(None);
         }
 
         let partitions_total = mutator.base_snapshot.summary.block_count as usize;
         let (statistics, parts) = self.read_partitions_with_metas(
             ctx.clone(),
             None,
-            mutator.selected_blocks,
+            mutator.selected_blocks.clone(),
             partitions_total,
         )?;
         let table_info = self.get_table_info();
@@ -106,6 +120,6 @@ impl FuseTable {
         }
 
         pipeline.add_pipe(sink_pipeline_builder.finalize());
-        Ok(())
+        Ok(Some(Arc::new(mutator)))
     }
 }
