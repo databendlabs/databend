@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,7 +17,7 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 #[global_allocator]
-static ALLOC: Allocator = Allocator;
+static ALLOC: JEAllocator = JEAllocator;
 
 pub use platform::*;
 pub use tikv_jemalloc_sys;
@@ -30,6 +30,7 @@ mod platform {
     use tikv_jemalloc_sys as ffi;
 
     use crate::base::ThreadTracker;
+    use crate::mem_allocator::Allocator;
 
     /// Memory allocation APIs compatible with libc
     pub mod libc_compat {
@@ -38,7 +39,8 @@ mod platform {
         pub use super::ffi::realloc;
     }
 
-    pub struct Allocator;
+    #[derive(Debug, Clone, Copy, Default)]
+    pub struct JEAllocator;
 
     // The minimum alignment guaranteed by the architecture. This value is used to
     // add fast paths for low alignment values.
@@ -75,7 +77,7 @@ mod platform {
         }
     }
 
-    unsafe impl GlobalAlloc for Allocator {
+    unsafe impl GlobalAlloc for JEAllocator {
         #[inline]
         unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
             ThreadTracker::alloc_memory(layout.size() as i64);
@@ -110,6 +112,69 @@ mod platform {
 
             let flags = layout_to_flags(layout.align(), new_size);
             ffi::rallocx(ptr as *mut _, new_size, flags) as *mut u8
+        }
+    }
+
+    unsafe impl Allocator for JEAllocator {
+        unsafe fn allocx(&mut self, layout: Layout, clear_mem: bool) -> *mut u8 {
+            if clear_mem {
+                self.alloc_zeroed(layout)
+            } else {
+                self.alloc(layout)
+            }
+        }
+
+        unsafe fn deallocx(&mut self, ptr: *mut u8, layout: Layout) {
+            self.dealloc(ptr, layout)
+        }
+
+        unsafe fn reallocx(
+            &mut self,
+            ptr: *mut u8,
+            layout: Layout,
+            new_size: usize,
+            clear_mem: bool,
+        ) -> *mut u8 {
+            let mut flags = layout_to_flags(layout.align(), new_size);
+            if clear_mem {
+                flags |= ffi::MALLOCX_ZERO;
+            }
+            ffi::rallocx(ptr as *mut _, new_size, flags) as *mut u8
+        }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use std::alloc::Layout;
+
+    use crate::mem_allocator::Allocator;
+    use crate::mem_allocator::JEAllocator;
+
+    #[test]
+    fn test_malloc() {
+        type T = i64;
+        let mut alloc = JEAllocator::default();
+
+        let align = std::mem::align_of::<T>();
+        let size = std::mem::size_of::<T>() * 100;
+        let new_size = std::mem::size_of::<T>() * 1000000;
+
+        unsafe {
+            let layout = Layout::from_size_align_unchecked(size, align);
+            let ptr = alloc.allocx(layout, true) as *mut T;
+            *ptr = 84;
+            assert_eq!(84, *ptr);
+            assert_eq!(0, *(ptr.offset(5)));
+
+            *(ptr.offset(5)) = 1000;
+
+            let new_ptr = alloc.reallocx(ptr as *mut u8, layout, new_size, true) as *mut T;
+            assert_eq!(84, *new_ptr);
+            assert_eq!(0, *(new_ptr.offset(4)));
+            assert_eq!(1000, *(new_ptr.offset(5)));
+
+            alloc.deallocx(new_ptr as *mut u8, layout)
         }
     }
 }

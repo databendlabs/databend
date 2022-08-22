@@ -43,6 +43,10 @@ fn test_string() {
     test_trim_both(file);
     test_trim(file);
     test_concat(file);
+    test_bin(file);
+    test_oct(file);
+    test_hex(file);
+    test_unhex(file);
 }
 
 fn test_upper(file: &mut impl Write) {
@@ -374,4 +378,121 @@ fn test_concat(file: &mut impl Write) {
         DataType::Nullable(Box::new(DataType::String)),
         Column::from_data_with_validity(&["a", "b", "c", "d"], vec![true, true, false, true]),
     )]);
+}
+
+fn test_bin(file: &mut impl Write) {
+    let columns = &[
+        ("a", DataType::Int8, Column::from_data(vec![-1i8, 2, 3])),
+        (
+            "a2",
+            DataType::Nullable(Box::new(DataType::UInt8)),
+            Column::from_data_with_validity(vec![1u8, 2, 3], vec![true, true, false]),
+        ),
+        ("b", DataType::Int16, Column::from_data(vec![2i16, 4, 6])),
+        (
+            "c",
+            DataType::UInt32,
+            Column::from_data(vec![10u32, 20, 30]),
+        ),
+        (
+            "d",
+            DataType::Float64,
+            Column::from_data(vec![10f64, -20f64, 30f64]),
+        ),
+        (
+            "e",
+            DataType::String,
+            Column::from_data(vec!["abc", "def", "databend"]),
+        ),
+    ];
+    run_ast(file, "bin(a)", columns);
+    run_ast(file, "bin(a2)", columns);
+    run_ast(file, "bin(b)", columns);
+    run_ast(file, "bin(c)", columns);
+    run_ast(file, "bin(d)", columns);
+    run_ast(file, "bin(e)", columns);
+}
+
+fn test_oct(file: &mut impl Write) {
+    let columns = &[
+        ("a", DataType::Int8, Column::from_data(vec![-1i8, 2, 3])),
+        (
+            "a2",
+            DataType::Nullable(Box::new(DataType::UInt8)),
+            Column::from_data_with_validity(vec![1u8, 2, 3], vec![true, true, false]),
+        ),
+        ("b", DataType::Int16, Column::from_data(vec![2i16, 4, 6])),
+        (
+            "c",
+            DataType::UInt32,
+            Column::from_data(vec![10u32, 20, 30]),
+        ),
+        (
+            "d",
+            DataType::Float64,
+            Column::from_data(vec![10f64, -20f64, 30f64]),
+        ),
+        (
+            "e",
+            DataType::String,
+            Column::from_data(vec!["abc", "def", "databend"]),
+        ),
+    ];
+    run_ast(file, "oct(a)", columns);
+    run_ast(file, "oct(a2)", columns);
+    run_ast(file, "oct(b)", columns);
+    run_ast(file, "oct(c)", columns);
+    run_ast(file, "oct(d)", columns);
+    run_ast(file, "oct(e)", columns);
+}
+
+fn test_hex(file: &mut impl Write) {
+    let columns = &[
+        ("a", DataType::Int8, Column::from_data(vec![-1i8, 2, 3])),
+        (
+            "a2",
+            DataType::Nullable(Box::new(DataType::UInt8)),
+            Column::from_data_with_validity(vec![1u8, 2, 3], vec![true, true, false]),
+        ),
+        ("b", DataType::Int16, Column::from_data(vec![2i16, 4, 6])),
+        (
+            "c",
+            DataType::UInt32,
+            Column::from_data(vec![10u32, 20, 30]),
+        ),
+        (
+            "d",
+            DataType::Float64,
+            Column::from_data(vec![10f64, -20f64, 30f64]),
+        ),
+        (
+            "e",
+            DataType::String,
+            Column::from_data(vec!["abc", "def", "databend"]),
+        ),
+    ];
+    run_ast(file, "hex(a)", columns);
+    run_ast(file, "hex(a2)", columns);
+    run_ast(file, "hex(b)", columns);
+    run_ast(file, "hex(c)", columns);
+    run_ast(file, "hex(d)", columns);
+    run_ast(file, "hex(e)", columns);
+}
+
+fn test_unhex(file: &mut impl Write) {
+    run_ast(file, "unhex('6461746162656e64')", &[]);
+
+    let columns = &[(
+        "s",
+        DataType::String,
+        Column::from_data(vec!["abc", "def", "databend"]),
+    )];
+    run_ast(file, "unhex(hex(s))", columns);
+
+    let columns = &[(
+        "s",
+        DataType::String,
+        Column::from_data(vec!["616263", "646566", "6461746162656e64"]),
+    )];
+    run_ast(file, "unhex(s)", columns);
 }
