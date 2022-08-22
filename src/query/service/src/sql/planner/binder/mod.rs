@@ -337,6 +337,12 @@ impl<'a> Binder {
             Statement::ShowShares(stmt) => {
                 self.bind_show_shares(stmt).await?
             }
+            Statement::ShowObjectGrantPrivileges(stmt) => {
+                self.bind_show_object_grant_privileges(stmt).await?
+            }
+            Statement::ShowGrantsOfShare(stmt) => {
+                self.bind_show_grants_of_share(stmt).await?
+            }
         };
         Ok(plan)
     }

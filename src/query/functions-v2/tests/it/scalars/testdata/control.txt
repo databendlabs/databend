@@ -1,15 +1,15 @@
 ast            : multi_if(false, 1, false, 2, NULL)
 raw expr       : multi_if(false, 1_u8, false, 2_u8, NULL)
-checked expr   : multi_if<T0=UInt8 NULL><Boolean, T0, Boolean, T0, T0>(false, CAST(1_u8 AS UInt8 NULL), false, CAST(2_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL))
+checked expr   : multi_if<T0=UInt8 NULL><Boolean NULL, T0, Boolean NULL, T0, T0>(CAST(false AS Boolean NULL), CAST(1_u8 AS UInt8 NULL), CAST(false AS Boolean NULL), CAST(2_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL))
 optimized expr : NULL
 output type    : UInt8 NULL
 output domain  : {NULL}
 output         : NULL
 
 
-ast            : multi_if(true, 1, false, 2, NULL)
-raw expr       : multi_if(true, 1_u8, false, 2_u8, NULL)
-checked expr   : multi_if<T0=UInt8 NULL><Boolean, T0, Boolean, T0, T0>(true, CAST(1_u8 AS UInt8 NULL), false, CAST(2_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL))
+ast            : multi_if(true, 1, NULL, 2, NULL)
+raw expr       : multi_if(true, 1_u8, NULL, 2_u8, NULL)
+checked expr   : multi_if<T0=UInt8 NULL><Boolean NULL, T0, Boolean NULL, T0, T0>(CAST(true AS Boolean NULL), CAST(1_u8 AS UInt8 NULL), CAST(NULL AS Boolean NULL), CAST(2_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL))
 optimized expr : 1_u8
 output type    : UInt8 NULL
 output domain  : {1..=1}
@@ -18,7 +18,7 @@ output         : 1
 
 ast            : multi_if(false, 1, true, 2, NULL)
 raw expr       : multi_if(false, 1_u8, true, 2_u8, NULL)
-checked expr   : multi_if<T0=UInt8 NULL><Boolean, T0, Boolean, T0, T0>(false, CAST(1_u8 AS UInt8 NULL), true, CAST(2_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL))
+checked expr   : multi_if<T0=UInt8 NULL><Boolean NULL, T0, Boolean NULL, T0, T0>(CAST(false AS Boolean NULL), CAST(1_u8 AS UInt8 NULL), CAST(true AS Boolean NULL), CAST(2_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL))
 optimized expr : 2_u8
 output type    : UInt8 NULL
 output domain  : {2..=2}
@@ -27,7 +27,7 @@ output         : 2
 
 ast            : multi_if(true, 1, true, 2, NULL)
 raw expr       : multi_if(true, 1_u8, true, 2_u8, NULL)
-checked expr   : multi_if<T0=UInt8 NULL><Boolean, T0, Boolean, T0, T0>(true, CAST(1_u8 AS UInt8 NULL), true, CAST(2_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL))
+checked expr   : multi_if<T0=UInt8 NULL><Boolean NULL, T0, Boolean NULL, T0, T0>(CAST(true AS Boolean NULL), CAST(1_u8 AS UInt8 NULL), CAST(true AS Boolean NULL), CAST(2_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL))
 optimized expr : 1_u8
 output type    : UInt8 NULL
 output domain  : {1..=1}
@@ -36,7 +36,7 @@ output         : 1
 
 ast            : multi_if(true, 1, true, NULL, 2)
 raw expr       : multi_if(true, 1_u8, true, NULL, 2_u8)
-checked expr   : multi_if<T0=UInt8 NULL><Boolean, T0, Boolean, T0, T0>(true, CAST(1_u8 AS UInt8 NULL), true, CAST(NULL AS UInt8 NULL), CAST(2_u8 AS UInt8 NULL))
+checked expr   : multi_if<T0=UInt8 NULL><Boolean NULL, T0, Boolean NULL, T0, T0>(CAST(true AS Boolean NULL), CAST(1_u8 AS UInt8 NULL), CAST(true AS Boolean NULL), CAST(NULL AS UInt8 NULL), CAST(2_u8 AS UInt8 NULL))
 optimized expr : 1_u8
 output type    : UInt8 NULL
 output domain  : {1..=1}
@@ -45,7 +45,7 @@ output         : 1
 
 ast            : multi_if(true, 1, NULL)
 raw expr       : multi_if(true, 1_u8, NULL)
-checked expr   : multi_if<T0=UInt8 NULL><Boolean, T0, T0>(true, CAST(1_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL))
+checked expr   : multi_if<T0=UInt8 NULL><Boolean NULL, T0, T0>(CAST(true AS Boolean NULL), CAST(1_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL))
 optimized expr : 1_u8
 output type    : UInt8 NULL
 output domain  : {1..=1}
@@ -54,7 +54,7 @@ output         : 1
 
 ast            : multi_if(false, 1, NULL)
 raw expr       : multi_if(false, 1_u8, NULL)
-checked expr   : multi_if<T0=UInt8 NULL><Boolean, T0, T0>(false, CAST(1_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL))
+checked expr   : multi_if<T0=UInt8 NULL><Boolean NULL, T0, T0>(CAST(false AS Boolean NULL), CAST(1_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL))
 optimized expr : NULL
 output type    : UInt8 NULL
 output domain  : {NULL}
@@ -63,7 +63,7 @@ output         : NULL
 
 ast            : multi_if(cond_a, expr_true, expr_else)
 raw expr       : multi_if(ColumnRef(0)::Boolean, ColumnRef(1)::Int64, ColumnRef(2)::Int64 NULL)
-checked expr   : multi_if<T0=Int64 NULL><Boolean, T0, T0>(ColumnRef(0), CAST(ColumnRef(1) AS Int64 NULL), ColumnRef(2))
+checked expr   : multi_if<T0=Int64 NULL><Boolean NULL, T0, T0>(CAST(ColumnRef(0) AS Boolean NULL), CAST(ColumnRef(1) AS Int64 NULL), ColumnRef(2))
 evaluation:
 +--------+---------------+-----------+------------------+------------------+
 |        | cond_a        | expr_true | expr_else        | Output           |
@@ -88,7 +88,7 @@ evaluation (internal):
 
 ast            : multi_if(cond_a, expr_true, expr_else)
 raw expr       : multi_if(ColumnRef(0)::Boolean, ColumnRef(1)::Int64, ColumnRef(2)::Int64 NULL)
-checked expr   : multi_if<T0=Int64 NULL><Boolean, T0, T0>(ColumnRef(0), CAST(ColumnRef(1) AS Int64 NULL), ColumnRef(2))
+checked expr   : multi_if<T0=Int64 NULL><Boolean NULL, T0, T0>(CAST(ColumnRef(0) AS Boolean NULL), CAST(ColumnRef(1) AS Int64 NULL), ColumnRef(2))
 evaluation:
 +--------+---------------+-----------+------------------+------------------+
 |        | cond_a        | expr_true | expr_else        | Output           |
@@ -113,35 +113,34 @@ evaluation (internal):
 
 ast            : multi_if(cond_a, expr_a, cond_b, expr_b, expr_else)
 raw expr       : multi_if(ColumnRef(0)::Boolean, ColumnRef(1)::Int64, ColumnRef(2)::Boolean, ColumnRef(3)::Int64, ColumnRef(4)::Int64 NULL)
-checked expr   : multi_if<T0=Int64 NULL><Boolean, T0, Boolean, T0, T0>(ColumnRef(0), CAST(ColumnRef(1) AS Int64 NULL), ColumnRef(2), CAST(ColumnRef(3) AS Int64 NULL), ColumnRef(4))
-optimized expr : multi_if<T0=Int64 NULL><Boolean, T0, Boolean, T0, T0>(ColumnRef(0), CAST(ColumnRef(1) AS Int64 NULL), true, CAST(ColumnRef(3) AS Int64 NULL), ColumnRef(4))
+checked expr   : multi_if<T0=Int64 NULL><Boolean NULL, T0, Boolean NULL, T0, T0>(CAST(ColumnRef(0) AS Boolean NULL), CAST(ColumnRef(1) AS Int64 NULL), CAST(ColumnRef(2) AS Boolean NULL), CAST(ColumnRef(3) AS Int64 NULL), ColumnRef(4))
 evaluation:
-+--------+---------------+---------+---------+---------+-------------------+------------+
-|        | cond_a        | expr_a  | cond_b  | expr_b  | expr_else         | Output     |
-+--------+---------------+---------+---------+---------+-------------------+------------+
-| Type   | Boolean       | Int64   | Boolean | Int64   | Int64 NULL        | Int64 NULL |
-| Domain | {FALSE, TRUE} | {1..=4} | {TRUE}  | {5..=8} | {9..=12} ∪ {NULL} | {1..=8}    |
-| Row 0  | true          | 1       | true    | 5       | 9                 | 1          |
-| Row 1  | true          | 2       | true    | 6       | 10                | 2          |
-| Row 2  | false         | 3       | true    | 7       | NULL              | 7          |
-| Row 3  | false         | 4       | true    | 8       | NULL              | 8          |
-+--------+---------------+---------+---------+---------+-------------------+------------+
++--------+---------------+---------+-----------------+---------+-------------------+-------------------+
+|        | cond_a        | expr_a  | cond_b          | expr_b  | expr_else         | Output            |
++--------+---------------+---------+-----------------+---------+-------------------+-------------------+
+| Type   | Boolean       | Int64   | Boolean         | Int64   | Int64 NULL        | Int64 NULL        |
+| Domain | {FALSE, TRUE} | {1..=4} | {TRUE} ∪ {NULL} | {5..=8} | {9..=12} ∪ {NULL} | {1..=12} ∪ {NULL} |
+| Row 0  | true          | 1       | NULL            | 5       | 9                 | 1                 |
+| Row 1  | true          | 2       | true            | 6       | 10                | 2                 |
+| Row 2  | false         | 3       | NULL            | 7       | NULL              | NULL              |
+| Row 3  | false         | 4       | true            | 8       | NULL              | 8                 |
++--------+---------------+---------+-----------------+---------+-------------------+-------------------+
 evaluation (internal):
 +-----------+-------------------------------------------------------------------------------------+
 | Column    | Data                                                                                |
 +-----------+-------------------------------------------------------------------------------------+
 | cond_a    | Boolean([0b____0011])                                                               |
 | expr_a    | Int64([1, 2, 3, 4])                                                                 |
-| cond_b    | Boolean([0b____1111])                                                               |
+| cond_b    | Nullable(NullableColumn { column: Boolean([0b____1111]), validity: [0b____1010] })  |
 | expr_b    | Int64([5, 6, 7, 8])                                                                 |
 | expr_else | Nullable(NullableColumn { column: Int64([9, 10, 11, 12]), validity: [0b____0011] }) |
-| Output    | Nullable(NullableColumn { column: Int64([1, 2, 7, 8]), validity: [0b____1111] })    |
+| Output    | Nullable(NullableColumn { column: Int64([1, 2, 0, 8]), validity: [0b____1011] })    |
 +-----------+-------------------------------------------------------------------------------------+
 
 
 ast            : multi_if(cond_a, expr_a, cond_b, expr_b, expr_else)
 raw expr       : multi_if(ColumnRef(0)::Boolean, ColumnRef(1)::Int64, ColumnRef(2)::Boolean, ColumnRef(3)::Int64, ColumnRef(4)::Int64)
-checked expr   : multi_if<T0=Int64><Boolean, T0, Boolean, T0, T0>(ColumnRef(0), ColumnRef(1), ColumnRef(2), ColumnRef(3), ColumnRef(4))
+checked expr   : multi_if<T0=Int64><Boolean NULL, T0, Boolean NULL, T0, T0>(CAST(ColumnRef(0) AS Boolean NULL), ColumnRef(1), CAST(ColumnRef(2) AS Boolean NULL), ColumnRef(3), ColumnRef(4))
 evaluation:
 +--------+---------------+---------+---------------+---------+-----------+----------+
 |        | cond_a        | expr_a  | cond_b        | expr_b  | expr_else | Output   |
