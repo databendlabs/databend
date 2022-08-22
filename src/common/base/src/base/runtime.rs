@@ -135,6 +135,7 @@ impl Runtime {
         Self::create(tracker, &mut runtime_builder)
     }
 
+    #[allow(unused_mut)]
     pub fn with_worker_threads(workers: usize, mut thread_name: Option<String>) -> Result<Self> {
         let tracker = RuntimeTracker::create();
         let mut runtime_builder = Self::tracker_builder(tracker.clone());
