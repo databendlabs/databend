@@ -40,6 +40,11 @@ SELECT 1 IN (1, 2, NULL);
 1
 
 
+statement query BB
+SELECT 1::Int64 IN (0,10,1.1), 0::Float32 IN (0, 10, 1.1);
+
+----
+0 1
 
 statement query B
 SELECT 1 IN (2, 3, NULL);
@@ -121,7 +126,7 @@ SELECT to_date(18869) in (to_date(18869), NULL);
 
 
 
-statement query T 
+statement query T
 SELECT NULL in ('2021-08-30');
 
 ----
@@ -136,7 +141,7 @@ CREATE TABLE t1(a UInt64 null, b UInt64 null) Engine = Fuse;
 statement ok
 INSERT INTO t1 (a,b) VALUES (1, NULL), (2, 3);
 
-statement query I 
+statement query I
 SELECT a FROM t1 WHERE b IN (NULL,3);
 
 ----
