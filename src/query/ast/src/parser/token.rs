@@ -125,8 +125,8 @@ pub enum TokenKind {
     #[regex(r"[0-9]+")]
     LiteralInteger,
 
-    #[regex(r"[0-9]+e[+-]?[0-9]+")]
-    #[regex(r"([0-9]*\.[0-9]+(e[+-]?[0-9]+)?)|([0-9]+\.[0-9]*(e[+-]?[0-9]+)?)")]
+    #[regex(r"[0-9]+[eE][+-]?[0-9]+")]
+    #[regex(r"([0-9]*\.[0-9]+([eE][+-]?[0-9]+)?)|([0-9]+\.[0-9]*([eE][+-]?[0-9]+)?)")]
     LiteralFloat,
 
     // Symbols
@@ -387,6 +387,8 @@ pub enum TokenKind {
     FILE_FORMAT,
     #[token("FILES", ignore(ascii_case))]
     FILES,
+    #[token("FINAL", ignore(ascii_case))]
+    FINAL,
     #[token("FLOAT", ignore(ascii_case))]
     FLOAT,
     #[token("FLOAT32", ignore(ascii_case))]
@@ -545,6 +547,8 @@ pub enum TokenKind {
     QUARTER,
     #[token("QUERY", ignore(ascii_case))]
     QUERY,
+    #[token("RECLUSTER", ignore(ascii_case))]
+    RECLUSTER,
     #[token("RECORD_DELIMITER", ignore(ascii_case))]
     RECORD_DELIMITER,
     #[token("REFERENCE_USAGE", ignore(ascii_case))]

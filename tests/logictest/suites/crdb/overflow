@@ -24,4 +24,3 @@ SELECT sum(a) FROM large_numbers;
 
 ----
 -1
-

@@ -28,8 +28,8 @@ use crate::pipelines::processors::transforms::transform::Transformer;
 use crate::sql::executor::ColumnID;
 
 pub struct ExpressionTransformV2 {
-    expressions: Vec<(EvalNode<ColumnID>, String)>,
-    func_ctx: FunctionContext,
+    pub(crate) expressions: Vec<(EvalNode<ColumnID>, String)>,
+    pub(crate) func_ctx: FunctionContext,
 }
 
 impl ExpressionTransformV2 {

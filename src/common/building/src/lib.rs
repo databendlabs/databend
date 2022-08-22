@@ -77,8 +77,14 @@ pub fn add_env_commit_authors(repo: &Repository) {
 pub fn add_env_credits_info() {
     let metadata_command = cargo_metadata::MetadataCommand::new();
 
-    let deps = match cargo_license::get_dependencies_from_cargo_lock(metadata_command, false, false)
-    {
+    let opt = cargo_license::GetDependenciesOpt {
+        avoid_dev_deps: false,
+        avoid_build_deps: false,
+        direct_deps_only: false,
+        root_only: false,
+    };
+
+    let deps = match cargo_license::get_dependencies_from_cargo_lock(metadata_command, opt) {
         Ok(v) => v,
         Err(err) => {
             error!("{:?}", err);

@@ -97,7 +97,7 @@ pub struct RaftConfig {
 
     /// The node id to leave from the cluster.
     ///
-    /// It will be ignored if `--leave` is absent.
+    /// It will be ignored if `--leave-via` is absent.
     pub leave_id: Option<NodeId>,
 
     /// The node id. Only used when this server is not initialized,
@@ -150,6 +150,10 @@ impl Default for RaftConfig {
 impl RaftConfig {
     pub fn raft_api_listen_host_string(&self) -> String {
         format!("{}:{}", self.raft_listen_host, self.raft_api_port)
+    }
+
+    pub fn raft_api_advertise_host_string(&self) -> String {
+        format!("{}:{}", self.raft_advertise_host, self.raft_api_port)
     }
 
     pub fn raft_api_listen_host_endpoint(&self) -> Endpoint {

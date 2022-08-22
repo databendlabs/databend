@@ -15,11 +15,9 @@
 use std::collections::BTreeSet;
 
 use common_meta_api::KVApi;
-use common_meta_sled_store::openraft;
 use common_meta_sled_store::openraft::error::ChangeMembershipError;
 use common_meta_sled_store::openraft::error::ClientWriteError;
 use common_meta_sled_store::openraft::error::InProgress;
-use common_meta_sled_store::openraft::raft::EntryPayload;
 use common_meta_types::AppliedState;
 use common_meta_types::Cmd;
 use common_meta_types::ForwardRequest;
@@ -30,7 +28,6 @@ use common_meta_types::MetaError;
 use common_meta_types::MetaRaftError;
 use common_meta_types::Node;
 use common_meta_types::NodeId;
-use openraft::raft::ClientWriteRequest;
 use tracing::debug;
 use tracing::info;
 
@@ -218,11 +215,7 @@ impl<'a> MetaLeader<'a> {
     #[tracing::instrument(level = "debug", skip(self, entry))]
     pub async fn write(&self, entry: LogEntry) -> Result<AppliedState, MetaError> {
         info!("write LogEntry: {:?}", entry);
-        let write_rst = self
-            .meta_node
-            .raft
-            .client_write(ClientWriteRequest::new(EntryPayload::Normal(entry)))
-            .await;
+        let write_rst = self.meta_node.raft.client_write(entry).await;
 
         info!("raft.client_write rst: {:?}", write_rst);
 

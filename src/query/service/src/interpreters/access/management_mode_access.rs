@@ -62,6 +62,7 @@ impl ManagementModeAccess {
                             | RewriteKind::ShowFunctions
                             | RewriteKind::ShowUsers
                             | RewriteKind::ShowStages
+                            | RewriteKind::DescribeStage
                             | RewriteKind::ShowRoles),
                         _ => false
                     }
@@ -92,7 +93,6 @@ impl ManagementModeAccess {
                 // Stage.
                 | Plan::CreateStage(_)
                 | Plan::DropStage(_)
-                | Plan::DescribeStage(_)
                 | Plan::ListStage(_)
 
                 // UDF
