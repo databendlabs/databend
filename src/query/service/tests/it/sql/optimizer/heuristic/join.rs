@@ -27,7 +27,7 @@ pub async fn test_heuristic_optimizer_join() -> Result<()> {
     let mut mint = Mint::new("tests/it/sql/optimizer/heuristic/testdata/");
     let mut file = mint.new_goldenfile("join.test")?;
 
-    let ctx = create_query_context().await?;
+    let (_guard, ctx) = create_query_context().await?;
 
     let suites = vec![
         Suite {

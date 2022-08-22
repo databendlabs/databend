@@ -16,19 +16,25 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::hash::Hash;
+use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
 use common_base::base::tokio::sync::Notify;
 use common_base::base::tokio::time::interval_at;
 use common_base::base::tokio::time::Duration;
 use common_base::base::tokio::time::Instant;
+use common_base::base::GlobalIORuntime;
 use common_base::base::ProgressValues;
 use common_base::base::Runtime;
+use common_base::base::Singleton;
+use common_base::base::TrySpawn;
+use common_config::Config;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::InsertPlan;
 use common_planners::SelectPlan;
+use once_cell::sync::OnceCell;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 
@@ -189,49 +195,64 @@ type EntryPtr = Arc<Entry>;
 type Queue = HashMap<InsertKey, InsertData>;
 type QueryIdToEntry = HashMap<String, EntryPtr>;
 
-#[derive(Clone)]
-pub struct AsyncInsertQueue {
-    pub session_mgr: Arc<RwLock<Option<Arc<SessionManager>>>>,
-    runtime: Arc<Runtime>,
+pub struct AsyncInsertManager {
+    async_runtime: Runtime,
     max_data_size: u64,
     busy_timeout: Duration,
     stale_timeout: Duration,
     queue: Arc<RwLock<Queue>>,
     current_processing_insert: Arc<RwLock<QueryIdToEntry>>,
+    finished: AtomicBool,
 }
 
-impl AsyncInsertQueue {
-    pub fn try_create(
-        // TODO(fkuner): maybe circular reference
-        session_mgr: Arc<RwLock<Option<Arc<SessionManager>>>>,
-        runtime: Arc<Runtime>,
-        max_data_size: u64,
-        busy_timeout: Duration,
-        stale_timeout: Duration,
-    ) -> Self {
-        Self {
-            session_mgr,
-            runtime,
-            max_data_size,
+static ASYNC_INSERT_MANAGER: OnceCell<Singleton<Arc<AsyncInsertManager>>> = OnceCell::new();
+
+impl AsyncInsertManager {
+    pub fn init(config: &Config, v: Singleton<Arc<AsyncInsertManager>>) -> Result<()> {
+        let max_data_size = config.query.async_insert_max_data_size;
+        let busy_timeout = Duration::from_millis(config.query.async_insert_busy_timeout);
+        let stale_timeout = Duration::from_millis(config.query.async_insert_stale_timeout);
+        let async_runtime = Runtime::with_worker_threads(2, Some(String::from("Async-Insert")))?;
+
+        v.init(Arc::new(AsyncInsertManager {
             busy_timeout,
             stale_timeout,
+            max_data_size,
+            async_runtime,
+            finished: AtomicBool::new(false),
             queue: Arc::new(RwLock::new(Queue::default())),
             current_processing_insert: Arc::new(RwLock::new(QueryIdToEntry::default())),
+        }))?;
+
+        ASYNC_INSERT_MANAGER.set(v).ok();
+        Ok(())
+    }
+
+    pub fn instance() -> Arc<AsyncInsertManager> {
+        match ASYNC_INSERT_MANAGER.get() {
+            None => panic!("AsyncInsertManager is not init"),
+            Some(async_insert_manager) => async_insert_manager.get(),
         }
     }
 
-    pub async fn start(self: Arc<Self>) {
-        let self_arc = self.clone();
+    pub fn shutdown(self: &Arc<Self>) {
+        self.finished
+            .store(true, std::sync::atomic::Ordering::Release);
+    }
+
+    pub async fn start(self: &Arc<Self>) {
+        // TODO: need refactor this code.
+        let this = self.clone();
         // busy timeout
-        let busy_timeout = self_arc.busy_timeout;
-        self_arc.clone().runtime.as_ref().inner().spawn(async move {
+        let busy_timeout = this.busy_timeout;
+        self.async_runtime.spawn(async move {
             let mut intv = interval_at(Instant::now() + busy_timeout, busy_timeout);
-            loop {
+            while !this.finished.load(std::sync::atomic::Ordering::Relaxed) {
                 intv.tick().await;
-                if self_arc.queue.read().is_empty() {
+                if this.queue.read().is_empty() {
                     continue;
                 }
-                let timeout = self_arc.clone().busy_check();
+                let timeout = this.clone().busy_check();
                 if timeout != busy_timeout {
                     intv = interval_at(Instant::now() + timeout, timeout);
                 }
@@ -240,14 +261,15 @@ impl AsyncInsertQueue {
         // stale timeout
         let stale_timeout = self.stale_timeout;
         if !stale_timeout.is_zero() {
-            self.clone().runtime.as_ref().inner().spawn(async move {
+            let this = self.clone();
+            self.async_runtime.spawn(async move {
                 let mut intv = interval_at(Instant::now() + stale_timeout, stale_timeout);
-                loop {
+                while !this.finished.load(std::sync::atomic::Ordering::Relaxed) {
                     intv.tick().await;
-                    if self.queue.read().is_empty() {
+                    if this.queue.read().is_empty() {
                         continue;
                     }
-                    let timeout = self.clone().stale_check();
+                    let timeout = this.stale_check();
                     if timeout != busy_timeout {
                         intv = interval_at(Instant::now() + timeout, timeout);
                     }
@@ -283,10 +305,9 @@ impl AsyncInsertQueue {
                 }
                 pipeline.add_pipe(sink_pipeline_builder.finalize());
 
-                let query_need_abort = ctx.query_need_abort();
                 let executor = PipelineCompleteExecutor::try_create(
-                    self.runtime.clone(),
-                    query_need_abort,
+                    GlobalIORuntime::instance(),
+                    ctx.query_need_abort(),
                     pipeline,
                 )
                 .unwrap();
@@ -361,7 +382,7 @@ impl AsyncInsertQueue {
     ) -> Result<()> {
         let entry = self.get_entry(&query_id)?;
         let e = entry.clone();
-        self.runtime.as_ref().inner().spawn(async move {
+        self.async_runtime.spawn(async move {
             let mut intv = interval_at(Instant::now() + time_out, time_out);
             intv.tick().await;
             e.finish_with_timeout();
@@ -378,9 +399,10 @@ impl AsyncInsertQueue {
         }
     }
 
-    fn schedule(self: Arc<Self>, key: InsertKey, data: InsertData) {
-        self.runtime.as_ref().inner().spawn(async {
-            match self.process(key, data.clone()).await {
+    fn schedule(self: &Arc<Self>, key: InsertKey, data: InsertData) {
+        let this = self.clone();
+        self.async_runtime.spawn(async {
+            match this.process(key, data.clone()).await {
                 Ok(_) => {
                     for entry in data.entries.into_iter() {
                         entry.finish();
@@ -398,9 +420,11 @@ impl AsyncInsertQueue {
     async fn process(self: Arc<Self>, key: InsertKey, data: InsertData) -> Result<()> {
         let insert_plan = key.plan;
 
-        let session_mgr = self.session_mgr.read().clone().unwrap();
-        let session = session_mgr.create_session(SessionType::HTTPQuery).await;
-        let ctx = session.unwrap().create_query_context().await?;
+        let session_manager = SessionManager::instance();
+        let session = session_manager
+            .create_session(SessionType::HTTPQuery)
+            .await?;
+        let ctx = session.create_query_context().await?;
         ctx.apply_changed_settings(key.changed_settings.clone())?;
 
         let interpreter =
@@ -445,7 +469,7 @@ impl AsyncInsertQueue {
         timeout
     }
 
-    fn stale_check(self: Arc<Self>) -> Duration {
+    fn stale_check(self: &Arc<Self>) -> Duration {
         let mut keys = Vec::new();
         let mut queue = self.queue.write();
 

@@ -17,7 +17,6 @@ use std::sync::Arc;
 
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
-use common_base::base::Runtime;
 use common_config::Config;
 use common_contexts::DalContext;
 use common_contexts::DalMetrics;
@@ -25,7 +24,6 @@ use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::scalars::FunctionContext;
-use common_fuse_meta::caches::CacheManager;
 use common_io::prelude::FormatSettings;
 use common_meta_types::UserInfo;
 use common_planners::Partitions;
@@ -33,7 +31,6 @@ use common_planners::PlanNode;
 use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
 use common_settings::Settings;
-use common_users::RoleCacheMgr;
 use common_users::UserApiProvider;
 use opendal::Operator;
 use parking_lot::Mutex;
@@ -84,7 +81,7 @@ pub trait TableContext: Send + Sync {
     fn attach_query_str(&self, query: &str);
     fn attach_query_plan(&self, query_plan: &PlanNode);
     fn get_fragment_id(&self) -> usize;
-    fn get_catalogs(&self) -> Arc<CatalogManager>;
+    fn get_catalog_manager(&self) -> Result<Arc<CatalogManager>>;
     fn get_catalog(&self, catalog_name: &str) -> Result<Arc<dyn Catalog>>;
     fn get_id(&self) -> String;
     fn get_current_catalog(&self) -> String;
@@ -99,17 +96,13 @@ pub trait TableContext: Send + Sync {
     fn get_tenant(&self) -> String;
     fn set_current_tenant(&self, tenant: String);
     fn get_subquery_name(&self, _query: &PlanNode) -> String;
-    fn get_role_cache_manager(&self) -> Arc<RoleCacheMgr>;
     /// Get the data accessor metrics.
     fn get_dal_metrics(&self) -> DalMetrics;
     /// Get the session running query.
     fn get_query_str(&self) -> String;
-    /// Get the storage cache manager
-    fn get_storage_cache_manager(&self) -> Arc<CacheManager>;
     // Get the storage data accessor operator from the session manager.
     fn get_storage_operator(&self) -> Result<Operator>;
     fn get_dal_context(&self) -> &DalContext;
-    fn get_storage_runtime(&self) -> Arc<Runtime>;
     fn push_precommit_block(&self, block: DataBlock);
     fn consume_precommit_blocks(&self) -> Vec<DataBlock>;
     fn try_get_function_context(&self) -> Result<FunctionContext>;

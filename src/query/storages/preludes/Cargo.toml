@@ -14,7 +14,6 @@ test = false
 [dependencies]
 common-arrow = { path = "../../../common/arrow" }
 common-base = { path = "../../../common/base" }
-common-cache = { path = "../../../common/cache" }
 common-catalog = { path = "../../catalog" }
 common-config = { path = "../../config" }
 common-contexts = { path = "../../../common/contexts" }
@@ -22,7 +21,6 @@ common-datablocks = { path = "../../datablocks" }
 common-datavalues = { path = "../../datavalues" }
 common-exception = { path = "../../../common/exception" }
 common-functions = { path = "../../functions" }
-common-fuse-meta = { path = "../fuse-meta" }
 common-grpc = { path = "../../../common/grpc" }
 common-meta-app = { path = "../../../meta/app" }
 common-meta-types = { path = "../../../meta/types" }

@@ -31,6 +31,7 @@ use tracing::info;
 use tracing::warn;
 
 use super::v1::HttpQueryContext;
+use crate::auth::AuthMgr;
 use crate::auth::Credential;
 use crate::servers::HttpHandlerKind;
 use crate::sessions::SessionManager;
@@ -38,7 +39,13 @@ use crate::sessions::SessionType;
 
 pub struct HTTPSessionMiddleware {
     pub kind: HttpHandlerKind,
-    pub session_manager: Arc<SessionManager>,
+    pub auth_manager: Arc<AuthMgr>,
+}
+
+impl HTTPSessionMiddleware {
+    pub fn create(kind: HttpHandlerKind, auth_manager: Arc<AuthMgr>) -> HTTPSessionMiddleware {
+        HTTPSessionMiddleware { kind, auth_manager }
+    }
 }
 
 fn get_credential(req: &Request, kind: HttpHandlerKind) -> Result<Credential> {
@@ -104,33 +111,35 @@ impl<E: Endpoint> Middleware<E> for HTTPSessionMiddleware {
     type Output = HTTPSessionEndpoint<E>;
     fn transform(&self, ep: E) -> Self::Output {
         HTTPSessionEndpoint {
-            kind: self.kind,
             ep,
-            manager: self.session_manager.clone(),
+            kind: self.kind,
+            auth_manager: self.auth_manager.clone(),
         }
     }
 }
 
 pub struct HTTPSessionEndpoint<E> {
-    pub kind: HttpHandlerKind,
     ep: E,
-    manager: Arc<SessionManager>,
+    pub kind: HttpHandlerKind,
+    pub auth_manager: Arc<AuthMgr>,
 }
 
 impl<E> HTTPSessionEndpoint<E> {
     async fn auth(&self, req: &Request) -> Result<HttpQueryContext> {
         let credential = get_credential(req, self.kind)?;
-        let session = self.manager.create_session(SessionType::Dummy).await?;
+        let session_manager = SessionManager::instance();
+        let session = session_manager.create_session(SessionType::Dummy).await?;
         let ctx = session.create_query_context().await?;
         if let Some(tenant_id) = req.headers().get("X-DATABEND-TENANT") {
             let tenant_id = tenant_id.to_str().unwrap().to_string();
             session.set_current_tenant(tenant_id);
         }
-        ctx.get_auth_manager()
+
+        self.auth_manager
             .auth(ctx.get_current_session(), &credential)
             .await?;
 
-        Ok(HttpQueryContext::new(self.manager.clone(), session))
+        Ok(HttpQueryContext::new(session))
     }
 }
 

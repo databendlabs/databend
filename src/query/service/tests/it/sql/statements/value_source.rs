@@ -24,7 +24,7 @@ use crate::tests::create_query_context;
 
 #[tokio::test]
 async fn test_parse_value_source() -> Result<()> {
-    let ctx = create_query_context().await?;
+    let (_guard, ctx) = create_query_context().await?;
     let schema = DataSchemaRefExt::create(vec![
         DataField::new("name", Vu8::to_data_type()),
         DataField::new("age", u8::to_data_type()),

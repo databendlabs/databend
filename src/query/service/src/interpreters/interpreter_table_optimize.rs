@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_base::base::GlobalIORuntime;
 use common_exception::Result;
 use common_planners::OptimizeTableAction;
 use common_planners::OptimizeTablePlan;
@@ -77,7 +78,7 @@ impl OptimizeTableInterpreter {
 
         pipeline.set_max_threads(settings.get_max_threads()? as usize);
 
-        let async_runtime = ctx.get_storage_runtime();
+        let async_runtime = GlobalIORuntime::instance();
         let query_need_abort = ctx.query_need_abort();
         let executor =
             PipelineCompleteExecutor::try_create(async_runtime, query_need_abort, pipeline)?;

@@ -72,8 +72,10 @@ impl BlockBloomFilterIndexReader for Location {
 mod util_v1 {
     use std::future::Future;
 
+    use common_base::base::GlobalIORuntime;
     use common_base::base::Runtime;
     use common_base::base::TrySpawn;
+    use common_fuse_meta::caches::CacheManager;
 
     use super::*;
 
@@ -185,13 +187,13 @@ mod util_v1 {
     /// read data from cache, or populate cache items if possible
     #[tracing::instrument(level = "debug", skip_all)]
     async fn load_column_bytes(
-        ctx: &Arc<dyn TableContext>,
+        _ctx: &Arc<dyn TableContext>,
         file_meta: &FileMetaData,
         col_name: &str,
         path: &str,
         dal: &Operator,
     ) -> Result<(Arc<Vec<u8>>, usize)> {
-        let storage_runtime = &ctx.get_storage_runtime();
+        let storage_runtime = GlobalIORuntime::instance();
         let cols = file_meta.row_groups[0].columns();
         if let Some((idx, col_meta)) = cols
             .iter()
@@ -199,8 +201,7 @@ mod util_v1 {
             .find(|(_, c)| c.descriptor().path_in_schema[0] == col_name)
         {
             let cache_key = format!("{path}-{idx}");
-            if let Some(bloom_index_cache) = ctx.get_storage_cache_manager().get_bloom_index_cache()
-            {
+            if let Some(bloom_index_cache) = CacheManager::instance().get_bloom_index_cache() {
                 let cache = &mut bloom_index_cache.write().await;
                 if let Some(bytes) = cache.get(&cache_key) {
                     Ok((bytes.clone(), idx))
@@ -212,7 +213,7 @@ mod util_v1 {
                             dal.clone(),
                             path.to_owned(),
                         )
-                        .execute_in_runtime(storage_runtime)
+                        .execute_in_runtime(&storage_runtime)
                         .await??,
                     );
                     cache.put(cache_key, bytes.clone());
@@ -225,7 +226,7 @@ mod util_v1 {
                         dal.clone(),
                         path.to_owned(),
                     )
-                    .execute_in_runtime(storage_runtime)
+                    .execute_in_runtime(&storage_runtime)
                     .await??,
                 );
                 Ok((bytes, idx))
@@ -241,13 +242,12 @@ mod util_v1 {
     /// read data from cache, or populate cache items if possible
     #[tracing::instrument(level = "debug", skip_all)]
     async fn load_index_meta(
-        ctx: &Arc<dyn TableContext>,
+        _ctx: &Arc<dyn TableContext>,
         path: &str,
         dal: &Operator,
     ) -> Result<Arc<FileMetaData>> {
-        let storage_runtime = &ctx.get_storage_runtime();
-        if let Some(bloom_index_meta_cache) =
-            ctx.get_storage_cache_manager().get_bloom_index_meta_cache()
+        let storage_runtime = &GlobalIORuntime::instance();
+        if let Some(bloom_index_meta_cache) = CacheManager::instance().get_bloom_index_meta_cache()
         {
             let cache = &mut bloom_index_meta_cache.write().await;
             if let Some(file_meta) = cache.get(path) {

@@ -12,19 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use chrono::DateTime;
 use chrono::Utc;
+use common_catalog::catalog::CatalogManager;
 use common_catalog::catalog::CATALOG_DEFAULT;
 use common_exception::Result;
-use poem::web::Data;
 use poem::web::Json;
 use poem::web::Path;
 use poem::IntoResponse;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::catalogs::CatalogManagerHelper;
 use crate::sessions::SessionManager;
 
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Default)]
@@ -45,13 +44,8 @@ pub struct TenantTableInfo {
     pub index_bytes: u64,
 }
 
-async fn load_tenant_tables(
-    session_mgr: &Arc<SessionManager>,
-    tenant: &str,
-) -> Result<Vec<TenantTableInfo>> {
-    let catalog = session_mgr
-        .get_catalog_manager()
-        .get_catalog(CATALOG_DEFAULT)?;
+async fn load_tenant_tables(tenant: &str) -> Result<Vec<TenantTableInfo>> {
+    let catalog = CatalogManager::instance().get_catalog(CATALOG_DEFAULT)?;
     let databases = catalog.list_databases(tenant).await?;
 
     let mut table_infos: Vec<TenantTableInfo> = vec![];
@@ -79,9 +73,8 @@ async fn load_tenant_tables(
 #[poem::handler]
 pub async fn list_tenant_tables_handler(
     Path(tenant): Path<String>,
-    session_mgr: Data<&Arc<SessionManager>>,
 ) -> poem::Result<impl IntoResponse> {
-    let tables = load_tenant_tables(&session_mgr, &tenant)
+    let tables = load_tenant_tables(&tenant)
         .await
         .map_err(poem::error::InternalServerError)?;
     Ok(Json(TenantTablesResponse { tables }))
@@ -89,16 +82,14 @@ pub async fn list_tenant_tables_handler(
 
 // This handler returns the statistics about the tables of the current tenant.
 #[poem::handler]
-pub async fn list_tables_handler(
-    session_mgr: Data<&Arc<SessionManager>>,
-) -> poem::Result<impl IntoResponse> {
-    let conf = session_mgr.get_conf();
-    let tenant = &conf.query.tenant_id;
+pub async fn list_tables_handler() -> poem::Result<impl IntoResponse> {
+    let session_mgr = SessionManager::instance();
+    let tenant = &session_mgr.get_conf().query.tenant_id;
     if tenant.is_empty() {
         return Ok(Json(TenantTablesResponse { tables: vec![] }));
     }
 
-    let tables = load_tenant_tables(&session_mgr, tenant)
+    let tables = load_tenant_tables(tenant)
         .await
         .map_err(poem::error::InternalServerError)?;
     Ok(Json(TenantTablesResponse { tables }))

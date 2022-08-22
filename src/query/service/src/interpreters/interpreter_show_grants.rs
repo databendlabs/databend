@@ -21,6 +21,7 @@ use common_meta_types::PrincipalIdentity;
 use common_planners::ShowGrantsPlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
+use common_users::RoleCacheManager;
 
 use crate::interpreters::Interpreter;
 use crate::sessions::QueryContext;
@@ -50,7 +51,6 @@ impl Interpreter for ShowGrantsInterpreter {
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         let tenant = self.ctx.get_tenant();
         let user_mgr = self.ctx.get_user_manager();
-        let role_cache_mgr = self.ctx.get_role_cache_manager();
 
         // TODO: add permission check on reading user grants
         let (identity, grant_set) = match self.plan.principal {
@@ -69,7 +69,7 @@ impl Interpreter for ShowGrantsInterpreter {
                 }
             },
         };
-        let grant_list = role_cache_mgr
+        let grant_list = RoleCacheManager::instance()
             .find_related_roles(&tenant, &grant_set.roles())
             .await?
             .into_iter()

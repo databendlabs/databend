@@ -19,8 +19,10 @@ use std::time::Instant;
 
 use common_base::base::tokio;
 use common_base::base::tokio::task::JoinHandle;
+use common_base::base::Singleton;
 use common_exception::Result;
 use common_meta_types::RoleInfo;
+use once_cell::sync::OnceCell;
 use parking_lot::RwLock;
 use tracing::warn;
 
@@ -32,29 +34,49 @@ struct CachedRoles {
     cached_at: Instant,
 }
 
-pub struct RoleCacheMgr {
-    user_api: Arc<UserApiProvider>,
+pub struct RoleCacheManager {
+    user_manager: Arc<UserApiProvider>,
     cache: Arc<RwLock<HashMap<String, CachedRoles>>>,
     polling_interval: Duration,
     polling_join_handle: Option<JoinHandle<()>>,
 }
 
-impl RoleCacheMgr {
-    pub fn new(user_api: Arc<UserApiProvider>) -> Self {
-        let mut mgr = Self {
-            user_api,
+static ROLE_CACHE_MANAGER: OnceCell<Singleton<Arc<RoleCacheManager>>> = OnceCell::new();
+
+impl RoleCacheManager {
+    pub fn init(v: Singleton<Arc<RoleCacheManager>>) -> Result<()> {
+        // Check that the user API has been initialized.
+        let instance = UserApiProvider::instance();
+
+        v.init(Self::try_create(instance)?)?;
+
+        ROLE_CACHE_MANAGER.set(v).ok();
+        Ok(())
+    }
+
+    pub fn try_create(user_manager: Arc<UserApiProvider>) -> Result<Arc<RoleCacheManager>> {
+        let mut role_cache_manager = Self {
+            user_manager,
+            polling_join_handle: None,
             cache: Arc::new(RwLock::new(HashMap::new())),
             polling_interval: Duration::new(15, 0),
-            polling_join_handle: None,
         };
-        mgr.background_polling();
-        mgr
+
+        role_cache_manager.background_polling();
+        Ok(Arc::new(role_cache_manager))
+    }
+
+    pub fn instance() -> Arc<RoleCacheManager> {
+        match ROLE_CACHE_MANAGER.get() {
+            None => panic!("RoleCacheManager is not init"),
+            Some(role_cache_manager) => role_cache_manager.get(),
+        }
     }
 
     pub fn background_polling(&mut self) {
-        let user_api = self.user_api.clone();
         let cache = self.cache.clone();
         let polling_interval = self.polling_interval;
+        let user_manager = self.user_manager.clone();
         self.polling_join_handle = Some(tokio::spawn(async move {
             loop {
                 let tenants: Vec<String> = {
@@ -62,7 +84,7 @@ impl RoleCacheMgr {
                     cached.keys().cloned().collect()
                 };
                 for tenant in tenants {
-                    match load_roles_data(&user_api, &tenant).await {
+                    match load_roles_data(&user_manager, &tenant).await {
                         Err(err) => {
                             warn!(
                                 "role_cache_mgr load roles data of tenant {} failed: {}",
@@ -115,7 +137,7 @@ impl RoleCacheMgr {
             }
         };
         if need_reload {
-            let data = load_roles_data(&self.user_api, tenant).await?;
+            let data = load_roles_data(&self.user_manager, tenant).await?;
             let mut cached = self.cache.write();
             cached.insert(tenant.to_string(), data);
         }

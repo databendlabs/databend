@@ -17,6 +17,8 @@ use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_planners::*;
 use databend_query::interpreters::InterpreterFactory;
+use databend_query::sessions::SessionManager;
+use databend_query::sessions::SessionType;
 use databend_query::sessions::TableContext;
 use databend_query::sql::PlanParser;
 use databend_query::storages::TableStreamReadWrap;
@@ -24,10 +26,13 @@ use databend_query::storages::ToReadDataSourcePlan;
 use databend_query::table_functions::NumbersTable;
 use futures::TryStreamExt;
 
+use crate::tests::ConfigBuilder;
+use crate::tests::TestGlobalServices;
+
 #[tokio::test]
 async fn test_number_table() -> Result<()> {
     let tbl_args = Some(vec![Expression::create_literal(DataValue::UInt64(8))]);
-    let ctx = crate::tests::create_query_context().await?;
+    let (_guard, ctx) = crate::tests::create_query_context().await?;
     let table = NumbersTable::create("system", "numbers_mt", 1, tbl_args)?;
 
     let source_plan = table
@@ -105,8 +110,12 @@ async fn test_limit_push_down() -> Result<()> {
         },
     ];
 
+    let _guard = TestGlobalServices::setup(ConfigBuilder::create().build()).await?;
     for test in tests {
-        let ctx = crate::tests::create_query_context().await?;
+        let session = SessionManager::instance()
+            .create_session(SessionType::Dummy)
+            .await?;
+        let ctx = session.create_query_context().await?;
         let plan = PlanParser::parse(ctx.clone(), test.query).await?;
         let actual = format!("{:?}", plan);
         assert_eq!(test.expect, actual, "{:#?}", test.name);
