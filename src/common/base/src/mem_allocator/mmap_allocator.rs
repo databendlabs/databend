@@ -136,7 +136,7 @@ unsafe impl<const MMAP_POPULATE: bool> AllocatorTrait for MmapAllocator<MMAP_POP
                     new_size,
                     MREMAP_MAYMOVE,
                     PROT_READ | PROT_WRITE,
-                )
+                ) as *mut u8
             }
         } else {
             let new_buf = self.allocx(
@@ -178,26 +178,22 @@ mod tests {
 
     use super::*;
     use crate::mem_allocator::Allocator as AllocatorTrait;
-    type ALOC = MmapAllocator<true>;
+    type Aloc = MmapAllocator<true>;
 
     fn clear_errno() {
         unsafe { *libc::__errno_location() = 0 }
     }
 
-    // fn errno() -> i32 {
-    //     unsafe { *libc::__errno_location() }
-    // }
-
     #[test]
     fn default() {
-        let _alloc = ALOC::default();
+        let _alloc = Aloc::default();
     }
 
     #[test]
     fn allocate() {
         unsafe {
             type T = i64;
-            let mut alloc = ALOC::default();
+            let mut alloc = Aloc::default();
 
             let layout = Layout::new::<i64>();
             let ptr = alloc.allocx(layout, false) as *mut T;
@@ -206,7 +202,7 @@ mod tests {
             *ptr = 84;
             assert_eq!(84, *ptr);
 
-            *ptr = *ptr * -2;
+            *ptr *= -2;
             assert_eq!(-168, *ptr);
 
             alloc.deallocx(ptr as *mut u8, layout)
@@ -219,7 +215,7 @@ mod tests {
             clear_errno();
 
             type T = String;
-            let mut alloc = ALOC::default();
+            let mut alloc = Aloc::default();
 
             let align = mem::align_of::<T>();
             let size = std::usize::MAX - mem::size_of::<T>();
@@ -233,7 +229,7 @@ mod tests {
     fn alloc_zeroed() {
         unsafe {
             type T = [u8; 1025];
-            let mut alloc = ALOC::default();
+            let mut alloc = Aloc::default();
 
             let layout = Layout::new::<T>();
             let ptr = alloc.allocx(layout, false) as *mut T;
@@ -251,7 +247,7 @@ mod tests {
     fn reallocx() {
         unsafe {
             type T = [u8; 1025];
-            let mut alloc = ALOC::default();
+            let mut alloc = Aloc::default();
 
             let layout = Layout::new::<T>();
             let ptr = alloc.allocx(layout, false) as *mut T;

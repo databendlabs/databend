@@ -31,9 +31,19 @@ mod profiling;
 pub use profiling::dump_profile;
 
 // A new Allocator trait suits databend
+/// # Safety
+///
+/// All functions are thread safe.
 pub unsafe trait Allocator {
+    /// # Safety
+    /// the caller must ensure that the layout is valid
     unsafe fn allocx(&mut self, layout: Layout, clear_mem: bool) -> *mut u8;
+    /// # Safety
+    /// the caller must ensure that the ptr is valid
     unsafe fn deallocx(&mut self, ptr: *mut u8, layout: Layout);
+    /// # Safety
+    /// the caller must ensure that the `new_size` does not overflow.
+    /// `layout.align()` comes from a `Layout` and is thus guaranteed to be valid.
     unsafe fn reallocx(
         &mut self,
         ptr: *mut u8,
@@ -41,8 +51,6 @@ pub unsafe trait Allocator {
         new_size: usize,
         clear_mem: bool,
     ) -> *mut u8 {
-        // SAFETY: the caller must ensure that the `new_size` does not overflow.
-        // `layout.align()` comes from a `Layout` and is thus guaranteed to be valid.
         let new_layout = Layout::from_size_align_unchecked(new_size, layout.align());
         // SAFETY: the caller must ensure that `new_layout` is greater than zero.
         let new_ptr = self.allocx(new_layout, clear_mem);

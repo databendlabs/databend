@@ -15,7 +15,6 @@
 #![feature(core_intrinsics)]
 #![feature(arbitrary_self_types)]
 
-use common_base::mem_allocator::JEAllocator;
 use common_base::mem_allocator::MmapAllocator;
 use common_base::mem_allocator::StackfulAllocator;
 pub use hash_table::HashTable;

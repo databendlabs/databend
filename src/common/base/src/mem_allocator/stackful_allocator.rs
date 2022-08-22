@@ -91,18 +91,18 @@ mod tests {
     use super::*;
     use crate::mem_allocator::Allocator as AllocatorTrait;
     use crate::mem_allocator::MmapAllocator;
-    type ALOC = StackfulAllocator<1024, MmapAllocator<true>>;
+    type Aloc = StackfulAllocator<1024, MmapAllocator<true>>;
 
     #[test]
     fn default() {
-        let _alloc = ALOC::default();
+        let _alloc = Aloc::default();
     }
 
     #[test]
     fn allocate() {
         unsafe {
             type T = i64;
-            let mut alloc = ALOC::default();
+            let mut alloc = Aloc::default();
 
             let layout = Layout::new::<i64>();
             let ptr = alloc.allocx(layout, false) as *mut T;
@@ -111,7 +111,7 @@ mod tests {
             *ptr = 84;
             assert_eq!(84, *ptr);
 
-            *ptr = *ptr * -2;
+            *ptr *= -2;
             assert_eq!(-168, *ptr);
 
             alloc.deallocx(ptr as *mut u8, layout)
@@ -122,7 +122,7 @@ mod tests {
     fn alloc_zeroed() {
         unsafe {
             type T = [u8; 1025];
-            let mut alloc = ALOC::default();
+            let mut alloc = Aloc::default();
 
             let layout = Layout::new::<T>();
             let ptr = alloc.allocx(layout, true) as *mut T;
@@ -140,7 +140,7 @@ mod tests {
     fn reallocx() {
         unsafe {
             type T = [u8; 1025];
-            let mut alloc = ALOC::default();
+            let mut alloc = Aloc::default();
 
             let layout = Layout::new::<T>();
             let ptr = alloc.allocx(layout, false) as *mut T;

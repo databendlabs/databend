@@ -45,11 +45,7 @@ unsafe impl Allocator for StdAllocator {
     ) -> *mut u8 {
         let ptr = std::alloc::realloc(ptr, layout, new_size);
         if clear_mem && new_size > layout.size() {
-            std::ptr::write_bytes(
-                ptr.offset(layout.size() as isize),
-                0,
-                new_size - layout.size(),
-            );
+            std::ptr::write_bytes(ptr.add(layout.size()), 0, new_size - layout.size());
         }
         ptr
     }
