@@ -14,12 +14,13 @@
 //
 // Reference the ClickHouse HashTable to implement the Databend HashTable
 
+use std::alloc::GlobalAlloc;
 use std::alloc::Layout;
 use std::marker::PhantomData;
 use std::mem;
 
 use common_base::mem_allocator::Allocator as AllocatorTrait;
-use common_base::mem_allocator::GlobalAllocator;
+use common_base::mem_allocator::ALLOC;
 
 use crate::hash_table_grower::HashTableGrower;
 use crate::HashTableEntity;
@@ -100,7 +101,7 @@ impl<
                     mem::size_of::<Entity>(),
                     std::mem::align_of::<Entity>(),
                 );
-                GlobalAllocator::dealloc(zero_entity, zero_layout);
+                ALLOC.dealloc(zero_entity, zero_layout);
             }
         }
     }
@@ -288,7 +289,7 @@ impl<
                     self.size += 1;
                     *inserted = true;
 
-                    self.zero_entity_raw = Some(GlobalAllocator::alloc_zeroed(layout));
+                    self.zero_entity_raw = Some(ALLOC.alloc_zeroed(layout));
                     self.zero_entity = Some(self.zero_entity_raw.unwrap() as *mut Entity);
                     self.zero_entity.unwrap().set_key_and_hash(key, hash_value);
                     self.zero_entity
