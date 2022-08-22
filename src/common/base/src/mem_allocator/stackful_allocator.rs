@@ -19,22 +19,25 @@
 use std::alloc::Layout;
 use std::ptr;
 
-
 use super::Allocator as AllocatorTrait;
 
 /// Implementation of std::alloc::Allocator whose backend is mmap(2)
 #[derive(Debug, Clone, Copy)]
-pub struct StackfulAllocator< const INIT_BYTES: usize, Allocator: AllocatorTrait>  {
+pub struct StackfulAllocator<const INIT_BYTES: usize, Allocator: AllocatorTrait> {
     allocator: Allocator,
     stack_bytes: [u8; INIT_BYTES],
 }
 
-impl<const INIT_BYTES: usize, Allocator: AllocatorTrait + Default> Default for  StackfulAllocator<INIT_BYTES,  Allocator> {
+impl<const INIT_BYTES: usize, Allocator: AllocatorTrait + Default> Default
+    for StackfulAllocator<INIT_BYTES, Allocator>
+{
     fn default() -> Self {
-        Self { allocator: Default::default(), stack_bytes: [0; INIT_BYTES] }
+        Self {
+            allocator: Default::default(),
+            stack_bytes: [0; INIT_BYTES],
+        }
     }
 }
-
 
 /// # Safety
 ///
@@ -43,13 +46,13 @@ unsafe impl<const INIT_BYTES: usize, Allocator: AllocatorTrait> AllocatorTrait
     for StackfulAllocator<INIT_BYTES, Allocator>
 {
     unsafe fn allocx(&mut self, layout: Layout, clear_mem: bool) -> *mut u8 {
-       if layout.size() <= INIT_BYTES {
+        if layout.size() <= INIT_BYTES {
             if clear_mem {
                 ptr::write_bytes(self.stack_bytes.as_mut_ptr(), 0, INIT_BYTES);
             }
             return self.stack_bytes.as_mut_ptr();
-       }
-       self.allocator.allocx(layout, clear_mem)
+        }
+        self.allocator.allocx(layout, clear_mem)
     }
 
     unsafe fn deallocx(&mut self, ptr: *mut u8, layout: Layout) {
@@ -68,23 +71,26 @@ unsafe impl<const INIT_BYTES: usize, Allocator: AllocatorTrait> AllocatorTrait
         if new_size <= INIT_BYTES {
             return ptr;
         }
-
         if layout.size() > INIT_BYTES {
             return self.allocator.reallocx(ptr, layout, new_size, clear_mem);
         }
-        let new_buf = self.allocx(Layout::from_size_align_unchecked(new_size, layout.align()), clear_mem);
+
+        let new_buf = self.allocator.allocx(
+            Layout::from_size_align_unchecked(new_size, layout.align()),
+            clear_mem,
+        );
         std::ptr::copy_nonoverlapping(ptr, new_buf, layout.size());
         new_buf
     }
 }
-
 
 #[cfg(test)]
 mod tests {
     use std::mem;
 
     use super::*;
-    use crate::mem_allocator::{Allocator as AllocatorTrait, MmapAllocator};
+    use crate::mem_allocator::Allocator as AllocatorTrait;
+    use crate::mem_allocator::MmapAllocator;
     type ALOC = StackfulAllocator<1024, MmapAllocator<true>>;
 
     #[test]
@@ -111,7 +117,6 @@ mod tests {
             alloc.deallocx(ptr as *mut u8, layout)
         }
     }
-
 
     #[test]
     fn alloc_zeroed() {

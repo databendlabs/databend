@@ -22,6 +22,7 @@ use common_base::mem_allocator::Allocator as AllocatorTrait;
 
 use crate::hash_table_grower::HashTableGrower;
 use crate::HashTableEntity;
+use crate::HashTableIter;
 use crate::HashTableIteratorKind;
 use crate::HashTableKeyable;
 
@@ -88,7 +89,6 @@ impl<
             let layout = Layout::from_size_align_unchecked(size, std::mem::align_of::<Entity>());
 
             self.allocator.deallocx(self.entities_raw, layout);
-
             if let Some(zero_entity) = self.zero_entity_raw {
                 if std::mem::needs_drop::<Entity>() && !self.entity_swapped {
                     let entity = self.zero_entity.unwrap();
@@ -127,6 +127,7 @@ impl<
             let layout = Layout::from_size_align_unchecked(size, mem::align_of::<Entity>());
             let mut allocator = Allocator::default();
             let raw_ptr = allocator.allocx(layout, true);
+            // let raw_ptr = std::alloc::alloc_zeroed(layout);
             let entities_ptr = raw_ptr as *mut Entity;
             HashTable {
                 size: 0,
@@ -153,8 +154,17 @@ impl<
     }
 
     #[inline(always)]
-    pub fn iter(&self) -> HashTableIteratorKind<Key, Entity> {
+    pub fn enum_iter(&self) -> HashTableIteratorKind<Key, Entity> {
         HashTableIteratorKind::create_hash_table_iter(
+            self.grower.max_size(),
+            self.entities,
+            self.zero_entity,
+        )
+    }
+
+    #[inline(always)]
+    pub fn iter(&self) -> HashTableIter<Key, Entity> {
+        HashTableIter::<Key, Entity>::create(
             self.grower.max_size(),
             self.entities,
             self.zero_entity,
@@ -290,23 +300,24 @@ impl<
     }
 
     unsafe fn resize(&mut self) {
-        let old_size = self.grower.max_size();
+        let old_grow_size = self.grower.max_size();
         let mut new_grower = self.grower.clone();
 
         new_grower.increase_size();
 
         // Realloc memory
         if new_grower.max_size() > self.grower.max_size() {
+            let old_size = (old_grow_size as usize) * std::mem::size_of::<Entity>();
             let new_size = (new_grower.max_size() as usize) * std::mem::size_of::<Entity>();
             let layout =
-                Layout::from_size_align_unchecked(new_size, std::mem::align_of::<Entity>());
+                Layout::from_size_align_unchecked(old_size, std::mem::align_of::<Entity>());
+
             self.entities_raw = self
                 .allocator
                 .reallocx(self.entities_raw, layout, new_size, true);
             self.entities = self.entities_raw as *mut Entity;
             self.grower = new_grower;
-
-            for index in 0..old_size {
+            for index in 0..old_grow_size {
                 let entity_ptr = self.entities.offset(index);
 
                 if !entity_ptr.is_zero() {
@@ -321,7 +332,7 @@ impl<
             //      and in order to transfer it where necessary,
             //      after transferring all the elements from the old halves you need to     [         o   x    ]
             //      process tail from the collision resolution chain immediately after it   [        o    x    ]
-            for index in old_size..self.grower.max_size() {
+            for index in old_grow_size..self.grower.max_size() {
                 let entity = self.entities.offset(index);
 
                 if entity.is_zero() {

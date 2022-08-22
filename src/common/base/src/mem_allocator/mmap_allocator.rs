@@ -23,14 +23,12 @@ use std::os::raw::c_long;
 use std::os::raw::c_void;
 use std::ptr;
 
-use libc::memset;
 use libc::off_t;
 use libc::size_t;
 
+use super::JEAllocator;
 use crate::base::ThreadTracker;
 use crate::mem_allocator::Allocator as AllocatorTrait;
-
-use super::JEAllocator;
 
 const MMAP_THRESHOLD: size_t = 64 * (1usize << 20);
 const MALLOC_MIN_ALIGNMENT: size_t = 8;
@@ -56,9 +54,7 @@ pub struct MmapAllocator<const MMAP_POPULATE: bool> {
 ///
 /// Note that it is not an error to deallocate pointer which is not allocated.
 /// This is the spec of munmap(2). See `man 2 munmap` for details.
-unsafe impl<const MMAP_POPULATE: bool> AllocatorTrait
-    for MmapAllocator<MMAP_POPULATE>
-{
+unsafe impl<const MMAP_POPULATE: bool> AllocatorTrait for MmapAllocator<MMAP_POPULATE> {
     /// # Panics
     ///
     /// This method may panic if the align of `layout` is greater than the kernel page align.
@@ -79,10 +75,12 @@ unsafe impl<const MMAP_POPULATE: bool> AllocatorTrait
         const OFFSET: off_t = 0; // Should be 0 if flags includes MAP_ANONYMOUS. See `man 2 mmap`
         let length = layout.size() as size_t;
 
-        if layout.align() > page_size() {
-            if length >= MMAP_THRESHOLD {
+        if layout.size() >= MMAP_THRESHOLD {
+            if layout.align() > page_size() {
+                // too large alignment, fallback to use allocator
                 return self.allocator.allocx(layout, clear_mem);
             }
+
             ThreadTracker::alloc_memory(layout.size() as i64);
             match mmap(ADDR, length, PROT, flags, FD, OFFSET) {
                 libc::MAP_FAILED => ptr::null_mut::<u8>(),
@@ -93,34 +91,20 @@ unsafe impl<const MMAP_POPULATE: bool> AllocatorTrait
                 }
             }
         } else {
-            if layout.align() <= MALLOC_MIN_ALIGNMENT {
-                self.allocator.allocx(layout, clear_mem)
-            } else {
-                ThreadTracker::alloc_memory(layout.size() as i64);
-                let buf = ptr::null_mut::<u8>();
-                posix_memalign(buf as *mut c_void, layout.align(), layout.size());
-                if clear_mem {
-                    memset(buf as *mut c_void, 0, layout.size());
-                }
-                buf
-            }
+            self.allocator.allocx(layout, clear_mem)
         }
     }
 
     #[inline]
     unsafe fn deallocx(&mut self, ptr: *mut u8, layout: Layout) {
         let addr = ptr as *mut c_void;
-        if layout.align() > page_size() {
-            if layout.size() >= MMAP_THRESHOLD {
-                return self.allocator.deallocx(ptr, layout);
-            }
+        if layout.size() >= MMAP_THRESHOLD {
             munmap(addr, layout.size());
         } else {
-            munmap(addr, layout.size());
+            self.allocator.deallocx(ptr, layout);
         }
     }
 
-    #[cfg(target_os = "linux")]
     #[inline]
     unsafe fn reallocx(
         &mut self,
@@ -129,6 +113,7 @@ unsafe impl<const MMAP_POPULATE: bool> AllocatorTrait
         new_size: usize,
         clear_mem: bool,
     ) -> *mut u8 {
+        use libc::MREMAP_MAYMOVE;
         use libc::PROT_READ;
         use libc::PROT_WRITE;
 
@@ -140,18 +125,19 @@ unsafe impl<const MMAP_POPULATE: bool> AllocatorTrait
             && new_size < MMAP_THRESHOLD
             && layout.align() <= MALLOC_MIN_ALIGNMENT
         {
-            let new_buf = self.allocator.reallocx(ptr, layout, new_size, clear_mem);
-            if clear_mem && new_size > layout.size() {
-                memset(new_buf as *mut c_void, 0, new_size);
-            }
-            new_buf
+            self.allocator.reallocx(ptr, layout, new_size, clear_mem)
         } else if layout.size() >= MMAP_THRESHOLD && new_size >= MMAP_THRESHOLD {
-            mremap(
-                ptr as *mut c_void,
-                layout.size(),
-                new_size,
-                PROT_READ | PROT_WRITE,
-            ) as *mut u8
+            if layout.align() > page_size() {
+                self.allocator.reallocx(ptr, layout, new_size, clear_mem)
+            } else {
+                mremap(
+                    ptr as *mut c_void,
+                    layout.size(),
+                    new_size,
+                    MREMAP_MAYMOVE,
+                    PROT_READ | PROT_WRITE,
+                )
+            }
         } else {
             let new_buf = self.allocx(
                 Layout::from_size_align_unchecked(new_size, layout.align()),
@@ -176,14 +162,12 @@ extern "C" {
 
     fn munmap(addr: *mut c_void, length: size_t);
 
-    fn posix_memalign(memptr: *mut c_void, alignment: size_t, size: size_t) -> c_int;
-
-    #[cfg(target_os = "linux")]
     fn mremap(
         old_address: *mut c_void,
         old_size: size_t,
         new_size: size_t,
         flags: c_int,
+        mmap_prot: c_int,
     ) -> *mut c_void;
 }
 

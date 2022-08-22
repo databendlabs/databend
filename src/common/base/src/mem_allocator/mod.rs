@@ -12,15 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod je_allocator;
 mod mmap_allocator;
 mod stackful_allocator;
-mod je_allocator;
+mod std_allocator;
 
 use std::alloc::Layout;
 
 pub use je_allocator::JEAllocator;
 pub use mmap_allocator::MmapAllocator;
 pub use stackful_allocator::StackfulAllocator;
+pub use std_allocator::StdAllocator;
 
 #[cfg(feature = "memory-profiling")]
 mod profiling;

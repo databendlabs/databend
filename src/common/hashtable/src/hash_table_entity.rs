@@ -25,6 +25,7 @@ pub trait HashTableEntity<Key>: Sized {
     unsafe fn not_equals_key(self: *mut Self, other: *mut Self) -> bool;
 }
 
+#[derive(Default)]
 pub struct KeyValueEntity<Key, Value>
 where
     Key: HashTableKeyable,

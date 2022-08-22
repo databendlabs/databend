@@ -135,15 +135,46 @@ mod platform {
             new_size: usize,
             clear_mem: bool,
         ) -> *mut u8 {
-            let res = self.realloc(ptr, layout, new_size);
-            if clear_mem && new_size > layout.size() {
-                std::ptr::write_bytes(
-                    res.offset(layout.size() as isize),
-                    0,
-                    new_size - layout.size(),
-                );
+            let mut flags = layout_to_flags(layout.align(), new_size);
+            if clear_mem {
+                flags |= ffi::MALLOCX_ZERO;
             }
-            res
+            ffi::rallocx(ptr as *mut _, new_size, flags) as *mut u8
+        }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use std::alloc::Layout;
+
+    use crate::mem_allocator::Allocator;
+    use crate::mem_allocator::JEAllocator;
+
+    #[test]
+    fn test_malloc() {
+        type T = i64;
+        let mut alloc = JEAllocator::default();
+
+        let align = std::mem::align_of::<T>();
+        let size = std::mem::size_of::<T>() * 100;
+        let new_size = std::mem::size_of::<T>() * 1000000;
+
+        unsafe {
+            let layout = Layout::from_size_align_unchecked(size, align);
+            let ptr = alloc.allocx(layout, true) as *mut T;
+            *ptr = 84;
+            assert_eq!(84, *ptr);
+            assert_eq!(0, *(ptr.offset(5)));
+
+            *(ptr.offset(5)) = 1000;
+
+            let new_ptr = alloc.reallocx(ptr as *mut u8, layout, new_size, true) as *mut T;
+            assert_eq!(84, *new_ptr);
+            assert_eq!(0, *(new_ptr.offset(4)));
+            assert_eq!(1000, *(new_ptr.offset(5)));
+
+            alloc.deallocx(new_ptr as *mut u8, layout)
         }
     }
 }

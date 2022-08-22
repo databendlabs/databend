@@ -21,6 +21,7 @@ use crate::HashTableEntity;
 use crate::HashTableGrower;
 use crate::HashTableIteratorKind;
 use crate::HashTableKeyable;
+use crate::TwoLevelHashTableIter;
 
 static BITS_FOR_BUCKET: u8 = 8;
 static NUM_BUCKETS: usize = 1 << BITS_FOR_BUCKET;
@@ -69,8 +70,8 @@ impl<
     #[inline(always)]
     pub fn iter(&self) -> HashTableIteratorKind<Key, Entity> {
         match self {
-            HashTableKind::HashTable(data) => data.iter(),
-            HashTableKind::TwoLevelHashTable(data) => data.iter(),
+            HashTableKind::HashTable(data) => data.enum_iter(),
+            HashTableKind::TwoLevelHashTable(data) => data.enum_iter(),
         }
     }
 
@@ -180,12 +181,21 @@ impl<
     }
 
     #[inline(always)]
-    pub fn iter(&self) -> HashTableIteratorKind<Key, Entity> {
+    pub fn enum_iter(&self) -> HashTableIteratorKind<Key, Entity> {
         let mut iters = Vec::with_capacity(NUM_BUCKETS);
         for i in 0..NUM_BUCKETS {
             iters.push(self.hash_tables[i].iter())
         }
         HashTableIteratorKind::<Key, Entity>::create_two_level_hash_table_iter(iters)
+    }
+
+    #[inline(always)]
+    pub fn iter(&self) -> TwoLevelHashTableIter<Key, Entity> {
+        let mut iters = Vec::with_capacity(NUM_BUCKETS);
+        for i in 0..NUM_BUCKETS {
+            iters.push(self.hash_tables[i].iter())
+        }
+        TwoLevelHashTableIter::<Key, Entity>::create(iters)
     }
 
     #[inline(always)]

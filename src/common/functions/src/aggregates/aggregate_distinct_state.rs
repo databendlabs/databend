@@ -57,7 +57,7 @@ pub struct AggregateDistinctState {
 }
 
 pub struct AggregateDistinctPrimitiveState<T: PrimitiveType, E: From<T> + HashTableKeyable> {
-    set: HashSetWithStackMemory<{16 * 8}, E>,
+    set: HashSetWithStackMemory<{ 16 * 8 }, E>,
     _t: PhantomData<T>,
     inserted: bool,
 }
@@ -344,9 +344,7 @@ where
     }
 
     fn merge(&mut self, rhs: &Self) -> Result<()> {
-        for value in rhs.set.iter() {
-            self.set.insert_key(value.get_key(), &mut self.inserted);
-        }
+        self.set.merge(&rhs.set);
         Ok(())
     }
 
