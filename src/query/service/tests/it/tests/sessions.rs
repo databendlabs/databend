@@ -229,7 +229,7 @@ impl SingletonImpl<Arc<Runtime>> for TestGlobalServices {
         match std::thread::current().name() {
             None => panic!("thread name is none"),
             Some(name) => match self.global_runtime.lock().entry(name.to_string()) {
-                Entry::Vacant(v) => v.insert(value.clone()),
+                Entry::Vacant(v) => v.insert(value),
                 Entry::Occupied(_v) => panic!("Global runtime set twice in test[{:?}]", name),
             },
         };
@@ -253,7 +253,7 @@ impl SingletonImpl<Arc<QueryLogger>> for TestGlobalServices {
         match std::thread::current().name() {
             None => panic!("thread name is none"),
             Some(name) => match self.query_logger.lock().entry(name.to_string()) {
-                Entry::Vacant(v) => v.insert(value.clone()),
+                Entry::Vacant(v) => v.insert(value),
                 Entry::Occupied(_v) => panic!("QueryLogger set twice in test[{:?}]", name),
             },
         };
@@ -277,7 +277,7 @@ impl SingletonImpl<Arc<ClusterDiscovery>> for TestGlobalServices {
         match std::thread::current().name() {
             None => panic!("thread name is none"),
             Some(name) => match self.cluster_discovery.lock().entry(name.to_string()) {
-                Entry::Vacant(v) => v.insert(value.clone()),
+                Entry::Vacant(v) => v.insert(value),
                 Entry::Occupied(_v) => panic!("ClusterDiscovery set twice in test[{:?}]", name),
             },
         };
@@ -301,7 +301,7 @@ impl SingletonImpl<Operator> for TestGlobalServices {
         match std::thread::current().name() {
             None => panic!("thread name is none"),
             Some(name) => match self.storage_operator.lock().entry(name.to_string()) {
-                Entry::Vacant(v) => v.insert(value.clone()),
+                Entry::Vacant(v) => v.insert(value),
                 Entry::Occupied(_v) => panic!("StorageOperator set twice in test[{:?}]", name),
             },
         };
@@ -325,7 +325,7 @@ impl SingletonImpl<Arc<AsyncInsertManager>> for TestGlobalServices {
         match std::thread::current().name() {
             None => panic!("thread name is none"),
             Some(name) => match self.async_insert_manager.lock().entry(name.to_string()) {
-                Entry::Vacant(v) => v.insert(value.clone()),
+                Entry::Vacant(v) => v.insert(value),
                 Entry::Occupied(_v) => panic!("AsyncInsertManager set twice in test[{:?}]", name),
             },
         };
@@ -349,7 +349,7 @@ impl SingletonImpl<Arc<CacheManager>> for TestGlobalServices {
         match std::thread::current().name() {
             None => panic!("thread name is none"),
             Some(name) => match self.cache_manager.lock().entry(name.to_string()) {
-                Entry::Vacant(v) => v.insert(value.clone()),
+                Entry::Vacant(v) => v.insert(value),
                 Entry::Occupied(_v) => panic!("CacheManager set twice in test[{:?}]", name),
             },
         };
@@ -373,7 +373,7 @@ impl SingletonImpl<Arc<CatalogManager>> for TestGlobalServices {
         match std::thread::current().name() {
             None => panic!("thread name is none"),
             Some(name) => match self.catalog_manager.lock().entry(name.to_string()) {
-                Entry::Vacant(v) => v.insert(value.clone()),
+                Entry::Vacant(v) => v.insert(value),
                 Entry::Occupied(_v) => panic!("CatalogManager set twice in test[{:?}]", name),
             },
         };
@@ -397,7 +397,7 @@ impl SingletonImpl<Arc<HttpQueryManager>> for TestGlobalServices {
         match std::thread::current().name() {
             None => panic!("thread name is none"),
             Some(name) => match self.http_query_manager.lock().entry(name.to_string()) {
-                Entry::Vacant(v) => v.insert(value.clone()),
+                Entry::Vacant(v) => v.insert(value),
                 Entry::Occupied(_v) => panic!("HttpQueryManager set twice in test[{:?}]", name),
             },
         };
@@ -421,7 +421,7 @@ impl SingletonImpl<Arc<DataExchangeManager>> for TestGlobalServices {
         match std::thread::current().name() {
             None => panic!("thread name is none"),
             Some(name) => match self.data_exchange_manager.lock().entry(name.to_string()) {
-                Entry::Vacant(v) => v.insert(value.clone()),
+                Entry::Vacant(v) => v.insert(value),
                 Entry::Occupied(_v) => panic!("DataExchangeManager set twice in test[{:?}]", name),
             },
         };
@@ -445,7 +445,7 @@ impl SingletonImpl<Arc<SessionManager>> for TestGlobalServices {
         match std::thread::current().name() {
             None => panic!("thread name is none"),
             Some(name) => match self.session_manager.lock().entry(name.to_string()) {
-                Entry::Vacant(v) => v.insert(value.clone()),
+                Entry::Vacant(v) => v.insert(value),
                 Entry::Occupied(_v) => panic!("SessionManager set twice in test[{:?}]", name),
             },
         };
@@ -469,7 +469,7 @@ impl SingletonImpl<Arc<UserApiProvider>> for TestGlobalServices {
         match std::thread::current().name() {
             None => panic!("thread name is none"),
             Some(name) => match self.users_manager.lock().entry(name.to_string()) {
-                Entry::Vacant(v) => v.insert(value.clone()),
+                Entry::Vacant(v) => v.insert(value),
                 Entry::Occupied(_v) => panic!("UserApiProvider set twice in test[{:?}]", name),
             },
         };
@@ -493,7 +493,7 @@ impl SingletonImpl<Arc<RoleCacheManager>> for TestGlobalServices {
         match std::thread::current().name() {
             None => panic!("thread name is none"),
             Some(name) => match self.users_role_manager.lock().entry(name.to_string()) {
-                Entry::Vacant(v) => v.insert(value.clone()),
+                Entry::Vacant(v) => v.insert(value),
                 Entry::Occupied(_v) => panic!("RoleCacheManager set twice in test[{:?}]", name),
             },
         };
