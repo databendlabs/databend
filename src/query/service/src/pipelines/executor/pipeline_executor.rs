@@ -177,6 +177,7 @@ impl PipelineExecutor {
 
         for thread_num in 0..threads_size {
             let this = self.clone();
+            #[allow(unused_mut)]
             let mut name = Some(format!("PipelineExecutor-{}", thread_num));
 
             #[cfg(debug_assertions)]
