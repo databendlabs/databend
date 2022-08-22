@@ -193,6 +193,7 @@ extern "C" {
 
     fn munmap(addr: *mut c_void, length: size_t);
 
+    #[cfg(target_os = "linux")]
     fn mremap(
         old_address: *mut c_void,
         old_size: size_t,
