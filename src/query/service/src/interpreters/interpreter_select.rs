@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_base::base::GlobalIORuntime;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -89,7 +90,7 @@ impl Interpreter for SelectInterpreter {
     /// Note: there is an issue to track the progress of the new processor:  https://github.com/datafuselabs/databend/issues/3379
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         let build_res = self.build_pipeline().await?;
-        let async_runtime = self.ctx.get_storage_runtime();
+        let async_runtime = GlobalIORuntime::instance();
         let query_need_abort = self.ctx.query_need_abort();
         Ok(Box::pin(ProcessorExecutorStream::create(
             PipelinePullingExecutor::from_pipelines(async_runtime, query_need_abort, build_res)?,

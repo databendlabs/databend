@@ -12,10 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
 use std::time::SystemTime;
 
-use poem::web::Data;
 use poem::web::Json;
 use poem::IntoResponse;
 use serde::Deserialize;
@@ -43,11 +41,10 @@ fn secs_since_epoch(t: SystemTime) -> u64 {
 // lightweight way to get status
 // return Status in json
 #[poem::handler]
-pub async fn instance_status_handler(
-    sessions_extension: Data<&Arc<SessionManager>>,
-) -> poem::Result<impl IntoResponse> {
+pub async fn instance_status_handler() -> poem::Result<impl IntoResponse> {
+    let session_manager = SessionManager::instance();
     let status = {
-        let status = sessions_extension.0.status.read();
+        let status = session_manager.status.read();
         status.clone()
     };
     let status = InstanceStatus {

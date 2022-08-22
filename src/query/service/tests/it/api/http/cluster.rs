@@ -22,19 +22,16 @@ use poem::http::Method;
 use poem::http::StatusCode;
 use poem::http::Uri;
 use poem::Endpoint;
-use poem::EndpointExt;
 use poem::Request;
 use poem::Route;
 use pretty_assertions::assert_eq;
 
-use crate::tests::SessionManagerBuilder;
+use crate::tests::TestGlobalServices;
 
 #[tokio::test]
 async fn test_cluster() -> Result<()> {
-    let sessions = SessionManagerBuilder::create().build()?;
-    let cluster_router = Route::new()
-        .at("/v1/cluster/list", get(cluster_list_handler))
-        .data(sessions);
+    let _guard = TestGlobalServices::setup(crate::tests::ConfigBuilder::create().build()).await?;
+    let cluster_router = Route::new().at("/v1/cluster/list", get(cluster_list_handler));
 
     // List Node
     {

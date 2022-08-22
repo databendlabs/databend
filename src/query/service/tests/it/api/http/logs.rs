@@ -20,20 +20,17 @@ use poem::http::Method;
 use poem::http::StatusCode;
 use poem::http::Uri;
 use poem::Endpoint;
-use poem::EndpointExt;
 use poem::Request;
 use poem::Route;
 use pretty_assertions::assert_eq;
 
-use crate::tests::SessionManagerBuilder;
+use crate::tests::TestGlobalServices;
 
 #[tokio::test]
 async fn test_logs() -> Result<()> {
-    let sessions = SessionManagerBuilder::create().build()?;
+    let _guard = TestGlobalServices::setup(crate::tests::ConfigBuilder::create().build()).await?;
 
-    let test_router = Route::new()
-        .at("/v1/logs", get(logs_handler))
-        .data(sessions);
+    let test_router = Route::new().at("/v1/logs", get(logs_handler));
     {
         let response = test_router
             .call(

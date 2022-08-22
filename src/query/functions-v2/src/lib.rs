@@ -13,5 +13,6 @@
 // limitations under the License.
 
 #![feature(core_intrinsics)]
+#![feature(box_patterns)]
 
 pub mod scalars;
