@@ -68,10 +68,10 @@ impl<KV: KVApi> ShareApi for KV {
         debug!(req = debug(&req), "ShareApi: {}", func_name!());
 
         // Get all outbound share accounts.
-        let outbound_accounts = get_outbound_shared_accounts_by_tenant(self, &req.tenant).await?;
+        let outbound_accounts = get_outbound_share_infos_by_tenant(self, &req.tenant).await?;
 
         // Get all inbound share accounts.
-        let inbound_accounts = get_inbound_shared_accounts_by_tenant(self, &req.tenant).await?;
+        let inbound_accounts = get_inbound_share_infos_by_tenant(self, &req.tenant).await?;
 
         Ok(ShowSharesReply {
             outbound_accounts,
@@ -759,11 +759,9 @@ impl<KV: KVApi> ShareApi for KV {
         &self,
         req: GetShareGrantTenantsReq,
     ) -> MetaResult<GetShareGrantTenantsReply> {
-        let reply = get_outbound_shared_accounts_by_name(self, &req.share_name).await?;
+        let accounts = get_outbound_share_tenants_by_name(self, &req.share_name).await?;
 
-        Ok(GetShareGrantTenantsReply {
-            accounts: reply.accounts.unwrap_or_default(),
-        })
+        Ok(GetShareGrantTenantsReply { accounts })
     }
 
     // Return all the grant privileges of the object
@@ -920,7 +918,37 @@ async fn get_share_database_name(
     }
 }
 
-async fn get_outbound_shared_accounts_by_name(
+async fn get_outbound_share_tenants_by_name(
+    kv_api: &(impl KVApi + ?Sized),
+    share_name: &ShareNameIdent,
+) -> Result<Vec<GetShareGrantTenants>, MetaError> {
+    let res = get_share_or_err(kv_api, share_name, format!("get_share: {share_name}")).await?;
+    let (_share_id_seq, share_id, _share_meta_seq, share_meta) = res;
+
+    let mut accounts = vec![];
+    for account in share_meta.get_accounts() {
+        let share_account_key = ShareAccountNameIdent {
+            account: account.clone(),
+            share_id,
+        };
+
+        let (_seq, meta) = get_share_account_meta_or_err(
+            kv_api,
+            &share_account_key,
+            format!("get_outbound_share_tenants_by_name's account: {share_id}/{account}"),
+        )
+        .await?;
+
+        accounts.push(GetShareGrantTenants {
+            account,
+            grant_on: meta.share_on,
+        });
+    }
+
+    Ok(accounts)
+}
+
+async fn get_outbound_share_info_by_name(
     kv_api: &(impl KVApi + ?Sized),
     share_name: &ShareNameIdent,
 ) -> Result<ShareAccountReply, MetaError> {
@@ -948,7 +976,7 @@ async fn get_outbound_shared_accounts_by_name(
     })
 }
 
-async fn get_outbound_shared_accounts_by_tenant(
+async fn get_outbound_share_infos_by_tenant(
     kv_api: &(impl KVApi + ?Sized),
     tenant: &str,
 ) -> Result<Vec<ShareAccountReply>, MetaError> {
@@ -961,7 +989,7 @@ async fn get_outbound_shared_accounts_by_tenant(
     let share_name_keys = list_keys(kv_api, &tenant_share_name_key).await?;
 
     for share_name in share_name_keys {
-        let reply = get_outbound_shared_accounts_by_name(kv_api, &share_name).await;
+        let reply = get_outbound_share_info_by_name(kv_api, &share_name).await;
         if let Ok(reply) = reply {
             outbound_share_accounts.push(reply)
         }
@@ -970,7 +998,7 @@ async fn get_outbound_shared_accounts_by_tenant(
     Ok(outbound_share_accounts)
 }
 
-async fn get_inbound_shared_accounts_by_tenant(
+async fn get_inbound_share_infos_by_tenant(
     kv_api: &(impl KVApi + ?Sized),
     tenant: &String,
 ) -> Result<Vec<ShareAccountReply>, MetaError> {
@@ -986,14 +1014,14 @@ async fn get_inbound_shared_accounts_by_tenant(
         let (_share_meta_seq, share_meta) = get_share_meta_by_id_or_err(
             kv_api,
             share_id,
-            format!("get_inbound_shared_accounts_by_tenant: {}", share_id),
+            format!("get_inbound_share_infos_by_tenant: {}", share_id),
         )
         .await?;
 
         let (_seq, share_name) = get_share_id_to_name_or_err(
             kv_api,
             share_id,
-            format!("get_inbound_shared_accounts_by_tenant: {}", share_id),
+            format!("get_inbound_share_infos_by_tenant: {}", share_id),
         )
         .await?;
         let database_name = get_share_database_name(kv_api, &share_meta, &share_name).await?;
@@ -1006,7 +1034,7 @@ async fn get_inbound_shared_accounts_by_tenant(
             kv_api,
             &share_account_key,
             format!(
-                "get_inbound_shared_accounts_by_tenant's account: {}/{}",
+                "get_inbound_share_infos_by_tenant's account: {}/{}",
                 share_id, tenant
             ),
         )

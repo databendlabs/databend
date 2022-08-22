@@ -1,0 +1,5 @@
+yyyy-mm-dd HH:MM:SS	OUTBOUND	test_share	show_shares	test_tenant	x	comment
+TABLE	show_shares.test_tb	yyyy-mm-dd HH:MM:SS
+DATABASE	show_shares	yyyy-mm-dd HH:MM:SS
+yyyy-mm-dd HH:MM:SS	Usage	test_share
+yyyy-mm-dd HH:MM:SS	Select	test_share
