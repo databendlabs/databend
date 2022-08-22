@@ -21,37 +21,12 @@ use common_expression::types::string::StringColumnBuilder;
 use common_expression::types::GenericMap;
 use common_expression::types::NumberType;
 use common_expression::types::StringType;
+use common_expression::vectorize_with_writer_1_arg;
 use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
 use common_expression::NumberDomain;
 use common_expression::Value;
 use common_expression::ValueRef;
-
-trait OctString {
-    fn oct_string(self) -> String;
-}
-
-impl OctString for i64 {
-    fn oct_string(self) -> String {
-        match self.cmp(&0) {
-            Ordering::Less => {
-                format!("-0{:o}", self.unsigned_abs())
-            }
-            Ordering::Equal => "0".to_string(),
-            Ordering::Greater => format!("0{:o}", self),
-        }
-    }
-}
-
-impl OctString for u64 {
-    fn oct_string(self) -> String {
-        if self == 0 {
-            "0".to_string()
-        } else {
-            format!("0{:o}", self)
-        }
-    }
-}
 
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
@@ -341,9 +316,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     // number to string functions
     register_bin(registry);
-
     register_oct(registry);
-
     register_hex(registry);
 
     registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
@@ -353,22 +326,19 @@ pub fn register(registry: &mut FunctionRegistry) {
         vectorize_string_to_string(
             |col| col.data.len() / 2,
             |val, writer| {
-                let size = val.len() / 2;
-                let mut buffer = vec![0u8; size];
-                let buffer = &mut buffer[0..size];
-
-                match hex::decode_to_slice(val, buffer) {
-                    Ok(()) => writer.put_slice(buffer),
-                    Err(err) => {
-                        return Err(format!(
-                            "{} can not unhex because: {}",
-                            String::from_utf8_lossy(val),
-                            err
-                        ));
+                let new_size = writer.data.len() + val.len() / 2;
+                writer.data.resize(new_size, 0);
+                match hex::decode_to_slice(val, &mut writer.data[new_size - val.len() / 2..]) {
+                    Ok(()) => {
+                        writer.commit_row();
+                        Ok(())
                     }
+                    Err(err) => Err(format!(
+                        "{} can not unhex because: {}",
+                        String::from_utf8_lossy(val),
+                        err
+                    )),
                 }
-                writer.commit_row();
-                Ok(())
             },
         ),
     );
@@ -443,74 +413,107 @@ fn vectorize_string_to_string_2_arg(
     }
 }
 
+macro_rules! write_and_commit {
+    ($w:ident, $($arg:tt)*) => {
+        match write!($w.data, $($arg)*) {
+            Ok(_) =>{
+                $w.commit_row();
+                Ok(())
+            },
+            Err(err) => Err(format!("{}", err)),
+        }
+    };
+}
+
 fn register_bin(registry: &mut FunctionRegistry) {
-    registry.register_1_arg::<NumberType<u64>, StringType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<NumberType<u64>, StringType, _, _>(
         "bin",
         FunctionProperty::default(),
         |_| None,
-        |val| format!("{:b}", val).as_bytes().to_vec(),
+        vectorize_with_writer_1_arg::<NumberType<u64>, StringType>(|val, writer| {
+            write_and_commit!(writer, "{:b}", val)
+        }),
     );
-    registry.register_1_arg::<NumberType<i64>, StringType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<NumberType<i64>, StringType, _, _>(
         "bin",
         FunctionProperty::default(),
         |_| None,
-        |val| format!("{:b}", val).as_bytes().to_vec(),
+        vectorize_with_writer_1_arg::<NumberType<i64>, StringType>(|val, writer| {
+            write_and_commit!(writer, "{:b}", val)
+        }),
     );
-    registry.register_1_arg::<NumberType<f64>, StringType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<NumberType<f64>, StringType, _, _>(
         "bin",
         FunctionProperty::default(),
         |_| None,
-        |val| {
-            let val = val as f64;
-            let ret = if val.ge(&0f64) {
-                format!(
-                    "{:b}",
-                    val.max(i64::MIN as f64).min(i64::MAX as f64).round() as i64
-                )
+        vectorize_with_writer_1_arg::<NumberType<f64>, StringType>(|val, writer| {
+            if val.ge(&0f64) {
+                let v = val.max(i64::MIN as f64).min(i64::MAX as f64).round() as i64;
+                write_and_commit!(writer, "{:b}", v)
             } else {
-                format!(
-                    "{:b}",
-                    val.max(u64::MIN as f64).min(u64::MAX as f64).round() as u64
-                )
-            };
-            ret.as_bytes().to_vec()
-        },
+                let v = val.max(u64::MIN as f64).min(u64::MAX as f64).round() as u64;
+                write_and_commit!(writer, "{:b}", v)
+            }
+        }),
     );
 }
 
 fn register_oct(registry: &mut FunctionRegistry) {
-    registry.register_1_arg::<NumberType<u64>, StringType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<NumberType<u64>, StringType, _, _>(
         "oct",
         FunctionProperty::default(),
         |_| None,
-        |val| val.oct_string().as_bytes().to_vec(),
+        vectorize_with_writer_1_arg::<NumberType<u64>, StringType>(|val, writer| {
+            if val == 0 {
+                write_and_commit!(writer, "0")
+            } else {
+                write_and_commit!(writer, "0{:o}", val)
+            }
+        }),
     );
-    registry.register_1_arg::<NumberType<i64>, StringType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<NumberType<i64>, StringType, _, _>(
         "oct",
         FunctionProperty::default(),
         |_| None,
-        |val| val.oct_string().as_bytes().to_vec(),
+        vectorize_with_writer_1_arg::<NumberType<i64>, StringType>(|val, writer| {
+            match val.cmp(&0) {
+                Ordering::Less => write_and_commit!(writer, "-0{:o}", val.unsigned_abs()),
+                Ordering::Equal => write_and_commit!(writer, "0"),
+                Ordering::Greater => write_and_commit!(writer, "0{:o}", val),
+            }
+        }),
     );
-    registry.register_1_arg::<NumberType<f64>, StringType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<NumberType<f64>, StringType, _, _>(
         "oct",
         FunctionProperty::default(),
         |_| None,
-        |val| (val as i64).oct_string().as_bytes().to_vec(),
+        vectorize_with_writer_1_arg::<NumberType<f64>, StringType>(|val, writer| {
+            let val = val as i64;
+            match val.cmp(&0) {
+                Ordering::Less => write_and_commit!(writer, "-0{:o}", val.unsigned_abs()),
+                Ordering::Equal => write_and_commit!(writer, "0"),
+                Ordering::Greater => write_and_commit!(writer, "0{:o}", val),
+            }
+        }),
     );
 }
 
 fn register_hex(registry: &mut FunctionRegistry) {
-    registry.register_1_arg::<NumberType<u64>, StringType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<NumberType<u64>, StringType, _, _>(
         "hex",
         FunctionProperty::default(),
         |_| None,
-        |val| format!("{:x}", val).as_bytes().to_vec(),
+        vectorize_with_writer_1_arg::<NumberType<u64>, StringType>(|val, writer| {
+            write_and_commit!(writer, "{:x}", val)
+        }),
     );
-    registry.register_1_arg::<NumberType<i64>, StringType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<NumberType<i64>, StringType, _, _>(
         "hex",
         FunctionProperty::default(),
         |_| None,
-        |val| format!("{:x}", val).as_bytes().to_vec(),
+        vectorize_with_writer_1_arg::<NumberType<i64>, StringType>(|val, writer| {
+            write_and_commit!(writer, "{:x}", val)
+        }),
     );
     registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
         "hex",
@@ -519,10 +522,9 @@ fn register_hex(registry: &mut FunctionRegistry) {
         vectorize_string_to_string(
             |col| col.data.len() * 2,
             |val, writer| {
-                let mut buffer = vec![0u8; val.len() * 2];
-                let buff = &mut buffer[0..val.len() * 2];
-                let _ = hex::encode_to_slice(val, buff);
-                writer.put_slice(buff);
+                let new_size = writer.data.len() + val.len() * 2;
+                writer.data.resize(new_size, 0);
+                let _ = hex::encode_to_slice(val, &mut writer.data[new_size - val.len() * 2..]);
                 writer.commit_row();
                 Ok(())
             },
