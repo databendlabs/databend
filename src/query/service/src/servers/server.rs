@@ -28,6 +28,7 @@ use tokio_stream::wrappers::TcpListenerStream;
 use tracing::error;
 use tracing::info;
 
+use crate::clusters::ClusterDiscovery;
 use crate::sessions::SessionManager;
 
 pub type ListeningStream = Abortable<TcpListenerStream>;
@@ -45,12 +46,12 @@ pub struct ShutdownHandle {
 }
 
 impl ShutdownHandle {
-    pub fn create(sessions: Arc<SessionManager>) -> ShutdownHandle {
-        ShutdownHandle {
-            sessions,
+    pub fn create() -> Result<ShutdownHandle> {
+        Ok(ShutdownHandle {
+            sessions: SessionManager::instance(),
             services: vec![],
             shutdown: Arc::new(AtomicBool::new(false)),
-        }
+        })
     }
     async fn shutdown_services(&mut self, graceful: bool) {
         let mut shutdown_jobs = vec![];
@@ -62,8 +63,7 @@ impl ShutdownHandle {
 
     pub async fn shutdown(&mut self, mut signal: SignalStream) {
         self.shutdown_services(true).await;
-        self.sessions
-            .get_cluster_discovery()
+        ClusterDiscovery::instance()
             .unregister_to_metastore(&mut signal)
             .await;
         self.sessions.graceful_shutdown(signal, 5).await;

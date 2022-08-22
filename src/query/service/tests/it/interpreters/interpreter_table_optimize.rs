@@ -20,7 +20,7 @@ use futures::TryStreamExt;
 
 #[tokio::test]
 async fn test_optimize_recluster_interpreter() -> Result<()> {
-    let ctx = crate::tests::create_query_context().await?;
+    let (_guard, ctx) = crate::tests::create_query_context().await?;
     let mut planner = Planner::new(ctx.clone());
 
     // Create table.

@@ -28,9 +28,3 @@ impl fmt::Display for Endpoint {
         write!(f, "{}:{}", self.addr, self.port)
     }
 }
-
-impl From<Endpoint> for String {
-    fn from(endpoint: Endpoint) -> Self {
-        format!("{}:{}", endpoint.addr, endpoint.port)
-    }
-}

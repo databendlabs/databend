@@ -11,7 +11,7 @@ doctest = false
 test = false
 
 [dependencies]
-common-datavalues = { path = "../../common/datavalues" }
+common-datavalues = { path = "../../query/datavalues" }
 common-meta-app = { path = "../app" }
 common-meta-types = { path = "../types" }
 common-protos = { path = "../protos" }

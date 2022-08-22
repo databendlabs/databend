@@ -19,7 +19,9 @@ use std::time::Duration;
 use common_base::base::tokio;
 use common_base::base::tokio::sync::RwLock;
 use common_base::base::tokio::time::sleep;
+use common_base::base::Singleton;
 use common_exception::Result;
+use once_cell::sync::OnceCell;
 use parking_lot::Mutex;
 use tracing::warn;
 
@@ -44,15 +46,27 @@ pub struct HttpQueryManager {
     pub(crate) config: HttpQueryConfig,
 }
 
+static HTTP_QUERIES_MANAGER: OnceCell<Singleton<Arc<HttpQueryManager>>> = OnceCell::new();
+
 impl HttpQueryManager {
-    pub async fn create_global(cfg: Config) -> Result<Arc<HttpQueryManager>> {
-        Ok(Arc::new(HttpQueryManager {
+    pub async fn init(cfg: &Config, v: Singleton<Arc<HttpQueryManager>>) -> Result<()> {
+        v.init(Arc::new(HttpQueryManager {
             queries: Arc::new(RwLock::new(HashMap::new())),
             sessions: Mutex::new(ExpiringMap::default()),
             config: HttpQueryConfig {
                 result_timeout_millis: cfg.query.http_handler_result_timeout_millis,
             },
-        }))
+        }))?;
+
+        HTTP_QUERIES_MANAGER.set(v).ok();
+        Ok(())
+    }
+
+    pub fn instance() -> Arc<HttpQueryManager> {
+        match HTTP_QUERIES_MANAGER.get() {
+            None => panic!("HttpQueryManager is not init"),
+            Some(http_queries_manager) => http_queries_manager.get(),
+        }
     }
 
     pub(crate) async fn try_create_query(

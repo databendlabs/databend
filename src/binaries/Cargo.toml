@@ -40,7 +40,9 @@ common-meta-sled-store = { path = "../meta/sled-store" }
 common-meta-store = { path = "../meta/store" }
 common-meta-types = { path = "../meta/types" }
 common-metrics = { path = "../common/metrics" }
+common-storage = { path = "../common/storage" }
 common-tracing = { path = "../common/tracing" }
+common-users = { path = "../query/users" }
 databend-meta = { path = "../meta/service" }
 databend-query = { path = "../query/service" }
 
@@ -55,7 +57,7 @@ tonic = "0.7.2"
 tracing = "0.1.35"
 url = "2.2.2"
 
-openraft = { git = "https://github.com/datafuselabs/openraft", rev = "v0.7.1" }
+openraft = { git = "https://github.com/drmingdrmer/openraft", rev = "v0.7.2-alpha.1" }
 
 [[bin]]
 name = "databend-meta"

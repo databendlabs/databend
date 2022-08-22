@@ -1015,6 +1015,8 @@ dependencies = [
  "ctrlc",
  "futures",
  "libc",
+ "num_cpus",
+ "once_cell",
  "parking_lot 0.12.1",
  "pprof",
  "serde",
@@ -1062,7 +1064,6 @@ dependencies = [
  "common-datavalues",
  "common-exception",
  "common-functions",
- "common-fuse-meta",
  "common-io",
  "common-meta-app",
  "common-meta-types",
@@ -1255,9 +1256,11 @@ dependencies = [
  "base64 0.13.0",
  "bstr",
  "comfy-table",
+ "common-arrow",
  "common-ast",
  "common-expression",
  "goldenfile",
+ "hex",
  "match-template",
  "num-traits",
  "strength_reduce",
@@ -1275,6 +1278,7 @@ dependencies = [
  "common-datavalues",
  "common-exception",
  "common-metrics",
+ "once_cell",
  "serde",
 ]
 
@@ -1299,6 +1303,7 @@ dependencies = [
 name = "common-hashtable"
 version = "0.1.0"
 dependencies = [
+ "common-base",
  "ordered-float 3.0.0",
  "primitive-types",
  "rand 0.8.5",
@@ -1714,7 +1719,12 @@ name = "common-storage"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "backon",
+ "common-base",
+ "common-contexts",
+ "common-exception",
  "globiter",
+ "once_cell",
  "opendal",
  "percent-encoding",
  "serde",
@@ -1816,7 +1826,6 @@ dependencies = [
  "common-arrow",
  "common-base",
  "common-building",
- "common-cache",
  "common-catalog",
  "common-config",
  "common-contexts",
@@ -1824,7 +1833,6 @@ dependencies = [
  "common-datavalues",
  "common-exception",
  "common-functions",
- "common-fuse-meta",
  "common-grpc",
  "common-meta-app",
  "common-meta-types",
@@ -1900,7 +1908,10 @@ dependencies = [
 name = "common-tracing"
 version = "0.1.0"
 dependencies = [
+ "common-base",
+ "common-exception",
  "console-subscriber",
+ "once_cell",
  "opentelemetry",
  "opentelemetry-jaeger",
  "sentry-tracing",
@@ -1927,6 +1938,7 @@ dependencies = [
  "common-meta-types",
  "common-tracing",
  "jwtk",
+ "once_cell",
  "parking_lot 0.12.1",
  "pretty_assertions",
  "serde",
@@ -2364,7 +2376,9 @@ dependencies = [
  "common-meta-store",
  "common-meta-types",
  "common-metrics",
+ "common-storage",
  "common-tracing",
+ "common-users",
  "databend-meta",
  "databend-query",
  "openraft",
@@ -4995,9 +5009,9 @@ checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
 
 [[package]]
 name = "opendal"
-version = "0.13.0"
+version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0c060aacce95fbe4a415b4ec6855d2c02b93b407eae07f8ceba3c475fedaed21"
+checksum = "47b5ab8000354e0fbe889ee7f9b12636b81e8dd5dc082e17becdc1da2154fc87"
 dependencies = [
  "anyhow",
  "async-compat",
@@ -5031,8 +5045,8 @@ dependencies = [
 
 [[package]]
 name = "openraft"
-version = "0.7.1"
-source = "git+https://github.com/datafuselabs/openraft?rev=v0.7.1#19fa9f0cff9e4245cb60409ee0a21d4b0b69b49a"
+version = "0.7.2"
+source = "git+https://github.com/drmingdrmer/openraft?rev=v0.7.2-alpha.1#03324cbf6ccd1dbe6453ec172a47a0f5d03bf3c7"
 dependencies = [
  "anyerror",
  "anyhow",
@@ -6173,9 +6187,9 @@ dependencies = [
 
 [[package]]
 name = "reqsign"
-version = "0.3.0"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3e8cdb1fd992664b9ec136dc07ea1d4b6e9debc099a1ad691c2eaad1b1efdb08"
+checksum = "089ba78fc07022b47d4cde6cebafbf2e756609ec3e83198c238529dcc59c4d17"
 dependencies = [
  "anyhow",
  "backon",
@@ -6195,6 +6209,7 @@ dependencies = [
  "rust-ini",
  "serde",
  "serde_json",
+ "sha1",
  "sha2 0.10.2",
  "time 0.3.13",
 ]
