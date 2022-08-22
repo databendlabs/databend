@@ -23,7 +23,7 @@ use databend_query::sql::Planner;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_grant_role_interpreter() -> Result<()> {
-    let ctx = crate::tests::create_query_context().await?;
+    let (_guard, ctx) = crate::tests::create_query_context().await?;
     let mut planner = Planner::new(ctx.clone());
     let tenant = ctx.get_tenant();
     let user_mgr = ctx.get_user_manager();

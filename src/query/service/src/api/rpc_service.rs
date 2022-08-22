@@ -30,20 +30,19 @@ use tracing::info;
 
 use crate::api::rpc::DatabendQueryFlightService;
 use crate::servers::Server as DatabendQueryServer;
-use crate::sessions::SessionManager;
 use crate::Config;
 
 pub struct RpcService {
-    pub sessions: Arc<SessionManager>,
+    pub config: Config,
     pub abort_notify: Arc<Notify>,
 }
 
 impl RpcService {
-    pub fn create(sessions: Arc<SessionManager>) -> Box<dyn DatabendQueryServer> {
-        Box::new(Self {
-            sessions,
+    pub fn create(config: Config) -> Result<Box<dyn DatabendQueryServer>> {
+        Ok(Box::new(Self {
+            config,
             abort_notify: Arc::new(Notify::new()),
-        })
+        }))
     }
 
     async fn listener_tcp(listening: SocketAddr) -> Result<(TcpListenerStream, SocketAddr)> {
@@ -70,14 +69,12 @@ impl RpcService {
     }
 
     pub async fn start_with_incoming(&mut self, listener_stream: TcpListenerStream) -> Result<()> {
-        let sessions = self.sessions.clone();
-        let flight_api_service = DatabendQueryFlightService::create(sessions);
-        let conf = self.sessions.get_conf();
+        let flight_api_service = DatabendQueryFlightService::create();
         let builder = Server::builder();
-        let mut builder = if conf.tls_rpc_server_enabled() {
+        let mut builder = if self.config.tls_rpc_server_enabled() {
             info!("databend query tls rpc enabled");
             builder
-                .tls_config(Self::server_tls_config(&conf).await.map_err(|e| {
+                .tls_config(Self::server_tls_config(&self.config).await.map_err(|e| {
                     ErrorCode::TLSConfigurationFailure(format!(
                         "failed to load server tls config: {e}",
                     ))

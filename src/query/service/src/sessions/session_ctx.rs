@@ -19,6 +19,7 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_meta_types::UserInfo;
+use common_settings::Settings;
 use futures::channel::oneshot::Sender;
 use parking_lot::RwLock;
 
@@ -28,6 +29,7 @@ use crate::Config;
 pub struct SessionContext {
     conf: Config,
     abort: AtomicBool,
+    settings: Arc<Settings>,
     current_catalog: RwLock<String>,
     current_database: RwLock<String>,
     current_tenant: RwLock<String>,
@@ -39,9 +41,10 @@ pub struct SessionContext {
 }
 
 impl SessionContext {
-    pub fn try_create(conf: Config) -> Result<Self> {
-        Ok(SessionContext {
+    pub fn try_create(conf: Config, settings: Arc<Settings>) -> Result<Arc<Self>> {
+        Ok(Arc::new(SessionContext {
             conf,
+            settings,
             abort: Default::default(),
             current_user: Default::default(),
             auth_role: Default::default(),
@@ -51,7 +54,7 @@ impl SessionContext {
             current_database: RwLock::new("default".to_string()),
             io_shutdown_tx: Default::default(),
             query_context_shared: Default::default(),
-        })
+        }))
     }
 
     // Get abort status.
@@ -62,6 +65,18 @@ impl SessionContext {
     // Set abort status.
     pub fn set_abort(&self, v: bool) {
         self.abort.store(v, Ordering::Relaxed);
+    }
+
+    pub fn get_settings(&self) -> Arc<Settings> {
+        self.settings.clone()
+    }
+
+    pub fn get_changed_settings(&self) -> Arc<Settings> {
+        Arc::new(self.settings.get_changed_settings())
+    }
+
+    pub fn apply_changed_settings(&self, changed_settings: Arc<Settings>) -> Result<()> {
+        self.settings.apply_changed_settings(changed_settings)
     }
 
     // Get current catalog name.

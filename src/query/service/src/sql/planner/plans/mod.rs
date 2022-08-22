@@ -57,7 +57,6 @@ use common_planners::CreateUserUDFPlan;
 use common_planners::CreateViewPlan;
 use common_planners::DeletePlan;
 use common_planners::DescribeTablePlan;
-use common_planners::DescribeUserStagePlan;
 use common_planners::DropDatabasePlan;
 use common_planners::DropRolePlan;
 use common_planners::DropTableClusterKeyPlan;
@@ -188,7 +187,6 @@ pub enum Plan {
 
     // Stages
     ListStage(Box<ListPlan>),
-    DescribeStage(Box<DescribeUserStagePlan>),
     CreateStage(Box<CreateUserStagePlan>),
     DropStage(Box<DropUserStagePlan>),
     RemoveStage(Box<RemoveUserStagePlan>),
@@ -208,6 +206,8 @@ pub enum Plan {
     AlterShareTenants(Box<AlterShareTenantsPlan>),
     DescShare(Box<DescSharePlan>),
     ShowShares(Box<ShowSharesPlan>),
+    ShowObjectGrantPrivileges(Box<ShowObjectGrantPrivilegesPlan>),
+    ShowGrantTenantsOfShare(Box<ShowGrantTenantsOfSharePlan>),
 }
 
 #[derive(Clone, Debug)]
@@ -225,6 +225,7 @@ pub enum RewriteKind {
 
     ShowUsers,
     ShowStages,
+    DescribeStage,
     ShowRoles,
 }
 
@@ -260,7 +261,6 @@ impl Display for Plan {
             Plan::CreateRole(_) => write!(f, "CreateRole"),
             Plan::DropRole(_) => write!(f, "DropRole"),
             Plan::ListStage(_) => write!(f, "ListStage"),
-            Plan::DescribeStage(_) => write!(f, "DescribeStage"),
             Plan::CreateStage(_) => write!(f, "CreateStage"),
             Plan::DropStage(_) => write!(f, "DropStage"),
             Plan::RemoveStage(_) => write!(f, "RemoveStage"),
@@ -285,6 +285,8 @@ impl Display for Plan {
             Plan::AlterShareTenants(_) => write!(f, "AlterShareTenants"),
             Plan::DescShare(_) => write!(f, "DescShare"),
             Plan::ShowShares(_) => write!(f, "ShowShares"),
+            Plan::ShowObjectGrantPrivileges(_) => write!(f, "ShowObjectGrantPrivileges"),
+            Plan::ShowGrantTenantsOfShare(_) => write!(f, "ShowGrantTenantsOfShare"),
         }
     }
 }
@@ -332,7 +334,6 @@ impl Plan {
             Plan::GrantPriv(plan) => plan.schema(),
             Plan::ShowGrants(plan) => plan.schema(),
             Plan::ListStage(plan) => plan.schema(),
-            Plan::DescribeStage(plan) => plan.schema(),
             Plan::CreateStage(plan) => plan.schema(),
             Plan::DropStage(plan) => plan.schema(),
             Plan::RemoveStage(plan) => plan.schema(),
@@ -354,6 +355,8 @@ impl Plan {
             Plan::AlterShareTenants(plan) => plan.schema(),
             Plan::DescShare(plan) => plan.schema(),
             Plan::ShowShares(plan) => plan.schema(),
+            Plan::ShowObjectGrantPrivileges(plan) => plan.schema(),
+            Plan::ShowGrantTenantsOfShare(plan) => plan.schema(),
         }
     }
 }

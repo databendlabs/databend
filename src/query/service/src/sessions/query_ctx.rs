@@ -25,7 +25,6 @@ use chrono_tz::Tz;
 use common_base::base::tokio::task::JoinHandle;
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
-use common_base::base::Runtime;
 use common_base::base::TrySpawn;
 use common_contexts::DalContext;
 use common_contexts::DalMetrics;
@@ -46,14 +45,12 @@ use common_planners::StageTableInfo;
 use common_planners::Statistics;
 use common_streams::AbortStream;
 use common_streams::SendableDataBlockStream;
-use common_users::RoleCacheMgr;
 use common_users::UserApiProvider;
 use futures::future::AbortHandle;
 use opendal::Operator;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 use tracing::debug;
-use tracing::Subscriber;
 
 use crate::api::DataExchangeManager;
 use crate::auth::AuthMgr;
@@ -64,10 +61,10 @@ use crate::servers::http::v1::HttpQueryHandle;
 use crate::sessions::query_affect::QueryAffect;
 use crate::sessions::ProcessInfo;
 use crate::sessions::QueryContextShared;
+use crate::sessions::SessionManager;
 use crate::sessions::SessionRef;
 use crate::sessions::Settings;
 use crate::sessions::TableContext;
-use crate::storages::cache::CacheManager;
 use crate::storages::stage::StageTable;
 use crate::storages::Table;
 use crate::Config;
@@ -167,7 +164,7 @@ impl QueryContext {
     }
 
     pub fn get_exchange_manager(&self) -> Arc<DataExchangeManager> {
-        self.shared.session.session_mgr.get_data_exchange_manager()
+        DataExchangeManager::instance()
     }
 
     pub fn try_create_abortable(&self, input: SendableDataBlockStream) -> Result<AbortStream> {
@@ -199,11 +196,7 @@ impl QueryContext {
 
     // Get one session by session id.
     pub async fn get_session_by_id(self: &Arc<Self>, id: &str) -> Option<SessionRef> {
-        self.shared
-            .session
-            .get_session_manager()
-            .get_session_by_id(id)
-            .await
+        SessionManager::instance().get_session_by_id(id).await
     }
 
     // Get session id by mysql connection id.
@@ -211,20 +204,14 @@ impl QueryContext {
         self: &Arc<Self>,
         conn_id: &Option<u32>,
     ) -> Option<String> {
-        self.shared
-            .session
-            .get_session_manager()
+        SessionManager::instance()
             .get_id_by_mysql_conn_id(conn_id)
             .await
     }
 
     // Get all the processes list info.
     pub async fn get_processes_info(self: &Arc<Self>) -> Vec<ProcessInfo> {
-        self.shared
-            .session
-            .get_session_manager()
-            .processes_info()
-            .await
+        SessionManager::instance().processes_info().await
     }
 
     /// Get the client socket address.
@@ -243,10 +230,6 @@ impl QueryContext {
     pub fn set_affect(self: &Arc<Self>, affect: QueryAffect) {
         self.shared.set_affect(affect)
     }
-
-    pub fn get_query_logger(&self) -> Option<Arc<dyn Subscriber + Send + Sync>> {
-        self.shared.session.session_mgr.get_query_logger()
-    }
 }
 
 #[async_trait::async_trait]
@@ -260,11 +243,9 @@ impl TableContext for QueryContext {
             SourceInfo::TableSource(table_info) => {
                 self.build_table_by_table_info(&plan.catalog, table_info, plan.tbl_args.clone())
             }
-            SourceInfo::StageSource(s3_table_info) => self.build_external_by_table_info(
-                &plan.catalog,
-                s3_table_info,
-                plan.tbl_args.clone(),
-            ),
+            SourceInfo::StageSource(stage_info) => {
+                self.build_external_by_table_info(&plan.catalog, stage_info, plan.tbl_args.clone())
+            }
         }
     }
     fn get_scan_progress(&self) -> Arc<Progress> {
@@ -337,12 +318,14 @@ impl TableContext for QueryContext {
     fn get_fragment_id(&self) -> usize {
         self.fragment_id.fetch_add(1, Ordering::Release)
     }
-    fn get_catalogs(&self) -> Arc<CatalogManager> {
-        self.shared.get_catalogs()
+
+    fn get_catalog_manager(&self) -> Result<Arc<CatalogManager>> {
+        Ok(self.shared.catalog_manager.clone())
     }
+
     fn get_catalog(&self, catalog_name: &str) -> Result<Arc<dyn Catalog>> {
         self.shared
-            .get_catalogs()
+            .catalog_manager
             .get_catalog(catalog_name.as_ref())
     }
     fn get_id(&self) -> String {
@@ -386,9 +369,6 @@ impl TableContext for QueryContext {
         let index = self.shared.subquery_index.fetch_add(1, Ordering::Relaxed);
         format!("_subquery_{}", index)
     }
-    fn get_role_cache_manager(&self) -> Arc<RoleCacheMgr> {
-        self.shared.get_role_cache_manager()
-    }
     /// Get the data accessor metrics.
     fn get_dal_metrics(&self) -> DalMetrics {
         self.shared.dal_ctx.get_metrics().as_ref().clone()
@@ -397,21 +377,14 @@ impl TableContext for QueryContext {
     fn get_query_str(&self) -> String {
         self.shared.get_query_str()
     }
-    /// Get the storage cache manager
-    fn get_storage_cache_manager(&self) -> Arc<CacheManager> {
-        self.shared.session.session_mgr.get_storage_cache_manager()
-    }
     // Get the storage data accessor operator from the session manager.
     fn get_storage_operator(&self) -> Result<Operator> {
-        let operator = self.shared.session.get_storage_operator();
+        let operator = self.shared.storage_operator.clone();
 
         Ok(operator.layer(self.shared.dal_ctx.as_ref().clone()))
     }
     fn get_dal_context(&self) -> &DalContext {
         self.shared.dal_ctx.as_ref()
-    }
-    fn get_storage_runtime(&self) -> Arc<Runtime> {
-        self.shared.session.session_mgr.get_storage_runtime()
     }
     fn push_precommit_block(&self, block: DataBlock) {
         let mut blocks = self.precommit_blocks.write();
@@ -450,11 +423,7 @@ impl TableContext for QueryContext {
 
     // Get all the processes list info.
     async fn get_processes_info(&self) -> Vec<ProcessInfo> {
-        self.shared
-            .session
-            .get_session_manager()
-            .processes_info()
-            .await
+        SessionManager::instance().processes_info().await
     }
 }
 

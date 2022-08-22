@@ -17,12 +17,14 @@ use std::fmt::Debug;
 use std::net::Ipv4Addr;
 use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
+use std::time::Duration;
 
 use common_base::base::tokio;
 use common_base::base::tokio::sync::watch;
 use common_base::base::tokio::sync::Mutex;
 use common_base::base::tokio::sync::RwLockReadGuard;
 use common_base::base::tokio::task::JoinHandle;
+use common_grpc::ConnectionFactory;
 use common_grpc::DNSResolver;
 use common_meta_raft_store::config::RaftConfig;
 use common_meta_raft_store::state_machine::StateMachine;
@@ -316,12 +318,11 @@ impl MetaNode {
         config: &RaftConfig,
         open: Option<()>,
         create: Option<()>,
-        is_initialize: bool,
-        node: Node,
+        initialize_cluster: Option<Node>,
     ) -> MetaResult<Arc<MetaNode>> {
         info!(
-            "open_create_boot, config: {:?}, open: {:?}, create: {:?}, is_initialize: {}, node: {:?}",
-            config, open, create, is_initialize, node
+            "open_create_boot, config: {:?}, open: {:?}, create: {:?}, initialize_cluster: {:?}",
+            config, open, create, initialize_cluster
         );
 
         let mut config = config.clone();
@@ -339,14 +340,11 @@ impl MetaNode {
         let sto = Arc::new(StoreExt::new(sto));
         sto.set_defensive(true);
 
-        let is_open = sto.is_opened();
-
-        let mut builder = MetaNode::builder(&config).sto(sto.clone());
         // config.id only used for the first time
-        let self_node_id = if is_open { sto.id } else { config.id };
+        let self_node_id = if sto.is_opened() { sto.id } else { config.id };
 
-        // use ip:port to start grpc listening
-        builder = builder
+        let builder = MetaNode::builder(&config)
+            .sto(sto.clone())
             .node_id(self_node_id)
             .endpoint(config.raft_api_listen_host_endpoint());
         let mn = builder.build().await?;
@@ -354,7 +352,11 @@ impl MetaNode {
         info!("MetaNode started: {:?}", config);
 
         // init_cluster with advertise_host other than listen_host
-        if !is_open && is_initialize {
+        if mn.is_opened() {
+            return Ok(mn);
+        }
+
+        if let Some(node) = initialize_cluster {
             mn.init_cluster(node).await?;
         }
         Ok(mn)
@@ -571,16 +573,26 @@ impl MetaNode {
         let advertise_endpoint = conf.raft_api_advertise_host_endpoint();
         #[allow(clippy::never_loop)]
         for addr in addrs {
-            info!("try to join cluster via {}...", addr);
+            let timeout = Some(Duration::from_millis(3_000));
+            info!(
+                "try to join cluster via {}, timeout: {:?}...",
+                addr, timeout
+            );
 
-            let conn_res = RaftServiceClient::connect(format!("http://{}", addr)).await;
-            let mut raft_client = match conn_res {
+            if addr == &conf.raft_api_advertise_host_string() {
+                info!("avoid join via self: {}", addr);
+                continue;
+            }
+
+            let chan_res = ConnectionFactory::create_rpc_channel(addr, timeout, None).await;
+            let chan = match chan_res {
                 Ok(c) => c,
                 Err(e) => {
                     error!("connect to {} join cluster fail: {:?}", addr, e);
                     continue;
                 }
             };
+            let mut raft_client = RaftServiceClient::new(chan);
 
             let req = ForwardRequest {
                 forward_to_leader: 1,
@@ -592,6 +604,8 @@ impl MetaNode {
             };
 
             let join_res = raft_client.forward(req.clone()).await;
+            info!("join cluster result: {:?}", join_res);
+
             match join_res {
                 Ok(r) => {
                     let reply = r.into_inner();
@@ -616,26 +630,28 @@ impl MetaNode {
     async fn do_start(conf: &MetaConfig) -> Result<Arc<MetaNode>, MetaError> {
         let raft_conf = &conf.raft_config;
 
-        let node = conf.get_node();
+        let initialize_cluster = if raft_conf.single {
+            Some(conf.get_node())
+        } else {
+            None
+        };
 
         if raft_conf.single {
-            let mn = MetaNode::open_create_boot(raft_conf, Some(()), Some(()), true, node).await?;
+            let mn = MetaNode::open_create_boot(raft_conf, Some(()), Some(()), initialize_cluster)
+                .await?;
             return Ok(mn);
         }
 
         if !raft_conf.join.is_empty() {
             // Bring up a new node, join it into a cluster
 
-            let mn = MetaNode::open_create_boot(raft_conf, Some(()), Some(()), false, node).await?;
-
-            if mn.is_opened() {
-                return Ok(mn);
-            }
+            let mn = MetaNode::open_create_boot(raft_conf, Some(()), Some(()), initialize_cluster)
+                .await?;
             return Ok(mn);
         }
         // open mode
 
-        let mn = MetaNode::open_create_boot(raft_conf, Some(()), None, false, node).await?;
+        let mn = MetaNode::open_create_boot(raft_conf, Some(()), None, initialize_cluster).await?;
         Ok(mn)
     }
 
@@ -643,15 +659,9 @@ impl MetaNode {
     /// For every cluster this func should be called exactly once.
     #[tracing::instrument(level = "debug", skip(config), fields(config_id=config.raft_config.config_id.as_str()))]
     pub async fn boot(config: &MetaConfig) -> MetaResult<Arc<MetaNode>> {
-        // 1. Bring a node up as non voter, start the grpc service for raft communication.
-        // 2. Initialize itself as leader, because it is the only one in the new cluster.
-        // 3. Add itself to the cluster storage by committing an `add-node` log so that the cluster members(only this node) is persisted.
-
-        let raft_conf = &config.raft_config;
-
-        let node = config.get_node();
-
-        let mn = Self::open_create_boot(raft_conf, None, Some(()), true, node).await?;
+        let mn =
+            Self::open_create_boot(&config.raft_config, None, Some(()), Some(config.get_node()))
+                .await?;
 
         Ok(mn)
     }
@@ -836,6 +846,7 @@ impl MetaNode {
         let forward = req.forward_to_leader;
 
         let l = self.as_leader().await;
+        debug!("as_leader: is_err: {}", l.is_err());
         let res = match l {
             Ok(l) => l.handle_forwardable_req(req.clone()).await,
             Err(e) => Err(MetaRaftError::ForwardToLeader(e).into()),
@@ -880,6 +891,7 @@ impl MetaNode {
     #[tracing::instrument(level = "debug", skip(self))]
     pub async fn as_leader(&self) -> Result<MetaLeader<'_>, ForwardToLeader> {
         let curr_leader = self.get_leader().await;
+        debug!("curr_leader: {:?}", curr_leader);
         if curr_leader == self.sto.id {
             return Ok(MetaLeader::new(self));
         }
