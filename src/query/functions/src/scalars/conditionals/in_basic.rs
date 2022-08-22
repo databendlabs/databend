@@ -131,12 +131,12 @@ impl<const NEGATED: bool> Function for InFunction<NEGATED> {
         let mut least_super_dt = columns[0].field().data_type().clone();
         let mut nonull_least_super_dt = remove_nullable(&least_super_dt);
 
-        // avoid precision loss
+        // may have precision loss if contains float
         if nonull_least_super_dt.data_type_id().is_numeric() {
             for column in columns[1..].iter() {
                 if column.data_type().data_type_id().is_numeric() {
                     nonull_least_super_dt =
-                        numerical_coercion(&nonull_least_super_dt, column.data_type(), false)
+                        numerical_coercion(&nonull_least_super_dt, column.data_type(), true)
                             .unwrap();
                 }
             }

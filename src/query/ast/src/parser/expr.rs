@@ -1098,6 +1098,18 @@ pub fn literal_string(i: Input) -> IResult<String> {
     )(i)
 }
 
+pub fn literal_string_eq_ignore_case(s: &str) -> impl FnMut(Input) -> IResult<()> + '_ {
+    move |i| {
+        map_res(rule! { QuotedString }, |token| {
+            if token.text()[1..token.text().len() - 1].eq_ignore_ascii_case(s) {
+                Ok(())
+            } else {
+                Err(ErrorKind::ExpectToken(QuotedString))
+            }
+        })(i)
+    }
+}
+
 pub fn at_string(i: Input) -> IResult<String> {
     match_token(AtString)(i)
         .map(|(i2, token)| (i2, token.text()[1..token.text().len()].to_string()))
@@ -1244,6 +1256,38 @@ pub fn interval_kind(i: Input) -> IResult<IntervalKind> {
         value(IntervalKind::Second, rule! { SECOND }),
         value(IntervalKind::Doy, rule! { DOY }),
         value(IntervalKind::Dow, rule! { DOW }),
+        value(
+            IntervalKind::Year,
+            rule! { #literal_string_eq_ignore_case("YEAR")  },
+        ),
+        value(
+            IntervalKind::Month,
+            rule! { #literal_string_eq_ignore_case("MONTH")  },
+        ),
+        value(
+            IntervalKind::Day,
+            rule! { #literal_string_eq_ignore_case("DAY")  },
+        ),
+        value(
+            IntervalKind::Hour,
+            rule! { #literal_string_eq_ignore_case("HOUR")  },
+        ),
+        value(
+            IntervalKind::Minute,
+            rule! { #literal_string_eq_ignore_case("MINUTE")  },
+        ),
+        value(
+            IntervalKind::Second,
+            rule! { #literal_string_eq_ignore_case("SECOND")  },
+        ),
+        value(
+            IntervalKind::Doy,
+            rule! { #literal_string_eq_ignore_case("DOY")  },
+        ),
+        value(
+            IntervalKind::Dow,
+            rule! { #literal_string_eq_ignore_case("DOW")  },
+        ),
     ))(i)
 }
 
