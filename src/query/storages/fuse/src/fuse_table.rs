@@ -19,6 +19,7 @@ use std::sync::Arc;
 use common_cache::Cache;
 use common_catalog::catalog::StorageDescription;
 use common_catalog::table_context::TableContext;
+use common_catalog::table_mutator::TableMutator;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -418,5 +419,23 @@ impl Table for FuseTable {
     #[tracing::instrument(level = "debug", name = "fuse_table_delete", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     async fn delete(&self, ctx: Arc<dyn TableContext>, delete_plan: DeletePlan) -> Result<()> {
         self.do_delete(ctx, &delete_plan).await
+    }
+
+    async fn compact(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        catalog: String,
+        pipeline: &mut Pipeline,
+    ) -> Result<Option<Arc<dyn TableMutator>>> {
+        self.do_compact(ctx, catalog, pipeline).await
+    }
+
+    async fn recluster(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        catalog: String,
+        pipeline: &mut Pipeline,
+    ) -> Result<Option<Arc<dyn TableMutator>>> {
+        self.do_recluster(ctx, catalog, pipeline).await
     }
 }
