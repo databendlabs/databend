@@ -26,7 +26,9 @@ use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::Pipeline;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
+use crate::storages::fuse::operations::CompactMutator;
 use crate::storages::fuse::FuseTable;
+
 pub struct OptimizeTableInterpreter {
     ctx: Arc<QueryContext>,
     plan: OptimizeTablePlan,
@@ -54,8 +56,6 @@ impl OptimizeTableInterpreter {
             .await?;
         let table = FuseTable::try_from_table(table.as_ref())?;
 
-        let mut pipeline = Pipeline::create();
-
         let mutator = table.try_get_recluster_mutator(ctx.clone()).await?;
         let mut mutator = if let Some(mutator) = mutator {
             mutator
@@ -68,7 +68,7 @@ impl OptimizeTableInterpreter {
         if !need_recluster {
             return Ok(true);
         }
-
+        let mut pipeline = Pipeline::create();
         table.recluster(
             ctx.clone(),
             catalog.to_owned(),
@@ -140,7 +140,40 @@ impl Interpreter for OptimizeTableInterpreter {
             .await?;
 
         if do_compact {
-            table.compact(self.ctx.clone(), self.plan.clone()).await?;
+            let table = FuseTable::try_from_table(table.as_ref())?;
+            let mutator = CompactMutator::try_create(self.ctx.clone(), table).await?;
+            if let Some(mutator) = mutator {
+                let ctx = self.ctx.clone();
+                let need_compact = mutator.blocks_select().await?;
+                let mut pipeline = Pipeline::create();
+                if need_compact {
+                    table.compact(
+                        ctx.clone(),
+                        plan.catalog.clone(),
+                        mutator.clone(),
+                        &mut pipeline,
+                    )?;
+                }
+
+                let settings = ctx.get_settings();
+                let tenant = self.ctx.get_tenant();
+
+                pipeline.set_max_threads(settings.get_max_threads()? as usize);
+
+                let async_runtime = ctx.get_storage_runtime();
+                let query_need_abort = ctx.query_need_abort();
+                let executor = PipelineCompleteExecutor::try_create(
+                    async_runtime,
+                    query_need_abort,
+                    pipeline,
+                )?;
+                executor.execute()?;
+                drop(executor);
+
+                let catalog_name = ctx.get_current_catalog();
+                mutator.commit_compact(&catalog_name).await?;
+            }
+
             if do_purge {
                 // currently, context caches the table, we have to "refresh"
                 // the table by using the catalog API directly

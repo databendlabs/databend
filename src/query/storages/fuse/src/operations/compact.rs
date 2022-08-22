@@ -17,56 +17,95 @@ use std::sync::Arc;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
-use common_meta_app::schema::TableStatistics;
-use common_planners::OptimizeTablePlan;
+use common_pipeline_core::processors::port::InputPort;
+use common_pipeline_core::Pipeline;
+use common_pipeline_core::SinkPipeBuilder;
+use common_pipeline_transforms::processors::transforms::BlockCompactor;
+use common_pipeline_transforms::processors::transforms::TransformCompact;
+use common_planners::ReadDataSourcePlan;
+use common_planners::SourceInfo;
 
-use crate::operations::mutation::CompactMutator;
+use super::FuseTableSink;
+use crate::operations::CompactMutator;
+use crate::statistics::ClusterStatsGenerator;
 use crate::FuseTable;
 use crate::DEFAULT_BLOCK_PER_SEGMENT;
+use crate::DEFAULT_BLOCK_SIZE_IN_MEM_SIZE_THRESHOLD;
 use crate::DEFAULT_ROW_PER_BLOCK;
+use crate::FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD;
 use crate::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 use crate::FUSE_OPT_KEY_ROW_PER_BLOCK;
 
 impl FuseTable {
-    pub async fn do_compact(
+    pub async fn compact(
         &self,
         ctx: Arc<dyn TableContext>,
-        plan: &OptimizeTablePlan,
+        catalog: String,
+        mutator: CompactMutator,
+        pipeline: &mut Pipeline,
     ) -> Result<()> {
-        let snapshot_opt = self.read_table_snapshot(ctx.clone()).await?;
-        let snapshot = if let Some(val) = snapshot_opt {
-            val
-        } else {
-            // no snapshot, no compaction.
-            return Ok(());
-        };
-
-        if snapshot.summary.block_count <= 1 {
+        if mutator.selected_blocks.is_empty() {
             return Ok(());
         }
 
-        let row_per_block = self.get_option(FUSE_OPT_KEY_ROW_PER_BLOCK, DEFAULT_ROW_PER_BLOCK);
+        let partitions_total = mutator.base_snapshot.summary.block_count as usize;
+        let (statistics, parts) = self.read_partitions_with_metas(
+            ctx.clone(),
+            None,
+            mutator.selected_blocks,
+            partitions_total,
+        )?;
+        let table_info = self.get_table_info();
+        let description = statistics.get_description(table_info);
+        let plan = ReadDataSourcePlan {
+            catalog,
+            source_info: SourceInfo::TableSource(table_info.clone()),
+            scan_fields: None,
+            parts,
+            statistics,
+            description,
+            tbl_args: self.table_args(),
+            push_downs: None,
+        };
+
+        ctx.try_set_partitions(plan.parts.clone())?;
+        self.do_read2(ctx.clone(), &plan, pipeline)?;
+
+        let max_rows_per_block = self.get_option(FUSE_OPT_KEY_ROW_PER_BLOCK, DEFAULT_ROW_PER_BLOCK);
+        let min_rows_per_block = (max_rows_per_block as f64 * 0.8) as usize;
+        let max_bytes_per_block = self.get_option(
+            FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD,
+            DEFAULT_BLOCK_SIZE_IN_MEM_SIZE_THRESHOLD,
+        );
+
         let block_per_seg =
             self.get_option(FUSE_OPT_KEY_BLOCK_PER_SEGMENT, DEFAULT_BLOCK_PER_SEGMENT);
 
-        let mut mutator = CompactMutator::try_create(
-            &ctx,
-            &self.meta_location_generator,
-            &snapshot,
-            row_per_block,
-            block_per_seg,
-        )?;
+        pipeline.add_transform(|transform_input_port, transform_output_port| {
+            TransformCompact::try_create(
+                transform_input_port,
+                transform_output_port,
+                BlockCompactor::new(max_rows_per_block, min_rows_per_block, max_bytes_per_block),
+            )
+        })?;
 
-        let new_snapshot = mutator.compact(self).await?;
-        let mut new_table_meta = self.get_table_info().meta.clone(); // update statistics
-        new_table_meta.statistics = TableStatistics {
-            number_of_rows: new_snapshot.summary.row_count,
-            data_bytes: new_snapshot.summary.uncompressed_byte_size,
-            compressed_data_bytes: new_snapshot.summary.compressed_byte_size,
-            index_data_bytes: new_snapshot.summary.index_size,
-        };
-        let ctx: &dyn TableContext = ctx.as_ref();
-        self.update_table_meta(ctx, &plan.catalog, &new_snapshot, &mut new_table_meta)
-            .await
+        let mut sink_pipeline_builder = SinkPipeBuilder::create();
+        for _ in 0..pipeline.output_len() {
+            let input_port = InputPort::create();
+            sink_pipeline_builder.add_sink(
+                input_port.clone(),
+                FuseTableSink::try_create(
+                    input_port,
+                    ctx.clone(),
+                    block_per_seg,
+                    mutator.data_accessor.clone(),
+                    self.meta_location_generator().clone(),
+                    ClusterStatsGenerator::default(),
+                )?,
+            );
+        }
+
+        pipeline.add_pipe(sink_pipeline_builder.finalize());
+        Ok(())
     }
 }
