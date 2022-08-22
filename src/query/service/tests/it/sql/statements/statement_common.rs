@@ -12,18 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
-
 use common_base::base::tokio;
 use common_exception::Result;
-use common_meta_types::StageParams;
 use common_meta_types::StageType;
 use common_meta_types::UserStageInfo;
-use common_storage::StorageParams;
-use common_storage::StorageS3Config;
 use databend_query::sessions::TableContext;
 use databend_query::sql::statements::parse_stage_location;
-use databend_query::sql::statements::parse_uri_location;
 use pretty_assertions::assert_eq;
 
 use crate::tests::create_query_context;
@@ -93,137 +87,6 @@ async fn test_parse_stage_location_external() -> Result<()> {
 
         assert_eq!(stage, stage_info, "{}", name);
         assert_eq!(path, expected, "{}", name);
-    }
-
-    Ok(())
-}
-
-#[tokio::test]
-async fn test_parse_uri_location() -> Result<()> {
-    let (_guard, ctx) = create_query_context().await?;
-
-    // Cases are in the format:
-    // - `name`
-    // - `input location`
-    // - `input credential option`
-    // - `input encryption option`
-    // - `expected user stage info`
-    // - `expected path`
-    let cases = vec![
-        (
-            "s3 root",
-            "s3://test",
-            BTreeMap::from([
-                ("aws_key_id".into(), "test_aws_key_id".into()),
-                ("aws_secret_key".into(), "test_aws_secret_key".into()),
-            ]),
-            BTreeMap::from([("master_key".into(), "test_master_key".into())]),
-            UserStageInfo {
-                stage_name: "s3://test/".to_string(),
-                stage_type: StageType::External,
-                stage_params: StageParams {
-                    storage: StorageParams::S3(StorageS3Config {
-                        bucket: "test".to_string(),
-                        access_key_id: "test_aws_key_id".to_string(),
-                        secret_access_key: "test_aws_secret_key".to_string(),
-                        master_key: "test_master_key".to_string(),
-                        root: "/".to_string(),
-                        disable_credential_loader: true,
-                        ..Default::default()
-                    }),
-                },
-                ..Default::default()
-            },
-            "/",
-        ),
-        (
-            "s3 root with suffix",
-            "s3://test/",
-            BTreeMap::from([
-                ("aws_key_id".into(), "test_aws_key_id".into()),
-                ("aws_secret_key".into(), "test_aws_secret_key".into()),
-            ]),
-            BTreeMap::from([("master_key".into(), "test_master_key".into())]),
-            UserStageInfo {
-                stage_name: "s3://test/".to_string(),
-                stage_type: StageType::External,
-                stage_params: StageParams {
-                    storage: StorageParams::S3(StorageS3Config {
-                        bucket: "test".to_string(),
-                        access_key_id: "test_aws_key_id".to_string(),
-                        secret_access_key: "test_aws_secret_key".to_string(),
-                        master_key: "test_master_key".to_string(),
-                        root: "/".to_string(),
-                        disable_credential_loader: true,
-                        ..Default::default()
-                    }),
-                },
-                ..Default::default()
-            },
-            "/",
-        ),
-        (
-            "s3 file path",
-            "s3://test/path/to/file",
-            BTreeMap::from([
-                ("aws_key_id".into(), "test_aws_key_id".into()),
-                ("aws_secret_key".into(), "test_aws_secret_key".into()),
-            ]),
-            BTreeMap::from([("master_key".into(), "test_master_key".into())]),
-            UserStageInfo {
-                stage_name: "s3://test/path/to/file".to_string(),
-                stage_type: StageType::External,
-                stage_params: StageParams {
-                    storage: StorageParams::S3(StorageS3Config {
-                        bucket: "test".to_string(),
-                        access_key_id: "test_aws_key_id".to_string(),
-                        secret_access_key: "test_aws_secret_key".to_string(),
-                        master_key: "test_master_key".to_string(),
-                        root: "/".to_string(),
-                        disable_credential_loader: true,
-                        ..Default::default()
-                    }),
-                },
-                ..Default::default()
-            },
-            "/path/to/file",
-        ),
-        (
-            "s3 dir path",
-            "s3://test/path/to/dir/",
-            BTreeMap::from([
-                ("aws_key_id".into(), "test_aws_key_id".into()),
-                ("aws_secret_key".into(), "test_aws_secret_key".into()),
-            ]),
-            BTreeMap::from([("master_key".into(), "test_master_key".into())]),
-            UserStageInfo {
-                stage_name: "s3://test/path/to/dir/".to_string(),
-                stage_type: StageType::External,
-                stage_params: StageParams {
-                    storage: StorageParams::S3(StorageS3Config {
-                        bucket: "test".to_string(),
-                        access_key_id: "test_aws_key_id".to_string(),
-                        secret_access_key: "test_aws_secret_key".to_string(),
-                        master_key: "test_master_key".to_string(),
-                        root: "/path/to/dir/".to_string(),
-                        disable_credential_loader: true,
-                        ..Default::default()
-                    }),
-                },
-                ..Default::default()
-            },
-            "/",
-        ),
-    ];
-
-    for (name, input_location, input_credential, input_encryption, expected_stage, expected_path) in
-        cases
-    {
-        let (stage, path) =
-            parse_uri_location(&ctx, input_location, &input_credential, &input_encryption)?;
-
-        assert_eq!(stage, expected_stage, "{}", name);
-        assert_eq!(path, expected_path, "{}", name);
     }
 
     Ok(())

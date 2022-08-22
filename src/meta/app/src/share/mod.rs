@@ -25,6 +25,7 @@ pub use share::GetObjectGrantPrivilegesReply;
 pub use share::GetObjectGrantPrivilegesReq;
 pub use share::GetShareGrantObjectReply;
 pub use share::GetShareGrantObjectReq;
+pub use share::GetShareGrantTenants;
 pub use share::GetShareGrantTenantsReply;
 pub use share::GetShareGrantTenantsReq;
 pub use share::GrantShareObjectReply;
