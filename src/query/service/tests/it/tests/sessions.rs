@@ -12,10 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::backtrace::Backtrace;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
-use std::collections::VecDeque;
 use std::sync::Arc;
 
 use common_base::base::GlobalIORuntime;
@@ -53,7 +51,6 @@ impl Drop for TestGuard {
 
 /// Hard code, in order to make each test share the global service instance, we made some hack code
 ///   - We use thread names as key to store global service instances, because rust test passes the test name through the thread name
-///   - We created an LRU queue to store the last ten global service instances, because the tests may run in parallel
 ///   - In the debug version, we enable the transfer of thread names by environment variables.
 pub struct TestGlobalServices {
     global_runtime: Mutex<HashMap<String, Arc<Runtime>>>,
@@ -68,8 +65,6 @@ pub struct TestGlobalServices {
     session_manager: Mutex<HashMap<String, Arc<SessionManager>>>,
     users_manager: Mutex<HashMap<String, Arc<UserApiProvider>>>,
     users_role_manager: Mutex<HashMap<String, Arc<RoleCacheManager>>>,
-
-    lru_queue: Mutex<VecDeque<String>>,
 }
 
 unsafe impl Send for TestGlobalServices {}
@@ -96,7 +91,6 @@ impl TestGlobalServices {
                 session_manager: Mutex::new(HashMap::new()),
                 users_manager: Mutex::new(HashMap::new()),
                 users_role_manager: Mutex::new(HashMap::new()),
-                lru_queue: Mutex::new(VecDeque::new()),
             })
         });
 
