@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
+use common_fuse_meta::caches::CacheManager;
 use common_fuse_meta::caches::TenantLabel;
 use common_fuse_meta::meta::SegmentInfo;
 use common_fuse_meta::meta::SegmentInfoVersion;
@@ -47,7 +48,7 @@ pub struct MetaReaders;
 impl MetaReaders {
     pub fn segment_info_reader(ctx: &dyn TableContext) -> SegmentInfoReader {
         SegmentInfoReader::new(
-            ctx.get_storage_cache_manager().get_table_segment_cache(),
+            CacheManager::instance().get_table_segment_cache(),
             ctx,
             "SEGMENT_INFO_CACHE".to_owned(),
         )
@@ -55,7 +56,7 @@ impl MetaReaders {
 
     pub fn table_snapshot_reader(ctx: Arc<dyn TableContext>) -> TableSnapshotReader {
         TableSnapshotReader::new(
-            ctx.get_storage_cache_manager().get_table_snapshot_cache(),
+            CacheManager::instance().get_table_snapshot_cache(),
             ctx,
             "SNAPSHOT_CACHE".to_owned(),
         )
@@ -122,13 +123,14 @@ impl BufReaderProvider for Arc<dyn TableContext> {
 
 impl HasTenantLabel for &dyn TableContext {
     fn tenant_label(&self) -> TenantLabel {
-        let mgr = self.get_storage_cache_manager();
+        let storage_cache_manager = CacheManager::instance();
         TenantLabel {
-            tenant_id: mgr.get_tenant_id().to_owned(),
-            cluster_id: mgr.get_cluster_id().to_owned(),
+            tenant_id: storage_cache_manager.get_tenant_id().to_owned(),
+            cluster_id: storage_cache_manager.get_cluster_id().to_owned(),
         }
     }
 }
+
 impl HasTenantLabel for Arc<dyn TableContext> {
     fn tenant_label(&self) -> TenantLabel {
         self.as_ref().tenant_label()

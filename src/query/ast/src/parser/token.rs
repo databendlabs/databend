@@ -513,6 +513,8 @@ pub enum TokenKind {
     NULL,
     #[token("OBJECT", ignore(ascii_case))]
     OBJECT,
+    #[token("OF", ignore(ascii_case))]
+    OF,
     #[token("OFFSET", ignore(ascii_case))]
     OFFSET,
     #[token("ON", ignore(ascii_case))]
@@ -917,6 +919,7 @@ impl TokenKind {
             | TokenKind::LIMIT
             | TokenKind::OFFSET
             | TokenKind::ON
+            | TokenKind::OF
             | TokenKind::ORDER
             // | TokenKind::PRECISION
             // | TokenKind::RETURNING
@@ -1027,6 +1030,7 @@ impl TokenKind {
             // | TokenKind::NOTNULL
             | TokenKind::OFFSET
             | TokenKind::ON
+            | TokenKind::OF
             | TokenKind::ORDER
             // | TokenKind::OVERLAPS
             // | TokenKind::RETURNING

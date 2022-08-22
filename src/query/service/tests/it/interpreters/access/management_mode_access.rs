@@ -152,7 +152,7 @@ async fn test_management_mode_access() -> Result<()> {
     let conf = crate::tests::ConfigBuilder::create()
         .with_management_mode()
         .config();
-    let ctx = crate::tests::create_query_context_with_config(conf.clone(), None).await?;
+    let (_guard, ctx) = crate::tests::create_query_context_with_config(conf.clone(), None).await?;
     let mut planner = Planner::new(ctx.clone());
 
     for group in groups {

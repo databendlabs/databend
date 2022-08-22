@@ -190,7 +190,7 @@ fn test_meta_locations() -> Result<()> {
 
 #[tokio::test]
 async fn test_column_reader_retry_should_return_original_error() -> Result<()> {
-    let ctx = create_query_context().await?;
+    let (_guard, ctx) = create_query_context().await?;
     let operator = ctx.get_storage_operator()?;
     let reader = operator.object("not_exist");
     let r = BlockReader::read_column(reader, 0, 0, 100).await;

@@ -30,6 +30,8 @@ async-trait = "0.1.56"
 ctrlc = { version = "3.2.2", features = ["termination"] }
 futures = "0.3.21"
 libc = "0.2.126"
+num_cpus = "1.13.1"
+once_cell = "1.12.0"
 parking_lot = "0.12.1"
 pprof = { version = "0.10.0", features = [
     "flamegraph",

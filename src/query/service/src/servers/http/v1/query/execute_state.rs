@@ -19,6 +19,7 @@ use std::time::Instant;
 
 use common_base::base::tokio::sync::mpsc;
 use common_base::base::tokio::sync::RwLock;
+use common_base::base::GlobalIORuntime;
 use common_base::base::ProgressValues;
 use common_base::base::TrySpawn;
 use common_datavalues::DataField;
@@ -378,7 +379,7 @@ impl HttpQueryHandle {
             processors: vec![sink],
         });
 
-        let async_runtime = ctx.get_storage_runtime();
+        let async_runtime = GlobalIORuntime::instance();
         let async_runtime_clone = async_runtime.clone();
         let query_need_abort = ctx.query_need_abort();
 
@@ -417,7 +418,9 @@ impl HttpQueryHandle {
 
         std::thread::spawn(move || {
             if let Err(cause) = run() {
-                error_sender.blocking_send(Err(cause)).unwrap();
+                if error_sender.blocking_send(Err(cause)).is_err() {
+                    tracing::warn!("Error sender is disconnect");
+                }
             }
         });
         Ok(Box::pin(DataBlockStream::create(schema, None, vec![])))
