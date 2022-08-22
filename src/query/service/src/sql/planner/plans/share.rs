@@ -156,3 +156,34 @@ impl ShowSharesPlan {
         ]))
     }
 }
+
+// Show object grant privileges.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct ShowObjectGrantPrivilegesPlan {
+    pub object: ShareGrantObjectName,
+}
+
+impl ShowObjectGrantPrivilegesPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::new(vec![
+            DataField::new("Granted_on", Vu8::to_data_type()),
+            DataField::new("Privilege", Vu8::to_data_type()),
+            DataField::new("Share_name", Vu8::to_data_type()),
+        ]))
+    }
+}
+
+// Show grant tenants of share.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct ShowGrantTenantsOfSharePlan {
+    pub share_name: String,
+}
+
+impl ShowGrantTenantsOfSharePlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::new(vec![
+            DataField::new("Granted_on", Vu8::to_data_type()),
+            DataField::new("Account", Vu8::to_data_type()),
+        ]))
+    }
+}

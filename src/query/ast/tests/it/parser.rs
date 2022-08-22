@@ -271,6 +271,9 @@ fn test_statement() {
         r#"DESC SHARE b;"#,
         r#"DESCRIBE SHARE b;"#,
         r#"SHOW SHARES;"#,
+        r#"SHOW GRANTS ON TABLE db1.tb1;"#,
+        r#"SHOW GRANTS ON DATABASE db;"#,
+        r#"SHOW GRANTS OF SHARE t;"#,
     ];
 
     for case in cases {
