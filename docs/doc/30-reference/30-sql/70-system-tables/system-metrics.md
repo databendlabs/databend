@@ -2,7 +2,7 @@
 title: system.metrics
 ---
 
-Contains information about metric events.
+Contains information about [metric events](../../../50-manage/01-query/20-query-metrics.md).
 
 ```sql
 SELECT * FROM system.metrics;

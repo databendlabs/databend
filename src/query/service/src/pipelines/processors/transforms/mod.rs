@@ -37,6 +37,7 @@ mod transform_rename;
 mod transform_window_func;
 
 pub mod group_by;
+mod transform_merge_block;
 
 pub use aggregator::AggregatorParams;
 pub use aggregator::AggregatorTransformParams;
@@ -75,6 +76,7 @@ pub use transform_limit::TransformLimit;
 pub use transform_limit_by::TransformLimitBy;
 pub use transform_mark_join::MarkJoinCompactor;
 pub use transform_mark_join::TransformMarkJoin;
+pub use transform_merge_block::TransformMergeBlock;
 pub use transform_project::TransformProject;
 pub use transform_rename::TransformRename;
 pub use transform_sort_merge::SortMergeCompactor;
