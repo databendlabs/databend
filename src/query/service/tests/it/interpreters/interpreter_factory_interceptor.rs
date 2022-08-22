@@ -22,7 +22,7 @@ use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_interpreter_interceptor() -> Result<()> {
-    let ctx = crate::tests::create_query_context().await?;
+    let (_guard, ctx) = crate::tests::create_query_context().await?;
     {
         let query = "select number from numbers_mt(100) where number > 90";
         ctx.attach_query_str(query);
@@ -79,7 +79,7 @@ async fn test_interpreter_interceptor() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_interpreter_interceptor_for_insert() -> Result<()> {
-    let ctx = crate::tests::create_query_context().await?;
+    let (_guard, ctx) = crate::tests::create_query_context().await?;
     let mut planner = Planner::new(ctx.clone());
 
     {

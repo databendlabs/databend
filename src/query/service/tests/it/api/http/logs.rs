@@ -28,7 +28,7 @@ use crate::tests::TestGlobalServices;
 
 #[tokio::test]
 async fn test_logs() -> Result<()> {
-    TestGlobalServices::setup(crate::tests::ConfigBuilder::create().build()).await?;
+    let _guard = TestGlobalServices::setup(crate::tests::ConfigBuilder::create().build()).await?;
 
     let test_router = Route::new().at("/v1/logs", get(logs_handler));
     {

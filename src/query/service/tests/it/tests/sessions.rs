@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::backtrace::Backtrace;
 use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::sync::Arc;
@@ -37,6 +38,17 @@ use databend_query::Config;
 use once_cell::sync::OnceCell;
 use opendal::Operator;
 use parking_lot::Mutex;
+
+pub struct TestGuard {
+    thread_name: String,
+    services: Arc<TestGlobalServices>,
+}
+
+impl Drop for TestGuard {
+    fn drop(&mut self) {
+        self.services.remove_services(&self.thread_name);
+    }
+}
 
 /// Hard code, in order to make each test share the global service instance, we made some hack code
 ///   - We use thread names as key to store global service instances, because rust test passes the test name through the thread name
@@ -66,7 +78,7 @@ unsafe impl Sync for TestGlobalServices {}
 static GLOBAL: OnceCell<Arc<TestGlobalServices>> = OnceCell::new();
 
 impl TestGlobalServices {
-    pub async fn setup(config: Config) -> Result<()> {
+    pub async fn setup(config: Config) -> Result<TestGuard> {
         set_panic_hook();
         std::env::set_var("UNIT_TEST", "TRUE");
         let global_services = GLOBAL.get_or_init(|| {
@@ -86,25 +98,6 @@ impl TestGlobalServices {
                 lru_queue: Mutex::new(VecDeque::new()),
             })
         });
-
-        {
-            match std::thread::current().name() {
-                None => panic!("thread name is none"),
-                Some(thread_name) => {
-                    let mut lru_queue = global_services.lru_queue.lock();
-                    lru_queue.push_back(thread_name.to_string());
-
-                    if lru_queue.len() >= 10 {
-                        let remove_id = lru_queue.pop_front().unwrap();
-
-                        if !lru_queue.contains(&remove_id) {
-                            // drop(lru_queue);
-                            global_services.remove_services(&remove_id);
-                        }
-                    }
-                }
-            }
-        }
 
         // The order of initialization is very important
         let app_name_shuffle = format!("{}-{}", config.query.tenant_id, config.query.cluster_id);
@@ -131,59 +124,91 @@ impl TestGlobalServices {
 
         ClusterDiscovery::instance()
             .register_to_metastore(&config)
-            .await
+            .await?;
+
+        match std::thread::current().name() {
+            None => panic!("thread name is none"),
+            Some(thread_name) => Ok(TestGuard {
+                services: global_services.clone(),
+                thread_name: thread_name.to_string(),
+            }),
+        }
     }
 
     pub fn remove_services(&self, key: &str) {
         {
-            let mut global_runtime = self.global_runtime.lock();
-            global_runtime.remove(key);
+            let mut global_runtime_guard = self.global_runtime.lock();
+            let global_runtime = global_runtime_guard.remove(key);
+            drop(global_runtime_guard);
+            drop(global_runtime);
         }
         {
-            let mut query_logger = self.query_logger.lock();
-            query_logger.remove(key);
+            let mut query_logger_guard = self.query_logger.lock();
+            let query_logger = query_logger_guard.remove(key);
+            drop(query_logger_guard);
+            drop(query_logger);
         }
         {
-            let mut cluster_discovery = self.cluster_discovery.lock();
-            cluster_discovery.remove(key);
+            let mut cluster_discovery_guard = self.cluster_discovery.lock();
+            let cluster_discovery = cluster_discovery_guard.remove(key);
+            drop(cluster_discovery_guard);
+            drop(cluster_discovery);
         }
         {
-            let mut storage_operator = self.storage_operator.lock();
-            storage_operator.remove(key);
+            let mut storage_operator_guard = self.storage_operator.lock();
+            let storage_operator = storage_operator_guard.remove(key);
+            drop(storage_operator_guard);
+            drop(storage_operator);
         }
         {
-            let mut async_insert_manager = self.async_insert_manager.lock();
-            if let Some(async_insert_manager) = async_insert_manager.remove(key) {
+            let mut async_insert_manager_guard = self.async_insert_manager.lock();
+            if let Some(async_insert_manager) = async_insert_manager_guard.remove(key) {
+                drop(async_insert_manager_guard);
                 async_insert_manager.shutdown();
+                drop(async_insert_manager);
             }
         }
         {
-            let mut cache_manager = self.cache_manager.lock();
-            cache_manager.remove(key);
+            let mut cache_manager_guard = self.cache_manager.lock();
+            let cache_manager = cache_manager_guard.remove(key);
+            drop(cache_manager_guard);
+            drop(cache_manager);
         }
         {
-            let mut catalog_manager = self.catalog_manager.lock();
-            catalog_manager.remove(key);
+            let mut catalog_manager_guard = self.catalog_manager.lock();
+            let catalog_manager = catalog_manager_guard.remove(key);
+            drop(catalog_manager_guard);
+            drop(catalog_manager);
         }
         {
-            let mut http_query_manager = self.http_query_manager.lock();
-            http_query_manager.remove(key);
+            let mut http_query_manager_guard = self.http_query_manager.lock();
+            let http_query_manager = http_query_manager_guard.remove(key);
+            drop(http_query_manager_guard);
+            drop(http_query_manager);
         }
         {
-            let mut data_exchange_manager = self.data_exchange_manager.lock();
-            data_exchange_manager.remove(key);
+            let mut data_exchange_manager_guard = self.data_exchange_manager.lock();
+            let data_exchange_manager = data_exchange_manager_guard.remove(key);
+            drop(data_exchange_manager_guard);
+            drop(data_exchange_manager);
         }
         {
-            let mut session_manager = self.session_manager.lock();
-            session_manager.remove(key);
+            let mut users_role_manager_guard = self.users_role_manager.lock();
+            let users_role_manager = users_role_manager_guard.remove(key);
+            drop(users_role_manager_guard);
+            drop(users_role_manager);
         }
         {
-            let mut users_role_manager = self.users_role_manager.lock();
-            users_role_manager.remove(key);
+            let mut users_manager_guard = self.users_manager.lock();
+            let users_manager = users_manager_guard.remove(key);
+            drop(users_manager_guard);
+            drop(users_manager);
         }
         {
-            let mut users_manager = self.users_manager.lock();
-            users_manager.remove(key);
+            let mut session_manager_guard = self.session_manager.lock();
+            let session_manager = session_manager_guard.remove(key);
+            drop(session_manager_guard);
+            drop(session_manager);
         }
     }
 }
@@ -308,10 +333,7 @@ impl SingletonImpl<Arc<CacheManager>> for TestGlobalServices {
         match std::thread::current().name() {
             None => panic!("CacheManager is not init"),
             Some(name) => match self.cache_manager.lock().get(name) {
-                None => panic!(
-                    "CacheManager is not init {:?}",
-                    std::thread::current().name()
-                ),
+                None => panic!("CacheManager is not init"),
                 Some(cache_manager) => cache_manager.clone(),
             },
         }
@@ -402,10 +424,20 @@ impl SingletonImpl<Arc<SessionManager>> for TestGlobalServices {
     fn get(&self) -> Arc<SessionManager> {
         match std::thread::current().name() {
             None => panic!("SessionManager is not init"),
-            Some(name) => match self.session_manager.lock().get(name) {
-                None => panic!("SessionManager is not init"),
-                Some(session_manager) => session_manager.clone(),
-            },
+            Some(name) => {
+                let sessions = self.session_manager.lock();
+                match sessions.get(name) {
+                    None => {
+                        panic!(
+                            "SessionManager is not init {:?}, {:?}, backtrace: {:?}",
+                            name,
+                            self.lru_queue.lock(),
+                            Backtrace::capture()
+                        );
+                    }
+                    Some(session_manager) => session_manager.clone(),
+                }
+            }
         }
     }
 

@@ -22,7 +22,7 @@ use crate::tests::TestGlobalServices;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_single_cluster_discovery() -> Result<()> {
-    TestGlobalServices::setup(crate::tests::ConfigBuilder::create().build()).await?;
+    let _guard = TestGlobalServices::setup(crate::tests::ConfigBuilder::create().build()).await?;
 
     let discover_cluster = ClusterDiscovery::instance().discover().await?;
 

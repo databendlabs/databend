@@ -418,7 +418,9 @@ impl HttpQueryHandle {
 
         std::thread::spawn(move || {
             if let Err(cause) = run() {
-                error_sender.blocking_send(Err(cause)).unwrap();
+                if error_sender.blocking_send(Err(cause)).is_err() {
+                    tracing::warn!("Error sender is disconnect");
+                }
             }
         });
         Ok(Box::pin(DataBlockStream::create(schema, None, vec![])))

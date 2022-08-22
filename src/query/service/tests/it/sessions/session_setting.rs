@@ -21,7 +21,7 @@ use crate::tests::TestGlobalServices;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_session_setting() -> Result<()> {
-    TestGlobalServices::setup(crate::tests::ConfigBuilder::create().build()).await?;
+    let _guard = TestGlobalServices::setup(crate::tests::ConfigBuilder::create().build()).await?;
     let session = SessionManager::instance()
         .create_session(SessionType::Dummy)
         .await?;

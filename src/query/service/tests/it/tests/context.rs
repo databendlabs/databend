@@ -32,18 +32,23 @@ use databend_query::sessions::TableContext;
 use databend_query::storages::StorageContext;
 use databend_query::Config;
 
+use crate::tests::sessions::TestGuard;
 use crate::tests::TestGlobalServices;
 
-pub async fn create_query_context() -> Result<Arc<QueryContext>> {
+pub async fn create_query_context() -> Result<(TestGuard, Arc<QueryContext>)> {
     create_query_context_with_session(SessionType::Dummy).await
 }
 
-pub async fn create_query_context_with_type(typ: SessionType) -> Result<Arc<QueryContext>> {
+pub async fn create_query_context_with_type(
+    typ: SessionType,
+) -> Result<(TestGuard, Arc<QueryContext>)> {
     create_query_context_with_session(typ).await
 }
 
-async fn create_query_context_with_session(typ: SessionType) -> Result<Arc<QueryContext>> {
-    TestGlobalServices::setup(crate::tests::ConfigBuilder::create().build()).await?;
+async fn create_query_context_with_session(
+    typ: SessionType,
+) -> Result<(TestGuard, Arc<QueryContext>)> {
+    let guard = TestGlobalServices::setup(crate::tests::ConfigBuilder::create().build()).await?;
 
     let dummy_session = SessionManager::instance().create_session(typ).await?;
 
@@ -61,14 +66,14 @@ async fn create_query_context_with_session(typ: SessionType) -> Result<Arc<Query
 
     let dummy_query_context = dummy_session.create_query_context().await?;
     dummy_query_context.get_settings().set_max_threads(8)?;
-    Ok(dummy_query_context)
+    Ok((guard, dummy_query_context))
 }
 
 pub async fn create_query_context_with_config(
     config: Config,
     mut current_user: Option<UserInfo>,
-) -> Result<Arc<QueryContext>> {
-    TestGlobalServices::setup(config).await?;
+) -> Result<(TestGuard, Arc<QueryContext>)> {
+    let guard = TestGlobalServices::setup(config).await?;
 
     let dummy_session = SessionManager::instance()
         .create_session(SessionType::Dummy)
@@ -92,7 +97,7 @@ pub async fn create_query_context_with_config(
     let dummy_query_context = dummy_session.create_query_context().await?;
 
     dummy_query_context.get_settings().set_max_threads(8)?;
-    Ok(dummy_query_context)
+    Ok((guard, dummy_query_context))
 }
 
 pub async fn create_storage_context() -> Result<StorageContext> {
@@ -142,9 +147,9 @@ impl Default for ClusterDescriptor {
 
 pub async fn create_query_context_with_cluster(
     desc: ClusterDescriptor,
-) -> Result<Arc<QueryContext>> {
+) -> Result<(TestGuard, Arc<QueryContext>)> {
     let config = crate::tests::ConfigBuilder::create().build();
-    TestGlobalServices::setup(config.clone()).await?;
+    let guard = TestGlobalServices::setup(config.clone()).await?;
     let dummy_session = SessionManager::instance()
         .create_session(SessionType::Dummy)
         .await?;
@@ -161,5 +166,5 @@ pub async fn create_query_context_with_cluster(
     );
 
     dummy_query_context.get_settings().set_max_threads(8)?;
-    Ok(dummy_query_context)
+    Ok((guard, dummy_query_context))
 }

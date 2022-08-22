@@ -27,7 +27,7 @@ use crate::tests::TestGlobalServices;
 
 #[tokio::test]
 async fn test_config() -> common_exception::Result<()> {
-    TestGlobalServices::setup(crate::tests::ConfigBuilder::create().build()).await?;
+    let _guard = TestGlobalServices::setup(crate::tests::ConfigBuilder::create().build()).await?;
     let cluster_router = Route::new().at("/v1/config", get(config_handler));
 
     let response = cluster_router

@@ -164,50 +164,50 @@ async fn test_scatter_optimizer() -> Result<()> {
             name: "Standalone query with cluster subquery",
             query: "SELECT * FROM numbers_local(1) WHERE EXISTS(SELECT * FROM numbers(1))",
             expect: "Projection: number:UInt64\
-            \n  Filter: exists(subquery(_subquery_1))\
-            \n    Create sub queries sets: [_subquery_1]\
+            \n  Filter: exists(subquery(_subquery_2))\
+            \n    Create sub queries sets: [_subquery_2]\
             \n      RedistributeStage[expr: 0]\
             \n        Projection: number:UInt64\
             \n          ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 1, read_bytes: 8, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0]]\
-            \n      ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 1, read_bytes: 8, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0], filters: [exists(subquery(_subquery_1))]]",
+            \n      ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 1, read_bytes: 8, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0], filters: [exists(subquery(_subquery_2))]]",
         },
         Test {
             name: "Cluster query with standalone subquery",
             query: "SELECT * FROM numbers(1) WHERE EXISTS(SELECT * FROM numbers_local(1))",
             expect: "\
             Projection: number:UInt64\
-            \n  Filter: exists(subquery(_subquery_1))\
-            \n    Create sub queries sets: [_subquery_1]\
+            \n  Filter: exists(subquery(_subquery_3))\
+            \n    Create sub queries sets: [_subquery_3]\
             \n      Broadcast in cluster\
             \n        Projection: number:UInt64\
             \n          ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 1, read_bytes: 8, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0]]\
-            \n      ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 1, read_bytes: 8, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0], filters: [exists(subquery(_subquery_1))]]",
+            \n      ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 1, read_bytes: 8, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0], filters: [exists(subquery(_subquery_3))]]",
         },
         Test {
             name: "Cluster query with cluster subquery",
             query: "SELECT * FROM numbers(1) WHERE EXISTS(SELECT * FROM numbers(1))",
             expect: "\
             Projection: number:UInt64\
-            \n  Filter: exists(subquery(_subquery_1))\
-            \n    Create sub queries sets: [_subquery_1]\
+            \n  Filter: exists(subquery(_subquery_4))\
+            \n    Create sub queries sets: [_subquery_4]\
             \n      Broadcast in cluster\
             \n        Projection: number:UInt64\
             \n          ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 1, read_bytes: 8, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0]]\
-            \n      ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 1, read_bytes: 8, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0], filters: [exists(subquery(_subquery_1))]]",
+            \n      ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 1, read_bytes: 8, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0], filters: [exists(subquery(_subquery_4))]]",
         },
     ];
 
-    for test in tests {
-        let ctx = create_query_context_with_cluster(
-            ClusterDescriptor::new()
-                .with_node("Github", "www.github.com:9090")
-                .with_node("dummy_local", "127.0.0.1:9090")
-                .with_local_id("dummy_local"),
-        )
-        .await?;
+    let (_guard, ctx) = create_query_context_with_cluster(
+        ClusterDescriptor::new()
+            .with_node("Github", "www.github.com:9090")
+            .with_node("dummy_local", "127.0.0.1:9090")
+            .with_local_id("dummy_local"),
+    )
+    .await?;
 
+    for test in tests {
         let plan = PlanParser::parse(ctx.clone(), test.query).await?;
-        let mut optimizer = ScattersOptimizer::create(ctx);
+        let mut optimizer = ScattersOptimizer::create(ctx.clone());
         let optimized = optimizer.optimize(&plan)?;
         let actual = format!("{:?}", optimized);
         assert_eq!(test.expect, actual, "{:#?}", test.name);

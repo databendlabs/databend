@@ -12,19 +12,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+
+
 use common_base::base::tokio;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_types::AuthInfo;
+use common_meta_types::GrantObject;
+use common_meta_types::PasswordHashMethod;
+use common_meta_types::UserInfo;
 use common_meta_types::UserOptionFlag;
+use common_meta_types::UserPrivilegeSet;
 use databend_query::interpreters::*;
-use databend_query::sessions::TableContext;
+
+
 use databend_query::sql::Planner;
 use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_call_interpreter() -> Result<()> {
-    let ctx = crate::tests::create_query_context().await?;
+    let (_guard, ctx) = crate::tests::create_query_context().await?;
     let mut planner = Planner::new(ctx.clone());
 
     let query = "call system$test()";
@@ -42,7 +50,7 @@ async fn test_call_interpreter() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_call_fuse_snapshot_interpreter() -> Result<()> {
-    let ctx = crate::tests::create_query_context().await?;
+    let (_guard, ctx) = crate::tests::create_query_context().await?;
     let mut planner = Planner::new(ctx.clone());
 
     // NumberArgumentsNotMatch
@@ -108,7 +116,7 @@ async fn test_call_fuse_snapshot_interpreter() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_call_clustering_information_interpreter() -> Result<()> {
-    let ctx = crate::tests::create_query_context().await?;
+    let (_guard, ctx) = crate::tests::create_query_context().await?;
     let mut planner = Planner::new(ctx.clone());
 
     // NumberArgumentsNotMatch
@@ -197,29 +205,28 @@ async fn test_call_clustering_information_interpreter() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_call_tenant_quota_interpreter() -> Result<()> {
-    let ctx = crate::tests::create_query_context().await?;
-    let mut planner = Planner::new(ctx.clone());
-
-    // Access denied
-    {
-        let query = "call admin$tenant_quota(tenant1)";
-        let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
-        let res = executor.execute().await;
-        assert_eq!(res.is_err(), true);
-        let expect =
-            "Code: 1062, displayText = Access denied: 'TENANT_QUOTA' only used in management-mode.";
-        assert_eq!(expect, res.err().unwrap().to_string());
-    }
-
     let conf = crate::tests::ConfigBuilder::create()
         .with_management_mode()
         .config();
-    let mut user_info = ctx.get_current_user()?;
+
+    let mut user_info = UserInfo::new("root", "127.0.0.1", AuthInfo::Password {
+        hash_method: PasswordHashMethod::Sha256,
+        hash_value: Vec::from("pass"),
+    });
+
+    user_info.grants.grant_privileges(
+        &GrantObject::Global,
+        UserPrivilegeSet::available_privileges_on_global(),
+    );
+
     user_info
         .option
         .set_option_flag(UserOptionFlag::TenantSetting);
-    let ctx = crate::tests::create_query_context_with_config(conf.clone(), Some(user_info)).await?;
+
+    let (_guard, ctx) =
+        crate::tests::create_query_context_with_config(conf.clone(), Some(user_info)).await?;
+
+    let mut planner = Planner::new(ctx.clone());
 
     // current tenant
     {
@@ -319,6 +326,26 @@ async fn test_call_tenant_quota_interpreter() -> Result<()> {
             "+---------------+-------------------------+------------+---------------------+",
         ];
         common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
+    }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_call_tenant_quote_without_management_mode() -> Result<()> {
+    let (_guard, ctx) = crate::tests::create_query_context().await?;
+    let mut planner = Planner::new(ctx.clone());
+
+    // Access denied
+    {
+        let query = "call admin$tenant_quota(tenant1)";
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let res = executor.execute().await;
+        assert_eq!(res.is_err(), true);
+        let expect =
+            "Code: 1062, displayText = Access denied: 'TENANT_QUOTA' only used in management-mode.";
+        assert_eq!(expect, res.err().unwrap().to_string());
     }
 
     Ok(())

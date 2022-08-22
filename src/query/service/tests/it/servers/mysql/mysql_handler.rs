@@ -35,7 +35,7 @@ use crate::tests::TestGlobalServices;
 #[tokio::test(flavor = "current_thread")]
 async fn test_generic_code_with_on_query() -> Result<()> {
     // Setup
-    TestGlobalServices::setup(ConfigBuilder::create().build()).await?;
+    let _guard = TestGlobalServices::setup(ConfigBuilder::create().build()).await?;
 
     let mut handler = MySQLHandler::create()?;
 
@@ -51,7 +51,8 @@ async fn test_generic_code_with_on_query() -> Result<()> {
 
 #[tokio::test(flavor = "current_thread")]
 async fn test_rejected_session_with_sequence() -> Result<()> {
-    TestGlobalServices::setup(ConfigBuilder::create().max_active_sessions(1).build()).await?;
+    let _guard =
+        TestGlobalServices::setup(ConfigBuilder::create().max_active_sessions(1).build()).await?;
 
     let mut handler = MySQLHandler::create()?;
 
@@ -116,7 +117,8 @@ async fn test_rejected_session_with_parallel() -> Result<()> {
     }
 
     // Setup
-    TestGlobalServices::setup(ConfigBuilder::create().max_active_sessions(1).build()).await?;
+    let _guard =
+        TestGlobalServices::setup(ConfigBuilder::create().max_active_sessions(1).build()).await?;
 
     let mut handler = MySQLHandler::create()?;
 
