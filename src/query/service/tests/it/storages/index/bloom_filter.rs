@@ -26,8 +26,6 @@ use pretty_assertions::assert_eq;
 
 use crate::tests::create_query_context;
 
-
-
 fn create_seed() -> u64 {
     0x16f11fe89b0d677c
 }

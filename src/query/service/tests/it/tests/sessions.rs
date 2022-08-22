@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::backtrace::Backtrace;
+use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::sync::Arc;
@@ -227,12 +228,13 @@ impl SingletonImpl<Arc<Runtime>> for TestGlobalServices {
     fn init(&self, value: Arc<Runtime>) -> Result<()> {
         match std::thread::current().name() {
             None => panic!("thread name is none"),
-            Some(name) => {
-                let mut global_runtime = self.global_runtime.lock();
-                global_runtime.insert(name.to_string(), value);
-                Ok(())
-            }
-        }
+            Some(name) => match self.global_runtime.lock().entry(name.to_string()) {
+                Entry::Vacant(v) => v.insert(value.clone()),
+                Entry::Occupied(_v) => panic!("Global runtime set twice in test[{:?}]", name),
+            },
+        };
+
+        Ok(())
     }
 }
 
@@ -250,12 +252,13 @@ impl SingletonImpl<Arc<QueryLogger>> for TestGlobalServices {
     fn init(&self, value: Arc<QueryLogger>) -> Result<()> {
         match std::thread::current().name() {
             None => panic!("thread name is none"),
-            Some(name) => {
-                let mut query_logger = self.query_logger.lock();
-                query_logger.insert(name.to_string(), value);
-                Ok(())
-            }
-        }
+            Some(name) => match self.query_logger.lock().entry(name.to_string()) {
+                Entry::Vacant(v) => v.insert(value.clone()),
+                Entry::Occupied(_v) => panic!("QueryLogger set twice in test[{:?}]", name),
+            },
+        };
+
+        Ok(())
     }
 }
 
@@ -273,12 +276,13 @@ impl SingletonImpl<Arc<ClusterDiscovery>> for TestGlobalServices {
     fn init(&self, value: Arc<ClusterDiscovery>) -> Result<()> {
         match std::thread::current().name() {
             None => panic!("thread name is none"),
-            Some(name) => {
-                let mut cluster_discovery = self.cluster_discovery.lock();
-                cluster_discovery.insert(name.to_string(), value);
-                Ok(())
-            }
-        }
+            Some(name) => match self.cluster_discovery.lock().entry(name.to_string()) {
+                Entry::Vacant(v) => v.insert(value.clone()),
+                Entry::Occupied(_v) => panic!("ClusterDiscovery set twice in test[{:?}]", name),
+            },
+        };
+
+        Ok(())
     }
 }
 
@@ -296,12 +300,13 @@ impl SingletonImpl<Operator> for TestGlobalServices {
     fn init(&self, value: Operator) -> Result<()> {
         match std::thread::current().name() {
             None => panic!("thread name is none"),
-            Some(name) => {
-                let mut storage_operator = self.storage_operator.lock();
-                storage_operator.insert(name.to_string(), value);
-                Ok(())
-            }
-        }
+            Some(name) => match self.storage_operator.lock().entry(name.to_string()) {
+                Entry::Vacant(v) => v.insert(value.clone()),
+                Entry::Occupied(_v) => panic!("StorageOperator set twice in test[{:?}]", name),
+            },
+        };
+
+        Ok(())
     }
 }
 
@@ -319,12 +324,13 @@ impl SingletonImpl<Arc<AsyncInsertManager>> for TestGlobalServices {
     fn init(&self, value: Arc<AsyncInsertManager>) -> Result<()> {
         match std::thread::current().name() {
             None => panic!("thread name is none"),
-            Some(name) => {
-                let mut async_insert_manager = self.async_insert_manager.lock();
-                async_insert_manager.insert(name.to_string(), value);
-                Ok(())
-            }
-        }
+            Some(name) => match self.async_insert_manager.lock().entry(name.to_string()) {
+                Entry::Vacant(v) => v.insert(value.clone()),
+                Entry::Occupied(_v) => panic!("AsyncInsertManager set twice in test[{:?}]", name),
+            },
+        };
+
+        Ok(())
     }
 }
 
@@ -342,12 +348,13 @@ impl SingletonImpl<Arc<CacheManager>> for TestGlobalServices {
     fn init(&self, value: Arc<CacheManager>) -> Result<()> {
         match std::thread::current().name() {
             None => panic!("thread name is none"),
-            Some(name) => {
-                let mut cache_manager = self.cache_manager.lock();
-                cache_manager.insert(name.to_string(), value);
-                Ok(())
-            }
-        }
+            Some(name) => match self.cache_manager.lock().entry(name.to_string()) {
+                Entry::Vacant(v) => v.insert(value.clone()),
+                Entry::Occupied(_v) => panic!("CacheManager set twice in test[{:?}]", name),
+            },
+        };
+
+        Ok(())
     }
 }
 
@@ -365,12 +372,13 @@ impl SingletonImpl<Arc<CatalogManager>> for TestGlobalServices {
     fn init(&self, value: Arc<CatalogManager>) -> Result<()> {
         match std::thread::current().name() {
             None => panic!("thread name is none"),
-            Some(name) => {
-                let mut catalog_manager = self.catalog_manager.lock();
-                catalog_manager.insert(name.to_string(), value);
-                Ok(())
-            }
-        }
+            Some(name) => match self.catalog_manager.lock().entry(name.to_string()) {
+                Entry::Vacant(v) => v.insert(value.clone()),
+                Entry::Occupied(_v) => panic!("CatalogManager set twice in test[{:?}]", name),
+            },
+        };
+
+        Ok(())
     }
 }
 
@@ -388,12 +396,13 @@ impl SingletonImpl<Arc<HttpQueryManager>> for TestGlobalServices {
     fn init(&self, value: Arc<HttpQueryManager>) -> Result<()> {
         match std::thread::current().name() {
             None => panic!("thread name is none"),
-            Some(name) => {
-                let mut http_query_manager = self.http_query_manager.lock();
-                http_query_manager.insert(name.to_string(), value);
-                Ok(())
-            }
-        }
+            Some(name) => match self.http_query_manager.lock().entry(name.to_string()) {
+                Entry::Vacant(v) => v.insert(value.clone()),
+                Entry::Occupied(_v) => panic!("HttpQueryManager set twice in test[{:?}]", name),
+            },
+        };
+
+        Ok(())
     }
 }
 
@@ -411,12 +420,13 @@ impl SingletonImpl<Arc<DataExchangeManager>> for TestGlobalServices {
     fn init(&self, value: Arc<DataExchangeManager>) -> Result<()> {
         match std::thread::current().name() {
             None => panic!("thread name is none"),
-            Some(name) => {
-                let mut data_exchange_manager = self.data_exchange_manager.lock();
-                data_exchange_manager.insert(name.to_string(), value);
-                Ok(())
-            }
-        }
+            Some(name) => match self.data_exchange_manager.lock().entry(name.to_string()) {
+                Entry::Vacant(v) => v.insert(value.clone()),
+                Entry::Occupied(_v) => panic!("DataExchangeManager set twice in test[{:?}]", name),
+            },
+        };
+
+        Ok(())
     }
 }
 
@@ -424,32 +434,23 @@ impl SingletonImpl<Arc<SessionManager>> for TestGlobalServices {
     fn get(&self) -> Arc<SessionManager> {
         match std::thread::current().name() {
             None => panic!("SessionManager is not init"),
-            Some(name) => {
-                let sessions = self.session_manager.lock();
-                match sessions.get(name) {
-                    None => {
-                        panic!(
-                            "SessionManager is not init {:?}, {:?}, backtrace: {:?}",
-                            name,
-                            self.lru_queue.lock(),
-                            Backtrace::capture()
-                        );
-                    }
-                    Some(session_manager) => session_manager.clone(),
-                }
-            }
+            Some(name) => match self.session_manager.lock().get(name) {
+                None => panic!("SessionManager is not init"),
+                Some(session_manager) => session_manager.clone(),
+            },
         }
     }
 
     fn init(&self, value: Arc<SessionManager>) -> Result<()> {
         match std::thread::current().name() {
             None => panic!("thread name is none"),
-            Some(name) => {
-                let mut session_manager = self.session_manager.lock();
-                session_manager.insert(name.to_string(), value);
-                Ok(())
-            }
-        }
+            Some(name) => match self.session_manager.lock().entry(name.to_string()) {
+                Entry::Vacant(v) => v.insert(value.clone()),
+                Entry::Occupied(_v) => panic!("SessionManager set twice in test[{:?}]", name),
+            },
+        };
+
+        Ok(())
     }
 }
 
@@ -467,12 +468,13 @@ impl SingletonImpl<Arc<UserApiProvider>> for TestGlobalServices {
     fn init(&self, value: Arc<UserApiProvider>) -> Result<()> {
         match std::thread::current().name() {
             None => panic!("thread name is none"),
-            Some(name) => {
-                let mut users_manager = self.users_manager.lock();
-                users_manager.insert(name.to_string(), value);
-                Ok(())
-            }
-        }
+            Some(name) => match self.users_manager.lock().entry(name.to_string()) {
+                Entry::Vacant(v) => v.insert(value.clone()),
+                Entry::Occupied(_v) => panic!("UserApiProvider set twice in test[{:?}]", name),
+            },
+        };
+
+        Ok(())
     }
 }
 
@@ -490,11 +492,12 @@ impl SingletonImpl<Arc<RoleCacheManager>> for TestGlobalServices {
     fn init(&self, value: Arc<RoleCacheManager>) -> Result<()> {
         match std::thread::current().name() {
             None => panic!("thread name is none"),
-            Some(name) => {
-                let mut users_role_manager = self.users_role_manager.lock();
-                users_role_manager.insert(name.to_string(), value);
-                Ok(())
-            }
-        }
+            Some(name) => match self.users_role_manager.lock().entry(name.to_string()) {
+                Entry::Vacant(v) => v.insert(value.clone()),
+                Entry::Occupied(_v) => panic!("RoleCacheManager set twice in test[{:?}]", name),
+            },
+        };
+
+        Ok(())
     }
 }

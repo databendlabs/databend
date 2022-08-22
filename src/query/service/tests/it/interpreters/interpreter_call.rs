@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
-
 use common_base::base::tokio;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -24,8 +22,6 @@ use common_meta_types::UserInfo;
 use common_meta_types::UserOptionFlag;
 use common_meta_types::UserPrivilegeSet;
 use databend_query::interpreters::*;
-
-
 use databend_query::sql::Planner;
 use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
