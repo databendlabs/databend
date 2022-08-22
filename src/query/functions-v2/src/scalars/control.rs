@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_expression::types::nullable::NullableColumn;
 use common_expression::types::DataType;
 use common_expression::BooleanDomain;
 use common_expression::Column;
@@ -23,17 +24,23 @@ use common_expression::Function;
 use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
 use common_expression::FunctionSignature;
+use common_expression::NullableDomain;
 use common_expression::ScalarRef;
 use common_expression::Value;
 use common_expression::ValueRef;
 
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_function_factory("multi_if", |_, args_type| {
-        if args_type.len() < 3 && args_type.len() % 2 == 0 {
+        if args_type.len() < 3 || args_type.len() % 2 == 0 {
             return None;
         }
         let sig_args_type = (0..(args_type.len() - 1) / 2)
-            .flat_map(|_| [DataType::Boolean, DataType::Generic(0)])
+            .flat_map(|_| {
+                [
+                    DataType::Nullable(Box::new(DataType::Boolean)),
+                    DataType::Generic(0),
+                ]
+            })
             .chain([DataType::Generic(0)])
             .collect();
 
@@ -47,62 +54,38 @@ pub fn register(registry: &mut FunctionRegistry) {
             calc_domain: Box::new(|args_domain, _| {
                 let mut domain = None;
                 for cond_idx in (0..args_domain.len() - 1).step_by(2) {
-                    match (&domain, &args_domain[cond_idx]) {
-                        (
-                            None,
-                            Domain::Boolean(BooleanDomain {
-                                has_true: true,
-                                has_false: false,
-                            }),
-                        ) => {
+                    let (has_true, has_null_or_false) = match &args_domain[cond_idx] {
+                        Domain::Nullable(NullableDomain {
+                            has_null,
+                            value:
+                                Some(box Domain::Boolean(BooleanDomain {
+                                    has_true,
+                                    has_false,
+                                })),
+                        }) => (*has_true, *has_null || *has_false),
+                        Domain::Nullable(NullableDomain { value: None, .. }) => (false, true),
+                        _ => unreachable!(),
+                    };
+                    match (&mut domain, has_true, has_null_or_false) {
+                        (None, true, false) => {
                             return Some(args_domain[cond_idx + 1].clone());
                         }
-                        (
-                            None,
-                            Domain::Boolean(BooleanDomain {
-                                has_true: false,
-                                has_false: true,
-                            }),
-                        ) => {
+                        (None, false, true) => {
                             continue;
                         }
-                        (
-                            None,
-                            Domain::Boolean(BooleanDomain {
-                                has_true: true,
-                                has_false: true,
-                            }),
-                        ) => {
+                        (None, true, true) => {
                             domain = Some(args_domain[cond_idx + 1].clone());
                         }
-                        (
-                            Some(prev_domain),
-                            Domain::Boolean(BooleanDomain {
-                                has_true: true,
-                                has_false: false,
-                            }),
-                        ) => {
+                        (Some(prev_domain), true, false) => {
                             return Some(prev_domain.merge(&args_domain[cond_idx + 1]));
                         }
-                        (
-                            Some(_),
-                            Domain::Boolean(BooleanDomain {
-                                has_true: false,
-                                has_false: true,
-                            }),
-                        ) => {
+                        (Some(_), false, true) => {
                             continue;
                         }
-                        (
-                            Some(prev_domain),
-                            Domain::Boolean(BooleanDomain {
-                                has_true: true,
-                                has_false: true,
-                            }),
-                        ) => {
+                        (Some(prev_domain), true, true) => {
                             domain = Some(prev_domain.merge(&args_domain[cond_idx + 1]));
                         }
-                        _ => unreachable!(),
+                        (_, false, false) => unreachable!(),
                     }
                 }
 
@@ -123,10 +106,12 @@ pub fn register(registry: &mut FunctionRegistry) {
                     let result_idx = (0..args.len() - 1)
                         .step_by(2)
                         .find(|&cond_idx| match &args[cond_idx] {
+                            ValueRef::Scalar(ScalarRef::Null) => false,
                             ValueRef::Scalar(ScalarRef::Boolean(cond)) => *cond,
-                            ValueRef::Column(Column::Boolean(cond_col)) => {
-                                cond_col.get(row_idx).unwrap()
-                            }
+                            ValueRef::Column(Column::Nullable(box NullableColumn {
+                                column: Column::Boolean(cond_col),
+                                validity,
+                            })) => validity.get_bit(row_idx) && cond_col.get_bit(row_idx),
                             _ => unreachable!(),
                         })
                         .map(|idx| {
