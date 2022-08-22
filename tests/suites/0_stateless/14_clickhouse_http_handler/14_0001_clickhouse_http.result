@@ -4,6 +4,18 @@
 OK.
 OK.
 8.12.14
+database
+String
+db2
+tables_in_db2
+String
+t2
+Table	Create Table
+String	String
+t2	CREATE TABLE `t2` (\n  `a` INT\n) ENGINE=FUSE
+Field	Type	Null	Default	Extra
+String	String	String	String	String
+a	INT	NO	0	
 1
 --- default_format
 a
