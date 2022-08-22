@@ -32,17 +32,25 @@ use databend_query::sessions::TableContext;
 use databend_query::storages::StorageContext;
 use databend_query::Config;
 
-use crate::tests::SessionManagerBuilder;
+use crate::tests::sessions::TestGuard;
+use crate::tests::TestGlobalServices;
 
-pub async fn create_query_context() -> Result<Arc<QueryContext>> {
-    let sessions = SessionManagerBuilder::create().build()?;
-    create_query_context_with_session(sessions).await
+pub async fn create_query_context() -> Result<(TestGuard, Arc<QueryContext>)> {
+    create_query_context_with_session(SessionType::Dummy).await
 }
 
-pub async fn create_query_context_with_session(
-    sessions: Arc<SessionManager>,
-) -> Result<Arc<QueryContext>> {
-    let dummy_session = sessions.create_session(SessionType::Dummy).await?;
+pub async fn create_query_context_with_type(
+    typ: SessionType,
+) -> Result<(TestGuard, Arc<QueryContext>)> {
+    create_query_context_with_session(typ).await
+}
+
+async fn create_query_context_with_session(
+    typ: SessionType,
+) -> Result<(TestGuard, Arc<QueryContext>)> {
+    let guard = TestGlobalServices::setup(crate::tests::ConfigBuilder::create().build()).await?;
+
+    let dummy_session = SessionManager::instance().create_session(typ).await?;
 
     // Set user with all privileges
     let mut user_info = UserInfo::new("root", "127.0.0.1", AuthInfo::Password {
@@ -56,40 +64,40 @@ pub async fn create_query_context_with_session(
 
     dummy_session.set_current_user(user_info);
 
-    let context = QueryContext::create_from_shared(
-        QueryContextShared::try_create((*dummy_session).clone(), Cluster::empty()).await?,
-    );
-
-    context.get_settings().set_max_threads(8)?;
-    Ok(context)
+    let dummy_query_context = dummy_session.create_query_context().await?;
+    dummy_query_context.get_settings().set_max_threads(8)?;
+    Ok((guard, dummy_query_context))
 }
 
 pub async fn create_query_context_with_config(
     config: Config,
-    current_user: Option<UserInfo>,
-) -> Result<Arc<QueryContext>> {
-    let sessions = SessionManagerBuilder::create_with_conf(config.clone()).build()?;
-    let dummy_session = sessions.create_session(SessionType::Dummy).await?;
+    mut current_user: Option<UserInfo>,
+) -> Result<(TestGuard, Arc<QueryContext>)> {
+    let guard = TestGlobalServices::setup(config).await?;
 
-    let mut user_info = UserInfo::new("root", "127.0.0.1", AuthInfo::Password {
-        hash_method: PasswordHashMethod::Sha256,
-        hash_value: Vec::from("pass"),
-    });
-    user_info.grants.grant_privileges(
-        &GrantObject::Global,
-        UserPrivilegeSet::available_privileges_on_global(),
-    );
-    if let Some(user) = current_user {
-        user_info = user;
+    let dummy_session = SessionManager::instance()
+        .create_session(SessionType::Dummy)
+        .await?;
+
+    if current_user.is_none() {
+        let mut user_info = UserInfo::new("root", "127.0.0.1", AuthInfo::Password {
+            hash_method: PasswordHashMethod::Sha256,
+            hash_value: Vec::from("pass"),
+        });
+
+        user_info.grants.grant_privileges(
+            &GrantObject::Global,
+            UserPrivilegeSet::available_privileges_on_global(),
+        );
+
+        current_user = Some(user_info);
     }
-    dummy_session.set_current_user(user_info);
 
-    let context = QueryContext::create_from_shared(
-        QueryContextShared::try_create((*dummy_session).clone(), Cluster::empty()).await?,
-    );
+    dummy_session.set_current_user(current_user.unwrap());
+    let dummy_query_context = dummy_session.create_query_context().await?;
 
-    context.get_settings().set_max_threads(8)?;
-    Ok(context)
+    dummy_query_context.get_settings().set_max_threads(8)?;
+    Ok((guard, dummy_query_context))
 }
 
 pub async fn create_storage_context() -> Result<StorageContext> {
@@ -139,18 +147,24 @@ impl Default for ClusterDescriptor {
 
 pub async fn create_query_context_with_cluster(
     desc: ClusterDescriptor,
-) -> Result<Arc<QueryContext>> {
-    let sessions = SessionManagerBuilder::create().build()?;
-    let dummy_session = sessions.create_session(SessionType::Dummy).await?;
-
+) -> Result<(TestGuard, Arc<QueryContext>)> {
+    let config = crate::tests::ConfigBuilder::create().build();
+    let guard = TestGlobalServices::setup(config.clone()).await?;
+    let dummy_session = SessionManager::instance()
+        .create_session(SessionType::Dummy)
+        .await?;
     let local_id = desc.local_node_id;
     let nodes = desc.cluster_nodes_list;
 
-    let context = QueryContext::create_from_shared(
-        QueryContextShared::try_create((*dummy_session).clone(), Cluster::create(nodes, local_id))
-            .await?,
+    let dummy_query_context = QueryContext::create_from_shared(
+        QueryContextShared::try_create(
+            config,
+            (*dummy_session).clone(),
+            Cluster::create(nodes, local_id),
+        )
+        .await?,
     );
 
-    context.get_settings().set_max_threads(8)?;
-    Ok(context)
+    dummy_query_context.get_settings().set_max_threads(8)?;
+    Ok((guard, dummy_query_context))
 }

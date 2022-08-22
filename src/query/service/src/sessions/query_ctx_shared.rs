@@ -26,15 +26,17 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::UserInfo;
 use common_planners::PlanNode;
-use common_users::RoleCacheMgr;
+use common_storage::StorageOperator;
 use common_users::UserApiProvider;
 use futures::future::AbortHandle;
+use opendal::Operator;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 use uuid::Uuid;
 
 use crate::auth::AuthMgr;
 use crate::catalogs::CatalogManager;
+use crate::catalogs::CatalogManagerHelper;
 use crate::clusters::Cluster;
 use crate::servers::http::v1::HttpQueryHandle;
 use crate::sessions::query_affect::QueryAffect;
@@ -56,6 +58,7 @@ type DatabaseAndTable = (String, String, String);
 ///     FROM table_name_4;
 /// For each subquery, they will share a runtime, session, progress, init_query_id
 pub struct QueryContextShared {
+    pub(in crate::sessions) config: Config,
     /// scan_progress for scan metrics of datablocks (uncompressed)
     pub(in crate::sessions) scan_progress: Arc<Progress>,
     /// write_progress for write/commit metrics of datablocks (uncompressed)
@@ -75,25 +78,25 @@ pub struct QueryContextShared {
     pub(in crate::sessions) running_plan: Arc<RwLock<Option<PlanNode>>>,
     pub(in crate::sessions) tables_refs: Arc<Mutex<HashMap<DatabaseAndTable, Arc<dyn Table>>>>,
     pub(in crate::sessions) dal_ctx: Arc<DalContext>,
-    pub(in crate::sessions) user_manager: Arc<UserApiProvider>,
     pub(in crate::sessions) auth_manager: Arc<AuthMgr>,
     pub(in crate::sessions) affect: Arc<Mutex<Option<QueryAffect>>>,
-
+    pub(in crate::sessions) catalog_manager: Arc<CatalogManager>,
     pub(in crate::sessions) query_need_abort: Arc<AtomicBool>,
+    pub(in crate::sessions) storage_operator: Operator,
 }
 
 impl QueryContextShared {
     pub async fn try_create(
+        config: Config,
         session: Arc<Session>,
         cluster_cache: Arc<Cluster>,
     ) -> Result<Arc<QueryContextShared>> {
-        let conf = session.get_config();
-
-        let user_manager = session.session_mgr.get_user_api_provider();
-
         Ok(Arc::new(QueryContextShared {
             session,
             cluster_cache,
+            config: config.clone(),
+            catalog_manager: CatalogManager::instance(),
+            storage_operator: StorageOperator::instance(),
             init_query_id: Arc::new(RwLock::new(Uuid::new_v4().to_string())),
             scan_progress: Arc::new(Progress::create()),
             result_progress: Arc::new(Progress::create()),
@@ -108,8 +111,7 @@ impl QueryContextShared {
             running_plan: Arc::new(RwLock::new(None)),
             tables_refs: Arc::new(Mutex::new(HashMap::new())),
             dal_ctx: Arc::new(Default::default()),
-            user_manager: user_manager.clone(),
-            auth_manager: Arc::new(AuthMgr::create(conf, user_manager.clone()).await?),
+            auth_manager: AuthMgr::create(config).await?,
             query_need_abort: Arc::new(AtomicBool::new(false)),
             affect: Arc::new(Mutex::new(None)),
         }))
@@ -171,15 +173,11 @@ impl QueryContextShared {
     }
 
     pub fn get_user_manager(&self) -> Arc<UserApiProvider> {
-        self.user_manager.clone()
+        UserApiProvider::instance()
     }
 
     pub fn get_auth_manager(&self) -> Arc<AuthMgr> {
         self.auth_manager.clone()
-    }
-
-    pub fn get_role_cache_manager(&self) -> Arc<RoleCacheMgr> {
-        self.session.get_role_cache_manager()
     }
 
     pub fn get_settings(&self) -> Arc<Settings> {
@@ -192,10 +190,6 @@ impl QueryContextShared {
 
     pub fn apply_changed_settings(&self, changed_settings: Arc<Settings>) -> Result<()> {
         self.session.apply_changed_settings(changed_settings)
-    }
-
-    pub fn get_catalogs(&self) -> Arc<CatalogManager> {
-        self.session.get_catalogs()
     }
 
     pub async fn get_table(
@@ -228,7 +222,7 @@ impl QueryContextShared {
     ) -> Result<Arc<dyn Table>> {
         let tenant = self.get_tenant();
         let table_meta_key = (catalog.to_string(), database.to_string(), table.to_string());
-        let catalog = self.get_catalogs().get_catalog(catalog)?;
+        let catalog = self.catalog_manager.get_catalog(catalog)?;
         let cache_table = catalog.get_table(tenant.as_str(), database, table).await?;
 
         let mut tables_refs = self.tables_refs.lock();
@@ -288,7 +282,7 @@ impl QueryContextShared {
     }
 
     pub fn get_config(&self) -> Config {
-        self.session.get_config()
+        self.config.clone()
     }
 
     pub fn get_connection_id(&self) -> String {

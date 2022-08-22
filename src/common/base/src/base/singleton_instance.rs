@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,20 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod catalog;
-mod config;
-mod context;
+use std::sync::Arc;
 
-mod sessions;
-pub(crate) mod tls_constants;
+use common_exception::Result;
 
-pub use catalog::create_catalog;
-pub use config::ConfigBuilder;
-pub use context::create_query_context;
-pub use context::create_query_context_with_cluster;
-pub use context::create_query_context_with_config;
-pub use context::create_query_context_with_type;
-pub use context::create_storage_context;
-pub use context::ClusterDescriptor;
-pub use sessions::TestGlobalServices;
-pub use sessions::TestGuard;
+pub trait SingletonImpl<T>: Send + Sync {
+    fn get(&self) -> T;
+
+    fn init(&self, value: T) -> Result<()>;
+}
+
+pub type Singleton<T> = Arc<dyn SingletonImpl<T>>;

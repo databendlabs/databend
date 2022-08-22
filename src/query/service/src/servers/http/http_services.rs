@@ -14,7 +14,6 @@
 
 use std::net::SocketAddr;
 use std::path::Path;
-use std::sync::Arc;
 
 use common_exception::Result;
 use common_http::HttpShutdownHandler;
@@ -31,12 +30,12 @@ use poem::Route;
 use tracing::info;
 
 use super::v1::upload_to_stage;
+use crate::auth::AuthMgr;
 use crate::servers::http::middleware::HTTPSessionMiddleware;
 use crate::servers::http::v1::clickhouse_router;
 use crate::servers::http::v1::query_route;
 use crate::servers::http::v1::streaming_load;
 use crate::servers::Server;
-use crate::sessions::SessionManager;
 use crate::Config;
 
 #[derive(Copy, Clone)]
@@ -68,21 +67,21 @@ echo '{}' | curl -u root: '{:?}/?query=INSERT%20INTO%20test%20FORMAT%20JSONEachR
 }
 
 pub struct HttpHandler {
-    session_manager: Arc<SessionManager>,
+    config: Config,
     shutdown_handler: HttpShutdownHandler,
     kind: HttpHandlerKind,
 }
 
 impl HttpHandler {
-    pub fn create(session_manager: Arc<SessionManager>, kind: HttpHandlerKind) -> Box<dyn Server> {
-        Box::new(HttpHandler {
-            session_manager,
-            shutdown_handler: HttpShutdownHandler::create("http handler".to_string()),
+    pub fn create(kind: HttpHandlerKind, config: Config) -> Result<Box<dyn Server>> {
+        Ok(Box::new(HttpHandler {
             kind,
-        })
+            config,
+            shutdown_handler: HttpShutdownHandler::create("http handler".to_string()),
+        }))
     }
 
-    fn build_router(&self, sock: SocketAddr) -> impl Endpoint {
+    async fn build_router(&self, config: Config, sock: SocketAddr) -> Result<impl Endpoint> {
         let ep = match self.kind {
             HttpHandlerKind::Query => Route::new()
                 .at(
@@ -97,13 +96,14 @@ impl HttpHandler {
                 .at("/v1/upload_to_stage", put(upload_to_stage)),
             HttpHandlerKind::Clickhouse => Route::new().nest("/", clickhouse_router()),
         };
-        ep.with(HTTPSessionMiddleware {
-            kind: self.kind,
-            session_manager: self.session_manager.clone(),
-        })
-        .with(NormalizePath::new(TrailingSlash::Trim))
-        .with(CatchPanic::new())
-        .boxed()
+
+        let auth_manager = AuthMgr::create(config).await?;
+        let session_middleware = HTTPSessionMiddleware::create(self.kind, auth_manager);
+        Ok(ep
+            .with(session_middleware)
+            .with(NormalizePath::new(TrailingSlash::Trim))
+            .with(CatchPanic::new())
+            .boxed())
     }
 
     fn build_tls(config: &Config) -> Result<RustlsConfig> {
@@ -126,16 +126,17 @@ impl HttpHandler {
     async fn start_with_tls(&mut self, listening: SocketAddr) -> Result<SocketAddr> {
         info!("Http Handler TLS enabled");
 
-        let config = self.session_manager.get_conf();
-        let tls_config = Self::build_tls(&config)?;
+        let tls_config = Self::build_tls(&self.config)?;
+        let router = self.build_router(self.config.clone(), listening).await?;
         self.shutdown_handler
-            .start_service(listening, Some(tls_config), self.build_router(listening))
+            .start_service(listening, Some(tls_config), router)
             .await
     }
 
     async fn start_without_tls(&mut self, listening: SocketAddr) -> Result<SocketAddr> {
+        let router = self.build_router(self.config.clone(), listening).await?;
         self.shutdown_handler
-            .start_service(listening, None, self.build_router(listening))
+            .start_service(listening, None, router)
             .await
     }
 }
@@ -146,8 +147,8 @@ impl Server for HttpHandler {
         self.shutdown_handler.shutdown(graceful).await;
     }
 
-    async fn start(&mut self, listening: SocketAddr) -> common_exception::Result<SocketAddr> {
-        let config = &self.session_manager.get_conf().query;
+    async fn start(&mut self, listening: SocketAddr) -> Result<SocketAddr> {
+        let config = &self.config.query;
         match config.http_handler_tls_server_key.is_empty()
             || config.http_handler_tls_server_cert.is_empty()
         {

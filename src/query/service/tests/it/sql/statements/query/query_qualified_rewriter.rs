@@ -145,8 +145,8 @@ async fn test_query_qualified_rewriter() -> Result<()> {
         //    },
     ];
 
+    let (_guard, ctx) = create_query_context().await?;
     for test_case in &tests {
-        let ctx = create_query_context().await?;
         let (mut statements, _) =
             DfParser::parse_sql(test_case.query, ctx.get_current_session().get_type())?;
 
@@ -156,7 +156,7 @@ async fn test_query_qualified_rewriter() -> Result<()> {
                 let schema = analyzer.analyze(&query).await?;
 
                 let mut ir = QueryNormalizer::normalize(ctx.clone(), &query).await?;
-                QualifiedRewriter::rewrite(&schema, ctx, &mut ir)?;
+                QualifiedRewriter::rewrite(&schema, ctx.clone(), &mut ir)?;
 
                 assert_eq!(
                     test_case.expect,

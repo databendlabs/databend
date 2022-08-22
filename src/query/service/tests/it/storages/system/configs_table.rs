@@ -31,7 +31,7 @@ use wiremock::ResponseTemplate;
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_configs_table() -> Result<()> {
     let conf = crate::tests::ConfigBuilder::create().config();
-    let ctx = crate::tests::create_query_context_with_config(conf, None).await?;
+    let (_guard, ctx) = crate::tests::create_query_context_with_config(conf, None).await?;
     ctx.get_settings().set_max_threads(8)?;
 
     let table = ConfigsTable::create(1);
@@ -134,16 +134,16 @@ async fn test_configs_table() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test(flavor = "current_thread")]
 async fn test_configs_table_redact() -> Result<()> {
-    let mock_server = MockServer::start().await;
+    let mock_server = MockServer::builder().start().await;
     Mock::given(method("HEAD"))
         .and(path("/test/.opendal"))
         .respond_with(ResponseTemplate::new(404))
         .mount(&mock_server)
         .await;
 
-    let mut conf = crate::tests::ConfigBuilder::create().config();
+    let mut conf = crate::tests::ConfigBuilder::create().build();
     conf.storage.params = StorageParams::S3(StorageS3Config {
         region: "us-east-2".to_string(),
         endpoint_url: mock_server.uri(),
@@ -152,7 +152,8 @@ async fn test_configs_table_redact() -> Result<()> {
         secret_access_key: "secret_access_key".to_string(),
         ..Default::default()
     });
-    let ctx = crate::tests::create_query_context_with_config(conf, None).await?;
+
+    let (_guard, ctx) = crate::tests::create_query_context_with_config(conf, None).await?;
     ctx.get_settings().set_max_threads(8)?;
 
     let table = ConfigsTable::create(1);

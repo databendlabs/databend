@@ -188,7 +188,7 @@ async fn test_range_filter() -> Result<()> {
         },
     ];
 
-    let ctx = create_query_context().await?;
+    let (_guard, ctx) = create_query_context().await?;
     for test in tests {
         let prune = RangeFilter::try_create(ctx.clone(), &[test.expr], schema.clone())?;
 

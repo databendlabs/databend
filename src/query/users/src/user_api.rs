@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_base::base::Singleton;
 use common_exception::Result;
 use common_grpc::RpcClientConf;
 use common_management::QuotaApi;
@@ -31,19 +32,36 @@ use common_management::UserMgr;
 use common_meta_api::KVApi;
 use common_meta_store::MetaStore;
 use common_meta_store::MetaStoreProvider;
+use once_cell::sync::OnceCell;
 
 pub struct UserApiProvider {
     meta: MetaStore,
     client: Arc<dyn KVApi>,
 }
 
+static USER_API_PROVIDER: OnceCell<Singleton<Arc<UserApiProvider>>> = OnceCell::new();
+
 impl UserApiProvider {
-    pub async fn create_global(conf: RpcClientConf) -> Result<Arc<UserApiProvider>> {
+    pub async fn init(conf: RpcClientConf, v: Singleton<Arc<UserApiProvider>>) -> Result<()> {
+        v.init(Self::try_create(conf).await?)?;
+
+        USER_API_PROVIDER.set(v).ok();
+        Ok(())
+    }
+
+    pub async fn try_create(conf: RpcClientConf) -> Result<Arc<UserApiProvider>> {
         let client = MetaStoreProvider::new(conf).try_get_meta_store().await?;
         Ok(Arc::new(UserApiProvider {
             meta: client.clone(),
             client: client.arc(),
         }))
+    }
+
+    pub fn instance() -> Arc<UserApiProvider> {
+        match USER_API_PROVIDER.get() {
+            None => panic!("UserApiProvider is not init"),
+            Some(user_api_provider) => user_api_provider.get(),
+        }
     }
 
     pub fn get_user_api_client(&self, tenant: &str) -> Result<Arc<dyn UserApi>> {

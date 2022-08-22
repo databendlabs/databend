@@ -22,7 +22,7 @@ use common_meta_types::GrantObject;
 use common_meta_types::RoleInfo;
 use common_meta_types::UserPrivilegeSet;
 use common_users::role_util::find_all_related_roles;
-use common_users::RoleCacheMgr;
+use common_users::RoleCacheManager;
 use common_users::UserApiProvider;
 
 pub const CATALOG_DEFAULT: &str = "default";
@@ -30,20 +30,21 @@ pub const CATALOG_DEFAULT: &str = "default";
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_role_cache_mgr() -> Result<()> {
     let conf = RpcClientConf::default();
-    let user_api = UserApiProvider::create_global(conf).await?;
+    let user_manager = UserApiProvider::try_create(conf).await?;
+    let role_cache_manager = RoleCacheManager::try_create(user_manager.clone())?;
 
     let mut role1 = RoleInfo::new("role1");
     role1.grants.grant_privileges(
         &GrantObject::Database(CATALOG_DEFAULT.to_owned(), "db1".to_string()),
         UserPrivilegeSet::available_privileges_on_database(),
     );
-    user_api.add_role("tenant1", role1, false).await?;
+    user_manager.add_role("tenant1", role1, false).await?;
 
-    let role_cache_mgr = RoleCacheMgr::new(user_api);
-    let roles = role_cache_mgr
+    let roles = role_cache_manager
         .find_related_roles("tenant1", &["role1".to_string()])
         .await?;
-    assert!(roles.len() == 1);
+    assert_eq!(roles.len(), 1);
+
     Ok(())
 }
 

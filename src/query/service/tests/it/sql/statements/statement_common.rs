@@ -30,7 +30,7 @@ use crate::tests::create_query_context;
 
 #[tokio::test]
 async fn test_parse_stage_location_internal() -> Result<()> {
-    let ctx = create_query_context().await?;
+    let (_guard, ctx) = create_query_context().await?;
     let user_stage_info = UserStageInfo {
         stage_name: "test".to_string(),
         stage_type: StageType::Internal,
@@ -67,7 +67,7 @@ async fn test_parse_stage_location_internal() -> Result<()> {
 
 #[tokio::test]
 async fn test_parse_stage_location_external() -> Result<()> {
-    let ctx = create_query_context().await?;
+    let (_guard, ctx) = create_query_context().await?;
     let user_stage_info = UserStageInfo {
         stage_name: "test".to_string(),
         stage_type: StageType::External,
@@ -100,7 +100,7 @@ async fn test_parse_stage_location_external() -> Result<()> {
 
 #[tokio::test]
 async fn test_parse_uri_location() -> Result<()> {
-    let ctx = create_query_context().await?;
+    let (_guard, ctx) = create_query_context().await?;
 
     // Cases are in the format:
     // - `name`

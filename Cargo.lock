@@ -1015,6 +1015,8 @@ dependencies = [
  "ctrlc",
  "futures",
  "libc",
+ "num_cpus",
+ "once_cell",
  "parking_lot 0.12.1",
  "pprof",
  "serde",
@@ -1062,7 +1064,6 @@ dependencies = [
  "common-datavalues",
  "common-exception",
  "common-functions",
- "common-fuse-meta",
  "common-io",
  "common-meta-app",
  "common-meta-types",
@@ -1277,6 +1278,7 @@ dependencies = [
  "common-datavalues",
  "common-exception",
  "common-metrics",
+ "once_cell",
  "serde",
 ]
 
@@ -1717,7 +1719,12 @@ name = "common-storage"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "backon",
+ "common-base",
+ "common-contexts",
+ "common-exception",
  "globiter",
+ "once_cell",
  "opendal",
  "percent-encoding",
  "serde",
@@ -1819,7 +1826,6 @@ dependencies = [
  "common-arrow",
  "common-base",
  "common-building",
- "common-cache",
  "common-catalog",
  "common-config",
  "common-contexts",
@@ -1827,7 +1833,6 @@ dependencies = [
  "common-datavalues",
  "common-exception",
  "common-functions",
- "common-fuse-meta",
  "common-grpc",
  "common-meta-app",
  "common-meta-types",
@@ -1903,7 +1908,10 @@ dependencies = [
 name = "common-tracing"
 version = "0.1.0"
 dependencies = [
+ "common-base",
+ "common-exception",
  "console-subscriber",
+ "once_cell",
  "opentelemetry",
  "opentelemetry-jaeger",
  "sentry-tracing",
@@ -1930,6 +1938,7 @@ dependencies = [
  "common-meta-types",
  "common-tracing",
  "jwtk",
+ "once_cell",
  "parking_lot 0.12.1",
  "pretty_assertions",
  "serde",
@@ -2367,7 +2376,9 @@ dependencies = [
  "common-meta-store",
  "common-meta-types",
  "common-metrics",
+ "common-storage",
  "common-tracing",
+ "common-users",
  "databend-meta",
  "databend-query",
  "openraft",

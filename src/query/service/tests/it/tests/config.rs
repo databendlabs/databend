@@ -33,6 +33,83 @@ impl ConfigBuilder {
         ConfigBuilder { conf }
     }
 
+    pub fn api_tls_server_key(mut self, value: impl Into<String>) -> ConfigBuilder {
+        self.conf.query.api_tls_server_key = value.into();
+        self
+    }
+
+    pub fn api_tls_server_cert(mut self, value: impl Into<String>) -> ConfigBuilder {
+        self.conf.query.api_tls_server_cert = value.into();
+        self
+    }
+
+    pub fn api_tls_server_root_ca_cert(mut self, value: impl Into<String>) -> ConfigBuilder {
+        self.conf.query.api_tls_server_root_ca_cert = value.into();
+        self
+    }
+
+    pub fn max_active_sessions(mut self, value: u64) -> ConfigBuilder {
+        self.conf.query.max_active_sessions = value;
+        self
+    }
+
+    pub fn jwt_key_file(mut self, value: impl Into<String>) -> ConfigBuilder {
+        self.conf.query.jwt_key_file = value.into();
+        self
+    }
+
+    pub fn async_insert_busy_timeout(mut self, value: u64) -> ConfigBuilder {
+        self.conf.query.async_insert_busy_timeout = value;
+        self
+    }
+
+    pub fn async_insert_max_data_size(mut self, value: u64) -> ConfigBuilder {
+        self.conf.query.async_insert_max_data_size = value;
+        self
+    }
+
+    pub fn async_insert_stale_timeout(mut self, value: u64) -> ConfigBuilder {
+        self.conf.query.async_insert_stale_timeout = value;
+        self
+    }
+
+    pub fn http_handler_result_time_out(mut self, value: impl Into<u64>) -> ConfigBuilder {
+        self.conf.query.http_handler_result_timeout_millis = value.into();
+        self
+    }
+
+    pub fn http_handler_tls_server_key(mut self, value: impl Into<String>) -> ConfigBuilder {
+        self.conf.query.http_handler_tls_server_key = value.into();
+        self
+    }
+
+    pub fn http_handler_tls_server_cert(mut self, value: impl Into<String>) -> ConfigBuilder {
+        self.conf.query.http_handler_tls_server_cert = value.into();
+        self
+    }
+
+    pub fn http_handler_tls_server_root_ca_cert(
+        mut self,
+        value: impl Into<String>,
+    ) -> ConfigBuilder {
+        self.conf.query.http_handler_tls_server_root_ca_cert = value.into();
+        self
+    }
+
+    pub fn rpc_tls_server_key(mut self, value: impl Into<String>) -> ConfigBuilder {
+        self.conf.query.rpc_tls_server_key = value.into();
+        self
+    }
+
+    pub fn rpc_tls_server_cert(mut self, value: impl Into<String>) -> ConfigBuilder {
+        self.conf.query.rpc_tls_server_cert = value.into();
+        self
+    }
+
+    pub fn build(self) -> Config {
+        self.conf
+    }
+
     pub fn config(&self) -> Config {
         self.conf.clone()
     }

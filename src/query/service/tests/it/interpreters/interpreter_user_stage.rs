@@ -23,7 +23,7 @@ use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_user_stage_interpreter() -> Result<()> {
-    let ctx = crate::tests::create_query_context().await?;
+    let (_guard, ctx) = crate::tests::create_query_context().await?;
     let mut planner = Planner::new(ctx.clone());
 
     // add
