@@ -1,0 +1,32 @@
+[package]
+name = "common-planners"
+version = "0.1.0"
+authors = ["Databend Authors <opensource@datafuselabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[lib]
+doctest = false
+test = false
+
+[dependencies] # In alphabetical order
+# Workspace dependencies
+common-datablocks = { path = "../datablocks" }
+common-datavalues = { path = "../datavalues" }
+common-exception = { path = "../../common/exception" }
+common-functions = { path = "../functions" }
+common-meta-app = { path = "../../meta/app" }
+common-meta-types = { path = "../../meta/types" }
+
+# Github dependencies
+
+# Crates.io dependencies
+bitflags = "1.3.2"
+once_cell = "1.12.0"
+serde = { version = "1.0.137", features = ["derive"] }
+serde_json = "1.0.81"
+typetag = "0.1.8"
+
+[dev-dependencies]
+pretty_assertions = "1.2.1"

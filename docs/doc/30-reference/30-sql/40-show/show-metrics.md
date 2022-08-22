@@ -2,7 +2,7 @@
 title: SHOW METRICS
 ---
 
-Shows the list of system metrics.
+Shows the list of [system metrics](../70-system-tables/system-metrics.md).
 
 ## Syntax
 

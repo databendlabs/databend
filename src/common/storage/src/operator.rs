@@ -15,6 +15,16 @@
 use std::env;
 use std::io::Result;
 
+use backon::ExponentialBackoff;
+use common_base::base::GlobalIORuntime;
+use common_base::base::Singleton;
+use common_contexts::DalRuntime;
+use common_exception::ErrorCode;
+use once_cell::sync::OnceCell;
+use opendal::layers::LoggingLayer;
+use opendal::layers::MetricsLayer;
+use opendal::layers::RetryLayer;
+use opendal::layers::TracingLayer;
 use opendal::services::azblob;
 use opendal::services::fs;
 use opendal::services::gcs;
@@ -29,6 +39,7 @@ use super::StorageParams;
 use super::StorageS3Config;
 use crate::config::StorageGcsConfig;
 use crate::config::StorageHttpConfig;
+use crate::StorageConfig;
 
 /// init_operator will init an opendal operator based on storage config.
 pub fn init_operator(cfg: &StorageParams) -> Result<Operator> {
@@ -157,4 +168,49 @@ pub fn init_s3_operator(cfg: &StorageS3Config) -> Result<Operator> {
     }
 
     Ok(Operator::new(builder.build()?))
+}
+
+pub struct StorageOperator;
+
+static STORAGE_OPERATOR: OnceCell<Singleton<Operator>> = OnceCell::new();
+
+impl StorageOperator {
+    pub async fn init(
+        conf: &StorageConfig,
+        v: Singleton<Operator>,
+    ) -> common_exception::Result<()> {
+        v.init(Self::try_create(conf).await?)?;
+
+        STORAGE_OPERATOR.set(v).ok();
+        Ok(())
+    }
+
+    pub async fn try_create(conf: &StorageConfig) -> common_exception::Result<Operator> {
+        let io_runtime = GlobalIORuntime::instance();
+        let operator = init_operator(&conf.params)?
+            .layer(RetryLayer::new(ExponentialBackoff::default()))
+            .layer(LoggingLayer)
+            .layer(TracingLayer)
+            .layer(MetricsLayer);
+
+        // OpenDAL will send a real request to underlying storage to check whether it works or not.
+        // If this check failed, it's highly possible that the users have configured it wrongly.
+        if let Err(cause) = operator.check().await {
+            return Err(ErrorCode::StorageUnavailable(format!(
+                "current configured storage is not available: config: {:?}, cause: {cause}",
+                conf
+            )));
+        }
+
+        // NOTE: Magic happens here. We will add a layer upon original storage operator
+        // so that all underlying storage operations will send to storage runtime.
+        Ok(operator.layer(DalRuntime::new(io_runtime.inner())))
+    }
+
+    pub fn instance() -> Operator {
+        match STORAGE_OPERATOR.get() {
+            None => panic!("StorageOperator is not init"),
+            Some(storage_operator) => storage_operator.get(),
+        }
+    }
 }

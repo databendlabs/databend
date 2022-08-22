@@ -21,6 +21,7 @@ use common_datavalues::DataSchema;
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_fuse_meta::caches::CacheManager;
 use common_fuse_meta::meta::BlockMeta;
 use common_fuse_meta::meta::ClusterStatistics;
 use common_fuse_meta::meta::SegmentInfo;
@@ -42,7 +43,7 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
     let ctx = fixture.ctx();
     let location_generator = TableMetaLocationGenerator::with_prefix("_prefix".to_owned());
 
-    let segment_info_cache = ctx.get_storage_cache_manager().get_table_segment_cache();
+    let segment_info_cache = CacheManager::instance().get_table_segment_cache();
     let data_accessor = ctx.get_storage_operator()?;
     let seg_writer = SegmentWriter::new(&data_accessor, &location_generator, &segment_info_cache);
 

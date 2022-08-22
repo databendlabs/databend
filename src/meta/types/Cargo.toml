@@ -11,11 +11,11 @@ doctest = false
 test = false
 
 [dependencies]
-common-datavalues = { path = "../../common/datavalues" }
+common-datavalues = { path = "../../query/datavalues" }
 common-exception = { path = "../../common/exception" }
 common-storage = { path = "../../common/storage" }
 
-openraft = { git = "https://github.com/datafuselabs/openraft", rev = "v0.7.1" }
+openraft = { git = "https://github.com/drmingdrmer/openraft", rev = "v0.7.2-alpha.1" }
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1", default-features = false }
 
 anyerror = "0.1.6"

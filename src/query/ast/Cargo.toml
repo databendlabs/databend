@@ -11,9 +11,9 @@ doctest = false
 
 [dependencies] # In alphabetical order
 # Workspace dependencies
-common-datavalues = { path = "../../common/datavalues" }
+common-datavalues = { path = "../datavalues" }
 common-exception = { path = "../../common/exception" }
-common-functions = { path = "../../common/functions" }
+common-functions = { path = "../functions" }
 common-meta-app = { path = "../../meta/app" }
 common-meta-types = { path = "../../meta/types" }
 

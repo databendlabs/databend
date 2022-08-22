@@ -33,6 +33,11 @@ select to_timestamp('2000-01-01 12:00:00');
 ----
 2000-01-01 12:00:00.000000
 
+statement query T
+select to_timestamp('2000-01-01 12:00:00+08:00');
+
+----
+2000-01-01 12:00:00.000000
 
 statement ok
 set timezone = 'UTC';

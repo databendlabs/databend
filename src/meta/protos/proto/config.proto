@@ -37,3 +37,13 @@ message FsStorageConfig {
 
   string root = 1;
 }
+
+message GcsStorageConfig {
+  uint64 version = 100;
+  uint64 min_compatible = 101;
+
+  string endpoint_url = 1;
+  string bucket = 2;
+  string root = 3;
+  string credential = 4;
+}

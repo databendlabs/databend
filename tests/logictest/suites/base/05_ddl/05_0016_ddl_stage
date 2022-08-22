@@ -29,8 +29,5 @@ DROP STAGE test_stage;
 statement ok
 DROP STAGE test_stage_internal;
 
-statement error 2501
-desc stage test_stage_internal;
-
 statement ok
 SHOW STAGES;

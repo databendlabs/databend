@@ -16,10 +16,12 @@ use std::collections::BTreeMap;
 use std::io::Result;
 
 use common_storage::parse_uri_location;
+use common_storage::StorageGcsConfig;
 use common_storage::StorageHttpConfig;
 use common_storage::StorageParams;
 use common_storage::StorageS3Config;
 use common_storage::UriLocation;
+use common_storage::STORAGE_GCS_DEFAULT_ENDPOINT;
 use common_storage::STORAGE_S3_DEFAULT_ENDPOINT;
 
 #[test]
@@ -79,6 +81,27 @@ fn test_parse_uri_location() -> Result<()> {
                     root: "/tmp/".to_string(),
                     disable_credential_loader: true,
                     enable_virtual_host_style: false,
+                }),
+                "/".to_string(),
+            ),
+        ),
+        (
+            "gcs_with_credential",
+            UriLocation {
+                protocol: "gcs".to_string(),
+                name: "example".to_string(),
+                path: "/tmp/".to_string(),
+                connection: vec![("credential", "gcs.credential")]
+                    .into_iter()
+                    .map(|(k, v)| (k.to_string(), v.to_string()))
+                    .collect(),
+            },
+            (
+                StorageParams::Gcs(StorageGcsConfig {
+                    endpoint_url: STORAGE_GCS_DEFAULT_ENDPOINT.to_string(),
+                    bucket: "example".to_string(),
+                    root: "/tmp/".to_string(),
+                    credential: "gcs.credential".to_string(),
                 }),
                 "/".to_string(),
             ),
@@ -147,7 +170,7 @@ fn test_parse_uri_location() -> Result<()> {
 
     for (name, input, expected) in cases {
         let actual = parse_uri_location(&input)?;
-        assert_eq!(expected, actual, "{name}");
+        assert_eq!(expected, actual, "{}", name);
     }
 
     Ok(())

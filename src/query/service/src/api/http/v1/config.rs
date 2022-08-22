@@ -12,17 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
-use poem::web::Data;
 use poem::web::Json;
 use poem::IntoResponse;
 
 use crate::sessions::SessionManager;
 
 #[poem::handler]
-pub async fn config_handler(
-    session: Data<&Arc<SessionManager>>,
-) -> poem::Result<impl IntoResponse> {
-    Ok(Json(session.0.get_conf().into_outer()))
+pub async fn config_handler() -> poem::Result<impl IntoResponse> {
+    Ok(Json(SessionManager::instance().get_conf().into_outer()))
 }
