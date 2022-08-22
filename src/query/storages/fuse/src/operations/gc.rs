@@ -19,6 +19,7 @@ use common_cache::Cache;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_fuse_meta::caches::CacheManager;
 use common_fuse_meta::meta::Location;
 use common_fuse_meta::meta::SnapshotId;
 use futures::TryStreamExt;
@@ -183,9 +184,7 @@ impl FuseTable {
                 if !root.contains(block_meta.location.0.as_str()) {
                     if let Some(bloom_index_location) = &block_meta.bloom_filter_index_location {
                         let path = &bloom_index_location.0;
-                        if let Some(c) =
-                            ctx.get_storage_cache_manager().get_bloom_index_meta_cache()
-                        {
+                        if let Some(c) = CacheManager::instance().get_bloom_index_meta_cache() {
                             let cache = &mut *c.write().await;
                             cache.pop(path);
                         }
@@ -243,7 +242,7 @@ impl FuseTable {
 
         // 1. remove the segments
         for (x, _v) in segments_to_be_deleted {
-            if let Some(c) = ctx.get_storage_cache_manager().get_table_segment_cache() {
+            if let Some(c) = CacheManager::instance().get_table_segment_cache() {
                 let cache = &mut *c.write().await;
                 cache.pop(x.as_str());
             }
@@ -254,7 +253,7 @@ impl FuseTable {
         // 2. remove the snapshots
         for (id, ver) in snapshots_to_be_deleted.iter().rev() {
             let loc = locs.snapshot_location_from_uuid(id, *ver)?;
-            if let Some(c) = ctx.get_storage_cache_manager().get_table_snapshot_cache() {
+            if let Some(c) = CacheManager::instance().get_table_snapshot_cache() {
                 let cache = &mut *c.write().await;
                 cache.pop(loc.as_str());
             }

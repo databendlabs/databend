@@ -18,6 +18,7 @@ use std::sync::mpsc::Receiver;
 use std::sync::mpsc::SyncSender;
 use std::sync::Arc;
 
+use common_base::base::GlobalIORuntime;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -31,7 +32,6 @@ use crate::pipelines::processors::SyncSourcer;
 use crate::pipelines::Pipeline;
 use crate::pipelines::SourcePipeBuilder;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
 
 struct State {
     finished: AtomicBool,
@@ -94,7 +94,7 @@ impl PipelinePushingExecutor {
         mut pipeline: Pipeline,
     ) -> Result<PipelinePushingExecutor> {
         let state = State::create();
-        let async_runtime = ctx.get_storage_runtime();
+        let async_runtime = GlobalIORuntime::instance();
         let sender = Self::wrap_pipeline(ctx, &mut pipeline)?;
         let executor = PipelineExecutor::create(async_runtime, query_need_abort, pipeline)?;
         Ok(PipelinePushingExecutor {

@@ -22,6 +22,7 @@ use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_fuse_meta::caches::CacheManager;
 use common_fuse_meta::meta::ClusterKey;
 use common_fuse_meta::meta::Statistics as FuseStatistics;
 use common_fuse_meta::meta::TableSnapshot;
@@ -200,9 +201,7 @@ impl FuseTable {
         let result = catalog.update_table_meta(req).await;
         match result {
             Ok(_) => {
-                if let Some(snapshot_cache) =
-                    ctx.get_storage_cache_manager().get_table_snapshot_cache()
-                {
+                if let Some(snapshot_cache) = CacheManager::instance().get_table_snapshot_cache() {
                     let cache = &mut snapshot_cache.write().await;
                     cache.put(snapshot_loc, Arc::new(snapshot.clone()));
                 }

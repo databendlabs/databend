@@ -12,7 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
+use common_base::base::Singleton;
 use common_config::QueryConfig;
+use common_exception::Result;
+use once_cell::sync::OnceCell;
 
 use crate::caches::memory_cache::new_bytes_cache;
 use crate::caches::memory_cache::BloomIndexCache;
@@ -38,34 +43,50 @@ pub struct CacheManager {
     tenant_id: String,
 }
 
+static CACHE_MANAGER: OnceCell<Singleton<Arc<CacheManager>>> = OnceCell::new();
+
 impl CacheManager {
     /// Initialize the caches according to the relevant configurations.
     ///
     /// For convenience, ids of cluster and tenant are also kept
-    pub fn init(config: &QueryConfig) -> CacheManager {
+    pub fn init(config: &QueryConfig, v: Singleton<Arc<CacheManager>>) -> Result<()> {
         if !config.table_cache_enabled {
-            Self {
+            v.init(Arc::new(Self {
                 table_snapshot_cache: None,
                 segment_info_cache: None,
                 bloom_index_cache: None,
                 bloom_index_meta_cache: None,
                 cluster_id: config.cluster_id.clone(),
                 tenant_id: config.tenant_id.clone(),
-            }
+            }))?;
+
+            CACHE_MANAGER.set(v).ok();
         } else {
             let table_snapshot_cache = Self::new_item_cache(config.table_cache_snapshot_count);
             let segment_info_cache = Self::new_item_cache(config.table_cache_segment_count);
             let bloom_index_cache = Self::new_bytes_cache(DEFAULT_BLOOM_INDEX_META_CACHE_ITEMS);
             let bloom_index_meta_cache =
                 Self::new_item_cache(DEFAULT_BLOOM_INDEX_COLUMN_CACHE_SIZE);
-            Self {
+
+            v.init(Arc::new(Self {
                 table_snapshot_cache,
                 segment_info_cache,
                 bloom_index_cache,
                 bloom_index_meta_cache,
                 cluster_id: config.cluster_id.clone(),
                 tenant_id: config.tenant_id.clone(),
-            }
+            }))?;
+
+            CACHE_MANAGER.set(v).ok();
+        }
+
+        Ok(())
+    }
+
+    pub fn instance() -> Arc<CacheManager> {
+        match CACHE_MANAGER.get() {
+            None => panic!("CacheManager is not init"),
+            Some(cache_manager) => cache_manager.get(),
         }
     }
 

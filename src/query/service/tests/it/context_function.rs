@@ -19,7 +19,7 @@ use databend_query::context_function::ContextFunction;
 #[tokio::test]
 async fn test_context_function_build_arg_from_ctx() -> Result<()> {
     use pretty_assertions::assert_eq;
-    let ctx = crate::tests::create_query_context().await?;
+    let (_guard, ctx) = crate::tests::create_query_context().await?;
 
     // Ok.
     {

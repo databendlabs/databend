@@ -37,6 +37,7 @@ use crate::servers::http::v1::query::Executor;
 use crate::servers::http::v1::query::PageManager;
 use crate::servers::http::v1::query::ResponseData;
 use crate::servers::http::v1::query::Wait;
+use crate::servers::http::v1::HttpQueryManager;
 use crate::sessions::QueryAffect;
 use crate::sessions::SessionType;
 use crate::sessions::TableContext;
@@ -163,7 +164,7 @@ impl HttpQuery {
         request: HttpQueryRequest,
         config: HttpQueryConfig,
     ) -> Result<Arc<HttpQuery>> {
-        let http_query_manager = ctx.session_mgr.get_http_query_manager();
+        let http_query_manager = HttpQueryManager::instance();
 
         let session = if let Some(id) = &request.session_id {
             let session = http_query_manager.get_session(id).await.ok_or_else(|| {

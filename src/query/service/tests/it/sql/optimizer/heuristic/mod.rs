@@ -26,10 +26,10 @@ use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
 use common_ast::Backtrace;
 use common_ast::Dialect;
+use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use databend_query::sessions::QueryContext;
-use databend_query::sessions::TableContext;
 use databend_query::sql::optimizer::HeuristicOptimizer;
 use databend_query::sql::optimizer::RuleID;
 use databend_query::sql::optimizer::RuleList;
@@ -51,7 +51,7 @@ async fn run_test(ctx: Arc<QueryContext>, suite: &Suite) -> Result<String> {
     let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL, &bt)?;
     let binder = Binder::new(
         ctx.clone(),
-        ctx.get_catalogs(),
+        ctx.get_catalog_manager()?,
         NameResolutionContext::default(),
         Arc::new(RwLock::new(Metadata::create())),
     );

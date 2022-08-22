@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
 use common_exception::Result;
+use common_fuse_meta::caches::CacheManager;
 use common_fuse_meta::meta::BlockMeta;
 use common_fuse_meta::meta::SegmentInfo;
 use common_fuse_meta::meta::TableSnapshot;
@@ -113,10 +114,7 @@ impl<'a> CompactMutator<'a> {
         Self::write_block(&block_writer, remains, &mut remain_blocks).await?;
 
         // Create new segments.
-        let segment_info_cache = self
-            .ctx
-            .get_storage_cache_manager()
-            .get_table_segment_cache();
+        let segment_info_cache = CacheManager::instance().get_table_segment_cache();
         let seg_writer = SegmentWriter::new(
             &self.data_accessor,
             self.location_generator,

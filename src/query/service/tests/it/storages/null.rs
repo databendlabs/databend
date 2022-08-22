@@ -25,7 +25,7 @@ use futures::TryStreamExt;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_null_table() -> Result<()> {
-    let ctx = crate::tests::create_query_context().await?;
+    let (_guard, ctx) = crate::tests::create_query_context().await?;
 
     let table = NullTable::try_create(crate::tests::create_storage_context().await?, TableInfo {
         desc: "'default'.'a'".into(),

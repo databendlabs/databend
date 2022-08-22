@@ -28,6 +28,7 @@ use common_base::base::DummySignalStream;
 use common_base::base::GlobalUniqName;
 use common_base::base::SignalStream;
 use common_base::base::SignalType;
+use common_base::base::Singleton;
 pub use common_catalog::cluster_info::Cluster;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -43,6 +44,7 @@ use futures::future::Either;
 use futures::Future;
 use futures::StreamExt;
 use metrics::gauge;
+use once_cell::sync::OnceCell;
 use rand::thread_rng;
 use rand::Rng;
 use tracing::error;
@@ -132,6 +134,8 @@ impl ClusterHelper for Cluster {
     }
 }
 
+static CLUSTER_DISCOVERY: OnceCell<Singleton<Arc<ClusterDiscovery>>> = OnceCell::new();
+
 impl ClusterDiscovery {
     const METRIC_LABEL_FUNCTION: &'static str = "function";
 
@@ -143,12 +147,12 @@ impl ClusterDiscovery {
         }
     }
 
-    pub async fn create_global(cfg: Config) -> Result<Arc<ClusterDiscovery>> {
+    pub async fn init(cfg: Config, v: Singleton<Arc<ClusterDiscovery>>) -> Result<()> {
         let local_id = GlobalUniqName::unique();
         let meta_client = ClusterDiscovery::create_meta_client(&cfg).await?;
         let (lift_time, provider) = Self::create_provider(&cfg, meta_client)?;
 
-        Ok(Arc::new(ClusterDiscovery {
+        v.init(Arc::new(ClusterDiscovery {
             local_id: local_id.clone(),
             api_provider: provider.clone(),
             heartbeat: Mutex::new(ClusterHeartbeat::create(
@@ -160,7 +164,17 @@ impl ClusterDiscovery {
             cluster_id: cfg.query.cluster_id.clone(),
             tenant_id: cfg.query.tenant_id.clone(),
             flight_address: cfg.query.flight_api_address.clone(),
-        }))
+        }))?;
+
+        CLUSTER_DISCOVERY.set(v).ok();
+        Ok(())
+    }
+
+    pub fn instance() -> Arc<ClusterDiscovery> {
+        match CLUSTER_DISCOVERY.get() {
+            None => panic!("ClusterDiscovery is not init"),
+            Some(cluster_discovery) => cluster_discovery.get(),
+        }
     }
 
     fn create_provider(

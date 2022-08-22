@@ -24,6 +24,7 @@ use common_datavalues::prelude::Series;
 use common_datavalues::prelude::SeriesFrom;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_tracing::QueryLogger;
 use serde::Serialize;
 use serde::Serializer;
 use serde_json;
@@ -230,7 +231,7 @@ impl InterpreterQueryLog {
             .await?;
 
         // info!("{}", serde_json::to_string(event)?);
-        match self.ctx.get_query_logger() {
+        match QueryLogger::instance().get_subscriber() {
             Some(logger) => {
                 let event_str = serde_json::to_string(event)?;
                 subscriber::with_default(logger, || {

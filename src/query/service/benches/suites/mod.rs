@@ -22,6 +22,7 @@ use databend_query::sessions::SessionManager;
 use databend_query::sessions::SessionType;
 use databend_query::sql::PlanParser;
 use databend_query::Config;
+use databend_query::GlobalServices;
 use futures::StreamExt;
 
 pub mod bench_aggregate_query_sql;
@@ -30,7 +31,8 @@ pub mod bench_limit_query_sql;
 pub mod bench_sort_query_sql;
 
 pub async fn select_executor(sql: &str) -> Result<()> {
-    let sessions = SessionManager::from_conf(Config::default()).await?;
+    GlobalServices::init(Config::default()).await?;
+    let sessions = SessionManager::instance();
     let executor_session = sessions.create_session(SessionType::Dummy).await?;
     let ctx = executor_session.create_query_context().await?;
 

@@ -30,13 +30,13 @@ use pretty_assertions::assert_eq;
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_user_manager() -> Result<()> {
     let conf = RpcClientConf::default();
+    let user_mgr = UserApiProvider::try_create(conf).await?;
 
     let tenant = "test";
     let username = "test-user1";
     let hostname = "localhost";
     let hostname2 = "%";
     let pwd = "test-pwd";
-    let user_mgr = UserApiProvider::create_global(conf).await?;
 
     let auth_info = AuthInfo::Password {
         hash_value: Vec::from(pwd),
@@ -240,12 +240,14 @@ async fn test_user_manager() -> Result<()> {
         // ErrorCode::UnknownUser
         assert_eq!(not_exist.err().unwrap().code(), 2201)
     }
+
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_user_manager_with_root_user() -> Result<()> {
     let conf = RpcClientConf::default();
+    let user_mgr = UserApiProvider::try_create(conf).await?;
 
     let tenant = "test";
     let username1 = "default";
@@ -254,8 +256,6 @@ async fn test_user_manager_with_root_user() -> Result<()> {
     let hostname1 = "127.0.0.1";
     let hostname2 = "localhost";
     let hostname3 = "otherhost";
-
-    let user_mgr = UserApiProvider::create_global(conf).await?;
 
     // Get user via username `default` and hostname `127.0.0.1`.
     {
