@@ -17,6 +17,8 @@ use std::sync::atomic::AtomicI64;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
+use crate::mem_allocator::GlobalAllocator;
+
 #[thread_local]
 static mut TRACKER: *mut ThreadTracker = std::ptr::null_mut();
 
@@ -168,7 +170,7 @@ impl RuntimeTracker {
             let tracker = std::mem::replace(&mut TRACKER, std::ptr::null_mut());
 
             std::ptr::drop_in_place(tracker as usize as *mut ThreadTracker);
-            std::alloc::dealloc(tracker as *mut u8, Layout::new::<ThreadTracker>());
+            GlobalAllocator::dealloc(tracker as *mut u8, Layout::new::<ThreadTracker>())
         }
     }
 

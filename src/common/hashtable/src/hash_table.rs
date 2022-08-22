@@ -19,6 +19,7 @@ use std::marker::PhantomData;
 use std::mem;
 
 use common_base::mem_allocator::Allocator as AllocatorTrait;
+use common_base::mem_allocator::GlobalAllocator;
 
 use crate::hash_table_grower::HashTableGrower;
 use crate::HashTableEntity;
@@ -99,7 +100,7 @@ impl<
                     mem::size_of::<Entity>(),
                     std::mem::align_of::<Entity>(),
                 );
-                std::alloc::dealloc(zero_entity, zero_layout);
+                GlobalAllocator::dealloc(zero_entity, zero_layout);
             }
         }
     }
@@ -127,7 +128,6 @@ impl<
             let layout = Layout::from_size_align_unchecked(size, mem::align_of::<Entity>());
             let mut allocator = Allocator::default();
             let raw_ptr = allocator.allocx(layout, true);
-            // let raw_ptr = std::alloc::alloc_zeroed(layout);
             let entities_ptr = raw_ptr as *mut Entity;
             HashTable {
                 size: 0,
@@ -288,7 +288,7 @@ impl<
                     self.size += 1;
                     *inserted = true;
 
-                    self.zero_entity_raw = Some(std::alloc::alloc_zeroed(layout));
+                    self.zero_entity_raw = Some(GlobalAllocator::alloc_zeroed(layout));
                     self.zero_entity = Some(self.zero_entity_raw.unwrap() as *mut Entity);
                     self.zero_entity.unwrap().set_key_and_hash(key, hash_value);
                     self.zero_entity
