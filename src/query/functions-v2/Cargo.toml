@@ -17,6 +17,7 @@ common-expression = { path = "../expression" }
 # Crates.io dependencies
 base64 = "0.13.0"
 bstr = "0.2.17"
+hex = "0.4.3"
 match-template = "0.0.1"
 num-traits = "0.2.15"
 strength_reduce = "0.2.3"
