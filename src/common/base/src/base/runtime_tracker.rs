@@ -12,12 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::alloc::GlobalAlloc;
 use std::alloc::Layout;
 use std::sync::atomic::AtomicI64;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use crate::mem_allocator::GlobalAllocator;
+use crate::mem_allocator::ALLOC;
 
 #[thread_local]
 static mut TRACKER: *mut ThreadTracker = std::ptr::null_mut();
@@ -170,7 +171,7 @@ impl RuntimeTracker {
             let tracker = std::mem::replace(&mut TRACKER, std::ptr::null_mut());
 
             std::ptr::drop_in_place(tracker as usize as *mut ThreadTracker);
-            GlobalAllocator::dealloc(tracker as *mut u8, Layout::new::<ThreadTracker>())
+            ALLOC.dealloc(tracker as *mut u8, Layout::new::<ThreadTracker>())
         }
     }
 
