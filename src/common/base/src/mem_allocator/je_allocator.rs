@@ -77,25 +77,30 @@ mod platform {
         }
     }
 
-    unsafe impl GlobalAlloc for JEAllocator {
+    impl JEAllocator {
+        /// # Safety
+        /// the caller must ensure that the layout is valid
         #[inline]
-        unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+        pub unsafe fn alloc(layout: Layout) -> *mut u8 {
             ThreadTracker::alloc_memory(layout.size() as i64);
-
             let flags = layout_to_flags(layout.align(), layout.size());
             ffi::mallocx(layout.size(), flags) as *mut u8
         }
 
+        /// # Safety
+        /// the caller must ensure that the ptr and layout are valid
         #[inline]
-        unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
+        pub unsafe fn dealloc(ptr: *mut u8, layout: Layout) {
             ThreadTracker::dealloc_memory(layout.size() as i64);
 
             let flags = layout_to_flags(layout.align(), layout.size());
             ffi::sdallocx(ptr as *mut _, layout.size(), flags)
         }
 
+        /// # Safety
+        /// the caller must ensure that the layout is valid
         #[inline]
-        unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
+        pub unsafe fn alloc_zeroed(layout: Layout) -> *mut u8 {
             ThreadTracker::alloc_memory(layout.size() as i64);
 
             if layout.align() <= MIN_ALIGN && layout.align() <= layout.size() {
@@ -106,26 +111,62 @@ mod platform {
             }
         }
 
+        /// # Safety
+        /// the caller must ensure that the `new_size` does not overflow.
+        /// `layout.align()` comes from a `Layout` and is thus guaranteed to be valid.
         #[inline]
-        unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
+        unsafe fn realloc(ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
             ThreadTracker::realloc_memory(layout.size() as i64, new_size as i64);
 
             let flags = layout_to_flags(layout.align(), new_size);
             ffi::rallocx(ptr as *mut _, new_size, flags) as *mut u8
+        }
+
+        /// # Safety
+        /// the caller must ensure that the `new_size` does not overflow.
+        /// `layout.align()` comes from a `Layout` and is thus guaranteed to be valid.
+        #[inline]
+        unsafe fn realloc_zeroed(ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
+            ThreadTracker::realloc_memory(layout.size() as i64, new_size as i64);
+
+            let flags = layout_to_flags(layout.align(), new_size) | ffi::MALLOCX_ZERO;
+            ffi::rallocx(ptr as *mut _, new_size, flags) as *mut u8
+        }
+    }
+
+    unsafe impl GlobalAlloc for JEAllocator {
+        #[inline]
+        unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+            Self::alloc(layout)
+        }
+
+        #[inline]
+        unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
+            Self::dealloc(ptr, layout)
+        }
+
+        #[inline]
+        unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
+            Self::alloc_zeroed(layout)
+        }
+
+        #[inline]
+        unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
+            Self::realloc(ptr, layout, new_size)
         }
     }
 
     unsafe impl Allocator for JEAllocator {
         unsafe fn allocx(&mut self, layout: Layout, clear_mem: bool) -> *mut u8 {
             if clear_mem {
-                self.alloc_zeroed(layout)
+                Self::alloc_zeroed(layout)
             } else {
-                self.alloc(layout)
+                Self::alloc(layout)
             }
         }
 
         unsafe fn deallocx(&mut self, ptr: *mut u8, layout: Layout) {
-            self.dealloc(ptr, layout)
+            Self::dealloc(ptr, layout)
         }
 
         unsafe fn reallocx(
@@ -135,11 +176,11 @@ mod platform {
             new_size: usize,
             clear_mem: bool,
         ) -> *mut u8 {
-            let mut flags = layout_to_flags(layout.align(), new_size);
             if clear_mem {
-                flags |= ffi::MALLOCX_ZERO;
+                Self::realloc(ptr, layout, new_size)
+            } else {
+                Self::realloc_zeroed(ptr, layout, new_size)
             }
-            ffi::rallocx(ptr as *mut _, new_size, flags) as *mut u8
         }
     }
 }
