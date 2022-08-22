@@ -12,6 +12,7 @@ test = false
 
 [dependencies] # In alphabetical order
 # Workspace dependencies
+common-base = { path = "../base" }
 
 # Crates.io dependencies
 ordered-float = "3.0.0"

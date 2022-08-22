@@ -1260,6 +1260,7 @@ dependencies = [
  "common-ast",
  "common-expression",
  "goldenfile",
+ "hex",
  "match-template",
  "num-traits",
  "strength_reduce",
@@ -1302,6 +1303,7 @@ dependencies = [
 name = "common-hashtable"
 version = "0.1.0"
 dependencies = [
+ "common-base",
  "ordered-float 3.0.0",
  "primitive-types",
  "rand 0.8.5",

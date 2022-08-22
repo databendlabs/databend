@@ -14,7 +14,6 @@ test = false
 tracing = ["tokio/tracing"]
 memory-profiling = [
     "tikv-jemalloc-ctl",
-    "libc",
     "tikv-jemalloc-sys/stats",
     "tikv-jemalloc-sys/profiling",
     "tikv-jemalloc-sys/unprefixed_malloc_on_supported_platforms",
@@ -30,7 +29,7 @@ common-exception = { path = "../exception" }
 async-trait = "0.1.56"
 ctrlc = { version = "3.2.2", features = ["termination"] }
 futures = "0.3.21"
-libc = { version = "0.2.126", optional = true }
+libc = "0.2.126"
 num_cpus = "1.13.1"
 once_cell = "1.12.0"
 parking_lot = "0.12.1"
