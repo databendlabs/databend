@@ -9,7 +9,7 @@ CONCAT_WS() does not skip empty strings. However, it does skip any NULL values a
 ## Syntax
 
 ```sql
-CONCAT(seperator, column1, ...)
+CONCAT_WS(seperator, column1, ...)
 ```
 
 ## Arguments

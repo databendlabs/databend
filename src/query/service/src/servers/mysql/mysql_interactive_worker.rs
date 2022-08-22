@@ -74,7 +74,6 @@ fn has_result_set_by_plan(plan: &Plan) -> bool {
             | Plan::DescribeTable(_)
             | Plan::ShowGrants(_)
             | Plan::ListStage(_)
-            | Plan::DescribeStage(_)
             | Plan::Presign(_)
     )
 }

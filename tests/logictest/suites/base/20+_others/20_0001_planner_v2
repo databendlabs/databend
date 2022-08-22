@@ -47,6 +47,13 @@ select date_trunc(month, to_date('2022-07-07'));
 2022-07-01
 
 
+statement query T
+select date_trunc('month', to_date('2022-07-07'));
+
+----
+2022-07-01
+
+
 statement query I
 select * from numbers(10) where number between 1 and 9 and number > 2 and number < 8 and number is not null and number = 5 and number >= 5 and number <= 5;
 

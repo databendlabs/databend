@@ -104,7 +104,8 @@ async fn test_scalar_evaluator() -> Result<()> {
         DataField::new("1", Int32Type::new_impl()),
     )?;
 
-    let func_ctx = create_query_context().await?.try_get_function_context()?;
+    let (_guard, ctx) = create_query_context().await?;
+    let func_ctx = ctx.try_get_function_context()?;
     let eval = Evaluator::eval_scalar::<String>(&scalar)?;
     let result = eval.eval(&func_ctx, &block)?;
 
@@ -148,7 +149,8 @@ async fn test_eval_const() -> Result<()> {
         return_type: Box::new(Float64Type::new_impl()),
     });
 
-    let func_ctx = create_query_context().await?.try_get_function_context()?;
+    let (_guard, ctx) = create_query_context().await?;
+    let func_ctx = ctx.try_get_function_context()?;
     let eval = Evaluator::eval_scalar::<String>(&scalar)?;
     let (result, result_type) = eval.try_eval_const(&func_ctx)?;
 

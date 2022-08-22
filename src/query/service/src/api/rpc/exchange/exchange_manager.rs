@@ -19,11 +19,14 @@ use std::ops::Deref;
 use std::sync::Arc;
 
 use common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
+use common_base::base::GlobalIORuntime;
+use common_base::base::Singleton;
 use common_base::base::Thread;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_grpc::ConnectionFactory;
+use once_cell::sync::OnceCell;
 use parking_lot::Mutex;
 use parking_lot::ReentrantMutex;
 
@@ -61,12 +64,24 @@ pub struct DataExchangeManager {
     queries_coordinator: ReentrantMutex<SyncUnsafeCell<HashMap<String, QueryCoordinator>>>,
 }
 
+static DATA_EXCHANGE_MANAGER: OnceCell<Singleton<Arc<DataExchangeManager>>> = OnceCell::new();
+
 impl DataExchangeManager {
-    pub fn create(config: Config) -> Arc<DataExchangeManager> {
-        Arc::new(DataExchangeManager {
+    pub fn init(config: Config, v: Singleton<Arc<DataExchangeManager>>) -> Result<()> {
+        v.init(Arc::new(DataExchangeManager {
             config,
             queries_coordinator: ReentrantMutex::new(SyncUnsafeCell::new(HashMap::new())),
-        })
+        }))?;
+
+        DATA_EXCHANGE_MANAGER.set(v).ok();
+        Ok(())
+    }
+
+    pub fn instance() -> Arc<DataExchangeManager> {
+        match DATA_EXCHANGE_MANAGER.get() {
+            None => panic!("DataExchangeManager is not init"),
+            Some(data_exchange_manager) => data_exchange_manager.get(),
+        }
     }
 
     // Create connections for cluster all nodes. We will push data through this connection.
@@ -545,7 +560,7 @@ impl QueryCoordinator {
             }
         }
 
-        let async_runtime = info.query_ctx.get_storage_runtime();
+        let async_runtime = GlobalIORuntime::instance();
         let query_need_abort = info.query_ctx.query_need_abort();
 
         let executor =

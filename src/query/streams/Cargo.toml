@@ -1,0 +1,36 @@
+[package]
+authors = ["Databend Authors <opensource@datafuselabs.com>"]
+edition = "2021"
+license = "Apache-2.0"
+name = "common-streams"
+publish = false
+version = "0.1.0"
+
+[lib]
+doctest = false
+test = false
+
+[dependencies] # In alphabetical order
+# Workspace dependencies
+common-arrow = { path = "../../common/arrow" }
+common-base = { path = "../../common/base" }
+common-datablocks = { path = "../datablocks" }
+common-datavalues = { path = "../datavalues" }
+common-exception = { path = "../../common/exception" }
+common-io = { path = "../../common/io" }
+
+# Github dependencies
+
+# Crates.io dependencies
+async-stream = "0.3.3"
+async-trait = "0.1.56"
+chrono-tz = "0.6.1"
+csv-async = "1.2.4"
+futures = "0.3.21"
+parking_lot = "0.12.1"
+pin-project-lite = "0.2.9"
+serde_json = { version = "1.0.81", default-features = false, features = ["preserve_order"] }
+tempfile = "3.3.0"
+
+[dev-dependencies]
+opendal = { version = "0.13.1", features = ["layers-retry", "compress"] }

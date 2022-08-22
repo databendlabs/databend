@@ -23,7 +23,7 @@ use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_user_stage_interpreter() -> Result<()> {
-    let ctx = crate::tests::create_query_context().await?;
+    let (_guard, ctx) = crate::tests::create_query_context().await?;
     let mut planner = Planner::new(ctx.clone());
 
     // add
@@ -41,8 +41,6 @@ async fn test_user_stage_interpreter() -> Result<()> {
         let query = "DESC STAGE test_stage";
         let (plan, _, _) = planner.plan_sql(query).await?;
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
-        assert_eq!(executor.name(), "DescribeUserStageInterpreter");
-
         let mut stream = executor.execute().await?;
         let mut blocks = vec![];
 

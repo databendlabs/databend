@@ -23,12 +23,12 @@ use common_io::prelude::FormatSettings;
 use common_meta_types::GrantObject;
 use common_meta_types::UserInfo;
 use common_meta_types::UserPrivilegeType;
-use common_users::RoleCacheMgr;
+use common_users::RoleCacheManager;
 use futures::channel::*;
-use opendal::Operator;
 use parking_lot::RwLock;
 
-use crate::catalogs::CatalogManager;
+use crate::clusters::ClusterDiscovery;
+use crate::servers::http::v1::HttpQueryManager;
 use crate::sessions::QueryContext;
 use crate::sessions::QueryContextShared;
 use crate::sessions::SessionContext;
@@ -41,36 +41,27 @@ use crate::Config;
 pub struct Session {
     pub(in crate::sessions) id: String,
     pub(in crate::sessions) typ: RwLock<SessionType>,
-    pub(in crate::sessions) session_mgr: Arc<SessionManager>,
     pub(in crate::sessions) ref_count: Arc<AtomicUsize>,
     pub(in crate::sessions) session_ctx: Arc<SessionContext>,
-    session_settings: Settings,
     status: Arc<RwLock<SessionStatus>>,
     pub(in crate::sessions) mysql_connection_id: Option<u32>,
 }
 
 impl Session {
-    pub async fn try_create(
-        conf: Config,
+    pub fn try_create(
         id: String,
         typ: SessionType,
-        session_mgr: Arc<SessionManager>,
+        session_ctx: Arc<SessionContext>,
         mysql_connection_id: Option<u32>,
     ) -> Result<Arc<Session>> {
-        let session_ctx = Arc::new(SessionContext::try_create(conf.clone())?);
-        let user_api = session_mgr.get_user_api_provider();
-        let session_settings =
-            Settings::try_create(&conf, user_api, session_ctx.get_current_tenant()).await?;
         let ref_count = Arc::new(AtomicUsize::new(0));
         let status = Arc::new(Default::default());
         Ok(Arc::new(Session {
             id,
             typ: RwLock::new(typ),
-            session_mgr,
+            status,
             ref_count,
             session_ctx,
-            session_settings,
-            status,
             mysql_connection_id,
         }))
     }
@@ -108,7 +99,9 @@ impl Session {
                 }
             }
         }
-        self.session_mgr.http_query_manager.kill_session(&self.id);
+
+        let http_queries_manager = HttpQueryManager::instance();
+        http_queries_manager.kill_session(&self.id);
     }
 
     pub fn kill(self: &Arc<Self>) {
@@ -139,18 +132,18 @@ impl Session {
     }
 
     pub async fn get_shared_query_context(self: &Arc<Self>) -> Result<Arc<QueryContextShared>> {
-        let discovery = self.session_mgr.get_cluster_discovery();
-
+        let config = self.get_config();
         let session = self.clone();
-        let cluster = discovery.discover().await?;
-        let shared = QueryContextShared::try_create(session, cluster).await?;
+        let cluster = ClusterDiscovery::instance().discover().await?;
+        let shared = QueryContextShared::try_create(config, session, cluster).await?;
+
         self.session_ctx
             .set_query_context_shared(Some(shared.clone()));
         Ok(shared)
     }
 
     pub fn get_format_settings(&self) -> Result<FormatSettings> {
-        let settings = &self.session_settings;
+        let settings = &self.session_ctx.get_settings();
         let mut format = FormatSettings {
             record_delimiter: settings.get_record_delimiter()?,
             field_delimiter: settings.get_field_delimiter()?,
@@ -251,11 +244,7 @@ impl Session {
         // TODO: take current role instead of all roles
         let all_roles = self.get_all_roles()?;
         let tenant = self.get_current_tenant();
-        let role_cache = self
-            .get_shared_query_context()
-            .await?
-            .get_role_cache_manager();
-        let role_verified = role_cache
+        let role_verified = RoleCacheManager::instance()
             .find_related_roles(&tenant, &all_roles)
             .await?
             .iter()
@@ -273,24 +262,15 @@ impl Session {
     }
 
     pub fn get_settings(self: &Arc<Self>) -> Arc<Settings> {
-        Arc::new(self.session_settings.clone())
+        self.session_ctx.get_settings()
     }
 
     pub fn get_changed_settings(self: &Arc<Self>) -> Arc<Settings> {
-        Arc::new(self.session_settings.get_changed_settings())
+        self.session_ctx.get_changed_settings()
     }
 
     pub fn apply_changed_settings(self: &Arc<Self>, changed_settings: Arc<Settings>) -> Result<()> {
-        self.session_settings
-            .apply_changed_settings(changed_settings)
-    }
-
-    pub fn get_session_manager(self: &Arc<Self>) -> Arc<SessionManager> {
-        self.session_mgr.clone()
-    }
-
-    pub fn get_catalogs(self: &Arc<Self>) -> Arc<CatalogManager> {
-        self.session_mgr.get_catalog_manager()
+        self.session_ctx.apply_changed_settings(changed_settings)
     }
 
     pub fn get_memory_usage(self: &Arc<Self>) -> usize {
@@ -298,19 +278,11 @@ impl Session {
         0
     }
 
-    pub fn get_storage_operator(self: &Arc<Self>) -> Operator {
-        self.session_mgr.get_storage_operator()
-    }
-
     pub fn get_config(&self) -> Config {
-        self.session_mgr.get_conf()
+        SessionManager::instance().get_conf()
     }
 
     pub fn get_status(self: &Arc<Self>) -> Arc<RwLock<SessionStatus>> {
         self.status.clone()
-    }
-
-    pub fn get_role_cache_manager(self: &Arc<Self>) -> Arc<RoleCacheMgr> {
-        self.session_mgr.get_role_cache_manager()
     }
 }

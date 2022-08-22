@@ -128,8 +128,8 @@ where R: BufferRead
             let _ = self.keep_read(&mut buf, |f| (b'0'..=b'9').contains(&f))?;
         }
 
-        // #[regex(r"([0-9]*\.[0-9]+(e[+-]?[0-9]+)?)|([0-9]+\.[0-9]*(e[+-]?[0-9]+)?)")]
-        if self.ignore_byte(b'e')? {
+        // #[regex(r"([0-9]*\.[0-9]+([eE][+-]?[0-9]+)?)|([0-9]+\.[0-9]*([eE][+-]?[0-9]+)?)")]
+        if self.ignore(|b| b == b'e' || b == b'E')? {
             buf.push(b'e');
             if self.ignore_byte(b'+')? {
                 buf.push(b'+');
