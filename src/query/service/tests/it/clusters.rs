@@ -18,18 +18,51 @@ use databend_query::clusters::ClusterDiscovery;
 use databend_query::clusters::ClusterHelper;
 use pretty_assertions::assert_eq;
 
+use crate::tests::ConfigBuilder;
 use crate::tests::TestGlobalServices;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_single_cluster_discovery() -> Result<()> {
-    let _guard = TestGlobalServices::setup(crate::tests::ConfigBuilder::create().build()).await?;
+    let config = ConfigBuilder::create().build();
+    let _guard = TestGlobalServices::setup(config.clone()).await?;
 
-    let discover_cluster = ClusterDiscovery::instance().discover().await?;
+    let discover_cluster = ClusterDiscovery::instance().discover(&config).await?;
 
     let discover_cluster_nodes = discover_cluster.get_nodes();
     assert_eq!(discover_cluster_nodes.len(), 1);
     assert!(discover_cluster.is_empty());
     assert!(discover_cluster.is_local(&discover_cluster_nodes[0]));
+    Ok(())
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn test_remove_invalid_nodes() -> Result<()> {
+    let config_1 = ConfigBuilder::create()
+        .query_flight_address("invalid_address_1")
+        .build();
+    let config_2 = ConfigBuilder::create()
+        .query_flight_address("invalid_address_2")
+        .build();
+
+    let meta_client = ClusterDiscovery::create_meta_client(&config_1).await?;
+    let cluster_discovery_1 = ClusterDiscovery::try_create(&config_1, meta_client.clone()).await?;
+    let cluster_discovery_2 = ClusterDiscovery::try_create(&config_2, meta_client.clone()).await?;
+
+    cluster_discovery_1.register_to_metastore(&config_1).await?;
+    cluster_discovery_2.register_to_metastore(&config_2).await?;
+
+    let discover_cluster_1 = cluster_discovery_1.discover(&config_1).await?;
+    let discover_cluster_nodes_1 = discover_cluster_1.get_nodes();
+    assert_eq!(discover_cluster_nodes_1.len(), 1);
+    assert!(discover_cluster_1.is_empty());
+    assert!(discover_cluster_1.is_local(&discover_cluster_nodes_1[0]));
+
+    let discover_cluster_2 = cluster_discovery_2.discover(&config_1).await?;
+    let discover_cluster_nodes_2 = discover_cluster_2.get_nodes();
+    assert_eq!(discover_cluster_nodes_2.len(), 1);
+    assert!(discover_cluster_2.is_empty());
+    assert!(discover_cluster_2.is_local(&discover_cluster_nodes_2[0]));
+
     Ok(())
 }
 
