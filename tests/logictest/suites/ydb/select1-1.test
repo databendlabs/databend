@@ -96,6 +96,7 @@ insert into t1(e,d,c,b,a) values(246,248,247,249,245);
 
 statement query skipped
 select count(*) as x from (select 1 as x union all select 2 as x) group by x;
+
 statement query I
 select count(*) from t1 left join
 (select t1.a from t1  cross join t1 as x where x.c>t1.c and x.d<t1.d) as t2 on t1.a = t2.a;
@@ -1148,6 +1149,7 @@ where e+d between a+b-10 and c+130
    and a>b
    and (a>b-2 and a<b+2)
 order by col1;
+
 statement query IIIII
 select case a+1 when b then 111 when c then 222
         when d then 333  when e then 444 else 555 end as col1,
@@ -1758,6 +1760,7 @@ where b>c
    and (a>b-2 and a<b+2)
    and d not between 110 and 150
 order by col4,col5,col3,col1,col2,col6;
+
 statement query IIII
 select case a+1 when b then 111 when c then 222
         when d then 333  when e then 444 else 555 end as col1,
@@ -4403,6 +4406,7 @@ where b>c
    and a>b
    and (e>a and e<b)
 order by col2,col1;
+
 statement query III
 select a+b*2 as col1,
        b-c as col2,
@@ -4818,6 +4822,7 @@ where (a>b-2 and a<b+2)
    and e+d between a+b-10 and c+130
    and d not between 110 and 150
 order by col5,col3,col2,col4,col1;
+
 statement query III
 select c as col1,
        a+b*2 as col2,
@@ -5243,6 +5248,7 @@ from t1
 where a>b
    and (e>a and e<b)
 order by col7,col2,col4,col6,col1,col3,col5;
+
 statement query I
 select a+b*2+c*3+d*4+e*5 as col1
 from t1
@@ -6084,6 +6090,7 @@ where exists(select 1 from t1 as x where x.b<t1.b)
    and (e>a and e<b)
    and (a>b-2 and a<b+2)
 order by col3,col2,col1,col6,col5,col4;
+
 statement query III
 select case when c>avg_c then a*2 else b*10 end as col1,
        a+b*2+c*3+d*4 as col2,
@@ -6168,6 +6175,7 @@ where (a>b-2 and a<b+2)
    and (e>a and e<b)
    and a>b
 order by col3,col4,col1,col2;
+
 statement query IIII
 select case a+1 when b then 111 when c then 222
         when d then 333  when e then 444 else 555 end as col1,
@@ -6788,6 +6796,7 @@ where exists(select 1 from t1 as x where x.b<t1.b)
    and (e>a and e<b)
    and a>b
 order by col2,col4,col6,col5,col1,col3;
+
 statement query IIII
 select a+b*2+c*3+d*4 as col1,
        case when a<b-3 then 111 when a<=b then 222
