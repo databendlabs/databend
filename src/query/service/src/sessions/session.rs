@@ -134,7 +134,7 @@ impl Session {
     pub async fn get_shared_query_context(self: &Arc<Self>) -> Result<Arc<QueryContextShared>> {
         let config = self.get_config();
         let session = self.clone();
-        let cluster = ClusterDiscovery::instance().discover().await?;
+        let cluster = ClusterDiscovery::instance().discover(&config).await?;
         let shared = QueryContextShared::try_create(config, session, cluster).await?;
 
         self.session_ctx

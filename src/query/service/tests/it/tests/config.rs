@@ -106,6 +106,11 @@ impl ConfigBuilder {
         self
     }
 
+    pub fn query_flight_address(mut self, value: impl Into<String>) -> ConfigBuilder {
+        self.conf.query.flight_api_address = value.into();
+        self
+    }
+
     pub fn build(self) -> Config {
         self.conf
     }
