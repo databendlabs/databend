@@ -150,6 +150,7 @@ from t1
 where d not between 110 and 150
     or exists(select 1 from t1 as x where x.b<t1.b)
 or a is null;
+
 statement query IIII
 select a+b*2 as col1,
        c as col2,
@@ -201,12 +202,14 @@ select case a+1 when b then 111 when c then 222
 from t1
 where a>b
 and (e>a and e<b);
+
 statement query skipped
 select a+b*2+c*3+d*4+e*5 as col1
 from t1
 where (a>b-2 and a<b+2)
     or d not between 110 and 150
 or exists(select 1 from t1 as x where x.b<t1.b);
+
 statement query II
 select b-c as col1,
        a+b*2+c*3+d*4+e*5 as col2
@@ -250,17 +253,20 @@ select case a+1 when b then 111 when c then 222
         when d then 333  when e then 444 else 555 end as col1
 from t1
 where exists(select 1 from t1 as x where x.b<t1.b);
+
 statement query skipped
 select a-b as col1,
        (select count(*) from t1 as x where x.b<t1.b) as col2,
        a as col3
 from t1;
+
 statement query skipped
 select abs(b-c) as col1
 from t1
 where coalesce(a,b,c,d,e)<>0
    and b is not null
 order by col1;
+
 statement query skipped
 select c-d as col1,
        abs(b-c) as col2
@@ -269,6 +275,7 @@ where (c<=d-2 or c>=d+2)
    and e+d between a+b-10 and c+130
    and b is not null
 order by col1,col2;
+
 statement query FIIIII
 select (a+b+c+d+e)/5 as col1,
        e as col2,
@@ -321,6 +328,7 @@ select a-b as col1,
 from t1
 where c>d
 order by col2,col1;
+
 statement query skipped
 select (a+b+c+d+e)/5 as col1,
        a+b*2+c*3+d*4+e*5 as col2,
@@ -334,3 +342,4 @@ where c between b-2 and d+2
    and b>c
    and a>b
 order by col4,col6,col1,col2,col5,col3;
+
