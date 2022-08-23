@@ -993,8 +993,8 @@ where a is null
 order by col3,col1,col5,col2,col4;
 
 ----
--2 0 0 NULL 555
--1 0 1120 NULL 555
+-1 NULL 1120 NULL 555
+-2 NULL NULL NULL 555
 
 statement query III
 select c as col1,

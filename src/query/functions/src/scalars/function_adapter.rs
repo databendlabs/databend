@@ -146,13 +146,14 @@ impl Function for FunctionAdapter {
             let mut input = Vec::with_capacity(columns.len());
             for v in columns.iter() {
                 let (is_all_null, valid) = v.column().validity();
+
                 if is_all_null {
                     // If only null, return null directly.
                     let inner_type = remove_nullable(&inner.return_type());
                     return Ok(NullableColumn::wrap_inner(
                         inner_type
                             .create_constant_column(&inner_type.default_value(), input_rows)?,
-                        valid.cloned(),
+                        Some(Bitmap::new_zeroed(input_rows)),
                     ));
                 }
                 validity = combine_validities_2(validity.clone(), valid.cloned());

@@ -827,8 +827,8 @@ where a is null
 order by col3,col4,col1,col2,col5;
 
 ----
-NULL 0 444 NULL 555
 NULL 1120 444 NULL 555
+NULL NULL 444 NULL 555
 
 statement skipped query IIIIIF
 select case when c>(select avg(c) from t1) then a*2 else b*10 end as col1,

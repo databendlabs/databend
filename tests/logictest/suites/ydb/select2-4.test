@@ -4213,8 +4213,8 @@ where a is null
 order by col4,col5,col1,col6,col2,col7,col3;
 
 ----
-1 44.8 NULL 113 1120 -1 444
-2 NULL NULL 208 0 -2 444
+1 NULL NULL 113 1120 -1 444
+2 NULL NULL 208 NULL -2 444
 
 statement query II
 select b-c as col1,
