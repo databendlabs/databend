@@ -267,11 +267,19 @@ pub fn compare_coercion(lhs_type: &DataTypeImpl, rhs_type: &DataTypeImpl) -> Res
     // string and numeric do not have precision, use the max precision 6
     {
         if (lhs_id.is_numeric() || lhs_id.is_string()) && rhs_id.is_date_or_date_time() {
-            return Ok(TimestampType::new_impl(6));
+            return if lhs_id.is_string() {
+                Ok(TimestampType::new_impl(6))
+            } else {
+                Ok(rhs_type.clone())
+            };
         }
 
         if (rhs_id.is_numeric() || rhs_id.is_string()) && lhs_id.is_date_or_date_time() {
-            return Ok(TimestampType::new_impl(6));
+            return if rhs_id.is_string() {
+                Ok(TimestampType::new_impl(6))
+            } else {
+                Ok(lhs_type.clone())
+            };
         }
     }
 
