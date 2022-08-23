@@ -1,4 +1,7 @@
 statement ok
+SET enable_planner_v2=1;
+
+statement ok
 DROP DATABASE IF EXISTS showtabstat;
 
 statement ok
@@ -38,7 +41,7 @@ SHOW TABLE STATUS LIKE 't2';
 ----
 t2 NULL 0 NULL NULL NULL NULL NULL NULL NULL NULL $DATE NULL NULL NULL NULL 
 
-statement ok
+statement ok 
 SHOW TABLE STATUS LIKE 't';
 
 statement query TTITTTTTTTTTRTTTT
@@ -49,7 +52,7 @@ t1 NULL 0 NULL NULL NULL NULL NULL NULL NULL NULL $DATE NULL NULL NULL NULL
 t2 NULL 0 NULL NULL NULL NULL NULL NULL NULL NULL $DATE NULL NULL NULL NULL 
 t3 NULL 0 NULL NULL NULL NULL NULL NULL NULL NULL $DATE NULL NULL NULL NULL 
 
-statement ok
+statement ok 
 SHOW TABLE STATUS WHERE Name = 't%' AND 1 = 0;
 
 statement query TTITTTTTTTTTRTTTT
@@ -112,12 +115,12 @@ SHOW TABLE STATUS FROM showtabstat WHERE Name = 't4';
 ----
 t4 FUSE 0 NULL 1 NULL 4 NULL NULL NULL NULL $DATE NULL NULL NULL NULL 
 
-statement ok 
-SHOW TABLE STATUS FROM showtabstat WHERE engine = 'test';
-
-statement ok 
-SHOW TABLE STATUS FROM showtabstat WHERE Create_time = 'test';
+statement error 1065
+SHOW TABLE STATUS FROM showtabstat WHERE created_on = 'test';
 
 statement ok
 DROP DATABASE IF EXISTS showtabstat;
+
+statement ok
+SET enable_planner_v2=0;
 
