@@ -24,7 +24,7 @@ def parse_sql_file(source_file):
             continue
 
         # multi line sql
-        sql_content = sql_content + line.rstrip()
+        sql_content = sql_content + "\n" + line.rstrip()
         if ';' not in line:
             continue
 
@@ -69,7 +69,7 @@ def parse_logictest_file(source_file):
             continue
 
         if parsing_statement:
-            sql_content = sql_content + line.rstrip()
+            sql_content = sql_content + "\n" + line.rstrip()
             if ';' not in line:
                 continue
             parsing_statement = False
