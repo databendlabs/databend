@@ -16,6 +16,7 @@ def parse_sql_file(source_file):
     sqls = list()
     f = open(source_file, encoding='UTF-8')
     sql_content = ""
+    skipped_query = False
     for line in f.readlines():
         if is_empty_line(line):
             continue
@@ -29,7 +30,7 @@ def parse_sql_file(source_file):
             continue
 
         statement = sql_content.strip()
-        sqls.append(statement)
+        sqls.append([statement, skipped_query, ""])
         sql_content = ""
 
     f.close()
@@ -38,18 +39,23 @@ def parse_sql_file(source_file):
 
 def parse_logictest_file(source_file):
     parsing_statement = False
+    skipped_query = False
     sqls = list()
     f = open(source_file, encoding='UTF-8')
     sql_content = ""
 
     for line in f.readlines():
         if is_empty_line(line):
+            if parsing_statement and skipped_query:
+                continue
+
             if parsing_statement:
                 parsing_statement = False
                 statement = sql_content.strip()
                 if ";" not in statement:
                     statement = statement + ";"
-                sqls.append(statement)
+
+                sqls.append([statement, skipped_query])
                 sql_content = ""
             continue
 
@@ -58,7 +64,7 @@ def parse_logictest_file(source_file):
             statement = sql_content.strip()
             if ";" not in statement:
                 statement = statement + ";"
-            sqls.append(statement)
+            sqls.append([statement, skipped_query])
             sql_content = ""
 
         if line.startswith("--") or line.startswith("#"):  # pass comment
@@ -66,15 +72,19 @@ def parse_logictest_file(source_file):
 
         if line.startswith("statement") or line.startswith("query"):
             parsing_statement = True
+            if line.find("skipped") >= 0:
+                skipped_query = True
             continue
 
         if parsing_statement:
             sql_content = sql_content + "\n" + line.rstrip()
             if ';' not in line:
                 continue
+
             parsing_statement = False
             statement = sql_content.strip()
-            sqls.append(statement)
+            sqls.append([statement, skipped_query])
+            skipped_query = False
             sql_content = ""
 
     f.close()
@@ -88,12 +98,18 @@ def get_sql_from_file(source_file):
         return parse_logictest_file(source_file)
 
 
-def gen_suite_from_sql(sqls, dest_file):
+def gen_suite_from_sql(sql_and_skips, dest_file):
     out = open(f"{dest_file}", mode="w+", encoding='UTF-8')
     statements = list()
     connection = mysql.connector.connect(**mysql_config)
     cursor = connection.cursor(buffered=True)
-    for sql in sqls:
+    for sql_and_skip in sql_and_skips:
+        sql = sql_and_skip[0]
+        if sql_and_skip[1]:
+            statements.append(
+                f"statement query skipped\n{sql}\n"
+            )
+            continue
         # use mysql connector
         try:
             cursor.execute(sql)
@@ -121,9 +137,14 @@ def gen_suite_from_sql(sqls, dest_file):
                         continue
                     rows.append(str(v))
                 results.append(rows)
-            statements.append(
-                f"statement query {options}\n{sql}\n\n----\n{format_result(results)}\n"
-            )
+            if len(results) > 0:
+                statements.append(
+                    f"statement query {options}\n{sql}\n\n----\n{format_result(results)}\n"
+                )
+            else:
+                statements.append(
+                    f"statement ok\n{sql}\n"
+                )
         except mysql.connector.Error as err:
             statements.append(f"statement ok\n{sql}\n\n")
 
@@ -146,12 +167,12 @@ def run(args):
     mysql_config['database'] = args.mysql_database
 
     print(f"Mysql config: {mysql_config}")
-    sqls = get_sql_from_file(args.source_file)
+    sql_and_skips = get_sql_from_file(args.source_file)
     if args.show_sql:
-        for sql in sqls:
-            print(sql)
+        for sql in sql_and_skips:
+            print(sql[0])
 
-    gen_suite_from_sql(sqls, args.dest_file)
+    gen_suite_from_sql(sql_and_skips, args.dest_file)
 
 
 if __name__ == '__main__':
