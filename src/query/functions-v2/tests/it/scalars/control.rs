@@ -17,6 +17,7 @@ use std::io::Write;
 use common_expression::types::nullable::NullableColumn;
 use common_expression::types::DataType;
 use common_expression::Column;
+use common_expression::ColumnFrom;
 use goldenfile::Mint;
 
 use super::run_ast;
@@ -31,7 +32,7 @@ fn test_control() {
 
 fn test_multi_if(file: &mut impl Write) {
     run_ast(file, "multi_if(false, 1, false, 2, NULL)", &[]);
-    run_ast(file, "multi_if(true, 1, false, 2, NULL)", &[]);
+    run_ast(file, "multi_if(true, 1, NULL, 2, NULL)", &[]);
     run_ast(file, "multi_if(false, 1, true, 2, NULL)", &[]);
     run_ast(file, "multi_if(true, 1, true, 2, NULL)", &[]);
     run_ast(file, "multi_if(true, 1, true, NULL, 2)", &[]);
@@ -94,7 +95,9 @@ fn test_multi_if(file: &mut impl Write) {
             (
                 "cond_b",
                 DataType::Boolean,
-                Column::Boolean(vec![true, true, true, true].into()),
+                Column::from_data_with_validity(vec![true, true, true, true], vec![
+                    false, true, false, true,
+                ]),
             ),
             (
                 "expr_b",

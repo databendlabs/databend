@@ -260,7 +260,7 @@ impl ShareApiTestSuite {
             assert!(resp.is_ok());
             let resp = resp.unwrap();
             assert_eq!(resp.accounts.len(), 1);
-            assert_eq!(resp.accounts[0], account.to_string());
+            assert_eq!(resp.accounts[0].account, account.to_string());
         }
 
         info!("--- share tenant2.share2 to tenant1");

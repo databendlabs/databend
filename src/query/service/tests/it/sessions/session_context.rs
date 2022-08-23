@@ -17,19 +17,16 @@ use std::net::SocketAddr;
 use common_base::base::tokio;
 use common_exception::Result;
 use common_meta_types::UserInfo;
-use databend_query::clusters::Cluster;
-use databend_query::clusters::ClusterHelper;
-use databend_query::sessions::QueryContextShared;
+use common_settings::Settings;
 use databend_query::sessions::SessionContext;
-use databend_query::sessions::SessionType;
 use databend_query::Config;
-
-use crate::tests::SessionManagerBuilder;
 
 #[tokio::test]
 async fn test_session_context() -> Result<()> {
     let conf = Config::load()?;
-    let session_ctx = SessionContext::try_create(conf)?;
+    let tenant = &conf.query.tenant_id;
+    let settings = Settings::default_settings(tenant);
+    let session_ctx = SessionContext::try_create(conf, settings)?;
 
     // Abort status.
     {
@@ -73,24 +70,6 @@ async fn test_session_context() -> Result<()> {
         assert!(val.is_some());
 
         let val = session_ctx.take_io_shutdown_tx();
-        assert!(val.is_none());
-    }
-
-    // context shared.
-    {
-        let sessions = SessionManagerBuilder::create().build()?;
-        let dummy_session = sessions.create_session(SessionType::Dummy).await?;
-        let shared =
-            QueryContextShared::try_create((*dummy_session).clone(), Cluster::empty()).await?;
-
-        session_ctx.set_query_context_shared(Some(shared.clone()));
-        let val = session_ctx.get_query_context_shared();
-        assert_eq!(shared.get_config(), val.unwrap().get_config());
-
-        let val = session_ctx.take_query_context_shared();
-        assert_eq!(shared.get_config(), val.unwrap().get_config());
-
-        let val = session_ctx.get_query_context_shared();
         assert!(val.is_none());
     }
 

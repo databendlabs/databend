@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_fuse_meta::caches::CacheManager;
 use common_fuse_meta::meta::BlockMeta;
 use common_fuse_meta::meta::Location;
 use common_fuse_meta::meta::SegmentInfo;
@@ -106,10 +107,7 @@ impl BaseMutator {
 
         let segment_reader = MetaReaders::segment_info_reader(self.ctx.as_ref());
 
-        let segment_info_cache = self
-            .ctx
-            .get_storage_cache_manager()
-            .get_table_segment_cache();
+        let segment_info_cache = CacheManager::instance().get_table_segment_cache();
         let seg_writer = SegmentWriter::new(
             &self.data_accessor,
             &self.location_generator,

@@ -19,6 +19,7 @@ use std::sync::Arc;
 use tracing::debug;
 
 use crate::sessions::Session;
+use crate::sessions::SessionManager;
 
 /// SessionRef is the ptr of session.
 /// Remove it in session_manager when the current session is not referenced
@@ -57,7 +58,7 @@ impl Session {
     pub fn destroy_session_ref(self: &Arc<Self>) {
         if self.ref_count.fetch_sub(1, Ordering::Relaxed) == 1 {
             debug!("Destroy session {}", self.id);
-            self.session_mgr.destroy_session(&self.id);
+            SessionManager::instance().destroy_session(&self.id);
             self.quit();
         }
     }

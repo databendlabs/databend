@@ -28,6 +28,7 @@ use common_base::base::DummySignalStream;
 use common_base::base::GlobalUniqName;
 use common_base::base::SignalStream;
 use common_base::base::SignalType;
+use common_base::base::Singleton;
 pub use common_catalog::cluster_info::Cluster;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -43,6 +44,7 @@ use futures::future::Either;
 use futures::Future;
 use futures::StreamExt;
 use metrics::gauge;
+use once_cell::sync::OnceCell;
 use rand::thread_rng;
 use rand::Rng;
 use tracing::error;
@@ -132,10 +134,12 @@ impl ClusterHelper for Cluster {
     }
 }
 
+static CLUSTER_DISCOVERY: OnceCell<Singleton<Arc<ClusterDiscovery>>> = OnceCell::new();
+
 impl ClusterDiscovery {
     const METRIC_LABEL_FUNCTION: &'static str = "function";
 
-    async fn create_meta_client(cfg: &Config) -> Result<Arc<dyn KVApi>> {
+    pub async fn create_meta_client(cfg: &Config) -> Result<Arc<dyn KVApi>> {
         let meta_api_provider = MetaStoreProvider::new(cfg.meta.to_meta_grpc_client_conf());
         match meta_api_provider.try_get_meta_store().await {
             Ok(client) => Ok(client.arc()),
@@ -143,13 +147,19 @@ impl ClusterDiscovery {
         }
     }
 
-    pub async fn create_global(cfg: Config) -> Result<Arc<ClusterDiscovery>> {
-        let local_id = GlobalUniqName::unique();
+    pub async fn init(cfg: Config, v: Singleton<Arc<ClusterDiscovery>>) -> Result<()> {
         let meta_client = ClusterDiscovery::create_meta_client(&cfg).await?;
-        let (lift_time, provider) = Self::create_provider(&cfg, meta_client)?;
+        v.init(Self::try_create(&cfg, meta_client).await?)?;
+
+        CLUSTER_DISCOVERY.set(v).ok();
+        Ok(())
+    }
+
+    pub async fn try_create(cfg: &Config, api: Arc<dyn KVApi>) -> Result<Arc<ClusterDiscovery>> {
+        let (lift_time, provider) = Self::create_provider(cfg, api)?;
 
         Ok(Arc::new(ClusterDiscovery {
-            local_id: local_id.clone(),
+            local_id: GlobalUniqName::unique(),
             api_provider: provider.clone(),
             heartbeat: Mutex::new(ClusterHeartbeat::create(
                 lift_time,
@@ -161,6 +171,13 @@ impl ClusterDiscovery {
             tenant_id: cfg.query.tenant_id.clone(),
             flight_address: cfg.query.flight_api_address.clone(),
         }))
+    }
+
+    pub fn instance() -> Arc<ClusterDiscovery> {
+        match CLUSTER_DISCOVERY.get() {
+            None => panic!("ClusterDiscovery is not init"),
+            Some(cluster_discovery) => cluster_discovery.get(),
+        }
     }
 
     fn create_provider(
@@ -176,7 +193,7 @@ impl ClusterDiscovery {
         Ok((lift_time, Arc::new(cluster_manager)))
     }
 
-    pub async fn discover(&self) -> Result<Arc<Cluster>> {
+    pub async fn discover(&self, config: &Config) -> Result<Arc<Cluster>> {
         match self.api_provider.get_nodes().await {
             Err(cause) => {
                 label_counter_with_val_and_labels(
@@ -210,7 +227,18 @@ impl ClusterDiscovery {
             Ok(cluster_nodes) => {
                 let mut res = Vec::with_capacity(cluster_nodes.len());
                 for node in &cluster_nodes {
-                    res.push(Arc::new(node.clone()))
+                    if node.id != self.local_id {
+                        if let Err(cause) = create_client(config, &node.flight_address).await {
+                            warn!(
+                                "Cannot connect node [{:?}], remove it in query. cause: {:?}",
+                                node.flight_address, cause
+                            );
+
+                            continue;
+                        }
+                    }
+
+                    res.push(Arc::new(node.clone()));
                 }
 
                 gauge!(
@@ -445,5 +473,21 @@ impl ClusterHeartbeat {
             }
         }
         Ok(())
+    }
+}
+
+pub async fn create_client(config: &Config, address: &str) -> Result<FlightClient> {
+    match config.tls_query_cli_enabled() {
+        true => Ok(FlightClient::new(FlightServiceClient::new(
+            ConnectionFactory::create_rpc_channel(
+                address.to_owned(),
+                None,
+                Some(config.query.to_rpc_client_tls_config()),
+            )
+            .await?,
+        ))),
+        false => Ok(FlightClient::new(FlightServiceClient::new(
+            ConnectionFactory::create_rpc_channel(address.to_owned(), None, None).await?,
+        ))),
     }
 }

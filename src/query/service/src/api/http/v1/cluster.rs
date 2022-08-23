@@ -17,7 +17,6 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_meta_types::NodeInfo;
 use poem::http::StatusCode;
-use poem::web::Data;
 use poem::web::IntoResponse;
 use poem::web::Json;
 
@@ -32,10 +31,9 @@ use crate::sessions::TableContext;
 // cluster_state: the shared in memory state which store all nodes known to current node
 // return: return a list of cluster node information
 #[poem::handler]
-pub async fn cluster_list_handler(
-    sessions: Data<&Arc<SessionManager>>,
-) -> poem::Result<impl IntoResponse> {
-    let nodes = list_nodes(sessions.0).await.map_err(|cause| {
+pub async fn cluster_list_handler() -> poem::Result<impl IntoResponse> {
+    let sessions = SessionManager::instance();
+    let nodes = list_nodes(&sessions).await.map_err(|cause| {
         poem::Error::from_string(
             format!("Failed to fetch cluster nodes list. cause: {cause}"),
             StatusCode::INTERNAL_SERVER_ERROR,

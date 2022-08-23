@@ -19,9 +19,11 @@ use std::sync::Arc;
 use common_cache::Cache;
 use common_catalog::catalog::StorageDescription;
 use common_catalog::table_context::TableContext;
+use common_catalog::table_mutator::TableMutator;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_fuse_meta::caches::CacheManager;
 use common_fuse_meta::meta::ClusterKey;
 use common_fuse_meta::meta::Statistics as FuseStatistics;
 use common_fuse_meta::meta::TableSnapshot;
@@ -34,7 +36,6 @@ use common_meta_types::MatchSeq;
 use common_planners::DeletePlan;
 use common_planners::Expression;
 use common_planners::Extras;
-use common_planners::OptimizeTablePlan;
 use common_planners::Partitions;
 use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
@@ -200,9 +201,7 @@ impl FuseTable {
         let result = catalog.update_table_meta(req).await;
         match result {
             Ok(_) => {
-                if let Some(snapshot_cache) =
-                    ctx.get_storage_cache_manager().get_table_snapshot_cache()
-                {
+                if let Some(snapshot_cache) = CacheManager::instance().get_table_snapshot_cache() {
                     let cache = &mut snapshot_cache.write().await;
                     cache.put(snapshot_loc, Arc::new(snapshot.clone()));
                 }
@@ -422,8 +421,21 @@ impl Table for FuseTable {
         self.do_delete(ctx, &delete_plan).await
     }
 
-    #[tracing::instrument(level = "debug", name = "fuse_table_compact", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
-    async fn compact(&self, ctx: Arc<dyn TableContext>, plan: OptimizeTablePlan) -> Result<()> {
-        self.do_compact(ctx, &plan).await
+    async fn compact(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        catalog: String,
+        pipeline: &mut Pipeline,
+    ) -> Result<Option<Arc<dyn TableMutator>>> {
+        self.do_compact(ctx, catalog, pipeline).await
+    }
+
+    async fn recluster(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        catalog: String,
+        pipeline: &mut Pipeline,
+    ) -> Result<Option<Arc<dyn TableMutator>>> {
+        self.do_recluster(ctx, catalog, pipeline).await
     }
 }

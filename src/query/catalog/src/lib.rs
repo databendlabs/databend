@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![deny(unused_crate_dependencies)]
-
 pub mod catalog;
 pub mod cluster_info;
 pub mod database;
@@ -21,3 +19,4 @@ pub mod table;
 pub mod table_args;
 pub mod table_context;
 pub mod table_function;
+pub mod table_mutator;

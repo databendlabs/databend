@@ -1,8 +1,6 @@
 statement ok
 drop table if exists t1 all;
 
-
-
 statement ok
 create table t1(a integer null, b integer null, c integer null, d integer null, e integer null);
 
@@ -109,38 +107,38 @@ where coalesce(a,b,c,d,e)<>0
 order by col1,col4,col2,col5,col3;
 
 ----
-1 NULL 1 0 122
-1 NULL NULL 825 NULL
-1 NULL NULL 885 NULL
-1 4 -1 1006 114
 1 -1 -2 1612 108
 1 2 -3 2432 164
 1 -4 2 2806 185
 1 -2 3 2878 190
 1 1 2 3331 222
 1 3 -2 3473 233
+1 4 -1 NULL 114
+1 NULL 1 NULL 122
 1 NULL NULL NULL NULL
-2 NULL 1 0 207
-2 NULL NULL 730 NULL
+1 NULL NULL NULL NULL
+1 NULL NULL NULL NULL
 2 1 1 2046 136
 2 -4 1 2131 140
 2 -2 1 2579 171
 2 2 -1 3706 248
-3 NULL NULL 785 NULL
+2 NULL 1 NULL 207
+2 NULL NULL NULL NULL
 3 3 1 2728 183
 3 -1 -1 2949 196
 3 2 2 3175 212
 3 -2 -2 3260 217
 3 -1 -1 3399 226
+3 NULL NULL NULL NULL
 4 2 -3 1902 128
 4 1 1 1985 133
 4 NULL NULL NULL NULL
-NULL NULL 1 0 101
-NULL -1 3 1406 116
-NULL 1 NULL 2137 238
-NULL -1 -1 2438 203
+NULL -1 3 NULL 116
+NULL -1 -1 NULL 203
+NULL 1 NULL NULL 238
+NULL NULL 1 NULL 101
 
-statement skipped query
+statement query skipped
 select a-b as col1,
        (a+b+c+d+e)/5 as col2,
        abs(b-c) as col3,
@@ -164,9 +162,6 @@ where (e>a and e<b)
 order by col1,col2,col3,col4;
 
 ----
-0 102 NULL NULL
-0 119 117 NULL
-0 202 204 NULL
 317 106 109 105
 369 123 NULL 124
 385 125 126 129
@@ -192,10 +187,13 @@ order by col1,col2,col3,col4;
 711 NULL 237 236
 723 244 NULL 240
 743 247 246 249
+NULL 102 NULL NULL
 NULL 113 110 112
+NULL 119 117 NULL
+NULL 202 204 NULL
 NULL 208 NULL 206
 
-statement skipped query
+statement query skipped
 select case a+1 when b then 111 when c then 222
         when d then 333  when e then 444 else 555 end as col1,
        d as col2,
@@ -205,7 +203,7 @@ from t1
 where a>b
 and (e>a and e<b);
 
-statement skipped query
+statement query skipped
 select a+b*2+c*3+d*4+e*5 as col1
 from t1
 where (a>b-2 and a<b+2)
@@ -223,46 +221,45 @@ order by col1,col2;
 -4 NULL
 -3 2728
 -3 3175
--2 0
--2 730
 -2 2579
--1 885
--1 1006
+-2 NULL
+-2 NULL
 -1 1612
 -1 2432
 -1 2806
 -1 3331
-1 0
-1 825
+-1 NULL
+-1 NULL
 1 2878
 1 3473
+1 NULL
+1 NULL
 1 NULL
 2 2046
 2 2131
 2 3706
-3 785
 3 2949
 3 3260
 3 3399
+3 NULL
 4 1902
-NULL 0
-NULL 1406
-NULL 2137
-NULL 2438
+NULL NULL
+NULL NULL
+NULL NULL
+NULL NULL
 
-statement skipped query I
+statement query skipped
 select case a+1 when b then 111 when c then 222
         when d then 333  when e then 444 else 555 end as col1
 from t1
 where exists(select 1 from t1 as x where x.b<t1.b);
 
-statement skipped query III
+statement query skipped
 select a-b as col1,
        (select count(*) from t1 as x where x.b<t1.b) as col2,
        a as col3
 from t1;
 
--- auto generated, statement query get no results
 statement query skipped
 select abs(b-c) as col1
 from t1
@@ -270,10 +267,6 @@ where coalesce(a,b,c,d,e)<>0
    and b is not null
 order by col1;
 
-----
-Add results here
-
--- auto generated, statement query get no results
 statement query skipped
 select c-d as col1,
        abs(b-c) as col2
@@ -282,9 +275,6 @@ where (c<=d-2 or c>=d+2)
    and e+d between a+b-10 and c+130
    and b is not null
 order by col1,col2;
-
-----
-Add results here
 
 statement query FIIIII
 select (a+b+c+d+e)/5 as col1,
@@ -301,16 +291,6 @@ where c between b-2 and d+2
 order by col1,col2,col6,col5,col3,col4;
 
 ----
-0.0 146 NULL 880 444 4
-0.0 157 NULL 940 333 1
-0.0 165 NULL 1000 333 1
-0.0 177 NULL 1057 444 4
-0.0 NULL NULL 905 333 2
-0.0 NULL NULL 1455 444 3
-44.8 110 -1 0 444 NULL
-46.6 117 3 357 444 NULL
-47.4 237 NULL 0 444 3
-81.4 204 -1 606 444 NULL
 107.0 109 -2 635 333 2
 127.0 126 -3 760 222 -2
 132.0 132 1 793 333 1
@@ -328,11 +308,20 @@ order by col1,col2,col6,col5,col3,col4;
 227.0 227 -1 1360 333 1
 232.0 230 -2 1391 333 2
 247.0 246 -1 1484 111 -4
+NULL 110 -1 NULL 444 NULL
+NULL 117 3 NULL 444 NULL
+NULL 146 NULL 880 444 4
+NULL 157 NULL 940 333 1
+NULL 165 NULL 1000 333 1
+NULL 177 NULL 1057 444 4
+NULL 204 -1 NULL 444 NULL
+NULL 237 NULL NULL 444 3
 NULL NULL 1 738 222 -3
-NULL NULL 1 0 444 NULL
-NULL NULL 1 306 444 NULL
+NULL NULL NULL 905 333 2
+NULL NULL NULL 1455 444 3
+NULL NULL 1 NULL 444 NULL
+NULL NULL 1 NULL 444 NULL
 
--- auto generated, statement query get no results
 statement query skipped
 select a-b as col1,
        a as col2
@@ -340,10 +329,6 @@ from t1
 where c>d
 order by col2,col1;
 
-----
-Add results here
-
--- auto generated, statement query get no results
 statement query skipped
 select (a+b+c+d+e)/5 as col1,
        a+b*2+c*3+d*4+e*5 as col2,
@@ -357,7 +342,4 @@ where c between b-2 and d+2
    and b>c
    and a>b
 order by col4,col6,col1,col2,col5,col3;
-
-----
-Add results here
 
