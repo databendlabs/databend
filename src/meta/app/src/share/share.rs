@@ -203,8 +203,14 @@ pub struct GetShareGrantTenantsReq {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct GetShareGrantTenants {
+    pub account: String,
+    pub grant_on: DateTime<Utc>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct GetShareGrantTenantsReply {
-    pub accounts: Vec<String>,
+    pub accounts: Vec<GetShareGrantTenants>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]

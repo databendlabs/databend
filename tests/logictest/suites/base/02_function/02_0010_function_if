@@ -104,6 +104,9 @@ select if(true, number, null), if(false, number, null) from numbers(1);
 0 NULL
 
 statement ok
+drop table if exists t;
+
+statement ok
 create table t(a int null, b int);
 
 statement ok
