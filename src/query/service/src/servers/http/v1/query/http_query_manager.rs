@@ -29,7 +29,7 @@ use super::expiring_map::ExpiringMap;
 use super::HttpQueryContext;
 use crate::servers::http::v1::query::http_query::HttpQuery;
 use crate::servers::http::v1::query::HttpQueryRequest;
-use crate::sessions::SessionRef;
+use crate::sessions::Session;
 use crate::Config;
 
 // TODO(youngsofun): may need refactor later for 2 reasons:
@@ -42,7 +42,7 @@ pub(crate) struct HttpQueryConfig {
 
 pub struct HttpQueryManager {
     pub(crate) queries: Arc<RwLock<HashMap<String, Arc<HttpQuery>>>>,
-    pub(crate) sessions: Mutex<ExpiringMap<String, SessionRef>>,
+    pub(crate) sessions: Mutex<ExpiringMap<String, Arc<Session>>>,
     pub(crate) config: HttpQueryConfig,
 }
 
@@ -117,14 +117,14 @@ impl HttpQueryManager {
         q
     }
 
-    pub(crate) async fn get_session(self: &Arc<Self>, session_id: &str) -> Option<SessionRef> {
+    pub(crate) async fn get_session(self: &Arc<Self>, session_id: &str) -> Option<Arc<Session>> {
         let sessions = self.sessions.lock();
         sessions.get(session_id)
     }
 
-    pub(crate) async fn add_session(self: &Arc<Self>, session: SessionRef, timeout: Duration) {
+    pub(crate) async fn add_session(self: &Arc<Self>, session: Arc<Session>, timeout: Duration) {
         let mut sessions = self.sessions.lock();
-        sessions.insert(session.get_id(), session.clone(), Some(timeout));
+        sessions.insert(session.get_id(), session, Some(timeout));
     }
 
     pub(crate) fn kill_session(self: &Arc<Self>, session_id: &str) {
