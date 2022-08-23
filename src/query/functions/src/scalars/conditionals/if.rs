@@ -11,7 +11,6 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
@@ -67,7 +66,6 @@ impl IfFunction {
         } else {
             columns[1].clone()
         };
-
         cast_column_field(&c, c.data_type(), &self.least_supertype, func_ctx)
     }
 
@@ -83,6 +81,7 @@ impl IfFunction {
         func_ctx: &FunctionContext,
     ) -> Result<ColumnRef> {
         debug_assert!(columns[0].column().is_const() || columns[1].column().is_const());
+
         let (lhs_col, rhs_col, reverse) = if columns[0].column().is_const() {
             (&columns[0], &columns[1], false)
         } else {
@@ -103,15 +102,14 @@ impl IfFunction {
         )?;
 
         let type_id = remove_nullable(&lhs.data_type()).data_type_id();
-
-        if rhs.is_nullable() {
-            // rhs is nullable column
+        if self.least_supertype.is_nullable() {
             with_match_scalar_type!(type_id.to_physical_type(), |$T| {
                 let left_viewer = $T::try_create_viewer(&lhs)?;
                 let l_val = left_viewer.value_at(0);
+                let l_val_valid = left_viewer.valid_at(0);
                 let rhs_viewer = $T::try_create_viewer(&rhs)?;
 
-                let mut builder: NullableColumnBuilder<$T> =  NullableColumnBuilder::with_capacity_meta(input_rows, lhs.column_meta());
+                let mut builder: NullableColumnBuilder<$T> = NullableColumnBuilder::with_capacity_meta(input_rows, lhs.column_meta());
 
                 let iter = cond_col.iter().zip(rhs_viewer.iter().enumerate());
 
@@ -120,14 +118,14 @@ impl IfFunction {
                         if predicate {
                             builder.append(r_val, rhs_viewer.valid_at(row));
                         } else {
-                            builder.append(l_val, true);
+                            builder.append(l_val, l_val_valid);
                         }
                     }
                     return Ok(builder.build(input_rows));
                 } else {
                     for (predicate, (row, r_val)) in iter {
                         if predicate {
-                            builder.append(l_val, true);
+                            builder.append(l_val, l_val_valid);
                         } else {
                             builder.append(r_val, rhs_viewer.valid_at(row));
                         }
@@ -137,33 +135,14 @@ impl IfFunction {
             }, {
                 unimplemented!()
             });
-        } else if rhs.is_const() {
-            // rhs is const column
-            with_match_scalar_type!(type_id.to_physical_type(), |$T| {
-                let left_viewer = $T::try_create_viewer(&lhs)?;
-                let l_val = left_viewer.value_at(0);
-                let right_viewer = $T::try_create_viewer(&rhs)?;
-                let r_val = right_viewer.value_at(0);
-
-                if reverse {
-                    let iter = cond_col.iter().map(|predicate| if predicate { r_val } else { l_val });
-                    return Ok(Arc::new(ColumnBuilder::<$T>::from_iterator(iter)));
-                } else {
-                    let iter = cond_col.iter().map(|predicate| if predicate { l_val } else { r_val });
-                    return Ok(Arc::new(ColumnBuilder::<$T>::from_iterator(iter)));
-                }
-            }, {
-                unimplemented!()
-            });
         } else {
-            // rhs is scalar column
             with_match_scalar_type!(type_id.to_physical_type(), |$T| {
                 let left_viewer = $T::try_create_viewer(&lhs)?;
                 let l_val = left_viewer.value_at(0);
-                let rhs = Series::check_get_scalar::<$T>(&rhs)?;
+                let rhs_viewer = $T::try_create_viewer(&rhs)?;
 
                 if reverse {
-                    let iter = cond_col.iter().zip(rhs.scalar_iter()).map(|(predicate, r_val)| {
+                    let iter = cond_col.iter().zip(rhs_viewer.iter()).map(|(predicate, r_val)| {
                         if predicate {
                             r_val
                         } else {
@@ -173,7 +152,7 @@ impl IfFunction {
                     let col = <$T as Scalar>::ColumnType::from_iterator(iter);
                     return Ok(col.arc());
                 } else {
-                    let iter = cond_col.iter().zip(rhs.scalar_iter()).map(|(predicate, r_val)| {
+                    let iter = cond_col.iter().zip(rhs_viewer.iter()).map(|(predicate, r_val)| {
                         if predicate {
                             l_val
                         } else {
@@ -214,11 +193,11 @@ impl IfFunction {
         )?;
 
         let type_id = remove_nullable(&self.least_supertype).data_type_id();
-
         with_match_scalar_type!(type_id.to_physical_type(), |$T| {
             let lhs_viewer = $T::try_create_viewer(&lhs)?;
             let rhs_viewer = $T::try_create_viewer(&rhs)?;
             let mut builder = NullableColumnBuilder::<$T>::with_capacity_meta(input_rows, lhs.column_meta());
+
             for ((predicate, l), (row, r)) in cond_col
                 .iter()
                 .zip(lhs_viewer.iter())
