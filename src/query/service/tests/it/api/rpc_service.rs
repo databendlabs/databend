@@ -20,31 +20,28 @@ use common_arrow::arrow_format::flight::data::Empty;
 use common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
 use common_base::base::tokio;
 use common_base::base::tokio::net::TcpListener;
-use common_base::base::tokio::sync::Notify;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_grpc::ConnectionFactory;
 use common_grpc::GrpcConnectionError;
 use common_grpc::RpcClientTlsConfig;
 use databend_query::api::RpcService;
-use databend_query::servers::Server;
 use tokio_stream::wrappers::TcpListenerStream;
 
 use crate::tests::tls_constants::TEST_CA_CERT;
 use crate::tests::tls_constants::TEST_CN_NAME;
 use crate::tests::tls_constants::TEST_SERVER_CERT;
 use crate::tests::tls_constants::TEST_SERVER_KEY;
-use crate::tests::SessionManagerBuilder;
+use crate::tests::ConfigBuilder;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_tls_rpc_server() -> Result<()> {
-    let mut rpc_service = RpcService {
-        abort_notify: Arc::new(Notify::new()),
-        sessions: SessionManagerBuilder::create()
+    let mut rpc_service = RpcService::create(
+        ConfigBuilder::create()
             .rpc_tls_server_key(TEST_SERVER_KEY)
             .rpc_tls_server_cert(TEST_SERVER_CERT)
-            .build()?,
-    };
+            .build(),
+    )?;
 
     let mut listener_address = SocketAddr::from_str("127.0.0.1:0")?;
     listener_address = rpc_service.start(listener_address).await?;
@@ -75,11 +72,11 @@ async fn test_tls_rpc_server_invalid_server_config() -> Result<()> {
     // setup, invalid cert locations
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let mut srv = RpcService {
-        abort_notify: Arc::new(Notify::new()),
-        sessions: SessionManagerBuilder::create()
+        config: ConfigBuilder::create()
             .rpc_tls_server_key("../tests/data/certs/none.key")
             .rpc_tls_server_cert("../tests/data/certs/none.pem")
-            .build()?,
+            .build(),
+        abort_notify: Arc::new(Default::default()),
     };
     let stream = TcpListenerStream::new(listener);
     let r = srv.start_with_incoming(stream).await;

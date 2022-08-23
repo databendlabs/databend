@@ -1,0 +1,20 @@
+[package]
+name = "common-pipeline-transforms"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+doctest = false
+test = false
+
+[dependencies]
+common-catalog = { path = "../../catalog" }
+common-datablocks = { path = "../../datablocks" }
+common-datavalues = { path = "../../datavalues" }
+common-exception = { path = "../../../common/exception" }
+common-pipeline-core = { path = "../core" }
+common-planners = { path = "../../planners" }
+
+async-trait = { version = "0.1.0", package = "async-trait-fn" }
+tracing = "0.1.35"

@@ -16,6 +16,7 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 use std::time::Instant;
 
+use common_base::base::tokio::io::AsyncWrite;
 use common_base::base::TrySpawn;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
@@ -23,7 +24,10 @@ use common_exception::Result;
 use common_exception::ToErrorCode;
 use common_io::prelude::*;
 use common_planners::PlanNode;
+use common_streams::DataBlockStream;
+use common_streams::SendableDataBlockStream;
 use common_users::CertifiedInfo;
+use futures_util::StreamExt;
 use metrics::histogram;
 use opensrv_mysql::AsyncMysqlShim;
 use opensrv_mysql::ErrorKind;
@@ -32,7 +36,6 @@ use opensrv_mysql::ParamParser;
 use opensrv_mysql::QueryResultWriter;
 use opensrv_mysql::StatementMetaWriter;
 use rand::RngCore;
-use tokio_stream::StreamExt;
 use tracing::error;
 use tracing::info;
 use tracing::Instrument;
@@ -43,12 +46,14 @@ use crate::interpreters::InterpreterFactoryV2;
 use crate::interpreters::InterpreterQueryLog;
 use crate::servers::mysql::writers::DFInitResultWriter;
 use crate::servers::mysql::writers::DFQueryResultWriter;
+use crate::servers::mysql::writers::ProgressReporter;
 use crate::servers::mysql::writers::QueryResult;
 use crate::servers::mysql::MySQLFederated;
 use crate::servers::mysql::MYSQL_VERSION;
 use crate::servers::utils::use_planner_v2;
 use crate::sessions::QueryContext;
-use crate::sessions::SessionRef;
+use crate::sessions::Session;
+use crate::sessions::SessionManager;
 use crate::sessions::TableContext;
 use crate::sql::plans::Plan;
 use crate::sql::DfParser;
@@ -63,10 +68,13 @@ fn has_result_set_by_plan(plan: &Plan) -> bool {
             | Plan::Call(_)
             | Plan::ShowCreateDatabase(_)
             | Plan::ShowCreateTable(_)
+            | Plan::DescShare(_)
+            | Plan::ShowShares(_)
+            | Plan::ShowObjectGrantPrivileges(_)
+            | Plan::ShowGrantTenantsOfShare(_)
             | Plan::DescribeTable(_)
             | Plan::ShowGrants(_)
             | Plan::ListStage(_)
-            | Plan::DescribeStage(_)
             | Plan::Presign(_)
     )
 }
@@ -75,12 +83,18 @@ fn has_result_set_by_plan_node(plan: &PlanNode) -> bool {
     matches!(plan, PlanNode::Explain(_) | PlanNode::Select(_))
 }
 
-struct InteractiveWorkerBase<W: std::io::Write> {
-    session: SessionRef,
+struct InteractiveWorkerBase<W: AsyncWrite + Send + Unpin> {
+    session: Arc<Session>,
     generic_hold: PhantomData<W>,
 }
 
-pub struct InteractiveWorker<W: std::io::Write> {
+impl<W: AsyncWrite + Send + Unpin> Drop for InteractiveWorkerBase<W> {
+    fn drop(&mut self) {
+        SessionManager::instance().destroy_session(&self.session.get_id())
+    }
+}
+
+pub struct InteractiveWorker<W: AsyncWrite + Send + Unpin> {
     base: InteractiveWorkerBase<W>,
     version: String,
     salt: [u8; 20],
@@ -88,7 +102,7 @@ pub struct InteractiveWorker<W: std::io::Write> {
 }
 
 #[async_trait::async_trait]
-impl<W: std::io::Write + Send + Sync> AsyncMysqlShim<W> for InteractiveWorker<W> {
+impl<W: AsyncWrite + Send + Sync + Unpin> AsyncMysqlShim<W> for InteractiveWorker<W> {
     type Error = ErrorCode;
 
     fn version(&self) -> &str {
@@ -150,10 +164,12 @@ impl<W: std::io::Write + Send + Sync> AsyncMysqlShim<W> for InteractiveWorker<W>
         writer: StatementMetaWriter<'a, W>,
     ) -> Result<()> {
         if self.base.session.is_aborting() {
-            writer.error(
-                ErrorKind::ER_ABORTING_CONNECTION,
-                "Aborting this connection. because we are try aborting server.".as_bytes(),
-            )?;
+            writer
+                .error(
+                    ErrorKind::ER_ABORTING_CONNECTION,
+                    "Aborting this connection. because we are try aborting server.".as_bytes(),
+                )
+                .await?;
 
             return Err(ErrorCode::AbortedSession(
                 "Aborting this connection. because we are try aborting server.",
@@ -170,10 +186,12 @@ impl<W: std::io::Write + Send + Sync> AsyncMysqlShim<W> for InteractiveWorker<W>
         writer: QueryResultWriter<'a, W>,
     ) -> Result<()> {
         if self.base.session.is_aborting() {
-            writer.error(
-                ErrorKind::ER_ABORTING_CONNECTION,
-                "Aborting this connection. because we are try aborting server.".as_bytes(),
-            )?;
+            writer
+                .error(
+                    ErrorKind::ER_ABORTING_CONNECTION,
+                    "Aborting this connection. because we are try aborting server.".as_bytes(),
+                )
+                .await?;
 
             return Err(ErrorCode::AbortedSession(
                 "Aborting this connection. because we are try aborting server.",
@@ -195,10 +213,12 @@ impl<W: std::io::Write + Send + Sync> AsyncMysqlShim<W> for InteractiveWorker<W>
         writer: QueryResultWriter<'a, W>,
     ) -> Result<()> {
         if self.base.session.is_aborting() {
-            writer.error(
-                ErrorKind::ER_ABORTING_CONNECTION,
-                "Aborting this connection. because we are try aborting server.".as_bytes(),
-            )?;
+            writer
+                .error(
+                    ErrorKind::ER_ABORTING_CONNECTION,
+                    "Aborting this connection. because we are try aborting server.".as_bytes(),
+                )
+                .await?;
 
             return Err(ErrorCode::AbortedSession(
                 "Aborting this connection. because we are try aborting server.",
@@ -211,7 +231,7 @@ impl<W: std::io::Write + Send + Sync> AsyncMysqlShim<W> for InteractiveWorker<W>
         let blocks = self.base.do_query(query).await;
 
         let format = self.base.session.get_format_settings()?;
-        let mut write_result = writer.write(blocks, &format);
+        let mut write_result = writer.write(blocks, &format).await;
 
         if let Err(cause) = write_result {
             let suffix = format!("(while in query {})", query);
@@ -232,21 +252,25 @@ impl<W: std::io::Write + Send + Sync> AsyncMysqlShim<W> for InteractiveWorker<W>
         writer: InitWriter<'a, W>,
     ) -> Result<()> {
         if self.base.session.is_aborting() {
-            writer.error(
-                ErrorKind::ER_ABORTING_CONNECTION,
-                "Aborting this connection. because we are try aborting server.".as_bytes(),
-            )?;
+            writer
+                .error(
+                    ErrorKind::ER_ABORTING_CONNECTION,
+                    "Aborting this connection. because we are try aborting server.".as_bytes(),
+                )
+                .await?;
 
             return Err(ErrorCode::AbortedSession(
                 "Aborting this connection. because we are try aborting server.",
             ));
         }
 
-        DFInitResultWriter::create(writer).write(self.base.do_init(database_name).await)
+        DFInitResultWriter::create(writer)
+            .write(self.base.do_init(database_name).await)
+            .await
     }
 }
 
-impl<W: std::io::Write> InteractiveWorkerBase<W> {
+impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
     async fn authenticate(&self, salt: &[u8], info: CertifiedInfo) -> Result<bool> {
         let user_name = &info.user_name;
         let client_ip = info.user_client_address.split(':').collect::<Vec<_>>()[0];
@@ -265,10 +289,12 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
     }
 
     async fn do_prepare(&mut self, _: &str, writer: StatementMetaWriter<'_, W>) -> Result<()> {
-        writer.error(
-            ErrorKind::ER_UNKNOWN_ERROR,
-            "Prepare is not support in Databend.".as_bytes(),
-        )?;
+        writer
+            .error(
+                ErrorKind::ER_UNKNOWN_ERROR,
+                "Prepare is not support in Databend.".as_bytes(),
+            )
+            .await?;
         Ok(())
     }
 
@@ -278,10 +304,12 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
         _: ParamParser<'_>,
         writer: QueryResultWriter<'_, W>,
     ) -> Result<()> {
-        writer.error(
-            ErrorKind::ER_UNKNOWN_ERROR,
-            "Execute is not support in Databend.".as_bytes(),
-        )?;
+        writer
+            .error(
+                ErrorKind::ER_UNKNOWN_ERROR,
+                "Execute is not support in Databend.".as_bytes(),
+            )
+            .await?;
         Ok(())
     }
 
@@ -302,11 +330,12 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
                 if data_block.num_rows() > 0 {
                     info!("Federated response: {:?}", data_block);
                 }
+                let has_result = data_block.num_rows() > 0;
                 let schema = data_block.schema().clone();
                 Ok(QueryResult::create(
-                    vec![data_block],
-                    String::from(""),
-                    false,
+                    DataBlockStream::create(schema.clone(), None, vec![data_block]).boxed(),
+                    None,
+                    has_result,
                     schema,
                 ))
             }
@@ -323,7 +352,7 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
                     Ok((_, h)) => h.clone(),
                     Err(_) => vec![],
                 };
-                let mut has_result_set = false;
+                let mut has_result_set = true;
                 let interpreter = if use_planner_v2(&settings, &stmts_hints)? {
                     let mut planner = Planner::new(context.clone());
                     planner.plan_sql(query).await.and_then(|v| {
@@ -394,63 +423,59 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
         }
     }
 
-    #[tracing::instrument(level = "debug", skip(interpreter, context))]
+    //#[tracing::instrument(level = "debug", skip(interpreter, context))]
     async fn exec_query(
         interpreter: Arc<dyn Interpreter>,
         context: &Arc<QueryContext>,
-    ) -> Result<(Vec<DataBlock>, String)> {
+    ) -> Result<(
+        SendableDataBlockStream,
+        Option<Box<dyn ProgressReporter + Send>>,
+    )> {
         let instant = Instant::now();
 
-        let query_result = context.try_spawn(
+        let query_result = context.try_spawn({
+            let ctx = context.clone();
             async move {
                 // Write start query log.
                 let _ = interpreter
                     .start()
                     .await
                     .map_err(|e| error!("interpreter.start.error: {:?}", e));
-                let data_stream = interpreter.execute().await?;
+                let mut data_stream = interpreter.execute().await?;
                 histogram!(
                     super::mysql_metrics::METRIC_INTERPRETER_USEDTIME,
                     instant.elapsed()
                 );
 
-                let collector = data_stream.collect::<Result<Vec<DataBlock>>>();
-                let query_result = collector.await?;
-                // Write finish query log.
-                let _ = interpreter
-                    .finish()
-                    .await
-                    .map_err(|e| error!("interpreter.finish.error: {:?}", e));
+                // Wrap the data stream, log finish event at the end of stream
+                let intercepted_stream = async_stream::stream! {
 
-                Ok::<Vec<DataBlock>, ErrorCode>(query_result)
+                    while let Some(item) = data_stream.next().await {
+                        yield item
+                    };
+
+                    // Write finish query log.
+                    if let Err(e) = interpreter.finish().await {
+                        // Errors will only be traced, but not propagated
+                        tracing::warn!("interpreter.finish.error: {:?}", e);
+                    }
+                };
+
+                let abortable_stream = ctx
+                    .try_create_abortable(intercepted_stream.boxed())?
+                    .boxed();
+                Ok::<_, ErrorCode>(abortable_stream)
             }
-            .in_current_span(),
-        )?;
+            .in_current_span()
+        })?;
 
         let query_result = query_result.await.map_err_to_code(
             ErrorCode::TokioError,
             || "Cannot join handle from context's runtime",
         )?;
-        query_result.map(|data| {
-            if data.is_empty() {
-                (data, "".to_string())
-            } else {
-                (data, Self::extra_info(context, instant))
-            }
-        })
-    }
-
-    fn extra_info(context: &Arc<QueryContext>, instant: Instant) -> String {
-        let progress = context.get_scan_progress_value();
-        let seconds = instant.elapsed().as_nanos() as f64 / 1e9f64;
-        format!(
-            "Read {} rows, {} in {:.3} sec., {} rows/sec., {}/sec.",
-            progress.rows,
-            convert_byte_size(progress.bytes as f64),
-            seconds,
-            convert_number_size((progress.rows as f64) / (seconds as f64)),
-            convert_byte_size((progress.bytes as f64) / (seconds as f64)),
-        )
+        let reporter = Box::new(ContextProgressReporter::new(context.clone(), instant))
+            as Box<dyn ProgressReporter + Send>;
+        query_result.map(|data| (data, Some(reporter)))
     }
 
     async fn do_init(&mut self, database_name: &str) -> Result<()> {
@@ -467,8 +492,8 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
     }
 }
 
-impl<W: std::io::Write> InteractiveWorker<W> {
-    pub fn create(session: SessionRef, client_addr: String) -> InteractiveWorker<W> {
+impl<W: AsyncWrite + Send + Unpin> InteractiveWorker<W> {
+    pub fn create(session: Arc<Session>, client_addr: String) -> InteractiveWorker<W> {
         let mut bs = vec![0u8; 20];
         let mut rng = rand::thread_rng();
         rng.fill_bytes(bs.as_mut());
@@ -494,5 +519,31 @@ impl<W: std::io::Write> InteractiveWorker<W> {
             ),
             client_addr,
         }
+    }
+}
+
+struct ContextProgressReporter {
+    context: Arc<QueryContext>,
+    instant: Instant,
+}
+
+impl ContextProgressReporter {
+    fn new(context: Arc<QueryContext>, instant: Instant) -> Self {
+        Self { context, instant }
+    }
+}
+
+impl ProgressReporter for ContextProgressReporter {
+    fn progress_info(&self) -> String {
+        let progress = self.context.get_scan_progress_value();
+        let seconds = self.instant.elapsed().as_nanos() as f64 / 1e9f64;
+        format!(
+            "Read {} rows, {} in {:.3} sec., {} rows/sec., {}/sec.",
+            progress.rows,
+            convert_byte_size(progress.bytes as f64),
+            seconds,
+            convert_number_size((progress.rows as f64) / (seconds as f64)),
+            convert_byte_size((progress.bytes as f64) / (seconds as f64)),
+        )
     }
 }

@@ -399,14 +399,29 @@ select * from t1 left outer join t2 on t1.a > t2.c order by a,b,c,d;
 7 8 2 3
 7 8 6 8
 
+statement ok
+CREATE TABLE t3(c0 BIGINT NULL, c1 DOUBLE NULL DEFAULT(true));
+
+statement ok
+CREATE TABLE t4(c0 FLOAT NULL);
+
+statement query I
+SELECT SUM(count) FROM (SELECT ((false IS NOT NULL AND false) ::INT64)as count FROM t4 NATURAL LEFT JOIN t3) as res;
+
+----
+0
 
 statement ok
 drop table t1;
 
-
 statement ok
 drop table t2;
 
+statement ok
+drop table t3;
+
+statement ok
+drop table t4;
 
 statement ok
 create table t1_null(a int null , b int null);
@@ -466,3 +481,22 @@ select * from numbers(10) x join (select 1::UInt64 number) y on x.number = y.num
 
 ----
 1 1
+
+statement ok
+CREATE TABLE onecolumn (x INT NULL);
+
+statement ok
+INSERT INTO onecolumn(x) VALUES (44), (NULL), (42);
+
+statement ok
+CREATE TABLE empty (x INT);
+
+statement ok
+SELECT * FROM onecolumn AS a(x) CROSS JOIN empty AS b(y);
+
+statement ok
+drop table onecolumn;
+
+statement ok
+drop table empty;
+

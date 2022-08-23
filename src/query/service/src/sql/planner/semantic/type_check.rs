@@ -29,7 +29,6 @@ use common_ast::parser::parse_expr;
 use common_ast::parser::token::Token;
 use common_ast::parser::tokenize_sql;
 use common_ast::Backtrace;
-use common_ast::Dialect;
 use common_ast::DisplayError;
 use common_datavalues::type_coercion::merge_types;
 use common_datavalues::ArrayType;
@@ -1363,7 +1362,7 @@ impl<'a> TypeChecker<'a> {
     ) -> Result<Box<(Scalar, DataTypeImpl)>> {
         let mut binder = Binder::new(
             self.ctx.clone(),
-            self.ctx.get_catalogs(),
+            self.ctx.get_catalog_manager()?,
             self.name_resolution_ctx.clone(),
             self.metadata.clone(),
         );
@@ -1623,9 +1622,11 @@ impl<'a> TypeChecker<'a> {
                     arguments.len()
                 ))));
             }
+            let settings = self.ctx.get_settings();
+            let sql_dialect = settings.get_sql_dialect()?;
             let backtrace = Backtrace::new();
             let sql_tokens = tokenize_sql(udf.definition.as_str())?;
-            let expr = parse_expr(&sql_tokens, Dialect::PostgreSQL, &backtrace)?;
+            let expr = parse_expr(&sql_tokens, sql_dialect, &backtrace)?;
             let mut args_map = HashMap::new();
             arguments.iter().enumerate().for_each(|(idx, argument)| {
                 if let Some(parameter) = parameters.get(idx) {

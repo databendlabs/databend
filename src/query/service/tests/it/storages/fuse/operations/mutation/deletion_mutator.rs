@@ -22,6 +22,7 @@ use common_datablocks::DataBlock;
 use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_fuse_meta::caches::CacheManager;
 use common_fuse_meta::meta::BlockMeta;
 use common_fuse_meta::meta::SegmentInfo;
 use common_fuse_meta::meta::Statistics;
@@ -48,7 +49,7 @@ async fn test_deletion_mutator_multiple_empty_segments() -> Result<()> {
     let ctx = fixture.ctx();
     let location_generator = TableMetaLocationGenerator::with_prefix("_prefix".to_owned());
 
-    let segment_info_cache = ctx.get_storage_cache_manager().get_table_segment_cache();
+    let segment_info_cache = CacheManager::instance().get_table_segment_cache();
     let data_accessor = ctx.get_storage_operator()?;
     let seg_writer = SegmentWriter::new(&data_accessor, &location_generator, &segment_info_cache);
 
@@ -93,9 +94,9 @@ async fn test_deletion_mutator_multiple_empty_segments() -> Result<()> {
 
     let table_ctx: Arc<dyn TableContext> = ctx as Arc<dyn TableContext>;
     let mut mutator = DeletionMutator::try_create(
-        &table_ctx,
-        &location_generator,
-        &base_snapshot,
+        table_ctx,
+        location_generator,
+        Arc::new(base_snapshot),
         ClusterStatsGenerator::default(),
     )?;
 

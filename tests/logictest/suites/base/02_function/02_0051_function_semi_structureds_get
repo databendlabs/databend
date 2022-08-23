@@ -11,13 +11,13 @@ select get(parse_json('[2.71, 3.14]'), 2);
 NULL
 
 statement query T
-select get(parse_json('{"aa":1, "aA":2, "Aa":3}'), 'aA');
+select get(parse_json('{"aa": 1, "aA": 2, "Aa": 3}'), 'aA');
 
 ----
 2
 
 statement query T
-select get(parse_json('{"aa":1, "aA":2, "Aa":3}'), 'AA');
+select get(parse_json('{"aa": 1, "aA": 2, "Aa": 3}'), 'AA');
 
 ----
 NULL
@@ -35,102 +35,102 @@ select parse_json('[[2.71, 3.14]]')[0][1];
 3.14
 
 statement query T
-select parse_json('{"aa":1, "aA":2, "Aa":3}')['aa'];
+select parse_json('{"aa": 1, "aA": 2, "Aa": 3 }')['aa'];
 
 ----
 1
 
 statement query T
-select get_ignore_case(parse_json('{"aa":1, "aA":2, "Aa":3}'), 'aA');
+select get_ignore_case(parse_json('{"aa": 1, "aA": 2, "Aa": 3}'), 'aA');
 
 ----
 2
 
 statement query T
-select get_ignore_case(parse_json('{"aa":1, "aA":2, "Aa":3}'), 'AA');
+select get_ignore_case(parse_json('{"aa": 1, "aA": 2, "Aa": 3}'), 'AA');
 
 ----
 1
 
 statement query T
-select get_path(parse_json('{"attr":[{"name":1}, {"name":2}]}'), 'attr[0].name');
+select get_path(parse_json('{"attr":[{"name": 1}, {"name": 2}]}'), 'attr[0].name');
 
 ----
 1
 
 statement query T
-select get_path(parse_json('{"attr":[{"name":1}, {"name":2}]}'), 'attr[1]:name');
+select get_path(parse_json('{"attr":[{"name": 1}, {"name": 2}]}'), 'attr[1]: name');
 
 ----
 2
 
 statement query T
-select get_path(parse_json('{"customer":{"id":1, "name":"databend", "extras":["ext", "test"]}}'), 'customer:id');
+select get_path(parse_json('{"customer":{"id": 1, "name":"databend", "extras":["ext", "test"]}}'), 'customer: id');
 
 ----
 1
 
 statement query T
-select get_path(parse_json('{"customer":{"id":1, "name":"databend", "extras":["ext", "test"]}}'), 'customer.name');
+select get_path(parse_json('{"customer":{"id": 1, "name":"databend", "extras":["ext", "test"]}}'), 'customer.name');
 
 ----
 "databend"
 
 statement query T
-select get_path(parse_json('{"customer":{"id":1, "name":"databend", "extras":["ext", "test"]}}'), 'customer["extras"][0]');
+select get_path(parse_json('{"customer":{"id": 1, "name":"databend", "extras":["ext", "test"]}}'), 'customer["extras"][0]');
 
 ----
 "ext"
 
 statement query T
-select get_path(parse_json('{"customer":{"id":1, "name":"databend", "extras":["ext", "test"]}}'), 'customer["extras"][2]');
+select get_path(parse_json('{"customer":{"id": 1, "name":"databend", "extras":["ext", "test"]}}'), 'customer["extras"][2]');
 
 ----
 NULL
 
 
 statement error 1005
-select get_path(parse_json('{"customer":{"id":1, "name":"databend", "extras":["ext", "test"]}}'), ''); 
+select get_path(parse_json('{"customer":{"id": 1, "name":"databend", "extras":["ext", "test"]}}'), '');
 
 statement query T
-select json_extract_path_text('{"attr":[{"name":1}, {"name":2}]}', 'attr[0].name');
+select json_extract_path_text('{"attr":[{"name": 1}, {"name": 2}]}', 'attr[0].name');
 
 ----
 1
 
 statement query T
-select json_extract_path_text('{"attr":[{"name":1}, {"name":2}]}', 'attr[1]:name');
+select json_extract_path_text('{"attr":[{"name": 1}, {"name": 2}]}', 'attr[1]: name');
 
 ----
 2
 
 statement query T
-select json_extract_path_text('{"customer":{"id":1, "name":"databend", "extras":["ext", "test"]}}', 'customer:id');
+select json_extract_path_text('{"customer":{"id": 1, "name":"databend", "extras":["ext", "test"]}}', 'customer: id');
 
 ----
 1
 
 statement query T
-select json_extract_path_text('{"customer":{"id":1, "name":"databend", "extras":["ext", "test"]}}', 'customer.name');
+select json_extract_path_text('{"customer":{"id": 1, "name":"databend", "extras":["ext", "test"]}}', 'customer.name');
 
 ----
 "databend"
 
 statement query T
-select json_extract_path_text('{"customer":{"id":1, "name":"databend", "extras":["ext", "test"]}}', 'customer["extras"][0]');
+select json_extract_path_text('{"customer":{"id": 1, "name":"databend", "extras":["ext", "test"]}}', 'customer["extras"][0]');
 
 ----
 "ext"
 
 statement query T
-select json_extract_path_text('{"customer":{"id":1, "name":"databend", "extras":["ext", "test"]}}', 'customer["extras"][2]');
+select json_extract_path_text('{"customer":{"id": 1, "name":"databend", "extras":["ext", "test"]}}', 'customer["extras"][2]');
 
 ----
 NULL
 
 
 statement error 1005
-select json_extract_path_text('{"customer":{"id":1, "name":"databend", "extras":["ext", "test"]}}', ''); 
+select json_extract_path_text('{"customer":{"id": 1, "name":"databend", "extras":["ext", "test"]}}', '');
 
 statement query T
 select [][0];
@@ -187,13 +187,13 @@ statement ok
 CREATE TABLE IF NOT EXISTS t2(id Int null, obj Object null) Engine = Fuse;
 
 statement ok
-insert into t2 select 1, parse_json('{"a":1,"b":{"c":2}}');
+insert into t2 select 1, parse_json('{"a": 1,"b":{"c": 2}}');
 
 statement ok
 CREATE TABLE IF NOT EXISTS t3(id Int null, str String null) Engine = Fuse;
 
 statement ok
-insert into t3 values(1, '[1,2,3,["a","b","c"]]'), (2, '{"a":1,"b":{"c":2}}');
+insert into t3 values(1, '[1,2,3,["a","b","c"]]'), (2, '{"a": 1,"b":{"c": 2}}');
 
 statement ok
 CREATE TABLE IF NOT EXISTS t4(id Int null, arr Array(Int64) null) Engine = Fuse;
@@ -338,7 +338,7 @@ select id, get(arr, 4) from t4;
 
 
 statement error 1065
-select id, get(arr, 'a') from t4; 
+select id, get(arr, 'a') from t4;
 
 statement ok
 DROP DATABASE db1;

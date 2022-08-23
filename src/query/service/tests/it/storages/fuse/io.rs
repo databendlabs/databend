@@ -44,11 +44,11 @@ fn test_block_compactor() -> Result<()> {
     let gen_rows = |n| std::iter::repeat(1i32).take(n).collect::<Vec<_>>();
     let gen_block = |col| DataBlock::create(schema.clone(), vec![Series::from_data(col)]);
     let test_case =
-        |rows_per_sample_block, max_row_per_block, num_blocks, case_name| -> Result<()> {
+        |rows_per_sample_block, max_rows_per_block, num_blocks, case_name| -> Result<()> {
             // One block, contains `rows_per_sample_block` rows
             let sample_block = gen_block(gen_rows(rows_per_sample_block));
 
-            let mut compactor = BlockCompactor::new(max_row_per_block);
+            let mut compactor = BlockCompactor::new(max_rows_per_block);
             let total_rows = rows_per_sample_block * num_blocks;
 
             let mut generated: Vec<DataBlock> = vec![];
@@ -70,17 +70,17 @@ fn test_block_compactor() -> Result<()> {
             //
             //  2.) well shaped
             //
-            //      - if `max_row_per_block` divides `total_rows`
+            //      - if `max_rows_per_block` divides `total_rows`
             //
-            //        for all block B in `generated`, B.num_rows() == max_row_per_block,
+            //        for all block B in `generated`, B.num_rows() == max_rows_per_block,
             //
-            //      - if `total_rows` % `max_row_per_block` = r and r > 0
+            //      - if `total_rows` % `max_rows_per_block` = r and r > 0
             //
             //        - there should be exactly one block B in `generated` where B.num_rows() == r
             //
-            //        - for all block B' in `generated`; B' =/= B implies that B'.row_count() == max_row_per_block,
+            //        - for all block B' in `generated`; B' =/= B implies that B'.row_count() == max_rows_per_block,
 
-            let remainder = total_rows % max_row_per_block;
+            let remainder = total_rows % max_rows_per_block;
             if remainder == 0 {
                 assert!(
                     sealed.is_none(),
@@ -106,8 +106,8 @@ fn test_block_compactor() -> Result<()> {
             assert!(
                 generated
                     .iter()
-                    .all(|item| item.num_rows() == max_row_per_block),
-                "[{}], for each block, the num_rows should be exactly max_row_per_block",
+                    .all(|item| item.num_rows() == max_rows_per_block),
+                "[{}], for each block, the num_rows should be exactly max_rows_per_block",
                 case_name
             );
 
@@ -125,48 +125,48 @@ fn test_block_compactor() -> Result<()> {
 
     let case_name = "small blocks, with remainder";
     // 3 > 2; 2 * 10 % 3 = 2
-    let max_row_per_block = 3;
+    let max_rows_per_block = 3;
     let rows_per_sample_block = 2;
     let num_blocks = 10;
     test_case(
         rows_per_sample_block,
-        max_row_per_block,
+        max_rows_per_block,
         num_blocks,
         case_name,
     )?;
 
     let case_name = "small blocks, no remainder";
     // 4 > 2; 2 * 10 % 4 = 0
-    let max_row_per_block = 4;
+    let max_rows_per_block = 4;
     let rows_per_sample_block = 2;
     let num_blocks = 10;
     test_case(
         rows_per_sample_block,
-        max_row_per_block,
+        max_rows_per_block,
         num_blocks,
         case_name,
     )?;
 
     let case_name = "large blocks, no remainder";
     // 15 < 30; 30 * 10 % 15 = 0
-    let max_row_per_block = 15;
+    let max_rows_per_block = 15;
     let rows_per_sample_block = 30;
     let num_blocks = 10;
     test_case(
         rows_per_sample_block,
-        max_row_per_block,
+        max_rows_per_block,
         num_blocks,
         case_name,
     )?;
 
     let case_name = "large blocks, with remainders";
     // 7 < 30; 30 * 10 % 7 = 6
-    let max_row_per_block = 7;
+    let max_rows_per_block = 7;
     let rows_per_sample_block = 30;
     let num_blocks = 10;
     test_case(
         rows_per_sample_block,
-        max_row_per_block,
+        max_rows_per_block,
         num_blocks,
         case_name,
     )?;
@@ -190,7 +190,7 @@ fn test_meta_locations() -> Result<()> {
 
 #[tokio::test]
 async fn test_column_reader_retry_should_return_original_error() -> Result<()> {
-    let ctx = create_query_context().await?;
+    let (_guard, ctx) = create_query_context().await?;
     let operator = ctx.get_storage_operator()?;
     let reader = operator.object("not_exist");
     let r = BlockReader::read_column(reader, 0, 0, 100).await;

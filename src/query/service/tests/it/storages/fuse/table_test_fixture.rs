@@ -59,9 +59,12 @@ use tokio_stream::StreamExt;
 use uuid::Uuid;
 use walkdir::WalkDir;
 
+use crate::tests::TestGuard;
+
 pub struct TestFixture {
     _tmp_dir: TempDir,
     ctx: Arc<QueryContext>,
+    _guard: TestGuard,
     prefix: String,
 }
 
@@ -76,7 +79,7 @@ impl TestFixture {
             root: tmp_dir.path().to_str().unwrap().to_string(),
         });
 
-        let ctx = crate::tests::create_query_context_with_config(conf, None)
+        let (_guard, ctx) = crate::tests::create_query_context_with_config(conf, None)
             .await
             .unwrap();
 
@@ -103,6 +106,7 @@ impl TestFixture {
         Self {
             _tmp_dir: tmp_dir,
             ctx,
+            _guard,
             prefix: random_prefix,
         }
     }
@@ -297,7 +301,11 @@ fn gen_db_name(prefix: &str) -> String {
     format!("db_{}", prefix)
 }
 
-pub async fn test_drive(test_db: Option<&str>, test_tbl: Option<&str>) -> Result<()> {
+pub async fn test_drive(
+    ctx: Arc<QueryContext>,
+    test_db: Option<&str>,
+    test_tbl: Option<&str>,
+) -> Result<()> {
     let arg_db = match test_db {
         Some(v) => DataValue::String(v.as_bytes().to_vec()),
         None => DataValue::Null,
@@ -313,11 +321,10 @@ pub async fn test_drive(test_db: Option<&str>, test_tbl: Option<&str>) -> Result
         Expression::create_literal(arg_tbl),
     ]);
 
-    test_drive_with_args(tbl_args).await
+    test_drive_with_args(ctx, tbl_args).await
 }
 
-pub async fn test_drive_with_args(tbl_args: TableArgs) -> Result<()> {
-    let ctx = crate::tests::create_query_context().await?;
+pub async fn test_drive_with_args(ctx: Arc<QueryContext>, tbl_args: TableArgs) -> Result<()> {
     let mut stream = test_drive_with_args_and_ctx(tbl_args, ctx).await?;
 
     while let Some(res) = stream.next().await {
@@ -331,7 +338,7 @@ pub async fn test_drive_with_args(tbl_args: TableArgs) -> Result<()> {
 
 pub async fn test_drive_with_args_and_ctx(
     tbl_args: TableArgs,
-    ctx: std::sync::Arc<QueryContext>,
+    ctx: Arc<QueryContext>,
 ) -> Result<SendableDataBlockStream> {
     let func = FuseSnapshotTable::create("system", "fuse_snapshot", 1, tbl_args)?;
     let source_plan = func
@@ -345,7 +352,7 @@ pub async fn test_drive_with_args_and_ctx(
 
 pub async fn test_drive_clustering_information(
     tbl_args: TableArgs,
-    ctx: std::sync::Arc<QueryContext>,
+    ctx: Arc<QueryContext>,
 ) -> Result<SendableDataBlockStream> {
     let func = ClusteringInformationTable::create("system", "clustering_information", 1, tbl_args)?;
     let source_plan = func

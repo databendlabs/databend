@@ -18,6 +18,7 @@ use std::time::Duration;
 use std::time::SystemTime;
 
 use common_base::base::tokio;
+use common_base::base::GlobalIORuntime;
 use common_base::base::TrySpawn;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -25,46 +26,11 @@ use common_planners::InsertPlan;
 use common_planners::PlanNode::Insert;
 use databend_query::interpreters::*;
 use databend_query::sessions::QueryContext;
-use databend_query::sessions::SessionManager;
 use databend_query::sessions::TableContext;
 use databend_query::sql::*;
 use futures::TryStreamExt;
 
-use crate::tests::SessionManagerBuilder;
-
-pub async fn build_async_insert_queue(
-    max_data_size: Option<u64>,
-    busy_timeout: Option<u64>,
-    stale_timeout: Option<u64>,
-) -> Result<(Arc<SessionManager>, Arc<AsyncInsertQueue>)> {
-    let mut conf = crate::tests::ConfigBuilder::create().config();
-    if let Some(max_data_size) = max_data_size {
-        conf.query.async_insert_max_data_size = max_data_size
-    }
-    if let Some(busy_timeout) = busy_timeout {
-        conf.query.async_insert_busy_timeout = busy_timeout;
-    }
-    if let Some(stale_timeout) = stale_timeout {
-        conf.query.async_insert_stale_timeout = stale_timeout;
-    }
-    let session_manager = SessionManagerBuilder::create_with_conf(conf.clone()).build()?;
-
-    let async_insert_queue = session_manager
-        .clone()
-        .get_async_insert_queue()
-        .read()
-        .clone()
-        .unwrap();
-    {
-        {
-            let mut queue = async_insert_queue.session_mgr.write();
-            *queue = Some(session_manager.clone());
-        }
-        async_insert_queue.clone().start().await;
-    }
-
-    Ok((session_manager.clone(), async_insert_queue.clone()))
-}
+use crate::tests::ConfigBuilder;
 
 pub async fn build_insert_plan(sql: &str, ctx: Arc<QueryContext>) -> Result<InsertPlan> {
     let plan = PlanParser::parse(ctx.clone(), sql).await?;
@@ -76,8 +42,9 @@ pub async fn build_insert_plan(sql: &str, ctx: Arc<QueryContext>) -> Result<Inse
 
 #[tokio::test]
 async fn test_async_insert_queue() -> Result<()> {
-    let (session_manager, queue) = build_async_insert_queue(None, None, None).await?;
-    let ctx = crate::tests::create_query_context_with_session(session_manager.clone()).await?;
+    let (_guard, ctx) = crate::tests::create_query_context().await?;
+
+    AsyncInsertManager::instance().start().await;
     let mut planner = Planner::new(ctx.clone());
 
     // Create table
@@ -93,11 +60,11 @@ async fn test_async_insert_queue() -> Result<()> {
         let insert_plan =
             build_insert_plan("insert into default.test values(1, 'aaa');", ctx.clone()).await?;
 
-        queue
+        AsyncInsertManager::instance()
             .clone()
             .push(Arc::new(insert_plan.to_owned()), ctx.clone())
             .await?;
-        queue
+        AsyncInsertManager::instance()
             .clone()
             .wait_for_processing_insert(
                 ctx.get_id(),
@@ -112,10 +79,10 @@ async fn test_async_insert_queue() -> Result<()> {
     {
         let context1 = ctx.clone();
         let context2 = ctx.clone();
-        let queue1 = queue.clone();
-        let queue2 = queue.clone();
+        let queue1 = AsyncInsertManager::instance();
+        let queue2 = AsyncInsertManager::instance();
 
-        let handler1 = context1.get_storage_runtime().spawn(async move {
+        let handler1 = GlobalIORuntime::instance().spawn(async move {
             let insert_plan =
                 build_insert_plan("insert into default.test(a) values(1);", context1.clone())
                     .await?;
@@ -136,7 +103,7 @@ async fn test_async_insert_queue() -> Result<()> {
                 .await
         });
 
-        let handler2 = context2.clone().get_storage_runtime().spawn(async move {
+        let handler2 = GlobalIORuntime::instance().spawn(async move {
             let insert_plan = build_insert_plan(
                 "insert into default.test(b) values('bbbb');",
                 context2.clone(),
@@ -187,8 +154,16 @@ async fn test_async_insert_queue() -> Result<()> {
 
 #[tokio::test]
 async fn test_async_insert_queue_max_data_size() -> Result<()> {
-    let (session_manager, queue) = build_async_insert_queue(Some(1), None, None).await?;
-    let ctx = crate::tests::create_query_context_with_session(session_manager.clone()).await?;
+    let (_guard, ctx) = crate::tests::create_query_context_with_config(
+        ConfigBuilder::create()
+            .async_insert_max_data_size(1)
+            .build(),
+        None,
+    )
+    .await?;
+
+    AsyncInsertManager::instance().start().await;
+
     let mut planner = Planner::new(ctx.clone());
 
     // Create table
@@ -206,11 +181,11 @@ async fn test_async_insert_queue_max_data_size() -> Result<()> {
         let insert_plan =
             build_insert_plan("insert into default.test values(1, 'aaa');", ctx.clone()).await?;
 
-        queue
+        AsyncInsertManager::instance()
             .clone()
             .push(Arc::new(insert_plan.to_owned()), ctx.clone())
             .await?;
-        queue
+        AsyncInsertManager::instance()
             .clone()
             .wait_for_processing_insert(
                 ctx.get_id(),
@@ -230,8 +205,15 @@ async fn test_async_insert_queue_max_data_size() -> Result<()> {
 
 #[tokio::test]
 async fn test_async_insert_queue_busy_timeout() -> Result<()> {
-    let (session_manager, queue) = build_async_insert_queue(None, Some(900), None).await?;
-    let ctx = crate::tests::create_query_context_with_session(session_manager.clone()).await?;
+    let (_guard, ctx) = crate::tests::create_query_context_with_config(
+        ConfigBuilder::create()
+            .async_insert_busy_timeout(900)
+            .build(),
+        None,
+    )
+    .await?;
+
+    AsyncInsertManager::instance().start().await;
     let mut planner = Planner::new(ctx.clone());
 
     // Create table
@@ -249,11 +231,11 @@ async fn test_async_insert_queue_busy_timeout() -> Result<()> {
         let insert_plan =
             build_insert_plan("insert into default.test values(1, 'aaa');", ctx.clone()).await?;
 
-        queue
+        AsyncInsertManager::instance()
             .clone()
             .push(Arc::new(insert_plan.to_owned()), ctx.clone())
             .await?;
-        queue
+        AsyncInsertManager::instance()
             .clone()
             .wait_for_processing_insert(
                 ctx.get_id(),
@@ -273,8 +255,16 @@ async fn test_async_insert_queue_busy_timeout() -> Result<()> {
 
 #[tokio::test]
 async fn test_async_insert_queue_stale_timeout() -> Result<()> {
-    let (session_manager, queue) = build_async_insert_queue(None, Some(900), Some(300)).await?;
-    let ctx = crate::tests::create_query_context_with_session(session_manager.clone()).await?;
+    let (_guard, ctx) = crate::tests::create_query_context_with_config(
+        ConfigBuilder::create()
+            .async_insert_busy_timeout(900)
+            .async_insert_stale_timeout(300)
+            .build(),
+        None,
+    )
+    .await?;
+
+    AsyncInsertManager::instance().start().await;
     let mut planner = Planner::new(ctx.clone());
 
     // Create table
@@ -292,11 +282,11 @@ async fn test_async_insert_queue_stale_timeout() -> Result<()> {
         let insert_plan =
             build_insert_plan("insert into default.test values(1, 'aaa');", ctx.clone()).await?;
 
-        queue
+        AsyncInsertManager::instance()
             .clone()
             .push(Arc::new(insert_plan.to_owned()), ctx.clone())
             .await?;
-        queue
+        AsyncInsertManager::instance()
             .clone()
             .wait_for_processing_insert(
                 ctx.get_id(),
@@ -316,8 +306,15 @@ async fn test_async_insert_queue_stale_timeout() -> Result<()> {
 
 #[tokio::test]
 async fn test_async_insert_queue_wait_timeout() -> Result<()> {
-    let (session_manager, queue) = build_async_insert_queue(None, Some(2000), None).await?;
-    let ctx = crate::tests::create_query_context_with_session(session_manager.clone()).await?;
+    let (_guard, ctx) = crate::tests::create_query_context_with_config(
+        ConfigBuilder::create()
+            .async_insert_busy_timeout(2000)
+            .build(),
+        None,
+    )
+    .await?;
+
+    AsyncInsertManager::instance().start().await;
     let mut planner = Planner::new(ctx.clone());
 
     // Create table
@@ -334,11 +331,11 @@ async fn test_async_insert_queue_wait_timeout() -> Result<()> {
     {
         let insert_plan =
             build_insert_plan("insert into default.test values(1, 'aaa');", ctx.clone()).await?;
-        queue
+        AsyncInsertManager::instance()
             .clone()
             .push(Arc::new(insert_plan.to_owned()), ctx.clone())
             .await?;
-        let res = queue
+        let res = AsyncInsertManager::instance()
             .clone()
             .wait_for_processing_insert(ctx.get_id(), tokio::time::Duration::from_secs(1))
             .await;
@@ -358,8 +355,9 @@ async fn test_async_insert_queue_wait_timeout() -> Result<()> {
 
 #[tokio::test]
 async fn test_async_insert_queue_no_wait() -> Result<()> {
-    let (session_manager, queue) = build_async_insert_queue(None, None, None).await?;
-    let ctx = crate::tests::create_query_context_with_session(session_manager.clone()).await?;
+    let (_guard, ctx) = crate::tests::create_query_context().await?;
+
+    AsyncInsertManager::instance().start().await;
     let mut planner = Planner::new(ctx.clone());
 
     // Create table
@@ -376,7 +374,7 @@ async fn test_async_insert_queue_no_wait() -> Result<()> {
     {
         let insert_plan =
             build_insert_plan("insert into default.test values(1, 'aaa');", ctx.clone()).await?;
-        queue
+        AsyncInsertManager::instance()
             .clone()
             .push(Arc::new(insert_plan.to_owned()), ctx.clone())
             .await?;

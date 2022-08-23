@@ -20,14 +20,12 @@ use databend_query::metrics::MetricService;
 use databend_query::servers::Server;
 use metrics::counter;
 
-use crate::tests::SessionManagerBuilder;
-
 pub static METRIC_TEST: &str = "metrics.test";
 
 #[tokio::test]
 async fn test_metric_server() -> common_exception::Result<()> {
     init_default_metrics_recorder();
-    let mut service = MetricService::create(SessionManagerBuilder::create().build()?);
+    let mut service = MetricService::create()?;
     let listening = "127.0.0.1:0".parse::<SocketAddr>()?;
     let listening = service.start(listening).await?;
     let client = reqwest::Client::builder().build().unwrap();

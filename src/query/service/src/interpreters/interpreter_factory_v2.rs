@@ -19,7 +19,6 @@ use common_planners::EmptyPlan;
 use common_planners::PlanNode;
 
 use super::interpreter_share_desc::DescShareInterpreter;
-use super::interpreter_user_stage_describe::DescribeUserStageInterpreter;
 use super::interpreter_user_stage_drop::DropUserStageInterpreter;
 use super::*;
 use crate::interpreters::interpreter_copy_v2::CopyInterpreterV2;
@@ -189,10 +188,6 @@ impl InterpreterFactoryV2 {
 
             // Stages
             Plan::ListStage(s) => Ok(Arc::new(ListInterpreter::try_create(ctx, *s.clone())?)),
-            Plan::DescribeStage(s) => Ok(Arc::new(DescribeUserStageInterpreter::try_create(
-                ctx,
-                *s.clone(),
-            )?)),
             Plan::CreateStage(create_stage) => Ok(Arc::new(
                 CreateUserStageInterpreter::try_create(ctx, *create_stage.clone())?,
             )),
@@ -273,6 +268,16 @@ impl InterpreterFactoryV2 {
                 *p.clone(),
             )?)),
             Plan::DescShare(p) => Ok(Arc::new(DescShareInterpreter::try_create(ctx, *p.clone())?)),
+            Plan::ShowShares(p) => Ok(Arc::new(ShowSharesInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            Plan::ShowObjectGrantPrivileges(p) => Ok(Arc::new(
+                ShowObjectGrantPrivilegesInterpreter::try_create(ctx, *p.clone())?,
+            )),
+            Plan::ShowGrantTenantsOfShare(p) => Ok(Arc::new(
+                ShowGrantTenantsOfShareInterpreter::try_create(ctx, *p.clone())?,
+            )),
         }
     }
 }

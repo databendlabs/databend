@@ -34,9 +34,7 @@ impl<Key, Entity: HashTableEntity<Key>> HashTableIteratorKind<Key, Entity> {
         ))
     }
 
-    pub fn create_two_level_hash_table_iter(
-        iters: Vec<HashTableIteratorKind<Key, Entity>>,
-    ) -> Self {
+    pub fn create_two_level_hash_table_iter(iters: Vec<HashTableIter<Key, Entity>>) -> Self {
         Self::TwoLevelHashMapIter(TwoLevelHashTableIter::<Key, Entity>::create(iters))
     }
 }
@@ -92,7 +90,6 @@ impl<Key, Entity: HashTableEntity<Key>> Iterator for HashTableIter<Key, Entity> 
             while self.idx < self.capacity && self.entities.offset(self.idx).is_zero() {
                 self.idx += 1;
             }
-
             match self.idx == self.capacity {
                 true => None,
                 false => Some(self.entities.offset(self.idx)),
@@ -102,12 +99,12 @@ impl<Key, Entity: HashTableEntity<Key>> Iterator for HashTableIter<Key, Entity> 
 }
 
 pub struct TwoLevelHashTableIter<Key, Entity: HashTableEntity<Key>> {
-    iters: Vec<HashTableIteratorKind<Key, Entity>>,
+    iters: Vec<HashTableIter<Key, Entity>>,
     index: usize,
 }
 
 impl<Key, Entity: HashTableEntity<Key>> TwoLevelHashTableIter<Key, Entity> {
-    pub fn create(iters: Vec<HashTableIteratorKind<Key, Entity>>) -> Self {
+    pub fn create(iters: Vec<HashTableIter<Key, Entity>>) -> Self {
         Self { iters, index: 0 }
     }
 }

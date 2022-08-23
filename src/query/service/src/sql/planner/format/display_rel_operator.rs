@@ -78,6 +78,7 @@ impl Display for FormatContext {
             RelOperator::Sort(op) => format_sort(f, &self.metadata, op),
             RelOperator::Limit(op) => format_limit(f, &self.metadata, op),
             RelOperator::Exchange(op) => format_exchange(f, &self.metadata, op),
+            RelOperator::UnionAll(_) => write!(f, "UNION ALL"),
             RelOperator::Pattern(_) => write!(f, "Pattern"),
         }
     }

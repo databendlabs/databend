@@ -23,11 +23,10 @@ use common_users::JwtAuthenticator;
 use common_users::UserApiProvider;
 use jwtk::Claims;
 
-use crate::sessions::SessionRef;
+use crate::sessions::Session;
 pub use crate::Config;
 
 pub struct AuthMgr {
-    user_mgr: Arc<UserApiProvider>,
     jwt_auth: Option<JwtAuthenticator>,
 }
 
@@ -44,14 +43,13 @@ pub enum Credential {
 }
 
 impl AuthMgr {
-    pub async fn create(cfg: Config, user_mgr: Arc<UserApiProvider>) -> Result<Self> {
-        Ok(AuthMgr {
-            user_mgr,
+    pub async fn create(cfg: Config) -> Result<Arc<AuthMgr>> {
+        Ok(Arc::new(AuthMgr {
             jwt_auth: JwtAuthenticator::try_create(cfg.query.jwt_key_file).await?,
-        })
+        }))
     }
 
-    pub async fn auth(&self, session: SessionRef, credential: &Credential) -> Result<()> {
+    pub async fn auth(&self, session: Arc<Session>, credential: &Credential) -> Result<()> {
         let user_info = match credential {
             Credential::Jwt {
                 token: t,
@@ -65,7 +63,7 @@ impl AuthMgr {
                 let (tenant, user_name) = self
                     .process_jwt_claims(&session, parsed_jwt.claims())
                     .await?;
-                self.user_mgr
+                UserApiProvider::instance()
                     .get_user_with_client_ip(
                         &tenant,
                         &user_name,
@@ -79,8 +77,7 @@ impl AuthMgr {
                 hostname: h,
             } => {
                 let tenant = session.get_current_tenant();
-                let user = self
-                    .user_mgr
+                let user = UserApiProvider::instance()
                     .get_user_with_client_ip(&tenant, n, h.as_ref().unwrap_or(&"%".to_string()))
                     .await?;
                 match &user.auth_info {
@@ -108,7 +105,7 @@ impl AuthMgr {
 
     async fn process_jwt_claims(
         &self,
-        session: &SessionRef,
+        session: &Arc<Session>,
         claims: &Claims<CustomClaims>,
     ) -> Result<(String, String)> {
         // setup tenant if the JWT claims contain extra.tenant_id
@@ -136,8 +133,10 @@ impl AuthMgr {
                     user_info.grants.grant_role(role);
                 }
             }
-            self.user_mgr.ensure_builtin_roles(&tenant).await?;
-            self.user_mgr
+            UserApiProvider::instance()
+                .ensure_builtin_roles(&tenant)
+                .await?;
+            UserApiProvider::instance()
                 .add_user(&tenant, user_info.clone(), true)
                 .await?;
         }

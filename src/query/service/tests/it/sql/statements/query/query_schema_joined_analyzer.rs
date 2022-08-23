@@ -51,14 +51,15 @@ async fn test_joined_schema_analyzer() -> Result<()> {
         },
     ];
 
+    let (_guard, ctx) = create_query_context().await?;
+
     for test_case in &tests {
-        let ctx = create_query_context().await?;
         let (mut statements, _) =
             DfParser::parse_sql(test_case.query, ctx.get_current_session().get_type())?;
 
         match statements.remove(0) {
             DfStatement::Query(query) => {
-                let analyzer = JoinedSchemaAnalyzer::create(ctx);
+                let analyzer = JoinedSchemaAnalyzer::create(ctx.clone());
                 assert_eq!(
                     test_case.expect,
                     format!("{:?}", analyzer.analyze(&query).await?),

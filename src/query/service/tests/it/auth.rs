@@ -53,7 +53,7 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
 
     let mut conf = crate::tests::ConfigBuilder::create().config();
     conf.query.jwt_key_file = jwks_url.clone();
-    let ctx = crate::tests::create_query_context_with_config(conf, None).await?;
+    let (_guard, ctx) = crate::tests::create_query_context_with_config(conf, None).await?;
     let user_mgr = ctx.get_user_manager();
     let auth_mgr = ctx.get_auth_manager();
     let tenant = "test";
@@ -237,11 +237,37 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
         );
     }
 
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_jwt_auth_mgr_with_management() -> Result<()> {
+    let kid = "test_kid";
+    let user_name = "test";
+    let key_pair = RS256KeyPair::generate(2048)?.with_key_id(kid);
+    let rsa_components = key_pair.public_key().to_components();
+    let e = encode_config(rsa_components.e, URL_SAFE_NO_PAD);
+    let n = encode_config(rsa_components.n, URL_SAFE_NO_PAD);
+    let j =
+        serde_json::json!({"keys": [ {"kty": "RSA", "kid": kid, "e": e, "n": n, } ] }).to_string();
+
+    let server = MockServer::start().await;
+    let json_path = "/jwks.json";
+    // Create a mock on the server.
+    let template = ResponseTemplate::new(200).set_body_raw(j, "application/json");
+    Mock::given(method("GET"))
+        .and(path(json_path))
+        .respond_with(template)
+        .expect(1..)
+        // Mounting the mock on the mock server - it's now effective!
+        .mount(&server)
+        .await;
+
     let mut conf = crate::tests::ConfigBuilder::create()
         .with_management_mode()
         .config();
-    conf.query.jwt_key_file = jwks_url;
-    let ctx = crate::tests::create_query_context_with_config(conf, None).await?;
+    conf.query.jwt_key_file = format!("http://{}{}", server.address(), json_path);
+    let (_guard, ctx) = crate::tests::create_query_context_with_config(conf, None).await?;
     let auth_mgr = ctx.get_auth_manager();
 
     // with create user in other tenant
@@ -264,6 +290,7 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
         let current_tenant = ctx.get_tenant();
         assert_eq!(current_tenant, tenant.to_string());
         assert_eq!(user_info.grants.roles().len(), 0);
+
+        Ok(())
     }
-    Ok(())
 }

@@ -15,6 +15,8 @@
 #![feature(core_intrinsics)]
 #![feature(arbitrary_self_types)]
 
+use common_base::mem_allocator::MmapAllocator;
+use common_base::mem_allocator::StackfulAllocator;
 pub use hash_table::HashTable;
 pub use hash_table_entity::HashTableEntity;
 pub use hash_table_entity::KeyValueEntity;
@@ -28,6 +30,7 @@ pub use hash_table_key::HashTableKeyable;
 pub use two_level_hash_table::HashTableKind;
 pub use two_level_hash_table::TwoLevelHashTable;
 
+mod hash_set;
 mod hash_table;
 #[allow(clippy::missing_safety_doc, clippy::not_unsafe_ptr_arg_deref)]
 mod hash_table_entity;
@@ -36,13 +39,29 @@ mod hash_table_iter;
 mod hash_table_key;
 mod two_level_hash_table;
 
-pub type HashMap<Key, Value> = HashTable<Key, KeyValueEntity<Key, Value>, SingleLevelGrower>;
-pub type HashSet<Key> = HashTable<Key, KeyValueEntity<Key, ()>, SingleLevelGrower>;
+type HashTableAllocator = MmapAllocator<true>;
+type HashTableAllocatorWithStackMemory<const INIT_BYTES: usize = 64> =
+    StackfulAllocator<INIT_BYTES, HashTableAllocator>;
 
-pub type TwoLevelHashMap<Key, Value> =
-    TwoLevelHashTable<Key, KeyValueEntity<Key, Value>, TwoLevelGrower>;
-pub type TwoLevelHashSet<Key> = TwoLevelHashTable<Key, KeyValueEntity<Key, ()>, TwoLevelGrower>;
+pub type HashMap<Key, Value, Grower = SingleLevelGrower, Allocator = HashTableAllocator> =
+    HashTable<Key, KeyValueEntity<Key, Value>, Grower, Allocator>;
+
+pub type HashSet<Key, Grower = SingleLevelGrower, Allocator = HashTableAllocator> =
+    HashTable<Key, KeyValueEntity<Key, ()>, Grower, Allocator>;
+
+pub type TwoLevelHashMap<Key, Value, Grower = SingleLevelGrower, Allocator = HashTableAllocator> =
+    TwoLevelHashTable<Key, KeyValueEntity<Key, Value>, Grower, Allocator>;
+pub type TwoLevelHashSet<Key, Grower = SingleLevelGrower, Allocator = HashTableAllocator> =
+    TwoLevelHashTable<Key, KeyValueEntity<Key, ()>, Grower, Allocator>;
 
 pub type HashMapIteratorKind<Key, Value> = HashTableIteratorKind<Key, KeyValueEntity<Key, Value>>;
-pub type HashMapKind<Key, Value> =
-    HashTableKind<Key, KeyValueEntity<Key, Value>, SingleLevelGrower, TwoLevelGrower>;
+pub type HashMapKind<Key, Value> = HashTableKind<
+    Key,
+    KeyValueEntity<Key, Value>,
+    SingleLevelGrower,
+    TwoLevelGrower,
+    HashTableAllocator,
+>;
+
+pub type HashSetWithStackMemory<const INIT_BYTES: usize, Key> =
+    HashSet<Key, SingleLevelGrower, HashTableAllocatorWithStackMemory<INIT_BYTES>>;

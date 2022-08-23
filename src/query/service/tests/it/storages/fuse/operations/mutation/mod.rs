@@ -13,3 +13,4 @@
 //  limitations under the License.
 
 mod deletion_mutator;
+mod recluster_mutator;

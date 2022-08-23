@@ -12,18 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod global_runtime;
 mod net;
 mod profiling;
 mod progress;
 mod runtime;
 mod runtime_tracker;
 mod shutdown_signal;
+mod singleton_instance;
 mod stop_handle;
 mod stoppable;
 mod string_func;
 mod thread;
 mod uniq_id;
 
+pub use global_runtime::GlobalIORuntime;
 pub use net::get_free_tcp_port;
 pub use net::get_free_udp_port;
 pub use profiling::Profiling;
@@ -38,6 +41,8 @@ pub use shutdown_signal::signal_stream;
 pub use shutdown_signal::DummySignalStream;
 pub use shutdown_signal::SignalStream;
 pub use shutdown_signal::SignalType;
+pub use singleton_instance::Singleton;
+pub use singleton_instance::SingletonImpl;
 pub use stop_handle::StopHandle;
 pub use stoppable::Stoppable;
 pub use string_func::escape_for_key;

@@ -26,6 +26,9 @@ use crate::sql::plans::DropSharePlan;
 use crate::sql::plans::GrantShareObjectPlan;
 use crate::sql::plans::Plan;
 use crate::sql::plans::RevokeShareObjectPlan;
+use crate::sql::plans::ShowGrantTenantsOfSharePlan;
+use crate::sql::plans::ShowObjectGrantPrivilegesPlan;
+use crate::sql::plans::ShowSharesPlan;
 
 impl<'a> Binder {
     pub(in crate::sql::planner::binder) async fn bind_create_share(
@@ -137,5 +140,36 @@ impl<'a> Binder {
 
         let plan = DescSharePlan { share };
         Ok(Plan::DescShare(Box::new(plan)))
+    }
+
+    pub(in crate::sql::planner::binder) async fn bind_show_shares(
+        &mut self,
+        _stmt: &ShowSharesStmt,
+    ) -> Result<Plan> {
+        Ok(Plan::ShowShares(Box::new(ShowSharesPlan {})))
+    }
+
+    pub(in crate::sql::planner::binder) async fn bind_show_object_grant_privileges(
+        &mut self,
+        stmt: &ShowObjectGrantPrivilegesStmt,
+    ) -> Result<Plan> {
+        let ShowObjectGrantPrivilegesStmt { object } = stmt;
+
+        let plan = ShowObjectGrantPrivilegesPlan {
+            object: object.clone(),
+        };
+        Ok(Plan::ShowObjectGrantPrivileges(Box::new(plan)))
+    }
+
+    pub(in crate::sql::planner::binder) async fn bind_show_grants_of_share(
+        &mut self,
+        stmt: &ShowGrantsOfShareStmt,
+    ) -> Result<Plan> {
+        let ShowGrantsOfShareStmt { share_name } = stmt;
+
+        let plan = ShowGrantTenantsOfSharePlan {
+            share_name: share_name.clone(),
+        };
+        Ok(Plan::ShowGrantTenantsOfShare(Box::new(plan)))
     }
 }

@@ -28,25 +28,25 @@ io-uring = [
 [dependencies]
 # Workspace dependencies
 common-arrow = { path = "../../common/arrow" }
-common-ast = { path = ".././ast" }
+common-ast = { path = "../ast" }
 common-base = { path = "../../common/base" }
 common-cache = { path = "../../common/cache" }
-common-catalog = { path = "../../common/catalog" }
-common-config = { path = "../../common/config" }
+common-catalog = { path = "../catalog" }
+common-config = { path = "../config" }
 common-contexts = { path = "../../common/contexts" }
-common-datablocks = { path = "../../common/datablocks" }
-common-datavalues = { path = "../../common/datavalues" }
+common-datablocks = { path = "../datablocks" }
+common-datavalues = { path = "../datavalues" }
 common-exception = { path = "../../common/exception" }
-common-formats = { path = "../../common/formats" }
-common-functions = { path = "../../common/functions" }
-common-fuse-meta = { path = "../../common/fuse-meta" }
+common-formats = { path = "../formats" }
+common-functions = { path = "../functions" }
+common-fuse-meta = { path = "../storages/fuse-meta" }
 common-grpc = { path = "../../common/grpc" }
 common-hashtable = { path = "../../common/hashtable" }
-common-hive-meta-store = { path = "../../common/hive-meta-store", optional = true }
+common-hive-meta-store = { path = "../storages/hive-meta-store", optional = true }
 common-http = { path = "../../common/http" }
 common-io = { path = "../../common/io" }
-common-legacy-parser = { path = "../../common/legacy-parser" }
-common-management = { path = "../../common/management" }
+common-legacy-parser = { path = "../legacy-parser" }
+common-management = { path = "../management" }
 common-meta-api = { path = "../../meta/api" }
 common-meta-app = { path = "../../meta/app" }
 common-meta-embedded = { path = "../../meta/embedded" }
@@ -56,24 +56,23 @@ common-meta-sled-store = { path = "../../meta/sled-store" }
 common-meta-store = { path = "../../meta/store" }
 common-meta-types = { path = "../../meta/types" }
 common-metrics = { path = "../../common/metrics" }
-common-pipeline-core = { path = "../../common/pipeline/core" }
-common-pipeline-sinks = { path = "../../common/pipeline/sinks" }
-common-pipeline-sources = { path = "../../common/pipeline/sources" }
-common-pipeline-transforms = { path = "../../common/pipeline/transforms" }
-common-planners = { path = "../../common/planners" }
-common-settings = { path = "../../common/settings" }
+common-pipeline-core = { path = "../pipeline/core" }
+common-pipeline-sinks = { path = "../pipeline/sinks" }
+common-pipeline-sources = { path = "../pipeline/sources" }
+common-pipeline-transforms = { path = "../pipeline/transforms" }
+common-planners = { path = "../planners" }
+common-settings = { path = "../settings" }
 common-storage = { path = "../../common/storage" }
-common-storages-fuse = { path = "../../common/storages/fuse" }
-common-storages-hive = { path = "../../common/storages/hive", optional = true }
-common-storages-index = { path = "../../common/storages/index" }
-common-storages-preludes = { path = "../../common/storages/preludes" }
-common-storages-util = { path = "../../common/storages/util" }
-common-streams = { path = "../../common/streams" }
+common-storages-fuse = { path = "../storages/fuse" }
+common-storages-hive = { path = "../storages/hive", optional = true }
+common-storages-index = { path = "../storages/index" }
+common-storages-preludes = { path = "../storages/preludes" }
+common-storages-util = { path = "../storages/util" }
+common-streams = { path = "../streams" }
 common-tracing = { path = "../../common/tracing" }
-common-users = { path = "../../common/users" }
+common-users = { path = "../users" }
 
 # Github dependencies
-async-trait = { git = "https://github.com/datafuse-extras/async-trait", rev = "f0b0fd5" }
 sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "7f246e3" }
 
 # Crates.io dependencies
@@ -82,6 +81,7 @@ async-channel = "1.6.1"
 async-compat = "0.2.1"
 async-recursion = "1.0.0"
 async-stream = "0.3.3"
+async-trait = { version = "0.1.0", package = "async-trait-fn" }
 backoff = { version = "0.4.0", features = ["futures", "tokio"] }
 backon = "0.0.2"
 base64 = "0.13.0"
@@ -110,8 +110,8 @@ num = "0.4.0"
 num_cpus = "1.13.1"
 octocrab = "0.16.0"
 once_cell = "1.12.0"
-opendal = { version = "0.12.0", features = ["retry", "compress"] }
-opensrv-mysql = "0.1.0"
+opendal = { version = "0.13.1", features = ["layers-retry", "layers-tracing", "layers-metrics", "compress"] }
+opensrv-mysql = "0.2.0"
 openssl = { version = "0.10.40", features = ["vendored"] }
 parking_lot = "0.12.1"
 paste = "1.0.7"

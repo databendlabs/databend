@@ -13,7 +13,9 @@
 // limitations under the License.
 
 use std::net::Shutdown;
+use std::sync::Arc;
 
+use common_base::base::tokio::io::BufWriter;
 use common_base::base::tokio::net::TcpStream;
 use common_base::base::Runtime;
 use common_base::base::Thread;
@@ -26,12 +28,15 @@ use opensrv_mysql::IntermediaryOptions;
 use tracing::error;
 
 use crate::servers::mysql::mysql_interactive_worker::InteractiveWorker;
-use crate::sessions::SessionRef;
+use crate::sessions::Session;
+
+// default size of resultset write buffer: 100KB
+const DEFAULT_RESULT_SET_WRITE_BUFFER_SIZE: usize = 100 * 1024;
 
 pub struct MySQLConnection;
 
 impl MySQLConnection {
-    pub fn run_on_stream(session: SessionRef, stream: TcpStream) -> Result<()> {
+    pub fn run_on_stream(session: Arc<Session>, stream: TcpStream) -> Result<()> {
         let blocking_stream = Self::convert_stream(stream)?;
         MySQLConnection::attach_session(&session, &blocking_stream)?;
 
@@ -45,19 +50,16 @@ impl MySQLConnection {
                 let opts = IntermediaryOptions {
                     process_use_statement_on_query: true,
                 };
-                AsyncMysqlIntermediary::run_with_options(
-                    interactive_worker,
-                    non_blocking_stream,
-                    &opts,
-                )
-                .await
+                let (r, w) = non_blocking_stream.into_split();
+                let w = BufWriter::with_capacity(DEFAULT_RESULT_SET_WRITE_BUFFER_SIZE, w);
+                AsyncMysqlIntermediary::run_with_options(interactive_worker, r, w, &opts).await
             });
             let _ = futures::executor::block_on(join_handle);
         });
         Ok(())
     }
 
-    fn attach_session(session: &SessionRef, blocking_stream: &std::net::TcpStream) -> Result<()> {
+    fn attach_session(session: &Arc<Session>, blocking_stream: &std::net::TcpStream) -> Result<()> {
         let host = blocking_stream.peer_addr().ok();
         let blocking_stream_ref = blocking_stream.try_clone()?;
         session.attach(host, move || {

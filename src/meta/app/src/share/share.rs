@@ -53,7 +53,7 @@ impl Display for ShareAccountNameIdent {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct ShowShareReq {
+pub struct ShowSharesReq {
     pub tenant: String,
 }
 
@@ -70,7 +70,7 @@ pub struct ShareAccountReply {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct ShowShareReply {
+pub struct ShowSharesReply {
     // sharing to other accounts(outbound shares)
     pub outbound_accounts: Vec<ShareAccountReply>,
     // be shared by other accounts(inbound shares)
@@ -182,8 +182,6 @@ pub struct RevokeShareObjectReply {}
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct GetShareGrantObjectReq {
     pub share_name: ShareNameIdent,
-    // If object is None, return all the granted objects.
-    pub object: Option<ShareGrantObjectName>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -197,6 +195,40 @@ pub struct ShareGrantReplyObject {
 pub struct GetShareGrantObjectReply {
     pub share_name: ShareNameIdent,
     pub objects: Vec<ShareGrantReplyObject>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct GetShareGrantTenantsReq {
+    pub share_name: ShareNameIdent,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct GetShareGrantTenants {
+    pub account: String,
+    pub grant_on: DateTime<Utc>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct GetShareGrantTenantsReply {
+    pub accounts: Vec<GetShareGrantTenants>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct GetObjectGrantPrivilegesReq {
+    pub tenant: String,
+    pub object: ShareGrantObjectName,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct ObjectGrantPrivilege {
+    pub share_name: String,
+    pub privileges: BitFlags<ShareGrantObjectPrivilege>,
+    pub grant_on: DateTime<Utc>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct GetObjectGrantPrivilegesReply {
+    pub privileges: Vec<ObjectGrantPrivilege>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -263,6 +295,33 @@ impl Display for ShareGrantObject {
                 write!(f, "table/{}", *table_id)
             }
         }
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct ObjectSharedByShareIds {
+    pub share_ids: BTreeSet<u64>,
+}
+
+impl Default for ObjectSharedByShareIds {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ObjectSharedByShareIds {
+    pub fn new() -> ObjectSharedByShareIds {
+        ObjectSharedByShareIds {
+            share_ids: BTreeSet::new(),
+        }
+    }
+
+    pub fn add(&mut self, share_id: u64) {
+        self.share_ids.insert(share_id);
+    }
+
+    pub fn remove(&mut self, share_id: u64) {
+        self.share_ids.remove(&share_id);
     }
 }
 

@@ -17,7 +17,6 @@ use std::sync::Arc;
 use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
 use common_ast::Backtrace;
-use common_ast::Dialect;
 use common_exception::Result;
 use parking_lot::RwLock;
 pub use plans::ScalarExpr;
@@ -61,18 +60,19 @@ impl Planner {
 
     pub async fn plan_sql(&mut self, sql: &str) -> Result<(Plan, MetadataRef, Option<String>)> {
         let settings = self.ctx.get_settings();
+        let sql_dialect = settings.get_sql_dialect()?;
 
         // Step 1: parse SQL text into AST
         let tokens = tokenize_sql(sql)?;
         let backtrace = Backtrace::new();
-        let (stmt, format) = parse_sql(&tokens, Dialect::PostgreSQL, &backtrace)?;
+        let (stmt, format) = parse_sql(&tokens, sql_dialect, &backtrace)?;
 
         // Step 2: bind AST with catalog, and generate a pure logical SExpr
         let metadata = Arc::new(RwLock::new(Metadata::create()));
         let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
         let binder = Binder::new(
             self.ctx.clone(),
-            self.ctx.get_catalogs(),
+            self.ctx.get_catalog_manager()?,
             name_resolution_ctx,
             metadata.clone(),
         );

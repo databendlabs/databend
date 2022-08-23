@@ -15,13 +15,16 @@
 use std::sync::Arc;
 use std::sync::RwLock;
 
+use common_base::base::GlobalIORuntime;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
+use common_pipeline_core::Pipeline;
 use common_planners::CallPlan;
-use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
 use super::Interpreter;
+use crate::interpreters::ProcessorExecutorStream;
+use crate::pipelines::executor::PipelinePullingExecutor;
 use crate::procedures::ProcedureFactory;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
@@ -68,11 +71,19 @@ impl Interpreter for CallInterpreter {
             let mut schema = self.schema.write().unwrap();
             *schema = Some(last_schema);
         }
-        let blocks = func.eval(self.ctx.clone(), plan.args.clone()).await?;
-        Ok(Box::pin(DataBlockStream::create(
-            self.schema(),
-            None,
-            vec![blocks],
-        )))
+
+        let mut pipeline = Pipeline::create();
+        func.eval(self.ctx.clone(), plan.args.clone(), &mut pipeline)
+            .await?;
+
+        let ctx = &self.ctx;
+        let settings = ctx.get_settings();
+        let async_runtime = GlobalIORuntime::instance();
+        let query_need_abort = ctx.query_need_abort();
+        pipeline.set_max_threads(settings.get_max_threads()? as usize);
+        let executor =
+            PipelinePullingExecutor::try_create(async_runtime, query_need_abort, pipeline)?;
+
+        Ok(Box::pin(ProcessorExecutorStream::create(executor)?))
     }
 }

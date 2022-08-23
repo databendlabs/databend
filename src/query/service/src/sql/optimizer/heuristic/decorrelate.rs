@@ -14,7 +14,7 @@
 
 use std::collections::HashSet;
 
-use common_datavalues::type_coercion::merge_types;
+use common_datavalues::type_coercion::compare_coercion;
 use common_datavalues::BooleanType;
 use common_datavalues::DataTypeImpl;
 use common_datavalues::NullableType;
@@ -51,6 +51,7 @@ use crate::sql::plans::Scalar;
 use crate::sql::plans::ScalarItem;
 use crate::sql::plans::SubqueryExpr;
 use crate::sql::plans::SubqueryType;
+use crate::sql::plans::UnionAll;
 use crate::sql::ColumnBinding;
 use crate::sql::IndexType;
 use crate::sql::MetadataRef;
@@ -170,7 +171,7 @@ impl SubqueryRewriter {
                 }
 
                 JoinCondition::Both { left, right } => {
-                    let join_type = merge_types(&left.data_type(), &right.data_type())?;
+                    let join_type = compare_coercion(&left.data_type(), &right.data_type())?;
                     let left = wrap_cast_if_needed(left.clone(), &join_type);
                     let right = wrap_cast_if_needed(right.clone(), &join_type);
                     left_conditions.push(left);
@@ -630,6 +631,18 @@ impl SubqueryRewriter {
                 let flatten_plan =
                     self.flatten(plan.child(0)?, correlated_columns, flatten_info)?;
                 Ok(SExpr::create_unary(plan.plan().clone(), flatten_plan))
+            }
+
+            RelOperator::UnionAll(_) => {
+                let left_flatten_plan =
+                    self.flatten(plan.child(0)?, correlated_columns, flatten_info)?;
+                let right_flatten_plan =
+                    self.flatten(plan.child(1)?, correlated_columns, flatten_info)?;
+                Ok(SExpr::create_binary(
+                    UnionAll {}.into(),
+                    left_flatten_plan,
+                    right_flatten_plan,
+                ))
             }
 
             RelOperator::Exchange(_)

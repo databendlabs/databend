@@ -19,26 +19,28 @@ use poem::Request;
 use poem::RequestBody;
 use poem::Result as PoemResult;
 
+use crate::sessions::Session;
 use crate::sessions::SessionManager;
-use crate::sessions::SessionRef;
 use crate::sessions::SessionType;
 
 pub struct HttpQueryContext {
-    pub session_mgr: Arc<SessionManager>,
-    session: SessionRef,
+    session: Arc<Session>,
 }
 
 impl HttpQueryContext {
-    pub fn new(session_mgr: Arc<SessionManager>, session: SessionRef) -> Self {
-        HttpQueryContext {
-            session_mgr,
-            session,
-        }
+    pub fn new(session: Arc<Session>) -> Self {
+        HttpQueryContext { session }
     }
 
-    pub fn get_session(&self, session_type: SessionType) -> SessionRef {
+    pub fn get_session(&self, session_type: SessionType) -> Arc<Session> {
         self.session.set_type(session_type);
         self.session.clone()
+    }
+}
+
+impl Drop for HttpQueryContext {
+    fn drop(&mut self) {
+        SessionManager::instance().destroy_session(&self.session.get_id())
     }
 }
 

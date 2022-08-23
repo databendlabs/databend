@@ -24,7 +24,6 @@ use common_ast::parser::parse_comma_separated_exprs;
 use common_ast::parser::token::Token;
 use common_ast::parser::tokenize_sql;
 use common_ast::Backtrace;
-use common_ast::Dialect;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_datavalues::DataSchemaRef;
@@ -37,26 +36,28 @@ use common_exception::Result;
 use common_formats::FormatFactory;
 use common_io::prelude::BufferReader;
 use common_io::prelude::*;
-use common_planners::Expression;
+use common_pipeline_transforms::processors::transforms::Transform;
 use common_streams::NDJsonSourceBuilder;
 use common_streams::Source;
 use tracing::debug;
 
-use crate::pipelines::processors::transforms::ExpressionExecutor;
+use crate::evaluator::Evaluator;
+use crate::pipelines::processors::transforms::ExpressionTransformV2;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::binder::Binder;
 use crate::sql::binder::ScalarBinder;
-use crate::sql::executor::ExpressionBuilderWithRenaming;
 use crate::sql::normalize_identifier;
 use crate::sql::optimizer::optimize;
 use crate::sql::optimizer::OptimizerConfig;
 use crate::sql::optimizer::OptimizerContext;
 use crate::sql::planner::semantic::NameResolutionContext;
+use crate::sql::plans::CastExpr;
 use crate::sql::plans::Insert;
 use crate::sql::plans::InsertInputSource;
 use crate::sql::plans::InsertValueBlock;
 use crate::sql::plans::Plan;
+use crate::sql::plans::Scalar;
 use crate::sql::BindContext;
 use crate::sql::MetadataRef;
 
@@ -345,11 +346,13 @@ impl<'a> ValueSourceV2<'a> {
                 let buf = reader.get_checkpoint_buffer();
 
                 let sql = std::str::from_utf8(buf).unwrap();
+                let settings = self.ctx.get_settings();
+                let sql_dialect = settings.get_sql_dialect()?;
                 let tokens = tokenize_sql(sql)?;
                 let backtrace = Backtrace::new();
                 let exprs = parse_comma_separated_exprs(
                     &tokens[1..tokens.len() as usize],
-                    Dialect::PostgreSQL,
+                    sql_dialect,
                     &backtrace,
                 )?;
 
@@ -461,36 +464,29 @@ async fn exprs_to_datavalue<'a>(
             metadata.clone(),
             &[],
         );
-        let scalar = scalar_binder.bind(expr).await?.0;
-        let expression_builder = ExpressionBuilderWithRenaming::create(metadata.clone());
-        let expr = expression_builder.build(&scalar)?;
-        let expr = if &expr.to_data_type(schema)? != schema.field(i).data_type() {
-            Expression::Cast {
-                expr: Box::new(expr),
-                data_type: schema.field(i).data_type().clone(),
-                pg_style: false,
-            }
-        } else {
-            expr
-        };
-        expressions.push(Expression::Alias(
+        let (mut scalar, data_type) = scalar_binder.bind(expr).await?;
+        let field_data_type = schema.field(i).data_type();
+        if !data_type.eq(field_data_type) {
+            scalar = Scalar::CastExpr(CastExpr {
+                argument: Box::new(scalar),
+                from_type: Box::new(data_type),
+                target_type: Box::new(field_data_type.clone()),
+            })
+        }
+        expressions.push((
+            Evaluator::eval_scalar(&scalar)?,
             schema.field(i).name().to_string(),
-            Box::new(expr),
         ));
     }
 
     let dummy = DataSchemaRefExt::create(vec![DataField::new("dummy", u8::to_data_type())]);
-    let one_row_block = DataBlock::create(dummy.clone(), vec![Series::from_data(vec![1u8])]);
-    let executor = ExpressionExecutor::try_create(
-        ctx,
-        "Insert into from values",
-        dummy,
-        schema.clone(),
+    let one_row_block = DataBlock::create(dummy, vec![Series::from_data(vec![1u8])]);
+    let func_ctx = ctx.try_get_function_context()?;
+    let mut expression_transform = ExpressionTransformV2 {
         expressions,
-        true,
-    )?;
-
-    let res = executor.execute(&one_row_block)?;
-    let datavalues: Vec<DataValue> = res.columns().iter().map(|col| col.get(0)).collect();
+        func_ctx,
+    };
+    let res = expression_transform.transform(one_row_block)?;
+    let datavalues: Vec<DataValue> = res.columns().iter().skip(1).map(|col| col.get(0)).collect();
     Ok(datavalues)
 }

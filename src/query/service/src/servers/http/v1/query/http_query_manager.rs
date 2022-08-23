@@ -19,7 +19,9 @@ use std::time::Duration;
 use common_base::base::tokio;
 use common_base::base::tokio::sync::RwLock;
 use common_base::base::tokio::time::sleep;
+use common_base::base::Singleton;
 use common_exception::Result;
+use once_cell::sync::OnceCell;
 use parking_lot::Mutex;
 use tracing::warn;
 
@@ -27,7 +29,7 @@ use super::expiring_map::ExpiringMap;
 use super::HttpQueryContext;
 use crate::servers::http::v1::query::http_query::HttpQuery;
 use crate::servers::http::v1::query::HttpQueryRequest;
-use crate::sessions::SessionRef;
+use crate::sessions::Session;
 use crate::Config;
 
 // TODO(youngsofun): may need refactor later for 2 reasons:
@@ -40,19 +42,31 @@ pub(crate) struct HttpQueryConfig {
 
 pub struct HttpQueryManager {
     pub(crate) queries: Arc<RwLock<HashMap<String, Arc<HttpQuery>>>>,
-    pub(crate) sessions: Mutex<ExpiringMap<String, SessionRef>>,
+    pub(crate) sessions: Mutex<ExpiringMap<String, Arc<Session>>>,
     pub(crate) config: HttpQueryConfig,
 }
 
+static HTTP_QUERIES_MANAGER: OnceCell<Singleton<Arc<HttpQueryManager>>> = OnceCell::new();
+
 impl HttpQueryManager {
-    pub async fn create_global(cfg: Config) -> Result<Arc<HttpQueryManager>> {
-        Ok(Arc::new(HttpQueryManager {
+    pub async fn init(cfg: &Config, v: Singleton<Arc<HttpQueryManager>>) -> Result<()> {
+        v.init(Arc::new(HttpQueryManager {
             queries: Arc::new(RwLock::new(HashMap::new())),
             sessions: Mutex::new(ExpiringMap::default()),
             config: HttpQueryConfig {
                 result_timeout_millis: cfg.query.http_handler_result_timeout_millis,
             },
-        }))
+        }))?;
+
+        HTTP_QUERIES_MANAGER.set(v).ok();
+        Ok(())
+    }
+
+    pub fn instance() -> Arc<HttpQueryManager> {
+        match HTTP_QUERIES_MANAGER.get() {
+            None => panic!("HttpQueryManager is not init"),
+            Some(http_queries_manager) => http_queries_manager.get(),
+        }
     }
 
     pub(crate) async fn try_create_query(
@@ -103,14 +117,14 @@ impl HttpQueryManager {
         q
     }
 
-    pub(crate) async fn get_session(self: &Arc<Self>, session_id: &str) -> Option<SessionRef> {
+    pub(crate) async fn get_session(self: &Arc<Self>, session_id: &str) -> Option<Arc<Session>> {
         let sessions = self.sessions.lock();
         sessions.get(session_id)
     }
 
-    pub(crate) async fn add_session(self: &Arc<Self>, session: SessionRef, timeout: Duration) {
+    pub(crate) async fn add_session(self: &Arc<Self>, session: Arc<Session>, timeout: Duration) {
         let mut sessions = self.sessions.lock();
-        sessions.insert(session.get_id(), session.clone(), Some(timeout));
+        sessions.insert(session.get_id(), session, Some(timeout));
     }
 
     pub(crate) fn kill_session(self: &Arc<Self>, session_id: &str) {

@@ -78,15 +78,15 @@ SELECT CAST(CAST(1 + 1 + 1, String) AS Int8);
 
 
 statement error 1010
-SELECT CAST(Null as Int64); 
+SELECT CAST(Null as Int64);
 
 
 statement error 1010
-SELECT CAST(Null as Varchar); 
+SELECT CAST(Null as Varchar);
 
 
 statement error 1010
-SELECT CAST(Null as Boolean); 
+SELECT CAST(Null as Boolean);
 
 statement query B
 SELECT CAST('33' as signed) = 33;
@@ -103,23 +103,23 @@ SELECT CAST('33' as unsigned) = 33;
 
 
 statement error 1010
-SELECT CAST('-33aa' as signed) = 33; 
+SELECT CAST('-33aa' as signed) = 33;
 
 
 statement error 1010
-SELECT CAST('33 aa' as unsigned) = 33; 
+SELECT CAST('33 aa' as unsigned) = 33;
 
 
 statement error 1010
-SELECT CAST('-33' as unsigned) = 0; 
+SELECT CAST('-33' as unsigned) = 0;
 
 
 statement error 1010
-SELECT CAST('aa' as unsigned) = 0; 
+SELECT CAST('aa' as unsigned) = 0;
 
 
 statement error 1010
-SELECT CAST('aa' as Float64) = 0; 
+SELECT CAST('aa' as Float64) = 0;
 
 statement query B
 SELECT '33'::signed = 33;
@@ -137,7 +137,7 @@ SELECT '33'::unsigned = 33;
 
 
 statement error 1010
-SELECT '-33aa'::signed = 33; 
+SELECT '-33aa'::signed = 33;
 
 statement query B
 SELECT 33::string = '33';
@@ -168,7 +168,7 @@ select 'false'::boolean = not 'true'::boolean;
 
 
 statement error 1010
-select 'FalSex'::boolean; 
+select 'FalSex'::boolean;
 
 statement query B
 SELECT  to_timestamp('2021-03-05 01:01:01') + 1 = to_timestamp('2021-03-05 01:01:01.000001');
@@ -215,6 +215,12 @@ SELECT to_date(to_timestamp(1640019661000000)) = to_date('2021-12-20');
 ----
 1
 
+statement query B
+SELECT to_date('2022-02-03T00:00:00+09:00') = to_date('2022-02-02');
+
+----
+1
+
 
 statement query B
 SELECT to_timestamp(to_timestamp(1640019661000000)) = to_timestamp('2021-12-20 17:01:01.000000');
@@ -252,15 +258,15 @@ SELECT parse_json('"false"')::boolean;
 
 
 statement error 1010
-SELECT parse_json('"test"')::boolean; 
+SELECT parse_json('"test"')::boolean;
 
 
 statement error 1010
-SELECT parse_json(1)::boolean; 
+SELECT parse_json(1)::boolean;
 
 
 statement error 1010
-SELECT parse_json('null')::boolean; 
+SELECT parse_json('null')::boolean;
 
 statement query I
 SELECT parse_json(255)::uint8;
@@ -408,17 +414,17 @@ SELECT parse_json('"9223372036854775807"')::int64;
 
 
 statement error 1010
-SELECT parse_json('"test"')::uint64; 
+SELECT parse_json('"test"')::uint64;
 
 
 statement error 1010
-SELECT parse_json('"test"')::int64; 
+SELECT parse_json('"test"')::int64;
 
 
 statement error 1010
-SELECT parse_json('null')::int64; 
+SELECT parse_json('null')::int64;
 
-statement query F 
+statement query F
 SELECT parse_json(12.34)::float32;
 
 ----
@@ -444,15 +450,15 @@ SELECT parse_json('"1234.5678"')::float64;
 
 
 statement error 1010
-SELECT parse_json('"test"')::float32; 
+SELECT parse_json('"test"')::float32;
 
 
 statement error 1010
-SELECT parse_json('"test"')::float64; 
+SELECT parse_json('"test"')::float64;
 
 
 statement error 1010
-SELECT parse_json('null')::float64; 
+SELECT parse_json('null')::float64;
 
 statement query T
 SELECT parse_json('"2022-01-01"')::date;
@@ -468,17 +474,17 @@ SELECT parse_json('"2022-01-01 01:01:01"')::datetime(0);
 
 
 statement error 1010
-SELECT parse_json('"test"')::date; 
+SELECT parse_json('"test"')::date;
 
 
 statement error 1010
-SELECT parse_json('"test"')::datetime; 
+SELECT parse_json('"test"')::datetime;
 
 
 statement error 1010
-SELECT parse_json('null')::datetime; 
+SELECT parse_json('null')::datetime;
 
-statement query T 
+statement query T
 SELECT parse_json('[1,2,3]')::array;
 
 ----
@@ -498,23 +504,23 @@ SELECT parse_json('"ab"')::array;
 
 
 statement error 1010
-SELECT parse_json('null')::array; 
+SELECT parse_json('null')::array;
 
 statement query T
-SELECT parse_json('{"a":1,"b":2}')::object;
+SELECT parse_json('{"a": 1,"b": 2}')::object;
 
 ----
 {"a":1,"b":2}
 
 
 statement error 1010
-SELECT parse_json('"abc"')::object; 
+SELECT parse_json('"abc"')::object;
 
 
 statement error 1010
-SELECT parse_json('[1,2,3]')::object; 
+SELECT parse_json('[1,2,3]')::object;
 
 
 statement error 1010
-SELECT parse_json('null')::object; 
+SELECT parse_json('null')::object;
 

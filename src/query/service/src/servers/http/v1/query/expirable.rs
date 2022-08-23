@@ -12,10 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
-use crate::sessions::SessionRef;
+use crate::sessions::Session;
 
 #[derive(PartialEq, Eq)]
 pub enum ExpiringState {
@@ -30,7 +31,7 @@ pub trait Expirable {
     fn on_expire(&self);
 }
 
-impl Expirable for SessionRef {
+impl Expirable for Arc<Session> {
     fn expire_state(&self) -> ExpiringState {
         if self.is_aborting() {
             ExpiringState::Aborted {
