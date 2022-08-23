@@ -10,11 +10,11 @@ USE db1;
 statement ok
 CREATE TABLE IF NOT EXISTS t1(a int, b varchar) Engine = fuse cluster by(a);
 
-statement query skipped TTTTTTIIII
+statement query TTTTRTIIII
 SELECT * FROM system.tables WHERE database='db1';
 
 ----
-db1 t1 FUSE (a) 2022-07-27 09:45:21.631 +0000 NULL 0 0 0 NULL
+db1 t1 FUSE (a) $DATE NULL 0 0 0 0
 
 statement ok
 DROP TABLE t1;
@@ -23,19 +23,19 @@ statement ok
 DROP TABLE IF EXISTS t1;
 
 statement error 1025
-DROP TABLE t1; 
+DROP TABLE t1;
 
 statement error 1022
-CREATE TABLE t(c int) Engine = fuse database_id = 1; 
+CREATE TABLE t(c int) Engine = fuse database_id = 1;
 
 statement error 1022
-CREATE TABLE t(c int) Engine = fuse DATABASE_ID = 1; 
+CREATE TABLE t(c int) Engine = fuse DATABASE_ID = 1;
 
 statement error 1022
-CREATE TABLE t(c int) Engine = fuse snapshot_loc = 1; 
+CREATE TABLE t(c int) Engine = fuse snapshot_loc = 1;
 
 statement error 1022
-CREATE TABLE t(c int) Engine = fuse SNAPSHOT_LOC = 1; 
+CREATE TABLE t(c int) Engine = fuse SNAPSHOT_LOC = 1;
 
 statement ok
 DROP DATABASE db1;
@@ -44,5 +44,5 @@ statement ok
 DROP DATABASE IF EXISTS db1;
 
 statement error 1003
-DROP DATABASE db1; 
+DROP DATABASE db1;
 
