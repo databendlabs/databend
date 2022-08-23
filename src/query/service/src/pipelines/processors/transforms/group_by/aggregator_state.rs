@@ -12,10 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::alloc::GlobalAlloc;
 use std::alloc::Layout;
 use std::intrinsics::likely;
 
 use bumpalo::Bump;
+use common_base::mem_allocator::ALLOC;
 use common_datablocks::HashMethod;
 use common_datablocks::HashMethodFixedKeys;
 use common_datablocks::HashMethodSerializer;
@@ -114,7 +116,7 @@ impl<T: ShortFixedKeyable> ShortFixedKeysAggregatorState<T> {
             let entity_align = std::mem::align_of::<ShortFixedKeysStateEntity<T>>();
             let entity_layout = Layout::from_size_align_unchecked(size, entity_align);
 
-            let raw_ptr = std::alloc::alloc_zeroed(entity_layout);
+            let raw_ptr = ALLOC.alloc_zeroed(entity_layout);
 
             ShortFixedKeysAggregatorState::<T> {
                 area: Default::default(),
@@ -133,7 +135,7 @@ impl<T: ShortFixedKeyable> Drop for ShortFixedKeysAggregatorState<T> {
             let size = self.max_size * std::mem::size_of::<ShortFixedKeysStateEntity<T>>();
             let entity_align = std::mem::align_of::<ShortFixedKeysStateEntity<T>>();
             let layout = Layout::from_size_align_unchecked(size, entity_align);
-            std::alloc::dealloc(self.data as *mut u8, layout);
+            ALLOC.dealloc(self.data as *mut u8, layout);
         }
     }
 }
