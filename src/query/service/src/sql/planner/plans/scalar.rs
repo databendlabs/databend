@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt::{Display, Formatter};
+use std::fmt::Display;
+use std::fmt::Formatter;
+
 use common_ast::ast::BinaryOperator;
 use common_datavalues::BooleanType;
 use common_datavalues::DataTypeImpl;
