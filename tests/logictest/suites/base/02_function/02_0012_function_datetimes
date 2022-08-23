@@ -782,7 +782,17 @@ select to_monday(to_datetime(1634614318000000))  =  to_date('2021-10-18');
 ----
 1
 
+statement query B
+SELECT to_datetime(1651017600000)::String = to_date('2022-04-27');
 
+----
+1
+
+statement query B
+SELECT to_datetime(1651017600000) = to_date('2022-04-27');
+
+----
+1
 
 statement query B
 select to_year(to_datetime(1646404329000000)) = 2022;
