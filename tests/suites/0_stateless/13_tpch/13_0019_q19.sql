@@ -1,6 +1,6 @@
 
 select
-    sum(l_extendedprice* (1 - l_discount)) as revenue
+    truncate(sum(l_extendedprice* (1 - l_discount)),3) as revenue
 from
     lineitem,
     part
@@ -67,3 +67,4 @@ where
                     )
             and l_shipinstruct = 'DELIVER IN PERSON'
         )
+;
