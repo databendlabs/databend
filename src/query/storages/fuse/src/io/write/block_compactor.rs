@@ -21,8 +21,8 @@ pub trait Compactor<S, T> {
     /// Takes an element s of type S, convert it into [Some<T>] if possible;
     /// otherwise, returns [None]
     ///
-    /// for example. given a DataBlock s, a setting of `max_row_per_block`
-    ///    - Some<Vec<DataBlock>> might be returned if s contains more rows than `max_row_per_block`
+    /// for example. given a DataBlock s, a setting of `max_rows_per_block`
+    ///    - Some<Vec<DataBlock>> might be returned if s contains more rows than `max_rows_per_block`
     ///       in this case, s will been split into vector of (smaller) blocks
     ///    - or [None] might be returned if s is too small
     ///       in this case, s will be accumulated
@@ -37,19 +37,19 @@ pub trait Compactor<S, T> {
 pub struct BlockCompactor {
     // TODO threshold of block size
     /// Max number of rows per data block
-    max_row_per_block: usize,
+    max_rows_per_block: usize,
     /// Number of rows accumulate in `accumulated_blocks`.
     accumulated_rows: usize,
     /// Small data blocks accumulated
     ///
-    /// Invariant: accumulated_blocks.iter().map(|item| item.num_rows()).sum() < max_row_per_block
+    /// Invariant: accumulated_blocks.iter().map(|item| item.num_rows()).sum() < max_rows_per_block
     accumulated_blocks: Vec<DataBlock>,
 }
 
 impl BlockCompactor {
-    pub fn new(max_row_per_block: usize) -> Self {
+    pub fn new(max_rows_per_block: usize) -> Self {
         Self {
-            max_row_per_block,
+            max_rows_per_block,
             accumulated_rows: 0,
             accumulated_blocks: Vec::new(),
         }
@@ -64,13 +64,13 @@ impl BlockCompactor {
         let num_rows = block.num_rows();
 
         // For cases like stmt `insert into .. select ... from ...`, the blocks that feeded
-        // are likely to be properly sized, i.e. exeactly `max_row_per_block` rows per block,
+        // are likely to be properly sized, i.e. exeactly `max_rows_per_block` rows per block,
         // In that cases, just return them.
-        if num_rows == self.max_row_per_block {
+        if num_rows == self.max_rows_per_block {
             return Ok(Some(vec![block]));
         }
 
-        if num_rows + self.accumulated_rows < self.max_row_per_block {
+        if num_rows + self.accumulated_rows < self.max_rows_per_block {
             self.accumulated_rows += num_rows;
             self.accumulated_blocks.push(block);
             Ok(None)
@@ -78,11 +78,11 @@ impl BlockCompactor {
             let mut blocks = std::mem::take(&mut self.accumulated_blocks);
             blocks.push(block);
             let merged = DataBlock::concat_blocks(&blocks)?;
-            let blocks = DataBlock::split_block_by_size(&merged, self.max_row_per_block)?;
+            let blocks = DataBlock::split_block_by_size(&merged, self.max_rows_per_block)?;
 
             let (result, remains) = blocks
                 .into_iter()
-                .partition(|item| item.num_rows() >= self.max_row_per_block);
+                .partition(|item| item.num_rows() >= self.max_rows_per_block);
             self.reset(remains);
             Ok(Some(result))
         }
