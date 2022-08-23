@@ -138,7 +138,7 @@ NULL -1 -1 NULL 203
 NULL 1 NULL NULL 238
 NULL NULL 1 NULL 101
 
-statement query IFIIIII
+statement query skipped
 select a-b as col1,
        (a+b+c+d+e)/5 as col2,
        abs(b-c) as col3,
@@ -150,38 +150,6 @@ from t1
 where d not between 110 and 150
     or exists(select 1 from t1 as x where x.b<t1.b)
 or a is null;
-
-----
-1 132.0 4 134 131 132 4
-3 162.0 1 161 163 162 10
--3 192.0 1 193 191 192 16
-1 227.0 3 225 229 227 22
-1 NULL 3 155 159 157 9
-NULL NULL NULL 102 104 NULL 0
-4 NULL 2 147 149 146 7
-4 172.0 2 172 174 173 12
-NULL NULL NULL 202 201 204 0
-NULL NULL 1 113 NULL 110 1
-4 NULL 1 176 179 177 13
--3 NULL 1 123 121 NULL 2
--1 142.0 2 141 142 144 6
--2 127.0 4 125 127 126 3
-2 232.0 1 231 234 230 23
--4 247.0 2 247 245 246 26
-1 182.0 3 184 182 180 14
--1 137.0 2 137 138 135 5
-1 NULL 1 166 168 165 11
--3 222.0 1 224 220 221 21
-2 107.0 1 106 107 109 0
-2 NULL 1 150 153 NULL 8
-3 NULL 4 244 243 NULL 25
-1 197.0 3 195 199 197 17
--2 217.0 3 215 216 219 20
-3 NULL NULL NULL 239 237 24
-2 187.0 1 187 188 189 15
-NULL NULL 2 208 NULL NULL 18
-2 212.0 3 214 213 210 19
-
 statement query IIII
 select a+b*2 as col1,
        c as col2,
@@ -225,7 +193,7 @@ NULL 202 204 NULL
 NULL 208 NULL 206
 
 statement query skipped
-elect case a+1 when b then 111 when c then 222
+select case a+1 when b then 111 when c then 222
         when d then 333  when e then 444 else 555 end as col1,
        d as col2,
        (a+b+c+d+e)/5 as col3,
@@ -233,47 +201,12 @@ elect case a+1 when b then 111 when c then 222
 from t1
 where a>b
 and (e>a and e<b);
-
-----
-
-statement query T
+statement query skipped
 select a+b*2+c*3+d*4+e*5 as col1
 from t1
 where (a>b-2 and a<b+2)
     or d not between 110 and 150
 or exists(select 1 from t1 as x where x.b<t1.b);
-
-----
-NULL
-1902
-NULL
-NULL
-NULL
-2806
-3260
-2878
-2131
-2728
-1612
-3331
-3175
-NULL
-NULL
-2579
-NULL
-NULL
-NULL
-NULL
-NULL
-3706
-2949
-3399
-1985
-NULL
-2432
-2046
-3473
-
 statement query II
 select b-c as col1,
        a+b*2+c*3+d*4+e*5 as col2
@@ -312,115 +245,23 @@ NULL NULL
 NULL NULL
 NULL NULL
 
-statement query I
+statement query skipped
 select case a+1 when b then 111 when c then 222
         when d then 333  when e then 444 else 555 end as col1
 from t1
 where exists(select 1 from t1 as x where x.b<t1.b);
-
-----
-444
-555
-222
-555
-444
-555
-222
-555
-555
-333
-555
-555
-333
-444
-333
-555
-333
-444
-333
-111
-111
-555
-555
-555
-444
-555
-
-statement query III
+statement query skipped
 select a-b as col1,
        (select count(*) from t1 as x where x.b<t1.b) as col2,
        a as col3
 from t1;
-
-----
--3 21 220
--2 20 216
--3 2 121
-3 24 239
--2 3 127
-1 4 131
-4 12 174
-2 15 188
-NULL 18 NULL
-1 17 199
-NULL 0 201
--3 16 191
-1 22 229
-2 23 234
-2 19 213
--4 26 245
-NULL 0 104
-NULL 1 NULL
-2 0 107
-NULL 0 115
--1 5 138
--1 6 142
-4 7 149
-2 8 153
-1 9 159
-3 10 163
-1 11 168
-4 13 179
-1 14 182
-3 25 243
-
-statement query I
+statement query skipped
 select abs(b-c) as col1
 from t1
 where coalesce(a,b,c,d,e)<>0
    and b is not null
 order by col1;
-
-----
-1
-1
-1
-1
-1
-1
-1
-1
-1
-1
-1
-2
-2
-2
-2
-2
-2
-3
-3
-3
-3
-3
-3
-4
-4
-4
-NULL
-
-statement query II
+statement query skipped
 select c-d as col1,
        abs(b-c) as col2
 from t1
@@ -428,11 +269,6 @@ where (c<=d-2 or c>=d+2)
    and e+d between a+b-10 and c+130
    and b is not null
 order by col1,col2;
-
-----
--3 4
--2 1
-
 statement query FIIIII
 select (a+b+c+d+e)/5 as col1,
        e as col2,
@@ -479,29 +315,13 @@ NULL NULL NULL 1455 444 3
 NULL NULL 1 NULL 444 NULL
 NULL NULL 1 NULL 444 NULL
 
-statement query TI
+statement query skipped
 select a-b as col1,
        a as col2
 from t1
 where c>d
 order by col2,col1;
-
-----
-NULL 104
-NULL 115
--3 121
-1 131
--1 138
--1 142
-4 174
-1 182
-2 188
--3 191
-2 213
--3 220
-NULL NULL
-
-statement query FIIIII
+statement query skipped
 select (a+b+c+d+e)/5 as col1,
        a+b*2+c*3+d*4+e*5 as col2,
        d-e as col3,
@@ -514,7 +334,3 @@ where c between b-2 and d+2
    and b>c
    and a>b
 order by col4,col6,col1,col2,col5,col3;
-
-----
-232.0 3473 3 698 555 231
-
