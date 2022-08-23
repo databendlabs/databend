@@ -565,13 +565,3 @@ impl PartialEq for SubqueryExpr {
         false
     }
 }
-
-impl Display for Scalar {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Scalar::ConstantExpr(constant_expr) => write!(f, "{}", constant_expr.value),
-            Scalar::CastExpr(cast_expr) => write!(f, "{}", cast_expr.argument),
-            _ => unimplemented!("Unimplemented display for scalar"),
-        }
-    }
-}
