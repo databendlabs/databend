@@ -39,25 +39,28 @@ pub fn cast_from_string(
     let str_column: &StringColumn = Series::check_get(&str_column)?;
     let size = str_column.len();
 
+    let return_res = |column| {
+        let nullable_column: &NullableColumn = Series::check_get(&column)?;
+        Ok((
+            nullable_column.inner().clone(),
+            Some(nullable_column.ensure_validity().clone()),
+        ))
+    };
     match data_type.data_type_id() {
         TypeID::Date => {
             let mut builder = NullableColumnBuilder::<i32>::with_capacity(size);
-
+            let tz = func_ctx.tz;
             for v in str_column.iter() {
-                if let Some(d) = string_to_date(v) {
-                    builder.append((d.num_days_from_ce() - EPOCH_DAYS_FROM_CE) as i32, true);
-                } else {
-                    builder.append_null();
+                match string_to_date(v, &tz) {
+                    Some(d) => {
+                        builder.append((d.num_days_from_ce() - EPOCH_DAYS_FROM_CE) as i32, true)
+                    }
+                    None => builder.append_null(),
                 }
             }
             let column = builder.build(size);
-            let nullable_column: &NullableColumn = Series::check_get(&column)?;
-            Ok((
-                nullable_column.inner().clone(),
-                Some(nullable_column.ensure_validity().clone()),
-            ))
+            return_res(column)
         }
-
         TypeID::Timestamp => {
             let mut builder = NullableColumnBuilder::<i64>::with_capacity(size);
             let tz = func_ctx.tz;
@@ -68,11 +71,7 @@ pub fn cast_from_string(
                 }
             }
             let column = builder.build(size);
-            let nullable_column: &NullableColumn = Series::check_get(&column)?;
-            Ok((
-                nullable_column.inner().clone(),
-                Some(nullable_column.ensure_validity().clone()),
-            ))
+            return_res(column)
         }
         TypeID::Boolean => {
             let mut builder = NullableColumnBuilder::<bool>::with_capacity(size);
@@ -86,11 +85,7 @@ pub fn cast_from_string(
                 }
             }
             let column = builder.build(size);
-            let nullable_column: &NullableColumn = Series::check_get(&column)?;
-            Ok((
-                nullable_column.inner().clone(),
-                Some(nullable_column.ensure_validity().clone()),
-            ))
+            return_res(column)
         }
         TypeID::Interval => todo!(),
         _ => arrow_cast_compute(column, from_type, data_type, cast_options, func_ctx),
@@ -111,26 +106,13 @@ pub fn string_to_timestamp(date_str: impl AsRef<[u8]>, tz: &Tz) -> Option<DateTi
 }
 
 #[inline]
-pub fn string_to_date(date_str: impl AsRef<[u8]>) -> Option<NaiveDate> {
-    let s = std::str::from_utf8(date_str.as_ref()).ok();
-    if let Some(s) = s {
-        // convert zero date to `1970-01-01`
-        if s == "0000-00-00" {
-            Some(NaiveDate::from_ymd(1970, 1, 1))
-        } else {
-            match s.parse::<NaiveDate>() {
-                Ok(d) => {
-                    // convert date less than `1000-01-01` to `1000-01-01`
-                    if d.year() < 1000 {
-                        Some(NaiveDate::from_ymd(1000, 1, 1))
-                    } else {
-                        Some(d)
-                    }
-                }
-                Err(_) => None,
-            }
-        }
-    } else {
-        None
+pub fn string_to_date(date_str: impl AsRef<[u8]>, tz: &Tz) -> Option<NaiveDate> {
+    let mut reader = BufferReader::new(std::str::from_utf8(date_str.as_ref()).unwrap().as_bytes());
+    match reader.read_date_text(tz) {
+        Ok(d) => match reader.must_eof() {
+            Ok(..) => Some(d),
+            Err(_) => None,
+        },
+        Err(_) => None,
     }
 }

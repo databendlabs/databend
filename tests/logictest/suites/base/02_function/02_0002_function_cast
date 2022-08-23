@@ -215,6 +215,12 @@ SELECT to_date(to_timestamp(1640019661000000)) = to_date('2021-12-20');
 ----
 1
 
+statement query B
+SELECT to_date('2022-02-03T00:00:00+09:00') = to_date('2022-02-02');
+
+----
+1
+
 
 statement query B
 SELECT to_timestamp(to_timestamp(1640019661000000)) = to_timestamp('2021-12-20 17:01:01.000000');
