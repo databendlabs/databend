@@ -29,14 +29,9 @@ use crate::sql::plans::RelOperator;
 /// Input:  Limit
 ///           \
 ///          LogicalGet
-///             \
-///              *
 ///
-/// Output: Limit
-///             \
+/// Output:
 ///           LogicalGet
-///               \
-///                *
 
 pub struct RulePushDownLimitScan {
     id: RuleID,
@@ -52,17 +47,11 @@ impl RulePushDownLimitScan {
                     plan_type: RelOp::Limit,
                 }
                 .into(),
-                SExpr::create_unary(
+                SExpr::create_leaf(
                     PatternPlan {
                         plan_type: RelOp::LogicalGet,
                     }
                     .into(),
-                    SExpr::create_leaf(
-                        PatternPlan {
-                            plan_type: RelOp::Pattern,
-                        }
-                        .into(),
-                    ),
                 ),
             ),
         }
@@ -76,27 +65,17 @@ impl Rule for RulePushDownLimitScan {
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformState) -> Result<()> {
         let limit: Limit = s_expr.plan().clone().try_into()?;
-        if limit.limit.is_none() {
-            // nothing happened
-            return Ok(());
-        }
-        let mut scan: LogicalGet = s_expr.child(0)?.plan().clone().try_into()?;
-        let limited = limit.limit.unwrap() + limit.offset;
-        if let Some(cnt) = scan.limit {
-            // already have limit node been pushed down
-            scan.limit = Some(cmp::min(limited, cnt));
-        } else {
-            // first limit
-            scan.limit = Some(limited);
-        }
-        if limit.offset == 0 {
-            // no offset, just tells it how many rows to be scanned
-            state.add_result(SExpr::create_leaf(RelOperator::LogicalGet(scan)));
-        } else {
-            // replace scan with limit pushed down
-            state.add_result(
-                s_expr.replace_children(vec![SExpr::create_leaf(RelOperator::LogicalGet(scan))]),
-            )
+        if let Some(mut count) = limit.limit {
+            let child = s_expr.child(0)?;
+            let mut get: LogicalGet = child.plan().clone().try_into()?;
+            count += limit.offset;
+            get.limit = Some(get.limit.map_or(count, |c| cmp::max(c, count)));
+            let get = SExpr::create_leaf(RelOperator::LogicalGet(get));
+            if limit.offset == 0 {
+                state.add_result(get);
+            } else {
+                state.add_result(s_expr.replace_children(vec![get]));
+            }
         }
         Ok(())
     }

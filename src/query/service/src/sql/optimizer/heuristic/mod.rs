@@ -50,8 +50,6 @@ pub static DEFAULT_REWRITE_RULES: Lazy<Vec<RuleID>> = Lazy::new(|| {
         RuleID::MergeFilter,
         RuleID::MergeEvalScalar,
         RuleID::MergeProject,
-        RuleID::MergeProject,
-        RuleID::MergeProject,
         RuleID::PushDownLimitProject,
         RuleID::PushDownLimitSort,
         RuleID::PushDownLimitOuterJoin,
@@ -138,7 +136,7 @@ impl HeuristicOptimizer {
         for expr in s_expr.children() {
             optimized_children.push(self.optimize_expression(expr)?);
         }
-        let optimized_expr = SExpr::create(s_expr.plan().clone(), optimized_children, None);
+        let optimized_expr = s_expr.replace_children(optimized_children);
         let result = self.apply_transform_rules(&optimized_expr, &self.rules)?;
 
         Ok(result)
@@ -167,8 +165,8 @@ impl HeuristicOptimizer {
         for rule in rule_list.iter() {
             let mut state = TransformState::new();
             if s_expr.match_pattern(rule.pattern()) && !s_expr.applied_rule(&rule.id()) {
-                rule.apply(&s_expr, &mut state)?;
                 s_expr.apply_rule(&rule.id());
+                rule.apply(&s_expr, &mut state)?;
                 if !state.results().is_empty() {
                     // Recursive optimize the result
                     let result = &state.results()[0];
