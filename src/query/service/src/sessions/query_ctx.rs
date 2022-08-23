@@ -61,8 +61,8 @@ use crate::servers::http::v1::HttpQueryHandle;
 use crate::sessions::query_affect::QueryAffect;
 use crate::sessions::ProcessInfo;
 use crate::sessions::QueryContextShared;
+use crate::sessions::Session;
 use crate::sessions::SessionManager;
-use crate::sessions::SessionRef;
 use crate::sessions::Settings;
 use crate::sessions::TableContext;
 use crate::storages::stage::StageTable;
@@ -190,12 +190,12 @@ impl QueryContext {
     }
 
     // Get the current session.
-    pub fn get_current_session(self: &Arc<Self>) -> SessionRef {
-        SessionRef::create(self.shared.session.clone())
+    pub fn get_current_session(self: &Arc<Self>) -> Arc<Session> {
+        self.shared.session.clone()
     }
 
     // Get one session by session id.
-    pub async fn get_session_by_id(self: &Arc<Self>, id: &str) -> Option<SessionRef> {
+    pub async fn get_session_by_id(self: &Arc<Self>, id: &str) -> Option<Arc<Session>> {
         SessionManager::instance().get_session_by_id(id).await
     }
 
