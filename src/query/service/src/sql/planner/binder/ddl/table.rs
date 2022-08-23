@@ -42,6 +42,7 @@ use crate::catalogs::DatabaseCatalog;
 use crate::sessions::TableContext;
 use crate::sql::binder::scalar::ScalarBinder;
 use crate::sql::binder::Binder;
+use crate::sql::executor::PhysicalScalarBuilder;
 use crate::sql::is_reserved_opt_key;
 use crate::sql::optimizer::optimize;
 use crate::sql::optimizer::OptimizerConfig;
@@ -773,7 +774,9 @@ impl<'a> Binder {
                                     target_type: Box::new(data_type),
                                 })
                             }
-                            Some(default_expr.to_string())
+                            let mut builder = PhysicalScalarBuilder;
+                            let serializable_expr = builder.build(&expr)?;
+                            Some(serde_json::to_string(&serializable_expr)?)
                         } else {
                             None
                         }
