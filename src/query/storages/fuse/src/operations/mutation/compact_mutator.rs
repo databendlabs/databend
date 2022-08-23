@@ -14,83 +14,111 @@
 
 use std::sync::Arc;
 
-use common_catalog::table_context::TableContext;
-use common_datablocks::DataBlock;
 use common_exception::Result;
 use common_fuse_meta::caches::CacheManager;
 use common_fuse_meta::meta::BlockMeta;
+use common_fuse_meta::meta::Location;
 use common_fuse_meta::meta::SegmentInfo;
+use common_fuse_meta::meta::Statistics;
 use common_fuse_meta::meta::TableSnapshot;
-use common_planners::Projection;
+use common_fuse_meta::meta::Versioned;
 use opendal::Operator;
 
-use super::block_filter::all_the_columns_ids;
-use crate::io::BlockCompactor;
-use crate::io::BlockWriter;
+use crate::io::write_meta;
 use crate::io::MetaReaders;
 use crate::io::SegmentWriter;
-use crate::io::TableMetaLocationGenerator;
+use crate::operations::AppendOperationLogEntry;
+use crate::statistics::merge_statistics;
 use crate::statistics::reducers::reduce_block_metas;
 use crate::statistics::reducers::reduce_statistics;
 use crate::FuseTable;
+use crate::TableContext;
+use crate::TableMutator;
+use crate::DEFAULT_BLOCK_PER_SEGMENT;
+use crate::DEFAULT_BLOCK_SIZE_IN_MEM_SIZE_THRESHOLD;
+use crate::DEFAULT_ROW_PER_BLOCK;
+use crate::FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD;
+use crate::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
+use crate::FUSE_OPT_KEY_ROW_PER_BLOCK;
 
-pub struct CompactMutator<'a> {
-    ctx: &'a Arc<dyn TableContext>,
-    location_generator: &'a TableMetaLocationGenerator,
-    base_snapshot: &'a TableSnapshot,
-    data_accessor: Operator,
-    row_per_block: usize,
-    block_per_seg: usize,
+#[derive(Clone)]
+pub struct CompactMutator {
+    ctx: Arc<dyn TableContext>,
+    pub(crate) base_snapshot: Arc<TableSnapshot>,
+    pub(crate) data_accessor: Operator,
+    pub(crate) selected_blocks: Vec<BlockMeta>,
+    segments: Vec<Location>,
+    summary: Statistics,
+    table: Arc<FuseTable>,
 }
 
-impl<'a> CompactMutator<'a> {
+impl CompactMutator {
     pub fn try_create(
-        ctx: &'a Arc<dyn TableContext>,
-        location_generator: &'a TableMetaLocationGenerator,
-        base_snapshot: &'a TableSnapshot,
-        row_per_block: usize,
-        block_per_seg: usize,
+        ctx: Arc<dyn TableContext>,
+        base_snapshot: Arc<TableSnapshot>,
+        table: &FuseTable,
     ) -> Result<Self> {
         let data_accessor = ctx.get_storage_operator()?;
+
         Ok(Self {
             ctx,
-            location_generator,
             base_snapshot,
             data_accessor,
-            row_per_block,
-            block_per_seg,
+            selected_blocks: Vec::new(),
+            segments: Vec::new(),
+            summary: Statistics::default(),
+            table: Arc::new(table.clone()),
         })
     }
+}
 
-    pub async fn compact(&mut self, table: &FuseTable) -> Result<TableSnapshot> {
-        let snapshot = self.base_snapshot;
+#[async_trait::async_trait]
+impl TableMutator for CompactMutator {
+    async fn blocks_select(&mut self) -> Result<bool> {
+        let snapshot = self.base_snapshot.clone();
         // Blocks that need to be reorganized into new segments.
         let mut remain_blocks = Vec::new();
-        // Blocks that need to be compacted.
-        let mut merged_blocks = Vec::new();
-        // The new segments.
-        let mut segments = Vec::new();
         let mut summarys = Vec::new();
         let reader = MetaReaders::segment_info_reader(self.ctx.as_ref());
-        let no_cluster = table.cluster_key_meta.is_none();
+
+        let max_rows_per_block = self
+            .table
+            .get_option(FUSE_OPT_KEY_ROW_PER_BLOCK, DEFAULT_ROW_PER_BLOCK);
+        let min_rows_per_block = (max_rows_per_block as f64 * 0.8) as usize;
+        let max_bytes_per_block = self.table.get_option(
+            FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD,
+            DEFAULT_BLOCK_SIZE_IN_MEM_SIZE_THRESHOLD,
+        );
+
+        let block_per_seg = self
+            .table
+            .get_option(FUSE_OPT_KEY_BLOCK_PER_SEGMENT, DEFAULT_BLOCK_PER_SEGMENT);
+
+        let is_cluster = self.table.cluster_key_meta.is_some();
         for segment_location in &snapshot.segments {
             let (x, ver) = (segment_location.0.clone(), segment_location.1);
             let mut need_merge = false;
             let mut remains = Vec::new();
             let segment = reader.read(x, None, ver).await?;
             segment.blocks.iter().for_each(|b| {
-                if no_cluster && b.row_count != self.row_per_block as u64 {
-                    merged_blocks.push(b.clone());
-                    need_merge = true;
-                } else {
+                if is_cluster
+                    || b.check_perfect_block(
+                        max_rows_per_block,
+                        min_rows_per_block,
+                        max_bytes_per_block,
+                    )
+                {
                     remains.push(b.clone());
+                } else {
+                    self.selected_blocks.push(b.clone());
+                    need_merge = true;
                 }
             });
 
             // If the number of blocks of segment meets block_per_seg, and the blocks in segments donot need to be compacted,
             // then record the segment information.
-            if !need_merge && segment.blocks.len() == self.block_per_seg {
-                segments.push(segment_location.clone());
+            if !need_merge && segment.blocks.len() == block_per_seg {
+                self.segments.push(segment_location.clone());
                 summarys.push(segment.summary.clone());
                 continue;
             }
@@ -98,56 +126,73 @@ impl<'a> CompactMutator<'a> {
             remain_blocks.append(&mut remains);
         }
 
-        // Compact the blocks.
-        let col_ids = all_the_columns_ids(table);
-        let projection = Projection::Columns(col_ids);
-        let mut compactor = BlockCompactor::new(self.row_per_block);
-        let block_writer = BlockWriter::new(self.ctx, &self.data_accessor, self.location_generator);
-        for block_meta in &merged_blocks {
-            let block_reader = table.create_block_reader(self.ctx, projection.clone())?;
-            let data_block = block_reader.read_with_block_meta(block_meta).await?;
-
-            let res = compactor.compact(data_block)?;
-            Self::write_block(&block_writer, res, &mut remain_blocks).await?;
+        if self.selected_blocks.is_empty()
+            && (remain_blocks.is_empty() || snapshot.segments.len() <= self.segments.len() + 1)
+        {
+            return Ok(false);
         }
-        let remains = compactor.finish()?;
-        Self::write_block(&block_writer, remains, &mut remain_blocks).await?;
 
         // Create new segments.
         let segment_info_cache = CacheManager::instance().get_table_segment_cache();
         let seg_writer = SegmentWriter::new(
             &self.data_accessor,
-            self.location_generator,
+            &self.table.meta_location_generator,
             &segment_info_cache,
         );
-        let chunks = remain_blocks.chunks(self.block_per_seg);
+        let chunks = remain_blocks.chunks(block_per_seg);
         for chunk in chunks {
             let new_summary = reduce_block_metas(chunk)?;
             let new_segment = SegmentInfo::new(chunk.to_vec(), new_summary.clone());
             let new_segment_location = seg_writer.write_segment(new_segment).await?;
-            segments.push(new_segment_location);
+            self.segments.push(new_segment_location);
             summarys.push(new_summary);
         }
 
-        let mut new_snapshot = TableSnapshot::from_previous(snapshot);
-        new_snapshot.segments = segments;
         // update the summary of new snapshot
-        let new_summary = reduce_statistics(&summarys)?;
-        new_snapshot.summary = new_summary;
-        Ok(new_snapshot)
+        self.summary = reduce_statistics(&summarys)?;
+        Ok(true)
     }
 
-    async fn write_block(
-        writer: &BlockWriter<'_>,
-        blocks: Option<Vec<DataBlock>>,
-        metas: &mut Vec<BlockMeta>,
-    ) -> Result<()> {
-        if let Some(blocks) = blocks {
-            for block in blocks {
-                let new_block_meta = writer.write(block, None).await?;
-                metas.push(new_block_meta);
-            }
-        }
+    async fn try_commit(&self, catalog_name: &str) -> Result<()> {
+        let ctx = self.ctx.clone();
+        let snapshot = self.base_snapshot.clone();
+        let mut new_snapshot = TableSnapshot::from_previous(&snapshot);
+        new_snapshot.segments = self.segments.clone();
+
+        let append_entries = ctx.consume_precommit_blocks();
+        let append_log_entries = append_entries
+            .iter()
+            .map(AppendOperationLogEntry::try_from)
+            .collect::<Result<Vec<AppendOperationLogEntry>>>()?;
+
+        let (merged_segments, merged_summary) =
+            FuseTable::merge_append_operations(&append_log_entries)?;
+
+        let mut merged_segments = merged_segments
+            .into_iter()
+            .map(|loc| (loc, SegmentInfo::VERSION))
+            .collect();
+        new_snapshot.segments.append(&mut merged_segments);
+        new_snapshot.summary = merge_statistics(&self.summary, &merged_summary)?;
+
+        // write down the new snapshot
+        let snapshot_loc = self
+            .table
+            .meta_location_generator
+            .snapshot_location_from_uuid(
+                &new_snapshot.snapshot_id,
+                new_snapshot.format_version(),
+            )?;
+        write_meta(&self.data_accessor, &snapshot_loc, &new_snapshot).await?;
+
+        FuseTable::commit_to_meta_server(
+            ctx.as_ref(),
+            catalog_name,
+            &self.table.table_info,
+            snapshot_loc,
+            &new_snapshot.summary,
+        )
+        .await?;
         Ok(())
     }
 }

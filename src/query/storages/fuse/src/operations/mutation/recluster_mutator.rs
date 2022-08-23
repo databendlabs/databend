@@ -34,13 +34,14 @@ use crate::operations::AppendOperationLogEntry;
 use crate::sessions::TableContext;
 use crate::statistics::merge_statistics;
 use crate::FuseTable;
+use crate::TableMutator;
 
 #[derive(Clone)]
 pub struct ReclusterMutator {
-    pub base_mutator: BaseMutator,
+    pub(crate) base_mutator: BaseMutator,
     pub selected_blocks: Vec<BlockMeta>,
-    pub level: i32,
-    pub row_per_block: usize,
+    pub(crate) level: i32,
+    pub(crate) row_per_block: usize,
     threshold: f64,
     table_info: TableInfo,
 }
@@ -64,8 +65,11 @@ impl ReclusterMutator {
             row_per_block,
         })
     }
+}
 
-    pub async fn blocks_select(&mut self) -> Result<bool> {
+#[async_trait::async_trait]
+impl TableMutator for ReclusterMutator {
+    async fn blocks_select(&mut self) -> Result<bool> {
         let snapshot = &self.base_mutator.base_snapshot;
 
         let default_cluster_key_id = snapshot
@@ -195,8 +199,9 @@ impl ReclusterMutator {
         Ok(false)
     }
 
-    pub async fn commit_recluster(self, catalog_name: &str) -> Result<()> {
-        let ctx = self.base_mutator.ctx.clone();
+    async fn try_commit(&self, catalog_name: &str) -> Result<()> {
+        let base_mutator = self.base_mutator.clone();
+        let ctx = base_mutator.ctx.clone();
         let (mut segments, mut summary) = self.base_mutator.generate_segments().await?;
 
         let append_entries = ctx.consume_precommit_blocks();
@@ -216,10 +221,7 @@ impl ReclusterMutator {
         segments.append(&mut merged_segments);
         summary = merge_statistics(&summary, &merged_summary)?;
 
-        let (new_snapshot, loc) = self
-            .base_mutator
-            .into_new_snapshot(segments, summary)
-            .await?;
+        let (new_snapshot, loc) = base_mutator.into_new_snapshot(segments, summary).await?;
 
         FuseTable::commit_to_meta_server(
             ctx.as_ref(),
