@@ -102,7 +102,7 @@ echo "CREATE TABLE IF NOT EXISTS lineitem
 #download data 
 mkdir -p  ${CURDIR}/data/
 curl -s -o ${CURDIR}/data/tpch.tar.gz  http://repo.databend.rs/dataset/stateful/tpch.tar.gz
-tar -zxvf ${CURDIR}/data/tpch.tar.gz -C ${CURDIR}/data
+tar -zxf ${CURDIR}/data/tpch.tar.gz -C ${CURDIR}/data
 
 # insert data to tables
 for t in customer lineitem nation orders partsupp part region supplier
