@@ -19,3 +19,4 @@ pub mod table;
 pub mod table_args;
 pub mod table_context;
 pub mod table_function;
+pub mod table_mutator;

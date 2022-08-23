@@ -28,6 +28,7 @@ use common_catalog::table::NavigationPoint;
 use common_catalog::table::Table;
 use common_catalog::table::TableStatistics;
 pub use common_catalog::table_context::TableContext;
+use common_catalog::table_mutator::TableMutator;
 use common_storages_util::table_option_keys;
 pub use constants::*;
 pub use fuse_part::ColumnLeaf;
