@@ -90,9 +90,7 @@ impl Interpreter for DescribeTableInterpreter {
             match field.default_expr() {
                 Some(expr) => {
                     let expression: PhysicalScalar = serde_json::from_str(expr)?;
-                    if let PhysicalScalar::Constant { value, .. } = expression {
-                        default_exprs.push(format!("{:?}", value));
-                    }
+                    default_exprs.push(format!("{expression}"));
                 }
 
                 None => {

@@ -59,7 +59,7 @@ statement ok
 insert into t values();
 
 statement query II
-select * from t;
+select * from t order by a;
 
 ----
 1 NULL
@@ -70,6 +70,9 @@ drop table t;
 
 statement ok
 CREATE TABLE t(a INT DEFAULT 0.1, b INT NULL);
+
+statement ok
+insert into t values();
 
 statement query II
 select * from t;

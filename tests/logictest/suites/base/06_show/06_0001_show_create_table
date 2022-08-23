@@ -13,14 +13,14 @@ SHOW CREATE TABLE `test`.`a`;
 ----
 a CREATE TABLE `a` (
   `a` BIGINT,
-  `b` INT DEFAULT 3,
-  `c` VARCHAR DEFAULT 'x',
+  `b` INT DEFAULT CAST(3 AS INT),
+  `c` VARCHAR DEFAULT x,
   `d` SMALLINT NULL,
   `e` DATE
 ) ENGINE=NULL
 
 statement ok
-CREATE TABLE `test`.`b` (    a bigint, b int null default null, c varchar(255), d smallint unsigned null, e Date default today()) Engine = Null COMMENT = 'test b';
+CREATE TABLE `test`.`b` (    a bigint, b int null default null, c varchar(255), d smallint unsigned null) Engine = Null COMMENT = 'test b';
 
 statement query TT 
 SHOW CREATE TABLE `test`.`b`;
@@ -28,10 +28,9 @@ SHOW CREATE TABLE `test`.`b`;
 ----
 b CREATE TABLE `b` (
   `a` BIGINT,
-  `b` INT NULL DEFAULT NULL,
+  `b` INT NULL DEFAULT CAST(NULL AS INT NULL),
   `c` VARCHAR,
-  `d` SMALLINT UNSIGNED NULL,
-  `e` DATE DEFAULT today()
+  `d` SMALLINT UNSIGNED NULL
 ) ENGINE=NULL COMMENT='test b'
 
 statement ok
