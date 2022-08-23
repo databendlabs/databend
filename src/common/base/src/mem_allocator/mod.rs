@@ -20,6 +20,7 @@ mod std_allocator;
 use std::alloc::Layout;
 
 pub use je_allocator::JEAllocator;
+pub use je_allocator::ALLOC;
 pub use mmap_allocator::MmapAllocator;
 pub use stackful_allocator::StackfulAllocator;
 pub use std_allocator::StdAllocator;

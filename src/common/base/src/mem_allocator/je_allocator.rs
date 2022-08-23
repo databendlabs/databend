@@ -17,7 +17,7 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 #[global_allocator]
-static ALLOC: JEAllocator = JEAllocator;
+pub static ALLOC: JEAllocator = JEAllocator;
 
 pub use platform::*;
 pub use tikv_jemalloc_sys;
@@ -81,7 +81,6 @@ mod platform {
         #[inline]
         unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
             ThreadTracker::alloc_memory(layout.size() as i64);
-
             let flags = layout_to_flags(layout.align(), layout.size());
             ffi::mallocx(layout.size(), flags) as *mut u8
         }
@@ -135,6 +134,8 @@ mod platform {
             new_size: usize,
             clear_mem: bool,
         ) -> *mut u8 {
+            ThreadTracker::realloc_memory(layout.size() as i64, new_size as i64);
+
             let mut flags = layout_to_flags(layout.align(), new_size);
             if clear_mem {
                 flags |= ffi::MALLOCX_ZERO;
