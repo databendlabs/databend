@@ -124,7 +124,7 @@ impl SessionManager {
         let user_api = UserApiProvider::instance();
         let session_settings = Settings::try_create(&config, user_api, tenant).await?;
         let session_ctx = SessionContext::try_create(config.clone(), session_settings)?;
-        let session = Session::try_create(id, typ, session_ctx, mysql_conn_id)?;
+        let session = Session::try_create(id, typ.clone(), session_ctx, mysql_conn_id)?;
 
         let mut sessions = self.active_sessions.write();
         if sessions.len() < self.max_sessions {
@@ -134,54 +134,18 @@ impl SessionManager {
                 &config.query.cluster_id,
             );
 
-            sessions.insert(session.get_id(), session.clone());
+            match typ {
+                SessionType::FlightRPC => {}
+                _ => {
+                    sessions.insert(session.get_id(), session.clone());
+                }
+            }
 
             Ok(session)
         } else {
             Err(ErrorCode::TooManyUserConnections(
                 "The current accept connection has exceeded max_active_sessions config",
             ))
-        }
-    }
-
-    pub async fn create_rpc_session(
-        self: &Arc<Self>,
-        id: String,
-        aborted: bool,
-    ) -> Result<Arc<Session>> {
-        // TODO: maybe deadlock?
-        let config = self.get_conf();
-        {
-            let sessions = self.active_sessions.read();
-            let v = sessions.get(&id);
-            if v.is_some() {
-                return Ok(v.unwrap().clone());
-            }
-        }
-
-        let tenant = config.query.tenant_id.clone();
-        let user_api = UserApiProvider::instance();
-        let session_settings = Settings::try_create(&config, user_api, tenant).await?;
-        let session_ctx = SessionContext::try_create(config.clone(), session_settings)?;
-        let session = Session::try_create(id.clone(), SessionType::FlightRPC, session_ctx, None)?;
-
-        let mut sessions = self.active_sessions.write();
-        let v = sessions.get(&id);
-        if v.is_none() {
-            if aborted {
-                return Err(ErrorCode::AbortedSession("Aborting server."));
-            }
-
-            label_counter(
-                super::metrics::METRIC_SESSION_CONNECT_NUMBERS,
-                &config.query.tenant_id,
-                &config.query.cluster_id,
-            );
-
-            sessions.insert(id, session.clone());
-            Ok(session)
-        } else {
-            Ok(v.unwrap().clone())
         }
     }
 
