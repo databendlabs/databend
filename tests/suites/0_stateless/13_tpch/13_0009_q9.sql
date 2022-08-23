@@ -2,7 +2,7 @@
 select
     nation,
     o_year,
-    sum(amount) as sum_profit
+    truncate(sum(amount),3) as sum_profit
 from
     (
         select
