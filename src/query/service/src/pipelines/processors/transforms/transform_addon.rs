@@ -17,11 +17,9 @@ use std::sync::Arc;
 use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
 use common_datavalues::DataField;
-use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataType;
 use common_exception::Result;
-use common_planners::Expression;
 
 use crate::evaluator::Evaluator;
 use crate::pipelines::processors::port::InputPort;
@@ -29,10 +27,8 @@ use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::transforms::transform::Transform;
 use crate::pipelines::processors::transforms::transform::Transformer;
-use crate::pipelines::processors::transforms::ExpressionExecutor;
 use crate::pipelines::processors::transforms::ExpressionTransformV2;
 use crate::sessions::QueryContext;
-use crate::sql::PlanParser;
 
 pub struct TransformAddOn {
     default_expr_fields: Vec<DataField>,
@@ -73,7 +69,7 @@ where Self: Transform
         }
 
         let func_ctx = ctx.try_get_function_context()?;
-        let mut expression_transform = ExpressionTransformV2 {
+        let expression_transform = ExpressionTransformV2 {
             expressions: default_exprs,
             func_ctx,
         };

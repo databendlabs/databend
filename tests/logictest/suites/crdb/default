@@ -65,3 +65,17 @@ select * from t;
 1 NULL
 2 NULL
 
+statement ok
+drop table t;
+
+statement ok
+CREATE TABLE t(a INT DEFAULT 0.1, b INT NULL);
+
+statement query II
+select * from t;
+
+----
+0 NULL
+
+statement ok
+drop table t;
