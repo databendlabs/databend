@@ -29,13 +29,13 @@ use common_pipeline_core::Pipeline;
 use common_planners::DeletePlan;
 use common_planners::Expression;
 use common_planners::Extras;
-use common_planners::OptimizeTablePlan;
 use common_planners::Partitions;
 use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
 use common_planners::TruncateTablePlan;
 
 use crate::table_context::TableContext;
+use crate::table_mutator::TableMutator;
 
 #[async_trait::async_trait]
 pub trait Table: Sync + Send {
@@ -191,9 +191,27 @@ pub trait Table: Sync + Send {
         )))
     }
 
-    async fn compact(&self, _ctx: Arc<dyn TableContext>, _plan: OptimizeTablePlan) -> Result<()> {
+    async fn compact(
+        &self,
+        _ctx: Arc<dyn TableContext>,
+        _catalog: String,
+        _pipeline: &mut Pipeline,
+    ) -> Result<Option<Arc<dyn TableMutator>>> {
         Err(ErrorCode::UnImplement(format!(
             "table {},  of engine type {}, does not support compact",
+            self.name(),
+            self.get_table_info().engine(),
+        )))
+    }
+
+    async fn recluster(
+        &self,
+        _ctx: Arc<dyn TableContext>,
+        _catalog: String,
+        _pipeline: &mut Pipeline,
+    ) -> Result<Option<Arc<dyn TableMutator>>> {
+        Err(ErrorCode::UnImplement(format!(
+            "table {},  of engine type {}, does not support recluster",
             self.name(),
             self.get_table_info().engine(),
         )))

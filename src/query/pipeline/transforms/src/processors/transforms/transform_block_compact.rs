@@ -19,20 +19,20 @@ use super::Compactor;
 use super::TransformCompact;
 
 pub struct BlockCompactor {
-    max_row_per_block: usize,
-    min_row_per_block: usize,
+    max_rows_per_block: usize,
+    min_rows_per_block: usize,
     max_bytes_per_block: usize,
 }
 
 impl BlockCompactor {
     pub fn new(
-        max_row_per_block: usize,
-        min_row_per_block: usize,
+        max_rows_per_block: usize,
+        min_rows_per_block: usize,
         max_bytes_per_block: usize,
     ) -> Self {
         BlockCompactor {
-            max_row_per_block,
-            min_row_per_block,
+            max_rows_per_block,
+            min_rows_per_block,
             max_bytes_per_block,
         }
     }
@@ -50,17 +50,17 @@ impl Compactor for BlockCompactor {
 
         for block in blocks.iter() {
             // Perfect block, no need to compact
-            if block.num_rows() >= self.min_row_per_block
-                && block.num_rows() <= self.max_row_per_block
+            if block.num_rows() >= self.min_rows_per_block
+                && block.num_rows() <= self.max_rows_per_block
             {
                 res.push(block.clone());
             } else {
-                let block = if block.num_rows() > self.max_row_per_block {
-                    let b = block.slice(0, self.max_row_per_block);
+                let block = if block.num_rows() > self.max_rows_per_block {
+                    let b = block.slice(0, self.max_rows_per_block);
                     res.push(b);
                     block.slice(
-                        self.max_row_per_block,
-                        block.num_rows() - self.max_row_per_block,
+                        self.max_rows_per_block,
+                        block.num_rows() - self.max_rows_per_block,
                     )
                 } else {
                     block.clone()
@@ -69,16 +69,16 @@ impl Compactor for BlockCompactor {
                 accumulated_rows += block.num_rows();
                 temp_blocks.push(block);
 
-                while accumulated_rows >= self.max_row_per_block {
+                while accumulated_rows >= self.max_rows_per_block {
                     let block = DataBlock::concat_blocks(&temp_blocks)?;
-                    res.push(block.slice(0, self.max_row_per_block));
-                    accumulated_rows -= self.max_row_per_block;
+                    res.push(block.slice(0, self.max_rows_per_block));
+                    accumulated_rows -= self.max_rows_per_block;
 
                     temp_blocks.clear();
                     if accumulated_rows != 0 {
                         temp_blocks.push(block.slice(
-                            self.max_row_per_block,
-                            block.num_rows() - self.max_row_per_block,
+                            self.max_rows_per_block,
+                            block.num_rows() - self.max_rows_per_block,
                         ));
                     }
                 }
@@ -107,8 +107,8 @@ impl Compactor for BlockCompactor {
         let block = blocks[size - 1].clone();
 
         // perfect block
-        if (block.num_rows() >= self.min_row_per_block
-            && block.num_rows() <= self.max_row_per_block)
+        if (block.num_rows() >= self.min_rows_per_block
+            && block.num_rows() <= self.max_rows_per_block)
             || block.memory_size() >= self.max_bytes_per_block
         {
             res.push(block);
@@ -120,14 +120,14 @@ impl Compactor for BlockCompactor {
             let merged = DataBlock::concat_blocks(blocks)?;
             blocks.clear();
 
-            if accumulated_rows >= self.max_row_per_block {
-                let cut = merged.slice(0, self.max_row_per_block);
+            if accumulated_rows >= self.max_rows_per_block {
+                let cut = merged.slice(0, self.max_rows_per_block);
                 res.push(cut);
 
-                if accumulated_rows != self.max_row_per_block {
+                if accumulated_rows != self.max_rows_per_block {
                     blocks.push(merged.slice(
-                        self.max_row_per_block,
-                        accumulated_rows - self.max_row_per_block,
+                        self.max_rows_per_block,
+                        accumulated_rows - self.max_rows_per_block,
                     ));
                 }
             } else if accumulated_bytes >= self.max_bytes_per_block {
