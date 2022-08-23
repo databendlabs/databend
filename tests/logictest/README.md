@@ -22,7 +22,7 @@ pip install -r requirements.txt
 
 ## Need to know
 1. Cases from **tests/suites/0_stateless/**  to  **tests/logictest/suites/gen/**
-2. If a case file already exists in gen/, gen_suites will ignore it. 
+2. If a case file already exists in gen/, gen_suites will ignore it.
 3. Regenerate：delete case file in gen/ and run gen_suites.py
 
 ## Generate sqllogic test cases from Stateless Test
@@ -79,7 +79,7 @@ Runner supported: mysql handler, http handler, clickhouse handler.
   - Return result and check the result with expected, follow by query_type and query_label
   - query_type is a char represent a column in result, multi char means multi column
     - B Boolean
-    - T text   
+    - T text
     - F floating point
     - I integer
     - R regex
