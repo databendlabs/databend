@@ -98,9 +98,15 @@ echo "CREATE TABLE IF NOT EXISTS lineitem
     l_comment      STRING not null
 )" | $MYSQL_CLIENT_CONNECT
 
+
+#download data 
+mkdir -p  ${CURDIR}/data/
+curl -s -o ${CURDIR}/data/tpch.tar.gz  http://repo.databend.rs/dataset/stateful/tpch.tar.gz
+tar -zxvf ${CURDIR}/data/tpch.tar.gz -C ${CURDIR}/data
+
 # insert data to tables
 for t in customer lineitem nation orders partsupp part region supplier
 do
     echo "$t"
-    curl -s -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" -H 'insert_sql: insert into '$t' format CSV' -H 'skip_header: 0' -H 'field_delimiter:|' -H 'record_delimiter: \n' -F 'upload=@"'${CURDIR}'/data/'$t'.tbl"' > /dev/null 2>&1
+    curl -s -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" -H 'insert_sql: insert into '$t' format CSV' -H 'skip_header: 0' -H 'field_delimiter:|' -H 'record_delimiter: \n' -F 'upload=@"'${CURDIR}'/data/tests/suites/0_stateless/13_tpch/data/'$t'.tbl"' > /dev/null 2>&1
 done
