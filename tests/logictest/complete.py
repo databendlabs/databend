@@ -30,7 +30,7 @@ def parse_sql_file(source_file):
             continue
 
         statement = sql_content.strip()
-        sqls.append([statement, skipped_query, ""])
+        sqls.append([statement, skipped_query])
         sql_content = ""
 
     f.close()
