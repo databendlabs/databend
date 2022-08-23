@@ -28,7 +28,7 @@ use super::BufferRead;
 use super::BufferReadExt;
 
 pub trait BufferReadDateTimeExt: BufferRead {
-    fn read_date_text(&mut self) -> Result<NaiveDate>;
+    fn read_date_text(&mut self, tz: &Tz) -> Result<NaiveDate>;
     fn read_timestamp_text(&mut self, tz: &Tz) -> Result<DateTime<Tz>>;
     fn parse_time_offset(
         &mut self,
@@ -45,28 +45,9 @@ const DATE_LEN: usize = 10;
 impl<R> BufferReadDateTimeExt for R
 where R: BufferRead
 {
-    fn read_date_text(&mut self) -> Result<NaiveDate> {
+    fn read_date_text(&mut self, tz: &Tz) -> Result<NaiveDate> {
         // TODO support YYYYMMDD format
-        let mut buf = vec![0; DATE_LEN];
-        self.read_exact(buf.as_mut_slice())?;
-
-        let v = std::str::from_utf8(buf.as_slice()).map_err_to_code(ErrorCode::BadBytes, || {
-            format!("Cannot convert value:{:?} to utf8", buf)
-        })?;
-        // convert zero date to `1970-01-01`
-        if v == "0000-00-00" {
-            return Ok(NaiveDate::from_ymd(1970, 1, 1));
-        }
-        let d = v
-            .parse::<NaiveDate>()
-            .map_err_to_code(ErrorCode::BadBytes, || {
-                format!("Cannot parse value:{} to Date type", v)
-            })?;
-        // convert date less than `1000-01-01` to `1000-01-01`
-        if d.year() < 1000 {
-            return Ok(NaiveDate::from_ymd(1000, 1, 1));
-        }
-        Ok(d)
+        self.read_timestamp_text(tz).map(|dt| dt.naive_utc().date())
     }
 
     fn read_timestamp_text(&mut self, tz: &Tz) -> Result<DateTime<Tz>> {
