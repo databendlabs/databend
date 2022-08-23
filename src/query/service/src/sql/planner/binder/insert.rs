@@ -479,7 +479,7 @@ async fn exprs_to_datavalue<'a>(
             let field = schema.field(idx);
             if let Some(default_expr) = field.default_expr() {
                 expressions.push((
-                    Evaluator::eval_physical_scalar(&serde_json::from_str(default_expr).unwrap())?,
+                    Evaluator::eval_physical_scalar(&serde_json::from_str(default_expr)?)?,
                     schema.field(idx).name().to_string(),
                 ));
             } else {
