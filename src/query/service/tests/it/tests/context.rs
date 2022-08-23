@@ -157,12 +157,8 @@ pub async fn create_query_context_with_cluster(
     let nodes = desc.cluster_nodes_list;
 
     let dummy_query_context = QueryContext::create_from_shared(
-        QueryContextShared::try_create(
-            config,
-            (*dummy_session).clone(),
-            Cluster::create(nodes, local_id),
-        )
-        .await?,
+        QueryContextShared::try_create(config, dummy_session, Cluster::create(nodes, local_id))
+            .await?,
     );
 
     dummy_query_context.get_settings().set_max_threads(8)?;
