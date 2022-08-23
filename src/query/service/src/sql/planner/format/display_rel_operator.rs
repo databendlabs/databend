@@ -146,8 +146,11 @@ pub fn format_logical_get(
     let table = metadata.read().table(op.table_index).clone();
     write!(
         f,
-        "LogicalGet: {}.{}.{}",
-        &table.catalog, &table.database, &table.name
+        "LogicalGet: {}.{}.{}, limit: {}",
+        &table.catalog,
+        &table.database,
+        &table.name,
+        op.limit.map_or("none".to_string(), |c| c.to_string())
     )
 }
 
@@ -247,7 +250,7 @@ pub fn format_physical_scan(
     let table = metadata.read().table(op.table_index).clone();
     write!(
         f,
-        "Scan: {}.{}.{}, filters: [{}]",
+        "Scan: {}.{}.{}, filters: [{}], limit: {}",
         &table.catalog,
         &table.database,
         &table.name,
@@ -258,8 +261,9 @@ pub fn format_physical_scan(
                     .iter()
                     .map(|pred| format_scalar(metadata, pred))
                     .join(", ")
-            }
-        )
+            },
+        ),
+        op.limit.map_or("none".to_string(), |c| c.to_string())
     )
 }
 
