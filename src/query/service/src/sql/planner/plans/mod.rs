@@ -206,6 +206,8 @@ pub enum Plan {
     AlterShareTenants(Box<AlterShareTenantsPlan>),
     DescShare(Box<DescSharePlan>),
     ShowShares(Box<ShowSharesPlan>),
+    ShowObjectGrantPrivileges(Box<ShowObjectGrantPrivilegesPlan>),
+    ShowGrantTenantsOfShare(Box<ShowGrantTenantsOfSharePlan>),
 }
 
 #[derive(Clone, Debug)]
@@ -283,6 +285,8 @@ impl Display for Plan {
             Plan::AlterShareTenants(_) => write!(f, "AlterShareTenants"),
             Plan::DescShare(_) => write!(f, "DescShare"),
             Plan::ShowShares(_) => write!(f, "ShowShares"),
+            Plan::ShowObjectGrantPrivileges(_) => write!(f, "ShowObjectGrantPrivileges"),
+            Plan::ShowGrantTenantsOfShare(_) => write!(f, "ShowGrantTenantsOfShare"),
         }
     }
 }
@@ -351,6 +355,8 @@ impl Plan {
             Plan::AlterShareTenants(plan) => plan.schema(),
             Plan::DescShare(plan) => plan.schema(),
             Plan::ShowShares(plan) => plan.schema(),
+            Plan::ShowObjectGrantPrivileges(plan) => plan.schema(),
+            Plan::ShowGrantTenantsOfShare(plan) => plan.schema(),
         }
     }
 }

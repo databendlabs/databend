@@ -26,6 +26,7 @@ use crate::config::STORAGE_S3_DEFAULT_ENDPOINT;
 use crate::StorageAzblobConfig;
 use crate::StorageParams;
 use crate::StorageS3Config;
+use crate::STORAGE_GCS_DEFAULT_ENDPOINT;
 
 #[derive(Clone, Debug)]
 pub struct UriLocation {
@@ -69,6 +70,16 @@ pub fn parse_uri_location(l: &UriLocation) -> Result<(StorageParams, String)> {
                 .unwrap_or_default(),
             account_key: l.connection.get("account_key").cloned().unwrap_or_default(),
             root: root.to_string(),
+        }),
+        Scheme::Gcs => StorageParams::Gcs(crate::StorageGcsConfig {
+            endpoint_url: l
+                .connection
+                .get("endpoint_url")
+                .cloned()
+                .unwrap_or_else(|| STORAGE_GCS_DEFAULT_ENDPOINT.to_string()),
+            bucket: l.name.clone(),
+            root: l.path.clone(),
+            credential: l.connection.get("credential").cloned().unwrap_or_default(),
         }),
         #[cfg(feature = "storage-hdfs")]
         Scheme::Hdfs => StorageParams::Hdfs(crate::StorageHdfsConfig {
