@@ -125,12 +125,12 @@ pub fn cast_from_variant(
             }
             TypeID::Date => {
                 let mut builder = NullableColumnBuilder::<i32>::with_capacity(size);
-
+                let tz = func_ctx.tz;
                 for value in variant_column.iter() {
                     match value.as_ref() {
                         JsonValue::Null => builder.append_null(),
                         JsonValue::String(v) => {
-                            if let Some(d) = string_to_date(v) {
+                            if let Some(d) = string_to_date(v, &tz) {
                                 builder.append((d.num_days_from_ce() - EPOCH_DAYS_FROM_CE) as i32, true);
                             } else {
                                 builder.append_null();
@@ -147,7 +147,6 @@ pub fn cast_from_variant(
                 ))
             }
             TypeID::Timestamp => {
-                // TODO(veeupup): support datetime with precision
                 let mut builder = NullableColumnBuilder::<i64>::with_capacity(size);
                 let tz = func_ctx.tz;
                 for value in variant_column.iter() {

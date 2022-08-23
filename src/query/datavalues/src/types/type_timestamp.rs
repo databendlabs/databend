@@ -49,7 +49,6 @@ pub fn check_timestamp(micros: i64) -> Result<()> {
 /// Timestamp type only stores UTC time in microseconds
 #[derive(Default, Clone, serde::Deserialize, serde::Serialize)]
 pub struct TimestampType {
-    /// The time resolution is determined by the precision parameter, range from 0 to 9
     /// Typically are used - 0 (seconds) 3 (milliseconds), 6 (microseconds)
     precision: usize,
 }
