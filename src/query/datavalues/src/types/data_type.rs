@@ -316,7 +316,7 @@ impl Display for DataTypeImpl {
         match self {
             DataTypeImpl::Null(_) => write!(f, "null"),
             DataTypeImpl::Nullable(type_nullable) => {
-                write!(f, "{}", format!("nullable({})", type_nullable.inner_type()))
+                write!(f, "nullable({})", type_nullable.inner_type())
             }
             DataTypeImpl::Boolean(_) => write!(f, "boolean"),
             DataTypeImpl::Int8(_) => write!(f, "int8"),
