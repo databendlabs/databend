@@ -56,9 +56,7 @@ where Self: Transform
             if !input_schema.has_field(f.name()) {
                 if let Some(default_expr) = f.default_expr() {
                     default_exprs.push((
-                        Evaluator::eval_physical_scalar(
-                            &serde_json::from_str(default_expr).unwrap(),
-                        )?,
+                        Evaluator::eval_physical_scalar(&serde_json::from_str(default_expr)?)?,
                         f.name().to_string(),
                     ));
                     default_expr_fields.push(f.clone());
