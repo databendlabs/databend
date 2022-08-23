@@ -61,11 +61,11 @@ where
         Ok(())
     }
 
-    fn de_json(&mut self, value: &serde_json::Value, _format: &FormatSettings) -> Result<()> {
+    fn de_json(&mut self, value: &serde_json::Value, format: &FormatSettings) -> Result<()> {
         match value {
             serde_json::Value::String(v) => {
                 let mut reader = BufferReader::new(v.as_bytes());
-                let date = reader.read_date_text()?;
+                let date = reader.read_date_text(&format.timezone)?;
                 let days = uniform(date);
                 check_date(days.as_i32())?;
                 self.builder.append_value(days);
@@ -75,9 +75,9 @@ where
         }
     }
 
-    fn de_whole_text(&mut self, reader: &[u8], _format: &FormatSettings) -> Result<()> {
+    fn de_whole_text(&mut self, reader: &[u8], format: &FormatSettings) -> Result<()> {
         let mut reader = BufferReader::new(reader);
-        let date = reader.read_date_text()?;
+        let date = reader.read_date_text(&format.timezone)?;
         let days = uniform(date);
         check_date(days.as_i32())?;
         reader.must_eof()?;
@@ -88,10 +88,10 @@ where
     fn de_text_quoted<R: BufferRead>(
         &mut self,
         reader: &mut NestedCheckpointReader<R>,
-        _format: &FormatSettings,
+        format: &FormatSettings,
     ) -> Result<()> {
         reader.must_ignore_byte(b'\'')?;
-        let date = reader.read_date_text();
+        let date = reader.read_date_text(&format.timezone);
         reader.must_ignore_byte(b'\'')?;
         if date.is_err() {
             return Err(date.err().unwrap());
@@ -106,9 +106,9 @@ where
     fn de_text<R: BufferRead>(
         &mut self,
         reader: &mut NestedCheckpointReader<R>,
-        _format: &FormatSettings,
+        format: &FormatSettings,
     ) -> Result<()> {
-        let date = reader.read_date_text()?;
+        let date = reader.read_date_text(&format.timezone)?;
         let days = uniform(date);
         check_date(days.as_i32())?;
         self.builder.append_value(days);
@@ -118,7 +118,7 @@ where
     fn de_text_csv<R: BufferRead>(
         &mut self,
         reader: &mut NestedCheckpointReader<R>,
-        _format: &FormatSettings,
+        format: &FormatSettings,
     ) -> Result<()> {
         let maybe_single_quote = reader.ignore_byte(b'\'')?;
         let maybe_double_quote = if !maybe_single_quote {
@@ -126,7 +126,7 @@ where
         } else {
             false
         };
-        let date = reader.read_date_text();
+        let date = reader.read_date_text(&format.timezone);
         if maybe_single_quote {
             reader.must_ignore_byte(b'\'')?;
         } else if maybe_double_quote {
@@ -144,10 +144,10 @@ where
     fn de_text_json<R: BufferRead>(
         &mut self,
         reader: &mut NestedCheckpointReader<R>,
-        _format: &FormatSettings,
+        format: &FormatSettings,
     ) -> Result<()> {
         reader.must_ignore_byte(b'"')?;
-        let date = reader.read_date_text()?;
+        let date = reader.read_date_text(&format.timezone)?;
         let days = uniform(date);
         check_date(days.as_i32())?;
         reader.must_ignore_byte(b'"')?;
