@@ -9,6 +9,7 @@ import six
 
 from log import log
 from statistics import global_statistics
+from regex_type import compare_result_with_reg
 
 supports_labels = ['http', 'mysql', 'clickhouse']
 
@@ -364,10 +365,24 @@ class SuiteRunner(object):
                              message=str(statement),
                              errorType="statement ok get error in response")
 
-    def assert_query_equal(self, f, resultset, statement):
+    def assert_query_equal(self, f, resultset, statement, with_regex = False):
         # use join after split instead of strip
         compare_f = "".join(f.split())
         compare_result = "".join(resultset[2].split())
+        if with_regex:
+            try:
+                return compare_result_with_reg(resultset[2].split(), f.split())
+            except Exception as err:
+                raise LogicError(message="\n{}\n Expected:\n{:<80}\n Actual:\n{:<80}\n Statement:{}\n Start " \
+                                            "Line: {}, Result Label: {}".format(str(err),
+                                                                                resultset[2].rstrip(),
+                                                                                f.rstrip(),
+                                                                                str(statement), resultset[1],
+                                                                                resultset[0].group("label")),
+                            errorType="statement query get result not equal to expected(with regex expression)",
+                            runner=self.kind,
+                            )
+
         if compare_f != compare_result:
             raise LogicError(message="\n Expected:\n{:<80}\n Actual:\n{:<80}\n Statement:{}\n Start " \
                                             "Line: {}, Result Label: {}".format(resultset[2].rstrip(),
@@ -401,17 +416,20 @@ class SuiteRunner(object):
             raise LogicError(message=f"{statement} no result found by query",
                              errorType="statement query get empty result",
                              runner=self.kind)
+        with_regex = False
+        if 'R' in statement.s_type.query_type:
+            with_regex = True
         hasResult = False
         for resultset in statement.results:
             if resultset[0].group("label") is not None and resultset[0].group(
                     "label") == self.kind:
-                self.assert_query_equal(f, resultset, statement)
+                self.assert_query_equal(f, resultset, statement, with_regex)
                 hasResult = True
         if not hasResult:
             for resultset in statement.results:
                 if resultset[0].group("label") is None or len(
                         resultset[0].group("label")) == 0:
-                    self.assert_query_equal(f, resultset, statement)
+                    self.assert_query_equal(f, resultset, statement, with_regex)
                     hasResult = True
         if not hasResult:
             raise LogicError(

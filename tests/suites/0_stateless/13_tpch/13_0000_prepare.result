@@ -1,3 +1,12 @@
+tests/suites/0_stateless/13_tpch/data/
+tests/suites/0_stateless/13_tpch/data/supplier.tbl
+tests/suites/0_stateless/13_tpch/data/lineitem.tbl
+tests/suites/0_stateless/13_tpch/data/part.tbl
+tests/suites/0_stateless/13_tpch/data/partsupp.tbl
+tests/suites/0_stateless/13_tpch/data/orders.tbl
+tests/suites/0_stateless/13_tpch/data/customer.tbl
+tests/suites/0_stateless/13_tpch/data/nation.tbl
+tests/suites/0_stateless/13_tpch/data/region.tbl
 customer
 lineitem
 nation
