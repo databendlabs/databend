@@ -27,10 +27,12 @@ use common_base::base::tokio::task::JoinHandle;
 use common_grpc::ConnectionFactory;
 use common_grpc::DNSResolver;
 use common_meta_raft_store::config::RaftConfig;
+use common_meta_raft_store::sled_key_spaces::GenericKV;
 use common_meta_raft_store::state_machine::StateMachine;
 use common_meta_sled_store::openraft;
 use common_meta_sled_store::openraft::DefensiveCheck;
 use common_meta_sled_store::openraft::StoreExt;
+use common_meta_sled_store::SledKeySpace;
 use common_meta_types::protobuf::raft_service_client::RaftServiceClient;
 use common_meta_types::protobuf::raft_service_server::RaftServiceServer;
 use common_meta_types::protobuf::WatchRequest;
@@ -106,6 +108,11 @@ pub struct MetaNodeStatus {
     pub voters: Vec<Node>,
 
     pub non_voters: Vec<Node>,
+
+    /// The last `seq` used by GenericKV sub tree.
+    ///
+    /// `seq` is a monotonically incremental integer for every value that is inserted or updated.
+    pub last_seq: u64,
 }
 
 // MetaRaft is a impl of the generic Raft handling meta data R/W.
@@ -755,6 +762,13 @@ impl MetaNode {
         } else {
             None
         };
+
+        let last_seq = {
+            let sm = self.sto.state_machine.read().await;
+            let last_seq = sm.sequences().get(&GenericKV::NAME.to_string())?;
+            last_seq.unwrap_or_default().0
+        };
+
         Ok(MetaNodeStatus {
             id: self.sto.id,
             endpoint: endpoint.to_string(),
@@ -770,6 +784,7 @@ impl MetaNode {
             leader,
             voters,
             non_voters,
+            last_seq,
         })
     }
 
