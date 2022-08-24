@@ -22,6 +22,7 @@ use common_fuse_meta::meta::SegmentInfo;
 use common_fuse_meta::meta::Statistics;
 use common_fuse_meta::meta::TableSnapshot;
 use common_fuse_meta::meta::Versioned;
+use common_meta_app::schema::TableInfo;
 use opendal::Operator;
 
 use crate::io::write_meta;
@@ -153,7 +154,7 @@ impl TableMutator for CompactMutator {
         Ok(true)
     }
 
-    async fn try_commit(&self, catalog_name: &str) -> Result<()> {
+    async fn try_commit(&self, catalog_name: &str, table_info: &TableInfo) -> Result<()> {
         let ctx = self.ctx.clone();
         let snapshot = self.base_snapshot.clone();
         let mut new_snapshot = TableSnapshot::from_previous(&snapshot);

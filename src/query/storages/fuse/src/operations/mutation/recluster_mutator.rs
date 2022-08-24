@@ -199,7 +199,7 @@ impl TableMutator for ReclusterMutator {
         Ok(false)
     }
 
-    async fn try_commit(&self, catalog_name: &str) -> Result<()> {
+    async fn try_commit(&self, catalog_name: &str, table_info: &TableInfo) -> Result<()> {
         let base_mutator = self.base_mutator.clone();
         let ctx = base_mutator.ctx.clone();
         let (mut segments, mut summary) = self.base_mutator.generate_segments().await?;
