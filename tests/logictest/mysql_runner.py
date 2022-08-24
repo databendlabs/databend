@@ -5,7 +5,6 @@ import mysql.connector
 
 import logictest
 from log import log
-from cleanup import pick_create_statement, get_cleanup_statements
 
 import mysql.connector
 from mysql.connector.conversion import MySQLConverter
