@@ -18,6 +18,15 @@ env:
   BUILD_PROFILE: debug
 
 jobs:
+  # Use github-hosted runner to do this check.
+  check_file_size:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        run: npx @adobe/sizewatcher
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   check:
     timeout-minutes: 30
     runs-on: [self-hosted, X64, Linux]

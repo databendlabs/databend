@@ -7,16 +7,6 @@ inputs:
 runs:
   using: "composite"
   steps:
-    # Check inside runner instead of within build tools.
-    - uses: actions/setup-node@v3
-      with:
-        node-version: 18
-    - name: Check File Size
-      shell: bash
-      run: npx @adobe/sizewatcher
-      env:
-        GITHUB_TOKEN: ${{ inputs.github_token }}
-
     - name: Setup Build Tool
       uses: ./.github/actions/setup_build_tool
       with:
