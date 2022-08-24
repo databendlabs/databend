@@ -24,6 +24,7 @@ use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
 use crate::sessions::QueryContext;
+use crate::sql::executor::PhysicalScalar;
 use crate::sql::PlanParser;
 use crate::storages::view::view_table::QUERY;
 use crate::storages::view::view_table::VIEW_ENGINE;
@@ -88,8 +89,8 @@ impl Interpreter for DescribeTableInterpreter {
             });
             match field.default_expr() {
                 Some(expr) => {
-                    let expression = PlanParser::parse_expr(expr)?;
-                    default_exprs.push(format!("{:?}", expression));
+                    let expression: PhysicalScalar = serde_json::from_str(expr)?;
+                    default_exprs.push(format!("{expression}"));
                 }
 
                 None => {

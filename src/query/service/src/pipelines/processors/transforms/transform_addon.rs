@@ -14,28 +14,27 @@
 
 use std::sync::Arc;
 
+use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
 use common_datavalues::DataField;
-use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataType;
 use common_exception::Result;
-use common_planners::Expression;
 
+use crate::evaluator::Evaluator;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::transforms::transform::Transform;
 use crate::pipelines::processors::transforms::transform::Transformer;
-use crate::pipelines::processors::transforms::ExpressionExecutor;
+use crate::pipelines::processors::transforms::ExpressionTransformV2;
 use crate::sessions::QueryContext;
-use crate::sql::PlanParser;
 
 pub struct TransformAddOn {
     default_expr_fields: Vec<DataField>,
     default_nonexpr_fields: Vec<DataField>,
 
-    expression_executor: ExpressionExecutor,
+    expression_transform: ExpressionTransformV2,
     output_schema: DataSchemaRef,
 }
 
@@ -55,38 +54,28 @@ where Self: Transform
 
         for f in output_schema.fields() {
             if !input_schema.has_field(f.name()) {
-                if let Some(expr) = f.default_expr() {
-                    let expression = PlanParser::parse_expr(expr)?;
-                    let expression = Expression::Alias(
+                if let Some(default_expr) = f.default_expr() {
+                    default_exprs.push((
+                        Evaluator::eval_physical_scalar(&serde_json::from_str(default_expr)?)?,
                         f.name().to_string(),
-                        Box::new(Expression::Cast {
-                            expr: Box::new(expression),
-                            data_type: f.data_type().clone(),
-                            pg_style: false,
-                        }),
-                    );
-
+                    ));
                     default_expr_fields.push(f.clone());
-                    default_exprs.push(expression);
                 } else {
                     default_nonexpr_fields.push(f.clone());
                 }
             }
         }
-        let schema_after_default_expr = Arc::new(DataSchema::new(default_expr_fields.clone()));
-        let expression_executor = ExpressionExecutor::try_create(
-            ctx,
-            "stream_addon",
-            input_schema,
-            schema_after_default_expr,
-            default_exprs,
-            true,
-        )?;
+
+        let func_ctx = ctx.try_get_function_context()?;
+        let expression_transform = ExpressionTransformV2 {
+            expressions: default_exprs,
+            func_ctx,
+        };
 
         Ok(Transformer::create(input, output, Self {
             default_expr_fields,
             default_nonexpr_fields,
-            expression_executor,
+            expression_transform,
             output_schema,
         }))
     }
@@ -97,7 +86,7 @@ impl Transform for TransformAddOn {
 
     fn transform(&mut self, mut block: DataBlock) -> Result<DataBlock> {
         let num_rows = block.num_rows();
-        let expr_block = self.expression_executor.execute(&block)?;
+        let expr_block = self.expression_transform.transform(block.clone())?;
 
         for f in self.default_expr_fields.iter() {
             block =
