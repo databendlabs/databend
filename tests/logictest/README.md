@@ -161,7 +161,7 @@ select 1;
 1
 ```
 
-3. if some test has flaky failure, and you want ignore it, simply add skipped before statement query.(Remove it after problem solved)
+3. if some test has a flaky failure, and you want to ignore it, simply add skipped before statement query. (Remove it after the problem is solved)
 ```
 statement query skipped I
 select 1;
@@ -177,22 +177,24 @@ select 1;
 
 ## Tools
 
-complete.py can auto complete test file for you, It do as follow steps:
+complete.py can auto-complete test file for you, It does as follow steps:
 
 1. Get SQLs from source-file, whether an SQL file or logictest file.
 2. Execute SQL one by one, if SQL fetches results, add statement query; if SQL fetches nothing, add statement ok; if SQL gets an error, add statement error.
 
 ### Usage
 
-- Pre-run, you need to start databend server or mysql server
+- Pre-run, you need to start databend server or MySQL server
 - Use `./complete.py --source-file="xxx.sql" --dest-file="my-gen"`  for SQL files(suffix name must be like *.sql)
 - Use `./complete.py --source-file="xxx.test" --fest-file="my-gen"` for logictest files(suffix name not like *.sql, maybe like *.test)
-- If you want to see what SQLs get from source-file, add --show-sql
+- Use `--enable-auto-cleanup` to add `drop table if exists xxx` or `drop database if exists xxx` at the beginning of the test file
+- If you want to see what SQLs get from source-file, add `--show-sql`
 - Use the command line to specify host, user, port, password and database. Details in `./complete.py -h`
 
 ### Acknowledgement
-- *tips* You can use MYSQL syntax to auto-complete test suite, but make sure you know all grammar differences.
-- *tips* MYSQL return bool as 1 and 0, this tool make it as `int(I)` in query type option.
+
+- *tips* You can use MYSQL syntax to auto-complete the test suite, but make sure you know all grammar differences.
+- *tips* MYSQL return bool as 1 and 0, this tool makes it as `int(I)` in query type option.
 - *warning* No multi handlers use in the auto-complete tool(MYSQL only), if handlers return a difference, manual fix it, please.
 
 # Learn More
