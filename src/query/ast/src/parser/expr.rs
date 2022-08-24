@@ -126,7 +126,11 @@ pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
             }
         }
         let iter = &mut expr_elements.into_iter();
-        run_pratt_parser(ExprParser, iter, rest, i)
+        let res = run_pratt_parser(ExprParser, iter, rest, i);
+        // if let Ok((_, expr)) = &res {
+        //     dbg!(expr);
+        // }
+        res
     }
 }
 
@@ -739,12 +743,14 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
     });
     let tuple = map(
         rule! {
-            "(" ~ #subexpr(0) ~ "," ~ #comma_separated_list1_allow_trailling(subexpr(0))? ~ ","? ~ ^")"
+            "(" ~ #comma_separated_list0_allow_trailling(subexpr(0)) ~ ","? ~ ^")"
         },
-        |(_, head, _, opt_tail, _, _)| {
-            let mut exprs = opt_tail.unwrap_or_default();
-            exprs.insert(0, head);
-            ExprElement::Tuple { exprs }
+        |(_, mut exprs, opt_trail, _)| {
+            if exprs.len() == 1 && opt_trail.is_none() {
+                ExprElement::Group(exprs.remove(0))
+            } else {
+                ExprElement::Tuple { exprs }
+            }
         },
     );
     let function_call = map(
@@ -819,14 +825,14 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             ExprElement::Subquery { modifier, subquery }
         },
     );
-    let group = map(
-        rule! {
-           "("
-           ~ ^#subexpr(0)
-           ~ ^")"
-        },
-        |(_, expr, _)| ExprElement::Group(expr),
-    );
+    // let group = map(
+    //     rule! {
+    //        "("
+    //        ~ ^#subexpr(0)
+    //        ~ ^")"
+    //     },
+    //     |(_, expr, _)| ExprElement::Group(expr),
+    // );
     let binary_op = map(binary_op, |op| ExprElement::BinaryOp { op });
     let unary_op = map(unary_op, |op| ExprElement::UnaryOp { op });
     let literal = map(literal, |lit| ExprElement::Literal { lit });
@@ -946,7 +952,6 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             | #literal : "<literal>"
             | #case : "`CASE ... END`"
             | #subquery : "`(SELECT ...)`"
-            | #group
             | #column_ref : "<column>"
             | #map_access : "[<key>] | .<key> | :<key>"
             | #array : "`[...]`"
