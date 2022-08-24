@@ -62,7 +62,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_1_arg::<NumberType<f64>, NumberType<f64>, _, _>(
         "acos",
         FunctionProperty::default(),
-        |_| Some(NumberDomain::<f64> { min: 0, max: PI }),
+        |_| Some(NumberDomain::<f64> { min: 0.0, max: PI }),
         |f: f64| f.acos(),
     );
 
@@ -71,8 +71,8 @@ pub fn register(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| {
             Some(NumberDomain::<f64> {
-                min: 0,
-                max: 2 * PI,
+                min: 0.0,
+                max: 2.0 * PI,
             })
         },
         |f: f64| f.asin(),
@@ -83,8 +83,8 @@ pub fn register(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| {
             Some(NumberDomain::<f64> {
-                min: -PI / 2,
-                max: PI / 2,
+                min: -PI / 2.0,
+                max: PI / 2.0,
             })
         },
         |f: f64| f.atan(),
@@ -93,7 +93,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_2_arg::<NumberType<f64>, NumberType<f64>, NumberType<f64>, _, _>(
         "atan2",
         FunctionProperty::default(),
-        |_| Some(NumberDomain::<f64> { min: -PI, max: PI }),
+        |_, _| Some(NumberDomain::<f64> { min: -PI, max: PI }),
         |f: f64, r: f64| f.atan2(r),
     );
 

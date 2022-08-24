@@ -52,7 +52,7 @@ raw expr       : sign(1_u8)
 checked expr   : sign<Float64>(CAST(1_u8 AS Float64))
 optimized expr : 1_i8
 output type    : Int8
-output domain  : {-1..=1}
+output domain  : {1..=1}
 output         : 1
 
 
@@ -61,7 +61,7 @@ raw expr       : sign(minus(1_u8))
 checked expr   : sign<Float64>(CAST(minus<UInt8>(1_u8) AS Float64))
 optimized expr : -1_i8
 output type    : Int8
-output domain  : {-1..=1}
+output domain  : {-1..=-1}
 output         : -1
 
 
@@ -101,7 +101,7 @@ raw expr       : sin(1_u8)
 checked expr   : sin<Float64>(CAST(1_u8 AS Float64))
 optimized expr : 0.8414709848078965_f64
 output type    : Float64
-output domain  : Unknown
+output domain  : {-1.0..=1.0}
 output         : 0.8414709848078965
 
 
@@ -110,7 +110,7 @@ raw expr       : cos(1_u8)
 checked expr   : cos<Float64>(CAST(1_u8 AS Float64))
 optimized expr : 0.5403023058681398_f64
 output type    : Float64
-output domain  : Unknown
+output domain  : {-1.0..=1.0}
 output         : 0.5403023058681398
 
 
@@ -128,7 +128,7 @@ raw expr       : atan(0.5_f64)
 checked expr   : atan<Float64>(0.5_f64)
 optimized expr : 0.4636476090008061_f64
 output type    : Float64
-output domain  : Unknown
+output domain  : {-1.5707963267948966..=1.5707963267948966}
 output         : 0.4636476090008061
 
 
@@ -146,7 +146,7 @@ raw expr       : asin(1_u8)
 checked expr   : asin<Float64>(CAST(1_u8 AS Float64))
 optimized expr : 1.5707963267948966_f64
 output type    : Float64
-output domain  : Unknown
+output domain  : {0.0..=6.283185307179586}
 output         : 1.5707963267948966
 
 
@@ -155,7 +155,7 @@ raw expr       : acos(0_u8)
 checked expr   : acos<Float64>(CAST(0_u8 AS Float64))
 optimized expr : 1.5707963267948966_f64
 output type    : Float64
-output domain  : Unknown
+output domain  : {0.0..=3.141592653589793}
 output         : 1.5707963267948966
 
 
@@ -173,15 +173,15 @@ raw expr       : atan2(ColumnRef(0)::Int64, 4_u8)
 checked expr   : atan2<Float64, Float64>(CAST(ColumnRef(0) AS Float64), CAST(4_u8 AS Float64))
 optimized expr : atan2<Float64, Float64>(CAST(ColumnRef(0) AS Float64), 4.0_f64)
 evaluation:
-+--------+-------------+----------------------+
-|        | a           | Output               |
-+--------+-------------+----------------------+
-| Type   | Int64       | Float64              |
-| Domain | {-1..=1024} | Unknown              |
-| Row 0  | 1           | 0.24497866312686414  |
-| Row 1  | -1          | -0.24497866312686414 |
-| Row 2  | 1024        | 1.5668900966629296   |
-+--------+-------------+----------------------+
++--------+-------------+------------------------------------------+
+|        | a           | Output                                   |
++--------+-------------+------------------------------------------+
+| Type   | Int64       | Float64                                  |
+| Domain | {-1..=1024} | {-3.141592653589793..=3.141592653589793} |
+| Row 0  | 1           | 0.24497866312686414                      |
+| Row 1  | -1          | -0.24497866312686414                     |
+| Row 2  | 1024        | 1.5668900966629296                       |
++--------+-------------+------------------------------------------+
 evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
