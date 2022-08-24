@@ -934,12 +934,12 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         rule!(
             #is_distinct_from: "`... IS [NOT] DISTINCT FROM ...`"
             | #count_all : "COUNT(*)"
-            | #tuple : "`(<expr>, ...)`"
             | #function_call_with_param : "<function>"
             | #function_call : "<function>"
             | #literal : "<literal>"
             | #case : "`CASE ... END`"
             | #subquery : "`(SELECT ...)`"
+            | #tuple : "`(<expr> [,] [...])`"
             | #column_ref : "<column>"
             | #map_access : "[<key>] | .<key> | :<key>"
             | #array : "`[...]`"
