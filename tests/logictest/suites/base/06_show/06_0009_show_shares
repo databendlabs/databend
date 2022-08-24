@@ -61,4 +61,3 @@ DROP DATABASE IF EXISTS show_shares;
 
 statement ok
 DROP SHARE IF EXISTS test_share;
-

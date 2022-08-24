@@ -14,6 +14,8 @@
 
 use std::any::Any;
 use std::collections::BTreeMap;
+use std::fmt::Display;
+use std::fmt::Formatter;
 
 use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_arrow::arrow::datatypes::Field as ArrowField;
@@ -306,5 +308,36 @@ pub fn format_data_type_sql(data_type: &DataTypeImpl) -> String {
     match data_type.is_nullable() {
         true => format!("{} NULL", notnull_type.sql_name()),
         false => notnull_type.sql_name(),
+    }
+}
+
+impl Display for DataTypeImpl {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DataTypeImpl::Null(_) => write!(f, "null"),
+            DataTypeImpl::Nullable(type_nullable) => {
+                write!(f, "nullable({})", type_nullable.inner_type())
+            }
+            DataTypeImpl::Boolean(_) => write!(f, "boolean"),
+            DataTypeImpl::Int8(_) => write!(f, "int8"),
+            DataTypeImpl::Int16(_) => write!(f, "int16"),
+            DataTypeImpl::Int32(_) => write!(f, "int32"),
+            DataTypeImpl::Int64(_) => write!(f, "int64"),
+            DataTypeImpl::UInt8(_) => write!(f, "uint8"),
+            DataTypeImpl::UInt16(_) => write!(f, "uint16"),
+            DataTypeImpl::UInt32(_) => write!(f, "uint32"),
+            DataTypeImpl::UInt64(_) => write!(f, "uint64"),
+            DataTypeImpl::Float32(_) => write!(f, "float32"),
+            DataTypeImpl::Float64(_) => write!(f, "float64"),
+            DataTypeImpl::Date(_) => write!(f, "date"),
+            DataTypeImpl::Timestamp(_) => write!(f, "timestamp"),
+            DataTypeImpl::String(_) => write!(f, "string"),
+            DataTypeImpl::Struct(_) => write!(f, "struct"),
+            DataTypeImpl::Array(_) => write!(f, "array"),
+            DataTypeImpl::Variant(_) => write!(f, "variant"),
+            DataTypeImpl::VariantArray(_) => write!(f, "variant_array"),
+            DataTypeImpl::VariantObject(_) => write!(f, "variant_object"),
+            DataTypeImpl::Interval(_) => write!(f, "interval"),
+        }
     }
 }

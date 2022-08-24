@@ -26,6 +26,7 @@ pub use expression_builder::ExpressionBuilderWithRenaming;
 pub use expression_builder::ExpressionBuilderWithoutRenaming;
 pub use physical_plan::*;
 pub use physical_plan_builder::PhysicalPlanBuilder;
+pub use physical_plan_builder::PhysicalScalarBuilder;
 pub use physical_plan_visitor::PhysicalPlanReplacer;
 pub use physical_scalar::*;
 pub use pipeline_builder::PipelineBuilder;
