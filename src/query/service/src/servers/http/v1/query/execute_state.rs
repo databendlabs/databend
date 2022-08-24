@@ -49,7 +49,7 @@ use crate::pipelines::PipelineBuildResult;
 use crate::servers::utils::use_planner_v2;
 use crate::sessions::QueryAffect;
 use crate::sessions::QueryContext;
-use crate::sessions::SessionRef;
+use crate::sessions::Session;
 use crate::sessions::TableContext;
 use crate::sql::ColumnBinding;
 use crate::sql::DfParser;
@@ -105,7 +105,7 @@ impl ExecuteState {
 
 pub struct ExecuteRunning {
     // used to kill query
-    session: SessionRef,
+    session: Arc<Session>,
     // mainly used to get progress for now
     ctx: Arc<QueryContext>,
     interpreter: Arc<dyn Interpreter>,
@@ -180,7 +180,7 @@ impl Executor {
 impl ExecuteState {
     pub(crate) async fn try_create(
         request: &HttpQueryRequest,
-        session: SessionRef,
+        session: Arc<Session>,
         ctx: Arc<QueryContext>,
         block_buffer: Arc<BlockBuffer>,
     ) -> Result<Arc<RwLock<Executor>>> {

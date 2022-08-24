@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::net::SocketAddr;
-use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 
 use chrono_tz::Tz;
@@ -41,7 +40,6 @@ use crate::Config;
 pub struct Session {
     pub(in crate::sessions) id: String,
     pub(in crate::sessions) typ: RwLock<SessionType>,
-    pub(in crate::sessions) ref_count: Arc<AtomicUsize>,
     pub(in crate::sessions) session_ctx: Arc<SessionContext>,
     status: Arc<RwLock<SessionStatus>>,
     pub(in crate::sessions) mysql_connection_id: Option<u32>,
@@ -54,13 +52,11 @@ impl Session {
         session_ctx: Arc<SessionContext>,
         mysql_connection_id: Option<u32>,
     ) -> Result<Arc<Session>> {
-        let ref_count = Arc::new(AtomicUsize::new(0));
         let status = Arc::new(Default::default());
         Ok(Arc::new(Session {
             id,
             typ: RwLock::new(typ),
             status,
-            ref_count,
             session_ctx,
             mysql_connection_id,
         }))
@@ -134,7 +130,7 @@ impl Session {
     pub async fn get_shared_query_context(self: &Arc<Self>) -> Result<Arc<QueryContextShared>> {
         let config = self.get_config();
         let session = self.clone();
-        let cluster = ClusterDiscovery::instance().discover().await?;
+        let cluster = ClusterDiscovery::instance().discover(&config).await?;
         let shared = QueryContextShared::try_create(config, session, cluster).await?;
 
         self.session_ctx

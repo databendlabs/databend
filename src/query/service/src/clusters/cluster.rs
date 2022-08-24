@@ -139,7 +139,7 @@ static CLUSTER_DISCOVERY: OnceCell<Singleton<Arc<ClusterDiscovery>>> = OnceCell:
 impl ClusterDiscovery {
     const METRIC_LABEL_FUNCTION: &'static str = "function";
 
-    async fn create_meta_client(cfg: &Config) -> Result<Arc<dyn KVApi>> {
+    pub async fn create_meta_client(cfg: &Config) -> Result<Arc<dyn KVApi>> {
         let meta_api_provider = MetaStoreProvider::new(cfg.meta.to_meta_grpc_client_conf());
         match meta_api_provider.try_get_meta_store().await {
             Ok(client) => Ok(client.arc()),
@@ -148,12 +148,18 @@ impl ClusterDiscovery {
     }
 
     pub async fn init(cfg: Config, v: Singleton<Arc<ClusterDiscovery>>) -> Result<()> {
-        let local_id = GlobalUniqName::unique();
         let meta_client = ClusterDiscovery::create_meta_client(&cfg).await?;
-        let (lift_time, provider) = Self::create_provider(&cfg, meta_client)?;
+        v.init(Self::try_create(&cfg, meta_client).await?)?;
 
-        v.init(Arc::new(ClusterDiscovery {
-            local_id: local_id.clone(),
+        CLUSTER_DISCOVERY.set(v).ok();
+        Ok(())
+    }
+
+    pub async fn try_create(cfg: &Config, api: Arc<dyn KVApi>) -> Result<Arc<ClusterDiscovery>> {
+        let (lift_time, provider) = Self::create_provider(cfg, api)?;
+
+        Ok(Arc::new(ClusterDiscovery {
+            local_id: GlobalUniqName::unique(),
             api_provider: provider.clone(),
             heartbeat: Mutex::new(ClusterHeartbeat::create(
                 lift_time,
@@ -164,10 +170,7 @@ impl ClusterDiscovery {
             cluster_id: cfg.query.cluster_id.clone(),
             tenant_id: cfg.query.tenant_id.clone(),
             flight_address: cfg.query.flight_api_address.clone(),
-        }))?;
-
-        CLUSTER_DISCOVERY.set(v).ok();
-        Ok(())
+        }))
     }
 
     pub fn instance() -> Arc<ClusterDiscovery> {
@@ -190,7 +193,7 @@ impl ClusterDiscovery {
         Ok((lift_time, Arc::new(cluster_manager)))
     }
 
-    pub async fn discover(&self) -> Result<Arc<Cluster>> {
+    pub async fn discover(&self, config: &Config) -> Result<Arc<Cluster>> {
         match self.api_provider.get_nodes().await {
             Err(cause) => {
                 label_counter_with_val_and_labels(
@@ -224,7 +227,18 @@ impl ClusterDiscovery {
             Ok(cluster_nodes) => {
                 let mut res = Vec::with_capacity(cluster_nodes.len());
                 for node in &cluster_nodes {
-                    res.push(Arc::new(node.clone()))
+                    if node.id != self.local_id {
+                        if let Err(cause) = create_client(config, &node.flight_address).await {
+                            warn!(
+                                "Cannot connect node [{:?}], remove it in query. cause: {:?}",
+                                node.flight_address, cause
+                            );
+
+                            continue;
+                        }
+                    }
+
+                    res.push(Arc::new(node.clone()));
                 }
 
                 gauge!(
@@ -459,5 +473,21 @@ impl ClusterHeartbeat {
             }
         }
         Ok(())
+    }
+}
+
+pub async fn create_client(config: &Config, address: &str) -> Result<FlightClient> {
+    match config.tls_query_cli_enabled() {
+        true => Ok(FlightClient::new(FlightServiceClient::new(
+            ConnectionFactory::create_rpc_channel(
+                address.to_owned(),
+                None,
+                Some(config.query.to_rpc_client_tls_config()),
+            )
+            .await?,
+        ))),
+        false => Ok(FlightClient::new(FlightServiceClient::new(
+            ConnectionFactory::create_rpc_channel(address.to_owned(), None, None).await?,
+        ))),
     }
 }

@@ -6,14 +6,14 @@ Shows all settings of the current session.
 
 ## Syntax
 
-```
-SHOW SETTINGS
+```sql
+SHOW SETTINGS;
 ```
 
 ## Examples
 
 ```sql
-show settings;
+SHOW SETTINGS;
 
 |name                          |value  |default|level  |description                                                                                       |type  |
 |------------------------------|-------|-------|-------|--------------------------------------------------------------------------------------------------|------|

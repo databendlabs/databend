@@ -67,26 +67,5 @@ async fn test_session_in_management_mode() -> Result<()> {
         assert_eq!(&actual, "tenant2");
     }
 
-    // test session leak
-    let leak_id;
-    {
-        let leak_session = SessionManager::instance()
-            .create_session(SessionType::Dummy)
-            .await?;
-        leak_id = leak_session.get_id();
-        assert!(
-            SessionManager::instance()
-                .get_session_by_id(leak_id.as_str())
-                .await
-                .is_some()
-        );
-    }
-    assert!(
-        SessionManager::instance()
-            .get_session_by_id(leak_id.as_str())
-            .await
-            .is_none()
-    );
-
     Ok(())
 }
