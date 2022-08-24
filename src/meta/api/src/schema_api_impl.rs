@@ -81,6 +81,7 @@ use common_meta_types::app_error::UndropTableWithNoDropTime;
 use common_meta_types::app_error::UnknownShareAccounts;
 use common_meta_types::app_error::UnknownTable;
 use common_meta_types::app_error::UnknownTableId;
+use common_meta_types::app_error::WrongShare;
 use common_meta_types::ConditionResult;
 use common_meta_types::GCDroppedDataReply;
 use common_meta_types::GCDroppedDataReq;
@@ -135,6 +136,15 @@ impl<KV: KVApi> SchemaApi for KV {
             return Err(MetaError::AppError(AppError::CreateDatabaseWithDropTime(
                 CreateDatabaseWithDropTime::new(&name_key.db_name),
             )));
+        }
+
+        // if create a database from a share, check if the share exists and grant access, update share_meta.
+        if let Some(from_share) = &req.meta.from_share {
+            if from_share.tenant == req.name_ident.tenant {
+                return Err(MetaError::AppError(AppError::WrongShare(WrongShare::new(
+                    req.name_ident.to_string(),
+                ))));
+            }
         }
 
         let mut retry = 0;
