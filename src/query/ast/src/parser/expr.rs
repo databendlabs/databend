@@ -126,11 +126,7 @@ pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
             }
         }
         let iter = &mut expr_elements.into_iter();
-        let res = run_pratt_parser(ExprParser, iter, rest, i);
-        // if let Ok((_, expr)) = &res {
-        //     dbg!(expr);
-        // }
-        res
+        run_pratt_parser(ExprParser, iter, rest, i)
     }
 }
 
@@ -825,14 +821,6 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             ExprElement::Subquery { modifier, subquery }
         },
     );
-    // let group = map(
-    //     rule! {
-    //        "("
-    //        ~ ^#subexpr(0)
-    //        ~ ^")"
-    //     },
-    //     |(_, expr, _)| ExprElement::Group(expr),
-    // );
     let binary_op = map(binary_op, |op| ExprElement::BinaryOp { op });
     let unary_op = map(unary_op, |op| ExprElement::UnaryOp { op });
     let literal = map(literal, |lit| ExprElement::Literal { lit });

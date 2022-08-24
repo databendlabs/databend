@@ -20,8 +20,8 @@ use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
 use common_ast::Backtrace;
 use common_ast::Dialect;
-use criterion::Criterion;
 use criterion::black_box;
+use criterion::Criterion;
 
 fn bench(c: &mut Criterion) {
     let mut group = c.benchmark_group("bench_parser");
