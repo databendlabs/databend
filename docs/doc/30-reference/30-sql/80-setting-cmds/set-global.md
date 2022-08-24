@@ -2,7 +2,7 @@
 title: SET
 ---
 
-Changes the value of a session-level or global-level setting. To show all the current settings, use [SHOW SETTINGS](show-settings.md). 
+Changes the value of a session-level or cluster-level setting. To show all the current settings, use [SHOW SETTINGS](show-settings.md). 
 
 ## Syntax
 
@@ -10,22 +10,22 @@ Changes the value of a session-level or global-level setting. To show all the cu
 SET [GLOBAL] <setting_name> = <new_value>;
 ```
 
-`GLOBAL`: Include this option when you change the value of a global-level setting. If you include this option preceding a session-level setting, the setting will become a global-level setting.
+`GLOBAL`: Include this option when you change the value of a global-level setting. If you include this option preceding a session-level setting, the setting will become a cluster-level(or global-level) setting.
 
 :::note
-A global-level setting is a cluster setting and the value will be stored in the `metasrv`.
+A cluster-level setting is a cluster setting and the value will be stored in the meta service.
 :::
 
 ## Examples
 
-The following example sets the `skip_header` setting to 1:
+The following example sets the `max_threads` setting to `4`:
 
 ```sql
-SET skip_header = 1;
+SET max_threads = 4;
 ```
 
-The following example sets the `skip_header` setting to 1 and changes it to be a global-level setting:
+The following example sets the `max_threads` setting to `4` and changes it to be a cluster-level setting:
 
 ```sql
-SET GLOBAL skip_header = 1;
+SET GLOBAL max_threads = 4;
 ```
