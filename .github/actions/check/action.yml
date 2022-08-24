@@ -12,6 +12,9 @@ runs:
       with:
         bypass_env_vars: RUSTFLAGS,RUST_LOG,GITHUB_TOKEN
 
+    - uses: actions/setup-node@v3
+      with:
+        node-version: 18
     - uses: andresz1/size-limit-action@v1
       with:
         github_token: ${{ inputs.github_token }}
