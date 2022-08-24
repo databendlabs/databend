@@ -33,16 +33,16 @@ select a+b from t2;
 4
 
 statement error 2302
-create table t2(a int,b int) Engine = Fuse; 
+create table t2(a int,b int) Engine = Fuse;
 
 statement error 2302
-create table t2(a int,b int) Engine = Fuse; 
+create table t2(a int,b int) Engine = Fuse;
 
 statement error 1005
-create table t2(a INT auto_increment); 
+create table t2(a INT auto_increment);
 
 statement error 2703
-create table t3(a int,b int) engine=Memory CLUSTER BY(a); 
+create table t3(a int,b int) engine=Memory CLUSTER BY(a);
 
 statement ok
 create table t3(`a` int) ENGINE = Null;
@@ -149,10 +149,10 @@ NULL
 NULL
 
 statement error 1065
-create table db2.test6(id Int8, created timestamp  DEFAULT CURRENT_TIMESTAMP); 
+create table db2.test6(id Int8, created timestamp  DEFAULT CURRENT_TIMESTAMP);
 
 statement error 1065
-create table db2.test6(id Int8, created timestamp  DEFAULT today() + a); 
+create table db2.test6(id Int8, created timestamp  DEFAULT today() + a);
 
 statement ok
 create table db2.test6(id Int8, created timestamp  DEFAULT today() + 3);
@@ -160,14 +160,54 @@ create table db2.test6(id Int8, created timestamp  DEFAULT today() + 3);
 statement ok
 create table db2.test7(tiny TINYINT, tiny_unsigned TINYINT UNSIGNED, smallint SMALLINT, smallint_unsigned SMALLINT UNSIGNED, int INT, int_unsigned INT UNSIGNED, bigint BIGINT, bigint_unsigned BIGINT UNSIGNED,float FLOAT, double DOUBLE, date DATE, datetime DATETIME, ts TIMESTAMP, str VARCHAR default '3', bool BOOLEAN, arr ARRAY, obj OBJECT, variant VARIANT);
 
-statement ok
+statement query TTTTT
 desc db2.test7;
+
+----
+tiny TINYINT NO 0 
+tiny_unsigned TINYINT UNSIGNED NO 0 
+smallint SMALLINT NO 0 
+smallint_unsigned SMALLINT UNSIGNED NO 0 
+int INT NO 0 
+int_unsigned INT UNSIGNED NO 0 
+bigint BIGINT NO 0 
+bigint_unsigned BIGINT UNSIGNED NO 0 
+float FLOAT NO 0 
+double DOUBLE NO 0 
+date DATE NO 0 
+datetime TIMESTAMP(6) NO 0 
+ts TIMESTAMP(6) NO 0 
+str VARCHAR NO 3 
+bool BOOLEAN NO false 
+arr ARRAY NO [] 
+obj OBJECT NO {} 
+variant VARIANT NO null 
 
 statement ok
 create transient table db2.test8(tiny TINYINT, tiny_unsigned TINYINT UNSIGNED, smallint SMALLINT, smallint_unsigned SMALLINT UNSIGNED, int INT, int_unsigned INT UNSIGNED, bigint BIGINT, bigint_unsigned BIGINT UNSIGNED,float FLOAT, double DOUBLE, date DATE, datetime DATETIME, ts TIMESTAMP, str VARCHAR default '3', bool BOOLEAN, arr ARRAY, obj OBJECT, variant VARIANT);
 
-statement ok
+statement query TTTTT
 desc db2.test8;
+
+----
+tiny TINYINT NO 0 
+tiny_unsigned TINYINT UNSIGNED NO 0 
+smallint SMALLINT NO 0 
+smallint_unsigned SMALLINT UNSIGNED NO 0 
+int INT NO 0 
+int_unsigned INT UNSIGNED NO 0 
+bigint BIGINT NO 0 
+bigint_unsigned BIGINT UNSIGNED NO 0 
+float FLOAT NO 0 
+double DOUBLE NO 0 
+date DATE NO 0 
+datetime TIMESTAMP(6) NO 0 
+ts TIMESTAMP(6) NO 0 
+str VARCHAR NO 3 
+bool BOOLEAN NO false 
+arr ARRAY NO [] 
+obj OBJECT NO {} 
+variant VARIANT NO null 
 
 statement ok
 DROP DATABASE db1;
@@ -176,5 +216,5 @@ statement ok
 DROP DATABASE db2;
 
 statement error 1002
-CREATE TABLE system.test(a INT); 
+CREATE TABLE system.test(a INT);
 
