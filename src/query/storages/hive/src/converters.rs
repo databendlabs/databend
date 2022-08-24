@@ -29,6 +29,7 @@ use common_datavalues::DataSchema;
 use common_datavalues::DataTypeImpl;
 use common_datavalues::DateType;
 use common_datavalues::NullableType;
+use common_datavalues::TimestampType;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_hive_meta_store as hms;
@@ -171,7 +172,7 @@ fn try_from_filed_type_name(type_name: impl AsRef<str>) -> Result<DataTypeImpl> 
             "DOUBLE PRECISION" => Ok(DataTypeImpl::Float64(Float64Type::default())),
 
             // timestamp
-            // "TIMESTAMP" => Ok(DataTypeImpl::Timestamp(TimestampType::create(3))),
+            "TIMESTAMP" => Ok(DataTypeImpl::Timestamp(TimestampType::create(3))),
             "DATE" => Ok(DataTypeImpl::Date(DateType::default())),
 
             _ => Err(ErrorCode::IllegalDataType(format!(
