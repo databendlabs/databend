@@ -12,11 +12,9 @@ runs:
       with:
         bypass_env_vars: RUSTFLAGS,RUST_LOG,GITHUB_TOKEN
 
-    - name: Check File Size
-      env:
-        GITHUB_TOKEN: ${{ inputs.github_token }}
-      shell: bash
-      run: npx @adobe/sizewatcher@1.2.1
+    - uses: andresz1/size-limit-action@v1
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Check License Header
       shell: bash
