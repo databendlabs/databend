@@ -7,11 +7,7 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Setup Build Tool
-      uses: ./.github/actions/setup_build_tool
-      with:
-        bypass_env_vars: RUSTFLAGS,RUST_LOG,GITHUB_TOKEN
-
+    # Check inside runner instead of within build tools.
     - uses: actions/setup-node@v3
       with:
         node-version: 18
@@ -20,6 +16,11 @@ runs:
       run: npx @adobe/sizewatcher
       env:
         GITHUB_TOKEN: ${{ inputs.github_token }}
+
+    - name: Setup Build Tool
+      uses: ./.github/actions/setup_build_tool
+      with:
+        bypass_env_vars: RUSTFLAGS,RUST_LOG,GITHUB_TOKEN
 
     - name: Check License Header
       shell: bash
