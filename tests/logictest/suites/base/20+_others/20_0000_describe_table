@@ -14,8 +14,15 @@ c VARCHAR YES NULL
 d SMALLINT NO 0 
 e DATE NO 0 
 
-statement ok
+statement query TTTTT
 DESC t;
+
+----
+a BIGINT YES NULL 
+b INT YES NULL 
+c VARCHAR YES NULL 
+d SMALLINT NO 0 
+e DATE NO 0 
 
 statement ok
 DROP TABLE IF EXISTS t1;
@@ -23,14 +30,55 @@ DROP TABLE IF EXISTS t1;
 statement ok
 CREATE TABLE t1(a bigint null, b int null, c char(255) null, d smallint, e Date, f char(120) not null default '' ) ENGINE = Null;
 
-statement ok
+statement query TTTTT
 DESCRIBE t1;
 
-statement ok
+----
+a BIGINT YES NULL 
+b INT YES NULL 
+c VARCHAR YES NULL 
+d SMALLINT NO 0 
+e DATE NO 0 
+f VARCHAR NO  
+
+statement query TTTTT
 DESC t1;
 
-statement ok
+----
+a BIGINT YES NULL 
+b INT YES NULL 
+c VARCHAR YES NULL 
+d SMALLINT NO 0 
+e DATE NO 0 
+f VARCHAR NO  
+
+statement query TTTTT
 DESC INFORMATION_SCHEMA.COLUMNS;
+
+----
+table_catalog VARCHAR NO  
+table_schema VARCHAR NO  
+table_name VARCHAR NO  
+column_name VARCHAR NO  
+ordinal_position TINYINT UNSIGNED NO 0 
+column_default NULL NO NULL 
+is_nullable BOOLEAN NO false 
+data_type VARCHAR NO  
+character_maximum_length NULL NO NULL 
+character_octet_length NULL NO NULL 
+numeric_precision NULL NO NULL 
+numeric_precision_radix NULL NO NULL 
+numeric_scale NULL NO NULL 
+datetime_precision NULL NO NULL 
+character_set_catalog NULL NO NULL 
+character_set_schema NULL NO NULL 
+character_set_name NULL NO NULL 
+collation_catalog NULL NO NULL 
+collation_schema NULL NO NULL 
+collation_name NULL NO NULL 
+domain_catalog NULL NO NULL 
+domain_schema NULL NO NULL 
+domain_name NULL NO NULL 
 
 statement ok
 DROP TABLE IF EXISTS t;
