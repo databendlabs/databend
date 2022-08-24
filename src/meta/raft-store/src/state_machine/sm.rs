@@ -260,11 +260,8 @@ impl StateMachine {
     /// command safely in case of network failure etc.
     #[tracing::instrument(level = "debug", skip(self, entry), fields(log_id=%entry.log_id))]
     pub async fn apply(&self, entry: &Entry<LogEntry>) -> Result<AppliedState, MetaStorageError> {
-        info!(
-            "apply: summary: {}; payload: {:?}",
-            entry.summary(),
-            entry.payload
-        );
+        debug!("apply: summary: {}", entry.summary());
+        debug!("apply: payload: {:?}", entry.payload);
 
         let log_id = &entry.log_id;
 
@@ -288,7 +285,6 @@ impl StateMachine {
                     }
 
                     let res = self.apply_cmd(&data.cmd, &txn_tree, kv_pairs.as_ref());
-                    info!("apply_result: summary: {}; res: {:?}", entry.summary(), res);
                     let applied_state = res?;
 
                     if let Some(ref txid) = data.txid {
@@ -748,7 +744,7 @@ impl StateMachine {
         txn_tree: &TransactionSledTree,
         kv_pairs: Option<&(DeleteByPrefixKeyMap, DeleteByPrefixKeyMap)>,
     ) -> Result<AppliedState, MetaStorageError> {
-        info!("apply_cmd: {:?}", cmd);
+        debug!("apply_cmd: {:?}", cmd);
 
         match cmd {
             Cmd::IncrSeq { ref key } => self.apply_incr_seq_cmd(key, txn_tree),

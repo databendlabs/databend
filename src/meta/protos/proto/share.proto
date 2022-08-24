@@ -70,6 +70,7 @@ message ShareMeta {
   optional string comment = 4;
   string share_on = 5;
   optional string update_on = 6;
+  repeated uint64 share_from_db_ids = 7;
 }
 
 message ShareAccountMeta {

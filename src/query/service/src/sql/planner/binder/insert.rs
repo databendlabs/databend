@@ -53,7 +53,6 @@ use crate::sql::optimizer::OptimizerConfig;
 use crate::sql::optimizer::OptimizerContext;
 use crate::sql::planner::semantic::NameResolutionContext;
 use crate::sql::plans::CastExpr;
-use crate::sql::plans::ConstantExpr;
 use crate::sql::plans::Insert;
 use crate::sql::plans::InsertInputSource;
 use crate::sql::plans::InsertValueBlock;
@@ -312,6 +311,7 @@ impl<'a> ValueSourceV2<'a> {
 
         // Start of the row --- '('
         if !reader.ignore_byte(b'(')? {
+            reader.pop_checkpoint();
             return Err(ErrorCode::BadDataValueType(
                 "Must start with parentheses".to_string(),
             ));
@@ -450,8 +450,12 @@ async fn exprs_to_datavalue<'a>(
     bind_context: &BindContext,
     metadata: MetadataRef,
 ) -> Result<Vec<DataValue>> {
-    let schema_fields_len = schema.fields().len();
-    let mut expressions = Vec::with_capacity(schema_fields_len);
+    if exprs.len() != schema.num_fields() {
+        return Err(ErrorCode::BadDataValueType(
+            "Expression size not match schema num of cols".to_string(),
+        ));
+    }
+    let mut expressions = Vec::with_capacity(exprs.len());
     for (i, expr) in exprs.iter().enumerate() {
         let mut scalar_binder = ScalarBinder::new(
             bind_context,
@@ -462,7 +466,7 @@ async fn exprs_to_datavalue<'a>(
         );
         let (mut scalar, data_type) = scalar_binder.bind(expr).await?;
         let field_data_type = schema.field(i).data_type();
-        if data_type.ne(field_data_type) {
+        if !data_type.eq(field_data_type) {
             scalar = Scalar::CastExpr(CastExpr {
                 argument: Box::new(scalar),
                 from_type: Box::new(data_type),
@@ -473,34 +477,6 @@ async fn exprs_to_datavalue<'a>(
             Evaluator::eval_scalar(&scalar)?,
             schema.field(i).name().to_string(),
         ));
-    }
-    if exprs.len() < schema_fields_len {
-        for idx in exprs.len()..schema_fields_len {
-            let field = schema.field(idx);
-            if let Some(default_expr) = field.default_expr() {
-                expressions.push((
-                    Evaluator::eval_physical_scalar(&serde_json::from_str(default_expr)?)?,
-                    schema.field(idx).name().to_string(),
-                ));
-            } else {
-                // If field data type is nullable, then we'll fill it with null.
-                if field.data_type().is_nullable() {
-                    let scalar = Scalar::ConstantExpr(ConstantExpr {
-                        value: DataValue::Null,
-                        data_type: Box::new(field.data_type().clone()),
-                    });
-                    expressions.push((
-                        Evaluator::eval_scalar(&scalar)?,
-                        schema.field(idx).name().to_string(),
-                    ));
-                } else {
-                    return Err(ErrorCode::LogicalError(format!(
-                        "null value in column {} violates not-null constraint",
-                        schema.field(idx).name()
-                    )));
-                }
-            }
-        }
     }
 
     let dummy = DataSchemaRefExt::create(vec![DataField::new("dummy", u8::to_data_type())]);
