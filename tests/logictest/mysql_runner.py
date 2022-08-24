@@ -8,6 +8,7 @@ from log import log
 
 import mysql.connector
 from mysql.connector.conversion import MySQLConverter
+from cleanup import pick_create_statement, get_cleanup_statements
 
 
 class StringConverter(MySQLConverter):
@@ -25,6 +26,12 @@ class TestMySQL(logictest.SuiteRunner, ABC):
         self._connection = None
 
     def reset_connection(self):
+        cursor = self.get_connection().cursor(buffered=True)
+        for cleanup_sql in get_cleanup_statements():
+            try:
+                cursor.execute(cleanup_sql)
+            except Exception:
+                pass
         if self._connection is not None:
             self._connection.close()
             self._connection = None
@@ -45,6 +52,7 @@ class TestMySQL(logictest.SuiteRunner, ABC):
     def execute_ok(self, statement):
         cursor = self.get_connection().cursor(buffered=True)
         cursor.execute(statement)
+        pick_create_statement(statement)
         return None
 
     def execute_error(self, statement):

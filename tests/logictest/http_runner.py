@@ -2,6 +2,7 @@ from abc import ABC
 
 import logictest
 import http_connector
+from cleanup import pick_create_statement, get_cleanup_statements
 
 
 class TestHttp(logictest.SuiteRunner, ABC):
@@ -16,6 +17,11 @@ class TestHttp(logictest.SuiteRunner, ABC):
         return self._http
 
     def reset_connection(self):
+        for cleanup_sql in get_cleanup_statements():
+            try:
+                self.get_connection().query_with_session(cleanup_sql)
+            except Exception:
+                pass
         if self._http is not None:
             self._http.reset_session()
 
@@ -26,6 +32,7 @@ class TestHttp(logictest.SuiteRunner, ABC):
 
     def execute_ok(self, statement):
         resp = self.get_connection().query_with_session(statement)
+        pick_create_statement(statement)
         return http_connector.get_error(resp[0])
 
     def execute_error(self, statement):

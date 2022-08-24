@@ -4,6 +4,7 @@ from mysql.connector.errors import Error
 
 import logictest
 import clickhouse_connector
+from cleanup import pick_create_statement, get_cleanup_statements
 
 
 class TestClickhouse(logictest.SuiteRunner, ABC):
@@ -19,6 +20,11 @@ class TestClickhouse(logictest.SuiteRunner, ABC):
         return self._ch
 
     def reset_connection(self):
+        for cleanup_sql in get_cleanup_statements():
+            try:
+                self.get_connection().query_with_session(cleanup_sql)
+            except Exception:
+                pass
         if self._ch is not None:
             self._ch.reset_session()
 
@@ -29,6 +35,7 @@ class TestClickhouse(logictest.SuiteRunner, ABC):
 
     def execute_ok(self, statement):
         self.get_connection().query_with_session(statement)
+        pick_create_statement(statement)
         return None
 
     def execute_error(self, statement):

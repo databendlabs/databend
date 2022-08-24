@@ -9,12 +9,15 @@ from clickhouse_runner import TestClickhouse
 from statistics import global_statistics
 from argparse import ArgumentParser
 from config import mysql_config, http_config, clickhouse_config
+from cleanup import set_auto_cleanup
 
 
 def run(args):
     """
     Run tests
     """
+    set_auto_cleanup(args.enable_auto_cleanup)
+
     if not args.disable_mysql_test:
         mysql_test = TestMySQL("mysql", args)
         mysql_test.set_driver(mysql_config)
@@ -50,6 +53,10 @@ if __name__ == '__main__':
                         action='store_true',
                         default=os.environ.get('DISABLE_CLICKHOUSE_LOGIC_TEST'),
                         help='Disable clickhouse handler test')
+    parser.add_argument('--enable-auto-cleanup',
+                        action='store_true',
+                        default=False,
+                        help="Enable auto cleanup after test per session")
     parser.add_argument('pattern',
                         nargs='*',
                         help='Optional test case name regex')
