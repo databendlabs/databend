@@ -59,6 +59,7 @@ fn test_add(file: &mut impl Write, columns: &[(&str, DataType, Column)]) {
     run_ast(file, "a2 + c", columns);
     run_ast(file, "c + b", columns);
     run_ast(file, "c + d", columns);
+    run_ast(file, "+d", columns);
 }
 
 fn test_minus(file: &mut impl Write, columns: &[(&str, DataType, Column)]) {
@@ -67,6 +68,7 @@ fn test_minus(file: &mut impl Write, columns: &[(&str, DataType, Column)]) {
     run_ast(file, "a2 - c", columns);
     run_ast(file, "c - b", columns);
     run_ast(file, "c - d", columns);
+    run_ast(file, "-c", columns);
 }
 
 fn test_mul(file: &mut impl Write, columns: &[(&str, DataType, Column)]) {

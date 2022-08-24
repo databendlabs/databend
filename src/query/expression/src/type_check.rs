@@ -359,7 +359,11 @@ pub fn can_auto_cast_to(src_ty: &DataType, dest_ty: &DataType) -> bool {
         (DataType::Array(src_ty), DataType::Array(dest_ty)) => can_auto_cast_to(src_ty, dest_ty),
         (src_ty, dest_ty) => match (src_ty.number_type_info(), dest_ty.number_type_info()) {
             (Some(src_num_info), Some(dest_num_info)) => {
-                src_num_info.can_lossless_cast_to(dest_num_info)
+                // all integer types can cast to int64
+                (dest_ty == &DataType::Int64 && !src_num_info.is_float)
+                // all numeric types can cast to float64
+                || dest_ty == &DataType::Float64
+                || src_num_info.can_lossless_cast_to(dest_num_info)
             }
             _ => false,
         },
