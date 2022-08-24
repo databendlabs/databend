@@ -12,9 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![deny(unused_crate_dependencies)]
+pub const METRIC_ROWS_SCANNED_COUNT: &str = "io.metric_rows_scanned_count";
+pub const METRIC_ROWS_WRITE_COUNT: &str = "io.metric_rows_write_count";
 
-pub mod metrics;
-pub mod retry;
-pub mod storage_context;
-pub mod table_option_keys;
+pub const METRIC_BYTES_SCANNED_COUNT: &str = "io.metric_bytes_scanned_count";
+pub const METRIC_BYTES_WRITE_COUNT: &str = "io.metric_bytes_write_count";

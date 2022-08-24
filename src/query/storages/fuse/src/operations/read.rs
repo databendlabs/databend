@@ -31,6 +31,8 @@ use common_planners::Extras;
 use common_planners::PartInfoPtr;
 use common_planners::Projection;
 use common_planners::ReadDataSourcePlan;
+use common_storages_util::metrics::METRIC_BYTES_SCANNED_COUNT;
+use common_storages_util::metrics::METRIC_ROWS_SCANNED_COUNT;
 
 use crate::io::BlockReader;
 use crate::operations::read::State::Generated;
@@ -187,6 +189,8 @@ impl Processor for FuseTableSource {
                     rows: data_block.num_rows(),
                     bytes: data_block.memory_size(),
                 };
+                metrics::counter!(METRIC_BYTES_SCANNED_COUNT, progress_values.rows as u64);
+                metrics::counter!(METRIC_ROWS_SCANNED_COUNT, progress_values.bytes as u64);
                 self.scan_progress.incr(&progress_values);
 
                 self.state = match partitions.is_empty() {

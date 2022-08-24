@@ -38,6 +38,8 @@ chrono = "0.4.19"
 futures = "0.3.21"
 futures-util = "0.3.21"
 opendal = { version = "0.13.1", features = ["layers-retry"] }
+metrics = "0.19.0"
+opendal = { version = "0.13.0", features = ["layers-retry"] }
 serde = { version = "1.0.137", features = ["derive"] }
 serde_json = "1.0.81"
 tracing = "0.1.35"

@@ -35,6 +35,8 @@ use common_meta_app::schema::TableStatistics;
 use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_types::MatchSeq;
+use common_storages_util::metrics::METRIC_BYTES_WRITE_COUNT;
+use common_storages_util::metrics::METRIC_ROWS_WRITE_COUNT;
 use tracing::debug;
 use tracing::info;
 use tracing::warn;
@@ -171,6 +173,8 @@ impl FuseTable {
             rows: summary.row_count as usize,
             bytes: summary.uncompressed_byte_size as usize,
         };
+        metrics::counter!(METRIC_BYTES_WRITE_COUNT, summary.row_count);
+        metrics::counter!(METRIC_ROWS_WRITE_COUNT, summary.uncompressed_byte_size);
         ctx.get_write_progress().incr(&progress_values);
 
         let segments = segments
