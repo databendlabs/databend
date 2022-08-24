@@ -12,10 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod block_compactor;
 mod block_writer;
 mod meta_writer;
 mod segment_writer;
 
+pub use block_compactor::BlockCompactor;
 pub use block_writer::write_block;
 pub use block_writer::write_data;
 pub use block_writer::BlockWriter;

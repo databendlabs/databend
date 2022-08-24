@@ -22,47 +22,35 @@ use common_exception::Result;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::Pipeline;
 use common_pipeline_core::SinkPipeBuilder;
-use common_pipeline_transforms::processors::transforms::BlockCompactor;
 use common_pipeline_transforms::processors::transforms::ExpressionTransform;
 use common_pipeline_transforms::processors::transforms::TransformCompact;
 use common_pipeline_transforms::processors::transforms::TransformSortPartial;
 use common_pipeline_transforms::processors::ExpressionExecutor;
 use common_planners::Expression;
 
+use crate::io::BlockCompactor;
 use crate::operations::FuseTableSink;
 use crate::statistics::ClusterStatsGenerator;
 use crate::FuseTable;
 use crate::DEFAULT_BLOCK_PER_SEGMENT;
-use crate::DEFAULT_BLOCK_SIZE_IN_MEM_SIZE_THRESHOLD;
-use crate::DEFAULT_ROW_PER_BLOCK;
-use crate::FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD;
 use crate::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
-use crate::FUSE_OPT_KEY_ROW_PER_BLOCK;
 
 impl FuseTable {
     pub fn do_append2(&self, ctx: Arc<dyn TableContext>, pipeline: &mut Pipeline) -> Result<()> {
-        let max_rows_per_block = self.get_option(FUSE_OPT_KEY_ROW_PER_BLOCK, DEFAULT_ROW_PER_BLOCK);
-        let min_rows_per_block = (max_rows_per_block as f64 * 0.8) as usize;
-        let max_bytes_per_block = self.get_option(
-            FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD,
-            DEFAULT_BLOCK_SIZE_IN_MEM_SIZE_THRESHOLD,
-        );
-
         let block_per_seg =
             self.get_option(FUSE_OPT_KEY_BLOCK_PER_SEGMENT, DEFAULT_BLOCK_PER_SEGMENT);
 
-        let da = ctx.get_storage_operator()?;
-
+        let block_compactor = self.get_block_compactor();
         pipeline.add_transform(|transform_input_port, transform_output_port| {
             TransformCompact::try_create(
                 transform_input_port,
                 transform_output_port,
-                BlockCompactor::new(max_rows_per_block, min_rows_per_block, max_bytes_per_block),
+                block_compactor.to_compactor(),
             )
         })?;
 
         let cluster_stats_gen =
-            self.get_cluster_stats_gen(ctx.clone(), pipeline, 0, max_rows_per_block)?;
+            self.get_cluster_stats_gen(ctx.clone(), pipeline, 0, block_compactor)?;
         if !self.cluster_keys.is_empty() {
             // sort
             let sort_descs: Vec<SortColumnDescription> = self
@@ -85,6 +73,7 @@ impl FuseTable {
             })?;
         }
 
+        let da = ctx.get_storage_operator()?;
         let mut sink_pipeline_builder = SinkPipeBuilder::create();
         for _ in 0..pipeline.output_len() {
             let input_port = InputPort::create();
@@ -110,7 +99,7 @@ impl FuseTable {
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
         level: i32,
-        row_per_block: usize,
+        block_compactor: BlockCompactor,
     ) -> Result<ClusterStatsGenerator> {
         if self.cluster_keys.is_empty() {
             return Ok(ClusterStatsGenerator::default());
@@ -170,7 +159,7 @@ impl FuseTable {
             cluster_key_index,
             expression_executor,
             level,
-            row_per_block,
+            block_compactor,
         ))
     }
 
