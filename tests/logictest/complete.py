@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: UTF-8 -*-
 import os
+import re
 
 from argparse import ArgumentParser
 import mysql.connector
@@ -8,8 +9,17 @@ import mysql.connector
 from logictest import is_empty_line
 from config import mysql_config
 from http_connector import format_result
+from cleanup import pick_create_statement, get_cleanup_statements, set_auto_cleanup
 
+error_code_regex = r".*Code: (?P<error_code>.*),.*"
 target_dir = "./"
+
+
+def get_error_code(msg):
+    matched = re.match(error_code_regex, msg, re.MULTILINE | re.IGNORECASE)
+    if matched is None:
+        return "{error_code}"
+    return matched.group("error_code")
 
 
 def parse_sql_file(source_file):
@@ -113,8 +123,9 @@ def gen_suite_from_sql(sql_and_skips, dest_file):
         # use mysql connector
         try:
             cursor.execute(sql)
+            pick_create_statement(sql)
         except mysql.connector.Error as err:
-            statements.append(f"statement error {err.errno}\n{sql}\n\n")
+            statements.append(f"statement error {get_error_code(err.msg)}\n{sql}\n\n")
             continue
 
         try:
@@ -148,6 +159,19 @@ def gen_suite_from_sql(sql_and_skips, dest_file):
         except mysql.connector.Error as err:
             statements.append(f"statement ok\n{sql}\n\n")
 
+    # cleanup database, table
+    drop_statements = list()
+    for cleanup_sql in get_cleanup_statements():
+        try:
+            drop_statements.append(
+                f"statement ok\n{cleanup_sql}\n\n"
+            )
+            cursor.execute(cleanup_sql)
+            print(f"Cleanup execute sql: {cleanup_sql}")
+        except Exception:
+            pass
+
+    out.writelines(drop_statements)
     out.writelines(statements)
     out.flush()
     out.close()
@@ -167,6 +191,7 @@ def run(args):
     mysql_config['database'] = args.mysql_database
 
     print(f"Mysql config: {mysql_config}")
+    set_auto_cleanup(args.enable_auto_cleanup)
     sql_and_skips = get_sql_from_file(args.source_file)
     if args.show_sql:
         for sql in sql_and_skips:
@@ -190,6 +215,11 @@ if __name__ == '__main__':
                         action='store_true',
                         default=False,
                         help='Show sql from source file')
+
+    parser.add_argument('--enable-auto-cleanup',
+                        action='store_true',
+                        default=False,
+                        help="Enable auto cleanup after test per session")
 
     parser.add_argument('--mysql-user', default="root", help='Mysql user')
 
