@@ -12,6 +12,10 @@ SET [GLOBAL] <setting_name> = <new_value>;
 
 `GLOBAL`: Include this option when you change the value of a global-level setting. If you include this option preceding a session-level setting, the setting will become a global-level setting.
 
+:::note
+A global-level setting is a cluster setting and the value will be stored in the `metasrv`.
+:::
+
 ## Examples
 
 The following example sets the `skip_header` setting to 1:
