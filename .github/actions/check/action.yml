@@ -14,7 +14,7 @@ runs:
 
     - uses: andresz1/size-limit-action@v1
       with:
-        github_token: ${{ secrets.GITHUB_TOKEN }}
+        github_token: ${{ inputs.github_token }}
 
     - name: Check License Header
       shell: bash
