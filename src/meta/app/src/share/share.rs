@@ -426,6 +426,7 @@ pub struct ShareMeta {
     pub comment: Option<String>,
     pub share_on: DateTime<Utc>,
     pub update_on: Option<DateTime<Utc>>,
+    pub share_from_db_ids: BTreeSet<u64>,
 }
 
 impl ShareMeta {
@@ -451,6 +452,18 @@ impl ShareMeta {
 
     pub fn del_account(&mut self, account: &String) {
         self.accounts.remove(account);
+    }
+
+    pub fn has_share_from_db_id(&self, db_id: u64) -> bool {
+        self.share_from_db_ids.contains(&db_id)
+    }
+
+    pub fn add_share_from_db_id(&mut self, db_id: u64) {
+        self.share_from_db_ids.insert(db_id);
+    }
+
+    pub fn remove_share_from_db_id(&mut self, db_id: u64) {
+        self.share_from_db_ids.remove(&db_id);
     }
 
     pub fn get_grant_entry(&self, object: ShareGrantObject) -> Option<ShareGrantEntry> {

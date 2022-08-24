@@ -337,6 +337,38 @@ impl WrongShareObject {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[error("ShareHasNoGrantedDatabase: {tenant}.{share_name} has no granted database")]
+pub struct ShareHasNoGrantedDatabase {
+    pub tenant: String,
+    pub share_name: String,
+}
+
+impl ShareHasNoGrantedDatabase {
+    pub fn new(tenant: impl Into<String>, share_name: impl Into<String>) -> Self {
+        Self {
+            tenant: tenant.into(),
+            share_name: share_name.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[error("ShareHasNoGrantedPrivilege: {tenant}.{share_name} has no proper granted privilege")]
+pub struct ShareHasNoGrantedPrivilege {
+    pub tenant: String,
+    pub share_name: String,
+}
+
+impl ShareHasNoGrantedPrivilege {
+    pub fn new(tenant: impl Into<String>, share_name: impl Into<String>) -> Self {
+        Self {
+            tenant: tenant.into(),
+            share_name: share_name.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
 #[error("WrongShare: {share_name} has the wrong format")]
 pub struct WrongShare {
     share_name: String,
@@ -471,6 +503,12 @@ pub enum AppError {
     WrongShareObject(#[from] WrongShareObject),
 
     #[error(transparent)]
+    ShareHasNoGrantedDatabase(#[from] ShareHasNoGrantedDatabase),
+
+    #[error(transparent)]
+    ShareHasNoGrantedPrivilege(#[from] ShareHasNoGrantedPrivilege),
+
+    #[error(transparent)]
     WrongShare(#[from] WrongShare),
 }
 
@@ -579,6 +617,24 @@ impl AppErrorMessage for WrongShareObject {
     }
 }
 
+impl AppErrorMessage for ShareHasNoGrantedDatabase {
+    fn message(&self) -> String {
+        format!(
+            "share {}.{} has no granted database",
+            self.tenant, self.share_name
+        )
+    }
+}
+
+impl AppErrorMessage for ShareHasNoGrantedPrivilege {
+    fn message(&self) -> String {
+        format!(
+            "share {}.{} has no proper granted privilege",
+            self.tenant, self.share_name
+        )
+    }
+}
+
 impl AppErrorMessage for WrongShare {
     fn message(&self) -> String {
         format!("share {} has the wrong format", self.share_name)
@@ -659,6 +715,12 @@ impl From<AppError> for ErrorCode {
             }
             AppError::UnknownShareAccounts(err) => ErrorCode::UnknownShareAccounts(err.message()),
             AppError::WrongShareObject(err) => ErrorCode::WrongShareObject(err.message()),
+            AppError::ShareHasNoGrantedDatabase(err) => {
+                ErrorCode::ShareHasNoGrantedDatabase(err.message())
+            }
+            AppError::ShareHasNoGrantedPrivilege(err) => {
+                ErrorCode::ShareHasNoGrantedPrivilege(err.message())
+            }
             AppError::WrongShare(err) => ErrorCode::WrongShare(err.message()),
             AppError::TxnRetryMaxTimes(err) => ErrorCode::TxnRetryMaxTimes(err.message()),
         }
