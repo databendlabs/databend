@@ -291,6 +291,8 @@ impl RaftStorage<LogEntry, AppliedState> for RaftStoreBare {
 
     #[tracing::instrument(level = "debug", skip(self, hs), fields(id=self.id))]
     async fn save_hard_state(&self, hs: &HardState) -> Result<(), StorageError> {
+        info!("save_hard_state: {:?}", hs);
+
         match self
             .raft_state
             .write_hard_state(hs)
@@ -327,6 +329,8 @@ impl RaftStorage<LogEntry, AppliedState> for RaftStoreBare {
 
     #[tracing::instrument(level = "debug", skip(self), fields(id=self.id))]
     async fn delete_conflict_logs_since(&self, log_id: LogId) -> Result<(), StorageError> {
+        info!("delete_conflict_logs_since: {}", log_id);
+
         match self
             .log
             .range_remove(log_id.index..)
@@ -343,6 +347,8 @@ impl RaftStorage<LogEntry, AppliedState> for RaftStoreBare {
 
     #[tracing::instrument(level = "debug", skip(self), fields(id=self.id))]
     async fn purge_logs_upto(&self, log_id: LogId) -> Result<(), StorageError> {
+        info!("purge_logs_upto: {}", log_id);
+
         if let Err(err) = self
             .log
             .set_last_purged(log_id)
@@ -367,7 +373,10 @@ impl RaftStorage<LogEntry, AppliedState> for RaftStoreBare {
 
     #[tracing::instrument(level = "debug", skip(self, entries), fields(id=self.id))]
     async fn append_to_log(&self, entries: &[&Entry<LogEntry>]) -> Result<(), StorageError> {
-        // TODO(xp): replicated_to_log should not block. Do the actual work in another task.
+        for ent in entries {
+            info!("append_to_log: {}", ent.log_id);
+        }
+
         let entries = entries.iter().map(|x| (*x).clone()).collect::<Vec<_>>();
         match self
             .log
@@ -388,6 +397,10 @@ impl RaftStorage<LogEntry, AppliedState> for RaftStoreBare {
         &self,
         entries: &[&Entry<LogEntry>],
     ) -> Result<Vec<AppliedState>, StorageError> {
+        for ent in entries {
+            info!("apply_to_state_machine: {}", ent.log_id);
+        }
+
         let mut res = Vec::with_capacity(entries.len());
 
         let sm = self.state_machine.write().await;
@@ -576,6 +589,11 @@ impl RaftStorage<LogEntry, AppliedState> for RaftStoreBare {
             Some(x) => Some(x.1.log_id),
         };
 
+        info!(
+            "get_log_state: ({:?},{:?}]",
+            last_purged_log_id, last_log_id
+        );
+
         Ok(LogState {
             last_purged_log_id,
             last_log_id,
@@ -606,6 +624,12 @@ impl RaftStorage<LogEntry, AppliedState> for RaftStoreBare {
             }
             Ok(r) => r,
         };
+
+        info!(
+            "last_applied_state: applied: {:?}, membership: {:?}",
+            last_applied, last_membership
+        );
+
         Ok((last_applied, last_membership))
     }
 }
