@@ -14,6 +14,8 @@
 
 use std::sync::Arc;
 
+use common_arrow::arrow::bitmap::Bitmap;
+use common_arrow::arrow::bitmap::MutableBitmap;
 use common_expression::types::nullable::NullableColumn;
 use common_expression::types::DataType;
 use common_expression::BooleanDomain;
@@ -25,12 +27,17 @@ use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
 use common_expression::FunctionSignature;
 use common_expression::NullableDomain;
+use common_expression::Scalar;
 use common_expression::ScalarRef;
 use common_expression::Value;
 use common_expression::ValueRef;
 
+const MULTI_IF: &str = "multi_if";
+const IS_NULL: &str = "is_null";
+const IS_NOT_NULL: &str = "is_not_null";
+
 pub fn register(registry: &mut FunctionRegistry) {
-    registry.register_function_factory("multi_if", |_, args_type| {
+    registry.register_function_factory(MULTI_IF, |_, args_type| {
         if args_type.len() < 3 || args_type.len() % 2 == 0 {
             return None;
         }
@@ -46,7 +53,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
         Some(Arc::new(Function {
             signature: FunctionSignature {
-                name: "multi_if",
+                name: MULTI_IF,
                 args_type: sig_args_type,
                 return_type: DataType::Generic(0),
                 property: FunctionProperty::default(),
@@ -136,6 +143,80 @@ pub fn register(registry: &mut FunctionRegistry) {
                 match len {
                     Some(_) => Ok(Value::Column(output_builder.build())),
                     None => Ok(Value::Scalar(output_builder.build_scalar())),
+                }
+            }),
+        }))
+    });
+    registry.register_function_factory(IS_NULL, |_, args_type| {
+        if args_type.len() != 1 {
+            return None;
+        }
+        Some(Arc::new(Function {
+            signature: FunctionSignature {
+                name: IS_NULL,
+                args_type: args_type.to_vec(),
+                return_type: DataType::Boolean,
+                property: FunctionProperty::default(),
+            },
+            calc_domain: Box::new(|args_domain, _| {
+                assert_eq!(args_domain.len(), 1);
+                None
+            }),
+            eval: Box::new(|args, _generics| {
+                assert_eq!(args.len(), 1);
+                match &args[0] {
+                    ValueRef::Column(Column::Nullable(box NullableColumn { validity, .. })) => {
+                        let bitmap = Bitmap::from_iter(validity.iter().map(|v| !v));
+                        Ok(Value::Column(Column::Boolean(bitmap)))
+                    }
+                    ValueRef::Column(column) => {
+                        let len = column.len();
+                        let mut bitmap = MutableBitmap::with_capacity(len);
+                        for _ in 0..len {
+                            unsafe { bitmap.push_unchecked(false) };
+                        }
+                        let bitmap = Bitmap::from(bitmap);
+                        Ok(Value::Column(Column::Boolean(bitmap)))
+                    }
+                    ValueRef::Scalar(ScalarRef::Null) => Ok(Value::Scalar(Scalar::Boolean(true))),
+                    ValueRef::Scalar(_) => Ok(Value::Scalar(Scalar::Boolean(false))),
+                }
+            }),
+        }))
+    });
+    registry.register_function_factory(IS_NOT_NULL, |_, args_type| {
+        if args_type.len() != 1 {
+            return None;
+        }
+        Some(Arc::new(Function {
+            signature: FunctionSignature {
+                name: IS_NULL,
+                args_type: args_type.to_vec(),
+                return_type: DataType::Boolean,
+                property: FunctionProperty::default(),
+            },
+            calc_domain: Box::new(|args_domain, _| {
+                assert_eq!(args_domain.len(), 1);
+                None
+            }),
+            eval: Box::new(|args, _generics| {
+                assert_eq!(args.len(), 1);
+                match &args[0] {
+                    ValueRef::Column(Column::Nullable(box NullableColumn { validity, .. })) => {
+                        let bitmap = validity.clone();
+                        Ok(Value::Column(Column::Boolean(bitmap)))
+                    }
+                    ValueRef::Column(column) => {
+                        let len = column.len();
+                        let mut bitmap = MutableBitmap::with_capacity(len);
+                        for _ in 0..len {
+                            unsafe { bitmap.push_unchecked(true) };
+                        }
+                        let bitmap = Bitmap::from(bitmap);
+                        Ok(Value::Column(Column::Boolean(bitmap)))
+                    }
+                    ValueRef::Scalar(ScalarRef::Null) => Ok(Value::Scalar(Scalar::Boolean(false))),
+                    ValueRef::Scalar(_) => Ok(Value::Scalar(Scalar::Boolean(true))),
                 }
             }),
         }))
