@@ -132,6 +132,7 @@ impl TableMutator for ReclusterMutator {
                 total_bytes += meta.block_size;
             }
 
+            // If the statistics of blocks are too small, just merge them into one block.
             if self
                 .block_compactor
                 .check_for_recluster(total_rows as usize, total_bytes as usize)

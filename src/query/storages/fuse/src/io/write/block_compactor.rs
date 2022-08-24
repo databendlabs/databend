@@ -43,7 +43,6 @@ impl BlockCompactor {
         false
     }
 
-    // If the statistics of blocks are too small, just merge them into one block.
     pub fn check_for_recluster(&self, total_rows: usize, total_bytes: usize) -> bool {
         if total_rows <= self.min_rows_per_block && total_bytes <= self.max_bytes_per_block {
             return true;

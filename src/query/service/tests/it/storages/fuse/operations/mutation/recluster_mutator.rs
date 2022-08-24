@@ -29,8 +29,8 @@ use common_fuse_meta::meta::SegmentInfo;
 use common_fuse_meta::meta::Statistics;
 use common_fuse_meta::meta::TableSnapshot;
 use common_fuse_meta::meta::Versioned;
-use common_meta_app::schema::TableInfo;
 use databend_query::sessions::TableContext;
+use databend_query::storages::fuse::io::BlockCompactor;
 use databend_query::storages::fuse::io::SegmentWriter;
 use databend_query::storages::fuse::io::TableMetaLocationGenerator;
 use databend_query::storages::fuse::operations::ReclusterMutator;
@@ -108,19 +108,17 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
         Some((0, "(id)".to_string())),
     );
 
-    let tbl_info = TableInfo::default();
     let mut mutator = ReclusterMutator::try_create(
         ctx,
         location_generator,
         Arc::new(base_snapshot),
         1.0,
-        tbl_info,
-        1,
+        BlockCompactor::default(),
     )?;
 
     let need_recluster = mutator.blocks_select().await?;
     assert!(need_recluster);
-    assert_eq!(mutator.selected_blocks.len(), 3);
+    assert_eq!(mutator.selected_blocks().len(), 3);
 
     Ok(())
 }
