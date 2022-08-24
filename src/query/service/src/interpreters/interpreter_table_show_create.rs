@@ -25,8 +25,8 @@ use tracing::debug;
 use crate::interpreters::Interpreter;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
+use crate::sql::executor::PhysicalScalar;
 use crate::sql::is_internal_opt_key;
-use crate::sql::PlanParser;
 
 pub struct ShowCreateTableInterpreter {
     ctx: Arc<QueryContext>,
@@ -71,8 +71,8 @@ impl Interpreter for ShowCreateTableInterpreter {
             for (idx, field) in schema.fields().iter().enumerate() {
                 let default_expr = match field.default_expr() {
                     Some(expr) => {
-                        let expression = PlanParser::parse_expr(expr)?;
-                        format!(" DEFAULT {}", expression.column_name())
+                        let expression: PhysicalScalar = serde_json::from_str(expr)?;
+                        format!(" DEFAULT {expression}")
                     }
                     None => "".to_string(),
                 };
