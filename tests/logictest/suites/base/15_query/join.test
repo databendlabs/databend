@@ -400,7 +400,7 @@ select * from t1 left outer join t2 on t1.a > t2.c order by a,b,c,d;
 7 8 6 8
 
 statement ok
-CREATE TABLE t3(c0 BIGINT NULL, c1 DOUBLE NULL DEFAULT(true));
+CREATE TABLE t3(c0 BIGINT NULL, c1 DOUBLE NULL);
 
 statement ok
 CREATE TABLE t4(c0 FLOAT NULL);

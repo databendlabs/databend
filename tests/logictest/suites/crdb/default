@@ -1,97 +1,84 @@
--- -- BUG:https://github.com/datafuselabs/databend/issues/7139
+statement ok
+drop table if exists t;
 
--- statement ok
--- drop table if exists null_default;
+statement ok
+CREATE TABLE t ( a INT DEFAULT 42,  b TIMESTAMP DEFAULT now(),  c FLOAT DEFAULT 1.0,  d DATE DEFAULT now());
 
--- statement ok
--- CREATE TABLE null_default (ts TIMESTAMP NULL DEFAULT NULL);
+statement ok
+INSERT INTO t(a,b,c,d) VALUES ();
 
--- statement ok
--- drop table if exists t;
+statement query IIII
+SELECT a, b <= now(), c >= 0.0, d <= now() FROM t;
 
--- statement ok
--- CREATE TABLE t (  a INT DEFAULT 42,  b TIMESTAMP DEFAULT now(),  c FLOAT DEFAULT 1.0,  d DATE DEFAULT now());
+----
+42 1 1 1
 
--- statement error 1105
--- INSERT INTO t(a,b,c,d) VALUES ();
+statement ok
+INSERT INTO t (a) VALUES (1);
 
--- statement query
--- SELECT a, b <= now(), c >= 0.0, d <= now() FROM t;
+statement query IIII
+SELECT a, b <= now(), c >= 0.0, d <= now() FROM t WHERE a = 1;
 
--- ----
+----
+1 1 1 1
 
--- statement ok
--- TRUNCATE TABLE t;
+statement ok
+INSERT INTO t(a) VALUES (2);
 
--- statement error 1105
--- INSERT INTO t VALUES ();
+statement query IIII
+SELECT a, b <= now(), c >= 0.0, d <= now() FROM t WHERE a = 2;
 
--- statement query 
--- SELECT a, b <= now(), c >= 0.0, d <= now() FROM t;
+----
+2 1 1 1
 
--- ----
+statement ok
+drop table t;
 
--- statement ok
--- INSERT INTO t (a) VALUES (1);
+statement ok
+CREATE TABLE v ( a INT,  b TIMESTAMP NULL DEFAULT NULL,  c INT);
 
--- statement query IIII
--- SELECT a, b <= now(), c >= 0.0, d <= now() FROM t WHERE a = 1;
+statement error 1015
+insert into v values(1);
 
--- ----
--- 1 1 1 1
+statement ok
+drop table v;
 
--- statement ok
--- INSERT INTO t(a) VALUES (2);
+statement ok
+CREATE TABLE t(a INT DEFAULT 2, b INT NULL);
 
--- statement query IIII
--- SELECT a, b <= now(), c >= 0.0, d <= now() FROM t WHERE a = 2;
+statement ok
+insert into t values(1);
 
--- ----
--- 2 1 1 1
+statement query II
+select * from t;
 
--- statement error 1105
--- UPDATE t SET (b, c) = ('2015-09-18 00:00:00', -1.0);
+----
+1 NULL
 
--- statement error 1105
--- UPDATE t SET b = DEFAULT WHERE a = 1;
+statement ok
+insert into t values();
 
--- statement query IIII
--- SELECT a, b <= now(), c = -1.0, d <= now() FROM t WHERE a = 1;
+statement query II
+select * from t order by a;
 
--- ----
--- 1 1 0 1
+----
+1 NULL
+2 NULL
 
--- statement error 1105
--- UPDATE t SET (b, c) = (DEFAULT, DEFAULT) WHERE a = 2;
+statement ok
+drop table t;
 
--- statement query IIII
--- SELECT a, b <= now(), c >= 0.0, d <= now() FROM t WHERE a = 2;
+statement ok
+CREATE TABLE t(a INT DEFAULT 0.1, b INT NULL);
 
--- ----
--- 2 1 1 1
+statement ok
+insert into t values();
 
--- statement error 1105
--- UPDATE t SET b = DEFAULT, c = DEFAULT, d = DEFAULT;
+statement query II
+select * from t;
 
--- statement error 1105
--- UPDATE t SET (b) = (DEFAULT), (c) = (DEFAULT), (d) = (DEFAULT);
+----
+0 NULL
 
--- statement error 1105
--- CREATE TABLE v (  a INT,  b TIMESTAMP NULL DEFAULT NULL,  c INT);
-
--- statement error 1105
--- CREATE TABLE t34901 (x STRING);
-
--- statement ok
--- INSERT INTO t34901 VALUES ('a');
-
--- statement error 1105
--- ALTER TABLE t34901 ADD COLUMN y STRING DEFAULT (concat('b', 'c'));
-
--- statement query T
--- SELECT * FROM t34901;
-
--- ----
--- a
--- a
-
+statement ok
+drop table t;
