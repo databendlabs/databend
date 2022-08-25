@@ -85,7 +85,6 @@ fn test_statement() {
         r#"use "a";"#,
         r#"create database if not exists a;"#,
         r#"create database catalog.t engine = Default;"#,
-        r#"create database t engine = Github(token='123456');"#,
         r#"create database t engine = Default;"#,
         r#"drop database catalog.t;"#,
         r#"drop database if exists t;"#,
