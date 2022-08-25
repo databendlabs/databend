@@ -31,7 +31,7 @@ fn s(ss: impl ToString) -> String {
     ss.to_string()
 }
 
-fn new_db_meta_v2() -> mt::DatabaseMeta {
+fn new_db_meta_share() -> mt::DatabaseMeta {
     mt::DatabaseMeta {
         engine: "44".to_string(),
         engine_options: btreemap! {s("abc") => s("def")},
@@ -76,7 +76,7 @@ fn new_db_meta() -> mt::DatabaseMeta {
     }
 }
 
-fn new_share_meta_v1() -> share::ShareMeta {
+fn new_share_meta_share_from_db_ids() -> share::ShareMeta {
     let now = Utc.ymd(2014, 11, 28).and_hms(12, 0, 9);
 
     let db_entry = share::ShareGrantEntry::new(
@@ -266,7 +266,7 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
 
     // DatabaseMeta
     {
-        let db_meta = new_db_meta_v2();
+        let db_meta = new_db_meta_share();
         let p = db_meta.to_pb()?;
 
         let mut buf = vec![];
@@ -287,7 +287,7 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
 
     // ShareMeta
     {
-        let tbl = new_share_meta_v1();
+        let tbl = new_share_meta_share_from_db_ids();
 
         let p = tbl.to_pb()?;
 
@@ -367,7 +367,7 @@ fn test_load_old() -> anyhow::Result<()> {
 
             let got = mt::DatabaseMeta::from_pb(p).map_err(print_err)?;
 
-            let want = new_db_meta_v2();
+            let want = new_db_meta_share();
             assert_eq!(want, got);
         }
     }
@@ -463,7 +463,7 @@ fn test_load_old() -> anyhow::Result<()> {
                 common_protos::prost::Message::decode(share_meta.as_slice()).map_err(print_err)?;
 
             let got = share::ShareMeta::from_pb(p).map_err(print_err)?;
-            let want = new_share_meta_v1();
+            let want = new_share_meta_share_from_db_ids();
             assert_eq!(want, got);
         }
     }
