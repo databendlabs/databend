@@ -17,6 +17,7 @@ use std::time::Duration;
 
 use common_meta_app::share::ShareGrantObjectName;
 use common_meta_app::share::ShareGrantObjectPrivilege;
+use common_meta_app::share::ShareNameIdent;
 use common_meta_types::AuthType;
 use common_meta_types::PrincipalIdentity;
 use common_meta_types::UserIdentity;
@@ -41,6 +42,12 @@ pub enum ShowGrantOption {
     PrincipalIdentity(PrincipalIdentity),
     ShareGrantObjectName(ShareGrantObjectName),
     ShareName(String),
+}
+
+#[derive(Clone)]
+pub enum CreateDatabaseOption {
+    DatabaseEngine(DatabaseEngine),
+    FromShare(ShareNameIdent),
 }
 
 pub fn statement(i: Input) -> IResult<StatementMsg> {
@@ -169,16 +176,39 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let create_database = map(
         rule! {
-            CREATE ~ ( DATABASE | SCHEMA ) ~ ( IF ~ NOT ~ EXISTS )? ~ #peroid_separated_idents_1_to_2 ~ #database_engine?
+            CREATE ~ ( DATABASE | SCHEMA ) ~ ( IF ~ NOT ~ EXISTS )? ~ #peroid_separated_idents_1_to_2 ~ #create_database_option?
         },
-        |(_, _, opt_if_not_exists, (catalog, database), engine)| {
-            Statement::CreateDatabase(CreateDatabaseStmt {
-                if_not_exists: opt_if_not_exists.is_some(),
-                catalog,
-                database,
-                engine,
-                options: vec![],
-            })
+        |(_, _, opt_if_not_exists, (catalog, database), create_database_option)| {
+            match create_database_option {
+                Some(CreateDatabaseOption::DatabaseEngine(engine)) => {
+                    Statement::CreateDatabase(CreateDatabaseStmt {
+                        if_not_exists: opt_if_not_exists.is_some(),
+                        catalog,
+                        database,
+                        engine: Some(engine),
+                        options: vec![],
+                        from_share: None,
+                    })
+                }
+                Some(CreateDatabaseOption::FromShare(share_name)) => {
+                    Statement::CreateDatabase(CreateDatabaseStmt {
+                        if_not_exists: opt_if_not_exists.is_some(),
+                        catalog,
+                        database,
+                        engine: None,
+                        options: vec![],
+                        from_share: Some(share_name),
+                    })
+                }
+                None => Statement::CreateDatabase(CreateDatabaseStmt {
+                    if_not_exists: opt_if_not_exists.is_some(),
+                    catalog,
+                    database,
+                    engine: None,
+                    options: vec![],
+                    from_share: None,
+                }),
+            }
         },
     );
     let drop_database = map(
@@ -1458,6 +1488,43 @@ pub fn database_engine(i: Input) -> IResult<DatabaseEngine> {
             ENGINE ~ ^"=" ~ ^#engine
         },
         |(_, _, engine)| engine,
+    )(i)
+}
+
+pub fn create_database_option(i: Input) -> IResult<CreateDatabaseOption> {
+    let engine = alt((
+        value(
+            CreateDatabaseOption::DatabaseEngine(DatabaseEngine::Default),
+            rule! {DEFAULT},
+        ),
+        map(
+            rule! {
+                GITHUB ~ "(" ~ TOKEN ~ ^"=" ~ #literal_string ~ ")"
+            },
+            |(_, _, _, _, github_token, _)| {
+                CreateDatabaseOption::DatabaseEngine(DatabaseEngine::Github(github_token))
+            },
+        ),
+    ));
+
+    let share_from = alt((map(
+        rule! {
+            #ident ~ "." ~ #ident
+        },
+        |(tenant, _, share_name)| {
+            CreateDatabaseOption::FromShare(ShareNameIdent {
+                tenant: tenant.to_string(),
+                share_name: share_name.to_string(),
+            })
+        },
+    ),));
+
+    map(
+        rule! {
+            ENGINE ~ ^"=" ~ ^#engine
+            | FROM ~ SHARE ~ ^#share_from
+        },
+        |(_, _, option)| option,
     )(i)
 }
 

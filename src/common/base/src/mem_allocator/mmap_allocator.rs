@@ -169,7 +169,7 @@ unsafe fn mremapx(
             new_address as *mut u8,
             old_size as usize,
         );
-        return new_address;
+        new_address
     }
     #[cfg(target_os = "linux")]
     mremap(

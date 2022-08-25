@@ -229,6 +229,8 @@ build_exceptions! {
     UnknownShareAccounts(2709),
     WrongShareObject(2710),
     WrongShare(2711),
+    ShareHasNoGrantedDatabase(2712),
+    ShareHasNoGrantedPrivilege(2713),
 
     // Variable error codes.
     UnknownVariable(2801),
