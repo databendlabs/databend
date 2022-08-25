@@ -31,8 +31,6 @@ use crate::operations::mutation::DeletionMutator;
 use crate::pruning::BlockPruner;
 use crate::statistics::ClusterStatsGenerator;
 use crate::FuseTable;
-use crate::DEFAULT_ROW_PER_BLOCK;
-use crate::FUSE_OPT_KEY_ROW_PER_BLOCK;
 
 impl FuseTable {
     pub async fn do_delete(&self, ctx: Arc<dyn TableContext>, plan: &DeletePlan) -> Result<()> {
@@ -182,14 +180,12 @@ impl FuseTable {
             expression_executor = Some(executor);
         }
 
-        let row_per_block = self.get_option(FUSE_OPT_KEY_ROW_PER_BLOCK, DEFAULT_ROW_PER_BLOCK);
-
         Ok(ClusterStatsGenerator::new(
             cluster_key_id,
             cluster_key_index,
             expression_executor,
             0,
-            row_per_block,
+            self.get_block_compactor(),
         ))
     }
 }

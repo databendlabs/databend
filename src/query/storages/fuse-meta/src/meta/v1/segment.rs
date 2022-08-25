@@ -96,22 +96,6 @@ impl BlockMeta {
     pub fn compression(&self) -> Compression {
         self.compression
     }
-
-    pub fn check_perfect_block(
-        &self,
-        max_rows_per_block: usize,
-        min_rows_per_block: usize,
-        max_bytes_per_block: usize,
-    ) -> bool {
-        let row_count = self.row_count as usize;
-        let block_size = self.block_size as usize;
-        if (row_count >= min_rows_per_block && row_count <= max_rows_per_block)
-            || block_size >= max_bytes_per_block
-        {
-            return true;
-        }
-        false
-    }
 }
 
 impl SegmentInfo {

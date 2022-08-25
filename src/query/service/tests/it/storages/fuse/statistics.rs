@@ -25,6 +25,7 @@ use common_pipeline_transforms::processors::ExpressionExecutor;
 use common_planners::add;
 use common_planners::col;
 use common_planners::lit;
+use databend_query::storages::fuse::io::BlockCompactor;
 use databend_query::storages::fuse::io::BlockWriter;
 use databend_query::storages::fuse::io::TableMetaLocationGenerator;
 use databend_query::storages::fuse::statistics::gen_columns_statistics;
@@ -174,14 +175,15 @@ fn test_ft_stats_cluster_stats() -> common_exception::Result<()> {
         Series::from_data(vec!["123456", "234567", "345678"]),
     ]);
 
-    let stats_gen = ClusterStatsGenerator::new(0, vec![0], None, 0, 1_000_000);
+    let block_compactor = BlockCompactor::new(1_000_000, 800_000, 100 * 1024 * 1024);
+    let stats_gen = ClusterStatsGenerator::new(0, vec![0], None, 0, block_compactor.clone());
     let (stats, _) = stats_gen.gen_stats_for_append(&blocks)?;
     assert!(stats.is_some());
     let stats = stats.unwrap();
     assert_eq!(vec![DataValue::Int64(1)], stats.min);
     assert_eq!(vec![DataValue::Int64(3)], stats.max);
 
-    let stats_gen = ClusterStatsGenerator::new(1, vec![1], None, 0, 1_000_000);
+    let stats_gen = ClusterStatsGenerator::new(1, vec![1], None, 0, block_compactor);
     let (stats, _) = stats_gen.gen_stats_for_append(&blocks)?;
     assert!(stats.is_some());
     let stats = stats.unwrap();
@@ -202,7 +204,8 @@ async fn test_ft_cluster_stats_with_stats() -> common_exception::Result<()> {
         level: 0,
     });
 
-    let stats_gen = ClusterStatsGenerator::new(0, vec![0], None, 0, 1_000_000);
+    let block_compactor = BlockCompactor::new(1_000_000, 800_000, 100 * 1024 * 1024);
+    let stats_gen = ClusterStatsGenerator::new(0, vec![0], None, 0, block_compactor.clone());
     let stats = stats_gen.gen_with_origin_stats(&blocks, origin.clone())?;
     assert!(stats.is_some());
     let stats = stats.unwrap();
@@ -222,7 +225,8 @@ async fn test_ft_cluster_stats_with_stats() -> common_exception::Result<()> {
         vec![add(col("a"), lit(1))],
         true,
     )?;
-    let stats_gen = ClusterStatsGenerator::new(0, vec![0], Some(executor), 0, 1_000_000);
+    let stats_gen =
+        ClusterStatsGenerator::new(0, vec![0], Some(executor), 0, block_compactor.clone());
     let stats = stats_gen.gen_with_origin_stats(&blocks, origin.clone())?;
     assert!(stats.is_some());
     let stats = stats.unwrap();
@@ -230,7 +234,7 @@ async fn test_ft_cluster_stats_with_stats() -> common_exception::Result<()> {
     assert_eq!(vec![DataValue::Int64(4)], stats.max);
 
     // different cluster_key_id.
-    let stats_gen = ClusterStatsGenerator::new(1, vec![0], None, 0, 1_000_000);
+    let stats_gen = ClusterStatsGenerator::new(1, vec![0], None, 0, block_compactor);
     let stats = stats_gen.gen_with_origin_stats(&blocks, origin)?;
     assert!(stats.is_none());
 

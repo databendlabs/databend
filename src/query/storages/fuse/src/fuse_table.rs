@@ -44,6 +44,7 @@ use common_storages_util::storage_context::StorageContext;
 use uuid::Uuid;
 
 use crate::io::write_meta;
+use crate::io::BlockCompactor;
 use crate::io::MetaReaders;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::AppendOperationLogEntry;
@@ -51,6 +52,10 @@ use crate::pipelines::Pipeline;
 use crate::NavigationPoint;
 use crate::Table;
 use crate::TableStatistics;
+use crate::DEFAULT_BLOCK_SIZE_IN_MEM_SIZE_THRESHOLD;
+use crate::DEFAULT_ROW_PER_BLOCK;
+use crate::FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD;
+use crate::FUSE_OPT_KEY_ROW_PER_BLOCK;
 use crate::OPT_KEY_DATABASE_ID;
 use crate::OPT_KEY_LEGACY_SNAPSHOT_LOC;
 use crate::OPT_KEY_SNAPSHOT_LOCATION;
@@ -218,6 +223,16 @@ impl FuseTable {
 
     pub fn transient(&self) -> bool {
         self.table_info.meta.options.contains_key("TRANSIENT")
+    }
+
+    pub(crate) fn get_block_compactor(&self) -> BlockCompactor {
+        let max_rows_per_block = self.get_option(FUSE_OPT_KEY_ROW_PER_BLOCK, DEFAULT_ROW_PER_BLOCK);
+        let min_rows_per_block = (max_rows_per_block as f64 * 0.8) as usize;
+        let max_bytes_per_block = self.get_option(
+            FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD,
+            DEFAULT_BLOCK_SIZE_IN_MEM_SIZE_THRESHOLD,
+        );
+        BlockCompactor::new(max_rows_per_block, min_rows_per_block, max_bytes_per_block)
     }
 }
 
