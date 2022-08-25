@@ -40,6 +40,7 @@ use common_datavalues::DataValue;
 use common_datavalues::IntervalKind;
 use common_datavalues::IntervalType;
 use common_datavalues::NullType;
+use common_datavalues::NullableType;
 use common_datavalues::StringType;
 use common_datavalues::StructType;
 use common_datavalues::TimestampType;
@@ -929,7 +930,12 @@ impl<'a> TypeChecker<'a> {
         let mut arg_types = vec![];
 
         for argument in arguments {
-            let box (arg, arg_type) = self.resolve(argument, None).await?;
+            let box (arg, mut arg_type) = self.resolve(argument, None).await?;
+            if let Scalar::SubqueryExpr(subquery) = &arg {
+                if subquery.typ == SubqueryType::Scalar && !arg.data_type().is_nullable() {
+                    arg_type = NullableType::new_impl(arg_type);
+                }
+            }
             args.push(arg);
             arg_types.push(arg_type);
         }
