@@ -632,13 +632,16 @@ impl SubqueryRewriter {
                 Ok(SExpr::create_unary(plan.plan().clone(), flatten_plan))
             }
 
-            RelOperator::UnionAll(_) => {
+            RelOperator::UnionAll(union_all) => {
                 let left_flatten_plan =
                     self.flatten(plan.child(0)?, correlated_columns, flatten_info)?;
                 let right_flatten_plan =
                     self.flatten(plan.child(1)?, correlated_columns, flatten_info)?;
                 Ok(SExpr::create_binary(
-                    UnionAll {}.into(),
+                    UnionAll {
+                        data_types: union_all.data_types.clone(),
+                    }
+                    .into(),
                     left_flatten_plan,
                     right_flatten_plan,
                 ))

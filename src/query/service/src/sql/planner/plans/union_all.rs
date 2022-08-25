@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_datavalues::DataTypeImpl;
 use common_exception::Result;
 
 use crate::sql::optimizer::Distribution;
@@ -25,7 +26,9 @@ use crate::sql::plans::PhysicalOperator;
 use crate::sql::plans::RelOp;
 
 #[derive(Clone, Debug)]
-pub struct UnionAll;
+pub struct UnionAll {
+    pub data_types: Vec<Box<DataTypeImpl>>,
+}
 
 impl Operator for UnionAll {
     fn rel_op(&self) -> RelOp {
