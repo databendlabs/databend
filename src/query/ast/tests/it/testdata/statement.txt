@@ -729,30 +729,6 @@ CreateDatabase(
 
 
 ---------- Input ----------
-create database t engine = Github(token='123456');
----------- Output ---------
-CREATE DATABASE t ENGINE = GITHUB(token='123456')
----------- AST ------------
-CreateDatabase(
-    CreateDatabaseStmt {
-        if_not_exists: false,
-        catalog: None,
-        database: Identifier {
-            name: "t",
-            quote: None,
-            span: Ident(16..17),
-        },
-        engine: Some(
-            Github(
-                "123456",
-            ),
-        ),
-        options: [],
-    },
-)
-
-
----------- Input ----------
 create database t engine = Default;
 ---------- Output ---------
 CREATE DATABASE t ENGINE = DEFAULT

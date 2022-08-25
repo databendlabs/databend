@@ -37,7 +37,6 @@ async fn test_show_engines_interpreter() -> Result<()> {
             "| Engine | Comment                     |",
             "+--------+-----------------------------+",
             "| FUSE   | FUSE Storage Engine         |",
-            "| GITHUB | GITHUB Storage Engine       |",
             "| MEMORY | MEMORY Storage Engine       |",
             "| NULL   | NULL Storage Engine         |",
             "| RANDOM | RANDOM Storage Engine       |",

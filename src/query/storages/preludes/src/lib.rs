@@ -15,7 +15,6 @@
 #![feature(generic_associated_types)]
 #![feature(type_alias_impl_trait)]
 
-pub mod github;
 pub mod information_schema;
 pub mod memory;
 pub mod null;
@@ -28,7 +27,6 @@ mod storages {
     pub use common_catalog::table::Table;
     pub use common_storages_util::storage_context::StorageContext;
 
-    pub use super::github;
     pub use super::memory;
     pub use super::system;
     pub use super::view;

@@ -214,11 +214,6 @@ impl<'a> Binder {
 
         let database_engine = engine.as_ref().unwrap_or(&DatabaseEngine::Default);
         let (engine, engine_options) = match database_engine {
-            DatabaseEngine::Github(token) => {
-                let engine_options =
-                    BTreeMap::from_iter(vec![("token".to_string(), token.clone())]);
-                ("github", engine_options)
-            }
             DatabaseEngine::Default => ("default", BTreeMap::default()),
         };
 

@@ -15,7 +15,6 @@ mod database;
 mod database_context;
 mod database_factory;
 mod default;
-mod github;
 mod information_schema;
 mod system;
 

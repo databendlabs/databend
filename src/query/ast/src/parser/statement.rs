@@ -1429,7 +1429,6 @@ pub fn engine(i: Input) -> IResult<Engine> {
         value(Engine::Null, rule! { NULL }),
         value(Engine::Memory, rule! { MEMORY }),
         value(Engine::Fuse, rule! { FUSE }),
-        value(Engine::Github, rule! { GITHUB }),
         value(Engine::View, rule! { VIEW }),
         value(Engine::Random, rule! { RANDOM }),
     ));
@@ -1443,15 +1442,7 @@ pub fn engine(i: Input) -> IResult<Engine> {
 }
 
 pub fn database_engine(i: Input) -> IResult<DatabaseEngine> {
-    let engine = alt((
-        value(DatabaseEngine::Default, rule! {DEFAULT}),
-        map(
-            rule! {
-                GITHUB ~ "(" ~ TOKEN ~ ^"=" ~ #literal_string ~ ")"
-            },
-            |(_, _, _, _, github_token, _)| DatabaseEngine::Github(github_token),
-        ),
-    ));
+    let engine = alt((value(DatabaseEngine::Default, rule! {DEFAULT}),));
 
     map(
         rule! {
