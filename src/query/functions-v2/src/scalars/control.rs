@@ -14,8 +14,6 @@
 
 use std::sync::Arc;
 
-use common_arrow::arrow::bitmap::Bitmap;
-use common_arrow::arrow::bitmap::MutableBitmap;
 use common_expression::types::nullable::NullableColumn;
 use common_expression::types::BooleanType;
 use common_expression::types::DataType;
@@ -36,7 +34,6 @@ use common_expression::Value;
 use common_expression::ValueRef;
 
 const MULTI_IF: &str = "multi_if";
-const IS_NULL: &str = "is_null";
 const IS_NOT_NULL: &str = "is_not_null";
 
 pub fn register(registry: &mut FunctionRegistry) {
@@ -150,32 +147,16 @@ pub fn register(registry: &mut FunctionRegistry) {
             }),
         }))
     });
-    registry.register_1_arg_core::<NullableType<GenericType<0>>, BooleanType, _, _>(
-        IS_NULL,
-        FunctionProperty::default(),
-        |_| None,
-        |arg, _| match &arg {
-            ValueRef::Column(NullableColumn { validity, .. }) => {
-                let bitmap = Bitmap::from_iter(validity.iter().map(|v| !v));
-                Ok(Value::Column(bitmap))
-            }
-            ValueRef::Scalar(None) => Ok(Value::Scalar(true)),
-            ValueRef::Scalar(Some(_)) => Ok(Value::Scalar(false)),
-        },
-    );
     registry.register_1_arg_core::<NullType, BooleanType, _, _>(
-        IS_NULL,
+        IS_NOT_NULL,
         FunctionProperty::default(),
-        |_| None,
-        |arg, _| match &arg {
-            ValueRef::Column(len) => {
-                let vec = vec![0xff_u8; (*len).saturating_add(7) / 8];
-                let bitmap = MutableBitmap::from_vec(vec, *len);
-                let bitmap = Bitmap::from(bitmap);
-                Ok(Value::Column(bitmap))
-            }
-            ValueRef::Scalar(_) => Ok(Value::Scalar(true)),
+        |_| {
+            Some(BooleanDomain {
+                has_true: false,
+                has_false: true,
+            })
         },
+        |_, _| Ok(Value::Scalar(false)),
     );
     registry.register_1_arg_core::<NullableType<GenericType<0>>, BooleanType, _, _>(
         IS_NOT_NULL,
@@ -188,20 +169,6 @@ pub fn register(registry: &mut FunctionRegistry) {
             }
             ValueRef::Scalar(None) => Ok(Value::Scalar(false)),
             ValueRef::Scalar(Some(_)) => Ok(Value::Scalar(true)),
-        },
-    );
-    registry.register_1_arg_core::<NullType, BooleanType, _, _>(
-        IS_NOT_NULL,
-        FunctionProperty::default(),
-        |_| None,
-        |arg, _| match &arg {
-            ValueRef::Column(len) => {
-                let vec = vec![0x00_u8; (*len).saturating_add(7) / 8];
-                let bitmap = MutableBitmap::from_vec(vec, *len);
-                let bitmap = Bitmap::from(bitmap);
-                Ok(Value::Column(bitmap))
-            }
-            ValueRef::Scalar(_) => Ok(Value::Scalar(false)),
         },
     );
 }
