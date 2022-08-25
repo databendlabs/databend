@@ -1487,7 +1487,7 @@ pub fn create_database_option(i: Input) -> IResult<CreateDatabaseOption> {
         rule! {
             ^#database_engine
         },
-        |db_engine| CreateDatabaseOption::DatabaseEngine(db_engine),
+        CreateDatabaseOption::DatabaseEngine,
     ),));
 
     let share_from = alt((map(
