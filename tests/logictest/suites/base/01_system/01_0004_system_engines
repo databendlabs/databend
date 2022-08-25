@@ -4,3 +4,4 @@ SELECT * FROM system.engines ORDER BY "Engine" LIMIT 1,2;
 
 ----
 MEMORY MEMORY Storage Engine
+NULL NULL Storage Engine
