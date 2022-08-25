@@ -18,6 +18,7 @@ mod arithmetic;
 mod arithmetic_modulo;
 mod boolean;
 mod control;
+mod math;
 mod string;
 mod string_multi_args;
 
@@ -28,5 +29,6 @@ pub fn builtin_functions() -> FunctionRegistry {
     string::register(&mut registry);
     string_multi_args::register(&mut registry);
     arithmetic::register(&mut registry);
+    math::register(&mut registry);
     registry
 }

@@ -26,7 +26,7 @@ use super::arithmetic_modulo::vectorize_modulo;
 
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_aliases("plus", &["add"]);
-    registry.register_aliases("minus", &["substract"]);
+    registry.register_aliases("minus", &["substract", "neg"]);
     registry.register_aliases("div", &["intdiv"]);
 
     // TODO support modulo
@@ -44,6 +44,40 @@ pub fn register(registry: &mut FunctionRegistry) {
         DataType::Float32,
         DataType::Float64,
     ];
+
+    // Unary OP for minus and plus
+    for left in all_numerics_types {
+        with_number_mapped_type!(L, match left {
+            DataType::L => {
+                type T = <L as ResultTypeOfUnary>::Negate;
+                registry.register_1_arg::<NumberType<L>, NumberType<T>, _, _>(
+                    "minus",
+                    FunctionProperty::default(),
+                    |lhs| {
+                        Some(NumberDomain::<T> {
+                            min: -(lhs.max as T),
+                            max: -(lhs.min as T),
+                        })
+                    },
+                    |a| -(a as T),
+                );
+            }
+            _ => unreachable!(),
+        });
+
+        // Can be eliminated by optimizer
+        with_number_mapped_type!(L, match left {
+            DataType::L => {
+                registry.register_1_arg::<NumberType<L>, NumberType<L>, _, _>(
+                    "plus",
+                    FunctionProperty::default(),
+                    |lhs| Some(lhs.clone()),
+                    |a| a,
+                );
+            }
+            _ => unreachable!(),
+        });
+    }
 
     for left in all_numerics_types {
         for right in all_numerics_types {

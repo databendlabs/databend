@@ -116,9 +116,7 @@ def gen_suite_from_sql(sql_and_skips, dest_file):
     for sql_and_skip in sql_and_skips:
         sql = sql_and_skip[0]
         if sql_and_skip[1]:
-            statements.append(
-                f"statement query skipped\n{sql}\n\n"
-            )
+            statements.append(f"statement query skipped\n{sql}\n\n")
             continue
         # use mysql connector
         try:
@@ -153,9 +151,7 @@ def gen_suite_from_sql(sql_and_skips, dest_file):
                     f"statement query {options}\n{sql}\n\n----\n{format_result(results)}\n"
                 )
             else:
-                statements.append(
-                    f"statement ok\n{sql}\n\n"
-                )
+                statements.append(f"statement ok\n{sql}\n\n")
         except mysql.connector.Error as err:
             statements.append(f"statement ok\n{sql}\n\n")
 
