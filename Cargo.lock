@@ -1362,15 +1362,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "common-macros"
-version = "0.1.0"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
 name = "common-management"
 version = "0.1.0"
 dependencies = [
@@ -2367,7 +2358,6 @@ dependencies = [
  "common-base",
  "common-exception",
  "common-grpc",
- "common-macros",
  "common-meta-api",
  "common-meta-app",
  "common-meta-embedded",

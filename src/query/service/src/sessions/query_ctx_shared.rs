@@ -19,7 +19,7 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use common_base::base::Progress;
+use common_base::base::{Progress, QueryTracker};
 use common_base::base::Runtime;
 use common_contexts::DalContext;
 use common_exception::ErrorCode;
@@ -67,6 +67,7 @@ pub struct QueryContextShared {
     pub(in crate::sessions) result_progress: Arc<Progress>,
     pub(in crate::sessions) error: Arc<Mutex<Option<ErrorCode>>>,
     pub(in crate::sessions) session: Arc<Session>,
+    pub(in crate::sessions) tracker: Option<Arc<QueryTracker>>,
     pub(in crate::sessions) runtime: Arc<RwLock<Option<Arc<Runtime>>>>,
     pub(in crate::sessions) init_query_id: Arc<RwLock<String>>,
     pub(in crate::sessions) cluster_cache: Arc<Cluster>,
@@ -114,6 +115,7 @@ impl QueryContextShared {
             auth_manager: AuthMgr::create(config).await?,
             query_need_abort: Arc::new(AtomicBool::new(false)),
             affect: Arc::new(Mutex::new(None)),
+            tracker: None,
         }))
     }
 
@@ -231,6 +233,10 @@ impl QueryContextShared {
             Entry::Occupied(v) => Ok(v.get().clone()),
             Entry::Vacant(v) => Ok(v.insert(cache_table).clone()),
         }
+    }
+
+    pub fn get_tracker(&self) -> Arc<QueryTracker> {
+        unimplemented!()
     }
 
     /// Init runtime when first get

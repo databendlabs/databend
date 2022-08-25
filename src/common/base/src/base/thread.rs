@@ -14,17 +14,18 @@
 
 use std::thread::Builder;
 use std::thread::JoinHandle;
+use crate::base::{GlobalTracker, QueryTracker};
 
-use super::runtime_tracker::ThreadTracker;
+use super::thread_tracker::ThreadTracker;
 
 pub struct Thread;
 
 impl Thread {
     pub fn named_spawn<F, T>(mut name: Option<String>, f: F) -> JoinHandle<T>
-    where
-        F: FnOnce() -> T,
-        F: Send + 'static,
-        T: Send + 'static,
+        where
+            F: FnOnce() -> T,
+            F: Send + 'static,
+            T: Send + 'static,
     {
         let mut thread_builder = Builder::new();
 
@@ -32,22 +33,20 @@ impl Thread {
             thread_builder = thread_builder.name(named);
         }
 
-        match ThreadTracker::current_runtime_tracker() {
-            None => thread_builder.spawn(f).unwrap(),
-            Some(runtime_tracker) => thread_builder
-                .spawn(move || {
-                    ThreadTracker::create(runtime_tracker);
-                    f()
-                })
-                .unwrap(),
-        }
+        let global = GlobalTracker::current();
+        let query = QueryTracker::current();
+
+        thread_builder.spawn(move || {
+            ThreadTracker::init(global, query);
+            f()
+        }).unwrap()
     }
 
     pub fn spawn<F, T>(f: F) -> JoinHandle<T>
-    where
-        F: FnOnce() -> T,
-        F: Send + 'static,
-        T: Send + 'static,
+        where
+            F: FnOnce() -> T,
+            F: Send + 'static,
+            T: Send + 'static,
     {
         Self::named_spawn(None, f)
     }

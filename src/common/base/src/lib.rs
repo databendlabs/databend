@@ -14,6 +14,8 @@
 
 #![feature(thread_local)]
 
+extern crate core;
+
 pub mod base;
 pub mod containers;
 pub mod mem_allocator;

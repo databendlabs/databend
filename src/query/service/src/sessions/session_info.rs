@@ -32,11 +32,8 @@ impl Session {
         let mut memory_usage = 0;
 
         if let Some(shared) = &status.get_query_context_shared() {
-            if let Ok(runtime) = shared.try_get_runtime() {
-                let runtime_tracker = runtime.get_tracker();
-                let runtime_memory_tracker = runtime_tracker.get_memory_tracker();
-                memory_usage = runtime_memory_tracker.get_memory_usage();
-            }
+            let query_tracker = shared.get_tracker();
+            memory_usage = query_tracker.get_memory_usage() as i64;
         }
 
         ProcessInfo {

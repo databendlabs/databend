@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::alloc::{GlobalAlloc, Layout};
 use std::future::Future;
 use std::sync::Arc;
 use std::thread;
@@ -21,8 +22,8 @@ use common_exception::Result;
 use tokio::runtime::Handle;
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
-
-use super::runtime_tracker::RuntimeTracker;
+use crate::base::{GlobalTracker, QueryTracker, ThreadTracker};
+use crate::mem_allocator::ALLOC;
 
 /// Methods to spawn tasks.
 pub trait TrySpawn {
@@ -31,18 +32,18 @@ pub trait TrySpawn {
     /// It allows to return an error before spawning the task.
     #[track_caller]
     fn try_spawn<T>(&self, task: T) -> Result<JoinHandle<T::Output>>
-    where
-        T: Future + Send + 'static,
-        T::Output: Send + 'static;
+        where
+            T: Future + Send + 'static,
+            T::Output: Send + 'static;
 
     /// Spawns a new asynchronous task, returning a tokio::JoinHandle for it.
     ///
     /// A default impl of this method just calls `try_spawn` and just panics if there is an error.
     #[track_caller]
     fn spawn<T>(&self, task: T) -> JoinHandle<T::Output>
-    where
-        T: Future + Send + 'static,
-        T::Output: Send + 'static,
+        where
+            T: Future + Send + 'static,
+            T::Output: Send + 'static,
     {
         self.try_spawn(task).unwrap()
     }
@@ -51,18 +52,18 @@ pub trait TrySpawn {
 impl<S: TrySpawn> TrySpawn for Arc<S> {
     #[track_caller]
     fn try_spawn<T>(&self, task: T) -> Result<JoinHandle<T::Output>>
-    where
-        T: Future + Send + 'static,
-        T::Output: Send + 'static,
+        where
+            T: Future + Send + 'static,
+            T::Output: Send + 'static,
     {
         self.as_ref().try_spawn(task)
     }
 
     #[track_caller]
     fn spawn<T>(&self, task: T) -> JoinHandle<T::Output>
-    where
-        T: Future + Send + 'static,
-        T::Output: Send + 'static,
+        where
+            T: Future + Send + 'static,
+            T::Output: Send + 'static,
     {
         self.as_ref().spawn(task)
     }
@@ -73,14 +74,12 @@ impl<S: TrySpawn> TrySpawn for Arc<S> {
 pub struct Runtime {
     // Handle to runtime.
     handle: Handle,
-    // Runtime tracker
-    tracker: Arc<RuntimeTracker>,
     // Use to receive a drop signal when dropper is dropped.
     _dropper: Dropper,
 }
 
 impl Runtime {
-    fn create(tracker: Arc<RuntimeTracker>, builder: &mut tokio::runtime::Builder) -> Result<Self> {
+    fn create(builder: &mut tokio::runtime::Builder) -> Result<Self> {
         let runtime = builder
             .build()
             .map_err(|tokio_error| ErrorCode::TokioError(tokio_error.to_string()))?;
@@ -94,33 +93,29 @@ impl Runtime {
 
         Ok(Runtime {
             handle,
-            tracker,
             _dropper: Dropper {
                 close: Some(send_stop),
             },
         })
     }
 
-    fn tracker_builder(rt_tracker: Arc<RuntimeTracker>) -> tokio::runtime::Builder {
-        let mut builder = tokio::runtime::Builder::new_multi_thread();
+    fn init_tracker(mut builder: tokio::runtime::Builder) -> tokio::runtime::Builder {
+        let global = GlobalTracker::current();
+        let query = QueryTracker::current();
+
         builder
             .enable_all()
-            .on_thread_stop(rt_tracker.on_stop_thread())
-            .on_thread_start(rt_tracker.on_start_thread());
+            .on_thread_stop(|| { ThreadTracker::destroy(); })
+            .on_thread_start(move || { ThreadTracker::init(global.clone(), query.clone()); });
 
         builder
-    }
-
-    pub fn get_tracker(&self) -> Arc<RuntimeTracker> {
-        self.tracker.clone()
     }
 
     /// Spawns a new tokio runtime with a default thread count on a background
     /// thread and returns a `Handle` which can be used to spawn tasks via
     /// its executor.
     pub fn with_default_worker_threads() -> Result<Self> {
-        let tracker = RuntimeTracker::create();
-        let mut runtime_builder = Self::tracker_builder(tracker.clone());
+        let mut runtime_builder = Self::init_tracker(tokio::runtime::Builder::new_multi_thread());
 
         #[cfg(debug_assertions)]
         {
@@ -132,13 +127,12 @@ impl Runtime {
             }
         }
 
-        Self::create(tracker, &mut runtime_builder)
+        Self::create(&mut runtime_builder)
     }
 
     #[allow(unused_mut)]
     pub fn with_worker_threads(workers: usize, mut thread_name: Option<String>) -> Result<Self> {
-        let tracker = RuntimeTracker::create();
-        let mut runtime_builder = Self::tracker_builder(tracker.clone());
+        let mut runtime_builder = Self::init_tracker(tokio::runtime::Builder::new_multi_thread());
 
         #[cfg(debug_assertions)]
         {
@@ -154,7 +148,7 @@ impl Runtime {
             runtime_builder.thread_name(thread_name);
         }
 
-        Self::create(tracker, runtime_builder.worker_threads(workers))
+        Self::create(runtime_builder.worker_threads(workers))
     }
 
     pub fn inner(&self) -> tokio::runtime::Handle {
@@ -169,9 +163,9 @@ impl Runtime {
 impl TrySpawn for Runtime {
     #[track_caller]
     fn try_spawn<T>(&self, task: T) -> Result<JoinHandle<T::Output>>
-    where
-        T: Future + Send + 'static,
-        T::Output: Send + 'static,
+        where
+            T: Future + Send + 'static,
+            T::Output: Send + 'static,
     {
         Ok(self.handle.spawn(task))
     }

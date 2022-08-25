@@ -16,11 +16,10 @@ use std::env;
 use std::ops::Deref;
 use std::sync::Arc;
 
-use common_base::base::RuntimeTracker;
+use common_base::base::tokio;
 use common_base::base::StopHandle;
 use common_base::base::Stoppable;
 use common_grpc::RpcClientConf;
-use common_macros::databend_main;
 use common_meta_sled_store::init_sled_db;
 use common_meta_store::MetaStoreProvider;
 use common_tracing::init_logging;
@@ -40,8 +39,8 @@ pub use kvapi::KvApiCommand;
 
 const CMD_KVAPI_PREFIX: &str = "kvapi::";
 
-#[databend_main]
-async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<()> {
+#[tokio::main]
+async fn main() -> common_exception::Result<()> {
     let conf = Config::load()?;
 
     if run_cmd(&conf).await {

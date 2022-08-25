@@ -16,8 +16,7 @@ use std::env;
 use std::ops::Deref;
 use std::sync::Arc;
 
-use common_base::base::RuntimeTracker;
-use common_macros::databend_main;
+use common_base::base::{GlobalTracker, Runtime, ThreadTracker};
 use common_meta_embedded::MetaEmbedded;
 use common_meta_grpc::MIN_METASRV_SEMVER;
 use common_metrics::init_default_metrics_recorder;
@@ -36,9 +35,19 @@ use databend_query::Config;
 use databend_query::GlobalServices;
 use databend_query::QUERY_SEMVER;
 use tracing::info;
+use common_base::base::tokio;
 
-#[databend_main]
-async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<()> {
+fn main() -> common_exception::Result<()> {
+    // init thread tracker, because block_on use this thread;
+    let global = GlobalTracker::create();
+    ThreadTracker::init(global, None);
+
+    return Runtime::with_default_worker_threads()
+        .unwrap()
+        .block_on(main_entrypoint());
+}
+
+async fn main_entrypoint() -> common_exception::Result<()> {
     let conf: Config = Config::load()?;
 
     if run_cmd(&conf) {
@@ -214,7 +223,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
                 "{}:{}",
                 conf.query.clickhouse_http_handler_host, conf.query.clickhouse_http_handler_port
             )
-            .parse()?
+                .parse()?
         )
     );
     println!("Databend HTTP");
@@ -229,7 +238,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
                 "{}:{}",
                 conf.query.http_handler_host, conf.query.http_handler_port
             )
-            .parse()?
+                .parse()?
         )
     );
 

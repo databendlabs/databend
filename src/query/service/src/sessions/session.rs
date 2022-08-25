@@ -122,19 +122,18 @@ impl Session {
     /// For a query, execution environment(e.g cluster) should be immutable.
     /// We can bind the environment to the context in create_context method.
     pub async fn create_query_context(self: &Arc<Self>) -> Result<Arc<QueryContext>> {
-        let shared = self.get_shared_query_context().await?;
+        let shared = self.create_shared_query_context().await?;
 
         Ok(QueryContext::create_from_shared(shared))
     }
 
-    pub async fn get_shared_query_context(self: &Arc<Self>) -> Result<Arc<QueryContextShared>> {
+    async fn create_shared_query_context(self: &Arc<Self>) -> Result<Arc<QueryContextShared>> {
         let config = self.get_config();
         let session = self.clone();
         let cluster = ClusterDiscovery::instance().discover(&config).await?;
         let shared = QueryContextShared::try_create(config, session, cluster).await?;
 
-        self.session_ctx
-            .set_query_context_shared(Some(shared.clone()));
+        self.session_ctx.set_query_context_shared(Some(shared.clone()));
         Ok(shared)
     }
 
@@ -167,7 +166,7 @@ impl Session {
     }
 
     pub fn attach<F>(self: &Arc<Self>, host: Option<SocketAddr>, io_shutdown: F)
-    where F: FnOnce() + Send + 'static {
+        where F: FnOnce() + Send + 'static {
         let (tx, rx) = oneshot::channel();
         self.session_ctx.set_client_host(host);
         self.session_ctx.set_io_shutdown_tx(Some(tx));
