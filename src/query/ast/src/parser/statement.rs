@@ -1459,7 +1459,6 @@ pub fn engine(i: Input) -> IResult<Engine> {
         value(Engine::Null, rule! { NULL }),
         value(Engine::Memory, rule! { MEMORY }),
         value(Engine::Fuse, rule! { FUSE }),
-        value(Engine::Github, rule! { GITHUB }),
         value(Engine::View, rule! { VIEW }),
         value(Engine::Random, rule! { RANDOM }),
     ));
@@ -1473,39 +1472,23 @@ pub fn engine(i: Input) -> IResult<Engine> {
 }
 
 pub fn database_engine(i: Input) -> IResult<DatabaseEngine> {
-    let engine = alt((
-        value(DatabaseEngine::Default, rule! {DEFAULT}),
-        map(
-            rule! {
-                GITHUB ~ "(" ~ TOKEN ~ ^"=" ~ #literal_string ~ ")"
-            },
-            |(_, _, _, _, github_token, _)| DatabaseEngine::Github(github_token),
-        ),
-    ));
+    let engine = alt((value(DatabaseEngine::Default, rule! {DEFAULT}),));
 
     map(
         rule! {
-            ENGINE ~ ^"=" ~ ^#engine
+            ^#engine
         },
-        |(_, _, engine)| engine,
+        |engine| engine,
     )(i)
 }
 
 pub fn create_database_option(i: Input) -> IResult<CreateDatabaseOption> {
-    let engine = alt((
-        value(
-            CreateDatabaseOption::DatabaseEngine(DatabaseEngine::Default),
-            rule! {DEFAULT},
-        ),
-        map(
-            rule! {
-                GITHUB ~ "(" ~ TOKEN ~ ^"=" ~ #literal_string ~ ")"
-            },
-            |(_, _, _, _, github_token, _)| {
-                CreateDatabaseOption::DatabaseEngine(DatabaseEngine::Github(github_token))
-            },
-        ),
-    ));
+    let create_db_engine = alt((map(
+        rule! {
+            ^#database_engine
+        },
+        |db_engine| CreateDatabaseOption::DatabaseEngine(db_engine),
+    ),));
 
     let share_from = alt((map(
         rule! {
@@ -1521,7 +1504,7 @@ pub fn create_database_option(i: Input) -> IResult<CreateDatabaseOption> {
 
     map(
         rule! {
-            ENGINE ~ ^"=" ~ ^#engine
+            ENGINE ~  ^"=" ~ ^#create_db_engine
             | FROM ~ SHARE ~ ^#share_from
         },
         |(_, _, option)| option,

@@ -31,7 +31,7 @@ use super::outer_v0::Config as OuterV0Config;
 
 /// Inner config for query.
 ///
-/// All function should implemented based on this Config.
+/// All function should implement based on this Config.
 #[derive(Clone, Default, Debug, PartialEq, Eq)]
 pub struct Config {
     pub cmd: String,
@@ -55,7 +55,7 @@ pub struct Config {
 }
 
 impl Config {
-    /// As requires by [RFC: Config Backward Compatibility](https://github.com/datafuselabs/databend/pull/5324), we will load user's config via wrapper [`ConfigV0`] and than convert from [`ConfigV0`] to [`Config`].
+    /// As requires by [RFC: Config Backward Compatibility](https://github.com/datafuselabs/databend/pull/5324), we will load user's config via wrapper [`ConfigV0`] and then convert from [`ConfigV0`] to [`Config`].
     ///
     /// In the future, we could have `ConfigV1` and `ConfigV2`.
     pub fn load() -> Result<Self> {
@@ -125,8 +125,6 @@ pub struct QueryConfig {
     pub rpc_tls_query_service_domain_name: String,
     /// Table engine memory enabled
     pub table_engine_memory_enabled: bool,
-    /// Database engine github enabled
-    pub database_engine_github_enabled: bool,
     pub wait_timeout_mills: u64,
     pub max_query_log_size: usize,
     /// Table Cached enabled
@@ -179,7 +177,6 @@ impl Default for QueryConfig {
             rpc_tls_query_server_root_ca_cert: "".to_string(),
             rpc_tls_query_service_domain_name: "localhost".to_string(),
             table_engine_memory_enabled: true,
-            database_engine_github_enabled: true,
             wait_timeout_mills: 5000,
             max_query_log_size: 10000,
             table_cache_enabled: false,

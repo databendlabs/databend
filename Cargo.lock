@@ -1852,7 +1852,6 @@ dependencies = [
  "futures-util",
  "itertools",
  "num_cpus",
- "octocrab",
  "once_cell",
  "opendal",
  "parking_lot 0.12.1",

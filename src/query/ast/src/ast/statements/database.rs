@@ -150,15 +150,12 @@ pub enum AlterDatabaseAction<'a> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DatabaseEngine {
     Default,
-    Github(String),
 }
 
 impl Display for DatabaseEngine {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        if let DatabaseEngine::Github(token) = self {
-            write!(f, "GITHUB(token=\'{token}\')")
-        } else {
-            write!(f, "DEFAULT")
+        match self {
+            DatabaseEngine::Default => write!(f, "DEFAULT"),
         }
     }
 }

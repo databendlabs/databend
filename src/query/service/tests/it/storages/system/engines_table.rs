@@ -33,7 +33,6 @@ async fn test_engines_table() -> Result<()> {
         "+--------+-----------------------------+",
         "| Engine | Comment                     |",
         "+--------+-----------------------------+",
-        "| GITHUB | GITHUB Storage Engine       |",
         "| NULL   | NULL Storage Engine         |",
         "| FUSE   | FUSE Storage Engine         |",
         "| RANDOM | RANDOM Storage Engine       |",

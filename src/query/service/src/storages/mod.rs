@@ -25,7 +25,6 @@ pub mod system;
 
 pub use common_catalog::table::NavigationPoint;
 pub use common_catalog::table::TableStatistics;
-pub use common_storages_preludes::github;
 pub use common_storages_preludes::information_schema;
 pub use common_storages_preludes::memory;
 pub use common_storages_preludes::null;
