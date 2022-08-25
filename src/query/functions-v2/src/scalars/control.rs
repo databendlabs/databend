@@ -161,7 +161,12 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_1_arg_core::<NullableType<GenericType<0>>, BooleanType, _, _>(
         IS_NOT_NULL,
         FunctionProperty::default(),
-        |_| None,
+        |NullableDomain { has_null, value }| {
+            Some(BooleanDomain {
+                has_true: value.is_some(),
+                has_false: *has_null,
+            })
+        },
         |arg, _| match &arg {
             ValueRef::Column(NullableColumn { validity, .. }) => {
                 let bitmap = validity.clone();
