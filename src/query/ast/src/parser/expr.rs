@@ -739,12 +739,14 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
     });
     let tuple = map(
         rule! {
-            "(" ~ #subexpr(0) ~ "," ~ #comma_separated_list1_allow_trailling(subexpr(0))? ~ ","? ~ ^")"
+            "(" ~ #comma_separated_list0_allow_trailling(subexpr(0)) ~ ","? ~ ^")"
         },
-        |(_, head, _, opt_tail, _, _)| {
-            let mut exprs = opt_tail.unwrap_or_default();
-            exprs.insert(0, head);
-            ExprElement::Tuple { exprs }
+        |(_, mut exprs, opt_trail, _)| {
+            if exprs.len() == 1 && opt_trail.is_none() {
+                ExprElement::Group(exprs.remove(0))
+            } else {
+                ExprElement::Tuple { exprs }
+            }
         },
     );
     let function_call = map(
@@ -818,14 +820,6 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             });
             ExprElement::Subquery { modifier, subquery }
         },
-    );
-    let group = map(
-        rule! {
-           "("
-           ~ ^#subexpr(0)
-           ~ ^")"
-        },
-        |(_, expr, _)| ExprElement::Group(expr),
     );
     let binary_op = map(binary_op, |op| ExprElement::BinaryOp { op });
     let unary_op = map(unary_op, |op| ExprElement::UnaryOp { op });
@@ -940,13 +934,12 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         rule!(
             #is_distinct_from: "`... IS [NOT] DISTINCT FROM ...`"
             | #count_all : "COUNT(*)"
-            | #tuple : "`(<expr>, ...)`"
             | #function_call_with_param : "<function>"
             | #function_call : "<function>"
             | #literal : "<literal>"
             | #case : "`CASE ... END`"
             | #subquery : "`(SELECT ...)`"
-            | #group
+            | #tuple : "`(<expr> [,] [...])`"
             | #column_ref : "<column>"
             | #map_access : "[<key>] | .<key> | :<key>"
             | #array : "`[...]`"
