@@ -17,7 +17,11 @@ use std::sync::Arc;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_expression::types::nullable::NullableColumn;
+use common_expression::types::BooleanType;
 use common_expression::types::DataType;
+use common_expression::types::GenericType;
+use common_expression::types::NullType;
+use common_expression::types::NullableType;
 use common_expression::BooleanDomain;
 use common_expression::Column;
 use common_expression::ColumnBuilder;
@@ -27,7 +31,6 @@ use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
 use common_expression::FunctionSignature;
 use common_expression::NullableDomain;
-use common_expression::Scalar;
 use common_expression::ScalarRef;
 use common_expression::Value;
 use common_expression::ValueRef;
@@ -147,78 +150,58 @@ pub fn register(registry: &mut FunctionRegistry) {
             }),
         }))
     });
-    registry.register_function_factory(IS_NULL, |_, args_type| {
-        if args_type.len() != 1 {
-            return None;
-        }
-        Some(Arc::new(Function {
-            signature: FunctionSignature {
-                name: IS_NULL,
-                args_type: args_type.to_vec(),
-                return_type: DataType::Boolean,
-                property: FunctionProperty::default(),
-            },
-            calc_domain: Box::new(|args_domain, _| {
-                assert_eq!(args_domain.len(), 1);
-                None
-            }),
-            eval: Box::new(|args, _generics| {
-                assert_eq!(args.len(), 1);
-                match &args[0] {
-                    ValueRef::Column(Column::Nullable(box NullableColumn { validity, .. })) => {
-                        let bitmap = Bitmap::from_iter(validity.iter().map(|v| !v));
-                        Ok(Value::Column(Column::Boolean(bitmap)))
-                    }
-                    ValueRef::Column(column) => {
-                        let len = column.len();
-                        let mut bitmap = MutableBitmap::with_capacity(len);
-                        for _ in 0..len {
-                            unsafe { bitmap.push_unchecked(false) };
-                        }
-                        let bitmap = Bitmap::from(bitmap);
-                        Ok(Value::Column(Column::Boolean(bitmap)))
-                    }
-                    ValueRef::Scalar(ScalarRef::Null) => Ok(Value::Scalar(Scalar::Boolean(true))),
-                    ValueRef::Scalar(_) => Ok(Value::Scalar(Scalar::Boolean(false))),
-                }
-            }),
-        }))
-    });
-    registry.register_function_factory(IS_NOT_NULL, |_, args_type| {
-        if args_type.len() != 1 {
-            return None;
-        }
-        Some(Arc::new(Function {
-            signature: FunctionSignature {
-                name: IS_NULL,
-                args_type: args_type.to_vec(),
-                return_type: DataType::Boolean,
-                property: FunctionProperty::default(),
-            },
-            calc_domain: Box::new(|args_domain, _| {
-                assert_eq!(args_domain.len(), 1);
-                None
-            }),
-            eval: Box::new(|args, _generics| {
-                assert_eq!(args.len(), 1);
-                match &args[0] {
-                    ValueRef::Column(Column::Nullable(box NullableColumn { validity, .. })) => {
-                        let bitmap = validity.clone();
-                        Ok(Value::Column(Column::Boolean(bitmap)))
-                    }
-                    ValueRef::Column(column) => {
-                        let len = column.len();
-                        let mut bitmap = MutableBitmap::with_capacity(len);
-                        for _ in 0..len {
-                            unsafe { bitmap.push_unchecked(true) };
-                        }
-                        let bitmap = Bitmap::from(bitmap);
-                        Ok(Value::Column(Column::Boolean(bitmap)))
-                    }
-                    ValueRef::Scalar(ScalarRef::Null) => Ok(Value::Scalar(Scalar::Boolean(false))),
-                    ValueRef::Scalar(_) => Ok(Value::Scalar(Scalar::Boolean(true))),
-                }
-            }),
-        }))
-    });
+    registry.register_1_arg_core::<NullableType<GenericType<0>>, BooleanType, _, _>(
+        IS_NULL,
+        FunctionProperty::default(),
+        |_| None,
+        |arg, _| match &arg {
+            ValueRef::Column(NullableColumn { validity, .. }) => {
+                let bitmap = Bitmap::from_iter(validity.iter().map(|v| !v));
+                Ok(Value::Column(bitmap))
+            }
+            ValueRef::Scalar(None) => Ok(Value::Scalar(true)),
+            ValueRef::Scalar(Some(_)) => Ok(Value::Scalar(false)),
+        },
+    );
+    registry.register_1_arg_core::<NullType, BooleanType, _, _>(
+        IS_NULL,
+        FunctionProperty::default(),
+        |_| None,
+        |arg, _| match &arg {
+            ValueRef::Column(len) => {
+                let vec = vec![0xff_u8; (*len).saturating_add(7) / 8];
+                let bitmap = MutableBitmap::from_vec(vec, *len);
+                let bitmap = Bitmap::from(bitmap);
+                Ok(Value::Column(bitmap))
+            }
+            ValueRef::Scalar(_) => Ok(Value::Scalar(true)),
+        },
+    );
+    registry.register_1_arg_core::<NullableType<GenericType<0>>, BooleanType, _, _>(
+        IS_NOT_NULL,
+        FunctionProperty::default(),
+        |_| None,
+        |arg, _| match &arg {
+            ValueRef::Column(NullableColumn { validity, .. }) => {
+                let bitmap = validity.clone();
+                Ok(Value::Column(bitmap))
+            }
+            ValueRef::Scalar(None) => Ok(Value::Scalar(false)),
+            ValueRef::Scalar(Some(_)) => Ok(Value::Scalar(true)),
+        },
+    );
+    registry.register_1_arg_core::<NullType, BooleanType, _, _>(
+        IS_NOT_NULL,
+        FunctionProperty::default(),
+        |_| None,
+        |arg, _| match &arg {
+            ValueRef::Column(len) => {
+                let vec = vec![0x00_u8; (*len).saturating_add(7) / 8];
+                let bitmap = MutableBitmap::from_vec(vec, *len);
+                let bitmap = Bitmap::from(bitmap);
+                Ok(Value::Column(bitmap))
+            }
+            ValueRef::Scalar(_) => Ok(Value::Scalar(false)),
+        },
+    );
 }
