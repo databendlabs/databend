@@ -140,7 +140,7 @@ impl Function for FunctionAdapter {
         }
 
         // nullable
-        if self.has_nullable || columns.iter().any(|v| v.data_type().is_nullable()) {
+        if self.has_nullable && columns.iter().any(|v| v.data_type().is_nullable()) {
             let mut validity: Option<Bitmap> = None;
 
             let mut input = Vec::with_capacity(columns.len());

@@ -38,7 +38,6 @@ impl Series {
     /// Assumes that the `column` is T.
     pub unsafe fn static_cast<T: Any>(column: &ColumnRef) -> &T {
         let object = column.as_ref();
-        dbg!(column.data_type().clone());
         debug_assert!(object.as_any().is::<T>());
         &*(object as *const dyn Column as *const T)
     }
