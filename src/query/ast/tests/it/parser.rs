@@ -86,6 +86,7 @@ fn test_statement() {
         r#"create database if not exists a;"#,
         r#"create database catalog.t engine = Default;"#,
         r#"create database t engine = Default;"#,
+        r#"create database t FROM SHARE a.s;"#,
         r#"drop database catalog.t;"#,
         r#"drop database if exists t;"#,
         r#"create table c(a DateTime null, b DateTime(3));"#,

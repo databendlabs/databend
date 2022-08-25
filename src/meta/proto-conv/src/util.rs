@@ -14,7 +14,7 @@
 
 use crate::Incompatible;
 
-pub const VER: u64 = 4;
+pub const VER: u64 = 5;
 pub const MIN_COMPATIBLE_VER: u64 = 1;
 
 pub fn check_ver(msg_ver: u64, msg_min_compatible: u64) -> Result<(), Incompatible> {
