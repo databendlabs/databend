@@ -639,7 +639,7 @@ impl SubqueryRewriter {
                     self.flatten(plan.child(1)?, correlated_columns, flatten_info)?;
                 Ok(SExpr::create_binary(
                     UnionAll {
-                        data_types: union_all.data_types.clone(),
+                        column2type: union_all.column2type.clone(),
                     }
                     .into(),
                     left_flatten_plan,

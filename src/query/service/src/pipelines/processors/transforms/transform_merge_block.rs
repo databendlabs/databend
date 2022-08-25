@@ -114,24 +114,17 @@ impl Processor for TransformMergeBlock {
 
     fn process(&mut self) -> Result<()> {
         if let Some(input_data) = self.input_data.take() {
-            let input_data = DataBlock::create(
-                self.schema.clone(),
-                create_columns_with_schema(self.schema.clone(), input_data.columns())?,
-            );
+            let input_data = create_block_with_schema(self.schema.clone(), input_data.columns())?;
             if let Some(receiver_result) = self.receiver_result.take() {
-                let data_block = DataBlock::create(
-                    self.schema.clone(),
-                    create_columns_with_schema(self.schema.clone(), receiver_result.columns())?,
-                );
+                let data_block =
+                    create_block_with_schema(self.schema.clone(), receiver_result.columns())?;
                 self.output_data = Some(DataBlock::concat_blocks(&[input_data, data_block])?);
             } else {
                 self.output_data = Some(input_data);
             }
         } else if let Some(receiver_result) = self.receiver_result.take() {
-            let data_block = DataBlock::create(
-                self.schema.clone(),
-                create_columns_with_schema(self.schema.clone(), receiver_result.columns())?,
-            );
+            let data_block =
+                create_block_with_schema(self.schema.clone(), receiver_result.columns())?;
             self.output_data = Some(data_block);
         }
 
@@ -150,15 +143,13 @@ impl Processor for TransformMergeBlock {
     }
 }
 
-fn create_columns_with_schema(
-    schema: DataSchemaRef,
-    columns: &[ColumnRef],
-) -> Result<Vec<ColumnRef>> {
+fn create_block_with_schema(schema: DataSchemaRef, columns: &[ColumnRef]) -> Result<DataBlock> {
     let fields = schema.fields();
     assert_eq!(fields.len(), columns.len());
     let mut new_columns = Vec::with_capacity(columns.len());
     for (field, column) in fields.iter().zip(columns.iter()) {
         if field.data_type().eq(&column.data_type()) {
+            // fast path (mostly situations)
             new_columns.push(column.clone());
         } else {
             new_columns.push(
@@ -169,5 +160,5 @@ fn create_columns_with_schema(
             );
         }
     }
-    Ok(new_columns)
+    Ok(DataBlock::create(schema, new_columns))
 }

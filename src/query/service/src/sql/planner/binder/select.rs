@@ -335,11 +335,11 @@ impl<'a> Binder {
         right_expr: SExpr,
         distinct: bool,
     ) -> Result<SExpr> {
-        let mut data_types = Vec::with_capacity(bind_context.columns.len());
+        let mut column2type = HashMap::with_capacity(bind_context.columns.len());
         for column_binding in bind_context.columns.iter() {
-            data_types.push(column_binding.data_type.clone());
+            column2type.insert(column_binding.index, column_binding.data_type.clone());
         }
-        let union_plan = UnionAll { data_types };
+        let union_plan = UnionAll { column2type };
         let mut new_expr = SExpr::create_binary(union_plan.into(), left_expr, right_expr);
         if distinct {
             new_expr = self.bind_distinct(

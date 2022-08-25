@@ -330,10 +330,15 @@ impl PhysicalPlanBuilder {
                 let left = self.build(s_expr.child(0)?).await?;
                 let old_schema = left.output_schema()?;
                 let old_fields = old_schema.fields();
-                assert_eq!(old_fields.len(), union_all.data_types.len());
                 let mut new_fields = Vec::with_capacity(old_fields.len());
-                for (idx, data_type) in union_all.data_types.iter().enumerate() {
-                    new_fields.push(DataField::new(old_fields[idx].name(), *data_type.clone()));
+                for field in old_fields {
+                    let column_id = field.name().parse::<usize>().unwrap();
+                    if union_all.column2type.contains_key(&column_id) {
+                        new_fields.push(DataField::new(
+                            field.name(),
+                            *union_all.column2type.get(&column_id).unwrap().clone(),
+                        ));
+                    }
                 }
                 let schema = DataSchemaRefExt::create(new_fields);
                 Ok(PhysicalPlan::UnionAll(UnionAll {
