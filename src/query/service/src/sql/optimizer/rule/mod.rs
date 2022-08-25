@@ -54,6 +54,7 @@ pub enum RuleID {
     PushDownLimitProject,
     PushDownLimitSort,
     PushDownLimitScan,
+    PushDownSortScan,
     EliminateEvalScalar,
     EliminateFilter,
     EliminateProject,
@@ -76,18 +77,11 @@ impl Display for RuleID {
             RuleID::PushDownFilterEvalScalar => write!(f, "PushDownFilterEvalScalar"),
             RuleID::PushDownFilterJoin => write!(f, "PushDownFilterJoin"),
             RuleID::PushDownFilterScan => write!(f, "PushDownFilterScan"),
-            RuleID::PushDownLimitOuterJoin => {
-                write!(f, "PushDownLimitOuterJoin")
-            }
-            RuleID::PushDownLimitProject => {
-                write!(f, "PushDownLimitProject")
-            }
-            RuleID::PushDownLimitSort => {
-                write!(f, "PushDownLimitSort")
-            }
-            RuleID::PushDownLimitScan => {
-                write!(f, "PushDownLimitScan")
-            }
+            RuleID::PushDownLimitOuterJoin => write!(f, "PushDownLimitOuterJoin"),
+            RuleID::PushDownLimitProject => write!(f, "PushDownLimitProject"),
+            RuleID::PushDownLimitSort => write!(f, "PushDownLimitSort"),
+            RuleID::PushDownLimitScan => write!(f, "PushDownLimitScan"),
+            RuleID::PushDownSortScan => write!(f, "PushDownSortScan"),
             RuleID::EliminateEvalScalar => write!(f, "EliminateEvalScalar"),
             RuleID::EliminateFilter => write!(f, "EliminateFilter"),
             RuleID::EliminateProject => write!(f, "EliminateProject"),

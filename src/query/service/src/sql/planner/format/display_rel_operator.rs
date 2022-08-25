@@ -145,13 +145,27 @@ pub fn format_logical_get(
     op: &LogicalGet,
 ) -> std::fmt::Result {
     let table = metadata.read().table(op.table_index).clone();
+
     write!(
         f,
-        "LogicalGet: {}.{}.{}, limit: {}",
+        "LogicalGet: {}.{}.{}, Sort: [{}], limit: [{}]",
         &table.catalog,
         &table.database,
         &table.name,
-        op.limit.map_or("none".to_string(), |c| c.to_string())
+        op.order_by.as_ref().map_or_else(
+            || "none".to_string(),
+            |items| items
+                .iter()
+                .map(|item| format!(
+                    "{} (#{}) {}",
+                    metadata.read().column(item.index).name.clone(),
+                    item.index,
+                    if item.asc { "ASC" } else { "DESC" }
+                ))
+                .collect::<Vec<String>>()
+                .join(", ")
+        ),
+        op.limit.map_or("none".to_string(), |l| l.to_string())
     )
 }
 
@@ -251,7 +265,7 @@ pub fn format_physical_scan(
     let table = metadata.read().table(op.table_index).clone();
     write!(
         f,
-        "Scan: {}.{}.{}, filters: [{}], limit: {}",
+        "Scan: {}.{}.{}, filters: [{}], Sort: [{}], limit: [{}]",
         &table.catalog,
         &table.database,
         &table.name,
@@ -264,7 +278,20 @@ pub fn format_physical_scan(
                     .join(", ")
             },
         ),
-        op.limit.map_or("none".to_string(), |c| c.to_string())
+        op.order_by.as_ref().map_or_else(
+            || "none".to_string(),
+            |items| items
+                .iter()
+                .map(|item| format!(
+                    "{} (#{}) {}",
+                    metadata.read().column(item.index).name.clone(),
+                    item.index,
+                    if item.asc { "ASC" } else { "DESC" }
+                ))
+                .collect::<Vec<String>>()
+                .join(", ")
+        ),
+        op.limit.map_or("none".to_string(), |l| l.to_string())
     )
 }
 
@@ -368,7 +395,12 @@ pub fn format_sort(
         })
         .collect::<Vec<String>>()
         .join(", ");
-    write!(f, "Sort: [{}]", scalars)
+    write!(
+        f,
+        "Sort: [{}], limit: [{}]",
+        scalars,
+        op.limit.map_or("none".to_string(), |l| l.to_string())
+    )
 }
 
 pub fn format_limit(

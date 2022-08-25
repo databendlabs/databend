@@ -31,7 +31,9 @@ use crate::sql::plans::RelOperator;
 ///          LogicalGet
 ///
 /// Output:
-///           LogicalGet
+///         Limit
+///           \
+///           LogicalGet(padding limit)
 
 pub struct RulePushDownLimitScan {
     id: RuleID,
@@ -71,11 +73,7 @@ impl Rule for RulePushDownLimitScan {
             count += limit.offset;
             get.limit = Some(get.limit.map_or(count, |c| cmp::max(c, count)));
             let get = SExpr::create_leaf(RelOperator::LogicalGet(get));
-            if limit.offset == 0 {
-                state.add_result(get);
-            } else {
-                state.add_result(s_expr.replace_children(vec![get]));
-            }
+            state.add_result(s_expr.replace_children(vec![get]));
         }
         Ok(())
     }

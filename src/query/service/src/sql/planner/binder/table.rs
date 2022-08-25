@@ -308,6 +308,7 @@ impl<'a> Binder {
                     columns: columns.into_iter().map(|col| col.column_index).collect(),
                     push_down_predicates: None,
                     limit: None,
+                    order_by: None,
                 }
                 .into(),
             ),

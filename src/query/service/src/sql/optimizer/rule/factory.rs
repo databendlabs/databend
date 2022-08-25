@@ -30,6 +30,7 @@ use crate::sql::optimizer::rule::rewrite::RulePushDownLimitOuterJoin;
 use crate::sql::optimizer::rule::rewrite::RulePushDownLimitProject;
 use crate::sql::optimizer::rule::rewrite::RulePushDownLimitScan;
 use crate::sql::optimizer::rule::rewrite::RulePushDownLimitSort;
+use crate::sql::optimizer::rule::rewrite::RulePushDownSortScan;
 use crate::sql::optimizer::rule::rewrite::RuleSplitAggregate;
 use crate::sql::optimizer::rule::rule_implement_get::RuleImplementGet;
 use crate::sql::optimizer::rule::rule_implement_hash_join::RuleImplementHashJoin;
@@ -54,6 +55,7 @@ impl RuleFactory {
             RuleID::PushDownFilterScan => Ok(Box::new(RulePushDownFilterScan::new())),
             RuleID::PushDownLimitProject => Ok(Box::new(RulePushDownLimitProject::new())),
             RuleID::PushDownLimitScan => Ok(Box::new(RulePushDownLimitScan::new())),
+            RuleID::PushDownSortScan => Ok(Box::new(RulePushDownSortScan::new())),
             RuleID::PushDownLimitOuterJoin => Ok(Box::new(RulePushDownLimitOuterJoin::new())),
             RuleID::PushDownLimitSort => Ok(Box::new(RulePushDownLimitSort::new())),
             RuleID::EliminateFilter => Ok(Box::new(RuleEliminateFilter::new())),

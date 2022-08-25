@@ -14,67 +14,69 @@
 
 use std::cmp;
 
+use common_exception::Result;
+
 use crate::sql::optimizer::rule::Rule;
 use crate::sql::optimizer::rule::TransformState;
 use crate::sql::optimizer::RuleID;
 use crate::sql::optimizer::SExpr;
-use crate::sql::plans::Limit;
+use crate::sql::plans::LogicalGet;
 use crate::sql::plans::PatternPlan;
 use crate::sql::plans::RelOp;
-use crate::sql::plans::RelOp::Pattern;
-use crate::sql::plans::RelOp::Sort;
 use crate::sql::plans::RelOperator;
-use crate::sql::plans::Sort as logsort;
+use crate::sql::plans::Sort;
 
-/// Input:  Limit
+/// Input:  Sort
 ///           \
-///          Sort
-///             \
-///              *
+///          LogicalGet
 ///
-/// Output: Limit
+/// Output:
+///         Sort
 ///           \
-///          Sort(padding limit)
-///             \
-///               *
-pub struct RulePushDownLimitSort {
+///           LogicalGet(padding order_by and limit)
+
+pub struct RulePushDownSortScan {
     id: RuleID,
     pattern: SExpr,
 }
 
-impl RulePushDownLimitSort {
+impl RulePushDownSortScan {
     pub fn new() -> Self {
         Self {
-            id: RuleID::PushDownLimitSort,
+            id: RuleID::PushDownSortScan,
             pattern: SExpr::create_unary(
                 PatternPlan {
-                    plan_type: RelOp::Limit,
+                    plan_type: RelOp::Sort,
                 }
                 .into(),
-                SExpr::create_unary(
-                    PatternPlan { plan_type: Sort }.into(),
-                    SExpr::create_leaf(PatternPlan { plan_type: Pattern }.into()),
+                SExpr::create_leaf(
+                    PatternPlan {
+                        plan_type: RelOp::LogicalGet,
+                    }
+                    .into(),
                 ),
             ),
         }
     }
 }
 
-impl Rule for RulePushDownLimitSort {
+impl Rule for RulePushDownSortScan {
     fn id(&self) -> RuleID {
         self.id
     }
 
-    fn apply(&self, s_expr: &SExpr, state: &mut TransformState) -> common_exception::Result<()> {
-        let limit: Limit = s_expr.plan().clone().try_into()?;
-        if let Some(mut count) = limit.limit {
-            count += limit.offset;
-            let sort = s_expr.child(0)?;
-            let mut sort_limit: logsort = sort.plan().clone().try_into()?;
-            sort_limit.limit = Some(sort_limit.limit.map_or(count, |c| cmp::max(c, count)));
-            let sort = SExpr::create_unary(RelOperator::Sort(sort_limit), sort.child(0)?.clone());
-            state.add_result(s_expr.replace_children(vec![sort]));
+    fn apply(&self, s_expr: &SExpr, state: &mut TransformState) -> Result<()> {
+        let sort: Sort = s_expr.plan().clone().try_into()?;
+        let child = s_expr.child(0)?;
+        let mut get: LogicalGet = child.plan().clone().try_into()?;
+        if get.order_by.is_none() {
+            get.order_by = Some(sort.items);
         }
+        if let Some(limit) = sort.limit {
+            get.limit = Some(get.limit.map_or(limit, |c| cmp::max(c, limit)));
+        }
+        let get = SExpr::create_leaf(RelOperator::LogicalGet(get));
+        state.add_result(s_expr.replace_children(vec![get]));
         Ok(())
     }
 

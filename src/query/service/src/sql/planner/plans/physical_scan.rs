@@ -24,6 +24,7 @@ use crate::sql::plans::Operator;
 use crate::sql::plans::PhysicalOperator;
 use crate::sql::plans::RelOp;
 use crate::sql::plans::Scalar;
+use crate::sql::plans::SortItem;
 use crate::sql::IndexType;
 
 #[derive(Clone, Debug)]
@@ -32,6 +33,7 @@ pub struct PhysicalScan {
     pub columns: ColumnSet,
     pub push_down_predicates: Option<Vec<Scalar>>,
     pub limit: Option<usize>,
+    pub order_by: Option<Vec<SortItem>>,
 }
 
 impl Operator for PhysicalScan {

@@ -92,6 +92,19 @@ impl PhysicalPlanBuilder {
                     })
                     .transpose()?;
 
+                let order_by = scan
+                    .order_by
+                    .clone()
+                    .map(|items| {
+                        let builder =
+                            ExpressionBuilderWithoutRenaming::create(self.metadata.clone());
+                        items
+                            .into_iter()
+                            .map(|item| builder.build_column_ref(item.index))
+                            .collect::<Result<Vec<_>>>()
+                    })
+                    .transpose()?;
+
                 let table_entry = metadata.table(scan.table_index);
                 let table = table_entry.table.clone();
                 let table_schema = table.schema();
@@ -131,7 +144,7 @@ impl PhysicalPlanBuilder {
                     projection: Some(projection),
                     filters: push_down_filters.unwrap_or_default(),
                     limit: scan.limit,
-                    ..Default::default()
+                    order_by: order_by.unwrap_or_default(),
                 };
 
                 let source = table

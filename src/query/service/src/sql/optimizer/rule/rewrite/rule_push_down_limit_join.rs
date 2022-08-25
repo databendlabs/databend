@@ -30,11 +30,13 @@ use crate::sql::plans::RelOperator;
 ///            *      *
 ///
 /// Output:
+///             Limit
+///               |
 ///        Left Outer Join
-///             /    \
-///           Limit   *
-///           /
-///          *
+///             /     \
+///           Limit   Limit
+///           /         \
+///          *           *
 pub struct RulePushDownLimitOuterJoin {
     id: RuleID,
     pattern: SExpr,
@@ -79,21 +81,19 @@ impl Rule for RulePushDownLimitOuterJoin {
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformState) -> common_exception::Result<()> {
         let limit: Limit = s_expr.plan().clone().try_into()?;
-        if let Some(mut count) = limit.limit {
-            count += limit.offset;
+        if limit.limit.is_some() {
             let child = s_expr.child(0)?;
             let join: LogicalInnerJoin = child.plan().clone().try_into()?;
             match join.join_type {
-                JoinType::Left | JoinType::Full => state.add_result(child.replace_children(vec![
-                    SExpr::create_unary(
-                        RelOperator::Limit(Limit {
-                            limit: Some(count),
-                            offset: 0,
-                        }),
-                        child.child(0)?.clone(),
-                    ),
-                    child.child(1)?.clone(),
-                ])),
+                JoinType::Left | JoinType::Full => {
+                    state.add_result(s_expr.replace_children(vec![child.replace_children(vec![
+                        SExpr::create_unary(
+                            RelOperator::Limit(limit.clone()),
+                            child.child(0)?.clone(),
+                        ),
+                        SExpr::create_unary(RelOperator::Limit(limit), child.child(1)?.clone()),
+                    ])]))
+                }
                 _ => {}
             }
         }

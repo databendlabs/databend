@@ -54,6 +54,7 @@ pub static DEFAULT_REWRITE_RULES: Lazy<Vec<RuleID>> = Lazy::new(|| {
         RuleID::PushDownLimitSort,
         RuleID::PushDownLimitOuterJoin,
         RuleID::PushDownLimitScan,
+        RuleID::PushDownSortScan,
         RuleID::PushDownFilterEvalScalar,
         RuleID::PushDownFilterProject,
         RuleID::PushDownFilterJoin,
