@@ -345,6 +345,9 @@ impl HttpQueryHandle {
         mut build_res: PipelineBuildResult,
         result_columns: &[ColumnBinding],
     ) -> Result<SendableDataBlockStream> {
+        let id = ctx.get_id();
+        tracing::info!("http query_id execute() begin");
+
         let executor = self.executor.clone();
         let block_buffer = self.block_buffer.clone();
 
@@ -423,6 +426,7 @@ impl HttpQueryHandle {
                 }
             }
         });
+        tracing::info!("http query {id} execute() end");
         Ok(Box::pin(DataBlockStream::create(schema, None, vec![])))
     }
 }
