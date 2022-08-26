@@ -4,8 +4,8 @@ explain select t.number from numbers(1) as t, numbers(1) as t1 where t.number = 
 ----
 Project: [number (#0)]
 └── HashJoin: INNER, build keys: [t1.number (#1)], probe keys: [t.number (#0)], join filters: []
-    ├── Scan: default.system.numbers, filters: []
-    └── Scan: default.system.numbers, filters: []
+    ├── Scan: default.system.numbers, filters: [], Sort: [none], limit: [none]
+    └── Scan: default.system.numbers, filters: [], Sort: [none], limit: [none]
 
 statement query T
 explain select t.number from numbers(1) as t, numbers(1) as t1 where t.number = t1.number and t.number = t1.number + 1;
@@ -13,8 +13,8 @@ explain select t.number from numbers(1) as t, numbers(1) as t1 where t.number = 
 ----
 Project: [number (#0)]
 └── HashJoin: INNER, build keys: [t1.number (#1), +(t1.number (#1), 1)], probe keys: [t.number (#0), t.number (#0)], join filters: []
-    ├── Scan: default.system.numbers, filters: []
-    └── Scan: default.system.numbers, filters: []
+    ├── Scan: default.system.numbers, filters: [], Sort: [none], limit: [none]
+    └── Scan: default.system.numbers, filters: [], Sort: [none], limit: [none]
 
 statement query T
 explain select t.number from numbers(1) as t, numbers(1) as t1 where t.number > 1 and 1 < t1.number;
@@ -23,9 +23,9 @@ explain select t.number from numbers(1) as t, numbers(1) as t1 where t.number > 
 Project: [number (#0)]
 └── CrossJoin
     ├── Filter: [t.number (#0) > 1]
-    │   └── Scan: default.system.numbers, filters: [t.number (#0) > 1]
+    │   └── Scan: default.system.numbers, filters: [t.number (#0) > 1], Sort: [none], limit: [none]
     └── Filter: [1 < t1.number (#1)]
-        └── Scan: default.system.numbers, filters: [1 < t1.number (#1)]
+        └── Scan: default.system.numbers, filters: [1 < t1.number (#1)], Sort: [none], limit: [none]
 
 statement query T
 explain select t.number from numbers(1) as t, numbers(1) as t1 where t.number + t1.number = 1;
@@ -34,8 +34,8 @@ explain select t.number from numbers(1) as t, numbers(1) as t1 where t.number + 
 Project: [number (#0)]
 └── Filter: [+(t.number (#0), t1.number (#1)) = 1]
     └── CrossJoin
-        ├── Scan: default.system.numbers, filters: []
-        └── Scan: default.system.numbers, filters: []
+        ├── Scan: default.system.numbers, filters: [], Sort: [none], limit: [none]
+        └── Scan: default.system.numbers, filters: [], Sort: [none], limit: [none]
 
 statement query T
 explain select t.number from numbers(1) as t, numbers(1) as t1 where t.number = cast(t1.number as string);
@@ -43,8 +43,8 @@ explain select t.number from numbers(1) as t, numbers(1) as t1 where t.number = 
 ----
 Project: [number (#0)]
 └── HashJoin: INNER, build keys: [CAST(CAST(t1.number (#1) AS VARCHAR) AS DOUBLE)], probe keys: [CAST(t.number (#0) AS DOUBLE)], join filters: []
-    ├── Scan: default.system.numbers, filters: []
-    └── Scan: default.system.numbers, filters: []
+    ├── Scan: default.system.numbers, filters: [], Sort: [none], limit: [none]
+    └── Scan: default.system.numbers, filters: [], Sort: [none], limit: [none]
 
 statement query T
 explain select t.number from numbers(1) as t, numbers(1) as t1, numbers(1) as t2 where t1.number = t2.number and t.number = 1;
@@ -54,7 +54,7 @@ Project: [number (#0)]
 └── HashJoin: INNER, build keys: [t2.number (#2)], probe keys: [t1.number (#1)], join filters: []
     ├── CrossJoin
     │   ├── Filter: [t.number (#0) = 1]
-    │   │   └── Scan: default.system.numbers, filters: [t.number (#0) = 1]
-    │   └── Scan: default.system.numbers, filters: []
-    └── Scan: default.system.numbers, filters: []
+    │   │   └── Scan: default.system.numbers, filters: [t.number (#0) = 1], Sort: [none], limit: [none]
+    │   └── Scan: default.system.numbers, filters: [], Sort: [none], limit: [none]
+    └── Scan: default.system.numbers, filters: [], Sort: [none], limit: [none]
 
