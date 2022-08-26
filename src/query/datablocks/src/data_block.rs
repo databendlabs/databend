@@ -18,7 +18,6 @@ use std::sync::Arc;
 
 use common_arrow::arrow::array::Array;
 use common_arrow::arrow::chunk::Chunk;
-use common_arrow::arrow::compute::aggregate;
 use common_arrow::ArrayRef;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
