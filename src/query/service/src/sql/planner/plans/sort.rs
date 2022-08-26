@@ -28,6 +28,7 @@ use crate::sql::IndexType;
 #[derive(Clone, Debug)]
 pub struct Sort {
     pub items: Vec<SortItem>,
+    pub limit: Option<usize>,
 }
 
 #[derive(Clone, Debug)]

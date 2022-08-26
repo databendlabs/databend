@@ -111,6 +111,15 @@ impl SExpr {
         true
     }
 
+    pub fn replace_children(&self, children: Vec<SExpr>) -> Self {
+        Self {
+            plan: self.plan.clone(),
+            original_group: self.original_group,
+            applied_rules: self.applied_rules.clone(),
+            children,
+        }
+    }
+
     /// Record the applied rule id in current SExpr
     pub(super) fn apply_rule(&mut self, rule_id: &RuleID) {
         self.applied_rules.set(rule_id, true);

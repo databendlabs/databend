@@ -174,7 +174,7 @@ async fn test_block_pruner() -> Result<()> {
         nulls_first: false,
         origin_expr: Box::new(col("b")),
     }];
-    e4.limit = Some(3);
+    e4.limit = Some(4);
 
     let extras = vec![
         (None, num_blocks, num_blocks * row_per_block),
