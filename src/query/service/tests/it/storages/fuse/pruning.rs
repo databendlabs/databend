@@ -167,23 +167,24 @@ async fn test_block_pruner() -> Result<()> {
     e3.limit = Some(3);
 
     // Sort desc Limit
-    let mut e3 = Extras::default();
-    e3.order_by = vec![Expression::Sort {
+    let mut e4 = Extras::default();
+    e4.order_by = vec![Expression::Sort {
         expr: Box::new(col("b")),
         asc: false,
         nulls_first: false,
         origin_expr: Box::new(col("b")),
     }];
-    e3.limit = Some(3);
+    e4.limit = Some(3);
 
     let extras = vec![
         (None, num_blocks, num_blocks * row_per_block),
         (Some(e1), 0, 0),
         (Some(e2), b2, b2 * row_per_block),
         (Some(e3), 3, 3 * row_per_block),
+        (Some(e4), 4, 4 * row_per_block),
     ];
 
-    for (extra, expected_blocks, expect_rows) in extras {
+    for (extra, expected_blocks, expected_blocks) in extras {
         let blocks = apply_block_pruning(
             snapshot.clone(),
             table.get_table_info().schema(),
@@ -193,7 +194,7 @@ async fn test_block_pruner() -> Result<()> {
         .await?;
 
         let rows = blocks.iter().map(|b| b.row_count as usize).sum::<usize>();
-        assert_eq!(expect_rows, rows);
+        assert_eq!(expected_blocks, rows);
         assert_eq!(expected_blocks, blocks.len());
     }
 
