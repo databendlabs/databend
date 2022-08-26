@@ -165,3 +165,113 @@ evaluation (internal):
 +-----------+------------------------+
 
 
+ast            : is_not_null(1)
+raw expr       : is_not_null(1_u8)
+checked expr   : is_not_null<T0=UInt8><T0 NULL>(CAST(1_u8 AS UInt8 NULL))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : is_not_null(4096)
+raw expr       : is_not_null(4096_u16)
+checked expr   : is_not_null<T0=UInt16><T0 NULL>(CAST(4096_u16 AS UInt16 NULL))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : is_not_null(true)
+raw expr       : is_not_null(true)
+checked expr   : is_not_null<T0=Boolean><T0 NULL>(CAST(true AS Boolean NULL))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : is_not_null(false)
+raw expr       : is_not_null(false)
+checked expr   : is_not_null<T0=Boolean><T0 NULL>(CAST(false AS Boolean NULL))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : is_not_null('string')
+raw expr       : is_not_null("string")
+checked expr   : is_not_null<T0=String><T0 NULL>(CAST("string" AS String NULL))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : is_not_null(NULL)
+raw expr       : is_not_null(NULL)
+checked expr   : is_not_null<NULL>(NULL)
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : is_not_null(null_col)
+raw expr       : is_not_null(ColumnRef(0)::NULL)
+checked expr   : is_not_null<NULL>(ColumnRef(0))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : is_not_null(int64_col)
+raw expr       : is_not_null(ColumnRef(0)::Int64)
+checked expr   : is_not_null<T0=Int64><T0 NULL>(CAST(ColumnRef(0) AS Int64 NULL))
+optimized expr : true
+evaluation:
++--------+-----------+---------+
+|        | int64_col | Output  |
++--------+-----------+---------+
+| Type   | Int64     | Boolean |
+| Domain | {5..=8}   | {TRUE}  |
+| Row 0  | 5         | true    |
+| Row 1  | 6         | true    |
+| Row 2  | 7         | true    |
+| Row 3  | 8         | true    |
++--------+-----------+---------+
+evaluation (internal):
++-----------+-----------------------+
+| Column    | Data                  |
++-----------+-----------------------+
+| int64_col | Int64([5, 6, 7, 8])   |
+| Output    | Boolean([0b____1111]) |
++-----------+-----------------------+
+
+
+ast            : is_not_null(nullable_col)
+raw expr       : is_not_null(ColumnRef(0)::Int64 NULL)
+checked expr   : is_not_null<T0=Int64><T0 NULL>(ColumnRef(0))
+evaluation:
++--------+-------------------+---------------+
+|        | nullable_col      | Output        |
++--------+-------------------+---------------+
+| Type   | Int64 NULL        | Boolean       |
+| Domain | {9..=12} ∪ {NULL} | {FALSE, TRUE} |
+| Row 0  | 9                 | true          |
+| Row 1  | 10                | true          |
+| Row 2  | NULL              | false         |
+| Row 3  | NULL              | false         |
++--------+-------------------+---------------+
+evaluation (internal):
++--------------+-------------------------------------------------------------------------------------+
+| Column       | Data                                                                                |
++--------------+-------------------------------------------------------------------------------------+
+| nullable_col | Nullable(NullableColumn { column: Int64([9, 10, 11, 12]), validity: [0b____0011] }) |
+| Output       | Boolean([0b____0011])                                                               |
++--------------+-------------------------------------------------------------------------------------+
+
+

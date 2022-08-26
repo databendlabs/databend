@@ -51,7 +51,6 @@ impl FuseTable {
                     .into_iter()
                     .map(|(_, v)| v)
                     .collect::<Vec<_>>();
-
                 let partitions_total = snapshot.summary.block_count as usize;
                 self.read_partitions_with_metas(ctx, push_downs, block_metas, partitions_total)
             }
