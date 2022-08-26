@@ -1,4 +1,4 @@
-# Databend Cmd
+# Databend Binaries
 
 Contains all databend binaries:
 
