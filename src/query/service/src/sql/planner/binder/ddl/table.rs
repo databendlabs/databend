@@ -376,7 +376,9 @@ impl<'a> Binder {
                         )
                     })
                     .collect();
-                (DataSchemaRefExt::create(fields), vec![])
+                let schema = DataSchemaRefExt::create(fields);
+                Self::validate_create_table_schema(&schema)?;
+                (schema, vec![])
             }
             (Some(source), Some(query)) => {
                 // e.g. `CREATE TABLE t (i INT) AS SELECT * from old_t` with columns speicified
@@ -396,10 +398,9 @@ impl<'a> Binder {
                     .collect();
                 let source_fields = source_schema.fields().clone();
                 let source_fields = self.concat_fields(source_fields, query_fields);
-                (
-                    DataSchemaRefExt::create(source_fields.to_vec()),
-                    source_coments,
-                )
+                let schema = DataSchemaRefExt::create(source_fields);
+                Self::validate_create_table_schema(&schema)?;
+                (schema, source_coments)
             }
             _ => Err(ErrorCode::BadArguments(
                 "Incorrect CREATE query: required list of column descriptions or AS section or SELECT..",
@@ -784,7 +785,9 @@ impl<'a> Binder {
                     fields.push(field);
                     fields_comments.push(column.comment.clone().unwrap_or_default());
                 }
-                Ok((DataSchemaRefExt::create(fields), fields_comments))
+                let schema = DataSchemaRefExt::create(fields);
+                Self::validate_create_table_schema(&schema)?;
+                Ok((schema, fields_comments))
             }
             CreateTableSource::Like {
                 catalog,
@@ -804,6 +807,22 @@ impl<'a> Binder {
                 Ok((table.schema(), table.field_comments().clone()))
             }
         }
+    }
+
+    /// Validate the schema of the table to be created.
+    fn validate_create_table_schema(schema: &DataSchemaRef) -> Result<()> {
+        // Check if there are duplicated column names
+        let mut name_set = HashSet::new();
+        for field in schema.fields() {
+            if !name_set.insert(field.name().clone()) {
+                return Err(ErrorCode::BadArguments(format!(
+                    "Duplicated column name: {}",
+                    field.name()
+                )));
+            }
+        }
+
+        Ok(())
     }
 
     fn insert_table_option_with_validation(
