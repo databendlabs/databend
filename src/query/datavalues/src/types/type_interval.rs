@@ -25,7 +25,7 @@ use crate::prelude::*;
 use crate::serializations::DateSerializer;
 use crate::serializations::TypeSerializerImpl;
 
-#[derive(Clone, serde::Deserialize, serde::Serialize)]
+#[derive(Clone, Hash, serde::Deserialize, serde::Serialize)]
 pub struct IntervalType {
     kind: IntervalKind,
 }

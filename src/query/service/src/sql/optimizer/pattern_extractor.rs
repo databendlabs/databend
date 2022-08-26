@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_exception::Result;
+
 use crate::sql::optimizer::group::Group;
 use crate::sql::optimizer::m_expr::MExpr;
 use crate::sql::optimizer::memo::Memo;
@@ -25,45 +27,48 @@ impl PatternExtractor {
         PatternExtractor {}
     }
 
-    pub fn extract(&mut self, memo: &Memo, m_expr: &MExpr, pattern: &SExpr) -> Vec<SExpr> {
+    pub fn extract(&mut self, memo: &Memo, m_expr: &MExpr, pattern: &SExpr) -> Result<Vec<SExpr>> {
         if !m_expr.match_pattern(memo, pattern) {
-            return vec![];
+            return Ok(vec![]);
         }
 
         if pattern.is_pattern() {
             // Pattern operator is `Pattern`, we can return current operator.
-            return vec![SExpr::create(
-                m_expr.plan().clone(),
+            return Ok(vec![SExpr::create(
+                m_expr.plan.clone(),
                 vec![],
-                Some(m_expr.group_index()),
-            )];
+                Some(m_expr.group_index),
+            )]);
         }
 
         let pattern_children = pattern.children();
 
         if m_expr.arity() != pattern_children.len() {
-            return vec![];
+            return Ok(vec![]);
         }
 
         let mut children_results = vec![];
-        for (i, child) in m_expr.children().iter().enumerate().take(m_expr.arity()) {
+        for (i, child) in m_expr.children.iter().enumerate().take(m_expr.arity()) {
             let pattern = &pattern_children[i];
-            let child_group = memo.group(*child);
-            let result = self.extract_group(memo, child_group, pattern);
+            let child_group = memo.group(*child)?;
+            let result = self.extract_group(memo, child_group, pattern)?;
             children_results.push(result);
         }
 
-        Self::generate_expression_with_children(m_expr, children_results)
+        Ok(Self::generate_expression_with_children(
+            m_expr,
+            children_results,
+        ))
     }
 
-    fn extract_group(&mut self, memo: &Memo, group: &Group, pattern: &SExpr) -> Vec<SExpr> {
+    fn extract_group(&mut self, memo: &Memo, group: &Group, pattern: &SExpr) -> Result<Vec<SExpr>> {
         let mut results = vec![];
-        for group_expression in group.iter() {
-            let mut result = self.extract(memo, group_expression, pattern);
-            results.append(&mut result);
+        for m_expr in group.m_exprs.iter() {
+            let result = self.extract(memo, m_expr, pattern)?;
+            results.extend(result.into_iter());
         }
 
-        results
+        Ok(results)
     }
 
     fn generate_expression_with_children(
@@ -84,9 +89,9 @@ impl PatternExtractor {
 
         if cursors.is_empty() {
             results.push(SExpr::create(
-                m_expr.plan().clone(),
+                m_expr.plan.clone(),
                 vec![],
-                Some(m_expr.group_index()),
+                Some(m_expr.group_index),
             ));
             return results;
         }
@@ -97,9 +102,9 @@ impl PatternExtractor {
                 children.push(candidates[index][*cursor].clone());
             }
             results.push(SExpr::create(
-                m_expr.plan().clone(),
+                m_expr.plan.clone(),
                 children,
-                Some(m_expr.group_index()),
+                Some(m_expr.group_index),
             ));
 
             let mut shifted = false;

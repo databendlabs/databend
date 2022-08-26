@@ -65,7 +65,7 @@ pub trait PhysicalOperator {
 }
 
 /// Relational operator
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum RelOp {
     // Logical operators
     LogicalGet,
@@ -90,7 +90,7 @@ pub enum RelOp {
 }
 
 /// Relational operators
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum RelOperator {
     LogicalGet(LogicalGet),
     LogicalInnerJoin(LogicalInnerJoin),

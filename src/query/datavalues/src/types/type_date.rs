@@ -41,7 +41,7 @@ pub fn check_date(days: i32) -> Result<()> {
     ))
 }
 
-#[derive(Default, Clone, serde::Deserialize, serde::Serialize)]
+#[derive(Default, Clone, Hash, serde::Deserialize, serde::Serialize)]
 pub struct DateType {}
 
 impl DateType {

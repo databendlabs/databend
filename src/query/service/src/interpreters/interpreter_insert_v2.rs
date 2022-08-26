@@ -109,7 +109,7 @@ impl InsertInterpreterV2 {
                         } => SelectInterpreterV2::try_create(
                             self.ctx.clone(),
                             *bind_context.clone(),
-                            s_expr.clone(),
+                            *s_expr.clone(),
                             metadata.clone(),
                         ),
                         _ => unreachable!(),
