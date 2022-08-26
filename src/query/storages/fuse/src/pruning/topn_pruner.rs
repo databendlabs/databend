@@ -55,6 +55,8 @@ impl TopNPrunner {
             _ => unreachable!(),
         };
 
+        // Currently, we only support topn on single-column sort.
+        // TODO: support monadic + multi expression + order by cluster key sort.
         let column = if let Expression::Column(c) = sort.as_ref() {
             c
         } else {
