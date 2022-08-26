@@ -16,6 +16,7 @@ use common_catalog::table::TableStatistics;
 use common_exception::Result;
 use itertools::Itertools;
 
+use super::Prewhere;
 use crate::sql::optimizer::ColumnSet;
 use crate::sql::optimizer::RelExpr;
 use crate::sql::optimizer::RelationalProperty;
@@ -34,6 +35,7 @@ pub struct LogicalGet {
     pub push_down_predicates: Option<Vec<Scalar>>,
     pub limit: Option<usize>,
     pub order_by: Option<Vec<SortItem>>,
+    pub prewhere: Option<Prewhere>,
 
     // statistics will be ignored in comparison and hashing
     pub statistics: Option<TableStatistics>,

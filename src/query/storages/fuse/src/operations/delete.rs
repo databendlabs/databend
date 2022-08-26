@@ -83,6 +83,7 @@ impl FuseTable {
         let extras = Extras {
             projection: Some(plan.projection.clone()),
             filters: vec![filter.clone()],
+            prewhere: None, // TBD: if delete rows need prewhere optimization
             limit: None,
             order_by: vec![],
         };

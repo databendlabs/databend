@@ -56,6 +56,14 @@ impl Debug for Projection {
     }
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Default)]
+pub struct PrewhereInfo {
+    /// column indices of the table used for prewhere
+    pub columns: Vec<usize>,
+    /// predicates for prewhere
+    pub predicates: Vec<Expression>,
+}
+
 /// Extras is a wrapper for push down items.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Default)]
 pub struct Extras {
@@ -64,6 +72,9 @@ pub struct Extras {
     /// Optional filter expression plan
     /// split_conjunctions by `and` operator
     pub filters: Vec<Expression>,
+    /// Optional prewhere information
+    /// use for prewhere optimization
+    pub prewhere: Option<PrewhereInfo>,
     /// Optional limit to skip read
     pub limit: Option<usize>,
     /// Optional order_by expression plan
@@ -75,6 +86,7 @@ impl Extras {
         Extras {
             projection: None,
             filters: vec![],
+            prewhere: None,
             limit: None,
             order_by: vec![],
         }

@@ -35,6 +35,7 @@ use common_exception::Result;
 use common_fuse_meta::meta::BlockMeta;
 use common_fuse_meta::meta::Compression;
 use common_planners::PartInfoPtr;
+use common_planners::PrewhereInfo;
 use common_planners::Projection;
 use futures::AsyncReadExt;
 use futures::StreamExt;
@@ -85,6 +86,16 @@ impl BlockReader {
             parquet_schema_descriptor,
             column_leaves,
         }))
+    }
+
+    pub fn create_with_prewhere(
+        operator: Operator,
+        schema: DataSchemaRef,
+        projection: Projection,
+        prewhere: Option<PrewhereInfo>,
+    ) -> Result<Arc<BlockReader>> {
+        let mut reader = Self::create(operator, schema, projection)?;
+        Ok(reader)
     }
 
     fn to_array_iter(

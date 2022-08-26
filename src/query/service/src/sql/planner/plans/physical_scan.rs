@@ -17,6 +17,7 @@ use std::hash::Hash;
 use common_exception::Result;
 use itertools::Itertools;
 
+use super::Prewhere;
 use crate::sql::optimizer::ColumnSet;
 use crate::sql::optimizer::Distribution;
 use crate::sql::optimizer::PhysicalProperty;
@@ -37,6 +38,7 @@ pub struct PhysicalScan {
     pub push_down_predicates: Option<Vec<Scalar>>,
     pub limit: Option<usize>,
     pub order_by: Option<Vec<SortItem>>,
+    pub prewhere: Option<Prewhere>,
 }
 
 #[allow(clippy::derive_hash_xor_eq)]

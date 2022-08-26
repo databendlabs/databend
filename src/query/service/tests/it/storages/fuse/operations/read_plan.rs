@@ -170,6 +170,7 @@ async fn test_fuse_table_exact_statistic() -> Result<()> {
         let push_downs = Extras {
             projection: Some(proj),
             filters: vec![],
+            prewhere: None,
             limit: None,
             order_by: vec![],
         };

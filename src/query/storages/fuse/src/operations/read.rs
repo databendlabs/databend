@@ -29,6 +29,7 @@ use common_pipeline_core::Pipeline;
 use common_pipeline_core::SourcePipeBuilder;
 use common_planners::Extras;
 use common_planners::PartInfoPtr;
+use common_planners::PrewhereInfo;
 use common_planners::Projection;
 use common_planners::ReadDataSourcePlan;
 
@@ -47,6 +48,17 @@ impl FuseTable {
         BlockReader::create(operator, table_schema, projection)
     }
 
+    pub fn create_prewhere_block_reader(
+        &self,
+        ctx: &Arc<dyn TableContext>,
+        projection: Projection,
+        prewhere: Option<PrewhereInfo>,
+    ) -> Result<Arc<BlockReader>> {
+        let operator = ctx.get_storage_operator()?;
+        let table_schema = self.table_info.schema();
+        BlockReader::create_with_prewhere(operator, table_schema, projection, prewhere)
+    }
+
     pub fn projection_of_push_downs(&self, push_downs: &Option<Extras>) -> Projection {
         if let Some(Extras {
             projection: Some(prj),
@@ -62,6 +74,14 @@ impl FuseTable {
         }
     }
 
+    pub fn prewhere_of_push_downs(&self, push_downs: &Option<Extras>) -> Option<PrewhereInfo> {
+        if let Some(Extras { prewhere, .. }) = push_downs {
+            prewhere.clone()
+        } else {
+            None
+        }
+    }
+
     #[inline]
     pub fn do_read2(
         &self,
@@ -69,8 +89,11 @@ impl FuseTable {
         plan: &ReadDataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
-        let block_reader =
-            self.create_block_reader(&ctx, self.projection_of_push_downs(&plan.push_downs))?;
+        let block_reader = self.create_prewhere_block_reader(
+            &ctx,
+            self.projection_of_push_downs(&plan.push_downs),
+            self.prewhere_of_push_downs(&plan.push_downs),
+        )?;
 
         let parts_len = plan.parts.len();
         let max_threads = ctx.get_settings().get_max_threads()? as usize;

@@ -313,6 +313,7 @@ impl<'a> Binder {
                     limit: None,
                     order_by: None,
                     statistics: stat,
+                    prewhere: None,
                 }
                 .into(),
             ),

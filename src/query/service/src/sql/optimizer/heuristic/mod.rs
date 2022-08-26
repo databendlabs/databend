@@ -17,6 +17,7 @@ mod implement;
 mod prune_columns;
 mod rule_list;
 mod subquery_rewriter;
+mod where_optimizer;
 
 use std::sync::Arc;
 
@@ -94,7 +95,11 @@ impl HeuristicOptimizer {
         let pruner = prune_columns::ColumnPruner::new(self.metadata.clone());
         let require_columns: ColumnSet =
             self.bind_context.columns.iter().map(|c| c.index).collect();
-        pruner.prune_columns(&s_expr, require_columns)
+        pruner.prune_columns(&s_expr, require_columns.clone())?;
+
+        let where_opt =
+            where_optimizer::WhereOptimizer::new(self.metadata.clone(), require_columns);
+        where_opt.optimize(s_expr)
     }
 
     pub fn optimize(&mut self, s_expr: SExpr) -> Result<SExpr> {

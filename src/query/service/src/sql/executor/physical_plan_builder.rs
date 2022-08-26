@@ -19,6 +19,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Expression;
 use common_planners::Extras;
+use common_planners::PrewhereInfo;
 use common_planners::Projection;
 use common_planners::StageKind;
 use itertools::Itertools;
@@ -150,9 +151,34 @@ impl PhysicalPlanBuilder {
                     Projection::InnerColumns(col_indices)
                 };
 
+                let prewhere_info = if let Some(prewhere) = &scan.prewhere {
+                    let builder = ExpressionBuilderWithoutRenaming::create(self.metadata.clone());
+                    let predicates = prewhere
+                        .predicates
+                        .iter()
+                        .map(|scalar| builder.build(scalar))
+                        .collect::<Result<Vec<_>>>()?;
+                    let columns = scan
+                        .columns
+                        .iter()
+                        .map(|index| {
+                            let name = metadata.column(*index).name.as_str();
+                            table_schema.index_of(name).unwrap()
+                        })
+                        .sorted()
+                        .collect::<Vec<_>>();
+                    Some(PrewhereInfo {
+                        columns,
+                        predicates,
+                    })
+                } else {
+                    None
+                };
+
                 let push_downs = Extras {
                     projection: Some(projection),
                     filters: push_down_filters.unwrap_or_default(),
+                    prewhere: prewhere_info,
                     limit: scan.limit,
                     order_by: order_by.unwrap_or_default(),
                 };
