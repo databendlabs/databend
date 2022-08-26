@@ -14,6 +14,7 @@
 
 mod builder;
 mod enforcer;
+mod stat;
 
 use std::collections::HashSet;
 
@@ -40,6 +41,10 @@ impl RequiredProperty {
 pub struct RelationalProperty {
     pub output_columns: ColumnSet,
     pub outer_columns: ColumnSet,
+
+    // TODO(leiysky): introduce upper bound of cardinality to
+    // reduce error in estimation.
+    pub cardinality: f64,
 }
 
 #[derive(Default, Clone)]
@@ -47,7 +52,7 @@ pub struct PhysicalProperty {
     pub distribution: Distribution,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Distribution {
     Any,
     Random,

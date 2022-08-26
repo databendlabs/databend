@@ -42,7 +42,7 @@ impl<'a> RelExpr<'a> {
     pub fn derive_relational_prop(&self) -> Result<RelationalProperty> {
         let plan = match self {
             RelExpr::SExpr { expr } => expr.plan(),
-            RelExpr::MExpr { expr, .. } => expr.plan(),
+            RelExpr::MExpr { expr, .. } => &expr.plan,
         };
 
         if let Some(logical) = plan.as_logical() {
@@ -62,22 +62,16 @@ impl<'a> RelExpr<'a> {
                 let rel_expr = RelExpr::with_s_expr(child);
                 rel_expr.derive_relational_prop()
             }
-            RelExpr::MExpr { expr, memo } => memo
-                .group(expr.group_index())
-                .relational_prop()
-                .cloned()
-                .ok_or_else(|| {
-                    ErrorCode::LogicalError(
-                        "Relational property should have been filled".to_string(),
-                    )
-                }),
+            RelExpr::MExpr { expr, memo } => {
+                Ok(memo.group(expr.group_index)?.relational_prop.clone())
+            }
         }
     }
 
     pub fn derive_physical_prop(&self) -> Result<PhysicalProperty> {
         let plan = match self {
             RelExpr::SExpr { expr } => expr.plan(),
-            RelExpr::MExpr { expr, .. } => expr.plan(),
+            RelExpr::MExpr { expr, .. } => &expr.plan,
         };
 
         if let Some(physical) = plan.as_physical() {
@@ -110,7 +104,7 @@ impl<'a> RelExpr<'a> {
     ) -> Result<RequiredProperty> {
         let plan = match self {
             RelExpr::SExpr { expr } => expr.plan(),
-            RelExpr::MExpr { expr, .. } => expr.plan(),
+            RelExpr::MExpr { expr, .. } => &expr.plan,
         };
 
         if let Some(physical) = plan.as_physical() {

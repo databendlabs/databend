@@ -17,6 +17,7 @@
 
 use std::cmp::Ordering;
 use std::fmt;
+use std::hash::Hash;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
@@ -364,6 +365,24 @@ impl Ord for DataValue {
         }
 
         self.as_i64().unwrap().cmp(&other.as_i64().unwrap())
+    }
+}
+
+#[allow(clippy::derive_hash_xor_eq)]
+impl Hash for DataValue {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        std::mem::discriminant(self).hash(state);
+        match self {
+            DataValue::Null => {}
+            DataValue::Boolean(v) => v.hash(state),
+            DataValue::UInt64(v) => v.hash(state),
+            DataValue::Int64(v) => v.hash(state),
+            DataValue::Float64(v) => v.to_bits().hash(state),
+            DataValue::String(v) => v.hash(state),
+            DataValue::Array(v) => v.hash(state),
+            DataValue::Struct(v) => v.hash(state),
+            DataValue::Variant(v) => v.hash(state),
+        }
     }
 }
 

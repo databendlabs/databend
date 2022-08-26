@@ -16,6 +16,7 @@ use core::str::FromStr;
 use std::cmp::Ordering;
 use std::fmt::Display;
 use std::fmt::Formatter;
+use std::hash::Hash;
 use std::ops::Deref;
 
 use common_exception::ErrorCode;
@@ -216,6 +217,15 @@ impl Ord for VariantValue {
 impl PartialOrd for VariantValue {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
+    }
+}
+
+#[allow(clippy::derive_hash_xor_eq)]
+impl Hash for VariantValue {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        let v = self.as_ref().to_string();
+        let u = v.as_bytes();
+        Hash::hash(&u, state);
     }
 }
 
