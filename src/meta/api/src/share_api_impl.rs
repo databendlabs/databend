@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt::Display;
-
 use common_meta_app::schema::DBIdTableName;
 use common_meta_app::schema::DatabaseId;
 use common_meta_app::schema::DatabaseIdToName;
@@ -29,7 +27,6 @@ use common_meta_types::app_error::ShareAlreadyExists;
 use common_meta_types::app_error::TxnRetryMaxTimes;
 use common_meta_types::app_error::UnknownShare;
 use common_meta_types::app_error::UnknownShareAccounts;
-use common_meta_types::app_error::UnknownShareId;
 use common_meta_types::app_error::WrongShare;
 use common_meta_types::app_error::WrongShareObject;
 use common_meta_types::ConditionResult::Eq;
@@ -44,6 +41,10 @@ use tracing::debug;
 use crate::db_has_to_exist;
 use crate::fetch_id;
 use crate::get_db_or_err;
+use crate::get_share_account_meta_or_err;
+use crate::get_share_id_to_name_or_err;
+use crate::get_share_meta_by_id_or_err;
+use crate::get_share_or_err;
 use crate::get_struct_value;
 use crate::get_u64_value;
 use crate::id_generator::IdGenerator;
@@ -1212,126 +1213,4 @@ fn add_grant_object_txn_if_then(
     }
 
     Ok(())
-}
-
-/// Returns (share_meta_seq, share_meta)
-pub(crate) async fn get_share_id_to_name_or_err(
-    kv_api: &(impl KVApi + ?Sized),
-    share_id: u64,
-    msg: impl Display,
-) -> Result<(u64, ShareNameIdent), MetaError> {
-    let id_key = ShareIdToName { share_id };
-
-    let (share_name_seq, share_name) = get_struct_value(kv_api, &id_key).await?;
-    if share_name_seq == 0 {
-        debug!(share_name_seq, ?share_id, "share meta does not exist");
-
-        return Err(MetaError::AppError(AppError::UnknownShareId(
-            UnknownShareId::new(share_id, format!("{}: {}", msg, share_id)),
-        )));
-    }
-
-    Ok((share_name_seq, share_name.unwrap()))
-}
-
-/// Returns (share_meta_seq, share_meta)
-pub(crate) async fn get_share_meta_by_id_or_err(
-    kv_api: &(impl KVApi + ?Sized),
-    share_id: u64,
-    msg: impl Display,
-) -> Result<(u64, ShareMeta), MetaError> {
-    let id_key = ShareId { share_id };
-
-    let (share_meta_seq, share_meta) = get_struct_value(kv_api, &id_key).await?;
-    share_meta_has_to_exist(share_meta_seq, share_id, msg)?;
-
-    Ok((share_meta_seq, share_meta.unwrap()))
-}
-
-/// Returns (share_id_seq, share_id, share_meta_seq, share_meta)
-async fn get_share_or_err(
-    kv_api: &(impl KVApi + ?Sized),
-    name_key: &ShareNameIdent,
-    msg: impl Display,
-) -> Result<(u64, u64, u64, ShareMeta), MetaError> {
-    let (share_id_seq, share_id) = get_u64_value(kv_api, name_key).await?;
-    share_has_to_exist(share_id_seq, name_key, &msg)?;
-
-    let (share_meta_seq, share_meta) = get_share_meta_by_id_or_err(kv_api, share_id, msg).await?;
-
-    Ok((share_id_seq, share_id, share_meta_seq, share_meta))
-}
-
-fn share_meta_has_to_exist(seq: u64, share_id: u64, msg: impl Display) -> Result<(), MetaError> {
-    if seq == 0 {
-        debug!(seq, ?share_id, "share meta does not exist");
-
-        Err(MetaError::AppError(AppError::UnknownShareId(
-            UnknownShareId::new(share_id, format!("{}: {}", msg, share_id)),
-        )))
-    } else {
-        Ok(())
-    }
-}
-
-/// Return OK if a share_id or share_meta exists by checking the seq.
-///
-/// Otherwise returns UnknownShare error
-fn share_has_to_exist(
-    seq: u64,
-    share_name_ident: &ShareNameIdent,
-    msg: impl Display,
-) -> Result<(), MetaError> {
-    if seq == 0 {
-        debug!(seq, ?share_name_ident, "share does not exist");
-
-        Err(MetaError::AppError(AppError::UnknownShare(
-            UnknownShare::new(
-                &share_name_ident.share_name,
-                format!("{}: {}", msg, share_name_ident),
-            ),
-        )))
-    } else {
-        Ok(())
-    }
-}
-
-/// Returns (share_account_meta_seq, share_account_meta)
-pub(crate) async fn get_share_account_meta_or_err(
-    kv_api: &(impl KVApi + ?Sized),
-    name_key: &ShareAccountNameIdent,
-    msg: impl Display,
-) -> Result<(u64, ShareAccountMeta), MetaError> {
-    let (share_account_meta_seq, share_account_meta): (u64, Option<ShareAccountMeta>) =
-        get_struct_value(kv_api, name_key).await?;
-    share_account_meta_has_to_exist(share_account_meta_seq, name_key, msg)?;
-
-    Ok((
-        share_account_meta_seq,
-        // Safe unwrap(): share_meta_seq > 0 implies share_meta is not None.
-        share_account_meta.unwrap(),
-    ))
-}
-
-/// Return OK if a share_id or share_account_meta exists by checking the seq.
-///
-/// Otherwise returns UnknownShareAccounts error
-fn share_account_meta_has_to_exist(
-    seq: u64,
-    name_key: &ShareAccountNameIdent,
-    msg: impl Display,
-) -> Result<(), MetaError> {
-    if seq == 0 {
-        debug!(seq, ?name_key, "share account does not exist");
-
-        Err(MetaError::AppError(AppError::UnknownShareAccounts(
-            UnknownShareAccounts::new(
-                &[name_key.account.clone()],
-                name_key.share_id,
-                format!("{}: {}", msg, name_key),
-            ),
-        )))
-    } else {
-        Ok(())
-    }
 }

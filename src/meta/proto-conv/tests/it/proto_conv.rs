@@ -31,6 +31,23 @@ fn s(ss: impl ToString) -> String {
     ss.to_string()
 }
 
+fn new_db_meta_share() -> mt::DatabaseMeta {
+    mt::DatabaseMeta {
+        engine: "44".to_string(),
+        engine_options: btreemap! {s("abc") => s("def")},
+        options: btreemap! {s("xyz") => s("foo")},
+        created_on: Utc.ymd(2014, 11, 28).and_hms(12, 0, 9),
+        updated_on: Utc.ymd(2014, 11, 29).and_hms(12, 0, 9),
+        comment: "foo bar".to_string(),
+        drop_on: None,
+        shared_by: BTreeSet::new(),
+        from_share: Some(share::ShareNameIdent {
+            tenant: "tenant".to_string(),
+            share_name: "share".to_string(),
+        }),
+    }
+}
+
 fn new_db_meta_v1() -> mt::DatabaseMeta {
     mt::DatabaseMeta {
         engine: "44".to_string(),
@@ -41,6 +58,7 @@ fn new_db_meta_v1() -> mt::DatabaseMeta {
         comment: "foo bar".to_string(),
         drop_on: None,
         shared_by: BTreeSet::new(),
+        from_share: None,
     }
 }
 
@@ -54,6 +72,35 @@ fn new_db_meta() -> mt::DatabaseMeta {
         comment: "foo bar".to_string(),
         drop_on: None,
         shared_by: BTreeSet::from_iter(vec![1].into_iter()),
+        from_share: None,
+    }
+}
+
+fn new_share_meta_share_from_db_ids() -> share::ShareMeta {
+    let now = Utc.ymd(2014, 11, 28).and_hms(12, 0, 9);
+
+    let db_entry = share::ShareGrantEntry::new(
+        share::ShareGrantObject::Database(1),
+        share::ShareGrantObjectPrivilege::Usage,
+        now,
+    );
+    let mut entries = BTreeMap::new();
+    for entry in vec![share::ShareGrantEntry::new(
+        share::ShareGrantObject::Table(19),
+        share::ShareGrantObjectPrivilege::Select,
+        now,
+    )] {
+        entries.insert(entry.to_string().clone(), entry);
+    }
+
+    share::ShareMeta {
+        database: Some(db_entry),
+        entries,
+        accounts: BTreeSet::from_iter(vec![s("a"), s("b")].into_iter()),
+        share_from_db_ids: BTreeSet::from_iter(vec![1, 2].into_iter()),
+        comment: Some(s("comment")),
+        share_on: Utc.ymd(2014, 11, 28).and_hms(12, 0, 9),
+        update_on: Some(Utc.ymd(2014, 11, 29).and_hms(12, 0, 9)),
     }
 }
 
@@ -78,6 +125,7 @@ fn new_share_meta() -> share::ShareMeta {
         database: Some(db_entry),
         entries,
         accounts: BTreeSet::from_iter(vec![s("a"), s("b")].into_iter()),
+        share_from_db_ids: BTreeSet::new(),
         comment: Some(s("comment")),
         share_on: Utc.ymd(2014, 11, 28).and_hms(12, 0, 9),
         update_on: Some(Utc.ymd(2014, 11, 29).and_hms(12, 0, 9)),
@@ -185,13 +233,13 @@ fn test_pb_from_to() -> anyhow::Result<()> {
 fn test_incompatible() -> anyhow::Result<()> {
     let db_meta = new_db_meta();
     let mut p = db_meta.to_pb()?;
-    p.ver = 5;
-    p.min_compatible = 5;
+    p.ver = 6;
+    p.min_compatible = 6;
 
     let res = mt::DatabaseMeta::from_pb(p);
     assert_eq!(
         Incompatible {
-            reason: s("executable ver=4 is smaller than the message min compatible ver: 5")
+            reason: s("executable ver=5 is smaller than the message min compatible ver: 6")
         },
         res.unwrap_err()
     );
@@ -218,7 +266,7 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
 
     // DatabaseMeta
     {
-        let db_meta = new_db_meta();
+        let db_meta = new_db_meta_share();
         let p = db_meta.to_pb()?;
 
         let mut buf = vec![];
@@ -239,7 +287,7 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
 
     // ShareMeta
     {
-        let tbl = new_share_meta();
+        let tbl = new_share_meta_share_from_db_ids();
 
         let p = tbl.to_pb()?;
 
@@ -268,37 +316,60 @@ fn test_load_old() -> anyhow::Result<()> {
 
     // DatabaseMeta is loadable
     {
-        let db_meta_v1: Vec<u8> = vec![
-            34, 10, 10, 3, 120, 121, 122, 18, 3, 102, 111, 111, 42, 2, 52, 52, 50, 10, 10, 3, 97,
-            98, 99, 18, 3, 100, 101, 102, 162, 1, 23, 50, 48, 49, 52, 45, 49, 49, 45, 50, 56, 32,
-            49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 170, 1, 23, 50, 48, 49, 52, 45, 49, 49,
-            45, 50, 57, 32, 49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 178, 1, 7, 102, 111,
-            111, 32, 98, 97, 114, 160, 6, 2, 168, 6, 1,
-        ];
+        {
+            let db_meta_v1: Vec<u8> = vec![
+                34, 10, 10, 3, 120, 121, 122, 18, 3, 102, 111, 111, 42, 2, 52, 52, 50, 10, 10, 3,
+                97, 98, 99, 18, 3, 100, 101, 102, 162, 1, 23, 50, 48, 49, 52, 45, 49, 49, 45, 50,
+                56, 32, 49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 170, 1, 23, 50, 48, 49, 52,
+                45, 49, 49, 45, 50, 57, 32, 49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 178, 1,
+                7, 102, 111, 111, 32, 98, 97, 114, 160, 6, 2, 168, 6, 1,
+            ];
 
-        let p: pb::DatabaseMeta =
-            common_protos::prost::Message::decode(db_meta_v1.as_slice()).map_err(print_err)?;
+            let p: pb::DatabaseMeta =
+                common_protos::prost::Message::decode(db_meta_v1.as_slice()).map_err(print_err)?;
 
-        let got = mt::DatabaseMeta::from_pb(p).map_err(print_err)?;
+            let got = mt::DatabaseMeta::from_pb(p).map_err(print_err)?;
 
-        let want = new_db_meta_v1();
-        assert_eq!(want, got);
+            let want = new_db_meta_v1();
+            assert_eq!(want, got);
+        }
 
-        let db_meta_v2: Vec<u8> = vec![
-            34, 10, 10, 3, 120, 121, 122, 18, 3, 102, 111, 111, 42, 2, 52, 52, 50, 10, 10, 3, 97,
-            98, 99, 18, 3, 100, 101, 102, 162, 1, 23, 50, 48, 49, 52, 45, 49, 49, 45, 50, 56, 32,
-            49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 170, 1, 23, 50, 48, 49, 52, 45, 49, 49,
-            45, 50, 57, 32, 49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 178, 1, 7, 102, 111,
-            111, 32, 98, 97, 114, 194, 1, 1, 1, 160, 6, 2, 168, 6, 1,
-        ];
+        {
+            let db_meta_v2: Vec<u8> = vec![
+                34, 10, 10, 3, 120, 121, 122, 18, 3, 102, 111, 111, 42, 2, 52, 52, 50, 10, 10, 3,
+                97, 98, 99, 18, 3, 100, 101, 102, 162, 1, 23, 50, 48, 49, 52, 45, 49, 49, 45, 50,
+                56, 32, 49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 170, 1, 23, 50, 48, 49, 52,
+                45, 49, 49, 45, 50, 57, 32, 49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 178, 1,
+                7, 102, 111, 111, 32, 98, 97, 114, 194, 1, 1, 1, 160, 6, 2, 168, 6, 1,
+            ];
 
-        let p: pb::DatabaseMeta =
-            common_protos::prost::Message::decode(db_meta_v2.as_slice()).map_err(print_err)?;
+            let p: pb::DatabaseMeta =
+                common_protos::prost::Message::decode(db_meta_v2.as_slice()).map_err(print_err)?;
 
-        let got = mt::DatabaseMeta::from_pb(p).map_err(print_err)?;
+            let got = mt::DatabaseMeta::from_pb(p).map_err(print_err)?;
 
-        let want = new_db_meta();
-        assert_eq!(want, got);
+            let want = new_db_meta();
+            assert_eq!(want, got);
+        }
+
+        {
+            let db_meta = vec![
+                34, 10, 10, 3, 120, 121, 122, 18, 3, 102, 111, 111, 42, 2, 52, 52, 50, 10, 10, 3,
+                97, 98, 99, 18, 3, 100, 101, 102, 162, 1, 23, 50, 48, 49, 52, 45, 49, 49, 45, 50,
+                56, 32, 49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 170, 1, 23, 50, 48, 49, 52,
+                45, 49, 49, 45, 50, 57, 32, 49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 178, 1,
+                7, 102, 111, 111, 32, 98, 97, 114, 202, 1, 21, 10, 6, 116, 101, 110, 97, 110, 116,
+                18, 5, 115, 104, 97, 114, 101, 160, 6, 5, 168, 6, 1, 160, 6, 5, 168, 6, 1,
+            ];
+
+            let p: pb::DatabaseMeta =
+                common_protos::prost::Message::decode(db_meta.as_slice()).map_err(print_err)?;
+
+            let got = mt::DatabaseMeta::from_pb(p).map_err(print_err)?;
+
+            let want = new_db_meta_share();
+            assert_eq!(want, got);
+        }
     }
 
     // TableMeta is loadable
@@ -358,22 +429,43 @@ fn test_load_old() -> anyhow::Result<()> {
 
     // ShareMeta is loadable
     {
-        let share_meta_v2: Vec<u8> = vec![
-            10, 43, 10, 8, 8, 1, 160, 6, 2, 168, 6, 1, 16, 1, 26, 23, 50, 48, 49, 52, 45, 49, 49,
-            45, 50, 56, 32, 49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 160, 6, 2, 168, 6, 1,
-            18, 43, 10, 8, 16, 19, 160, 6, 2, 168, 6, 1, 16, 4, 26, 23, 50, 48, 49, 52, 45, 49, 49,
-            45, 50, 56, 32, 49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 160, 6, 2, 168, 6, 1,
-            26, 1, 97, 26, 1, 98, 34, 7, 99, 111, 109, 109, 101, 110, 116, 42, 23, 50, 48, 49, 52,
-            45, 49, 49, 45, 50, 56, 32, 49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 50, 23, 50,
-            48, 49, 52, 45, 49, 49, 45, 50, 57, 32, 49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84, 67,
-            160, 6, 2, 168, 6, 1,
-        ];
-        let p: pb::ShareMeta =
-            common_protos::prost::Message::decode(share_meta_v2.as_slice()).map_err(print_err)?;
+        {
+            let share_meta_v2: Vec<u8> = vec![
+                10, 43, 10, 8, 8, 1, 160, 6, 2, 168, 6, 1, 16, 1, 26, 23, 50, 48, 49, 52, 45, 49,
+                49, 45, 50, 56, 32, 49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 160, 6, 2, 168,
+                6, 1, 18, 43, 10, 8, 16, 19, 160, 6, 2, 168, 6, 1, 16, 4, 26, 23, 50, 48, 49, 52,
+                45, 49, 49, 45, 50, 56, 32, 49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 160, 6,
+                2, 168, 6, 1, 26, 1, 97, 26, 1, 98, 34, 7, 99, 111, 109, 109, 101, 110, 116, 42,
+                23, 50, 48, 49, 52, 45, 49, 49, 45, 50, 56, 32, 49, 50, 58, 48, 48, 58, 48, 57, 32,
+                85, 84, 67, 50, 23, 50, 48, 49, 52, 45, 49, 49, 45, 50, 57, 32, 49, 50, 58, 48, 48,
+                58, 48, 57, 32, 85, 84, 67, 160, 6, 2, 168, 6, 1,
+            ];
+            let p: pb::ShareMeta = common_protos::prost::Message::decode(share_meta_v2.as_slice())
+                .map_err(print_err)?;
 
-        let got = share::ShareMeta::from_pb(p).map_err(print_err)?;
-        let want = new_share_meta();
-        assert_eq!(want, got);
+            let got = share::ShareMeta::from_pb(p).map_err(print_err)?;
+            let want = new_share_meta();
+            assert_eq!(want, got);
+        }
+
+        {
+            let share_meta: Vec<u8> = vec![
+                10, 43, 10, 8, 8, 1, 160, 6, 5, 168, 6, 1, 16, 1, 26, 23, 50, 48, 49, 52, 45, 49,
+                49, 45, 50, 56, 32, 49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 160, 6, 5, 168,
+                6, 1, 18, 43, 10, 8, 16, 19, 160, 6, 5, 168, 6, 1, 16, 4, 26, 23, 50, 48, 49, 52,
+                45, 49, 49, 45, 50, 56, 32, 49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 160, 6,
+                5, 168, 6, 1, 26, 1, 97, 26, 1, 98, 34, 7, 99, 111, 109, 109, 101, 110, 116, 42,
+                23, 50, 48, 49, 52, 45, 49, 49, 45, 50, 56, 32, 49, 50, 58, 48, 48, 58, 48, 57, 32,
+                85, 84, 67, 50, 23, 50, 48, 49, 52, 45, 49, 49, 45, 50, 57, 32, 49, 50, 58, 48, 48,
+                58, 48, 57, 32, 85, 84, 67, 58, 2, 1, 2, 160, 6, 5, 168, 6, 1,
+            ];
+            let p: pb::ShareMeta =
+                common_protos::prost::Message::decode(share_meta.as_slice()).map_err(print_err)?;
+
+            let got = share::ShareMeta::from_pb(p).map_err(print_err)?;
+            let want = new_share_meta_share_from_db_ids();
+            assert_eq!(want, got);
+        }
     }
 
     // ShareAccountMeta is loadable

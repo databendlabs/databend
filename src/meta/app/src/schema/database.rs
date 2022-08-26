@@ -22,6 +22,8 @@ use std::ops::Deref;
 use common_datavalues::chrono::DateTime;
 use common_datavalues::chrono::Utc;
 
+use crate::share::ShareNameIdent;
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
 pub struct DatabaseNameIdent {
     pub tenant: String,
@@ -94,6 +96,7 @@ pub struct DatabaseMeta {
     pub drop_on: Option<DateTime<Utc>>,
     // shared by share_id
     pub shared_by: BTreeSet<u64>,
+    pub from_share: Option<ShareNameIdent>,
 }
 
 impl Default for DatabaseMeta {
@@ -107,6 +110,7 @@ impl Default for DatabaseMeta {
             comment: "".to_string(),
             drop_on: None,
             shared_by: BTreeSet::new(),
+            from_share: None,
         }
     }
 }

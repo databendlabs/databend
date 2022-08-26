@@ -20,6 +20,7 @@ use std::collections::BTreeSet;
 use common_datavalues::chrono::DateTime;
 use common_datavalues::chrono::Utc;
 use common_meta_app::schema as mt;
+use common_meta_app::share;
 use common_protos::pb;
 
 use crate::check_ver;
@@ -68,6 +69,10 @@ impl FromToProto for mt::DatabaseMeta {
             },
             comment: p.comment,
             shared_by: BTreeSet::from_iter(p.shared_by.into_iter()),
+            from_share: match p.from_share {
+                Some(from_share) => Some(share::ShareNameIdent::from_pb(from_share)?),
+                None => None,
+            },
         };
         Ok(v)
     }
@@ -87,6 +92,10 @@ impl FromToProto for mt::DatabaseMeta {
             },
             comment: self.comment.clone(),
             shared_by: Vec::from_iter(self.shared_by.clone().into_iter()),
+            from_share: match &self.from_share {
+                Some(from_share) => Some(from_share.to_pb()?),
+                None => None,
+            },
         };
         Ok(p)
     }

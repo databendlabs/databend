@@ -20,6 +20,8 @@ syntax = "proto3";
 
 package databend_proto;
 
+import "share.proto";
+
 message DatabaseNameIdent {
   uint64 ver = 100;
   uint64 min_compatible = 101;
@@ -58,6 +60,8 @@ message DatabaseMeta {
   optional string drop_on = 23;
 
   repeated uint64 shared_by = 24;
+
+  optional ShareNameIdent from_share = 25;
 }
 
 // Save db name id list history.

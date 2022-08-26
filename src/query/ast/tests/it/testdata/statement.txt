@@ -696,6 +696,7 @@ CreateDatabase(
         },
         engine: None,
         options: [],
+        from_share: None,
     },
 )
 
@@ -724,6 +725,7 @@ CreateDatabase(
             Default,
         ),
         options: [],
+        from_share: None,
     },
 )
 
@@ -746,6 +748,33 @@ CreateDatabase(
             Default,
         ),
         options: [],
+        from_share: None,
+    },
+)
+
+
+---------- Input ----------
+create database t FROM SHARE a.s;
+---------- Output ---------
+CREATE DATABASE t FROM SHARE a.s
+---------- AST ------------
+CreateDatabase(
+    CreateDatabaseStmt {
+        if_not_exists: false,
+        catalog: None,
+        database: Identifier {
+            name: "t",
+            quote: None,
+            span: Ident(16..17),
+        },
+        engine: None,
+        options: [],
+        from_share: Some(
+            ShareNameIdent {
+                tenant: "a",
+                share_name: "s",
+            },
+        ),
     },
 )
 

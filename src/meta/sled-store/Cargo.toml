@@ -17,7 +17,7 @@ io-uring = ["sled/io_uring"]
 [dependencies]
 common-meta-types = { path = "../types" }
 
-openraft = { git = "https://github.com/drmingdrmer/openraft", rev = "v0.7.2-alpha.1" }
+openraft = { git = "https://github.com/drmingdrmer/openraft", rev = "v0.7.2-alpha.2" }
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1", default-features = false }
 
 anyhow = "1.0.58"
