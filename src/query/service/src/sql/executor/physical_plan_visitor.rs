@@ -123,6 +123,7 @@ pub trait PhysicalPlanReplacer {
         Ok(PhysicalPlan::Sort(Sort {
             input: Box::new(input),
             order_by: plan.order_by.clone(),
+            limit: plan.limit,
         }))
     }
 

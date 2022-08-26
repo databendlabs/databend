@@ -337,6 +337,7 @@ impl PhysicalPlanBuilder {
                         order_by: v.index.to_string(),
                     })
                     .collect(),
+                limit: sort.limit,
             })),
             RelOperator::Limit(limit) => Ok(PhysicalPlan::Limit(Limit {
                 input: Box::new(self.build(s_expr.child(0)?).await?),

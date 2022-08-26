@@ -35,8 +35,8 @@ impl DataBlock {
                 Series::take(column, indices)
             })
             .collect::<Result<Vec<_>>>()?;
-
-        Ok(DataBlock::create(raw.schema().clone(), columns))
+        let data = DataBlock::create(raw.schema().clone(), columns);
+        Ok(data)
     }
 
     pub fn block_take_by_chunk_indices(

@@ -161,6 +161,8 @@ impl AggregateFinal {
 pub struct Sort {
     pub input: Box<PhysicalPlan>,
     pub order_by: Vec<SortDesc>,
+    // limit = Limit.limit + Limit.offset
+    pub limit: Option<usize>,
 }
 
 impl Sort {
