@@ -93,7 +93,7 @@ impl TopNPrunner {
                 a.1.max.cmp(&b.1.max).reverse()
             }
         });
-        id_stats.truncate(self.limit as usize);
-        Ok(id_stats.iter().map(|s| (s.0, s.2.clone())).collect())
+
+        Ok(id_stats.iter().map(|s| (s.0, s.2.clone())).take(self.limit as usize).collect())
     }
 }
