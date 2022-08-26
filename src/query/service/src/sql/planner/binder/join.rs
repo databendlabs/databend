@@ -28,6 +28,7 @@ use crate::sessions::QueryContext;
 use crate::sql::binder::scalar_common::split_conjunctions;
 use crate::sql::binder::scalar_common::split_equivalent_predicate;
 use crate::sql::binder::scalar_common::wrap_cast_if_needed;
+use crate::sql::normalize_identifier;
 use crate::sql::optimizer::ColumnSet;
 use crate::sql::optimizer::SExpr;
 use crate::sql::planner::binder::scalar::ScalarBinder;
@@ -282,7 +283,7 @@ impl<'a> JoinConditionResolver<'a> {
             JoinCondition::Using(identifiers) => {
                 let using_columns = identifiers
                     .iter()
-                    .map(|ident| ident.name.clone())
+                    .map(|ident| normalize_identifier(ident, self.name_resolution_ctx).name)
                     .collect::<Vec<String>>();
                 self.resolve_using(using_columns, left_join_conditions, right_join_conditions)
                     .await?;

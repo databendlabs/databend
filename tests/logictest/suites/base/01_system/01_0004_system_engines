@@ -1,7 +1,7 @@
 onlyif mysql
-statement query TT 
+statement query TT
 SELECT * FROM system.engines ORDER BY "Engine" LIMIT 1,2;
 
 ----
-GITHUB GITHUB Storage Engine
 MEMORY MEMORY Storage Engine
+NULL NULL Storage Engine

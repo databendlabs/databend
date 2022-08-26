@@ -16,4 +16,6 @@ mod bloom_pruner;
 mod limiter;
 mod pruning_executor;
 mod range_pruner;
+mod topn_pruner;
+
 pub use pruning_executor::BlockPruner;

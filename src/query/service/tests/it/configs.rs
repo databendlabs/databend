@@ -182,7 +182,6 @@ fn test_env_config_s3() -> Result<()> {
             ("STORAGE_GCS_ROOT", Some("/path/to/root")),
             ("STORAGE_GCS_CREDENTIAL", Some("gcs.credential")),
             ("QUERY_TABLE_ENGINE_MEMORY_ENABLED", Some("true")),
-            ("QUERY_DATABASE_ENGINE_GITHUB_ENABLED", Some("false")),
             ("CONFIG_FILE", None),
         ],
         || {
@@ -226,7 +225,6 @@ fn test_env_config_s3() -> Result<()> {
             assert_eq!("us.bucket", configured.storage.s3.bucket);
 
             assert!(configured.query.table_engine_memory_enabled);
-            assert!(!configured.query.database_engine_github_enabled);
 
             assert!(configured.query.table_cache_enabled);
             assert_eq!(512, configured.query.table_memory_cache_mb_size);
@@ -278,7 +276,6 @@ fn test_env_config_fs() -> Result<()> {
             ("STORAGE_GCS_ROOT", Some("/path/to/root")),
             ("STORAGE_GCS_CREDENTIAL", Some("gcs.credential")),
             ("QUERY_TABLE_ENGINE_MEMORY_ENABLED", Some("true")),
-            ("QUERY_DATABASE_ENGINE_GITHUB_ENABLED", Some("false")),
             ("CONFIG_FILE", None),
         ],
         || {
@@ -322,7 +319,6 @@ fn test_env_config_fs() -> Result<()> {
             assert_eq!("", configured.storage.gcs.credential);
 
             assert!(configured.query.table_engine_memory_enabled);
-            assert!(!configured.query.database_engine_github_enabled);
 
             assert!(configured.query.table_cache_enabled);
             assert_eq!(512, configured.query.table_memory_cache_mb_size);
@@ -373,7 +369,6 @@ fn test_env_config_gcs() -> Result<()> {
             ("STORAGE_GCS_ROOT", Some("/path/to/root")),
             ("STORAGE_GCS_CREDENTIAL", Some("gcs.credential")),
             ("QUERY_TABLE_ENGINE_MEMORY_ENABLED", Some("true")),
-            ("QUERY_DATABASE_ENGINE_GITHUB_ENABLED", Some("false")),
             ("CONFIG_FILE", None),
         ],
         || {
@@ -417,7 +412,6 @@ fn test_env_config_gcs() -> Result<()> {
             );
 
             assert!(configured.query.table_engine_memory_enabled);
-            assert!(!configured.query.database_engine_github_enabled);
 
             assert!(configured.query.table_cache_enabled);
             assert_eq!(512, configured.query.table_memory_cache_mb_size);

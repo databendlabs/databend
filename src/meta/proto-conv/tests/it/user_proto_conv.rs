@@ -181,13 +181,13 @@ fn test_user_incompatible() -> anyhow::Result<()> {
     {
         let user_info = test_user_info();
         let mut p = user_info.to_pb()?;
-        p.ver = 5;
-        p.min_compatible = 5;
+        p.ver = 6;
+        p.min_compatible = 6;
 
         let res = mt::UserInfo::from_pb(p);
         assert_eq!(
             Incompatible {
-                reason: s("executable ver=4 is smaller than the message min compatible ver: 5")
+                reason: s("executable ver=5 is smaller than the message min compatible ver: 6")
             },
             res.unwrap_err()
         );
@@ -196,13 +196,13 @@ fn test_user_incompatible() -> anyhow::Result<()> {
     {
         let fs_stage_info = test_fs_stage_info();
         let mut p = fs_stage_info.to_pb()?;
-        p.ver = 5;
-        p.min_compatible = 5;
+        p.ver = 6;
+        p.min_compatible = 6;
 
         let res = mt::UserStageInfo::from_pb(p);
         assert_eq!(
             Incompatible {
-                reason: s("executable ver=4 is smaller than the message min compatible ver: 5")
+                reason: s("executable ver=5 is smaller than the message min compatible ver: 6")
             },
             res.unwrap_err()
         )
@@ -211,13 +211,13 @@ fn test_user_incompatible() -> anyhow::Result<()> {
     {
         let s3_stage_info = test_s3_stage_info();
         let mut p = s3_stage_info.to_pb()?;
-        p.ver = 5;
-        p.min_compatible = 5;
+        p.ver = 6;
+        p.min_compatible = 6;
 
         let res = mt::UserStageInfo::from_pb(p);
         assert_eq!(
             Incompatible {
-                reason: s("executable ver=4 is smaller than the message min compatible ver: 5")
+                reason: s("executable ver=5 is smaller than the message min compatible ver: 6")
             },
             res.unwrap_err()
         );
@@ -226,13 +226,13 @@ fn test_user_incompatible() -> anyhow::Result<()> {
     {
         let gcs_stage_info = test_gcs_stage_info();
         let mut p = gcs_stage_info.to_pb()?;
-        p.ver = 5;
-        p.min_compatible = 5;
+        p.ver = 6;
+        p.min_compatible = 6;
 
         let res = mt::UserStageInfo::from_pb(p);
         assert_eq!(
             Incompatible {
-                reason: s("executable ver=4 is smaller than the message min compatible ver: 5")
+                reason: s("executable ver=5 is smaller than the message min compatible ver: 6")
             },
             res.unwrap_err()
         );

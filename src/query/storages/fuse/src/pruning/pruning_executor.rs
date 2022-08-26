@@ -33,6 +33,7 @@ use super::bloom_pruner;
 use crate::io::MetaReaders;
 use crate::pruning::limiter;
 use crate::pruning::range_pruner;
+use crate::pruning::topn_pruner;
 
 pub struct BlockPruner {
     table_snapshot: Arc<TableSnapshot>,
@@ -150,15 +151,33 @@ impl BlockPruner {
             .map_err(|e| ErrorCode::StorageOther(format!("block pruning failure, {}", e)))?;
 
         // 3. collect the result
-        tracing::debug_span!("collect_result").in_scope(|| {
-            // flatten the collected block metas
-            let metas = joint
-                .into_iter()
-                .collect::<Result<Vec<_>>>()?
-                .into_iter()
-                .flatten();
-            Ok(metas.collect())
-        })
+        let metas: Result<Vec<(usize, BlockMeta)>> = tracing::debug_span!("collect_result")
+            .in_scope(|| {
+                // flatten the collected block metas
+                let metas = joint
+                    .into_iter()
+                    .collect::<Result<Vec<_>>>()?
+                    .into_iter()
+                    .flatten();
+                Ok(metas.collect())
+            });
+        let metas = metas?;
+
+        // if there are ordering + limit clause, use topn pruner
+
+        if push_down
+            .as_ref()
+            .filter(|p| !p.order_by.is_empty() && p.limit.is_some())
+            .is_some()
+        {
+            let push_down = push_down.as_ref().unwrap();
+            let limit = push_down.limit.unwrap();
+            let sort = push_down.order_by.clone();
+            let tpruner = topn_pruner::TopNPrunner::new(schema, sort, limit);
+            return tpruner.prune(metas);
+        }
+
+        Ok(metas)
     }
 
     async fn all_the_blocks(

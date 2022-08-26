@@ -23,7 +23,6 @@ use parking_lot::RwLock;
 
 use super::random::RandomTable;
 use crate::storages::fuse::FuseTable;
-use crate::storages::github::GithubTable;
 use crate::storages::memory::MemoryTable;
 use crate::storages::null::NullTable;
 use crate::storages::view::ViewTable;
@@ -78,14 +77,6 @@ impl StorageFactory {
             creators.insert("MEMORY".to_string(), Storage {
                 creator: Arc::new(MemoryTable::try_create),
                 descriptor: Arc::new(MemoryTable::description),
-            });
-        }
-
-        // Register github table engine;
-        if conf.query.database_engine_github_enabled {
-            creators.insert("GITHUB".to_string(), Storage {
-                creator: Arc::new(GithubTable::try_create),
-                descriptor: Arc::new(GithubTable::description),
             });
         }
 
