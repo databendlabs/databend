@@ -159,7 +159,6 @@ docker run --net=host  datafuselabs/databend
 
 ### Use Cases
 
-- [Analyzing Github Repository With Databend](https://databend.rs/doc/learn/analyze-github-repo-with-databend)
 - [Analyzing Nginx Access Logs With Databend](https://databend.rs/doc/learn/analyze-nginx-logs-with-databend-and-vector)
 - [User Retention Analysis With Databend](https://databend.rs/doc/learn/analyze-user-retention-with-databend)
 - [Conversion Funnel Analysis With Databend](https://databend.rs/doc/learn/analyze-funnel-with-databend)

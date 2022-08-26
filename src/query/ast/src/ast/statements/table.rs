@@ -411,7 +411,6 @@ pub enum Engine {
     Null,
     Memory,
     Fuse,
-    Github,
     View,
     Random,
 }
@@ -422,7 +421,6 @@ impl Display for Engine {
             Engine::Null => write!(f, "NULL"),
             Engine::Memory => write!(f, "MEMORY"),
             Engine::Fuse => write!(f, "FUSE"),
-            Engine::Github => write!(f, "GITHUB"),
             Engine::View => write!(f, "VIEW"),
             Engine::Random => write!(f, "RANDOM"),
         }

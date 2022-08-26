@@ -21,7 +21,6 @@ use common_exception::Result;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::Pipeline;
 use common_pipeline_core::SinkPipeBuilder;
-use common_pipeline_transforms::processors::transforms::BlockCompactor;
 use common_pipeline_transforms::processors::transforms::SortMergeCompactor;
 use common_pipeline_transforms::processors::transforms::TransformCompact;
 use common_pipeline_transforms::processors::transforms::TransformSortMerge;
@@ -35,12 +34,8 @@ use crate::FuseTable;
 use crate::TableMutator;
 use crate::DEFAULT_AVG_DEPTH_THRESHOLD;
 use crate::DEFAULT_BLOCK_PER_SEGMENT;
-use crate::DEFAULT_BLOCK_SIZE_IN_MEM_SIZE_THRESHOLD;
-use crate::DEFAULT_ROW_PER_BLOCK;
-use crate::FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD;
 use crate::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 use crate::FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD;
-use crate::FUSE_OPT_KEY_ROW_PER_BLOCK;
 
 impl FuseTable {
     pub(crate) async fn do_recluster(
@@ -65,7 +60,7 @@ impl FuseTable {
             return Ok(None);
         }
 
-        let table_info = self.table_info.clone();
+        let block_compactor = self.get_block_compactor();
         let avg_depth_threshold = self.get_option(
             FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD,
             DEFAULT_AVG_DEPTH_THRESHOLD,
@@ -76,14 +71,14 @@ impl FuseTable {
         } else {
             1.0
         };
-        let row_per_block = self.get_option(FUSE_OPT_KEY_ROW_PER_BLOCK, DEFAULT_ROW_PER_BLOCK);
+        let block_per_seg =
+            self.get_option(FUSE_OPT_KEY_BLOCK_PER_SEGMENT, DEFAULT_BLOCK_PER_SEGMENT);
         let mut mutator = ReclusterMutator::try_create(
             ctx.clone(),
             self.meta_location_generator.clone(),
             snapshot,
             threshold,
-            table_info,
-            row_per_block,
+            block_compactor.clone(),
         )?;
 
         let need_recluster = mutator.blocks_select().await?;
@@ -91,11 +86,11 @@ impl FuseTable {
             return Ok(None);
         }
 
-        let partitions_total = mutator.base_mutator.base_snapshot.summary.block_count as usize;
+        let partitions_total = mutator.partitions_total();
         let (statistics, parts) = self.read_partitions_with_metas(
             ctx.clone(),
             None,
-            mutator.selected_blocks.clone(),
+            mutator.selected_blocks(),
             partitions_total,
         )?;
         let table_info = self.get_table_info();
@@ -117,8 +112,8 @@ impl FuseTable {
         let cluster_stats_gen = self.get_cluster_stats_gen(
             ctx.clone(),
             pipeline,
-            mutator.level + 1,
-            mutator.row_per_block,
+            mutator.level() + 1,
+            block_compactor.clone(),
         )?;
 
         // sort
@@ -155,26 +150,15 @@ impl FuseTable {
             )
         })?;
 
-        let max_rows_per_block = self.get_option(FUSE_OPT_KEY_ROW_PER_BLOCK, DEFAULT_ROW_PER_BLOCK);
-        let min_rows_per_block = (max_rows_per_block as f64 * 0.8) as usize;
-        let max_bytes_per_block = self.get_option(
-            FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD,
-            DEFAULT_BLOCK_SIZE_IN_MEM_SIZE_THRESHOLD,
-        );
-
-        let block_per_seg =
-            self.get_option(FUSE_OPT_KEY_BLOCK_PER_SEGMENT, DEFAULT_BLOCK_PER_SEGMENT);
-
-        let da = ctx.get_storage_operator()?;
-
         pipeline.add_transform(|transform_input_port, transform_output_port| {
             TransformCompact::try_create(
                 transform_input_port,
                 transform_output_port,
-                BlockCompactor::new(max_rows_per_block, min_rows_per_block, max_bytes_per_block),
+                block_compactor.to_compactor(),
             )
         })?;
 
+        let da = ctx.get_storage_operator()?;
         let mut sink_pipeline_builder = SinkPipeBuilder::create();
         for _ in 0..pipeline.output_len() {
             let input_port = InputPort::create();

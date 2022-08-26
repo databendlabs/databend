@@ -666,7 +666,7 @@ pub struct QueryConfig {
     #[clap(long, parse(try_from_str), default_value = "true")]
     pub table_engine_memory_enabled: bool,
 
-    /// Database engine github enabled
+    /// Deprecated: Database engine github enabled
     #[clap(long, parse(try_from_str), default_value = "true")]
     pub database_engine_github_enabled: bool,
 
@@ -760,7 +760,6 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             rpc_tls_query_server_root_ca_cert: self.rpc_tls_query_server_root_ca_cert,
             rpc_tls_query_service_domain_name: self.rpc_tls_query_service_domain_name,
             table_engine_memory_enabled: self.table_engine_memory_enabled,
-            database_engine_github_enabled: self.database_engine_github_enabled,
             wait_timeout_mills: self.wait_timeout_mills,
             max_query_log_size: self.max_query_log_size,
             table_cache_enabled: self.table_cache_enabled,
@@ -813,7 +812,7 @@ impl From<InnerQueryConfig> for QueryConfig {
             rpc_tls_query_server_root_ca_cert: inner.rpc_tls_query_server_root_ca_cert,
             rpc_tls_query_service_domain_name: inner.rpc_tls_query_service_domain_name,
             table_engine_memory_enabled: inner.table_engine_memory_enabled,
-            database_engine_github_enabled: inner.database_engine_github_enabled,
+            database_engine_github_enabled: true,
             wait_timeout_mills: inner.wait_timeout_mills,
             max_query_log_size: inner.max_query_log_size,
             table_cache_enabled: inner.table_cache_enabled,

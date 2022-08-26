@@ -164,7 +164,7 @@ pub fn transform_expr(ast: common_ast::ast::Expr, columns: &[(&str, DataType)]) 
 }
 
 fn transform_unary_op(op: UnaryOperator) -> String {
-    op.to_string().to_lowercase()
+    format!("{op:?}").to_lowercase()
 }
 
 fn transform_binary_op(op: BinaryOperator) -> String {
@@ -212,7 +212,8 @@ pub fn transform_literal(lit: ASTLiteral) -> Literal {
         ASTLiteral::String(s) => Literal::String(s.as_bytes().to_vec()),
         ASTLiteral::Boolean(b) => Literal::Boolean(b),
         ASTLiteral::Null => Literal::Null,
-        _ => unimplemented!(),
+        ASTLiteral::Float(f) => Literal::Float64(f),
+        _ => unimplemented!("{lit}"),
     }
 }
 

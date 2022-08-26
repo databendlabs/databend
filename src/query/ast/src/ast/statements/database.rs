@@ -15,6 +15,8 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use common_meta_app::share::ShareNameIdent;
+
 use crate::ast::statements::show::ShowLimit;
 use crate::ast::write_period_separated_list;
 use crate::ast::Identifier;
@@ -57,6 +59,7 @@ pub struct CreateDatabaseStmt<'a> {
     pub database: Identifier<'a>,
     pub engine: Option<DatabaseEngine>,
     pub options: Vec<SQLProperty>,
+    pub from_share: Option<ShareNameIdent>,
 }
 
 impl Display for CreateDatabaseStmt<'_> {
@@ -68,6 +71,13 @@ impl Display for CreateDatabaseStmt<'_> {
         write_period_separated_list(f, self.catalog.iter().chain(Some(&self.database)))?;
         if let Some(engine) = &self.engine {
             write!(f, " ENGINE = {engine}")?;
+        }
+        if let Some(from_share) = &self.from_share {
+            write!(
+                f,
+                " FROM SHARE {}.{}",
+                from_share.tenant, from_share.share_name
+            )?;
         }
         // TODO(leiysky): display rest information
         Ok(())
@@ -140,15 +150,12 @@ pub enum AlterDatabaseAction<'a> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DatabaseEngine {
     Default,
-    Github(String),
 }
 
 impl Display for DatabaseEngine {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        if let DatabaseEngine::Github(token) = self {
-            write!(f, "GITHUB(token=\'{token}\')")
-        } else {
-            write!(f, "DEFAULT")
+        match self {
+            DatabaseEngine::Default => write!(f, "DEFAULT"),
         }
     }
 }

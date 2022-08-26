@@ -31,6 +31,7 @@ use common_datavalues::ToDataType;
 use common_datavalues::Vu8;
 use common_exception::Result;
 use common_meta_app::schema::DatabaseMeta;
+use common_meta_app::share::ShareNameIdent;
 use common_planners::CreateDatabasePlan;
 use common_planners::DropDatabasePlan;
 use common_planners::RenameDatabaseEntity;
@@ -183,6 +184,7 @@ impl<'a> Binder {
             database,
             engine,
             options,
+            from_share,
         } = stmt;
 
         let tenant = self.ctx.get_tenant();
@@ -191,7 +193,7 @@ impl<'a> Binder {
             .map(|catalog| normalize_identifier(catalog, &self.name_resolution_ctx).name)
             .unwrap_or_else(|| self.ctx.get_current_catalog());
         let database = normalize_identifier(database, &self.name_resolution_ctx).name;
-        let meta = self.database_meta(engine, options)?;
+        let meta = self.database_meta(engine, options, from_share)?;
 
         Ok(Plan::CreateDatabase(Box::new(CreateDatabasePlan {
             if_not_exists: *if_not_exists,
@@ -206,6 +208,7 @@ impl<'a> Binder {
         &self,
         engine: &Option<DatabaseEngine>,
         options: &[SQLProperty],
+        from_share: &Option<ShareNameIdent>,
     ) -> Result<DatabaseMeta> {
         let options = options
             .iter()
@@ -214,11 +217,6 @@ impl<'a> Binder {
 
         let database_engine = engine.as_ref().unwrap_or(&DatabaseEngine::Default);
         let (engine, engine_options) = match database_engine {
-            DatabaseEngine::Github(token) => {
-                let engine_options =
-                    BTreeMap::from_iter(vec![("token".to_string(), token.clone())]);
-                ("github", engine_options)
-            }
             DatabaseEngine::Default => ("default", BTreeMap::default()),
         };
 
@@ -226,6 +224,7 @@ impl<'a> Binder {
             engine: engine.to_string(),
             engine_options,
             options,
+            from_share: from_share.clone(),
             ..Default::default()
         })
     }

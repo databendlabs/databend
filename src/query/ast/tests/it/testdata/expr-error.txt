@@ -5,8 +5,9 @@ error:
   --> SQL:1:12
   |
 1 | 5 * (a and ) 1
-  | -          ^ expected more tokens for expression
-  | |           
+  | -   -      ^ expected more tokens for expression
+  | |   |       
+  | |   while parsing `(<expr> [,] [...])`
   | while parsing expression
 
 

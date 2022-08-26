@@ -18,13 +18,15 @@ use common_exception::Result;
 use common_fuse_meta::meta::ClusterStatistics;
 use common_pipeline_transforms::processors::ExpressionExecutor;
 
+use crate::io::BlockCompactor;
+
 #[derive(Clone, Default)]
 pub struct ClusterStatsGenerator {
     cluster_key_id: u32,
     cluster_key_index: Vec<usize>,
     expression_executor: Option<ExpressionExecutor>,
     level: i32,
-    row_per_block: usize,
+    block_compactor: BlockCompactor,
 }
 
 impl ClusterStatsGenerator {
@@ -33,14 +35,14 @@ impl ClusterStatsGenerator {
         cluster_key_index: Vec<usize>,
         expression_executor: Option<ExpressionExecutor>,
         level: i32,
-        row_per_block: usize,
+        block_compactor: BlockCompactor,
     ) -> Self {
         Self {
             cluster_key_id,
             cluster_key_index,
             expression_executor,
             level,
-            row_per_block,
+            block_compactor,
         }
     }
 
@@ -123,7 +125,11 @@ impl ClusterStatsGenerator {
             max.push(right);
         }
 
-        let level = if min == max && data_block.num_rows() == self.row_per_block {
+        let level = if min == max
+            && self
+                .block_compactor
+                .check_perfect_block(data_block.num_rows(), data_block.memory_size())
+        {
             -1
         } else {
             level
