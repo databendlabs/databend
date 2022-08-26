@@ -28,12 +28,12 @@ use crate::sql::plans::ScalarExpr;
 use crate::sql::IndexType;
 
 /// Evaluate scalar expression
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct EvalScalar {
     pub items: Vec<ScalarItem>,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct ScalarItem {
     pub scalar: Scalar,
     pub index: IndexType,
@@ -98,9 +98,13 @@ impl LogicalOperator for EvalScalar {
         }
         outer_columns = outer_columns.difference(&output_columns).cloned().collect();
 
+        // Derive cardinality
+        let cardinality = input_prop.cardinality;
+
         Ok(RelationalProperty {
             output_columns,
             outer_columns,
+            cardinality,
         })
     }
 }

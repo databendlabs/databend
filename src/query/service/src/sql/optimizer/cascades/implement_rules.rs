@@ -16,7 +16,7 @@ use crate::sql::optimizer::RuleID;
 use crate::sql::optimizer::RuleSet;
 
 pub fn get_implement_rule_set() -> RuleSet {
-    RuleSet::create_with_ids(vec![RuleID::ImplementGet]).unwrap()
+    RuleSet::create_with_ids(vec![RuleID::ImplementGet, RuleID::ImplementHashJoin]).unwrap()
 }
 
 #[cfg(test)]

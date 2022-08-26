@@ -119,7 +119,7 @@ use crate::sql::optimizer::SExpr;
 pub enum Plan {
     // `SELECT` statement
     Query {
-        s_expr: SExpr,
+        s_expr: Box<SExpr>,
         metadata: MetadataRef,
         bind_context: Box<BindContext>,
         rewrite_kind: Option<RewriteKind>,

@@ -58,7 +58,7 @@ impl Interpreter for ExplainInterpreterV2 {
                 Plan::Query {
                     s_expr, metadata, ..
                 } => {
-                    self.explain_pipeline(s_expr.clone(), metadata.clone())
+                    self.explain_pipeline(*s_expr.clone(), metadata.clone())
                         .await?
                 }
                 _ => {
@@ -69,7 +69,7 @@ impl Interpreter for ExplainInterpreterV2 {
                 Plan::Query {
                     s_expr, metadata, ..
                 } => {
-                    self.explain_fragments(s_expr.clone(), metadata.clone())
+                    self.explain_fragments(*s_expr.clone(), metadata.clone())
                         .await?
                 }
                 _ => {

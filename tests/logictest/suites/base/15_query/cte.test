@@ -103,7 +103,7 @@ WITH test1 AS (SELECT i + 1, j + 1 FROM test1) SELECT * FROM (SELECT * FROM test
 4 5
 
 statement query III
-SELECT * FROM (WITH t1 AS (SELECT to_int32(number) i FROM numbers(5)) SELECT * FROM t1) l INNER JOIN test1 r on l.i = r.i order by l.i, r.j;
+SELECT * FROM (WITH t1 AS (SELECT i FROM test1) SELECT * FROM t1) l INNER JOIN test1 r on l.i = r.i order by l.i, r.j;
 
 ----
 1 1 2

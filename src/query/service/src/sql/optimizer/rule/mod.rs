@@ -24,6 +24,7 @@ mod rewrite;
 mod rule_implement_get;
 mod rule_implement_hash_join;
 mod rule_set;
+mod transform;
 mod transform_state;
 
 pub use factory::RuleFactory;
@@ -63,6 +64,9 @@ pub enum RuleID {
     MergeFilter,
     SplitAggregate,
 
+    // Exploration rules
+    CommuteJoin,
+
     // Implementation rules
     ImplementGet,
     ImplementHashJoin,
@@ -71,8 +75,6 @@ pub enum RuleID {
 impl Display for RuleID {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            RuleID::ImplementGet => write!(f, "ImplementGet"),
-            RuleID::ImplementHashJoin => write!(f, "ImplementHashJoin"),
             RuleID::PushDownFilterProject => write!(f, "PushDownFilterProject"),
             RuleID::PushDownFilterEvalScalar => write!(f, "PushDownFilterEvalScalar"),
             RuleID::PushDownFilterJoin => write!(f, "PushDownFilterJoin"),
@@ -91,6 +93,11 @@ impl Display for RuleID {
             RuleID::NormalizeScalarFilter => write!(f, "NormalizeScalarFilter"),
             RuleID::SplitAggregate => write!(f, "SplitAggregate"),
             RuleID::NormalizeDisjunctiveFilter => write!(f, "NormalizeDisjunctiveFilter"),
+
+            RuleID::CommuteJoin => write!(f, "CommuteJoin"),
+
+            RuleID::ImplementGet => write!(f, "ImplementGet"),
+            RuleID::ImplementHashJoin => write!(f, "ImplementHashJoin"),
         }
     }
 }

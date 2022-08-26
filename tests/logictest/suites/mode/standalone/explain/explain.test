@@ -1,22 +1,15 @@
--- TODO(need fix)
-
-onlyif mysql
 statement ok
 drop table if exists t1 all;
 
-onlyif mysql
 statement ok
 drop table if exists t2 all;
 
-onlyif mysql
 statement ok
 create table t1(a int, b int);
 
-onlyif mysql
 statement ok
 create table t2(a int, b int);
 
-onlyif mysql
 statement query T
 explain select t1.a from t1 where a > 0;
 
@@ -25,7 +18,6 @@ Project: [a (#0)]
 └── Filter: [t1.a (#0) > 0]
     └── Scan: default.default.t1, filters: [t1.a (#0) > 0], Sort: [none], limit: [none]
 
-onlyif mysql
 statement query T
 explain select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a and t2.a > 5 and t1.a > 1);
 
@@ -35,7 +27,6 @@ Filter: [(t1.a (#0) > 3) OR ((t2.a (#2) > 5) AND (t1.a (#0) > 1))]
     ├── Scan: default.default.t1, filters: [], Sort: [none], limit: [none]
     └── Scan: default.default.t2, filters: [], Sort: [none], limit: [none]
 
-onlyif mysql
 statement query T
 explain select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a);
 
@@ -44,7 +35,6 @@ HashJoin: INNER, build keys: [t2.a (#2)], probe keys: [t1.a (#0)], join filters:
 ├── Scan: default.default.t1, filters: [], Sort: [none], limit: [none]
 └── Scan: default.default.t2, filters: [], Sort: [none], limit: [none]
 
-onlyif mysql
 statement query T
 explain raw select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a);
 
@@ -56,7 +46,6 @@ Project: [a (#0),b (#1),a (#2),b (#3)]
             ├── LogicalGet: default.default.t1, Sort: [none], limit: [none]
             └── LogicalGet: default.default.t2, Sort: [none], limit: [none]
 
-onlyif mysql
 statement query T
 explain raw select * from t1 inner join t2 on t1.a = t2.a and t1.b = t2.b and t1.a > 2;
 
@@ -67,7 +56,6 @@ Project: [a (#0),b (#1),a (#2),b (#3)]
         ├── LogicalGet: default.default.t1, Sort: [none], limit: [none]
         └── LogicalGet: default.default.t2, Sort: [none], limit: [none]
 
-onlyif mysql
 statement query T
 explain syntax select 1, 'ab', [1,2,3], (1, 'a');
 
@@ -78,7 +66,6 @@ SELECT
     [1, 2, 3],
     (1, 'a')
 
-onlyif mysql
 statement query T
 explain syntax select a, sum(b) as sum from t1 where a in (1, 2) and b > 0 and b < 100 group by a order by a;
 
@@ -95,7 +82,6 @@ WHERE
 GROUP BY a
 ORDER BY a
 
-onlyif mysql
 statement query T
 explain syntax select * from t1 inner join t2 on t1.a = t2.a and t1.b = t2.b and t1.a > 2;
 
@@ -107,7 +93,6 @@ FROM
     AND t1.b = t2.b
     AND t1.a > 2
 
-onlyif mysql
 statement query T
 explain syntax delete from t1 where a > 100 and b > 1 and b < 10;
 
@@ -119,7 +104,6 @@ WHERE
     AND b > 1
     AND b < 10
 
-onlyif mysql
 statement query T
 explain syntax copy into t1 from 's3://mybucket/data.csv' file_format = ( type = 'CSV' field_delimiter = ',' record_delimiter = '\n' skip_header = 1) size_limit=10;
 
@@ -135,7 +119,6 @@ FILE_FORMAT = (
 )
 SIZE_LIMIT = 10
 
-onlyif mysql
 statement query T
 explain syntax copy into 's3://mybucket/data.csv' from t1 file_format = ( type = 'CSV' field_delimiter = ',' record_delimiter = '\n' skip_header = 1) size_limit=10;
 
@@ -151,7 +134,6 @@ FILE_FORMAT = (
 )
 SIZE_LIMIT = 10
 
-onlyif mysql
 statement query T
 explain syntax create table t3(a int64, b uint64, c float64, d string, e array(int32), f tuple(f1 bool, f2 string)) engine=fuse cluster by (a, b, c) comment='test' compression='LZ4';
 
@@ -172,7 +154,6 @@ CLUSTER BY (
 comment = 'test',
 compression = 'LZ4'
 
-onlyif mysql
 statement query T
 explain syntax create view v as select number % 3 as a from numbers(100) where number > 10;
 
@@ -464,10 +445,9 @@ CreateUser (children 3)
 ├── AuthType sha256_password
 └── Password "new_password"
 
-onlyif mysql
 statement ok
 drop table t1;
 
-onlyif mysql
 statement ok
 drop table t2;
+

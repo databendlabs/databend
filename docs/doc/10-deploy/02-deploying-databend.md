@@ -59,6 +59,20 @@ For information about how to manage buckets and Access Keys for your cloud objec
 
 </TabItem>
 
+<TabItem value="Google GCS" label="Google GCS">
+
+Before deploying Databend, make sure you have successfully set up your object storage environment in the cloud, and the following tasks have been completed:
+
+- Create a bucket named `databend`.
+- Get the Google Cloud Storage OAuth2 credential of your account.
+
+For information about how to manage buckets and OAuth2 credentials in Google Cloud Storage, refer to the user manual from the solution provider. Here are some useful links you may need:
+
+- https://cloud.google.com/storage/docs/creating-buckets
+- https://cloud.google.com/storage/docs/authentication#apiauth
+
+</TabItem>
+
 <TabItem value="Tencent COS" label="Tencent COS">
 
 Before deploying Databend, make sure you have successfully set up your object storage environment in the cloud, and the following tasks have been completed:
@@ -216,7 +230,7 @@ b. In the file `databend-query.toml`, set the parameter `type` in [storage] bloc
 
 ```toml
 [storage]
-# fs | s3 | azblob
+# fs | s3 | azblob | gcs
 type = "s3"
 ```
 
@@ -241,9 +255,14 @@ secret_access_key = "<your-account-key>"
 # container = "<your-azure-storage-container-name>"
 # account_name = "<your-storage-account-name>"
 # account_key = "<your-account-key>"
+
+# To use Google Cloud Storage, uncomment this block and set your values.
+# [storage.gcs]
+# bucket = "<your-bucket-name>"
+# credential = "<your-credential>"
 ```
 
-d. Set your values in the `[storage.s3]` or `[storage.azblob]` block. Please note that the field `endpoint_url` refers to the service URL of your storage region and varies depending on the object storage solution you use:
+d. Set your values in the `[storage.s3]`, `[storage.azblob]` or `[storage.GCS]` block. Please note that the field `endpoint_url` refers to the service URL of your storage region and varies depending on the object storage solution you use:
 
 <Tabs groupId="operating-systems">
 <TabItem value="MinIO" label="MinIO">
@@ -283,6 +302,34 @@ secret_access_key = "<your-access-key>"
 
 </TabItem>
 
+<TabItem value="Google GCS" label="Google GCS">
+
+```toml
+[storage]
+# gcs
+type = "gcs"
+
+[storage.gcs]
+# How to create a bucket:
+# https://cloud.google.com/storage/docs/creating-buckets
+// highlight-next-line
+bucket = "databend-1.048596"
+
+# GCS also supports changing the endpoint URL
+# but the endpoint should be compatible with GCS's JSON API
+# default:
+# endpoint_url = "https://storage.googleapis.com/"
+
+# working directory of GCS
+# default:
+# root = "/"
+
+// highlight-next-line
+credential = "<your-credential>"
+```
+
+</TabItem>
+
 <TabItem value="Tencent COS" label="Tencent COS">
 
 ```toml
@@ -316,7 +363,7 @@ In this example COS region is `ap-beijing`.
 
 <TabItem value="Alibaba OSS" label="Alibaba OSS">
 
-```shell
+```toml
 [storage]
 # s3
 type = "s3"

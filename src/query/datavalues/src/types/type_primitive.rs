@@ -144,6 +144,12 @@ macro_rules! impl_numeric {
                 write!(f, "{}", self.name())
             }
         }
+
+        impl std::hash::Hash for PrimitiveDataType<$ty> {
+            fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+                self.data_type_id().hash(state);
+            }
+        }
     };
 }
 //

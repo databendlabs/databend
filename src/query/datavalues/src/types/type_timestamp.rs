@@ -47,7 +47,7 @@ pub fn check_timestamp(micros: i64) -> Result<()> {
 }
 
 /// Timestamp type only stores UTC time in microseconds
-#[derive(Default, Clone, serde::Deserialize, serde::Serialize)]
+#[derive(Default, Clone, Hash, serde::Deserialize, serde::Serialize)]
 pub struct TimestampType {
     /// Typically are used - 0 (seconds) 3 (milliseconds), 6 (microseconds)
     precision: usize,

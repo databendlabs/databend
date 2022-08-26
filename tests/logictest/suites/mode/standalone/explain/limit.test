@@ -64,3 +64,4 @@ Limit: [1], Offset: [0]
                 └── Aggregate(Final): group items: [t.number (#4)], aggregate functions: [count(t.number)]
                     └── Aggregate(Partial): group items: [t.number (#4)], aggregate functions: [count(t.number)]
                         └── Scan: default.system.numbers, filters: [], Sort: [none], limit: [none]
+

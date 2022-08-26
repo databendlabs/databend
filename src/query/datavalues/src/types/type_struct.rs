@@ -27,7 +27,7 @@ use crate::prelude::*;
 use crate::serializations::StructSerializer;
 use crate::serializations::TypeSerializerImpl;
 
-#[derive(Default, Clone, serde::Deserialize, serde::Serialize)]
+#[derive(Default, Clone, Hash, serde::Deserialize, serde::Serialize)]
 pub struct StructType {
     names: Option<Vec<String>>,
     types: Vec<DataTypeImpl>,

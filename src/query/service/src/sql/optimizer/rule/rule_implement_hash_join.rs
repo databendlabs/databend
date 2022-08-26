@@ -59,8 +59,8 @@ impl Rule for RuleImplementHashJoin {
         self.id
     }
 
-    fn apply(&self, expression: &SExpr, state: &mut TransformState) -> Result<()> {
-        let plan = expression.plan().clone();
+    fn apply(&self, s_expr: &SExpr, state: &mut TransformState) -> Result<()> {
+        let plan = s_expr.plan().clone();
         let logical_join: LogicalInnerJoin = plan.try_into()?;
 
         let result = SExpr::create(
@@ -73,8 +73,8 @@ impl Rule for RuleImplementHashJoin {
                 from_correlated_subquery: logical_join.from_correlated_subquery,
             }
             .into(),
-            expression.children().to_vec(),
-            expression.original_group(),
+            s_expr.children().to_vec(),
+            None,
         );
         state.add_result(result);
 

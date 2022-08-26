@@ -44,7 +44,7 @@ use crate::sql::plans::ScalarExpr;
 use crate::sql::plans::ScalarItem;
 use crate::sql::BindContext;
 
-#[derive(Default, Clone, PartialEq, Debug)]
+#[derive(Default, Clone, PartialEq, Eq, Debug)]
 pub struct AggregateInfo {
     /// Aggregation functions
     pub aggregate_functions: Vec<ScalarItem>,
