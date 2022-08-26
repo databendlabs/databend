@@ -28,6 +28,7 @@ fn test_control() {
     let file = &mut mint.new_goldenfile("control.txt").unwrap();
 
     test_multi_if(file);
+    test_is_not_null(file);
 }
 
 fn test_multi_if(file: &mut impl Write) {
@@ -145,4 +146,31 @@ fn test_multi_if(file: &mut impl Write) {
             ),
         ],
     );
+}
+
+fn test_is_not_null(file: &mut impl Write) {
+    run_ast(file, "is_not_null(1)", &[]);
+    run_ast(file, "is_not_null(4096)", &[]);
+    run_ast(file, "is_not_null(true)", &[]);
+    run_ast(file, "is_not_null(false)", &[]);
+    run_ast(file, "is_not_null('string')", &[]);
+    run_ast(file, "is_not_null(NULL)", &[]);
+    run_ast(file, "is_not_null(null_col)", &[(
+        "null_col",
+        DataType::Null,
+        Column::Null { len: 13 },
+    )]);
+    run_ast(file, "is_not_null(int64_col)", &[(
+        "int64_col",
+        DataType::Int64,
+        Column::Int64(vec![5, 6, 7, 8].into()),
+    )]);
+    run_ast(file, "is_not_null(nullable_col)", &[(
+        "nullable_col",
+        DataType::Nullable(Box::new(DataType::Int64)),
+        Column::Nullable(Box::new(NullableColumn {
+            column: Column::Int64(vec![9, 10, 11, 12].into()),
+            validity: vec![true, true, false, false].into(),
+        })),
+    )]);
 }
