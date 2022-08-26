@@ -155,7 +155,8 @@ async fn test_accumulator() -> common_exception::Result<()> {
         let block = item?;
         let block_statistics = BlockStatistics::from(&block, "does_not_matter".to_owned(), None)?;
         let block_writer = BlockWriter::new(&table_ctx, &operator, &loc_generator);
-        let block_meta = block_writer.write(block, None).await?;
+        let chunk_size = block.num_rows();
+        let block_meta = block_writer.write(block, None, chunk_size).await?;
         stats_acc.add_with_block_meta(block_meta, block_statistics)?;
     }
 

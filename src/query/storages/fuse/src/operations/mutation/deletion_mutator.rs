@@ -34,6 +34,7 @@ pub enum Deletion {
 pub struct DeletionMutator {
     base_mutator: BaseMutator,
     cluster_stats_gen: ClusterStatsGenerator,
+    chunk_size: usize,
 }
 
 impl DeletionMutator {
@@ -42,11 +43,13 @@ impl DeletionMutator {
         location_generator: TableMetaLocationGenerator,
         base_snapshot: Arc<TableSnapshot>,
         cluster_stats_gen: ClusterStatsGenerator,
+        chunk_size: usize,
     ) -> Result<Self> {
         let base_mutator = BaseMutator::try_create(ctx, location_generator, base_snapshot)?;
         Ok(Self {
             base_mutator,
             cluster_stats_gen,
+            chunk_size,
         })
     }
 
@@ -76,7 +79,11 @@ impl DeletionMutator {
             let cluster_stats = self
                 .cluster_stats_gen
                 .gen_with_origin_stats(&replace_with, origin_stats)?;
-            Some(block_writer.write(replace_with, cluster_stats).await?)
+            Some(
+                block_writer
+                    .write(replace_with, cluster_stats, self.chunk_size)
+                    .await?,
+            )
         };
         let original_block_loc = location_of_block_to_be_replaced;
         self.base_mutator

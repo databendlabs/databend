@@ -180,7 +180,7 @@ impl Processor for ResultTableSink {
                 let mut data = Vec::with_capacity(100 * 1024 * 1024);
                 let schema = block.schema().clone();
                 let (size, meta_data) =
-                    serialize_data_blocks(vec![block.clone()], &schema, &mut data)?;
+                    serialize_data_blocks(vec![block.clone()], &schema, 1024 * 1024, &mut data)?;
 
                 let bloom_index_location = None;
                 let bloom_index_size = 0_u64;

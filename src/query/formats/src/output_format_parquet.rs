@@ -42,8 +42,13 @@ impl OutputFormat for ParquetOutputFormat {
     }
 
     fn finalize(&mut self) -> Result<Vec<u8>> {
-        let mut buf = Vec::with_capacity(100 * 1024 * 1024);
-        let _ = serialize_data_blocks(self.data_blocks.clone(), &self.schema, &mut buf)?;
+        let mut buf = Vec::with_capacity(100 * 1024 * 1024); // todo adjust this
+        let _ = serialize_data_blocks(
+            self.data_blocks.clone(),
+            &self.schema,
+            1024 * 1024, // TODO
+            &mut buf,
+        )?;
 
         Ok(buf)
     }

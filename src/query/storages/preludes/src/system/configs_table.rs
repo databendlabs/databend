@@ -101,6 +101,8 @@ impl SyncSystemTable for ConfigsTable {
             storage_config_value,
         );
 
+        // jemalloc config/opts
+
         let names: Vec<&str> = names.iter().map(|x| x.as_str()).collect();
         let values: Vec<&str> = values.iter().map(|x| x.as_str()).collect();
         let groups: Vec<&str> = groups.iter().map(|x| x.as_str()).collect();

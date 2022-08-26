@@ -93,11 +93,14 @@ async fn test_deletion_mutator_multiple_empty_segments() -> Result<()> {
     );
 
     let table_ctx: Arc<dyn TableContext> = ctx as Arc<dyn TableContext>;
+    // we do not care about chunk size in this test case, choose it arbitrarily
+    let chunk_size = 10;
     let mut mutator = DeletionMutator::try_create(
         table_ctx,
         location_generator,
         Arc::new(base_snapshot),
         ClusterStatsGenerator::default(),
+        chunk_size,
     )?;
 
     // clear half of the segments

@@ -100,7 +100,8 @@ impl ResultTableWriter {
         let mut data = Vec::with_capacity(100 * 1024 * 1024);
         let block_statistics = BlockStatistics::from(&block, location.clone(), None)?;
         let schema = block.schema().clone();
-        let (size, meta_data) = serialize_data_blocks(vec![block], &schema, &mut data)?;
+        let (size, meta_data) =
+            serialize_data_blocks(vec![block], &schema, 1024 * 1024, &mut data)?;
         self.data_accessor
             .object(&location)
             .write(data)

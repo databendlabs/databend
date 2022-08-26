@@ -53,8 +53,10 @@ use crate::NavigationPoint;
 use crate::Table;
 use crate::TableStatistics;
 use crate::DEFAULT_BLOCK_SIZE_IN_MEM_SIZE_THRESHOLD;
+use crate::DEFAULT_CHUNK_SIZE;
 use crate::DEFAULT_ROW_PER_BLOCK;
 use crate::FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD;
+use crate::FUSE_OPT_KEY_CHUNK_SIZE;
 use crate::FUSE_OPT_KEY_ROW_PER_BLOCK;
 use crate::OPT_KEY_DATABASE_ID;
 use crate::OPT_KEY_LEGACY_SNAPSHOT_LOC;
@@ -233,6 +235,10 @@ impl FuseTable {
             DEFAULT_BLOCK_SIZE_IN_MEM_SIZE_THRESHOLD,
         );
         BlockCompactor::new(max_rows_per_block, min_rows_per_block, max_bytes_per_block)
+    }
+
+    pub(crate) fn get_chunk_size(&self) -> usize {
+        self.get_option(FUSE_OPT_KEY_CHUNK_SIZE, DEFAULT_CHUNK_SIZE)
     }
 }
 

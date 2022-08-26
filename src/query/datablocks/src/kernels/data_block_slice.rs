@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_datavalues::prelude::ceil;
+use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::DataBlock;
@@ -20,6 +21,13 @@ use crate::DataBlock;
 impl DataBlock {
     pub fn split_block_by_size(block: &DataBlock, max_block_size: usize) -> Result<Vec<DataBlock>> {
         let size = block.num_rows();
+        if max_block_size == 0 {
+            return if size != 0 {
+                Err(ErrorCode::LogicalError("illegal max_block_size."))
+            } else {
+                Ok(vec![])
+            };
+        }
         let mut blocks = Vec::with_capacity(ceil(size, max_block_size));
 
         let mut offset = 0;

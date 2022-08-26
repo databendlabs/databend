@@ -32,6 +32,7 @@ pub fn serialize_data_blocks_with_compression(
     blocks: Vec<DataBlock>,
     schema: impl AsRef<DataSchema>,
     buf: &mut Vec<u8>,
+    chunk_size: usize,
     compression: CompressionOptions,
 ) -> Result<(u64, ThriftFileMetaData)> {
     let arrow_schema = schema.as_ref().to_arrow();
@@ -40,6 +41,7 @@ pub fn serialize_data_blocks_with_compression(
         write_statistics: false,
         compression,
         version: Version::V2,
+        data_page_size_limit: chunk_size,
     };
     let batches = blocks
         .into_iter()
@@ -79,9 +81,16 @@ pub fn serialize_data_blocks_with_compression(
 pub fn serialize_data_blocks(
     blocks: Vec<DataBlock>,
     schema: impl AsRef<DataSchema>,
+    chunk_size: usize,
     buf: &mut Vec<u8>,
 ) -> Result<(u64, ThriftFileMetaData)> {
-    serialize_data_blocks_with_compression(blocks, schema, buf, CompressionOptions::Lz4Raw)
+    serialize_data_blocks_with_compression(
+        blocks,
+        schema,
+        buf,
+        chunk_size,
+        CompressionOptions::Lz4Raw,
+    )
 }
 
 fn col_encoding(_data_type: &ArrowDataType) -> Encoding {

@@ -63,6 +63,7 @@ impl<'a> BlockWriter<'a> {
         block_id: Uuid,
         location: Location,
         cluster_stats: Option<ClusterStatistics>,
+        chunk_size: usize,
     ) -> Result<BlockMeta> {
         let data_accessor = &self.data_accessor;
         let row_count = block.num_rows() as u64;
@@ -71,7 +72,8 @@ impl<'a> BlockWriter<'a> {
         let (bloom_filter_index_size, bloom_filter_index_location) = self
             .build_block_index(data_accessor, &block, block_id)
             .await?;
-        let (file_size, file_meta_data) = write_block(block, data_accessor, &location.0).await?;
+        let (file_size, file_meta_data) =
+            write_block(block, data_accessor, &location.0, chunk_size).await?;
         let col_metas = util::column_metas(&file_meta_data)?;
         let block_meta = BlockMeta::new(
             row_count,
@@ -91,9 +93,10 @@ impl<'a> BlockWriter<'a> {
         &self,
         block: DataBlock,
         cluster_stats: Option<ClusterStatistics>,
+        chunk_size: usize,
     ) -> Result<BlockMeta> {
         let (location, block_id) = self.location_generator.gen_block_location();
-        self.write_with_location(block, block_id, location, cluster_stats)
+        self.write_with_location(block, block_id, location, cluster_stats, chunk_size)
             .await
     }
 
@@ -114,6 +117,7 @@ impl<'a> BlockWriter<'a> {
             vec![index_block],
             &index_block_schema,
             &mut data,
+            1024 * 1024, // TODO
             CompressionOptions::Uncompressed,
         )?;
         write_data(&data, data_accessor, &location.0).await?;
@@ -125,10 +129,12 @@ pub async fn write_block(
     block: DataBlock,
     data_accessor: &Operator,
     location: &str,
+    chunk_size: usize,
 ) -> Result<(u64, ThriftFileMetaData)> {
     let mut buf = Vec::with_capacity(DEFAULT_BLOCK_WRITE_BUFFER_SIZE);
+    // let blocks = DataBlock::split_block_by_size(&block, chunk_size)?;
     let schema = block.schema().clone();
-    let result = serialize_data_blocks(vec![block], &schema, &mut buf)?;
+    let result = serialize_data_blocks(vec![block], &schema, chunk_size, &mut buf)?;
     write_data(&buf, data_accessor, location).await?;
     Ok(result)
 }

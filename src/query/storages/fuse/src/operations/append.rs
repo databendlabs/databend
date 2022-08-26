@@ -33,7 +33,9 @@ use crate::operations::FuseTableSink;
 use crate::statistics::ClusterStatsGenerator;
 use crate::FuseTable;
 use crate::DEFAULT_BLOCK_PER_SEGMENT;
+use crate::DEFAULT_CHUNK_SIZE;
 use crate::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
+use crate::FUSE_OPT_KEY_CHUNK_SIZE;
 
 impl FuseTable {
     pub fn do_append2(&self, ctx: Arc<dyn TableContext>, pipeline: &mut Pipeline) -> Result<()> {
@@ -75,6 +77,7 @@ impl FuseTable {
 
         let da = ctx.get_storage_operator()?;
         let mut sink_pipeline_builder = SinkPipeBuilder::create();
+        let chunk_size = self.get_option(FUSE_OPT_KEY_CHUNK_SIZE, DEFAULT_CHUNK_SIZE);
         for _ in 0..pipeline.output_len() {
             let input_port = InputPort::create();
             sink_pipeline_builder.add_sink(
@@ -86,6 +89,7 @@ impl FuseTable {
                     da.clone(),
                     self.meta_location_generator().clone(),
                     cluster_stats_gen.clone(),
+                    chunk_size,
                 )?,
             );
         }
