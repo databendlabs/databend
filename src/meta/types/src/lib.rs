@@ -95,6 +95,7 @@ pub use cluster::Node;
 pub use cluster::NodeInfo;
 pub use cluster::Slot;
 pub use cmd::Cmd;
+pub use cmd::UpsertKV;
 pub use endpoint::Endpoint;
 pub use errors::ConflictSeq;
 pub use kv_message::GetKVReply;
