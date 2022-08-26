@@ -124,7 +124,7 @@ impl Column for NullableColumn {
     }
 
     fn memory_size(&self) -> usize {
-        self.column.memory_size()
+        self.column.memory_size() + self.validity.as_slice().0.len()
     }
 
     fn as_arrow_array(&self, logical_type: DataTypeImpl) -> ArrayRef {

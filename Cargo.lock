@@ -1198,6 +1198,7 @@ dependencies = [
  "common-io",
  "once_cell",
  "pretty_assertions",
+ "serde_json",
  "similar-asserts",
  "strum",
  "strum_macros",
