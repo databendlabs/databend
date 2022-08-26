@@ -184,7 +184,7 @@ async fn test_block_pruner() -> Result<()> {
         (Some(e4), 4, 4 * row_per_block),
     ];
 
-    for (extra, expected_blocks, expected_blocks) in extras {
+    for (extra, expected_blocks, expected_rows) in extras {
         let blocks = apply_block_pruning(
             snapshot.clone(),
             table.get_table_info().schema(),
@@ -194,7 +194,7 @@ async fn test_block_pruner() -> Result<()> {
         .await?;
 
         let rows = blocks.iter().map(|b| b.row_count as usize).sum::<usize>();
-        assert_eq!(expected_blocks, rows);
+        assert_eq!(expected_rows, rows);
         assert_eq!(expected_blocks, blocks.len());
     }
 
