@@ -12,7 +12,6 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -85,7 +84,6 @@ impl TopNPrunner {
             if a.1.null_count + b.1.null_count != 0 && *nulls_first {
                 return a.1.null_count.cmp(&b.1.null_count).reverse();
             }
-
             // no nulls
             if *asc {
                 a.1.min.cmp(&b.1.min)
@@ -93,7 +91,10 @@ impl TopNPrunner {
                 a.1.max.cmp(&b.1.max).reverse()
             }
         });
-
-        Ok(id_stats.iter().map(|s| (s.0, s.2.clone())).take(self.limit as usize).collect())
+        Ok(id_stats
+            .iter()
+            .map(|s| (s.0, s.2.clone()))
+            .take(self.limit as usize)
+            .collect())
     }
 }

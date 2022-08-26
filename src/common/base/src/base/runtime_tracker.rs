@@ -59,7 +59,6 @@ impl ThreadTracker {
 
     #[inline]
     pub fn alloc_memory(size: i64) {
-        println!("ALLOCATE {size}");
         unsafe {
             if !TRACKER.is_null() {
                 (*TRACKER).untracked_memory += size;
@@ -77,8 +76,6 @@ impl ThreadTracker {
 
     #[inline]
     pub fn dealloc_memory(size: i64) {
-        println!("DEALLOCATE {size}");
-
         unsafe {
             if !TRACKER.is_null() {
                 (*TRACKER).untracked_memory -= size;
@@ -97,7 +94,6 @@ impl ThreadTracker {
     #[inline]
     pub fn realloc_memory(old_size: i64, new_size: i64) {
         let addition = new_size - old_size;
-        println!("RE ALLOCATE {addition}");
         match addition > 0 {
             true => Self::alloc_memory(addition),
             false => Self::dealloc_memory(-addition),

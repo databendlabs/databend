@@ -26,6 +26,7 @@ use common_planners::col;
 use common_planners::lit;
 use common_planners::sub;
 use common_planners::CreateTablePlan;
+use common_planners::Expression;
 use common_planners::Extras;
 use databend_query::interpreters::CreateTableInterpreter;
 use databend_query::interpreters::Interpreter;
@@ -147,7 +148,7 @@ async fn test_block_pruner() -> Result<()> {
 
     // nothing is pruned
     let mut e1 = Extras::default();
-    e1.filters = vec![ col("a").gt(lit(30u64))];
+    e1.filters = vec![col("a").gt(lit(30u64))];
 
     // some blocks pruned
     let mut e2 = Extras::default();
@@ -155,10 +156,31 @@ async fn test_block_pruner() -> Result<()> {
     e2.filters = vec![col("a").gt(lit(0u64)).and(col("b").gt(lit(max_val_of_b)))];
     let b2 = num_blocks - max_val_of_b as usize - 1;
 
+    // Sort asc Limit
+    let mut e3 = Extras::default();
+    e3.order_by = vec![Expression::Sort {
+        expr: Box::new(col("b")),
+        asc: true,
+        nulls_first: false,
+        origin_expr: Box::new(col("b")),
+    }];
+    e3.limit = Some(3);
+
+    // Sort desc Limit
+    let mut e3 = Extras::default();
+    e3.order_by = vec![Expression::Sort {
+        expr: Box::new(col("b")),
+        asc: false,
+        nulls_first: false,
+        origin_expr: Box::new(col("b")),
+    }];
+    e3.limit = Some(3);
+
     let extras = vec![
         (None, num_blocks, num_blocks * row_per_block),
         (Some(e1), 0, 0),
         (Some(e2), b2, b2 * row_per_block),
+        (Some(e3), 3, 3 * row_per_block),
     ];
 
     for (extra, expected_blocks, expect_rows) in extras {
@@ -177,7 +199,6 @@ async fn test_block_pruner() -> Result<()> {
 
     Ok(())
 }
-
 
 #[tokio::test]
 async fn test_block_pruner_monotonic() -> Result<()> {
