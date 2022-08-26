@@ -57,6 +57,10 @@ impl HttpService {
             .at("/v1/health", get(health_handler))
             .at("/v1/config", get(super::http::v1::config::config_handler))
             .at(
+                "/v1/ctrl/trigger_snapshot",
+                get(super::http::v1::ctrl::trigger_snapshot),
+            )
+            .at(
                 "/v1/cluster/nodes",
                 get(super::http::v1::cluster_state::nodes_handler),
             )

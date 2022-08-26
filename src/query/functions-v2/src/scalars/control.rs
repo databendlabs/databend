@@ -15,7 +15,11 @@
 use std::sync::Arc;
 
 use common_expression::types::nullable::NullableColumn;
+use common_expression::types::BooleanType;
 use common_expression::types::DataType;
+use common_expression::types::GenericType;
+use common_expression::types::NullType;
+use common_expression::types::NullableType;
 use common_expression::BooleanDomain;
 use common_expression::Column;
 use common_expression::ColumnBuilder;
@@ -29,8 +33,11 @@ use common_expression::ScalarRef;
 use common_expression::Value;
 use common_expression::ValueRef;
 
+const MULTI_IF: &str = "multi_if";
+const IS_NOT_NULL: &str = "is_not_null";
+
 pub fn register(registry: &mut FunctionRegistry) {
-    registry.register_function_factory("multi_if", |_, args_type| {
+    registry.register_function_factory(MULTI_IF, |_, args_type| {
         if args_type.len() < 3 || args_type.len() % 2 == 0 {
             return None;
         }
@@ -46,7 +53,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
         Some(Arc::new(Function {
             signature: FunctionSignature {
-                name: "multi_if",
+                name: MULTI_IF,
                 args_type: sig_args_type,
                 return_type: DataType::Generic(0),
                 property: FunctionProperty::default(),
@@ -140,4 +147,33 @@ pub fn register(registry: &mut FunctionRegistry) {
             }),
         }))
     });
+    registry.register_1_arg_core::<NullType, BooleanType, _, _>(
+        IS_NOT_NULL,
+        FunctionProperty::default(),
+        |_| {
+            Some(BooleanDomain {
+                has_true: false,
+                has_false: true,
+            })
+        },
+        |_, _| Ok(Value::Scalar(false)),
+    );
+    registry.register_1_arg_core::<NullableType<GenericType<0>>, BooleanType, _, _>(
+        IS_NOT_NULL,
+        FunctionProperty::default(),
+        |NullableDomain { has_null, value }| {
+            Some(BooleanDomain {
+                has_true: value.is_some(),
+                has_false: *has_null,
+            })
+        },
+        |arg, _| match &arg {
+            ValueRef::Column(NullableColumn { validity, .. }) => {
+                let bitmap = validity.clone();
+                Ok(Value::Column(bitmap))
+            }
+            ValueRef::Scalar(None) => Ok(Value::Scalar(false)),
+            ValueRef::Scalar(Some(_)) => Ok(Value::Scalar(true)),
+        },
+    );
 }
