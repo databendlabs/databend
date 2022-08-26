@@ -20,6 +20,7 @@ use super::rewrite::RuleNormalizeScalarFilter;
 use super::rewrite::RulePushDownFilterEvalScalar;
 use super::rewrite::RulePushDownFilterJoin;
 use super::rewrite::RulePushDownFilterProject;
+use super::transform::RuleCommuteJoin;
 use crate::sql::optimizer::rule::rewrite::RuleEliminateFilter;
 use crate::sql::optimizer::rule::rewrite::RuleEliminateProject;
 use crate::sql::optimizer::rule::rewrite::RuleMergeEvalScalar;
@@ -68,6 +69,7 @@ impl RuleFactory {
             RuleID::NormalizeDisjunctiveFilter => {
                 Ok(Box::new(RuleNormalizeDisjunctiveFilter::new()))
             }
+            RuleID::CommuteJoin => Ok(Box::new(RuleCommuteJoin::new())),
         }
     }
 }

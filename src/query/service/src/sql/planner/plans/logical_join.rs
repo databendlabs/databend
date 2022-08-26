@@ -27,7 +27,7 @@ use crate::sql::plans::RelOp;
 use crate::sql::plans::Scalar;
 use crate::sql::IndexType;
 
-#[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum JoinType {
     Inner,
     Left,
@@ -76,7 +76,7 @@ impl Display for JoinType {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct LogicalInnerJoin {
     pub left_conditions: Vec<Scalar>,
     pub right_conditions: Vec<Scalar>,
@@ -141,9 +141,24 @@ impl LogicalOperator for LogicalInnerJoin {
         }
         outer_columns = outer_columns.difference(&output_columns).cloned().collect();
 
+        // Derive cardinality. We can not estimate the cardinality of inner join until we have
+        // distribution information of join keys, so we set it to the maximum value.
+        let cardinality = match self.join_type {
+            JoinType::Inner
+            | JoinType::Left
+            | JoinType::Right
+            | JoinType::Full
+            | JoinType::Cross => left_prop.cardinality * right_prop.cardinality,
+
+            JoinType::Semi | JoinType::Anti | JoinType::Mark | JoinType::Single => {
+                left_prop.cardinality
+            }
+        };
+
         Ok(RelationalProperty {
             output_columns,
             outer_columns,
+            cardinality,
         })
     }
 }

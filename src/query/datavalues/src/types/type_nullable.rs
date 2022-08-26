@@ -28,7 +28,7 @@ use crate::prelude::*;
 use crate::serializations::NullableSerializer;
 use crate::serializations::TypeSerializerImpl;
 
-#[derive(Clone, serde::Deserialize, serde::Serialize)]
+#[derive(Clone, Hash, serde::Deserialize, serde::Serialize)]
 pub struct NullableType {
     inner: Box<DataTypeImpl>,
 }

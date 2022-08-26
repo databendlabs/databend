@@ -24,7 +24,7 @@ use crate::sql::plans::Operator;
 use crate::sql::plans::PhysicalOperator;
 use crate::sql::plans::RelOp;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Limit {
     pub limit: Option<usize>,
     pub offset: usize,
@@ -71,6 +71,15 @@ impl PhysicalOperator for Limit {
 
 impl LogicalOperator for Limit {
     fn derive_relational_prop<'a>(&self, rel_expr: &RelExpr<'a>) -> Result<RelationalProperty> {
-        rel_expr.derive_relational_prop_child(0)
+        let input_prop = rel_expr.derive_relational_prop_child(0)?;
+
+        Ok(RelationalProperty {
+            output_columns: input_prop.output_columns,
+            outer_columns: input_prop.outer_columns,
+            cardinality: match self.limit {
+                Some(limit) if (limit as f64) < input_prop.cardinality => limit as f64,
+                _ => input_prop.cardinality,
+            },
+        })
     }
 }

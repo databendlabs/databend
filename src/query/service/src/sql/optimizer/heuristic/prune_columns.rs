@@ -89,6 +89,7 @@ impl ColumnPruner {
                     push_down_predicates: p.push_down_predicates.clone(),
                     limit: p.limit,
                     order_by: p.order_by.clone(),
+                    statistics: p.statistics.clone(),
                 })))
             }
             RelOperator::LogicalInnerJoin(p) => {
