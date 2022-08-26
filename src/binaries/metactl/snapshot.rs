@@ -236,7 +236,11 @@ async fn init_new_cluster(
 
             let entry: Entry<LogEntry> = Entry::<LogEntry> {
                 log_id,
-                payload: EntryPayload::Normal(LogEntry { txid: None, cmd }),
+                payload: EntryPayload::Normal(LogEntry {
+                    txid: None,
+                    time_ms: None,
+                    cmd,
+                }),
             };
 
             log.insert(&entry).await?;

@@ -925,6 +925,7 @@ impl MetaNode {
         let resp = self
             .write(LogEntry {
                 txid: None,
+                time_ms: None,
                 cmd: Cmd::AddNode {
                     node_id: node_id as NodeId,
                     node,
@@ -940,6 +941,7 @@ impl MetaNode {
         let resp = self
             .write(LogEntry {
                 txid: None,
+                time_ms: None,
                 cmd: Cmd::RemoveNode { node_id },
             })
             .await?;

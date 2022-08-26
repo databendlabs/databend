@@ -43,6 +43,7 @@ impl KVApi for MetaNode {
     async fn upsert_kv(&self, act: UpsertKVReq) -> Result<UpsertKVReply, MetaError> {
         let ent = LogEntry {
             txid: None,
+            time_ms: None,
             cmd: Cmd::UpsertKV {
                 key: act.key,
                 seq: act.seq,
@@ -99,6 +100,7 @@ impl KVApi for MetaNode {
         info!("MetaNode::transaction(): {}", txn);
         let ent = LogEntry {
             txid: None,
+            time_ms: None,
             cmd: Cmd::Transaction(txn),
         };
         let rst = self.write(ent).await?;

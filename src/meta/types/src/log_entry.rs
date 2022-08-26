@@ -29,6 +29,14 @@ pub struct LogEntry {
     /// When not None, it is used to filter out duplicated logs, which are caused by retries by client.
     pub txid: Option<RaftTxId>,
 
+    /// The time in millisecond when this log is proposed by the leader.
+    ///
+    /// State machine depends on clock time to expire values.
+    /// The time to use has to be consistent on leader and followers.
+    /// Otherwise an `apply` results in different state on leader and followers.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub time_ms: Option<u64>,
+
     /// The action a client want to take.
     pub cmd: Cmd,
 }
