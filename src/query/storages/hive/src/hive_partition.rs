@@ -28,7 +28,7 @@ pub struct HivePartInfo {
     pub filename: String,
     // partition values, like 'c_region=ASIA/c_nation=CHINA'
     pub partitions: Option<String>,
-
+    // only the data in ranges belong to this partition
     pub range: Range<u64>,
 }
 

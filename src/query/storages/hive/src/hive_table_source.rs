@@ -118,7 +118,7 @@ impl Processor for HiveTableSource {
             {
                 self.output.push_data(Ok(data_block));
 
-                hive_blocks.advacne();
+                hive_blocks.advance();
                 match hive_blocks.has_blocks() {
                     true => {
                         self.state = State::ReadData(hive_blocks);
@@ -144,7 +144,7 @@ impl Processor for HiveTableSource {
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Finish) {
             State::Deserialize(hive_blocks, chunks) => {
-                let row_group = hive_blocks.get_current_block();
+                let row_group = hive_blocks.get_current_row_group_meta_data();
                 let part = hive_blocks.get_part_info();
                 let data_block = self.block_reader.deserialize(chunks, row_group, part)?;
                 let progress_values = ProgressValues {
@@ -176,7 +176,7 @@ impl Processor for HiveTableSource {
                 Ok(())
             }
             State::ReadData(hive_blocks) => {
-                let row_group = hive_blocks.get_current_block();
+                let row_group = hive_blocks.get_current_row_group_meta_data();
                 let part = hive_blocks.get_part_info();
                 let chunks = self
                     .block_reader

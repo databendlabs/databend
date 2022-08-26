@@ -35,6 +35,9 @@ impl HiveBlocks {
         }
     }
 
+    // there are some conditions to filter invalid row_groups:
+    // 1. the rowgroup doesn't belong to the partition
+    // 2. filtered by predict pushdown (todo)
     pub fn prune(&mut self) -> bool {
         for (idx, row_group) in self.file_meta.row_groups.iter().enumerate() {
             let start = row_group.columns()[0].byte_range().0;
@@ -52,11 +55,11 @@ impl HiveBlocks {
         self.part.clone()
     }
 
-    pub fn get_current_block(&self) -> &RowGroupMetaData {
+    pub fn get_current_row_group_meta_data(&self) -> &RowGroupMetaData {
         &self.file_meta.row_groups[self.get_current_rowgroup_index()]
     }
 
-    pub fn advacne(&mut self) {
+    pub fn advance(&mut self) {
         self.current_index += 1;
     }
 
