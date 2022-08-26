@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_planners::Expression;
 use common_planners::Extras;
 use common_planners::Projection;
 use common_planners::StageKind;
@@ -100,7 +101,16 @@ impl PhysicalPlanBuilder {
                             ExpressionBuilderWithoutRenaming::create(self.metadata.clone());
                         items
                             .into_iter()
-                            .map(|item| builder.build_column_ref(item.index))
+                            .map(|item| {
+                                builder
+                                    .build_column_ref(item.index)
+                                    .map(|c| Expression::Sort {
+                                        expr: Box::new(c.clone()),
+                                        asc: item.asc,
+                                        nulls_first: item.nulls_first,
+                                        origin_expr: Box::new(c),
+                                    })
+                            })
                             .collect::<Result<Vec<_>>>()
                     })
                     .transpose()?;
