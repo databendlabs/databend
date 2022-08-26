@@ -15,6 +15,7 @@
 use std::collections::BTreeMap;
 use std::convert::TryInto;
 use std::fmt::Debug;
+use std::time::Duration;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
@@ -68,6 +69,7 @@ use openraft::raft::EntryPayload;
 use serde::Deserialize;
 use serde::Serialize;
 use tracing::debug;
+use tracing::error;
 use tracing::info;
 
 use crate::config::RaftConfig;
@@ -287,8 +289,21 @@ impl StateMachine {
                         }
                     }
 
-                    let res = self.apply_cmd(&data.cmd, &txn_tree, kv_pairs.as_ref());
+                    let log_time_ms = match data.time_ms {
+                        None => {
+                            error!("log has no time: {}, treat every record with non-none `expire` as timed out", entry.summary());
+                            0
+                        }
+                        Some(x) => {
+                            let t = SystemTime::UNIX_EPOCH + Duration::from_millis(x);
+                            info!("apply: raft-log time: {:?}", t);
+                            x
+                        },
+                    };
+
+                    let res = self.apply_cmd(&data.cmd, &txn_tree, kv_pairs.as_ref(), log_time_ms);
                     info!("apply_result: summary: {}; res: {:?}", entry.summary(), res);
+
                     let applied_state = res?;
 
                     if let Some(ref txid) = data.txid {
@@ -383,6 +398,7 @@ impl StateMachine {
         value_op: &Operation<Vec<u8>>,
         value_meta: &Option<KVMeta>,
         txn_tree: &TransactionSledTree,
+        log_time_ms: u64,
     ) -> MetaStorageResult<AppliedState> {
         debug!(
             key = display(key),
@@ -400,6 +416,7 @@ impl StateMachine {
             seq,
             value_op.clone(),
             value_meta.clone(),
+            log_time_ms,
         )?;
 
         debug!("applied UpsertKV: {} {:?}", key, result);
@@ -531,6 +548,7 @@ impl StateMachine {
         put: &TxnPutRequest,
         resp: &mut TxnReply,
         events: &mut Option<Vec<NotifyKVEvent>>,
+        log_time_ms: u64,
     ) -> MetaStorageResult<()> {
         let sub_tree = txn_tree.key_space::<GenericKV>();
 
@@ -540,6 +558,7 @@ impl StateMachine {
             &MatchSeq::Any,
             Operation::Update(put.value.clone()),
             None,
+            log_time_ms,
         )?;
 
         if let Some(events) = events {
@@ -568,6 +587,7 @@ impl StateMachine {
         delete: &TxnDeleteRequest,
         resp: &mut TxnReply,
         events: &mut Option<Vec<NotifyKVEvent>>,
+        log_time_ms: u64,
     ) -> MetaStorageResult<()> {
         let sub_tree = txn_tree.key_space::<GenericKV>();
 
@@ -577,6 +597,7 @@ impl StateMachine {
             &MatchSeq::Any,
             Operation::Delete,
             None,
+            log_time_ms,
         )?;
 
         if let Some(events) = events {
@@ -607,6 +628,7 @@ impl StateMachine {
         kv_pairs: Option<&DeleteByPrefixKeyMap>,
         resp: &mut TxnReply,
         events: &mut Option<Vec<NotifyKVEvent>>,
+        log_time_ms: u64,
     ) -> MetaStorageResult<()> {
         let mut count: u32 = 0;
         if let Some(kv_pairs) = kv_pairs {
@@ -619,6 +641,7 @@ impl StateMachine {
                         &MatchSeq::Any,
                         Operation::Delete,
                         None,
+                        log_time_ms,
                     );
 
                     if let Ok(ret) = ret {
@@ -652,6 +675,7 @@ impl StateMachine {
         kv_pairs: Option<&DeleteByPrefixKeyMap>,
         resp: &mut TxnReply,
         events: &mut Option<Vec<NotifyKVEvent>>,
+        log_time_ms: u64,
     ) -> MetaStorageResult<()> {
         debug!(op = display(op), "txn execute TxnOp");
         match &op.request {
@@ -659,10 +683,10 @@ impl StateMachine {
                 self.txn_execute_get_operation(txn_tree, get, resp)?;
             }
             Some(txn_op::Request::Put(put)) => {
-                self.txn_execute_put_operation(txn_tree, put, resp, events)?;
+                self.txn_execute_put_operation(txn_tree, put, resp, events, log_time_ms)?;
             }
             Some(txn_op::Request::Delete(delete)) => {
-                self.txn_execute_delete_operation(txn_tree, delete, resp, events)?;
+                self.txn_execute_delete_operation(txn_tree, delete, resp, events, log_time_ms)?;
             }
             Some(txn_op::Request::DeleteByPrefix(delete_by_prefix)) => {
                 self.txn_execute_delete_by_prefix_operation(
@@ -671,6 +695,7 @@ impl StateMachine {
                     kv_pairs,
                     resp,
                     events,
+                    log_time_ms,
                 )?;
             }
             None => {}
@@ -685,6 +710,7 @@ impl StateMachine {
         req: &TxnRequest,
         txn_tree: &TransactionSledTree,
         kv_pairs: Option<&(DeleteByPrefixKeyMap, DeleteByPrefixKeyMap)>,
+        log_time_ms: u64,
     ) -> MetaStorageResult<AppliedState> {
         debug!(txn = display(req), "apply txn cmd");
 
@@ -722,7 +748,14 @@ impl StateMachine {
             None
         };
         for op in ops {
-            self.txn_execute_operation(txn_tree, op, kv_op_pairs, &mut resp, &mut events)?;
+            self.txn_execute_operation(
+                txn_tree,
+                op,
+                kv_op_pairs,
+                &mut resp,
+                &mut events,
+                log_time_ms,
+            )?;
         }
 
         if let Some(subscriber) = &self.subscriber {
@@ -747,6 +780,7 @@ impl StateMachine {
         cmd: &Cmd,
         txn_tree: &TransactionSledTree,
         kv_pairs: Option<&(DeleteByPrefixKeyMap, DeleteByPrefixKeyMap)>,
+        log_time_ms: u64,
     ) -> Result<AppliedState, MetaStorageError> {
         info!("apply_cmd: {:?}", cmd);
 
@@ -765,9 +799,9 @@ impl StateMachine {
                 seq,
                 value: value_op,
                 value_meta,
-            } => self.apply_update_kv_cmd(key, seq, value_op, value_meta, txn_tree),
+            } => self.apply_update_kv_cmd(key, seq, value_op, value_meta, txn_tree, log_time_ms),
 
-            Cmd::Transaction(txn) => self.apply_txn_cmd(txn, txn_tree, kv_pairs),
+            Cmd::Transaction(txn) => self.apply_txn_cmd(txn, txn_tree, kv_pairs, log_time_ms),
         }
     }
 
@@ -791,6 +825,7 @@ impl StateMachine {
         seq: &MatchSeq,
         value_op: Operation<V>,
         value_meta: Option<KVMeta>,
+        log_time_ms: u64,
     ) -> MetaStorageResult<(Option<SeqV<V>>, Option<SeqV<V>>)>
     where
         V: Clone + Debug,
@@ -799,7 +834,7 @@ impl StateMachine {
         let prev = sub_tree.get(key)?;
 
         // If prev is timed out, treat it as a None.
-        let prev = Self::unexpired_opt(prev);
+        let prev = Self::unexpired_opt(prev, log_time_ms);
 
         if seq.match_seq(&prev).is_err() {
             return Ok((prev.clone(), prev));
@@ -934,36 +969,33 @@ impl StateMachine {
         }
     }
 
-    pub fn unexpired_opt<V: Debug>(seq_value: Option<SeqV<V>>) -> Option<SeqV<V>> {
-        seq_value.and_then(Self::unexpired)
+    pub fn unexpired_opt<V: Debug>(
+        seq_value: Option<SeqV<V>>,
+        log_time_ms: u64,
+    ) -> Option<SeqV<V>> {
+        seq_value.and_then(|x| Self::unexpired(x, log_time_ms))
     }
 
-    pub fn unexpired<V: Debug>(seq_value: SeqV<V>) -> Option<SeqV<V>> {
-        // TODO(xp): log must be assigned with a ts.
+    pub fn unexpired<V: Debug>(seq_value: SeqV<V>, log_time_ms: u64) -> Option<SeqV<V>> {
+        // Caveat: The cleanup must be consistent across raft nodes:
+        //         A conditional update, e.g. an upsert_kv() with MatchSeq::Eq(some_value),
+        //         must be applied with the same timestamp on every raft node.
+        //         Otherwise: node-1 could have applied a log with a ts that is smaller than value.expire_at,
+        //         while node-2 may fail to apply the same log if it use a greater ts > value.expire_at.
+        //
+        // Thus:
+        //
+        // 1. A raft log must have a field ts assigned by the leader. When applying, use this ts to
+        //    check against expire_at to decide whether to purge it.
+        // 2. A GET operation must not purge any expired entry. Since a GET is only applied to a node itself.
+        // 3. The background task can only be triggered by the raft leader, by submit a "clean expired" log.
 
         // TODO(xp): background task to clean expired
-
-        // TODO(xp): Caveat: The cleanup must be consistent across raft nodes:
-        //           A conditional update, e.g. an upsert_kv() with MatchSeq::Eq(some_value),
-        //           must be applied with the same timestamp on every raft node.
-        //           Otherwise: node-1 could have applied a log with a ts that is smaller than value.expire_at,
-        //           while node-2 may fail to apply the same log if it use a greater ts > value.expire_at.
-        //           Thus:
-        //           1. A raft log must have a field ts assigned by the leader. When applying, use this ts to
-        //              check against expire_at to decide whether to purge it.
-        //           2. A GET operation must not purge any expired entry. Since a GET is only applied to a node itself.
-        //           3. The background task can only be triggered by the raft leader, by submit a "clean expired" log.
-
         // TODO(xp): maybe it needs a expiration queue for efficient cleaning up.
 
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
+        debug!("seq_value: {:?} log_time_ms: {}", seq_value, log_time_ms);
 
-        debug!("seq_value: {:?} now: {}", seq_value, now);
-
-        if seq_value.get_expire_at() < now {
+        if seq_value.get_expire_at() < log_time_ms {
             None
         } else {
             Some(seq_value)

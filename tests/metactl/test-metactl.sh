@@ -6,7 +6,7 @@ SCRIPT_PATH="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd)"
 BUILD_PROFILE="${BUILD_PROFILE:-debug}"
 
 meta_dir="$SCRIPT_PATH/_meta_dir"
-meta_json="$SCRIPT_PATH/meta.json"
+meta_json="$SCRIPT_PATH/meta.txt"
 exported="$SCRIPT_PATH/exported"
 grpc_exported="$SCRIPT_PATH/exported"
 
