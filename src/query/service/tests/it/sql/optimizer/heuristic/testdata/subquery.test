@@ -146,3 +146,5 @@ Project: [number (#0)]
             HashJoin: SEMI, build keys: [], probe keys: [], join filters: [t.number (#0) > t1.number (#1)]
                 Scan: default.system.numbers, filters: [], Sort: [none], limit: [none]
                 Scan: default.system.numbers, filters: [], Sort: [none], limit: [none]
+
+
