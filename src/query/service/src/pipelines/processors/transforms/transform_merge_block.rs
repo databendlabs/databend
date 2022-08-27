@@ -17,9 +17,7 @@ use std::sync::Arc;
 
 use async_channel::Receiver;
 use common_datablocks::DataBlock;
-use common_datavalues::ColumnRef;
 use common_datavalues::DataSchemaRef;
-use common_datavalues::DataType;
 use common_exception::Result;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
@@ -114,17 +112,16 @@ impl Processor for TransformMergeBlock {
 
     fn process(&mut self) -> Result<()> {
         if let Some(input_data) = self.input_data.take() {
-            let input_data = create_block_with_schema(self.schema.clone(), input_data.columns())?;
             if let Some(receiver_result) = self.receiver_result.take() {
                 let data_block =
-                    create_block_with_schema(self.schema.clone(), receiver_result.columns())?;
+                    DataBlock::create(self.schema.clone(), receiver_result.columns().to_vec());
                 self.output_data = Some(DataBlock::concat_blocks(&[input_data, data_block])?);
             } else {
                 self.output_data = Some(input_data);
             }
         } else if let Some(receiver_result) = self.receiver_result.take() {
             let data_block =
-                create_block_with_schema(self.schema.clone(), receiver_result.columns())?;
+                DataBlock::create(self.schema.clone(), receiver_result.columns().to_vec());
             self.output_data = Some(data_block);
         }
 
@@ -141,24 +138,4 @@ impl Processor for TransformMergeBlock {
         }
         Ok(())
     }
-}
-
-fn create_block_with_schema(schema: DataSchemaRef, columns: &[ColumnRef]) -> Result<DataBlock> {
-    let fields = schema.fields();
-    assert_eq!(fields.len(), columns.len());
-    let mut new_columns = Vec::with_capacity(columns.len());
-    for (field, column) in fields.iter().zip(columns.iter()) {
-        if field.data_type().eq(&column.data_type()) {
-            // fast path (mostly situations)
-            new_columns.push(column.clone());
-        } else {
-            new_columns.push(
-                field
-                    .data_type()
-                    .clone()
-                    .create_column(&column.to_values())?,
-            );
-        }
-    }
-    Ok(DataBlock::create(schema, new_columns))
 }

@@ -15,8 +15,6 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRefExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Extras;
@@ -326,21 +324,9 @@ impl PhysicalPlanBuilder {
                     keys,
                 }))
             }
-            RelOperator::UnionAll(union_all) => {
+            RelOperator::UnionAll(_) => {
                 let left = self.build(s_expr.child(0)?).await?;
-                let old_schema = left.output_schema()?;
-                let old_fields = old_schema.fields();
-                let mut new_fields = Vec::with_capacity(old_fields.len());
-                for field in old_fields {
-                    let column_id = field.name().parse::<usize>().unwrap();
-                    if union_all.column2type.contains_key(&column_id) {
-                        new_fields.push(DataField::new(
-                            field.name(),
-                            *union_all.column2type.get(&column_id).unwrap().clone(),
-                        ));
-                    }
-                }
-                let schema = DataSchemaRefExt::create(new_fields);
+                let schema = left.output_schema()?;
                 Ok(PhysicalPlan::UnionAll(UnionAll {
                     left: Box::new(left),
                     right: Box::new(self.build(s_expr.child(1)?).await?),

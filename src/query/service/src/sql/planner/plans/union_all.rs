@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
-
-use common_datavalues::DataTypeImpl;
 use common_exception::Result;
 
 use crate::sql::optimizer::Distribution;
@@ -26,12 +23,9 @@ use crate::sql::plans::LogicalOperator;
 use crate::sql::plans::Operator;
 use crate::sql::plans::PhysicalOperator;
 use crate::sql::plans::RelOp;
-use crate::sql::IndexType;
 
 #[derive(Clone, Debug)]
-pub struct UnionAll {
-    pub column2type: HashMap<IndexType, Box<DataTypeImpl>>,
-}
+pub struct UnionAll;
 
 impl Operator for UnionAll {
     fn rel_op(&self) -> RelOp {
