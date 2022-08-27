@@ -41,6 +41,7 @@ use tracing::debug;
 use crate::db_has_to_exist;
 use crate::fetch_id;
 use crate::get_db_or_err;
+use crate::get_object_shared_by_share_ids;
 use crate::get_share_account_meta_or_err;
 use crate::get_share_id_to_name_or_err;
 use crate::get_share_meta_by_id_or_err;
@@ -887,19 +888,6 @@ impl<KV: KVApi> ShareApi for KV {
             }
         }
         Ok(GetObjectGrantPrivilegesReply { privileges })
-    }
-}
-
-async fn get_object_shared_by_share_ids(
-    kv_api: &(impl KVApi + ?Sized),
-    object: &ShareGrantObject,
-) -> Result<(u64, ObjectSharedByShareIds), MetaError> {
-    let (seq, share_ids): (u64, Option<ObjectSharedByShareIds>) =
-        get_struct_value(kv_api, object).await?;
-
-    match share_ids {
-        Some(share_ids) => Ok((seq, share_ids)),
-        None => Ok((0, ObjectSharedByShareIds::default())),
     }
 }
 

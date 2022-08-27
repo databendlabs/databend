@@ -21,15 +21,20 @@ use common_meta_app::schema::DatabaseNameIdent;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TableNameIdent;
 use common_meta_app::share::*;
+use common_meta_types::MetaError;
 use enumflags2::BitFlags;
 use tracing::info;
 
+use crate::get_kv_data;
+use crate::get_object_shared_by_share_ids;
 use crate::get_share_account_meta_or_err;
 use crate::get_share_id_to_name_or_err;
 use crate::get_share_meta_by_id_or_err;
-use crate::is_db_exists;
+use crate::get_share_or_err;
+use crate::is_all_db_data_has_been_removed;
 use crate::ApiBuilder;
 use crate::AsKVApi;
+use crate::KVApi;
 use crate::SchemaApi;
 use crate::ShareApi;
 
@@ -40,6 +45,65 @@ use crate::ShareApi;
 /// such as `meta/embedded` and `metasrv`.
 #[derive(Copy, Clone)]
 pub struct ShareApiTestSuite {}
+
+async fn if_share_object_data_exists(
+    kv_api: &(impl KVApi + ?Sized),
+    entry: &ShareGrantEntry,
+) -> Result<bool, MetaError> {
+    if let Ok((_seq, _share_ids)) = get_object_shared_by_share_ids(kv_api, &entry.object).await {
+        return Ok(false);
+    }
+    Ok(true)
+}
+
+// Return true if all the share data has been removed.
+async fn is_all_share_data_has_been_removed(
+    kv_api: &(impl KVApi + ?Sized),
+    share_name: &ShareNameIdent,
+    share_id: u64,
+    share_meta: &ShareMeta,
+) -> Result<bool, MetaError> {
+    let res = get_share_or_err(kv_api, share_name, "").await;
+    if res.is_ok() {
+        return Ok(false);
+    }
+
+    let res = get_share_id_to_name_or_err(kv_api, share_id, "").await;
+    if res.is_ok() {
+        return Ok(false);
+    }
+
+    for account in share_meta.get_accounts() {
+        let share_account_key = ShareAccountNameIdent {
+            account: account.clone(),
+            share_id,
+        };
+        let res = get_share_account_meta_or_err(kv_api, &share_account_key, "").await;
+        if res.is_ok() {
+            return Ok(false);
+        }
+    }
+
+    if let Some(database) = &share_meta.database {
+        if if_share_object_data_exists(kv_api, database).await? {
+            return Ok(false);
+        }
+    }
+
+    for (_key, entry) in share_meta.entries.iter() {
+        if if_share_object_data_exists(kv_api, entry).await? {
+            return Ok(false);
+        }
+    }
+
+    for db_id in &share_meta.share_from_db_ids {
+        if !is_all_db_data_has_been_removed(kv_api, *db_id).await? {
+            return Ok(false);
+        }
+    }
+
+    Ok(true)
+}
 
 impl ShareApiTestSuite {
     /// Test ShareApi on a single node
@@ -888,6 +952,7 @@ impl ShareApiTestSuite {
         let share2 = "share2";
         let db_name = "db1";
         let tbl_name = "table1";
+        let share_id;
 
         let share_name1 = ShareNameIdent {
             tenant: tenant1.to_string(),
@@ -940,6 +1005,7 @@ impl ShareApiTestSuite {
 
             let res = mt.create_share(req).await;
             assert!(res.is_ok());
+            share_id = res.unwrap().share_id;
 
             let req = CreateShareReq {
                 if_not_exists: false,
@@ -1083,14 +1149,25 @@ impl ShareApiTestSuite {
                 share_name: share_name1.clone(),
             };
 
+            // get share meta
+            let share_id_key = ShareId { share_id };
+            let share_meta: ShareMeta = get_kv_data(mt.as_kv_api(), &share_id_key).await?;
+
             let res = mt.drop_share(req).await;
             assert!(res.is_ok());
 
-            // after drop the share, check that the db has been dropped
-            // check that DatabaseMeta has been removed
-            let res = is_db_exists(mt.as_kv_api(), db_id).await;
-            assert!(res.is_ok());
-            assert!(!res.unwrap());
+            // check if all the share data has been removed
+            let res = is_all_share_data_has_been_removed(
+                mt.as_kv_api(),
+                &share_name1,
+                share_id,
+                &share_meta,
+            )
+            .await?;
+            assert!(res);
+
+            let res = is_all_db_data_has_been_removed(mt.as_kv_api(), db_id).await?;
+            assert!(res);
 
             // get_grant_privileges_of_object of db and table again
             let req = GetObjectGrantPrivilegesReq {

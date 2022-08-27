@@ -420,22 +420,25 @@ pub fn get_share_database_id_and_privilege(
 }
 
 // Return true if all the database data has been removed.
-pub async fn is_db_exists(kv_api: &(impl KVApi + ?Sized), db_id: u64) -> Result<bool, MetaError> {
+pub async fn is_all_db_data_has_been_removed(
+    kv_api: &(impl KVApi + ?Sized),
+    db_id: u64,
+) -> Result<bool, MetaError> {
     let dbid = DatabaseId { db_id };
 
     let (db_meta_seq, db_meta): (_, Option<DatabaseMeta>) = get_struct_value(kv_api, &dbid).await?;
     if db_meta_seq != 0 || db_meta.is_some() {
-        return Ok(true);
+        return Ok(false);
     }
 
     let id_to_name = DatabaseIdToName { db_id };
     let (name_ident_seq, name_ident): (_, Option<DatabaseNameIdent>) =
         get_struct_value(kv_api, &id_to_name).await?;
     if name_ident_seq != 0 || name_ident.is_some() {
-        return Ok(true);
+        return Ok(false);
     }
 
-    Ok(false)
+    Ok(true)
 }
 
 pub async fn is_db_need_to_be_remove<F>(
@@ -489,4 +492,17 @@ where
     };
 
     Err(MetaError::SerdeError(AnyError::error("get_kv fail")))
+}
+
+pub async fn get_object_shared_by_share_ids(
+    kv_api: &(impl KVApi + ?Sized),
+    object: &ShareGrantObject,
+) -> Result<(u64, ObjectSharedByShareIds), MetaError> {
+    let (seq, share_ids): (u64, Option<ObjectSharedByShareIds>) =
+        get_struct_value(kv_api, object).await?;
+
+    match share_ids {
+        Some(share_ids) => Ok((seq, share_ids)),
+        None => Ok((0, ObjectSharedByShareIds::default())),
+    }
 }

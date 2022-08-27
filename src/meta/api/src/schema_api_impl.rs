@@ -2104,9 +2104,8 @@ async fn gc_dropped_db(
             let (removed, from_share) = is_db_need_to_be_remove(
                 kv_api,
                 db_id,
-                |db_meta| {
-                    return is_drop_time_out_of_retention_time(&db_meta.drop_on, &utc);
-                },
+                // drop db if out of retention time
+                |db_meta| is_drop_time_out_of_retention_time(&db_meta.drop_on, &utc),
                 &mut condition,
                 &mut if_then,
             )
