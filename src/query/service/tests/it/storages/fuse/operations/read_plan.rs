@@ -131,6 +131,7 @@ fn test_to_partitions() -> Result<()> {
         filters: vec![],
         limit: None,
         order_by: vec![],
+        prewhere: None,
     });
 
     let (stats, parts) = FuseTable::to_partitions(&blocks_metas, &column_leafs, push_down);

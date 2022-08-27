@@ -56,12 +56,14 @@ impl Debug for Projection {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Default)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct PrewhereInfo {
     /// column indices of the table used for prewhere
-    pub columns: Vec<usize>,
-    /// predicates for prewhere
-    pub predicates: Vec<Expression>,
+    pub need_columns: Projection,
+    /// remain_columns = scan.columns - need_columns
+    pub remain_columns: Projection,
+    /// filter for prewhere
+    pub filter: Expression,
 }
 
 /// Extras is a wrapper for push down items.

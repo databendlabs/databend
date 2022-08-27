@@ -26,15 +26,13 @@ use crate::sql::MetadataRef;
 
 pub struct WhereOptimizer {
     metadata: MetadataRef,
-    required_columns: ColumnSet,
     pattern: SExpr,
 }
 
 impl WhereOptimizer {
-    pub fn new(metadata: MetadataRef, required_columns: ColumnSet) -> Self {
+    pub fn new(metadata: MetadataRef) -> Self {
         Self {
             metadata,
-            required_columns,
             pattern: SExpr::create_unary(
                 PatternPlan {
                     plan_type: RelOp::Filter,
@@ -82,7 +80,7 @@ impl WhereOptimizer {
     }
 
     // analyze if the expression can be moved to prewhere
-    fn analyze(&self, expr: &Scalar) -> (bool, ColumnSet) {
+    fn analyze(&self, expr: &Scalar, columns_to_scan: &ColumnSet) -> (bool, ColumnSet) {
         let mut columns = ColumnSet::new();
 
         // columns in subqueries are not considered
@@ -93,7 +91,7 @@ impl WhereOptimizer {
         // 2. Do not move conditions involving all queried columns.
         // 3. Only current table columns are considered. (This condition is always true in current Pattern (Filter -> LogicalGet)).
         (
-            !columns.is_empty() && columns.len() < self.required_columns.len(),
+            !columns.is_empty() && columns.len() < columns_to_scan.len(),
             columns,
         )
     }
@@ -117,7 +115,7 @@ impl WhereOptimizer {
 
             // filter.predicates are already splited by AND
             for pred in filter.predicates.iter() {
-                let (viable, columns) = self.analyze(pred);
+                let (viable, columns) = self.analyze(pred, &get.columns);
                 if viable {
                     prewhere_pred.push(pred.clone());
                     prewhere_columns.extend(&columns);

@@ -95,10 +95,9 @@ impl HeuristicOptimizer {
         let pruner = prune_columns::ColumnPruner::new(self.metadata.clone());
         let require_columns: ColumnSet =
             self.bind_context.columns.iter().map(|c| c.index).collect();
-        pruner.prune_columns(&s_expr, require_columns.clone())?;
+        let s_expr = pruner.prune_columns(&s_expr, require_columns)?;
 
-        let where_opt =
-            where_optimizer::WhereOptimizer::new(self.metadata.clone(), require_columns);
+        let where_opt = where_optimizer::WhereOptimizer::new(self.metadata.clone());
         where_opt.optimize(s_expr)
     }
 

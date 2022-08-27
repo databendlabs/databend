@@ -140,6 +140,7 @@ fn test_format() {
                     push_down_predicates: None,
                     limit: None,
                     order_by: None,
+                    prewhere: None,
                 }
                 .into(),
             ),
@@ -151,6 +152,7 @@ fn test_format() {
                 push_down_predicates: None,
                 limit: None,
                 order_by: None,
+                prewhere: None,
             }
             .into(),
         ),
