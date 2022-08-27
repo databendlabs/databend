@@ -15,7 +15,7 @@
 use super::Scalar;
 use crate::sql::optimizer::ColumnSet;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Prewhere {
     pub columns: ColumnSet,
     pub predicates: Vec<Scalar>,
