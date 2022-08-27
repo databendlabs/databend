@@ -231,6 +231,7 @@ pub(crate) async fn query_handler(
 ) -> PoemResult<Json<QueryResponse>> {
     info!("receive http query: {:?}", req);
     let http_query_manager = HttpQueryManager::instance();
+    let sql = req.sql.clone();
     let query = http_query_manager.try_create_query(ctx, req).await;
 
     match query {
@@ -240,6 +241,14 @@ pub(crate) async fn query_handler(
                 .await
                 .map_err(|err| poem::Error::from_string(err.message(), StatusCode::NOT_FOUND))?;
             query.update_expire_time().await;
+            let (rows, next_page) = match &resp.data {
+                None => (0, None),
+                Some(p) => (p.page.data.num_rows(), p.next_page_no),
+            };
+            info!(
+                "initial response to http query_id={}, state={:?}, rows={}, next_page={:?}, sql='{}'",
+                &query.id, &resp.state, rows, next_page, sql
+            );
             Ok(Json(QueryResponse::from_internal(
                 query.id.to_string(),
                 resp,

@@ -646,3 +646,9 @@ select * from (SELECT number AS a FROM numbers(10)) x where exists (select 1::UI
 7
 8
 9
+
+statement query I
+select (select count() from numbers(10)) + (select count() from numbers(10));
+
+----
+20

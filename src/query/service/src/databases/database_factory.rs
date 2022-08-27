@@ -21,7 +21,6 @@ use common_meta_app::schema::DatabaseInfo;
 use parking_lot::RwLock;
 
 use crate::databases::default::DefaultDatabase;
-use crate::databases::github::GithubDatabase;
 use crate::databases::Database;
 use crate::databases::DatabaseContext;
 use crate::Config;
@@ -46,12 +45,9 @@ pub struct DatabaseFactory {
 }
 
 impl DatabaseFactory {
-    pub fn create(conf: Config) -> Self {
+    pub fn create(_: Config) -> Self {
         let mut creators: HashMap<String, Arc<dyn DatabaseCreator>> = Default::default();
         creators.insert("DEFAULT".to_string(), Arc::new(DefaultDatabase::try_create));
-        if conf.query.database_engine_github_enabled {
-            creators.insert("GITHUB".to_string(), Arc::new(GithubDatabase::try_create));
-        }
 
         DatabaseFactory {
             creators: RwLock::new(creators),

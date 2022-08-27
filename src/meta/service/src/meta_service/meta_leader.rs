@@ -28,6 +28,7 @@ use common_meta_types::MetaError;
 use common_meta_types::MetaRaftError;
 use common_meta_types::Node;
 use common_meta_types::NodeId;
+use common_meta_types::SeqV;
 use tracing::debug;
 use tracing::info;
 
@@ -123,6 +124,7 @@ impl<'a> MetaLeader<'a> {
                 membership.insert(node_id);
                 let ent = LogEntry {
                     txid: None,
+                    time_ms: None,
                     cmd: Cmd::AddNode {
                         node_id,
                         node: Node {
@@ -171,6 +173,7 @@ impl<'a> MetaLeader<'a> {
                 self.change_membership(membership).await?;
                 let ent = LogEntry {
                     txid: None,
+                    time_ms: None,
                     cmd: Cmd::RemoveNode { node_id },
                 };
                 self.write(ent).await?;
@@ -213,7 +216,10 @@ impl<'a> MetaLeader<'a> {
     /// If the leadership is lost during writing the log, it returns an UnknownError.
     /// TODO(xp): elaborate the UnknownError, e.g. LeaderLostError
     #[tracing::instrument(level = "debug", skip(self, entry))]
-    pub async fn write(&self, entry: LogEntry) -> Result<AppliedState, MetaError> {
+    pub async fn write(&self, mut entry: LogEntry) -> Result<AppliedState, MetaError> {
+        // Add consistent clock time to log entry.
+        entry.time_ms = Some(SeqV::<()>::now_ms());
+
         info!("write LogEntry: {:?}", entry);
         let write_rst = self.meta_node.raft.client_write(entry).await;
 

@@ -27,6 +27,7 @@ use common_fuse_meta::meta::TableSnapshot;
 use common_fuse_meta::meta::Versioned;
 use common_meta_app::schema::TableInfo;
 
+use crate::io::BlockCompactor;
 use crate::io::MetaReaders;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::mutation::BaseMutator;
@@ -38,12 +39,11 @@ use crate::TableMutator;
 
 #[derive(Clone)]
 pub struct ReclusterMutator {
-    pub(crate) base_mutator: BaseMutator,
-    pub selected_blocks: Vec<BlockMeta>,
-    pub(crate) level: i32,
-    pub(crate) row_per_block: usize,
+    base_mutator: BaseMutator,
+    selected_blocks: Vec<BlockMeta>,
+    level: i32,
+    block_compactor: BlockCompactor,
     threshold: f64,
-    table_info: TableInfo,
 }
 
 impl ReclusterMutator {
@@ -52,18 +52,28 @@ impl ReclusterMutator {
         location_generator: TableMetaLocationGenerator,
         base_snapshot: Arc<TableSnapshot>,
         threshold: f64,
-        table_info: TableInfo,
-        row_per_block: usize,
+        block_compactor: BlockCompactor,
     ) -> Result<Self> {
         let base_mutator = BaseMutator::try_create(ctx, location_generator, base_snapshot)?;
         Ok(Self {
             base_mutator,
             selected_blocks: Vec::new(),
             level: 0,
+            block_compactor,
             threshold,
-            table_info,
-            row_per_block,
         })
+    }
+
+    pub fn partitions_total(&self) -> usize {
+        self.base_mutator.base_snapshot.summary.block_count as usize
+    }
+
+    pub fn selected_blocks(&self) -> Vec<BlockMeta> {
+        self.selected_blocks.clone()
+    }
+
+    pub fn level(&self) -> i32 {
+        self.level
     }
 }
 
@@ -103,7 +113,8 @@ impl TableMutator for ReclusterMutator {
                 continue;
             }
 
-            let mut total_row_count = 0;
+            let mut total_rows = 0;
+            let mut total_bytes = 0;
             let mut points_map: BTreeMap<Vec<DataValue>, (Vec<usize>, Vec<usize>)> =
                 BTreeMap::new();
             for (i, (_, meta)) in block_metas.iter().enumerate() {
@@ -117,10 +128,15 @@ impl TableMutator for ReclusterMutator {
                     .and_modify(|v| v.1.push(i))
                     .or_insert((vec![], vec![i]));
 
-                total_row_count += meta.row_count;
+                total_rows += meta.row_count;
+                total_bytes += meta.block_size;
             }
 
-            if total_row_count <= self.row_per_block as u64 {
+            // If the statistics of blocks are too small, just merge them into one block.
+            if self
+                .block_compactor
+                .check_for_recluster(total_rows as usize, total_bytes as usize)
+            {
                 self.selected_blocks = block_metas
                     .into_iter()
                     .map(|(seg_idx, block_meta)| {
@@ -199,7 +215,7 @@ impl TableMutator for ReclusterMutator {
         Ok(false)
     }
 
-    async fn try_commit(&self, catalog_name: &str) -> Result<()> {
+    async fn try_commit(&self, catalog_name: &str, table_info: &TableInfo) -> Result<()> {
         let base_mutator = self.base_mutator.clone();
         let ctx = base_mutator.ctx.clone();
         let (mut segments, mut summary) = self.base_mutator.generate_segments().await?;
@@ -226,7 +242,7 @@ impl TableMutator for ReclusterMutator {
         FuseTable::commit_to_meta_server(
             ctx.as_ref(),
             catalog_name,
-            &self.table_info,
+            table_info,
             loc,
             &new_snapshot.summary,
         )

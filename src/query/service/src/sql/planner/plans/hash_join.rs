@@ -26,7 +26,7 @@ use crate::sql::plans::RelOp;
 use crate::sql::plans::Scalar;
 use crate::sql::IndexType;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct PhysicalHashJoin {
     pub build_keys: Vec<Scalar>,
     pub probe_keys: Vec<Scalar>,

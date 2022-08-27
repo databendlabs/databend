@@ -20,12 +20,18 @@ use super::rewrite::RuleNormalizeScalarFilter;
 use super::rewrite::RulePushDownFilterEvalScalar;
 use super::rewrite::RulePushDownFilterJoin;
 use super::rewrite::RulePushDownFilterProject;
+use super::transform::RuleCommuteJoin;
 use crate::sql::optimizer::rule::rewrite::RuleEliminateFilter;
 use crate::sql::optimizer::rule::rewrite::RuleEliminateProject;
 use crate::sql::optimizer::rule::rewrite::RuleMergeEvalScalar;
 use crate::sql::optimizer::rule::rewrite::RuleMergeFilter;
 use crate::sql::optimizer::rule::rewrite::RuleMergeProject;
 use crate::sql::optimizer::rule::rewrite::RulePushDownFilterScan;
+use crate::sql::optimizer::rule::rewrite::RulePushDownLimitOuterJoin;
+use crate::sql::optimizer::rule::rewrite::RulePushDownLimitProject;
+use crate::sql::optimizer::rule::rewrite::RulePushDownLimitScan;
+use crate::sql::optimizer::rule::rewrite::RulePushDownLimitSort;
+use crate::sql::optimizer::rule::rewrite::RulePushDownSortScan;
 use crate::sql::optimizer::rule::rewrite::RuleSplitAggregate;
 use crate::sql::optimizer::rule::rule_implement_get::RuleImplementGet;
 use crate::sql::optimizer::rule::rule_implement_hash_join::RuleImplementHashJoin;
@@ -48,6 +54,11 @@ impl RuleFactory {
             RuleID::PushDownFilterEvalScalar => Ok(Box::new(RulePushDownFilterEvalScalar::new())),
             RuleID::PushDownFilterJoin => Ok(Box::new(RulePushDownFilterJoin::new())),
             RuleID::PushDownFilterScan => Ok(Box::new(RulePushDownFilterScan::new())),
+            RuleID::PushDownLimitProject => Ok(Box::new(RulePushDownLimitProject::new())),
+            RuleID::PushDownLimitScan => Ok(Box::new(RulePushDownLimitScan::new())),
+            RuleID::PushDownSortScan => Ok(Box::new(RulePushDownSortScan::new())),
+            RuleID::PushDownLimitOuterJoin => Ok(Box::new(RulePushDownLimitOuterJoin::new())),
+            RuleID::PushDownLimitSort => Ok(Box::new(RulePushDownLimitSort::new())),
             RuleID::EliminateFilter => Ok(Box::new(RuleEliminateFilter::new())),
             RuleID::EliminateProject => Ok(Box::new(RuleEliminateProject::new())),
             RuleID::MergeProject => Ok(Box::new(RuleMergeProject::new())),
@@ -58,6 +69,7 @@ impl RuleFactory {
             RuleID::NormalizeDisjunctiveFilter => {
                 Ok(Box::new(RuleNormalizeDisjunctiveFilter::new()))
             }
+            RuleID::CommuteJoin => Ok(Box::new(RuleCommuteJoin::new())),
         }
     }
 }

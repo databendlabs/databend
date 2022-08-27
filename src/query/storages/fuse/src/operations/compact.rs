@@ -18,7 +18,6 @@ use common_exception::Result;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::Pipeline;
 use common_pipeline_core::SinkPipeBuilder;
-use common_pipeline_transforms::processors::transforms::BlockCompactor;
 use common_pipeline_transforms::processors::transforms::TransformCompact;
 use common_planners::ReadDataSourcePlan;
 use common_planners::SourceInfo;
@@ -31,11 +30,7 @@ use crate::Table;
 use crate::TableContext;
 use crate::TableMutator;
 use crate::DEFAULT_BLOCK_PER_SEGMENT;
-use crate::DEFAULT_BLOCK_SIZE_IN_MEM_SIZE_THRESHOLD;
-use crate::DEFAULT_ROW_PER_BLOCK;
-use crate::FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD;
 use crate::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
-use crate::FUSE_OPT_KEY_ROW_PER_BLOCK;
 
 impl FuseTable {
     pub(crate) async fn do_compact(
@@ -56,17 +51,28 @@ impl FuseTable {
             return Ok(None);
         }
 
-        let mut mutator = CompactMutator::try_create(ctx.clone(), base_snapshot, self)?;
+        let block_compactor = self.get_block_compactor();
+        let block_per_seg =
+            self.get_option(FUSE_OPT_KEY_BLOCK_PER_SEGMENT, DEFAULT_BLOCK_PER_SEGMENT);
+
+        let mut mutator = CompactMutator::try_create(
+            ctx.clone(),
+            base_snapshot,
+            block_compactor.clone(),
+            self.meta_location_generator().clone(),
+            block_per_seg,
+            self.cluster_key_meta.is_some(),
+        )?;
         let need_compact = mutator.blocks_select().await?;
         if !need_compact {
             return Ok(None);
         }
 
-        let partitions_total = mutator.base_snapshot.summary.block_count as usize;
+        let partitions_total = mutator.partitions_total();
         let (statistics, parts) = self.read_partitions_with_metas(
             ctx.clone(),
             None,
-            mutator.selected_blocks.clone(),
+            mutator.selected_blocks(),
             partitions_total,
         )?;
         let table_info = self.get_table_info();
@@ -85,21 +91,11 @@ impl FuseTable {
         ctx.try_set_partitions(plan.parts.clone())?;
         self.do_read2(ctx.clone(), &plan, pipeline)?;
 
-        let max_rows_per_block = self.get_option(FUSE_OPT_KEY_ROW_PER_BLOCK, DEFAULT_ROW_PER_BLOCK);
-        let min_rows_per_block = (max_rows_per_block as f64 * 0.8) as usize;
-        let max_bytes_per_block = self.get_option(
-            FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD,
-            DEFAULT_BLOCK_SIZE_IN_MEM_SIZE_THRESHOLD,
-        );
-
-        let block_per_seg =
-            self.get_option(FUSE_OPT_KEY_BLOCK_PER_SEGMENT, DEFAULT_BLOCK_PER_SEGMENT);
-
         pipeline.add_transform(|transform_input_port, transform_output_port| {
             TransformCompact::try_create(
                 transform_input_port,
                 transform_output_port,
-                BlockCompactor::new(max_rows_per_block, min_rows_per_block, max_bytes_per_block),
+                block_compactor.to_compactor(),
             )
         })?;
 
@@ -112,7 +108,7 @@ impl FuseTable {
                     input_port,
                     ctx.clone(),
                     block_per_seg,
-                    mutator.data_accessor.clone(),
+                    mutator.get_storage_operator(),
                     self.meta_location_generator().clone(),
                     ClusterStatsGenerator::default(),
                 )?,

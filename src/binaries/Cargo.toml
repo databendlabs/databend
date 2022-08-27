@@ -57,7 +57,7 @@ tonic = "0.7.2"
 tracing = "0.1.35"
 url = "2.2.2"
 
-openraft = { git = "https://github.com/drmingdrmer/openraft", rev = "v0.7.2-alpha.1" }
+openraft = { git = "https://github.com/drmingdrmer/openraft", rev = "v0.7.2-alpha.2" }
 
 [[bin]]
 name = "databend-meta"

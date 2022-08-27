@@ -74,7 +74,9 @@ impl OptimizeTableInterpreter {
         drop(executor);
 
         let catalog_name = ctx.get_current_catalog();
-        mutator.try_commit(&catalog_name).await?;
+        mutator
+            .try_commit(&catalog_name, table.get_table_info())
+            .await?;
 
         Ok(false)
     }
@@ -95,7 +97,9 @@ impl OptimizeTableInterpreter {
             drop(executor);
 
             let catalog_name = ctx.get_current_catalog();
-            mutator.try_commit(&catalog_name).await?;
+            mutator
+                .try_commit(&catalog_name, table.get_table_info())
+                .await?;
         }
         Ok(())
     }

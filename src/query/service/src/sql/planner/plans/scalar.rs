@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::hash::Hash;
+
 use common_ast::ast::BinaryOperator;
 use common_datavalues::BooleanType;
 use common_datavalues::DataTypeImpl;
@@ -41,7 +43,7 @@ pub trait ScalarExpr {
     // fn contains_subquery(&self) -> bool;
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Scalar {
     BoundColumnRef(BoundColumnRef),
     ConstantExpr(ConstantExpr),
@@ -267,7 +269,7 @@ impl TryFrom<Scalar> for SubqueryExpr {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct BoundColumnRef {
     pub column: ColumnBinding,
 }
@@ -286,7 +288,7 @@ impl ScalarExpr for BoundColumnRef {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct ConstantExpr {
     pub value: DataValue,
 
@@ -307,7 +309,7 @@ impl ScalarExpr for ConstantExpr {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct AndExpr {
     pub left: Box<Scalar>,
     pub right: Box<Scalar>,
@@ -330,7 +332,7 @@ impl ScalarExpr for AndExpr {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct OrExpr {
     pub left: Box<Scalar>,
     pub right: Box<Scalar>,
@@ -353,7 +355,7 @@ impl ScalarExpr for OrExpr {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub enum ComparisonOp {
     Equal,
     NotEqual,
@@ -404,7 +406,7 @@ impl<'a> TryFrom<&'a BinaryOperator> for ComparisonOp {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct ComparisonExpr {
     pub op: ComparisonOp,
     pub left: Box<Scalar>,
@@ -433,7 +435,7 @@ impl ScalarExpr for ComparisonExpr {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct AggregateFunction {
     pub display_name: String,
 
@@ -462,7 +464,7 @@ impl ScalarExpr for AggregateFunction {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct FunctionCall {
     pub arguments: Vec<Scalar>,
 
@@ -492,7 +494,7 @@ impl ScalarExpr for FunctionCall {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct CastExpr {
     pub argument: Box<Scalar>,
     pub from_type: Box<DataTypeImpl>,
@@ -513,7 +515,7 @@ impl ScalarExpr for CastExpr {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub enum SubqueryType {
     Any,
     All,
@@ -536,6 +538,20 @@ pub struct SubqueryExpr {
     pub outer_columns: ColumnSet,
 }
 
+impl PartialEq for SubqueryExpr {
+    fn eq(&self, _other: &Self) -> bool {
+        false
+    }
+}
+
+impl Eq for SubqueryExpr {}
+
+impl Hash for SubqueryExpr {
+    fn hash<H: std::hash::Hasher>(&self, _state: &mut H) {
+        unreachable!()
+    }
+}
+
 impl ScalarExpr for SubqueryExpr {
     fn data_type(&self) -> DataTypeImpl {
         match &self.typ {
@@ -553,12 +569,6 @@ impl ScalarExpr for SubqueryExpr {
     }
 
     fn is_deterministic(&self) -> bool {
-        false
-    }
-}
-
-impl PartialEq for SubqueryExpr {
-    fn eq(&self, _other: &Self) -> bool {
         false
     }
 }

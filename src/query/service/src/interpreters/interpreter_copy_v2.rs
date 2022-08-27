@@ -186,7 +186,7 @@ impl CopyInterpreterV2 {
         let select_interpreter = SelectInterpreterV2::try_create(
             self.ctx.clone(),
             *(bind_context.clone()),
-            s_expr.clone(),
+            *s_expr.clone(),
             metadata.clone(),
         )?;
 

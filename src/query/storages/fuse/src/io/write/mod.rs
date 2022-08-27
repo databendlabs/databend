@@ -17,7 +17,6 @@ mod block_writer;
 mod meta_writer;
 mod segment_writer;
 
-// for testing only
 pub use block_compactor::BlockCompactor;
 pub use block_writer::write_block;
 pub use block_writer::write_data;

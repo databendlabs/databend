@@ -12,10 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::sql::optimizer::RuleID;
 use crate::sql::optimizer::RuleSet;
 
 pub fn get_explore_rule_set() -> RuleSet {
-    RuleSet::create_with_ids(vec![]).unwrap()
+    RuleSet::create_with_ids(vec![RuleID::CommuteJoin]).unwrap()
 }
 
 #[cfg(test)]

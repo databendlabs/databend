@@ -991,6 +991,7 @@ dependencies = [
  "common-functions",
  "common-meta-app",
  "common-meta-types",
+ "criterion",
  "fast-float",
  "goldenfile",
  "itertools",
@@ -1851,7 +1852,6 @@ dependencies = [
  "futures-util",
  "itertools",
  "num_cpus",
- "octocrab",
  "once_cell",
  "opendal",
  "parking_lot 0.12.1",
@@ -4364,9 +4364,9 @@ dependencies = [
 
 [[package]]
 name = "lz4-sys"
-version = "1.9.3"
+version = "1.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d7be8908e2ed6f31c02db8a9fa962f03e36c53fbfde437363eae3306b85d7e17"
+checksum = "57d27b317e207b10f69f5e75494119e391a96f48861ae870d1da6edac98ca900"
 dependencies = [
  "cc",
  "libc",
@@ -5046,7 +5046,7 @@ dependencies = [
 [[package]]
 name = "openraft"
 version = "0.7.2"
-source = "git+https://github.com/drmingdrmer/openraft?rev=v0.7.2-alpha.1#03324cbf6ccd1dbe6453ec172a47a0f5d03bf3c7"
+source = "git+https://github.com/drmingdrmer/openraft?rev=v0.7.2-alpha.2#42f6ff09f7adf179388d536257f1ee0bab7afbbc"
 dependencies = [
  "anyerror",
  "anyhow",

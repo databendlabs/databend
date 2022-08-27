@@ -47,8 +47,8 @@ impl Rule for RuleImplementGet {
         self.id
     }
 
-    fn apply(&self, expression: &SExpr, state: &mut TransformState) -> Result<()> {
-        let plan = expression.plan().clone();
+    fn apply(&self, s_expr: &SExpr, state: &mut TransformState) -> Result<()> {
+        let plan = s_expr.plan().clone();
         let logical_get: LogicalGet = plan.try_into()?;
 
         let result = SExpr::create_leaf(
@@ -56,6 +56,8 @@ impl Rule for RuleImplementGet {
                 table_index: logical_get.table_index,
                 columns: logical_get.columns,
                 push_down_predicates: logical_get.push_down_predicates,
+                limit: logical_get.limit,
+                order_by: logical_get.order_by,
             }
             .into(),
         );

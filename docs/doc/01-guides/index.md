@@ -71,7 +71,6 @@ These tutorials are intended to help you get started with Databend:
 
 ## Use Cases
 
-* [How to Analyze Github Repository with Databend](../90-learn/00-analyze-github-repo-with-databend.md)
 * [How to Analyze Nginx Access Logs with Databend](../90-learn/02-analyze-nginx-logs-with-databend-and-vector.md)
 * [How to Do User Retention Analysis with Databend](../90-learn/03-analyze-user-retention-with-databend.md)
 * [How to Do Conversion Funnel Analysis with Databend](../90-learn/04-analyze-funnel-with-databend.md)

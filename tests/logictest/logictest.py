@@ -365,7 +365,7 @@ class SuiteRunner(object):
                              message=str(statement),
                              errorType="statement ok get error in response")
 
-    def assert_query_equal(self, f, resultset, statement, with_regex = False):
+    def assert_query_equal(self, f, resultset, statement, with_regex=False):
         # use join after split instead of strip
         compare_f = "".join(f.split())
         compare_result = "".join(resultset[2].split())

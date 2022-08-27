@@ -411,8 +411,6 @@ pub enum TokenKind {
     FUNCTIONS,
     #[token("FUSE", ignore(ascii_case))]
     FUSE,
-    #[token("GITHUB", ignore(ascii_case))]
-    GITHUB,
     #[token("GLOBAL", ignore(ascii_case))]
     GLOBAL,
     #[token("GRAPH", ignore(ascii_case))]

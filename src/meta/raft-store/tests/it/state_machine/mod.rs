@@ -59,6 +59,7 @@ async fn test_state_machine_apply_non_dup_incr_seq() -> anyhow::Result<()> {
                     },
                     &t,
                     None,
+                    0,
                 )
                 .unwrap())
         })?;
@@ -75,6 +76,7 @@ async fn test_state_machine_apply_non_dup_incr_seq() -> anyhow::Result<()> {
                     },
                     &t,
                     None,
+                    0,
                 )
                 .unwrap())
         })?;
@@ -100,6 +102,7 @@ async fn test_state_machine_apply_incr_seq() -> anyhow::Result<()> {
                 log_id: LogId { term: 0, index: 5 },
                 payload: EntryPayload::Normal(LogEntry {
                     txid: txid.clone(),
+                    time_ms: None,
                     cmd: Cmd::IncrSeq { key: k.to_string() },
                 }),
             })
@@ -217,6 +220,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_upsert_get() -> anyhow::Res
                     },
                     &t,
                     None,
+                    SeqV::<()>::now_ms(),
                 )
                 .unwrap())
         })?;
@@ -282,6 +286,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_value_meta() -> anyhow::Res
                 },
                 &t,
                 None,
+                0,
             )
             .unwrap())
     })?;
@@ -308,6 +313,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_value_meta() -> anyhow::Res
                 },
                 &t,
                 None,
+                0,
             )
             .unwrap())
     })?;
@@ -326,6 +332,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_value_meta() -> anyhow::Res
                 },
                 &t,
                 None,
+                0,
             )
             .unwrap())
     })?;
@@ -406,6 +413,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_delete() -> anyhow::Result<
                     },
                     &t,
                     None,
+                    0,
                 )
                 .unwrap())
         })?;
@@ -422,6 +430,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_delete() -> anyhow::Result<
                     },
                     &t,
                     None,
+                    0,
                 )
                 .unwrap())
         })?;
