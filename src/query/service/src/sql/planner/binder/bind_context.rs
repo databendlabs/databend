@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::hash::Hash;
 use std::sync::Arc;
 
 use common_ast::ast::TableAlias;
@@ -33,7 +34,7 @@ use crate::sql::optimizer::SExpr;
 use crate::sql::plans::Scalar;
 use crate::sql::NameResolutionContext;
 
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, Debug)]
 pub struct ColumnBinding {
     /// Database name of this `ColumnBinding` in current context
     pub database_name: Option<String>,
@@ -50,6 +51,20 @@ pub struct ColumnBinding {
     /// The result should only contain one `a` column.
     /// So we need make `t.a` or `t1.a` invisible in unqualified wildcard.
     pub visible_in_unqualified_wildcard: bool,
+}
+
+impl PartialEq for ColumnBinding {
+    fn eq(&self, other: &Self) -> bool {
+        self.index == other.index
+    }
+}
+
+impl Eq for ColumnBinding {}
+
+impl Hash for ColumnBinding {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.index.hash(state);
+    }
 }
 
 #[derive(Debug, Clone)]

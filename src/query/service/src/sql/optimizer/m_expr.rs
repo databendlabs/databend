@@ -12,8 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_exception::ErrorCode;
 use common_exception::Result;
 
+use super::group::Group;
 use crate::sql::optimizer::memo::Memo;
 use crate::sql::optimizer::pattern_extractor::PatternExtractor;
 use crate::sql::optimizer::rule::RulePtr;
@@ -27,17 +29,27 @@ use crate::sql::IndexType;
 /// expressions inside `Memo`.
 #[derive(Clone)]
 pub struct MExpr {
-    group_index: IndexType,
-    plan: RelOperator,
-    children: Vec<IndexType>,
+    // index of current `Group`
+    pub group_index: IndexType,
+    // index of current `MExpr` within a `Group`
+    pub index: IndexType,
+
+    pub plan: RelOperator,
+    pub children: Vec<IndexType>,
 }
 
 impl MExpr {
-    pub fn create(group_index: IndexType, plan: RelOperator, children: Vec<IndexType>) -> Self {
+    pub fn create(
+        group_index: IndexType,
+        index: IndexType,
+        plan: RelOperator,
+        children: Vec<IndexType>,
+    ) -> Self {
         MExpr {
             group_index,
             plan,
             children,
+            index,
         }
     }
 
@@ -45,16 +57,15 @@ impl MExpr {
         self.children.len()
     }
 
-    pub fn group_index(&self) -> IndexType {
-        self.group_index
-    }
-
-    pub fn plan(&self) -> &RelOperator {
-        &self.plan
-    }
-
-    pub fn children(&self) -> &Vec<IndexType> {
-        &self.children
+    pub fn child_group<'a>(&'a self, memo: &'a Memo, child_index: usize) -> Result<&'a Group> {
+        let group_index = self.children.get(child_index).ok_or_else(|| {
+            ErrorCode::LogicalError(format!(
+                "child_index {} is out of bound {}",
+                child_index,
+                self.children.len()
+            ))
+        })?;
+        memo.group(*group_index)
     }
 
     /// Doesn't check if children are matched
@@ -77,7 +88,7 @@ impl MExpr {
         transform_state: &mut TransformState,
     ) -> Result<()> {
         let mut extractor = PatternExtractor::create();
-        let exprs = extractor.extract(memo, self, rule.pattern());
+        let exprs = extractor.extract(memo, self, rule.pattern())?;
 
         for expr in exprs.iter() {
             rule.apply(expr, transform_state)?;

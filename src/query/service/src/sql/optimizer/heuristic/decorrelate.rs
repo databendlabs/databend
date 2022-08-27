@@ -457,6 +457,7 @@ impl SubqueryRewriter {
                     push_down_predicates: None,
                     limit: None,
                     order_by: None,
+                    statistics: None,
                 }
                 .into(),
             );

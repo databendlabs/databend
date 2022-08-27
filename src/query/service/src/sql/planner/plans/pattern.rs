@@ -17,7 +17,7 @@ use crate::sql::plans::Operator;
 use crate::sql::plans::PhysicalOperator;
 use crate::sql::plans::RelOp;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct PatternPlan {
     pub plan_type: RelOp,
 }

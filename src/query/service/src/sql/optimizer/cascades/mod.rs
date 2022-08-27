@@ -15,76 +15,90 @@
 mod explore_rules;
 mod implement_rules;
 
+use std::collections::hash_map::Entry;
+use std::collections::HashMap;
+
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+use super::cost::Cost;
+use super::cost::CostContext;
+use super::cost::CostModel;
+use super::cost::DefaultCostModel;
 use crate::sql::optimizer::cascades::explore_rules::get_explore_rule_set;
 use crate::sql::optimizer::cascades::implement_rules::get_implement_rule_set;
-use crate::sql::optimizer::group::Group;
+use crate::sql::optimizer::format::display_memo;
 use crate::sql::optimizer::m_expr::MExpr;
 use crate::sql::optimizer::memo::Memo;
-use crate::sql::optimizer::rule::RulePtr;
 use crate::sql::optimizer::rule::RuleSet;
 use crate::sql::optimizer::rule::TransformState;
-use crate::sql::optimizer::RequiredProperty;
 use crate::sql::optimizer::SExpr;
 use crate::sql::plans::Operator;
 use crate::sql::IndexType;
 
 /// A cascades-style search engine to enumerate possible alternations of a relational expression and
 /// find the optimal one.
-///
-/// NOTICE: we don't support cost-based optimization and lower bound searching for now.
-#[allow(dead_code)]
 pub struct CascadesOptimizer {
-    // optimize_context: OptimizeContext,
     memo: Memo,
     explore_rules: RuleSet,
     implement_rules: RuleSet,
+
+    cost_model: Box<dyn CostModel>,
+
+    /// group index -> best cost context
+    best_cost_map: HashMap<IndexType, CostContext>,
 }
 
 impl CascadesOptimizer {
-    #[allow(dead_code)]
     pub fn create() -> Self {
         CascadesOptimizer {
             memo: Memo::create(),
             explore_rules: get_explore_rule_set(),
             implement_rules: get_implement_rule_set(),
+            cost_model: Box::new(DefaultCostModel),
+            best_cost_map: HashMap::new(),
         }
     }
 
-    #[allow(dead_code)]
     fn init(&mut self, expression: SExpr) -> Result<()> {
         self.memo.init(expression)?;
 
         Ok(())
     }
 
-    #[allow(dead_code)]
-    pub fn optimize(&mut self, expression: SExpr) -> Result<SExpr> {
-        self.init(expression)?;
+    pub fn optimize(mut self, s_expr: SExpr) -> Result<SExpr> {
+        self.init(s_expr)?;
 
-        self.explore_group(self.memo.root().unwrap().group_index())?;
+        let root_index = self
+            .memo
+            .root()
+            .ok_or_else(|| {
+                ErrorCode::LogicalError("Root group cannot be None after initialization")
+            })?
+            .group_index;
 
-        self.implement_group(self.memo.root().unwrap().group_index())?;
+        self.explore_group(root_index)?;
 
-        self.find_optimal_plan()
+        self.implement_group(root_index)?;
+
+        self.optimize_group(root_index)?;
+
+        tracing::debug!("Memo: \n{}", display_memo(&self.memo));
+
+        self.find_optimal_plan(root_index)
     }
 
-    #[allow(dead_code)]
     fn explore_group(&mut self, group_index: IndexType) -> Result<()> {
-        let group = self.memo.group(group_index);
-        let expressions: Vec<MExpr> = group.iter().cloned().collect();
-        for m_expr in expressions {
-            self.explore_expr(m_expr)?;
+        let group = self.memo.group(group_index)?;
+        for m_expr in group.m_exprs.clone() {
+            self.explore_expr(&m_expr)?;
         }
 
         Ok(())
     }
 
-    #[allow(dead_code)]
-    fn explore_expr(&mut self, m_expr: MExpr) -> Result<()> {
-        for child in m_expr.children() {
+    fn explore_expr(&mut self, m_expr: &MExpr) -> Result<()> {
+        for child in m_expr.children.iter() {
             self.explore_group(*child)?;
         }
 
@@ -92,25 +106,22 @@ impl CascadesOptimizer {
         for rule in self.explore_rules.iter() {
             m_expr.apply_rule(&self.memo, rule, &mut state)?;
         }
-        self.insert_from_transform_state(m_expr.group_index(), state)?;
+        self.insert_from_transform_state(m_expr.group_index, state)?;
 
         Ok(())
     }
 
-    #[allow(dead_code)]
     fn implement_group(&mut self, group_index: IndexType) -> Result<()> {
-        let group = self.memo.group(group_index);
-        let expressions: Vec<MExpr> = group.iter().cloned().collect();
-        for m_expr in expressions {
-            self.implement_expr(m_expr)?;
+        let group = self.memo.group(group_index)?;
+        for m_expr in group.m_exprs.clone() {
+            self.implement_expr(&m_expr)?;
         }
 
         Ok(())
     }
 
-    #[allow(dead_code)]
-    fn implement_expr(&mut self, m_expr: MExpr) -> Result<()> {
-        for child in m_expr.children() {
+    fn implement_expr(&mut self, m_expr: &MExpr) -> Result<()> {
+        for child in m_expr.children.iter() {
             self.implement_group(*child)?;
         }
 
@@ -118,12 +129,11 @@ impl CascadesOptimizer {
         for rule in self.implement_rules.iter() {
             m_expr.apply_rule(&self.memo, rule, &mut state)?;
         }
-        self.insert_from_transform_state(m_expr.group_index(), state)?;
+        self.insert_from_transform_state(m_expr.group_index, state)?;
 
         Ok(())
     }
 
-    #[allow(dead_code)]
     fn insert_from_transform_state(
         &mut self,
         group_index: IndexType,
@@ -136,68 +146,78 @@ impl CascadesOptimizer {
         Ok(())
     }
 
-    #[allow(dead_code)]
     fn insert_expression(&mut self, group_index: IndexType, expression: &SExpr) -> Result<()> {
         self.memo.insert(Some(group_index), expression.clone())?;
 
         Ok(())
     }
 
-    #[allow(dead_code)]
-    fn apply_rule(&self, m_expr: &MExpr, rule: &RulePtr, state: &mut TransformState) -> Result<()> {
-        m_expr.apply_rule(&self.memo, rule, state)?;
+    fn find_optimal_plan(&self, group_index: IndexType) -> Result<SExpr> {
+        let group = self.memo.group(group_index)?;
+        let cost_context = self.best_cost_map.get(&group_index).ok_or_else(|| {
+            ErrorCode::LogicalError(format!("Cannot find CostContext of group: {group_index}"))
+        })?;
+
+        let m_expr = group.m_exprs.get(cost_context.expr_index).ok_or_else(|| {
+            ErrorCode::LogicalError(format!(
+                "Cannot find best expression of group: {group_index}"
+            ))
+        })?;
+
+        let children = m_expr
+            .children
+            .iter()
+            .map(|index| self.find_optimal_plan(*index))
+            .collect::<Result<Vec<_>>>()?;
+
+        let result = SExpr::create(m_expr.plan.clone(), children, None);
+
+        Ok(result)
+    }
+
+    fn optimize_group(&mut self, group_index: IndexType) -> Result<()> {
+        let group = self.memo.group(group_index)?.clone();
+        for m_expr in group.m_exprs.iter() {
+            if m_expr.plan.is_physical() {
+                self.optimize_m_expr(m_expr)?;
+            }
+        }
 
         Ok(())
     }
 
-    #[allow(dead_code)]
-    fn find_optimal_plan(&self) -> Result<SExpr> {
-        let root_group = self.memo.root().unwrap();
+    fn optimize_m_expr(&mut self, m_expr: &MExpr) -> Result<()> {
+        let mut cost = Cost::from(0);
+        for child in m_expr.children.iter() {
+            self.optimize_group(*child)?;
+            let cost_context = self.best_cost_map.get(child).ok_or_else(|| {
+                ErrorCode::LogicalError(format!("Cannot find CostContext of group: {child}"))
+            })?;
 
-        let required_prop = RequiredProperty::default();
+            cost = cost + cost_context.cost;
+        }
 
-        self.optimize_group(root_group, &required_prop)
-    }
+        let op_cost = self.cost_model.compute_cost(&self.memo, m_expr)?;
+        cost = cost + op_cost;
 
-    /// We don't have cost mechanism for evaluate cost of plans, so we just extract
-    /// first physical plan in a group that satisfies given RequiredProperty.
-    #[allow(dead_code)]
-    fn optimize_group(&self, group: &Group, required_prop: &RequiredProperty) -> Result<SExpr> {
-        for m_expr in group.iter() {
-            if m_expr.plan().is_physical() {
-                let plan = m_expr.plan();
+        let cost_context = CostContext {
+            cost,
+            group_index: m_expr.group_index,
+            expr_index: m_expr.index,
+        };
 
-                // TODO: Check properties
-                // let physical = plan.as_physical_plan().unwrap();
-                // let relational_prop = group.relational_prop().unwrap();
-                // let dummy_physical_prop = PhysicalProperty::default();
-                // let required_prop = physical.compute_required_prop(required_prop);
-                //
-                // if !required_prop.provided_by(relational_prop, &dummy_physical_prop) {
-                //     continue;
-                // }
-
-                let children = self.optimize_m_expr(m_expr, required_prop)?;
-                let result = SExpr::create(plan.clone(), children, None);
-                return Ok(result);
+        match self.best_cost_map.entry(m_expr.group_index) {
+            Entry::Vacant(entry) => {
+                entry.insert(cost_context);
+            }
+            Entry::Occupied(mut entry) => {
+                // Replace the cost context of the group if current context is lower
+                if cost < entry.get().cost {
+                    entry.insert(cost_context);
+                }
             }
         }
 
-        Err(ErrorCode::LogicalError("Cannot find an appropriate plan"))
-    }
-
-    #[allow(dead_code)]
-    fn optimize_m_expr(
-        &self,
-        m_expr: &MExpr,
-        required_prop: &RequiredProperty,
-    ) -> Result<Vec<SExpr>> {
-        let mut children = vec![];
-        for child in m_expr.children() {
-            let group = self.memo.group(*child);
-            children.push(self.optimize_group(group, required_prop)?);
-        }
-
-        Ok(children)
+        Ok(())
     }
 }

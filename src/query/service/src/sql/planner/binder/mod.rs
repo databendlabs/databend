@@ -111,7 +111,7 @@ impl<'a> Binder {
             Statement::Query(query) => {
                 let (s_expr, bind_context) = self.bind_query(bind_context, query).await?;
                 Plan::Query {
-                    s_expr,
+                    s_expr: Box::new(s_expr),
                     metadata: self.metadata.clone(),
                     bind_context: Box::new(bind_context),
                     rewrite_kind: None,

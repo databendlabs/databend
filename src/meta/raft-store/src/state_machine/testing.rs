@@ -37,6 +37,7 @@ pub fn snapshot_logs() -> (Vec<Entry<LogEntry>>, Vec<String>) {
             log_id: LogId { term: 1, index: 4 },
             payload: EntryPayload::Normal(LogEntry {
                 txid: None,
+                time_ms: None,
                 cmd: Cmd::UpsertKV {
                     key: "a".to_string(),
                     seq: MatchSeq::Any,
@@ -57,6 +58,7 @@ pub fn snapshot_logs() -> (Vec<Entry<LogEntry>>, Vec<String>) {
             log_id: LogId { term: 1, index: 8 },
             payload: EntryPayload::Normal(LogEntry {
                 txid: None,
+                time_ms: None,
                 cmd: Cmd::IncrSeq {
                     key: "c".to_string(),
                 },
@@ -66,6 +68,7 @@ pub fn snapshot_logs() -> (Vec<Entry<LogEntry>>, Vec<String>) {
             log_id: LogId { term: 1, index: 9 },
             payload: EntryPayload::Normal(LogEntry {
                 txid: None,
+                time_ms: None,
                 cmd: Cmd::AddNode {
                     node_id: 5,
                     node: Default::default(),

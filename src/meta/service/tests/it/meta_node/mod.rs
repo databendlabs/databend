@@ -13,4 +13,5 @@
 // limitations under the License.
 
 pub(crate) mod meta_node_all;
+pub(crate) mod meta_node_expire;
 pub(crate) mod meta_node_kv_api;

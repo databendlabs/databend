@@ -26,7 +26,7 @@ use crate::sql::plans::PhysicalOperator;
 use crate::sql::plans::RelOp;
 use crate::sql::plans::ScalarItem;
 
-#[derive(Clone, Debug, PartialEq, Eq, Copy)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Copy)]
 pub enum AggregateMode {
     Partial,
     Final,
@@ -36,7 +36,7 @@ pub enum AggregateMode {
     Initial,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Aggregate {
     pub mode: AggregateMode,
     // group by scalar expressions, such as: group by col1 asc, col2 desc;
@@ -144,9 +144,19 @@ impl LogicalOperator for Aggregate {
             .cloned()
             .collect();
 
+        // Derive cardinality. We can not estimate the cardinality of an aggregate with group by, until
+        // we have information about distribution of group keys. So we pass through the cardinality.
+        let cardinality = if self.group_items.is_empty() {
+            // Scalar aggregation
+            1.0
+        } else {
+            input_prop.cardinality
+        };
+
         Ok(RelationalProperty {
             output_columns,
             outer_columns,
+            cardinality,
         })
     }
 }

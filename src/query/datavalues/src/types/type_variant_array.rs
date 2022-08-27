@@ -25,7 +25,7 @@ use crate::prelude::*;
 use crate::serializations::TypeSerializerImpl;
 use crate::serializations::VariantSerializer;
 
-#[derive(Default, Clone, serde::Deserialize, serde::Serialize)]
+#[derive(Default, Clone, Hash, serde::Deserialize, serde::Serialize)]
 pub struct VariantArrayType {}
 
 impl VariantArrayType {
