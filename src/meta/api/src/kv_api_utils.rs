@@ -15,6 +15,9 @@
 use std::fmt::Display;
 
 use anyerror::AnyError;
+use common_meta_app::schema::DatabaseId;
+use common_meta_app::schema::DatabaseIdToName;
+use common_meta_app::schema::DatabaseMeta;
 use common_meta_app::schema::DatabaseNameIdent;
 use common_meta_app::schema::TableNameIdent;
 use common_meta_app::share::*;
@@ -41,6 +44,7 @@ use common_meta_types::UpsertKVReq;
 use common_proto_conv::FromToProto;
 use enumflags2::BitFlags;
 use tracing::debug;
+use ConditionResult::Eq;
 
 use crate::Id;
 use crate::KVApi;
@@ -196,7 +200,7 @@ pub fn meta_encode_err<E: std::error::Error + 'static>(e: E) -> MetaError {
 }
 
 pub async fn send_txn(
-    kv_api: &impl KVApi,
+    kv_api: &(impl KVApi + ?Sized),
     txn_req: TxnRequest,
 ) -> Result<(bool, Vec<TxnOpResponse>), MetaError> {
     let tx_reply = kv_api.transaction(txn_req).await?;
@@ -413,4 +417,76 @@ pub fn get_share_database_id_and_privilege(
     Err(MetaError::AppError(AppError::ShareHasNoGrantedDatabase(
         ShareHasNoGrantedDatabase::new(&name_key.tenant, &name_key.share_name),
     )))
+}
+
+// Return true if all the database data has been removed.
+pub async fn is_db_exists(kv_api: &(impl KVApi + ?Sized), db_id: u64) -> Result<bool, MetaError> {
+    let dbid = DatabaseId { db_id };
+
+    let (db_meta_seq, db_meta): (_, Option<DatabaseMeta>) = get_struct_value(kv_api, &dbid).await?;
+    if db_meta_seq != 0 || db_meta.is_some() {
+        return Ok(true);
+    }
+
+    let id_to_name = DatabaseIdToName { db_id };
+    let (name_ident_seq, name_ident): (_, Option<DatabaseNameIdent>) =
+        get_struct_value(kv_api, &id_to_name).await?;
+    if name_ident_seq != 0 || name_ident.is_some() {
+        return Ok(true);
+    }
+
+    Ok(false)
+}
+
+pub async fn is_db_need_to_be_remove<F>(
+    kv_api: &(impl KVApi + ?Sized),
+    db_id: u64,
+    mut f: F,
+    condition: &mut Vec<TxnCondition>,
+    if_then: &mut Vec<TxnOp>,
+) -> Result<(bool, Option<ShareNameIdent>), MetaError>
+where
+    F: FnMut(&DatabaseMeta) -> bool,
+{
+    let dbid = DatabaseId { db_id };
+
+    let (db_meta_seq, db_meta): (_, Option<DatabaseMeta>) = get_struct_value(kv_api, &dbid).await?;
+    if db_meta_seq == 0 || db_meta.is_none() {
+        return Ok((false, None));
+    }
+
+    let id_to_name = DatabaseIdToName { db_id };
+    let (name_ident_seq, name_ident): (_, Option<DatabaseNameIdent>) =
+        get_struct_value(kv_api, &id_to_name).await?;
+    if name_ident_seq == 0 || name_ident.is_none() {
+        return Ok((false, None));
+    }
+
+    let db_meta = db_meta.unwrap();
+    if f(&db_meta) {
+        condition.push(txn_cond_seq(&dbid, Eq, db_meta_seq));
+        if_then.push(txn_op_del(&dbid));
+        condition.push(txn_cond_seq(&id_to_name, Eq, name_ident_seq));
+        if_then.push(txn_op_del(&id_to_name));
+
+        return Ok((true, db_meta.from_share.clone()));
+    }
+
+    Ok((false, None))
+}
+
+pub async fn get_kv_data<T>(
+    kv_api: &(impl KVApi + ?Sized),
+    key: &impl KVApiKey,
+) -> Result<T, MetaError>
+where
+    T: FromToProto,
+    T::PB: common_protos::prost::Message + Default,
+{
+    let res = kv_api.get_kv(&key.to_key()).await?;
+    if let Some(res) = res {
+        return deserialize_struct(&res.data);
+    };
+
+    Err(MetaError::SerdeError(AnyError::error("get_kv fail")))
 }

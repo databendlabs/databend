@@ -27,6 +27,7 @@ use tracing::info;
 use crate::get_share_account_meta_or_err;
 use crate::get_share_id_to_name_or_err;
 use crate::get_share_meta_by_id_or_err;
+use crate::is_db_exists;
 use crate::ApiBuilder;
 use crate::AsKVApi;
 use crate::SchemaApi;
@@ -1039,6 +1040,78 @@ impl ShareApiTestSuite {
             assert_eq!(res.privileges.len(), 1);
             assert_eq!(&res.privileges[0].share_name, share1);
             assert_eq!(res.privileges[0].grant_on, grant_on);
+        }
+
+        info!("--- drop share1 and check objects");
+        {
+            let tenant2 = "tenant2";
+            let db2 = "db2";
+
+            let db_name2 = DatabaseNameIdent {
+                tenant: tenant2.to_string(),
+                db_name: db2.to_string(),
+            };
+
+            // first grant account tenant2
+            let req = AddShareAccountsReq {
+                share_name: share_name1.clone(),
+                share_on: Utc::now(),
+                if_exists: false,
+                accounts: vec![tenant2.to_string()],
+            };
+            let res = mt.add_share_tenants(req).await;
+            assert!(res.is_ok());
+
+            // tenant2 create a database from share1
+            let req = CreateDatabaseReq {
+                if_not_exists: false,
+                name_ident: db_name2.clone(),
+                meta: DatabaseMeta {
+                    from_share: Some(share_name1.clone()),
+                    ..Default::default()
+                },
+            };
+
+            let res = mt.create_database(req).await;
+            info!("create database res: {:?}", res);
+            assert!(res.is_ok());
+            // save the db id
+            let db_id = res.unwrap().db_id;
+
+            let req = DropShareReq {
+                if_exists: true,
+                share_name: share_name1.clone(),
+            };
+
+            let res = mt.drop_share(req).await;
+            assert!(res.is_ok());
+
+            // after drop the share, check that the db has been dropped
+            // check that DatabaseMeta has been removed
+            let res = is_db_exists(mt.as_kv_api(), db_id).await;
+            assert!(res.is_ok());
+            assert!(!res.unwrap());
+
+            // get_grant_privileges_of_object of db and table again
+            let req = GetObjectGrantPrivilegesReq {
+                tenant: tenant1.to_string(),
+                object: ShareGrantObjectName::Database(db_name.to_string()),
+            };
+
+            let res = mt.get_grant_privileges_of_object(req).await;
+            assert!(res.is_ok());
+            let res = res.unwrap();
+            assert_eq!(res.privileges.len(), 1);
+
+            let req = GetObjectGrantPrivilegesReq {
+                tenant: tenant1.to_string(),
+                object: ShareGrantObjectName::Table(db_name.to_string(), tbl_name.to_string()),
+            };
+
+            let res = mt.get_grant_privileges_of_object(req).await;
+            assert!(res.is_ok());
+            let res = res.unwrap();
+            assert_eq!(res.privileges.len(), 0);
         }
 
         Ok(())
