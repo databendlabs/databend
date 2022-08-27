@@ -26,6 +26,7 @@ use common_planners::col;
 use common_planners::lit;
 use common_planners::sub;
 use common_planners::CreateTablePlan;
+use common_planners::Expression;
 use common_planners::Extras;
 use databend_query::interpreters::CreateTableInterpreter;
 use databend_query::interpreters::Interpreter;
@@ -145,49 +146,57 @@ async fn test_block_pruner() -> Result<()> {
     let reader = MetaReaders::table_snapshot_reader(ctx.clone());
     let snapshot = reader.read(snapshot_loc.as_str(), None, 1).await?;
 
-    // nothing will be pruned
-    let push_downs = None;
-    let blocks = apply_block_pruning(
-        snapshot.clone(),
-        table.get_table_info().schema(),
-        &push_downs,
-        ctx.clone(),
-    )
-    .await?;
-    let rows = blocks.iter().map(|b| b.row_count as usize).sum::<usize>();
-    assert_eq!(rows, num_blocks * row_per_block);
-    assert_eq!(num_blocks, blocks.len());
-
-    // fully pruned
-    let mut extra = Extras::default();
-    // max value of col a is
-    let pred = col("a").gt(lit(30u64));
-    extra.filters = vec![pred];
-
-    let blocks = apply_block_pruning(
-        snapshot.clone(),
-        table.get_table_info().schema(),
-        &Some(extra),
-        ctx.clone(),
-    )
-    .await?;
-    assert_eq!(0, blocks.len());
+    // nothing is pruned
+    let mut e1 = Extras::default();
+    e1.filters = vec![col("a").gt(lit(30u64))];
 
     // some blocks pruned
-    let mut extra = Extras::default();
+    let mut e2 = Extras::default();
     let max_val_of_b = 6u64;
-    let pred = col("a").gt(lit(0u64)).and(col("b").gt(lit(max_val_of_b)));
-    extra.filters = vec![pred];
+    e2.filters = vec![col("a").gt(lit(0u64)).and(col("b").gt(lit(max_val_of_b)))];
+    let b2 = num_blocks - max_val_of_b as usize - 1;
 
-    let blocks = apply_block_pruning(
-        snapshot.clone(),
-        table.get_table_info().schema(),
-        &Some(extra),
-        ctx.clone(),
-    )
-    .await?;
+    // Sort asc Limit
+    let mut e3 = Extras::default();
+    e3.order_by = vec![Expression::Sort {
+        expr: Box::new(col("b")),
+        asc: true,
+        nulls_first: false,
+        origin_expr: Box::new(col("b")),
+    }];
+    e3.limit = Some(3);
 
-    assert_eq!((num_blocks - max_val_of_b as usize - 1), blocks.len());
+    // Sort desc Limit
+    let mut e4 = Extras::default();
+    e4.order_by = vec![Expression::Sort {
+        expr: Box::new(col("b")),
+        asc: false,
+        nulls_first: false,
+        origin_expr: Box::new(col("b")),
+    }];
+    e4.limit = Some(4);
+
+    let extras = vec![
+        (None, num_blocks, num_blocks * row_per_block),
+        (Some(e1), 0, 0),
+        (Some(e2), b2, b2 * row_per_block),
+        (Some(e3), 3, 3 * row_per_block),
+        (Some(e4), 4, 4 * row_per_block),
+    ];
+
+    for (extra, expected_blocks, expected_rows) in extras {
+        let blocks = apply_block_pruning(
+            snapshot.clone(),
+            table.get_table_info().schema(),
+            &extra,
+            ctx.clone(),
+        )
+        .await?;
+
+        let rows = blocks.iter().map(|b| b.row_count as usize).sum::<usize>();
+        assert_eq!(expected_rows, rows);
+        assert_eq!(expected_blocks, blocks.len());
+    }
 
     Ok(())
 }

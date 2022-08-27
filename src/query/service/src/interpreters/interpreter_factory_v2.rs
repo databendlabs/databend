@@ -65,7 +65,7 @@ impl InterpreterFactoryV2 {
             } => Ok(Arc::new(SelectInterpreterV2::try_create(
                 ctx,
                 *bind_context.clone(),
-                s_expr.clone(),
+                *s_expr.clone(),
                 metadata.clone(),
             )?)),
             Plan::Explain { kind, plan } => Ok(Arc::new(ExplainInterpreterV2::try_create(

@@ -52,6 +52,7 @@ async fn test_raft_log_append_and_range_get() -> anyhow::Result<()> {
             log_id: LogId { term: 3, index: 4 },
             payload: EntryPayload::Normal(LogEntry {
                 txid: None,
+                time_ms: None,
                 cmd: Cmd::IncrSeq {
                     key: "foo".to_string(),
                 },
@@ -127,6 +128,7 @@ async fn test_raft_log_insert() -> anyhow::Result<()> {
             log_id: LogId { term: 3, index: 4 },
             payload: EntryPayload::Normal(LogEntry {
                 txid: None,
+                time_ms: None,
                 cmd: Cmd::IncrSeq {
                     key: "foo".to_string(),
                 },
@@ -162,6 +164,7 @@ async fn test_raft_log_get() -> anyhow::Result<()> {
             log_id: LogId { term: 3, index: 4 },
             payload: EntryPayload::Normal(LogEntry {
                 txid: None,
+                time_ms: None,
                 cmd: Cmd::IncrSeq {
                     key: "foo".to_string(),
                 },
@@ -199,6 +202,7 @@ async fn test_raft_log_last() -> anyhow::Result<()> {
             log_id: LogId { term: 3, index: 4 },
             payload: EntryPayload::Normal(LogEntry {
                 txid: None,
+                time_ms: None,
                 cmd: Cmd::IncrSeq {
                     key: "foo".to_string(),
                 },
@@ -229,6 +233,7 @@ async fn test_raft_log_range_remove() -> anyhow::Result<()> {
             log_id: LogId { term: 3, index: 4 },
             payload: EntryPayload::Normal(LogEntry {
                 txid: None,
+                time_ms: None,
                 cmd: Cmd::IncrSeq {
                     key: "foo".to_string(),
                 },

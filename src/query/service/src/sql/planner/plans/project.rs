@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_exception::Result;
+use itertools::Itertools;
 
 use crate::sql::optimizer::ColumnSet;
 use crate::sql::optimizer::PhysicalProperty;
@@ -24,9 +25,18 @@ use crate::sql::plans::Operator;
 use crate::sql::plans::PhysicalOperator;
 use crate::sql::plans::RelOp;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Project {
     pub columns: ColumnSet,
+}
+
+#[allow(clippy::derive_hash_xor_eq)]
+impl std::hash::Hash for Project {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        for column in self.columns.iter().sorted() {
+            column.hash(state);
+        }
+    }
 }
 
 impl Operator for Project {
@@ -72,6 +82,7 @@ impl LogicalOperator for Project {
         Ok(RelationalProperty {
             output_columns: self.columns.clone(),
             outer_columns: input_prop.outer_columns,
+            cardinality: input_prop.cardinality,
         })
     }
 }

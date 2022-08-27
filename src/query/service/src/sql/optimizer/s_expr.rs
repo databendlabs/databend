@@ -18,6 +18,7 @@ use common_exception::Result;
 use crate::sql::optimizer::rule::AppliedRules;
 use crate::sql::optimizer::rule::RuleID;
 use crate::sql::plans::Operator;
+use crate::sql::plans::PatternPlan;
 use crate::sql::plans::RelOp;
 use crate::sql::plans::RelOperator;
 use crate::sql::IndexType;
@@ -25,10 +26,10 @@ use crate::sql::IndexType;
 /// `SExpr` is abbreviation of single expression, which is a tree of relational operators.
 #[derive(Clone, Debug)]
 pub struct SExpr {
-    plan: RelOperator,
-    children: Vec<SExpr>,
+    pub(super) plan: RelOperator,
+    pub(super) children: Vec<SExpr>,
 
-    original_group: Option<IndexType>,
+    pub(super) original_group: Option<IndexType>,
 
     /// A bitmap to record applied rules on current SExpr, to prevent
     /// redundant transformations.
@@ -60,6 +61,17 @@ impl SExpr {
 
     pub fn create_leaf(plan: RelOperator) -> Self {
         Self::create(plan, vec![], None)
+    }
+
+    pub fn create_pattern_leaf() -> Self {
+        Self::create(
+            PatternPlan {
+                plan_type: RelOp::Pattern,
+            }
+            .into(),
+            vec![],
+            None,
+        )
     }
 
     pub fn plan(&self) -> &RelOperator {
@@ -109,6 +121,15 @@ impl SExpr {
         };
 
         true
+    }
+
+    pub fn replace_children(&self, children: Vec<SExpr>) -> Self {
+        Self {
+            plan: self.plan.clone(),
+            original_group: self.original_group,
+            applied_rules: self.applied_rules.clone(),
+            children,
+        }
     }
 
     /// Record the applied rule id in current SExpr

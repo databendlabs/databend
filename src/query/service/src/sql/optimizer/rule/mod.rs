@@ -24,6 +24,7 @@ mod rewrite;
 mod rule_implement_get;
 mod rule_implement_hash_join;
 mod rule_set;
+mod transform;
 mod transform_state;
 
 pub use factory::RuleFactory;
@@ -50,6 +51,11 @@ pub enum RuleID {
     PushDownFilterEvalScalar,
     PushDownFilterJoin,
     PushDownFilterScan,
+    PushDownLimitOuterJoin,
+    PushDownLimitProject,
+    PushDownLimitSort,
+    PushDownLimitScan,
+    PushDownSortScan,
     EliminateEvalScalar,
     EliminateFilter,
     EliminateProject,
@@ -57,6 +63,9 @@ pub enum RuleID {
     MergeEvalScalar,
     MergeFilter,
     SplitAggregate,
+
+    // Exploration rules
+    CommuteJoin,
 
     // Implementation rules
     ImplementGet,
@@ -66,12 +75,15 @@ pub enum RuleID {
 impl Display for RuleID {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            RuleID::ImplementGet => write!(f, "ImplementGet"),
-            RuleID::ImplementHashJoin => write!(f, "ImplementHashJoin"),
             RuleID::PushDownFilterProject => write!(f, "PushDownFilterProject"),
             RuleID::PushDownFilterEvalScalar => write!(f, "PushDownFilterEvalScalar"),
             RuleID::PushDownFilterJoin => write!(f, "PushDownFilterJoin"),
             RuleID::PushDownFilterScan => write!(f, "PushDownFilterScan"),
+            RuleID::PushDownLimitOuterJoin => write!(f, "PushDownLimitOuterJoin"),
+            RuleID::PushDownLimitProject => write!(f, "PushDownLimitProject"),
+            RuleID::PushDownLimitSort => write!(f, "PushDownLimitSort"),
+            RuleID::PushDownLimitScan => write!(f, "PushDownLimitScan"),
+            RuleID::PushDownSortScan => write!(f, "PushDownSortScan"),
             RuleID::EliminateEvalScalar => write!(f, "EliminateEvalScalar"),
             RuleID::EliminateFilter => write!(f, "EliminateFilter"),
             RuleID::EliminateProject => write!(f, "EliminateProject"),
@@ -81,6 +93,11 @@ impl Display for RuleID {
             RuleID::NormalizeScalarFilter => write!(f, "NormalizeScalarFilter"),
             RuleID::SplitAggregate => write!(f, "SplitAggregate"),
             RuleID::NormalizeDisjunctiveFilter => write!(f, "NormalizeDisjunctiveFilter"),
+
+            RuleID::CommuteJoin => write!(f, "CommuteJoin"),
+
+            RuleID::ImplementGet => write!(f, "ImplementGet"),
+            RuleID::ImplementHashJoin => write!(f, "ImplementHashJoin"),
         }
     }
 }

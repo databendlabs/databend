@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_planners::Expression;
 use common_planners::Extras;
 use common_planners::Projection;
 use common_planners::StageKind;
@@ -92,6 +93,28 @@ impl PhysicalPlanBuilder {
                     })
                     .transpose()?;
 
+                let order_by = scan
+                    .order_by
+                    .clone()
+                    .map(|items| {
+                        let builder =
+                            ExpressionBuilderWithoutRenaming::create(self.metadata.clone());
+                        items
+                            .into_iter()
+                            .map(|item| {
+                                builder
+                                    .build_column_ref(item.index)
+                                    .map(|c| Expression::Sort {
+                                        expr: Box::new(c.clone()),
+                                        asc: item.asc,
+                                        nulls_first: item.nulls_first,
+                                        origin_expr: Box::new(c),
+                                    })
+                            })
+                            .collect::<Result<Vec<_>>>()
+                    })
+                    .transpose()?;
+
                 let table_entry = metadata.table(scan.table_index);
                 let table = table_entry.table.clone();
                 let table_schema = table.schema();
@@ -130,7 +153,8 @@ impl PhysicalPlanBuilder {
                 let push_downs = Extras {
                     projection: Some(projection),
                     filters: push_down_filters.unwrap_or_default(),
-                    ..Default::default()
+                    limit: scan.limit,
+                    order_by: order_by.unwrap_or_default(),
                 };
 
                 let source = table

@@ -219,6 +219,8 @@ impl HttpQuery {
 
         let ctx = session.create_query_context().await?;
         let id = ctx.get_id();
+        let sql = &request.sql;
+        tracing::info!("run query_id={id} in session_id={session_id}, sql='{sql}'");
 
         let block_buffer = BlockBuffer::new(request.pagination.max_rows_in_buffer);
         let state =

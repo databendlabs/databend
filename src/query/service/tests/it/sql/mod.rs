@@ -14,7 +14,6 @@
 
 mod exec;
 mod expr_parser;
-mod optimizer;
 mod planner;
 mod sql_common;
 mod sql_parser;

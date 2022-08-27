@@ -14,6 +14,8 @@
 
 use std::convert::TryInto;
 use std::fmt::Formatter;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 
 use serde::Deserialize;
 use serde::Serialize;
@@ -74,16 +76,28 @@ impl<T> SeqV<T> {
         }
     }
 
+    /// Create a timestamp in millisecond for expiration control used in SeqV
+    pub fn now_ms() -> u64 {
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64
+    }
+
     pub fn with_meta(seq: u64, meta: Option<KVMeta>, data: T) -> Self {
         Self { seq, meta, data }
     }
 
+    /// Returns millisecond since 1970-01-01
     pub fn get_expire_at(&self) -> u64 {
         match self.meta {
             None => u64::MAX,
             Some(ref m) => match m.expire_at {
                 None => u64::MAX,
-                Some(exp_at) => exp_at,
+                Some(exp_at) => {
+                    // exp_at is in second.
+                    exp_at * 1000
+                }
             },
         }
     }

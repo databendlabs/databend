@@ -48,7 +48,8 @@ use crate::serializations::ConstSerializer;
 pub const ARROW_EXTENSION_NAME: &str = "ARROW:extension:databend_name";
 pub const ARROW_EXTENSION_META: &str = "ARROW:extension:databend_metadata";
 
-#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+#[derive(Clone, Debug, Hash, serde::Deserialize, serde::Serialize)]
+#[allow(clippy::derive_hash_xor_eq)]
 #[serde(tag = "type")]
 #[enum_dispatch(DataType)]
 pub enum DataTypeImpl {

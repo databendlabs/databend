@@ -218,3 +218,17 @@ DROP DATABASE db2;
 statement error 1002
 CREATE TABLE system.test(a INT);
 
+statement ok
+drop table if exists t;
+
+statement error Duplicated column name
+create table t(a int, a int);
+
+statement error Duplicated column name
+create table t(a int, A int);
+
+statement error Duplicated column name
+create table t("A" int, "A" int);
+
+statement error Duplicated column name
+create table t as select number, number from numbers(1);

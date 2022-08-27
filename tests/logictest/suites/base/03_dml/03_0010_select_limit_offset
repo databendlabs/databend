@@ -114,3 +114,44 @@ select number from numbers(10000) order by number limit 1;
 ----
 0
 
+statement ok
+drop table if exists t;
+
+statement ok
+drop table if exists t1;
+
+statement ok
+create table t(a int);
+
+statement ok
+create table t1(a int);
+
+statement ok
+insert into t values(1);
+
+statement ok
+insert into t1 values(1),(1);
+
+onlyif mysql
+statement query T
+explain select * from t left join t1 on t.a = t1.a limit 1,2;
+
+----
+Limit: [2], Offset: [1]
+└── HashJoin: LEFT OUTER, build keys: [t1.a (#1)], probe keys: [CAST(t.a (#0) AS INT NULL)], join filters: []
+    ├── Limit: [2], Offset: [1]
+    │   └── Scan: default.default.t, filters: [], Sort: [none], limit: [3]
+    └── Limit: [2], Offset: [1]
+        └── Scan: default.default.t1, filters: [], Sort: [none], limit: [3]
+
+statement query II
+select * from t left join t1 on t.a = t1.a limit 1;
+
+----
+1 1
+
+statement ok
+drop table if exists t;
+
+statement ok
+drop table if exists t1;
