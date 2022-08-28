@@ -19,7 +19,6 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_datavalues::prelude::*;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_fuse_meta::meta::BlockMeta;
 use common_fuse_meta::meta::SegmentInfo;
@@ -28,7 +27,6 @@ use common_fuse_meta::meta::Versioned;
 use common_meta_app::schema::TableInfo;
 
 use crate::io::BlockCompactor;
-use crate::io::MetaReaders;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::mutation::BaseMutator;
 use crate::operations::AppendOperationLogEntry;
@@ -40,6 +38,7 @@ use crate::TableMutator;
 #[derive(Clone)]
 pub struct ReclusterMutator {
     base_mutator: BaseMutator,
+    blocks_map: BTreeMap<i32, Vec<(usize, BlockMeta)>>,
     selected_blocks: Vec<BlockMeta>,
     level: i32,
     block_compactor: BlockCompactor,
@@ -53,10 +52,12 @@ impl ReclusterMutator {
         base_snapshot: Arc<TableSnapshot>,
         threshold: f64,
         block_compactor: BlockCompactor,
+        blocks_map: BTreeMap<i32, Vec<(usize, BlockMeta)>>,
     ) -> Result<Self> {
         let base_mutator = BaseMutator::try_create(ctx, location_generator, base_snapshot)?;
         Ok(Self {
             base_mutator,
+            blocks_map,
             selected_blocks: Vec::new(),
             level: 0,
             block_compactor,
@@ -80,34 +81,7 @@ impl ReclusterMutator {
 #[async_trait::async_trait]
 impl TableMutator for ReclusterMutator {
     async fn blocks_select(&mut self) -> Result<bool> {
-        let snapshot = &self.base_mutator.base_snapshot;
-
-        let default_cluster_key_id = snapshot
-            .cluster_key_meta
-            .clone()
-            .ok_or_else(|| {
-                ErrorCode::InvalidClusterKeys("Invalid clustering keys or table is not clustered")
-            })?
-            .0;
-
-        let mut blocks_map = BTreeMap::new();
-        let reader = MetaReaders::segment_info_reader(self.base_mutator.ctx.as_ref());
-        for (idx, segment_location) in snapshot.segments.iter().enumerate() {
-            let (x, ver) = (segment_location.0.clone(), segment_location.1);
-            let segment = reader.read(x, None, ver).await?;
-
-            segment.blocks.iter().for_each(|b| {
-                if let Some(stats) = &b.cluster_stats {
-                    if stats.cluster_key_id == default_cluster_key_id && stats.level >= 0 {
-                        blocks_map
-                            .entry(stats.level)
-                            .or_insert(Vec::new())
-                            .push((idx, b.clone()));
-                    }
-                }
-            });
-        }
-
+        let blocks_map = self.blocks_map.clone();
         for (level, block_metas) in blocks_map.into_iter() {
             if block_metas.len() <= 1 {
                 continue;

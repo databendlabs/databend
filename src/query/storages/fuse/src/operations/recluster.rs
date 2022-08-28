@@ -12,11 +12,13 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_datablocks::SortColumnDescription;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::Pipeline;
@@ -25,11 +27,13 @@ use common_pipeline_transforms::processors::transforms::SortMergeCompactor;
 use common_pipeline_transforms::processors::transforms::TransformCompact;
 use common_pipeline_transforms::processors::transforms::TransformSortMerge;
 use common_pipeline_transforms::processors::transforms::TransformSortPartial;
+use common_planners::Extras;
 use common_planners::ReadDataSourcePlan;
 use common_planners::SourceInfo;
 
 use crate::operations::FuseTableSink;
 use crate::operations::ReclusterMutator;
+use crate::pruning::BlockPruner;
 use crate::FuseTable;
 use crate::TableMutator;
 use crate::DEFAULT_AVG_DEPTH_THRESHOLD;
@@ -43,6 +47,7 @@ impl FuseTable {
         ctx: Arc<dyn TableContext>,
         catalog: String,
         pipeline: &mut Pipeline,
+        push_downs: Option<Extras>,
     ) -> Result<Option<Arc<dyn TableMutator>>> {
         if self.cluster_key_meta.is_none() {
             return Ok(None);
@@ -56,9 +61,24 @@ impl FuseTable {
             return Ok(None);
         };
 
-        if snapshot.summary.block_count <= 1 {
-            return Ok(None);
-        }
+        let schema = self.table_info.schema();
+        let block_metas = BlockPruner::new(snapshot.clone())
+            .prune(&ctx, schema, &push_downs)
+            .await?;
+
+        let default_cluster_key_id = self.cluster_key_meta.clone().unwrap().0;
+
+        let mut blocks_map = BTreeMap::new();
+        block_metas.iter().for_each(|(idx, b)| {
+            if let Some(stats) = &b.cluster_stats {
+                if stats.cluster_key_id == default_cluster_key_id && stats.level >= 0 {
+                    blocks_map
+                        .entry(stats.level)
+                        .or_insert(Vec::new())
+                        .push((*idx, b.clone()));
+                }
+            }
+        });
 
         let block_compactor = self.get_block_compactor();
         let avg_depth_threshold = self.get_option(
@@ -79,6 +99,7 @@ impl FuseTable {
             snapshot,
             threshold,
             block_compactor.clone(),
+            blocks_map,
         )?;
 
         let need_recluster = mutator.blocks_select().await?;

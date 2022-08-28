@@ -57,7 +57,7 @@ impl OptimizeTableInterpreter {
 
         let mut pipeline = Pipeline::create();
         let mutator = table
-            .recluster(ctx.clone(), catalog.to_owned(), &mut pipeline)
+            .recluster(ctx.clone(), catalog.to_owned(), &mut pipeline, None)
             .await?;
         let mutator = if let Some(mutator) = mutator {
             mutator
