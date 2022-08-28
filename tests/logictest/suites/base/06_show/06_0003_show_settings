@@ -37,5 +37,6 @@ SHOW SETTINGS LIKE 'enable%';
 enable_async_insert 0 0 SESSION Whether the client open async insert mode, default value: 0 UInt64
 enable_new_processor_framework 1 1 SESSION Enable new processor framework if value != 0, default value: 1 UInt64
 enable_planner_v2 1 1 SESSION Enable planner v2 by setting this variable to 1, default value: 1 UInt64
+enable_prewhere  1  1  SESSION  Enable prewhere optimization by setting this variable to 1, default value: 1  UInt64
 
 
