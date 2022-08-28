@@ -77,6 +77,36 @@ impl FromStr for VariantValue {
 }
 
 impl VariantValue {
+    // calculate memory size of JSON value
+    pub fn calculate_memory_size(&self) -> usize {
+        let mut memory_size = 0;
+        let mut values = Vec::new();
+        let value = self.as_ref();
+        values.push(value);
+        while !values.is_empty() {
+            memory_size += std::mem::size_of::<Value>();
+            let value = values.pop().unwrap();
+            match value {
+                Value::String(val) => {
+                    memory_size += val.len();
+                }
+                Value::Array(vals) => {
+                    for val in vals.iter() {
+                        values.push(val);
+                    }
+                }
+                Value::Object(obj) => {
+                    for (key, val) in obj.iter() {
+                        memory_size += key.len();
+                        values.push(val);
+                    }
+                }
+                _ => {}
+            }
+        }
+        memory_size
+    }
+
     fn level(&self) -> u8 {
         match self.as_ref() {
             Value::Null => 0,
