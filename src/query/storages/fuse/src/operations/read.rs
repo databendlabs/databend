@@ -139,18 +139,13 @@ impl FuseTable {
 }
 
 /// PrewhereExtraData is used for operations after prewhere filter
-type PrewhereExtraData = (DataBlock, BooleanColumn);
+type PrewhereExtraData = (Vec<(usize, Vec<u8>)>, BooleanColumn);
 
 enum State {
     PrewhereReadData(PartInfoPtr),
-    PrewhereFilter(PartInfoPtr, DataBlock),
+    PrewhereFilter(PartInfoPtr, Vec<(usize, Vec<u8>)>),
     ReadData(PartInfoPtr, Option<PrewhereExtraData>),
-    Deserialize(
-        PartInfoPtr,
-        Vec<(usize, Vec<u8>)>,
-        bool, // true: before prewhere filter, false: after prewhere filter
-        Option<PrewhereExtraData>,
-    ),
+    Deserialize(PartInfoPtr, Vec<(usize, Vec<u8>)>, Option<BooleanColumn>),
     Generated(Option<PartInfoPtr>, DataBlock),
     Finish,
 }
@@ -253,63 +248,44 @@ impl Processor for FuseTableSource {
             State::PrewhereReadData(_) => Ok(Event::Async),
             State::PrewhereFilter(_, _) => Ok(Event::Sync),
             State::ReadData(_, _) => Ok(Event::Async),
-            State::Deserialize(_, _, _, _) => Ok(Event::Sync),
+            State::Deserialize(_, _, _) => Ok(Event::Sync),
             State::Generated(_, _) => Err(ErrorCode::LogicalError("It's a bug.")),
         }
     }
 
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Finish) {
-            State::Deserialize(part, chunks, before_prewhere_filter, extra) => {
-                if before_prewhere_filter {
-                    // before prewhere filter
-                    if let Some(prewhere) = self.prewhere_info.as_ref() {
-                        let data_block = prewhere
-                            .need_columns_block_reader
-                            .deserialize(part.clone(), chunks)?;
-                        // the data deserialized is prewhere column data
-                        // need to filter
-                        self.state = State::PrewhereFilter(part, data_block);
-                        Ok(())
-                    } else {
-                        Err(ErrorCode::LogicalError("It's a bug."))
-                    }
+            State::Deserialize(part, chunks, filter) => {
+                let data_block = if let Some(filter) = filter {
+                    let block = self.block_reader.deserialize(part, chunks)?;
+                    // the last step of prewhere
+                    DataBlock::filter_block_with_bool_column(block, &filter)?
                 } else {
-                    // after prewhere filter or no prewhere
-                    let data_block = if let Some((prewhere_data_block, filter)) = extra {
-                        // after prewhere and fetched remain columns
-                        // need to merge two parts of columns
-                        if let Some(prewhere) = self.prewhere_info.as_ref() {
-                            let remain_data_block = prewhere
-                                .remain_columns_block_reader
-                                .deserialize(part, chunks)?;
-                            let block = prewhere_data_block.append(&remain_data_block)?;
-                            DataBlock::filter_block_with_bool_column(block, &filter)?
-                        } else {
-                            return Err(ErrorCode::LogicalError("It's a bug."));
-                        }
-                    } else {
-                        // no prewhere, return all columns directly
-                        self.block_reader.deserialize(part, chunks)?
-                    };
+                    self.block_reader.deserialize(part, chunks)?
+                };
 
-                    let mut partitions = self.ctx.try_get_partitions(1)?;
+                let mut partitions = self.ctx.try_get_partitions(1)?;
 
-                    let progress_values = ProgressValues {
-                        rows: data_block.num_rows(),
-                        bytes: data_block.memory_size(),
-                    };
-                    self.scan_progress.incr(&progress_values);
+                let progress_values = ProgressValues {
+                    rows: data_block.num_rows(),
+                    bytes: data_block.memory_size(),
+                };
+                self.scan_progress.incr(&progress_values);
 
-                    self.state = match partitions.is_empty() {
-                        true => State::Generated(None, data_block),
-                        false => State::Generated(Some(partitions.remove(0)), data_block),
-                    };
-                    Ok(())
-                }
+                self.state = match partitions.is_empty() {
+                    true => State::Generated(None, data_block),
+                    false => State::Generated(Some(partitions.remove(0)), data_block),
+                };
+                Ok(())
             }
-            State::PrewhereFilter(part, block) => {
+            State::PrewhereFilter(part, chunks) => {
                 if let Some(prewhere) = self.prewhere_info.as_ref() {
+                    // deserialize prewhere data block first
+                    let block = prewhere
+                        .need_columns_block_reader
+                        .deserialize(part.clone(), chunks.clone())?;
+
+                    // do filter
                     let res = prewhere.filter.execute(&block)?;
                     let predicates = DataBlock::cast_to_nonull_boolean(res.column(0))?;
                     // shortcut, if predicates is const boolean (or can be cast to boolean)
@@ -327,11 +303,11 @@ impl Processor for FuseTableSource {
                             return Ok(());
                         }
                     }
-
+                    // generate the boolean column for fiter
                     let boolean_col: &BooleanColumn = Series::check_get(&predicates)?;
                     let values = boolean_col.values().clone();
                     let filter = BooleanColumn::from_arrow_data(values);
-                    self.state = State::ReadData(part, Some((block, filter)));
+                    self.state = State::ReadData(part, Some((chunks, filter)));
                     Ok(())
                 } else {
                     Err(ErrorCode::LogicalError("It's a bug."))
@@ -349,7 +325,7 @@ impl Processor for FuseTableSource {
                         .need_columns_block_reader
                         .read_columns_data(part.clone())
                         .await?;
-                    self.state = State::Deserialize(part, chunks, true, None);
+                    self.state = State::PrewhereFilter(part, chunks);
                 } else {
                     // no need to do prewhere, read all data directly
                     self.state = State::ReadData(part, None);
@@ -357,24 +333,25 @@ impl Processor for FuseTableSource {
                 Ok(())
             }
             State::ReadData(part, extra) => {
-                if extra.is_none() {
-                    // no extra prewhere info, read all columns
-                    let chunks = self.block_reader.read_columns_data(part.clone()).await?;
-                    self.state = State::Deserialize(part, chunks, false, None);
-                    Ok(())
-                } else {
+                if let Some((prewhere_chunks, filter)) = extra {
                     // after prewhere filter, read remain columns
                     if let Some(prewhere) = self.prewhere_info.as_ref() {
-                        let chunks = prewhere
+                        let mut chunks = prewhere
                             .remain_columns_block_reader
                             .read_columns_data(part.clone())
                             .await?;
-                        self.state = State::Deserialize(part, chunks, false, extra);
-                        Ok(())
+                        // merge two parts of chunks
+                        chunks.extend_from_slice(&prewhere_chunks);
+                        self.state = State::Deserialize(part, chunks, Some(filter));
                     } else {
-                        Err(ErrorCode::LogicalError("It's a bug."))
+                        return Err(ErrorCode::LogicalError("It's a bug."));
                     }
+                } else {
+                    // no extra prewhere info, read all columns
+                    let chunks = self.block_reader.read_columns_data(part.clone()).await?;
+                    self.state = State::Deserialize(part, chunks, None);
                 }
+                Ok(())
             }
             _ => Err(ErrorCode::LogicalError("It's a bug.")),
         }

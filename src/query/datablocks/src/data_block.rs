@@ -189,22 +189,6 @@ impl DataBlock {
     }
 
     #[inline]
-    pub fn append(self, other: Self) -> Result<Self> {
-        let mut columns = self.columns.clone();
-        let mut fields = self.schema.fields().clone();
-
-        columns.extend(other.columns.into_iter());
-        fields.extend(other.schema.fields().clone().into_iter());
-
-        let new_schema = Arc::new(DataSchema::new(fields));
-
-        Ok(Self {
-            columns,
-            schema: new_schema,
-        })
-    }
-
-    #[inline]
     pub fn convert_full_block(self) -> Result<Self> {
         let mut columns = Vec::with_capacity(self.num_columns());
         let schema = self.schema().clone();
