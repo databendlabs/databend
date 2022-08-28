@@ -281,14 +281,6 @@ impl Settings {
                 desc: "SQL dialect, support \"PostgreSQL\" and \"MySQL\", default value: \"PostgreSQL\"",
                 possible_values: Some(vec!["PostgreSQL", "MySQL"]),
             },
-            // enable prewhere optimization
-            SettingValue {
-                default_value: DataValue::UInt64(1),
-                user_setting: UserSetting::create("enable_prewhere", DataValue::UInt64(1)),
-                level: ScopeLevel::Session,
-                desc: "Enable prewhere optimization by setting this variable to 1, default value: 1",
-                possible_values: None,
-            },
         ];
 
         let settings: Arc<RwLock<HashMap<String, SettingValue>>> =
@@ -603,11 +595,6 @@ impl Settings {
             result.insert(k.clone(), v.user_setting.value.clone());
         }
         result
-    }
-
-    pub fn get_enable_prewhere(&self) -> Result<u64> {
-        static KEY: &str = "enable_prewhere";
-        self.try_get_u64(KEY)
     }
 
     pub fn set_settings(&self, key: String, val: String, is_global: bool) -> Result<()> {
