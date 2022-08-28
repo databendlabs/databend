@@ -5,7 +5,7 @@ description: CEILING(x) function
 
 CEILING() is a synonym for CEIL().
 
-Returns the smallest numeric value not less than x.
+Rounds the number up.
 
 ## Syntax
 

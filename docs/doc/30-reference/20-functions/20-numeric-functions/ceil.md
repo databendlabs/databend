@@ -3,7 +3,7 @@ title: CEIL
 description: CEIL() function
 ---
 
-Returns the smallest numeric value not less than x.
+Rounds the number up.
 
 ## Syntax
 

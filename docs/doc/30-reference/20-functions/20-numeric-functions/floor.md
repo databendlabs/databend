@@ -3,7 +3,7 @@ title: FLOOR
 description: FLOOR(x) function
 ---
 
-Returns the largest numeric value not greater than x.
+Rounds the number down.
 
 ## Syntax
 
