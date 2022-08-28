@@ -70,7 +70,7 @@ use tracing::debug;
 use tracing::info;
 
 use crate::get_kv_data;
-use crate::is_all_db_data_has_been_removed;
+use crate::is_all_db_data_removed;
 use crate::serialize_struct;
 use crate::ApiBuilder;
 use crate::AsKVApi;
@@ -791,7 +791,7 @@ impl SchemaApiTestSuite {
             assert!(!share_meta.has_share_from_db_id(db_id));
 
             // check that DatabaseMeta has been removed
-            let res = is_all_db_data_has_been_removed(mt.as_kv_api(), db_id).await?;
+            let res = is_all_db_data_removed(mt.as_kv_api(), db_id).await?;
             assert!(res);
         }
 

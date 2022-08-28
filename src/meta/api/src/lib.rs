@@ -53,7 +53,7 @@ pub use kv_api_utils::get_share_meta_by_id_or_err;
 pub use kv_api_utils::get_share_or_err;
 pub use kv_api_utils::get_struct_value;
 pub use kv_api_utils::get_u64_value;
-pub use kv_api_utils::is_all_db_data_has_been_removed;
+pub use kv_api_utils::is_all_db_data_removed;
 pub use kv_api_utils::is_db_need_to_be_remove;
 pub use kv_api_utils::list_keys;
 pub use kv_api_utils::list_u64_value;

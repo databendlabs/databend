@@ -31,7 +31,7 @@ use crate::get_share_account_meta_or_err;
 use crate::get_share_id_to_name_or_err;
 use crate::get_share_meta_by_id_or_err;
 use crate::get_share_or_err;
-use crate::is_all_db_data_has_been_removed;
+use crate::is_all_db_data_removed;
 use crate::ApiBuilder;
 use crate::AsKVApi;
 use crate::KVApi;
@@ -57,7 +57,7 @@ async fn if_share_object_data_exists(
 }
 
 // Return true if all the share data has been removed.
-async fn is_all_share_data_has_been_removed(
+async fn is_all_share_data_removed(
     kv_api: &(impl KVApi + ?Sized),
     share_name: &ShareNameIdent,
     share_id: u64,
@@ -97,7 +97,7 @@ async fn is_all_share_data_has_been_removed(
     }
 
     for db_id in &share_meta.share_from_db_ids {
-        if !is_all_db_data_has_been_removed(kv_api, *db_id).await? {
+        if !is_all_db_data_removed(kv_api, *db_id).await? {
             return Ok(false);
         }
     }
@@ -1157,16 +1157,12 @@ impl ShareApiTestSuite {
             assert!(res.is_ok());
 
             // check if all the share data has been removed
-            let res = is_all_share_data_has_been_removed(
-                mt.as_kv_api(),
-                &share_name1,
-                share_id,
-                &share_meta,
-            )
-            .await?;
+            let res =
+                is_all_share_data_removed(mt.as_kv_api(), &share_name1, share_id, &share_meta)
+                    .await?;
             assert!(res);
 
-            let res = is_all_db_data_has_been_removed(mt.as_kv_api(), db_id).await?;
+            let res = is_all_db_data_removed(mt.as_kv_api(), db_id).await?;
             assert!(res);
 
             // get_grant_privileges_of_object of db and table again

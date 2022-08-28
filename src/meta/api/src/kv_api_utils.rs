@@ -420,21 +420,23 @@ pub fn get_share_database_id_and_privilege(
 }
 
 // Return true if all the database data has been removed.
-pub async fn is_all_db_data_has_been_removed(
+pub async fn is_all_db_data_removed(
     kv_api: &(impl KVApi + ?Sized),
     db_id: u64,
 ) -> Result<bool, MetaError> {
     let dbid = DatabaseId { db_id };
 
     let (db_meta_seq, db_meta): (_, Option<DatabaseMeta>) = get_struct_value(kv_api, &dbid).await?;
-    if db_meta_seq != 0 || db_meta.is_some() {
+    debug_assert_eq!((db_meta_seq == 0), db_meta.is_none());
+    if db_meta_seq != 0 {
         return Ok(false);
     }
 
     let id_to_name = DatabaseIdToName { db_id };
     let (name_ident_seq, name_ident): (_, Option<DatabaseNameIdent>) =
         get_struct_value(kv_api, &id_to_name).await?;
-    if name_ident_seq != 0 || name_ident.is_some() {
+    debug_assert_eq!((name_ident_seq == 0), name_ident.is_none());
+    if name_ident_seq != 0 {
         return Ok(false);
     }
 
@@ -454,14 +456,14 @@ where
     let dbid = DatabaseId { db_id };
 
     let (db_meta_seq, db_meta): (_, Option<DatabaseMeta>) = get_struct_value(kv_api, &dbid).await?;
-    if db_meta_seq == 0 || db_meta.is_none() {
+    if db_meta_seq == 0 {
         return Ok((false, None));
     }
 
     let id_to_name = DatabaseIdToName { db_id };
-    let (name_ident_seq, name_ident): (_, Option<DatabaseNameIdent>) =
+    let (name_ident_seq, _name_ident): (_, Option<DatabaseNameIdent>) =
         get_struct_value(kv_api, &id_to_name).await?;
-    if name_ident_seq == 0 || name_ident.is_none() {
+    if name_ident_seq == 0 {
         return Ok((false, None));
     }
 
