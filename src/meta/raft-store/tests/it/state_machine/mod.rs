@@ -30,6 +30,7 @@ use common_meta_types::MatchSeq;
 use common_meta_types::Operation;
 use common_meta_types::SeqV;
 use common_meta_types::UpsertKV;
+use common_meta_types::With;
 use openraft::raft::Entry;
 use openraft::raft::EntryPayload;
 use openraft::LogId;
@@ -413,7 +414,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_delete() -> anyhow::Result<
         let resp = sm.sm_tree.txn(true, |t| {
             Ok(sm
                 .apply_cmd(
-                    &Cmd::UpsertKV(UpsertKV::delete(&c.key).seq(c.seq)),
+                    &Cmd::UpsertKV(UpsertKV::delete(&c.key).with(c.seq)),
                     &t,
                     None,
                     0,
