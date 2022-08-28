@@ -49,6 +49,7 @@ mod user_privilege;
 mod user_quota;
 mod user_setting;
 mod user_stage;
+mod with;
 
 pub mod app_error;
 pub mod error_context;
@@ -177,3 +178,4 @@ pub use user_privilege::UserPrivilegeType;
 pub use user_quota::UserQuota;
 pub use user_setting::UserSetting;
 pub use user_stage::*;
+pub use with::With;

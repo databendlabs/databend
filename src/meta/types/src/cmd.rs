@@ -18,6 +18,7 @@ use openraft::NodeId;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::with::With;
 use crate::KVMeta;
 use crate::MatchSeq;
 use crate::Node;
@@ -95,6 +96,20 @@ impl fmt::Display for UpsertKV {
 }
 
 impl UpsertKV {
+    pub fn new(
+        key: &str,
+        seq: MatchSeq,
+        value: Operation<Vec<u8>>,
+        value_meta: Option<KVMeta>,
+    ) -> Self {
+        Self {
+            key: key.to_string(),
+            seq,
+            value,
+            value_meta,
+        }
+    }
+
     pub fn insert(key: impl ToString, value: &[u8]) -> Self {
         Self {
             key: key.to_string(),
@@ -121,9 +136,18 @@ impl UpsertKV {
             value_meta: None,
         }
     }
+}
 
-    pub fn seq(mut self, seq: MatchSeq) -> Self {
+impl With<MatchSeq> for UpsertKV {
+    fn with(mut self, seq: MatchSeq) -> Self {
         self.seq = seq;
+        self
+    }
+}
+
+impl With<KVMeta> for UpsertKV {
+    fn with(mut self, meta: KVMeta) -> Self {
+        self.value_meta = Some(meta);
         self
     }
 }
