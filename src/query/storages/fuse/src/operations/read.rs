@@ -19,9 +19,9 @@ use common_base::base::Progress;
 use common_base::base::ProgressValues;
 use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
-use common_datavalues::BooleanColumn;
+use common_datavalues::ColumnRef;
+use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
-use common_datavalues::Series;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_pipeline_core::processors::port::OutputPort;
@@ -91,7 +91,7 @@ impl FuseTable {
             let executor = ExpressionExecutor::try_create(
                 ctx.clone(),
                 "filter expression executor (prewhere) ",
-                schema, // in fact, this field is not used
+                schema.clone(), // in fact, this field is not used
                 expr_schema,
                 vec![prewhere.filter.clone()],
                 false,
@@ -102,10 +102,16 @@ impl FuseTable {
             let remain_columns_block_reader =
                 self.create_block_reader(&ctx, prewhere.remain_columns)?;
 
+            let output_schema = match &projection {
+                Projection::Columns(path_indices) => schema.project(path_indices),
+                Projection::InnerColumns(path_indices) => schema.inner_project(path_indices),
+            };
+
             Some(FusePrewhereInfo {
                 filter: executor,
                 need_columns_block_reader,
                 remain_columns_block_reader,
+                output_schema: Arc::new(output_schema),
             })
         } else {
             None
@@ -139,13 +145,13 @@ impl FuseTable {
 }
 
 /// PrewhereExtraData is used for operations after prewhere filter
-type PrewhereExtraData = (Vec<(usize, Vec<u8>)>, BooleanColumn);
+type PrewhereExtraData = (Vec<(usize, Vec<u8>)>, ColumnRef);
 
 enum State {
     PrewhereReadData(PartInfoPtr),
     PrewhereFilter(PartInfoPtr, Vec<(usize, Vec<u8>)>),
     ReadData(PartInfoPtr, Option<PrewhereExtraData>),
-    Deserialize(PartInfoPtr, Vec<(usize, Vec<u8>)>, Option<BooleanColumn>),
+    Deserialize(PartInfoPtr, Vec<(usize, Vec<u8>)>, Option<ColumnRef>),
     Generated(Option<PartInfoPtr>, DataBlock),
     Finish,
 }
@@ -155,6 +161,7 @@ struct FusePrewhereInfo {
     need_columns_block_reader: Arc<BlockReader>,
     remain_columns_block_reader: Arc<BlockReader>,
     filter: ExpressionExecutor,
+    output_schema: DataSchemaRef, // for filter short cut
 }
 
 struct FuseTableSource {
@@ -259,7 +266,7 @@ impl Processor for FuseTableSource {
                 let data_block = if let Some(filter) = filter {
                     let block = self.block_reader.deserialize(part, chunks)?;
                     // the last step of prewhere
-                    DataBlock::filter_block_with_bool_column(block, &filter)?
+                    DataBlock::filter_block(block, &filter)?
                 } else {
                     self.block_reader.deserialize(part, chunks)?
                 };
@@ -287,26 +294,24 @@ impl Processor for FuseTableSource {
 
                     // do filter
                     let res = prewhere.filter.execute(&block)?;
-                    let predicates = DataBlock::cast_to_nonull_boolean(res.column(0))?;
+                    let filter = DataBlock::cast_to_nonull_boolean(res.column(0))?;
                     // shortcut, if predicates is const boolean (or can be cast to boolean)
-                    if let Some(const_bool) = DataBlock::try_as_const_bool(&predicates)? {
-                        if !const_bool {
-                            // all rows in this block are filtered out
-                            // turn to read next part
-                            let mut partitions = self.ctx.try_get_partitions(1)?;
-                            self.state = match partitions.is_empty() {
-                                true => State::Generated(None, DataBlock::empty()),
-                                false => {
-                                    State::Generated(Some(partitions.remove(0)), DataBlock::empty())
-                                }
-                            };
-                            return Ok(());
-                        }
+                    if !DataBlock::filter_exists(&filter)? {
+                        // all rows in this block are filtered out
+                        // turn to read next part
+                        let mut partitions = self.ctx.try_get_partitions(1)?;
+                        self.state = match partitions.is_empty() {
+                            true => State::Generated(
+                                None,
+                                DataBlock::empty_with_schema(prewhere.output_schema.clone()),
+                            ),
+                            false => State::Generated(
+                                Some(partitions.remove(0)),
+                                DataBlock::empty_with_schema(prewhere.output_schema.clone()),
+                            ),
+                        };
+                        return Ok(());
                     }
-                    // generate the boolean column for fiter
-                    let boolean_col: &BooleanColumn = Series::check_get(&predicates)?;
-                    let values = boolean_col.values().clone();
-                    let filter = BooleanColumn::from_arrow_data(values);
                     self.state = State::ReadData(part, Some((chunks, filter)));
                     Ok(())
                 } else {
