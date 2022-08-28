@@ -1,7 +1,7 @@
 
 select
     n_name,
-    truncate(sum(l_extendedprice * (1 - l_discount)),3) as revenue
+    to_int64(sum(l_extendedprice * (1 - l_discount)),3) as revenue
 from
     customer,
     orders,
