@@ -793,6 +793,18 @@ impl SchemaApiTestSuite {
             // check that DatabaseMeta has been removed
             let res = is_all_db_data_removed(mt.as_kv_api(), db_id).await?;
             assert!(res);
+
+            // db has been removed, so undrop_database MUST return error
+            let res = mt
+                .undrop_database(UndropDatabaseReq {
+                    name_ident: db_name1.clone(),
+                })
+                .await;
+            assert!(res.is_err());
+            assert_eq!(
+                ErrorCode::UndropDbHasNoHistory("").code(),
+                ErrorCode::from(res.unwrap_err()).code()
+            );
         }
 
         Ok(())

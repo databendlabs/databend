@@ -341,6 +341,10 @@ impl<KV: KVApi> SchemaApi for KV {
             let mut condition = vec![];
             let mut if_then = vec![];
 
+            // remove db_name -> db id
+            condition.push(txn_cond_seq(tenant_dbname, Eq, db_id_seq));
+            if_then.push(txn_op_del(tenant_dbname)); // (tenant, db_name) -> db_id
+
             let (removed, from_share) = is_db_need_to_be_remove(
                 self,
                 db_id,
@@ -358,6 +362,30 @@ impl<KV: KVApi> SchemaApi for KV {
                     id = debug(&DatabaseId { db_id }),
                     "drop_database from share"
                 );
+
+                // if remove db, MUST also removed db id from db id list
+                let dbid_idlist = DbIdListKey {
+                    tenant: tenant_dbname.tenant.clone(),
+                    db_name: tenant_dbname.db_name.clone(),
+                };
+                let (db_id_list_seq, db_id_list_opt): (_, Option<DbIdList>) =
+                    get_struct_value(self, &dbid_idlist).await?;
+
+                let mut db_id_list = if db_id_list_seq == 0 {
+                    DbIdList::new()
+                } else {
+                    match db_id_list_opt {
+                        Some(list) => list,
+                        None => DbIdList::new(),
+                    }
+                };
+                if let Some(last_db_id) = db_id_list.last() {
+                    if *last_db_id == db_id {
+                        db_id_list.pop();
+                        condition.push(txn_cond_seq(&dbid_idlist, Eq, db_id_list_seq));
+                        if_then.push(txn_op_put(&dbid_idlist, serialize_struct(&db_id_list)?));
+                    }
+                }
 
                 if let Some(from_share) = from_share {
                     remove_db_id_from_share(self, db_id, from_share, &mut condition, &mut if_then)
@@ -382,10 +410,8 @@ impl<KV: KVApi> SchemaApi for KV {
                     // update drop on time
                     db_meta.drop_on = Some(Utc::now());
 
-                    condition.push(txn_cond_seq(tenant_dbname, Eq, db_id_seq));
                     condition.push(txn_cond_seq(&db_id_key, Eq, db_meta_seq));
 
-                    if_then.push(txn_op_del(tenant_dbname)); // (tenant, db_name) -> db_id
                     if_then.push(txn_op_put(&db_id_key, serialize_struct(&db_meta)?)); // (db_id) -> db_meta
                 }
             }

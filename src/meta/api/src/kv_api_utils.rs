@@ -443,6 +443,11 @@ pub async fn is_all_db_data_removed(
     Ok(true)
 }
 
+// Return (true, `DataBaseMeta.from_share`) if the database needs to be removed, otherwise return (false, None).
+// f: the predict function whether or not the database needs to be removed
+//    base on the database meta passed by the user.
+// When the database needs to be removed, add `TxnCondition` into `condition`
+//    and `TxnOp` into the `if_then`.
 pub async fn is_db_need_to_be_remove<F>(
     kv_api: &(impl KVApi + ?Sized),
     db_id: u64,
@@ -467,16 +472,16 @@ where
         return Ok((false, None));
     }
 
-    let db_meta = db_meta.unwrap();
-    if f(&db_meta) {
-        condition.push(txn_cond_seq(&dbid, Eq, db_meta_seq));
-        if_then.push(txn_op_del(&dbid));
-        condition.push(txn_cond_seq(&id_to_name, Eq, name_ident_seq));
-        if_then.push(txn_op_del(&id_to_name));
+    if let Some(db_meta) = db_meta {
+        if f(&db_meta) {
+            condition.push(txn_cond_seq(&dbid, Eq, db_meta_seq));
+            if_then.push(txn_op_del(&dbid));
+            condition.push(txn_cond_seq(&id_to_name, Eq, name_ident_seq));
+            if_then.push(txn_op_del(&id_to_name));
 
-        return Ok((true, db_meta.from_share.clone()));
+            return Ok((true, db_meta.from_share.clone()));
+        }
     }
-
     Ok((false, None))
 }
 
@@ -493,7 +498,10 @@ where
         return deserialize_struct(&res.data);
     };
 
-    Err(MetaError::SerdeError(AnyError::error("get_kv fail")))
+    Err(MetaError::SerdeError(AnyError::error(format!(
+        "get_kv {:?} fail",
+        key.to_key()
+    ))))
 }
 
 pub async fn get_object_shared_by_share_ids(
