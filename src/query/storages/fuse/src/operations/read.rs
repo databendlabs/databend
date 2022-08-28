@@ -341,7 +341,7 @@ impl Processor for FuseTableSource {
                             .read_columns_data(part.clone())
                             .await?;
                         // merge two parts of chunks
-                        chunks.extend_from_slice(&prewhere_chunks);
+                        chunks.extend(prewhere_chunks);
                         self.state = State::Deserialize(part, chunks, Some(filter));
                     } else {
                         return Err(ErrorCode::LogicalError("It's a bug."));
