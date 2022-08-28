@@ -100,10 +100,10 @@ impl FuseTable {
             let need_columns_block_reader =
                 self.create_block_reader(&ctx, prewhere.need_columns.clone())?;
             let remain_columns_block_reader =
-                self.create_block_reader(&ctx, prewhere.remain_columns.clone())?;
+                self.create_block_reader(&ctx, prewhere.remain_columns)?;
 
             Some(FusePrewhereInfo {
-                filter: Arc::new(executor),
+                filter: executor,
                 need_columns_block_reader,
                 remain_columns_block_reader,
             })
@@ -159,7 +159,7 @@ enum State {
 struct FusePrewhereInfo {
     need_columns_block_reader: Arc<BlockReader>,
     remain_columns_block_reader: Arc<BlockReader>,
-    filter: Arc<ExpressionExecutor>,
+    filter: ExpressionExecutor,
 }
 
 struct FuseTableSource {
@@ -187,16 +187,27 @@ impl FuseTableSource {
                 block_reader,
                 scan_progress,
                 state: State::Finish,
-                prewhere_info,
+                prewhere_info: Arc::new(None),
             }))),
-            false => Ok(ProcessorPtr::create(Box::new(FuseTableSource {
-                ctx,
-                output,
-                block_reader,
-                scan_progress,
-                state: State::PrewhereReadData(partitions.remove(0)),
-                prewhere_info,
-            }))),
+            false => match prewhere_info.is_some() {
+                true => Ok(ProcessorPtr::create(Box::new(FuseTableSource {
+                    ctx,
+                    output,
+                    block_reader,
+                    scan_progress,
+                    state: State::PrewhereReadData(partitions.remove(0)),
+                    prewhere_info,
+                }))),
+                // short cut
+                false => Ok(ProcessorPtr::create(Box::new(FuseTableSource {
+                    ctx,
+                    output,
+                    block_reader,
+                    scan_progress,
+                    state: State::ReadData(partitions.remove(0), None),
+                    prewhere_info: Arc::new(None),
+                }))),
+            },
         }
     }
 }
@@ -272,7 +283,7 @@ impl Processor for FuseTableSource {
                             let remain_data_block = prewhere
                                 .remain_columns_block_reader
                                 .deserialize(part, chunks)?;
-                            let block = prewhere_data_block.append(remain_data_block)?;
+                            let block = prewhere_data_block.append(&remain_data_block)?;
                             DataBlock::filter_block_with_bool_column(block, &filter)?
                         } else {
                             return Err(ErrorCode::LogicalError("It's a bug."));

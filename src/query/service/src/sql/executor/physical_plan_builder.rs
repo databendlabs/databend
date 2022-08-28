@@ -176,7 +176,7 @@ impl PhysicalPlanBuilder {
                         .collect::<Result<Vec<_>>>()?;
 
                     assert!(
-                        predicates.len() > 0,
+                        !predicates.is_empty(),
                         "There should be a least one predicate in prewhere"
                     );
                     let mut filter = predicates[0].clone();
@@ -187,7 +187,7 @@ impl PhysicalPlanBuilder {
                     let remain_columns = scan
                         .columns
                         .difference(&prewhere.columns)
-                        .map(|x| *x)
+                        .copied()
                         .collect::<HashSet<usize>>();
                     let need_columns = Self::build_projection(
                         &metadata,

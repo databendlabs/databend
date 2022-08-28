@@ -22,6 +22,7 @@ mod where_optimizer;
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_storages_fuse::TableContext;
 use once_cell::sync::Lazy;
 
 use super::rule::RuleID;
@@ -64,7 +65,7 @@ pub struct HeuristicOptimizer {
     rules: RuleList,
     implementor: HeuristicImplementor,
 
-    _ctx: Arc<QueryContext>,
+    ctx: Arc<QueryContext>,
     bind_context: Box<BindContext>,
     metadata: MetadataRef,
 }
@@ -80,7 +81,7 @@ impl HeuristicOptimizer {
             rules,
             implementor: HeuristicImplementor::new(),
 
-            _ctx: ctx,
+            ctx,
             bind_context,
             metadata,
         }
@@ -97,8 +98,13 @@ impl HeuristicOptimizer {
             self.bind_context.columns.iter().map(|c| c.index).collect();
         let s_expr = pruner.prune_columns(&s_expr, require_columns)?;
 
-        let where_opt = where_optimizer::WhereOptimizer::new(self.metadata.clone());
-        where_opt.optimize(s_expr)
+        let settings = self.ctx.get_settings();
+        if settings.get_enable_prewhere()? == 1 {
+            let where_opt = where_optimizer::WhereOptimizer::new(self.metadata.clone());
+            where_opt.optimize(s_expr)
+        } else {
+            Ok(s_expr)
+        }
     }
 
     pub fn optimize(&mut self, s_expr: SExpr) -> Result<SExpr> {
