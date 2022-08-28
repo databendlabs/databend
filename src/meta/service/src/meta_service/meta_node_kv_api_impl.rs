@@ -27,6 +27,7 @@ use common_meta_types::MetaError;
 use common_meta_types::MetaResultError;
 use common_meta_types::TxnReply;
 use common_meta_types::TxnRequest;
+use common_meta_types::UpsertKV;
 use common_meta_types::UpsertKVReply;
 use common_meta_types::UpsertKVReq;
 use tracing::info;
@@ -44,12 +45,12 @@ impl KVApi for MetaNode {
         let ent = LogEntry {
             txid: None,
             time_ms: None,
-            cmd: Cmd::UpsertKV {
+            cmd: Cmd::UpsertKV(UpsertKV {
                 key: act.key,
                 seq: act.seq,
                 value: act.value,
                 value_meta: act.value_meta,
-            },
+            }),
         };
         let rst = self.write(ent).await?;
 

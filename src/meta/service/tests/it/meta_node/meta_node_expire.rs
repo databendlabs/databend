@@ -23,6 +23,7 @@ use common_meta_types::LogEntry;
 use common_meta_types::MatchSeq;
 use common_meta_types::Operation;
 use common_meta_types::SeqV;
+use common_meta_types::UpsertKV;
 use tracing::info;
 
 use crate::init_meta_ut;
@@ -59,14 +60,14 @@ async fn test_meta_node_replicate_kv_with_expire() -> anyhow::Result<()> {
             .write(LogEntry {
                 txid: None,
                 time_ms: None,
-                cmd: Cmd::UpsertKV {
+                cmd: Cmd::UpsertKV(UpsertKV {
                     key: key.to_string(),
                     seq: MatchSeq::Any,
                     value: Operation::Update(key.to_string().into_bytes()),
                     value_meta: Some(KVMeta {
                         expire_at: Some(now_sec + 3),
                     }),
-                },
+                }),
             })
             .await?;
         log_index += 1;
@@ -91,14 +92,14 @@ async fn test_meta_node_replicate_kv_with_expire() -> anyhow::Result<()> {
             .write(LogEntry {
                 txid: None,
                 time_ms: None,
-                cmd: Cmd::UpsertKV {
+                cmd: Cmd::UpsertKV(UpsertKV {
                     key: key.to_string(),
                     seq: MatchSeq::Exact(seq),
                     value: Operation::Update(value2.to_string().into_bytes()),
                     value_meta: Some(KVMeta {
                         expire_at: Some(now_sec + 1000),
                     }),
-                },
+                }),
             })
             .await?;
         log_index += 1;

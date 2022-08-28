@@ -28,14 +28,13 @@ use common_meta_types::Cmd;
 use common_meta_types::Endpoint;
 use common_meta_types::ForwardToLeader;
 use common_meta_types::LogEntry;
-use common_meta_types::MatchSeq;
 use common_meta_types::MetaError;
 use common_meta_types::MetaRaftError;
 use common_meta_types::Node;
 use common_meta_types::NodeId;
-use common_meta_types::Operation;
 use common_meta_types::RetryableError;
 use common_meta_types::SeqV;
+use common_meta_types::UpsertKV;
 use databend_meta::configs;
 use databend_meta::meta_service::meta_leader::MetaLeader;
 use databend_meta::meta_service::ForwardRequest;
@@ -129,12 +128,7 @@ async fn test_meta_node_write_to_local_leader() -> anyhow::Result<()> {
             .write(LogEntry {
                 txid: None,
                 time_ms: None,
-                cmd: Cmd::UpsertKV {
-                    key: key.to_string(),
-                    seq: MatchSeq::Any,
-                    value: Operation::Update(key.to_string().into_bytes()),
-                    value_meta: None,
-                },
+                cmd: Cmd::UpsertKV(UpsertKV::update(&key, key.as_bytes())),
             })
             .await;
 
@@ -197,12 +191,7 @@ async fn test_meta_node_snapshot_replication() -> anyhow::Result<()> {
         mn.write(LogEntry {
             txid: None,
             time_ms: None,
-            cmd: Cmd::UpsertKV {
-                key: key.clone(),
-                seq: MatchSeq::Any,
-                value: Some(b"v".to_vec()).into(),
-                value_meta: None,
-            },
+            cmd: Cmd::UpsertKV(UpsertKV::update(&key, b"v")),
         })
         .await?;
     }
@@ -592,12 +581,7 @@ async fn test_meta_node_restart_single_node() -> anyhow::Result<()> {
             .write(LogEntry {
                 txid: None,
                 time_ms: None,
-                cmd: Cmd::UpsertKV {
-                    key: "foo".to_string(),
-                    seq: MatchSeq::Any,
-                    value: Operation::Update(b"1".to_vec()),
-                    value_meta: None,
-                },
+                cmd: Cmd::UpsertKV(UpsertKV::update("foo", b"1")),
             })
             .await?;
         log_index += 1;
@@ -837,12 +821,7 @@ async fn assert_upsert_kv_synced(meta_nodes: Vec<Arc<MetaNode>>, key: &str) -> a
             .write(LogEntry {
                 txid: None,
                 time_ms: None,
-                cmd: Cmd::UpsertKV {
-                    key: key.to_string(),
-                    seq: MatchSeq::Any,
-                    value: Operation::Update(key.to_string().into_bytes()),
-                    value_meta: None,
-                },
+                cmd: Cmd::UpsertKV(UpsertKV::update(key, key.as_bytes())),
             })
             .await?;
     }
