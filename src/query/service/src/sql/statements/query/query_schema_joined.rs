@@ -89,7 +89,7 @@ impl JoinedSchema {
     pub fn set_table_push_downs(&mut self, table_pos: usize, extras: Extras) {
         let table_desc = &mut self.tables_long_name_columns[table_pos];
         if let JoinedTableDesc::Table { push_downs, .. } = table_desc {
-            *push_downs = Some(extras);
+            *push_downs = Box::new(Some(extras));
         }
     }
 
@@ -164,7 +164,7 @@ pub enum JoinedTableDesc {
         table: Arc<dyn Table>,
         name_parts: Vec<String>,
         columns_desc: Vec<JoinedColumnDesc>,
-        push_downs: Option<Extras>,
+        push_downs: Box<Option<Extras>>,
     },
     Subquery {
         state: Box<QueryAnalyzeState>,
@@ -186,7 +186,7 @@ impl JoinedTableDesc {
             table,
             columns_desc,
             name_parts: prefix,
-            push_downs: None,
+            push_downs: Box::new(None),
         }
     }
 
