@@ -300,6 +300,7 @@ impl Display for ShareGrantObject {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct ObjectSharedByShareIds {
+    // save share ids which shares this object
     pub share_ids: BTreeSet<u64>,
 }
 
@@ -422,10 +423,14 @@ impl Display for ShareGrantEntry {
 pub struct ShareMeta {
     pub database: Option<ShareGrantEntry>,
     pub entries: BTreeMap<String, ShareGrantEntry>,
+
+    // save accounts which has been granted access to this share.
     pub accounts: BTreeSet<String>,
     pub comment: Option<String>,
     pub share_on: DateTime<Utc>,
     pub update_on: Option<DateTime<Utc>>,
+
+    // save db ids which created from this share
     pub share_from_db_ids: BTreeSet<u64>,
 }
 
