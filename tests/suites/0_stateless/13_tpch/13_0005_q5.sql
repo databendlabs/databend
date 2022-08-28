@@ -1,7 +1,7 @@
 
 select
     n_name,
-    floor(sum(l_extendedprice * (1 - l_discount))) as revenue
+    ceil(sum(l_extendedprice * (1 - l_discount))) as revenue
 from
     customer,
     orders,
