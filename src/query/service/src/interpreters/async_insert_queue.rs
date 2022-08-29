@@ -41,6 +41,7 @@ use parking_lot::RwLock;
 use super::InsertInterpreter;
 use super::SelectInterpreter;
 use crate::interpreters::Interpreter;
+use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
@@ -305,10 +306,12 @@ impl AsyncInsertManager {
                 }
                 pipeline.add_pipe(sink_pipeline_builder.finalize());
 
+                let executor_settings = ExecutorSettings::try_create(&settings)?;
                 let executor = PipelineCompleteExecutor::try_create(
                     GlobalIORuntime::instance(),
                     ctx.query_need_abort(),
                     pipeline,
+                    executor_settings,
                 )
                 .unwrap();
                 executor.execute()?;

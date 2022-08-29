@@ -24,6 +24,7 @@ use super::plan_schedulers::schedule_query_v2;
 use crate::clusters::ClusterHelper;
 use crate::interpreters::stream::ProcessorExecutorStream;
 use crate::interpreters::Interpreter;
+use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelinePullingExecutor;
 use crate::pipelines::Pipeline;
 use crate::pipelines::PipelineBuildResult;
@@ -103,11 +104,14 @@ impl Interpreter for SelectInterpreterV2 {
                 .await;
         }
 
+        let executor_settings = ExecutorSettings::try_create(&self.ctx.get_settings())?;
+
         Ok(Box::pin(Box::pin(ProcessorExecutorStream::create(
             PipelinePullingExecutor::from_pipelines(
                 GlobalIORuntime::instance(),
                 self.ctx.query_need_abort(),
                 build_res,
+                executor_settings,
             )?,
         )?)))
     }

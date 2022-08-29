@@ -16,6 +16,7 @@ mod pipeline_executor;
 
 mod executor_condvar;
 mod executor_graph;
+mod executor_settings;
 mod executor_tasks;
 mod executor_worker_context;
 mod pipeline_complete_executor;
@@ -24,6 +25,7 @@ mod pipeline_pushing_executor;
 mod processor_async_task;
 
 pub use executor_graph::RunningGraph;
+pub use executor_settings::ExecutorSettings;
 pub use pipeline_complete_executor::PipelineCompleteExecutor;
 pub use pipeline_executor::FinishedCallback;
 pub use pipeline_executor::PipelineExecutor;

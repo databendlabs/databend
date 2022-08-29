@@ -25,6 +25,7 @@ use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+use crate::pipelines::executor::executor_settings::ExecutorSettings;
 use crate::pipelines::executor::PipelineExecutor;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::processor::ProcessorPtr;
@@ -77,12 +78,14 @@ impl PipelinePullingExecutor {
         async_runtime: Arc<Runtime>,
         query_need_abort: Arc<AtomicBool>,
         mut pipeline: Pipeline,
+        settings: ExecutorSettings,
     ) -> Result<PipelinePullingExecutor> {
         let (sender, receiver) = std::sync::mpsc::sync_channel(pipeline.output_len());
         let state = State::create(sender.clone());
 
         Self::wrap_pipeline(&mut pipeline, sender)?;
-        let executor = PipelineExecutor::create(async_runtime, query_need_abort, pipeline)?;
+        let executor =
+            PipelineExecutor::create(async_runtime, query_need_abort, pipeline, settings)?;
         Ok(PipelinePullingExecutor {
             receiver,
             state,
@@ -94,6 +97,7 @@ impl PipelinePullingExecutor {
         async_runtime: Arc<Runtime>,
         query_need_abort: Arc<AtomicBool>,
         build_res: PipelineBuildResult,
+        settings: ExecutorSettings,
     ) -> Result<PipelinePullingExecutor> {
         let mut main_pipeline = build_res.main_pipeline;
         let (sender, receiver) = std::sync::mpsc::sync_channel(main_pipeline.output_len());
@@ -106,7 +110,12 @@ impl PipelinePullingExecutor {
         Ok(PipelinePullingExecutor {
             receiver,
             state,
-            executor: PipelineExecutor::from_pipelines(async_runtime, query_need_abort, pipelines)?,
+            executor: PipelineExecutor::from_pipelines(
+                async_runtime,
+                query_need_abort,
+                pipelines,
+                settings,
+            )?,
         })
     }
 
