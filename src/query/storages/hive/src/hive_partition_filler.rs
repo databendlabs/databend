@@ -26,7 +26,6 @@ use common_datavalues::PrimitiveType;
 use common_datavalues::StringColumn;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::PartInfo;
 
 use crate::hive_partition::HivePartInfo;
 
@@ -81,8 +80,7 @@ impl HivePartitionFiller {
         }
     }
 
-    fn extract_partition_values(&self, part: Arc<Box<dyn PartInfo>>) -> Result<Vec<String>> {
-        let hive_part = part.as_any().downcast_ref::<HivePartInfo>().unwrap();
+    fn extract_partition_values(&self, hive_part: HivePartInfo) -> Result<Vec<String>> {
         let partition_map = hive_part.get_partition_map();
 
         let mut partition_values = vec![];
@@ -104,7 +102,7 @@ impl HivePartitionFiller {
     pub fn fill_data(
         &self,
         mut data_block: DataBlock,
-        part: Arc<Box<dyn PartInfo>>,
+        part: HivePartInfo,
         origin_num_rows: usize,
     ) -> Result<DataBlock> {
         let data_values = self.extract_partition_values(part)?;
