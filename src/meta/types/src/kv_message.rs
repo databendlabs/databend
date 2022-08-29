@@ -13,10 +13,10 @@
 // limitations under the License.
 
 use crate::Change;
-use crate::KVMeta;
-use crate::MatchSeq;
-use crate::Operation;
 use crate::SeqV;
+use crate::UpsertKV;
+
+pub type UpsertKVReq = UpsertKV;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct GetKVReq {
@@ -37,27 +37,3 @@ pub type UpsertKVReply = Change<Vec<u8>>;
 pub type GetKVReply = Option<SeqV<Vec<u8>>>;
 pub type MGetKVReply = Vec<Option<SeqV<Vec<u8>>>>;
 pub type ListKVReply = Vec<(String, SeqV<Vec<u8>>)>;
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct UpsertKVReq {
-    pub key: String,
-    pub seq: MatchSeq,
-    pub value: Operation<Vec<u8>>,
-    pub value_meta: Option<KVMeta>,
-}
-
-impl UpsertKVReq {
-    pub fn new(
-        key: &str,
-        seq: MatchSeq,
-        value: Operation<Vec<u8>>,
-        value_meta: Option<KVMeta>,
-    ) -> Self {
-        Self {
-            key: key.to_string(),
-            seq,
-            value,
-            value_meta,
-        }
-    }
-}

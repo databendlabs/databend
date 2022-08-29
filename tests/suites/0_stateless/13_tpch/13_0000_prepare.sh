@@ -99,9 +99,12 @@ echo "CREATE TABLE IF NOT EXISTS lineitem
 )" | $MYSQL_CLIENT_CONNECT
 
 
-#download data 
+#download data
 mkdir -p  ${CURDIR}/data/
-curl -s -o ${CURDIR}/data/tpch.tar.gz  http://repo.databend.rs/dataset/stateful/tpch.tar.gz
+if [ ! -d ${CURDIR}/data/tpch.tar.gz ];then
+    curl -s -o ${CURDIR}/data/tpch.tar.gz  http://repo.databend.rs/dataset/stateful/tpch.tar.gz
+fi
+
 tar -zxf ${CURDIR}/data/tpch.tar.gz -C ${CURDIR}/data
 
 # insert data to tables

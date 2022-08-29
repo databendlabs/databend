@@ -41,6 +41,7 @@ use tracing::debug;
 use crate::db_has_to_exist;
 use crate::fetch_id;
 use crate::get_db_or_err;
+use crate::get_object_shared_by_share_ids;
 use crate::get_share_account_meta_or_err;
 use crate::get_share_id_to_name_or_err;
 use crate::get_share_meta_by_id_or_err;
@@ -48,6 +49,7 @@ use crate::get_share_or_err;
 use crate::get_struct_value;
 use crate::get_u64_value;
 use crate::id_generator::IdGenerator;
+use crate::is_db_need_to_be_remove;
 use crate::list_keys;
 use crate::send_txn;
 use crate::serialize_struct;
@@ -155,6 +157,15 @@ impl<KV: KVApi> ShareApi for KV {
         )))
     }
 
+    // When drop a share, need to:
+    // drop __fd_share/<tenant>/<share_name> -> <share_id>
+    // drop __fd_share_id/<share_id> -> <share_meta>
+    // drop __fd_share_id_to_name/<share_id> -> ShareNameIdent
+    // iterator all the granted accounts(from ShareMeta.accounts),
+    //     drop __fd_share_account/tenant/id -> ShareAccountMeta
+    // iterator all the granted objects(from ShareMeta.{database|entries}),
+    //     remove share id from ObjectSharedByShareIds
+    // drop all the databases created from the share(from ShareMeta.share_from_db_ids),
     async fn drop_share(&self, req: DropShareReq) -> MetaResult<DropShareReply> {
         debug!(req = debug(&req), "ShareApi: {}", func_name!());
 
@@ -194,31 +205,40 @@ impl<KV: KVApi> ShareApi for KV {
                 }
             };
 
-            // get all accounts seq from share_meta
-            let mut accounts = vec![];
-            for account in share_meta.get_accounts() {
-                let share_account_key = ShareAccountNameIdent {
-                    account: account.clone(),
-                    share_id,
-                };
-                let ret = get_share_account_meta_or_err(
-                    self,
-                    &share_account_key,
-                    format!("drop_share's account: {}/{}", share_id, account),
-                )
-                .await;
-
-                match ret {
-                    Err(_) => {}
-                    Ok((seq, _meta)) => accounts.push((share_account_key, seq)),
-                }
-            }
-
             // Delete share by these operations:
             // del (tenant, share_name)
             // del share_id
             // del (share_id) -> (tenant, share_name)
             // del all outbound of share
+            // remove share id from share object metas
+            // drop the database created from share
+
+            let mut condition = vec![];
+            let mut if_then = vec![];
+
+            // drop all accounts seq from share_meta
+            drop_accounts_granted_from_share(
+                self,
+                share_id,
+                &share_meta,
+                &mut condition,
+                &mut if_then,
+            )
+            .await?;
+
+            // remove share id from the share objects
+            remove_share_id_from_share_objects(
+                self,
+                share_id,
+                &share_meta,
+                &mut condition,
+                &mut if_then,
+            )
+            .await?;
+
+            // drop all the databases created from the share
+            drop_all_database_from_share(self, share_id, &share_meta, &mut condition, &mut if_then)
+                .await?;
 
             let share_id_key = ShareId { share_id };
             let id_name_key = ShareIdToName { share_id };
@@ -226,20 +246,12 @@ impl<KV: KVApi> ShareApi for KV {
             debug!(share_id, name_key = debug(&name_key), "drop_share");
 
             {
-                let mut condition = vec![
-                    txn_cond_seq(name_key, Eq, share_id_seq),
-                    txn_cond_seq(&share_id_key, Eq, share_meta_seq),
-                    txn_cond_seq(&id_name_key, Eq, share_name_seq),
-                ];
-                let mut if_then = vec![
-                    txn_op_del(name_key),      // del (tenant, share_name)
-                    txn_op_del(&share_id_key), // del share_id
-                    txn_op_del(&id_name_key),  // del (share_id) -> (tenant, share_name)
-                ];
-                for account in accounts {
-                    condition.push(txn_cond_seq(&account.0, Eq, account.1));
-                    if_then.push(txn_op_del(&account.0));
-                }
+                condition.push(txn_cond_seq(name_key, Eq, share_id_seq));
+                condition.push(txn_cond_seq(&share_id_key, Eq, share_meta_seq));
+                condition.push(txn_cond_seq(&id_name_key, Eq, share_name_seq));
+                if_then.push(txn_op_del(name_key)); // del (tenant, share_name)
+                if_then.push(txn_op_del(&share_id_key)); // del share_id
+                if_then.push(txn_op_del(&id_name_key)); // del (share_id) -> (tenant, share_name)
 
                 let txn_req = TxnRequest {
                     condition,
@@ -879,19 +891,6 @@ impl<KV: KVApi> ShareApi for KV {
     }
 }
 
-async fn get_object_shared_by_share_ids(
-    kv_api: &(impl KVApi + ?Sized),
-    object: &ShareGrantObject,
-) -> Result<(u64, ObjectSharedByShareIds), MetaError> {
-    let (seq, share_ids): (u64, Option<ObjectSharedByShareIds>) =
-        get_struct_value(kv_api, object).await?;
-
-    match share_ids {
-        Some(share_ids) => Ok((seq, share_ids)),
-        None => Ok((0, ObjectSharedByShareIds::default())),
-    }
-}
-
 async fn get_share_database_name(
     kv_api: &(impl KVApi + ?Sized),
     share_meta: &ShareMeta,
@@ -1212,5 +1211,81 @@ fn add_grant_object_txn_if_then(
         ShareGrantObjectSeqAndId::Table(_, _, _) => {}
     }
 
+    Ok(())
+}
+
+async fn drop_accounts_granted_from_share(
+    kv_api: &(impl KVApi + ?Sized),
+    share_id: u64,
+    share_meta: &ShareMeta,
+    condition: &mut Vec<TxnCondition>,
+    if_then: &mut Vec<TxnOp>,
+) -> MetaResult<()> {
+    // get all accounts seq from share_meta
+    for account in share_meta.get_accounts() {
+        let share_account_key = ShareAccountNameIdent {
+            account: account.clone(),
+            share_id,
+        };
+        let ret = get_share_account_meta_or_err(
+            kv_api,
+            &share_account_key,
+            format!("drop_share's account: {}/{}", share_id, account),
+        )
+        .await;
+
+        if let Ok((seq, _meta)) = ret {
+            condition.push(txn_cond_seq(&share_account_key, Eq, seq));
+            if_then.push(txn_op_del(&share_account_key));
+        }
+    }
+
+    Ok(())
+}
+
+async fn remove_share_id_from_share_object(
+    kv_api: &(impl KVApi + ?Sized),
+    share_id: u64,
+    entry: &ShareGrantEntry,
+    condition: &mut Vec<TxnCondition>,
+    if_then: &mut Vec<TxnOp>,
+) -> MetaResult<()> {
+    if let Ok((seq, mut share_ids)) = get_object_shared_by_share_ids(kv_api, &entry.object).await {
+        share_ids.remove(share_id);
+
+        condition.push(txn_cond_seq(&entry.object, Eq, seq));
+        if_then.push(txn_op_put(&entry.object, serialize_struct(&share_ids)?));
+    }
+    Ok(())
+}
+
+async fn remove_share_id_from_share_objects(
+    kv_api: &(impl KVApi + ?Sized),
+    share_id: u64,
+    share_meta: &ShareMeta,
+    condition: &mut Vec<TxnCondition>,
+    if_then: &mut Vec<TxnOp>,
+) -> MetaResult<()> {
+    if let Some(database) = &share_meta.database {
+        remove_share_id_from_share_object(kv_api, share_id, database, condition, if_then).await?;
+    }
+
+    for (_key, entry) in share_meta.entries.iter() {
+        remove_share_id_from_share_object(kv_api, share_id, entry, condition, if_then).await?;
+    }
+
+    Ok(())
+}
+
+async fn drop_all_database_from_share(
+    kv_api: &(impl KVApi + ?Sized),
+    _share_id: u64,
+    share_meta: &ShareMeta,
+    condition: &mut Vec<TxnCondition>,
+    if_then: &mut Vec<TxnOp>,
+) -> MetaResult<()> {
+    for db_id in &share_meta.share_from_db_ids {
+        let _ = is_db_need_to_be_remove(kv_api, *db_id, |_db_meta| true, condition, if_then).await;
+    }
     Ok(())
 }

@@ -21,6 +21,7 @@ use common_meta_types::MetaError;
 use common_meta_types::SeqV;
 use common_meta_types::TxnReply;
 use common_meta_types::TxnRequest;
+use common_meta_types::UpsertKV;
 use common_meta_types::UpsertKVReply;
 use common_meta_types::UpsertKVReq;
 use tracing::debug;
@@ -30,12 +31,12 @@ use crate::state_machine::StateMachine;
 #[async_trait::async_trait]
 impl KVApi for StateMachine {
     async fn upsert_kv(&self, act: UpsertKVReq) -> Result<UpsertKVReply, MetaError> {
-        let cmd = Cmd::UpsertKV {
+        let cmd = Cmd::UpsertKV(UpsertKV {
             key: act.key,
             seq: act.seq,
             value: act.value,
             value_meta: act.value_meta,
-        };
+        });
 
         let res = self.sm_tree.txn(true, |t| {
             let r = self

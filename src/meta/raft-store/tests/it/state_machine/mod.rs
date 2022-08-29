@@ -29,6 +29,8 @@ use common_meta_types::LogEntry;
 use common_meta_types::MatchSeq;
 use common_meta_types::Operation;
 use common_meta_types::SeqV;
+use common_meta_types::UpsertKV;
+use common_meta_types::With;
 use openraft::raft::Entry;
 use openraft::raft::EntryPayload;
 use openraft::LogId;
@@ -212,12 +214,12 @@ async fn test_state_machine_apply_non_dup_generic_kv_upsert_get() -> anyhow::Res
         let resp = sm.sm_tree.txn(true, |t| {
             Ok(sm
                 .apply_cmd(
-                    &Cmd::UpsertKV {
+                    &Cmd::UpsertKV(UpsertKV {
                         key: c.key.clone(),
                         seq: c.seq,
                         value: Some(c.value.clone()).into(),
                         value_meta: c.value_meta.clone(),
-                    },
+                    }),
                     &t,
                     None,
                     SeqV::<()>::now_ms(),
@@ -276,14 +278,14 @@ async fn test_state_machine_apply_non_dup_generic_kv_value_meta() -> anyhow::Res
     let resp = sm.sm_tree.txn(true, |t| {
         Ok(sm
             .apply_cmd(
-                &Cmd::UpsertKV {
+                &Cmd::UpsertKV(UpsertKV {
                     key: key.clone(),
                     seq: MatchSeq::Any,
                     value: Operation::AsIs,
                     value_meta: Some(KVMeta {
                         expire_at: Some(now + 10),
                     }),
-                },
+                }),
                 &t,
                 None,
                 0,
@@ -303,14 +305,14 @@ async fn test_state_machine_apply_non_dup_generic_kv_value_meta() -> anyhow::Res
     sm.sm_tree.txn(true, |t| {
         Ok(sm
             .apply_cmd(
-                &Cmd::UpsertKV {
+                &Cmd::UpsertKV(UpsertKV {
                     key: key.clone(),
                     seq: MatchSeq::Any,
                     value: Operation::Update(b"value_meta_bar".to_vec()),
                     value_meta: Some(KVMeta {
                         expire_at: Some(now + 10),
                     }),
-                },
+                }),
                 &t,
                 None,
                 0,
@@ -322,14 +324,14 @@ async fn test_state_machine_apply_non_dup_generic_kv_value_meta() -> anyhow::Res
     sm.sm_tree.txn(true, |t| {
         Ok(sm
             .apply_cmd(
-                &Cmd::UpsertKV {
+                &Cmd::UpsertKV(UpsertKV {
                     key: key.clone(),
                     seq: MatchSeq::Any,
                     value: Operation::AsIs,
                     value_meta: Some(KVMeta {
                         expire_at: Some(now + 20),
                     }),
-                },
+                }),
                 &t,
                 None,
                 0,
@@ -404,17 +406,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_delete() -> anyhow::Result<
         // prepare an record
         sm.sm_tree.txn(true, |t| {
             Ok(sm
-                .apply_cmd(
-                    &Cmd::UpsertKV {
-                        key: "foo".to_string(),
-                        seq: MatchSeq::Any,
-                        value: Some(b"x".to_vec()).into(),
-                        value_meta: None,
-                    },
-                    &t,
-                    None,
-                    0,
-                )
+                .apply_cmd(&Cmd::UpsertKV(UpsertKV::update("foo", b"x")), &t, None, 0)
                 .unwrap())
         })?;
 
@@ -422,12 +414,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_delete() -> anyhow::Result<
         let resp = sm.sm_tree.txn(true, |t| {
             Ok(sm
                 .apply_cmd(
-                    &Cmd::UpsertKV {
-                        key: c.key.clone(),
-                        seq: c.seq,
-                        value: Operation::Delete,
-                        value_meta: None,
-                    },
+                    &Cmd::UpsertKV(UpsertKV::delete(&c.key).with(c.seq)),
                     &t,
                     None,
                     0,
