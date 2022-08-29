@@ -767,30 +767,30 @@ impl<'a> TypeChecker<'a> {
 
             Expr::DateAdd {
                 span,
-                date,
-                interval,
                 unit,
+                interval,
+                date,
                 ..
             } => {
-                self.resolve_date_add(span, date, interval, unit, required_type)
+                self.resolve_date_add(span, unit, interval, date, required_type)
                     .await?
             }
             Expr::DateSub {
                 span,
-                date,
-                interval,
                 unit,
+                interval,
+                date,
                 ..
             } => {
                 self.resolve_date_add(
                     span,
-                    date,
+                    unit,
                     &Expr::UnaryOp {
                         span,
                         op: UnaryOperator::Minus,
                         expr: interval.clone(),
                     },
-                    unit,
+                    date,
                     required_type,
                 )
                 .await?
@@ -1255,9 +1255,9 @@ impl<'a> TypeChecker<'a> {
     pub async fn resolve_date_add(
         &mut self,
         span: &[Token<'_>],
-        date: &Expr<'_>,
-        interval: &Expr<'_>,
         interval_kind: &IntervalKind,
+        interval: &Expr<'_>,
+        date: &Expr<'_>,
         _required_type: Option<DataTypeImpl>,
     ) -> Result<Box<(Scalar, DataTypeImpl)>> {
         let mut args = vec![];

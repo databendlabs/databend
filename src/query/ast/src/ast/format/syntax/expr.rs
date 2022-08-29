@@ -316,9 +316,9 @@ pub(crate) fn pretty_expr(expr: Expr) -> RcDoc {
             .append(RcDoc::space())
             .append(RcDoc::text(unit.to_string())),
         Expr::DateAdd {
-            date,
-            interval,
             unit,
+            interval,
+            date,
             ..
         } => RcDoc::text("DATE_ADD(")
             .append(pretty_expr(*date))
@@ -331,9 +331,9 @@ pub(crate) fn pretty_expr(expr: Expr) -> RcDoc {
             .append(RcDoc::text(unit.to_string()))
             .append(RcDoc::text(")")),
         Expr::DateSub {
-            date,
-            interval,
             unit,
+            interval,
+            date,
             ..
         } => RcDoc::text("DATE_SUB(")
             .append(pretty_expr(*date))
