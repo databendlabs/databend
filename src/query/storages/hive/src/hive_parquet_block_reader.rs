@@ -33,7 +33,6 @@ use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::PartInfo;
 use common_planners::PartInfoPtr;
 use futures::AsyncReadExt;
 use opendal::Object;
@@ -168,38 +167,23 @@ impl HiveParquetBlockReader {
         }
     }
 
-    pub async fn read_columns_data(
-        &self,
-        part: PartInfoPtr,
-    ) -> Result<(FileMetaData, Vec<Vec<u8>>)> {
-        let part = HivePartInfo::from_part(&part)?;
-
-        let object = self.operator.object(&part.filename);
+    pub async fn read_meta_data(&self, filename: &str) -> Result<FileMetaData> {
+        let object = self.operator.object(filename);
         let mut reader = object.seekable_reader(0..);
         let meta = read_metadata_async(&mut reader).await;
-        let meta = match meta {
-            Ok(meta) => meta,
-            Err(err) => {
-                tracing::warn!("parquet failed,read_meta,{}", part.filename);
-                return Err(ErrorCode::ParquetError(format!(
-                    "read meta failed, {}, {:?}",
-                    part.filename, err
-                )));
-            }
-        };
-
-        if meta.row_groups.is_empty() {
-            tracing::warn!("parquet failed,no rowgroup,{}", part.filename);
-            return Err(ErrorCode::ParquetError(format!(
-                "no rowgroup in parquet file: {}",
-                part.filename
-            )));
+        if meta.is_err() {
+            tracing::warn!("parquet failed,read_meta,{}", filename);
         }
+        meta.map_err(|err| {
+            ErrorCode::ParquetError(format!("read meta failed, {}, {:?}", filename, err))
+        })
+    }
 
-        // todo: support more than one rowgroup
-        // todo: support predict push down
-        let row_group = &meta.row_groups[0];
-
+    pub async fn read_columns_data(
+        &self,
+        row_group: &RowGroupMetaData,
+        part: &HivePartInfo,
+    ) -> Result<Vec<Vec<u8>>> {
         let mut join_handlers = Vec::with_capacity(self.projection.len());
 
         let semaphore = Arc::new(Semaphore::new(10));
@@ -216,14 +200,14 @@ impl HiveParquetBlockReader {
             ));
         }
 
-        Ok((meta, futures::future::try_join_all(join_handlers).await?))
+        futures::future::try_join_all(join_handlers).await
     }
 
     pub fn deserialize(
         &self,
         chunks: Vec<Vec<u8>>,
-        meta: FileMetaData,
-        part: Arc<Box<dyn PartInfo>>,
+        row_group: &RowGroupMetaData,
+        part: HivePartInfo,
     ) -> Result<DataBlock> {
         if self.projection.len() != chunks.len() {
             return Err(ErrorCode::LogicalError(
@@ -231,7 +215,6 @@ impl HiveParquetBlockReader {
             ));
         }
 
-        let row_group = &meta.row_groups[0];
         let mut columns_array_iter = Vec::with_capacity(self.projection.len());
 
         for (index, column_chunk) in chunks.into_iter().enumerate() {
@@ -254,7 +237,6 @@ impl HiveParquetBlockReader {
 
         let data_block = self.try_next_block(&mut deserializer);
         if data_block.is_err() {
-            let part = part.as_any().downcast_ref::<HivePartInfo>().unwrap();
             let err = data_block.err().unwrap();
             tracing::warn!("parquet failed,deserialize,{}", part.filename);
             return Err(ErrorCode::ParquetError(format!(

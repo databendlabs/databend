@@ -14,6 +14,7 @@
 
 use std::any::Any;
 use std::collections::HashMap;
+use std::ops::Range;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
@@ -21,12 +22,14 @@ use common_exception::Result;
 use common_planners::PartInfo;
 use common_planners::PartInfoPtr;
 
-#[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Debug, Clone)]
 pub struct HivePartInfo {
     // file location, like /usr/hive/warehouse/ssb.db/customer.table/c_region=ASIA/c_nation=CHINA/f00.parquet
     pub filename: String,
     // partition values, like 'c_region=ASIA/c_nation=CHINA'
     pub partitions: Option<String>,
+    // only the data in ranges belong to this partition
+    pub range: Range<u64>,
 }
 
 #[typetag::serde(name = "hive")]
@@ -44,10 +47,15 @@ impl PartInfo for HivePartInfo {
 }
 
 impl HivePartInfo {
-    pub fn create(filename: String, partitions: Option<String>) -> Arc<Box<dyn PartInfo>> {
+    pub fn create(
+        filename: String,
+        partitions: Option<String>,
+        range: Range<u64>,
+    ) -> Arc<Box<dyn PartInfo>> {
         Arc::new(Box::new(HivePartInfo {
             filename,
             partitions,
+            range,
         }))
     }
 

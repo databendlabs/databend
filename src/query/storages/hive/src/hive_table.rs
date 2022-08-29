@@ -48,9 +48,9 @@ use super::hive_catalog::HiveCatalog;
 use super::hive_partition_pruner::HivePartitionPruner;
 use super::hive_table_options::HiveTableOptions;
 use crate::hive_parquet_block_reader::HiveParquetBlockReader;
-use crate::hive_partition::HivePartInfo;
 use crate::hive_partition_filler::HivePartitionFiller;
 use crate::hive_table_source::HiveTableSource;
+use crate::HiveFileSplitter;
 use crate::CATALOG_HIVE;
 
 /// ! Dummy implementation for HIVE TABLE
@@ -246,7 +246,7 @@ impl HiveTable {
         &self,
         ctx: Arc<dyn TableContext>,
         dirs: Vec<(String, Option<String>)>,
-    ) -> Result<Vec<(String, Option<String>)>> {
+    ) -> Result<Vec<HiveFileInfo>> {
         let operator = ctx.get_storage_operator()?;
 
         let sem = Arc::new(Semaphore::new(60));
@@ -264,8 +264,9 @@ impl HiveTable {
         let mut all_files = vec![];
         for (task, partition) in tasks {
             let files = task.await.unwrap()?;
-            for file in files {
-                all_files.push((file, partition.clone()));
+            for mut file in files {
+                file.add_partition(partition.clone());
+                all_files.push(file);
             }
         }
 
@@ -279,12 +280,10 @@ impl HiveTable {
         push_downs: Option<Extras>,
     ) -> Result<(Statistics, Partitions)> {
         let dirs = self.get_query_locations(ctx.clone(), &push_downs).await?;
-        let all_files = self.list_files_from_dirs(ctx, dirs).await?;
+        let all_files = self.list_files_from_dirs(ctx.clone(), dirs).await?;
 
-        let partitions = all_files
-            .into_iter()
-            .map(|(filename, partition)| HivePartInfo::create(filename, partition))
-            .collect();
+        let splitter = HiveFileSplitter::create(128 * 1024 * 1024_u64);
+        let partitions = splitter.get_splits(all_files);
 
         Ok((Default::default(), partitions))
     }
@@ -400,6 +399,26 @@ impl SyncSource for HiveSource {
     }
 }
 
+pub struct HiveFileInfo {
+    pub filename: String,
+    pub length: u64,
+    pub partition: Option<String>,
+}
+
+impl HiveFileInfo {
+    pub fn create(filename: String, length: u64) -> Self {
+        HiveFileInfo {
+            filename,
+            length,
+            partition: None,
+        }
+    }
+
+    pub fn add_partition(&mut self, partition: Option<String>) {
+        self.partition = partition;
+    }
+}
+
 // convert hdfs path format to opendal path formated
 //
 // there are two rules:
@@ -471,7 +490,7 @@ async fn list_files_from_dir(
     operator: Operator,
     location: String,
     sem: Arc<Semaphore>,
-) -> Result<Vec<String>> {
+) -> Result<Vec<HiveFileInfo>> {
     let (files, dirs) = do_list_files_from_dir(operator.clone(), location, sem.clone()).await?;
     let mut all_files = files;
     let mut tasks = Vec::with_capacity(dirs.len());
@@ -493,11 +512,17 @@ async fn list_files_from_dir(
     Ok(all_files)
 }
 
+async fn get_file_length(operator: Operator, file: &str) -> Result<u64> {
+    let object = operator.object(file);
+    let meta = object.metadata().await?;
+    Ok(meta.content_length())
+}
+
 async fn do_list_files_from_dir(
     operator: Operator,
     location: String,
     sem: Arc<Semaphore>,
-) -> Result<(Vec<String>, Vec<String>)> {
+) -> Result<(Vec<HiveFileInfo>, Vec<String>)> {
     let _a = sem.acquire().await.unwrap();
     let object = operator.object(&location);
     let mut m = object.list().await?;
@@ -512,7 +537,10 @@ async fn do_list_files_from_dir(
         }
         match de.mode() {
             ObjectMode::FILE => {
-                all_files.push(path.to_string());
+                // todo, support in opendal#list
+                let filename = path.to_string();
+                let length = get_file_length(operator.clone(), path).await?;
+                all_files.push(HiveFileInfo::create(filename, length));
             }
             ObjectMode::DIR => {
                 all_dirs.push(path.to_string());
