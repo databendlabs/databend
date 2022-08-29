@@ -1999,18 +1999,18 @@ impl<'a> TypeChecker<'a> {
                 }),
                 Expr::DateAdd {
                     span,
-                    date,
-                    interval,
                     unit,
+                    interval,
+                    date,
                 } => Ok(Expr::DateAdd {
                     span,
-                    date: Box::new(
-                        self.clone_expr_with_replacement(date.as_ref(), replacement_fn)?,
-                    ),
+                    unit: *unit,
                     interval: Box::new(
                         self.clone_expr_with_replacement(interval.as_ref(), replacement_fn)?,
                     ),
-                    unit: *unit,
+                    date: Box::new(
+                        self.clone_expr_with_replacement(date.as_ref(), replacement_fn)?,
+                    ),
                 }),
                 _ => Ok(original_expr.clone()),
             },

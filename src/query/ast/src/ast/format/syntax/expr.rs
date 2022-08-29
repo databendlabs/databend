@@ -321,14 +321,15 @@ pub(crate) fn pretty_expr(expr: Expr) -> RcDoc {
             date,
             ..
         } => RcDoc::text("DATE_ADD(")
-            .append(pretty_expr(*date))
+            .append(RcDoc::text(unit.to_string()))
             .append(RcDoc::text(","))
             .append(RcDoc::space())
             .append(RcDoc::text("INTERVAL"))
             .append(RcDoc::space())
             .append(pretty_expr(*interval))
+            .append(RcDoc::text(","))
             .append(RcDoc::space())
-            .append(RcDoc::text(unit.to_string()))
+            .append(pretty_expr(*date))
             .append(RcDoc::text(")")),
         Expr::DateSub {
             unit,
@@ -336,14 +337,15 @@ pub(crate) fn pretty_expr(expr: Expr) -> RcDoc {
             date,
             ..
         } => RcDoc::text("DATE_SUB(")
-            .append(pretty_expr(*date))
+            .append(RcDoc::text(unit.to_string()))
             .append(RcDoc::text(","))
             .append(RcDoc::space())
             .append(RcDoc::text("INTERVAL"))
             .append(RcDoc::space())
             .append(pretty_expr(*interval))
+            .append(RcDoc::text(","))
             .append(RcDoc::space())
-            .append(RcDoc::text(unit.to_string()))
+            .append(pretty_expr(*date))
             .append(RcDoc::text(")")),
         Expr::DateTrunc { unit, date, .. } => RcDoc::text("DATE_TRUNC(")
             .append(RcDoc::text(unit.to_string()))

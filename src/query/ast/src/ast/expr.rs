@@ -855,7 +855,7 @@ impl<'a> Display for Expr<'a> {
                 date,
                 ..
             } => {
-                write!(f, "DATE_ADD({date}, INTERVAL {interval} {unit})")?;
+                write!(f, "DATE_ADD({unit}, INTERVAL {interval}, {date})")?;
             }
             Expr::DateSub {
                 unit,
@@ -863,7 +863,7 @@ impl<'a> Display for Expr<'a> {
                 date,
                 ..
             } => {
-                write!(f, "DATE_SUB({date}, INTERVAL {interval} {unit})")?;
+                write!(f, "DATE_SUB({unit}, INTERVAL {interval}, {date})")?;
             }
             Expr::DateTrunc { unit, date, .. } => {
                 write!(f, "DATE_TRUNC({unit}, {date})")?;
