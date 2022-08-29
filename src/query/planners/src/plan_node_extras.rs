@@ -16,6 +16,8 @@ use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 
+use common_datavalues::DataSchema;
+
 use crate::Expression;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq)]
@@ -40,6 +42,14 @@ impl Projection {
         match self {
             Projection::Columns(indices) => indices.is_empty(),
             Projection::InnerColumns(path_indices) => path_indices.is_empty(),
+        }
+    }
+
+    /// Use this projection to project a schema.
+    pub fn project_schema(&self, schema: &DataSchema) -> DataSchema {
+        match self {
+            Projection::Columns(indices) => schema.project(indices),
+            Projection::InnerColumns(path_indices) => schema.inner_project(path_indices),
         }
     }
 }
