@@ -117,28 +117,28 @@ output         : 0.5403023058681398
 ast            : tan(1)
 raw expr       : tan(1_u8)
 checked expr   : tan<Float64>(CAST(1_u8 AS Float64))
-optimized expr : 1.557407724654902_f64
+optimized expr : 1.5574077246549023_f64
 output type    : Float64
 output domain  : Unknown
-output         : 1.557407724654902
+output         : 1.5574077246549023
 
 
 ast            : atan(0.5)
 raw expr       : atan(0.5_f64)
 checked expr   : atan<Float64>(0.5_f64)
-optimized expr : 0.46364760900080615_f64
+optimized expr : 0.4636476090008061_f64
 output type    : Float64
 output domain  : {-1.5707963267948966..=1.5707963267948966}
-output         : 0.46364760900080615
+output         : 0.4636476090008061
 
 
 ast            : cot(-1.0)
 raw expr       : cot(minus(1_f64))
 checked expr   : cot<Float64>(minus<Float64>(1.0_f64))
-optimized expr : -0.6420926159343308_f64
+optimized expr : -0.6420926159343306_f64
 output type    : Float64
 output domain  : Unknown
-output         : -0.6420926159343308
+output         : -0.6420926159343306
 
 
 ast            : asin(1)
