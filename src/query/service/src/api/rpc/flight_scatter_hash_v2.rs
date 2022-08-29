@@ -129,20 +129,28 @@ impl OneHashKeyFlightScatter {
     ) -> Result<Box<dyn FlightScatter>> {
         let hash_key = Evaluator::eval_physical_scalar(scalar)?;
 
+        let mut sip_hash = EvalNode::<ColumnID>::Function {
+            args: vec![hash_key],
+            func: FunctionFactory::instance().get("sipHash", &[&scalar.data_type()])?,
+        };
+
+        if scalar.data_type().is_nullable() {
+            sip_hash = EvalNode::Function {
+                args: vec![sip_hash],
+                func: FunctionFactory::instance().get("ASSUME_NOT_NULL", &[
+                    &NullableType::new_impl(DataTypeImpl::UInt64(UInt64Type::new())),
+                ])?,
+            };
+        }
+
         Ok(Box::new(OneHashKeyFlightScatter {
             scatter_size,
             func_ctx,
             indices_scalar: EvalNode::<ColumnID>::Function {
-                args: vec![
-                    EvalNode::Function {
-                        args: vec![hash_key],
-                        func: FunctionFactory::instance().get("sipHash", &[&scalar.data_type()])?,
-                    },
-                    EvalNode::Constant {
-                        value: DataValue::UInt64(scatter_size as u64),
-                        data_type: DataTypeImpl::UInt64(UInt64Type::new()),
-                    },
-                ],
+                args: vec![sip_hash, EvalNode::Constant {
+                    value: DataValue::UInt64(scatter_size as u64),
+                    data_type: DataTypeImpl::UInt64(UInt64Type::new()),
+                }],
                 func: FunctionFactory::instance().get("modulo", &[
                     &DataTypeImpl::UInt64(UInt64Type::new()),
                     &DataTypeImpl::UInt64(UInt64Type::new()),
