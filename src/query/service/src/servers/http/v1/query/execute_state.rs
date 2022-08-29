@@ -346,7 +346,7 @@ impl HttpQueryHandle {
         result_columns: &[ColumnBinding],
     ) -> Result<SendableDataBlockStream> {
         let id = ctx.get_id();
-        tracing::info!("http query_id execute() begin");
+        tracing::info!("http query {id} execute() begin");
 
         let executor = self.executor.clone();
         let block_buffer = self.block_buffer.clone();
