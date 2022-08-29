@@ -2,66 +2,168 @@ statement query T
 explain select * from (select t.number from numbers(10) as t limit 8) limit 9;
 
 ----
-Limit: [9], Offset: [0]
-└── Limit: [8], Offset: [0]
-    └── Scan: default.system.numbers, filters: [], Sort: [none], limit: [8]
+Limit
+├── limit: [9]
+├── offset: [0]
+└── Limit
+    ├── limit: [8]
+    ├── offset: [0]
+    └── PhysicalScan
+        ├── table: default.system.numbers
+        ├── filters: []
+        ├── order by: []
+        └── limit: 8
 
 statement query T
 explain select * from (select t.number from numbers(10) as t order by number desc) order by number asc;
 
 ----
-Sort: [number (#0) ASC], limit: [none]
-└── Sort: [number (#0) DESC], limit: [none]
-    └── Scan: default.system.numbers, filters: [], Sort: [number (#0) DESC], limit: [none]
+Sort
+├── sort keys: [number (#0) ASC]
+├── limit: [NONE]
+└── Sort
+    ├── sort keys: [number (#0) DESC]
+    ├── limit: [NONE]
+    └── PhysicalScan
+        ├── table: default.system.numbers
+        ├── filters: []
+        ├── order by: [number (#0) DESC]
+        └── limit: NONE
 
 statement query T
 explain select number from (select t.number from numbers(10) as t order by number desc limit 8) order by number asc limit 9;
 
 ----
-Limit: [9], Offset: [0]
-└── Sort: [number (#0) ASC], limit: [9]
-    └── Limit: [8], Offset: [0]
-        └── Sort: [number (#0) DESC], limit: [8]
-            └── Scan: default.system.numbers, filters: [], Sort: [number (#0) DESC], limit: [8]
+Limit
+├── limit: [9]
+├── offset: [0]
+└── Sort
+    ├── sort keys: [number (#0) ASC]
+    ├── limit: [9]
+    └── Limit
+        ├── limit: [8]
+        ├── offset: [0]
+        └── Sort
+            ├── sort keys: [number (#0) DESC]
+            ├── limit: [8]
+            └── PhysicalScan
+                ├── table: default.system.numbers
+                ├── filters: []
+                ├── order by: [number (#0) DESC]
+                └── limit: 8
 
 statement query T
 explain select t.number from numbers(1) as t, numbers(1) as t1 where t.number = (select count(*) from numbers(1) as t2, numbers(1) as t3 where t.number = t2.number) group by t.number order by t.number desc limit 3;
 
 ----
-Limit: [3], Offset: [0]
-└── Sort: [number (#0) DESC], limit: [3]
-    └── Aggregate(Final): group items: [t.number (#0)], aggregate functions: []
-        └── Aggregate(Partial): group items: [t.number (#0)], aggregate functions: []
-            └── Filter: [t.number (#0) = CAST(if(is_null(scalar_subquery_4 (#4)), 0, scalar_subquery_4 (#4)) AS BIGINT UNSIGNED)]
-                └── HashJoin: SINGLE, build keys: [subquery_6 (#6)], probe keys: [subquery_0 (#0)], join filters: []
+Limit
+├── limit: [3]
+├── offset: [0]
+└── Sort
+    ├── sort keys: [number (#0) DESC]
+    ├── limit: [3]
+    └── Aggregate(Final)
+        ├── group items: [t.number (#0)]
+        ├── aggregate functions: []
+        └── Aggregate(Partial)
+            ├── group items: [t.number (#0)]
+            ├── aggregate functions: []
+            └── Filter
+                ├── filters: [t.number (#0) = CAST(if(is_null(scalar_subquery_4 (#4)), 0, scalar_subquery_4 (#4)) AS BIGINT UNSIGNED)]
+                └── HashJoin: SINGLE
+                    ├── build keys: [subquery_6 (#6)]
+                    ├── probe keys: [subquery_0 (#0)]
+                    ├── other filters: []
                     ├── CrossJoin
-                    │   ├── Scan: default.system.numbers, filters: [], Sort: [none], limit: [none]
-                    │   └── Scan: default.system.numbers, filters: [], Sort: [none], limit: [none]
-                    └── Project: [COUNT(*) (#4),number (#6)]
-                        └── EvalScalar: [COUNT(*) (#5)]
-                            └── Aggregate(Final): group items: [subquery_6 (#6)], aggregate functions: [COUNT(*)]
-                                └── Aggregate(Partial): group items: [subquery_6 (#6)], aggregate functions: [COUNT(*)]
-                                    └── HashJoin: INNER, build keys: [t2.number (#2)], probe keys: [subquery_6 (#6)], join filters: []
-                                        ├── Scan: default.system.numbers, filters: [], Sort: [none], limit: [none]
+                    │   ├── build keys: []
+                    │   ├── probe keys: []
+                    │   ├── other filters: []
+                    │   ├── PhysicalScan
+                    │   │   ├── table: default.system.numbers
+                    │   │   ├── filters: []
+                    │   │   ├── order by: []
+                    │   │   └── limit: NONE
+                    │   └── PhysicalScan
+                    │       ├── table: default.system.numbers
+                    │       ├── filters: []
+                    │       ├── order by: []
+                    │       └── limit: NONE
+                    └── Project
+                        ├── projections: [COUNT(*) (#4),number (#6)]
+                        └── EvalScalar
+                            ├── scalars: [COUNT(*) (#5)]
+                            └── Aggregate(Final)
+                                ├── group items: [subquery_6 (#6)]
+                                ├── aggregate functions: [COUNT(*)]
+                                └── Aggregate(Partial)
+                                    ├── group items: [subquery_6 (#6)]
+                                    ├── aggregate functions: [COUNT(*)]
+                                    └── HashJoin: INNER
+                                        ├── build keys: [t2.number (#2)]
+                                        ├── probe keys: [subquery_6 (#6)]
+                                        ├── other filters: []
+                                        ├── PhysicalScan
+                                        │   ├── table: default.system.numbers
+                                        │   ├── filters: []
+                                        │   ├── order by: []
+                                        │   └── limit: NONE
                                         └── CrossJoin
-                                            ├── Scan: default.system.numbers, filters: [], Sort: [none], limit: [none]
-                                            └── Scan: default.system.numbers, filters: [], Sort: [none], limit: [none]
+                                            ├── build keys: []
+                                            ├── probe keys: []
+                                            ├── other filters: []
+                                            ├── PhysicalScan
+                                            │   ├── table: default.system.numbers
+                                            │   ├── filters: []
+                                            │   ├── order by: []
+                                            │   └── limit: NONE
+                                            └── PhysicalScan
+                                                ├── table: default.system.numbers
+                                                ├── filters: []
+                                                ├── order by: []
+                                                └── limit: NONE
 
 statement query T
 explain select * from (select count(t1.number) as c1 from numbers(1) as t1 group by number) as t3 left join (select count(t.number) as c from numbers(2) as t group by number) as t4 on t3.c1=t4.c order by t3.c1 limit 1;
 
 ----
-Limit: [1], Offset: [0]
-└── Sort: [c1 (#1) ASC], limit: [1]
-    └── HashJoin: LEFT OUTER, build keys: [t4.c (#5)], probe keys: [CAST(t3.c1 (#1) AS BIGINT UNSIGNED NULL)], join filters: []
-        ├── Project: [c1 (#1)]
-        │   └── EvalScalar: [count(t1.number) (#3)]
-        │       └── Aggregate(Final): group items: [t1.number (#0)], aggregate functions: [count(t1.number)]
-        │           └── Aggregate(Partial): group items: [t1.number (#0)], aggregate functions: [count(t1.number)]
-        │               └── Scan: default.system.numbers, filters: [], Sort: [none], limit: [none]
-        └── Project: [c (#5)]
-            └── EvalScalar: [count(t.number) (#7)]
-                └── Aggregate(Final): group items: [t.number (#4)], aggregate functions: [count(t.number)]
-                    └── Aggregate(Partial): group items: [t.number (#4)], aggregate functions: [count(t.number)]
-                        └── Scan: default.system.numbers, filters: [], Sort: [none], limit: [none]
+Limit
+├── limit: [1]
+├── offset: [0]
+└── Sort
+    ├── sort keys: [c1 (#1) ASC]
+    ├── limit: [1]
+    └── HashJoin: LEFT OUTER
+        ├── build keys: [t4.c (#5)]
+        ├── probe keys: [CAST(t3.c1 (#1) AS BIGINT UNSIGNED NULL)]
+        ├── other filters: []
+        ├── Project
+        │   ├── projections: [c1 (#1)]
+        │   └── EvalScalar
+        │       ├── scalars: [count(t1.number) (#3)]
+        │       └── Aggregate(Final)
+        │           ├── group items: [t1.number (#0)]
+        │           ├── aggregate functions: [count(t1.number)]
+        │           └── Aggregate(Partial)
+        │               ├── group items: [t1.number (#0)]
+        │               ├── aggregate functions: [count(t1.number)]
+        │               └── PhysicalScan
+        │                   ├── table: default.system.numbers
+        │                   ├── filters: []
+        │                   ├── order by: []
+        │                   └── limit: NONE
+        └── Project
+            ├── projections: [c (#5)]
+            └── EvalScalar
+                ├── scalars: [count(t.number) (#7)]
+                └── Aggregate(Final)
+                    ├── group items: [t.number (#4)]
+                    ├── aggregate functions: [count(t.number)]
+                    └── Aggregate(Partial)
+                        ├── group items: [t.number (#4)]
+                        ├── aggregate functions: [count(t.number)]
+                        └── PhysicalScan
+                            ├── table: default.system.numbers
+                            ├── filters: []
+                            ├── order by: []
+                            └── limit: NONE
 
