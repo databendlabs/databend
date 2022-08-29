@@ -129,7 +129,14 @@ impl TableMutator for ReclusterMutator {
             let mut point_overlaps: Vec<Vec<usize>> = Vec::new();
             let mut unfinished_parts: HashMap<usize, usize> = HashMap::new();
             for (start, end) in points_map.values() {
-                let point_depth = unfinished_parts.len() + start.len();
+                // block1: [1, 2], block2: [2, 3]. The depth of point '2' is 1.
+                let point_depth =
+                    if unfinished_parts.len() == 1 && start.len() == 1 && end.len() == 1 {
+                        1
+                    } else {
+                        unfinished_parts.len() + start.len()
+                    };
+
                 if point_depth > max_depth {
                     max_depth = point_depth;
                 }
