@@ -3,7 +3,9 @@ title: CEILING
 description: CEILING(x) function
 ---
 
-Returns the smallest integer value not less than x.
+CEILING() is a synonym for CEIL().
+
+Rounds the number up.
 
 ## Syntax
 
@@ -19,7 +21,7 @@ CEILING(x)
 
 ## Return Type
 
-A Float64 data type value.
+A numeric data type value which is the same as input type.
 
 ## Examples
 
@@ -28,13 +30,13 @@ SELECT CEILING(1.23);
 +---------------+
 | CEILING(1.23) |
 +---------------+
-|             2 |
+|           2.0 |
 +---------------+
 
 SELECT CEILING(-1.23);
-+-------------------+
-| CEILING((- 1.23)) |
-+-------------------+
-|                -1 |
-+-------------------+
++-----------------+
+| CEILING(- 1.23) |
++-----------------+
+|            -1.0 |
++-----------------+
 ```
