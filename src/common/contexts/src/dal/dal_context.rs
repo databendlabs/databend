@@ -131,12 +131,12 @@ impl Accessor for DalContext {
                 ReadEvent::Pending => last_pending = Some(start),
                 ReadEvent::Read(n) => {
                     last_pending = None;
-                    metric.inc_read_bytes(n);
+                    metric.inc_write_bytes(n);
                 }
                 ReadEvent::Error(_) => last_pending = None,
                 _ => {}
             }
-            metric.inc_read_bytes_cost(start.elapsed().as_millis() as u64);
+            metric.inc_write_bytes_cost(start.elapsed().as_millis() as u64);
         });
 
         self.get_inner()?.write(args, Box::new(r)).await
