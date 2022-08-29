@@ -1244,7 +1244,8 @@ drop table n;
 
 
 statement query I
-select * from numbers(5) as t where exists (select * from numbers(3) where number = t.number) order by number;
+select * from numbers(5) as t where exists (select * from numbers(3) where number = t.number) ORDER BY number;
+
 
 ----
 0
