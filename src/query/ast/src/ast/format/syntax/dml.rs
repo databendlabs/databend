@@ -17,16 +17,16 @@ use pretty::RcDoc;
 use super::expr::pretty_expr;
 use super::query::pretty_query;
 use super::query::pretty_table;
-use crate::ast::inline_comma;
-use crate::ast::interweave_comma;
-use crate::ast::parenthenized;
+use crate::ast::format::syntax::inline_comma;
+use crate::ast::format::syntax::interweave_comma;
+use crate::ast::format::syntax::parenthenized;
+use crate::ast::format::syntax::NEST_FACTOR;
 use crate::ast::CopyStmt;
 use crate::ast::CopyUnit;
 use crate::ast::Expr;
 use crate::ast::InsertSource;
 use crate::ast::InsertStmt;
 use crate::ast::TableReference;
-use crate::ast::NEST_FACTOR;
 
 pub(crate) fn pretty_insert(insert_stmt: InsertStmt) -> RcDoc {
     RcDoc::text("INSERT")

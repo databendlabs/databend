@@ -47,3 +47,30 @@ pub fn pretty_statement(stmt: Statement, max_width: usize) -> Result<String> {
     pretty_stmt.render(max_width, &mut bs)?;
     Ok(String::from_utf8(bs)?)
 }
+
+pub(crate) const NEST_FACTOR: isize = 4;
+
+pub(crate) fn interweave_comma<'a, D>(docs: D) -> RcDoc<'a>
+where D: Iterator<Item = RcDoc<'a>> {
+    RcDoc::intersperse(docs, RcDoc::text(",").append(RcDoc::line()))
+}
+
+pub(crate) fn inline_comma<'a, D>(docs: D) -> RcDoc<'a>
+where D: Iterator<Item = RcDoc<'a>> {
+    RcDoc::intersperse(docs, RcDoc::text(",").append(RcDoc::space()))
+}
+
+pub(crate) fn inline_dot<'a, D>(docs: D) -> RcDoc<'a>
+where D: Iterator<Item = RcDoc<'a>> {
+    RcDoc::intersperse(docs, RcDoc::text("."))
+}
+
+pub(crate) fn parenthenized(doc: RcDoc<'_>) -> RcDoc<'_> {
+    RcDoc::text("(")
+        .append(RcDoc::line_())
+        .append(doc)
+        .nest(NEST_FACTOR)
+        .append(RcDoc::line_())
+        .append(RcDoc::text(")"))
+        .group()
+}

@@ -253,6 +253,8 @@ pub enum TokenKind {
     ARRAY,
     #[token("AS", ignore(ascii_case))]
     AS,
+    #[token("AST", ignore(ascii_case))]
+    AST,
     #[token("AT", ignore(ascii_case))]
     AT,
     #[token("ASC", ignore(ascii_case))]

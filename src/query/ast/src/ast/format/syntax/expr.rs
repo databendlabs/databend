@@ -15,13 +15,13 @@
 use pretty::RcDoc;
 
 use super::query::pretty_query;
-use crate::ast::inline_comma;
-use crate::ast::interweave_comma;
-use crate::ast::parenthenized;
+use crate::ast::format::syntax::inline_comma;
+use crate::ast::format::syntax::interweave_comma;
+use crate::ast::format::syntax::parenthenized;
+use crate::ast::format::syntax::NEST_FACTOR;
 use crate::ast::BinaryOperator;
 use crate::ast::Expr;
 use crate::ast::MapAccessor;
-use crate::ast::NEST_FACTOR;
 
 pub(crate) fn pretty_expr(expr: Expr) -> RcDoc {
     match expr {

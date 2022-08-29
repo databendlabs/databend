@@ -99,3 +99,10 @@ DROP TABLE data2015;
 
 statement ok
 DROP TABLE data2016;
+
+statement query TTTTI
+SELECT 'Кирилл' as a, 'Müller' as b, '我是谁' as c, 'ASCII' as d, 2 as id UNION SELECT NULL as a, NULL as b, NULL as c, NULL as d, 1 as id order by id;
+
+----
+NULL NULL NULL NULL 1
+Кирилл Müller 我是谁 ASCII 2
