@@ -26,7 +26,6 @@ common-pipeline-core = { path = "../../pipeline/core" }
 common-pipeline-sources = { path = "../../pipeline/sources" }
 common-planners = { path = "../../planners" }
 common-storages-index = { path = "../index" }
-common-storages-util = { path = "../util" }
 
 async-recursion = "1.0.0"
 async-trait = "0.1.56"

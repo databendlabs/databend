@@ -14,35 +14,30 @@
 
 use std::sync::Arc;
 
-use common_arrow::arrow::datatypes::Field;
 use common_arrow::arrow::datatypes::Schema;
-use common_arrow::arrow::io::parquet::read::column_iter_to_arrays;
+use common_arrow::arrow::io::parquet::read::read_columns_many_async;
 use common_arrow::arrow::io::parquet::read::read_metadata_async;
 use common_arrow::arrow::io::parquet::read::ArrayIter;
 use common_arrow::arrow::io::parquet::read::RowGroupDeserializer;
-use common_arrow::arrow::io::parquet::write::to_parquet_schema;
-use common_arrow::parquet::metadata::ColumnChunkMetaData;
-use common_arrow::parquet::metadata::ColumnDescriptor;
 use common_arrow::parquet::metadata::FileMetaData;
 use common_arrow::parquet::metadata::RowGroupMetaData;
-use common_arrow::parquet::metadata::SchemaDescriptor;
-use common_arrow::parquet::read::BasicDecompressor;
-use common_arrow::parquet::read::PageReader;
-use common_base::base::tokio::sync::Semaphore;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::PartInfoPtr;
-use futures::AsyncReadExt;
-use opendal::Object;
+use futures::future::BoxFuture;
+use futures::io::BufReader;
 use opendal::Operator;
-use tracing::warn;
 
 use crate::hive_partition::HivePartInfo;
 use crate::hive_partition_filler::HivePartitionFiller;
-use crate::retry;
-use crate::retry::Retryable;
+
+/// default buffer size of BufReader (in bytes)
+const DEFAULT_READ_BUFFER_SIZE: usize = 18 * 1024 * 1024;
+
+/// default buffer size of env var name, tmp workaround, for easy of tuning
+const READ_BUFFER_SIZE_VAR: &str = "READ_BUFFER_SIZE";
 
 #[derive(Clone)]
 pub struct HiveParquetBlockReader {
@@ -50,8 +45,8 @@ pub struct HiveParquetBlockReader {
     projection: Vec<usize>,
     arrow_schema: Arc<Schema>,
     projected_schema: DataSchemaRef,
-    parquet_schema_descriptor: SchemaDescriptor,
     hive_partition_filler: Option<HivePartitionFiller>,
+    read_buffer_size: usize,
 }
 
 impl HiveParquetBlockReader {
@@ -63,108 +58,29 @@ impl HiveParquetBlockReader {
     ) -> Result<Arc<HiveParquetBlockReader>> {
         let projected_schema = DataSchemaRef::new(schema.project(&projection));
 
+        let read_buffer_size = if let Ok(read_buffer_size_str) = std::env::var(READ_BUFFER_SIZE_VAR)
+        {
+            read_buffer_size_str.parse::<usize>().unwrap_or_else(|_|
+                {
+                    tracing::warn!(
+                    "invalid value of env var READ_BUFFER_SIZE {read_buffer_size_str}, using default value {DEFAULT_READ_BUFFER_SIZE}",
+                );
+                    DEFAULT_READ_BUFFER_SIZE
+                })
+        } else {
+            DEFAULT_READ_BUFFER_SIZE
+        };
+
         let arrow_schema = schema.to_arrow();
-        let parquet_schema_descriptor = to_parquet_schema(&arrow_schema)?;
 
         Ok(Arc::new(HiveParquetBlockReader {
             operator,
             projection,
             projected_schema,
-            parquet_schema_descriptor,
             arrow_schema: Arc::new(arrow_schema),
             hive_partition_filler,
+            read_buffer_size,
         }))
-    }
-
-    fn to_deserialize(
-        column_meta: &ColumnChunkMetaData,
-        chunk: Vec<u8>,
-        rows: usize,
-        column_descriptor: &ColumnDescriptor,
-        field: Field,
-    ) -> Result<ArrayIter<'static>> {
-        let pages = PageReader::new(
-            std::io::Cursor::new(chunk),
-            column_meta,
-            Arc::new(|_, _| true),
-            vec![],
-        );
-
-        let primitive_type = &column_descriptor.descriptor.primitive_type;
-        let decompressor = BasicDecompressor::new(pages, vec![]);
-        Ok(column_iter_to_arrays(
-            vec![decompressor],
-            vec![primitive_type],
-            field,
-            Some(rows),
-        )?)
-    }
-
-    fn get_parquet_column_metadata<'a>(
-        row_group: &'a RowGroupMetaData,
-        field_name: &str,
-    ) -> Result<&'a ColumnChunkMetaData> {
-        let column_meta: Vec<&ColumnChunkMetaData> = row_group
-            .columns()
-            .iter()
-            .filter(|x| {
-                x.descriptor().path_in_schema[0].to_lowercase() == field_name.to_lowercase()
-            })
-            .collect();
-        if column_meta.is_empty() {
-            return Err(ErrorCode::ParquetError(format!(
-                "couldn't find column:{} in parquet file",
-                field_name
-            )));
-        } else if column_meta.len() > 1 {
-            return Err(ErrorCode::ParquetError(format!(
-                "find multi column:{} in parquet file",
-                field_name
-            )));
-        }
-        Ok(column_meta[0])
-    }
-
-    async fn read_column(
-        o: Object,
-        offset: u64,
-        length: u64,
-        semaphore: Arc<Semaphore>,
-    ) -> Result<Vec<u8>> {
-        let handler = common_base::base::tokio::spawn(async move {
-            let op = || async {
-                let mut chunk = vec![0; length as usize];
-                // Sine error conversion DO matters: retry depends on the conversion
-                // to distinguish transient errors from permanent ones.
-                // Explict error conversion is used here, to make the code easy to be followed
-                let mut r = o
-                    .range_reader(offset..offset + length)
-                    .await
-                    .map_err(retry::from_io_error)?;
-                r.read_exact(&mut chunk).await?;
-                Ok(chunk)
-            };
-
-            let notify = |e: std::io::Error, duration| {
-                warn!(
-                    "transient error encountered while reading column, at duration {:?} : {}",
-                    duration, e,
-                )
-            };
-
-            let _semaphore_permit = semaphore.acquire().await.unwrap();
-            let chunk = op.retry_with_notify(notify).await?;
-            Ok(chunk)
-        });
-
-        match handler.await {
-            Ok(Ok(data)) => Ok(data),
-            Ok(Err(cause)) => Err(cause),
-            Err(cause) => Err(ErrorCode::TokioError(format!(
-                "Cannot join future {:?}",
-                cause
-            ))),
-        }
     }
 
     pub async fn read_meta_data(&self, filename: &str) -> Result<FileMetaData> {
@@ -183,86 +99,54 @@ impl HiveParquetBlockReader {
         &self,
         row_group: &RowGroupMetaData,
         part: &HivePartInfo,
-    ) -> Result<Vec<Vec<u8>>> {
-        let mut join_handlers = Vec::with_capacity(self.projection.len());
+    ) -> Result<Vec<ArrayIter<'static>>> {
+        let factory = || {
+            Box::pin(async {
+                let reader = self.operator.object(&part.filename).seekable_reader(..);
+                let buffer_reader = BufReader::with_capacity(self.read_buffer_size, reader);
+                Ok(buffer_reader)
+            }) as BoxFuture<_>
+        };
+        let fields = self
+            .projection
+            .iter()
+            .map(|idx| self.arrow_schema.fields[*idx].clone())
+            .collect::<Vec<_>>();
 
-        let semaphore = Arc::new(Semaphore::new(10));
-        for index in &self.projection {
-            let field = &self.arrow_schema.fields[*index];
-            let column_meta = Self::get_parquet_column_metadata(row_group, &field.name)?;
-            let (start, len) = column_meta.byte_range();
-
-            join_handlers.push(Self::read_column(
-                self.operator.object(&part.filename),
-                start,
-                len,
-                semaphore.clone(),
-            ));
-        }
-
-        futures::future::try_join_all(join_handlers).await
+        // TODO constraint the degree of concurrency (of reading cols)
+        let column_chunks = read_columns_many_async(factory, row_group, fields, None).await?;
+        Ok(column_chunks)
     }
 
-    pub fn deserialize(
+    pub fn deserialize_next_block(
         &self,
-        chunks: Vec<Vec<u8>>,
+        row_group_deserializer: &mut RowGroupDeserializer,
         row_group: &RowGroupMetaData,
         part: HivePartInfo,
-    ) -> Result<DataBlock> {
-        if self.projection.len() != chunks.len() {
-            return Err(ErrorCode::LogicalError(
-                "Columns chunk len must be equals projections len.",
-            ));
-        }
+    ) -> Result<Option<DataBlock>> {
+        let maybe_chunk = row_group_deserializer.next().transpose().map_err(|e| {
+            ErrorCode::ParquetError(format!(
+                "failed to read next chunk of row group, file name {}, err {}",
+                part.filename, e
+            ))
+        })?;
 
-        let mut columns_array_iter = Vec::with_capacity(self.projection.len());
+        let maybe_block = maybe_chunk
+            .map(|chunk| DataBlock::from_chunk(&self.projected_schema, &chunk))
+            .transpose()?;
 
-        for (index, column_chunk) in chunks.into_iter().enumerate() {
-            let idx = self.projection[index];
-            let field = self.arrow_schema.fields[idx].clone();
-            let column_descriptor = &self.parquet_schema_descriptor.columns()[idx];
-            let column_meta = Self::get_parquet_column_metadata(row_group, &field.name)?;
-
-            columns_array_iter.push(Self::to_deserialize(
-                column_meta,
-                column_chunk,
-                row_group.num_rows(),
-                column_descriptor,
-                field,
-            )?);
-        }
-
-        let mut deserializer =
-            RowGroupDeserializer::new(columns_array_iter, row_group.num_rows(), None);
-
-        let data_block = self.try_next_block(&mut deserializer);
-        if data_block.is_err() {
-            let err = data_block.err().unwrap();
-            tracing::warn!("parquet failed,deserialize,{}", part.filename);
-            return Err(ErrorCode::ParquetError(format!(
-                "deseriallize parquet failed, {}, {:?}",
-                part.filename, err
-            )));
-        }
-
-        match &self.hive_partition_filler {
-            Some(hive_partition_filler) => {
-                hive_partition_filler.fill_data(data_block?, part, row_group.num_rows())
+        // fill the partition column if necessary
+        if let Some(filler) = &self.hive_partition_filler {
+            if let Some(block) = maybe_block {
+                return Ok(Some(filler.fill_data(block, part, row_group.num_rows())?));
             }
-            None => data_block,
         }
+
+        Ok(maybe_block)
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
     pub async fn read(&self, _part: PartInfoPtr) -> Result<DataBlock> {
         Err(ErrorCode::UnImplement("depracated"))
-    }
-
-    fn try_next_block(&self, deserializer: &mut RowGroupDeserializer) -> Result<DataBlock> {
-        match deserializer.next() {
-            None => Err(ErrorCode::ParquetError("fail to get a chunk")),
-            Some(Err(cause)) => Err(ErrorCode::from(cause)),
-            Some(Ok(chunk)) => DataBlock::from_chunk(&self.projected_schema, &chunk),
-        }
     }
 }
