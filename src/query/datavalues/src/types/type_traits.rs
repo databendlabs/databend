@@ -137,6 +137,8 @@ pub trait ObjectType:
     fn data_type() -> DataTypeImpl;
 
     fn column_name() -> &'static str;
+
+    fn memory_size(&self) -> usize;
 }
 
 impl ObjectType for VariantValue {
@@ -146,6 +148,10 @@ impl ObjectType for VariantValue {
 
     fn column_name() -> &'static str {
         "VariantColumn"
+    }
+
+    fn memory_size(&self) -> usize {
+        self.calculate_memory_size()
     }
 }
 

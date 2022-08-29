@@ -256,3 +256,24 @@ fn test_variant_value_cmp() -> Result<()> {
     }
     Ok(())
 }
+
+#[test]
+fn test_variant_calculate_memory_size() -> Result<()> {
+    let values = vec![
+        VariantValue::from(JsonValue::Null),
+        VariantValue::from(JsonValue::Bool(true)),
+        VariantValue::from(JsonValue::Bool(false)),
+        VariantValue::from(json!(100000i64)),
+        VariantValue::from(json!(12.34e10f64)),
+        VariantValue::from(json!("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")),
+        VariantValue::from(json!([1i64, 2, 3, 4, 5])),
+        VariantValue::from(json!({"a":"some string","b":["an","array"],"c":{"an":"object"}})),
+    ];
+    let expects = vec![80, 80, 80, 80, 80, 110, 480, 589];
+
+    for (value, expect) in values.iter().zip(expects) {
+        let memory_size = value.calculate_memory_size();
+        assert_eq!(memory_size, expect, "value: {:?}", value);
+    }
+    Ok(())
+}
