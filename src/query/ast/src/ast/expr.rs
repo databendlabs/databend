@@ -181,15 +181,15 @@ pub enum Expr<'a> {
     },
     DateAdd {
         span: &'a [Token<'a>],
-        date: Box<Expr<'a>>,
-        interval: Box<Expr<'a>>,
         unit: IntervalKind,
+        interval: Box<Expr<'a>>,
+        date: Box<Expr<'a>>,
     },
     DateSub {
         span: &'a [Token<'a>],
-        date: Box<Expr<'a>>,
-        interval: Box<Expr<'a>>,
         unit: IntervalKind,
+        interval: Box<Expr<'a>>,
+        date: Box<Expr<'a>>,
     },
     DateTrunc {
         span: &'a [Token<'a>],
@@ -850,20 +850,20 @@ impl<'a> Display for Expr<'a> {
                 write!(f, "INTERVAL {expr} {unit}")?;
             }
             Expr::DateAdd {
-                date,
-                interval,
                 unit,
+                interval,
+                date,
                 ..
             } => {
-                write!(f, "DATE_ADD({date}, INTERVAL {interval} {unit})")?;
+                write!(f, "DATE_ADD({unit}, INTERVAL {interval}, {date})")?;
             }
             Expr::DateSub {
-                date,
-                interval,
                 unit,
+                interval,
+                date,
                 ..
             } => {
-                write!(f, "DATE_SUB({date}, INTERVAL {interval} {unit})")?;
+                write!(f, "DATE_SUB({unit}, INTERVAL {interval}, {date})")?;
             }
             Expr::DateTrunc { unit, date, .. } => {
                 write!(f, "DATE_TRUNC({unit}, {date})")?;
