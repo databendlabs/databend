@@ -82,11 +82,11 @@ Syntax:
 CREATE TRANSIENT TABLE ...
 ```
 
-### CREATE TABLE ... SNAPSHOT_LOCATION ...
+### CREATE TABLE ... SNAPSHOT_LOCATION
 
 Creates a table and inserts data from a snapshot file. 
 
-Databend automatically creates snapshots when data updates occur, so a snapshot can be considered as a view of your data at a time point in the past. Databend may store many snapshots of a table (depending on the number of update operations you performed) for the Time Travle feature that allows you to query, back up, and restore from a previous version of your data within the retention period (24 hours by default).
+Databend automatically creates snapshots when data updates occur, so a snapshot can be considered as a view of your data at a time point in the past. Databend may store many snapshots of a table (depending on the number of update operations you performed) for the Time Travel feature that allows you to query, back up, and restore from a previous version of your data within the retention period (24 hours by default).
 
 This command enables you to insert the data stored in a snapshot file when you create a table. Please note that the table you create must have same column definations as the data from the snapshot.
 
