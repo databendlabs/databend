@@ -127,7 +127,7 @@ impl OneHashKeyFlightScatter {
         scalar: &PhysicalScalar,
         scatter_size: usize,
     ) -> Result<Box<dyn FlightScatter>> {
-        let hash_key = Evaluator::eval_physical_scalar(&scalar)?;
+        let hash_key = Evaluator::eval_physical_scalar(scalar)?;
 
         Ok(Box::new(OneHashKeyFlightScatter {
             scatter_size,
