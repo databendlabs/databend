@@ -75,8 +75,6 @@ impl NDJsonInputFormat {
         min_accepted_rows: usize,
         min_accepted_bytes: usize,
     ) -> Result<Arc<dyn InputFormat>> {
-        settings.field_delimiter = vec![b'\t'];
-        settings.record_delimiter = vec![b'\n'];
         let ident_case_sensitive = settings.ident_case_sensitive;
 
         Ok(Arc::new(NDJsonInputFormat {
