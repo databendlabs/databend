@@ -308,9 +308,9 @@ pub trait Visitor<'ast>: Sized {
     fn visit_date_add(
         &mut self,
         _span: &'ast [Token<'ast>],
-        date: &'ast Expr<'ast>,
-        interval: &'ast Expr<'ast>,
         _unit: &'ast IntervalKind,
+        interval: &'ast Expr<'ast>,
+        date: &'ast Expr<'ast>,
     ) {
         walk_expr(self, date);
         walk_expr(self, interval);
@@ -319,9 +319,9 @@ pub trait Visitor<'ast>: Sized {
     fn visit_date_sub(
         &mut self,
         _span: &'ast [Token<'ast>],
-        date: &'ast Expr<'ast>,
-        interval: &'ast Expr<'ast>,
         _unit: &'ast IntervalKind,
+        interval: &'ast Expr<'ast>,
+        date: &'ast Expr<'ast>,
     ) {
         walk_expr(self, date);
         walk_expr(self, interval);

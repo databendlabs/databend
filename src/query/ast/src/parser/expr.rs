@@ -267,14 +267,14 @@ pub enum ExprElement<'a> {
         unit: IntervalKind,
     },
     DateAdd {
-        date: Expr<'a>,
-        interval: Expr<'a>,
         unit: IntervalKind,
+        interval: Expr<'a>,
+        date: Expr<'a>,
     },
     DateSub {
-        date: Expr<'a>,
-        interval: Expr<'a>,
         unit: IntervalKind,
+        interval: Expr<'a>,
+        date: Expr<'a>,
     },
     DateTrunc {
         unit: IntervalKind,
@@ -460,24 +460,24 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement<'a>>>> PrattParser<I> for E
                 unit,
             },
             ExprElement::DateAdd {
-                date,
-                interval,
                 unit,
+                interval,
+                date,
             } => Expr::DateAdd {
                 span: elem.span.0,
-                date: Box::new(date),
-                interval: Box::new(interval),
                 unit,
+                interval: Box::new(interval),
+                date: Box::new(date),
             },
             ExprElement::DateSub {
-                date,
-                interval,
                 unit,
+                interval,
+                date,
             } => Expr::DateSub {
                 span: elem.span.0,
-                date: Box::new(date),
-                interval: Box::new(interval),
                 unit,
+                interval: Box::new(interval),
+                date: Box::new(date),
             },
             ExprElement::DateTrunc { unit, date } => Expr::DateTrunc {
                 span: elem.span.0,
@@ -839,22 +839,22 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
     );
     let date_add = map(
         rule! {
-            DATE_ADD ~ "(" ~ #subexpr(0) ~ "," ~ #subexpr(0) ~ "," ~ #interval_kind ~ ")"
+            DATE_ADD ~ "(" ~ #interval_kind ~ "," ~ #subexpr(0) ~ "," ~ #subexpr(0) ~ ")"
         },
-        |(_, _, date, _, interval, _, unit, _)| ExprElement::DateAdd {
-            date,
-            interval,
+        |(_, _, unit, _, interval, _, date, _)| ExprElement::DateAdd {
             unit,
+            interval,
+            date,
         },
     );
     let date_sub = map(
         rule! {
-            DATE_SUB ~ "(" ~ #subexpr(0) ~ "," ~ #subexpr(0) ~ "," ~ #interval_kind ~ ")"
+            DATE_SUB ~ "(" ~ #interval_kind ~ "," ~ #subexpr(0) ~ "," ~ #subexpr(0) ~ ")"
         },
-        |(_, _, date, _, interval, _, unit, _)| ExprElement::DateSub {
-            date,
-            interval,
+        |(_, _, unit, _, interval, _, date, _)| ExprElement::DateSub {
             unit,
+            interval,
+            date,
         },
     );
     let interval = map(
