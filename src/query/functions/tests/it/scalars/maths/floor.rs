@@ -24,18 +24,18 @@ fn test_floor_function() -> Result<()> {
         ScalarFunctionTest {
             name: "floor(123)",
             columns: vec![Series::from_data([123])],
-            expect: Series::from_data(vec![123_f64]),
+            expect: Series::from_data(vec![123]),
             error: "",
         },
         ScalarFunctionTest {
             name: "floor(1.7)",
-            columns: vec![Series::from_data([1.7])],
+            columns: vec![Series::from_data([1.7f64])],
             expect: Series::from_data(vec![1_f64]),
             error: "",
         },
         ScalarFunctionTest {
             name: "floor(-2.1)",
-            columns: vec![Series::from_data([-2.1])],
+            columns: vec![Series::from_data([-2.1f64])],
             expect: Series::from_data(vec![-3_f64]),
             error: "",
         },

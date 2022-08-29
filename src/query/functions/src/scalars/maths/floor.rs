@@ -16,9 +16,7 @@ use std::fmt;
 use std::str;
 
 use common_datavalues::prelude::*;
-use common_datavalues::with_match_primitive_type_id;
 use common_exception::Result;
-use num::cast::AsPrimitive;
 
 use crate::scalars::function_common::assert_numeric;
 use crate::scalars::function_factory::FunctionDescription;
@@ -32,6 +30,7 @@ use crate::scalars::Monotonicity;
 #[derive(Clone)]
 pub struct FloorFunction {
     display_name: String,
+    return_type: DataTypeImpl,
 }
 
 impl FloorFunction {
@@ -39,6 +38,7 @@ impl FloorFunction {
         assert_numeric(args[0])?;
         Ok(Box::new(FloorFunction {
             display_name: display_name.to_string(),
+            return_type: args[0].clone(),
         }))
     }
 
@@ -52,18 +52,13 @@ impl FloorFunction {
     }
 }
 
-fn floor<S>(value: S, _ctx: &mut EvalContext) -> f64
-where S: AsPrimitive<f64> {
-    value.as_().floor()
-}
-
 impl Function for FloorFunction {
     fn name(&self) -> &str {
         &*self.display_name
     }
 
     fn return_type(&self) -> DataTypeImpl {
-        Float64Type::new_impl()
+        self.return_type.clone()
     }
 
     fn eval(
@@ -73,12 +68,30 @@ impl Function for FloorFunction {
         _input_rows: usize,
     ) -> Result<ColumnRef> {
         let mut ctx = EvalContext::default();
-        with_match_primitive_type_id!(columns[0].data_type().data_type_id(), |$S| {
-             let col = scalar_unary_op::<$S, f64, _>(columns[0].column(), floor::<$S>, &mut ctx)?;
-             Ok(col.arc())
-        },{
-            unreachable!()
-        })
+        let data_type_id = columns[0].data_type().data_type_id();
+        if data_type_id.is_integer() {
+            return Ok(columns[0].column().clone());
+        }
+        match data_type_id {
+            TypeID::Float32 => {
+                let column = scalar_unary_op::<f32, f32, _>(
+                    columns[0].column(),
+                    |v: f32, _| v.floor(),
+                    &mut ctx,
+                )?;
+                Ok(column.arc())
+            }
+
+            TypeID::Float64 => {
+                let column = scalar_unary_op::<f64, f64, _>(
+                    columns[0].column(),
+                    |v: f64, _| v.floor(),
+                    &mut ctx,
+                )?;
+                Ok(column.arc())
+            }
+            _ => unreachable!(),
+        }
     }
 
     fn get_monotonicity(&self, args: &[Monotonicity]) -> Result<Monotonicity> {
