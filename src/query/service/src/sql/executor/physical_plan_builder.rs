@@ -177,7 +177,7 @@ impl PhysicalPlanBuilder {
 
                     assert!(
                         !predicates.is_empty(),
-                        "There should be a least one predicate in prewhere"
+                        "There should be at least one predicate in prewhere"
                     );
                     let mut filter = predicates[0].clone();
                     for pred in predicates.iter().skip(1) {

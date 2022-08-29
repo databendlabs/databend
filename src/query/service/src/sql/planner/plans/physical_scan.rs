@@ -17,7 +17,7 @@ use std::hash::Hash;
 use common_exception::Result;
 use itertools::Itertools;
 
-use super::Prewhere;
+use super::logical_get::Prewhere;
 use crate::sql::optimizer::ColumnSet;
 use crate::sql::optimizer::Distribution;
 use crate::sql::optimizer::PhysicalProperty;

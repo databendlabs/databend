@@ -19,7 +19,9 @@ use common_base::base::Progress;
 use common_base::base::ProgressValues;
 use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
+use common_datavalues::BooleanType;
 use common_datavalues::ColumnRef;
+use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_exception::ErrorCode;
@@ -85,13 +87,20 @@ impl FuseTable {
         let projection = self.projection_of_push_downs(&plan.push_downs);
         let prewhere_info = if let Some(prewhere) = self.prewhere_of_push_downs(&plan.push_downs) {
             let schema = self.table_info.schema();
-            let expr_field = prewhere.filter.to_data_field(&schema)?;
-            let expr_schema = DataSchemaRefExt::create(vec![expr_field]);
+            let prewhere_schema = match &prewhere.need_columns {
+                Projection::Columns(indices) => schema.project(indices),
+                Projection::InnerColumns(path_indices) => schema.inner_project(path_indices),
+            };
+            let expr_schema = DataSchemaRefExt::create(vec![DataField::new(
+                prewhere.filter.column_name().as_str(),
+                BooleanType::new_impl(),
+            )]);
+            let prewhere_schema = Arc::new(prewhere_schema);
 
             let executor = ExpressionExecutor::try_create(
                 ctx.clone(),
                 "filter expression executor (prewhere) ",
-                schema.clone(), // in fact, this field is not used
+                prewhere_schema.clone(),
                 expr_schema,
                 vec![prewhere.filter.clone()],
                 false,
@@ -102,16 +111,11 @@ impl FuseTable {
             let remain_columns_block_reader =
                 self.create_block_reader(&ctx, prewhere.remain_columns)?;
 
-            let output_schema = match &projection {
-                Projection::Columns(path_indices) => schema.project(path_indices),
-                Projection::InnerColumns(path_indices) => schema.inner_project(path_indices),
-            };
-
             Some(FusePrewhereInfo {
                 filter: executor,
                 need_columns_block_reader,
                 remain_columns_block_reader,
-                output_schema: Arc::new(output_schema),
+                output_schema: prewhere_schema,
             })
         } else {
             None

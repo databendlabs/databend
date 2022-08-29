@@ -48,55 +48,56 @@ impl WhereOptimizer {
         }
     }
 
-    fn collect_columns_no_subqueries(expr: &Scalar, columns: &mut ColumnSet) {
+    fn collect_columns(expr: &Scalar, columns: &mut ColumnSet) {
         match expr {
             Scalar::BoundColumnRef(column) => {
                 columns.insert(column.column.index);
             }
             Scalar::AndExpr(and) => {
-                Self::collect_columns_no_subqueries(and.left.as_ref(), columns);
-                Self::collect_columns_no_subqueries(and.right.as_ref(), columns);
+                Self::collect_columns(and.left.as_ref(), columns);
+                Self::collect_columns(and.right.as_ref(), columns);
             }
             Scalar::OrExpr(or) => {
-                Self::collect_columns_no_subqueries(or.left.as_ref(), columns);
-                Self::collect_columns_no_subqueries(or.right.as_ref(), columns);
+                Self::collect_columns(or.left.as_ref(), columns);
+                Self::collect_columns(or.right.as_ref(), columns);
             }
             Scalar::ComparisonExpr(cmp) => {
-                Self::collect_columns_no_subqueries(cmp.left.as_ref(), columns);
-                Self::collect_columns_no_subqueries(cmp.right.as_ref(), columns);
+                Self::collect_columns(cmp.left.as_ref(), columns);
+                Self::collect_columns(cmp.right.as_ref(), columns);
             }
             Scalar::FunctionCall(func) => {
                 for arg in func.arguments.iter() {
-                    Self::collect_columns_no_subqueries(arg, columns);
+                    Self::collect_columns(arg, columns);
                 }
             }
             Scalar::CastExpr(cast) => {
-                Self::collect_columns_no_subqueries(cast.argument.as_ref(), columns);
+                Self::collect_columns(cast.argument.as_ref(), columns);
             }
-            // constant and subqueries is not collected
-            // TBD: how about aggregate function. I think aggregate function will not appear hear.
+            // 1. ConstantExpr is not collected.
+            // 2. SubqueryExpr is not collected.
+            // 3. AggregateFunction will not appear in where clause.
             _ => {}
         }
     }
 
     // analyze if the expression can be moved to prewhere
-    fn analyze(&self, expr: &Scalar, columns_to_scan: &ColumnSet) -> (bool, ColumnSet) {
+    fn analyze(expr: &Scalar, columns_to_scan: usize) -> (bool, ColumnSet) {
         let mut columns = ColumnSet::new();
 
         // columns in subqueries are not considered
-        Self::collect_columns_no_subqueries(expr, &mut columns);
+        Self::collect_columns(expr, &mut columns);
 
         // viable conditions:
         // 1. Condition depend on some column. Constant expressions are not moved.
         // 2. Do not move conditions involving all queried columns.
         // 3. Only current table columns are considered. (This condition is always true in current Pattern (Filter -> LogicalGet)).
         (
-            !columns.is_empty() && columns.len() < columns_to_scan.len(),
+            !columns.is_empty() && columns.len() < columns_to_scan,
             columns,
         )
     }
 
-    pub fn optimize(&self, s_expr: SExpr) -> Result<SExpr> {
+    pub fn where_optimize(&self, s_expr: SExpr) -> Result<SExpr> {
         let rel_op = s_expr.plan();
         if s_expr.match_pattern(&self.pattern) {
             let mut filter: Filter = s_expr.plan().clone().try_into()?;
@@ -113,9 +114,11 @@ impl WhereOptimizer {
             let mut prewhere_pred = Vec::new();
             let mut remain_pred = Vec::new();
 
+            let columns_to_scan = get.columns.len();
+
             // filter.predicates are already splited by AND
             for pred in filter.predicates.iter() {
-                let (viable, columns) = self.analyze(pred, &get.columns);
+                let (viable, columns) = Self::analyze(pred, columns_to_scan);
                 if viable {
                     prewhere_pred.push(pred.clone());
                     prewhere_columns.extend(&columns);
@@ -146,7 +149,7 @@ impl WhereOptimizer {
             let children = s_expr
                 .children()
                 .iter()
-                .map(|expr| self.optimize(expr.clone()))
+                .map(|expr| self.where_optimize(expr.clone()))
                 .collect::<Result<Vec<_>>>()?;
             Ok(SExpr::create(rel_op.clone(), children, None))
         }

@@ -16,7 +16,6 @@ use common_catalog::table::TableStatistics;
 use common_exception::Result;
 use itertools::Itertools;
 
-use super::Prewhere;
 use crate::sql::optimizer::ColumnSet;
 use crate::sql::optimizer::RelExpr;
 use crate::sql::optimizer::RelationalProperty;
@@ -27,6 +26,12 @@ use crate::sql::plans::RelOp;
 use crate::sql::plans::Scalar;
 use crate::sql::plans::SortItem;
 use crate::sql::IndexType;
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Prewhere {
+    pub columns: ColumnSet,
+    pub predicates: Vec<Scalar>,
+}
 
 #[derive(Clone, Debug)]
 pub struct LogicalGet {

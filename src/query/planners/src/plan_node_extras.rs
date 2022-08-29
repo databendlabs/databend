@@ -75,7 +75,7 @@ pub struct Extras {
     /// split_conjunctions by `and` operator
     pub filters: Vec<Expression>,
     /// Optional prewhere information
-    /// use for prewhere optimization
+    /// used for prewhere optimization
     pub prewhere: Option<PrewhereInfo>,
     /// Optional limit to skip read
     pub limit: Option<usize>,

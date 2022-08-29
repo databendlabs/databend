@@ -98,7 +98,7 @@ impl HeuristicOptimizer {
         let s_expr = pruner.prune_columns(&s_expr, require_columns)?;
 
         let where_opt = where_optimizer::WhereOptimizer::new(self.metadata.clone());
-        where_opt.optimize(s_expr)
+        where_opt.where_optimize(s_expr)
     }
 
     pub fn optimize(&mut self, s_expr: SExpr) -> Result<SExpr> {
