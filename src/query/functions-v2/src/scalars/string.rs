@@ -367,15 +367,16 @@ pub fn register(registry: &mut FunctionRegistry) {
         vectorize_string_to_string(
             |col| col.data.len() / 2,
             |val, writer| {
-                let new_size = writer.data.len() + val.len() / 2;
-                writer.data.resize(new_size, 0);
-                match hex::decode_to_slice(val, &mut writer.data[new_size - val.len() / 2..]) {
+                let old_len = writer.data.len();
+                let extra_len = val.len() / 2;
+                writer.data.resize(old_len + extra_len, 0);
+                match hex::decode_to_slice(val, &mut writer.data[old_len..]) {
                     Ok(()) => {
                         writer.commit_row();
                         Ok(())
                     }
                     Err(err) => Err(format!(
-                        "{} can not unhex because: {}",
+                        "{:?} can not be `unhex()` because: {}",
                         String::from_utf8_lossy(val),
                         err
                     )),
