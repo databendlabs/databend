@@ -30,6 +30,7 @@ pub fn format_statement(stmt: Statement) -> Result<String> {
     format_ctx.format_pretty()
 }
 
+#[derive(Clone)]
 pub struct AstFormatContext {
     name: String,
     children_num: usize,
