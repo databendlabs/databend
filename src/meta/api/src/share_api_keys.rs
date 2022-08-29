@@ -169,7 +169,7 @@ impl KVApiKey for ShareAccountNameIdent {
     }
 }
 
-/// "__fd_share_id_to_name/<share_id> -> ShareNameIdent"
+/// __fd_share_id_to_name/<share_id> -> ShareNameIdent
 impl KVApiKey for ShareIdToName {
     const PREFIX: &'static str = PREFIX_SHARE_ID_TO_NAME;
 
