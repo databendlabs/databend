@@ -123,7 +123,8 @@ def gen_suite_from_sql(sql_and_skips, dest_file):
             cursor.execute(sql)
             pick_create_statement(sql)
         except mysql.connector.Error as err:
-            statements.append(f"statement error {get_error_code(err.msg)}\n{sql}\n\n")
+            statements.append(
+                f"statement error {get_error_code(err.msg)}\n{sql}\n\n")
             continue
 
         try:
@@ -159,9 +160,7 @@ def gen_suite_from_sql(sql_and_skips, dest_file):
     drop_statements = list()
     for cleanup_sql in get_cleanup_statements():
         try:
-            drop_statements.append(
-                f"statement ok\n{cleanup_sql}\n\n"
-            )
+            drop_statements.append(f"statement ok\n{cleanup_sql}\n\n")
             cursor.execute(cleanup_sql)
             print(f"Cleanup execute sql: {cleanup_sql}")
         except Exception:
