@@ -71,7 +71,7 @@ impl NDJsonInputFormat {
     pub fn try_create(
         _name: &str,
         schema: DataSchemaRef,
-        mut settings: FormatSettings,
+        settings: FormatSettings,
         min_accepted_rows: usize,
         min_accepted_bytes: usize,
     ) -> Result<Arc<dyn InputFormat>> {
