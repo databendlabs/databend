@@ -312,9 +312,9 @@ pub trait VisitorMut: Sized {
     fn visit_date_add(
         &mut self,
         _span: &mut &[Token<'_>],
-        date: &mut Expr<'_>,
-        interval: &mut Expr<'_>,
         _unit: &mut IntervalKind,
+        interval: &mut Expr<'_>,
+        date: &mut Expr<'_>,
     ) {
         walk_expr_mut(self, date);
         walk_expr_mut(self, interval);
@@ -323,9 +323,9 @@ pub trait VisitorMut: Sized {
     fn visit_date_sub(
         &mut self,
         _span: &mut &[Token<'_>],
-        date: &mut Expr<'_>,
-        interval: &mut Expr<'_>,
         _unit: &mut IntervalKind,
+        interval: &mut Expr<'_>,
+        date: &mut Expr<'_>,
     ) {
         walk_expr_mut(self, date);
         walk_expr_mut(self, interval);

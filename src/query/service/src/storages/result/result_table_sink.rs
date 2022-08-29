@@ -144,7 +144,7 @@ impl ResultTableSink {
 #[async_trait]
 impl Processor for ResultTableSink {
     fn name(&self) -> &'static str {
-        "FuseSink"
+        "ResultTableSink"
     }
 
     fn as_any(&mut self) -> &mut dyn Any {

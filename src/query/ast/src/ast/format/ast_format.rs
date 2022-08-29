@@ -614,9 +614,9 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
     fn visit_date_add(
         &mut self,
         _span: &'ast [Token<'ast>],
-        date: &'ast Expr<'ast>,
-        interval: &'ast Expr<'ast>,
         unit: &'ast IntervalKind,
+        interval: &'ast Expr<'ast>,
+        date: &'ast Expr<'ast>,
     ) {
         self.visit_expr(date);
         let date_child = self.children.pop().unwrap();
@@ -632,9 +632,9 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
     fn visit_date_sub(
         &mut self,
         _span: &'ast [Token<'ast>],
-        date: &'ast Expr<'ast>,
-        interval: &'ast Expr<'ast>,
         unit: &'ast IntervalKind,
+        interval: &'ast Expr<'ast>,
+        date: &'ast Expr<'ast>,
     ) {
         self.visit_expr(date);
         let date_child = self.children.pop().unwrap();
