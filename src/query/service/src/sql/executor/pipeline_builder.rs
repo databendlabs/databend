@@ -517,7 +517,7 @@ impl PipelineBuilder {
                 TransformMergeBlock::try_create(
                     transform_input_port,
                     transform_output_port,
-                    union_all.left.output_schema()?,
+                    union_all.output_schema()?,
                     union_all_receiver.clone(),
                 )
             })?;

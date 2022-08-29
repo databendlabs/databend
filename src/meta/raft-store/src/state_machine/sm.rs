@@ -15,6 +15,7 @@
 use std::collections::BTreeMap;
 use std::convert::TryInto;
 use std::fmt::Debug;
+use std::time::Duration;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
@@ -36,10 +37,8 @@ use common_meta_types::AppliedState;
 use common_meta_types::Change;
 use common_meta_types::Cmd;
 use common_meta_types::ConditionResult;
-use common_meta_types::KVMeta;
 use common_meta_types::LogEntry;
 use common_meta_types::LogId;
-use common_meta_types::MatchSeq;
 use common_meta_types::MatchSeqExt;
 use common_meta_types::MetaResult;
 use common_meta_types::MetaStorageError;
@@ -62,12 +61,14 @@ use common_meta_types::TxnPutRequest;
 use common_meta_types::TxnPutResponse;
 use common_meta_types::TxnReply;
 use common_meta_types::TxnRequest;
+use common_meta_types::UpsertKV;
 use num::FromPrimitive;
 use openraft::raft::Entry;
 use openraft::raft::EntryPayload;
 use serde::Deserialize;
 use serde::Serialize;
 use tracing::debug;
+use tracing::error;
 use tracing::info;
 
 use crate::config::RaftConfig;
@@ -287,8 +288,21 @@ impl StateMachine {
                         }
                     }
 
-                    let res = self.apply_cmd(&data.cmd, &txn_tree, kv_pairs.as_ref());
+                    let log_time_ms = match data.time_ms {
+                        None => {
+                            error!("log has no time: {}, treat every record with non-none `expire` as timed out", entry.summary());
+                            0
+                        }
+                        Some(x) => {
+                            let t = SystemTime::UNIX_EPOCH + Duration::from_millis(x);
+                            info!("apply: raft-log time: {:?}", t);
+                            x
+                        },
+                    };
+
+                    let res = self.apply_cmd(&data.cmd, &txn_tree, kv_pairs.as_ref(), log_time_ms);
                     info!("apply_result: summary: {}; res: {:?}", entry.summary(), res);
+
                     let applied_state = res?;
 
                     if let Some(ref txid) = data.txid {
@@ -375,37 +389,22 @@ impl StateMachine {
         Ok((prev, None).into())
     }
 
-    #[tracing::instrument(level = "debug", skip(self, txn_tree, key, seq, value_op))]
+    #[tracing::instrument(level = "debug", skip_all)]
     fn apply_update_kv_cmd(
         &self,
-        key: &str,
-        seq: &MatchSeq,
-        value_op: &Operation<Vec<u8>>,
-        value_meta: &Option<KVMeta>,
+        upsert_kv: &UpsertKV,
         txn_tree: &TransactionSledTree,
+        log_time_ms: u64,
     ) -> MetaStorageResult<AppliedState> {
-        debug!(
-            key = display(key),
-            seq = debug(seq),
-            value_op = debug(value_op),
-            value_meta = debug(value_meta),
-            "kv_cmd"
-        );
+        debug!(upsert_kv = debug(upsert_kv), "apply_update_kv_cmd");
 
         let sub_tree = txn_tree.key_space::<GenericKV>();
-        let key_str = key.to_string();
-        let (prev, result) = self.txn_sub_tree_upsert(
-            &sub_tree,
-            &key_str,
-            seq,
-            value_op.clone(),
-            value_meta.clone(),
-        )?;
+        let (prev, result) = self.txn_sub_tree_upsert(&sub_tree, upsert_kv, log_time_ms)?;
 
-        debug!("applied UpsertKV: {} {:?}", key, result);
+        debug!("applied UpsertKV: {:?} {:?}", upsert_kv, result);
 
         if let Some(subscriber) = &self.subscriber {
-            subscriber.kv_changed(&key_str, prev.clone(), result.clone());
+            subscriber.kv_changed(&upsert_kv.key, prev.clone(), result.clone());
         }
 
         Ok(Change::new(prev, result).into())
@@ -531,15 +530,14 @@ impl StateMachine {
         put: &TxnPutRequest,
         resp: &mut TxnReply,
         events: &mut Option<Vec<NotifyKVEvent>>,
+        log_time_ms: u64,
     ) -> MetaStorageResult<()> {
         let sub_tree = txn_tree.key_space::<GenericKV>();
 
         let (prev, result) = self.txn_sub_tree_upsert(
             &sub_tree,
-            &put.key,
-            &MatchSeq::Any,
-            Operation::Update(put.value.clone()),
-            None,
+            &UpsertKV::update(&put.key, &put.value),
+            log_time_ms,
         )?;
 
         if let Some(events) = events {
@@ -568,16 +566,12 @@ impl StateMachine {
         delete: &TxnDeleteRequest,
         resp: &mut TxnReply,
         events: &mut Option<Vec<NotifyKVEvent>>,
+        log_time_ms: u64,
     ) -> MetaStorageResult<()> {
         let sub_tree = txn_tree.key_space::<GenericKV>();
 
-        let (prev, result) = self.txn_sub_tree_upsert(
-            &sub_tree,
-            &delete.key,
-            &MatchSeq::Any,
-            Operation::Delete,
-            None,
-        )?;
+        let (prev, result) =
+            self.txn_sub_tree_upsert(&sub_tree, &UpsertKV::delete(&delete.key), log_time_ms)?;
 
         if let Some(events) = events {
             events.push((delete.key.to_string(), prev.clone(), result));
@@ -607,19 +601,15 @@ impl StateMachine {
         kv_pairs: Option<&DeleteByPrefixKeyMap>,
         resp: &mut TxnReply,
         events: &mut Option<Vec<NotifyKVEvent>>,
+        log_time_ms: u64,
     ) -> MetaStorageResult<()> {
         let mut count: u32 = 0;
         if let Some(kv_pairs) = kv_pairs {
             if let Some(kv_pairs) = kv_pairs.get(delete_by_prefix) {
                 let sub_tree = txn_tree.key_space::<GenericKV>();
                 for (key, _seq) in kv_pairs.iter() {
-                    let ret = self.txn_sub_tree_upsert(
-                        &sub_tree,
-                        key,
-                        &MatchSeq::Any,
-                        Operation::Delete,
-                        None,
-                    );
+                    let ret =
+                        self.txn_sub_tree_upsert(&sub_tree, &UpsertKV::delete(key), log_time_ms);
 
                     if let Ok(ret) = ret {
                         count += 1;
@@ -652,6 +642,7 @@ impl StateMachine {
         kv_pairs: Option<&DeleteByPrefixKeyMap>,
         resp: &mut TxnReply,
         events: &mut Option<Vec<NotifyKVEvent>>,
+        log_time_ms: u64,
     ) -> MetaStorageResult<()> {
         debug!(op = display(op), "txn execute TxnOp");
         match &op.request {
@@ -659,10 +650,10 @@ impl StateMachine {
                 self.txn_execute_get_operation(txn_tree, get, resp)?;
             }
             Some(txn_op::Request::Put(put)) => {
-                self.txn_execute_put_operation(txn_tree, put, resp, events)?;
+                self.txn_execute_put_operation(txn_tree, put, resp, events, log_time_ms)?;
             }
             Some(txn_op::Request::Delete(delete)) => {
-                self.txn_execute_delete_operation(txn_tree, delete, resp, events)?;
+                self.txn_execute_delete_operation(txn_tree, delete, resp, events, log_time_ms)?;
             }
             Some(txn_op::Request::DeleteByPrefix(delete_by_prefix)) => {
                 self.txn_execute_delete_by_prefix_operation(
@@ -671,6 +662,7 @@ impl StateMachine {
                     kv_pairs,
                     resp,
                     events,
+                    log_time_ms,
                 )?;
             }
             None => {}
@@ -685,6 +677,7 @@ impl StateMachine {
         req: &TxnRequest,
         txn_tree: &TransactionSledTree,
         kv_pairs: Option<&(DeleteByPrefixKeyMap, DeleteByPrefixKeyMap)>,
+        log_time_ms: u64,
     ) -> MetaStorageResult<AppliedState> {
         debug!(txn = display(req), "apply txn cmd");
 
@@ -722,7 +715,14 @@ impl StateMachine {
             None
         };
         for op in ops {
-            self.txn_execute_operation(txn_tree, op, kv_op_pairs, &mut resp, &mut events)?;
+            self.txn_execute_operation(
+                txn_tree,
+                op,
+                kv_op_pairs,
+                &mut resp,
+                &mut events,
+                log_time_ms,
+            )?;
         }
 
         if let Some(subscriber) = &self.subscriber {
@@ -747,6 +747,7 @@ impl StateMachine {
         cmd: &Cmd,
         txn_tree: &TransactionSledTree,
         kv_pairs: Option<&(DeleteByPrefixKeyMap, DeleteByPrefixKeyMap)>,
+        log_time_ms: u64,
     ) -> Result<AppliedState, MetaStorageError> {
         info!("apply_cmd: {:?}", cmd);
 
@@ -760,14 +761,11 @@ impl StateMachine {
 
             Cmd::RemoveNode { ref node_id } => self.apply_remove_node_cmd(node_id, txn_tree),
 
-            Cmd::UpsertKV {
-                key,
-                seq,
-                value: value_op,
-                value_meta,
-            } => self.apply_update_kv_cmd(key, seq, value_op, value_meta, txn_tree),
+            Cmd::UpsertKV(ref upsert_kv) => {
+                self.apply_update_kv_cmd(upsert_kv, txn_tree, log_time_ms)
+            }
 
-            Cmd::Transaction(txn) => self.apply_txn_cmd(txn, txn_tree, kv_pairs),
+            Cmd::Transaction(txn) => self.apply_txn_cmd(txn, txn_tree, kv_pairs, log_time_ms),
         }
     }
 
@@ -784,67 +782,43 @@ impl StateMachine {
     }
 
     #[allow(clippy::type_complexity)]
-    fn txn_sub_tree_upsert<'s, V, KS>(
+    fn txn_sub_tree_upsert<'s, KS>(
         &'s self,
         sub_tree: &AsTxnKeySpace<'s, KS>,
-        key: &KS::K,
-        seq: &MatchSeq,
-        value_op: Operation<V>,
-        value_meta: Option<KVMeta>,
-    ) -> MetaStorageResult<(Option<SeqV<V>>, Option<SeqV<V>>)>
+        upsert_kv: &UpsertKV,
+        log_time_ms: u64,
+    ) -> MetaStorageResult<(Option<SeqV>, Option<SeqV>)>
     where
-        V: Clone + Debug,
-        KS: SledKeySpace<V = SeqV<V>>,
+        KS: SledKeySpace<K = String, V = SeqV>,
     {
-        let prev = sub_tree.get(key)?;
+        let prev = sub_tree.get(&upsert_kv.key)?;
 
         // If prev is timed out, treat it as a None.
-        let prev = Self::unexpired_opt(prev);
+        let prev = Self::unexpired_opt(prev, log_time_ms);
 
-        if seq.match_seq(&prev).is_err() {
+        if upsert_kv.seq.match_seq(&prev).is_err() {
             return Ok((prev.clone(), prev));
         }
 
-        // result is the state after applying an operation.
-        let result =
-            self.txn_sub_tree_do_update(sub_tree, key, prev.clone(), value_meta, value_op)?;
-
-        debug!("applied upsert: {} {:?}", key, result);
-        Ok((prev, result))
-    }
-
-    /// Update a record into a sled tree sub tree, defined by a KeySpace, without seq check.
-    ///
-    /// TODO(xp); this should be a method of sled sub tree
-    fn txn_sub_tree_do_update<'s, V, KS>(
-        &'s self,
-        sub_tree: &AsTxnKeySpace<'s, KS>,
-        key: &KS::K,
-        prev: Option<SeqV<V>>,
-        value_meta: Option<KVMeta>,
-        value_op: Operation<V>,
-    ) -> MetaStorageResult<Option<SeqV<V>>>
-    where
-        V: Clone + Debug,
-        KS: SledKeySpace<V = SeqV<V>>,
-    {
-        let mut seq_kv_value = match value_op {
-            Operation::Update(v) => SeqV::with_meta(0, value_meta, v),
+        let mut new_seq_v = match &upsert_kv.value {
+            Operation::Update(v) => SeqV::with_meta(0, upsert_kv.value_meta.clone(), v.clone()),
             Operation::Delete => {
-                sub_tree.remove(key)?;
-                return Ok(None);
+                sub_tree.remove(&upsert_kv.key)?;
+                return Ok((prev, None));
             }
             Operation::AsIs => match prev {
-                None => return Ok(None),
-                Some(ref prev_kv_value) => prev_kv_value.clone().set_meta(value_meta),
+                None => return Ok((prev, None)),
+                Some(ref prev_kv_value) => {
+                    prev_kv_value.clone().set_meta(upsert_kv.value_meta.clone())
+                }
             },
         };
 
-        seq_kv_value.seq = self.txn_incr_seq(KS::NAME, sub_tree)?;
+        new_seq_v.seq = self.txn_incr_seq(KS::NAME, sub_tree)?;
+        sub_tree.insert(&upsert_kv.key, &new_seq_v)?;
 
-        sub_tree.insert(key, &seq_kv_value)?;
-
-        Ok(Some(seq_kv_value))
+        debug!("applied upsert: {:?} res: {:?}", upsert_kv, new_seq_v);
+        Ok((prev, Some(new_seq_v)))
     }
 
     fn txn_client_last_resp_update(
@@ -934,36 +908,33 @@ impl StateMachine {
         }
     }
 
-    pub fn unexpired_opt<V: Debug>(seq_value: Option<SeqV<V>>) -> Option<SeqV<V>> {
-        seq_value.and_then(Self::unexpired)
+    pub fn unexpired_opt<V: Debug>(
+        seq_value: Option<SeqV<V>>,
+        log_time_ms: u64,
+    ) -> Option<SeqV<V>> {
+        seq_value.and_then(|x| Self::unexpired(x, log_time_ms))
     }
 
-    pub fn unexpired<V: Debug>(seq_value: SeqV<V>) -> Option<SeqV<V>> {
-        // TODO(xp): log must be assigned with a ts.
+    pub fn unexpired<V: Debug>(seq_value: SeqV<V>, log_time_ms: u64) -> Option<SeqV<V>> {
+        // Caveat: The cleanup must be consistent across raft nodes:
+        //         A conditional update, e.g. an upsert_kv() with MatchSeq::Eq(some_value),
+        //         must be applied with the same timestamp on every raft node.
+        //         Otherwise: node-1 could have applied a log with a ts that is smaller than value.expire_at,
+        //         while node-2 may fail to apply the same log if it use a greater ts > value.expire_at.
+        //
+        // Thus:
+        //
+        // 1. A raft log must have a field ts assigned by the leader. When applying, use this ts to
+        //    check against expire_at to decide whether to purge it.
+        // 2. A GET operation must not purge any expired entry. Since a GET is only applied to a node itself.
+        // 3. The background task can only be triggered by the raft leader, by submit a "clean expired" log.
 
         // TODO(xp): background task to clean expired
-
-        // TODO(xp): Caveat: The cleanup must be consistent across raft nodes:
-        //           A conditional update, e.g. an upsert_kv() with MatchSeq::Eq(some_value),
-        //           must be applied with the same timestamp on every raft node.
-        //           Otherwise: node-1 could have applied a log with a ts that is smaller than value.expire_at,
-        //           while node-2 may fail to apply the same log if it use a greater ts > value.expire_at.
-        //           Thus:
-        //           1. A raft log must have a field ts assigned by the leader. When applying, use this ts to
-        //              check against expire_at to decide whether to purge it.
-        //           2. A GET operation must not purge any expired entry. Since a GET is only applied to a node itself.
-        //           3. The background task can only be triggered by the raft leader, by submit a "clean expired" log.
-
         // TODO(xp): maybe it needs a expiration queue for efficient cleaning up.
 
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
+        debug!("seq_value: {:?} log_time_ms: {}", seq_value, log_time_ms);
 
-        debug!("seq_value: {:?} now: {}", seq_value, now);
-
-        if seq_value.get_expire_at() < now {
+        if seq_value.get_expire_at() < log_time_ms {
             None
         } else {
             Some(seq_value)

@@ -28,14 +28,13 @@ use common_meta_types::Cmd;
 use common_meta_types::Endpoint;
 use common_meta_types::ForwardToLeader;
 use common_meta_types::LogEntry;
-use common_meta_types::MatchSeq;
 use common_meta_types::MetaError;
 use common_meta_types::MetaRaftError;
 use common_meta_types::Node;
 use common_meta_types::NodeId;
-use common_meta_types::Operation;
 use common_meta_types::RetryableError;
 use common_meta_types::SeqV;
+use common_meta_types::UpsertKV;
 use databend_meta::configs;
 use databend_meta::meta_service::meta_leader::MetaLeader;
 use databend_meta::meta_service::ForwardRequest;
@@ -128,12 +127,8 @@ async fn test_meta_node_write_to_local_leader() -> anyhow::Result<()> {
         let rst = maybe_leader
             .write(LogEntry {
                 txid: None,
-                cmd: Cmd::UpsertKV {
-                    key: key.to_string(),
-                    seq: MatchSeq::Any,
-                    value: Operation::Update(key.to_string().into_bytes()),
-                    value_meta: None,
-                },
+                time_ms: None,
+                cmd: Cmd::UpsertKV(UpsertKV::update(&key, key.as_bytes())),
             })
             .await;
 
@@ -195,12 +190,8 @@ async fn test_meta_node_snapshot_replication() -> anyhow::Result<()> {
         let key = format!("test_meta_node_snapshot_replication-key-{}", i);
         mn.write(LogEntry {
             txid: None,
-            cmd: Cmd::UpsertKV {
-                key: key.clone(),
-                seq: MatchSeq::Any,
-                value: Some(b"v".to_vec()).into(),
-                value_meta: None,
-            },
+            time_ms: None,
+            cmd: Cmd::UpsertKV(UpsertKV::update(&key, b"v")),
         })
         .await?;
     }
@@ -589,12 +580,8 @@ async fn test_meta_node_restart_single_node() -> anyhow::Result<()> {
             .await?
             .write(LogEntry {
                 txid: None,
-                cmd: Cmd::UpsertKV {
-                    key: "foo".to_string(),
-                    seq: MatchSeq::Any,
-                    value: Operation::Update(b"1".to_vec()),
-                    value_meta: None,
-                },
+                time_ms: None,
+                cmd: Cmd::UpsertKV(UpsertKV::update("foo", b"1")),
             })
             .await?;
         log_index += 1;
@@ -753,7 +740,7 @@ pub(crate) async fn start_meta_node_leader() -> anyhow::Result<(NodeId, MetaSrvT
 
 /// Start a NonVoter and setup replication from leader to it.
 /// Assert the NonVoter is ready and upto date such as the known leader, state and grpc service.
-async fn start_meta_node_non_voter(
+pub(crate) async fn start_meta_node_non_voter(
     leader: Arc<MetaNode>,
     id: NodeId,
 ) -> anyhow::Result<(NodeId, MetaSrvTestContext)> {
@@ -833,12 +820,8 @@ async fn assert_upsert_kv_synced(meta_nodes: Vec<Arc<MetaNode>>, key: &str) -> a
             .await?
             .write(LogEntry {
                 txid: None,
-                cmd: Cmd::UpsertKV {
-                    key: key.to_string(),
-                    seq: MatchSeq::Any,
-                    value: Operation::Update(key.to_string().into_bytes()),
-                    value_meta: None,
-                },
+                time_ms: None,
+                cmd: Cmd::UpsertKV(UpsertKV::update(key, key.as_bytes())),
             })
             .await?;
     }
@@ -864,7 +847,6 @@ async fn assert_get_kv(
 ) -> anyhow::Result<()> {
     for (i, mn) in meta_nodes.iter().enumerate() {
         let got = mn.get_kv(key).await?;
-        // let got = mn.get_file(key).await?;
         assert_eq!(
             value.to_string().into_bytes(),
             got.unwrap().data,
@@ -935,6 +917,7 @@ async fn test_meta_node_incr_seq() -> anyhow::Result<()> {
     for (name, txid, k, want) in cases.iter() {
         let req = LogEntry {
             txid: txid.clone(),
+            time_ms: None,
             cmd: Cmd::IncrSeq { key: k.to_string() },
         };
         let raft_reply = client.write(req).await?.into_inner();

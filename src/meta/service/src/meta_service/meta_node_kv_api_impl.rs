@@ -27,6 +27,7 @@ use common_meta_types::MetaError;
 use common_meta_types::MetaResultError;
 use common_meta_types::TxnReply;
 use common_meta_types::TxnRequest;
+use common_meta_types::UpsertKV;
 use common_meta_types::UpsertKVReply;
 use common_meta_types::UpsertKVReq;
 use tracing::info;
@@ -43,12 +44,13 @@ impl KVApi for MetaNode {
     async fn upsert_kv(&self, act: UpsertKVReq) -> Result<UpsertKVReply, MetaError> {
         let ent = LogEntry {
             txid: None,
-            cmd: Cmd::UpsertKV {
+            time_ms: None,
+            cmd: Cmd::UpsertKV(UpsertKV {
                 key: act.key,
                 seq: act.seq,
                 value: act.value,
                 value_meta: act.value_meta,
-            },
+            }),
         };
         let rst = self.write(ent).await?;
 
@@ -99,6 +101,7 @@ impl KVApi for MetaNode {
         info!("MetaNode::transaction(): {}", txn);
         let ent = LogEntry {
             txid: None,
+            time_ms: None,
             cmd: Cmd::Transaction(txn),
         };
         let rst = self.write(ent).await?;

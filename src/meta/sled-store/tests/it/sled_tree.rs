@@ -65,6 +65,7 @@ async fn test_sled_tree_append() -> anyhow::Result<()> {
             log_id: LogId { term: 3, index: 4 },
             payload: EntryPayload::Normal(LogEntry {
                 txid: None,
+                time_ms: None,
                 cmd: Cmd::IncrSeq {
                     key: "foo".to_string(),
                 },
@@ -79,6 +80,7 @@ async fn test_sled_tree_append() -> anyhow::Result<()> {
             log_id: LogId { term: 3, index: 4 },
             payload: EntryPayload::Normal(LogEntry {
                 txid: None,
+                time_ms: None,
                 cmd: Cmd::IncrSeq {
                     key: "foo".to_string(),
                 },
@@ -120,6 +122,8 @@ async fn test_sled_tree_append_values_and_range_get() -> anyhow::Result<()> {
             log_id: LogId { term: 3, index: 4 },
             payload: EntryPayload::Normal(LogEntry {
                 txid: None,
+                time_ms: None,
+
                 cmd: Cmd::IncrSeq {
                     key: "foo".to_string(),
                 },
@@ -283,6 +287,8 @@ async fn test_sled_tree_range() -> anyhow::Result<()> {
             log_id: LogId { term: 3, index: 4 },
             payload: EntryPayload::Normal(LogEntry {
                 txid: None,
+                time_ms: None,
+
                 cmd: Cmd::IncrSeq {
                     key: "foo".to_string(),
                 },
@@ -400,6 +406,8 @@ async fn test_sled_tree_insert() -> anyhow::Result<()> {
             log_id: LogId { term: 3, index: 4 },
             payload: EntryPayload::Normal(LogEntry {
                 txid: None,
+                time_ms: None,
+
                 cmd: Cmd::IncrSeq {
                     key: "foo".to_string(),
                 },
@@ -459,6 +467,8 @@ async fn test_sled_tree_contains_key() -> anyhow::Result<()> {
             log_id: LogId { term: 3, index: 4 },
             payload: EntryPayload::Normal(LogEntry {
                 txid: None,
+                time_ms: None,
+
                 cmd: Cmd::IncrSeq {
                     key: "foo".to_string(),
                 },
@@ -519,6 +529,8 @@ async fn test_sled_tree_get() -> anyhow::Result<()> {
             log_id: LogId { term: 3, index: 4 },
             payload: EntryPayload::Normal(LogEntry {
                 txid: None,
+                time_ms: None,
+
                 cmd: Cmd::IncrSeq {
                     key: "foo".to_string(),
                 },
@@ -561,6 +573,8 @@ async fn test_sled_tree_last() -> anyhow::Result<()> {
             log_id: LogId { term: 3, index: 4 },
             payload: EntryPayload::Normal(LogEntry {
                 txid: None,
+                time_ms: None,
+
                 cmd: Cmd::IncrSeq {
                     key: "foo".to_string(),
                 },
@@ -646,6 +660,8 @@ async fn test_sled_tree_range_remove() -> anyhow::Result<()> {
             log_id: LogId { term: 3, index: 4 },
             payload: EntryPayload::Normal(LogEntry {
                 txid: None,
+                time_ms: None,
+
                 cmd: Cmd::IncrSeq {
                     key: "foo".to_string(),
                 },
@@ -706,6 +722,8 @@ async fn test_sled_tree_multi_types() -> anyhow::Result<()> {
             log_id: LogId { term: 3, index: 4 },
             payload: EntryPayload::Normal(LogEntry {
                 txid: None,
+                time_ms: None,
+
                 cmd: Cmd::IncrSeq {
                     key: "foo".to_string(),
                 },
@@ -774,6 +792,8 @@ async fn test_as_append() -> anyhow::Result<()> {
             log_id: LogId { term: 3, index: 4 },
             payload: EntryPayload::Normal(LogEntry {
                 txid: None,
+                time_ms: None,
+
                 cmd: Cmd::IncrSeq {
                     key: "foo".to_string(),
                 },
@@ -788,6 +808,8 @@ async fn test_as_append() -> anyhow::Result<()> {
             log_id: LogId { term: 3, index: 4 },
             payload: EntryPayload::Normal(LogEntry {
                 txid: None,
+                time_ms: None,
+
                 cmd: Cmd::IncrSeq {
                     key: "foo".to_string(),
                 },
@@ -830,6 +852,8 @@ async fn test_as_append_values_and_range_get() -> anyhow::Result<()> {
             log_id: LogId { term: 3, index: 4 },
             payload: EntryPayload::Normal(LogEntry {
                 txid: None,
+                time_ms: None,
+
                 cmd: Cmd::IncrSeq {
                     key: "foo".to_string(),
                 },
@@ -1038,6 +1062,8 @@ async fn test_as_insert() -> anyhow::Result<()> {
             log_id: LogId { term: 3, index: 4 },
             payload: EntryPayload::Normal(LogEntry {
                 txid: None,
+                time_ms: None,
+
                 cmd: Cmd::IncrSeq {
                     key: "foo".to_string(),
                 },
@@ -1098,6 +1124,8 @@ async fn test_as_contains_key() -> anyhow::Result<()> {
             log_id: LogId { term: 3, index: 4 },
             payload: EntryPayload::Normal(LogEntry {
                 txid: None,
+                time_ms: None,
+
                 cmd: Cmd::IncrSeq {
                     key: "foo".to_string(),
                 },
@@ -1160,6 +1188,8 @@ async fn test_as_get() -> anyhow::Result<()> {
             log_id: LogId { term: 3, index: 4 },
             payload: EntryPayload::Normal(LogEntry {
                 txid: None,
+                time_ms: None,
+
                 cmd: Cmd::IncrSeq {
                     key: "foo".to_string(),
                 },
@@ -1199,6 +1229,8 @@ async fn test_as_last() -> anyhow::Result<()> {
             log_id: LogId { term: 3, index: 4 },
             payload: EntryPayload::Normal(LogEntry {
                 txid: None,
+                time_ms: None,
+
                 cmd: Cmd::IncrSeq {
                     key: "foo".to_string(),
                 },
@@ -1265,6 +1297,8 @@ async fn test_as_range_remove() -> anyhow::Result<()> {
             log_id: LogId { term: 3, index: 4 },
             payload: EntryPayload::Normal(LogEntry {
                 txid: None,
+                time_ms: None,
+
                 cmd: Cmd::IncrSeq {
                     key: "foo".to_string(),
                 },
@@ -1327,6 +1361,8 @@ async fn test_as_multi_types() -> anyhow::Result<()> {
             log_id: LogId { term: 3, index: 4 },
             payload: EntryPayload::Normal(LogEntry {
                 txid: None,
+                time_ms: None,
+
                 cmd: Cmd::IncrSeq {
                     key: "foo".to_string(),
                 },
@@ -1393,6 +1429,7 @@ async fn test_export() -> anyhow::Result<()> {
                 log_id: LogId { term: 3, index: 4 },
                 payload: EntryPayload::Normal(LogEntry {
                     txid: None,
+                    time_ms: None,
                     cmd: Cmd::IncrSeq {
                         key: "foo".to_string(),
                     },

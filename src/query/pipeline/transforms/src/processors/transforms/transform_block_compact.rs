@@ -43,6 +43,46 @@ impl Compactor for BlockCompactor {
         "BlockCompactTransform"
     }
 
+    fn use_partial_compact() -> bool {
+        true
+    }
+
+    fn compact_partial(&self, blocks: &mut Vec<DataBlock>) -> Result<Vec<DataBlock>> {
+        if blocks.is_empty() {
+            return Ok(vec![]);
+        }
+
+        let size = blocks.len();
+        let mut res = Vec::with_capacity(size);
+        let block = blocks[size - 1].clone();
+
+        // perfect block
+        if (block.num_rows() >= self.min_rows_per_block
+            && block.num_rows() <= self.max_rows_per_block)
+            || block.memory_size() >= self.max_bytes_per_block
+        {
+            res.push(block);
+            blocks.remove(size - 1);
+        } else {
+            let accumulated_rows: usize = blocks.iter_mut().map(|b| b.num_rows()).sum();
+            let accumulated_bytes: usize = blocks.iter_mut().map(|b| b.memory_size()).sum();
+
+            let merged = DataBlock::concat_blocks(blocks)?;
+            blocks.clear();
+
+            // we can't use slice here, it did not deallocate memory
+            if accumulated_rows >= self.max_rows_per_block
+                || accumulated_bytes >= self.max_bytes_per_block
+            {
+                res.push(merged);
+            } else {
+                blocks.push(merged);
+            }
+        }
+
+        Ok(res)
+    }
+
     fn compact_final(&self, blocks: &[DataBlock]) -> Result<Vec<DataBlock>> {
         let mut res = Vec::with_capacity(blocks.len());
         let mut temp_blocks = vec![];
@@ -88,55 +128,6 @@ impl Compactor for BlockCompactor {
         if accumulated_rows != 0 {
             let block = DataBlock::concat_blocks(&temp_blocks)?;
             res.push(block);
-        }
-
-        Ok(res)
-    }
-
-    fn use_partial_compact() -> bool {
-        true
-    }
-
-    fn compact_partial(&self, blocks: &mut Vec<DataBlock>) -> Result<Vec<DataBlock>> {
-        if blocks.is_empty() {
-            return Ok(vec![]);
-        }
-
-        let size = blocks.len();
-        let mut res = Vec::with_capacity(size);
-        let block = blocks[size - 1].clone();
-
-        // perfect block
-        if (block.num_rows() >= self.min_rows_per_block
-            && block.num_rows() <= self.max_rows_per_block)
-            || block.memory_size() >= self.max_bytes_per_block
-        {
-            res.push(block);
-            blocks.remove(size - 1);
-        } else {
-            let accumulated_rows: usize = blocks.iter_mut().map(|b| b.num_rows()).sum();
-            let accumulated_bytes: usize = blocks.iter_mut().map(|b| b.memory_size()).sum();
-
-            let merged = DataBlock::concat_blocks(blocks)?;
-            blocks.clear();
-
-            if accumulated_rows >= self.max_rows_per_block {
-                let cut = merged.slice(0, self.max_rows_per_block);
-                res.push(cut);
-
-                if accumulated_rows != self.max_rows_per_block {
-                    blocks.push(merged.slice(
-                        self.max_rows_per_block,
-                        accumulated_rows - self.max_rows_per_block,
-                    ));
-                }
-            } else if accumulated_bytes >= self.max_bytes_per_block {
-                // too large for merged block, flush to results
-                res.push(merged);
-            } else {
-                // keep the merged block into blocks for future merge
-                blocks.push(merged);
-            }
         }
 
         Ok(res)

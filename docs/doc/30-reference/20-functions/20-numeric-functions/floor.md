@@ -3,7 +3,7 @@ title: FLOOR
 description: FLOOR(x) function
 ---
 
-Returns the largest integer value not greater than x.
+Rounds the number down.
 
 ## Syntax
 
@@ -19,7 +19,8 @@ FLOOR(x)
 
 ## Return Type
 
-A Float64 data type value.
+A numeric data type value which is the same as input type.
+
 
 ## Examples
 

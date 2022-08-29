@@ -16,9 +16,8 @@ use common_meta_sled_store::openraft;
 use common_meta_types::Cmd;
 use common_meta_types::LogEntry;
 use common_meta_types::LogId;
-use common_meta_types::MatchSeq;
-use common_meta_types::Operation;
 use common_meta_types::RaftTxId;
+use common_meta_types::UpsertKV;
 use maplit::btreeset;
 use openraft::raft::Entry;
 use openraft::raft::EntryPayload;
@@ -37,12 +36,8 @@ pub fn snapshot_logs() -> (Vec<Entry<LogEntry>>, Vec<String>) {
             log_id: LogId { term: 1, index: 4 },
             payload: EntryPayload::Normal(LogEntry {
                 txid: None,
-                cmd: Cmd::UpsertKV {
-                    key: "a".to_string(),
-                    seq: MatchSeq::Any,
-                    value: Operation::Update(b"A".to_vec()),
-                    value_meta: None,
-                },
+                time_ms: None,
+                cmd: Cmd::UpsertKV(UpsertKV::update("a", b"A")),
             }),
         },
         Entry {
@@ -57,6 +52,7 @@ pub fn snapshot_logs() -> (Vec<Entry<LogEntry>>, Vec<String>) {
             log_id: LogId { term: 1, index: 8 },
             payload: EntryPayload::Normal(LogEntry {
                 txid: None,
+                time_ms: None,
                 cmd: Cmd::IncrSeq {
                     key: "c".to_string(),
                 },
@@ -66,6 +62,7 @@ pub fn snapshot_logs() -> (Vec<Entry<LogEntry>>, Vec<String>) {
             log_id: LogId { term: 1, index: 9 },
             payload: EntryPayload::Normal(LogEntry {
                 txid: None,
+                time_ms: None,
                 cmd: Cmd::AddNode {
                     node_id: 5,
                     node: Default::default(),
