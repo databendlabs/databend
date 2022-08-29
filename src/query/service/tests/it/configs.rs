@@ -518,6 +518,13 @@ root = ""
 name_node = ""
 root = ""
 
+[storage.obs]
+endpoint_url = ""
+access_key_id = ""
+secret_access_key = ""
+bucket = ""
+root = ""
+
 [catalog]
 meta_store_address = "127.0.0.1:9083"
 protocol = "binary"
