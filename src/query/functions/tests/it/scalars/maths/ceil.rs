@@ -24,18 +24,18 @@ fn test_ceil_function() -> Result<()> {
         ScalarFunctionTest {
             name: "ceil(123)",
             columns: vec![Series::from_data([123])],
-            expect: Series::from_data(vec![123_f64]),
+            expect: Series::from_data(vec![123]),
             error: "",
         },
         ScalarFunctionTest {
             name: "ceil(1.2)",
-            columns: vec![Series::from_data([1.2])],
+            columns: vec![Series::from_data([1.2f64])],
             expect: Series::from_data(vec![2_f64]),
             error: "",
         },
         ScalarFunctionTest {
             name: "ceil(-1.2)",
-            columns: vec![Series::from_data([-1.2])],
+            columns: vec![Series::from_data([-1.2f64])],
             expect: Series::from_data(vec![-1_f64]),
             error: "",
         },
