@@ -24,13 +24,14 @@ pub use indent_format::*;
 pub use pretty_format::*;
 pub use syntax::pretty_statement;
 
-pub struct FormatTreeNode<T: Display> {
+#[derive(Clone)]
+pub struct FormatTreeNode<T: Display + Clone> {
     payload: T,
     children: Vec<Self>,
 }
 
 impl<T> FormatTreeNode<T>
-where T: Display
+where T: Display + Clone
 {
     pub fn new(payload: T) -> Self {
         Self {
