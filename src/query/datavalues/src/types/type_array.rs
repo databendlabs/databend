@@ -26,7 +26,7 @@ use crate::prelude::*;
 use crate::serializations::ArraySerializer;
 use crate::serializations::TypeSerializerImpl;
 
-#[derive(Clone, serde::Deserialize, serde::Serialize)]
+#[derive(Clone, Hash, serde::Deserialize, serde::Serialize)]
 pub struct ArrayType {
     inner: Box<DataTypeImpl>,
 }

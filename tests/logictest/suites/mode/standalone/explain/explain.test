@@ -1,0 +1,453 @@
+statement ok
+drop table if exists t1 all;
+
+statement ok
+drop table if exists t2 all;
+
+statement ok
+create table t1(a int, b int);
+
+statement ok
+create table t2(a int, b int);
+
+statement query T
+explain select t1.a from t1 where a > 0;
+
+----
+Project: [a (#0)]
+└── Filter: [t1.a (#0) > 0]
+    └── Scan: default.default.t1, filters: [t1.a (#0) > 0], Sort: [none], limit: [none]
+
+statement query T
+explain select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a and t2.a > 5 and t1.a > 1);
+
+----
+Filter: [(t1.a (#0) > 3) OR ((t2.a (#2) > 5) AND (t1.a (#0) > 1))]
+└── HashJoin: INNER, build keys: [t2.a (#2)], probe keys: [t1.a (#0)], join filters: []
+    ├── Scan: default.default.t1, filters: [], Sort: [none], limit: [none]
+    └── Scan: default.default.t2, filters: [], Sort: [none], limit: [none]
+
+statement query T
+explain select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a);
+
+----
+HashJoin: INNER, build keys: [t2.a (#2)], probe keys: [t1.a (#0)], join filters: []
+├── Scan: default.default.t1, filters: [], Sort: [none], limit: [none]
+└── Scan: default.default.t2, filters: [], Sort: [none], limit: [none]
+
+statement query T
+explain raw select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a);
+
+----
+Project: [a (#0),b (#1),a (#2),b (#3)]
+└── EvalScalar: [t1.a (#0), t1.b (#1), t2.a (#2), t2.b (#3)]
+    └── Filter: [((t1.a (#0) = t2.a (#2)) AND (t1.a (#0) > 3)) OR (t1.a (#0) = t2.a (#2))]
+        └── LogicalInnerJoin: equi-conditions: [], non-equi-conditions: []
+            ├── LogicalGet: default.default.t1, Sort: [none], limit: [none]
+            └── LogicalGet: default.default.t2, Sort: [none], limit: [none]
+
+statement query T
+explain raw select * from t1 inner join t2 on t1.a = t2.a and t1.b = t2.b and t1.a > 2;
+
+----
+Project: [a (#0),b (#1),a (#2),b (#3)]
+└── EvalScalar: [t1.a (#0), t1.b (#1), t2.a (#2), t2.b (#3)]
+    └── LogicalInnerJoin: equi-conditions: [(t1.a (#0) = t2.a (#2)) AND (t1.b (#1) = t2.b (#3))], non-equi-conditions: [t1.a (#0) > 2]
+        ├── LogicalGet: default.default.t1, Sort: [none], limit: [none]
+        └── LogicalGet: default.default.t2, Sort: [none], limit: [none]
+
+statement query T
+explain syntax select 1, 'ab', [1,2,3], (1, 'a');
+
+----
+SELECT
+    1,
+    'ab',
+    [1, 2, 3],
+    (1, 'a')
+
+statement query T
+explain syntax select a, sum(b) as sum from t1 where a in (1, 2) and b > 0 and b < 100 group by a order by a;
+
+----
+SELECT
+    a,
+    sum(b) AS sum
+FROM
+    t1
+WHERE
+    a IN (1, 2)
+    AND b > 0
+    AND b < 100
+GROUP BY a
+ORDER BY a
+
+statement query T
+explain syntax select * from t1 inner join t2 on t1.a = t2.a and t1.b = t2.b and t1.a > 2;
+
+----
+SELECT *
+FROM
+    t1
+    INNER JOIN t2 ON t1.a = t2.a
+    AND t1.b = t2.b
+    AND t1.a > 2
+
+statement query T
+explain syntax delete from t1 where a > 100 and b > 1 and b < 10;
+
+----
+DELETE FROM
+    t1
+WHERE
+    a > 100
+    AND b > 1
+    AND b < 10
+
+statement query T
+explain syntax copy into t1 from 's3://mybucket/data.csv' file_format = ( type = 'CSV' field_delimiter = ',' record_delimiter = '\n' skip_header = 1) size_limit=10;
+
+----
+COPY
+INTO t1
+FROM 's3://mybucket/data.csv'
+FILE_FORMAT = (
+    field_delimiter = ",",
+    record_delimiter = "\n",
+    skip_header = "1",
+    type = "CSV"
+)
+SIZE_LIMIT = 10
+
+statement query T
+explain syntax copy into 's3://mybucket/data.csv' from t1 file_format = ( type = 'CSV' field_delimiter = ',' record_delimiter = '\n' skip_header = 1) size_limit=10;
+
+----
+COPY
+INTO 's3://mybucket/data.csv'
+FROM t1
+FILE_FORMAT = (
+    field_delimiter = ",",
+    record_delimiter = "\n",
+    skip_header = "1",
+    type = "CSV"
+)
+SIZE_LIMIT = 10
+
+statement query T
+explain syntax create table t3(a int64, b uint64, c float64, d string, e array(int32), f tuple(f1 bool, f2 string)) engine=fuse cluster by (a, b, c) comment='test' compression='LZ4';
+
+----
+CREATE TABLE t3 (
+    a Int64 NOT NULL,
+    b UInt64 NOT NULL,
+    c Float64 NOT NULL,
+    d STRING NOT NULL,
+    e ARRAY(Int32) NOT NULL,
+    f TUPLE(f1 BOOLEAN, f2 STRING) NOT NULL
+) ENGINE = FUSE
+CLUSTER BY (
+    a,
+    b,
+    c
+)
+comment = 'test',
+compression = 'LZ4'
+
+statement query T
+explain syntax create view v as select number % 3 as a from numbers(100) where number > 10;
+
+----
+CREATE VIEW v
+AS
+    SELECT number % 3 AS a
+    FROM
+        numbers(100)
+    WHERE
+        number > 10
+
+onlyif mysql
+statement query T
+explain ast select 1, 'ab', [1,2,3] as a, (1, 'a') as t;
+
+----
+Query (children 1)
+└── QueryBody (children 1)
+    └── SelectQuery (children 1)
+        └── SelectList (children 4)
+            ├── Target (children 1)
+            │   └── Literal Integer(1)
+            ├── Target (children 1)
+            │   └── Literal String("ab")
+            ├── Target (alias a) (children 1)
+            │   └── Literal Array (children 3)
+            │       ├── Literal Integer(1)
+            │       ├── Literal Integer(2)
+            │       └── Literal Integer(3)
+            └── Target (alias t) (children 1)
+                └── Literal Tuple (children 2)
+                    ├── Literal Integer(1)
+                    └── Literal String("a")
+
+onlyif mysql
+statement query T
+explain ast select case when a > 1 then 'x' when a < 10 then 'y' else 'z' end from t1
+
+----
+Query (children 1)
+└── QueryBody (children 1)
+    └── SelectQuery (children 2)
+        ├── SelectList (children 1)
+        │   └── Target (children 1)
+        │       └── Function Case (children 3)
+        │           ├── Conditions (children 2)
+        │           │   ├── Function > (children 2)
+        │           │   │   ├── ColumnIdentifier a
+        │           │   │   └── Literal Integer(1)
+        │           │   └── Function < (children 2)
+        │           │       ├── ColumnIdentifier a
+        │           │       └── Literal Integer(10)
+        │           ├── Results (children 2)
+        │           │   ├── Literal String("x")
+        │           │   └── Literal String("y")
+        │           └── ElseResult (children 1)
+        │               └── Literal String("z")
+        └── TableList (children 1)
+            └── TableIdentifier t1
+
+onlyif mysql
+statement query T
+explain ast select a, sum(b) as sum from t1 where a in (1, 2) and b > 0 and b < 100 group by a order by a limit 3;
+
+----
+Query (children 3)
+├── QueryBody (children 1)
+│   └── SelectQuery (children 4)
+│       ├── SelectList (children 2)
+│       │   ├── Target (children 1)
+│       │   │   └── ColumnIdentifier a
+│       │   └── Target (alias sum) (children 1)
+│       │       └── Function sum (children 1)
+│       │           └── ColumnIdentifier b
+│       ├── TableList (children 1)
+│       │   └── TableIdentifier t1
+│       ├── Where (children 1)
+│       │   └── Function AND (children 2)
+│       │       ├── Function AND (children 2)
+│       │       │   ├── Function In (children 2)
+│       │       │   │   ├── ColumnIdentifier a
+│       │       │   │   └── List (children 2)
+│       │       │   │       ├── Literal Integer(1)
+│       │       │   │       └── Literal Integer(2)
+│       │       │   └── Function > (children 2)
+│       │       │       ├── ColumnIdentifier b
+│       │       │       └── Literal Integer(0)
+│       │       └── Function < (children 2)
+│       │           ├── ColumnIdentifier b
+│       │           └── Literal Integer(100)
+│       └── GroupByList (children 1)
+│           └── ColumnIdentifier a
+├── OrderByList (children 1)
+│   └── OrderByElement (children 1)
+│       └── ColumnIdentifier a
+└── LimitList (children 1)
+    └── Literal Integer(3)
+
+
+onlyif mysql
+statement query T
+explain ast select * from t1 inner join t2 on t1.a = t2.a and t1.b = t2.b and t1.a > 2;
+
+----
+Query (children 1)
+└── QueryBody (children 1)
+    └── SelectQuery (children 2)
+        ├── SelectList (children 1)
+        │   └── Target *
+        └── TableList (children 1)
+            └── TableJoin (children 1)
+                └── Join (children 3)
+                    ├── TableIdentifier t1
+                    ├── TableIdentifier t2
+                    └── ConditionOn (children 1)
+                        └── Function AND (children 2)
+                            ├── Function AND (children 2)
+                            │   ├── Function = (children 2)
+                            │   │   ├── ColumnIdentifier t1.a
+                            │   │   └── ColumnIdentifier t2.a
+                            │   └── Function = (children 2)
+                            │       ├── ColumnIdentifier t1.b
+                            │       └── ColumnIdentifier t2.b
+                            └── Function > (children 2)
+                                ├── ColumnIdentifier t1.a
+                                └── Literal Integer(2)
+
+onlyif mysql
+statement query T
+explain ast with cte (a, b) as (select 1, 2 union all select 3, 4) select a, b from cte;
+
+----
+Query (children 2)
+├── With (children 1)
+│   └── CTE (alias cte(a, b)) (children 1)
+│       └── Query (children 1)
+│           └── QueryBody (children 1)
+│               └── SetOperation Union (children 2)
+│                   ├── QueryBody (children 1)
+│                   │   └── SelectQuery (children 1)
+│                   │       └── SelectList (children 2)
+│                   │           ├── Target (children 1)
+│                   │           │   └── Literal Integer(1)
+│                   │           └── Target (children 1)
+│                   │               └── Literal Integer(2)
+│                   └── QueryBody (children 1)
+│                       └── SelectQuery (children 1)
+│                           └── SelectList (children 2)
+│                               ├── Target (children 1)
+│                               │   └── Literal Integer(3)
+│                               └── Target (children 1)
+│                                   └── Literal Integer(4)
+└── QueryBody (children 1)
+    └── SelectQuery (children 2)
+        ├── SelectList (children 2)
+        │   ├── Target (children 1)
+        │   │   └── ColumnIdentifier a
+        │   └── Target (children 1)
+        │       └── ColumnIdentifier b
+        └── TableList (children 1)
+            └── TableIdentifier cte
+
+onlyif mysql
+statement query T
+explain ast insert into t1 (a, b) values (1, 2),(3, 4);
+
+----
+Insert (children 3)
+├── TableIdentifier t1
+├── Columns (children 2)
+│   ├── Identifier a
+│   └── Identifier b
+└── Source (children 1)
+    └── ValueSouce
+
+onlyif mysql
+statement query T
+explain ast delete from t1 where a > 100 and b > 1 and b < 10;
+
+----
+Delete (children 2)
+├── TableIdentifier t1
+└── Function AND (children 2)
+    ├── Function AND (children 2)
+    │   ├── Function > (children 2)
+    │   │   ├── ColumnIdentifier a
+    │   │   └── Literal Integer(100)
+    │   └── Function > (children 2)
+    │       ├── ColumnIdentifier b
+    │       └── Literal Integer(1)
+    └── Function < (children 2)
+        ├── ColumnIdentifier b
+        └── Literal Integer(10)
+
+onlyif mysql
+statement query T
+explain ast copy into t1 from 's3://mybucket/data.csv' file_format = ( type = 'CSV' field_delimiter = ',' record_delimiter = '\n' skip_header = 1) size_limit=10;
+
+----
+Copy (children 4)
+├── CopyUnit (children 1)
+│   └── UriLocation 's3://mybucket/data.csv'
+├── CopyUnit (children 1)
+│   └── TableIdentifier t1
+├── FileFormats (children 4)
+│   ├── FileFormat field_delimiter = ","
+│   ├── FileFormat record_delimiter = "\n"
+│   ├── FileFormat skip_header = "1"
+│   └── FileFormat type = "CSV"
+└── SizeLimit 10
+
+onlyif mysql
+statement query T
+explain ast create database db1 engine=default
+
+----
+CreateDatabase (children 2)
+├── DatabaseIdentifier db1
+└── DatabaseEngine DEFAULT
+
+onlyif mysql
+statement query T
+explain ast create table t3(a int64, b uint64, c float64, d string, e array(int32), f tuple(f1 bool, f2 string)) engine=fuse cluster by (a, b, c) comment='test' compression='LZ4';
+
+----
+CreateTable (children 5)
+├── TableIdentifier t3
+├── ColumnsDefinition (children 6)
+│   ├── ColumnDefinition a (children 1)
+│   │   └── DataType Int64
+│   ├── ColumnDefinition b (children 1)
+│   │   └── DataType UInt64
+│   ├── ColumnDefinition c (children 1)
+│   │   └── DataType Float64
+│   ├── ColumnDefinition d (children 1)
+│   │   └── DataType STRING
+│   ├── ColumnDefinition e (children 1)
+│   │   └── DataType ARRAY(Int32)
+│   └── ColumnDefinition f (children 1)
+│       └── DataType TUPLE(f1 BOOLEAN, f2 STRING)
+├── TableEngine FUSE
+├── ClusterByList (children 3)
+│   ├── ColumnIdentifier a
+│   ├── ColumnIdentifier b
+│   └── ColumnIdentifier c
+└── TableOptions (children 2)
+    ├── TableOption comment = "test"
+    └── TableOption compression = "LZ4"
+
+onlyif mysql
+statement query T
+explain ast create view v as select number % 3 as a from numbers(100) where number > 10;
+
+----
+CreateView (children 2)
+├── TableIdentifier v
+└── Query (children 1)
+    └── QueryBody (children 1)
+        └── SelectQuery (children 3)
+            ├── SelectList (children 1)
+            │   └── Target (alias a) (children 1)
+            │       └── Function % (children 2)
+            │           ├── ColumnIdentifier number
+            │           └── Literal Integer(3)
+            ├── TableList (children 1)
+            │   └── TableFunction numbers (children 1)
+            │       └── Literal Integer(100)
+            └── Where (children 1)
+                └── Function > (children 2)
+                    ├── ColumnIdentifier number
+                    └── Literal Integer(10)
+
+onlyif mysql
+statement query T
+explain ast show create table t1;
+
+----
+ShowCreateTable (children 1)
+└── TableIdentifier t1
+
+onlyif mysql
+statement query T
+explain ast create user 'test'@'localhost' identified with sha256_password by 'new_password';
+
+----
+CreateUser (children 3)
+├── User 'test'@'localhost'
+├── AuthType sha256_password
+└── Password "new_password"
+
+statement ok
+drop table t1;
+
+statement ok
+drop table t2;
+

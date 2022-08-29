@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_catalog::table::TableStatistics;
 use common_exception::Result;
+use itertools::Itertools;
 
 use crate::sql::optimizer::ColumnSet;
 use crate::sql::optimizer::RelExpr;
@@ -22,14 +24,39 @@ use crate::sql::plans::Operator;
 use crate::sql::plans::PhysicalOperator;
 use crate::sql::plans::RelOp;
 use crate::sql::plans::Scalar;
+use crate::sql::plans::SortItem;
 use crate::sql::IndexType;
 
 #[derive(Clone, Debug)]
 pub struct LogicalGet {
     pub table_index: IndexType,
     pub columns: ColumnSet,
-
     pub push_down_predicates: Option<Vec<Scalar>>,
+    pub limit: Option<usize>,
+    pub order_by: Option<Vec<SortItem>>,
+
+    // statistics will be ignored in comparison and hashing
+    pub statistics: Option<TableStatistics>,
+}
+
+impl PartialEq for LogicalGet {
+    fn eq(&self, other: &Self) -> bool {
+        self.table_index == other.table_index
+            && self.columns == other.columns
+            && self.push_down_predicates == other.push_down_predicates
+    }
+}
+
+impl Eq for LogicalGet {}
+
+impl std::hash::Hash for LogicalGet {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.table_index.hash(state);
+        for column in self.columns.iter().sorted() {
+            column.hash(state);
+        }
+        self.push_down_predicates.hash(state);
+    }
 }
 
 impl Operator for LogicalGet {
@@ -59,6 +86,10 @@ impl LogicalOperator for LogicalGet {
         Ok(RelationalProperty {
             output_columns: self.columns.clone(),
             outer_columns: Default::default(),
+            cardinality: self
+                .statistics
+                .as_ref()
+                .map_or(0.0, |stat| stat.num_rows.map_or(0.0, |num| num as f64)),
         })
     }
 }

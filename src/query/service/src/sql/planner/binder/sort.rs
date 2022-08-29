@@ -277,6 +277,7 @@ impl<'a> Binder {
 
         let sort_plan = Sort {
             items: order_by_items,
+            limit: None,
         };
         new_expr = SExpr::create_unary(sort_plan.into(), new_expr);
         Ok(new_expr)
@@ -326,6 +327,7 @@ impl<'a> Binder {
         }
         let sort_plan = Sort {
             items: order_by_items,
+            limit: None,
         };
         Ok(SExpr::create_unary(sort_plan.into(), child))
     }

@@ -13,6 +13,9 @@
 // limitations under the License.
 
 mod cascades;
+mod cost;
+mod distributed;
+mod format;
 mod group;
 mod heuristic;
 mod m_expr;
@@ -41,7 +44,10 @@ pub use property::RequiredProperty;
 pub use rule::RuleFactory;
 pub use s_expr::SExpr;
 
+use self::cascades::CascadesOptimizer;
+use self::distributed::optimize_distributed_query;
 use self::util::contains_local_table_scan;
+use self::util::validate_distributed_query;
 use super::plans::Plan;
 use super::BindContext;
 use crate::sessions::QueryContext;
@@ -79,13 +85,21 @@ pub fn optimize(
             metadata,
             rewrite_kind,
         } => Ok(Plan::Query {
-            s_expr: optimize_query(ctx, opt_ctx, metadata.clone(), bind_context.clone(), s_expr)?,
+            s_expr: Box::new(optimize_query(
+                ctx,
+                opt_ctx,
+                metadata.clone(),
+                bind_context.clone(),
+                *s_expr,
+            )?),
             bind_context,
             metadata,
             rewrite_kind,
         }),
         Plan::Explain { kind, plan } => match kind {
-            ExplainKind::Raw | ExplainKind::Syntax(_) => Ok(Plan::Explain { kind, plan }),
+            ExplainKind::Raw | ExplainKind::Ast(_) | ExplainKind::Syntax(_) => {
+                Ok(Plan::Explain { kind, plan })
+            }
             _ => Ok(Plan::Explain {
                 kind,
                 plan: Box::new(optimize(ctx, opt_ctx, *plan)?),
@@ -124,17 +138,21 @@ pub fn optimize_query(
 ) -> Result<SExpr> {
     let rules = RuleList::create(DEFAULT_REWRITE_RULES.clone())?;
 
+    let contains_local_table_scan = contains_local_table_scan(&s_expr, &metadata);
+
+    let mut heuristic = HeuristicOptimizer::new(ctx, bind_context, metadata, rules);
+    let mut result = heuristic.optimize(s_expr)?;
+
+    let cascades = CascadesOptimizer::create();
+    result = cascades.optimize(result)?;
+
     // So far, we don't have ability to execute distributed query
     // with reading data from local tales(e.g. system tables).
-    let enable_distributed_query = opt_ctx.config.enable_distributed_optimization
-        && !contains_local_table_scan(&s_expr, &metadata);
+    let enable_distributed_query =
+        opt_ctx.config.enable_distributed_optimization && !contains_local_table_scan;
+    if enable_distributed_query && validate_distributed_query(&result) {
+        result = optimize_distributed_query(&result)?;
+    }
 
-    let mut heuristic =
-        HeuristicOptimizer::new(ctx, bind_context, metadata, rules, enable_distributed_query);
-    let optimized = heuristic.optimize(s_expr)?;
-    // TODO: enable cascades optimizer
-    // let mut cascades = CascadesOptimizer::create(ctx);
-    // cascades.optimize(s_expr)
-
-    Ok(optimized)
+    Ok(result)
 }

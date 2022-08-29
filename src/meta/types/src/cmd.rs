@@ -18,6 +18,7 @@ use openraft::NodeId;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::with::With;
 use crate::KVMeta;
 use crate::MatchSeq;
 use crate::Node;
@@ -27,42 +28,39 @@ use crate::TxnRequest;
 /// A Cmd describes what a user want to do to raft state machine
 /// and is the essential part of a raft log.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-#[allow(clippy::large_enum_variant)]
 pub enum Cmd {
     /// Increment the sequence number generator specified by `key` and returns the new value.
-    IncrSeq {
-        key: String,
-    },
+    IncrSeq { key: String },
 
     /// Add node if absent
-    AddNode {
-        node_id: NodeId,
-        node: Node,
-    },
+    AddNode { node_id: NodeId, node: Node },
 
     /// Remove node
-    RemoveNode {
-        node_id: NodeId,
-    },
+    RemoveNode { node_id: NodeId },
 
     /// Update or insert a general purpose kv store
-    UpsertKV {
-        key: String,
+    UpsertKV(UpsertKV),
 
-        /// Since a sequence number is always positive, using Exact(0) to perform an add-if-absent operation.
-        /// - GE(1) to perform an update-any operation.
-        /// - Exact(n) to perform an update on some specified version.
-        /// - Any to perform an update or insert that always takes effect.
-        seq: MatchSeq,
-
-        /// The value to set. A `None` indicates to delete it.
-        value: Operation<Vec<u8>>,
-
-        /// Meta data of a value.
-        value_meta: Option<KVMeta>,
-    },
-
+    /// Update one or more kv with a transaction.
     Transaction(TxnRequest),
+}
+
+/// Update or insert a general purpose kv store
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct UpsertKV {
+    pub key: String,
+
+    /// Since a sequence number is always positive, using Exact(0) to perform an add-if-absent operation.
+    /// - GE(1) to perform an update-any operation.
+    /// - Exact(n) to perform an update on some specified version.
+    /// - Any to perform an update or insert that always takes effect.
+    pub seq: MatchSeq,
+
+    /// The value to set. A `None` indicates to delete it.
+    pub value: Operation<Vec<u8>>,
+
+    /// Meta data of a value.
+    pub value_meta: Option<KVMeta>,
 }
 
 impl fmt::Display for Cmd {
@@ -77,21 +75,79 @@ impl fmt::Display for Cmd {
             Cmd::RemoveNode { node_id } => {
                 write!(f, "remove_node:{}", node_id)
             }
-            Cmd::UpsertKV {
-                key,
-                seq,
-                value,
-                value_meta,
-            } => {
-                write!(
-                    f,
-                    "upsert_kv: {}({:?}) = {:?} ({:?})",
-                    key, seq, value, value_meta
-                )
+            Cmd::UpsertKV(upsert_kv) => {
+                write!(f, "upsert_kv:{}", upsert_kv)
             }
             Cmd::Transaction(txn) => {
                 write!(f, "txn:{:?}", txn)
             }
         }
+    }
+}
+
+impl fmt::Display for UpsertKV {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}({:?}) = {:?} ({:?})",
+            self.key, self.seq, self.value, self.value_meta
+        )
+    }
+}
+
+impl UpsertKV {
+    pub fn new(
+        key: &str,
+        seq: MatchSeq,
+        value: Operation<Vec<u8>>,
+        value_meta: Option<KVMeta>,
+    ) -> Self {
+        Self {
+            key: key.to_string(),
+            seq,
+            value,
+            value_meta,
+        }
+    }
+
+    pub fn insert(key: impl ToString, value: &[u8]) -> Self {
+        Self {
+            key: key.to_string(),
+            seq: MatchSeq::Exact(0),
+            value: Operation::Update(value.to_vec()),
+            value_meta: None,
+        }
+    }
+
+    pub fn update(key: impl ToString, value: &[u8]) -> Self {
+        Self {
+            key: key.to_string(),
+            seq: MatchSeq::Any,
+            value: Operation::Update(value.to_vec()),
+            value_meta: None,
+        }
+    }
+
+    pub fn delete(key: impl ToString) -> Self {
+        Self {
+            key: key.to_string(),
+            seq: MatchSeq::Any,
+            value: Operation::Delete,
+            value_meta: None,
+        }
+    }
+}
+
+impl With<MatchSeq> for UpsertKV {
+    fn with(mut self, seq: MatchSeq) -> Self {
+        self.seq = seq;
+        self
+    }
+}
+
+impl With<KVMeta> for UpsertKV {
+    fn with(mut self, meta: KVMeta) -> Self {
+        self.value_meta = Some(meta);
+        self
     }
 }

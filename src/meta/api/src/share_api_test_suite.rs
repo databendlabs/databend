@@ -21,14 +21,20 @@ use common_meta_app::schema::DatabaseNameIdent;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TableNameIdent;
 use common_meta_app::share::*;
+use common_meta_types::MetaError;
 use enumflags2::BitFlags;
 use tracing::info;
 
+use crate::get_kv_data;
+use crate::get_object_shared_by_share_ids;
 use crate::get_share_account_meta_or_err;
 use crate::get_share_id_to_name_or_err;
 use crate::get_share_meta_by_id_or_err;
+use crate::get_share_or_err;
+use crate::is_all_db_data_removed;
 use crate::ApiBuilder;
 use crate::AsKVApi;
+use crate::KVApi;
 use crate::SchemaApi;
 use crate::ShareApi;
 
@@ -39,6 +45,65 @@ use crate::ShareApi;
 /// such as `meta/embedded` and `metasrv`.
 #[derive(Copy, Clone)]
 pub struct ShareApiTestSuite {}
+
+async fn if_share_object_data_exists(
+    kv_api: &(impl KVApi + ?Sized),
+    entry: &ShareGrantEntry,
+) -> Result<bool, MetaError> {
+    if let Ok((_seq, _share_ids)) = get_object_shared_by_share_ids(kv_api, &entry.object).await {
+        return Ok(false);
+    }
+    Ok(true)
+}
+
+// Return true if all the share data has been removed.
+async fn is_all_share_data_removed(
+    kv_api: &(impl KVApi + ?Sized),
+    share_name: &ShareNameIdent,
+    share_id: u64,
+    share_meta: &ShareMeta,
+) -> Result<bool, MetaError> {
+    let res = get_share_or_err(kv_api, share_name, "").await;
+    if res.is_ok() {
+        return Ok(false);
+    }
+
+    let res = get_share_id_to_name_or_err(kv_api, share_id, "").await;
+    if res.is_ok() {
+        return Ok(false);
+    }
+
+    for account in share_meta.get_accounts() {
+        let share_account_key = ShareAccountNameIdent {
+            account: account.clone(),
+            share_id,
+        };
+        let res = get_share_account_meta_or_err(kv_api, &share_account_key, "").await;
+        if res.is_ok() {
+            return Ok(false);
+        }
+    }
+
+    if let Some(database) = &share_meta.database {
+        if if_share_object_data_exists(kv_api, database).await? {
+            return Ok(false);
+        }
+    }
+
+    for (_key, entry) in share_meta.entries.iter() {
+        if if_share_object_data_exists(kv_api, entry).await? {
+            return Ok(false);
+        }
+    }
+
+    for db_id in &share_meta.share_from_db_ids {
+        if !is_all_db_data_removed(kv_api, *db_id).await? {
+            return Ok(false);
+        }
+    }
+
+    Ok(true)
+}
 
 impl ShareApiTestSuite {
     /// Test ShareApi on a single node
@@ -887,6 +952,7 @@ impl ShareApiTestSuite {
         let share2 = "share2";
         let db_name = "db1";
         let tbl_name = "table1";
+        let share_id;
 
         let share_name1 = ShareNameIdent {
             tenant: tenant1.to_string(),
@@ -939,6 +1005,7 @@ impl ShareApiTestSuite {
 
             let res = mt.create_share(req).await;
             assert!(res.is_ok());
+            share_id = res.unwrap().share_id;
 
             let req = CreateShareReq {
                 if_not_exists: false,
@@ -1039,6 +1106,85 @@ impl ShareApiTestSuite {
             assert_eq!(res.privileges.len(), 1);
             assert_eq!(&res.privileges[0].share_name, share1);
             assert_eq!(res.privileges[0].grant_on, grant_on);
+        }
+
+        info!("--- drop share1 and check objects");
+        {
+            let tenant2 = "tenant2";
+            let db2 = "db2";
+
+            let db_name2 = DatabaseNameIdent {
+                tenant: tenant2.to_string(),
+                db_name: db2.to_string(),
+            };
+
+            // first grant account tenant2
+            let req = AddShareAccountsReq {
+                share_name: share_name1.clone(),
+                share_on: Utc::now(),
+                if_exists: false,
+                accounts: vec![tenant2.to_string()],
+            };
+            let res = mt.add_share_tenants(req).await;
+            assert!(res.is_ok());
+
+            // tenant2 create a database from share1
+            let req = CreateDatabaseReq {
+                if_not_exists: false,
+                name_ident: db_name2.clone(),
+                meta: DatabaseMeta {
+                    from_share: Some(share_name1.clone()),
+                    ..Default::default()
+                },
+            };
+
+            let res = mt.create_database(req).await;
+            info!("create database res: {:?}", res);
+            assert!(res.is_ok());
+            // save the db id
+            let db_id = res.unwrap().db_id;
+
+            let req = DropShareReq {
+                if_exists: true,
+                share_name: share_name1.clone(),
+            };
+
+            // get share meta
+            let share_id_key = ShareId { share_id };
+            let share_meta: ShareMeta = get_kv_data(mt.as_kv_api(), &share_id_key).await?;
+
+            let res = mt.drop_share(req).await;
+            assert!(res.is_ok());
+
+            // check if all the share data has been removed
+            let res =
+                is_all_share_data_removed(mt.as_kv_api(), &share_name1, share_id, &share_meta)
+                    .await?;
+            assert!(res);
+
+            let res = is_all_db_data_removed(mt.as_kv_api(), db_id).await?;
+            assert!(res);
+
+            // get_grant_privileges_of_object of db and table again
+            let req = GetObjectGrantPrivilegesReq {
+                tenant: tenant1.to_string(),
+                object: ShareGrantObjectName::Database(db_name.to_string()),
+            };
+
+            let res = mt.get_grant_privileges_of_object(req).await;
+            assert!(res.is_ok());
+            let res = res.unwrap();
+            assert_eq!(res.privileges.len(), 1);
+
+            let req = GetObjectGrantPrivilegesReq {
+                tenant: tenant1.to_string(),
+                object: ShareGrantObjectName::Table(db_name.to_string(), tbl_name.to_string()),
+            };
+
+            let res = mt.get_grant_privileges_of_object(req).await;
+            assert!(res.is_ok());
+            let res = res.unwrap();
+            assert_eq!(res.privileges.len(), 0);
         }
 
         Ok(())

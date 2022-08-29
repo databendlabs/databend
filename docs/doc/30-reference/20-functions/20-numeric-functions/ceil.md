@@ -3,9 +3,7 @@ title: CEIL
 description: CEIL() function
 ---
 
-CEIL() is a synonym for CEILING().
-
-Returns the smallest integer value not less than x.
+Rounds the number up.
 
 ## Syntax
 
@@ -21,17 +19,17 @@ CEIL(x)
 
 ## Return Type
 
-A Float64 data type value.
+A numeric data type value which is the same as input type.
 
 ## Examples
 
 ```sql
-SELECT CEIL(1.23);
-+------------+
-| CEIL(1.23) |
-+------------+
-|          2 |
-+------------+
+SELECT CEIL(1.23), typeof(ceil(3)), typeof(ceil(5.3));
++------------+------------------+-------------------+
+| CEIL(1.23) | typeof(ceil(3))  | typeof(ceil(5.3)) |
++------------+------------------+-------------------+
+|        2.0 | TINYINT UNSIGNED | DOUBLE            |
++------------+------------------+-------------------+
 
 SELECT CEIL(-1.23);
 +----------------+

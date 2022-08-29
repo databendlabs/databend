@@ -1,5 +1,5 @@
 ---
-title: TYPEOF 
+title: TYPEOF
 ---
 
 TYPEOF function is used to return the name of a data type.

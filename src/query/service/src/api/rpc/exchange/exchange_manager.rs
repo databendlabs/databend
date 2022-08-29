@@ -691,11 +691,11 @@ impl FragmentCoordinator {
                     query_id: info.query_id.to_string(),
                     executor_id: info.current_executor.to_string(),
                     destination_ids: exchange.destination_ids.to_owned(),
-                    shuffle_scatter: Arc::new(Box::new(HashFlightScatterV2::try_create(
+                    shuffle_scatter: Arc::new(HashFlightScatterV2::try_create(
                         info.query_ctx.try_get_function_context()?,
                         exchange.shuffle_keys.clone(),
                         exchange.destination_ids.len(),
-                    )?)),
+                    )?),
                 }))
             }
         }

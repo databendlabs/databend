@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::iter::Iterator;
-
 use common_exception::Result;
 
 use crate::sql::optimizer::m_expr::MExpr;
@@ -23,19 +21,19 @@ use crate::sql::IndexType;
 /// `Group` is a set of logically equivalent relational expressions represented with `MExpr`.
 #[derive(Clone)]
 pub struct Group {
-    group_index: IndexType,
-    expressions: Vec<MExpr>,
+    pub group_index: IndexType,
+    pub m_exprs: Vec<MExpr>,
 
     /// Relational property shared by expressions in a same `Group`
-    relational_prop: Option<RelationalProperty>,
+    pub relational_prop: RelationalProperty,
 }
 
 impl Group {
-    pub fn create(index: IndexType) -> Self {
+    pub fn create(index: IndexType, relational_prop: RelationalProperty) -> Self {
         Group {
             group_index: index,
-            expressions: vec![],
-            relational_prop: None,
+            m_exprs: vec![],
+            relational_prop,
         }
     }
 
@@ -43,20 +41,12 @@ impl Group {
         self.group_index
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = &MExpr> {
-        self.expressions.iter()
+    pub fn num_exprs(&self) -> usize {
+        self.m_exprs.len()
     }
 
-    pub fn insert(&mut self, group_expression: MExpr) -> Result<()> {
-        self.expressions.push(group_expression);
+    pub fn insert(&mut self, m_expr: MExpr) -> Result<()> {
+        self.m_exprs.push(m_expr);
         Ok(())
-    }
-
-    pub fn set_relational_prop(&mut self, relational_prop: RelationalProperty) {
-        self.relational_prop = Some(relational_prop);
-    }
-
-    pub fn relational_prop(&self) -> Option<&RelationalProperty> {
-        self.relational_prop.as_ref()
     }
 }

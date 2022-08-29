@@ -12,7 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::hash::Hash;
+
 use common_exception::Result;
+use itertools::Itertools;
 
 use crate::sql::optimizer::ColumnSet;
 use crate::sql::optimizer::Distribution;
@@ -24,14 +27,27 @@ use crate::sql::plans::Operator;
 use crate::sql::plans::PhysicalOperator;
 use crate::sql::plans::RelOp;
 use crate::sql::plans::Scalar;
+use crate::sql::plans::SortItem;
 use crate::sql::IndexType;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PhysicalScan {
     pub table_index: IndexType,
     pub columns: ColumnSet,
-
     pub push_down_predicates: Option<Vec<Scalar>>,
+    pub limit: Option<usize>,
+    pub order_by: Option<Vec<SortItem>>,
+}
+
+#[allow(clippy::derive_hash_xor_eq)]
+impl Hash for PhysicalScan {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.table_index.hash(state);
+        for column in self.columns.iter().sorted() {
+            column.hash(state);
+        }
+        self.push_down_predicates.hash(state);
+    }
 }
 
 impl Operator for PhysicalScan {

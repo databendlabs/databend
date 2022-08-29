@@ -227,13 +227,13 @@ impl DFHash for DataValue {
             }
             DataValue::Array(vals) => {
                 for v in vals {
-                    v.hash(state);
+                    DFHash::hash(v, state);
                     Hash::hash(&',', state);
                 }
             }
             DataValue::Struct(vals) => {
                 for v in vals {
-                    v.hash(state);
+                    DFHash::hash(v, state);
                     Hash::hash(&',', state);
                 }
             }

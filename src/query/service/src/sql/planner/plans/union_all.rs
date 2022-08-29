@@ -24,7 +24,7 @@ use crate::sql::plans::Operator;
 use crate::sql::plans::PhysicalOperator;
 use crate::sql::plans::RelOp;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct UnionAll;
 
 impl Operator for UnionAll {
@@ -68,9 +68,12 @@ impl LogicalOperator for UnionAll {
             .cloned()
             .collect();
 
+        let cardinality = left_prop.cardinality + right_prop.cardinality;
+
         Ok(RelationalProperty {
             output_columns,
             outer_columns,
+            cardinality,
         })
     }
 }

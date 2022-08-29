@@ -21,6 +21,7 @@ use common_meta_types::MetaError;
 use common_meta_types::SeqV;
 use common_meta_types::TxnReply;
 use common_meta_types::TxnRequest;
+use common_meta_types::UpsertKV;
 use common_meta_types::UpsertKVReply;
 use common_meta_types::UpsertKVReq;
 use tracing::debug;
@@ -30,15 +31,17 @@ use crate::state_machine::StateMachine;
 #[async_trait::async_trait]
 impl KVApi for StateMachine {
     async fn upsert_kv(&self, act: UpsertKVReq) -> Result<UpsertKVReply, MetaError> {
-        let cmd = Cmd::UpsertKV {
+        let cmd = Cmd::UpsertKV(UpsertKV {
             key: act.key,
             seq: act.seq,
             value: act.value,
             value_meta: act.value_meta,
-        };
+        });
 
         let res = self.sm_tree.txn(true, |t| {
-            let r = self.apply_cmd(&cmd, &t, None).unwrap();
+            let r = self
+                .apply_cmd(&cmd, &t, None, SeqV::<()>::now_ms())
+                .unwrap();
             Ok(r)
         })?;
 
@@ -54,7 +57,9 @@ impl KVApi for StateMachine {
         let cmd = Cmd::Transaction(txn);
 
         let res = self.sm_tree.txn(true, |t| {
-            let r = self.apply_cmd(&cmd, &t, None).unwrap();
+            let r = self
+                .apply_cmd(&cmd, &t, None, SeqV::<()>::now_ms())
+                .unwrap();
             Ok(r)
         })?;
 
@@ -70,20 +75,24 @@ impl KVApi for StateMachine {
         // TODO(xp) refine get(): a &str is enough for key
         let sv = self.kvs().get(&key.to_string())?;
         debug!("get_kv sv:{:?}", sv);
-        let sv = match sv {
+        let seq_v = match sv {
             None => return Ok(None),
             Some(sv) => sv,
         };
 
-        Ok(Self::unexpired(sv))
+        let local_now_ms = SeqV::<()>::now_ms();
+        Ok(Self::unexpired(seq_v, local_now_ms))
     }
 
     async fn mget_kv(&self, keys: &[String]) -> Result<MGetKVReply, MetaError> {
         let kvs = self.kvs();
         let mut res = vec![];
+
+        let local_now_ms = SeqV::<()>::now_ms();
+
         for x in keys.iter() {
             let v = kvs.get(x)?;
-            let v = Self::unexpired_opt(v);
+            let v = Self::unexpired_opt(v, local_now_ms);
             res.push(v)
         }
 
@@ -99,8 +108,10 @@ impl KVApi for StateMachine {
 
         let x = kv_pairs.into_iter();
 
+        let local_now_ms = SeqV::<()>::now_ms();
+
         // Convert expired to None
-        let x = x.map(|(k, v)| (k, Self::unexpired(v)));
+        let x = x.map(|(k, v)| (k, Self::unexpired(v, local_now_ms)));
         // Remove None
         let x = x.filter(|(_k, v)| v.is_some());
         // Extract from an Option

@@ -114,7 +114,7 @@ impl<T: ObjectType> Column for ObjectColumn<T> {
     }
 
     fn memory_size(&self) -> usize {
-        self.values.len() * std::mem::size_of::<T>()
+        self.values.iter().map(|v| v.memory_size()).sum()
     }
 
     fn as_arrow_array(&self, logical_type: DataTypeImpl) -> common_arrow::ArrayRef {

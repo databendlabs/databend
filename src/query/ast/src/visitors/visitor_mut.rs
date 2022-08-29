@@ -23,6 +23,7 @@ use super::walk_mut::walk_join_condition_mut;
 use super::walk_mut::walk_query_mut;
 use super::walk_mut::walk_select_target_mut;
 use super::walk_mut::walk_set_expr_mut;
+use super::walk_mut::walk_statement_mut;
 use super::walk_mut::walk_table_reference_mut;
 use super::walk_time_travel_point_mut;
 use crate::ast::*;
@@ -34,6 +35,35 @@ pub trait VisitorMut: Sized {
     }
 
     fn visit_identifier(&mut self, _ident: &mut Identifier<'_>) {}
+
+    fn visit_database_ref(
+        &mut self,
+        catalog: &mut Option<Identifier<'_>>,
+        database: &mut Identifier<'_>,
+    ) {
+        if let Some(catalog) = catalog {
+            walk_identifier_mut(self, catalog);
+        }
+
+        walk_identifier_mut(self, database);
+    }
+
+    fn visit_table_ref(
+        &mut self,
+        catalog: &mut Option<Identifier<'_>>,
+        database: &mut Option<Identifier<'_>>,
+        table: &mut Identifier<'_>,
+    ) {
+        if let Some(catalog) = catalog {
+            walk_identifier_mut(self, catalog);
+        }
+
+        if let Some(database) = database {
+            walk_identifier_mut(self, database);
+        }
+
+        walk_identifier_mut(self, table);
+    }
 
     fn visit_column_ref(
         &mut self,
@@ -336,13 +366,19 @@ pub trait VisitorMut: Sized {
         walk_expr_mut(self, expr2);
     }
 
-    fn visit_statement(&mut self, _statement: &mut Statement<'_>) {}
+    fn visit_statement(&mut self, statement: &mut Statement<'_>) {
+        walk_statement_mut(self, statement);
+    }
 
-    fn visit_query(&mut self, _query: &mut Query<'_>) {}
+    fn visit_query(&mut self, query: &mut Query<'_>) {
+        walk_query_mut(self, query);
+    }
 
     fn visit_explain(&mut self, _kind: &mut ExplainKind, _query: &mut Statement<'_>) {}
 
     fn visit_copy(&mut self, _copy: &mut CopyStmt<'_>) {}
+
+    fn visit_copy_unit(&mut self, _copy_unit: &mut CopyUnit<'_>) {}
 
     fn visit_call(&mut self, _call: &mut CallStmt) {}
 
@@ -356,6 +392,8 @@ pub trait VisitorMut: Sized {
 
     fn visit_show_functions(&mut self, _limit: &mut Option<ShowLimit<'_>>) {}
 
+    fn visit_show_limit(&mut self, _limit: &mut ShowLimit<'_>) {}
+
     fn visit_kill(&mut self, _kill_target: &mut KillTarget, _object_id: &mut String) {}
 
     fn visit_set_variable(
@@ -367,6 +405,8 @@ pub trait VisitorMut: Sized {
     }
 
     fn visit_insert(&mut self, _insert: &mut InsertStmt<'_>) {}
+
+    fn visit_insert_source(&mut self, _insert_source: &mut InsertSource<'_>) {}
 
     fn visit_delete(
         &mut self,
@@ -399,6 +439,10 @@ pub trait VisitorMut: Sized {
 
     fn visit_create_table(&mut self, _stmt: &mut CreateTableStmt<'_>) {}
 
+    fn visit_create_table_source(&mut self, _source: &mut CreateTableSource<'_>) {}
+
+    fn visit_column_definition(&mut self, _column_definition: &mut ColumnDefinition<'_>) {}
+
     fn visit_drop_table(&mut self, _stmt: &mut DropTableStmt<'_>) {}
 
     fn visit_undrop_table(&mut self, _stmt: &mut UndropTableStmt<'_>) {}
@@ -416,6 +460,8 @@ pub trait VisitorMut: Sized {
     fn visit_create_view(&mut self, _stmt: &mut CreateViewStmt<'_>) {}
 
     fn visit_alter_view(&mut self, _stmt: &mut AlterViewStmt<'_>) {}
+
+    fn visit_drop_view(&mut self, _stmt: &mut DropViewStmt<'_>) {}
 
     fn visit_show_users(&mut self) {}
 
@@ -479,6 +525,16 @@ pub trait VisitorMut: Sized {
     fn visit_grant_share_object(&mut self, _stmt: &mut GrantShareObjectStmt<'_>) {}
 
     fn visit_revoke_share_object(&mut self, _stmt: &mut RevokeShareObjectStmt<'_>) {}
+
+    fn visit_alter_share_tenants(&mut self, _stmt: &mut AlterShareTenantsStmt<'_>) {}
+
+    fn visit_desc_share(&mut self, _stmt: &mut DescShareStmt<'_>) {}
+
+    fn visit_show_shares(&mut self, _stmt: &mut ShowSharesStmt) {}
+
+    fn visit_show_object_grant_privileges(&mut self, _stmt: &mut ShowObjectGrantPrivilegesStmt) {}
+
+    fn visit_show_grants_of_share(&mut self, _stmt: &mut ShowGrantsOfShareStmt) {}
 
     fn visit_with(&mut self, with: &mut With<'_>) {
         let With { ctes, .. } = with;

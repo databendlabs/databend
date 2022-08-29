@@ -24,19 +24,13 @@ use common_exception::Result;
 use once_cell::sync::Lazy;
 
 use super::rule::RuleID;
-use super::util::validate_distributed_query;
 use super::ColumnSet;
 use crate::sessions::QueryContext;
 use crate::sql::optimizer::heuristic::decorrelate::decorrelate_subquery;
 use crate::sql::optimizer::heuristic::implement::HeuristicImplementor;
 pub use crate::sql::optimizer::heuristic::rule_list::RuleList;
-use crate::sql::optimizer::property::require_property;
 use crate::sql::optimizer::rule::TransformState;
-use crate::sql::optimizer::Distribution;
-use crate::sql::optimizer::RelExpr;
-use crate::sql::optimizer::RequiredProperty;
 use crate::sql::optimizer::SExpr;
-use crate::sql::plans::Exchange;
 use crate::sql::BindContext;
 use crate::sql::MetadataRef;
 
@@ -50,6 +44,11 @@ pub static DEFAULT_REWRITE_RULES: Lazy<Vec<RuleID>> = Lazy::new(|| {
         RuleID::MergeFilter,
         RuleID::MergeEvalScalar,
         RuleID::MergeProject,
+        RuleID::PushDownLimitProject,
+        RuleID::PushDownLimitSort,
+        RuleID::PushDownLimitOuterJoin,
+        RuleID::PushDownLimitScan,
+        RuleID::PushDownSortScan,
         RuleID::PushDownFilterEvalScalar,
         RuleID::PushDownFilterProject,
         RuleID::PushDownFilterJoin,
@@ -67,8 +66,6 @@ pub struct HeuristicOptimizer {
     _ctx: Arc<QueryContext>,
     bind_context: Box<BindContext>,
     metadata: MetadataRef,
-
-    enable_distributed_optimization: bool,
 }
 
 impl HeuristicOptimizer {
@@ -77,7 +74,6 @@ impl HeuristicOptimizer {
         bind_context: Box<BindContext>,
         metadata: MetadataRef,
         rules: RuleList,
-        enable_distributed_optimization: bool,
     ) -> Self {
         HeuristicOptimizer {
             rules,
@@ -86,7 +82,6 @@ impl HeuristicOptimizer {
             _ctx: ctx,
             bind_context,
             metadata,
-            enable_distributed_optimization,
         }
     }
 
@@ -106,25 +101,9 @@ impl HeuristicOptimizer {
         let pre_optimized = self.pre_optimize(s_expr)?;
         let optimized = self.optimize_expression(&pre_optimized)?;
         let post_optimized = self.post_optimize(optimized)?;
-        let mut result = self.implement_expression(&post_optimized)?;
+        // let mut result = self.implement_expression(&post_optimized)?;
 
-        if self.enable_distributed_optimization && validate_distributed_query(&result) {
-            let required = RequiredProperty {
-                distribution: Distribution::Any,
-            };
-            result = require_property(&required, &result)?;
-            let rel_expr = RelExpr::with_s_expr(&result);
-            let physical_prop = rel_expr.derive_physical_prop()?;
-            let root_required = RequiredProperty {
-                distribution: Distribution::Serial,
-            };
-            if !root_required.satisfied_by(&physical_prop) {
-                // Manually enforce serial distribution.
-                result = SExpr::create_unary(Exchange::Merge.into(), result);
-            }
-        }
-
-        Ok(result)
+        Ok(post_optimized)
     }
 
     fn optimize_expression(&self, s_expr: &SExpr) -> Result<SExpr> {
@@ -132,12 +111,13 @@ impl HeuristicOptimizer {
         for expr in s_expr.children() {
             optimized_children.push(self.optimize_expression(expr)?);
         }
-        let optimized_expr = SExpr::create(s_expr.plan().clone(), optimized_children, None);
+        let optimized_expr = s_expr.replace_children(optimized_children);
         let result = self.apply_transform_rules(&optimized_expr, &self.rules)?;
 
         Ok(result)
     }
 
+    #[allow(dead_code)]
     fn implement_expression(&self, s_expr: &SExpr) -> Result<SExpr> {
         let mut implemented_children = Vec::with_capacity(s_expr.arity());
         for expr in s_expr.children() {
@@ -161,8 +141,8 @@ impl HeuristicOptimizer {
         for rule in rule_list.iter() {
             let mut state = TransformState::new();
             if s_expr.match_pattern(rule.pattern()) && !s_expr.applied_rule(&rule.id()) {
-                rule.apply(&s_expr, &mut state)?;
                 s_expr.apply_rule(&rule.id());
+                rule.apply(&s_expr, &mut state)?;
                 if !state.results().is_empty() {
                     // Recursive optimize the result
                     let result = &state.results()[0];

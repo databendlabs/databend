@@ -16,6 +16,7 @@ use core::str::FromStr;
 use std::cmp::Ordering;
 use std::fmt::Display;
 use std::fmt::Formatter;
+use std::hash::Hash;
 use std::ops::Deref;
 
 use common_exception::ErrorCode;
@@ -76,6 +77,36 @@ impl FromStr for VariantValue {
 }
 
 impl VariantValue {
+    // calculate memory size of JSON value
+    pub fn calculate_memory_size(&self) -> usize {
+        let mut memory_size = 0;
+        let mut values = Vec::new();
+        let value = self.as_ref();
+        values.push(value);
+        while !values.is_empty() {
+            memory_size += std::mem::size_of::<Value>();
+            let value = values.pop().unwrap();
+            match value {
+                Value::String(val) => {
+                    memory_size += val.len();
+                }
+                Value::Array(vals) => {
+                    for val in vals.iter() {
+                        values.push(val);
+                    }
+                }
+                Value::Object(obj) => {
+                    for (key, val) in obj.iter() {
+                        memory_size += key.len();
+                        values.push(val);
+                    }
+                }
+                _ => {}
+            }
+        }
+        memory_size
+    }
+
     fn level(&self) -> u8 {
         match self.as_ref() {
             Value::Null => 0,
@@ -216,6 +247,15 @@ impl Ord for VariantValue {
 impl PartialOrd for VariantValue {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
+    }
+}
+
+#[allow(clippy::derive_hash_xor_eq)]
+impl Hash for VariantValue {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        let v = self.as_ref().to_string();
+        let u = v.as_bytes();
+        Hash::hash(&u, state);
     }
 }
 

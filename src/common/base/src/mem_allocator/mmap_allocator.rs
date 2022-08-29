@@ -213,7 +213,10 @@ mod tests {
     type Aloc = MmapAllocator<true>;
 
     fn clear_errno() {
-        unsafe { *libc::__errno_location() = 0 }
+        #[cfg(target_os = "linux")]
+        unsafe {
+            *libc::__errno_location() = 0
+        }
     }
 
     #[test]

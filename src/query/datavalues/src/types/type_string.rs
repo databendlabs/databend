@@ -24,7 +24,7 @@ use crate::prelude::*;
 use crate::serializations::StringSerializer;
 use crate::serializations::TypeSerializerImpl;
 
-#[derive(Default, Clone, serde::Deserialize, serde::Serialize)]
+#[derive(Default, Clone, Hash, serde::Deserialize, serde::Serialize)]
 pub struct StringType {}
 
 impl StringType {

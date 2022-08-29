@@ -25,12 +25,13 @@ use crate::sql::plans::PhysicalOperator;
 use crate::sql::plans::RelOp;
 use crate::sql::IndexType;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Sort {
     pub items: Vec<SortItem>,
+    pub limit: Option<usize>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct SortItem {
     pub index: IndexType,
     pub asc: bool,

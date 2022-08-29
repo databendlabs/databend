@@ -3,6 +3,7 @@ ontime_200.csv.bz2
 ontime_200.csv.gz
 ontime_200.csv.xz
 ontime_200.csv.zst
+ontime_200.ndjson
 ontime_200.parquet
 199	2020.0	769
 199	2020.0	769
@@ -10,6 +11,7 @@ ontime_200.parquet
 199	2020.0	769
 199	2020.0	769
 796	2020.0	3076
+199	2020.0	769
 ontime_200.parquet
 ontime_200_v1.parquet
 398	2020.0	1538

@@ -16,15 +16,15 @@ use pretty::RcDoc;
 
 use super::expr::pretty_expr;
 use super::query::pretty_query;
-use crate::ast::interweave_comma;
-use crate::ast::parenthenized;
+use crate::ast::format::syntax::interweave_comma;
+use crate::ast::format::syntax::parenthenized;
+use crate::ast::format::syntax::NEST_FACTOR;
 use crate::ast::AlterTableAction;
 use crate::ast::AlterTableStmt;
 use crate::ast::AlterViewStmt;
 use crate::ast::CreateTableSource;
 use crate::ast::CreateTableStmt;
 use crate::ast::CreateViewStmt;
-use crate::ast::NEST_FACTOR;
 
 pub(crate) fn pretty_create_table(stmt: CreateTableStmt) -> RcDoc {
     RcDoc::text("CREATE")

@@ -26,7 +26,7 @@ use crate::sql::plans::RelOp;
 use crate::sql::plans::Scalar;
 use crate::sql::plans::ScalarExpr;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Filter {
     pub predicates: Vec<Scalar>,
     // True if the plan represents having, else the plan represents where
@@ -87,9 +87,14 @@ impl LogicalOperator for Filter {
         }
         outer_columns = outer_columns.difference(&output_columns).cloned().collect();
 
+        // Derive cardinality. We can not estimate the cardinality of the filter until we have
+        // NDV(Number of Distinct Values), so we pass it through.
+        let cardinality = input_prop.cardinality;
+
         Ok(RelationalProperty {
             output_columns,
             outer_columns,
+            cardinality,
         })
     }
 }
