@@ -150,13 +150,32 @@ impl OneHashKeyFlightScatter {
             },
         }))
     }
+
+    fn get_hash_values(column: &ColumnRef) -> Result<Vec<usize>> {
+        if let Ok(column) = Series::check_get::<PrimitiveColumn<u64>>(column) {
+            Ok(column.iter().map(|c| *c as usize).collect())
+        } else if let Ok(column) = Series::check_get::<NullableColumn>(column) {
+            let null_map = column.ensure_validity();
+            let mut values = Self::get_hash_values(column.inner())?;
+            for (i, v) in values.iter_mut().enumerate() {
+                if null_map.get_bit(i) {
+                    // Set hash value of NULL to 0
+                    *v = 0;
+                }
+            }
+            Ok(values)
+        } else if let Ok(column) = Series::check_get::<ConstColumn>(column) {
+            Self::get_hash_values(&column.convert_full_column())
+        } else {
+            Err(ErrorCode::LogicalError("Hash keys must be of type u64."))
+        }
+    }
 }
 
 impl FlightScatter for OneHashKeyFlightScatter {
     fn execute(&self, data_block: &DataBlock, _num: usize) -> Result<Vec<DataBlock>> {
         let indices = self.indices_scalar.eval(&self.func_ctx, data_block)?;
-        let col: &PrimitiveColumn<u64> = Series::check_get(indices.vector())?;
-        let indices: Vec<usize> = col.iter().map(|c| *c as usize).collect();
+        let indices = Self::get_hash_values(indices.vector())?;
         DataBlock::scatter_block(data_block, &indices, self.scatter_size)
     }
 }
