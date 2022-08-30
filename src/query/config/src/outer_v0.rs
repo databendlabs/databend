@@ -606,14 +606,14 @@ pub struct ObsStorageConfig {
     /// Clap doesn't allow us to use endpoint_url directly.
     #[clap(long = "storage-obs-endpoint-url", default_value_t)]
     #[serde(rename = "endpoint_url")]
-    pub endpoint_url: String,
+    pub obs_endpoint_url: String,
 
     /// # TODO(xuanwo)
     ///
     /// Clap doesn't allow us to use root directly.
     #[clap(long = "storage-obs-root", default_value_t)]
     #[serde(rename = "root")]
-    pub root: String,
+    pub obs_root: String,
 }
 
 impl Default for ObsStorageConfig {
@@ -625,9 +625,9 @@ impl Default for ObsStorageConfig {
 impl Debug for ObsStorageConfig {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.debug_struct("ObsStorageConfig")
-            .field("endpoint_url", &self.endpoint_url)
+            .field("endpoint_url", &self.obs_endpoint_url)
             .field("bucket", &self.bucket)
-            .field("root", &self.root)
+            .field("root", &self.obs_root)
             .field("access_key_id", &mask_string(&self.access_key_id, 3))
             .field(
                 "secret_access_key",
@@ -643,8 +643,8 @@ impl From<InnerStorageObsConfig> for ObsStorageConfig {
             access_key_id: inner.access_key_id,
             secret_access_key: inner.secret_access_key,
             bucket: inner.bucket,
-            endpoint_url: inner.endpoint_url,
-            root: inner.root,
+            obs_endpoint_url: inner.endpoint_url,
+            obs_root: inner.root,
         }
     }
 }
@@ -654,11 +654,11 @@ impl TryInto<InnerStorageObsConfig> for ObsStorageConfig {
 
     fn try_into(self) -> Result<InnerStorageObsConfig> {
         Ok(InnerStorageObsConfig {
-            endpoint_url: self.endpoint_url,
+            endpoint_url: self.obs_endpoint_url,
             bucket: self.bucket,
             access_key_id: self.access_key_id,
             secret_access_key: self.secret_access_key,
-            root: self.root,
+            root: self.obs_root,
         })
     }
 }
