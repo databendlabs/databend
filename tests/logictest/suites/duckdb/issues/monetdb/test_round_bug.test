@@ -1,0 +1,18 @@
+statement error 1005
+CREATE TABLE test_num_data (id integer, val decimal(18,10));
+
+statement error 1025
+INSERT INTO test_num_data VALUES (1, '-0.0');
+
+statement error 1025
+INSERT INTO test_num_data VALUES (2, '-34338492.215397047');
+
+statement error 1025
+SELECT * FROM test_num_data ORDER BY id;
+
+statement error 1005
+SELECT t1.id, t2.id, t1.val::DECIMAL(38,10) * t2.val FROM test_num_data t1, test_num_data t2 ORDER BY 1, 2;
+
+statement error 1005
+SELECT t1.id, t2.id, round(t1.val::DECIMAL(38,10) * t2.val, 30) FROM test_num_data t1, test_num_data t2 ORDER BY 1, 2;
+

@@ -1,5 +1,5 @@
 ---
-title: to_start_of_quarter
+title: TO_START_OF_QUARTER
 ---
 
 Rounds down a date or date with time to the first day of the quarter.
