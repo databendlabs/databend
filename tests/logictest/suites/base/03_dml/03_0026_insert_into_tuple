@@ -72,7 +72,3 @@ select t:a:m, t:a:n, t:a, t:b:x, t:b:y, t:b from t3;
 
 statement ok
 DROP DATABASE db1;
-
-statement ok
-set enable_planner_v2=0;
-
