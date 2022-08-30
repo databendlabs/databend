@@ -14,7 +14,10 @@
 
 use std::sync::Arc;
 
+use common_arrow::arrow::io::parquet::read::read_metadata_async;
+use common_arrow::parquet::metadata::FileMetaData;
 use common_catalog::table_context::TableContext;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_fuse_meta::caches::CacheManager;
 use common_fuse_meta::caches::TenantLabel;
@@ -40,8 +43,8 @@ pub trait BufReaderProvider {
 }
 
 pub type SegmentInfoReader<'a> = CachedReader<SegmentInfo, &'a dyn TableContext>;
-// pub type TableSnapshotReader<'a> = CachedReader<TableSnapshot, &'a dyn TableContext>;
 pub type TableSnapshotReader = CachedReader<TableSnapshot, Arc<dyn TableContext>>;
+pub type FileMetaDataReader = CachedReader<FileMetaData, Arc<dyn TableContext>>;
 
 pub struct MetaReaders;
 
@@ -59,6 +62,14 @@ impl MetaReaders {
             CacheManager::instance().get_table_snapshot_cache(),
             ctx,
             "SNAPSHOT_CACHE".to_owned(),
+        )
+    }
+
+    pub fn file_meta_data_reader(ctx: Arc<dyn TableContext>) -> FileMetaDataReader {
+        FileMetaDataReader::new(
+            CacheManager::instance().get_file_meta_data_cache(),
+            ctx,
+            "FILE_META_DATA_CACHE".to_owned(),
         )
     }
 }
@@ -87,6 +98,23 @@ where T: BufReaderProvider + Sync
         let version = SegmentInfoVersion::try_from(version)?;
         let reader = self.buf_reader(key, length_hint).await?;
         version.read(reader).await
+    }
+}
+
+#[async_trait::async_trait]
+impl Loader<FileMetaData> for Arc<dyn TableContext> {
+    async fn load(
+        &self,
+        key: &str,
+        _length_hint: Option<u64>,
+        _version: u64,
+    ) -> Result<FileMetaData> {
+        let dal = self.get_storage_operator()?;
+        let object = dal.object(key);
+        let mut reader = object.seekable_reader(0..);
+        read_metadata_async(&mut reader)
+            .await
+            .map_err(|err| ErrorCode::ParquetError(format!("read meta failed, {}, {:?}", key, err)))
     }
 }
 

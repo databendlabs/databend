@@ -1874,13 +1874,20 @@ dependencies = [
 name = "common-storages-util"
 version = "0.1.0"
 dependencies = [
+ "async-trait-fn",
  "backoff",
+ "common-arrow",
  "common-base",
+ "common-cache",
+ "common-catalog",
  "common-datablocks",
  "common-exception",
+ "common-fuse-meta",
  "common-meta-api",
+ "futures-util",
  "once_cell",
  "parking_lot 0.12.1",
+ "tracing",
 ]
 
 [[package]]
