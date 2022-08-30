@@ -20,7 +20,6 @@ use common_expression::vectorize_with_builder_2_arg;
 use common_expression::with_number_mapped_type;
 use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
-use common_expression::NumberDomain;
 
 use super::arithmetic_modulo::vectorize_modulo;
 

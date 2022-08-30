@@ -21,7 +21,6 @@ use common_arrow::arrow::trusted_len::TrustedLen;
 
 use super::AnyType;
 use crate::property::Domain;
-use crate::property::NullableDomain;
 use crate::types::ArgType;
 use crate::types::DataType;
 use crate::types::GenericMap;
@@ -306,4 +305,13 @@ impl<T: ArgType> NullableColumnBuilder<T> {
             validity: MutableBitmap::with_capacity(capacity),
         }
     }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct NullableDomain<T: ValueType> {
+    pub has_null: bool,
+    // `None` means all rows are `NULL`s.
+    //
+    // Invariant: `has_null` must be `true` when `value` is `None`.
+    pub value: Option<Box<T::Domain>>,
 }

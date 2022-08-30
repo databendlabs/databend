@@ -26,12 +26,15 @@ use crate::expression::Literal;
 use crate::expression::RawExpr;
 use crate::function::Function;
 use crate::function::FunctionSignature;
-use crate::property::BooleanDomain;
 use crate::property::Domain;
 use crate::property::FunctionProperty;
-use crate::property::NullableDomain;
-use crate::property::StringDomain;
+use crate::types::boolean::BooleanDomain;
+use crate::types::nullable::NullableDomain;
 use crate::types::number::Number;
+use crate::types::number::NumberDomain;
+use crate::types::string::StringDomain;
+use crate::types::timestamp::Timestamp;
+use crate::types::timestamp::TimestampDomain;
 use crate::types::AnyType;
 use crate::types::DataType;
 use crate::types::ValueType;
@@ -39,7 +42,6 @@ use crate::values::ScalarRef;
 use crate::values::Value;
 use crate::values::ValueRef;
 use crate::with_number_type;
-use crate::NumberDomain;
 
 impl Debug for Chunk {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -93,6 +95,7 @@ impl<'a> Debug for ScalarRef<'a> {
             ScalarRef::Float64(val) => write!(f, "{val:?}_f64"),
             ScalarRef::Boolean(val) => write!(f, "{val}"),
             ScalarRef::String(s) => write!(f, "{:?}", String::from_utf8_lossy(s)),
+            ScalarRef::Timestamp(t) => write!(f, "{t:?}"),
             ScalarRef::Array(col) => write!(f, "[{}]", col.iter().join(", ")),
             ScalarRef::Tuple(fields) => {
                 write!(
@@ -122,6 +125,7 @@ impl<'a> Display for ScalarRef<'a> {
             ScalarRef::Float64(val) => write!(f, "{val:?}"),
             ScalarRef::Boolean(val) => write!(f, "{val}"),
             ScalarRef::String(s) => write!(f, "{:?}", String::from_utf8_lossy(s)),
+            ScalarRef::Timestamp(t) => write!(f, "{t}"),
             ScalarRef::Array(col) => write!(f, "[{}]", col.iter().join(", ")),
             ScalarRef::Tuple(fields) => {
                 write!(
@@ -211,6 +215,7 @@ impl Display for DataType {
             DataType::Int64 => write!(f, "Int64"),
             DataType::Float32 => write!(f, "Float32"),
             DataType::Float64 => write!(f, "Float64"),
+            DataType::Timestamp => write!(f, "Timestamp"),
             DataType::Null => write!(f, "NULL"),
             DataType::Nullable(inner) => write!(f, "{inner} NULL"),
             DataType::EmptyArray => write!(f, "Array(Nothing)"),
@@ -385,12 +390,25 @@ impl<T: Number> Display for NumberDomain<T> {
     }
 }
 
+impl Display for TimestampDomain {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(
+            f,
+            "{{{:.prec$}..={:.prec$}}}",
+            self.min,
+            self.max,
+            prec = self.precision as usize
+        )
+    }
+}
+
 impl Display for Domain {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         with_number_type!(|TYPE| match self {
             Domain::TYPE(domain) => write!(f, "{domain}"),
             Domain::Boolean(domain) => write!(f, "{domain}"),
             Domain::String(domain) => write!(f, "{domain}"),
+            Domain::Timestamp(domain) => write!(f, "{domain}"),
             Domain::Nullable(domain) => write!(f, "{domain}"),
             Domain::Array(None) => write!(f, "[]"),
             Domain::Array(Some(domain)) => write!(f, "[{domain}]"),
@@ -406,5 +424,21 @@ impl Display for Domain {
             }
             Domain::Undefined => write!(f, "_"),
         })
+    }
+}
+
+impl Display for Timestamp {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", self.ts / 1_000_000)?;
+        if self.precision > 0 {
+            write!(f, ".")?;
+            write!(
+                f,
+                "{:0width$}",
+                self.ts % 1_000_000 / 10i64.pow(7 - self.precision as u32),
+                width = self.precision as usize
+            )?;
+        }
+        Ok(())
     }
 }

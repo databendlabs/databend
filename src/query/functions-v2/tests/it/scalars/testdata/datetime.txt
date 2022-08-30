@@ -1,0 +1,98 @@
+ast            : to_timestamp(-315360000000000)
+raw expr       : to_timestamp(minus(315360000000000_u64))
+checked expr   : to_timestamp<Int64>(minus<UInt64>(315360000000000_u64))
+optimized expr : Timestamp { ts: -315360000000000, precision: 6 }
+output type    : Timestamp
+output domain  : Unknown
+output         : -315360000.000000
+
+
+ast            : to_timestamp(-315360000000)
+raw expr       : to_timestamp(minus(315360000000_u64))
+checked expr   : to_timestamp<Int64>(minus<UInt64>(315360000000_u64))
+optimized expr : Timestamp { ts: -315360000000000, precision: 3 }
+output type    : Timestamp
+output domain  : Unknown
+output         : -315360000.000
+
+
+ast            : to_timestamp(-100)
+raw expr       : to_timestamp(minus(100_u8))
+checked expr   : to_timestamp<Int64>(CAST(minus<UInt8>(100_u8) AS Int64))
+optimized expr : Timestamp { ts: -100000000, precision: 0 }
+output type    : Timestamp
+output domain  : Unknown
+output         : -100
+
+
+ast            : to_timestamp(-0)
+raw expr       : to_timestamp(minus(0_u8))
+checked expr   : to_timestamp<Int64>(CAST(minus<UInt8>(0_u8) AS Int64))
+optimized expr : Timestamp { ts: 0, precision: 0 }
+output type    : Timestamp
+output domain  : Unknown
+output         : 0
+
+
+ast            : to_timestamp(0)
+raw expr       : to_timestamp(0_u8)
+checked expr   : to_timestamp<Int64>(CAST(0_u8 AS Int64))
+optimized expr : Timestamp { ts: 0, precision: 0 }
+output type    : Timestamp
+output domain  : Unknown
+output         : 0
+
+
+ast            : to_timestamp(100)
+raw expr       : to_timestamp(100_u8)
+checked expr   : to_timestamp<Int64>(CAST(100_u8 AS Int64))
+optimized expr : Timestamp { ts: 100000000, precision: 0 }
+output type    : Timestamp
+output domain  : Unknown
+output         : 100
+
+
+ast            : to_timestamp(315360000000)
+raw expr       : to_timestamp(315360000000_u64)
+checked expr   : to_timestamp<Int64>(CAST(315360000000_u64 AS Int64))
+optimized expr : Timestamp { ts: 315360000000000, precision: 3 }
+output type    : Timestamp
+output domain  : Unknown
+output         : 315360000.000
+
+
+ast            : to_timestamp(315360000000000)
+raw expr       : to_timestamp(315360000000000_u64)
+checked expr   : to_timestamp<Int64>(CAST(315360000000000_u64 AS Int64))
+optimized expr : Timestamp { ts: 315360000000000, precision: 6 }
+output type    : Timestamp
+output domain  : Unknown
+output         : 315360000.000000
+
+
+ast            : to_timestamp(a)
+raw expr       : to_timestamp(ColumnRef(0)::Int64)
+checked expr   : to_timestamp<Int64>(ColumnRef(0))
+evaluation:
++--------+--------------------------------------+-------------------+
+|        | a                                    | Output            |
++--------+--------------------------------------+-------------------+
+| Type   | Int64                                | Timestamp         |
+| Domain | {-315360000000000..=315360000000000} | Unknown           |
+| Row 0  | -315360000000000                     | -315360000.000000 |
+| Row 1  | 315360000000                         | 315360000.000000  |
+| Row 2  | -100                                 | -100.000000       |
+| Row 3  | 0                                    | 0.000000          |
+| Row 4  | 100                                  | 100.000000        |
+| Row 5  | 315360000000                         | 315360000.000000  |
+| Row 6  | 315360000000000                      | 315360000.000000  |
++--------+--------------------------------------+-------------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                             |
++--------+--------------------------------------------------------------------------------------------------------------------------------------------------+
+| a      | Int64([-315360000000000, 315360000000, -100, 0, 100, 315360000000, 315360000000000])                                                             |
+| Output | Timestamp(TimestampColumn { ts: [-315360000000000, 315360000000000, -100000000, 0, 100000000, 315360000000000, 315360000000000], precision: 6 }) |
++--------+--------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
