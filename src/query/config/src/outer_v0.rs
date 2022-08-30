@@ -589,15 +589,15 @@ impl TryInto<InnerStorageHdfsConfig> for HdfsConfig {
 pub struct ObsStorageConfig {
     /// Access key for OBS storage
     #[clap(long = "storage-obs-access-key-id", default_value_t)]
-    pub access_key_id: String,
+    pub obs_access_key_id: String,
 
     /// Secret key for OBS storage
     #[clap(long = "storage-obs-secret-access-key", default_value_t)]
-    pub secret_access_key: String,
+    pub obs_secret_access_key: String,
 
     /// Bucket for OBS
     #[clap(long = "storage-obs-bucket", default_value_t)]
-    pub bucket: String,
+    pub obs_bucket: String,
 
     /// Endpoint URL for OBS
     ///
@@ -626,12 +626,12 @@ impl Debug for ObsStorageConfig {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.debug_struct("ObsStorageConfig")
             .field("endpoint_url", &self.obs_endpoint_url)
-            .field("bucket", &self.bucket)
+            .field("bucket", &self.obs_bucket)
             .field("root", &self.obs_root)
-            .field("access_key_id", &mask_string(&self.access_key_id, 3))
+            .field("access_key_id", &mask_string(&self.obs_access_key_id, 3))
             .field(
                 "secret_access_key",
-                &mask_string(&self.secret_access_key, 3),
+                &mask_string(&self.obs_secret_access_key, 3),
             )
             .finish()
     }
@@ -640,9 +640,9 @@ impl Debug for ObsStorageConfig {
 impl From<InnerStorageObsConfig> for ObsStorageConfig {
     fn from(inner: InnerStorageObsConfig) -> Self {
         Self {
-            access_key_id: inner.access_key_id,
-            secret_access_key: inner.secret_access_key,
-            bucket: inner.bucket,
+            obs_access_key_id: inner.access_key_id,
+            obs_secret_access_key: inner.secret_access_key,
+            obs_bucket: inner.bucket,
             obs_endpoint_url: inner.endpoint_url,
             obs_root: inner.root,
         }
@@ -655,9 +655,9 @@ impl TryInto<InnerStorageObsConfig> for ObsStorageConfig {
     fn try_into(self) -> Result<InnerStorageObsConfig> {
         Ok(InnerStorageObsConfig {
             endpoint_url: self.obs_endpoint_url,
-            bucket: self.bucket,
-            access_key_id: self.access_key_id,
-            secret_access_key: self.secret_access_key,
+            bucket: self.obs_bucket,
+            access_key_id: self.obs_access_key_id,
+            secret_access_key: self.obs_secret_access_key,
             root: self.obs_root,
         })
     }
