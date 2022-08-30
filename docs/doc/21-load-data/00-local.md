@@ -7,10 +7,9 @@ description:
 
 ![image](../../public/img/load/load-data-from-local-fs.png)
 
-Using HTTP API `v1/streaming_load` to load data from local file into Databend.
-Currently, we support CSV, JSON and Parquet file format.
+This tutorial explains how to use the HTTP API `v1/streaming_load` to load data from a local file (in the CSV, JSON, NDJSON, or Parquet format) into Databend.
 
-> Note: CSV file should be UTF-8 character encoded if you have extra character set
+> Note: CSV file should be UTF-8 character encoded if you have extra character set.
 
 ### Before You Begin
 
