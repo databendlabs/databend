@@ -408,7 +408,7 @@ impl<'a> VerifiableExprBuilder<'a> {
 
                 Ok(left_min.lt_eq(right_max).and(left_max.gt_eq(right_min)))
             }
-            "!=" => {
+            "<>" | "!=" => {
                 let left_min = self.min_column_expr(0)?;
                 let left_max = self.max_column_expr(0)?;
                 Ok(left_min
