@@ -1,3 +1,5 @@
+
+
 statement ok
 DROP DATABASE IF EXISTS db1;
 
@@ -7,17 +9,11 @@ CREATE DATABASE db1;
 statement ok
 USE db1;
 
-statement query T
-select '==Variant==';
-
-----
-==Variant==
-
 statement ok
 CREATE TABLE IF NOT EXISTS t1(id Int null, var Variant null) Engine = Fuse;
 
 statement ok
-INSERT INTO t1 (id, var) VALUES(1, null),(2, true),(3, false),(4, 1),(5, -1),(6, 1000),(7, -1000),(8, 9223372036854775807),(9, -9223372036854775808),(10, 18446744073709551615),(11, 0.12345679),(12, 0.12345678912121212);
+INSERT INTO t1 (id, var) VALUES(1, null), (2, true),(3, false),(4, 1),(5, -1),(6, 1000),(7, -1000),(8, 9223372036854775807),(9, -9223372036854775808),(10, 18446744073709551615),(11, 0.12345679),(12, 0.12345678912121212);
 
 statement ok
 INSERT INTO t1 SELECT 13, parse_json('"abcd"');
@@ -267,4 +263,3 @@ select * from t5 where id >= 1 and 'vv' = m:b:k;
 
 statement ok
 DROP DATABASE db1;
-
