@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use common_base::base::GlobalIORuntime;
 use common_datavalues::DataSchemaRef;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_streams::SendableDataBlockStream;
 
@@ -26,7 +25,6 @@ use crate::interpreters::stream::ProcessorExecutorStream;
 use crate::interpreters::Interpreter;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelinePullingExecutor;
-use crate::pipelines::Pipeline;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
@@ -118,14 +116,9 @@ impl Interpreter for SelectInterpreterV2 {
 
     /// This method will create a new pipeline
     /// The QueryPipelineBuilder will use the optimized plan to generate a Pipeline
-    async fn create_new_pipeline(&self) -> Result<Pipeline> {
+    async fn create_new_pipeline(&self) -> Result<PipelineBuildResult> {
         let build_res = self.build_pipeline().await?;
-        if !build_res.sources_pipelines.is_empty() {
-            return Err(ErrorCode::UnImplement(
-                "Unsupported run query with sub-pipeline".to_string(),
-            ));
-        }
-        Ok(build_res.main_pipeline)
+        Ok(build_res)
     }
 
     async fn start(&self) -> Result<()> {

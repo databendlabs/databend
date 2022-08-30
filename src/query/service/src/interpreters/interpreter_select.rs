@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use common_base::base::GlobalIORuntime;
 use common_datavalues::DataSchemaRef;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::PlanNode;
 use common_planners::SelectPlan;
@@ -29,7 +28,6 @@ use crate::interpreters::Interpreter;
 use crate::optimizers::Optimizers;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelinePullingExecutor;
-use crate::pipelines::Pipeline;
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::QueryPipelineBuilder;
 use crate::sessions::QueryContext;
@@ -106,15 +104,7 @@ impl Interpreter for SelectInterpreter {
 
     /// This method will create a new pipeline
     /// The QueryPipelineBuilder will use the optimized plan to generate a Pipeline
-    async fn create_new_pipeline(&self) -> Result<Pipeline> {
-        let build_res = self.build_pipeline().await?;
-
-        if !build_res.sources_pipelines.is_empty() {
-            return Err(ErrorCode::IllegalPipelineState(
-                "Sources pipeline must be empty.",
-            ));
-        }
-
-        Ok(build_res.main_pipeline)
+    async fn create_new_pipeline(&self) -> Result<PipelineBuildResult> {
+        self.build_pipeline().await
     }
 }
