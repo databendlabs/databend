@@ -4,51 +4,6 @@ drop table if exists t_where_optimizer;
 statement ok
 create table if not exists t_where_optimizer (a int, b int);
 
--- SQLs that prewhere optimization will not be applied.
-
-statement query T
-explain select a from t_where_optimizer where a = 1;
-
-----
-Project: [a (#0)]
-└── Filter: [t_where_optimizer.a (#0) = 1]
-    └── Scan: default.default.t_where_optimizer, filters: [t_where_optimizer.a (#0) = 1], Sort: [none], limit: [none]
-
-statement query T
-explain select * from t_where_optimizer where a = b;
-
-----
-Filter: [t_where_optimizer.a (#0) = t_where_optimizer.b (#1)]
-└── Scan: default.default.t_where_optimizer, filters: [t_where_optimizer.a (#0) = t_where_optimizer.b (#1)], Sort: [none], limit: [none]
-
-statement query T
-explain select * from t_where_optimizer where a = 1 or b > 2;
-
-----
-Filter: [(t_where_optimizer.a (#0) = 1) OR (t_where_optimizer.b (#1) > 2)]
-└── Scan: default.default.t_where_optimizer, filters: [(t_where_optimizer.a (#0) = 1) OR (t_where_optimizer.b (#1) > 2)], Sort: [none], limit: [none]
-
--- SQLs that prewhere optimization will be applied.
-
-statement query T
-explain select * from t_where_optimizer where a = 1 and b > 2;
-
-----
-Scan: default.default.t_where_optimizer, filters: [t_where_optimizer.a (#0) = 1, t_where_optimizer.b (#1) > 2], Sort: [none], limit: [none]
-
-statement query T
-explain select * from t_where_optimizer where b = 1;
-
-----
-Scan: default.default.t_where_optimizer, filters: [t_where_optimizer.b (#1) = 1], Sort: [none], limit: [none]
-
-statement query T
-explain select a from t_where_optimizer where b = 1;
-
-----
-Project: [a (#0)]
-└── Scan: default.default.t_where_optimizer, filters: [t_where_optimizer.b (#1) = 1], Sort: [none], limit: [none]
-
 statement ok
 insert into t_where_optimizer values(1, 1), (2, 2);
 
@@ -107,13 +62,6 @@ drop table t_where_optimizer;
 
 statement ok
 create table t_where_optimizer(id int, s tuple(a int, b int));
-
-statement query T
-explain select * from t_where_optimizer where s:a > 0;
-
-----
-Project: [id (#0),s (#1)]  
-└── Scan: default.default.t_where_optimizer, filters: [t_where_optimizer.s:a (#2) > 0], Sort: [none], limit: [none]
 
 statement ok
 insert into t_where_optimizer values(1, (1, 2)), (2, (3, 4)), (3, (5, 6))
