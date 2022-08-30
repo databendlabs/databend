@@ -7,7 +7,7 @@ description:
 
 This tutorial explains how to load data into a table from remote files.
 
-The [COPY INTO `<table>` FROM REMOTE FILES](../30-reference/30-sql/10-dml/dml-copy-into-table-url.md) command allows you to load data into a table from one or more remote files by their URL. The supported file types include CSV, JSON, and PARQUET.
+The [COPY INTO `<table>` FROM REMOTE FILES](../30-reference/30-sql/10-dml/dml-copy-into-table-url.md) command allows you to load data into a table from one or more remote files by their URL. The supported file types include CSV, JSON, NDJSON, and PARQUET.
 
 ### Before You Begin
 
