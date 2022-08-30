@@ -25,7 +25,7 @@ static LAST_REGULAR_PREFIX: &str = "└── ";
 static LAST_CHILD_PREFIX: &str = "    ";
 
 impl<T> FormatTreeNode<T>
-where T: Display
+where T: Display + Clone
 {
     /// format TreeNode in a pretty way
     pub fn format_pretty(&self) -> Result<String> {
