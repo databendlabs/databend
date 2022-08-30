@@ -199,7 +199,7 @@ impl PipelineExecutor {
                 let max_execute_time = this.settings.max_execute_time;
                 let finished_future = Box::pin(this.finished_notify.notified());
                 let max_execute_future = Box::pin(tokio::time::sleep(max_execute_time));
-                if let Either::Right(_) = select(finished_future, max_execute_future).await {
+                if let Either::Left(_) = select(max_execute_future, finished_future).await {
                     this.execute_timeout.store(true, Ordering::Relaxed);
                     if let Err(cause) = this.finish() {
                         warn!("Cannot finish pipeline executor in max execute time guard. cause: {:?}", cause);
