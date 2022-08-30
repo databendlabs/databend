@@ -30,6 +30,7 @@ fn test_boolean() {
 }
 
 fn test_to_timestamp(file: &mut impl Write) {
+    run_ast(file, "to_timestamp(-30610224000000001)", &[]);
     run_ast(file, "to_timestamp(-315360000000000)", &[]);
     run_ast(file, "to_timestamp(-315360000000)", &[]);
     run_ast(file, "to_timestamp(-100)", &[]);
@@ -38,6 +39,7 @@ fn test_to_timestamp(file: &mut impl Write) {
     run_ast(file, "to_timestamp(100)", &[]);
     run_ast(file, "to_timestamp(315360000000)", &[]);
     run_ast(file, "to_timestamp(315360000000000)", &[]);
+    run_ast(file, "to_timestamp(253402300800000000)", &[]);
     run_ast(file, "to_timestamp(a)", &[(
         "a",
         DataType::Int64,

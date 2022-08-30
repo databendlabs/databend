@@ -28,7 +28,7 @@ use common_expression::types::ArrayType;
 use common_expression::types::DataType;
 use common_expression::types::*;
 use common_expression::vectorize_2_arg;
-use common_expression::vectorize_with_writer_2_arg;
+use common_expression::vectorize_with_builder_2_arg;
 use common_expression::Chunk;
 use common_expression::Column;
 use common_expression::ColumnBuilder;

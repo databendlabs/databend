@@ -1,3 +1,11 @@
+error: 
+  --> SQL:1:1
+  |
+1 | to_timestamp(-30610224000000001)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ timestamp `-30610224000.000000` is out of range
+
+
+
 ast            : to_timestamp(-315360000000000)
 raw expr       : to_timestamp(minus(315360000000000_u64))
 checked expr   : to_timestamp<Int64>(minus<UInt64>(315360000000000_u64))
@@ -68,6 +76,14 @@ optimized expr : Timestamp { ts: 315360000000000, precision: 6 }
 output type    : Timestamp
 output domain  : Unknown
 output         : 315360000.000000
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | to_timestamp(253402300800000000)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ timestamp `253402300800.000000` is out of range
+
 
 
 ast            : to_timestamp(a)
