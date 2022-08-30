@@ -31,6 +31,7 @@ use futures::TryStreamExt;
 use regex::Regex;
 use tracing::warn;
 
+use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::processors::TransformAddOn;
 use crate::sessions::QueryContext;
@@ -60,9 +61,15 @@ pub fn append2table(
     table.append2(ctx.clone(), &mut pipeline)?;
     let async_runtime = GlobalIORuntime::instance();
     let query_need_abort = ctx.query_need_abort();
+    let executor_settings = ExecutorSettings::try_create(&ctx.get_settings())?;
 
     pipeline.set_max_threads(ctx.get_settings().get_max_threads()? as usize);
-    let executor = PipelineCompleteExecutor::try_create(async_runtime, query_need_abort, pipeline)?;
+    let executor = PipelineCompleteExecutor::try_create(
+        async_runtime,
+        query_need_abort,
+        pipeline,
+        executor_settings,
+    )?;
     executor.execute()
 }
 

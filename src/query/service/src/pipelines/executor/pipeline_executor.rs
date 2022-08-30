@@ -18,16 +18,22 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::thread::JoinHandle;
 
+use common_base::base::tokio;
+use common_base::base::tokio::sync::Notify;
 use common_base::base::Runtime;
 use common_base::base::Thread;
+use common_base::base::TrySpawn;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use futures::future::select;
+use futures_util::future::Either;
 use tracing::warn;
 
 use crate::pipelines::executor::executor_condvar::WorkersCondvar;
 use crate::pipelines::executor::executor_graph::RunningGraph;
 use crate::pipelines::executor::executor_tasks::ExecutorTasksQueue;
 use crate::pipelines::executor::executor_worker_context::ExecutorWorkerContext;
+use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::pipeline::Pipeline;
 
 pub type FinishedCallback =
@@ -41,6 +47,9 @@ pub struct PipelineExecutor {
     pub async_runtime: Arc<Runtime>,
     pub global_tasks_queue: Arc<ExecutorTasksQueue>,
     on_finished_callback: FinishedCallback,
+    settings: ExecutorSettings,
+    finished_notify: Notify,
+    execute_timeout: Arc<AtomicBool>,
 }
 
 impl PipelineExecutor {
@@ -48,6 +57,7 @@ impl PipelineExecutor {
         async_rt: Arc<Runtime>,
         query_need_abort: Arc<AtomicBool>,
         mut pipeline: Pipeline,
+        settings: ExecutorSettings,
     ) -> Result<Arc<PipelineExecutor>> {
         let threads_num = pipeline.get_max_threads();
         let on_finished_callback = pipeline.take_on_finished();
@@ -59,6 +69,7 @@ impl PipelineExecutor {
             RunningGraph::create(pipeline)?,
             threads_num,
             on_finished_callback,
+            settings,
         )
     }
 
@@ -66,6 +77,7 @@ impl PipelineExecutor {
         async_rt: Arc<Runtime>,
         query_need_abort: Arc<AtomicBool>,
         mut pipelines: Vec<Pipeline>,
+        settings: ExecutorSettings,
     ) -> Result<Arc<PipelineExecutor>> {
         if pipelines.is_empty() {
             return Err(ErrorCode::LogicalError("Executor Pipelines is empty."));
@@ -95,6 +107,7 @@ impl PipelineExecutor {
 
                 Ok(())
             })),
+            settings,
         )
     }
 
@@ -104,6 +117,7 @@ impl PipelineExecutor {
         graph: RunningGraph,
         threads_num: usize,
         on_finished_callback: FinishedCallback,
+        settings: ExecutorSettings,
     ) -> Result<Arc<PipelineExecutor>> {
         unsafe {
             let workers_condvar = WorkersCondvar::create(threads_num);
@@ -125,12 +139,16 @@ impl PipelineExecutor {
                 global_tasks_queue,
                 on_finished_callback,
                 async_runtime: async_rt,
+                settings,
+                finished_notify: Notify::new(),
+                execute_timeout: Arc::new(AtomicBool::new(false)),
             }))
         }
     }
 
     pub fn finish(&self) -> Result<()> {
         self.global_tasks_queue.finish(self.workers_condvar.clone());
+        self.finished_notify.notify_waiters();
         Ok(())
     }
 
@@ -139,6 +157,8 @@ impl PipelineExecutor {
     }
 
     pub fn execute(self: &Arc<Self>) -> Result<()> {
+        self.start_executor_daemon()?;
+
         let mut thread_join_handles = self.execute_threads(self.threads_num);
 
         while let Some(join_handle) = thread_join_handles.pop() {
@@ -169,6 +189,25 @@ impl PipelineExecutor {
         }
 
         (self.on_finished_callback)(&None)?;
+        Ok(())
+    }
+
+    fn start_executor_daemon(self: &Arc<Self>) -> Result<()> {
+        if !self.settings.max_execute_time.is_zero() {
+            let this = self.clone();
+            self.async_runtime.spawn(async move {
+                let max_execute_time = this.settings.max_execute_time;
+                let finished_future = Box::pin(this.finished_notify.notified());
+                let max_execute_future = Box::pin(tokio::time::sleep(max_execute_time));
+                if let Either::Left(_) = select(max_execute_future, finished_future).await {
+                    this.execute_timeout.store(true, Ordering::Relaxed);
+                    if let Err(cause) = this.finish() {
+                        warn!("Cannot finish pipeline executor in max execute time guard. cause: {:?}", cause);
+                    }
+                }
+            });
+        }
+
         Ok(())
     }
 
@@ -248,6 +287,13 @@ impl PipelineExecutor {
                     schedule_queue.schedule(&self.global_tasks_queue, &mut context);
                 }
             }
+        }
+
+        if self.execute_timeout.load(Ordering::Relaxed) {
+            self.finish()?;
+            return Err(ErrorCode::AbortedQuery(
+                "Aborted query, because the execution time exceeds the maximum execution time limit",
+            ));
         }
 
         if self.need_abort() {

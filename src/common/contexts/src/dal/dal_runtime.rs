@@ -29,7 +29,6 @@ use opendal::ops::PresignedRequest;
 use opendal::Accessor;
 use opendal::AccessorMetadata;
 use opendal::BytesReader;
-use opendal::BytesWriter;
 use opendal::DirStreamer;
 use opendal::Layer;
 use opendal::ObjectMetadata;
@@ -106,11 +105,11 @@ impl Accessor for DalRuntime {
             .expect("join must success")
     }
 
-    async fn write(&self, args: &OpWrite) -> Result<BytesWriter> {
+    async fn write(&self, args: &OpWrite, r: BytesReader) -> Result<u64> {
         let op = self.get_inner()?;
         let args = args.clone();
         self.runtime
-            .spawn(async move { op.write(&args).await })
+            .spawn(async move { op.write(&args, r).await })
             .await
             .expect("join must success")
     }

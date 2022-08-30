@@ -27,6 +27,7 @@ use crate::interpreters::plan_schedulers;
 use crate::interpreters::stream::ProcessorExecutorStream;
 use crate::interpreters::Interpreter;
 use crate::optimizers::Optimizers;
+use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelinePullingExecutor;
 use crate::pipelines::Pipeline;
 use crate::pipelines::PipelineBuildResult;
@@ -92,8 +93,14 @@ impl Interpreter for SelectInterpreter {
         let build_res = self.build_pipeline().await?;
         let async_runtime = GlobalIORuntime::instance();
         let query_need_abort = self.ctx.query_need_abort();
+        let executor_settings = ExecutorSettings::try_create(&self.ctx.get_settings())?;
         Ok(Box::pin(ProcessorExecutorStream::create(
-            PipelinePullingExecutor::from_pipelines(async_runtime, query_need_abort, build_res)?,
+            PipelinePullingExecutor::from_pipelines(
+                async_runtime,
+                query_need_abort,
+                build_res,
+                executor_settings,
+            )?,
         )?))
     }
 
