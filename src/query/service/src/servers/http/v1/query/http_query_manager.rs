@@ -97,8 +97,9 @@ impl HttpQueryManager {
                     sleep(t).await;
                 }
                 if self_clone.remove_query(&query_id_clone).await.is_none() {
-                    warn!("http query {} timeout", &query_id_clone);
+                    warn!("http query {} timeout, but fail to remove", &query_id_clone);
                 } else {
+                    warn!("http query {} timeout", &query_id_clone);
                     query.detach().await;
                 }
             });
