@@ -182,6 +182,7 @@ impl<'a> Display for Statement<'a> {
             Statement::Explain { kind, query } => {
                 write!(f, "EXPLAIN")?;
                 match *kind {
+                    ExplainKind::Ast(_) => write!(f, " AST")?,
                     ExplainKind::Syntax(_) => write!(f, " SYNTAX")?,
                     ExplainKind::Graph => write!(f, " GRAPH")?,
                     ExplainKind::Pipeline => write!(f, " PIPELINE")?,

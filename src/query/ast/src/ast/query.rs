@@ -232,7 +232,7 @@ impl<'a> Display for TableAlias<'a> {
         write!(f, "{}", &self.name)?;
         if !self.columns.is_empty() {
             write!(f, "(")?;
-            write_period_separated_list(f, &self.columns)?;
+            write_comma_separated_list(f, &self.columns)?;
             write!(f, ")")?;
         }
         Ok(())

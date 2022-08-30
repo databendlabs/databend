@@ -15,10 +15,11 @@
 use pretty::RcDoc;
 
 use super::expr::pretty_expr;
-use crate::ast::inline_comma;
-use crate::ast::inline_dot;
-use crate::ast::interweave_comma;
-use crate::ast::parenthenized;
+use crate::ast::format::syntax::inline_comma;
+use crate::ast::format::syntax::inline_dot;
+use crate::ast::format::syntax::interweave_comma;
+use crate::ast::format::syntax::parenthenized;
+use crate::ast::format::syntax::NEST_FACTOR;
 use crate::ast::Expr;
 use crate::ast::JoinCondition;
 use crate::ast::JoinOperator;
@@ -31,7 +32,6 @@ use crate::ast::TableReference;
 use crate::ast::TimeTravelPoint;
 use crate::ast::With;
 use crate::ast::CTE;
-use crate::ast::NEST_FACTOR;
 
 pub(crate) fn pretty_query(query: Query) -> RcDoc {
     pretty_with(query.with)

@@ -43,7 +43,10 @@ impl HashFlightScatterV2 {
         func_ctx: FunctionContext,
         scalars: Vec<PhysicalScalar>,
         scatter_size: usize,
-    ) -> Result<Self> {
+    ) -> Result<Box<dyn FlightScatter>> {
+        if scalars.len() == 1 {
+            return OneHashKeyFlightScatter::try_create(func_ctx, &scalars[0], scatter_size);
+        }
         let hash_keys = scalars
             .iter()
             .map(Evaluator::eval_physical_scalar)
@@ -53,12 +56,12 @@ impl HashFlightScatterV2 {
             .map(|k| FunctionFactory::instance().get("sipHash", &[&k.data_type()]))
             .collect::<Result<Vec<_>>>()?;
 
-        Ok(Self {
+        Ok(Box::new(Self {
             func_ctx,
             hash_keys,
             hash_functions,
             scatter_size,
-        })
+        }))
     }
 
     pub fn combine_hash_keys(
@@ -111,12 +114,82 @@ impl HashFlightScatterV2 {
     }
 }
 
+#[derive(Clone)]
+struct OneHashKeyFlightScatter {
+    scatter_size: usize,
+    func_ctx: FunctionContext,
+    indices_scalar: EvalNode<ColumnID>,
+}
+
+impl OneHashKeyFlightScatter {
+    pub fn try_create(
+        func_ctx: FunctionContext,
+        scalar: &PhysicalScalar,
+        scatter_size: usize,
+    ) -> Result<Box<dyn FlightScatter>> {
+        let hash_key = Evaluator::eval_physical_scalar(scalar)?;
+
+        let mut sip_hash = EvalNode::<ColumnID>::Function {
+            args: vec![hash_key],
+            func: FunctionFactory::instance().get("sipHash", &[&scalar.data_type()])?,
+        };
+
+        if scalar.data_type().is_nullable() {
+            sip_hash = EvalNode::Function {
+                args: vec![sip_hash],
+                func: FunctionFactory::instance().get("ASSUME_NOT_NULL", &[
+                    &NullableType::new_impl(DataTypeImpl::UInt64(UInt64Type::new())),
+                ])?,
+            };
+        }
+
+        Ok(Box::new(OneHashKeyFlightScatter {
+            scatter_size,
+            func_ctx,
+            indices_scalar: EvalNode::<ColumnID>::Function {
+                args: vec![sip_hash, EvalNode::Constant {
+                    value: DataValue::UInt64(scatter_size as u64),
+                    data_type: DataTypeImpl::UInt64(UInt64Type::new()),
+                }],
+                func: FunctionFactory::instance().get("modulo", &[
+                    &DataTypeImpl::UInt64(UInt64Type::new()),
+                    &DataTypeImpl::UInt64(UInt64Type::new()),
+                ])?,
+            },
+        }))
+    }
+
+    fn get_hash_values(column: &ColumnRef) -> Result<Vec<usize>> {
+        if let Ok(column) = Series::check_get::<PrimitiveColumn<u64>>(column) {
+            Ok(column.iter().map(|c| *c as usize).collect())
+        } else if let Ok(column) = Series::check_get::<NullableColumn>(column) {
+            let null_map = column.ensure_validity();
+            let mut values = Self::get_hash_values(column.inner())?;
+            for (i, v) in values.iter_mut().enumerate() {
+                if null_map.get_bit(i) {
+                    // Set hash value of NULL to 0
+                    *v = 0;
+                }
+            }
+            Ok(values)
+        } else if let Ok(column) = Series::check_get::<ConstColumn>(column) {
+            Self::get_hash_values(&column.convert_full_column())
+        } else {
+            Err(ErrorCode::LogicalError("Hash keys must be of type u64."))
+        }
+    }
+}
+
+impl FlightScatter for OneHashKeyFlightScatter {
+    fn execute(&self, data_block: &DataBlock, _num: usize) -> Result<Vec<DataBlock>> {
+        let indices = self.indices_scalar.eval(&self.func_ctx, data_block)?;
+        let indices = Self::get_hash_values(indices.vector())?;
+        DataBlock::scatter_block(data_block, &indices, self.scatter_size)
+    }
+}
+
 impl FlightScatter for HashFlightScatterV2 {
-    fn execute(
-        &self,
-        data_block: &DataBlock,
-        _num: usize,
-    ) -> common_exception::Result<Vec<DataBlock>> {
+    fn execute(&self, data_block: &DataBlock, _num: usize) -> Result<Vec<DataBlock>> {
         let hash_keys = self
             .hash_keys
             .iter()
