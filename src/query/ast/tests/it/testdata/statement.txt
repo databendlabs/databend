@@ -4756,6 +4756,63 @@ AlterTable(
 
 
 ---------- Input ----------
+ALTER TABLE t RECLUSTER FINAL WHERE c1 > 0;
+---------- Output ---------
+ALTER TABLE t RECLUSTER FINAL WHERE c1 > 0
+---------- AST ------------
+AlterTable(
+    AlterTableStmt {
+        if_exists: false,
+        table_reference: Table {
+            span: [
+                Ident(12..13),
+            ],
+            catalog: None,
+            database: None,
+            table: Identifier {
+                name: "t",
+                quote: None,
+                span: Ident(12..13),
+            },
+            alias: None,
+            travel_point: None,
+        },
+        action: ReclusterTable {
+            is_final: true,
+            selection: Some(
+                BinaryOp {
+                    span: [
+                        Gt(39..40),
+                    ],
+                    op: Gt,
+                    left: ColumnRef {
+                        span: [
+                            Ident(36..38),
+                        ],
+                        database: None,
+                        table: None,
+                        column: Identifier {
+                            name: "c1",
+                            quote: None,
+                            span: Ident(36..38),
+                        },
+                    },
+                    right: Literal {
+                        span: [
+                            LiteralInteger(41..42),
+                        ],
+                        lit: Integer(
+                            0,
+                        ),
+                    },
+                },
+            ),
+        },
+    },
+)
+
+
+---------- Input ----------
 ALTER DATABASE IF EXISTS catalog.c RENAME TO a;
 ---------- Output ---------
 ALTER DATABASE IF EXISTS catalog.c RENAME TO a

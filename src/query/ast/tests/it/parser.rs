@@ -138,6 +138,7 @@ fn test_statement() {
         r#"drop role if exists 'test'"#,
         r#"ALTER TABLE t CLUSTER BY(c1);"#,
         r#"ALTER TABLE t DROP CLUSTER KEY;"#,
+        r#"ALTER TABLE t RECLUSTER FINAL WHERE c1 > 0;"#,
         r#"ALTER DATABASE IF EXISTS catalog.c RENAME TO a;"#,
         r#"ALTER DATABASE c RENAME TO a;"#,
         r#"ALTER DATABASE catalog.c RENAME TO a;"#,
