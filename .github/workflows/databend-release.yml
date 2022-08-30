@@ -6,7 +6,7 @@ on:
       - "v*"
   schedule:
     # Release at 00:00 UTC+8
-    - cron: '0 16 * * *'
+    - cron: "0 16 * * *"
   workflow_dispatch:
     inputs:
       tags:
@@ -124,8 +124,7 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           version: ${{ needs.create_release.outputs.version }}
           target: ${{ steps.target.outputs.target }}
-          aws_access_key_id: ${{ secrets.REPO_ACCESS_KEY_ID }}
-          aws_secret_access_key: ${{ secrets.REPO_SECRET_ACCESS_KEY }}
+          repo_role_arn: ${{ secrets.REPO_ROLE_ARN }}
 
   publish_linux:
     name: linux assets
@@ -185,8 +184,7 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           version: ${{ needs.create_release.outputs.version }}
           target: ${{ steps.target.outputs.target }}
-          aws_access_key_id: ${{ secrets.REPO_ACCESS_KEY_ID }}
-          aws_secret_access_key: ${{ secrets.REPO_SECRET_ACCESS_KEY }}
+          repo_role_arn: ${{ secrets.REPO_ROLE_ARN }}
 
   release_docker_combined:
     name: docker image combined
