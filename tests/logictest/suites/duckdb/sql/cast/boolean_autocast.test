@@ -1,0 +1,25 @@
+-- boolean auto casts
+-- SELECT true=1;
+-- SELECT true=0;
+-- SELECT false=0;
+-- SELECT false=1;
+-- SELECT 1=true;
+-- SELECT 0=true;
+-- SELECT 0=false;
+-- SELECT 1=false;
+-- SELECT true='1';
+-- SELECT true='0';
+-- SELECT false='0';
+-- SELECT false='1';
+-- SELECT true='true';
+-- SELECT true='false';
+-- SELECT false='false';
+-- SELECT false='true';
+-- SELECT '1'=true;
+-- SELECT '0'=true;
+-- SELECT '0'=false;
+-- SELECT '1'=false;
+-- SELECT true='true';
+-- SELECT true='false';
+-- SELECT false='false';
+-- SELECT false='true';

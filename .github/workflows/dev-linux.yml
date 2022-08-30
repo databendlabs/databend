@@ -139,6 +139,7 @@ jobs:
           - "base"
           - "ydb"
           - "crdb"
+          - "duckdb"
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_sqllogic_standalone_linux

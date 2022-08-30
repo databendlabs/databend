@@ -1,0 +1,128 @@
+statement ok
+drop table if exists test;
+
+statement ok
+drop table if exists integers;
+
+statement ok
+CREATE TABLE test (a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO test VALUES (11, 22), (13, 22), (12, 21);
+
+-- aggregates cannot be nested
+statement error 1065
+SELECT SUM(SUM(41)), COUNT(*);
+
+statement query IIF
+SELECT SUM(a), COUNT(*), AVG(a) FROM test;
+
+----
+36 3 12.0
+
+statement query I
+SELECT COUNT(*) FROM test;
+
+----
+3
+
+statement query II
+SELECT SUM(a), COUNT(*) FROM test WHERE a = 11;
+
+----
+11 1
+
+statement query III
+SELECT SUM(a), SUM(b), SUM(a) + SUM (b) FROM test;
+
+----
+36 65 101
+
+statement query II
+SELECT SUM(a+2), SUM(a) + 2 * COUNT(*) FROM test;
+
+----
+42 42
+
+statement query IIIF
+SELECT b, SUM(a), SUM(a+2), AVG(a) FROM test GROUP BY b ORDER BY b;
+
+----
+21 12 14 12.0
+22 24 28 12.0
+
+-- SELECT b, SUM(a) FROM test GROUP BY b ORDER BY COUNT(a);
+-- SELECT b, SUM(a) FROM test GROUP BY b ORDER BY COUNT(a) DESC;
+
+statement query IIII
+SELECT b, SUM(a), COUNT(*), SUM(a+2) FROM test GROUP BY b ORDER BY b;
+
+----
+21 12 1 14
+22 24 2 28
+
+statement query II
+SELECT b % 2 AS f, SUM(a) FROM test GROUP BY f ORDER BY f;
+
+----
+0 24
+1 12
+
+statement query IIII
+SELECT b, SUM(a), COUNT(*), SUM(a+2) FROM test WHERE a <= 12 GROUP BY b ORDER BY b;
+
+----
+21 12 1 14
+22 11 1 13
+
+statement error 1065
+SELECT b % 2 AS f, COUNT(SUM(a)) FROM test GROUP BY f;
+
+statement ok
+INSERT INTO test VALUES (12, 21), (12, 21), (12, 21);
+
+statement query IIII
+SELECT b, SUM(a), COUNT(*), SUM(a+2) FROM test WHERE a <= 12 GROUP BY b ORDER BY b;
+
+----
+21 48 4 56
+22 11 1 13
+
+statement ok
+CREATE TABLE integers(i INTEGER, j INTEGER);
+
+statement ok
+INSERT INTO integers VALUES (3, 4), (3, 4), (2, 4);
+
+statement query II
+SELECT i, i + 10 FROM integers GROUP BY i ORDER BY i;
+
+----
+2 12
+3 13
+
+-- SELECT i, SUM(j), j FROM integers GROUP BY i ORDER BY i;
+-- SELECT i, SUM(j), FIRST(j) FROM integers GROUP BY i ORDER BY i;
+-- SELECT i, SUM(j), LAST(j) FROM integers GROUP BY i ORDER BY i;
+-- SELECT 1 AS k, SUM(i) FROM integers GROUP BY k ORDER BY 2;
+-- SELECT 1 AS i, SUM(i) FROM integers GROUP BY i ORDER BY 2;
+-- SELECT i % 2 AS k, SUM(i) FROM integers GROUP BY k, k ORDER BY 1;
+
+statement ok
+DROP TABLE integers;
+
+statement ok
+CREATE TABLE integers(i INTEGER NULL);
+
+statement ok
+INSERT INTO integers VALUES (1), (2), (3), (NULL);
+
+-- statement query II
+-- SELECT i, SUM(i) FROM integers GROUP BY i ORDER BY 1;
+
+-- statement query III
+-- SELECT i, i % 2 AS i, SUM(i) FROM integers GROUP BY i ORDER BY 1;
+
+-- statement query II
+-- SELECT test.b, SUM(a) FROM test GROUP BY b ORDER BY COUNT(a) DESC;
+

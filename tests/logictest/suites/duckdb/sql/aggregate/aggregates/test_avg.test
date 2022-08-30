@@ -1,0 +1,75 @@
+statement ok
+drop table if exists integers;
+
+statement ok
+drop table if exists vals;
+
+statement ok
+drop table if exists vals;
+
+statement ok
+drop table if exists vals;
+
+statement query FT
+SELECT AVG(3), AVG(NULL);
+
+----
+3.0 NULL
+
+statement error 1010
+SELECT AVG(3::SMALLINT), AVG(NULL::SMALLINT);
+
+statement error 1010
+SELECT AVG(3::DOUBLE), AVG(NULL::DOUBLE);
+
+statement error 1005
+CREATE SEQUENCE seq;
+
+statement error 1065
+SELECT AVG(nextval('seq'));
+
+statement error 1065
+SELECT AVG(nextval('seq'));
+
+statement ok
+drop table if exists integers;
+
+statement ok
+CREATE TABLE integers(i INTEGER NULL);
+
+statement ok
+INSERT INTO integers VALUES (1), (2), (3);
+
+statement query FFFT
+SELECT AVG(i), AVG(1), AVG(DISTINCT i), AVG(NULL) FROM integers;
+
+----
+2.0 1.0 2.0 NULL
+
+statement query T
+SELECT AVG(i) FROM integers WHERE i > 100;
+
+----
+NULL
+
+statement error 1065
+SELECT AVG();
+
+statement error 1065
+SELECT AVG(1, 2, 3);
+
+statement error 1065
+SELECT AVG(AVG(1));
+
+statement ok
+CREATE TABLE vals(i INTEGER NULL, j DOUBLE NULL, k BIGINT NULL);
+
+statement ok
+INSERT INTO vals VALUES (NULL, NULL, NULL);
+
+statement query TTT
+SELECT AVG(i), AVG(j), AVG(k) FROM vals;
+
+----
+NULL NULL NULL
+
