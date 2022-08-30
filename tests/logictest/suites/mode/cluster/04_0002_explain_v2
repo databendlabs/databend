@@ -14,66 +14,81 @@ statement query T
 explain select t1.a from t1 where a > 0;
 
 ----
-Exchange(Merge)
+Exchange
+├── exchange type: Merge
 └── Project
-    ├── projections: [a (#0)]
+    ├── columns: [0]
     └── Filter
-        ├── filters: [t1.a (#0) > 0]
-        └── PhysicalScan
+        ├── filters: [>(t1.a (#0), 0)]
+        └── TableScan
             ├── table: default.default.t1
-            ├── filters: [t1.a (#0) > 0]
-            ├── order by: []
-            └── limit: NONE
+            ├── read rows: 0
+            ├── read bytes: 0
+            ├── partitions total: 0
+            ├── partitions scanned: 0
+            └── push downs: [filters: [(a > 0)], limit: NONE]
 
 statement query T
 explain select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a and t2.a > 5 and t1.a > 1);
 
 ----
-Exchange(Merge)
+Exchange
+├── exchange type: Merge
 └── Filter
-    ├── filters: [(t1.a (#0) > 3) OR ((t2.a (#2) > 5) AND (t1.a (#0) > 1))]
-    └── HashJoin: INNER
+    ├── filters: [or(>(t1.a (#0), 3), and(>(t2.a (#2), 5), >(t1.a (#0), 1)))]
+    └── HashJoin
+        ├── join type: INNER
         ├── build keys: [t2.a (#2)]
         ├── probe keys: [t1.a (#0)]
-        ├── other filters: []
-        ├── Exchange(Hash)
-        │   ├── Exchange(Hash): keys: [t1.a (#0)]
-        │   └── PhysicalScan
-        │       ├── table: default.default.t1
-        │       ├── filters: []
-        │       ├── order by: []
-        │       └── limit: NONE
-        └── Exchange(Hash)
-            ├── Exchange(Hash): keys: [t2.a (#2)]
-            └── PhysicalScan
-                ├── table: default.default.t2
-                ├── filters: []
-                ├── order by: []
-                └── limit: NONE
+        ├── filters: []
+        ├── Exchange(Build)
+        │   ├── exchange type: Hash(t2.a (#2))
+        │   └── TableScan
+        │       ├── table: default.default.t2
+        │       ├── read rows: 0
+        │       ├── read bytes: 0
+        │       ├── partitions total: 0
+        │       ├── partitions scanned: 0
+        │       └── push downs: [filters: [], limit: NONE]
+        └── Exchange(Probe)
+            ├── exchange type: Hash(t1.a (#0))
+            └── TableScan
+                ├── table: default.default.t1
+                ├── read rows: 0
+                ├── read bytes: 0
+                ├── partitions total: 0
+                ├── partitions scanned: 0
+                └── push downs: [filters: [], limit: NONE]
 
 statement query T
 explain select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a);
 
 ----
-Exchange(Merge)
-└── HashJoin: INNER
+Exchange
+├── exchange type: Merge
+└── HashJoin
+    ├── join type: INNER
     ├── build keys: [t2.a (#2)]
     ├── probe keys: [t1.a (#0)]
-    ├── other filters: []
-    ├── Exchange(Hash)
-    │   ├── Exchange(Hash): keys: [t1.a (#0)]
-    │   └── PhysicalScan
-    │       ├── table: default.default.t1
-    │       ├── filters: []
-    │       ├── order by: []
-    │       └── limit: NONE
-    └── Exchange(Hash)
-        ├── Exchange(Hash): keys: [t2.a (#2)]
-        └── PhysicalScan
-            ├── table: default.default.t2
-            ├── filters: []
-            ├── order by: []
-            └── limit: NONE
+    ├── filters: []
+    ├── Exchange(Build)
+    │   ├── exchange type: Hash(t2.a (#2))
+    │   └── TableScan
+    │       ├── table: default.default.t2
+    │       ├── read rows: 0
+    │       ├── read bytes: 0
+    │       ├── partitions total: 0
+    │       ├── partitions scanned: 0
+    │       └── push downs: [filters: [], limit: NONE]
+    └── Exchange(Probe)
+        ├── exchange type: Hash(t1.a (#0))
+        └── TableScan
+            ├── table: default.default.t1
+            ├── read rows: 0
+            ├── read bytes: 0
+            ├── partitions total: 0
+            ├── partitions scanned: 0
+            └── push downs: [filters: [], limit: NONE]
 
 statement query T
 explain raw select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a);

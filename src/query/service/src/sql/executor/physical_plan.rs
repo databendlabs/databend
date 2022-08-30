@@ -39,6 +39,9 @@ pub type ColumnID = String;
 pub struct TableScan {
     pub name_mapping: BTreeMap<String, ColumnID>,
     pub source: Box<ReadDataSourcePlan>,
+
+    /// Only used for display
+    pub table_index: IndexType,
 }
 
 impl TableScan {

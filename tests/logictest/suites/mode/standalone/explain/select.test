@@ -2,73 +2,85 @@ statement query T
 explain select * from numbers(1);
 
 ----
-PhysicalScan
+TableScan
 ├── table: default.system.numbers
-├── filters: []
-├── order by: []
-└── limit: NONE
+├── read rows: 1
+├── read bytes: 8
+├── partitions total: 1
+├── partitions scanned: 1
+└── push downs: [filters: [], limit: NONE]
 
 statement query T
 explain select * from (select * from numbers(1)) as t1 where number = 1;
 
 ----
 Filter
-├── filters: [t1.number (#0) = 1]
-└── PhysicalScan
+├── filters: [=(numbers.number (#0), 1)]
+└── TableScan
     ├── table: default.system.numbers
-    ├── filters: [t1.number (#0) = 1]
-    ├── order by: []
-    └── limit: NONE
+    ├── read rows: 1
+    ├── read bytes: 8
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    └── push downs: [filters: [(number = 1)], limit: NONE]
 
 statement query T
 explain select * from (select number as a, number + 1 as b from numbers(1)) as t1 where a = 1 and b = 1;
 
 ----
 Filter
-├── filters: [t1.a (#0) = 1, t1.b (#1) = 1]
+├── filters: [=(numbers.number (#0), 1), =(b (#1), 1)]
 └── EvalScalar
-    ├── scalars: [+(numbers.number (#0), 1)]
-    └── PhysicalScan
+    ├── expressions: [+(numbers.number (#0), 1)]
+    └── TableScan
         ├── table: default.system.numbers
-        ├── filters: []
-        ├── order by: []
-        └── limit: NONE
+        ├── read rows: 1
+        ├── read bytes: 8
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        └── push downs: [filters: [], limit: NONE]
 
 statement query T
 explain select * from (select number as a, number + 1 as b from numbers(1)) as t1 where a = 1;
 
 ----
 EvalScalar
-├── scalars: [+(numbers.number (#0), 1)]
+├── expressions: [+(numbers.number (#0), 1)]
 └── Filter
-    ├── filters: [t1.a (#0) = 1]
-    └── PhysicalScan
+    ├── filters: [=(numbers.number (#0), 1)]
+    └── TableScan
         ├── table: default.system.numbers
-        ├── filters: [t1.a (#0) = 1]
-        ├── order by: []
-        └── limit: NONE
+        ├── read rows: 1
+        ├── read bytes: 8
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        └── push downs: [filters: [(number = 1)], limit: NONE]
 
 statement query T
 explain select * from numbers(1) where number = pow(1, 1 + 1);
 
 ----
 Filter
-├── filters: [numbers.number (#0) = 1]
-└── PhysicalScan
+├── filters: [=(numbers.number (#0), 1)]
+└── TableScan
     ├── table: default.system.numbers
-    ├── filters: [numbers.number (#0) = 1]
-    ├── order by: []
-    └── limit: NONE
+    ├── read rows: 1
+    ├── read bytes: 8
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    └── push downs: [filters: [(number = '1.0')], limit: NONE]
 
 statement query T
 explain select * from numbers(1) where TRUE and 1 = 1;
 
 ----
-PhysicalScan
+TableScan
 ├── table: default.system.numbers
-├── filters: []
-├── order by: []
-└── limit: NONE
+├── read rows: 1
+├── read bytes: 8
+├── partitions total: 1
+├── partitions scanned: 1
+└── push downs: [filters: [], limit: NONE]
 
 statement query T
 explain select * from numbers(1) where number = 0 and false;
@@ -76,11 +88,13 @@ explain select * from numbers(1) where number = 0 and false;
 ----
 Filter
 ├── filters: [false]
-└── PhysicalScan
+└── TableScan
     ├── table: default.system.numbers
-    ├── filters: [false]
-    ├── order by: []
-    └── limit: NONE
+    ├── read rows: 1
+    ├── read bytes: 8
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    └── push downs: [filters: [false], limit: NONE]
 
 statement query T
 explain select * from numbers(1) where number = 0 and null;
@@ -88,11 +102,13 @@ explain select * from numbers(1) where number = 0 and null;
 ----
 Filter
 ├── filters: [false]
-└── PhysicalScan
+└── TableScan
     ├── table: default.system.numbers
-    ├── filters: [false]
-    ├── order by: []
-    └── limit: NONE
+    ├── read rows: 1
+    ├── read bytes: 8
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    └── push downs: [filters: [false], limit: NONE]
 
 statement query T
 explain select * from numbers(1) where null;
@@ -100,31 +116,37 @@ explain select * from numbers(1) where null;
 ----
 Filter
 ├── filters: [NULL]
-└── PhysicalScan
+└── TableScan
     ├── table: default.system.numbers
-    ├── filters: [NULL]
-    ├── order by: []
-    └── limit: NONE
+    ├── read rows: 1
+    ├── read bytes: 8
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    └── push downs: [filters: [NULL], limit: NONE]
 
 statement query T
 explain select a from (select number as a, number as b from numbers(1));
 
 ----
-PhysicalScan
+TableScan
 ├── table: default.system.numbers
-├── filters: []
-├── order by: []
-└── limit: NONE
+├── read rows: 1
+├── read bytes: 8
+├── partitions total: 1
+├── partitions scanned: 1
+└── push downs: [filters: [], limit: NONE]
 
 statement query T
 explain select a from (select number as a, number+1 as b from numbers(1));
 
 ----
 Project
-├── projections: [number (#0)]
-└── PhysicalScan
+├── columns: [0]
+└── TableScan
     ├── table: default.system.numbers
-    ├── filters: []
-    ├── order by: []
-    └── limit: NONE
+    ├── read rows: 1
+    ├── read bytes: 8
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    └── push downs: [filters: [], limit: NONE]
 

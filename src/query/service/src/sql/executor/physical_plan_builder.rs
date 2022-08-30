@@ -229,6 +229,7 @@ impl PhysicalPlanBuilder {
                 Ok(PhysicalPlan::TableScan(TableScan {
                     name_mapping,
                     source: Box::new(source),
+                    table_index: scan.table_index,
                 }))
             }
             RelOperator::PhysicalHashJoin(join) => {
