@@ -53,6 +53,7 @@ impl Plan {
             Plan::DropTableClusterKey(drop_table_cluster_key) => {
                 Ok(format!("{:?}", drop_table_cluster_key))
             }
+            Plan::ReclusterTable(recluster_table) => Ok(format!("{:?}", recluster_table)),
             Plan::TruncateTable(truncate_table) => Ok(format!("{:?}", truncate_table)),
             Plan::OptimizeTable(optimize_table) => Ok(format!("{:?}", optimize_table)),
             Plan::ExistsTable(exists_table) => Ok(format!("{:?}", exists_table)),

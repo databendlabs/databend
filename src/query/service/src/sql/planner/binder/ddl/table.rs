@@ -42,6 +42,7 @@ use crate::catalogs::DatabaseCatalog;
 use crate::sessions::TableContext;
 use crate::sql::binder::scalar::ScalarBinder;
 use crate::sql::binder::Binder;
+use crate::sql::executor::ExpressionBuilderWithoutRenaming;
 use crate::sql::executor::PhysicalScalarBuilder;
 use crate::sql::is_reserved_opt_key;
 use crate::sql::optimizer::optimize;
@@ -529,26 +530,40 @@ impl<'a> Binder {
 
     pub(in crate::sql::planner::binder) async fn bind_alter_table(
         &mut self,
+        bind_context: &BindContext,
         stmt: &AlterTableStmt<'a>,
     ) -> Result<Plan> {
         let AlterTableStmt {
             if_exists,
-            catalog,
-            database,
-            table,
+            table_reference,
             action,
         } = stmt;
 
         let tenant = self.ctx.get_tenant();
-        let catalog = catalog
-            .as_ref()
-            .map(|catalog| normalize_identifier(catalog, &self.name_resolution_ctx).name)
-            .unwrap_or_else(|| self.ctx.get_current_catalog());
-        let database = database
-            .as_ref()
-            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
-            .unwrap_or_else(|| self.ctx.get_current_database());
-        let table = normalize_identifier(table, &self.name_resolution_ctx).name;
+
+        let (catalog, database, table) = if let TableReference::Table {
+            catalog,
+            database,
+            table,
+            ..
+        } = table_reference
+        {
+            (
+                catalog.as_ref().map_or_else(
+                    || self.ctx.get_current_catalog(),
+                    |i| normalize_identifier(i, &self.name_resolution_ctx).name,
+                ),
+                database.as_ref().map_or_else(
+                    || self.ctx.get_current_database(),
+                    |i| normalize_identifier(i, &self.name_resolution_ctx).name,
+                ),
+                normalize_identifier(table, &self.name_resolution_ctx).name,
+            )
+        } else {
+            return Err(ErrorCode::LogicalError(
+                "should not happen, parser should have report error already",
+            ));
+        };
 
         match action {
             AlterTableAction::RenameTable { new_table } => {
@@ -592,6 +607,43 @@ impl<'a> Binder {
                     table,
                 },
             ))),
+            AlterTableAction::ReclusterTable {
+                is_final,
+                selection,
+            } => {
+                let (_, context) = self
+                    .bind_table_reference(bind_context, table_reference)
+                    .await?;
+
+                let mut scalar_binder = ScalarBinder::new(
+                    &context,
+                    self.ctx.clone(),
+                    &self.name_resolution_ctx,
+                    self.metadata.clone(),
+                    &[],
+                );
+
+                let push_downs = if let Some(expr) = selection {
+                    let (scalar, _) = scalar_binder.bind(expr).await?;
+                    let eb = ExpressionBuilderWithoutRenaming::create(self.metadata.clone());
+                    let pred_expr = eb.build(&scalar)?;
+                    Some(Extras {
+                        filters: vec![pred_expr],
+                        ..Extras::default()
+                    })
+                } else {
+                    None
+                };
+
+                Ok(Plan::ReclusterTable(Box::new(ReclusterTablePlan {
+                    tenant,
+                    catalog,
+                    database,
+                    table,
+                    is_final: *is_final,
+                    push_downs,
+                })))
+            }
         }
     }
 
