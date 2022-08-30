@@ -14,6 +14,7 @@
 
 #![feature(generic_associated_types)]
 #![feature(type_alias_impl_trait)]
+#![feature(io_error_other)]
 #![deny(unused_crate_dependencies)]
 
 mod constants;

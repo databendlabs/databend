@@ -12,4 +12,4 @@ test = false
 common-base = { path = "../base" }
 
 async-trait = "0.1.56"
-opendal = { version = "0.13.1", features = ["layers-retry"] }
+opendal = { version = "0.14.1", features = ["layers-retry"] }
