@@ -97,6 +97,7 @@ pub use insert::InsertInputSource;
 pub use insert::InsertValueBlock;
 pub use limit::Limit;
 pub use logical_get::LogicalGet;
+pub use logical_get::Prewhere;
 pub use logical_join::JoinType;
 pub use logical_join::LogicalInnerJoin;
 pub use operator::*;
