@@ -4694,12 +4694,19 @@ ALTER TABLE t CLUSTER BY c1
 AlterTable(
     AlterTableStmt {
         if_exists: false,
-        catalog: None,
-        database: None,
-        table: Identifier {
-            name: "t",
-            quote: None,
-            span: Ident(12..13),
+        table_reference: Table {
+            span: [
+                Ident(12..13),
+            ],
+            catalog: None,
+            database: None,
+            table: Identifier {
+                name: "t",
+                quote: None,
+                span: Ident(12..13),
+            },
+            alias: None,
+            travel_point: None,
         },
         action: AlterTableClusterKey {
             cluster_by: [
@@ -4729,12 +4736,19 @@ ALTER TABLE t DROP CLUSTER KEY
 AlterTable(
     AlterTableStmt {
         if_exists: false,
-        catalog: None,
-        database: None,
-        table: Identifier {
-            name: "t",
-            quote: None,
-            span: Ident(12..13),
+        table_reference: Table {
+            span: [
+                Ident(12..13),
+            ],
+            catalog: None,
+            database: None,
+            table: Identifier {
+                name: "t",
+                quote: None,
+                span: Ident(12..13),
+            },
+            alias: None,
+            travel_point: None,
         },
         action: DropTableClusterKey,
     },
