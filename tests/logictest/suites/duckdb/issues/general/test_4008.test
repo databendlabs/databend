@@ -1,0 +1,15 @@
+statement error 1065
+select 1 - any(select 1);
+
+statement query I
+select 1 = all(select 1);
+
+----
+1
+
+statement error 1002
+select 1 where 2 + all(select 2);
+
+statement ok
+select 1 where 2 > any(select 2);
+
