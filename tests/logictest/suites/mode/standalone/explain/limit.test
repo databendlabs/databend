@@ -56,14 +56,6 @@ statement query T
 explain select t.number from numbers(1) as t, numbers(1) as t1 where t.number = (select count(*) from numbers(1) as t2, numbers(1) as t3 where t.number = t2.number) group by t.number order by t.number desc limit 3;
 
 ----
-<<<<<<< HEAD
-Limit: [3], Offset: [0]
-└── Sort: [number (#0) DESC], limit: [3]
-    └── Aggregate(Final): group items: [t.number (#0)], aggregate functions: []
-        └── Aggregate(Partial): group items: [t.number (#0)], aggregate functions: []
-            └── Filter: [t.number (#0) = CAST(if(is_not_null(scalar_subquery_4 (#4)), scalar_subquery_4 (#4), 0) AS BIGINT UNSIGNED)]
-                └── HashJoin: SINGLE, build keys: [subquery_6 (#6)], probe keys: [subquery_0 (#0)], join filters: []
-=======
 Limit
 ├── limit: [3]
 ├── offset: [0]
@@ -77,12 +69,11 @@ Limit
             ├── group items: [t.number (#0)]
             ├── aggregate functions: []
             └── Filter
-                ├── filters: [t.number (#0) = CAST(if(is_null(scalar_subquery_4 (#4)), 0, scalar_subquery_4 (#4)) AS BIGINT UNSIGNED)]
+                ├── filters: [t.number (#0) = CAST(if(is_not_null(scalar_subquery_4 (#4)), scalar_subquery_4 (#4), 0) AS BIGINT UNSIGNED)]
                 └── HashJoin: SINGLE
                     ├── build keys: [subquery_6 (#6)]
                     ├── probe keys: [subquery_0 (#0)]
                     ├── other filters: []
->>>>>>> a19ff7335 (refine explain format)
                     ├── CrossJoin
                     │   ├── build keys: []
                     │   ├── probe keys: []
