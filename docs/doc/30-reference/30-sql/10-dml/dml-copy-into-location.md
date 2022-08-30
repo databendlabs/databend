@@ -19,7 +19,7 @@ Unloads data from a table (or query) into one or more files in one of the follow
 ```sql
 COPY INTO { internalStage | externalStage | externalLocation }
 FROM { [<database_name>.]<table_name> | ( <query> ) }
-[ FILE_FORMAT = ( { TYPE = { CSV | JSON | PARQUET } [ formatTypeOptions ] } ) ]
+[ FILE_FORMAT = ( { TYPE = { CSV | JSON | NDJSON | PARQUET } [ formatTypeOptions ] } ) ]
 [ copyOptions ]
 [ VALIDATION_MODE = RETURN_ROWS ]
 ```

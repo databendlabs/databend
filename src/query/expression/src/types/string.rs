@@ -257,6 +257,12 @@ impl StringColumnBuilder {
         self.data.extend_from_slice(item);
     }
 
+    pub fn write_row<T>(&mut self, f: impl FnOnce(&mut Vec<u8>) -> T) -> T {
+        let res = f(&mut self.data);
+        self.commit_row();
+        res
+    }
+
     pub fn commit_row(&mut self) {
         self.offsets.push(self.data.len() as u64);
     }
