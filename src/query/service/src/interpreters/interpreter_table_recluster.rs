@@ -21,6 +21,7 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
+use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::Pipeline;
 use crate::sessions::QueryContext;
@@ -74,8 +75,13 @@ impl Interpreter for ReclusterTableInterpreter {
 
             let async_runtime = GlobalIORuntime::instance();
             let query_need_abort = ctx.query_need_abort();
-            let executor =
-                PipelineCompleteExecutor::try_create(async_runtime, query_need_abort, pipeline)?;
+            let executor_settings = ExecutorSettings::try_create(&settings)?;
+            let executor = PipelineCompleteExecutor::try_create(
+                async_runtime,
+                query_need_abort,
+                pipeline,
+                executor_settings,
+            )?;
             executor.execute()?;
             drop(executor);
 
