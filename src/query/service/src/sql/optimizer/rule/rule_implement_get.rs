@@ -58,6 +58,7 @@ impl Rule for RuleImplementGet {
                 push_down_predicates: logical_get.push_down_predicates,
                 limit: logical_get.limit,
                 order_by: logical_get.order_by,
+                prewhere: logical_get.prewhere,
             }
             .into(),
         );

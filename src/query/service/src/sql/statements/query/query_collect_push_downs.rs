@@ -85,6 +85,7 @@ impl QueryCollectPushDowns {
             schema.set_table_push_downs(index, Extras {
                 projection: Some(projection),
                 filters: self.require_filters.clone(),
+                prewhere: None, // This mod is no more used, so we don't need consider this.
                 limit,
                 order_by,
             });
