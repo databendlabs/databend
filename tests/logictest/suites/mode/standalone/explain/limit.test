@@ -3,167 +3,186 @@ explain select * from (select t.number from numbers(10) as t limit 8) limit 9;
 
 ----
 Limit
-├── limit: [9]
-├── offset: [0]
+├── limit: 9
+├── offset: 0
 └── Limit
-    ├── limit: [8]
-    ├── offset: [0]
-    └── PhysicalScan
+    ├── limit: 8
+    ├── offset: 0
+    └── TableScan
         ├── table: default.system.numbers
-        ├── filters: []
-        ├── order by: []
-        └── limit: 8
+        ├── read rows: 8
+        ├── read bytes: 64
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        └── push downs: [filters: [], limit: 8]
 
 statement query T
 explain select * from (select t.number from numbers(10) as t order by number desc) order by number asc;
 
 ----
 Sort
-├── sort keys: [number (#0) ASC]
-├── limit: [NONE]
+├── sort keys: [number ASC NULLS LAST]
 └── Sort
-    ├── sort keys: [number (#0) DESC]
-    ├── limit: [NONE]
-    └── PhysicalScan
+    ├── sort keys: [number DESC NULLS LAST]
+    └── TableScan
         ├── table: default.system.numbers
-        ├── filters: []
-        ├── order by: [number (#0) DESC]
-        └── limit: NONE
+        ├── read rows: 10
+        ├── read bytes: 80
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        └── push downs: [filters: [], limit: NONE]
 
 statement query T
 explain select number from (select t.number from numbers(10) as t order by number desc limit 8) order by number asc limit 9;
 
 ----
 Limit
-├── limit: [9]
-├── offset: [0]
+├── limit: 9
+├── offset: 0
 └── Sort
-    ├── sort keys: [number (#0) ASC]
-    ├── limit: [9]
+    ├── sort keys: [number ASC NULLS LAST]
     └── Limit
-        ├── limit: [8]
-        ├── offset: [0]
+        ├── limit: 8
+        ├── offset: 0
         └── Sort
-            ├── sort keys: [number (#0) DESC]
-            ├── limit: [8]
-            └── PhysicalScan
+            ├── sort keys: [number DESC NULLS LAST]
+            └── TableScan
                 ├── table: default.system.numbers
-                ├── filters: []
-                ├── order by: [number (#0) DESC]
-                └── limit: 8
+                ├── read rows: 10
+                ├── read bytes: 80
+                ├── partitions total: 1
+                ├── partitions scanned: 1
+                └── push downs: [filters: [], limit: 8]
 
 statement query T
 explain select t.number from numbers(1) as t, numbers(1) as t1 where t.number = (select count(*) from numbers(1) as t2, numbers(1) as t3 where t.number = t2.number) group by t.number order by t.number desc limit 3;
 
 ----
 Limit
-├── limit: [3]
-├── offset: [0]
+├── limit: 3
+├── offset: 0
 └── Sort
-    ├── sort keys: [number (#0) DESC]
-    ├── limit: [3]
-    └── Aggregate(Final)
-        ├── group items: [t.number (#0)]
+    ├── sort keys: [number DESC NULLS LAST]
+    └── AggregateFinal
+        ├── group by: [number]
         ├── aggregate functions: []
-        └── Aggregate(Partial)
-            ├── group items: [t.number (#0)]
+        └── AggregatePartial
+            ├── group by: [number]
             ├── aggregate functions: []
             └── Filter
-                ├── filters: [t.number (#0) = CAST(if(is_not_null(scalar_subquery_4 (#4)), scalar_subquery_4 (#4), 0) AS BIGINT UNSIGNED)]
-                └── HashJoin: SINGLE
-                    ├── build keys: [subquery_6 (#6)]
-                    ├── probe keys: [subquery_0 (#0)]
-                    ├── other filters: []
-                    ├── CrossJoin
-                    │   ├── build keys: []
-                    │   ├── probe keys: []
-                    │   ├── other filters: []
-                    │   ├── PhysicalScan
-                    │   │   ├── table: default.system.numbers
-                    │   │   ├── filters: []
-                    │   │   ├── order by: []
-                    │   │   └── limit: NONE
-                    │   └── PhysicalScan
-                    │       ├── table: default.system.numbers
-                    │       ├── filters: []
-                    │       ├── order by: []
-                    │       └── limit: NONE
-                    └── Project
-                        ├── projections: [COUNT(*) (#4),number (#6)]
-                        └── EvalScalar
-                            ├── scalars: [COUNT(*) (#5)]
-                            └── Aggregate(Final)
-                                ├── group items: [subquery_6 (#6)]
-                                ├── aggregate functions: [COUNT(*)]
-                                └── Aggregate(Partial)
-                                    ├── group items: [subquery_6 (#6)]
-                                    ├── aggregate functions: [COUNT(*)]
-                                    └── HashJoin: INNER
-                                        ├── build keys: [t2.number (#2)]
-                                        ├── probe keys: [subquery_6 (#6)]
-                                        ├── other filters: []
-                                        ├── PhysicalScan
-                                        │   ├── table: default.system.numbers
-                                        │   ├── filters: []
-                                        │   ├── order by: []
-                                        │   └── limit: NONE
-                                        └── CrossJoin
-                                            ├── build keys: []
-                                            ├── probe keys: []
-                                            ├── other filters: []
-                                            ├── PhysicalScan
-                                            │   ├── table: default.system.numbers
-                                            │   ├── filters: []
-                                            │   ├── order by: []
-                                            │   └── limit: NONE
-                                            └── PhysicalScan
-                                                ├── table: default.system.numbers
-                                                ├── filters: []
-                                                ├── order by: []
-                                                └── limit: NONE
+                ├── filters: [=(numbers.number (#0), CAST(if(is_not_null(COUNT(*) (#4)), COUNT(*) (#4), 0) AS BIGINT UNSIGNED))]
+                └── HashJoin
+                    ├── join type: SINGLE
+                    ├── build keys: [number (#6)]
+                    ├── probe keys: [numbers.number (#0)]
+                    ├── filters: []
+                    ├── Project(Build)
+                    │   ├── columns: [COUNT(*) (#4), number (#6)]
+                    │   └── EvalScalar
+                    │       ├── expressions: [COUNT(*) (#5)]
+                    │       └── AggregateFinal
+                    │           ├── group by: [number]
+                    │           ├── aggregate functions: [count()]
+                    │           └── AggregatePartial
+                    │               ├── group by: [number]
+                    │               ├── aggregate functions: [count()]
+                    │               └── HashJoin
+                    │                   ├── join type: INNER
+                    │                   ├── build keys: [numbers.number (#2)]
+                    │                   ├── probe keys: [number (#6)]
+                    │                   ├── filters: []
+                    │                   ├── HashJoin(Build)
+                    │                   │   ├── join type: CROSS
+                    │                   │   ├── build keys: []
+                    │                   │   ├── probe keys: []
+                    │                   │   ├── filters: []
+                    │                   │   ├── TableScan(Build)
+                    │                   │   │   ├── table: default.system.numbers
+                    │                   │   │   ├── read rows: 1
+                    │                   │   │   ├── read bytes: 8
+                    │                   │   │   ├── partitions total: 1
+                    │                   │   │   ├── partitions scanned: 1
+                    │                   │   │   └── push downs: [filters: [], limit: NONE]
+                    │                   │   └── TableScan(Probe)
+                    │                   │       ├── table: default.system.numbers
+                    │                   │       ├── read rows: 1
+                    │                   │       ├── read bytes: 8
+                    │                   │       ├── partitions total: 1
+                    │                   │       ├── partitions scanned: 1
+                    │                   │       └── push downs: [filters: [], limit: NONE]
+                    │                   └── TableScan(Probe)
+                    │                       ├── table: default.system.numbers
+                    │                       ├── read rows: 1
+                    │                       ├── read bytes: 8
+                    │                       ├── partitions total: 1
+                    │                       ├── partitions scanned: 1
+                    │                       └── push downs: [filters: [], limit: NONE]
+                    └── HashJoin(Probe)
+                        ├── join type: CROSS
+                        ├── build keys: []
+                        ├── probe keys: []
+                        ├── filters: []
+                        ├── TableScan(Build)
+                        │   ├── table: default.system.numbers
+                        │   ├── read rows: 1
+                        │   ├── read bytes: 8
+                        │   ├── partitions total: 1
+                        │   ├── partitions scanned: 1
+                        │   └── push downs: [filters: [], limit: NONE]
+                        └── TableScan(Probe)
+                            ├── table: default.system.numbers
+                            ├── read rows: 1
+                            ├── read bytes: 8
+                            ├── partitions total: 1
+                            ├── partitions scanned: 1
+                            └── push downs: [filters: [], limit: NONE]
 
 statement query T
 explain select * from (select count(t1.number) as c1 from numbers(1) as t1 group by number) as t3 left join (select count(t.number) as c from numbers(2) as t group by number) as t4 on t3.c1=t4.c order by t3.c1 limit 1;
 
 ----
 Limit
-├── limit: [1]
-├── offset: [0]
+├── limit: 1
+├── offset: 0
 └── Sort
-    ├── sort keys: [c1 (#1) ASC]
-    ├── limit: [1]
-    └── HashJoin: LEFT OUTER
-        ├── build keys: [t4.c (#5)]
-        ├── probe keys: [CAST(t3.c1 (#1) AS BIGINT UNSIGNED NULL)]
-        ├── other filters: []
-        ├── Project
-        │   ├── projections: [c1 (#1)]
+    ├── sort keys: [c1 ASC NULLS LAST]
+    └── HashJoin
+        ├── join type: LEFT OUTER
+        ├── build keys: [c (#5)]
+        ├── probe keys: [CAST(c1 (#1) AS BIGINT UNSIGNED NULL)]
+        ├── filters: []
+        ├── Project(Build)
+        │   ├── columns: [c (#5)]
         │   └── EvalScalar
-        │       ├── scalars: [count(t1.number) (#3)]
-        │       └── Aggregate(Final)
-        │           ├── group items: [t1.number (#0)]
-        │           ├── aggregate functions: [count(t1.number)]
-        │           └── Aggregate(Partial)
-        │               ├── group items: [t1.number (#0)]
-        │               ├── aggregate functions: [count(t1.number)]
-        │               └── PhysicalScan
+        │       ├── expressions: [count(t.number) (#7)]
+        │       └── AggregateFinal
+        │           ├── group by: [number]
+        │           ├── aggregate functions: [count(number)]
+        │           └── AggregatePartial
+        │               ├── group by: [number]
+        │               ├── aggregate functions: [count(number)]
+        │               └── TableScan
         │                   ├── table: default.system.numbers
-        │                   ├── filters: []
-        │                   ├── order by: []
-        │                   └── limit: NONE
-        └── Project
-            ├── projections: [c (#5)]
+        │                   ├── read rows: 2
+        │                   ├── read bytes: 16
+        │                   ├── partitions total: 1
+        │                   ├── partitions scanned: 1
+        │                   └── push downs: [filters: [], limit: NONE]
+        └── Project(Probe)
+            ├── columns: [c1 (#1)]
             └── EvalScalar
-                ├── scalars: [count(t.number) (#7)]
-                └── Aggregate(Final)
-                    ├── group items: [t.number (#4)]
-                    ├── aggregate functions: [count(t.number)]
-                    └── Aggregate(Partial)
-                        ├── group items: [t.number (#4)]
-                        ├── aggregate functions: [count(t.number)]
-                        └── PhysicalScan
+                ├── expressions: [count(t1.number) (#3)]
+                └── AggregateFinal
+                    ├── group by: [number]
+                    ├── aggregate functions: [count(number)]
+                    └── AggregatePartial
+                        ├── group by: [number]
+                        ├── aggregate functions: [count(number)]
+                        └── TableScan
                             ├── table: default.system.numbers
-                            ├── filters: []
-                            ├── order by: []
-                            └── limit: NONE
+                            ├── read rows: 1
+                            ├── read bytes: 8
+                            ├── partitions total: 1
+                            ├── partitions scanned: 1
+                            └── push downs: [filters: [], limit: NONE]
 

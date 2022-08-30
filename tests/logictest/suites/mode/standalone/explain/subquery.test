@@ -3,388 +3,475 @@ explain select t.number from numbers(1) as t, numbers(1) as t1 where t.number = 
 
 ----
 Project
-├── projections: [number (#0)]
+├── columns: [number (#0)]
 └── Filter
-    ├── filters: [t.number (#0) = CAST(if(is_not_null(scalar_subquery_4 (#4)), scalar_subquery_4 (#4), 0) AS BIGINT UNSIGNED)]
-    └── HashJoin: SINGLE
-        ├── build keys: [subquery_6 (#6)]
-        ├── probe keys: [subquery_0 (#0)]
-        ├── other filters: []
-        ├── CrossJoin
-        │   ├── build keys: []
-        │   ├── probe keys: []
-        │   ├── other filters: []
-        │   ├── PhysicalScan
-        │   │   ├── table: default.system.numbers
-        │   │   ├── filters: []
-        │   │   ├── order by: []
-        │   │   └── limit: NONE
-        │   └── PhysicalScan
-        │       ├── table: default.system.numbers
-        │       ├── filters: []
-        │       ├── order by: []
-        │       └── limit: NONE
-        └── Project
-            ├── projections: [COUNT(*) (#4),number (#6)]
-            └── EvalScalar
-                ├── scalars: [COUNT(*) (#5)]
-                └── Aggregate(Final)
-                    ├── group items: [subquery_6 (#6)]
-                    ├── aggregate functions: [COUNT(*)]
-                    └── Aggregate(Partial)
-                        ├── group items: [subquery_6 (#6)]
-                        ├── aggregate functions: [COUNT(*)]
-                        └── HashJoin: INNER
-                            ├── build keys: [t2.number (#2)]
-                            ├── probe keys: [subquery_6 (#6)]
-                            ├── other filters: []
-                            ├── PhysicalScan
-                            │   ├── table: default.system.numbers
-                            │   ├── filters: []
-                            │   ├── order by: []
-                            │   └── limit: NONE
-                            └── CrossJoin
-                                ├── build keys: []
-                                ├── probe keys: []
-                                ├── other filters: []
-                                ├── PhysicalScan
-                                │   ├── table: default.system.numbers
-                                │   ├── filters: []
-                                │   ├── order by: []
-                                │   └── limit: NONE
-                                └── PhysicalScan
-                                    ├── table: default.system.numbers
-                                    ├── filters: []
-                                    ├── order by: []
-                                    └── limit: NONE
+    ├── filters: [=(numbers.number (#0), CAST(if(is_not_null(COUNT(*) (#4)), COUNT(*) (#4), 0) AS BIGINT UNSIGNED))]
+    └── HashJoin
+        ├── join type: SINGLE
+        ├── build keys: [number (#6)]
+        ├── probe keys: [numbers.number (#0)]
+        ├── filters: []
+        ├── Project(Build)
+        │   ├── columns: [COUNT(*) (#4), number (#6)]
+        │   └── EvalScalar
+        │       ├── expressions: [COUNT(*) (#5)]
+        │       └── AggregateFinal
+        │           ├── group by: [number]
+        │           ├── aggregate functions: [count()]
+        │           └── AggregatePartial
+        │               ├── group by: [number]
+        │               ├── aggregate functions: [count()]
+        │               └── HashJoin
+        │                   ├── join type: INNER
+        │                   ├── build keys: [numbers.number (#2)]
+        │                   ├── probe keys: [number (#6)]
+        │                   ├── filters: []
+        │                   ├── HashJoin(Build)
+        │                   │   ├── join type: CROSS
+        │                   │   ├── build keys: []
+        │                   │   ├── probe keys: []
+        │                   │   ├── filters: []
+        │                   │   ├── TableScan(Build)
+        │                   │   │   ├── table: default.system.numbers
+        │                   │   │   ├── read rows: 1
+        │                   │   │   ├── read bytes: 8
+        │                   │   │   ├── partitions total: 1
+        │                   │   │   ├── partitions scanned: 1
+        │                   │   │   └── push downs: [filters: [], limit: NONE]
+        │                   │   └── TableScan(Probe)
+        │                   │       ├── table: default.system.numbers
+        │                   │       ├── read rows: 1
+        │                   │       ├── read bytes: 8
+        │                   │       ├── partitions total: 1
+        │                   │       ├── partitions scanned: 1
+        │                   │       └── push downs: [filters: [], limit: NONE]
+        │                   └── TableScan(Probe)
+        │                       ├── table: default.system.numbers
+        │                       ├── read rows: 1
+        │                       ├── read bytes: 8
+        │                       ├── partitions total: 1
+        │                       ├── partitions scanned: 1
+        │                       └── push downs: [filters: [], limit: NONE]
+        └── HashJoin(Probe)
+            ├── join type: CROSS
+            ├── build keys: []
+            ├── probe keys: []
+            ├── filters: []
+            ├── TableScan(Build)
+            │   ├── table: default.system.numbers
+            │   ├── read rows: 1
+            │   ├── read bytes: 8
+            │   ├── partitions total: 1
+            │   ├── partitions scanned: 1
+            │   └── push downs: [filters: [], limit: NONE]
+            └── TableScan(Probe)
+                ├── table: default.system.numbers
+                ├── read rows: 1
+                ├── read bytes: 8
+                ├── partitions total: 1
+                ├── partitions scanned: 1
+                └── push downs: [filters: [], limit: NONE]
 
 statement query T
 explain select t.number from numbers(1) as t where exists (select t1.number from numbers(1) as t1 where t.number = t1.number) or t.number > 1;
 
 ----
 Project
-├── projections: [number (#0)]
+├── columns: [number (#0)]
 └── Filter
-    ├── filters: [(3 (#3)) OR (t.number (#0) > 1)]
-    └── HashJoin: MARK
-        ├── build keys: [subquery_0 (#0)]
-        ├── probe keys: [subquery_2 (#2)]
-        ├── other filters: []
-        ├── HashJoin: INNER
-        │   ├── build keys: [t1.number (#1)]
-        │   ├── probe keys: [subquery_2 (#2)]
-        │   ├── other filters: []
-        │   ├── PhysicalScan
-        │   │   ├── table: default.system.numbers
-        │   │   ├── filters: []
-        │   │   ├── order by: []
-        │   │   └── limit: NONE
-        │   └── PhysicalScan
-        │       ├── table: default.system.numbers
-        │       ├── filters: []
-        │       ├── order by: []
-        │       └── limit: NONE
-        └── PhysicalScan
-            ├── table: default.system.numbers
+    ├── filters: [or(marker (#3), >(numbers.number (#0), 1))]
+    └── HashJoin
+        ├── join type: MARK
+        ├── build keys: [numbers.number (#0)]
+        ├── probe keys: [number (#2)]
+        ├── filters: []
+        ├── TableScan(Build)
+        │   ├── table: default.system.numbers
+        │   ├── read rows: 1
+        │   ├── read bytes: 8
+        │   ├── partitions total: 1
+        │   ├── partitions scanned: 1
+        │   └── push downs: [filters: [], limit: NONE]
+        └── HashJoin(Probe)
+            ├── join type: INNER
+            ├── build keys: [numbers.number (#1)]
+            ├── probe keys: [number (#2)]
             ├── filters: []
-            ├── order by: []
-            └── limit: NONE
+            ├── TableScan(Build)
+            │   ├── table: default.system.numbers
+            │   ├── read rows: 1
+            │   ├── read bytes: 8
+            │   ├── partitions total: 1
+            │   ├── partitions scanned: 1
+            │   └── push downs: [filters: [], limit: NONE]
+            └── TableScan(Probe)
+                ├── table: default.system.numbers
+                ├── read rows: 1
+                ├── read bytes: 8
+                ├── partitions total: 1
+                ├── partitions scanned: 1
+                └── push downs: [filters: [], limit: NONE]
 
 statement query T
 explain select t.number from numbers(1) as t where exists (select * from numbers(1) where number = 0);
 
 ----
 Project
-├── projections: [number (#0)]
-└── CrossJoin
+├── columns: [number (#0)]
+└── HashJoin
+    ├── join type: CROSS
     ├── build keys: []
     ├── probe keys: []
-    ├── other filters: []
-    ├── Project
-    │   ├── projections: [subquery (#3)]
-    │   └── Filter
-    │       ├── filters: [subquery_3 (#3)]
-    │       └── EvalScalar
-    │           ├── scalars: [count(*) (#2) = 1]
-    │           └── Aggregate(Final)
-    │               ├── group items: []
-    │               ├── aggregate functions: [count(*)]
-    │               └── Aggregate(Partial)
-    │                   ├── group items: []
-    │                   ├── aggregate functions: [count(*)]
-    │                   └── Limit
-    │                       ├── limit: [1]
-    │                       ├── offset: [0]
-    │                       └── Filter
-    │                           ├── filters: [numbers.number (#1) = 0]
-    │                           └── PhysicalScan
-    │                               ├── table: default.system.numbers
-    │                               ├── filters: [numbers.number (#1) = 0]
-    │                               ├── order by: []
-    │                               └── limit: NONE
-    └── PhysicalScan
-        ├── table: default.system.numbers
-        ├── filters: []
-        ├── order by: []
-        └── limit: NONE
+    ├── filters: []
+    ├── TableScan(Build)
+    │   ├── table: default.system.numbers
+    │   ├── read rows: 1
+    │   ├── read bytes: 8
+    │   ├── partitions total: 1
+    │   ├── partitions scanned: 1
+    │   └── push downs: [filters: [], limit: NONE]
+    └── Project(Probe)
+        ├── columns: [subquery (#3)]
+        └── Filter
+            ├── filters: [subquery (#3)]
+            └── EvalScalar
+                ├── expressions: [=(count(*) (#2), 1)]
+                └── AggregateFinal
+                    ├── group by: []
+                    ├── aggregate functions: [count()]
+                    └── AggregatePartial
+                        ├── group by: []
+                        ├── aggregate functions: [count()]
+                        └── Limit
+                            ├── limit: 1
+                            ├── offset: 0
+                            └── Filter
+                                ├── filters: [=(numbers.number (#1), 0)]
+                                └── TableScan
+                                    ├── table: default.system.numbers
+                                    ├── read rows: 1
+                                    ├── read bytes: 8
+                                    ├── partitions total: 1
+                                    ├── partitions scanned: 1
+                                    └── push downs: [filters: [(number = 0)], limit: NONE]
 
 statement query T
 explain select t.number from numbers(1) as t where number = (select * from numbers(1) where number = 0);
 
 ----
 Project
-├── projections: [number (#0)]
+├── columns: [number (#0)]
 └── Filter
-    ├── filters: [t.number (#0) = scalar_subquery_1 (#1)]
-    └── HashJoin: SINGLE
+    ├── filters: [=(numbers.number (#0), numbers.number (#1))]
+    └── HashJoin
+        ├── join type: SINGLE
         ├── build keys: []
         ├── probe keys: []
-        ├── other filters: []
-        ├── PhysicalScan
-        │   ├── table: default.system.numbers
-        │   ├── filters: []
-        │   ├── order by: []
-        │   └── limit: NONE
-        └── Filter
-            ├── filters: [numbers.number (#1) = 0]
-            └── PhysicalScan
-                ├── table: default.system.numbers
-                ├── filters: [numbers.number (#1) = 0]
-                ├── order by: []
-                └── limit: NONE
+        ├── filters: []
+        ├── Filter(Build)
+        │   ├── filters: [=(numbers.number (#1), 0)]
+        │   └── TableScan
+        │       ├── table: default.system.numbers
+        │       ├── read rows: 1
+        │       ├── read bytes: 8
+        │       ├── partitions total: 1
+        │       ├── partitions scanned: 1
+        │       └── push downs: [filters: [(number = 0)], limit: NONE]
+        └── TableScan(Probe)
+            ├── table: default.system.numbers
+            ├── read rows: 1
+            ├── read bytes: 8
+            ├── partitions total: 1
+            ├── partitions scanned: 1
+            └── push downs: [filters: [], limit: NONE]
 
 statement query T
 explain select t.number from numbers(1) as t where exists (select * from numbers(1) where number = t.number);
 
 ----
 Project
-├── projections: [number (#0)]
-└── HashJoin: SEMI
+├── columns: [number (#0)]
+└── HashJoin
+    ├── join type: SEMI
     ├── build keys: [numbers.number (#1)]
-    ├── probe keys: [t.number (#0)]
-    ├── other filters: []
-    ├── PhysicalScan
+    ├── probe keys: [numbers.number (#0)]
+    ├── filters: []
+    ├── TableScan(Build)
     │   ├── table: default.system.numbers
-    │   ├── filters: []
-    │   ├── order by: []
-    │   └── limit: NONE
-    └── PhysicalScan
+    │   ├── read rows: 1
+    │   ├── read bytes: 8
+    │   ├── partitions total: 1
+    │   ├── partitions scanned: 1
+    │   └── push downs: [filters: [], limit: NONE]
+    └── TableScan(Probe)
         ├── table: default.system.numbers
-        ├── filters: []
-        ├── order by: []
-        └── limit: NONE
+        ├── read rows: 1
+        ├── read bytes: 8
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        └── push downs: [filters: [], limit: NONE]
 
 statement query T
 explain select t.number from numbers(1) as t where not exists (select * from numbers(1) where number = t.number);
 
 ----
 Project
-├── projections: [number (#0)]
+├── columns: [number (#0)]
 └── Filter
-    ├── filters: [not(3 (#3))]
-    └── HashJoin: MARK
-        ├── build keys: [subquery_0 (#0)]
-        ├── probe keys: [subquery_2 (#2)]
-        ├── other filters: []
-        ├── HashJoin: INNER
-        │   ├── build keys: [numbers.number (#1)]
-        │   ├── probe keys: [subquery_2 (#2)]
-        │   ├── other filters: []
-        │   ├── PhysicalScan
-        │   │   ├── table: default.system.numbers
-        │   │   ├── filters: []
-        │   │   ├── order by: []
-        │   │   └── limit: NONE
-        │   └── PhysicalScan
-        │       ├── table: default.system.numbers
-        │       ├── filters: []
-        │       ├── order by: []
-        │       └── limit: NONE
-        └── PhysicalScan
-            ├── table: default.system.numbers
+    ├── filters: [not(marker (#3))]
+    └── HashJoin
+        ├── join type: MARK
+        ├── build keys: [numbers.number (#0)]
+        ├── probe keys: [number (#2)]
+        ├── filters: []
+        ├── TableScan(Build)
+        │   ├── table: default.system.numbers
+        │   ├── read rows: 1
+        │   ├── read bytes: 8
+        │   ├── partitions total: 1
+        │   ├── partitions scanned: 1
+        │   └── push downs: [filters: [], limit: NONE]
+        └── HashJoin(Probe)
+            ├── join type: INNER
+            ├── build keys: [numbers.number (#1)]
+            ├── probe keys: [number (#2)]
             ├── filters: []
-            ├── order by: []
-            └── limit: NONE
+            ├── TableScan(Build)
+            │   ├── table: default.system.numbers
+            │   ├── read rows: 1
+            │   ├── read bytes: 8
+            │   ├── partitions total: 1
+            │   ├── partitions scanned: 1
+            │   └── push downs: [filters: [], limit: NONE]
+            └── TableScan(Probe)
+                ├── table: default.system.numbers
+                ├── read rows: 1
+                ├── read bytes: 8
+                ├── partitions total: 1
+                ├── partitions scanned: 1
+                └── push downs: [filters: [], limit: NONE]
 
 statement query T
 explain select * from numbers(1) as t where exists (select number as a from numbers(1) where number = t.number);
 
 ----
 Project
-├── projections: [number (#0)]
-└── HashJoin: SEMI
+├── columns: [number (#0)]
+└── HashJoin
+    ├── join type: SEMI
     ├── build keys: [numbers.number (#1)]
-    ├── probe keys: [t.number (#0)]
-    ├── other filters: []
-    ├── PhysicalScan
+    ├── probe keys: [numbers.number (#0)]
+    ├── filters: []
+    ├── TableScan(Build)
     │   ├── table: default.system.numbers
-    │   ├── filters: []
-    │   ├── order by: []
-    │   └── limit: NONE
-    └── PhysicalScan
+    │   ├── read rows: 1
+    │   ├── read bytes: 8
+    │   ├── partitions total: 1
+    │   ├── partitions scanned: 1
+    │   └── push downs: [filters: [], limit: NONE]
+    └── TableScan(Probe)
         ├── table: default.system.numbers
-        ├── filters: []
-        ├── order by: []
-        └── limit: NONE
+        ├── read rows: 1
+        ├── read bytes: 8
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        └── push downs: [filters: [], limit: NONE]
 
 statement query T
 explain select t.number from numbers(1) as t where exists (select * from numbers(1) where number = t.number and number = 0 and t.number < 10);
 
 ----
 Project
-├── projections: [number (#0)]
-└── HashJoin: SEMI
+├── columns: [number (#0)]
+└── HashJoin
+    ├── join type: SEMI
     ├── build keys: [numbers.number (#1)]
-    ├── probe keys: [t.number (#0)]
-    ├── other filters: []
-    ├── Filter
-    │   ├── filters: [t.number (#0) < 10]
-    │   └── PhysicalScan
+    ├── probe keys: [numbers.number (#0)]
+    ├── filters: []
+    ├── Filter(Build)
+    │   ├── filters: [=(numbers.number (#1), 0)]
+    │   └── TableScan
     │       ├── table: default.system.numbers
-    │       ├── filters: [t.number (#0) < 10]
-    │       ├── order by: []
-    │       └── limit: NONE
-    └── Filter
-        ├── filters: [numbers.number (#1) = 0]
-        └── PhysicalScan
+    │       ├── read rows: 1
+    │       ├── read bytes: 8
+    │       ├── partitions total: 1
+    │       ├── partitions scanned: 1
+    │       └── push downs: [filters: [(number = 0)], limit: NONE]
+    └── Filter(Probe)
+        ├── filters: [<(numbers.number (#0), 10)]
+        └── TableScan
             ├── table: default.system.numbers
-            ├── filters: [numbers.number (#1) = 0]
-            ├── order by: []
-            └── limit: NONE
+            ├── read rows: 1
+            ├── read bytes: 8
+            ├── partitions total: 1
+            ├── partitions scanned: 1
+            └── push downs: [filters: [(number < 10)], limit: NONE]
 
 statement query T
 explain select t.number from numbers(1) as t where exists (select * from numbers(1) where number = t.number and t.number < number);
 
 ----
 Project
-├── projections: [number (#0)]
-└── HashJoin: SEMI
+├── columns: [number (#0)]
+└── HashJoin
+    ├── join type: SEMI
     ├── build keys: [numbers.number (#1)]
-    ├── probe keys: [t.number (#0)]
-    ├── other filters: [t.number (#0) < numbers.number (#1)]
-    ├── PhysicalScan
+    ├── probe keys: [numbers.number (#0)]
+    ├── filters: [<(numbers.number (#0), numbers.number (#1))]
+    ├── TableScan(Build)
     │   ├── table: default.system.numbers
-    │   ├── filters: []
-    │   ├── order by: []
-    │   └── limit: NONE
-    └── PhysicalScan
+    │   ├── read rows: 1
+    │   ├── read bytes: 8
+    │   ├── partitions total: 1
+    │   ├── partitions scanned: 1
+    │   └── push downs: [filters: [], limit: NONE]
+    └── TableScan(Probe)
         ├── table: default.system.numbers
-        ├── filters: []
-        ├── order by: []
-        └── limit: NONE
+        ├── read rows: 1
+        ├── read bytes: 8
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        └── push downs: [filters: [], limit: NONE]
 
 statement query T
 explain select t.number from numbers(1) as t where exists (select number as a, number as b, number as c from numbers(1) where number = t.number);
 
 ----
 Project
-├── projections: [number (#0)]
-└── HashJoin: SEMI
+├── columns: [number (#0)]
+└── HashJoin
+    ├── join type: SEMI
     ├── build keys: [numbers.number (#1)]
-    ├── probe keys: [t.number (#0)]
-    ├── other filters: []
-    ├── PhysicalScan
+    ├── probe keys: [numbers.number (#0)]
+    ├── filters: []
+    ├── TableScan(Build)
     │   ├── table: default.system.numbers
-    │   ├── filters: []
-    │   ├── order by: []
-    │   └── limit: NONE
-    └── PhysicalScan
+    │   ├── read rows: 1
+    │   ├── read bytes: 8
+    │   ├── partitions total: 1
+    │   ├── partitions scanned: 1
+    │   └── push downs: [filters: [], limit: NONE]
+    └── TableScan(Probe)
         ├── table: default.system.numbers
-        ├── filters: []
-        ├── order by: []
-        └── limit: NONE
+        ├── read rows: 1
+        ├── read bytes: 8
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        └── push downs: [filters: [], limit: NONE]
 
 statement query T
 explain select t.number from numbers(1) as t, numbers(1) as t1 where (select count(*) = 1 from numbers(1) where t.number = number) and t.number = t1.number;
 
 ----
 Project
-├── projections: [number (#0)]
+├── columns: [number (#0)]
 └── Filter
-    ├── filters: [CAST(if(is_not_null(scalar_subquery_3 (#3)), scalar_subquery_3 (#3), 0) AS BIGINT UNSIGNED)]
-    └── HashJoin: SINGLE
-        ├── build keys: [subquery_5 (#5)]
-        ├── probe keys: [subquery_0 (#0)]
-        ├── other filters: []
-        ├── HashJoin: INNER
-        │   ├── build keys: [t1.number (#1)]
-        │   ├── probe keys: [t.number (#0)]
-        │   ├── other filters: []
-        │   ├── PhysicalScan
-        │   │   ├── table: default.system.numbers
-        │   │   ├── filters: []
-        │   │   ├── order by: []
-        │   │   └── limit: NONE
-        │   └── PhysicalScan
-        │       ├── table: default.system.numbers
-        │       ├── filters: []
-        │       ├── order by: []
-        │       └── limit: NONE
-        └── Project
-            ├── projections: [COUNT(*) = 1 (#3),number (#5)]
-            └── EvalScalar
-                ├── scalars: [COUNT(*) (#4) = 1]
-                └── Aggregate(Final)
-                    ├── group items: [subquery_5 (#5)]
-                    ├── aggregate functions: [COUNT(*)]
-                    └── Aggregate(Partial)
-                        ├── group items: [subquery_5 (#5)]
-                        ├── aggregate functions: [COUNT(*)]
-                        └── HashJoin: INNER
-                            ├── build keys: [numbers.number (#2)]
-                            ├── probe keys: [subquery_5 (#5)]
-                            ├── other filters: []
-                            ├── PhysicalScan
-                            │   ├── table: default.system.numbers
-                            │   ├── filters: []
-                            │   ├── order by: []
-                            │   └── limit: NONE
-                            └── PhysicalScan
-                                ├── table: default.system.numbers
-                                ├── filters: []
-                                ├── order by: []
-                                └── limit: NONE
+    ├── filters: [CAST(if(is_not_null(COUNT(*) = 1 (#3)), COUNT(*) = 1 (#3), 0) AS BIGINT UNSIGNED)]
+    └── HashJoin
+        ├── join type: SINGLE
+        ├── build keys: [number (#5)]
+        ├── probe keys: [numbers.number (#0)]
+        ├── filters: []
+        ├── Project(Build)
+        │   ├── columns: [COUNT(*) = 1 (#3), number (#5)]
+        │   └── EvalScalar
+        │       ├── expressions: [=(COUNT(*) (#4), 1)]
+        │       └── AggregateFinal
+        │           ├── group by: [number]
+        │           ├── aggregate functions: [count()]
+        │           └── AggregatePartial
+        │               ├── group by: [number]
+        │               ├── aggregate functions: [count()]
+        │               └── HashJoin
+        │                   ├── join type: INNER
+        │                   ├── build keys: [numbers.number (#2)]
+        │                   ├── probe keys: [number (#5)]
+        │                   ├── filters: []
+        │                   ├── TableScan(Build)
+        │                   │   ├── table: default.system.numbers
+        │                   │   ├── read rows: 1
+        │                   │   ├── read bytes: 8
+        │                   │   ├── partitions total: 1
+        │                   │   ├── partitions scanned: 1
+        │                   │   └── push downs: [filters: [], limit: NONE]
+        │                   └── TableScan(Probe)
+        │                       ├── table: default.system.numbers
+        │                       ├── read rows: 1
+        │                       ├── read bytes: 8
+        │                       ├── partitions total: 1
+        │                       ├── partitions scanned: 1
+        │                       └── push downs: [filters: [], limit: NONE]
+        └── HashJoin(Probe)
+            ├── join type: INNER
+            ├── build keys: [numbers.number (#1)]
+            ├── probe keys: [numbers.number (#0)]
+            ├── filters: []
+            ├── TableScan(Build)
+            │   ├── table: default.system.numbers
+            │   ├── read rows: 1
+            │   ├── read bytes: 8
+            │   ├── partitions total: 1
+            │   ├── partitions scanned: 1
+            │   └── push downs: [filters: [], limit: NONE]
+            └── TableScan(Probe)
+                ├── table: default.system.numbers
+                ├── read rows: 1
+                ├── read bytes: 8
+                ├── partitions total: 1
+                ├── partitions scanned: 1
+                └── push downs: [filters: [], limit: NONE]
 
 statement query T
 explain select t.number from numbers(1) as t where exists(select * from numbers(1) as t1 where t.number > t1.number) and not exists(select * from numbers(1) as t1 where t.number < t1.number);
 
 ----
 Project
-├── projections: [number (#0)]
+├── columns: [number (#0)]
 └── Filter
-    ├── filters: [not(4 (#4))]
-    └── HashJoin: MARK
-        ├── build keys: [subquery_0 (#0)]
-        ├── probe keys: [subquery_3 (#3)]
-        ├── other filters: []
-        ├── Filter
-        │   ├── filters: [subquery_3 (#3) < t1.number (#2)]
-        │   └── CrossJoin
-        │       ├── build keys: []
-        │       ├── probe keys: []
-        │       ├── other filters: []
-        │       ├── PhysicalScan
-        │       │   ├── table: default.system.numbers
-        │       │   ├── filters: []
-        │       │   ├── order by: []
-        │       │   └── limit: NONE
-        │       └── PhysicalScan
-        │           ├── table: default.system.numbers
-        │           ├── filters: []
-        │           ├── order by: []
-        │           └── limit: NONE
-        └── HashJoin: SEMI
-            ├── build keys: []
-            ├── probe keys: []
-            ├── other filters: [t.number (#0) > t1.number (#1)]
-            ├── PhysicalScan
-            │   ├── table: default.system.numbers
-            │   ├── filters: []
-            │   ├── order by: []
-            │   └── limit: NONE
-            └── PhysicalScan
-                ├── table: default.system.numbers
+    ├── filters: [not(marker (#4))]
+    └── HashJoin
+        ├── join type: MARK
+        ├── build keys: [numbers.number (#0)]
+        ├── probe keys: [number (#3)]
+        ├── filters: []
+        ├── HashJoin(Build)
+        │   ├── join type: SEMI
+        │   ├── build keys: []
+        │   ├── probe keys: []
+        │   ├── filters: [>(numbers.number (#0), numbers.number (#1))]
+        │   ├── TableScan(Build)
+        │   │   ├── table: default.system.numbers
+        │   │   ├── read rows: 1
+        │   │   ├── read bytes: 8
+        │   │   ├── partitions total: 1
+        │   │   ├── partitions scanned: 1
+        │   │   └── push downs: [filters: [], limit: NONE]
+        │   └── TableScan(Probe)
+        │       ├── table: default.system.numbers
+        │       ├── read rows: 1
+        │       ├── read bytes: 8
+        │       ├── partitions total: 1
+        │       ├── partitions scanned: 1
+        │       └── push downs: [filters: [], limit: NONE]
+        └── Filter(Probe)
+            ├── filters: [<(number (#3), numbers.number (#2))]
+            └── HashJoin
+                ├── join type: CROSS
+                ├── build keys: []
+                ├── probe keys: []
                 ├── filters: []
-                ├── order by: []
-                └── limit: NONE
+                ├── TableScan(Build)
+                │   ├── table: default.system.numbers
+                │   ├── read rows: 1
+                │   ├── read bytes: 8
+                │   ├── partitions total: 1
+                │   ├── partitions scanned: 1
+                │   └── push downs: [filters: [], limit: NONE]
+                └── TableScan(Probe)
+                    ├── table: default.system.numbers
+                    ├── read rows: 1
+                    ├── read bytes: 8
+                    ├── partitions total: 1
+                    ├── partitions scanned: 1
+                    └── push downs: [filters: [], limit: NONE]
 
