@@ -1,5 +1,5 @@
 ---
-title: to_start_of_five_minutes
+title: TO_START_OF_FIVE_MINUTES
 ---
 
 Rounds down a date with time to the start of the five-minute interval.

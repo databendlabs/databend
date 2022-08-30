@@ -1,5 +1,5 @@
 ---
-title: to_start_of_week
+title: TO_START_OF_WEEK
 ---
 
 Returns the first day of the year for a date or a date with time.

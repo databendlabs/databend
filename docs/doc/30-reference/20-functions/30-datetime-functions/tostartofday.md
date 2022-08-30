@@ -1,5 +1,5 @@
 ---
-title: to_start_of_day
+title: TO_START_OF_DAY
 ---
 
 Rounds down a date with time to the start of the day.
