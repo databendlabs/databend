@@ -14,7 +14,7 @@ This command loads data into a table from one or more remote files by their URL.
 ```sql
 COPY INTO [<database>.]<table_name>
 FROM 'https://<site>/<directory>/<filename>'
-[ FILE_FORMAT = ( TYPE = { CSV | JSON | PARQUET } [ formatTypeOptions ] ) ]
+[ FILE_FORMAT = ( TYPE = { CSV | JSON | NDJSON | PARQUET } [ formatTypeOptions ] ) ]
 ```
 
 ### filename
