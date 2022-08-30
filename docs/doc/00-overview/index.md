@@ -104,7 +104,7 @@ Each Parquet file is sorted by the primary key before being written to the under
 For efficient pruning, Databend also creates indexes for each Parquet file:
 
 - `min_max.idx` The index file stores the *minimum* and *maximum* value of this Parquet file.
-- `sparse.idx` The index file store the <key, parquet-page> mapping for every [N] records granularity.
+- `sparse.idx` The index file store the <key, parquet-page> mapping for every [N] records' granularity.
 
 With the indexes, we can speed up the queries by reducing the I/O and CPU costs.
 Imagine that Parquet file f1 has `min_max.idx` of `[3, 5)` and Parquet file f2 has `min_max.idx` of `[4, 6)` in column `x` if the query predicate is `WHERE x < 4`, only f1 needs to be accessed and processed.
@@ -116,11 +116,12 @@ Imagine that Parquet file f1 has `min_max.idx` of `[3, 5)` and Parquet file f2 h
 ## Community
 
 - [Slack](https://link.databend.rs/join-slack) (For live discussion with the Community)
-- [Github](https://github.com/datafuselabs/databend) (Feature/Bug reports, Contributions)
+- [GitHub](https://github.com/datafuselabs/databend) (Feature/Bug reports, Contributions)
 - [Twitter](https://twitter.com/Datafuse_Labs) (Get the news fast)
 - [Weekly](https://weekly.databend.rs/) (A weekly newsletter about the Databend)
 
 ## Roadmap
+- [Roadmap v0.9](https://github.com/datafuselabs/databend/issues/7052)
 - [Roadmap v0.8](https://github.com/datafuselabs/databend/issues/4591)
 - [Roadmap 2022](https://github.com/datafuselabs/databend/issues/3706)
 

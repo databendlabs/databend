@@ -69,7 +69,7 @@ Limit
             ├── group items: [t.number (#0)]
             ├── aggregate functions: []
             └── Filter
-                ├── filters: [t.number (#0) = CAST(if(is_null(scalar_subquery_4 (#4)), 0, scalar_subquery_4 (#4)) AS BIGINT UNSIGNED)]
+                ├── filters: [t.number (#0) = CAST(if(is_not_null(scalar_subquery_4 (#4)), scalar_subquery_4 (#4), 0) AS BIGINT UNSIGNED)]
                 └── HashJoin: SINGLE
                     ├── build keys: [subquery_6 (#6)]
                     ├── probe keys: [subquery_0 (#0)]
