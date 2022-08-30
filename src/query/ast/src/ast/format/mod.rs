@@ -12,34 +12,35 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod ast_format;
+mod indent_format;
+mod pretty_format;
 mod syntax;
 
-use pretty::RcDoc;
+use std::fmt::Display;
+
+pub use ast_format::format_statement;
+pub use indent_format::*;
+pub use pretty_format::*;
 pub use syntax::pretty_statement;
 
-pub(crate) const NEST_FACTOR: isize = 4;
-
-pub(crate) fn interweave_comma<'a, D>(docs: D) -> RcDoc<'a>
-where D: Iterator<Item = RcDoc<'a>> {
-    RcDoc::intersperse(docs, RcDoc::text(",").append(RcDoc::line()))
+#[derive(Clone)]
+pub struct FormatTreeNode<T: Display + Clone> {
+    payload: T,
+    children: Vec<Self>,
 }
 
-pub(crate) fn inline_comma<'a, D>(docs: D) -> RcDoc<'a>
-where D: Iterator<Item = RcDoc<'a>> {
-    RcDoc::intersperse(docs, RcDoc::text(",").append(RcDoc::space()))
-}
+impl<T> FormatTreeNode<T>
+where T: Display + Clone
+{
+    pub fn new(payload: T) -> Self {
+        Self {
+            payload,
+            children: vec![],
+        }
+    }
 
-pub(crate) fn inline_dot<'a, D>(docs: D) -> RcDoc<'a>
-where D: Iterator<Item = RcDoc<'a>> {
-    RcDoc::intersperse(docs, RcDoc::text("."))
-}
-
-pub(crate) fn parenthenized(doc: RcDoc<'_>) -> RcDoc<'_> {
-    RcDoc::text("(")
-        .append(RcDoc::line_())
-        .append(doc)
-        .nest(NEST_FACTOR)
-        .append(RcDoc::line_())
-        .append(RcDoc::text(")"))
-        .group()
+    pub fn with_children(payload: T, children: Vec<Self>) -> Self {
+        Self { payload, children }
+    }
 }

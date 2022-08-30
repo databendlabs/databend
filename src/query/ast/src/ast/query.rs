@@ -154,17 +154,17 @@ pub enum TableReference<'a> {
         alias: Option<TableAlias<'a>>,
         travel_point: Option<TimeTravelPoint<'a>>,
     },
-    // Derived table, which can be a subquery or joined tables or combination of them
-    Subquery {
-        span: &'a [Token<'a>],
-        subquery: Box<Query<'a>>,
-        alias: Option<TableAlias<'a>>,
-    },
     // `TABLE(expr)[ AS alias ]`
     TableFunction {
         span: &'a [Token<'a>],
         name: Identifier<'a>,
         params: Vec<Expr<'a>>,
+        alias: Option<TableAlias<'a>>,
+    },
+    // Derived table, which can be a subquery or joined tables or combination of them
+    Subquery {
+        span: &'a [Token<'a>],
+        subquery: Box<Query<'a>>,
         alias: Option<TableAlias<'a>>,
     },
     Join {
@@ -232,7 +232,7 @@ impl<'a> Display for TableAlias<'a> {
         write!(f, "{}", &self.name)?;
         if !self.columns.is_empty() {
             write!(f, "(")?;
-            write_period_separated_list(f, &self.columns)?;
+            write_comma_separated_list(f, &self.columns)?;
             write!(f, ")")?;
         }
         Ok(())
@@ -267,16 +267,6 @@ impl<'a> Display for TableReference<'a> {
                     write!(f, " AS {alias}")?;
                 }
             }
-            TableReference::Subquery {
-                span: _,
-                subquery,
-                alias,
-            } => {
-                write!(f, "({subquery})")?;
-                if let Some(alias) = alias {
-                    write!(f, " AS {alias}")?;
-                }
-            }
             TableReference::TableFunction {
                 span: _,
                 name,
@@ -286,6 +276,16 @@ impl<'a> Display for TableReference<'a> {
                 write!(f, "{name}(")?;
                 write_comma_separated_list(f, params)?;
                 write!(f, ")")?;
+                if let Some(alias) = alias {
+                    write!(f, " AS {alias}")?;
+                }
+            }
+            TableReference::Subquery {
+                span: _,
+                subquery,
+                alias,
+            } => {
+                write!(f, "({subquery})")?;
                 if let Some(alias) = alias {
                     write!(f, " AS {alias}")?;
                 }

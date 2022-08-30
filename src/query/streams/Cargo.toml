@@ -33,4 +33,4 @@ serde_json = { version = "1.0.81", default-features = false, features = ["preser
 tempfile = "3.3.0"
 
 [dev-dependencies]
-opendal = { version = "0.13.1", features = ["layers-retry", "compress"] }
+opendal = { version = "0.14.1", features = ["layers-retry", "compress"] }

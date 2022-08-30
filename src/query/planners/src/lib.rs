@@ -176,6 +176,7 @@ pub use plan_list::ListPlan;
 pub use plan_node::PlanNode;
 pub use plan_node_builder::PlanBuilder;
 pub use plan_node_extras::Extras;
+pub use plan_node_extras::PrewhereInfo;
 pub use plan_node_extras::Projection;
 pub use plan_node_rewriter::PlanRewriter;
 pub use plan_node_rewriter::RewriteHelper;

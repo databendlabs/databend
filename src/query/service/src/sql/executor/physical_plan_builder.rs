@@ -13,12 +13,15 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::collections::HashSet;
 use std::sync::Arc;
 
+use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Expression;
 use common_planners::Extras;
+use common_planners::PrewhereInfo;
 use common_planners::Projection;
 use common_planners::StageKind;
 use itertools::Itertools;
@@ -43,11 +46,13 @@ use crate::sql::executor::PhysicalPlan;
 use crate::sql::executor::PhysicalScalar;
 use crate::sql::executor::SortDesc;
 use crate::sql::executor::UnionAll;
+use crate::sql::optimizer::ColumnSet;
 use crate::sql::optimizer::SExpr;
 use crate::sql::plans::AggregateMode;
 use crate::sql::plans::Exchange;
 use crate::sql::plans::RelOperator;
 use crate::sql::plans::Scalar;
+use crate::sql::Metadata;
 use crate::sql::MetadataRef;
 use crate::sql::ScalarExpr;
 use crate::storages::ToReadDataSourcePlan;
@@ -60,6 +65,42 @@ pub struct PhysicalPlanBuilder {
 impl PhysicalPlanBuilder {
     pub fn new(metadata: MetadataRef, ctx: Arc<QueryContext>) -> Self {
         Self { metadata, ctx }
+    }
+
+    fn build_projection(
+        metadata: &Metadata,
+        schema: &DataSchemaRef,
+        columns: &ColumnSet,
+        has_inner_column: bool,
+    ) -> Projection {
+        if !has_inner_column {
+            let col_indices = columns
+                .iter()
+                .map(|index| {
+                    let name = metadata.column(*index).name.as_str();
+                    schema.index_of(name).unwrap()
+                })
+                .sorted()
+                .collect::<Vec<_>>();
+            Projection::Columns(col_indices)
+        } else {
+            let col_indices = columns
+                .iter()
+                .map(|index| {
+                    let column = metadata.column(*index);
+                    match &column.path_indices {
+                        Some(path_indices) => (column.column_index, path_indices.clone()),
+                        None => {
+                            let name = metadata.column(*index).name.as_str();
+                            let idx = schema.index_of(name).unwrap();
+                            (column.column_index, vec![idx])
+                        }
+                    }
+                })
+                .sorted()
+                .collect::<BTreeMap<_, _>>();
+            Projection::InnerColumns(col_indices)
+        }
     }
 
     #[async_recursion::async_recursion]
@@ -119,40 +160,61 @@ impl PhysicalPlanBuilder {
                 let table = table_entry.table.clone();
                 let table_schema = table.schema();
 
-                let projection = if !has_inner_column {
-                    let col_indices = scan
-                        .columns
+                let projection = Self::build_projection(
+                    &metadata,
+                    &table_schema,
+                    &scan.columns,
+                    has_inner_column,
+                );
+
+                let prewhere_info = if let Some(prewhere) = &scan.prewhere {
+                    let builder = ExpressionBuilderWithoutRenaming::create(self.metadata.clone());
+                    let predicates = prewhere
+                        .predicates
                         .iter()
-                        .map(|index| {
-                            let name = metadata.column(*index).name.as_str();
-                            table_schema.index_of(name).unwrap()
-                        })
-                        .sorted()
-                        .collect::<Vec<_>>();
-                    Projection::Columns(col_indices)
+                        .map(|scalar| builder.build(scalar))
+                        .collect::<Result<Vec<_>>>()?;
+
+                    assert!(
+                        !predicates.is_empty(),
+                        "There should be at least one predicate in prewhere"
+                    );
+                    let mut filter = predicates[0].clone();
+                    for pred in predicates.iter().skip(1) {
+                        filter = filter.and(pred.clone());
+                    }
+
+                    let remain_columns = scan
+                        .columns
+                        .difference(&prewhere.columns)
+                        .copied()
+                        .collect::<HashSet<usize>>();
+                    let need_columns = Self::build_projection(
+                        &metadata,
+                        &table_schema,
+                        &prewhere.columns,
+                        has_inner_column,
+                    );
+                    let remain_columns = Self::build_projection(
+                        &metadata,
+                        &table_schema,
+                        &remain_columns,
+                        has_inner_column,
+                    );
+
+                    Some(PrewhereInfo {
+                        need_columns,
+                        remain_columns,
+                        filter,
+                    })
                 } else {
-                    let col_indices = scan
-                        .columns
-                        .iter()
-                        .map(|index| {
-                            let column = metadata.column(*index);
-                            match &column.path_indices {
-                                Some(path_indices) => (column.column_index, path_indices.clone()),
-                                None => {
-                                    let name = metadata.column(*index).name.as_str();
-                                    let idx = table_schema.index_of(name).unwrap();
-                                    (column.column_index, vec![idx])
-                                }
-                            }
-                        })
-                        .sorted()
-                        .collect::<BTreeMap<_, _>>();
-                    Projection::InnerColumns(col_indices)
+                    None
                 };
 
                 let push_downs = Extras {
                     projection: Some(projection),
                     filters: push_down_filters.unwrap_or_default(),
+                    prewhere: prewhere_info,
                     limit: scan.limit,
                     order_by: order_by.unwrap_or_default(),
                 };

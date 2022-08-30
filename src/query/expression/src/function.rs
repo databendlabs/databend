@@ -704,7 +704,7 @@ pub fn vectorize_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgType>(
     }
 }
 
-pub fn vectorize_with_writer_1_arg<I1: ArgType, O: ArgType>(
+pub fn vectorize_with_builder_1_arg<I1: ArgType, O: ArgType>(
     func: impl Fn(I1::ScalarRef<'_>, &mut O::ColumnBuilder) -> Result<(), String> + Copy,
 ) -> impl Fn(ValueRef<I1>, &GenericMap) -> Result<Value<O>, String> + Copy {
     move |arg1, generics| match arg1 {
@@ -724,7 +724,7 @@ pub fn vectorize_with_writer_1_arg<I1: ArgType, O: ArgType>(
     }
 }
 
-pub fn vectorize_with_writer_2_arg<I1: ArgType, I2: ArgType, O: ArgType>(
+pub fn vectorize_with_builder_2_arg<I1: ArgType, I2: ArgType, O: ArgType>(
     func: impl Fn(I1::ScalarRef<'_>, I2::ScalarRef<'_>, &mut O::ColumnBuilder) -> Result<(), String>
     + Copy,
 ) -> impl Fn(ValueRef<I1>, ValueRef<I2>, &GenericMap) -> Result<Value<O>, String> + Copy {
@@ -761,7 +761,7 @@ pub fn vectorize_with_writer_2_arg<I1: ArgType, I2: ArgType, O: ArgType>(
     }
 }
 
-pub fn vectorize_with_writer_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgType>(
+pub fn vectorize_with_builder_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgType>(
     func: impl Fn(
         I1::ScalarRef<'_>,
         I2::ScalarRef<'_>,

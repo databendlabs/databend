@@ -14,6 +14,7 @@
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ExplainKind {
+    Ast(String),
     Syntax(String),
     Graph,
     Pipeline,

@@ -6,7 +6,7 @@ on:
       - "v*"
   schedule:
     # Release at 00:00 UTC+8
-    - cron: '0 16 * * *'
+    - cron: "0 16 * * *"
   workflow_dispatch:
     inputs:
       tags:
@@ -110,22 +110,23 @@ jobs:
         run: |
           brew install gnu-tar
           sudo /usr/sbin/purge
-          mkdir -p release/${{ steps.target.outputs.target }}/{bin,configs}
-          cp ./target/${{ steps.target.outputs.target }}/release/databend-* release/${{ steps.target.outputs.target }}/bin/
-          rm -f release/${{ steps.target.outputs.target }}/bin/*.d
-          cp ./scripts/ci/deploy/config/databend-query-node-1.toml release/${{ steps.target.outputs.target }}/configs/databend-query.toml
-          cp ./scripts/ci/deploy/config/databend-meta-node-1.toml release/${{ steps.target.outputs.target }}/configs/databend-meta.toml
-          cp ./.github/actions/publish_binary/databend-release-readme.txt release/${{ steps.target.outputs.target }}/readme.txt
-          cp -r ./.github/actions/publish_binary/databend-scripts-for-release release/${{ steps.target.outputs.target }}/scripts
-          gtar -C ./release/${{ steps.target.outputs.target }} -czvf databend-${{ needs.create_release.outputs.version }}-${{ steps.target.outputs.target }}.tar.gz bin configs scripts readme.txt
+          target=${{ steps.target.outputs.target }}
+          version=${{ needs.create_release.outputs.version }}
+          mkdir -p release/${target}/{bin,configs}
+          cp ./target/${target}/release/databend-* release/${target}/bin/
+          rm -f release/${target}/bin/*.d
+          cp ./scripts/ci/deploy/config/databend-query-node-1.toml release/${target}/configs/databend-query.toml
+          cp ./scripts/ci/deploy/config/databend-meta-node-1.toml release/${target}/configs/databend-meta.toml
+          cp ./.github/actions/publish_binary/databend-release-readme.txt release/${target}/readme.txt
+          cp -r ./.github/actions/publish_binary/databend-scripts-for-release release/${target}/scripts
+          gtar -C ./release/${target} -czvf databend-${version}-${target}.tar.gz bin configs scripts readme.txt
       - name: Publish Binaries
         uses: ./.github/actions/publish_binary
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           version: ${{ needs.create_release.outputs.version }}
           target: ${{ steps.target.outputs.target }}
-          aws_access_key_id: ${{ secrets.REPO_ACCESS_KEY_ID }}
-          aws_secret_access_key: ${{ secrets.REPO_SECRET_ACCESS_KEY }}
+          repo_role_arn: ${{ secrets.REPO_ROLE_ARN }}
 
   publish_linux:
     name: linux assets
@@ -166,27 +167,29 @@ jobs:
       - name: Copyobj zlib for gnu binaries
         if: matrix.platform == 'gnu'
         run: |
-          build-tool /usr/bin/${{ matrix.arch }}-linux-gnu-objcopy --compress-debug-sections=zlib-gnu ./target/${{ steps.target.outputs.target }}/release/databend-query
-          build-tool /usr/bin/${{ matrix.arch }}-linux-gnu-objcopy --compress-debug-sections=zlib-gnu ./target/${{ steps.target.outputs.target }}/release/databend-meta
-          build-tool /usr/bin/${{ matrix.arch }}-linux-gnu-objcopy --compress-debug-sections=zlib-gnu ./target/${{ steps.target.outputs.target }}/release/databend-metactl
+          target=${{ steps.target.outputs.target }}
+          build-tool /usr/bin/${{ matrix.arch }}-linux-gnu-objcopy --compress-debug-sections=zlib-gnu ./target/${target}/release/databend-query
+          build-tool /usr/bin/${{ matrix.arch }}-linux-gnu-objcopy --compress-debug-sections=zlib-gnu ./target/${target}/release/databend-meta
+          build-tool /usr/bin/${{ matrix.arch }}-linux-gnu-objcopy --compress-debug-sections=zlib-gnu ./target/${target}/release/databend-metactl
       - name: Pack binaries
         run: |
-          mkdir -p release/${{ steps.target.outputs.target }}/{bin,configs}
-          cp ./target/${{ steps.target.outputs.target }}/release/databend-* release/${{ steps.target.outputs.target }}/bin/
-          rm -f release/${{ steps.target.outputs.target }}/bin/*.d
-          cp ./scripts/ci/deploy/config/databend-query-node-1.toml release/${{ steps.target.outputs.target }}/configs/databend-query.toml
-          cp ./scripts/ci/deploy/config/databend-meta-node-1.toml release/${{ steps.target.outputs.target }}/configs/databend-meta.toml
-          cp ./.github/actions/publish_binary/databend-release-readme.txt release/${{ steps.target.outputs.target }}/readme.txt
-          cp -r ./.github/actions/publish_binary/databend-scripts-for-release release/${{ steps.target.outputs.target }}/scripts
-          tar -C ./release/${{ steps.target.outputs.target }} -czvf databend-${{ needs.create_release.outputs.version }}-${{ steps.target.outputs.target }}.tar.gz bin configs scripts readme.txt
+          target=${{ steps.target.outputs.target }}
+          version=${{ needs.create_release.outputs.version }}
+          mkdir -p release/${target}/{bin,configs}
+          cp ./target/${target}/release/databend-* release/${target}/bin/
+          rm -f release/${target}/bin/*.d
+          cp ./scripts/ci/deploy/config/databend-query-node-1.toml release/${target}/configs/databend-query.toml
+          cp ./scripts/ci/deploy/config/databend-meta-node-1.toml release/${target}/configs/databend-meta.toml
+          cp ./.github/actions/publish_binary/databend-release-readme.txt release/${target}/readme.txt
+          cp -r ./.github/actions/publish_binary/databend-scripts-for-release release/${target}/scripts
+          tar -C ./release/${target} -czvf databend-${version}-${target}.tar.gz bin configs scripts readme.txt
       - name: Publish Binaries
         uses: ./.github/actions/publish_binary
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           version: ${{ needs.create_release.outputs.version }}
           target: ${{ steps.target.outputs.target }}
-          aws_access_key_id: ${{ secrets.REPO_ACCESS_KEY_ID }}
-          aws_secret_access_key: ${{ secrets.REPO_SECRET_ACCESS_KEY }}
+          repo_role_arn: ${{ secrets.REPO_ROLE_ARN }}
 
   release_docker_combined:
     name: docker image combined
@@ -214,9 +217,10 @@ jobs:
       - name: Download binaries for usage
         id: download_binaries
         run: |
+          version=${{ needs.create_release.outputs.version }}
           mkdir -p ./target/release
-          wget -q https://repo.databend.rs/databend/${{ needs.create_release.outputs.version }}/databend-${{ needs.create_release.outputs.version }}-x86_64-unknown-linux-gnu.tar.gz
-          tar x -C ./target/release -f ./databend-${{ needs.create_release.outputs.version }}-x86_64-unknown-linux-gnu.tar.gz --strip-components 1 bin/
+          wget -q https://repo.databend.rs/databend/${version}/databend-${version}-x86_64-unknown-linux-gnu.tar.gz
+          tar x -C ./target/release -f ./databend-${version}-x86_64-unknown-linux-gnu.tar.gz --strip-components 1 bin/
 
       - name: Build and push
         id: docker_build

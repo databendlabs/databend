@@ -18,7 +18,7 @@ common-tracing = { path = "../../common/tracing" }
 
 clap = { version = "3.2.5", features = ["derive", "env"] }
 once_cell = "1.12.0"
-opendal = { version = "0.13.1", features = ["layers-retry", "compress"], optional = true }
+opendal = { version = "0.14.1", features = ["layers-retry", "compress"], optional = true }
 semver = "1.0.10"
 serde = { version = "1.0.137", features = ["derive"] }
 serfig = "0.0.2"

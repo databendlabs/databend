@@ -23,6 +23,7 @@ use super::walk::walk_join_condition;
 use super::walk::walk_query;
 use super::walk::walk_select_target;
 use super::walk::walk_set_expr;
+use super::walk::walk_statement;
 use super::walk::walk_table_reference;
 use super::walk_time_travel_point;
 use crate::ast::*;
@@ -34,6 +35,35 @@ pub trait Visitor<'ast>: Sized {
     }
 
     fn visit_identifier(&mut self, _ident: &'ast Identifier<'ast>) {}
+
+    fn visit_database_ref(
+        &mut self,
+        catalog: &'ast Option<Identifier<'ast>>,
+        database: &'ast Identifier<'ast>,
+    ) {
+        if let Some(catalog) = catalog {
+            walk_identifier(self, catalog);
+        }
+
+        walk_identifier(self, database);
+    }
+
+    fn visit_table_ref(
+        &mut self,
+        catalog: &'ast Option<Identifier<'ast>>,
+        database: &'ast Option<Identifier<'ast>>,
+        table: &'ast Identifier<'ast>,
+    ) {
+        if let Some(catalog) = catalog {
+            walk_identifier(self, catalog);
+        }
+
+        if let Some(database) = database {
+            walk_identifier(self, database);
+        }
+
+        walk_identifier(self, table);
+    }
 
     fn visit_column_ref(
         &mut self,
@@ -278,9 +308,9 @@ pub trait Visitor<'ast>: Sized {
     fn visit_date_add(
         &mut self,
         _span: &'ast [Token<'ast>],
-        date: &'ast Expr<'ast>,
-        interval: &'ast Expr<'ast>,
         _unit: &'ast IntervalKind,
+        interval: &'ast Expr<'ast>,
+        date: &'ast Expr<'ast>,
     ) {
         walk_expr(self, date);
         walk_expr(self, interval);
@@ -289,9 +319,9 @@ pub trait Visitor<'ast>: Sized {
     fn visit_date_sub(
         &mut self,
         _span: &'ast [Token<'ast>],
-        date: &'ast Expr<'ast>,
-        interval: &'ast Expr<'ast>,
         _unit: &'ast IntervalKind,
+        interval: &'ast Expr<'ast>,
+        date: &'ast Expr<'ast>,
     ) {
         walk_expr(self, date);
         walk_expr(self, interval);
@@ -306,39 +336,19 @@ pub trait Visitor<'ast>: Sized {
         walk_expr(self, date);
     }
 
-    fn visit_nullif(
-        &mut self,
-        _span: &'ast [Token<'ast>],
-        expr1: &'ast Expr<'ast>,
-        expr2: &'ast Expr<'ast>,
-    ) {
-        walk_expr(self, expr1);
-        walk_expr(self, expr2);
+    fn visit_statement(&mut self, statement: &'ast Statement<'ast>) {
+        walk_statement(self, statement);
     }
 
-    fn visit_coalesce(&mut self, _span: &'ast [Token<'ast>], exprs: &'ast [Expr<'ast>]) {
-        for expr in exprs {
-            walk_expr(self, expr);
-        }
+    fn visit_query(&mut self, query: &'ast Query<'ast>) {
+        walk_query(self, query);
     }
-
-    fn visit_ifnull(
-        &mut self,
-        _span: &'ast [Token<'ast>],
-        expr1: &'ast Expr<'ast>,
-        expr2: &'ast Expr<'ast>,
-    ) {
-        walk_expr(self, expr1);
-        walk_expr(self, expr2);
-    }
-
-    fn visit_statement(&mut self, _statement: &'ast Statement<'ast>) {}
-
-    fn visit_query(&mut self, _query: &'ast Query<'ast>) {}
 
     fn visit_explain(&mut self, _kind: &'ast ExplainKind, _query: &'ast Statement<'ast>) {}
 
     fn visit_copy(&mut self, _copy: &'ast CopyStmt<'ast>) {}
+
+    fn visit_copy_unit(&mut self, _copy_unit: &'ast CopyUnit<'ast>) {}
 
     fn visit_call(&mut self, _call: &'ast CallStmt) {}
 
@@ -352,6 +362,8 @@ pub trait Visitor<'ast>: Sized {
 
     fn visit_show_functions(&mut self, _limit: &'ast Option<ShowLimit<'ast>>) {}
 
+    fn visit_show_limit(&mut self, _limit: &'ast ShowLimit<'ast>) {}
+
     fn visit_kill(&mut self, _kill_target: &'ast KillTarget, _object_id: &'ast str) {}
 
     fn visit_set_variable(
@@ -363,6 +375,8 @@ pub trait Visitor<'ast>: Sized {
     }
 
     fn visit_insert(&mut self, _insert: &'ast InsertStmt<'ast>) {}
+
+    fn visit_insert_source(&mut self, _insert_source: &'ast InsertSource<'ast>) {}
 
     fn visit_delete(
         &mut self,
@@ -395,6 +409,10 @@ pub trait Visitor<'ast>: Sized {
 
     fn visit_create_table(&mut self, _stmt: &'ast CreateTableStmt<'ast>) {}
 
+    fn visit_create_table_source(&mut self, _source: &'ast CreateTableSource<'ast>) {}
+
+    fn visit_column_definition(&mut self, _column_definition: &'ast ColumnDefinition<'ast>) {}
+
     fn visit_drop_table(&mut self, _stmt: &'ast DropTableStmt<'ast>) {}
 
     fn visit_undrop_table(&mut self, _stmt: &'ast UndropTableStmt<'ast>) {}
@@ -412,6 +430,8 @@ pub trait Visitor<'ast>: Sized {
     fn visit_create_view(&mut self, _stmt: &'ast CreateViewStmt<'ast>) {}
 
     fn visit_alter_view(&mut self, _stmt: &'ast AlterViewStmt<'ast>) {}
+
+    fn visit_drop_view(&mut self, _stmt: &'ast DropViewStmt<'ast>) {}
 
     fn visit_show_users(&mut self) {}
 
@@ -475,6 +495,16 @@ pub trait Visitor<'ast>: Sized {
     fn visit_grant_share_object(&mut self, _stmt: &'ast GrantShareObjectStmt<'ast>) {}
 
     fn visit_revoke_share_object(&mut self, _stmt: &'ast RevokeShareObjectStmt<'ast>) {}
+
+    fn visit_alter_share_tenants(&mut self, _stmt: &'ast AlterShareTenantsStmt<'ast>) {}
+
+    fn visit_desc_share(&mut self, _stmt: &'ast DescShareStmt<'ast>) {}
+
+    fn visit_show_shares(&mut self, _stmt: &'ast ShowSharesStmt) {}
+
+    fn visit_show_object_grant_privileges(&mut self, _stmt: &'ast ShowObjectGrantPrivilegesStmt) {}
+
+    fn visit_show_grants_of_share(&mut self, _stmt: &'ast ShowGrantsOfShareStmt) {}
 
     fn visit_with(&mut self, with: &'ast With<'ast>) {
         let With { ctes, .. } = with;

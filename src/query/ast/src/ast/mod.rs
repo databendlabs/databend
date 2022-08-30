@@ -36,7 +36,7 @@ pub struct Identifier<'a> {
 }
 
 impl<'a> Identifier<'a> {
-    pub fn quoted(&self) -> bool {
+    pub fn is_quoted(&self) -> bool {
         self.quote.is_some()
     }
 }

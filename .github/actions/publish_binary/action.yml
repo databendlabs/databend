@@ -1,5 +1,5 @@
-name: 'Publish Binary'
-description: 'Publish releases binaries'
+name: "Publish Binary"
+description: "Publish releases binaries"
 inputs:
   github_token:
     description: "Github token"
@@ -10,11 +10,8 @@ inputs:
   target:
     description: "Release target"
     required: true
-  aws_access_key_id:
-    description: "AWS access key id"
-    required: true
-  aws_secret_access_key:
-    description: "AWS secret access key"
+  repo_role_arn:
+    description: "Repo Role Arn"
     required: true
 
 runs:
@@ -27,11 +24,11 @@ runs:
       env:
         GH_TOKEN: ${{ inputs.github_token }}
 
-    - name: Configure AWS Credentials
+    - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v1
       with:
-        aws-access-key-id: ${{ inputs.aws_access_key_id }}
-        aws-secret-access-key: ${{ inputs.aws_secret_access_key }}
+        role-duration-seconds: 900
+        role-to-assume: ${{ inputs.repo_role_arn }}
         aws-region: us-east-2
 
     - name: Sync release to S3
@@ -39,8 +36,8 @@ runs:
       run: |
         aws s3 cp databend-${{ inputs.version }}-${{ inputs.target }}.tar.gz s3://repo.databend.rs/databend/${{ inputs.version }}/databend-${{ inputs.version }}-${{ inputs.target }}.tar.gz
         curl --retry 3 -fsSLo tags.json \
-             --header 'content-type: application/json' \
-             --header 'authorization: Bearer ${{ inputs.github_token }}' \
-             https://api.github.com/repos/datafuselabs/databend/tags
+            --header 'content-type: application/json' \
+            --header 'authorization: Bearer ${{ inputs.github_token }}' \
+            https://api.github.com/repos/datafuselabs/databend/tags
         cat tags.json
         aws s3 cp ./tags.json s3://repo.databend.rs/databend/tags.json

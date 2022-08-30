@@ -51,6 +51,7 @@ use crate::api::InitNodesChannelPacket;
 use crate::api::QueryFragmentsPlanPacket;
 use crate::interpreters::QueryFragmentActions;
 use crate::interpreters::QueryFragmentsActions;
+use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::QueryPipelineBuilder;
@@ -562,9 +563,14 @@ impl QueryCoordinator {
 
         let async_runtime = GlobalIORuntime::instance();
         let query_need_abort = info.query_ctx.query_need_abort();
+        let executor_settings = ExecutorSettings::try_create(&info.query_ctx.get_settings())?;
 
-        let executor =
-            PipelineCompleteExecutor::from_pipelines(async_runtime, query_need_abort, pipelines)?;
+        let executor = PipelineCompleteExecutor::from_pipelines(
+            async_runtime,
+            query_need_abort,
+            pipelines,
+            executor_settings,
+        )?;
 
         self.fragment_exchanges.clear();
         let info_mut = self.info.as_mut().expect("Query info is None");
@@ -691,11 +697,11 @@ impl FragmentCoordinator {
                     query_id: info.query_id.to_string(),
                     executor_id: info.current_executor.to_string(),
                     destination_ids: exchange.destination_ids.to_owned(),
-                    shuffle_scatter: Arc::new(Box::new(HashFlightScatterV2::try_create(
+                    shuffle_scatter: Arc::new(HashFlightScatterV2::try_create(
                         info.query_ctx.try_get_function_context()?,
                         exchange.shuffle_keys.clone(),
                         exchange.destination_ids.len(),
-                    )?)),
+                    )?),
                 }))
             }
         }

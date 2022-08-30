@@ -1,0 +1,67 @@
+-- statement error 1025
+-- with test(round) as (
+--     select 0
+--     union all
+--     select round+1 from test where round <= 20
+-- )
+-- select test.round
+-- from
+--     (select round from test limit 1) as subselect,
+--     test;
+
+statement query I
+with test(round) as (
+    select 0
+)
+select test.round
+from
+    (select round from test limit 1) as subselect,
+    test;
+
+----
+0
+
+statement query II
+with test(round) as (
+    select 0
+)
+select *
+from
+    test t1,
+    test t2;
+
+----
+0 0
+
+-- statement error 1025
+-- with recursive test(round) as (
+--     select 0
+--     union all
+--     select round+1 from test where round <= 20
+-- )
+-- select test.round
+-- from
+--     test;
+
+-- statement error 1025
+-- with recursive test(round) as (
+--     select 0
+--     union all
+--     select round+1 from test where round <= 20
+-- )
+-- select count(*)
+-- from
+--     (select round from test limit 1) as subselect,
+--     test;
+
+-- statement error 1025
+-- with recursive test(round) as (
+--     select 0
+--     union all
+--     select round+1 from test where round <= 20
+-- )
+-- select *
+-- from
+--     (select round from test limit 1) as subselect,
+--     test;
+
