@@ -22,7 +22,7 @@ use super::FormatTreeNode;
 static INDENT_SIZE: usize = 4;
 
 impl<T> FormatTreeNode<T>
-where T: Display
+where T: Display + Clone
 {
     pub fn format_indent(&self) -> Result<String> {
         let mut buf = String::new();
