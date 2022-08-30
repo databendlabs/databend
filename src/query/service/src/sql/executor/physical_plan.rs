@@ -30,6 +30,7 @@ use common_planners::StageKind;
 use super::physical_scalar::PhysicalScalar;
 use super::AggregateFunctionDesc;
 use super::SortDesc;
+use crate::sql::optimizer::ColumnSet;
 use crate::sql::plans::JoinType;
 use crate::sql::IndexType;
 
@@ -72,6 +73,9 @@ impl Filter {
 pub struct Project {
     pub input: Box<PhysicalPlan>,
     pub projections: Vec<usize>,
+
+    /// Only used for display
+    pub columns: ColumnSet,
 }
 
 impl Project {

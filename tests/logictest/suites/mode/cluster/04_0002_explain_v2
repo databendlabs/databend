@@ -17,7 +17,7 @@ explain select t1.a from t1 where a > 0;
 Exchange
 ├── exchange type: Merge
 └── Project
-    ├── columns: [0]
+    ├── columns: [a (#0)]
     └── Filter
         ├── filters: [>(t1.a (#0), 0)]
         └── TableScan

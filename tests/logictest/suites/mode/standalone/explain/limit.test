@@ -77,7 +77,7 @@ Limit
                     ├── probe keys: [numbers.number (#0)]
                     ├── filters: []
                     ├── Project(Build)
-                    │   ├── columns: [2, 1]
+                    │   ├── columns: [COUNT(*) (#4), number (#6)]
                     │   └── EvalScalar
                     │       ├── expressions: [COUNT(*) (#5)]
                     │       └── AggregateFinal
@@ -152,7 +152,7 @@ Limit
         ├── probe keys: [CAST(c1 (#1) AS BIGINT UNSIGNED NULL)]
         ├── filters: []
         ├── Project(Build)
-        │   ├── columns: [2]
+        │   ├── columns: [c (#5)]
         │   └── EvalScalar
         │       ├── expressions: [count(t.number) (#7)]
         │       └── AggregateFinal
@@ -169,7 +169,7 @@ Limit
         │                   ├── partitions scanned: 1
         │                   └── push downs: [filters: [], limit: NONE]
         └── Project(Probe)
-            ├── columns: [2]
+            ├── columns: [c1 (#1)]
             └── EvalScalar
                 ├── expressions: [count(t1.number) (#3)]
                 └── AggregateFinal

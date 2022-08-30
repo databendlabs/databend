@@ -3,7 +3,7 @@ explain select * from (select a from (select number as a, number + 1 as b from n
 
 ----
 Project
-├── columns: [0]
+├── columns: [number (#0)]
 └── TableScan
     ├── table: default.system.numbers
     ├── read rows: 1
@@ -17,7 +17,7 @@ explain select a from (select number as a, count(*) as b from numbers(1) group b
 
 ----
 Project
-├── columns: [0]
+├── columns: [number (#0)]
 └── AggregateFinal
     ├── group by: [number]
     ├── aggregate functions: []
@@ -37,14 +37,14 @@ explain select a from (select number as a, number b, sum(number) as c, number as
 
 ----
 Project
-├── columns: [0]
+├── columns: [number (#0)]
 └── Limit
     ├── limit: 1
     ├── offset: 0
     └── Sort
         ├── sort keys: [number ASC NULLS LAST]
         └── Project
-            ├── columns: [0]
+            ├── columns: [number (#0)]
             └── Filter
                 ├── filters: [>(numbers.number (#0), 1)]
                 └── AggregateFinal
@@ -66,14 +66,14 @@ explain select * from (select t1.a from (select number + 1 as a, number + 1 as b
 
 ----
 Project
-├── columns: [0]
+├── columns: [a (#1)]
 └── HashJoin
     ├── join type: INNER
     ├── build keys: [b (#11)]
     ├── probe keys: [b (#2)]
     ├── filters: []
     ├── Project(Build)
-    │   ├── columns: [1]
+    │   ├── columns: [b (#11)]
     │   └── EvalScalar
     │       ├── expressions: [+(numbers.number (#9), 1)]
     │       └── TableScan
@@ -84,7 +84,7 @@ Project
     │           ├── partitions scanned: 1
     │           └── push downs: [filters: [], limit: NONE]
     └── Project(Probe)
-        ├── columns: [3, 2]
+        ├── columns: [a (#1), b (#2)]
         └── Filter
             ├── filters: [=(c (#3), 1)]
             └── EvalScalar
@@ -102,7 +102,7 @@ explain select t1.a from (select number + 1 as a, number + 1 as b from numbers(1
 
 ----
 Project
-├── columns: [0]
+├── columns: [a (#1)]
 └── Filter
     ├── filters: [=(a (#1), COUNT(*) (#21))]
     └── HashJoin
@@ -111,7 +111,7 @@ Project
         ├── probe keys: []
         ├── filters: []
         ├── Project(Build)
-        │   ├── columns: [1]
+        │   ├── columns: [COUNT(*) (#21)]
         │   └── EvalScalar
         │       ├── expressions: [COUNT(*) (#22)]
         │       └── AggregateFinal
@@ -121,14 +121,14 @@ Project
         │               ├── group by: []
         │               ├── aggregate functions: [count()]
         │               └── Project
-        │                   ├── columns: [0]
+        │                   ├── columns: [a (#6)]
         │                   └── HashJoin
         │                       ├── join type: INNER
         │                       ├── build keys: [b (#16)]
         │                       ├── probe keys: [b (#7)]
         │                       ├── filters: []
         │                       ├── Project(Build)
-        │                       │   ├── columns: [1]
+        │                       │   ├── columns: [b (#16)]
         │                       │   └── EvalScalar
         │                       │       ├── expressions: [+(numbers.number (#14), 1)]
         │                       │       └── TableScan
@@ -139,7 +139,7 @@ Project
         │                       │           ├── partitions scanned: 1
         │                       │           └── push downs: [filters: [], limit: NONE]
         │                       └── Project(Probe)
-        │                           ├── columns: [1, 3]
+        │                           ├── columns: [a (#6), b (#7)]
         │                           └── Filter
         │                               ├── filters: [=(c (#8), 1)]
         │                               └── EvalScalar
@@ -152,7 +152,7 @@ Project
         │                                       ├── partitions scanned: 1
         │                                       └── push downs: [filters: [], limit: NONE]
         └── Project(Probe)
-            ├── columns: [1]
+            ├── columns: [a (#1)]
             └── EvalScalar
                 ├── expressions: [+(numbers.number (#0), 1)]
                 └── TableScan
@@ -168,7 +168,7 @@ explain select name from system.functions order by example;
 
 ----
 Project
-├── columns: [1]
+├── columns: [name (#0)]
 └── Sort
     ├── sort keys: [example ASC NULLS LAST]
     └── TableScan
@@ -184,7 +184,7 @@ explain select t.number from numbers(10) t where exists(select * from numbers(10
 
 ----
 Project
-├── columns: [1]
+├── columns: [number (#0)]
 └── HashJoin
     ├── join type: CROSS
     ├── build keys: []
@@ -198,7 +198,7 @@ Project
     │   ├── partitions scanned: 1
     │   └── push downs: [filters: [], limit: NONE]
     └── Project(Probe)
-        ├── columns: [1]
+        ├── columns: [subquery (#3)]
         └── Filter
             ├── filters: [subquery (#3)]
             └── EvalScalar

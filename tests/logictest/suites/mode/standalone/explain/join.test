@@ -3,7 +3,7 @@ explain select t.number from numbers(1) as t, numbers(1) as t1 where t.number = 
 
 ----
 Project
-├── columns: [0]
+├── columns: [number (#0)]
 └── HashJoin
     ├── join type: INNER
     ├── build keys: [numbers.number (#1)]
@@ -29,7 +29,7 @@ explain select t.number from numbers(1) as t, numbers(1) as t1 where t.number = 
 
 ----
 Project
-├── columns: [0]
+├── columns: [number (#0)]
 └── HashJoin
     ├── join type: INNER
     ├── build keys: [numbers.number (#1), +(numbers.number (#1), 1)]
@@ -55,7 +55,7 @@ explain select t.number from numbers(1) as t, numbers(1) as t1 where t.number > 
 
 ----
 Project
-├── columns: [0]
+├── columns: [number (#0)]
 └── HashJoin
     ├── join type: CROSS
     ├── build keys: []
@@ -85,7 +85,7 @@ explain select t.number from numbers(1) as t, numbers(1) as t1 where t.number + 
 
 ----
 Project
-├── columns: [0]
+├── columns: [number (#0)]
 └── Filter
     ├── filters: [=(+(numbers.number (#0), numbers.number (#1)), 1)]
     └── HashJoin
@@ -113,7 +113,7 @@ explain select t.number from numbers(1) as t, numbers(1) as t1 where t.number = 
 
 ----
 Project
-├── columns: [0]
+├── columns: [number (#0)]
 └── HashJoin
     ├── join type: INNER
     ├── build keys: [CAST(CAST(numbers.number (#1) AS VARCHAR) AS DOUBLE)]
@@ -139,7 +139,7 @@ explain select t.number from numbers(1) as t, numbers(1) as t1, numbers(1) as t2
 
 ----
 Project
-├── columns: [0]
+├── columns: [number (#0)]
 └── HashJoin
     ├── join type: INNER
     ├── build keys: [numbers.number (#2)]

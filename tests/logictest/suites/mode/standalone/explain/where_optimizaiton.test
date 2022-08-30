@@ -9,7 +9,7 @@ explain select a from t_where_optimizer where a = 1;
 
 ----
 Project
-├── columns: [0]
+├── columns: [a (#0)]
 └── Filter
     ├── filters: [=(t_where_optimizer.a (#0), 1)]
     └── TableScan
@@ -77,7 +77,7 @@ explain select a from t_where_optimizer where b = 1;
 
 ----
 Project
-├── columns: [0]
+├── columns: [a (#0)]
 └── TableScan
     ├── table: default.default.t_where_optimizer
     ├── read rows: 0
@@ -97,7 +97,7 @@ explain select * from t_where_optimizer where s:a > 0;
 
 ----
 Project
-├── columns: [0, 1]
+├── columns: [id (#0), s (#1)]
 └── TableScan
     ├── table: default.default.t_where_optimizer
     ├── read rows: 0

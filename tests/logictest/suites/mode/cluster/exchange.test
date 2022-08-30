@@ -143,7 +143,7 @@ Exchange
     └── Exchange(Probe)
         ├── exchange type: Hash(number (#1))
         └── Project
-            ├── columns: [2]
+            ├── columns: [number (#1)]
             └── EvalScalar
                 ├── expressions: [sum(number) (#3)]
                 └── AggregateFinal

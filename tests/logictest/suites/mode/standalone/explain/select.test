@@ -141,7 +141,7 @@ explain select a from (select number as a, number+1 as b from numbers(1));
 
 ----
 Project
-├── columns: [0]
+├── columns: [number (#0)]
 └── TableScan
     ├── table: default.system.numbers
     ├── read rows: 1

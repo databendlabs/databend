@@ -16,6 +16,7 @@ use common_ast::ast::FormatTreeNode;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::StageKind;
+use itertools::Itertools;
 
 use super::AggregateFinal;
 use super::AggregatePartial;
@@ -125,9 +126,10 @@ fn project_to_format_tree(
     metadata: &MetadataRef,
 ) -> Result<FormatTreeNode<String>> {
     let columns = plan
-        .projections
+        .columns
         .iter()
-        .map(|column| column.to_string())
+        .sorted()
+        .map(|column| format!("{} (#{})", metadata.read().column(*column).name, column))
         .collect::<Vec<_>>()
         .join(", ");
     Ok(FormatTreeNode::with_children("Project".to_string(), vec![
