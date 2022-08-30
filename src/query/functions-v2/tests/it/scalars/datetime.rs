@@ -22,7 +22,7 @@ use goldenfile::Mint;
 use super::run_ast;
 
 #[test]
-fn test_boolean() {
+fn test_datetime() {
     let mut mint = Mint::new("tests/it/scalars/testdata");
     let file = &mut mint.new_goldenfile("datetime.txt").unwrap();
 
