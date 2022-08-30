@@ -45,7 +45,7 @@ use crate::sql::ScalarExpr;
 pub enum FormatContext {
     RelOp {
         metadata: MetadataRef,
-        rel_operator: RelOperator,
+        rel_operator: Box<RelOperator>,
     },
     Text(String),
 }
@@ -68,7 +68,7 @@ impl Display for FormatContext {
             Self::RelOp {
                 metadata,
                 rel_operator,
-            } => match rel_operator {
+            } => match rel_operator.as_ref() {
                 RelOperator::LogicalGet(_) => write!(f, "LogicalGet"),
                 RelOperator::LogicalInnerJoin(op) => format_logical_inner_join(f, metadata, op),
                 RelOperator::PhysicalScan(_) => write!(f, "PhysicalScan"),
@@ -223,7 +223,7 @@ fn to_format_tree(
         _ => FormatTreeNode::with_children(
             FormatContext::RelOp {
                 metadata,
-                rel_operator,
+                rel_operator: Box::new(rel_operator),
             },
             children,
         ),
@@ -239,7 +239,7 @@ fn physical_scan_to_format_tree(
     FormatTreeNode::with_children(
         FormatContext::RelOp {
             metadata: metadata.clone(),
-            rel_operator: op.clone().into(),
+            rel_operator: Box::new(op.clone().into()),
         },
         vec![
             vec![
@@ -295,7 +295,7 @@ fn logical_get_to_format_tree(
     FormatTreeNode::with_children(
         FormatContext::RelOp {
             metadata: metadata.clone(),
-            rel_operator: op.clone().into(),
+            rel_operator: Box::new(op.clone().into()),
         },
         vec![
             vec![
@@ -389,7 +389,7 @@ pub fn logical_inner_join_to_format_tree(
     FormatTreeNode::with_children(
         FormatContext::RelOp {
             metadata,
-            rel_operator: op.clone().into(),
+            rel_operator: Box::new(op.clone().into()),
         },
         vec![
             vec![
@@ -435,7 +435,7 @@ fn physical_hash_join_to_format_tree(
     FormatTreeNode::with_children(
         FormatContext::RelOp {
             metadata,
-            rel_operator: op.clone().into(),
+            rel_operator: Box::new(op.clone().into()),
         },
         vec![
             vec![
@@ -472,7 +472,7 @@ fn aggregate_to_format_tree(
     FormatTreeNode::with_children(
         FormatContext::RelOp {
             metadata,
-            rel_operator: op.clone().into(),
+            rel_operator: Box::new(op.clone().into()),
         },
         vec![
             vec![
@@ -505,7 +505,7 @@ fn filter_to_format_tree(
     FormatTreeNode::with_children(
         FormatContext::RelOp {
             metadata,
-            rel_operator: op.clone().into(),
+            rel_operator: Box::new(op.clone().into()),
         },
         vec![
             vec![FormatTreeNode::new(FormatContext::Text(format!(
@@ -533,7 +533,7 @@ fn eval_scalar_to_format_tree(
     FormatTreeNode::with_children(
         FormatContext::RelOp {
             metadata,
-            rel_operator: op.clone().into(),
+            rel_operator: Box::new(op.clone().into()),
         },
         vec![
             vec![FormatTreeNode::new(FormatContext::Text(format!(
@@ -568,7 +568,7 @@ fn project_to_format_tree(
     FormatTreeNode::with_children(
         FormatContext::RelOp {
             metadata,
-            rel_operator: op.clone().into(),
+            rel_operator: Box::new(op.clone().into()),
         },
         vec![
             vec![FormatTreeNode::new(FormatContext::Text(format!(
@@ -605,7 +605,7 @@ fn sort_to_format_tree(
     FormatTreeNode::with_children(
         FormatContext::RelOp {
             metadata,
-            rel_operator: op.clone().into(),
+            rel_operator: Box::new(op.clone().into()),
         },
         vec![
             vec![
@@ -627,7 +627,7 @@ fn limit_to_format_tree(
     FormatTreeNode::with_children(
         FormatContext::RelOp {
             metadata,
-            rel_operator: op.clone().into(),
+            rel_operator: Box::new(op.clone().into()),
         },
         vec![
             vec![
@@ -649,7 +649,7 @@ fn exchange_to_format_tree(
         Exchange::Hash(keys) => FormatTreeNode::with_children(
             FormatContext::RelOp {
                 metadata: metadata.clone(),
-                rel_operator: op.clone().into(),
+                rel_operator: Box::new(op.clone().into()),
             },
             vec![
                 vec![FormatTreeNode::new(FormatContext::Text(format!(
@@ -666,7 +666,7 @@ fn exchange_to_format_tree(
         _ => FormatTreeNode::with_children(
             FormatContext::RelOp {
                 metadata,
-                rel_operator: op.clone().into(),
+                rel_operator: Box::new(op.clone().into()),
             },
             children,
         ),

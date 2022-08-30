@@ -196,23 +196,6 @@ pub enum Expr<'a> {
         unit: IntervalKind,
         date: Box<Expr<'a>>,
     },
-    /// NULLIF(<expr>, <expr>)
-    NullIf {
-        span: &'a [Token<'a>],
-        expr1: Box<Expr<'a>>,
-        expr2: Box<Expr<'a>>,
-    },
-    // Coalesce(<expr>, <expr>, ...)
-    Coalesce {
-        span: &'a [Token<'a>],
-        exprs: Vec<Expr<'a>>,
-    },
-    /// IFNULL(<expr>, <expr>)
-    IfNull {
-        span: &'a [Token<'a>],
-        expr1: Box<Expr<'a>>,
-        expr2: Box<Expr<'a>>,
-    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -377,10 +360,7 @@ impl<'a> Expr<'a> {
             | Expr::Interval { span, .. }
             | Expr::DateAdd { span, .. }
             | Expr::DateSub { span, .. }
-            | Expr::DateTrunc { span, .. }
-            | Expr::NullIf { span, .. }
-            | Expr::Coalesce { span, .. }
-            | Expr::IfNull { span, .. } => span,
+            | Expr::DateTrunc { span, .. } => span,
         }
     }
 }
@@ -867,17 +847,6 @@ impl<'a> Display for Expr<'a> {
             }
             Expr::DateTrunc { unit, date, .. } => {
                 write!(f, "DATE_TRUNC({unit}, {date})")?;
-            }
-            Expr::NullIf { expr1, expr2, .. } => {
-                write!(f, "NULLIF({expr1}, {expr2})")?;
-            }
-            Expr::Coalesce { exprs, .. } => {
-                write!(f, "COALESCE(")?;
-                write_comma_separated_list(f, exprs)?;
-                write!(f, ")")?;
-            }
-            Expr::IfNull { expr1, expr2, .. } => {
-                write!(f, "IFNULL({expr1}, {expr2})")?;
             }
         }
 

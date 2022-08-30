@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,16 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
-use common_planners::*;
-use pretty_assertions::assert_eq;
+use std::time::Duration;
 
-#[test]
-fn test_plan_extras() -> Result<()> {
-    let extras = Extras::default();
-    let expect =
-        "Extras { projection: None, filters: [], prewhere: None, limit: None, order_by: [] }";
-    let actual = format!("{:?}", extras);
-    assert_eq!(expect, actual);
-    Ok(())
+use common_exception::Result;
+use common_settings::Settings;
+
+pub struct ExecutorSettings {
+    pub max_execute_time: Duration,
+}
+
+impl ExecutorSettings {
+    pub fn try_create(settings: &Settings) -> Result<ExecutorSettings> {
+        let max_execute_time = settings.get_max_execute_time()?;
+        Ok(ExecutorSettings {
+            max_execute_time: Duration::from_millis(max_execute_time),
+        })
+    }
 }

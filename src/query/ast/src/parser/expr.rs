@@ -280,27 +280,16 @@ pub enum ExprElement<'a> {
         unit: IntervalKind,
         date: Expr<'a>,
     },
-    NullIf {
-        expr1: Expr<'a>,
-        expr2: Expr<'a>,
-    },
-    Coalesce {
-        exprs: Vec<Expr<'a>>,
-    },
-    IfNull {
-        expr1: Expr<'a>,
-        expr2: Expr<'a>,
-    },
 }
 
 struct ExprParser;
 
 impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement<'a>>>> PrattParser<I> for ExprParser {
-    type Error = pratt::NoError;
+    type Error = &'static str;
     type Input = WithSpan<'a, ExprElement<'a>>;
     type Output = Expr<'a>;
 
-    fn query(&mut self, elem: &WithSpan<ExprElement>) -> pratt::Result<Affix> {
+    fn query(&mut self, elem: &WithSpan<ExprElement>) -> Result<Affix, &'static str> {
         let affix = match &elem.elem {
             ExprElement::MapAccess { .. } => Affix::Postfix(Precedence(25)),
             ExprElement::IsNull { .. } => Affix::Postfix(Precedence(17)),
@@ -355,7 +344,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement<'a>>>> PrattParser<I> for E
         Ok(affix)
     }
 
-    fn primary(&mut self, elem: WithSpan<'a, ExprElement<'a>>) -> pratt::Result<Expr<'a>> {
+    fn primary(&mut self, elem: WithSpan<'a, ExprElement<'a>>) -> Result<Expr<'a>, &'static str> {
         let expr = match elem.elem {
             ExprElement::ColumnRef {
                 database,
@@ -484,20 +473,6 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement<'a>>>> PrattParser<I> for E
                 unit,
                 date: Box::new(date),
             },
-            ExprElement::NullIf { expr1, expr2 } => Expr::NullIf {
-                span: elem.span.0,
-                expr1: Box::new(expr1),
-                expr2: Box::new(expr2),
-            },
-            ExprElement::Coalesce { exprs } => Expr::Coalesce {
-                span: elem.span.0,
-                exprs,
-            },
-            ExprElement::IfNull { expr1, expr2 } => Expr::IfNull {
-                span: elem.span.0,
-                expr1: Box::new(expr1),
-                expr2: Box::new(expr2),
-            },
             _ => unreachable!(),
         };
         Ok(expr)
@@ -508,7 +483,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement<'a>>>> PrattParser<I> for E
         lhs: Expr<'a>,
         elem: WithSpan<'a, ExprElement>,
         rhs: Expr<'a>,
-    ) -> pratt::Result<Expr<'a>> {
+    ) -> Result<Expr<'a>, &'static str> {
         let expr = match elem.elem {
             ExprElement::BinaryOp { op } => Expr::BinaryOp {
                 span: elem.span.0,
@@ -531,7 +506,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement<'a>>>> PrattParser<I> for E
         &mut self,
         elem: WithSpan<'a, ExprElement>,
         rhs: Expr<'a>,
-    ) -> pratt::Result<Expr<'a>> {
+    ) -> Result<Expr<'a>, &'static str> {
         let expr = match elem.elem {
             ExprElement::UnaryOp { op } => Expr::UnaryOp {
                 span: elem.span.0,
@@ -547,7 +522,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement<'a>>>> PrattParser<I> for E
         &mut self,
         lhs: Expr<'a>,
         elem: WithSpan<'a, ExprElement<'a>>,
-    ) -> pratt::Result<Expr<'a>> {
+    ) -> Result<Expr<'a>, &'static str> {
         let expr = match elem.elem {
             ExprElement::MapAccess { accessor } => Expr::MapAccess {
                 span: elem.span.0,
@@ -739,7 +714,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
     });
     let tuple = map(
         rule! {
-            "(" ~ #comma_separated_list0_allow_trailling(subexpr(0)) ~ ","? ~ ^")"
+            "(" ~ #comma_separated_list0_ignore_trailling(subexpr(0)) ~ ","? ~ ^")"
         },
         |(_, mut exprs, opt_trail, _)| {
             if exprs.len() == 1 && opt_trail.is_none() {
@@ -830,7 +805,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         // and then will be converted back to an array if the map access is not following
         // a primary element or postfix element.
         rule! {
-            "[" ~ #comma_separated_list0_allow_trailling(subexpr(0))? ~ ","? ~ ^"]"
+            "[" ~ #comma_separated_list0_ignore_trailling(subexpr(0))? ~ ","? ~ ^"]"
         },
         |(_, opt_args, _, _)| {
             let exprs = opt_args.unwrap_or_default();
@@ -872,34 +847,6 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         },
         |(_, _, unit, _, date, _)| ExprElement::DateTrunc { unit, date },
     );
-    let nullif = map(
-        rule! {
-            NULLIF
-            ~ ^"("
-            ~ ^#subexpr(0)
-            ~ ^","
-            ~ ^#subexpr(0)
-            ~ ^")"
-        },
-        |(_, _, expr1, _, expr2, _)| ExprElement::NullIf { expr1, expr2 },
-    );
-    let coalesce = map(
-        rule! {
-            COALESCE ~ "(" ~ #comma_separated_list1(subexpr(0)) ~ ^")"
-        },
-        |(_, _, exprs, _)| ExprElement::Coalesce { exprs },
-    );
-    let ifnull = map(
-        rule! {
-            IFNULL
-            ~ ^"("
-            ~ ^#subexpr(0)
-            ~ ^","
-            ~ ^#subexpr(0)
-            ~ ^")"
-        },
-        |(_, _, expr1, _, expr2, _)| ExprElement::IfNull { expr1, expr2 },
-    );
     let is_distinct_from = map(
         rule! {
             IS ~ NOT? ~ DISTINCT ~ FROM
@@ -927,9 +874,6 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             | #substring : "`SUBSTRING(... [FROM ...] [FOR ...])`"
             | #trim : "`TRIM(...)`"
             | #trim_from : "`TRIM([(BOTH | LEADEING | TRAILING) ... FROM ...)`"
-            | #nullif: "`NULLIF(..., ...)`"
-            | #coalesce: "`COALESCE (<expr>, ...)`"
-            | #ifnull: "`IFNULL(..., ...)`"
         ),
         rule!(
             #is_distinct_from: "`... IS [NOT] DISTINCT FROM ...`"
@@ -939,7 +883,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             | #literal : "<literal>"
             | #case : "`CASE ... END`"
             | #subquery : "`(SELECT ...)`"
-            | #tuple : "`(<expr> [,] [...])`"
+            | #tuple : "`(<expr> [, ...])`"
             | #column_ref : "<column>"
             | #map_access : "[<key>] | .<key> | :<key>"
             | #array : "`[...]`"

@@ -83,6 +83,7 @@ async fn test_memorytable() -> Result<()> {
                             filters: vec![],
                             limit: None,
                             order_by: vec![],
+                            prewhere: None,
                         }
                     })
                 })

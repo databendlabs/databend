@@ -50,8 +50,8 @@ pub fn normalize_identifier<'a>(
     ident: &Identifier<'a>,
     context: &NameResolutionContext,
 ) -> Identifier<'a> {
-    if (ident.quoted() && context.quoted_ident_case_sensitive)
-        || (!ident.quoted() && context.unquoted_ident_case_sensitive)
+    if (ident.is_quoted() && context.quoted_ident_case_sensitive)
+        || (!ident.is_quoted() && context.unquoted_ident_case_sensitive)
     {
         ident.clone()
     } else {

@@ -19,6 +19,7 @@ use common_base::base::Runtime;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineExecutor;
 use crate::pipelines::Pipeline;
 
@@ -33,6 +34,7 @@ impl PipelineCompleteExecutor {
         async_runtime: Arc<Runtime>,
         query_need_abort: Arc<AtomicBool>,
         pipeline: Pipeline,
+        settings: ExecutorSettings,
     ) -> Result<PipelineCompleteExecutor> {
         if !pipeline.is_complete_pipeline()? {
             return Err(ErrorCode::LogicalError(
@@ -40,7 +42,8 @@ impl PipelineCompleteExecutor {
             ));
         }
 
-        let executor = PipelineExecutor::create(async_runtime, query_need_abort, pipeline)?;
+        let executor =
+            PipelineExecutor::create(async_runtime, query_need_abort, pipeline, settings)?;
         Ok(PipelineCompleteExecutor { executor })
     }
 
@@ -48,6 +51,7 @@ impl PipelineCompleteExecutor {
         async_runtime: Arc<Runtime>,
         query_need_abort: Arc<AtomicBool>,
         pipelines: Vec<Pipeline>,
+        settings: ExecutorSettings,
     ) -> Result<Arc<PipelineCompleteExecutor>> {
         for pipeline in &pipelines {
             if !pipeline.is_complete_pipeline()? {
@@ -58,7 +62,7 @@ impl PipelineCompleteExecutor {
         }
 
         let executor =
-            PipelineExecutor::from_pipelines(async_runtime, query_need_abort, pipelines)?;
+            PipelineExecutor::from_pipelines(async_runtime, query_need_abort, pipelines, settings)?;
         Ok(Arc::new(PipelineCompleteExecutor { executor }))
     }
 

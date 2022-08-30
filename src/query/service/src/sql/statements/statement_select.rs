@@ -303,7 +303,7 @@ impl DfQueryStatement {
             } => {
                 let catalog_name = Self::resolve_catalog(&ctx, &name_parts)?;
                 let source_plan = table
-                    .read_plan_with_catalog(ctx.clone(), catalog_name, push_downs)
+                    .read_plan_with_catalog(ctx.clone(), catalog_name, *push_downs)
                     .await?;
                 state.relation = QueryRelation::FromTable(Box::new(source_plan));
             }

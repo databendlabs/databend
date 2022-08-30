@@ -5,7 +5,7 @@ explain select t.number from numbers(1) as t, numbers(1) as t1 where t.number = 
 Project
 ├── projections: [number (#0)]
 └── Filter
-    ├── filters: [t.number (#0) = CAST(if(is_null(scalar_subquery_4 (#4)), 0, scalar_subquery_4 (#4)) AS BIGINT UNSIGNED)]
+    ├── filters: [t.number (#0) = CAST(if(is_not_null(scalar_subquery_4 (#4)), scalar_subquery_4 (#4), 0) AS BIGINT UNSIGNED)]
     └── HashJoin: SINGLE
         ├── build keys: [subquery_6 (#6)]
         ├── probe keys: [subquery_0 (#0)]
@@ -301,7 +301,7 @@ explain select t.number from numbers(1) as t, numbers(1) as t1 where (select cou
 Project
 ├── projections: [number (#0)]
 └── Filter
-    ├── filters: [CAST(if(is_null(scalar_subquery_3 (#3)), 0, scalar_subquery_3 (#3)) AS BIGINT UNSIGNED)]
+    ├── filters: [CAST(if(is_not_null(scalar_subquery_3 (#3)), scalar_subquery_3 (#3), 0) AS BIGINT UNSIGNED)]
     └── HashJoin: SINGLE
         ├── build keys: [subquery_5 (#5)]
         ├── probe keys: [subquery_0 (#0)]

@@ -20,8 +20,6 @@ use std::num::ParseIntError;
 
 use itertools::Itertools;
 use logos::Span;
-use pratt::NoError;
-use pratt::PrattError;
 
 use crate::input::Input;
 use crate::parser::token::*;
@@ -316,25 +314,4 @@ fn pretty_print_error(source: &str, lables: Vec<(Span, String)>) -> String {
     std::str::from_utf8(&writer.into_inner())
         .unwrap()
         .to_string()
-}
-
-impl<T: std::fmt::Debug> From<PrattError<T, pratt::NoError>> for ErrorKind {
-    fn from(err: PrattError<T, NoError>) -> Self {
-        match err {
-            PrattError::EmptyInput => ErrorKind::Other("expected more tokens for expression"),
-            PrattError::UnexpectedNilfix(_) => {
-                ErrorKind::Other("unable to parse the expression value")
-            }
-            PrattError::UnexpectedPrefix(_) => {
-                ErrorKind::Other("unable to parse the prefix operator")
-            }
-            PrattError::UnexpectedInfix(_) => {
-                ErrorKind::Other("unable to parse the binary operator")
-            }
-            PrattError::UnexpectedPostfix(_) => {
-                ErrorKind::Other("unable to parse the postfix operator")
-            }
-            PrattError::UserError(_) => unreachable!(),
-        }
-    }
 }

@@ -1764,7 +1764,7 @@ evaluation (internal):
 
 ast            : bin(a2)
 raw expr       : bin(ColumnRef(1)::UInt8 NULL)
-checked expr   : bin<UInt64 NULL>(CAST(ColumnRef(1) AS UInt64 NULL))
+checked expr   : bin<Int64 NULL>(CAST(ColumnRef(1) AS Int64 NULL))
 evaluation:
 +--------+----------+------------------+---------+-----------+----------------+-----------------+-------------+
 |        | a        | a2               | b       | c         | d              | e               | Output      |
@@ -1818,7 +1818,7 @@ evaluation (internal):
 
 ast            : bin(c)
 raw expr       : bin(ColumnRef(3)::UInt32)
-checked expr   : bin<UInt64>(CAST(ColumnRef(3) AS UInt64))
+checked expr   : bin<Int64>(CAST(ColumnRef(3) AS Int64))
 evaluation:
 +--------+----------+------------------+---------+-----------+----------------+-----------------+---------+
 |        | a        | a2               | b       | c         | d              | e               | Output  |
@@ -1843,31 +1843,17 @@ evaluation (internal):
 +--------+-------------------------------------------------------------------------------------------------------------------------+
 
 
-ast            : bin(d)
-raw expr       : bin(ColumnRef(4)::Float64)
-checked expr   : bin<Float64>(ColumnRef(4))
-evaluation:
-+--------+----------+------------------+---------+-----------+----------------+-----------------+---------+
-|        | a        | a2               | b       | c         | d              | e               | Output  |
-+--------+----------+------------------+---------+-----------+----------------+-----------------+---------+
-| Type   | Int8     | UInt8 NULL       | Int16   | UInt32    | Float64        | String          | String  |
-| Domain | {-1..=3} | {1..=3} ∪ {NULL} | {2..=6} | {10..=30} | {-20.0..=30.0} | {"abc"..="def"} | Unknown |
-| Row 0  | -1       | 1                | 2       | 10        | 10.0           | "abc"           | "1010"  |
-| Row 1  | 2        | 2                | 4       | 20        | -20.0          | "def"           | "0"     |
-| Row 2  | 3        | NULL             | 6       | 30        | 30.0           | "databend"      | "11110" |
-+--------+----------+------------------+---------+-----------+----------------+-----------------+---------+
-evaluation (internal):
-+--------+-------------------------------------------------------------------------------------------------------------------------+
-| Column | Data                                                                                                                    |
-+--------+-------------------------------------------------------------------------------------------------------------------------+
-| a      | Int8([-1, 2, 3])                                                                                                        |
-| a2     | Nullable(NullableColumn { column: UInt8([1, 2, 3]), validity: [0b_____011] })                                           |
-| b      | Int16([2, 4, 6])                                                                                                        |
-| c      | UInt32([10, 20, 30])                                                                                                    |
-| d      | Float64([10.0, -20.0, 30.0])                                                                                            |
-| e      | String(StringColumn { data: [97, 98, 99, 100, 101, 102, 100, 97, 116, 97, 98, 101, 110, 100], offsets: [0, 3, 6, 14] }) |
-| Output | String(StringColumn { data: [49, 48, 49, 48, 48, 49, 49, 49, 49, 48], offsets: [0, 4, 5, 10] })                         |
-+--------+-------------------------------------------------------------------------------------------------------------------------+
+error: 
+  --> SQL:1:1
+  |
+1 | bin(d)
+  | ^^^^^^ no overload satisfies `bin(Float64)`
+
+has tried possible overloads:
+  bin(NULL) :: NULL               : unable to unify `Float64` with `NULL`
+  bin(Int64) :: String            : unable to unify `Float64` with `Int64`
+  bin(Int64 NULL) :: String NULL  : unable to unify `Float64` with `Int64`
+
 
 
 error: 
@@ -1877,15 +1863,9 @@ error:
   | ^^^^^^ no overload satisfies `bin(String)`
 
 has tried possible overloads:
-  bin(NULL) :: NULL                 : unable to unify `String` with `NULL`
-  bin(UInt64) :: String             : unable to unify `String` with `UInt64`
-  bin(UInt64 NULL) :: String NULL   : unable to unify `String` with `UInt64`
-  bin(NULL) :: NULL                 : unable to unify `String` with `NULL`
-  bin(Int64) :: String              : unable to unify `String` with `Int64`
-  bin(Int64 NULL) :: String NULL    : unable to unify `String` with `Int64`
-  bin(NULL) :: NULL                 : unable to unify `String` with `NULL`
-  bin(Float64) :: String            : unable to unify `String` with `Float64`
-  bin(Float64 NULL) :: String NULL  : unable to unify `String` with `Float64`
+  bin(NULL) :: NULL               : unable to unify `String` with `NULL`
+  bin(Int64) :: String            : unable to unify `String` with `Int64`
+  bin(Int64 NULL) :: String NULL  : unable to unify `String` with `Int64`
 
 
 
@@ -1893,54 +1873,54 @@ ast            : oct(a)
 raw expr       : oct(ColumnRef(0)::Int8)
 checked expr   : oct<Int64>(CAST(ColumnRef(0) AS Int64))
 evaluation:
-+--------+----------+------------------+---------+-----------+----------------+-----------------+---------+
-|        | a        | a2               | b       | c         | d              | e               | Output  |
-+--------+----------+------------------+---------+-----------+----------------+-----------------+---------+
-| Type   | Int8     | UInt8 NULL       | Int16   | UInt32    | Float64        | String          | String  |
-| Domain | {-1..=3} | {1..=3} ∪ {NULL} | {2..=6} | {10..=30} | {-20.0..=30.0} | {"abc"..="def"} | Unknown |
-| Row 0  | -1       | 1                | 2       | 10        | 10.0           | "abc"           | "-01"   |
-| Row 1  | 2        | 2                | 4       | 20        | -20.0          | "def"           | "02"    |
-| Row 2  | 3        | NULL             | 6       | 30        | 30.0           | "databend"      | "03"    |
-+--------+----------+------------------+---------+-----------+----------------+-----------------+---------+
++--------+----------+------------------+---------+-----------+----------------+-----------------+--------------------------+
+|        | a        | a2               | b       | c         | d              | e               | Output                   |
++--------+----------+------------------+---------+-----------+----------------+-----------------+--------------------------+
+| Type   | Int8     | UInt8 NULL       | Int16   | UInt32    | Float64        | String          | String                   |
+| Domain | {-1..=3} | {1..=3} ∪ {NULL} | {2..=6} | {10..=30} | {-20.0..=30.0} | {"abc"..="def"} | Unknown                  |
+| Row 0  | -1       | 1                | 2       | 10        | 10.0           | "abc"           | "1777777777777777777777" |
+| Row 1  | 2        | 2                | 4       | 20        | -20.0          | "def"           | "2"                      |
+| Row 2  | 3        | NULL             | 6       | 30        | 30.0           | "databend"      | "3"                      |
++--------+----------+------------------+---------+-----------+----------------+-----------------+--------------------------+
 evaluation (internal):
-+--------+-------------------------------------------------------------------------------------------------------------------------+
-| Column | Data                                                                                                                    |
-+--------+-------------------------------------------------------------------------------------------------------------------------+
-| a      | Int8([-1, 2, 3])                                                                                                        |
-| a2     | Nullable(NullableColumn { column: UInt8([1, 2, 3]), validity: [0b_____011] })                                           |
-| b      | Int16([2, 4, 6])                                                                                                        |
-| c      | UInt32([10, 20, 30])                                                                                                    |
-| d      | Float64([10.0, -20.0, 30.0])                                                                                            |
-| e      | String(StringColumn { data: [97, 98, 99, 100, 101, 102, 100, 97, 116, 97, 98, 101, 110, 100], offsets: [0, 3, 6, 14] }) |
-| Output | String(StringColumn { data: [45, 48, 49, 48, 50, 48, 51], offsets: [0, 3, 5, 7] })                                      |
-+--------+-------------------------------------------------------------------------------------------------------------------------+
++--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                      |
++--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------+
+| a      | Int8([-1, 2, 3])                                                                                                                                          |
+| a2     | Nullable(NullableColumn { column: UInt8([1, 2, 3]), validity: [0b_____011] })                                                                             |
+| b      | Int16([2, 4, 6])                                                                                                                                          |
+| c      | UInt32([10, 20, 30])                                                                                                                                      |
+| d      | Float64([10.0, -20.0, 30.0])                                                                                                                              |
+| e      | String(StringColumn { data: [97, 98, 99, 100, 101, 102, 100, 97, 116, 97, 98, 101, 110, 100], offsets: [0, 3, 6, 14] })                                   |
+| Output | String(StringColumn { data: [49, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 50, 51], offsets: [0, 22, 23, 24] }) |
++--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 
 ast            : oct(a2)
 raw expr       : oct(ColumnRef(1)::UInt8 NULL)
-checked expr   : oct<UInt64 NULL>(CAST(ColumnRef(1) AS UInt64 NULL))
+checked expr   : oct<Int64 NULL>(CAST(ColumnRef(1) AS Int64 NULL))
 evaluation:
 +--------+----------+------------------+---------+-----------+----------------+-----------------+-------------+
 |        | a        | a2               | b       | c         | d              | e               | Output      |
 +--------+----------+------------------+---------+-----------+----------------+-----------------+-------------+
 | Type   | Int8     | UInt8 NULL       | Int16   | UInt32    | Float64        | String          | String NULL |
 | Domain | {-1..=3} | {1..=3} ∪ {NULL} | {2..=6} | {10..=30} | {-20.0..=30.0} | {"abc"..="def"} | Unknown     |
-| Row 0  | -1       | 1                | 2       | 10        | 10.0           | "abc"           | "01"        |
-| Row 1  | 2        | 2                | 4       | 20        | -20.0          | "def"           | "02"        |
+| Row 0  | -1       | 1                | 2       | 10        | 10.0           | "abc"           | "1"         |
+| Row 1  | 2        | 2                | 4       | 20        | -20.0          | "def"           | "2"         |
 | Row 2  | 3        | NULL             | 6       | 30        | 30.0           | "databend"      | NULL        |
 +--------+----------+------------------+---------+-----------+----------------+-----------------+-------------+
 evaluation (internal):
-+--------+---------------------------------------------------------------------------------------------------------------------------------------------+
-| Column | Data                                                                                                                                        |
-+--------+---------------------------------------------------------------------------------------------------------------------------------------------+
-| a      | Int8([-1, 2, 3])                                                                                                                            |
-| a2     | Nullable(NullableColumn { column: UInt8([1, 2, 3]), validity: [0b_____011] })                                                               |
-| b      | Int16([2, 4, 6])                                                                                                                            |
-| c      | UInt32([10, 20, 30])                                                                                                                        |
-| d      | Float64([10.0, -20.0, 30.0])                                                                                                                |
-| e      | String(StringColumn { data: [97, 98, 99, 100, 101, 102, 100, 97, 116, 97, 98, 101, 110, 100], offsets: [0, 3, 6, 14] })                     |
-| Output | Nullable(NullableColumn { column: String(StringColumn { data: [48, 49, 48, 50, 48, 51], offsets: [0, 2, 4, 6] }), validity: [0b_____011] }) |
-+--------+---------------------------------------------------------------------------------------------------------------------------------------------+
++--------+---------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                            |
++--------+---------------------------------------------------------------------------------------------------------------------------------+
+| a      | Int8([-1, 2, 3])                                                                                                                |
+| a2     | Nullable(NullableColumn { column: UInt8([1, 2, 3]), validity: [0b_____011] })                                                   |
+| b      | Int16([2, 4, 6])                                                                                                                |
+| c      | UInt32([10, 20, 30])                                                                                                            |
+| d      | Float64([10.0, -20.0, 30.0])                                                                                                    |
+| e      | String(StringColumn { data: [97, 98, 99, 100, 101, 102, 100, 97, 116, 97, 98, 101, 110, 100], offsets: [0, 3, 6, 14] })         |
+| Output | Nullable(NullableColumn { column: String(StringColumn { data: [49, 50, 51], offsets: [0, 1, 2, 3] }), validity: [0b_____011] }) |
++--------+---------------------------------------------------------------------------------------------------------------------------------+
 
 
 ast            : oct(b)
@@ -1952,9 +1932,9 @@ evaluation:
 +--------+----------+------------------+---------+-----------+----------------+-----------------+---------+
 | Type   | Int8     | UInt8 NULL       | Int16   | UInt32    | Float64        | String          | String  |
 | Domain | {-1..=3} | {1..=3} ∪ {NULL} | {2..=6} | {10..=30} | {-20.0..=30.0} | {"abc"..="def"} | Unknown |
-| Row 0  | -1       | 1                | 2       | 10        | 10.0           | "abc"           | "02"    |
-| Row 1  | 2        | 2                | 4       | 20        | -20.0          | "def"           | "04"    |
-| Row 2  | 3        | NULL             | 6       | 30        | 30.0           | "databend"      | "06"    |
+| Row 0  | -1       | 1                | 2       | 10        | 10.0           | "abc"           | "2"     |
+| Row 1  | 2        | 2                | 4       | 20        | -20.0          | "def"           | "4"     |
+| Row 2  | 3        | NULL             | 6       | 30        | 30.0           | "databend"      | "6"     |
 +--------+----------+------------------+---------+-----------+----------------+-----------------+---------+
 evaluation (internal):
 +--------+-------------------------------------------------------------------------------------------------------------------------+
@@ -1966,22 +1946,22 @@ evaluation (internal):
 | c      | UInt32([10, 20, 30])                                                                                                    |
 | d      | Float64([10.0, -20.0, 30.0])                                                                                            |
 | e      | String(StringColumn { data: [97, 98, 99, 100, 101, 102, 100, 97, 116, 97, 98, 101, 110, 100], offsets: [0, 3, 6, 14] }) |
-| Output | String(StringColumn { data: [48, 50, 48, 52, 48, 54], offsets: [0, 2, 4, 6] })                                          |
+| Output | String(StringColumn { data: [50, 52, 54], offsets: [0, 1, 2, 3] })                                                      |
 +--------+-------------------------------------------------------------------------------------------------------------------------+
 
 
 ast            : oct(c)
 raw expr       : oct(ColumnRef(3)::UInt32)
-checked expr   : oct<UInt64>(CAST(ColumnRef(3) AS UInt64))
+checked expr   : oct<Int64>(CAST(ColumnRef(3) AS Int64))
 evaluation:
 +--------+----------+------------------+---------+-----------+----------------+-----------------+---------+
 |        | a        | a2               | b       | c         | d              | e               | Output  |
 +--------+----------+------------------+---------+-----------+----------------+-----------------+---------+
 | Type   | Int8     | UInt8 NULL       | Int16   | UInt32    | Float64        | String          | String  |
 | Domain | {-1..=3} | {1..=3} ∪ {NULL} | {2..=6} | {10..=30} | {-20.0..=30.0} | {"abc"..="def"} | Unknown |
-| Row 0  | -1       | 1                | 2       | 10        | 10.0           | "abc"           | "012"   |
-| Row 1  | 2        | 2                | 4       | 20        | -20.0          | "def"           | "024"   |
-| Row 2  | 3        | NULL             | 6       | 30        | 30.0           | "databend"      | "036"   |
+| Row 0  | -1       | 1                | 2       | 10        | 10.0           | "abc"           | "12"    |
+| Row 1  | 2        | 2                | 4       | 20        | -20.0          | "def"           | "24"    |
+| Row 2  | 3        | NULL             | 6       | 30        | 30.0           | "databend"      | "36"    |
 +--------+----------+------------------+---------+-----------+----------------+-----------------+---------+
 evaluation (internal):
 +--------+-------------------------------------------------------------------------------------------------------------------------+
@@ -1993,35 +1973,21 @@ evaluation (internal):
 | c      | UInt32([10, 20, 30])                                                                                                    |
 | d      | Float64([10.0, -20.0, 30.0])                                                                                            |
 | e      | String(StringColumn { data: [97, 98, 99, 100, 101, 102, 100, 97, 116, 97, 98, 101, 110, 100], offsets: [0, 3, 6, 14] }) |
-| Output | String(StringColumn { data: [48, 49, 50, 48, 50, 52, 48, 51, 54], offsets: [0, 3, 6, 9] })                              |
+| Output | String(StringColumn { data: [49, 50, 50, 52, 51, 54], offsets: [0, 2, 4, 6] })                                          |
 +--------+-------------------------------------------------------------------------------------------------------------------------+
 
 
-ast            : oct(d)
-raw expr       : oct(ColumnRef(4)::Float64)
-checked expr   : oct<Float64>(ColumnRef(4))
-evaluation:
-+--------+----------+------------------+---------+-----------+----------------+-----------------+---------+
-|        | a        | a2               | b       | c         | d              | e               | Output  |
-+--------+----------+------------------+---------+-----------+----------------+-----------------+---------+
-| Type   | Int8     | UInt8 NULL       | Int16   | UInt32    | Float64        | String          | String  |
-| Domain | {-1..=3} | {1..=3} ∪ {NULL} | {2..=6} | {10..=30} | {-20.0..=30.0} | {"abc"..="def"} | Unknown |
-| Row 0  | -1       | 1                | 2       | 10        | 10.0           | "abc"           | "012"   |
-| Row 1  | 2        | 2                | 4       | 20        | -20.0          | "def"           | "-024"  |
-| Row 2  | 3        | NULL             | 6       | 30        | 30.0           | "databend"      | "036"   |
-+--------+----------+------------------+---------+-----------+----------------+-----------------+---------+
-evaluation (internal):
-+--------+-------------------------------------------------------------------------------------------------------------------------+
-| Column | Data                                                                                                                    |
-+--------+-------------------------------------------------------------------------------------------------------------------------+
-| a      | Int8([-1, 2, 3])                                                                                                        |
-| a2     | Nullable(NullableColumn { column: UInt8([1, 2, 3]), validity: [0b_____011] })                                           |
-| b      | Int16([2, 4, 6])                                                                                                        |
-| c      | UInt32([10, 20, 30])                                                                                                    |
-| d      | Float64([10.0, -20.0, 30.0])                                                                                            |
-| e      | String(StringColumn { data: [97, 98, 99, 100, 101, 102, 100, 97, 116, 97, 98, 101, 110, 100], offsets: [0, 3, 6, 14] }) |
-| Output | String(StringColumn { data: [48, 49, 50, 45, 48, 50, 52, 48, 51, 54], offsets: [0, 3, 7, 10] })                         |
-+--------+-------------------------------------------------------------------------------------------------------------------------+
+error: 
+  --> SQL:1:1
+  |
+1 | oct(d)
+  | ^^^^^^ no overload satisfies `oct(Float64)`
+
+has tried possible overloads:
+  oct(NULL) :: NULL               : unable to unify `Float64` with `NULL`
+  oct(Int64) :: String            : unable to unify `Float64` with `Int64`
+  oct(Int64 NULL) :: String NULL  : unable to unify `Float64` with `Int64`
+
 
 
 error: 
@@ -2031,15 +1997,9 @@ error:
   | ^^^^^^ no overload satisfies `oct(String)`
 
 has tried possible overloads:
-  oct(NULL) :: NULL                 : unable to unify `String` with `NULL`
-  oct(UInt64) :: String             : unable to unify `String` with `UInt64`
-  oct(UInt64 NULL) :: String NULL   : unable to unify `String` with `UInt64`
-  oct(NULL) :: NULL                 : unable to unify `String` with `NULL`
-  oct(Int64) :: String              : unable to unify `String` with `Int64`
-  oct(Int64 NULL) :: String NULL    : unable to unify `String` with `Int64`
-  oct(NULL) :: NULL                 : unable to unify `String` with `NULL`
-  oct(Float64) :: String            : unable to unify `String` with `Float64`
-  oct(Float64 NULL) :: String NULL  : unable to unify `String` with `Float64`
+  oct(NULL) :: NULL               : unable to unify `String` with `NULL`
+  oct(Int64) :: String            : unable to unify `String` with `Int64`
+  oct(Int64 NULL) :: String NULL  : unable to unify `String` with `Int64`
 
 
 
@@ -2072,7 +2032,7 @@ evaluation (internal):
 
 ast            : hex(a2)
 raw expr       : hex(ColumnRef(1)::UInt8 NULL)
-checked expr   : hex<UInt64 NULL>(CAST(ColumnRef(1) AS UInt64 NULL))
+checked expr   : hex<Int64 NULL>(CAST(ColumnRef(1) AS Int64 NULL))
 evaluation:
 +--------+----------+------------------+---------+-----------+----------------+-----------------+-------------+
 |        | a        | a2               | b       | c         | d              | e               | Output      |
@@ -2126,7 +2086,7 @@ evaluation (internal):
 
 ast            : hex(c)
 raw expr       : hex(ColumnRef(3)::UInt32)
-checked expr   : hex<UInt64>(CAST(ColumnRef(3) AS UInt64))
+checked expr   : hex<Int64>(CAST(ColumnRef(3) AS Int64))
 evaluation:
 +--------+----------+------------------+---------+-----------+----------------+-----------------+---------+
 |        | a        | a2               | b       | c         | d              | e               | Output  |
@@ -2158,9 +2118,6 @@ error:
   | ^^^^^^ no overload satisfies `hex(Float64)`
 
 has tried possible overloads:
-  hex(NULL) :: NULL                : unable to unify `Float64` with `NULL`
-  hex(UInt64) :: String            : unable to unify `Float64` with `UInt64`
-  hex(UInt64 NULL) :: String NULL  : unable to unify `Float64` with `UInt64`
   hex(NULL) :: NULL                : unable to unify `Float64` with `NULL`
   hex(Int64) :: String             : unable to unify `Float64` with `Int64`
   hex(Int64 NULL) :: String NULL   : unable to unify `Float64` with `Int64`
