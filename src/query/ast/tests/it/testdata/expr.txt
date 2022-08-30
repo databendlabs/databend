@@ -2615,9 +2615,9 @@ BinaryOp {
 ---------- Input ----------
 nullif(1, 1)
 ---------- Output ---------
-NULLIF(1, 1)
+nullif(1, 1)
 ---------- AST ------------
-NullIf {
+FunctionCall {
     span: [
         NULLIF(0..6),
         LParen(6..7),
@@ -2626,31 +2626,40 @@ NullIf {
         LiteralInteger(10..11),
         RParen(11..12),
     ],
-    expr1: Literal {
-        span: [
-            LiteralInteger(7..8),
-        ],
-        lit: Integer(
-            1,
-        ),
+    distinct: false,
+    name: Identifier {
+        name: "nullif",
+        quote: None,
+        span: NULLIF(0..6),
     },
-    expr2: Literal {
-        span: [
-            LiteralInteger(10..11),
-        ],
-        lit: Integer(
-            1,
-        ),
-    },
+    args: [
+        Literal {
+            span: [
+                LiteralInteger(7..8),
+            ],
+            lit: Integer(
+                1,
+            ),
+        },
+        Literal {
+            span: [
+                LiteralInteger(10..11),
+            ],
+            lit: Integer(
+                1,
+            ),
+        },
+    ],
+    params: [],
 }
 
 
 ---------- Input ----------
 nullif(a, b)
 ---------- Output ---------
-NULLIF(a, b)
+nullif(a, b)
 ---------- AST ------------
-NullIf {
+FunctionCall {
     span: [
         NULLIF(0..6),
         LParen(6..7),
@@ -2659,39 +2668,48 @@ NullIf {
         Ident(10..11),
         RParen(11..12),
     ],
-    expr1: ColumnRef {
-        span: [
-            Ident(7..8),
-        ],
-        database: None,
-        table: None,
-        column: Identifier {
-            name: "a",
-            quote: None,
-            span: Ident(7..8),
-        },
+    distinct: false,
+    name: Identifier {
+        name: "nullif",
+        quote: None,
+        span: NULLIF(0..6),
     },
-    expr2: ColumnRef {
-        span: [
-            Ident(10..11),
-        ],
-        database: None,
-        table: None,
-        column: Identifier {
-            name: "b",
-            quote: None,
-            span: Ident(10..11),
+    args: [
+        ColumnRef {
+            span: [
+                Ident(7..8),
+            ],
+            database: None,
+            table: None,
+            column: Identifier {
+                name: "a",
+                quote: None,
+                span: Ident(7..8),
+            },
         },
-    },
+        ColumnRef {
+            span: [
+                Ident(10..11),
+            ],
+            database: None,
+            table: None,
+            column: Identifier {
+                name: "b",
+                quote: None,
+                span: Ident(10..11),
+            },
+        },
+    ],
+    params: [],
 }
 
 
 ---------- Input ----------
 coalesce(1, 2, 3)
 ---------- Output ---------
-COALESCE(1, 2, 3)
+coalesce(1, 2, 3)
 ---------- AST ------------
-Coalesce {
+FunctionCall {
     span: [
         COALESCE(0..8),
         LParen(8..9),
@@ -2702,7 +2720,13 @@ Coalesce {
         LiteralInteger(15..16),
         RParen(16..17),
     ],
-    exprs: [
+    distinct: false,
+    name: Identifier {
+        name: "coalesce",
+        quote: None,
+        span: COALESCE(0..8),
+    },
+    args: [
         Literal {
             span: [
                 LiteralInteger(9..10),
@@ -2728,15 +2752,16 @@ Coalesce {
             ),
         },
     ],
+    params: [],
 }
 
 
 ---------- Input ----------
 coalesce(a, b, c)
 ---------- Output ---------
-COALESCE(a, b, c)
+coalesce(a, b, c)
 ---------- AST ------------
-Coalesce {
+FunctionCall {
     span: [
         COALESCE(0..8),
         LParen(8..9),
@@ -2747,7 +2772,13 @@ Coalesce {
         Ident(15..16),
         RParen(16..17),
     ],
-    exprs: [
+    distinct: false,
+    name: Identifier {
+        name: "coalesce",
+        quote: None,
+        span: COALESCE(0..8),
+    },
+    args: [
         ColumnRef {
             span: [
                 Ident(9..10),
@@ -2785,15 +2816,16 @@ Coalesce {
             },
         },
     ],
+    params: [],
 }
 
 
 ---------- Input ----------
 ifnull(1, 1)
 ---------- Output ---------
-IFNULL(1, 1)
+ifnull(1, 1)
 ---------- AST ------------
-IfNull {
+FunctionCall {
     span: [
         IFNULL(0..6),
         LParen(6..7),
@@ -2802,31 +2834,40 @@ IfNull {
         LiteralInteger(10..11),
         RParen(11..12),
     ],
-    expr1: Literal {
-        span: [
-            LiteralInteger(7..8),
-        ],
-        lit: Integer(
-            1,
-        ),
+    distinct: false,
+    name: Identifier {
+        name: "ifnull",
+        quote: None,
+        span: IFNULL(0..6),
     },
-    expr2: Literal {
-        span: [
-            LiteralInteger(10..11),
-        ],
-        lit: Integer(
-            1,
-        ),
-    },
+    args: [
+        Literal {
+            span: [
+                LiteralInteger(7..8),
+            ],
+            lit: Integer(
+                1,
+            ),
+        },
+        Literal {
+            span: [
+                LiteralInteger(10..11),
+            ],
+            lit: Integer(
+                1,
+            ),
+        },
+    ],
+    params: [],
 }
 
 
 ---------- Input ----------
 ifnull(a, b)
 ---------- Output ---------
-IFNULL(a, b)
+ifnull(a, b)
 ---------- AST ------------
-IfNull {
+FunctionCall {
     span: [
         IFNULL(0..6),
         LParen(6..7),
@@ -2835,30 +2876,39 @@ IfNull {
         Ident(10..11),
         RParen(11..12),
     ],
-    expr1: ColumnRef {
-        span: [
-            Ident(7..8),
-        ],
-        database: None,
-        table: None,
-        column: Identifier {
-            name: "a",
-            quote: None,
-            span: Ident(7..8),
-        },
+    distinct: false,
+    name: Identifier {
+        name: "ifnull",
+        quote: None,
+        span: IFNULL(0..6),
     },
-    expr2: ColumnRef {
-        span: [
-            Ident(10..11),
-        ],
-        database: None,
-        table: None,
-        column: Identifier {
-            name: "b",
-            quote: None,
-            span: Ident(10..11),
+    args: [
+        ColumnRef {
+            span: [
+                Ident(7..8),
+            ],
+            database: None,
+            table: None,
+            column: Identifier {
+                name: "a",
+                quote: None,
+                span: Ident(7..8),
+            },
         },
-    },
+        ColumnRef {
+            span: [
+                Ident(10..11),
+            ],
+            database: None,
+            table: None,
+            column: Identifier {
+                name: "b",
+                quote: None,
+                span: Ident(10..11),
+            },
+        },
+    ],
+    params: [],
 }
 
 

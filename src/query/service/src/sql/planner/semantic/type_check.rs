@@ -192,13 +192,9 @@ impl<'a> TypeChecker<'a> {
             Expr::IsNull {
                 span, expr, not, ..
             } => {
-                let func_name = if *not {
-                    "is_not_null".to_string()
-                } else {
-                    "is_null".to_string()
-                };
+                let func_name = if *not { "is_not_null" } else { "is_null" };
 
-                self.resolve_function(span, func_name.as_str(), &[expr.as_ref()], required_type)
+                self.resolve_function(span, func_name, &[expr.as_ref()], required_type)
                     .await?
             }
 
@@ -275,17 +271,13 @@ impl<'a> TypeChecker<'a> {
                 not,
                 ..
             } => {
-                let func_name = if *not {
-                    "not_in".to_string()
-                } else {
-                    "in".to_string()
-                };
+                let func_name = if *not { "not_in" } else { "in" };
                 let mut args = Vec::with_capacity(list.len() + 1);
                 args.push(expr.as_ref());
                 for expr in list.iter() {
                     args.push(expr);
                 }
-                self.resolve_function(span, func_name.as_str(), &args, required_type)
+                self.resolve_function(span, func_name, &args, required_type)
                     .await?
             }
 
@@ -511,14 +503,10 @@ impl<'a> TypeChecker<'a> {
                 ..
             } => {
                 let func_name = name.name.as_str();
-                if !is_builtin_function(func_name) {
-                    return self.resolve_udf(span, func_name, args).await;
-                }
-                // Check if current function is a context function, e.g. `database`, `version`
-                if let Some(ctx_func_result) =
-                    self.try_resolve_context_function(span, func_name).await
+                if !is_builtin_function(func_name)
+                    && !Self::is_rewritable_scalar_function(func_name)
                 {
-                    return ctx_func_result;
+                    return self.resolve_udf(span, func_name, args).await;
                 }
 
                 let args: Vec<&Expr> = args.iter().collect();
@@ -826,92 +814,6 @@ impl<'a> TypeChecker<'a> {
             }
 
             Expr::Tuple { span, exprs, .. } => self.resolve_tuple(span, exprs).await?,
-
-            Expr::NullIf { span, expr1, expr2 } => {
-                // Rewrite NULLIF(expr1, expr2) to IF(expr1 = expr2, NULL, expr1)
-                self.resolve_function(
-                    span,
-                    "if",
-                    &[
-                        &Expr::BinaryOp {
-                            span,
-                            op: BinaryOperator::Eq,
-                            left: expr1.clone(),
-                            right: expr2.clone(),
-                        },
-                        &Expr::Literal {
-                            span,
-                            lit: Literal::Null,
-                        },
-                        expr1.as_ref(),
-                    ],
-                    None,
-                )
-                .await?
-            }
-
-            Expr::Coalesce { span, exprs } => {
-                // coalesce(arg0, arg1, ..., argN) is essentially
-                // multiIf(is_not_null(arg0), assume_not_null(arg0), is_not_null(arg1), assume_not_null(arg1), ..., argN)
-                // with constant Literal::NULL arguments removed.
-                let mut args = Vec::with_capacity(exprs.len() * 2 + 1);
-
-                for expr in exprs.iter().filter(|expr| {
-                    !matches!(expr, Expr::Literal {
-                        span: _,
-                        lit: Literal::Null,
-                    })
-                }) {
-                    let is_not_null_expr = Expr::IsNull {
-                        span,
-                        expr: Box::new(expr.clone()),
-                        not: true,
-                    };
-
-                    let assume_not_null_expr = Expr::FunctionCall {
-                        span,
-                        distinct: false,
-                        name: Identifier {
-                            name: "assume_not_null".to_string(),
-                            quote: None,
-                            span: span[0].clone(),
-                        },
-                        args: vec![expr.clone()],
-                        params: vec![],
-                    };
-
-                    args.push(is_not_null_expr);
-                    args.push(assume_not_null_expr);
-                }
-                args.push(Expr::Literal {
-                    span,
-                    lit: Literal::Null,
-                });
-                let args_ref: Vec<&Expr> = args.iter().collect();
-                self.resolve_function(span, "multi_if", &args_ref, None)
-                    .await?
-            }
-
-            Expr::IfNull {
-                span, expr1, expr2, ..
-            } => {
-                // Rewrite IFNULL(expr1, expr2) to IF(ISNULL(expr1), expr2, expr1)
-                self.resolve_function(
-                    span,
-                    "if",
-                    &[
-                        &Expr::IsNull {
-                            span,
-                            expr: expr1.clone(),
-                            not: false,
-                        },
-                        expr2.as_ref(),
-                        expr1.as_ref(),
-                    ],
-                    None,
-                )
-                .await?
-            }
         };
 
         Ok(Box::new(self.post_resolve(&scalar, &data_type)?))
@@ -926,6 +828,14 @@ impl<'a> TypeChecker<'a> {
         arguments: &[&Expr<'_>],
         _required_type: Option<DataTypeImpl>,
     ) -> Result<Box<(Scalar, DataTypeImpl)>> {
+        // Check if current function is a virtual function, e.g. `database`, `version`
+        if let Some(rewriten_func_result) = self
+            .try_rewrite_scalar_function(span, func_name, arguments)
+            .await
+        {
+            return rewriten_func_result;
+        }
+
         let mut args = vec![];
         let mut arg_types = vec![];
 
@@ -1418,57 +1328,227 @@ impl<'a> TypeChecker<'a> {
         Ok(Box::new((subquery_expr.into(), *data_type)))
     }
 
+    fn is_rewritable_scalar_function(func_name: &str) -> bool {
+        matches!(
+            func_name.to_lowercase().as_str(),
+            "database"
+                | "currentdatabase"
+                | "current_database"
+                | "version"
+                | "user"
+                | "currentuser"
+                | "current_user"
+                | "connection_id"
+                | "timezone"
+                | "is_null"
+                | "not_in"
+                | "nullif"
+                | "ifnull"
+                | "coalesce"
+        )
+    }
+
     #[async_recursion::async_recursion]
-    async fn try_resolve_context_function(
+    async fn try_rewrite_scalar_function(
         &mut self,
         span: &[Token<'_>],
         func_name: &str,
+        args: &[&Expr<'_>],
     ) -> Option<Result<Box<(Scalar, DataTypeImpl)>>> {
-        match func_name.to_lowercase().as_str() {
-            name @ ("database" | "currentdatabase" | "current_database") => {
-                let arg = Expr::Literal {
-                    span: &[],
-                    lit: Literal::String(self.ctx.get_current_database()),
-                };
-                Some(self.resolve_function(span, name, &[&arg], None).await)
-            }
-            "version" => {
-                let arg = Expr::Literal {
-                    span: &[],
-                    lit: Literal::String(self.ctx.get_fuse_version()),
-                };
-                Some(self.resolve_function(span, "version", &[&arg], None).await)
-            }
-            name @ ("user" | "currentuser" | "current_user") => match self.ctx.get_current_user() {
-                Ok(user) => {
-                    let arg = Expr::Literal {
-                        span: &[],
-                        lit: Literal::String(user.identity().to_string()),
-                    };
-                    Some(self.resolve_function(span, name, &[&arg], None).await)
-                }
+        match (func_name.to_lowercase().as_str(), &args) {
+            ("database" | "currentdatabase" | "current_database", &[]) => Some(
+                self.resolve(
+                    &Expr::Literal {
+                        span,
+                        lit: Literal::String(self.ctx.get_current_database()),
+                    },
+                    None,
+                )
+                .await,
+            ),
+            ("version", &[]) => Some(
+                self.resolve(
+                    &Expr::Literal {
+                        span,
+                        lit: Literal::String(self.ctx.get_fuse_version()),
+                    },
+                    None,
+                )
+                .await,
+            ),
+            ("user" | "currentuser" | "current_user", &[]) => match self.ctx.get_current_user() {
+                Ok(user) => Some(
+                    self.resolve(
+                        &Expr::Literal {
+                            span,
+                            lit: Literal::String(user.identity().to_string()),
+                        },
+                        None,
+                    )
+                    .await,
+                ),
                 Err(e) => Some(Err(e)),
             },
-            "connection_id" => {
-                let arg = Expr::Literal {
-                    span: &[],
-                    lit: Literal::String(self.ctx.get_connection_id()),
-                };
+            ("connection_id", &[]) => Some(
+                self.resolve(
+                    &Expr::Literal {
+                        span,
+                        lit: Literal::String(self.ctx.get_connection_id()),
+                    },
+                    None,
+                )
+                .await,
+            ),
+            ("timezone", &[]) => {
+                let tz = self.ctx.get_settings().get_timezone().unwrap();
+                // No need to handle err, the tz in settings is valid.
+                let tz = String::from_utf8(tz).unwrap();
                 Some(
-                    self.resolve_function(span, "connection_id", &[&arg], None)
+                    self.resolve(
+                        &Expr::Literal {
+                            span,
+                            lit: Literal::String(tz),
+                        },
+                        None,
+                    )
+                    .await,
+                )
+            }
+            ("is_null", &[arg0]) => {
+                // Rewrite `is_null(arg0)` to `not(is_not_null(arg0))`
+                Some(
+                    self.resolve_function(
+                        span,
+                        "not",
+                        &[&Expr::FunctionCall {
+                            span,
+                            distinct: false,
+                            name: Identifier {
+                                name: "is_not_null".to_string(),
+                                quote: None,
+                                span: span[0].clone(),
+                            },
+                            args: vec![(*arg0).clone()],
+                            params: vec![],
+                        }],
+                        None,
+                    )
+                    .await,
+                )
+            }
+            ("not_in", args) => {
+                // Rewrite `not_in(arg0)` to `not(in(arg0))`
+                Some(
+                    self.resolve_function(
+                        span,
+                        "not",
+                        &[&Expr::FunctionCall {
+                            span,
+                            distinct: false,
+                            name: Identifier {
+                                name: "in".to_string(),
+                                quote: None,
+                                span: span[0].clone(),
+                            },
+                            args: args.iter().copied().cloned().collect(),
+                            params: vec![],
+                        }],
+                        None,
+                    )
+                    .await,
+                )
+            }
+            ("nullif", &[arg0, arg1]) => {
+                // Rewrite nullif(arg0, arg1) to if(arg0 = arg1, null, arg0)
+                Some(
+                    self.resolve_function(
+                        span,
+                        "if",
+                        &[
+                            &Expr::BinaryOp {
+                                span,
+                                op: BinaryOperator::Eq,
+                                left: Box::new((*arg0).clone()),
+                                right: Box::new((*arg1).clone()),
+                            },
+                            &Expr::Literal {
+                                span,
+                                lit: Literal::Null,
+                            },
+                            arg0,
+                        ],
+                        None,
+                    )
+                    .await,
+                )
+            }
+            ("ifnull", &[arg0, arg1]) => {
+                // Rewrite ifnull(arg0, arg1) to if(is_null(arg0), arg1, arg0)
+                Some(
+                    self.resolve_function(
+                        span,
+                        "if",
+                        &[
+                            &Expr::IsNull {
+                                span,
+                                expr: Box::new((*arg0).clone()),
+                                not: false,
+                            },
+                            arg1,
+                            arg0,
+                        ],
+                        None,
+                    )
+                    .await,
+                )
+            }
+            ("coalesce", args) => {
+                // coalesce(arg0, arg1, ..., argN) is essentially
+                // multi_if(is_not_null(arg0), assume_not_null(arg0), is_not_null(arg1), assume_not_null(arg1), ..., argN)
+                // with constant Literal::Null arguments removed.
+                let mut new_args = Vec::with_capacity(args.len() * 2 + 1);
+
+                for arg in args.iter() {
+                    if let Expr::Literal {
+                        span: _,
+                        lit: Literal::Null,
+                    } = arg
+                    {
+                        continue;
+                    }
+
+                    let is_not_null_expr = Expr::IsNull {
+                        span,
+                        expr: Box::new((*arg).clone()),
+                        not: true,
+                    };
+
+                    let assume_not_null_expr = Expr::FunctionCall {
+                        span,
+                        distinct: false,
+                        name: Identifier {
+                            name: "assume_not_null".to_string(),
+                            quote: None,
+                            span: span[0].clone(),
+                        },
+                        args: vec![(*arg).clone()],
+                        params: vec![],
+                    };
+
+                    new_args.push(is_not_null_expr);
+                    new_args.push(assume_not_null_expr);
+                }
+                new_args.push(Expr::Literal {
+                    span,
+                    lit: Literal::Null,
+                });
+                let args_ref: Vec<&Expr> = new_args.iter().collect();
+                Some(
+                    self.resolve_function(span, "multi_if", &args_ref, None)
                         .await,
                 )
             }
-            "timezone" => {
-                let tz = self.ctx.get_settings().get_timezone().unwrap();
-                // No need to map err, the tz in settings is valid.
-                let tz = String::from_utf8(tz).unwrap();
-                let arg = Expr::Literal {
-                    span: &[],
-                    lit: Literal::String(tz),
-                };
-                Some(self.resolve_function(span, "timezone", &[&arg], None).await)
-            }
+
             _ => None,
         }
     }

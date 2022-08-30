@@ -353,20 +353,5 @@ pub(crate) fn pretty_expr(expr: Expr) -> RcDoc {
             .append(RcDoc::space())
             .append(pretty_expr(*date))
             .append(RcDoc::text(")")),
-        Expr::NullIf { expr1, expr2, .. } => RcDoc::text("NULLIF(")
-            .append(pretty_expr(*expr1))
-            .append(RcDoc::text(","))
-            .append(RcDoc::space())
-            .append(pretty_expr(*expr2))
-            .append(RcDoc::text(")")),
-        Expr::Coalesce { exprs, .. } => RcDoc::text("COALESCE(")
-            .append(inline_comma(exprs.into_iter().map(pretty_expr)))
-            .append(RcDoc::text(")")),
-        Expr::IfNull { expr1, expr2, .. } => RcDoc::text("IFNULL(")
-            .append(pretty_expr(*expr1))
-            .append(RcDoc::text(","))
-            .append(RcDoc::space())
-            .append(pretty_expr(*expr2))
-            .append(RcDoc::text(")")),
     }
 }
