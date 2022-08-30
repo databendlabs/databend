@@ -321,10 +321,10 @@ impl SubqueryRewriter {
                 });
 
                 let scalar = if flatten_info.from_count_func {
-                    // convert count aggregate function to multi_if function, if count() is null, then 0 else count()
+                    // convert count aggregate function to multi_if function, if count() is not null, then count() else 0
                     let is_null = Scalar::FunctionCall(FunctionCall {
                         arguments: vec![column_ref.clone()],
-                        func_name: "is_null".to_string(),
+                        func_name: "is_not_null".to_string(),
                         arg_types: vec![column_ref.data_type()],
                         return_type: Box::new(BooleanType::new_impl()),
                     });
@@ -334,7 +334,7 @@ impl SubqueryRewriter {
                     });
                     Scalar::CastExpr(CastExpr {
                         argument: Box::new(Scalar::FunctionCall(FunctionCall {
-                            arguments: vec![is_null, zero, column_ref.clone()],
+                            arguments: vec![is_null, column_ref.clone(), zero],
                             func_name: "if".to_string(),
                             arg_types: vec![
                                 BooleanType::new_impl(),

@@ -27,6 +27,12 @@ use crate::sql::plans::Scalar;
 use crate::sql::plans::SortItem;
 use crate::sql::IndexType;
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Prewhere {
+    pub columns: ColumnSet,
+    pub predicates: Vec<Scalar>,
+}
+
 #[derive(Clone, Debug)]
 pub struct LogicalGet {
     pub table_index: IndexType,
@@ -34,6 +40,7 @@ pub struct LogicalGet {
     pub push_down_predicates: Option<Vec<Scalar>>,
     pub limit: Option<usize>,
     pub order_by: Option<Vec<SortItem>>,
+    pub prewhere: Option<Prewhere>,
 
     // statistics will be ignored in comparison and hashing
     pub statistics: Option<TableStatistics>,

@@ -120,20 +120,17 @@ pub fn walk_expr_mut<'a, V: VisitorMut>(visitor: &mut V, expr: &mut Expr<'a>) {
         Expr::Interval { span, expr, unit } => visitor.visit_interval(span, expr, unit),
         Expr::DateAdd {
             span,
-            date,
-            interval,
             unit,
-        } => visitor.visit_date_add(span, date, interval, unit),
+            interval,
+            date,
+        } => visitor.visit_date_add(span, unit, interval, date),
         Expr::DateSub {
             span,
             date,
             interval,
             unit,
-        } => visitor.visit_date_sub(span, date, interval, unit),
+        } => visitor.visit_date_sub(span, unit, interval, date),
         Expr::DateTrunc { span, unit, date } => visitor.visit_date_trunc(span, unit, date),
-        Expr::IfNull { span, expr1, expr2 } => visitor.visit_ifnull(span, expr1, expr2),
-        Expr::NullIf { span, expr1, expr2 } => visitor.visit_nullif(span, expr1, expr2),
-        Expr::Coalesce { span, exprs } => visitor.visit_coalesce(span, exprs),
     }
 }
 

@@ -45,6 +45,31 @@ statement ok
 DROP TABLE t3;
 
 statement ok
+create table t1 as select t.number as a from numbers(1) t, numbers(1) t1;
+
+statement query I
+select * from t1;
+
+----
+0
+
+statement ok
+create table t2 as select * from numbers(1) union all select * from numbers(1);
+
+statement query I
+select * from t2;
+
+----
+0
+0
+
+statement ok
+DROP TABLE t1;
+
+statement ok
+DROP TABLE t2;
+
+statement ok
 CREATE TABLE base_table(a Int32);
 
 statement ok
@@ -72,4 +97,3 @@ DROP TABLE aggregate_table;
 
 statement ok
 DROP DATABASE db1;
-

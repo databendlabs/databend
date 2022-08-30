@@ -312,9 +312,9 @@ pub trait VisitorMut: Sized {
     fn visit_date_add(
         &mut self,
         _span: &mut &[Token<'_>],
-        date: &mut Expr<'_>,
-        interval: &mut Expr<'_>,
         _unit: &mut IntervalKind,
+        interval: &mut Expr<'_>,
+        date: &mut Expr<'_>,
     ) {
         walk_expr_mut(self, date);
         walk_expr_mut(self, interval);
@@ -323,9 +323,9 @@ pub trait VisitorMut: Sized {
     fn visit_date_sub(
         &mut self,
         _span: &mut &[Token<'_>],
-        date: &mut Expr<'_>,
-        interval: &mut Expr<'_>,
         _unit: &mut IntervalKind,
+        interval: &mut Expr<'_>,
+        date: &mut Expr<'_>,
     ) {
         walk_expr_mut(self, date);
         walk_expr_mut(self, interval);
@@ -338,32 +338,6 @@ pub trait VisitorMut: Sized {
         date: &mut Expr<'_>,
     ) {
         walk_expr_mut(self, date);
-    }
-
-    fn visit_nullif(
-        &mut self,
-        _span: &mut &[Token<'_>],
-        expr1: &mut Expr<'_>,
-        expr2: &mut Expr<'_>,
-    ) {
-        walk_expr_mut(self, expr1);
-        walk_expr_mut(self, expr2);
-    }
-
-    fn visit_coalesce(&mut self, _span: &mut &[Token<'_>], exprs: &mut [Expr<'_>]) {
-        for expr in exprs.iter_mut() {
-            walk_expr_mut(self, expr);
-        }
-    }
-
-    fn visit_ifnull(
-        &mut self,
-        _span: &mut &[Token<'_>],
-        expr1: &mut Expr<'_>,
-        expr2: &mut Expr<'_>,
-    ) {
-        walk_expr_mut(self, expr1);
-        walk_expr_mut(self, expr2);
     }
 
     fn visit_statement(&mut self, statement: &mut Statement<'_>) {

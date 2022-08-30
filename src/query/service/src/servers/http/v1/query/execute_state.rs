@@ -42,6 +42,7 @@ use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
 use crate::interpreters::InterpreterFactoryV2;
 use crate::interpreters::InterpreterQueryLog;
+use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::Pipe;
@@ -346,7 +347,7 @@ impl HttpQueryHandle {
         result_columns: &[ColumnBinding],
     ) -> Result<SendableDataBlockStream> {
         let id = ctx.get_id();
-        tracing::info!("http query_id execute() begin");
+        tracing::info!("http query {id} execute() begin");
 
         let executor = self.executor.clone();
         let block_buffer = self.block_buffer.clone();
@@ -385,14 +386,17 @@ impl HttpQueryHandle {
         let async_runtime = GlobalIORuntime::instance();
         let async_runtime_clone = async_runtime.clone();
         let query_need_abort = ctx.query_need_abort();
+        let executor_settings = ExecutorSettings::try_create(&ctx.get_settings())?;
 
         let run = move || -> Result<()> {
             let mut pipelines = build_res.sources_pipelines;
             pipelines.push(build_res.main_pipeline);
+
             let pipeline_executor = PipelineCompleteExecutor::from_pipelines(
                 async_runtime_clone,
                 query_need_abort,
                 pipelines,
+                executor_settings,
             )?;
             pipeline_executor.execute()
         };

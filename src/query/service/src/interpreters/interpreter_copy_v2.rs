@@ -33,6 +33,7 @@ use super::append2table;
 use super::commit2table;
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreterV2;
+use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::Pipeline;
 use crate::sessions::QueryContext;
@@ -160,8 +161,13 @@ impl CopyInterpreterV2 {
 
         let async_runtime = GlobalIORuntime::instance();
         let query_need_abort = ctx.query_need_abort();
-        let executor =
-            PipelineCompleteExecutor::try_create(async_runtime, query_need_abort, pipeline)?;
+        let executor_settings = ExecutorSettings::try_create(&settings)?;
+        let executor = PipelineCompleteExecutor::try_create(
+            async_runtime,
+            query_need_abort,
+            pipeline,
+            executor_settings,
+        )?;
         executor.execute()?;
 
         Ok(ctx.consume_precommit_blocks())
@@ -210,14 +216,14 @@ impl CopyInterpreterV2 {
             files: vec![],
         };
 
-        let pipeline = select_interpreter.create_new_pipeline().await?;
+        let build_res = select_interpreter.create_new_pipeline().await?;
         let table = StageTable::try_create(stage_table_info)?;
 
         append2table(
             self.ctx.clone(),
             table.clone(),
             data_schema.clone(),
-            pipeline,
+            build_res,
         )?;
         commit2table(self.ctx.clone(), table.clone(), false).await?;
 

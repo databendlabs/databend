@@ -41,6 +41,7 @@ use parking_lot::RwLock;
 use super::InsertInterpreter;
 use super::SelectInterpreter;
 use crate::interpreters::Interpreter;
+use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
@@ -293,22 +294,27 @@ impl AsyncInsertManager {
                     input: Arc::new((**plan).clone()),
                 })?;
 
-                let mut pipeline = select_interpreter.create_new_pipeline().await?;
+                let mut build_res = select_interpreter.create_new_pipeline().await?;
 
                 let mut sink_pipeline_builder = SinkPipeBuilder::create();
-                for _ in 0..pipeline.output_len() {
+                for _ in 0..build_res.main_pipeline.output_len() {
                     let input_port = InputPort::create();
                     sink_pipeline_builder.add_sink(
                         input_port.clone(),
                         ContextSink::create(input_port, ctx.clone()),
                     );
                 }
-                pipeline.add_pipe(sink_pipeline_builder.finalize());
-
-                let executor = PipelineCompleteExecutor::try_create(
+                build_res
+                    .main_pipeline
+                    .add_pipe(sink_pipeline_builder.finalize());
+                let mut pipelines = build_res.sources_pipelines;
+                pipelines.push(build_res.main_pipeline);
+                let executor_settings = ExecutorSettings::try_create(&settings)?;
+                let executor = PipelineCompleteExecutor::from_pipelines(
                     GlobalIORuntime::instance(),
                     ctx.query_need_abort(),
-                    pipeline,
+                    pipelines,
+                    executor_settings,
                 )
                 .unwrap();
                 executor.execute()?;

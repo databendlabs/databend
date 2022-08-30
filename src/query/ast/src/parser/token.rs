@@ -810,7 +810,7 @@ impl TokenKind {
             | TokenKind::CASE
             | TokenKind::CAST
             // | TokenKind::CHECK
-            | TokenKind::COALESCE
+            // | TokenKind::COALESCE
             // | TokenKind::COLLATE
             // | TokenKind::COLUMN
             // | TokenKind::CONSTRAINT
@@ -836,7 +836,7 @@ impl TokenKind {
             // | TokenKind::FOREIGN
             // | TokenKind::GREATEST
             // | TokenKind::GROUPING
-            | TokenKind::IFNULL
+            // | TokenKind::IFNULL
             | TokenKind::IN
             // | TokenKind::INITIALLY
             // | TokenKind::INOUT
@@ -854,7 +854,7 @@ impl TokenKind {
             // | TokenKind::NORMALIZE
             | TokenKind::NOT
             | TokenKind::NULL
-            | TokenKind::NULLIF
+            // | TokenKind::NULLIF
             // | TokenKind::NUMERIC
             // | TokenKind::ONLY
             | TokenKind::OR
