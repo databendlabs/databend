@@ -38,6 +38,7 @@ use databend_query::interpreters::CreateTableInterpreter;
 use databend_query::interpreters::Interpreter;
 use databend_query::interpreters::InterpreterFactoryV2;
 use databend_query::pipelines::processors::BlocksSource;
+use databend_query::pipelines::PipelineBuildResult;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContext;
 use databend_query::sql::Planner;
@@ -288,7 +289,15 @@ impl TestFixture {
         );
         pipeline.add_pipe(builder.finalize());
 
-        append2table(self.ctx.clone(), table.clone(), source_schema, pipeline)?;
+        append2table(
+            self.ctx.clone(),
+            table.clone(),
+            source_schema,
+            PipelineBuildResult {
+                main_pipeline: pipeline,
+                sources_pipelines: vec![],
+            },
+        )?;
 
         if commit {
             commit2table(self.ctx.clone(), table.clone(), overwrite).await?;
