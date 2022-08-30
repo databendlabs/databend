@@ -1,5 +1,5 @@
 ---
-title: Add Time Interval
+title: ADD TIME INTERVAL
 description: Add time interval function
 title_includes: add_years, add_months, add_days, add_hours, add_minutes, add_seconds
 ---

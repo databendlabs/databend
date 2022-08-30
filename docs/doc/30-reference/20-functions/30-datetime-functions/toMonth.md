@@ -1,5 +1,5 @@
 ---
-title: to_month
+title: TO_MONTH
 ---
 
 Converts a date or date with time to a UInt8 number containing the month number (1-12).

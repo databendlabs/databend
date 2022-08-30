@@ -1,5 +1,5 @@
 ---
-title: to_start_of_month
+title: TO_START_OF_MONTH
 ---
 
 Rounds down a date or date with time to the first day of the month.
