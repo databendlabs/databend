@@ -16,6 +16,7 @@ use pretty::RcDoc;
 
 use super::expr::pretty_expr;
 use super::query::pretty_query;
+use super::query::pretty_table;
 use crate::ast::format::syntax::interweave_comma;
 use crate::ast::format::syntax::parenthenized;
 use crate::ast::format::syntax::NEST_FACTOR;
@@ -140,18 +141,9 @@ pub(crate) fn pretty_alter_table(stmt: AlterTableStmt) -> RcDoc {
             RcDoc::nil()
         })
         .append(
-            RcDoc::space()
-                .append(if let Some(catalog) = stmt.catalog {
-                    RcDoc::text(catalog.to_string()).append(RcDoc::text("."))
-                } else {
-                    RcDoc::nil()
-                })
-                .append(if let Some(database) = stmt.database {
-                    RcDoc::text(database.to_string()).append(RcDoc::text("."))
-                } else {
-                    RcDoc::nil()
-                })
-                .append(RcDoc::text(stmt.table.to_string())),
+            RcDoc::line()
+                .nest(NEST_FACTOR)
+                .append(pretty_table(stmt.table_reference)),
         )
         .append(pretty_alter_table_action(stmt.action))
 }
@@ -169,6 +161,25 @@ pub(crate) fn pretty_alter_table_action(action: AlterTableAction) -> RcDoc {
         AlterTableAction::DropTableClusterKey => {
             RcDoc::line().append(RcDoc::text("DROP CLUSTER KEY"))
         }
+        AlterTableAction::ReclusterTable {
+            is_final,
+            selection,
+        } => RcDoc::line()
+            .append(RcDoc::text("RECLUSTER"))
+            .append(if is_final {
+                RcDoc::space().append(RcDoc::text("FINAL"))
+            } else {
+                RcDoc::nil()
+            })
+            .append(if let Some(selection) = selection {
+                RcDoc::line().append(RcDoc::text("WHERE")).append(
+                    RcDoc::line()
+                        .nest(NEST_FACTOR)
+                        .append(pretty_expr(selection).nest(NEST_FACTOR).group()),
+                )
+            } else {
+                RcDoc::nil()
+            }),
     }
 }
 
