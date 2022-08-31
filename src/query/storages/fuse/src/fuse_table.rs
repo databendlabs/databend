@@ -234,9 +234,8 @@ impl Table for FuseTable {
             (FuseStatistics::default(), vec![])
         };
 
-        let new_snapshot_id = Uuid::new_v4();
         let new_snapshot = TableSnapshot::new(
-            new_snapshot_id,
+            Uuid::new_v4(),
             &prev_timestamp,
             prev_snapshot_id,
             schema,
@@ -245,15 +244,17 @@ impl Table for FuseTable {
             cluster_key_meta,
         );
 
+        let mut table_info = self.table_info.clone();
+        table_info.meta = new_table_meta;
+
         FuseTable::commit_to_meta_server(
             ctx.as_ref(),
             catalog_name,
-            &self.table_info,
+            &table_info,
             &self.meta_location_generator,
             new_snapshot,
         )
-        .await?;
-        Ok(())
+        .await
     }
 
     async fn drop_table_cluster_keys(
@@ -281,9 +282,8 @@ impl Table for FuseTable {
             (FuseStatistics::default(), vec![])
         };
 
-        let new_snapshot_id = Uuid::new_v4();
         let new_snapshot = TableSnapshot::new(
-            new_snapshot_id,
+            Uuid::new_v4(),
             &prev_timestamp,
             prev_snapshot_id,
             schema,
@@ -292,10 +292,13 @@ impl Table for FuseTable {
             None,
         );
 
+        let mut table_info = self.table_info.clone();
+        table_info.meta = new_table_meta;
+
         FuseTable::commit_to_meta_server(
             ctx.as_ref(),
             catalog_name,
-            &self.table_info,
+            &table_info,
             &self.meta_location_generator,
             new_snapshot,
         )

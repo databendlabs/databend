@@ -181,10 +181,9 @@ impl FuseTable {
             .map(|loc| (loc, SegmentInfo::VERSION))
             .collect();
 
-        let new_snapshot_id = Uuid::new_v4();
         let new_snapshot = if overwrite {
             TableSnapshot::new(
-                new_snapshot_id,
+                Uuid::new_v4(),
                 &prev_timestamp,
                 prev.as_ref().map(|v| (v.snapshot_id, prev_version)),
                 schema,
