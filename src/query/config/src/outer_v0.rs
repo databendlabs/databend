@@ -589,14 +589,17 @@ impl TryInto<InnerStorageHdfsConfig> for HdfsConfig {
 pub struct ObsStorageConfig {
     /// Access key for OBS storage
     #[clap(long = "storage-obs-access-key-id", default_value_t)]
+    #[serde(rename = "access_key_id")]
     pub obs_access_key_id: String,
 
     /// Secret key for OBS storage
     #[clap(long = "storage-obs-secret-access-key", default_value_t)]
+    #[serde(rename = "secret_access_key")]
     pub obs_secret_access_key: String,
 
     /// Bucket for OBS
     #[clap(long = "storage-obs-bucket", default_value_t)]
+    #[serde(rename = "bucket")]
     pub obs_bucket: String,
 
     /// Endpoint URL for OBS
