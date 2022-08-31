@@ -183,9 +183,9 @@ impl AggregateFunctionFactory {
         let agg = self.get_impl(name, params, arguments, &mut features)?;
 
         if or_null {
-            return AggregateFunctionBasicAdaptor::create(agg, features);
+            AggregateFunctionBasicAdaptor::create(agg, features)
         } else {
-            return Ok(agg);
+            Ok(agg)
         }
     }
 
