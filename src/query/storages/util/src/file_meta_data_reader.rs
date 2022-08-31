@@ -42,13 +42,16 @@ impl Loader<FileMetaData> for Arc<dyn TableContext> {
     async fn load(
         &self,
         key: &str,
-        _length_hint: Option<u64>,
+        length_hint: Option<u64>,
         _version: u64,
     ) -> Result<FileMetaData> {
-        // TODO use length hint
         let dal = self.get_storage_operator()?;
         let object = dal.object(key);
-        let reader = object.seekable_reader(0..);
+        let reader = if let Some(len) = length_hint {
+            object.seekable_reader(..len)
+        } else {
+            object.seekable_reader(..)
+        };
         let buffer_size = self.get_settings().get_storage_read_buffer_size()?;
         let mut buf_reader = BufReader::with_capacity(buffer_size as usize, reader);
         read_metadata_async(&mut buf_reader)

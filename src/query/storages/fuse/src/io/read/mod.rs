@@ -14,7 +14,6 @@
 
 mod block_reader;
 mod bloom_index_reader;
-// mod cached_reader;
 mod meta_readers;
 mod snapshot_history_reader;
 mod versioned_reader;

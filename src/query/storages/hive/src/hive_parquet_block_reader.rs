@@ -34,7 +34,7 @@ use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::PartInfoPtr;
-use common_storages_util::FileMetaDataReader;
+use common_storages_util::file_meta_data_reader::FileMetaDataReader;
 use futures::AsyncReadExt;
 use opendal::Object;
 use opendal::Operator;
