@@ -27,6 +27,7 @@ use crate::constants::FUSE_TBL_BLOCK_PREFIX;
 use crate::constants::FUSE_TBL_SEGMENT_PREFIX;
 use crate::constants::FUSE_TBL_SNAPSHOT_PREFIX;
 use crate::FUSE_TBL_BLOCK_INDEX_PREFIX;
+use crate::FUSE_TBL_LAST_SNAPSHOT_HINT;
 
 static SNAPSHOT_V0: SnapshotVersion = SnapshotVersion::V0(PhantomData);
 static SNAPSHOT_V1: SnapshotVersion = SnapshotVersion::V1(PhantomData);
@@ -101,8 +102,8 @@ impl TableMetaLocationGenerator {
 
     pub fn gen_last_snapshot_hint_location(&self) -> String {
         format!(
-            "{}/{}/last_snapshot_location_hint",
-            &self.prefix, FUSE_TBL_SNAPSHOT_PREFIX,
+            "{}/{}/{}",
+            &self.prefix, FUSE_TBL_SNAPSHOT_PREFIX, FUSE_TBL_LAST_SNAPSHOT_HINT,
         )
     }
 }

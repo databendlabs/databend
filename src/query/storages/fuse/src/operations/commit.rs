@@ -36,6 +36,8 @@ use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableStatistics;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_types::MatchSeq;
+use common_storages_util::retry;
+use common_storages_util::retry::Retryable;
 use opendal::Operator;
 use tracing::debug;
 use tracing::info;
@@ -375,7 +377,6 @@ impl FuseTable {
         location_generator: &TableMetaLocationGenerator,
         last_snapshot_path: String,
     ) {
-        let hint_path = location_generator.gen_last_snapshot_hint_location();
         // Just try our best to write down the hint file of last snapshot
         // - will retry in the case of temporary failure
         // but
@@ -384,11 +385,35 @@ impl FuseTable {
         // - "data race" ignored
         //   if multiple different versions of hints are written concurrently
         //   it is NOT guaranteed that the latest version will be kept
-        write_meta(operator, &hint_path, last_snapshot_path)
-            .await
-            .unwrap_or_else(|e| {
-                tracing::warn!("write last snapshot hint failure. {}", e);
-            })
+
+        let hint_path = location_generator.gen_last_snapshot_hint_location();
+        let op = || {
+            let hint_path = hint_path.clone();
+            let last_snapshot_path = {
+                let operator_meta_data = operator.metadata();
+                let storage_prefix = operator_meta_data.root();
+                format!("{}{}", storage_prefix, last_snapshot_path)
+            };
+
+            async move {
+                operator
+                    .object(&hint_path)
+                    .write(last_snapshot_path)
+                    .await
+                    .map_err(retry::from_io_error)
+            }
+        };
+
+        let notify = |e: std::io::Error, duration| {
+            warn!(
+                "transient error encountered while writing last snapshot hint file, location {}, at duration {:?} : {}",
+                hint_path, duration, e,
+            )
+        };
+
+        op.retry_with_notify(notify).await.unwrap_or_else(|e| {
+            tracing::warn!("write last snapshot hint failure. {}", e);
+        })
     }
 }
 
