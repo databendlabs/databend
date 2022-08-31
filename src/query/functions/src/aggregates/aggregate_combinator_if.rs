@@ -22,7 +22,6 @@ use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use super::AggregateFunctionBasicAdaptor;
 use super::StateAddr;
 use crate::aggregates::aggregate_function_factory::AggregateFunctionCreator;
 use crate::aggregates::aggregate_function_factory::CombinatorDescription;
@@ -168,6 +167,12 @@ impl AggregateFunction for AggregateIfCombinator {
 
     unsafe fn drop_state(&self, place: StateAddr) {
         self.nested.drop_state(place);
+    }
+
+    fn get_if_condition(&self, columns: &[ColumnRef]) -> Option<Bitmap> {
+        let predicate: &BooleanColumn =
+            unsafe { Series::static_cast(&columns[self.argument_len - 1]) };
+        Some(predicate.values().clone())
     }
 }
 

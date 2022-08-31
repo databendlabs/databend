@@ -553,7 +553,7 @@ impl<'a> TypeChecker<'a> {
                         .map(|box (_, data_type)| DataField::new("", data_type.clone()))
                         .collect();
 
-                    // Rewrite `count(distinct)` to `uniq(...)`
+                    // Rewrite `xxx(distinct)` to `xxx_distinct(...)`
                     let (func_name, distinct) =
                         if func_name.eq_ignore_ascii_case("count") && *distinct {
                             ("count_distinct", false)
@@ -561,25 +561,30 @@ impl<'a> TypeChecker<'a> {
                             (func_name, *distinct)
                         };
 
+                    let func_name = if distinct {
+                        format!("{}_distinct", func_name)
+                    } else {
+                        func_name.to_string()
+                    };
+
                     let agg_func = AggregateFunctionFactory::instance()
-                        .get(func_name, params.clone(), data_fields)
+                        .get(&func_name, params.clone(), data_fields)
                         .map_err(|e| ErrorCode::SemanticError(span.display_error(e.message())))?;
+
+                    let args = if optimize_remove_count_args(&func_name, distinct, args.as_slice())
+                    {
+                        vec![]
+                    } else {
+                        arguments.into_iter().map(|box (arg, _)| arg).collect()
+                    };
 
                     Box::new((
                         AggregateFunction {
                             display_name: format!("{:#}", expr),
-                            func_name: func_name.to_string(),
-                            distinct,
+                            func_name,
+                            distinct: false,
                             params,
-                            args: if optimize_remove_count_args(
-                                func_name,
-                                distinct,
-                                args.as_slice(),
-                            ) {
-                                vec![]
-                            } else {
-                                arguments.into_iter().map(|box (arg, _)| arg).collect()
-                            },
+                            args,
                             return_type: Box::new(agg_func.return_type()?),
                         }
                         .into(),

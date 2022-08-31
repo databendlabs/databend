@@ -144,6 +144,16 @@ impl AggregateFunctionFactory {
         params: Vec<DataValue>,
         arguments: Vec<DataField>,
     ) -> Result<AggregateFunctionRef> {
+        self.get_or_null(name, params, arguments, true)
+    }
+
+    pub fn get_or_null(
+        &self,
+        name: impl AsRef<str>,
+        params: Vec<DataValue>,
+        arguments: Vec<DataField>,
+        or_null: bool,
+    ) -> Result<AggregateFunctionRef> {
         let name = name.as_ref();
         let mut features = AggregateFunctionFeatures::default();
 
@@ -163,11 +173,20 @@ impl AggregateFunctionFactory {
                 nested,
                 features.clone(),
             )?;
-            return AggregateFunctionBasicAdaptor::create(agg, features);
+            if or_null {
+                return AggregateFunctionBasicAdaptor::create(agg, features);
+            } else {
+                return Ok(agg);
+            }
         }
 
         let agg = self.get_impl(name, params, arguments, &mut features)?;
-        AggregateFunctionBasicAdaptor::create(agg, features)
+
+        if or_null {
+            return AggregateFunctionBasicAdaptor::create(agg, features);
+        } else {
+            return Ok(agg);
+        }
     }
 
     fn get_impl(

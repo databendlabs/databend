@@ -235,6 +235,10 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction for AggregateNullUnaryAdapto
     fn convert_const_to_full(&self) -> bool {
         self.nested.convert_const_to_full()
     }
+
+    fn get_if_condition(&self, columns: &[ColumnRef]) -> Option<Bitmap> {
+        self.nested.get_if_condition(columns)
+    }
 }
 
 impl<const NULLABLE_RESULT: bool> fmt::Display for AggregateNullUnaryAdaptor<NULLABLE_RESULT> {

@@ -102,8 +102,16 @@ impl AggregateFunction for AggregateFunctionBasicAdaptor {
         if input_rows == 0 {
             return Ok(());
         }
-        if let Some(validity) = validity {
-            if validity.unset_bits() == input_rows {
+
+        let if_cond = self.inner.get_if_condition(columns);
+        if let Some(bm) = if_cond {
+            if bm.unset_bits() == input_rows {
+                return Ok(());
+            }
+        }
+
+        if let Some(bm) = validity {
+            if bm.unset_bits() == input_rows {
                 return Ok(());
             }
         }
@@ -132,10 +140,22 @@ impl AggregateFunction for AggregateFunctionBasicAdaptor {
             self.inner
                 .accumulate_keys(places, offset, columns, input_rows)?;
         }
-
-        for place in places {
-            self.set_flag(place.next(offset), 1);
+        let if_cond = self.inner.get_if_condition(columns);
+        match if_cond {
+            Some(bm) if bm.unset_bits() != 0 => {
+                for (place, valid) in places.iter().zip(bm.iter()) {
+                    if valid {
+                        self.set_flag(*place, 1);
+                    }
+                }
+            }
+            _ => {
+                for place in places {
+                    self.set_flag(place.next(offset), 1);
+                }
+            }
         }
+
         Ok(())
     }
 

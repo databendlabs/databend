@@ -88,6 +88,10 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
         Ok(None)
     }
 
+    fn get_if_condition(&self, _columns: &[ColumnRef]) -> Option<Bitmap> {
+        None
+    }
+
     // some features
     fn convert_const_to_full(&self) -> bool {
         true
