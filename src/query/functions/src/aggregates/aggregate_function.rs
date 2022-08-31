@@ -58,6 +58,7 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
         Ok(())
     }
 
+    // Used in aggregate_null_adaptor
     fn accumulate_row(&self, _place: StateAddr, _columns: &[ColumnRef], _row: usize) -> Result<()>;
 
     // serialize  the state into binary array

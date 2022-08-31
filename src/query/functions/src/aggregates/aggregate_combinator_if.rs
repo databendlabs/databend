@@ -22,6 +22,7 @@ use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+use super::AggregateFunctionBasicAdaptor;
 use super::StateAddr;
 use crate::aggregates::aggregate_function_factory::AggregateFunctionCreator;
 use crate::aggregates::aggregate_function_factory::CombinatorDescription;
@@ -136,7 +137,8 @@ impl AggregateFunction for AggregateIfCombinator {
     }
 
     fn accumulate_row(&self, place: StateAddr, columns: &[ColumnRef], row: usize) -> Result<()> {
-        let predicate: &BooleanColumn = Series::check_get(&columns[self.argument_len - 1])?;
+        let predicate: &BooleanColumn =
+            unsafe { Series::static_cast(&columns[self.argument_len - 1]) };
         if predicate.values().get_bit(row) {
             self.nested
                 .accumulate_row(place, &columns[0..self.argument_len - 1], row)?;

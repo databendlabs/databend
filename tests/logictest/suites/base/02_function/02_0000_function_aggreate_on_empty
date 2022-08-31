@@ -2,37 +2,37 @@ statement query I
 select min(number) from numbers_mt (10) where 1 = 2;
 
 ----
-0
+NULL
 
 statement query I
 select max(number) from numbers_mt (10) where 1 = 2;
 
 ----
-0
+NULL
 
 statement query I
 select arg_min(number, number) from numbers_mt (10) where 1 = 2;
 
 ----
-0
+NULL
 
 statement query I
 select arg_max(number, number) from numbers_mt (10) where 1 = 2;
 
 ----
-0
+NULL
 
 statement query I
 select sum_distinct(number) from numbers(10) where 1 = 2;
 
 ----
-0
+NULL
 
 statement query I
 select sum_if(number, number > 100) from numbers(10);
 
 ----
-0
+NULL
 
 statement query I
 select sum_if(number, number > 0) from numbers(10) where 1 = 2;

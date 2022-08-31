@@ -157,13 +157,17 @@ impl AggregateFunctionFactory {
 
             let nested = self.get_impl(name, new_params, new_arguments, &mut features)?;
             let agg = AggregateFunctionCombinatorNull::try_create(
-                name, params, arguments, nested, features,
+                name,
+                params,
+                arguments,
+                nested,
+                features.clone(),
             )?;
-            return Ok(AggregateFunctionBasicAdaptor::create(agg));
+            return AggregateFunctionBasicAdaptor::create(agg, features);
         }
 
         let agg = self.get_impl(name, params, arguments, &mut features)?;
-        Ok(AggregateFunctionBasicAdaptor::create(agg))
+        AggregateFunctionBasicAdaptor::create(agg, features)
     }
 
     fn get_impl(
