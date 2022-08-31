@@ -62,7 +62,7 @@ async fn test_async_insert_queue() -> Result<()> {
 
         AsyncInsertManager::instance()
             .clone()
-            .push(Arc::new(insert_plan.to_owned()), ctx.clone())
+            .push(ctx.clone(), Arc::new(insert_plan.to_owned()))
             .await?;
         AsyncInsertManager::instance()
             .clone()
@@ -88,7 +88,7 @@ async fn test_async_insert_queue() -> Result<()> {
                     .await?;
             queue1
                 .clone()
-                .push(Arc::new(insert_plan.to_owned()), context1.clone())
+                .push(context1.clone(), Arc::new(insert_plan.to_owned()))
                 .await?;
             queue1
                 .clone()
@@ -111,7 +111,7 @@ async fn test_async_insert_queue() -> Result<()> {
             .await?;
             queue2
                 .clone()
-                .push(Arc::new(insert_plan.to_owned()), context2.clone())
+                .push(context2.clone(), Arc::new(insert_plan.to_owned()))
                 .await?;
             queue2
                 .clone()
@@ -183,7 +183,7 @@ async fn test_async_insert_queue_max_data_size() -> Result<()> {
 
         AsyncInsertManager::instance()
             .clone()
-            .push(Arc::new(insert_plan.to_owned()), ctx.clone())
+            .push(ctx.clone(), Arc::new(insert_plan.to_owned()))
             .await?;
         AsyncInsertManager::instance()
             .clone()
@@ -233,7 +233,7 @@ async fn test_async_insert_queue_busy_timeout() -> Result<()> {
 
         AsyncInsertManager::instance()
             .clone()
-            .push(Arc::new(insert_plan.to_owned()), ctx.clone())
+            .push(ctx.clone(), Arc::new(insert_plan.to_owned()))
             .await?;
         AsyncInsertManager::instance()
             .clone()
@@ -284,7 +284,7 @@ async fn test_async_insert_queue_stale_timeout() -> Result<()> {
 
         AsyncInsertManager::instance()
             .clone()
-            .push(Arc::new(insert_plan.to_owned()), ctx.clone())
+            .push(ctx.clone(), Arc::new(insert_plan.to_owned()))
             .await?;
         AsyncInsertManager::instance()
             .clone()
@@ -333,7 +333,7 @@ async fn test_async_insert_queue_wait_timeout() -> Result<()> {
             build_insert_plan("insert into default.test values(1, 'aaa');", ctx.clone()).await?;
         AsyncInsertManager::instance()
             .clone()
-            .push(Arc::new(insert_plan.to_owned()), ctx.clone())
+            .push(ctx.clone(), Arc::new(insert_plan.to_owned()))
             .await?;
         let res = AsyncInsertManager::instance()
             .clone()
@@ -376,7 +376,7 @@ async fn test_async_insert_queue_no_wait() -> Result<()> {
             build_insert_plan("insert into default.test values(1, 'aaa');", ctx.clone()).await?;
         AsyncInsertManager::instance()
             .clone()
-            .push(Arc::new(insert_plan.to_owned()), ctx.clone())
+            .push(ctx.clone(), Arc::new(insert_plan.to_owned()))
             .await?;
     }
 

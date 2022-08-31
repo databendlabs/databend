@@ -127,7 +127,7 @@ If `endpoints` is configured, the `address` configuration will no longer take ef
 
 ### type 
 
-* Which storage type(Must one of `"fs"` | `"s3"` | `"azblob"`) should use for the databend-query, e.g., `"s3"`.
+* Which storage type(Must one of `"fs"` | `"s3"` | `"azblob"` | `"obs"`) should use for the databend-query, e.g., `"s3"`.
 * Default: `""`
 * Env variable: `STORAGE_TYPE`
 * Required.
@@ -189,6 +189,36 @@ If `endpoints` is configured, the `address` configuration will no longer take ef
 * Azure Blob Storage account key.
 * Default: `""`
 * Env variable: `STORAGE_AZBLOB_ACCOUNT_KEY`
+* Required.
+
+### storage.obs
+
+#### bucket
+
+* OBS bucket name.
+* Default: `""`
+* Env variable: `STORAGE_OBS_BUCKET`
+* Required.
+
+#### endpoint_url
+
+* OBS endpoint URL, e.g., `"https://obs.cn-north-4.myhuaweicloud.com"`.
+* Default: `""`
+* Env variable: `STORAGE_OBS_ENDPOINT_URL`
+* Required.
+
+#### access_key_id
+
+* OBS access_key_id.
+* Default: `""`
+* Env variable: `STORAGE_OBS_ACCESS_KEY_ID`
+* Required.
+
+#### secret_access_key
+
+* OBS secret_access_key.
+* Default: `""`
+* Env variable: `STORAGE_OBS_SECRET_ACCESS_KEY`
 * Required.
 
 ## A Toml File Demo
