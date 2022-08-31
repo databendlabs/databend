@@ -36,6 +36,7 @@ use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableStatistics;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_types::MatchSeq;
+use opendal::Operator;
 use tracing::debug;
 use tracing::info;
 use tracing::warn;
@@ -309,8 +310,11 @@ impl FuseTable {
             Ok(_) => {
                 if let Some(snapshot_cache) = CacheManager::instance().get_table_snapshot_cache() {
                     let cache = &mut snapshot_cache.write().await;
-                    cache.put(snapshot_location, Arc::new(snapshot));
+                    cache.put(snapshot_location.clone(), Arc::new(snapshot));
                 }
+                // try keep a hit file of last snapshot
+                Self::write_last_snapshot_hint(&operator, location_generator, snapshot_location)
+                    .await;
                 Ok(())
             }
             Err(e) => {
@@ -366,9 +370,26 @@ impl FuseTable {
     }
 
     // Left a hint file which indicates the location of the latest snapshot
-    // async fn write_last_snapshot_hint(_ctx: &dyn TableContext, _last_snapshot_path: String) {
-    //    todo!()
-    //}
+    async fn write_last_snapshot_hint(
+        operator: &Operator,
+        location_generator: &TableMetaLocationGenerator,
+        last_snapshot_path: String,
+    ) {
+        let hint_path = location_generator.gen_last_snapshot_hint_location();
+        // Just try our best to write down the hint file of last snapshot
+        // - will retry in the case of temporary failure
+        // but
+        // - errors are ignored if writing is eventually failed
+        // - errors (if any) will not be propagated to caller
+        // - "data race" ignored
+        //   if multiple different versions of hints are written concurrently
+        //   it is NOT guaranteed that the latest version will be kept
+        write_meta(operator, &hint_path, last_snapshot_path)
+            .await
+            .unwrap_or_else(|e| {
+                tracing::warn!("write last snapshot hint failure. {}", e);
+            })
+    }
 }
 
 mod utils {
