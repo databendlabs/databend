@@ -17,6 +17,7 @@ common-exception = { path = "../../common/exception" }
 # Github dependencies
 
 # Crates.io dependencies
+chrono = "0.4"
 chrono-tz = "0.6.1"
 comfy-table = "6"
 educe = "0.4"

@@ -34,17 +34,17 @@ pub fn register(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| None,
         vectorize_with_builder_1_arg::<Int64Type, TimestampType>(|val, output| {
-            if -31536000000 <= val && val <= 31536000000 {
+            if (-31536000000..=31536000000).contains(&val) {
                 output.push(Timestamp {
                     ts: val * MICROS_IN_A_SEC,
                     precision: 0,
                 });
-            } else if -31536000000000 < val && val < 31536000000000 {
+            } else if (-31536000000000..=31536000000000).contains(&val) {
                 output.push(Timestamp {
                     ts: val * MICROS_IN_A_MILLI,
                     precision: 3,
                 })
-            } else if TIMESTAMP_MIN <= val && val <= TIMESTAMP_MAX {
+            } else if (TIMESTAMP_MIN..=TIMESTAMP_MAX).contains(&val) {
                 output.push(Timestamp {
                     ts: val,
                     precision: 6,

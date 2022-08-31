@@ -15,7 +15,11 @@
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
+use std::time::Duration;
+use std::time::UNIX_EPOCH;
 
+use chrono::DateTime;
+use chrono::Utc;
 use comfy_table::Cell;
 use comfy_table::Table;
 use itertools::Itertools;
@@ -429,16 +433,18 @@ impl Display for Domain {
 
 impl Display for Timestamp {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}", self.ts / 1_000_000)?;
-        if self.precision > 0 {
-            write!(f, ".")?;
-            write!(
-                f,
-                "{:0width$}",
-                self.ts % 1_000_000 / 10i64.pow(7 - self.precision as u32),
-                width = self.precision as usize
-            )?;
-        }
+        let dt = if self.ts >= 0 {
+            DateTime::<Utc>::from(UNIX_EPOCH + Duration::from_micros(self.ts.unsigned_abs()))
+        } else {
+            DateTime::<Utc>::from(UNIX_EPOCH - Duration::from_micros(self.ts.unsigned_abs()))
+        };
+        let s = dt.format("%Y-%m-%d %H:%M:%S%.6f").to_string();
+        let truncate_end = if self.precision > 0 {
+            s.len() - 6 + self.precision as usize
+        } else {
+            s.len() - 7
+        };
+        write!(f, "{}", &s[..truncate_end])?;
         Ok(())
     }
 }

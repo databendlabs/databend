@@ -2,7 +2,7 @@ error:
   --> SQL:1:1
   |
 1 | to_timestamp(-30610224000000001)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ timestamp `-30610224000.000000` is out of range
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ timestamp `0999-12-31 23:59:59.999999` is out of range
 
 
 
@@ -12,7 +12,7 @@ checked expr   : to_timestamp<Int64>(minus<UInt64>(315360000000000_u64))
 optimized expr : Timestamp { ts: -315360000000000, precision: 6 }
 output type    : Timestamp
 output domain  : Unknown
-output         : -315360000.000000
+output         : 1960-01-04 00:00:00.000000
 
 
 ast            : to_timestamp(-315360000000)
@@ -21,7 +21,7 @@ checked expr   : to_timestamp<Int64>(minus<UInt64>(315360000000_u64))
 optimized expr : Timestamp { ts: -315360000000000, precision: 3 }
 output type    : Timestamp
 output domain  : Unknown
-output         : -315360000.000
+output         : 1960-01-04 00:00:00.000
 
 
 ast            : to_timestamp(-100)
@@ -30,7 +30,7 @@ checked expr   : to_timestamp<Int64>(CAST(minus<UInt8>(100_u8) AS Int64))
 optimized expr : Timestamp { ts: -100000000, precision: 0 }
 output type    : Timestamp
 output domain  : Unknown
-output         : -100
+output         : 1969-12-31 23:58:20
 
 
 ast            : to_timestamp(-0)
@@ -39,7 +39,7 @@ checked expr   : to_timestamp<Int64>(CAST(minus<UInt8>(0_u8) AS Int64))
 optimized expr : Timestamp { ts: 0, precision: 0 }
 output type    : Timestamp
 output domain  : Unknown
-output         : 0
+output         : 1970-01-01 00:00:00
 
 
 ast            : to_timestamp(0)
@@ -48,7 +48,7 @@ checked expr   : to_timestamp<Int64>(CAST(0_u8 AS Int64))
 optimized expr : Timestamp { ts: 0, precision: 0 }
 output type    : Timestamp
 output domain  : Unknown
-output         : 0
+output         : 1970-01-01 00:00:00
 
 
 ast            : to_timestamp(100)
@@ -57,7 +57,7 @@ checked expr   : to_timestamp<Int64>(CAST(100_u8 AS Int64))
 optimized expr : Timestamp { ts: 100000000, precision: 0 }
 output type    : Timestamp
 output domain  : Unknown
-output         : 100
+output         : 1970-01-01 00:01:40
 
 
 ast            : to_timestamp(315360000000)
@@ -66,7 +66,7 @@ checked expr   : to_timestamp<Int64>(CAST(315360000000_u64 AS Int64))
 optimized expr : Timestamp { ts: 315360000000000, precision: 3 }
 output type    : Timestamp
 output domain  : Unknown
-output         : 315360000.000
+output         : 1979-12-30 00:00:00.000
 
 
 ast            : to_timestamp(315360000000000)
@@ -75,14 +75,14 @@ checked expr   : to_timestamp<Int64>(CAST(315360000000000_u64 AS Int64))
 optimized expr : Timestamp { ts: 315360000000000, precision: 6 }
 output type    : Timestamp
 output domain  : Unknown
-output         : 315360000.000000
+output         : 1979-12-30 00:00:00.000000
 
 
 error: 
   --> SQL:1:1
   |
 1 | to_timestamp(253402300800000000)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ timestamp `253402300800.000000` is out of range
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ timestamp `+10000-01-01 00:00:00.000000` is out of range
 
 
 
@@ -90,19 +90,19 @@ ast            : to_timestamp(a)
 raw expr       : to_timestamp(ColumnRef(0)::Int64)
 checked expr   : to_timestamp<Int64>(ColumnRef(0))
 evaluation:
-+--------+--------------------------------------+-------------------+
-|        | a                                    | Output            |
-+--------+--------------------------------------+-------------------+
-| Type   | Int64                                | Timestamp         |
-| Domain | {-315360000000000..=315360000000000} | Unknown           |
-| Row 0  | -315360000000000                     | -315360000.000000 |
-| Row 1  | 315360000000                         | 315360000.000000  |
-| Row 2  | -100                                 | -100.000000       |
-| Row 3  | 0                                    | 0.000000          |
-| Row 4  | 100                                  | 100.000000        |
-| Row 5  | 315360000000                         | 315360000.000000  |
-| Row 6  | 315360000000000                      | 315360000.000000  |
-+--------+--------------------------------------+-------------------+
++--------+--------------------------------------+----------------------------+
+|        | a                                    | Output                     |
++--------+--------------------------------------+----------------------------+
+| Type   | Int64                                | Timestamp                  |
+| Domain | {-315360000000000..=315360000000000} | Unknown                    |
+| Row 0  | -315360000000000                     | 1960-01-04 00:00:00.000000 |
+| Row 1  | 315360000000                         | 1979-12-30 00:00:00.000000 |
+| Row 2  | -100                                 | 1969-12-31 23:58:20.000000 |
+| Row 3  | 0                                    | 1970-01-01 00:00:00.000000 |
+| Row 4  | 100                                  | 1970-01-01 00:01:40.000000 |
+| Row 5  | 315360000000                         | 1979-12-30 00:00:00.000000 |
+| Row 6  | 315360000000000                      | 1979-12-30 00:00:00.000000 |
++--------+--------------------------------------+----------------------------+
 evaluation (internal):
 +--------+--------------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                             |
