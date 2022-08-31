@@ -1,5 +1,5 @@
 ---
-title: Alter table recluster
+title: recluster table
 description: 
   RFC for recluster a clustered table
 ---

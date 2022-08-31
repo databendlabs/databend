@@ -1,5 +1,5 @@
 ---
-title: ALTER RECLUSTER
+title: RECLUSTER TABLE
 ---
 
 Use this command to re-cluster the data in a clustered table.
