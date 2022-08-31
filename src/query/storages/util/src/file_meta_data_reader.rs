@@ -45,6 +45,7 @@ impl Loader<FileMetaData> for Arc<dyn TableContext> {
         _length_hint: Option<u64>,
         _version: u64,
     ) -> Result<FileMetaData> {
+        // TODO use length hint
         let dal = self.get_storage_operator()?;
         let object = dal.object(key);
         let reader = object.seekable_reader(0..);

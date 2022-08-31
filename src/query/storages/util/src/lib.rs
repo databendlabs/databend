@@ -12,10 +12,10 @@
 
 #![deny(unused_crate_dependencies)]
 
-mod cached_file_meta_reader;
 pub mod cached_reader;
+mod file_meta_data_reader;
 pub mod retry;
 pub mod storage_context;
 pub mod table_option_keys;
 
-pub use cached_file_meta_reader::FileMetaDataReader;
+pub use file_meta_data_reader::FileMetaDataReader;
