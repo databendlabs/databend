@@ -101,10 +101,7 @@ impl TableMetaLocationGenerator {
     }
 
     pub fn gen_last_snapshot_hint_location(&self) -> String {
-        format!(
-            "{}/{}/{}",
-            &self.prefix, FUSE_TBL_SNAPSHOT_PREFIX, FUSE_TBL_LAST_SNAPSHOT_HINT,
-        )
+        format!("{}/{}", &self.prefix, FUSE_TBL_LAST_SNAPSHOT_HINT)
     }
 }
 
