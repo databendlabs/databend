@@ -1789,6 +1789,7 @@ dependencies = [
  "common-pipeline-sources",
  "common-planners",
  "common-storages-index",
+ "common-storages-util",
  "futures",
  "opendal",
  "serde",

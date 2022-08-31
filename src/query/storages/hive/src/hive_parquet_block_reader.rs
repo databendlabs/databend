@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use common_arrow::arrow::datatypes::Schema;
 use common_arrow::arrow::io::parquet::read::read_columns_many_async;
-use common_arrow::arrow::io::parquet::read::read_metadata_async;
 use common_arrow::arrow::io::parquet::read::ArrayIter;
 use common_arrow::arrow::io::parquet::read::RowGroupDeserializer;
 use common_arrow::parquet::metadata::FileMetaData;
@@ -30,8 +29,6 @@ use common_planners::PartInfoPtr;
 use common_storages_util::file_meta_data_reader::FileMetaDataReader;
 use futures::future::BoxFuture;
 use futures::io::BufReader;
-use futures::AsyncReadExt;
-use opendal::Object;
 use opendal::Operator;
 
 use crate::hive_partition::HivePartInfo;
