@@ -306,12 +306,12 @@ pub fn try_check_function(
         .map(|max_generic_idx| {
             (0..max_generic_idx + 1)
                 .map(|idx| match subst.0.get(&idx) {
-                    Some(ty) => ty.clone(),
-                    None => DataType::Generic(idx),
+                    Some(ty) => Ok(ty.clone()),
+                    None => Err((span.clone(), format!("unable to resolve generic T{idx}"))),
                 })
-                .collect()
+                .collect::<Result<Vec<_>>>()
         })
-        .unwrap_or_default();
+        .unwrap_or_else(|| Ok(vec![]))?;
 
     Ok((checked_args, return_type, generics))
 }

@@ -18,6 +18,7 @@ use std::sync::Arc;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_expression::types::nullable::NullableColumn;
 use common_expression::types::string::StringColumnBuilder;
+use common_expression::types::string::StringDomain;
 use common_expression::types::ArgType;
 use common_expression::types::DataType;
 use common_expression::types::NullableType;
@@ -31,7 +32,6 @@ use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
 use common_expression::FunctionSignature;
 use common_expression::Scalar;
-use common_expression::StringDomain;
 use common_expression::Value;
 use common_expression::ValueRef;
 

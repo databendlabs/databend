@@ -205,8 +205,10 @@ pub fn transform_literal(lit: ASTLiteral) -> Literal {
                 Literal::UInt8(u as u8)
             } else if u < u16::MAX as u64 {
                 Literal::UInt16(u as u16)
+            } else if u < u32::MAX as u64 {
+                Literal::UInt32(u as u32)
             } else {
-                unimplemented!()
+                Literal::UInt64(u)
             }
         }
         ASTLiteral::String(s) => Literal::String(s.as_bytes().to_vec()),
