@@ -19,11 +19,13 @@ use std::time::Instant;
 use backoff::backoff::Backoff;
 use backoff::ExponentialBackoffBuilder;
 use common_base::base::ProgressValues;
+use common_cache::Cache;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_fuse_meta::caches::CacheManager;
 use common_fuse_meta::meta::ClusterKey;
 use common_fuse_meta::meta::Location;
 use common_fuse_meta::meta::SegmentInfo;
@@ -32,7 +34,6 @@ use common_fuse_meta::meta::TableSnapshot;
 use common_fuse_meta::meta::Versioned;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableStatistics;
-use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_types::MatchSeq;
 use tracing::debug;
@@ -40,6 +41,7 @@ use tracing::info;
 use tracing::warn;
 use uuid::Uuid;
 
+use crate::io::write_meta;
 use crate::operations::AppendOperationLogEntry;
 use crate::operations::TableOperationLog;
 use crate::statistics;
@@ -177,9 +179,11 @@ impl FuseTable {
             .into_iter()
             .map(|loc| (loc, SegmentInfo::VERSION))
             .collect();
+
+        let new_snapshot_id = Uuid::new_v4();
         let new_snapshot = if overwrite {
             TableSnapshot::new(
-                Uuid::new_v4(),
+                new_snapshot_id,
                 &prev_timestamp,
                 prev.as_ref().map(|v| (v.snapshot_id, prev_version)),
                 schema,
@@ -207,11 +211,18 @@ impl FuseTable {
             index_data_bytes: new_snapshot.summary.index_size,
         };
 
-        self.update_table_meta(
+        // write down the new snapshot
+        let snapshot_loc = self.meta_location_generator.snapshot_location_from_uuid(
+            &new_snapshot.snapshot_id,
+            new_snapshot.format_version(),
+        )?;
+
+        FuseTable::commit_to_meta_server(
             ctx.as_ref(),
             catalog_name,
-            &new_snapshot,
-            &mut new_table_meta,
+            &self.table_info,
+            snapshot_loc,
+            new_snapshot,
         )
         .await
     }
@@ -256,24 +267,25 @@ impl FuseTable {
         ctx: &dyn TableContext,
         catalog_name: &str,
         table_info: &TableInfo,
-        new_snapshot_location: String,
-        stats: &Statistics,
-    ) -> Result<UpdateTableMetaReply> {
-        let catalog = ctx.get_catalog(catalog_name)?;
+        snapshot_location: String,
+        snapshot: TableSnapshot,
+    ) -> Result<()> {
+        // 1. write down snapshot
+        let operator = ctx.get_storage_operator()?;
+        write_meta(&operator, &snapshot_location, &snapshot).await?;
 
-        let table_id = table_info.ident.table_id;
-        let table_version = table_info.ident.seq;
-
+        // 2. prepare table meta
         let mut new_table_meta = table_info.meta.clone();
-
-        // set new snapshot location
-        new_table_meta
-            .options
-            .insert(OPT_KEY_SNAPSHOT_LOCATION.to_owned(), new_snapshot_location);
-
+        // 2.1 set new snapshot location
+        new_table_meta.options.insert(
+            OPT_KEY_SNAPSHOT_LOCATION.to_owned(),
+            snapshot_location.clone(),
+        );
         // remove legacy options
         self::utils::remove_legacy_options(&mut new_table_meta.options);
 
+        // 2.2 setup table statistics
+        let stats = &snapshot.summary;
         // update statistics
         new_table_meta.statistics = TableStatistics {
             number_of_rows: stats.row_count,
@@ -282,13 +294,35 @@ impl FuseTable {
             index_data_bytes: stats.index_size,
         };
 
+        // 3. prepare the request
+
+        let catalog = ctx.get_catalog(catalog_name)?;
+        let table_id = table_info.ident.table_id;
+        let table_version = table_info.ident.seq;
+
         let req = UpdateTableMetaReq {
             table_id,
             seq: MatchSeq::Exact(table_version),
             new_table_meta,
         };
 
-        catalog.update_table_meta(req).await
+        // 3. let's roll
+        let reply = catalog.update_table_meta(req).await;
+        match reply {
+            Ok(_) => {
+                if let Some(snapshot_cache) = CacheManager::instance().get_table_snapshot_cache() {
+                    let cache = &mut snapshot_cache.write().await;
+                    cache.put(snapshot_location, Arc::new(snapshot));
+                }
+                Ok(())
+            }
+            Err(e) => {
+                // commit snapshot to meta server failed, try to delete it.
+                // "major GC" will collect this, if deletion failure (even after DAL retried)
+                let _ = operator.object(&snapshot_location).delete().await;
+                Err(e)
+            }
+        }
     }
 
     pub fn merge_append_operations(
@@ -333,6 +367,11 @@ impl FuseTable {
         };
         catalog.get_table_by_info(&table_info)
     }
+
+    // Left a hint file which indicates the location of the latest snapshot
+    // async fn write_last_snapshot_hint(_ctx: &dyn TableContext, _last_snapshot_path: String) {
+    //    todo!()
+    //}
 }
 
 mod utils {

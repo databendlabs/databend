@@ -220,14 +220,8 @@ impl TableMutator for ReclusterMutator {
 
         let (new_snapshot, loc) = base_mutator.into_new_snapshot(segments, summary).await?;
 
-        FuseTable::commit_to_meta_server(
-            ctx.as_ref(),
-            catalog_name,
-            table_info,
-            loc,
-            &new_snapshot.summary,
-        )
-        .await?;
+        FuseTable::commit_to_meta_server(ctx.as_ref(), catalog_name, table_info, loc, new_snapshot)
+            .await?;
         Ok(())
     }
 }

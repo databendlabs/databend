@@ -126,14 +126,8 @@ impl FuseTable {
         catalog_name: &str,
     ) -> Result<()> {
         let (new_snapshot, loc) = del_holder.into_new_snapshot().await?;
-        Self::commit_to_meta_server(
-            ctx,
-            catalog_name,
-            self.get_table_info(),
-            loc,
-            &new_snapshot.summary,
-        )
-        .await?;
+        Self::commit_to_meta_server(ctx, catalog_name, self.get_table_info(), loc, new_snapshot)
+            .await?;
         // TODO check if error is recoverable, and try to resolve the conflict
         Ok(())
     }

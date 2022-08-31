@@ -26,7 +26,6 @@ use common_fuse_meta::meta::Statistics;
 use common_fuse_meta::meta::TableSnapshot;
 use opendal::Operator;
 
-use crate::io::write_meta;
 use crate::io::MetaReaders;
 use crate::io::SegmentWriter;
 use crate::io::TableMetaLocationGenerator;
@@ -96,7 +95,6 @@ impl BaseMutator {
             &new_snapshot.snapshot_id,
             new_snapshot.format_version(),
         )?;
-        write_meta(&self.data_accessor, &snapshot_loc, &new_snapshot).await?;
         Ok((new_snapshot, snapshot_loc))
     }
 

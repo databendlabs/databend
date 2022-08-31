@@ -30,7 +30,7 @@ use crate::meta::Versioned;
 // impl Versioned<0> for v0::SegmentInfo {}
 // impl Versioned<1> for v0::SegmentInfo {}
 //
-// Fortunately, since v0::SegmentInfo::VESION is used in
+// Fortunately, since v0::SegmentInfo::VERSION is used in
 // several places, compiler will report compile error if it
 // can not deduce a unique value the constant expression.
 
