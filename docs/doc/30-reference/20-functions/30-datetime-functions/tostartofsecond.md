@@ -1,5 +1,5 @@
 ---
-title: to_start_of_second
+title: TO_START_OF_SECOND
 ---
 
 Rounds down a date with time to the start of the second.

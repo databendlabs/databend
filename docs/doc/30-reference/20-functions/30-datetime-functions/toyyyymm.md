@@ -1,5 +1,5 @@
 ---
-title: to_yyyymm
+title: TO_YYYYMM
 ---
 
 Converts a date or date with time to a UInt32 number containing the year and month number.
