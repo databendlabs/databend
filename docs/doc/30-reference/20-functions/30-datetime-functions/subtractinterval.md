@@ -1,5 +1,5 @@
 ---
-title: Subtract Time Interval
+title: SUBTRACT TIME INTERVAL
 description: Subtract time interval function
 title_includes: subtract_years, subtract_months, subtract_days, subtract_hours, subtract_minutes, subtract_seconds
 ---

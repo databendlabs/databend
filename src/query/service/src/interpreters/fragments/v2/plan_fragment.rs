@@ -205,6 +205,7 @@ impl PhysicalPlanReplacer for ReplaceReadSource {
         Ok(PhysicalPlan::TableScan(TableScan {
             source: Box::new(self.source.clone()),
             name_mapping: plan.name_mapping.clone(),
+            table_index: plan.table_index,
         }))
     }
 }

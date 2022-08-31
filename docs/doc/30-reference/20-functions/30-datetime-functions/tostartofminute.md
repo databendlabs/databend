@@ -1,5 +1,5 @@
 ---
-title: to_start_of_minute
+title: TO_START_OF_MINUTE
 ---
 
 Rounds down a date with time to the start of the minute.

@@ -27,7 +27,7 @@ runs:
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v1
       with:
-        role-duration-seconds: 600
+        role-duration-seconds: 900
         role-to-assume: ${{ inputs.repo_role_arn }}
         aws-region: us-east-2
 

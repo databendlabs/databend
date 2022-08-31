@@ -1,5 +1,5 @@
 ---
-title: to_hour
+title: TO_HOUR
 ---
 
 Converts a date with time to a UInt8 number containing the number of the hour in 24-hour time (0-23).

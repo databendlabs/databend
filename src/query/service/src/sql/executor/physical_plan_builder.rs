@@ -229,6 +229,7 @@ impl PhysicalPlanBuilder {
                 Ok(PhysicalPlan::TableScan(TableScan {
                     name_mapping,
                     source: Box::new(source),
+                    table_index: scan.table_index,
                 }))
             }
             RelOperator::PhysicalHashJoin(join) => {
@@ -277,6 +278,8 @@ impl PhysicalPlanBuilder {
                         .sorted()
                         .map(|index| input_schema.index_of(index.to_string().as_str()))
                         .collect::<Result<_>>()?,
+
+                    columns: project.columns.clone(),
                 }))
             }
             RelOperator::EvalScalar(eval_scalar) => Ok(PhysicalPlan::EvalScalar(EvalScalar {
