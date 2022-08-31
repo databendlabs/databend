@@ -43,12 +43,15 @@ impl AggregateFunctionBasicAdaptor {
         features: AggregateFunctionFeatures,
     ) -> Result<AggregateFunctionRef> {
         // count/count distinct should not be nullable for empty set, just return zero
-        if features.returns_default_when_only_null {
+        let inner_return_type = inner.return_type()?;
+        if features.returns_default_when_only_null
+            || inner_return_type.data_type_id() == TypeID::Null
+        {
             return Ok(inner);
         }
 
         let inner_layout = inner.state_layout();
-        let inner_nullable = inner.return_type()?.is_nullable();
+        let inner_nullable = inner_return_type.is_nullable();
         Ok(Arc::new(AggregateFunctionBasicAdaptor {
             inner,
             size_of_data: inner_layout.size(),

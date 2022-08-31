@@ -44,7 +44,7 @@ statement query IIII
 SELECT a, COUNT(*), COUNT(s), COUNT(DISTINCT s) FROM test GROUP BY a ORDER BY a;
 
 ----
-11 3 2 2
+11 3 2 1
 12 2 2 1
 
 statement query IIII
