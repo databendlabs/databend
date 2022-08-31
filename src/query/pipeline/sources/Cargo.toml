@@ -23,5 +23,5 @@ common-streams = { path = "../../streams" }
 async-trait = { version = "0.1.0", package = "async-trait-fn" }
 futures = "0.3.21"
 futures-util = "0.3.21"
-opendal = { version = "0.13.1", features = ["layers-retry", "compress"] }
+opendal = { version = "0.14.1", features = ["layers-retry", "compress"] }
 parking_lot = "0.12.1"

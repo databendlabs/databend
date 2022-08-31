@@ -53,7 +53,7 @@ auto_sync_interval = 60
 
 # Storage config.
 [storage]
-# fs | s3 | azblob
+# fs | s3 | azblob | obs
 type = "fs"
 
 # Set a local folder to store your data.

@@ -173,7 +173,7 @@ pub fn comma_separated_list0<'a, T>(
     separated_list0(match_text(","), item)
 }
 
-pub fn comma_separated_list0_allow_trailling<'a, T>(
+pub fn comma_separated_list0_ignore_trailling<'a, T>(
     item: impl FnMut(Input<'a>) -> IResult<'a, T>,
 ) -> impl FnMut(Input<'a>) -> IResult<'a, Vec<T>> {
     nom::multi::separated_list0(match_text(","), item)
@@ -314,23 +314,41 @@ pub fn run_pratt_parser<'a, I, P, E>(
 ) -> IResult<'a, P::Output>
 where
     E: std::fmt::Debug,
-    P: PrattParser<I, Input = WithSpan<'a, E>>,
-    I: Iterator<Item = P::Input>,
-    ErrorKind: From<PrattError<WithSpan<'a, E>, <P as PrattParser<I>>::Error>>,
+    P: PrattParser<I, Input = WithSpan<'a, E>, Error = &'static str>,
+    I: Iterator<Item = P::Input> + ExactSizeIterator + Clone,
 {
+    let mut iter_cloned = iter.clone();
     let mut iter = iter.peekable();
+    let len = iter.len();
     let expr = parser
         .parse_input(&mut iter, Precedence(0))
         .map_err(|err| {
-            Error::from_error_kind(
-                iter.next()
-                    .map(|elem| elem.span)
-                    // It's safe to slice one more token because EOI is always added.
-                    .unwrap_or_else(|| rest.slice(..1)),
-                ErrorKind::from(err),
-            )
-        })
-        .map_err(nom::Err::Error)?;
+            // Rollback parsing footprint on unused expr elements.
+            input.2.clear();
+
+            let err_kind = match err {
+                PrattError::EmptyInput => ErrorKind::Other("expecting more subsequent tokens"),
+                PrattError::UnexpectedNilfix(_) => ErrorKind::Other("unable to parse the element"),
+                PrattError::UnexpectedPrefix(_) => {
+                    ErrorKind::Other("unable to parse the prefix operator")
+                }
+                PrattError::UnexpectedInfix(_) => {
+                    ErrorKind::Other("missing lhs or rhs for the binary operator")
+                }
+                PrattError::UnexpectedPostfix(_) => {
+                    ErrorKind::Other("unable to parse the postfix operator")
+                }
+                PrattError::UserError(err) => ErrorKind::Other(err),
+            };
+
+            let span = iter_cloned
+                .nth(len - iter.len() - 1)
+                .map(|elem| elem.span)
+                // It's safe to slice one more token because EOI is always added.
+                .unwrap_or_else(|| rest.slice(..1));
+
+            nom::Err::Error(Error::from_error_kind(span, err_kind))
+        })?;
     if let Some(elem) = iter.peek() {
         // Rollback parsing footprint on unused expr elements.
         input.2.clear();

@@ -19,9 +19,7 @@ use std::time::Instant;
 
 use async_trait::async_trait;
 use opendal::io_util::observe_read;
-use opendal::io_util::observe_write;
 use opendal::io_util::ReadEvent;
-use opendal::io_util::WriteEvent;
 use opendal::ops::OpCreate;
 use opendal::ops::OpDelete;
 use opendal::ops::OpList;
@@ -33,7 +31,6 @@ use opendal::ops::PresignedRequest;
 use opendal::Accessor;
 use opendal::AccessorMetadata;
 use opendal::BytesReader;
-use opendal::BytesWriter;
 use opendal::DirStreamer;
 use opendal::Layer;
 use opendal::ObjectMetadata;
@@ -120,30 +117,29 @@ impl Accessor for DalContext {
         })
     }
 
-    async fn write(&self, args: &OpWrite) -> Result<BytesWriter> {
+    async fn write(&self, args: &OpWrite, r: BytesReader) -> Result<u64> {
         let metric = self.metrics.clone();
 
-        self.get_inner()?.write(args).await.map(|w| {
-            let mut last_pending = None;
-            let w = observe_write(w, move |e| {
-                let start = match last_pending {
-                    None => Instant::now(),
-                    Some(t) => t,
-                };
-                match e {
-                    WriteEvent::Pending => last_pending = Some(start),
-                    WriteEvent::Written(n) => {
-                        last_pending = None;
-                        metric.inc_write_bytes(n);
-                    }
-                    WriteEvent::Error(_) => last_pending = None,
-                    _ => {}
-                }
-                metric.inc_write_bytes_cost(start.elapsed().as_millis() as u64);
-            });
+        let mut last_pending = None;
 
-            Box::new(w) as BytesWriter
-        })
+        let r = observe_read(r, move |e| {
+            let start = match last_pending {
+                None => Instant::now(),
+                Some(t) => t,
+            };
+            match e {
+                ReadEvent::Pending => last_pending = Some(start),
+                ReadEvent::Read(n) => {
+                    last_pending = None;
+                    metric.inc_write_bytes(n);
+                }
+                ReadEvent::Error(_) => last_pending = None,
+                _ => {}
+            }
+            metric.inc_write_bytes_cost(start.elapsed().as_millis() as u64);
+        });
+
+        self.get_inner()?.write(args, Box::new(r)).await
     }
 
     async fn stat(&self, args: &OpStat) -> Result<ObjectMetadata> {

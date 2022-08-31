@@ -1,0 +1,62 @@
+-- issue: https://github.com/datafuselabs/databend/issues/7391
+
+-- statement query I
+-- select cast(0.55::DOUBLE as BIGINT) as x;
+
+-- ----
+-- 1
+
+-- statement query I
+-- select cast(1.5::DOUBLE as BIGINT) as x;
+
+-- ----
+-- 2
+
+-- statement query I
+-- select cast(-0.5::DOUBLE as BIGINT) as x;
+
+-- ----
+-- 0
+
+-- statement query I
+-- select cast(-0.55::DOUBLE as BIGINT) as x;
+
+-- ----
+-- -1
+
+-- statement query I
+-- select cast(-1.5::DOUBLE as BIGINT) as x;
+
+-- ----
+-- -2
+
+-- statement query I
+-- select cast(0.55::DOUBLE as TINYINT) as x;
+
+-- ----
+-- 1
+
+-- statement query I
+-- select cast(1.5::DOUBLE as TINYINT) as x;
+
+-- ----
+-- 2
+
+-- statement query I
+-- select cast(-0.5::DOUBLE as TINYINT) as x;
+
+-- ----
+-- 0
+
+-- statement query I
+-- select cast(-0.55::DOUBLE as TINYINT) as x;
+
+-- ----
+-- -1
+
+-- statement query I
+-- select cast(-1.5::DOUBLE as TINYINT) as x;
+
+-- ----
+-- -2
+

@@ -26,8 +26,8 @@ pub use syntax::pretty_statement;
 
 #[derive(Clone)]
 pub struct FormatTreeNode<T: Display + Clone> {
-    payload: T,
-    children: Vec<Self>,
+    pub payload: T,
+    pub children: Vec<Self>,
 }
 
 impl<T> FormatTreeNode<T>

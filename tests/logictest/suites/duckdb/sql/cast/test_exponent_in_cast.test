@@ -1,0 +1,34 @@
+statement error 1010
+SELECT CAST('e1' AS INTEGER);
+
+statement error 1010
+SELECT CAST('  e1' AS INTEGER);
+
+statement error 1010
+SELECT CAST('  E1' AS INTEGER);
+
+statement error 1010
+SELECT CAST('e1' AS DOUBLE);
+
+statement error 1010
+SELECT CAST('  e1' AS DOUBLE);
+
+statement error 1010
+SELECT CAST('  E1' AS DOUBLE);
+
+statement error 1010
+SELECT CAST('  1e1' AS INTEGER);
+
+statement query F
+SELECT CAST('1e1' AS DOUBLE);
+
+----
+10.0
+
+-- TODO issue https://github.com/datafuselabs/databend/issues/7389
+-- statement query I
+-- SELECT CAST('   1e1' AS DOUBLE);
+
+-- ----
+-- 10.0
+

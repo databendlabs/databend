@@ -19,6 +19,9 @@ use common_base::base::Progress;
 use common_base::base::ProgressValues;
 use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
+use common_datavalues::ColumnRef;
+use common_datavalues::DataSchemaRef;
+use common_datavalues::DataSchemaRefExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_pipeline_core::processors::port::OutputPort;
@@ -27,8 +30,10 @@ use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 use common_pipeline_core::Pipeline;
 use common_pipeline_core::SourcePipeBuilder;
+use common_pipeline_transforms::processors::ExpressionExecutor;
 use common_planners::Extras;
 use common_planners::PartInfoPtr;
+use common_planners::PrewhereInfo;
 use common_planners::Projection;
 use common_planners::ReadDataSourcePlan;
 
@@ -62,6 +67,14 @@ impl FuseTable {
         }
     }
 
+    pub fn prewhere_of_push_downs(&self, push_downs: &Option<Extras>) -> Option<PrewhereInfo> {
+        if let Some(Extras { prewhere, .. }) = push_downs {
+            prewhere.clone()
+        } else {
+            None
+        }
+    }
+
     #[inline]
     pub fn do_read2(
         &self,
@@ -69,8 +82,48 @@ impl FuseTable {
         plan: &ReadDataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
-        let block_reader =
-            self.create_block_reader(&ctx, self.projection_of_push_downs(&plan.push_downs))?;
+        let table_schema = self.table_info.schema();
+        let projection = self.projection_of_push_downs(&plan.push_downs);
+        let output_schema = projection.project_schema(&table_schema);
+        let output_schema = Arc::new(output_schema);
+        let output_reader = self.create_block_reader(&ctx, projection)?; // for deserialize output blocks
+
+        let (output_reader, prewhere_reader, prewhere_filter, remain_reader) =
+            if let Some(prewhere) = self.prewhere_of_push_downs(&plan.push_downs) {
+                let prewhere_schema = prewhere.need_columns.project_schema(&table_schema);
+                let prewhere_schema = Arc::new(prewhere_schema);
+                let expr_field = prewhere.filter.to_data_field(&prewhere_schema)?;
+                let expr_schema = DataSchemaRefExt::create(vec![expr_field]);
+
+                let executor = ExpressionExecutor::try_create(
+                    ctx.clone(),
+                    "filter expression executor (prewhere) ",
+                    prewhere_schema,
+                    expr_schema,
+                    vec![prewhere.filter.clone()],
+                    false,
+                )?;
+
+                let prewhere_reader =
+                    self.create_block_reader(&ctx, prewhere.need_columns.clone())?;
+                let remain_reader = if prewhere.remain_columns.is_empty() {
+                    None
+                } else {
+                    Some((&*self.create_block_reader(&ctx, prewhere.remain_columns)?).clone())
+                };
+
+                (
+                    output_reader,
+                    prewhere_reader,
+                    Some(executor),
+                    remain_reader,
+                )
+            } else {
+                (output_reader.clone(), output_reader, None, None)
+            };
+
+        let prewhere_filter = Arc::new(prewhere_filter);
+        let remain_reader = Arc::new(remain_reader);
 
         let parts_len = plan.parts.len();
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
@@ -82,7 +135,15 @@ impl FuseTable {
             let output = OutputPort::create();
             source_builder.add_source(
                 output.clone(),
-                FuseTableSource::create(ctx.clone(), output, block_reader.clone())?,
+                FuseTableSource::create(
+                    ctx.clone(),
+                    output,
+                    output_schema.clone(),
+                    output_reader.clone(),
+                    prewhere_reader.clone(),
+                    prewhere_filter.clone(),
+                    remain_reader.clone(),
+                )?,
             );
         }
 
@@ -91,9 +152,13 @@ impl FuseTable {
     }
 }
 
+type DataChunks = Vec<(usize, Vec<u8>)>;
+
 enum State {
-    ReadData(PartInfoPtr),
-    Deserialize(PartInfoPtr, Vec<(usize, Vec<u8>)>),
+    ReadDataPrewhere(PartInfoPtr),
+    ReadDataRemain(PartInfoPtr, DataChunks, ColumnRef),
+    PrewhereFilter(PartInfoPtr, DataChunks),
+    Deserialize(PartInfoPtr, DataChunks, Option<ColumnRef>),
     Generated(Option<PartInfoPtr>, DataBlock),
     Finish,
 }
@@ -102,15 +167,24 @@ struct FuseTableSource {
     state: State,
     ctx: Arc<dyn TableContext>,
     scan_progress: Arc<Progress>,
-    block_reader: Arc<BlockReader>,
     output: Arc<OutputPort>,
+    output_schema: DataSchemaRef,
+    output_reader: Arc<BlockReader>,
+
+    prewhere_reader: Arc<BlockReader>,
+    prewhere_filter: Arc<Option<ExpressionExecutor>>,
+    remain_reader: Arc<Option<BlockReader>>,
 }
 
 impl FuseTableSource {
     pub fn create(
         ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
-        block_reader: Arc<BlockReader>,
+        output_schema: DataSchemaRef,
+        output_reader: Arc<BlockReader>,
+        prewhere_reader: Arc<BlockReader>,
+        prewhere_filter: Arc<Option<ExpressionExecutor>>,
+        remain_reader: Arc<Option<BlockReader>>,
     ) -> Result<ProcessorPtr> {
         let scan_progress = ctx.get_scan_progress();
         let mut partitions = ctx.try_get_partitions(1)?;
@@ -118,18 +192,57 @@ impl FuseTableSource {
             true => Ok(ProcessorPtr::create(Box::new(FuseTableSource {
                 ctx,
                 output,
-                block_reader,
                 scan_progress,
                 state: State::Finish,
+                output_schema,
+                output_reader,
+                prewhere_reader,
+                prewhere_filter,
+                remain_reader,
             }))),
             false => Ok(ProcessorPtr::create(Box::new(FuseTableSource {
                 ctx,
                 output,
-                block_reader,
                 scan_progress,
-                state: State::ReadData(partitions.remove(0)),
+                state: State::ReadDataPrewhere(partitions.remove(0)),
+                output_schema,
+                output_reader,
+                prewhere_reader,
+                prewhere_filter,
+                remain_reader,
             }))),
         }
+    }
+
+    fn generate_one_block(&mut self, block: DataBlock) -> Result<()> {
+        let mut partitions = self.ctx.try_get_partitions(1)?;
+
+        let progress_values = ProgressValues {
+            rows: block.num_rows(),
+            bytes: block.memory_size(),
+        };
+        self.scan_progress.incr(&progress_values);
+
+        self.state = match partitions.is_empty() {
+            true => State::Generated(None, block),
+            false => State::Generated(Some(partitions.remove(0)), block),
+        };
+        Ok(())
+    }
+
+    fn generate_one_empty_block(&mut self) -> Result<()> {
+        let mut partitions = self.ctx.try_get_partitions(1)?;
+        self.state = match partitions.is_empty() {
+            true => State::Generated(
+                None,
+                DataBlock::empty_with_schema(self.output_schema.clone()),
+            ),
+            false => State::Generated(
+                Some(partitions.remove(0)),
+                DataBlock::empty_with_schema(self.output_schema.clone()),
+            ),
+        };
+        Ok(())
     }
 }
 
@@ -161,7 +274,7 @@ impl Processor for FuseTableSource {
             if let Generated(part, data_block) = std::mem::replace(&mut self.state, State::Finish) {
                 self.state = match part {
                     None => State::Finish,
-                    Some(part) => State::ReadData(part),
+                    Some(part) => State::ReadDataPrewhere(part),
                 };
 
                 self.output.push_data(Ok(data_block));
@@ -171,29 +284,57 @@ impl Processor for FuseTableSource {
 
         match self.state {
             State::Finish => Ok(Event::Finished),
-            State::ReadData(_) => Ok(Event::Async),
-            State::Deserialize(_, _) => Ok(Event::Sync),
+            State::ReadDataPrewhere(_) => Ok(Event::Async),
+            State::ReadDataRemain(_, _, _) => Ok(Event::Async),
+            State::PrewhereFilter(_, _) => Ok(Event::Sync),
+            State::Deserialize(_, _, _) => Ok(Event::Sync),
             State::Generated(_, _) => Err(ErrorCode::LogicalError("It's a bug.")),
         }
     }
 
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Finish) {
-            State::Deserialize(part, chunks) => {
-                let data_block = self.block_reader.deserialize(part, chunks)?;
-                let mut partitions = self.ctx.try_get_partitions(1)?;
-
-                let progress_values = ProgressValues {
-                    rows: data_block.num_rows(),
-                    bytes: data_block.memory_size(),
+            State::Deserialize(part, chunks, filter) => {
+                let data_block = if let Some(filter) = filter {
+                    let block = self.output_reader.deserialize(part, chunks)?;
+                    // the last step of prewhere
+                    DataBlock::filter_block(block, &filter)?
+                } else {
+                    self.output_reader.deserialize(part, chunks)?
                 };
-                self.scan_progress.incr(&progress_values);
 
-                self.state = match partitions.is_empty() {
-                    true => State::Generated(None, data_block),
-                    false => State::Generated(Some(partitions.remove(0)), data_block),
-                };
+                self.generate_one_block(data_block)?;
                 Ok(())
+            }
+            State::PrewhereFilter(part, chunks) => {
+                // deserialize prewhere data block first
+                let block = self
+                    .prewhere_reader
+                    .deserialize(part.clone(), chunks.clone())?;
+                if let Some(filter) = self.prewhere_filter.as_ref() {
+                    // do filter
+                    let res = filter.execute(&block)?;
+                    let filter = DataBlock::cast_to_nonull_boolean(res.column(0))?;
+                    // shortcut, if predicates is const boolean (or can be cast to boolean)
+                    if !DataBlock::filter_exists(&filter)? {
+                        // all rows in this block are filtered out
+                        // turn to read next part
+                        self.generate_one_empty_block()?;
+                        return Ok(());
+                    }
+                    if self.remain_reader.is_none() {
+                        // shortcut, we don't need to read remain data
+                        let block = DataBlock::filter_block(block, &filter)?;
+                        self.generate_one_block(block)?;
+                    } else {
+                        self.state = State::ReadDataRemain(part, chunks, filter);
+                    }
+                    Ok(())
+                } else {
+                    Err(ErrorCode::LogicalError(
+                        "It's a bug. No need to do prewhere filter",
+                    ))
+                }
             }
             _ => Err(ErrorCode::LogicalError("It's a bug.")),
         }
@@ -201,10 +342,27 @@ impl Processor for FuseTableSource {
 
     async fn async_process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Finish) {
-            State::ReadData(part) => {
-                let chunks = self.block_reader.read_columns_data(part.clone()).await?;
-                self.state = State::Deserialize(part, chunks);
+            State::ReadDataPrewhere(part) => {
+                let chunks = self.prewhere_reader.read_columns_data(part.clone()).await?;
+
+                if self.prewhere_filter.is_some() {
+                    self.state = State::PrewhereFilter(part, chunks);
+                } else {
+                    // all needed columns are read.
+                    self.state = State::Deserialize(part, chunks, None)
+                }
                 Ok(())
+            }
+            State::ReadDataRemain(part, prewhere_chunks, filter) => {
+                if let Some(remain_reader) = self.remain_reader.as_ref() {
+                    let mut chunks = remain_reader.read_columns_data(part.clone()).await?;
+                    // merge two parts of chunks
+                    chunks.extend(prewhere_chunks);
+                    self.state = State::Deserialize(part, chunks, Some(filter));
+                    Ok(())
+                } else {
+                    return Err(ErrorCode::LogicalError("It's a bug. No remain reader"));
+                }
             }
             _ => Err(ErrorCode::LogicalError("It's a bug.")),
         }

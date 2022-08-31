@@ -1,5 +1,5 @@
 ---
-title: to_start_of_iso_year
+title: TO_START_OF_ISO_YEAR
 ---
 
 Returns the first day of the ISO year for a date or a date with time.

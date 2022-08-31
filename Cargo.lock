@@ -1874,13 +1874,20 @@ dependencies = [
 name = "common-storages-util"
 version = "0.1.0"
 dependencies = [
+ "async-trait-fn",
  "backoff",
+ "common-arrow",
  "common-base",
+ "common-cache",
+ "common-catalog",
  "common-datablocks",
  "common-exception",
+ "common-fuse-meta",
  "common-meta-api",
+ "futures-util",
  "once_cell",
  "parking_lot 0.12.1",
+ "tracing",
 ]
 
 [[package]]
@@ -3834,9 +3841,9 @@ dependencies = [
 
 [[package]]
 name = "iana-time-zone"
-version = "0.1.44"
+version = "0.1.46"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "808cf7d67cf4a22adc5be66e75ebdf769b3f2ea032041437a7061f97a63dad4b"
+checksum = "ad2bfd338099682614d3ee3fe0cd72e0b6a41ca6a87f6a74a3bd593c91650501"
 dependencies = [
  "android_system_properties",
  "core-foundation-sys",
@@ -3919,7 +3926,7 @@ dependencies = [
  "log",
  "num-format",
  "once_cell",
- "quick-xml",
+ "quick-xml 0.23.0",
  "rgb",
  "str_stack",
 ]
@@ -5010,9 +5017,9 @@ checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
 
 [[package]]
 name = "opendal"
-version = "0.13.1"
+version = "0.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "47b5ab8000354e0fbe889ee7f9b12636b81e8dd5dc082e17becdc1da2154fc87"
+checksum = "9e1bb2b32e29a223594277a78779b81755041ef7a94a60f650f9ebf2cb321522"
 dependencies = [
  "anyhow",
  "async-compat",
@@ -5033,7 +5040,7 @@ dependencies = [
  "parking_lot 0.12.1",
  "percent-encoding",
  "pin-project",
- "quick-xml",
+ "quick-xml 0.24.0",
  "radix_trie",
  "reqsign",
  "serde",
@@ -5994,6 +6001,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "quick-xml"
+version = "0.24.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "678404d55890514fa1c01fe98cf280b674db93944fdcb70310dd3be1d0d63be7"
+dependencies = [
+ "memchr",
+ "serde",
+]
+
+[[package]]
 name = "quote"
 version = "1.0.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6188,9 +6205,9 @@ dependencies = [
 
 [[package]]
 name = "reqsign"
-version = "0.4.0"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "089ba78fc07022b47d4cde6cebafbf2e756609ec3e83198c238529dcc59c4d17"
+checksum = "4942da92611173e7de170be8d64f507b418743c6b6bfd3297fa8b48352872caf"
 dependencies = [
  "anyhow",
  "backon",
@@ -6206,7 +6223,7 @@ dependencies = [
  "log",
  "once_cell",
  "percent-encoding",
- "quick-xml",
+ "quick-xml 0.23.0",
  "rust-ini",
  "serde",
  "serde_json",

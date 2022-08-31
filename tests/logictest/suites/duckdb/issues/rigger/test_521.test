@@ -1,0 +1,24 @@
+statement ok
+drop table if exists t0;
+
+statement query F
+SELECT ROUND(0.1, 1000);
+
+----
+0.1
+
+statement ok
+CREATE TABLE t0(c0 INT);
+
+statement ok
+INSERT INTO t0(c0) VALUES (0);
+
+statement ok
+SELECT * FROM t0 WHERE t0.c0 > ROUND(0.1, 1000);
+
+statement query I
+SELECT * FROM t0 WHERE t0.c0 <= ROUND(0.1, 1000);
+
+----
+0
+

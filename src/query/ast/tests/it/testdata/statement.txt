@@ -2225,17 +2225,7 @@ Query(
                 from: [
                     Join {
                         span: [
-                            Ident(14..15),
                             JOIN(16..20),
-                            Ident(21..22),
-                            ON(23..25),
-                            Ident(26..27),
-                            Period(27..28),
-                            Ident(28..29),
-                            Eq(30..31),
-                            Ident(32..33),
-                            Period(33..34),
-                            Ident(34..35),
                         ],
                         join: Join {
                             op: Inner,
@@ -2388,19 +2378,9 @@ Query(
                 from: [
                     Join {
                         span: [
-                            Ident(14..15),
                             LEFT(16..20),
                             OUTER(21..26),
                             JOIN(27..31),
-                            Ident(32..33),
-                            ON(34..36),
-                            Ident(37..38),
-                            Period(38..39),
-                            Ident(39..40),
-                            Eq(41..42),
-                            Ident(43..44),
-                            Period(44..45),
-                            Ident(45..46),
                         ],
                         join: Join {
                             op: LeftOuter,
@@ -2553,19 +2533,9 @@ Query(
                 from: [
                     Join {
                         span: [
-                            Ident(14..15),
                             RIGHT(16..21),
                             OUTER(22..27),
                             JOIN(28..32),
-                            Ident(33..34),
-                            ON(35..37),
-                            Ident(38..39),
-                            Period(39..40),
-                            Ident(40..41),
-                            Eq(42..43),
-                            Ident(44..45),
-                            Period(45..46),
-                            Ident(46..47),
                         ],
                         join: Join {
                             op: RightOuter,
@@ -2718,19 +2688,9 @@ Query(
                 from: [
                     Join {
                         span: [
-                            Ident(14..15),
                             FULL(16..20),
                             OUTER(21..26),
                             JOIN(27..31),
-                            Ident(32..33),
-                            ON(34..36),
-                            Ident(37..38),
-                            Period(38..39),
-                            Ident(39..40),
-                            Eq(41..42),
-                            Ident(43..44),
-                            Period(44..45),
-                            Ident(45..46),
                         ],
                         join: Join {
                             op: FullOuter,
@@ -2881,18 +2841,8 @@ Query(
                 from: [
                     Join {
                         span: [
-                            Ident(14..15),
                             INNER(16..21),
                             JOIN(22..26),
-                            Ident(27..28),
-                            ON(29..31),
-                            Ident(32..33),
-                            Period(33..34),
-                            Ident(34..35),
-                            Eq(36..37),
-                            Ident(38..39),
-                            Period(39..40),
-                            Ident(40..41),
                         ],
                         join: Join {
                             op: Inner,
@@ -3037,15 +2987,9 @@ Query(
                 from: [
                     Join {
                         span: [
-                            Ident(14..15),
                             LEFT(16..20),
                             OUTER(21..26),
                             JOIN(27..31),
-                            Ident(32..33),
-                            USING(34..39),
-                            LParen(39..40),
-                            Ident(40..41),
-                            RParen(41..42),
                         ],
                         join: Join {
                             op: LeftOuter,
@@ -3151,15 +3095,9 @@ Query(
                 from: [
                     Join {
                         span: [
-                            Ident(14..15),
                             RIGHT(16..21),
                             OUTER(22..27),
                             JOIN(28..32),
-                            Ident(33..34),
-                            USING(35..40),
-                            LParen(40..41),
-                            Ident(41..42),
-                            RParen(42..43),
                         ],
                         join: Join {
                             op: RightOuter,
@@ -3265,15 +3203,9 @@ Query(
                 from: [
                     Join {
                         span: [
-                            Ident(14..15),
                             FULL(16..20),
                             OUTER(21..26),
                             JOIN(27..31),
-                            Ident(32..33),
-                            USING(34..39),
-                            LParen(39..40),
-                            Ident(40..41),
-                            RParen(41..42),
                         ],
                         join: Join {
                             op: FullOuter,
@@ -3377,14 +3309,8 @@ Query(
                 from: [
                     Join {
                         span: [
-                            Ident(14..15),
                             INNER(16..21),
                             JOIN(22..26),
-                            Ident(27..28),
-                            USING(29..34),
-                            LParen(34..35),
-                            Ident(35..36),
-                            RParen(36..37),
                         ],
                         join: Join {
                             op: Inner,

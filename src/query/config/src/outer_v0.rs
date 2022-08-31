@@ -26,6 +26,7 @@ use common_storage::StorageConfig as InnerStorageConfig;
 use common_storage::StorageFsConfig as InnerStorageFsConfig;
 use common_storage::StorageGcsConfig as InnerStorageGcsConfig;
 use common_storage::StorageHdfsConfig as InnerStorageHdfsConfig;
+use common_storage::StorageObsConfig as InnerStorageObsConfig;
 use common_storage::StorageParams;
 use common_storage::StorageS3Config as InnerStorageS3Config;
 use common_tracing::Config as InnerLogConfig;
@@ -192,6 +193,10 @@ pub struct StorageConfig {
     // hdfs storage backend config
     #[clap(flatten)]
     pub hdfs: HdfsConfig,
+
+    // OBS storage backend config
+    #[clap(flatten)]
+    pub obs: ObsStorageConfig,
 }
 
 impl Default for StorageConfig {
@@ -211,6 +216,7 @@ impl From<InnerStorageConfig> for StorageConfig {
             s3: Default::default(),
             azblob: Default::default(),
             hdfs: Default::default(),
+            obs: Default::default(),
         };
 
         match inner.params {
@@ -238,6 +244,10 @@ impl From<InnerStorageConfig> for StorageConfig {
                 cfg.storage_type = "gcs".to_string();
                 cfg.gcs = v.into()
             }
+            StorageParams::Obs(v) => {
+                cfg.storage_type = "obs".to_string();
+                cfg.obs = v.into()
+            }
             v => unreachable!("{v:?} should not be used as storage backend"),
         }
 
@@ -261,6 +271,7 @@ impl TryInto<InnerStorageConfig> for StorageConfig {
                     "hdfs" => StorageParams::Hdfs(self.hdfs.try_into()?),
                     "memory" => StorageParams::Memory,
                     "s3" => StorageParams::S3(self.s3.try_into()?),
+                    "obs" => StorageParams::Obs(self.obs.try_into()?),
                     _ => return Err(ErrorCode::StorageOther("not supported storage type")),
                 }
             },
@@ -569,6 +580,88 @@ impl TryInto<InnerStorageHdfsConfig> for HdfsConfig {
         Ok(InnerStorageHdfsConfig {
             name_node: self.name_node,
             root: self.hdfs_root,
+        })
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize, Args)]
+#[serde(default)]
+pub struct ObsStorageConfig {
+    /// Access key for OBS storage
+    #[clap(long = "storage-obs-access-key-id", default_value_t)]
+    #[serde(rename = "access_key_id")]
+    pub obs_access_key_id: String,
+
+    /// Secret key for OBS storage
+    #[clap(long = "storage-obs-secret-access-key", default_value_t)]
+    #[serde(rename = "secret_access_key")]
+    pub obs_secret_access_key: String,
+
+    /// Bucket for OBS
+    #[clap(long = "storage-obs-bucket", default_value_t)]
+    #[serde(rename = "bucket")]
+    pub obs_bucket: String,
+
+    /// Endpoint URL for OBS
+    ///
+    /// # TODO(xuanwo)
+    ///
+    /// Clap doesn't allow us to use endpoint_url directly.
+    #[clap(long = "storage-obs-endpoint-url", default_value_t)]
+    #[serde(rename = "endpoint_url")]
+    pub obs_endpoint_url: String,
+
+    /// # TODO(xuanwo)
+    ///
+    /// Clap doesn't allow us to use root directly.
+    #[clap(long = "storage-obs-root", default_value_t)]
+    #[serde(rename = "root")]
+    pub obs_root: String,
+}
+
+impl Default for ObsStorageConfig {
+    fn default() -> Self {
+        InnerStorageObsConfig::default().into()
+    }
+}
+
+impl Debug for ObsStorageConfig {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ObsStorageConfig")
+            .field("endpoint_url", &self.obs_endpoint_url)
+            .field("bucket", &self.obs_bucket)
+            .field("root", &self.obs_root)
+            .field("access_key_id", &mask_string(&self.obs_access_key_id, 3))
+            .field(
+                "secret_access_key",
+                &mask_string(&self.obs_secret_access_key, 3),
+            )
+            .finish()
+    }
+}
+
+impl From<InnerStorageObsConfig> for ObsStorageConfig {
+    fn from(inner: InnerStorageObsConfig) -> Self {
+        Self {
+            obs_access_key_id: inner.access_key_id,
+            obs_secret_access_key: inner.secret_access_key,
+            obs_bucket: inner.bucket,
+            obs_endpoint_url: inner.endpoint_url,
+            obs_root: inner.root,
+        }
+    }
+}
+
+impl TryInto<InnerStorageObsConfig> for ObsStorageConfig {
+    type Error = ErrorCode;
+
+    fn try_into(self) -> Result<InnerStorageObsConfig> {
+        Ok(InnerStorageObsConfig {
+            endpoint_url: self.obs_endpoint_url,
+            bucket: self.obs_bucket,
+            access_key_id: self.obs_access_key_id,
+            secret_access_key: self.obs_secret_access_key,
+            root: self.obs_root,
         })
     }
 }

@@ -32,6 +32,7 @@ use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::BlocksSource;
 use crate::pipelines::processors::TransformCastSchema;
 use crate::pipelines::Pipeline;
+use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::SourcePipeBuilder;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
@@ -68,11 +69,11 @@ impl InsertInterpreterV2 {
             .get_table(&plan.catalog, &plan.database, &plan.table)
             .await?;
 
-        let mut pipeline = self.create_new_pipeline().await?;
+        let mut build_res = self.create_new_pipeline().await?;
         let mut builder = SourcePipeBuilder::create();
 
         if self.async_insert {
-            pipeline.add_pipe(
+            build_res.main_pipeline.add_pipe(
                 ((*self.source_pipe_builder.lock()).clone())
                     .ok_or_else(|| ErrorCode::EmptyData("empty source pipe builder"))?
                     .finalize(),
@@ -90,10 +91,10 @@ impl InsertInterpreterV2 {
                             BlocksSource::create(self.ctx.clone(), output.clone(), blocks.clone())?,
                         );
                     }
-                    pipeline.add_pipe(builder.finalize());
+                    build_res.main_pipeline.add_pipe(builder.finalize());
                 }
                 InsertInputSource::StreamingWithFormat(_) => {
-                    pipeline.add_pipe(
+                    build_res.main_pipeline.add_pipe(
                         ((*self.source_pipe_builder.lock()).clone())
                             .ok_or_else(|| ErrorCode::EmptyData("empty source pipe builder"))?
                             .finalize(),
@@ -115,7 +116,7 @@ impl InsertInterpreterV2 {
                         _ => unreachable!(),
                     };
 
-                    pipeline = select_interpreter?.create_new_pipeline().await?;
+                    build_res = select_interpreter?.create_new_pipeline().await?;
 
                     if self.check_schema_cast(plan)? {
                         let mut functions = Vec::with_capacity(self.plan.schema().fields().len());
@@ -135,21 +136,23 @@ impl InsertInterpreterV2 {
                         }
 
                         let func_ctx = self.ctx.try_get_function_context()?;
-                        pipeline.add_transform(|transform_input_port, transform_output_port| {
-                            TransformCastSchema::try_create(
-                                transform_input_port,
-                                transform_output_port,
-                                self.plan.schema(),
-                                functions.clone(),
-                                func_ctx.clone(),
-                            )
-                        })?;
+                        build_res.main_pipeline.add_transform(
+                            |transform_input_port, transform_output_port| {
+                                TransformCastSchema::try_create(
+                                    transform_input_port,
+                                    transform_output_port,
+                                    self.plan.schema(),
+                                    functions.clone(),
+                                    func_ctx.clone(),
+                                )
+                            },
+                        )?;
                     }
                 }
             };
         }
 
-        append2table(self.ctx.clone(), table.clone(), plan.schema(), pipeline)?;
+        append2table(self.ctx.clone(), table.clone(), plan.schema(), build_res)?;
         commit2table(self.ctx.clone(), table.clone(), self.plan.overwrite).await?;
 
         Ok(Box::pin(DataBlockStream::create(
@@ -186,9 +189,12 @@ impl Interpreter for InsertInterpreterV2 {
         self.execute_new().await
     }
 
-    async fn create_new_pipeline(&self) -> Result<Pipeline> {
+    async fn create_new_pipeline(&self) -> Result<PipelineBuildResult> {
         let insert_pipeline = Pipeline::create();
-        Ok(insert_pipeline)
+        Ok(PipelineBuildResult {
+            main_pipeline: insert_pipeline,
+            sources_pipelines: vec![],
+        })
     }
 
     fn set_source_pipe_builder(&self, builder: Option<SourcePipeBuilder>) -> Result<()> {

@@ -1,5 +1,5 @@
 ---
-title: to_day_of_year
+title: TO_DAY_OF_YEAR
 ---
 
 Converts a date or date with time to a UInt16 number containing the number of the day of the year (1-366).
