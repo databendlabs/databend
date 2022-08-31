@@ -1,5 +1,5 @@
 ---
-title: to_second
+title: TO_SECOND
 ---
 
 Converts a date with time to a UInt8 number containing the number of the second in the minute (0-59).

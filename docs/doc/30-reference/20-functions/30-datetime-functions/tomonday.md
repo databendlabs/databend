@@ -1,5 +1,5 @@
 ---
-title: to_monday
+title: TO_MONDAY
 ---
 
 Rounds down a date or date with time to the nearest Monday.

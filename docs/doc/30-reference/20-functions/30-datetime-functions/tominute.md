@@ -1,5 +1,5 @@
 ---
-title: to_minute
+title: TO_MINUTE
 ---
 
 Converts a date with time to a UInt8 number containing the number of the minute of the hour (0-59).

@@ -1,5 +1,5 @@
 ---
-title: to_year
+title: TO_YEAR
 ---
 
 Converts a date or date with time to a UInt16 number containing the year number (AD).

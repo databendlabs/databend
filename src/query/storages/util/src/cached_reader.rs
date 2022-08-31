@@ -15,15 +15,17 @@
 use std::sync::Arc;
 
 use common_cache::Cache;
+use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_fuse_meta::caches::CacheDeferMetrics;
+use common_fuse_meta::caches::CacheManager;
 use common_fuse_meta::caches::ItemCache;
 use common_fuse_meta::caches::TenantLabel;
 use tracing::warn;
 
-use crate::io::retry;
-use crate::io::retry::Retryable;
+use crate::retry;
+use crate::retry::Retryable;
 
 /// Loads an object from a source
 #[async_trait::async_trait]
@@ -99,7 +101,7 @@ where L: Loader<T> + HasTenantLabel
 
     async fn load(&self, loc: &str, len_hint: Option<u64>, version: u64) -> Result<Arc<T>> {
         let op = || async {
-            // Sine error conversion DO matters: retry depends on the conversion
+            // Error conversion matters: retry depends on the conversion
             // to distinguish transient errors from permanent ones.
             let v = self
                 .loader
@@ -117,5 +119,21 @@ where L: Loader<T> + HasTenantLabel
         let val = op.retry_with_notify(notify).await?;
         let item = Arc::new(val);
         Ok(item)
+    }
+}
+
+impl HasTenantLabel for &dyn TableContext {
+    fn tenant_label(&self) -> TenantLabel {
+        let storage_cache_manager = CacheManager::instance();
+        TenantLabel {
+            tenant_id: storage_cache_manager.get_tenant_id().to_owned(),
+            cluster_id: storage_cache_manager.get_cluster_id().to_owned(),
+        }
+    }
+}
+
+impl HasTenantLabel for Arc<dyn TableContext> {
+    fn tenant_label(&self) -> TenantLabel {
+        self.as_ref().tenant_label()
     }
 }

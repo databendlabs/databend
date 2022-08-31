@@ -34,8 +34,8 @@ impl VersionedReader<TableSnapshot> for SnapshotVersion {
     async fn read<R>(&self, reader: R) -> Result<TableSnapshot>
     where R: AsyncRead + Unpin + Send {
         let r = match self {
-            SnapshotVersion::V1(v) => load(reader, v).await?,
-            SnapshotVersion::V0(v) => load(reader, v).await?.into(),
+            SnapshotVersion::V1(v) => load_by_version(reader, v).await?,
+            SnapshotVersion::V0(v) => load_by_version(reader, v).await?.into(),
         };
         Ok(r)
     }
@@ -46,14 +46,14 @@ impl VersionedReader<SegmentInfo> for SegmentInfoVersion {
     async fn read<R>(&self, reader: R) -> Result<SegmentInfo>
     where R: AsyncRead + Unpin + Send {
         let r = match self {
-            SegmentInfoVersion::V1(v) => load(reader, v).await?,
-            SegmentInfoVersion::V0(v) => load(reader, v).await?.into(),
+            SegmentInfoVersion::V1(v) => load_by_version(reader, v).await?,
+            SegmentInfoVersion::V0(v) => load_by_version(reader, v).await?.into(),
         };
         Ok(r)
     }
 }
 
-async fn load<R, T>(mut reader: R, _v: &PhantomData<T>) -> Result<T>
+async fn load_by_version<R, T>(mut reader: R, _v: &PhantomData<T>) -> Result<T>
 where
     T: DeserializeOwned,
     R: AsyncRead + Unpin + Send,

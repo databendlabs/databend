@@ -21,6 +21,7 @@ use common_fuse_meta::meta::Location;
 use futures_util::TryStreamExt;
 
 use crate::io::MetaReaders;
+use crate::io::SnapshotHistoryReader;
 use crate::sessions::TableContext;
 use crate::FuseTable;
 
