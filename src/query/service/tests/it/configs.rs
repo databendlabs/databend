@@ -133,10 +133,10 @@ name_node = ""
 root = ""
 
 [storage.obs]
-endpoint_url = ""
 access_key_id = ""
 secret_access_key = ""
 bucket = ""
+endpoint_url = ""
 root = ""
 
 [catalog]
