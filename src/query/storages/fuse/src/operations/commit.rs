@@ -42,6 +42,7 @@ use tracing::warn;
 use uuid::Uuid;
 
 use crate::io::write_meta;
+use crate::io::TableMetaLocationGenerator;
 use crate::operations::AppendOperationLogEntry;
 use crate::operations::TableOperationLog;
 use crate::statistics;
@@ -211,17 +212,11 @@ impl FuseTable {
             index_data_bytes: new_snapshot.summary.index_size,
         };
 
-        // write down the new snapshot
-        let snapshot_loc = self.meta_location_generator.snapshot_location_from_uuid(
-            &new_snapshot.snapshot_id,
-            new_snapshot.format_version(),
-        )?;
-
         FuseTable::commit_to_meta_server(
             ctx.as_ref(),
             catalog_name,
             &self.table_info,
-            snapshot_loc,
+            &self.meta_location_generator,
             new_snapshot,
         )
         .await
@@ -267,9 +262,12 @@ impl FuseTable {
         ctx: &dyn TableContext,
         catalog_name: &str,
         table_info: &TableInfo,
-        snapshot_location: String,
+        location_generator: &TableMetaLocationGenerator,
         snapshot: TableSnapshot,
     ) -> Result<()> {
+        let snapshot_location = location_generator
+            .snapshot_location_from_uuid(&snapshot.snapshot_id, snapshot.format_version())?;
+
         // 1. write down snapshot
         let operator = ctx.get_storage_operator()?;
         write_meta(&operator, &snapshot_location, &snapshot).await?;

@@ -218,10 +218,16 @@ impl TableMutator for ReclusterMutator {
         segments.append(&mut merged_segments);
         summary = merge_statistics(&summary, &merged_summary)?;
 
-        let (new_snapshot, loc) = base_mutator.into_new_snapshot(segments, summary).await?;
+        let new_snapshot = base_mutator.into_new_snapshot(segments, summary).await?;
 
-        FuseTable::commit_to_meta_server(ctx.as_ref(), catalog_name, table_info, loc, new_snapshot)
-            .await?;
+        FuseTable::commit_to_meta_server(
+            ctx.as_ref(),
+            catalog_name,
+            table_info,
+            &self.base_mutator.location_generator,
+            new_snapshot,
+        )
+        .await?;
         Ok(())
     }
 }

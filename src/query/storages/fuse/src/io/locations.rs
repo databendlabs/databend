@@ -75,7 +75,7 @@ impl TableMetaLocationGenerator {
         )
     }
 
-    pub fn gen_segment_info_location(&self) -> String where {
+    pub fn gen_segment_info_location(&self) -> String {
         let segment_uuid = Uuid::new_v4().simple().to_string();
         format!(
             "{}/{}/{}_v{}.json",
@@ -97,6 +97,13 @@ impl TableMetaLocationGenerator {
         } else {
             SNAPSHOT_V0.version()
         }
+    }
+
+    pub fn gen_last_snapshot_hint_location(&self) -> String {
+        format!(
+            "{}/{}/last_snapshot_location_hint",
+            &self.prefix, FUSE_TBL_SNAPSHOT_PREFIX,
+        )
     }
 }
 

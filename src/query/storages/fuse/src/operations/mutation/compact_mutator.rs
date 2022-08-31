@@ -177,17 +177,11 @@ impl TableMutator for CompactMutator {
         new_snapshot.segments.append(&mut merged_segments);
         new_snapshot.summary = merge_statistics(&self.summary, &merged_summary)?;
 
-        // write down the new snapshot
-        let snapshot_loc = self.location_generator.snapshot_location_from_uuid(
-            &new_snapshot.snapshot_id,
-            new_snapshot.format_version(),
-        )?;
-
         FuseTable::commit_to_meta_server(
             ctx.as_ref(),
             catalog_name,
             table_info,
-            snapshot_loc,
+            &self.location_generator,
             new_snapshot,
         )
         .await
