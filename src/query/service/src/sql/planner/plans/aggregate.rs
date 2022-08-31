@@ -153,10 +153,17 @@ impl LogicalOperator for Aggregate {
             input_prop.cardinality
         };
 
+        let precise_cardinality = if self.group_items.is_empty() {
+            Some(1)
+        } else {
+            None
+        };
+
         Ok(RelationalProperty {
             output_columns,
             outer_columns,
             cardinality,
+            precise_cardinality,
         })
     }
 }

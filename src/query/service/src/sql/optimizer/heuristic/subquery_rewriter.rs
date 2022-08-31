@@ -131,7 +131,7 @@ impl SubqueryRewriter {
                 SExpr::create_unary(s_expr.plan().clone(), self.rewrite(s_expr.child(0)?)?),
             ),
 
-            RelOperator::LogicalGet(_) => Ok(s_expr.clone()),
+            RelOperator::DummyTableScan(_) | RelOperator::LogicalGet(_) => Ok(s_expr.clone()),
 
             RelOperator::PhysicalHashJoin(_)
             | RelOperator::Pattern(_)
