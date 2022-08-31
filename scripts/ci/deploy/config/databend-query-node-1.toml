@@ -54,7 +54,7 @@ auto_sync_interval = 60
 
 # Storage config.
 [storage]
-# fs | s3 | azblob
+# fs | s3 | azblob | obs
 type = "fs"
 
 # Set a local folder to store your data.
@@ -75,3 +75,10 @@ data_path = "./.databend/stateless_test_data"
 # container = "<your-azure-storage-container-name>"
 # account_name = "<your-storage-account-name>"
 # account_key = "<your-account-key>"
+
+# To use OBS object storage, uncomment this block and set your values.
+# [storage.obs]
+# bucket = "<your-bucket-name>"
+# endpoint_url = "<your-endpoint>"
+# access_key_id = "<your-key-id>"
+# secret_access_key = "<your-account-key>"
