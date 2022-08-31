@@ -1,5 +1,3 @@
-// Copyright 2022 Datafuse Labs.
-//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -14,6 +12,8 @@
 
 #![deny(unused_crate_dependencies)]
 
+pub mod cached_reader;
+pub mod file_meta_data_reader;
 pub mod retry;
 pub mod storage_context;
 pub mod table_option_keys;

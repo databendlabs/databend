@@ -163,7 +163,10 @@ impl Processor for HiveTableSource {
         match std::mem::replace(&mut self.state, State::Finish) {
             State::ReadMeta(part) => {
                 let part = HivePartInfo::from_part(&part)?;
-                let file_meta = self.block_reader.read_meta_data(&part.filename).await?;
+                let file_meta = self
+                    .block_reader
+                    .read_meta_data(self.ctx.clone(), &part.filename)
+                    .await?;
                 let mut hive_blocks = HiveBlocks::create(file_meta, part.clone());
                 match hive_blocks.prune() {
                     true => {

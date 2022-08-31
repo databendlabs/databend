@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_arrow::parquet::metadata::FileMetaData;
 use common_arrow::parquet::metadata::RowGroupMetaData;
 
@@ -19,14 +21,14 @@ use crate::HivePartInfo;
 
 #[derive(Clone, Debug)]
 pub struct HiveBlocks {
-    pub file_meta: FileMetaData,
+    pub file_meta: Arc<FileMetaData>,
     pub part: HivePartInfo,
     pub valid_rowgroups: Vec<usize>,
     pub current_index: usize,
 }
 
 impl HiveBlocks {
-    pub fn create(file_meta: FileMetaData, part: HivePartInfo) -> Self {
+    pub fn create(file_meta: Arc<FileMetaData>, part: HivePartInfo) -> Self {
         Self {
             file_meta,
             part,
