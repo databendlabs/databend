@@ -115,6 +115,19 @@ pub fn transform_expr(ast: common_ast::ast::Expr, columns: &[(&str, DataType)]) 
                 transform_expr(*right, columns),
             ],
         },
+        common_ast::ast::Expr::Position {
+            span,
+            substr_expr,
+            str_expr,
+        } => RawExpr::FunctionCall {
+            span: transform_span(span),
+            name: "position".to_string(),
+            params: vec![],
+            args: vec![
+                transform_expr(*substr_expr, columns),
+                transform_expr(*str_expr, columns),
+            ],
+        },
         common_ast::ast::Expr::Trim {
             span,
             expr,

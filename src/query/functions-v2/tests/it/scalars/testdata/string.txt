@@ -2207,3 +2207,465 @@ evaluation (internal):
 +--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 
+ast            : lpad('hi', 2, '?')
+raw expr       : lpad("hi", 2_u8, "?")
+checked expr   : lpad<String, UInt64, String>("hi", CAST(2_u8 AS UInt64), "?")
+optimized expr : "hi"
+output type    : String
+output domain  : Unknown
+output         : "hi"
+
+
+ast            : lpad('hi', 4, '?')
+raw expr       : lpad("hi", 4_u8, "?")
+checked expr   : lpad<String, UInt64, String>("hi", CAST(4_u8 AS UInt64), "?")
+optimized expr : "??hi"
+output type    : String
+output domain  : Unknown
+output         : "??hi"
+
+
+ast            : lpad('hi', 0, '?')
+raw expr       : lpad("hi", 0_u8, "?")
+checked expr   : lpad<String, UInt64, String>("hi", CAST(0_u8 AS UInt64), "?")
+optimized expr : ""
+output type    : String
+output domain  : Unknown
+output         : ""
+
+
+ast            : lpad('hi', 1, '?')
+raw expr       : lpad("hi", 1_u8, "?")
+checked expr   : lpad<String, UInt64, String>("hi", CAST(1_u8 AS UInt64), "?")
+optimized expr : "h"
+output type    : String
+output domain  : Unknown
+output         : "h"
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | lpad('hi', -1, '?')
+  | ^^^^^^^^^^^^^^^^^^^ no overload satisfies `lpad(String, Int16, String)`
+
+has tried possible overloads:
+  lpad(NULL, UInt64 NULL, String NULL) :: NULL                : unable to unify `String` with `NULL`
+  lpad(String NULL, NULL, String NULL) :: NULL                : unable to unify `Int16` with `NULL`
+  lpad(String NULL, UInt64 NULL, NULL) :: NULL                : unable to unify `Int16` with `UInt64`
+  lpad(String, UInt64, String) :: String                      : unable to unify `Int16` with `UInt64`
+  lpad(String NULL, UInt64 NULL, String NULL) :: String NULL  : unable to unify `Int16` with `UInt64`
+
+
+
+ast            : lpad(a, b, c)
+raw expr       : lpad(ColumnRef(0)::String, ColumnRef(1)::UInt8, ColumnRef(2)::String)
+checked expr   : lpad<String, UInt64, String>(ColumnRef(0), CAST(ColumnRef(1) AS UInt64), ColumnRef(2))
+evaluation:
++--------+-----------------+---------+-------------+---------+
+|        | a               | b       | c           | Output  |
++--------+-----------------+---------+-------------+---------+
+| Type   | String          | UInt8   | String      | String  |
+| Domain | {"cc"..="test"} | {0..=5} | {"?"..="x"} | Unknown |
+| Row 0  | "hi"            | 0       | "?"         | ""      |
+| Row 1  | "test"          | 3       | "x"         | "tes"   |
+| Row 2  | "cc"            | 5       | "bb"        | "bbbcc" |
++--------+-----------------+---------+-------------+---------+
+evaluation (internal):
++--------+----------------------------------------------------------------------------------------------+
+| Column | Data                                                                                         |
++--------+----------------------------------------------------------------------------------------------+
+| a      | String(StringColumn { data: [104, 105, 116, 101, 115, 116, 99, 99], offsets: [0, 2, 6, 8] }) |
+| b      | Int32([0, 3, 5])                                                                             |
+| c      | String(StringColumn { data: [63, 120, 98, 98], offsets: [0, 1, 2, 4] })                      |
+| Output | String(StringColumn { data: [116, 101, 115, 98, 98, 98, 99, 99], offsets: [0, 0, 3, 8] })    |
++--------+----------------------------------------------------------------------------------------------+
+
+
+ast            : rpad('hi', 2, '?')
+raw expr       : rpad("hi", 2_u8, "?")
+checked expr   : rpad<String, UInt64, String>("hi", CAST(2_u8 AS UInt64), "?")
+optimized expr : "hi"
+output type    : String
+output domain  : Unknown
+output         : "hi"
+
+
+ast            : rpad('hi', 4, '?')
+raw expr       : rpad("hi", 4_u8, "?")
+checked expr   : rpad<String, UInt64, String>("hi", CAST(4_u8 AS UInt64), "?")
+optimized expr : "hi??"
+output type    : String
+output domain  : Unknown
+output         : "hi??"
+
+
+ast            : rpad('hi', 0, '?')
+raw expr       : rpad("hi", 0_u8, "?")
+checked expr   : rpad<String, UInt64, String>("hi", CAST(0_u8 AS UInt64), "?")
+optimized expr : ""
+output type    : String
+output domain  : Unknown
+output         : ""
+
+
+ast            : rpad('hi', 1, '?')
+raw expr       : rpad("hi", 1_u8, "?")
+checked expr   : rpad<String, UInt64, String>("hi", CAST(1_u8 AS UInt64), "?")
+optimized expr : "h"
+output type    : String
+output domain  : Unknown
+output         : "h"
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | rpad('hi', -1, '?')
+  | ^^^^^^^^^^^^^^^^^^^ no overload satisfies `rpad(String, Int16, String)`
+
+has tried possible overloads:
+  rpad(NULL, UInt64 NULL, String NULL) :: NULL                : unable to unify `String` with `NULL`
+  rpad(String NULL, NULL, String NULL) :: NULL                : unable to unify `Int16` with `NULL`
+  rpad(String NULL, UInt64 NULL, NULL) :: NULL                : unable to unify `Int16` with `UInt64`
+  rpad(String, UInt64, String) :: String                      : unable to unify `Int16` with `UInt64`
+  rpad(String NULL, UInt64 NULL, String NULL) :: String NULL  : unable to unify `Int16` with `UInt64`
+
+
+
+ast            : rpad(a, b, c)
+raw expr       : rpad(ColumnRef(0)::String, ColumnRef(1)::UInt8, ColumnRef(2)::String)
+checked expr   : rpad<String, UInt64, String>(ColumnRef(0), CAST(ColumnRef(1) AS UInt64), ColumnRef(2))
+evaluation:
++--------+-----------------+---------+-------------+---------+
+|        | a               | b       | c           | Output  |
++--------+-----------------+---------+-------------+---------+
+| Type   | String          | UInt8   | String      | String  |
+| Domain | {"cc"..="test"} | {0..=5} | {"?"..="x"} | Unknown |
+| Row 0  | "hi"            | 0       | "?"         | ""      |
+| Row 1  | "test"          | 3       | "x"         | "tes"   |
+| Row 2  | "cc"            | 5       | "bb"        | "ccbbb" |
++--------+-----------------+---------+-------------+---------+
+evaluation (internal):
++--------+----------------------------------------------------------------------------------------------+
+| Column | Data                                                                                         |
++--------+----------------------------------------------------------------------------------------------+
+| a      | String(StringColumn { data: [104, 105, 116, 101, 115, 116, 99, 99], offsets: [0, 2, 6, 8] }) |
+| b      | Int32([0, 3, 5])                                                                             |
+| c      | String(StringColumn { data: [63, 120, 98, 98], offsets: [0, 1, 2, 4] })                      |
+| Output | String(StringColumn { data: [116, 101, 115, 99, 99, 98, 98, 98], offsets: [0, 0, 3, 8] })    |
++--------+----------------------------------------------------------------------------------------------+
+
+
+ast            : replace('hi', '', '?')
+raw expr       : replace("hi", "", "?")
+checked expr   : replace<String, String, String>("hi", "", "?")
+optimized expr : "hi"
+output type    : String
+output domain  : Unknown
+output         : "hi"
+
+
+ast            : replace('hi', '', 'hi')
+raw expr       : replace("hi", "", "hi")
+checked expr   : replace<String, String, String>("hi", "", "hi")
+optimized expr : "hi"
+output type    : String
+output domain  : Unknown
+output         : "hi"
+
+
+ast            : replace('hi', 'i', '?')
+raw expr       : replace("hi", "i", "?")
+checked expr   : replace<String, String, String>("hi", "i", "?")
+optimized expr : "h?"
+output type    : String
+output domain  : Unknown
+output         : "h?"
+
+
+ast            : replace('hi', 'x', '?')
+raw expr       : replace("hi", "x", "?")
+checked expr   : replace<String, String, String>("hi", "x", "?")
+optimized expr : "hi"
+output type    : String
+output domain  : Unknown
+output         : "hi"
+
+
+ast            : replace(a, b, c)
+raw expr       : replace(ColumnRef(0)::String, ColumnRef(1)::String, ColumnRef(2)::String)
+checked expr   : replace<String, String, String>(ColumnRef(0), ColumnRef(1), ColumnRef(2))
+evaluation:
++--------+-----------------+-------------+-------------+---------+
+|        | a               | b           | c           | Output  |
++--------+-----------------+-------------+-------------+---------+
+| Type   | String          | String      | String      | String  |
+| Domain | {"cc"..="test"} | {""..="te"} | {"?"..="x"} | Unknown |
+| Row 0  | "hi"            | "i"         | "?"         | "h?"    |
+| Row 1  | "test"          | "te"        | "x"         | "xst"   |
+| Row 2  | "cc"            | "cc"        | "bb"        | "bb"    |
+| Row 3  | "q"             | ""          | "q"         | "q"     |
++--------+-----------------+-------------+-------------+---------+
+evaluation (internal):
++--------+------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                 |
++--------+------------------------------------------------------------------------------------------------------+
+| a      | String(StringColumn { data: [104, 105, 116, 101, 115, 116, 99, 99, 113], offsets: [0, 2, 6, 8, 9] }) |
+| b      | String(StringColumn { data: [105, 116, 101, 99, 99], offsets: [0, 1, 3, 5, 5] })                     |
+| c      | String(StringColumn { data: [63, 120, 98, 98, 113], offsets: [0, 1, 2, 4, 5] })                      |
+| Output | String(StringColumn { data: [104, 63, 120, 115, 116, 98, 98, 113], offsets: [0, 2, 5, 7, 8] })       |
++--------+------------------------------------------------------------------------------------------------------+
+
+
+ast            : strcmp('text', 'text2')
+raw expr       : strcmp("text", "text2")
+checked expr   : strcmp<String, String>("text", "text2")
+optimized expr : -1_i8
+output type    : Int8
+output domain  : Unknown
+output         : -1
+
+
+ast            : strcmp('text2', 'text')
+raw expr       : strcmp("text2", "text")
+checked expr   : strcmp<String, String>("text2", "text")
+optimized expr : 1_i8
+output type    : Int8
+output domain  : Unknown
+output         : 1
+
+
+ast            : strcmp('hii', 'hii')
+raw expr       : strcmp("hii", "hii")
+checked expr   : strcmp<String, String>("hii", "hii")
+optimized expr : 0_i8
+output type    : Int8
+output domain  : Unknown
+output         : 0
+
+
+ast            : strcmp(a, b)
+raw expr       : strcmp(ColumnRef(0)::String, ColumnRef(1)::String)
+checked expr   : strcmp<String, String>(ColumnRef(0), ColumnRef(1))
+evaluation:
++--------+-----------------+------------------+---------+
+|        | a               | b                | Output  |
++--------+-----------------+------------------+---------+
+| Type   | String          | String           | Int8    |
+| Domain | {"cc"..="test"} | {"ccb"..="test"} | Unknown |
+| Row 0  | "hi"            | "i"              | 1       |
+| Row 1  | "test"          | "test"           | 0       |
+| Row 2  | "cc"            | "ccb"            | -1      |
++--------+-----------------+------------------+---------+
+evaluation (internal):
++--------+----------------------------------------------------------------------------------------------+
+| Column | Data                                                                                         |
++--------+----------------------------------------------------------------------------------------------+
+| a      | String(StringColumn { data: [104, 105, 116, 101, 115, 116, 99, 99], offsets: [0, 2, 6, 8] }) |
+| b      | String(StringColumn { data: [105, 116, 101, 115, 116, 99, 99, 98], offsets: [0, 1, 5, 8] })  |
+| Output | Int8([1, 0, -1])                                                                             |
++--------+----------------------------------------------------------------------------------------------+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | insert('Quadratic', 3, 4, 'What', 4)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no overload satisfies `insert(String, UInt8, UInt8, String, UInt8)`
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | insert('Quadratic', 3, 4)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^ no overload satisfies `insert(String, UInt8, UInt8)`
+
+
+
+ast            : insert('Quadratic', 3, 4, 'What')
+raw expr       : insert("Quadratic", 3_u8, 4_u8, "What")
+checked expr   : insert<String, Int64, Int64, String>("Quadratic", CAST(3_u8 AS Int64), CAST(4_u8 AS Int64), "What")
+optimized expr : "QuWhattic"
+output type    : String
+output domain  : Unknown
+output         : "QuWhattic"
+
+
+ast            : insert('Quadratic', -1, 4, 'What')
+raw expr       : insert("Quadratic", minus(1_u8), 4_u8, "What")
+checked expr   : insert<String, Int64, Int64, String>("Quadratic", CAST(minus<UInt8>(1_u8) AS Int64), CAST(4_u8 AS Int64), "What")
+optimized expr : "Quadratic"
+output type    : String
+output domain  : Unknown
+output         : "Quadratic"
+
+
+ast            : insert('Quadratic', 3, 100, 'What')
+raw expr       : insert("Quadratic", 3_u8, 100_u8, "What")
+checked expr   : insert<String, Int64, Int64, String>("Quadratic", CAST(3_u8 AS Int64), CAST(100_u8 AS Int64), "What")
+optimized expr : "QuWhat"
+output type    : String
+output domain  : Unknown
+output         : "QuWhat"
+
+
+ast            : insert('Quadratic', 3, 100, NULL)
+raw expr       : insert("Quadratic", 3_u8, 100_u8, NULL)
+checked expr   : insert<String NULL, Int64 NULL, Int64 NULL, String NULL>(CAST("Quadratic" AS String NULL), CAST(3_u8 AS Int64 NULL), CAST(100_u8 AS Int64 NULL), CAST(NULL AS String NULL))
+optimized expr : NULL
+output type    : String NULL
+output domain  : Unknown
+output         : NULL
+
+
+ast            : insert('Quadratic', 3, NULL, 'NULL')
+raw expr       : insert("Quadratic", 3_u8, NULL, "NULL")
+checked expr   : insert<String NULL, Int64 NULL, Int64 NULL, String NULL>(CAST("Quadratic" AS String NULL), CAST(3_u8 AS Int64 NULL), CAST(NULL AS Int64 NULL), CAST("NULL" AS String NULL))
+optimized expr : NULL
+output type    : String NULL
+output domain  : Unknown
+output         : NULL
+
+
+ast            : insert('Quadratic', NULL, 100, 'NULL')
+raw expr       : insert("Quadratic", NULL, 100_u8, "NULL")
+checked expr   : insert<String NULL, Int64 NULL, Int64 NULL, String NULL>(CAST("Quadratic" AS String NULL), CAST(NULL AS Int64 NULL), CAST(100_u8 AS Int64 NULL), CAST("NULL" AS String NULL))
+optimized expr : NULL
+output type    : String NULL
+output domain  : Unknown
+output         : NULL
+
+
+ast            : insert(NULL, 2, 100, 'NULL')
+raw expr       : insert(NULL, 2_u8, 100_u8, "NULL")
+checked expr   : insert<String NULL, Int64 NULL, Int64 NULL, String NULL>(CAST(NULL AS String NULL), CAST(2_u8 AS Int64 NULL), CAST(100_u8 AS Int64 NULL), CAST("NULL" AS String NULL))
+optimized expr : NULL
+output type    : String NULL
+output domain  : Unknown
+output         : NULL
+
+
+ast            : insert(a, b, c, d)
+raw expr       : insert(ColumnRef(0)::String, ColumnRef(1)::UInt8, ColumnRef(2)::UInt8, ColumnRef(3)::String)
+checked expr   : insert<String, Int64, Int64, String>(ColumnRef(0), CAST(ColumnRef(1) AS Int64), CAST(ColumnRef(2) AS Int64), ColumnRef(3))
+evaluation:
++--------+-----------------+---------+---------+---------------+---------+
+|        | a               | b       | c       | d             | Output  |
++--------+-----------------+---------+---------+---------------+---------+
+| Type   | String          | UInt8   | UInt8   | String        | String  |
+| Domain | {"cc"..="test"} | {1..=4} | {1..=5} | {"12"..="zc"} | Unknown |
+| Row 0  | "hi"            | 1       | 3       | "xx"          | "xx"    |
+| Row 1  | "test"          | 4       | 5       | "zc"          | "teszc" |
+| Row 2  | "cc"            | 1       | 1       | "12"          | "12"    |
+| Row 3  | "q"             | 1       | 1       | "56"          | "56"    |
++--------+-----------------+---------+---------+---------------+---------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                         |
++--------+--------------------------------------------------------------------------------------------------------------+
+| a      | String(StringColumn { data: [104, 105, 116, 101, 115, 116, 99, 99, 113], offsets: [0, 2, 6, 8, 9] })         |
+| b      | Int32([1, 4, 1, 1])                                                                                          |
+| c      | Int32([3, 5, 1, 1])                                                                                          |
+| d      | String(StringColumn { data: [120, 120, 122, 99, 49, 50, 53, 54], offsets: [0, 2, 4, 6, 8] })                 |
+| Output | String(StringColumn { data: [120, 120, 116, 101, 115, 122, 99, 49, 50, 53, 54], offsets: [0, 2, 7, 9, 11] }) |
++--------+--------------------------------------------------------------------------------------------------------------+
+
+
+ast            : insert(x, y, z, u)
+raw expr       : insert(ColumnRef(0)::String NULL, ColumnRef(1)::UInt8 NULL, ColumnRef(2)::UInt8 NULL, ColumnRef(3)::String NULL)
+checked expr   : insert<String NULL, Int64 NULL, Int64 NULL, String NULL>(ColumnRef(0), CAST(ColumnRef(1) AS Int64 NULL), CAST(ColumnRef(2) AS Int64 NULL), ColumnRef(3))
+evaluation:
++--------+--------------------------+------------------+------------------+------------------------+-------------+
+|        | x                        | y                | z                | u                      | Output      |
++--------+--------------------------+------------------+------------------+------------------------+-------------+
+| Type   | String NULL              | UInt8 NULL       | UInt8 NULL       | String NULL            | String NULL |
+| Domain | {"cc"..="test"} ∪ {NULL} | {1..=4} ∪ {NULL} | {1..=5} ∪ {NULL} | {"12"..="zc"} ∪ {NULL} | Unknown     |
+| Row 0  | NULL                     | 1                | 3                | NULL                   | NULL        |
+| Row 1  | "test"                   | 4                | NULL             | "zc"                   | NULL        |
+| Row 2  | "cc"                     | NULL             | 1                | "12"                   | NULL        |
+| Row 3  | "q"                      | 1                | 1                | "56"                   | "56"        |
++--------+--------------------------+------------------+------------------+------------------------+-------------+
+evaluation (internal):
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                                      |
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| x      | Nullable(NullableColumn { column: String(StringColumn { data: [104, 105, 116, 101, 115, 116, 99, 99, 113], offsets: [0, 2, 6, 8, 9] }), validity: [0b____1110] })         |
+| y      | Nullable(NullableColumn { column: Int32([1, 4, 1, 1]), validity: [0b____1011] })                                                                                          |
+| z      | Nullable(NullableColumn { column: Int32([3, 5, 1, 1]), validity: [0b____1101] })                                                                                          |
+| u      | Nullable(NullableColumn { column: String(StringColumn { data: [120, 120, 122, 99, 49, 50, 53, 54], offsets: [0, 2, 4, 6, 8] }), validity: [0b____1110] })                 |
+| Output | Nullable(NullableColumn { column: String(StringColumn { data: [120, 120, 116, 101, 115, 122, 99, 49, 50, 53, 54], offsets: [0, 2, 7, 9, 11] }), validity: [0b____1000] }) |
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : locate('bar', 'foobarbar')
+raw expr       : locate("bar", "foobarbar")
+checked expr   : locate<String, String>("bar", "foobarbar")
+optimized expr : 4_u64
+output type    : UInt64
+output domain  : Unknown
+output         : 4
+
+
+ast            : instr('foobarbar', 'bar')
+raw expr       : instr("foobarbar", "bar")
+checked expr   : instr<String, String>("foobarbar", "bar")
+optimized expr : 4_u64
+output type    : UInt64
+output domain  : Unknown
+output         : 4
+
+
+ast            : position('bar' IN 'foobarbar')
+raw expr       : position("bar", "foobarbar")
+checked expr   : position<String, String>("bar", "foobarbar")
+optimized expr : 4_u64
+output type    : UInt64
+output domain  : Unknown
+output         : 4
+
+
+ast            : position('foobarbar' IN 'bar')
+raw expr       : position("foobarbar", "bar")
+checked expr   : position<String, String>("foobarbar", "bar")
+optimized expr : 0_u64
+output type    : UInt64
+output domain  : Unknown
+output         : 0
+
+
+ast            : locate('bar', 'foobarbar', 5)
+raw expr       : locate("bar", "foobarbar", 5_u8)
+checked expr   : locate<String, String, UInt64>("bar", "foobarbar", CAST(5_u8 AS UInt64))
+optimized expr : 7_u64
+output type    : UInt64
+output domain  : Unknown
+output         : 7
+
+
+ast            : locate(a, b, c)
+raw expr       : locate(ColumnRef(0)::String, ColumnRef(1)::String, ColumnRef(2)::UInt8)
+checked expr   : locate<String, String, UInt64>(ColumnRef(0), ColumnRef(1), CAST(ColumnRef(2) AS UInt64))
+evaluation:
++--------+---------------+---------------+---------+---------+
+|        | a             | b             | c       | Output  |
++--------+---------------+---------------+---------+---------+
+| Type   | String        | String        | UInt8   | UInt64  |
+| Domain | {"bar"..="q"} | {"56"..="xx"} | {0..=2} | Unknown |
+| Row 0  | "bar"         | "foobarbar"   | 1       | 4       |
+| Row 1  | "cc"          | "bdccacc"     | 2       | 3       |
+| Row 2  | "cc"          | "xx"          | 0       | 0       |
+| Row 3  | "q"           | "56"          | 1       | 0       |
++--------+---------------+---------------+---------+---------+
+evaluation (internal):
++--------+------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                 |
++--------+------------------------------------------------------------------------------------------------------------------------------------------------------+
+| a      | String(StringColumn { data: [98, 97, 114, 99, 99, 99, 99, 113], offsets: [0, 3, 5, 7, 8] })                                                          |
+| b      | String(StringColumn { data: [102, 111, 111, 98, 97, 114, 98, 97, 114, 98, 100, 99, 99, 97, 99, 99, 120, 120, 53, 54], offsets: [0, 9, 16, 18, 20] }) |
+| c      | Int32([1, 2, 0, 1])                                                                                                                                  |
+| Output | UInt64([4, 3, 0, 0])                                                                                                                                 |
++--------+------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+

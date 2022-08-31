@@ -12,20 +12,34 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::Ordering;
 use std::io::Write;
+use std::ops::BitAnd;
+use std::sync::Arc;
 
 use bstr::ByteSlice;
+use common_arrow::arrow::bitmap::MutableBitmap;
+use common_expression::types::nullable::NullableColumn;
 use common_expression::types::number::NumberDomain;
 use common_expression::types::string::StringColumn;
 use common_expression::types::string::StringColumnBuilder;
+use common_expression::types::DataType;
 use common_expression::types::GenericMap;
+use common_expression::types::NullableType;
 use common_expression::types::NumberType;
 use common_expression::types::StringType;
+use common_expression::types::ValueType;
+use common_expression::util::constant_bitmap;
 use common_expression::vectorize_with_builder_1_arg;
+use common_expression::Column;
+use common_expression::Function;
 use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
+use common_expression::FunctionSignature;
+use common_expression::Scalar;
 use common_expression::Value;
 use common_expression::ValueRef;
+use itertools::izip;
 
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
@@ -105,6 +119,346 @@ pub fn register(registry: &mut FunctionRegistry) {
         },
     );
     registry.register_aliases("char_length", &["character_length"]);
+
+    registry.register_3_arg::<StringType, NumberType<u64>, StringType, StringType, _, _>(
+        "lpad",
+        FunctionProperty::default(),
+        |_, _, _| None,
+        |str: &[u8], l: u64, pad: &[u8]| {
+            let mut buff: Vec<u8> = vec![];
+            if l != 0 {
+                if l > str.len() as u64 {
+                    let l = l - str.len() as u64;
+                    while buff.len() < l as usize {
+                        if buff.len() + pad.len() <= l as usize {
+                            buff.extend_from_slice(pad);
+                        } else {
+                            buff.extend_from_slice(&pad[0..l as usize - buff.len()])
+                        }
+                    }
+                    buff.extend_from_slice(str);
+                } else {
+                    buff.extend_from_slice(&str[0..l as usize]);
+                }
+            }
+            buff
+        },
+    );
+
+    registry.register_3_arg::<StringType, NumberType<u64>, StringType, StringType, _, _>(
+        "rpad",
+        FunctionProperty::default(),
+        |_, _, _| None,
+        |str: &[u8], l: u64, pad: &[u8]| {
+            let mut buff: Vec<u8> = vec![];
+            if l != 0 {
+                if l > str.len() as u64 {
+                    buff.extend_from_slice(str);
+                    while buff.len() < l as usize {
+                        if buff.len() + pad.len() <= l as usize {
+                            buff.extend_from_slice(pad);
+                        } else {
+                            buff.extend_from_slice(&pad[0..l as usize - buff.len()])
+                        }
+                    }
+                } else {
+                    buff.extend_from_slice(&str[0..l as usize]);
+                }
+            }
+            buff
+        },
+    );
+
+    registry.register_3_arg::<StringType, StringType, StringType, StringType, _, _>(
+        "replace",
+        FunctionProperty::default(),
+        |_, _, _| None,
+        |str, from, to| {
+            let mut buf: Vec<u8> = vec![];
+            if from.is_empty() || from == to {
+                buf.extend_from_slice(str);
+                return buf;
+            }
+            let mut skip = 0;
+            for (p, w) in str.windows(from.len()).enumerate() {
+                if w == from {
+                    buf.extend_from_slice(to);
+                    skip = from.len();
+                } else if p + w.len() == str.len() {
+                    buf.extend_from_slice(w);
+                } else if skip > 1 {
+                    skip -= 1;
+                } else {
+                    buf.extend_from_slice(&w[0..1]);
+                }
+            }
+            buf
+        },
+    );
+
+    registry.register_2_arg::<StringType, StringType, NumberType<i8>, _, _>(
+        "strcmp",
+        FunctionProperty::default(),
+        |_, _| None,
+        |s1, s2| {
+            let res = match s1.len().cmp(&s2.len()) {
+                Ordering::Equal => {
+                    let mut res = Ordering::Equal;
+                    for (s1i, s2i) in izip!(s1, s2) {
+                        match s1i.cmp(s2i) {
+                            Ordering::Equal => continue,
+                            ord => {
+                                res = ord;
+                                break;
+                            }
+                        }
+                    }
+                    res
+                }
+                ord => ord,
+            };
+            match res {
+                Ordering::Equal => 0,
+                Ordering::Greater => 1,
+                Ordering::Less => -1,
+            }
+        },
+    );
+
+    // registry.register_4_arg::<StringType, NumberType<i64>, NumberType<i64>, StringType, StringType, _, _>(
+    //   "insert",
+    //     FunctionProperty::default(),
+    //     |_, _, _, _| None,
+    //     |srcstr, pos, len, substr| {
+    //         let mut values: Vec<u8> = vec![];
+    //
+    //         let sl = srcstr.len() as i64;
+    //         if pos < 1 || pos > sl {
+    //             values.extend_from_slice(srcstr);
+    //         } else {
+    //             let p = pos as usize - 1;
+    //             values.extend_from_slice(&srcstr[0..p]);
+    //             values.extend_from_slice(substr);
+    //             if len >= 0 && pos + len < sl {
+    //                 let l = len as usize;
+    //                 values.extend_from_slice(&srcstr[p + l..]);
+    //             }
+    //         }
+    //         values
+    //     }
+    // );
+
+    registry.register_function_factory("insert", |_, args_type| {
+        if args_type.len() != 4 {
+            return None;
+        }
+        Some(Arc::new(Function {
+            signature: FunctionSignature {
+                name: "insert",
+                args_type: vec![
+                    DataType::String,
+                    DataType::Int64,
+                    DataType::Int64,
+                    DataType::String,
+                ],
+                return_type: DataType::String,
+                property: FunctionProperty::default(),
+            },
+            calc_domain: Box::new(|_, _| None),
+            eval: Box::new(|args, _generics| {
+                let len = args.iter().find_map(|arg| match arg {
+                    ValueRef::Column(col) => Some(col.len()),
+                    _ => None,
+                });
+                let arg1 = args[0].try_downcast::<StringType>().unwrap();
+                let arg2 = args[1].try_downcast::<NumberType<i64>>().unwrap();
+                let arg3 = args[2].try_downcast::<NumberType<i64>>().unwrap();
+                let arg4 = args[3].try_downcast::<StringType>().unwrap();
+                let size = len.unwrap_or(1);
+                let mut builder = StringColumnBuilder::with_capacity(size, 0);
+                for idx in 0..size {
+                    let mut values: Vec<u8> = vec![];
+                    let srcstr = unsafe { arg1.index_unchecked(idx) };
+                    let pos = unsafe { arg2.index_unchecked(idx) };
+                    let len = unsafe { arg3.index_unchecked(idx) };
+                    let substr = unsafe { arg4.index_unchecked(idx) };
+                    let sl = srcstr.len() as i64;
+                    if pos < 1 || pos > sl {
+                        values.extend_from_slice(srcstr);
+                    } else {
+                        let p = pos as usize - 1;
+                        values.extend_from_slice(&srcstr[0..p]);
+                        values.extend_from_slice(substr);
+                        if len >= 0 && pos + len < sl {
+                            let l = len as usize;
+                            values.extend_from_slice(&srcstr[p + l..]);
+                        }
+                    }
+                    builder.put_slice(&values);
+                    builder.commit_row();
+                }
+                match len {
+                    Some(_) => Ok(Value::Column(Column::String(builder.build()))),
+                    _ => Ok(Value::Scalar(Scalar::String(builder.build_scalar()))),
+                }
+            }),
+        }))
+    });
+
+    // nullable insert
+    registry.register_function_factory("insert", |_, args_type| {
+        if args_type.len() != 4 {
+            return None;
+        }
+        Some(Arc::new(Function {
+            signature: FunctionSignature {
+                name: "insert",
+                args_type: vec![
+                    DataType::Nullable(Box::new(DataType::String)),
+                    DataType::Nullable(Box::new(DataType::Int64)),
+                    DataType::Nullable(Box::new(DataType::Int64)),
+                    DataType::Nullable(Box::new(DataType::String)),
+                ],
+                return_type: DataType::Nullable(Box::new(DataType::String)),
+                property: FunctionProperty::default(),
+            },
+            calc_domain: Box::new(|_, _| None),
+            eval: Box::new(|args, _generics| {
+                let len = args.iter().find_map(|arg| match arg {
+                    ValueRef::Column(col) => Some(col.len()),
+                    _ => None,
+                });
+
+                type T = NullableType<StringType>;
+                type G = NullableType<NumberType<i64>>;
+                let mut bitmap: Option<MutableBitmap> = None;
+                let mut inner_args: Vec<ValueRef<StringType>> = Vec::with_capacity(2);
+
+                let mut inner_num_args: Vec<ValueRef<NumberType<i64>>> = Vec::with_capacity(2);
+                let mut i = 0;
+                for arg in args {
+                    i += 1;
+                    if i == 1 || i == 4 {
+                        let col = arg.try_downcast::<T>().unwrap();
+                        match col {
+                            ValueRef::Scalar(None) => {
+                                return Ok(Value::Scalar(T::upcast_scalar(None)));
+                            }
+                            ValueRef::Column(c) => {
+                                bitmap = match bitmap {
+                                    Some(m) => Some(m.bitand(&c.validity)),
+                                    None => Some(c.validity.clone().make_mut()),
+                                };
+                                inner_args.push(ValueRef::Column(c.column.clone()));
+                            }
+                            ValueRef::Scalar(Some(s)) => inner_args.push(ValueRef::Scalar(s)),
+                        }
+                    } else {
+                        let col = arg.try_downcast::<G>().unwrap();
+                        match col {
+                            ValueRef::Scalar(None) => {
+                                return Ok(Value::Scalar(T::upcast_scalar(None)));
+                            }
+                            ValueRef::Column(c) => {
+                                bitmap = match bitmap {
+                                    Some(m) => Some(m.bitand(&c.validity)),
+                                    None => Some(c.validity.clone().make_mut()),
+                                };
+                                inner_num_args.push(ValueRef::Column(c.column.clone()));
+                            }
+                            ValueRef::Scalar(Some(s)) => inner_num_args.push(ValueRef::Scalar(s)),
+                        }
+                    }
+                }
+
+                let arg1 = inner_args[0].clone();
+                let arg2 = inner_num_args[0].clone();
+                let arg3 = inner_num_args[1].clone();
+                let arg4 = inner_args[1].clone();
+                let size = len.unwrap_or(1);
+                let mut builder = StringColumnBuilder::with_capacity(size, 0);
+                for idx in 0..size {
+                    let mut values: Vec<u8> = vec![];
+                    let srcstr = unsafe { arg1.index_unchecked(idx) };
+                    let pos = unsafe { arg2.index_unchecked(idx) };
+                    let len = unsafe { arg3.index_unchecked(idx) };
+                    let substr = unsafe { arg4.index_unchecked(idx) };
+                    let sl = srcstr.len() as i64;
+                    if pos < 1 || pos > sl {
+                        values.extend_from_slice(srcstr);
+                    } else {
+                        let p = pos as usize - 1;
+                        values.extend_from_slice(&srcstr[0..p]);
+                        values.extend_from_slice(substr);
+                        if len >= 0 && pos + len < sl {
+                            let l = len as usize;
+                            values.extend_from_slice(&srcstr[p + l..]);
+                        }
+                    }
+                    builder.put_slice(&values);
+                    builder.commit_row();
+                }
+                match len {
+                    Some(len) => {
+                        let n = NullableColumn::<StringType> {
+                            column: builder.build(),
+                            validity: bitmap
+                                .map(|m| m.into())
+                                .unwrap_or_else(|| constant_bitmap(true, len).into()),
+                        };
+                        let c = T::upcast_column(n);
+                        Ok(Value::Column(c))
+                    }
+                    _ => Ok(Value::Scalar(T::upcast_scalar(Some(
+                        builder.build_scalar(),
+                    )))),
+                }
+            }),
+        }))
+    });
+
+    let find_at = |str: &[u8], substr: &[u8], pos: u64| {
+        let pos = pos as usize;
+        if pos == 0 {
+            return 0_u64;
+        }
+        let p = pos - 1;
+        if p + substr.len() <= str.len() {
+            str[p..]
+                .windows(substr.len())
+                .position(|w| w == substr)
+                .map_or(0, |i| i + 1 + p) as u64
+        } else {
+            0_u64
+        }
+    };
+    registry.register_2_arg::<StringType, StringType, NumberType<u64>, _, _>(
+        "instr",
+        FunctionProperty::default(),
+        |_, _| None,
+        move |str: &[u8], substr: &[u8]| find_at(str, substr, 1),
+    );
+
+    registry.register_2_arg::<StringType, StringType, NumberType<u64>, _, _>(
+        "position",
+        FunctionProperty::default(),
+        |_, _| None,
+        move |substr: &[u8], str: &[u8]| find_at(str, substr, 1),
+    );
+
+    registry.register_2_arg::<StringType, StringType, NumberType<u64>, _, _>(
+        "locate",
+        FunctionProperty::default(),
+        |_, _| None,
+        move |substr: &[u8], str: &[u8]| find_at(str, substr, 1),
+    );
+
+    registry.register_3_arg::<StringType, StringType, NumberType<u64>, NumberType<u64>, _, _>(
+        "locate",
+        FunctionProperty::default(),
+        |_, _, _| None,
+        move |substr: &[u8], str: &[u8], pos: u64| find_at(str, substr, pos),
+    );
 
     registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
         "to_base64",
