@@ -85,6 +85,12 @@ pub trait Table: Sync + Send {
         vec![]
     }
 
+    /// Whether the table engine supports prewhere optimization.
+    /// only Fuse Engine supports this.
+    fn support_prewhere(&self) -> bool {
+        false
+    }
+
     async fn alter_table_cluster_keys(
         &self,
         _ctx: Arc<dyn TableContext>,
@@ -209,6 +215,7 @@ pub trait Table: Sync + Send {
         _ctx: Arc<dyn TableContext>,
         _catalog: String,
         _pipeline: &mut Pipeline,
+        _push_downs: Option<Extras>,
     ) -> Result<Option<Arc<dyn TableMutator>>> {
         Err(ErrorCode::UnImplement(format!(
             "table {},  of engine type {}, does not support recluster",

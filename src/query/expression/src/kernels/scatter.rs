@@ -19,11 +19,13 @@ use common_exception::Result;
 use crate::types::array::ArrayColumnBuilder;
 use crate::types::nullable::NullableColumn;
 use crate::types::string::StringColumnBuilder;
+use crate::types::timestamp::TimestampColumnBuilder;
 use crate::types::AnyType;
 use crate::types::ArrayType;
 use crate::types::BooleanType;
 use crate::types::NumberType;
 use crate::types::StringType;
+use crate::types::TimestampType;
 use crate::types::ValueType;
 use crate::with_number_mapped_type;
 use crate::Chunk;
@@ -107,6 +109,13 @@ impl Column {
             Column::String(column) => Self::scatter_scalars::<StringType, _>(
                 column,
                 StringColumnBuilder::with_capacity(length, 0),
+                indices,
+                scatter_size
+            ),
+
+            Column::Timestamp(column) => Self::scatter_scalars::<TimestampType, _>(
+                column,
+                TimestampColumnBuilder::with_capacity(length),
                 indices,
                 scatter_size
             ),

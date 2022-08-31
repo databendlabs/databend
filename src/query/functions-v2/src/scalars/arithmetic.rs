@@ -16,11 +16,10 @@ use common_expression::types::arithmetics_type::ResultTypeOfBinary;
 use common_expression::types::arithmetics_type::ResultTypeOfUnary;
 use common_expression::types::number::*;
 use common_expression::types::DataType;
-use common_expression::vectorize_with_writer_2_arg;
+use common_expression::vectorize_with_builder_2_arg;
 use common_expression::with_number_mapped_type;
 use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
-use common_expression::NumberDomain;
 
 use super::arithmetic_modulo::vectorize_modulo;
 
@@ -180,7 +179,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                             "div",
                             FunctionProperty::default(),
                             |_, _| None,
-                            vectorize_with_writer_2_arg::<NumberType<L>, NumberType<R>,  NumberType<T>>(
+                            vectorize_with_builder_2_arg::<NumberType<L>, NumberType<R>,  NumberType<T>>(
                                     |a, b, output| {
                                     let b = b as f64;
                                     if std::intrinsics::unlikely(b == 0.0) {
@@ -209,7 +208,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                                 "modulo",
                                 FunctionProperty::default(),
                                 |_, _| None,
-                                vectorize_with_writer_2_arg::<NumberType<L>, NumberType<R>,  NumberType<T>>(
+                                vectorize_with_builder_2_arg::<NumberType<L>, NumberType<R>,  NumberType<T>>(
                                         |a, b, output| {
                                         let b = b as f64;
                                         if std::intrinsics::unlikely(b == 0.0) {

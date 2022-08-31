@@ -281,6 +281,14 @@ impl Settings {
                 desc: "SQL dialect, support \"PostgreSQL\" and \"MySQL\", default value: \"PostgreSQL\"",
                 possible_values: Some(vec!["PostgreSQL", "MySQL"]),
             },
+            // max_execute_time
+            SettingValue {
+                default_value: DataValue::UInt64(0),
+                user_setting: UserSetting::create("max_execute_time", DataValue::UInt64(0)),
+                level: ScopeLevel::Session,
+                desc: "The maximum query execution time. it means no limit if the value is zero. default value: 0",
+                possible_values: None,
+            },
         ];
 
         let settings: Arc<RwLock<HashMap<String, SettingValue>>> =
@@ -317,6 +325,16 @@ impl Settings {
     pub fn set_max_threads(&self, val: u64) -> Result<()> {
         let key = "max_threads";
         self.try_set_u64(key, val, false)
+    }
+
+    // Get max_execute_time.
+    pub fn get_max_execute_time(&self) -> Result<u64> {
+        self.try_get_u64("max_execute_time")
+    }
+
+    // Set max_execute_time.
+    pub fn set_max_execute_time(&self, val: u64) -> Result<()> {
+        self.try_set_u64("max_execute_time", val, false)
     }
 
     // Get flight client timeout.

@@ -1,16 +1,16 @@
-// Copyright 2021 Datafuse Labs.
+//  Copyright 2022 Datafuse Labs.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+//  Licensed under the Apache License, Version 2.0 (the "License");
+//  you may not use this file except in compliance with the License.
+//  You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//      http://www.apache.org/licenses/LICENSE-2.0
 //
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+//  Unless required by applicable law or agreed to in writing, software
+//  distributed under the License is distributed on an "AS IS" BASIS,
+//  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+//  See the License for the specific language governing permissions and
+//  limitations under the License.
 
 use std::sync::Arc;
 
@@ -23,6 +23,7 @@ use crate::caches::memory_cache::new_bytes_cache;
 use crate::caches::memory_cache::BloomIndexCache;
 use crate::caches::memory_cache::BloomIndexMetaCache;
 use crate::caches::memory_cache::BytesCache;
+use crate::caches::memory_cache::FileMetaDataCache;
 use crate::caches::new_item_cache;
 use crate::caches::ItemCache;
 use crate::caches::SegmentInfoCache;
@@ -32,6 +33,8 @@ use crate::caches::TableSnapshotCache;
 static DEFAULT_BLOOM_INDEX_META_CACHE_ITEMS: u64 = 3000;
 // default size of cached bloom filter index (in bytes), 1G
 static DEFAULT_BLOOM_INDEX_COLUMN_CACHE_SIZE: u64 = 1024 * 1024 * 1024;
+// default number of file meta data cached, default 3000 items
+static DEFAULT_FILE_META_DATA_CACHE_ITEMS: u64 = 3000;
 
 /// Where all the caches reside
 pub struct CacheManager {
@@ -39,6 +42,7 @@ pub struct CacheManager {
     segment_info_cache: Option<SegmentInfoCache>,
     bloom_index_cache: Option<BloomIndexCache>,
     bloom_index_meta_cache: Option<BloomIndexMetaCache>,
+    file_meta_data_cache: Option<FileMetaDataCache>,
     cluster_id: String,
     tenant_id: String,
 }
@@ -56,6 +60,7 @@ impl CacheManager {
                 segment_info_cache: None,
                 bloom_index_cache: None,
                 bloom_index_meta_cache: None,
+                file_meta_data_cache: None,
                 cluster_id: config.cluster_id.clone(),
                 tenant_id: config.tenant_id.clone(),
             }))?;
@@ -68,11 +73,14 @@ impl CacheManager {
             let bloom_index_meta_cache =
                 Self::new_item_cache(DEFAULT_BLOOM_INDEX_COLUMN_CACHE_SIZE);
 
+            let file_meta_data_cache = Self::new_item_cache(DEFAULT_FILE_META_DATA_CACHE_ITEMS);
+
             v.init(Arc::new(Self {
                 table_snapshot_cache,
                 segment_info_cache,
                 bloom_index_cache,
                 bloom_index_meta_cache,
+                file_meta_data_cache,
                 cluster_id: config.cluster_id.clone(),
                 tenant_id: config.tenant_id.clone(),
             }))?;
@@ -104,6 +112,10 @@ impl CacheManager {
 
     pub fn get_bloom_index_meta_cache(&self) -> Option<BloomIndexMetaCache> {
         self.bloom_index_meta_cache.clone()
+    }
+
+    pub fn get_file_meta_data_cache(&self) -> Option<FileMetaDataCache> {
+        self.file_meta_data_cache.clone()
     }
 
     pub fn get_tenant_id(&self) -> &str {

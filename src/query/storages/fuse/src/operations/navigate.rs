@@ -24,6 +24,7 @@ use common_meta_app::schema::TableStatistics;
 use futures::TryStreamExt;
 
 use crate::io::MetaReaders;
+use crate::io::SnapshotHistoryReader;
 use crate::FuseTable;
 use crate::OPT_KEY_SNAPSHOT_LOCATION;
 

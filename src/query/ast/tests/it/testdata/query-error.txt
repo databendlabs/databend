@@ -2,10 +2,12 @@
 select * from customer join where a = b
 ---------- Output ---------
 error: 
-  --> SQL:1:29
+  --> SQL:1:24
   |
 1 | select * from customer join where a = b
-  |                             ^^^^^ expected `(`, `WITH`, `UNION`, `EXCEPT`, `INTERSECT`, `SELECT`, or 2 more ...
+  | ------                 ^^^^ expecting more subsequent tokens
+  | |                       
+  | while parsing `SELECT ...`
 
 
 ---------- Input ----------
@@ -15,7 +17,7 @@ error:
   --> SQL:1:15
   |
 1 | select * from join customer
-  | ------        ^^^^ expected `(`, `UNION`, `EXCEPT`, `INTERSECT`, `SELECT`, <Ident>, or 2 more ...
+  | ------        ^^^^ missing lhs or rhs for the binary operator
   | |              
   | while parsing `SELECT ...`
 
@@ -27,7 +29,9 @@ error:
   --> SQL:1:50
   |
 1 | select * from customer natural inner join orders on a = b
-  |                                                  ^^ expected `(`, `.`, `AT`, <Ident>, <QuotedString>, `AS`, or 19 more ...
+  | ------                                           ^^ join condition conflicting with NATURAL
+  | |                                                 
+  | while parsing `SELECT ...`
 
 
 ---------- Input ----------

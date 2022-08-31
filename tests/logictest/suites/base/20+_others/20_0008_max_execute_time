@@ -1,0 +1,8 @@
+statement ok
+SET max_execute_time = 100;
+
+statement error 1043
+SELECT COUNT() FROM numbers(1000000000) GROUP BY number % 3, number % 4;
+
+statement ok
+SET max_execute_time = 0;

@@ -1,0 +1,179 @@
+statement query I
+select number from numbers(100) order by number asc limit 10;
+
+----
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+
+statement query I
+select number from numbers(100) order by number*2 asc limit 10;
+
+----
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+
+statement query I
+select number from numbers(100) order by number asc limit 10, 10;
+
+----
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+
+statement query I
+select number from numbers(100) order by number-2 asc limit 10, 10;
+
+----
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+
+statement query I
+select number from numbers(100) order by number asc limit 10 offset 10;
+
+----
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+
+statement query I
+select number from numbers(100) order by number/2 asc limit 10 offset 10;
+
+----
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+
+statement query I
+select number from numbers(10) order by number asc offset 5;
+
+----
+5
+6
+7
+8
+9
+
+statement query I
+select number from numbers(10) order by number+number asc offset 5;
+
+----
+5
+6
+7
+8
+9
+
+statement query I
+select number from numbers(10000) order by number limit 1;
+
+----
+0
+
+statement ok
+drop table if exists t;
+
+statement ok
+drop table if exists t1;
+
+statement ok
+create table t(a int);
+
+statement ok
+create table t1(a int);
+
+statement ok
+insert into t values(1);
+
+statement ok
+insert into t1 values(1),(1);
+
+statement query T
+explain select * from t left join t1 on t.a = t1.a limit 1,2;
+
+----
+Limit
+├── limit: 2
+├── offset: 1
+└── HashJoin
+    ├── join type: LEFT OUTER
+    ├── build keys: [t1.a (#1)]
+    ├── probe keys: [CAST(t.a (#0) AS INT NULL)]
+    ├── filters: []
+    ├── Limit(Build)
+    │   ├── limit: 2
+    │   ├── offset: 1
+    │   └── TableScan
+    │       ├── table: default.default.t1
+    │       ├── read rows: 2
+    │       ├── read bytes: 31
+    │       ├── partitions total: 1
+    │       ├── partitions scanned: 1
+    │       └── push downs: [filters: [], limit: 3]
+    └── Limit(Probe)
+        ├── limit: 2
+        ├── offset: 1
+        └── TableScan
+            ├── table: default.default.t
+            ├── read rows: 1
+            ├── read bytes: 27
+            ├── partitions total: 1
+            ├── partitions scanned: 1
+            └── push downs: [filters: [], limit: 3]
+
+statement query II
+select * from t left join t1 on t.a = t1.a limit 1;
+
+----
+1 1
+
+statement ok
+drop table if exists t;
+
+statement ok
+drop table if exists t1;
+

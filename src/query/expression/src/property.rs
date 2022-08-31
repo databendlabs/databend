@@ -14,10 +14,14 @@
 
 use enum_as_inner::EnumAsInner;
 
+use crate::types::boolean::BooleanDomain;
+use crate::types::nullable::NullableDomain;
 use crate::types::number::overflow_cast;
 use crate::types::number::Number;
+use crate::types::number::NumberDomain;
+use crate::types::string::StringDomain;
+use crate::types::timestamp::TimestampDomain;
 use crate::types::AnyType;
-use crate::types::ValueType;
 use crate::with_number_type;
 use crate::Scalar;
 
@@ -47,34 +51,11 @@ pub enum Domain {
     Float64(NumberDomain<f64>),
     Boolean(BooleanDomain),
     String(StringDomain),
+    Timestamp(TimestampDomain),
     Nullable(NullableDomain<AnyType>),
     Array(Option<Box<Domain>>),
     Tuple(Vec<Domain>),
     Undefined,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct NumberDomain<T: Number> {
-    pub min: T::Storage,
-    pub max: T::Storage,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct BooleanDomain {
-    pub has_false: bool,
-    pub has_true: bool,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct StringDomain {
-    pub min: Vec<u8>,
-    pub max: Option<Vec<u8>>,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct NullableDomain<T: ValueType> {
-    pub has_null: bool,
-    pub value: Option<Box<T::Domain>>,
 }
 
 impl Domain {

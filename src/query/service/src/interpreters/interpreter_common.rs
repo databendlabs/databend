@@ -26,13 +26,14 @@ use common_meta_types::GrantObject;
 use common_meta_types::StageFile;
 use common_meta_types::StageType;
 use common_meta_types::UserStageInfo;
-use common_pipeline_core::Pipeline;
 use futures::TryStreamExt;
 use regex::Regex;
 use tracing::warn;
 
+use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::processors::TransformAddOn;
+use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::storages::stage::StageSourceHelper;
@@ -42,27 +43,36 @@ pub fn append2table(
     ctx: Arc<QueryContext>,
     table: Arc<dyn Table>,
     source_schema: DataSchemaRef,
-    mut pipeline: Pipeline,
+    mut build_res: PipelineBuildResult,
 ) -> Result<()> {
     let need_fill_missing_columns = table.schema() != source_schema;
     if need_fill_missing_columns {
-        pipeline.add_transform(|transform_input_port, transform_output_port| {
-            TransformAddOn::try_create(
-                transform_input_port,
-                transform_output_port,
-                source_schema.clone(),
-                table.schema(),
-                ctx.clone(),
-            )
-        })?;
+        build_res
+            .main_pipeline
+            .add_transform(|transform_input_port, transform_output_port| {
+                TransformAddOn::try_create(
+                    transform_input_port,
+                    transform_output_port,
+                    source_schema.clone(),
+                    table.schema(),
+                    ctx.clone(),
+                )
+            })?;
     }
 
-    table.append2(ctx.clone(), &mut pipeline)?;
+    table.append2(ctx.clone(), &mut build_res.main_pipeline)?;
     let async_runtime = GlobalIORuntime::instance();
     let query_need_abort = ctx.query_need_abort();
-
-    pipeline.set_max_threads(ctx.get_settings().get_max_threads()? as usize);
-    let executor = PipelineCompleteExecutor::try_create(async_runtime, query_need_abort, pipeline)?;
+    let executor_settings = ExecutorSettings::try_create(&ctx.get_settings())?;
+    build_res.set_max_threads(ctx.get_settings().get_max_threads()? as usize);
+    let mut pipelines = build_res.sources_pipelines;
+    pipelines.push(build_res.main_pipeline);
+    let executor = PipelineCompleteExecutor::from_pipelines(
+        async_runtime,
+        query_need_abort,
+        pipelines,
+        executor_settings,
+    )?;
     executor.execute()
 }
 

@@ -4,7 +4,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+// http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -21,13 +21,17 @@ use common_arrow::arrow::io::parquet::read::ArrayIter;
 use common_arrow::arrow::io::parquet::read::RowGroupDeserializer;
 use common_arrow::parquet::metadata::FileMetaData;
 use common_arrow::parquet::metadata::RowGroupMetaData;
+use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::PartInfoPtr;
+use common_storages_util::file_meta_data_reader::FileMetaDataReader;
 use futures::future::BoxFuture;
 use futures::io::BufReader;
+use futures::AsyncReadExt;
+use opendal::Object;
 use opendal::Operator;
 
 use crate::hive_partition::HivePartInfo;
@@ -83,16 +87,13 @@ impl HiveParquetBlockReader {
         }))
     }
 
-    pub async fn read_meta_data(&self, filename: &str) -> Result<FileMetaData> {
-        let object = self.operator.object(filename);
-        let mut reader = object.seekable_reader(0..);
-        let meta = read_metadata_async(&mut reader).await;
-        if meta.is_err() {
-            tracing::warn!("parquet failed,read_meta,{}", filename);
-        }
-        meta.map_err(|err| {
-            ErrorCode::ParquetError(format!("read meta failed, {}, {:?}", filename, err))
-        })
+    pub async fn read_meta_data(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        filename: &str,
+    ) -> Result<Arc<FileMetaData>> {
+        let file_meta_reader = FileMetaDataReader::new_reader(ctx);
+        file_meta_reader.read(filename, None, 0).await
     }
 
     pub async fn read_columns_data(

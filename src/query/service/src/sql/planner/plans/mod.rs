@@ -71,6 +71,7 @@ use common_planners::GrantRolePlan;
 use common_planners::KillPlan;
 use common_planners::ListPlan;
 use common_planners::OptimizeTablePlan;
+use common_planners::ReclusterTablePlan;
 use common_planners::RemoveUserStagePlan;
 use common_planners::RenameDatabasePlan;
 use common_planners::RenameTablePlan;
@@ -97,6 +98,7 @@ pub use insert::InsertInputSource;
 pub use insert::InsertValueBlock;
 pub use limit::Limit;
 pub use logical_get::LogicalGet;
+pub use logical_get::Prewhere;
 pub use logical_join::JoinType;
 pub use logical_join::LogicalInnerJoin;
 pub use operator::*;
@@ -153,6 +155,7 @@ pub enum Plan {
     RenameTable(Box<RenameTablePlan>),
     AlterTableClusterKey(Box<AlterTableClusterKeyPlan>),
     DropTableClusterKey(Box<DropTableClusterKeyPlan>),
+    ReclusterTable(Box<ReclusterTablePlan>),
     TruncateTable(Box<TruncateTablePlan>),
     OptimizeTable(Box<OptimizeTablePlan>),
     ExistsTable(Box<ExistsTablePlan>),
@@ -249,6 +252,7 @@ impl Display for Plan {
             Plan::RenameTable(_) => write!(f, "RenameTable"),
             Plan::AlterTableClusterKey(_) => write!(f, "AlterTableClusterKey"),
             Plan::DropTableClusterKey(_) => write!(f, "DropTableClusterKey"),
+            Plan::ReclusterTable(_) => write!(f, "ReclusterTable"),
             Plan::TruncateTable(_) => write!(f, "TruncateTable"),
             Plan::OptimizeTable(_) => write!(f, "OptimizeTable"),
             Plan::ExistsTable(_) => write!(f, "ExistsTable"),
@@ -319,6 +323,7 @@ impl Plan {
             Plan::RenameTable(plan) => plan.schema(),
             Plan::AlterTableClusterKey(plan) => plan.schema(),
             Plan::DropTableClusterKey(plan) => plan.schema(),
+            Plan::ReclusterTable(plan) => plan.schema(),
             Plan::TruncateTable(plan) => plan.schema(),
             Plan::OptimizeTable(plan) => plan.schema(),
             Plan::ExistsTable(plan) => plan.schema(),

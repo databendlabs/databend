@@ -262,6 +262,10 @@ impl Table for FuseTable {
         self.cluster_keys.clone()
     }
 
+    fn support_prewhere(&self) -> bool {
+        true
+    }
+
     async fn alter_table_cluster_keys(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -450,7 +454,8 @@ impl Table for FuseTable {
         ctx: Arc<dyn TableContext>,
         catalog: String,
         pipeline: &mut Pipeline,
+        push_downs: Option<Extras>,
     ) -> Result<Option<Arc<dyn TableMutator>>> {
-        self.do_recluster(ctx, catalog, pipeline).await
+        self.do_recluster(ctx, catalog, pipeline, push_downs).await
     }
 }

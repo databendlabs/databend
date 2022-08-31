@@ -114,32 +114,6 @@ pub fn select_target(i: Input) -> IResult<SelectTarget> {
     )(i)
 }
 
-pub fn table_reference(i: Input) -> IResult<TableReference> {
-    rule!(
-        #joined_tables
-        | #parenthesized_joined_tables
-        | #subquery
-        | #table_function
-        | #aliased_table
-    )(i)
-}
-
-pub fn aliased_table(i: Input) -> IResult<TableReference> {
-    map(
-        consumed(rule! {
-            #peroid_separated_idents_1_to_3 ~ #travel_point? ~ #table_alias?
-        }),
-        |(input, ((catalog, database, table), travel_point, alias))| TableReference::Table {
-            span: input.0,
-            catalog,
-            database,
-            table,
-            alias,
-            travel_point,
-        },
-    )(i)
-}
-
 pub fn travel_point(i: Input) -> IResult<TimeTravelPoint> {
     let at_snapshot = map(
         rule! { AT ~ "(" ~ SNAPSHOT ~ "=>" ~ #literal_string ~ ")" },
@@ -174,123 +148,12 @@ pub fn table_alias(i: Input) -> IResult<TableAlias> {
     )(i)
 }
 
-pub fn table_function(i: Input) -> IResult<TableReference> {
-    map(
-        consumed(rule! {
-            #ident ~ "(" ~ #comma_separated_list0(expr) ~ ")" ~ #table_alias?
-        }),
-        |(input, (name, _, params, _, alias))| TableReference::TableFunction {
-            span: input.0,
-            name,
-            params,
-            alias,
-        },
-    )(i)
-}
-
-pub fn subquery(i: Input) -> IResult<TableReference> {
-    map(
-        consumed(rule! {
-            ( #parenthesized_query | #query ) ~ #table_alias?
-        }),
-        |(input, (subquery, alias))| TableReference::Subquery {
-            span: input.0,
-            subquery: Box::new(subquery),
-            alias,
-        },
-    )(i)
-}
-
 pub fn parenthesized_query(i: Input) -> IResult<Query> {
     map(
         rule! {
             "(" ~ ( #parenthesized_query | #query ) ~ ")"
         },
         |(_, query, _)| query,
-    )(i)
-}
-
-pub fn parenthesized_joined_tables(i: Input) -> IResult<TableReference> {
-    map(
-        rule! {
-            "(" ~ ( #parenthesized_joined_tables | #joined_tables ) ~ ")"
-        },
-        |(_, joined_tables, _)| joined_tables,
-    )(i)
-}
-
-pub fn joined_tables(i: Input) -> IResult<TableReference> {
-    struct JoinElement<'a> {
-        op: JoinOperator,
-        condition: JoinCondition<'a>,
-        right: Box<TableReference<'a>>,
-    }
-
-    let table_ref_without_join = |i| {
-        rule!(
-            #parenthesized_joined_tables
-            | #subquery
-            | #table_function
-            | #aliased_table
-        )(i)
-    };
-    let join_condition_on = map(
-        rule! {
-            ON ~ #expr
-        },
-        |(_, expr)| JoinCondition::On(Box::new(expr)),
-    );
-    let join_condition_using = map(
-        rule! {
-            USING ~ "(" ~ #comma_separated_list1(ident) ~ ")"
-        },
-        |(_, _, idents, _)| JoinCondition::Using(idents),
-    );
-    let join_condition = rule! { #join_condition_on | #join_condition_using };
-
-    let join = map(
-        rule! {
-            #join_operator? ~ JOIN ~ #table_ref_without_join ~ #join_condition?
-        },
-        |(opt_op, _, right, condition)| JoinElement {
-            op: opt_op.unwrap_or(JoinOperator::Inner),
-            condition: condition.unwrap_or(JoinCondition::None),
-            right: Box::new(right),
-        },
-    );
-    let natural_join = map(
-        rule! {
-            NATURAL ~ #join_operator? ~ JOIN ~ #table_ref_without_join
-        },
-        |(_, opt_op, _, right)| JoinElement {
-            op: opt_op.unwrap_or(JoinOperator::Inner),
-            condition: JoinCondition::Natural,
-            right: Box::new(right),
-        },
-    );
-
-    map(
-        consumed(rule!(
-            #table_ref_without_join ~ ( #join | #natural_join )+
-        )),
-        |(input, (fst, joins))| {
-            joins.into_iter().fold(fst, |acc, elem| {
-                let JoinElement {
-                    op,
-                    condition,
-                    right,
-                } = elem;
-                TableReference::Join {
-                    span: input.0,
-                    join: Join {
-                        op,
-                        condition,
-                        left: Box::new(acc),
-                        right,
-                    },
-                }
-            })
-        },
     )(i)
 }
 
@@ -322,6 +185,236 @@ pub fn order_by_expr(i: Input) -> IResult<OrderByExpr> {
             nulls_first: opt_nulls_first,
         },
     )(i)
+}
+
+pub fn table_reference(i: Input) -> IResult<TableReference> {
+    let (rest, table_reference_elements) = rule!(#table_reference_element+)(i)?;
+    let iter = &mut table_reference_elements.into_iter();
+    run_pratt_parser(TableReferenceParser, iter, rest, i)
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum TableReferenceElement<'a> {
+    Table {
+        catalog: Option<Identifier<'a>>,
+        database: Option<Identifier<'a>>,
+        table: Identifier<'a>,
+        alias: Option<TableAlias<'a>>,
+        travel_point: Option<TimeTravelPoint<'a>>,
+    },
+    // `TABLE(expr)[ AS alias ]`
+    TableFunction {
+        name: Identifier<'a>,
+        params: Vec<Expr<'a>>,
+        alias: Option<TableAlias<'a>>,
+    },
+    // Derived table, which can be a subquery or joined tables or combination of them
+    Subquery {
+        subquery: Box<Query<'a>>,
+        alias: Option<TableAlias<'a>>,
+    },
+    // [NATURAL] [INNER|OUTER|CROSS|...] JOIN
+    Join {
+        op: JoinOperator,
+        natural: bool,
+    },
+    // ON expr | USING (ident, ...)
+    JoinCondition(JoinCondition<'a>),
+    Group(TableReference<'a>),
+}
+
+pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceElement>> {
+    let aliased_table = map(
+        rule! {
+            #peroid_separated_idents_1_to_3 ~ #travel_point? ~ #table_alias?
+        },
+        |((catalog, database, table), travel_point, alias)| TableReferenceElement::Table {
+            catalog,
+            database,
+            table,
+            alias,
+            travel_point,
+        },
+    );
+    let table_function = map(
+        rule! {
+            #ident ~ "(" ~ #comma_separated_list0(expr) ~ ")" ~ #table_alias?
+        },
+        |(name, _, params, _, alias)| TableReferenceElement::TableFunction {
+            name,
+            params,
+            alias,
+        },
+    );
+    let subquery = map(
+        rule! {
+            ( #parenthesized_query | #query ) ~ #table_alias?
+        },
+        |(subquery, alias)| TableReferenceElement::Subquery {
+            subquery: Box::new(subquery),
+            alias,
+        },
+    );
+    let join = map(
+        rule! {
+            NATURAL? ~ #join_operator? ~ JOIN
+        },
+        |(opt_natural, opt_op, _)| TableReferenceElement::Join {
+            op: opt_op.unwrap_or(JoinOperator::Inner),
+            natural: opt_natural.is_some(),
+        },
+    );
+    let join_condition_on = map(
+        rule! {
+            ON ~ #expr
+        },
+        |(_, expr)| TableReferenceElement::JoinCondition(JoinCondition::On(Box::new(expr))),
+    );
+    let join_condition_using = map(
+        rule! {
+            USING ~ "(" ~ #comma_separated_list1(ident) ~ ")"
+        },
+        |(_, _, idents, _)| TableReferenceElement::JoinCondition(JoinCondition::Using(idents)),
+    );
+    let group = map(
+        rule! {
+           "(" ~ #table_reference ~ ^")"
+        },
+        |(_, table_ref, _)| TableReferenceElement::Group(table_ref),
+    );
+
+    let (rest, (span, elem)) = consumed(rule! {
+        #subquery
+        | #table_function
+        | #aliased_table
+        | #group
+        | #join
+        | #join_condition_on
+        | #join_condition_using
+    })(i)?;
+    Ok((rest, WithSpan { span, elem }))
+}
+
+struct TableReferenceParser;
+
+impl<'a, I: Iterator<Item = WithSpan<'a, TableReferenceElement<'a>>>> PrattParser<I>
+    for TableReferenceParser
+{
+    type Error = &'static str;
+    type Input = WithSpan<'a, TableReferenceElement<'a>>;
+    type Output = TableReference<'a>;
+
+    fn query(&mut self, input: &Self::Input) -> Result<Affix, &'static str> {
+        let affix = match &input.elem {
+            TableReferenceElement::Join { .. } => Affix::Infix(Precedence(10), Associativity::Left),
+            TableReferenceElement::JoinCondition(..) => Affix::Postfix(Precedence(5)),
+            _ => Affix::Nilfix,
+        };
+        Ok(affix)
+    }
+
+    fn primary(&mut self, input: Self::Input) -> Result<Self::Output, &'static str> {
+        let table_ref = match input.elem {
+            TableReferenceElement::Group(table_ref) => table_ref,
+            TableReferenceElement::Table {
+                catalog,
+                database,
+                table,
+                alias,
+                travel_point,
+            } => TableReference::Table {
+                span: input.span.0,
+                catalog,
+                database,
+                table,
+                alias,
+                travel_point,
+            },
+            TableReferenceElement::TableFunction {
+                name,
+                params,
+                alias,
+            } => TableReference::TableFunction {
+                span: input.span.0,
+                name,
+                params,
+                alias,
+            },
+            TableReferenceElement::Subquery { subquery, alias } => TableReference::Subquery {
+                span: input.span.0,
+                subquery,
+                alias,
+            },
+            _ => unreachable!(),
+        };
+        Ok(table_ref)
+    }
+
+    fn infix(
+        &mut self,
+        lhs: Self::Output,
+        input: Self::Input,
+        rhs: Self::Output,
+    ) -> Result<Self::Output, &'static str> {
+        let table_ref = match input.elem {
+            TableReferenceElement::Join { op, natural } => {
+                let condition = if natural {
+                    JoinCondition::Natural
+                } else {
+                    JoinCondition::None
+                };
+                TableReference::Join {
+                    span: input.span.0,
+                    join: Join {
+                        op,
+                        condition,
+                        left: Box::new(lhs),
+                        right: Box::new(rhs),
+                    },
+                }
+            }
+            _ => unreachable!(),
+        };
+        Ok(table_ref)
+    }
+
+    fn prefix(
+        &mut self,
+        _op: Self::Input,
+        _rhs: Self::Output,
+    ) -> Result<Self::Output, Self::Error> {
+        unreachable!()
+    }
+
+    fn postfix(
+        &mut self,
+        mut lhs: Self::Output,
+        op: Self::Input,
+    ) -> Result<Self::Output, Self::Error> {
+        match op.elem {
+            TableReferenceElement::JoinCondition(new_condition) => match &mut lhs {
+                TableReference::Join {
+                    join: Join { condition, .. },
+                    ..
+                } => match *condition {
+                    JoinCondition::None => {
+                        *condition = new_condition;
+                        Ok(lhs)
+                    }
+                    JoinCondition::Natural => Err("join condition conflicting with NATURAL"),
+                    _ => Err("join condition already set"),
+                },
+                _ => Err("join condition must apply to a join"),
+            },
+            _ => unreachable!(),
+        }
+    }
+}
+
+pub fn set_operation(i: Input) -> IResult<SetExpr> {
+    let (rest, set_operation_elements) = rule!(#set_operation_element+)(i)?;
+    let iter = &mut set_operation_elements.into_iter();
+    run_pratt_parser(SetOperationParser, iter, rest, i)
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -359,7 +452,6 @@ pub fn set_operation_element(i: Input) -> IResult<WithSpan<SetOperationElement>>
             }
         },
     );
-
     let select_stmt = map(
         rule! {
              SELECT ~ DISTINCT? ~ ^#comma_separated_list1(select_target)
@@ -395,12 +487,9 @@ pub fn set_operation_element(i: Input) -> IResult<WithSpan<SetOperationElement>>
             }
         },
     );
-
     let group = map(
         rule! {
-           "("
-           ~ #set_operation
-           ~ ^")"
+           "(" ~ #set_operation ~ ^")"
         },
         |(_, set_expr, _)| SetOperationElement::Group(set_expr),
     );
@@ -409,22 +498,16 @@ pub fn set_operation_element(i: Input) -> IResult<WithSpan<SetOperationElement>>
     Ok((rest, WithSpan { span, elem }))
 }
 
-pub fn set_operation(i: Input) -> IResult<SetExpr> {
-    let (rest, set_operation_elements) = rule!(#set_operation_element+)(i)?;
-    let iter = &mut set_operation_elements.into_iter();
-    run_pratt_parser(SetOperationParser, iter, rest, i)
-}
-
 struct SetOperationParser;
 
 impl<'a, I: Iterator<Item = WithSpan<'a, SetOperationElement<'a>>>> PrattParser<I>
     for SetOperationParser
 {
-    type Error = pratt::NoError;
+    type Error = &'static str;
     type Input = WithSpan<'a, SetOperationElement<'a>>;
     type Output = SetExpr<'a>;
 
-    fn query(&mut self, input: &Self::Input) -> pratt::Result<Affix> {
+    fn query(&mut self, input: &Self::Input) -> Result<Affix, &'static str> {
         let affix = match &input.elem {
             SetOperationElement::SetOperation { op, .. } => match op {
                 SetOperator::Union | SetOperator::Except => {
@@ -437,7 +520,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, SetOperationElement<'a>>>> PrattParser<
         Ok(affix)
     }
 
-    fn primary(&mut self, input: Self::Input) -> pratt::Result<SetExpr<'a>> {
+    fn primary(&mut self, input: Self::Input) -> Result<Self::Output, &'static str> {
         let set_expr = match input.elem {
             SetOperationElement::Group(expr) => expr,
             SetOperationElement::SelectStmt {
@@ -466,7 +549,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, SetOperationElement<'a>>>> PrattParser<
         lhs: Self::Output,
         input: Self::Input,
         rhs: Self::Output,
-    ) -> pratt::Result<SetExpr<'a>> {
+    ) -> Result<Self::Output, &'static str> {
         let set_expr = match input.elem {
             SetOperationElement::SetOperation { op, all, .. } => {
                 SetExpr::SetOperation(Box::new(SetOperation {

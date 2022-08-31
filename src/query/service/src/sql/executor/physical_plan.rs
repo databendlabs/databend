@@ -30,6 +30,7 @@ use common_planners::StageKind;
 use super::physical_scalar::PhysicalScalar;
 use super::AggregateFunctionDesc;
 use super::SortDesc;
+use crate::sql::optimizer::ColumnSet;
 use crate::sql::plans::JoinType;
 use crate::sql::IndexType;
 
@@ -39,6 +40,9 @@ pub type ColumnID = String;
 pub struct TableScan {
     pub name_mapping: BTreeMap<String, ColumnID>,
     pub source: Box<ReadDataSourcePlan>,
+
+    /// Only used for display
+    pub table_index: IndexType,
 }
 
 impl TableScan {
@@ -69,6 +73,9 @@ impl Filter {
 pub struct Project {
     pub input: Box<PhysicalPlan>,
     pub projections: Vec<usize>,
+
+    /// Only used for display
+    pub columns: ColumnSet,
 }
 
 impl Project {

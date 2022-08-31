@@ -18,17 +18,19 @@ mod arithmetic;
 mod arithmetic_modulo;
 mod boolean;
 mod control;
+mod datetime;
 mod math;
 mod string;
 mod string_multi_args;
 
 pub fn builtin_functions() -> FunctionRegistry {
     let mut registry = FunctionRegistry::new();
+    arithmetic::register(&mut registry);
     boolean::register(&mut registry);
     control::register(&mut registry);
+    datetime::register(&mut registry);
+    math::register(&mut registry);
     string::register(&mut registry);
     string_multi_args::register(&mut registry);
-    arithmetic::register(&mut registry);
-    math::register(&mut registry);
     registry
 }

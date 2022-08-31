@@ -24,6 +24,7 @@ use common_streams::SendableDataBlockStream;
 
 use super::Interpreter;
 use crate::interpreters::ProcessorExecutorStream;
+use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelinePullingExecutor;
 use crate::procedures::ProcedureFactory;
 use crate::sessions::QueryContext;
@@ -81,8 +82,13 @@ impl Interpreter for CallInterpreter {
         let async_runtime = GlobalIORuntime::instance();
         let query_need_abort = ctx.query_need_abort();
         pipeline.set_max_threads(settings.get_max_threads()? as usize);
-        let executor =
-            PipelinePullingExecutor::try_create(async_runtime, query_need_abort, pipeline)?;
+        let executor_settings = ExecutorSettings::try_create(&settings)?;
+        let executor = PipelinePullingExecutor::try_create(
+            async_runtime,
+            query_need_abort,
+            pipeline,
+            executor_settings,
+        )?;
 
         Ok(Box::pin(ProcessorExecutorStream::create(executor)?))
     }

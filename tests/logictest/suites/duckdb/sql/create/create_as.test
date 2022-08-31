@@ -1,0 +1,58 @@
+statement ok
+drop table if exists tbl2;
+
+statement ok
+drop table if exists tbl3;
+
+statement ok
+drop table if exists tbl1;
+
+statement ok
+CREATE TABLE tbl1 AS SELECT 1;
+
+statement query I
+SELECT * FROM tbl1;
+
+----
+1
+
+statement ok
+CREATE TABLE tbl2 AS SELECT 2 AS f;
+
+statement query I
+SELECT * FROM tbl2;
+
+----
+2
+
+statement ok
+CREATE TABLE tbl3 AS SELECT 3;
+
+statement query I
+SELECT * FROM tbl3;
+
+----
+3
+
+statement ok
+drop table tbl1;
+
+-- statement ok
+-- CREATE TABLE tbl1 AS SELECT 'hello' UNION ALL SELECT 'world';
+
+-- statement query I
+-- SELECT * FROM tbl1;
+
+-- ----
+-- hello
+-- world
+
+-- statement ok
+-- drop table tbl1;
+
+statement ok
+CREATE TABLE tbl1 AS SELECT 5 WHERE false;
+
+statement ok
+SELECT * FROM tbl1;
+

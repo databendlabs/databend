@@ -24,6 +24,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use parking_lot::Mutex;
 
+use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineExecutor;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::ProcessorPtr;
@@ -92,11 +93,13 @@ impl PipelinePushingExecutor {
         ctx: Arc<QueryContext>,
         query_need_abort: Arc<AtomicBool>,
         mut pipeline: Pipeline,
+        settings: ExecutorSettings,
     ) -> Result<PipelinePushingExecutor> {
         let state = State::create();
         let async_runtime = GlobalIORuntime::instance();
         let sender = Self::wrap_pipeline(ctx, &mut pipeline)?;
-        let executor = PipelineExecutor::create(async_runtime, query_need_abort, pipeline)?;
+        let executor =
+            PipelineExecutor::create(async_runtime, query_need_abort, pipeline, settings)?;
         Ok(PipelinePushingExecutor {
             state,
             sender,

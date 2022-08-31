@@ -316,55 +316,42 @@ pub(crate) fn pretty_expr(expr: Expr) -> RcDoc {
             .append(RcDoc::space())
             .append(RcDoc::text(unit.to_string())),
         Expr::DateAdd {
-            date,
-            interval,
             unit,
+            interval,
+            date,
             ..
         } => RcDoc::text("DATE_ADD(")
-            .append(pretty_expr(*date))
+            .append(RcDoc::text(unit.to_string()))
             .append(RcDoc::text(","))
             .append(RcDoc::space())
             .append(RcDoc::text("INTERVAL"))
             .append(RcDoc::space())
             .append(pretty_expr(*interval))
+            .append(RcDoc::text(","))
             .append(RcDoc::space())
-            .append(RcDoc::text(unit.to_string()))
+            .append(pretty_expr(*date))
             .append(RcDoc::text(")")),
         Expr::DateSub {
-            date,
-            interval,
             unit,
+            interval,
+            date,
             ..
         } => RcDoc::text("DATE_SUB(")
-            .append(pretty_expr(*date))
+            .append(RcDoc::text(unit.to_string()))
             .append(RcDoc::text(","))
             .append(RcDoc::space())
             .append(RcDoc::text("INTERVAL"))
             .append(RcDoc::space())
             .append(pretty_expr(*interval))
+            .append(RcDoc::text(","))
             .append(RcDoc::space())
-            .append(RcDoc::text(unit.to_string()))
+            .append(pretty_expr(*date))
             .append(RcDoc::text(")")),
         Expr::DateTrunc { unit, date, .. } => RcDoc::text("DATE_TRUNC(")
             .append(RcDoc::text(unit.to_string()))
             .append(RcDoc::text(","))
             .append(RcDoc::space())
             .append(pretty_expr(*date))
-            .append(RcDoc::text(")")),
-        Expr::NullIf { expr1, expr2, .. } => RcDoc::text("NULLIF(")
-            .append(pretty_expr(*expr1))
-            .append(RcDoc::text(","))
-            .append(RcDoc::space())
-            .append(pretty_expr(*expr2))
-            .append(RcDoc::text(")")),
-        Expr::Coalesce { exprs, .. } => RcDoc::text("COALESCE(")
-            .append(inline_comma(exprs.into_iter().map(pretty_expr)))
-            .append(RcDoc::text(")")),
-        Expr::IfNull { expr1, expr2, .. } => RcDoc::text("IFNULL(")
-            .append(pretty_expr(*expr1))
-            .append(RcDoc::text(","))
-            .append(RcDoc::space())
-            .append(pretty_expr(*expr2))
             .append(RcDoc::text(")")),
     }
 }

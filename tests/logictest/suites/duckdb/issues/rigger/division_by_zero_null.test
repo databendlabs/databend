@@ -1,0 +1,54 @@
+statement ok
+drop table if exists t1;
+
+statement ok
+drop table if exists t0;
+
+statement ok
+CREATE TABLE t0(c0 DOUBLE, c1 DOUBLE NULL);
+
+statement ok
+INSERT INTO t0 VALUES(0.0,0.0);
+
+statement ok
+INSERT INTO t0 VALUES(0.0,NULL);
+
+statement query FI
+SELECT t0.c1, (1/t0.c1) IS NULL FROM t0 order by c1;
+
+----
+0.0 0
+NULL 1
+
+statement query T
+SELECT t0.c1 FROM t0 WHERE (((1/(t0.c1))) IS NULL) order by c1;
+
+----
+NULL
+
+statement ok
+CREATE TABLE t1(c0 DOUBLE);
+
+statement ok
+INSERT INTO t1 VALUES(10000.0);
+
+statement ok
+INSERT INTO t1 VALUES(0.0);
+
+statement query FI
+SELECT c0, exp(c0) IS NULL FROM t1 order by c0;
+
+----
+0.0 0
+10000.0 0
+
+statement query FF
+SELECT c0, exp(c0) FROM t1 order by c0;
+
+----
+0.0 1.0
+10000.0 inf
+
+statement ok
+SELECT c0 FROM t1 WHERE exp(c0) IS NULL;
+

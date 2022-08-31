@@ -29,7 +29,6 @@ use opendal::ops::OpRead;
 use opendal::ops::OpWrite;
 use opendal::Accessor;
 use opendal::BytesReader;
-use opendal::BytesWriter;
 use opendal::Operator;
 use parking_lot::Mutex;
 use uuid::Uuid;
@@ -235,7 +234,7 @@ where
         Err(err)
     }
 
-    async fn write(&self, _args: &OpWrite) -> std::io::Result<BytesWriter> {
+    async fn write(&self, _args: &OpWrite, _r: BytesReader) -> std::io::Result<u64> {
         let v = &mut (*self.err.lock());
         let err = v.take_err();
         v.increase_write_op_count();

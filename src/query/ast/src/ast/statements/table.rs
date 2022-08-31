@@ -23,6 +23,7 @@ use crate::ast::write_space_seperated_map;
 use crate::ast::Expr;
 use crate::ast::Identifier;
 use crate::ast::Query;
+use crate::ast::TableReference;
 use crate::ast::TypeName;
 
 #[derive(Debug, Clone, PartialEq)] // Tables
@@ -252,9 +253,7 @@ impl Display for UndropTableStmt<'_> {
 #[derive(Debug, Clone, PartialEq)]
 pub struct AlterTableStmt<'a> {
     pub if_exists: bool,
-    pub catalog: Option<Identifier<'a>>,
-    pub database: Option<Identifier<'a>>,
-    pub table: Identifier<'a>,
+    pub table_reference: TableReference<'a>,
     pub action: AlterTableAction<'a>,
 }
 
@@ -264,22 +263,24 @@ impl Display for AlterTableStmt<'_> {
         if self.if_exists {
             write!(f, "IF EXISTS ")?;
         }
-        write_period_separated_list(
-            f,
-            self.catalog
-                .iter()
-                .chain(&self.database)
-                .chain(Some(&self.table)),
-        )?;
+        write!(f, "{}", self.table_reference)?;
         write!(f, " {}", self.action)
     }
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum AlterTableAction<'a> {
-    RenameTable { new_table: Identifier<'a> },
-    AlterTableClusterKey { cluster_by: Vec<Expr<'a>> },
+    RenameTable {
+        new_table: Identifier<'a>,
+    },
+    AlterTableClusterKey {
+        cluster_by: Vec<Expr<'a>>,
+    },
     DropTableClusterKey,
+    ReclusterTable {
+        is_final: bool,
+        selection: Option<Expr<'a>>,
+    },
 }
 
 impl Display for AlterTableAction<'_> {
@@ -294,6 +295,19 @@ impl Display for AlterTableAction<'_> {
             }
             AlterTableAction::DropTableClusterKey => {
                 write!(f, "DROP CLUSTER KEY")
+            }
+            AlterTableAction::ReclusterTable {
+                is_final,
+                selection,
+            } => {
+                write!(f, "RECLUSTER")?;
+                if *is_final {
+                    write!(f, " FINAL")?;
+                }
+                if let Some(conditions) = selection {
+                    write!(f, " WHERE {conditions}")?;
+                }
+                Ok(())
             }
         }
     }
@@ -432,8 +446,6 @@ pub enum OptimizeTableAction {
     All,
     Purge,
     Compact,
-    Recluster,
-    ReclusterFinal,
 }
 
 impl Display for OptimizeTableAction {
@@ -442,8 +454,6 @@ impl Display for OptimizeTableAction {
             OptimizeTableAction::All => write!(f, "ALL"),
             OptimizeTableAction::Purge => write!(f, "PURGE"),
             OptimizeTableAction::Compact => write!(f, "COMPACT"),
-            OptimizeTableAction::Recluster => write!(f, "RECLUSTER"),
-            OptimizeTableAction::ReclusterFinal => write!(f, "RECLUSTER FINAL"),
         }
     }
 }

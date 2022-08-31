@@ -12,11 +12,18 @@ doctest = false
 test = false
 
 [dependencies]
+common-arrow = { path = "../../../common/arrow" }
 common-base = { path = "../../../common/base" }
+common-cache = { path = "../../../common/cache" }
+common-catalog = { path = "../../../common/../query/catalog" }
 common-datablocks = { path = "../../datablocks" }
 common-exception = { path = "../../../common/exception" }
+common-fuse-meta = { path = "../fuse-meta" }
 common-meta-api = { path = "../../../meta/api" }
 
+async-trait = { version = "0.1.0", package = "async-trait-fn" }
 backoff = { version = "0.4.0", features = ["futures", "tokio"] }
+futures-util = "0.3.21"
 once_cell = "1.12.0"
 parking_lot = "0.12.1"
+tracing = "0.1.35"

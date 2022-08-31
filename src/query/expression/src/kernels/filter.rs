@@ -23,6 +23,7 @@ use common_exception::Result;
 use crate::types::array::ArrayColumnBuilder;
 use crate::types::nullable::NullableColumn;
 use crate::types::string::StringColumnBuilder;
+use crate::types::timestamp::TimestampColumn;
 use crate::types::AnyType;
 use crate::types::ArrayType;
 use crate::types::BooleanType;
@@ -123,6 +124,13 @@ impl Column {
                 StringColumnBuilder::with_capacity(length, 0),
                 filter
             ),
+            Column::Timestamp(column) => {
+                let ts = Self::filter_primitive_types(&column.ts, filter);
+                Column::Timestamp(TimestampColumn {
+                    ts,
+                    precision: column.precision,
+                })
+            }
             Column::Array(column) => {
                 let mut builder = ArrayColumnBuilder::<AnyType>::from_column(column.slice(0..0));
                 builder.reserve(length);

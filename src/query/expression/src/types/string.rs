@@ -19,7 +19,6 @@ use common_arrow::arrow::buffer::Buffer;
 use common_arrow::arrow::trusted_len::TrustedLen;
 
 use crate::property::Domain;
-use crate::property::StringDomain;
 use crate::types::ArgType;
 use crate::types::DataType;
 use crate::types::GenericMap;
@@ -257,6 +256,12 @@ impl StringColumnBuilder {
         self.data.extend_from_slice(item);
     }
 
+    pub fn write_row<T>(&mut self, f: impl FnOnce(&mut Vec<u8>) -> T) -> T {
+        let res = f(&mut self.data);
+        self.commit_row();
+        res
+    }
+
     pub fn commit_row(&mut self) {
         self.offsets.push(self.data.len() as u64);
     }
@@ -279,4 +284,10 @@ impl StringColumnBuilder {
         assert_eq!(self.offsets.len(), 2);
         self.data[(self.offsets[0] as usize)..(self.offsets[1] as usize)].to_vec()
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StringDomain {
+    pub min: Vec<u8>,
+    pub max: Option<Vec<u8>>,
 }
