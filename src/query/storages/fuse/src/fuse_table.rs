@@ -262,6 +262,10 @@ impl Table for FuseTable {
         self.cluster_keys.clone()
     }
 
+    fn support_prewhere(&self) -> bool {
+        true
+    }
+
     async fn alter_table_cluster_keys(
         &self,
         ctx: Arc<dyn TableContext>,

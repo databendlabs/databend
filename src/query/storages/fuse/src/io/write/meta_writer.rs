@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::io::Error;
+
 use common_exception::Result;
 use opendal::Operator;
 use serde::Serialize;
@@ -22,12 +24,11 @@ use crate::io::retry::Retryable;
 
 pub async fn write_meta<T>(data_accessor: &Operator, location: &str, meta: &T) -> Result<()>
 where T: Serialize {
-    let bytes = &serde_json::to_vec(&meta)?;
     let op = || async {
-        data_accessor.object(location).write(bytes).await?;
+        let bs = serde_json::to_vec(&meta).map_err(Error::other)?;
         data_accessor
             .object(location)
-            .write(bytes)
+            .write(bs)
             .await
             .map_err(retry::from_io_error)
     };

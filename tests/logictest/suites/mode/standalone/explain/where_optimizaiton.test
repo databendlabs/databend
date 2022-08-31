@@ -1,0 +1,111 @@
+statement ok
+drop table if exists t_where_optimizer;
+
+statement ok
+create table if not exists t_where_optimizer (a int, b int);
+
+statement query T
+explain select a from t_where_optimizer where a = 1;
+
+----
+Project
+├── columns: [a (#0)]
+└── Filter
+    ├── filters: [=(t_where_optimizer.a (#0), 1)]
+    └── TableScan
+        ├── table: default.default.t_where_optimizer
+        ├── read rows: 0
+        ├── read bytes: 0
+        ├── partitions total: 0
+        ├── partitions scanned: 0
+        └── push downs: [filters: [(a = 1)], limit: NONE]
+
+statement query T
+explain select * from t_where_optimizer where a = b;
+
+----
+Filter
+├── filters: [=(t_where_optimizer.a (#0), t_where_optimizer.b (#1))]
+└── TableScan
+    ├── table: default.default.t_where_optimizer
+    ├── read rows: 0
+    ├── read bytes: 0
+    ├── partitions total: 0
+    ├── partitions scanned: 0
+    └── push downs: [filters: [(a = b)], limit: NONE]
+
+statement query T
+explain select * from t_where_optimizer where a = 1 or b > 2;
+
+----
+Filter
+├── filters: [or(=(t_where_optimizer.a (#0), 1), >(t_where_optimizer.b (#1), 2))]
+└── TableScan
+    ├── table: default.default.t_where_optimizer
+    ├── read rows: 0
+    ├── read bytes: 0
+    ├── partitions total: 0
+    ├── partitions scanned: 0
+    └── push downs: [filters: [((a = 1) or (b > 2))], limit: NONE]
+
+statement query T
+explain select * from t_where_optimizer where a = 1 and b > 2;
+
+----
+TableScan
+├── table: default.default.t_where_optimizer
+├── read rows: 0
+├── read bytes: 0
+├── partitions total: 0
+├── partitions scanned: 0
+└── push downs: [filters: [(a = 1), (b > 2)], limit: NONE]
+
+statement query T
+explain select * from t_where_optimizer where b = 1;
+
+----
+TableScan
+├── table: default.default.t_where_optimizer
+├── read rows: 0
+├── read bytes: 0
+├── partitions total: 0
+├── partitions scanned: 0
+└── push downs: [filters: [(b = 1)], limit: NONE]
+
+statement query T
+explain select a from t_where_optimizer where b = 1;
+
+----
+Project
+├── columns: [a (#0)]
+└── TableScan
+    ├── table: default.default.t_where_optimizer
+    ├── read rows: 0
+    ├── read bytes: 0
+    ├── partitions total: 0
+    ├── partitions scanned: 0
+    └── push downs: [filters: [(b = 1)], limit: NONE]
+
+statement ok
+drop table t_where_optimizer;
+
+statement ok
+create table t_where_optimizer(id int, s tuple(a int, b int));
+
+statement query T
+explain select * from t_where_optimizer where s:a > 0;
+
+----
+Project
+├── columns: [id (#0), s (#1)]
+└── TableScan
+    ├── table: default.default.t_where_optimizer
+    ├── read rows: 0
+    ├── read bytes: 0
+    ├── partitions total: 0
+    ├── partitions scanned: 0
+    └── push downs: [filters: [(s:a > 0)], limit: NONE]
+
+statement ok
+drop table t_where_optimizer;
+

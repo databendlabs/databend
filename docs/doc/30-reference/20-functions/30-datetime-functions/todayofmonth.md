@@ -1,5 +1,5 @@
 ---
-title: to_day_of_month
+title: TO_DAY_OF_MONTH
 ---
 
 Converts a date or date with time to a UInt8 number containing the number of the day of the month (1-31).

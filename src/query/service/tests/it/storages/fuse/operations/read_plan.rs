@@ -131,6 +131,7 @@ fn test_to_partitions() -> Result<()> {
         filters: vec![],
         limit: None,
         order_by: vec![],
+        prewhere: None,
     });
 
     let (stats, parts) = FuseTable::to_partitions(&blocks_metas, &column_leafs, push_down);
@@ -170,6 +171,7 @@ async fn test_fuse_table_exact_statistic() -> Result<()> {
         let push_downs = Extras {
             projection: Some(proj),
             filters: vec![],
+            prewhere: None,
             limit: None,
             order_by: vec![],
         };

@@ -12,7 +12,8 @@ In Databend, you **don't need to specify any of these**, one of Databend's desig
 
 ## Syntax
 
-### Create Table
+### CREATE TABLE
+
 ```sql
 CREATE [TRANSIENT] TABLE [IF NOT EXISTS] [db.]table_name
 (
@@ -69,6 +70,7 @@ AS SELECT query
 ```
 
 ### CREATE TRANSIENT TABLE ...
+
 Creates a transient table. 
 
 Transient tables are used to hold transitory data that does not require a data protection or recovery mechanism. Dataebend does not hold historical data for a transient table so you will not be able to query from a previous version of the transient table with the Time Travel feature, for example, the [AT](./../../20-query-syntax/dml-at.md) clause in the SELECT statement will not work for transient tables. Please note that you can still [drop](./20-ddl-drop-table.md) and [undrop](./21-ddl-undrop-table.md) a transient table.
@@ -78,6 +80,32 @@ Transient tables help save your storage expenses because they do not need extra 
 Syntax:
 ```sql
 CREATE TRANSIENT TABLE ...
+```
+
+### CREATE TABLE ... SNAPSHOT_LOCATION
+
+Creates a table and inserts data from a snapshot file. 
+
+Databend automatically creates snapshots when data updates occur, so a snapshot can be considered as a view of your data at a time point in the past. Databend may store many snapshots of a table (depending on the number of update operations you performed) for the Time Travel feature that allows you to query, back up, and restore from a previous version of your data within the retention period (24 hours by default).
+
+This command enables you to insert the data stored in a snapshot file when you create a table. Please note that the table you create must have same column definations as the data from the snapshot.
+
+Syntax:
+```sql
+CREATE TABLE [IF NOT EXISTS] [db.]table_name
+(
+    <column_name> <data_type> [ NOT NULL | NULL] [ { DEFAULT <expr> }],
+    <column_name> <data_type> [ NOT NULL | NULL] [ { DEFAULT <expr> }],
+    ...
+)
+SNAPSHOT_LOCATION = '<SNAPSHOT_FILENAME>';
+```
+
+To obtain the snapshot information (including the snapshot locations) of a table, execute the following command:
+
+```sql
+SELECT * 
+FROM   Fuse_snapshot('<database_name>', '<table_name>'); 
 ```
 
 ## Column Nullable
@@ -265,4 +293,53 @@ select count(*) from fuse_snapshot('default', 'mytemp');
 | count() |
 +---------+
 |       1 | 
+```
+
+### Create Table ... Snapshot_Location ...
+
+```sql
+CREATE TABLE members 
+  ( 
+     name VARCHAR 
+  ); 
+
+INSERT INTO members 
+VALUES     ('Amy'); 
+
+SELECT snapshot_id, 
+       timestamp, 
+       snapshot_location 
+FROM   fuse_snapshot('default', 'members'); 
++-----------------------------------+----------------------------+------------------------------------------------------------+
+| snapshot_id                       | timestamp                  | snapshot_location                                          |
++-----------------------------------+----------------------------+------------------------------------------------------------+
+|  b5931727ee404869ab99b25bf9e672a9 | 2022-08-29 17:53:54.243561 | 418920/604411/_ss/b5931727ee404869ab99b25bf9e672a9_v1.json |
++-----------------------------------+----------------------------+------------------------------------------------------------+
+
+INSERT INTO members 
+VALUES     ('Bob'); 
+
+SELECT snapshot_id, 
+       timestamp, 
+       snapshot_location 
+FROM   fuse_snapshot('default', 'members'); 
++----------------------------------+----------------------------+------------------------------------------------------------+
+| snapshot_id                      | timestamp                  | snapshot_location                                          |
+|----------------------------------|----------------------------|------------------------------------------------------------|
+| b5931727ee404869ab99b25bf9e672a9 | 2022-08-29 17:53:54.243561 | 418920/604411/_ss/b5931727ee404869ab99b25bf9e672a9_v1.json |
+| 12637e70dd1c4abbab15470fa0a6d69b | 2022-08-29 18:04:18.973272 | 418920/604411/_ss/12637e70dd1c4abbab15470fa0a6d69b_v1.json |
++----------------------------------+----------------------------+------------------------------------------------------------+
+
+-- Create a new table with a snapshot (ID: b5931727ee404869ab99b25bf9e672a9)
+CREATE TABLE members_previous 
+  ( 
+     name VARCHAR 
+  )
+snapshot_location='418920/604411/_ss/b5931727ee404869ab99b25bf9e672a9_v1.json';
+
+-- The created table contains "Amy" that is stored in the snapshot
+SELECT * 
+FROM   members_previous; 
+---
+Amy
 ```

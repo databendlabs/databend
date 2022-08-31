@@ -24,6 +24,8 @@
 #![feature(option_get_or_insert_default)]
 #![feature(result_option_inspect)]
 
+extern crate core;
+
 pub mod api;
 pub mod auth;
 pub mod catalogs;

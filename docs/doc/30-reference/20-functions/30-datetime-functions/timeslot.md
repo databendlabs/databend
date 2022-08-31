@@ -1,5 +1,5 @@
 ---
-title: time_slot
+title: TIME_SLOT
 ---
 
 Rounds the time to the half hour.

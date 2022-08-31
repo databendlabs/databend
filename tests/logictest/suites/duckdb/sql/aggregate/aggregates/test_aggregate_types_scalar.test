@@ -1,0 +1,126 @@
+statement ok
+drop table if exists test_val;
+
+statement query IIIIII
+SELECT COUNT(), COUNT(1), COUNT(*), COUNT(NULL), COUNT('hello'), COUNT('1992-02-02'::DATE);
+
+----
+1 1 1 0 1 1
+
+statement error 1065
+SELECT COUNT(1, 2);
+
+statement query ITF
+SELECT SUM(1), SUM(NULL), SUM(33.3);
+
+----
+1 NULL 33.3
+
+statement query I
+SELECT SUM(True);
+
+----
+1
+
+statement error 1065
+SELECT SUM('hello');
+
+statement error 1065
+SELECT SUM('1992-02-02'::DATE);
+
+statement error 1065
+SELECT SUM();
+
+statement error 1065
+SELECT SUM(1, 2);
+
+statement query ITFTITT
+SELECT MIN(1), MIN(NULL), MIN(33.3), MIN('hello'), MIN(True), MIN('1992-02-02'::DATE), MIN('2008-01-01 00:00:01'::TIMESTAMP);
+
+----
+1 NULL 33.3 hello 1 1992-02-02 2008-01-01 00:00:01.000000
+
+statement error 1065
+SELECT MIN();
+
+statement error 1065
+SELECT MIN(1, 2);
+
+statement query ITFTITT
+SELECT MAX(1), MAX(NULL), MAX(33.3), MAX('hello'), MAX(True), MAX('1992-02-02'::DATE), MAX('2008-01-01 00:00:01'::TIMESTAMP);
+
+----
+1 NULL 33.3 hello 1 1992-02-02 2008-01-01 00:00:01.000000
+
+statement error 1065
+SELECT MAX();
+
+statement error 1065
+SELECT MAX(1, 2);
+
+statement error 1065
+SELECT FIRST(1), FIRST(NULL), FIRST(33.3), FIRST('hello'), FIRST(True), FIRST('1992-02-02'::DATE), FIRST('2008-01-01 00:00:01'::TIMESTAMP);
+
+statement error 1065
+SELECT FIRST();
+
+statement error 1065
+SELECT FIRST(1, 2);
+
+statement error 1005
+SELECT LAST(1), LAST(NULL), LAST(33.3), LAST('hello'), LAST(True), LAST(DATE '1992-02-02'), LAST(TIMESTAMP '2008-01-01 00:00:01');
+
+statement error 1065
+SELECT LAST();
+
+statement error 1065
+SELECT LAST(1, 2);
+
+statement query FTF
+SELECT AVG(1), AVG(NULL), AVG(33.3);
+
+----
+1.0 NULL 33.3
+
+statement query F
+SELECT AVG(True);
+
+----
+1.0
+
+statement error 1065
+SELECT AVG('hello');
+
+statement error 1005
+SELECT AVG(DATE '1992-02-02');
+
+statement error 1065
+SELECT AVG();
+
+statement error 1065
+SELECT AVG(1, 2);
+
+statement error 1065
+SELECT STRING_AGG('hello');
+
+statement error 1065
+SELECT STRING_AGG('hello', ' '), STRING_AGG('hello', NULL), STRING_AGG(NULL, ' '), STRING_AGG(NULL, NULL), STRING_AGG('', '');
+
+statement error 1065
+SELECT STRING_AGG();
+
+statement error 1065
+SELECT STRING_AGG(1, 2, 3);
+
+statement ok
+CREATE TABLE test_val(val INT);
+
+statement ok
+INSERT INTO test_val VALUES(1), (2), (3), (3), (2);
+
+statement error 1005
+SELECT STRING_AGG(DISTINCT val ORDER BY val DESC) from test_val;
+
+statement error 1005
+SELECT COUNT(NULL), STRING_AGG(DISTINCT val ORDER BY val ASC) from test_val;
+

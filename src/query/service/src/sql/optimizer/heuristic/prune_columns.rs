@@ -90,6 +90,7 @@ impl ColumnPruner {
                     limit: p.limit,
                     order_by: p.order_by.clone(),
                     statistics: p.statistics,
+                    prewhere: p.prewhere.clone(),
                 })))
             }
             RelOperator::LogicalInnerJoin(p) => {

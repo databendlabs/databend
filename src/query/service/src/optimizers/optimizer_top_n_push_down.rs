@@ -110,6 +110,7 @@ impl PlanRewriter for TopNPushDownImpl {
                     Some(Extras {
                         projection: extras.projection.clone(),
                         filters: extras.filters.clone(),
+                        prewhere: extras.prewhere.clone(),
                         limit: Some(new_limit),
                         order_by: self.get_sort_columns(plan.schema())?,
                     })

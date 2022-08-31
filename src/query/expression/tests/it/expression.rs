@@ -25,7 +25,7 @@ use common_expression::types::ArrayType;
 use common_expression::types::DataType;
 use common_expression::types::*;
 use common_expression::vectorize_2_arg;
-use common_expression::vectorize_with_writer_2_arg;
+use common_expression::vectorize_with_builder_2_arg;
 use common_expression::BooleanDomain;
 use common_expression::Chunk;
 use common_expression::Column;
@@ -692,7 +692,7 @@ fn builtin_functions() -> FunctionRegistry {
         "get",
         FunctionProperty::default(),
         |_, _| None,
-        vectorize_with_writer_2_arg::<ArrayType<GenericType<0>>, NumberType<i16>, GenericType<0>>(
+        vectorize_with_builder_2_arg::<ArrayType<GenericType<0>>, NumberType<i16>, GenericType<0>>(
             |array, idx, output| {
             let item = array
                 .index(idx as usize)

@@ -1,0 +1,26 @@
+
+statement query F
+select '1e308'::float;
+
+----
+inf
+
+statement query F
+select '1e310'::double;
+
+----
+inf
+
+-- TODO issue https://github.com/datafuselabs/databend/issues/7295
+-- statement query F
+-- select '-1e308'::float;
+
+-- ----
+-- -inf
+
+-- statement query F
+-- select '-1e310'::double;
+
+-- ----
+-- -inf
+

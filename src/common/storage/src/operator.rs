@@ -30,6 +30,7 @@ use opendal::services::fs;
 use opendal::services::gcs;
 use opendal::services::http;
 use opendal::services::memory;
+use opendal::services::obs;
 use opendal::services::s3;
 use opendal::Operator;
 
@@ -39,6 +40,7 @@ use super::StorageParams;
 use super::StorageS3Config;
 use crate::config::StorageGcsConfig;
 use crate::config::StorageHttpConfig;
+use crate::config::StorageObsConfig;
 use crate::StorageConfig;
 
 /// init_operator will init an opendal operator based on storage config.
@@ -51,6 +53,7 @@ pub fn init_operator(cfg: &StorageParams) -> Result<Operator> {
         StorageParams::Hdfs(cfg) => init_hdfs_operator(cfg)?,
         StorageParams::Http(cfg) => init_http_operator(cfg)?,
         StorageParams::Memory => init_memory_operator()?,
+        StorageParams::Obs(cfg) => init_obs_operator(cfg)?,
         StorageParams::S3(cfg) => init_s3_operator(cfg)?,
     })
 }
@@ -166,6 +169,22 @@ pub fn init_s3_operator(cfg: &StorageS3Config) -> Result<Operator> {
     if cfg.enable_virtual_host_style {
         builder.enable_virtual_host_style();
     }
+
+    Ok(Operator::new(builder.build()?))
+}
+
+/// init_obs_operator will init a opendal obs operator with input obs config.
+pub fn init_obs_operator(cfg: &StorageObsConfig) -> Result<Operator> {
+    let mut builder = obs::Builder::default();
+    // Endpoint
+    builder.endpoint(&cfg.endpoint_url);
+    // Bucket
+    builder.bucket(&cfg.bucket);
+    // Root
+    builder.root(&cfg.root);
+    // Credential
+    builder.access_key_id(&cfg.access_key_id);
+    builder.secret_access_key(&cfg.secret_access_key);
 
     Ok(Operator::new(builder.build()?))
 }

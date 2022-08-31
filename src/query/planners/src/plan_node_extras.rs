@@ -16,6 +16,8 @@ use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 
+use common_datavalues::DataSchema;
+
 use crate::Expression;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq)]
@@ -42,6 +44,14 @@ impl Projection {
             Projection::InnerColumns(path_indices) => path_indices.is_empty(),
         }
     }
+
+    /// Use this projection to project a schema.
+    pub fn project_schema(&self, schema: &DataSchema) -> DataSchema {
+        match self {
+            Projection::Columns(indices) => schema.project(indices),
+            Projection::InnerColumns(path_indices) => schema.inner_project(path_indices),
+        }
+    }
 }
 
 impl Debug for Projection {
@@ -56,6 +66,16 @@ impl Debug for Projection {
     }
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub struct PrewhereInfo {
+    /// column indices of the table used for prewhere
+    pub need_columns: Projection,
+    /// remain_columns = scan.columns - need_columns
+    pub remain_columns: Projection,
+    /// filter for prewhere
+    pub filter: Expression,
+}
+
 /// Extras is a wrapper for push down items.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Default)]
 pub struct Extras {
@@ -64,6 +84,9 @@ pub struct Extras {
     /// Optional filter expression plan
     /// split_conjunctions by `and` operator
     pub filters: Vec<Expression>,
+    /// Optional prewhere information
+    /// used for prewhere optimization
+    pub prewhere: Option<PrewhereInfo>,
     /// Optional limit to skip read
     pub limit: Option<usize>,
     /// Optional order_by expression plan
@@ -75,6 +98,7 @@ impl Extras {
         Extras {
             projection: None,
             filters: vec![],
+            prewhere: None,
             limit: None,
             order_by: vec![],
         }

@@ -336,32 +336,6 @@ pub trait Visitor<'ast>: Sized {
         walk_expr(self, date);
     }
 
-    fn visit_nullif(
-        &mut self,
-        _span: &'ast [Token<'ast>],
-        expr1: &'ast Expr<'ast>,
-        expr2: &'ast Expr<'ast>,
-    ) {
-        walk_expr(self, expr1);
-        walk_expr(self, expr2);
-    }
-
-    fn visit_coalesce(&mut self, _span: &'ast [Token<'ast>], exprs: &'ast [Expr<'ast>]) {
-        for expr in exprs {
-            walk_expr(self, expr);
-        }
-    }
-
-    fn visit_ifnull(
-        &mut self,
-        _span: &'ast [Token<'ast>],
-        expr1: &'ast Expr<'ast>,
-        expr2: &'ast Expr<'ast>,
-    ) {
-        walk_expr(self, expr1);
-        walk_expr(self, expr2);
-    }
-
     fn visit_statement(&mut self, statement: &'ast Statement<'ast>) {
         walk_statement(self, statement);
     }

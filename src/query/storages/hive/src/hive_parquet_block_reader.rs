@@ -19,12 +19,9 @@ use common_arrow::arrow::datatypes::Schema;
 use common_arrow::arrow::io::parquet::read::column_iter_to_arrays;
 use common_arrow::arrow::io::parquet::read::ArrayIter;
 use common_arrow::arrow::io::parquet::read::RowGroupDeserializer;
-use common_arrow::arrow::io::parquet::write::to_parquet_schema;
 use common_arrow::parquet::metadata::ColumnChunkMetaData;
-use common_arrow::parquet::metadata::ColumnDescriptor;
 use common_arrow::parquet::metadata::FileMetaData;
 use common_arrow::parquet::metadata::RowGroupMetaData;
-use common_arrow::parquet::metadata::SchemaDescriptor;
 use common_arrow::parquet::read::BasicDecompressor;
 use common_arrow::parquet::read::PageReader;
 use common_base::base::tokio::sync::Semaphore;
@@ -51,7 +48,6 @@ pub struct HiveParquetBlockReader {
     projection: Vec<usize>,
     arrow_schema: Arc<Schema>,
     projected_schema: DataSchemaRef,
-    parquet_schema_descriptor: SchemaDescriptor,
     hive_partition_filler: Option<HivePartitionFiller>,
 }
 
@@ -65,13 +61,11 @@ impl HiveParquetBlockReader {
         let projected_schema = DataSchemaRef::new(schema.project(&projection));
 
         let arrow_schema = schema.to_arrow();
-        let parquet_schema_descriptor = to_parquet_schema(&arrow_schema)?;
 
         Ok(Arc::new(HiveParquetBlockReader {
             operator,
             projection,
             projected_schema,
-            parquet_schema_descriptor,
             arrow_schema: Arc::new(arrow_schema),
             hive_partition_filler,
         }))
@@ -81,9 +75,9 @@ impl HiveParquetBlockReader {
         column_meta: &ColumnChunkMetaData,
         chunk: Vec<u8>,
         rows: usize,
-        column_descriptor: &ColumnDescriptor,
         field: Field,
     ) -> Result<ArrayIter<'static>> {
+        let primitive_type = column_meta.descriptor().descriptor.primitive_type.clone();
         let pages = PageReader::new(
             std::io::Cursor::new(chunk),
             column_meta,
@@ -91,11 +85,10 @@ impl HiveParquetBlockReader {
             vec![],
         );
 
-        let primitive_type = &column_descriptor.descriptor.primitive_type;
         let decompressor = BasicDecompressor::new(pages, vec![]);
         Ok(column_iter_to_arrays(
             vec![decompressor],
-            vec![primitive_type],
+            vec![&primitive_type],
             field,
             Some(rows),
         )?)
@@ -218,14 +211,12 @@ impl HiveParquetBlockReader {
         for (index, column_chunk) in chunks.into_iter().enumerate() {
             let idx = self.projection[index];
             let field = self.arrow_schema.fields[idx].clone();
-            let column_descriptor = &self.parquet_schema_descriptor.columns()[idx];
             let column_meta = Self::get_parquet_column_metadata(row_group, &field.name)?;
 
             columns_array_iter.push(Self::to_deserialize(
                 column_meta,
                 column_chunk,
                 row_group.num_rows(),
-                column_descriptor,
                 field,
             )?);
         }

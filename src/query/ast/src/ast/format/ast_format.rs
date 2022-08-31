@@ -662,52 +662,6 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_nullif(
-        &mut self,
-        _span: &'ast [Token<'ast>],
-        expr1: &'ast Expr<'ast>,
-        expr2: &'ast Expr<'ast>,
-    ) {
-        self.visit_expr(expr1);
-        let expr_child1 = self.children.pop().unwrap();
-        self.visit_expr(expr2);
-        let expr_child2 = self.children.pop().unwrap();
-
-        let name = "Function NullIf".to_string();
-        let format_ctx = AstFormatContext::with_children(name, 2);
-        let node = FormatTreeNode::with_children(format_ctx, vec![expr_child1, expr_child2]);
-        self.children.push(node);
-    }
-
-    fn visit_coalesce(&mut self, _span: &'ast [Token<'ast>], exprs: &'ast [Expr<'ast>]) {
-        let mut children = Vec::with_capacity(exprs.len());
-        for expr in exprs.iter() {
-            self.visit_expr(expr);
-            children.push(self.children.pop().unwrap());
-        }
-        let name = "Function Coalesce".to_string();
-        let format_ctx = AstFormatContext::with_children(name, children.len());
-        let node = FormatTreeNode::with_children(format_ctx, children);
-        self.children.push(node);
-    }
-
-    fn visit_ifnull(
-        &mut self,
-        _span: &'ast [Token<'ast>],
-        expr1: &'ast Expr<'ast>,
-        expr2: &'ast Expr<'ast>,
-    ) {
-        self.visit_expr(expr1);
-        let expr_child1 = self.children.pop().unwrap();
-        self.visit_expr(expr2);
-        let expr_child2 = self.children.pop().unwrap();
-
-        let name = "Function IfNull".to_string();
-        let format_ctx = AstFormatContext::with_children(name, 2);
-        let node = FormatTreeNode::with_children(format_ctx, vec![expr_child1, expr_child2]);
-        self.children.push(node);
-    }
-
     fn visit_query(&mut self, query: &'ast Query<'ast>) {
         let mut children = Vec::new();
         if let Some(with) = &query.with {
