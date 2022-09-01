@@ -20,7 +20,6 @@ mod hive_catalog;
 mod hive_database;
 mod hive_file_splitter;
 mod hive_parquet_block_reader;
-// pub mod hive_parquet_block_reader_back;
 mod hive_partition;
 mod hive_partition_filler;
 mod hive_partition_pruner;

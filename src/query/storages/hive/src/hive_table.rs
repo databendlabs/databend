@@ -54,8 +54,6 @@ use crate::hive_table_source::HiveTableSource;
 use crate::HiveFileSplitter;
 use crate::CATALOG_HIVE;
 
-/// ! Dummy implementation for HIVE TABLE
-
 pub const HIVE_TABLE_ENGIE: &str = "hive";
 
 pub struct HiveTable {
@@ -288,11 +286,6 @@ impl HiveTable {
         let partitions = splitter.get_splits(all_files);
 
         tracing::info!("read partition, elapsed:{:?}", start.elapsed());
-
-        // let partitions = all_files
-        // .into_iter()
-        // .map(|(filename, partition)| HivePartInfo::create(filename, partition, 0..2))
-        // .collect();
 
         Ok((Default::default(), partitions))
     }
