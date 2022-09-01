@@ -48,3 +48,5 @@ pub type BloomIndexCache = BytesCache;
 /// FileMetaCache of bloom filter index data.
 /// Each cache item per block
 pub type BloomIndexMetaCache = ItemCache<FileMetaData>;
+
+pub type FileMetaDataCache = ItemCache<FileMetaData>;

@@ -22,25 +22,34 @@ use common_arrow::arrow::trusted_len::TrustedLen;
 use enum_as_inner::EnumAsInner;
 use itertools::Itertools;
 use ordered_float::OrderedFloat;
+use serde::de::Visitor;
 use serde::Deserialize;
+use serde::Deserializer;
 use serde::Serialize;
+use serde::Serializer;
 
-use crate::property::BooleanDomain;
 use crate::property::Domain;
-use crate::property::NullableDomain;
-use crate::property::StringDomain;
 use crate::types::array::ArrayColumn;
 use crate::types::array::ArrayColumnBuilder;
+use crate::types::boolean::BooleanDomain;
 use crate::types::nullable::NullableColumn;
 use crate::types::nullable::NullableColumnBuilder;
+use crate::types::nullable::NullableDomain;
+use crate::types::number::NumberDomain;
 use crate::types::string::StringColumn;
 use crate::types::string::StringColumnBuilder;
+use crate::types::string::StringDomain;
+use crate::types::timestamp::Timestamp;
+use crate::types::timestamp::TimestampColumn;
+use crate::types::timestamp::TimestampColumnBuilder;
+use crate::types::timestamp::TimestampDomain;
 use crate::types::*;
 use crate::util::append_bitmap;
 use crate::util::bitmap_into_mut;
 use crate::util::buffer_into_mut;
 use crate::util::constant_bitmap;
-use crate::NumberDomain;
+use crate::util::deserialize_arrow_array;
+use crate::util::serialize_arrow_array;
 
 #[derive(Debug, Clone, EnumAsInner)]
 pub enum Value<T: ValueType> {
@@ -69,9 +78,9 @@ pub enum Scalar {
     UInt64(u64),
     Float32(f32),
     Float64(f64),
+    Timestamp(Timestamp),
     Boolean(bool),
     String(Vec<u8>),
-    #[serde(skip)]
     Array(Column),
     Tuple(Vec<Scalar>),
 }
@@ -93,6 +102,7 @@ pub enum ScalarRef<'a> {
     Float64(f64),
     Boolean(bool),
     String(&'a [u8]),
+    Timestamp(Timestamp),
     Array(Column),
     Tuple(Vec<ScalarRef<'a>>),
 }
@@ -113,6 +123,7 @@ pub enum Column {
     Float64(Buffer<f64>),
     Boolean(Bitmap),
     String(StringColumn),
+    Timestamp(TimestampColumn),
     Array(Box<ArrayColumn<AnyType>>),
     Nullable(Box<NullableColumn<AnyType>>),
     Tuple { fields: Vec<Column>, len: usize },
@@ -138,6 +149,7 @@ pub enum ColumnBuilder {
     Float64(Vec<f64>),
     Boolean(MutableBitmap),
     String(StringColumnBuilder),
+    Timestamp(TimestampColumnBuilder),
     Array(Box<ArrayColumnBuilder<AnyType>>),
     Nullable(Box<NullableColumnBuilder<AnyType>>),
     Tuple {
@@ -232,6 +244,7 @@ impl Scalar {
             Scalar::Float64(i) => ScalarRef::Float64(*i),
             Scalar::Boolean(b) => ScalarRef::Boolean(*b),
             Scalar::String(s) => ScalarRef::String(s.as_slice()),
+            Scalar::Timestamp(t) => ScalarRef::Timestamp(*t),
             Scalar::Array(col) => ScalarRef::Array(col.clone()),
             Scalar::Tuple(fields) => ScalarRef::Tuple(fields.iter().map(Scalar::as_ref).collect()),
         }
@@ -255,6 +268,7 @@ impl<'a> ScalarRef<'a> {
             ScalarRef::Float64(i) => Scalar::Float64(*i),
             ScalarRef::Boolean(b) => Scalar::Boolean(*b),
             ScalarRef::String(s) => Scalar::String(s.to_vec()),
+            ScalarRef::Timestamp(t) => Scalar::Timestamp(*t),
             ScalarRef::Array(col) => Scalar::Array(col.clone()),
             ScalarRef::Tuple(fields) => {
                 Scalar::Tuple(fields.iter().map(ScalarRef::to_owned).collect())
@@ -278,6 +292,9 @@ impl<'a> ScalarRef<'a> {
             ScalarRef::Float64(i) => ColumnBuilder::Float64(vec![*i; n]),
             ScalarRef::Boolean(b) => ColumnBuilder::Boolean(constant_bitmap(*b, n)),
             ScalarRef::String(s) => ColumnBuilder::String(StringColumnBuilder::repeat(s, n)),
+            ScalarRef::Timestamp(t) => {
+                ColumnBuilder::Timestamp(TimestampColumnBuilder::repeat(*t, n))
+            }
             ScalarRef::Array(col) => {
                 ColumnBuilder::Array(Box::new(ArrayColumnBuilder::repeat(col, n)))
             }
@@ -317,6 +334,11 @@ impl<'a> ScalarRef<'a> {
                 min: s.to_vec(),
                 max: Some(s.to_vec()),
             }),
+            ScalarRef::Timestamp(t) => Domain::Timestamp(TimestampDomain {
+                min: t.ts,
+                max: t.ts,
+                precision: t.precision,
+            }),
             ScalarRef::Array(array) => Domain::Array(Some(Box::new(array.domain()))),
             ScalarRef::Tuple(fields) => {
                 Domain::Tuple(fields.iter().map(|field| field.domain()).collect())
@@ -342,6 +364,7 @@ impl Column {
             Column::Float64(col) => col.len(),
             Column::Boolean(col) => col.len(),
             Column::String(col) => col.len(),
+            Column::Timestamp(col) => col.len(),
             Column::Array(col) => col.len(),
             Column::Nullable(col) => col.len(),
             Column::Tuple { len, .. } => *len,
@@ -364,6 +387,7 @@ impl Column {
             Column::Float64(col) => Some(ScalarRef::Float64(col.get(index).cloned()?)),
             Column::Boolean(col) => Some(ScalarRef::Boolean(col.get(index)?)),
             Column::String(col) => Some(ScalarRef::String(col.index(index)?)),
+            Column::Timestamp(col) => Some(ScalarRef::Timestamp(col.index(index)?)),
             Column::Array(col) => Some(ScalarRef::Array(col.index(index)?)),
             Column::Nullable(col) => Some(col.index(index)?.unwrap_or(ScalarRef::Null)),
             Column::Tuple { fields, .. } => Some(ScalarRef::Tuple(
@@ -393,6 +417,7 @@ impl Column {
             Column::Float64(col) => ScalarRef::Float64(*col.get_unchecked(index)),
             Column::Boolean(col) => ScalarRef::Boolean(col.get_bit_unchecked(index)),
             Column::String(col) => ScalarRef::String(col.index_unchecked(index)),
+            Column::Timestamp(col) => ScalarRef::Timestamp(col.index_unchecked(index)),
             Column::Array(col) => ScalarRef::Array(col.index_unchecked(index)),
             Column::Nullable(col) => col.index_unchecked(index).unwrap_or(ScalarRef::Null),
             Column::Tuple { fields, .. } => ScalarRef::Tuple(
@@ -452,6 +477,7 @@ impl Column {
                 Column::Boolean(col.clone().slice(range.start, range.end - range.start))
             }
             Column::String(col) => Column::String(col.slice(range)),
+            Column::Timestamp(col) => Column::Timestamp(col.slice(range)),
             Column::Array(col) => Column::Array(Box::new(col.slice(range))),
             Column::Nullable(col) => Column::Nullable(Box::new(col.slice(range))),
             Column::Tuple { fields, .. } => Column::Tuple {
@@ -573,6 +599,14 @@ impl Column {
                     max: Some(max.to_vec()),
                 })
             }
+            Column::Timestamp(col) => {
+                let (min, max) = col.ts.iter().minmax().into_option().unwrap();
+                Domain::Timestamp(TimestampDomain {
+                    min: *min,
+                    max: *max,
+                    precision: col.precision,
+                })
+            }
             Column::Array(col) => {
                 let inner_domain = col.values.domain();
                 Domain::Array(Some(Box::new(inner_domain)))
@@ -614,6 +648,11 @@ impl Column {
             Column::Float64(_) => ArrowDataType::Float64,
             Column::Boolean(_) => ArrowDataType::Boolean,
             Column::String { .. } => ArrowDataType::LargeBinary,
+            Column::Timestamp(TimestampColumn { precision, .. }) => ArrowDataType::Extension(
+                "Timestamp".to_owned(),
+                Box::new(ArrowDataType::Int64),
+                Some(precision.to_string()),
+            ),
             Column::Array(box ArrayColumn {
                 values: Column::Nullable(box NullableColumn { column, .. }),
                 ..
@@ -734,6 +773,13 @@ impl Column {
                     None,
                 ))
             }
+            Column::Timestamp(col) => Box::new(
+                common_arrow::arrow::array::PrimitiveArray::<i64>::from_data(
+                    self.arrow_type(),
+                    col.ts.clone(),
+                    None,
+                ),
+            ),
             Column::Array(col) => {
                 Box::new(common_arrow::arrow::array::ListArray::<i64>::from_data(
                     self.arrow_type(),
@@ -922,6 +968,16 @@ impl Column {
                     offsets: offsets.into(),
                 })
             }
+            ArrowDataType::Extension(name, _, Some(precision)) if name == "Timestamp" => {
+                let ts = arrow_col
+                    .as_any()
+                    .downcast_ref::<common_arrow::arrow::array::Int64Array>()
+                    .expect("fail to read from arrow: array should be `Int64Array`")
+                    .values()
+                    .clone();
+                let precision = precision.parse().unwrap();
+                Column::Timestamp(TimestampColumn { ts, precision })
+            }
             ArrowDataType::LargeList(_) => {
                 let values_col = arrow_col
                     .as_any()
@@ -982,10 +1038,42 @@ impl Column {
             Column::Float64(_) => self.len() * 8,
             Column::Boolean(c) => c.as_slice().0.len(),
             Column::String(col) => col.data.len() + col.offsets.len() * 8,
+            Column::Timestamp(col) => col.len() * 8,
             Column::Array(col) => col.values.memory_size() + col.offsets.len() * 8,
             Column::Nullable(c) => c.column.memory_size() + c.validity.as_slice().0.len(),
             Column::Tuple { fields, .. } => fields.iter().map(|f| f.memory_size()).sum(),
         }
+    }
+}
+
+impl Serialize for Column {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where S: Serializer {
+        serializer.serialize_bytes(&serialize_arrow_array(self.as_arrow()))
+    }
+}
+
+impl<'de> Deserialize<'de> for Column {
+    fn deserialize<D>(deserializer: D) -> Result<Column, D::Error>
+    where D: Deserializer<'de> {
+        struct ColumnVisitor;
+
+        impl<'de> Visitor<'de> for ColumnVisitor {
+            type Value = Column;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("an arrow chunk with exactly one column")
+            }
+
+            fn visit_bytes<E>(self, value: &[u8]) -> Result<Self::Value, E>
+            where E: serde::de::Error {
+                let array = deserialize_arrow_array(value)
+                    .expect("expecting an arrow chunk with exactly one column");
+                Ok(Column::from_arrow(&*array))
+            }
+        }
+
+        deserializer.deserialize_bytes(ColumnVisitor)
     }
 }
 
@@ -1006,6 +1094,9 @@ impl ColumnBuilder {
             Column::Float64(col) => ColumnBuilder::Float64(buffer_into_mut(col)),
             Column::Boolean(col) => ColumnBuilder::Boolean(bitmap_into_mut(col)),
             Column::String(col) => ColumnBuilder::String(StringColumnBuilder::from_column(col)),
+            Column::Timestamp(col) => {
+                ColumnBuilder::Timestamp(TimestampColumnBuilder::from_column(col))
+            }
             Column::Array(box col) => {
                 ColumnBuilder::Array(Box::new(ArrayColumnBuilder::from_column(col)))
             }
@@ -1038,6 +1129,7 @@ impl ColumnBuilder {
             ColumnBuilder::Float64(builder) => builder.len(),
             ColumnBuilder::Boolean(builder) => builder.len(),
             ColumnBuilder::String(builder) => builder.len(),
+            ColumnBuilder::Timestamp(builder) => builder.len(),
             ColumnBuilder::Array(builder) => builder.len(),
             ColumnBuilder::Nullable(builder) => builder.len(),
             ColumnBuilder::Tuple { len, .. } => *len,
@@ -1048,20 +1140,23 @@ impl ColumnBuilder {
         match ty {
             DataType::Null => ColumnBuilder::Null { len: 0 },
             DataType::EmptyArray => ColumnBuilder::EmptyArray { len: 0 },
-            DataType::Boolean => ColumnBuilder::Boolean(MutableBitmap::with_capacity(capacity)),
-            DataType::String => {
-                ColumnBuilder::String(StringColumnBuilder::with_capacity(capacity, 0))
-            }
+            DataType::Int8 => ColumnBuilder::Int8(Vec::with_capacity(capacity)),
+            DataType::Int16 => ColumnBuilder::Int16(Vec::with_capacity(capacity)),
+            DataType::Int32 => ColumnBuilder::Int32(Vec::with_capacity(capacity)),
+            DataType::Int64 => ColumnBuilder::Int64(Vec::with_capacity(capacity)),
             DataType::UInt8 => ColumnBuilder::UInt8(Vec::with_capacity(capacity)),
             DataType::UInt16 => ColumnBuilder::UInt16(Vec::with_capacity(capacity)),
             DataType::UInt32 => ColumnBuilder::UInt32(Vec::with_capacity(capacity)),
             DataType::UInt64 => ColumnBuilder::UInt64(Vec::with_capacity(capacity)),
             DataType::Float32 => ColumnBuilder::Float32(Vec::with_capacity(capacity)),
             DataType::Float64 => ColumnBuilder::Float64(Vec::with_capacity(capacity)),
-            DataType::Int8 => ColumnBuilder::Int8(Vec::with_capacity(capacity)),
-            DataType::Int16 => ColumnBuilder::Int16(Vec::with_capacity(capacity)),
-            DataType::Int32 => ColumnBuilder::Int32(Vec::with_capacity(capacity)),
-            DataType::Int64 => ColumnBuilder::Int64(Vec::with_capacity(capacity)),
+            DataType::Boolean => ColumnBuilder::Boolean(MutableBitmap::with_capacity(capacity)),
+            DataType::String => {
+                ColumnBuilder::String(StringColumnBuilder::with_capacity(capacity, 0))
+            }
+            DataType::Timestamp => {
+                ColumnBuilder::Timestamp(TimestampColumnBuilder::with_capacity(capacity))
+            }
             DataType::Nullable(ty) => ColumnBuilder::Nullable(Box::new(NullableColumnBuilder {
                 builder: Self::with_capacity(ty, capacity),
                 validity: MutableBitmap::with_capacity(capacity),
@@ -1113,6 +1208,9 @@ impl ColumnBuilder {
                 builder.put_slice(value);
                 builder.commit_row();
             }
+            (ColumnBuilder::Timestamp(builder), ScalarRef::Timestamp(value)) => {
+                builder.push(value);
+            }
             (ColumnBuilder::Array(builder), ScalarRef::Array(value)) => {
                 builder.push(value);
             }
@@ -1149,6 +1247,7 @@ impl ColumnBuilder {
             ColumnBuilder::Float64(builder) => builder.push(0f64),
             ColumnBuilder::Boolean(builder) => builder.push(false),
             ColumnBuilder::String(builder) => builder.commit_row(),
+            ColumnBuilder::Timestamp(builder) => builder.push_default(),
             ColumnBuilder::Array(builder) => builder.push_default(),
             ColumnBuilder::Nullable(builder) => builder.push_null(),
             ColumnBuilder::Tuple { fields, len } => {
@@ -1225,6 +1324,7 @@ impl ColumnBuilder {
             ColumnBuilder::Float64(builder) => Column::Float64(builder.into()),
             ColumnBuilder::Boolean(builder) => Column::Boolean(builder.into()),
             ColumnBuilder::String(builder) => Column::String(builder.build()),
+            ColumnBuilder::Timestamp(builder) => Column::Timestamp(builder.build()),
             ColumnBuilder::Array(builder) => Column::Array(Box::new(builder.build())),
             ColumnBuilder::Nullable(builder) => Column::Nullable(Box::new(builder.build())),
             ColumnBuilder::Tuple { fields, len } => Column::Tuple {
@@ -1251,6 +1351,7 @@ impl ColumnBuilder {
             ColumnBuilder::Float64(builder) => Scalar::Float64(builder[0]),
             ColumnBuilder::Boolean(builder) => Scalar::Boolean(builder.get(0)),
             ColumnBuilder::String(builder) => Scalar::String(builder.build_scalar()),
+            ColumnBuilder::Timestamp(builder) => Scalar::Timestamp(builder.build_scalar()),
             ColumnBuilder::Array(builder) => Scalar::Array(builder.build_scalar()),
             ColumnBuilder::Nullable(builder) => builder.build_scalar().unwrap_or(Scalar::Null),
             ColumnBuilder::Tuple { fields, .. } => Scalar::Tuple(

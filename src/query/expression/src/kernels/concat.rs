@@ -18,6 +18,7 @@ use common_exception::Result;
 use crate::types::array::ArrayColumnBuilder;
 use crate::types::nullable::NullableColumn;
 use crate::types::string::StringColumnBuilder;
+use crate::types::timestamp::TimestampColumnBuilder;
 use crate::types::AnyType;
 use crate::types::ArgType;
 use crate::types::ArrayType;
@@ -27,6 +28,7 @@ use crate::types::NullType;
 use crate::types::NullableType;
 use crate::types::NumberType;
 use crate::types::StringType;
+use crate::types::TimestampType;
 use crate::types::ValueType;
 use crate::with_number_mapped_type;
 use crate::Chunk;
@@ -89,6 +91,10 @@ impl Column {
                 let data_capacity = columns.iter().map(|c| c.memory_size() - c.len() * 8).sum();
                 let builder = StringColumnBuilder::with_capacity(capacity, data_capacity);
                 Self::concat_value_types::<StringType>(builder, columns)
+            }
+            Column::Timestamp(_) => {
+                let builder = TimestampColumnBuilder::with_capacity(capacity);
+                Self::concat_value_types::<TimestampType>(builder, columns)
             }
             Column::Array(col) => {
                 let mut builder = ArrayColumnBuilder::<AnyType>::from_column(col.slice(0..0));

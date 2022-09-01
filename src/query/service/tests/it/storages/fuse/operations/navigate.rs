@@ -21,6 +21,7 @@ use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::TruncateTablePlan;
+use common_storages_fuse::io::SnapshotHistoryReader;
 use databend_query::pipelines::Pipeline;
 use databend_query::storages::fuse::io::MetaReaders;
 use databend_query::storages::fuse::io::TableMetaLocationGenerator;

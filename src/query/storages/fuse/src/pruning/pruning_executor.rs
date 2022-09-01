@@ -128,7 +128,10 @@ impl BlockPruner {
                         if range_filter_pruner.should_keep(&block_meta.col_stats) {
                             // prune block using bloom filter
                             if bloom_filter_pruner
-                                .should_keep(&block_meta.bloom_filter_index_location)
+                                .should_keep(
+                                    &block_meta.bloom_filter_index_location,
+                                    block_meta.bloom_filter_index_size,
+                                )
                                 .await
                             {
                                 if limiter.within_limit(block_meta.row_count) {

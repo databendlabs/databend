@@ -24,8 +24,17 @@ use crate::io::TableSnapshotReader;
 
 pub type TableSnapshotStream =
     Pin<Box<dyn stream::Stream<Item = common_exception::Result<Arc<TableSnapshot>>> + Send>>;
-impl TableSnapshotReader {
-    pub fn snapshot_history(
+
+pub trait SnapshotHistoryReader {
+    fn snapshot_history(
+        self,
+        location: String,
+        format_version: u64,
+        location_gen: TableMetaLocationGenerator,
+    ) -> TableSnapshotStream;
+}
+impl SnapshotHistoryReader for TableSnapshotReader {
+    fn snapshot_history(
         self,
         location: String,
         format_version: u64,

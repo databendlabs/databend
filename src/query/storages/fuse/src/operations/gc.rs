@@ -27,6 +27,7 @@ use opendal::Operator;
 use tracing::warn;
 
 use crate::io::MetaReaders;
+use crate::io::SnapshotHistoryReader;
 use crate::FuseTable;
 
 impl FuseTable {

@@ -19,7 +19,6 @@ use common_arrow::arrow::buffer::Buffer;
 use common_arrow::arrow::trusted_len::TrustedLen;
 
 use crate::property::Domain;
-use crate::property::StringDomain;
 use crate::types::ArgType;
 use crate::types::DataType;
 use crate::types::GenericMap;
@@ -285,4 +284,10 @@ impl StringColumnBuilder {
         assert_eq!(self.offsets.len(), 2);
         self.data[(self.offsets[0] as usize)..(self.offsets[1] as usize)].to_vec()
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StringDomain {
+    pub min: Vec<u8>,
+    pub max: Option<Vec<u8>>,
 }

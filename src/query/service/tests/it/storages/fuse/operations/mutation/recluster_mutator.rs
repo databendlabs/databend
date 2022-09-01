@@ -12,6 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -19,6 +20,7 @@ use common_base::base::tokio;
 use common_catalog::table_mutator::TableMutator;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchema;
+use common_datavalues::DataSchemaRef;
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -34,6 +36,7 @@ use databend_query::storages::fuse::io::BlockCompactor;
 use databend_query::storages::fuse::io::SegmentWriter;
 use databend_query::storages::fuse::io::TableMetaLocationGenerator;
 use databend_query::storages::fuse::operations::ReclusterMutator;
+use databend_query::storages::fuse::pruning::BlockPruner;
 use uuid::Uuid;
 
 use crate::storages::fuse::table_test_fixture::TestFixture;
@@ -107,13 +110,23 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
         test_segment_locations.clone(),
         Some((0, "(id)".to_string())),
     );
+    let base_snapshot = Arc::new(base_snapshot);
+
+    let schema = DataSchemaRef::new(DataSchema::empty());
+    let ctx: Arc<dyn TableContext> = ctx.clone();
+    let block_metas = BlockPruner::new(base_snapshot.clone())
+        .prune(&ctx, schema, &None)
+        .await?;
+    let mut blocks_map = BTreeMap::new();
+    blocks_map.insert(0, block_metas);
 
     let mut mutator = ReclusterMutator::try_create(
         ctx,
         location_generator,
-        Arc::new(base_snapshot),
+        base_snapshot,
         1.0,
         BlockCompactor::default(),
+        blocks_map,
     )?;
 
     let need_recluster = mutator.blocks_select().await?;

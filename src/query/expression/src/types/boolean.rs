@@ -17,7 +17,6 @@ use std::ops::Range;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
 
-use crate::property::BooleanDomain;
 use crate::property::Domain;
 use crate::types::ArgType;
 use crate::types::DataType;
@@ -149,4 +148,10 @@ impl ArgType for BooleanType {
     ) -> Self::Column {
         iter.collect()
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BooleanDomain {
+    pub has_false: bool,
+    pub has_true: bool,
 }

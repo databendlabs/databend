@@ -21,8 +21,8 @@ use serde::Serialize;
 
 use crate::property::Domain;
 use crate::property::FunctionProperty;
-use crate::property::NullableDomain;
 use crate::types::nullable::NullableColumn;
+use crate::types::nullable::NullableDomain;
 use crate::types::*;
 use crate::values::Value;
 use crate::values::ValueRef;

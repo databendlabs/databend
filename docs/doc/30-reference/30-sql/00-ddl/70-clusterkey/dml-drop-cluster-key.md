@@ -12,7 +12,7 @@ See also:
 ## Syntax
 
 ```sql
-ALTER TABLE <name> DROP CLUSTER KEY
+ALTER TABLE [IF EXISTS] <name> DROP CLUSTER KEY
 ```
 
 ## Examples

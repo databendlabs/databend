@@ -14,13 +14,14 @@
 
 use std::sync::Arc;
 
+use common_expression::types::boolean::BooleanDomain;
 use common_expression::types::nullable::NullableColumn;
+use common_expression::types::nullable::NullableDomain;
 use common_expression::types::BooleanType;
 use common_expression::types::DataType;
 use common_expression::types::GenericType;
 use common_expression::types::NullType;
 use common_expression::types::NullableType;
-use common_expression::BooleanDomain;
 use common_expression::Column;
 use common_expression::ColumnBuilder;
 use common_expression::Domain;
@@ -28,16 +29,12 @@ use common_expression::Function;
 use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
 use common_expression::FunctionSignature;
-use common_expression::NullableDomain;
 use common_expression::ScalarRef;
 use common_expression::Value;
 use common_expression::ValueRef;
 
-const MULTI_IF: &str = "multi_if";
-const IS_NOT_NULL: &str = "is_not_null";
-
 pub fn register(registry: &mut FunctionRegistry) {
-    registry.register_function_factory(MULTI_IF, |_, args_type| {
+    registry.register_function_factory("multi_if", |_, args_type| {
         if args_type.len() < 3 || args_type.len() % 2 == 0 {
             return None;
         }
@@ -53,7 +50,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
         Some(Arc::new(Function {
             signature: FunctionSignature {
-                name: MULTI_IF,
+                name: "multi_if",
                 args_type: sig_args_type,
                 return_type: DataType::Generic(0),
                 property: FunctionProperty::default(),
@@ -148,7 +145,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         }))
     });
     registry.register_1_arg_core::<NullType, BooleanType, _, _>(
-        IS_NOT_NULL,
+        "is_not_null",
         FunctionProperty::default(),
         |_| {
             Some(BooleanDomain {
@@ -159,7 +156,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _| Ok(Value::Scalar(false)),
     );
     registry.register_1_arg_core::<NullableType<GenericType<0>>, BooleanType, _, _>(
-        IS_NOT_NULL,
+        "is_not_null",
         FunctionProperty::default(),
         |NullableDomain { has_null, value }| {
             Some(BooleanDomain {

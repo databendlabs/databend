@@ -43,6 +43,7 @@ use super::ToYYYYMMFunction;
 use super::TodayFunction;
 use super::TomorrowFunction;
 use super::YesterdayFunction;
+use crate::scalars::dates::interval_function::AddQuartersFunction;
 use crate::scalars::function_factory::FactoryCreator;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFactory;
@@ -120,6 +121,7 @@ impl DateFunction {
 
         // interval functions
         factory.register("add_years", AddYearsFunction::desc(1));
+        factory.register("add_quarters", AddQuartersFunction::desc(1));
         factory.register("add_months", AddMonthsFunction::desc(1));
         factory.register("add_days", AddDaysFunction::desc(1));
         factory.register("add_hours", AddTimesFunction::desc(3600));
@@ -135,6 +137,10 @@ impl DateFunction {
         factory.register(
             "to_interval_year",
             to_interval_function_creator(IntervalKind::Year),
+        );
+        factory.register(
+            "to_interval_quarter",
+            to_interval_function_creator(IntervalKind::Quarter),
         );
         factory.register(
             "to_interval_month",
