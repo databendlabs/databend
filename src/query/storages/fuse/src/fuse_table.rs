@@ -454,7 +454,8 @@ impl Table for FuseTable {
         ctx: Arc<dyn TableContext>,
         catalog: String,
         pipeline: &mut Pipeline,
+        push_downs: Option<Extras>,
     ) -> Result<Option<Arc<dyn TableMutator>>> {
-        self.do_recluster(ctx, catalog, pipeline).await
+        self.do_recluster(ctx, catalog, pipeline, push_downs).await
     }
 }

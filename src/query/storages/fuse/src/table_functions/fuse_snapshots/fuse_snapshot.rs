@@ -25,6 +25,7 @@ use futures::stream::StreamExt;
 use futures::stream::TryStreamExt;
 
 use crate::io::MetaReaders;
+use crate::io::SnapshotHistoryReader;
 use crate::io::TableMetaLocationGenerator;
 use crate::sessions::TableContext;
 use crate::FuseTable;

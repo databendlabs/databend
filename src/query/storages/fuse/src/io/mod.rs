@@ -23,6 +23,7 @@ pub use read::BlockBloomFilterIndexReader;
 pub use read::BlockReader;
 pub use read::MetaReaders;
 pub use read::SegmentInfoReader;
+pub use read::SnapshotHistoryReader;
 pub use read::TableSnapshotReader;
 pub use write::write_block;
 pub use write::write_data;

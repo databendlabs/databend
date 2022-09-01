@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,23 +17,20 @@ use std::sync::Arc;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct OptimizeTablePlan {
+use crate::Extras;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub struct ReclusterTablePlan {
+    pub tenant: String,
     pub catalog: String,
     pub database: String,
     pub table: String,
-    pub action: OptimizeTableAction,
+    pub is_final: bool,
+    pub push_downs: Option<Extras>,
 }
 
-impl OptimizeTablePlan {
+impl ReclusterTablePlan {
     pub fn schema(&self) -> DataSchemaRef {
         Arc::new(DataSchema::empty())
     }
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Copy, Clone, Debug, PartialEq, Eq)]
-pub enum OptimizeTableAction {
-    All,
-    Purge,
-    Compact,
 }

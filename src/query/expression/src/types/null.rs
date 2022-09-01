@@ -14,8 +14,8 @@
 
 use std::ops::Range;
 
+use super::nullable::NullableDomain;
 use crate::property::Domain;
-use crate::property::NullableDomain;
 use crate::types::ArgType;
 use crate::types::DataType;
 use crate::types::GenericMap;

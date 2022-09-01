@@ -29,7 +29,6 @@ use crate::types::ValueType;
 use crate::util::buffer_into_mut;
 use crate::values::Column;
 use crate::values::Scalar;
-use crate::NumberDomain;
 use crate::ScalarRef;
 
 pub trait Number: Copy + Debug + Clone + PartialEq + 'static {
@@ -178,6 +177,12 @@ impl<Num: Number> ArgType for NumberType<Num> {
     ) -> Self::Column {
         iter.collect()
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NumberDomain<T: Number> {
+    pub min: T::Storage,
+    pub max: T::Storage,
 }
 
 impl Number for u8 {
