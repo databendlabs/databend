@@ -652,6 +652,7 @@ impl SubqueryRewriter {
             | RelOperator::Pattern(_)
             | RelOperator::LogicalGet(_)
             | RelOperator::PhysicalScan(_)
+            | RelOperator::DummyTableScan(_)
             | RelOperator::PhysicalHashJoin(_) => Err(ErrorCode::LogicalError(
                 "Invalid plan type for flattening subquery",
             )),

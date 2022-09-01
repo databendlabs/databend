@@ -80,6 +80,7 @@ impl LogicalOperator for Limit {
                 Some(limit) if (limit as f64) < input_prop.cardinality => limit as f64,
                 _ => input_prop.cardinality,
             },
+            precise_cardinality: None,
         })
     }
 }

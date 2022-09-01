@@ -95,6 +95,9 @@ impl LogicalOperator for Filter {
             output_columns,
             outer_columns,
             cardinality,
+            // TODO(leiysky): if the predicate is always true, then we can pass through
+            // precise cardinality
+            precise_cardinality: None,
         })
     }
 }

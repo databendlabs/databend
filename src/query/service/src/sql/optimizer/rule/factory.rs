@@ -15,6 +15,7 @@
 use common_exception::Result;
 
 use super::rewrite::RuleEliminateEvalScalar;
+use super::rewrite::RuleFoldCountAggregate;
 use super::rewrite::RuleNormalizeDisjunctiveFilter;
 use super::rewrite::RuleNormalizeScalarFilter;
 use super::rewrite::RulePushDownFilterEvalScalar;
@@ -66,6 +67,7 @@ impl RuleFactory {
             RuleID::MergeFilter => Ok(Box::new(RuleMergeFilter::new())),
             RuleID::NormalizeScalarFilter => Ok(Box::new(RuleNormalizeScalarFilter::new())),
             RuleID::SplitAggregate => Ok(Box::new(RuleSplitAggregate::new())),
+            RuleID::FoldCountAggregate => Ok(Box::new(RuleFoldCountAggregate::new())),
             RuleID::NormalizeDisjunctiveFilter => {
                 Ok(Box::new(RuleNormalizeDisjunctiveFilter::new()))
             }

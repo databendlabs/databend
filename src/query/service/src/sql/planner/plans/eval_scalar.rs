@@ -100,11 +100,13 @@ impl LogicalOperator for EvalScalar {
 
         // Derive cardinality
         let cardinality = input_prop.cardinality;
+        let precise_cardinality = input_prop.precise_cardinality;
 
         Ok(RelationalProperty {
             output_columns,
             outer_columns,
             cardinality,
+            precise_cardinality,
         })
     }
 }
