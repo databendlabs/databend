@@ -105,3 +105,47 @@ SELECT * FROM aggregate_table ORDER BY b;
 |    9 |
 +------+
 ```
+
+## Insert with `DEFAULT` to fill default value
+
+### Syntax
+
+```sql
+INSERT INTO [db.]table [(c1, c2, c3)] VALUES (v1|DEFAULT, v2|DEFAULT, v2|DEFAULT) ...
+```
+
+### Examples
+
+```sql
+create table t_insert_default(a int null, b int default 2, c float, d varchar default 'd');
+
+insert into t_insert_default values (default, default, default, default), (1, default, 1.0, default), (3, 3, 3.0, default), (4, 4, 4.0, 'a');
+
+select * from t_insert_default;
++------+------+------+------+
+| a    | b    | c    | d    |
++------+------+------+------+
+| NULL |    2 |  0.0 | d    |
+|    1 |    2 |  1.0 | d    |
+|    3 |    3 |  3.0 | d    |
+|    4 |    4 |  4.0 | a    |
++------+------+------+------+
+
+-- if values' len doesn't match the schema, it will fill the default value for the rest columns
+
+insert into t_insert_default values (default), (default, default), (default, default, default), (default, default, default, default);
+
+select * from t_insert_default;
++------+------+------+------+
+| a    | b    | c    | d    |
++------+------+------+------+
+| NULL |    2 |  0.0 | d    |
+|    1 |    2 |  1.0 | d    |
+|    3 |    3 |  3.0 | d    |
+|    4 |    4 |  4.0 | a    |
+| NULL |    2 |  0.0 | d    |
+| NULL |    2 |  0.0 | d    |
+| NULL |    2 |  0.0 | d    |
+| NULL |    2 |  0.0 | d    |
++------+------+------+------+
+```

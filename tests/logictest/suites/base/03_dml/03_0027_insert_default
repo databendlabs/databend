@@ -1,0 +1,56 @@
+statement ok
+drop table if exists t_insert_default;
+
+statement ok 
+create table t_insert_default(a int null, b int default 2, c float, d varchar default 'd');
+
+statement ok
+insert into t_insert_default values (default, default, default, default), (1, default, 1.0, default), (3, 3, 3.0, default), (4, 4, 4.0, 'a');
+
+statement query TIFS
+select * from t_insert_default;
+
+----
+NULL 2 0.0 d
+1 2 1.0 d
+3 3 3.0 d
+4 4 4.0 a
+
+statement ok 
+drop table t_insert_default;
+
+statement ok 
+create table t_insert_default(a int null, b int default 2, c float, d varchar default 'd');
+
+statement ok
+insert into t_insert_default(a, c) values (default, default), (1, 1.0);
+
+statement query TIFS
+select * from t_insert_default;
+
+----
+NULL 2 0.0 d
+1 2 1.0 d
+
+statement ok 
+drop table t_insert_default;
+
+statement ok 
+create table t_insert_default(a int null, b int default 2, c float, d varchar default 'd');
+
+statement ok 
+insert into t_insert_default values (default), (default, default), (default, default, default), (1), (2, 3), (3, 4, 5.0);
+
+statement query TIFS
+select * from t_insert_default;
+
+----
+NULL 2 0.0 d
+NULL 2 0.0 d
+NULL 2 0.0 d
+1 2 0.0 d
+2 3 0.0 d
+3 4 5.0 d
+
+statement ok
+drop table t_insert_default;
