@@ -50,7 +50,7 @@ async fn test_scalar_evaluator() -> Result<()> {
                                     column_name: "".to_string(),
                                     index: 0,
                                     data_type: Box::new(Int32Type::new_impl()),
-                                    visible_in_select_list: false,
+                                    visible_in_unqualified_wildcard: false,
                                 },
                             }
                             .into(),
@@ -61,7 +61,7 @@ async fn test_scalar_evaluator() -> Result<()> {
                                     column_name: "".to_string(),
                                     index: 1,
                                     data_type: Box::new(Int32Type::new_impl()),
-                                    visible_in_select_list: false,
+                                    visible_in_unqualified_wildcard: false,
                                 },
                             }
                             .into(),

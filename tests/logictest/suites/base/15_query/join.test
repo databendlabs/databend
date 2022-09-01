@@ -36,6 +36,13 @@ select t1.a from t1 join t2 using(a) order by t1.a, t2.a;
 3
 5
 
+statement query II
+select t1.a, t2.a from t1 join t2 using(a) order by t1.a, t2.a;
+
+----
+3 3
+5 5
+
 statement query I
 select a from t1 join t2 using(a) order by t1.a, t2.a;
 

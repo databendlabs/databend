@@ -88,7 +88,7 @@ fn test_format() {
                                 column_name: "col1".to_string(),
                                 index: col1,
                                 data_type: Box::new(BooleanType::new_impl()),
-                                visible_in_select_list: false,
+                                visible_in_unqualified_wildcard: false,
                             },
                         }
                         .into(),
@@ -110,7 +110,7 @@ fn test_format() {
                         column_name: "col2".to_string(),
                         index: col2,
                         data_type: Box::new(BooleanType::new_impl()),
-                        visible_in_select_list: false,
+                        visible_in_unqualified_wildcard: false,
                     },
                 }
                 .into(),
