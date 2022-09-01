@@ -14,29 +14,17 @@
 
 use std::cmp::Ordering;
 use std::io::Write;
-use std::ops::BitAnd;
-use std::sync::Arc;
 
 use bstr::ByteSlice;
-use common_arrow::arrow::bitmap::MutableBitmap;
-use common_expression::types::nullable::NullableColumn;
 use common_expression::types::number::NumberDomain;
 use common_expression::types::string::StringColumn;
 use common_expression::types::string::StringColumnBuilder;
-use common_expression::types::DataType;
 use common_expression::types::GenericMap;
-use common_expression::types::NullableType;
 use common_expression::types::NumberType;
 use common_expression::types::StringType;
-use common_expression::types::ValueType;
-use common_expression::util::constant_bitmap;
 use common_expression::vectorize_with_builder_1_arg;
-use common_expression::Column;
-use common_expression::Function;
 use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
-use common_expression::FunctionSignature;
-use common_expression::Scalar;
 use common_expression::Value;
 use common_expression::ValueRef;
 use itertools::izip;
@@ -224,175 +212,6 @@ pub fn register(registry: &mut FunctionRegistry) {
             }
         },
     );
-
-    registry.register_function_factory("insert", |_, args_type| {
-        if args_type.len() != 4 {
-            return None;
-        }
-        Some(Arc::new(Function {
-            signature: FunctionSignature {
-                name: "insert",
-                args_type: vec![
-                    DataType::String,
-                    DataType::Int64,
-                    DataType::Int64,
-                    DataType::String,
-                ],
-                return_type: DataType::String,
-                property: FunctionProperty::default(),
-            },
-            calc_domain: Box::new(|_, _| None),
-            eval: Box::new(|args, _generics| {
-                let len = args.iter().find_map(|arg| match arg {
-                    ValueRef::Column(col) => Some(col.len()),
-                    _ => None,
-                });
-                let arg1 = args[0].try_downcast::<StringType>().unwrap();
-                let arg2 = args[1].try_downcast::<NumberType<i64>>().unwrap();
-                let arg3 = args[2].try_downcast::<NumberType<i64>>().unwrap();
-                let arg4 = args[3].try_downcast::<StringType>().unwrap();
-                let size = len.unwrap_or(1);
-                let mut builder = StringColumnBuilder::with_capacity(size, 0);
-                for idx in 0..size {
-                    let mut values: Vec<u8> = vec![];
-                    let srcstr = unsafe { arg1.index_unchecked(idx) };
-                    let pos = unsafe { arg2.index_unchecked(idx) };
-                    let len = unsafe { arg3.index_unchecked(idx) };
-                    let substr = unsafe { arg4.index_unchecked(idx) };
-                    let sl = srcstr.len() as i64;
-                    if pos < 1 || pos > sl {
-                        values.extend_from_slice(srcstr);
-                    } else {
-                        let p = pos as usize - 1;
-                        values.extend_from_slice(&srcstr[0..p]);
-                        values.extend_from_slice(substr);
-                        if len >= 0 && pos + len < sl {
-                            let l = len as usize;
-                            values.extend_from_slice(&srcstr[p + l..]);
-                        }
-                    }
-                    builder.put_slice(&values);
-                    builder.commit_row();
-                }
-                match len {
-                    Some(_) => Ok(Value::Column(Column::String(builder.build()))),
-                    _ => Ok(Value::Scalar(Scalar::String(builder.build_scalar()))),
-                }
-            }),
-        }))
-    });
-
-    // nullable insert
-    registry.register_function_factory("insert", |_, args_type| {
-        if args_type.len() != 4 {
-            return None;
-        }
-        Some(Arc::new(Function {
-            signature: FunctionSignature {
-                name: "insert",
-                args_type: vec![
-                    DataType::Nullable(Box::new(DataType::String)),
-                    DataType::Nullable(Box::new(DataType::Int64)),
-                    DataType::Nullable(Box::new(DataType::Int64)),
-                    DataType::Nullable(Box::new(DataType::String)),
-                ],
-                return_type: DataType::Nullable(Box::new(DataType::String)),
-                property: FunctionProperty::default(),
-            },
-            calc_domain: Box::new(|_, _| None),
-            eval: Box::new(|args, _generics| {
-                let len = args.iter().find_map(|arg| match arg {
-                    ValueRef::Column(col) => Some(col.len()),
-                    _ => None,
-                });
-
-                type T = NullableType<StringType>;
-                type G = NullableType<NumberType<i64>>;
-                let mut bitmap: Option<MutableBitmap> = None;
-                let mut inner_args: Vec<ValueRef<StringType>> = Vec::with_capacity(2);
-
-                let mut inner_num_args: Vec<ValueRef<NumberType<i64>>> = Vec::with_capacity(2);
-                let mut i = 0;
-                for arg in args {
-                    i += 1;
-                    if i == 1 || i == 4 {
-                        let col = arg.try_downcast::<T>().unwrap();
-                        match col {
-                            ValueRef::Scalar(None) => {
-                                return Ok(Value::Scalar(T::upcast_scalar(None)));
-                            }
-                            ValueRef::Column(c) => {
-                                bitmap = match bitmap {
-                                    Some(m) => Some(m.bitand(&c.validity)),
-                                    None => Some(c.validity.clone().make_mut()),
-                                };
-                                inner_args.push(ValueRef::Column(c.column.clone()));
-                            }
-                            ValueRef::Scalar(Some(s)) => inner_args.push(ValueRef::Scalar(s)),
-                        }
-                    } else {
-                        let col = arg.try_downcast::<G>().unwrap();
-                        match col {
-                            ValueRef::Scalar(None) => {
-                                return Ok(Value::Scalar(T::upcast_scalar(None)));
-                            }
-                            ValueRef::Column(c) => {
-                                bitmap = match bitmap {
-                                    Some(m) => Some(m.bitand(&c.validity)),
-                                    None => Some(c.validity.clone().make_mut()),
-                                };
-                                inner_num_args.push(ValueRef::Column(c.column.clone()));
-                            }
-                            ValueRef::Scalar(Some(s)) => inner_num_args.push(ValueRef::Scalar(s)),
-                        }
-                    }
-                }
-
-                let arg1 = inner_args[0].clone();
-                let arg2 = inner_num_args[0].clone();
-                let arg3 = inner_num_args[1].clone();
-                let arg4 = inner_args[1].clone();
-                let size = len.unwrap_or(1);
-                let mut builder = StringColumnBuilder::with_capacity(size, 0);
-                for idx in 0..size {
-                    let mut values: Vec<u8> = vec![];
-                    let srcstr = unsafe { arg1.index_unchecked(idx) };
-                    let pos = unsafe { arg2.index_unchecked(idx) };
-                    let len = unsafe { arg3.index_unchecked(idx) };
-                    let substr = unsafe { arg4.index_unchecked(idx) };
-                    let sl = srcstr.len() as i64;
-                    if pos < 1 || pos > sl {
-                        values.extend_from_slice(srcstr);
-                    } else {
-                        let p = pos as usize - 1;
-                        values.extend_from_slice(&srcstr[0..p]);
-                        values.extend_from_slice(substr);
-                        if len >= 0 && pos + len < sl {
-                            let l = len as usize;
-                            values.extend_from_slice(&srcstr[p + l..]);
-                        }
-                    }
-                    builder.put_slice(&values);
-                    builder.commit_row();
-                }
-                match len {
-                    Some(len) => {
-                        let n = NullableColumn::<StringType> {
-                            column: builder.build(),
-                            validity: bitmap
-                                .map(|m| m.into())
-                                .unwrap_or_else(|| constant_bitmap(true, len).into()),
-                        };
-                        let c = T::upcast_column(n);
-                        Ok(Value::Column(c))
-                    }
-                    _ => Ok(Value::Scalar(T::upcast_scalar(Some(
-                        builder.build_scalar(),
-                    )))),
-                }
-            }),
-        }))
-    });
 
     let find_at = |str: &[u8], substr: &[u8], pos: u64| {
         let pos = pos as usize;
