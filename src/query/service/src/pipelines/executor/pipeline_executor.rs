@@ -262,7 +262,6 @@ impl PipelineExecutor {
     fn throw_error(self: &Arc<Self>, thread_num: usize, cause: ErrorCode) -> Result<()> {
         // Wake up other threads to finish when throw error
         self.finish()?;
-
         Err(cause.add_message_back(format!(" (while in processor thread {})", thread_num)))
     }
 

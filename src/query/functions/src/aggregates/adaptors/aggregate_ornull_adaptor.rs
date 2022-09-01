@@ -178,8 +178,9 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
 
     #[inline]
     fn deserialize(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
-        self.inner.deserialize(place, reader)?;
-        let flag: u8 = reader.read_scalar()?;
+        self.inner
+            .deserialize(place, &mut &reader[..reader.len() - 1])?;
+        let flag = reader[reader.len() - 1];
         self.set_flag(place, flag);
         Ok(())
     }

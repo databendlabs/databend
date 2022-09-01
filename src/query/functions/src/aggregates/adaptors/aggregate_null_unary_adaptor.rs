@@ -183,11 +183,13 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction for AggregateNullUnaryAdapto
     }
 
     fn deserialize(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
-        self.nested.deserialize(place, reader)?;
-
         if NULLABLE_RESULT {
-            let flag: u8 = reader.read_scalar()?;
+            self.nested
+                .deserialize(place, &mut &reader[..reader.len() - 1])?;
+            let flag = reader[reader.len() - 1];
             self.set_flag(place, flag);
+        } else {
+            self.nested.deserialize(place, reader)?;
         }
 
         Ok(())
