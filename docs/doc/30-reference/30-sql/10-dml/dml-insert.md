@@ -111,7 +111,7 @@ SELECT * FROM aggregate_table ORDER BY b;
 ### Syntax
 
 ```sql
-INSERT INTO [db.]table [(c1, c2, c3)] VALUES (v1|DEFAULT, v2|DEFAULT, v2|DEFAULT) ...
+INSERT INTO [db.]table [(c1, c2, c3)] VALUES (v1|DEFAULT, v2|DEFAULT, v3|DEFAULT) ...
 ```
 
 ### Examples
@@ -129,23 +129,5 @@ select * from t_insert_default;
 |    1 |    2 |  1.0 | d    |
 |    3 |    3 |  3.0 | d    |
 |    4 |    4 |  4.0 | a    |
-+------+------+------+------+
-
--- if values' len doesn't match the schema, it will fill the default value for the rest columns
-
-insert into t_insert_default values (default), (default, default), (default, default, default), (default, default, default, default);
-
-select * from t_insert_default;
-+------+------+------+------+
-| a    | b    | c    | d    |
-+------+------+------+------+
-| NULL |    2 |  0.0 | d    |
-|    1 |    2 |  1.0 | d    |
-|    3 |    3 |  3.0 | d    |
-|    4 |    4 |  4.0 | a    |
-| NULL |    2 |  0.0 | d    |
-| NULL |    2 |  0.0 | d    |
-| NULL |    2 |  0.0 | d    |
-| NULL |    2 |  0.0 | d    |
 +------+------+------+------+
 ```

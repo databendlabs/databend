@@ -482,6 +482,11 @@ async fn exprs_to_datavalue<'a>(
     metadata: MetadataRef,
 ) -> Result<Vec<DataValue>> {
     let schema_fields_len = schema.fields().len();
+    if exprs.len() < schema_fields_len {
+        return Err(ErrorCode::LogicalError(
+            "Column count doesn't match value count",
+        ));
+    }
     let mut expressions = Vec::with_capacity(schema_fields_len);
     for (i, expr) in exprs.iter().enumerate() {
         // `DEFAULT` in insert values will be parsed as `Expr::ColumnRef`.
@@ -512,12 +517,6 @@ async fn exprs_to_datavalue<'a>(
             Evaluator::eval_scalar(&scalar)?,
             schema.field(i).name().to_string(),
         ));
-    }
-    if exprs.len() < schema_fields_len {
-        for idx in exprs.len()..schema_fields_len {
-            let field = schema.field(idx);
-            fill_default_value(&mut expressions, field)?;
-        }
     }
 
     let dummy = DataSchemaRefExt::create(vec![DataField::new("dummy", u8::to_data_type())]);

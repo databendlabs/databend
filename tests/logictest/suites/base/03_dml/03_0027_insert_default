@@ -32,25 +32,23 @@ select * from t_insert_default;
 NULL 2 0.0 d
 1 2 1.0 d
 
-statement ok 
-drop table t_insert_default;
+statement error 1015 
+insert into t_insert_default values (default);
 
-statement ok 
-create table t_insert_default(a int null, b int default 2, c float, d varchar default 'd');
+statement error 1015 
+insert into t_insert_default values (default, default);
 
-statement ok 
-insert into t_insert_default values (default), (default, default), (default, default, default), (1), (2, 3), (3, 4, 5.0);
+statement error 1015 
+insert into t_insert_default values (default, default, default);
 
-statement query TIFS
-select * from t_insert_default;
+statement error 1015 
+insert into t_insert_default values (1); 
 
-----
-NULL 2 0.0 d
-NULL 2 0.0 d
-NULL 2 0.0 d
-1 2 0.0 d
-2 3 0.0 d
-3 4 5.0 d
+statement error 1015 
+insert into t_insert_default values (2, 3);
+
+statement error 1015 
+insert into t_insert_default values (3, 4, 5.0);
 
 statement ok
 drop table t_insert_default;
