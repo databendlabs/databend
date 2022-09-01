@@ -800,7 +800,23 @@ select to_year(to_datetime(1646404329000000)) = 2022;
 ----
 1
 
+statement query T
+select date_add(QUARTER, 1, to_date('2018-01-02'));
 
+----
+2018-04-02
+
+statement query T
+select date_sub(QUARTER, 1, to_date('2018-01-02'));
+
+----
+2017-10-02
+
+statement query T
+select date_trunc(month, to_date('2022-07-07'));
+
+----
+2022-07-01
 
 statement query B
 select EXTRACT(YEAR FROM to_datetime('2022-03-04 22:32:09')) = 2022;
