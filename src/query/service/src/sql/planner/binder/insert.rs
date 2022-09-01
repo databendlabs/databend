@@ -213,12 +213,24 @@ impl<'a> Binder {
                 let input_format =
                     FormatFactory::instance().get_input(name, schema.clone(), settings)?;
 
-                let data_slice = stream_str.as_bytes();
+                let mut data_slice = stream_str.as_bytes();
+
                 let mut input_state = input_format.create_state();
                 let skip_size = input_format.skip_header(data_slice, &mut input_state, 0)?;
+                data_slice = &data_slice[skip_size..];
 
-                let _ = input_format.read_buf(&data_slice[skip_size..], &mut input_state)?;
-                let blocks = input_format.deserialize_data(&mut input_state)?;
+                let mut blocks = Vec::new();
+                while !data_slice.is_empty() {
+                    input_state = input_format.create_state();
+                    let (read_size, _) = input_format.read_buf(data_slice, &mut input_state)?;
+
+                    if read_size <= data_slice.len() {
+                        let blocks_batch = input_format.deserialize_data(&mut input_state)?;
+                        blocks.extend_from_slice(blocks_batch.as_slice());
+                    }
+                    data_slice = &data_slice[read_size..];
+                }
+
                 let block = DataBlock::concat_blocks(&blocks)?;
                 Ok(InsertInputSource::Values(InsertValueBlock { block }))
             }
