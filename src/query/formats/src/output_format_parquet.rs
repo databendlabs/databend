@@ -24,13 +24,15 @@ use crate::output_format::OutputFormat;
 pub struct ParquetOutputFormat {
     schema: DataSchemaRef,
     data_blocks: Vec<DataBlock>,
+    page_size_limit: usize,
 }
 
 impl ParquetOutputFormat {
-    pub fn create(schema: DataSchemaRef, _format_setting: FormatSettings) -> Self {
+    pub fn create(schema: DataSchemaRef, format_setting: FormatSettings) -> Self {
         Self {
             schema,
             data_blocks: vec![],
+            page_size_limit: format_setting.parquet_output_page_size,
         }
     }
 }
@@ -46,7 +48,7 @@ impl OutputFormat for ParquetOutputFormat {
         let _ = serialize_data_blocks(
             self.data_blocks.clone(),
             &self.schema,
-            1024 * 1024, // TODO
+            self.page_size_limit,
             &mut buf,
         )?;
 

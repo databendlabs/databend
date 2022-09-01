@@ -39,6 +39,8 @@ pub struct FormatSettings {
     pub tsv_null_bytes: Vec<u8>,
     pub json_quote_denormals: bool,
     pub json_escape_forward_slashes: bool,
+    /// parquet page size limit (in bytes, before compressed)
+    pub parquet_output_page_size: usize,
 
     pub input_buffer_size: usize,
     pub decompress_buffer_size: usize,
@@ -64,6 +66,7 @@ impl Default for FormatSettings {
             tsv_null_bytes: vec![b'\\', b'N'],
             json_quote_denormals: false,
             json_escape_forward_slashes: true,
+            parquet_output_page_size: 1024 * 1024,
             input_buffer_size: 1024 * 1024,
             decompress_buffer_size: 1024 * 1024,
             ident_case_sensitive: false,

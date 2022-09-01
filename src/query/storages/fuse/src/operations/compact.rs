@@ -100,7 +100,7 @@ impl FuseTable {
         })?;
 
         let mut sink_pipeline_builder = SinkPipeBuilder::create();
-        let chunk_size = self.get_chunk_size();
+        let page_size_limit = self.get_page_size_limit();
         for _ in 0..pipeline.output_len() {
             let input_port = InputPort::create();
             sink_pipeline_builder.add_sink(
@@ -112,7 +112,7 @@ impl FuseTable {
                     mutator.get_storage_operator(),
                     self.meta_location_generator().clone(),
                     ClusterStatsGenerator::default(),
-                    chunk_size,
+                    page_size_limit,
                 )?,
             );
         }

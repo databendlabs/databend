@@ -16,7 +16,7 @@ pub const FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD: &str = "block_size_threshold
 pub const FUSE_OPT_KEY_BLOCK_PER_SEGMENT: &str = "block_per_segment";
 pub const FUSE_OPT_KEY_ROW_PER_BLOCK: &str = "row_per_block";
 pub const FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD: &str = "row_avg_depth_threshold";
-pub const FUSE_OPT_KEY_CHUNK_SIZE: &str = "row_per_chunk";
+pub const FUSE_OPT_KEY_PAGE_SIZE_LIMIT: &str = "page_size_limit";
 
 pub const FUSE_TBL_BLOCK_PREFIX: &str = "_b";
 pub const FUSE_TBL_BLOCK_INDEX_PREFIX: &str = "_i";
@@ -26,5 +26,5 @@ pub const FUSE_TBL_SNAPSHOT_PREFIX: &str = "_ss";
 pub const DEFAULT_BLOCK_PER_SEGMENT: usize = 1000;
 pub const DEFAULT_BLOCK_SIZE_IN_MEM_SIZE_THRESHOLD: usize = 100 * 1024 * 1024;
 pub const DEFAULT_ROW_PER_BLOCK: usize = 1000 * 1000;
-pub const DEFAULT_CHUNK_SIZE: usize = 10000;
+pub const DEFAULT_PAGE_SIZE_LIMIT: usize = 10000;
 pub const DEFAULT_AVG_DEPTH_THRESHOLD: f64 = 0.01;

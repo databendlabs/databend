@@ -25,7 +25,6 @@ use common_arrow::arrow::io::parquet::write::to_parquet_schema;
 use common_arrow::parquet::compression::Compression as ParquetCompression;
 use common_arrow::parquet::metadata::ColumnDescriptor;
 use common_arrow::parquet::metadata::SchemaDescriptor;
-// use common_arrow::parquet::read::BasicDecompressor;
 use common_arrow::parquet::read::Decompressor;
 use common_arrow::parquet::read::PageMetaData;
 use common_arrow::parquet::read::PageReader;
@@ -112,7 +111,6 @@ impl BlockReader {
                     Arc::new(|_, _| true),
                     vec![],
                 );
-                // BasicDecompressor::new(pages, vec![])
                 Decompressor::new(pages, vec![])
             })
             .collect::<Vec<_>>();

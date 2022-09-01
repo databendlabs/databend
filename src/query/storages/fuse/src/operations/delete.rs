@@ -72,13 +72,13 @@ impl FuseTable {
         plan: &DeletePlan,
     ) -> Result<()> {
         let cluster_stats_gen = self.cluster_stats_gen(ctx.clone())?;
-        let chunk_size = self.get_chunk_size();
+        let page_size_limit = self.get_page_size_limit();
         let mut deletion_collector = DeletionMutator::try_create(
             ctx.clone(),
             self.meta_location_generator.clone(),
             snapshot.clone(),
             cluster_stats_gen,
-            chunk_size,
+            page_size_limit,
         )?;
         let schema = self.table_info.schema();
         // TODO refine pruner

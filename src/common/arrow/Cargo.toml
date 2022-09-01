@@ -40,7 +40,6 @@ arrow = { package = "arrow2", git = "https://github.com/datafuse-extras/arrow2",
     "io_parquet_compression",
 ], rev = "ada1bf9" }
 
-
 # Crates.io dependencies
 arrow-format = { version = "0.7.0", features = ["flight-data", "flight-service", "ipc"] }
 futures = "0.3.21"

@@ -75,7 +75,7 @@ pub struct FuseTableSink {
     meta_locations: TableMetaLocationGenerator,
     accumulator: StatisticsAccumulator,
     cluster_stats_gen: ClusterStatsGenerator,
-    chunk_size: usize,
+    page_size_limit: usize,
 }
 
 impl FuseTableSink {
@@ -86,7 +86,7 @@ impl FuseTableSink {
         data_accessor: Operator,
         meta_locations: TableMetaLocationGenerator,
         cluster_stats_gen: ClusterStatsGenerator,
-        chunk_size: usize,
+        page_size_limit: usize,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(FuseTableSink {
             ctx,
@@ -97,7 +97,7 @@ impl FuseTableSink {
             accumulator: Default::default(),
             num_block_threshold: num_block_threshold as u64,
             cluster_stats_gen,
-            chunk_size,
+            page_size_limit,
         })))
     }
 }
@@ -181,7 +181,7 @@ impl Processor for FuseTableSink {
                 let mut data = Vec::with_capacity(100 * 1024 * 1024);
                 let schema = block.schema().clone();
                 let (size, meta_data) =
-                    serialize_data_blocks(vec![block], &schema, self.chunk_size, &mut data)?;
+                    serialize_data_blocks(vec![block], &schema, self.page_size_limit, &mut data)?;
 
                 self.state = State::Serialized {
                     data,
