@@ -400,5 +400,6 @@ pub fn walk_statement_mut<'a, V: VisitorMut>(visitor: &mut V, statement: &mut St
             visitor.visit_show_object_grant_privileges(stmt)
         }
         Statement::ShowGrantsOfShare(stmt) => visitor.visit_show_grants_of_share(stmt),
+        Statement::CreateTabularFunction(stmt) => visitor.visit_create_tabular_function(stmt),
     }
 }

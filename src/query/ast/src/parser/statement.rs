@@ -878,6 +878,41 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         |(_, _)| Statement::ShowShares(ShowSharesStmt {}),
     );
 
+    let create_tabular_function = map(
+        rule! {
+            CREATE ~ FUNCTION ~ ( IF ~ NOT ~ EXISTS )?
+            ~ #peroid_separated_idents_1_to_3
+            ~ "(" ~ #comma_separated_list0(expr) ~ ")"
+            ~ RETURNS ~ TABLE
+            ~ #create_table_source?
+            ~ AS ~ #query
+        },
+        |(
+            _,
+            _,
+            opt_if_not_exists,
+            (catalog, database, func),
+            _,
+            args,
+            _,
+            _,
+            _,
+            source,
+            _,
+            as_query,
+        )| {
+            Statement::CreateTabularFunction(CreateTabularFunctionStmt {
+                if_not_exists: opt_if_not_exists.is_some(),
+                catalog,
+                database,
+                name: func,
+                args,
+                source,
+                as_query: Box::new(as_query),
+            })
+        },
+    );
+
     let statement_body = alt((
         rule!(
             #map(query, |query| Statement::Query(Box::new(query)))
@@ -972,6 +1007,9 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             | #alter_share_tenants: "`ALTER SHARE [IF EXISTS] <share_name> { ADD | REMOVE } TENANTS = tenant [, tenant, ...]`"
             | #desc_share: "`{DESC | DESCRIBE} SHARE <share_name>`"
             | #show_shares: "`SHOW SHARES`"
+        ),
+        rule!(
+           #create_tabular_function: "`CREATE FUNCTION [IF NOT EXISTS] <name> (<parameter>, ...) RETURNS TABLE [(<column>, ...)] AS SELECT ...`"
         ),
     ));
 

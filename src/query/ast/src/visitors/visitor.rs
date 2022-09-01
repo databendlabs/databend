@@ -504,6 +504,8 @@ pub trait Visitor<'ast>: Sized {
 
     fn visit_show_grants_of_share(&mut self, _stmt: &'ast ShowGrantsOfShareStmt) {}
 
+    fn visit_create_tabular_function(&mut self, _stmt: &'ast CreateTabularFunctionStmt) {}
+
     fn visit_with(&mut self, with: &'ast With<'ast>) {
         let With { ctes, .. } = with;
         for cte in ctes.iter() {

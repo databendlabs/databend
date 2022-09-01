@@ -739,6 +739,8 @@ pub enum TokenKind {
     FIRST,
     #[token("LAST", ignore(ascii_case))]
     LAST,
+    #[token("RETURNS", ignore(ascii_case))]
+    RETURNS,
 }
 
 // Reference: https://www.postgresql.org/docs/current/sql-keywords-appendix.html
@@ -796,6 +798,7 @@ impl TokenKind {
                 | PGSquareRoot
                 | PGCubeRoot
                 | EOI
+                | RETURNS
         )
     }
 
@@ -937,6 +940,7 @@ impl TokenKind {
             | TokenKind::DATE_ADD
             | TokenKind::DATE_SUB
             | TokenKind::DATE_TRUNC
+            | TokenKind::RETURNS
             if !after_as => true,
             _ => false
         }
@@ -1048,6 +1052,7 @@ impl TokenKind {
             | TokenKind::WHERE
             // | TokenKind::WINDOW
             | TokenKind::WITH
+            | TokenKind::RETURNS
             if !after_as => true,
             _ => false
         }

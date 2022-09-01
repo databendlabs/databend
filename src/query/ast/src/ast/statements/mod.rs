@@ -24,6 +24,7 @@ mod show;
 mod stage;
 mod statement;
 mod table;
+mod tabular_function;
 mod user;
 mod view;
 
@@ -39,5 +40,6 @@ pub use show::*;
 pub use stage::*;
 pub use statement::*;
 pub use table::*;
+pub use tabular_function::*;
 pub use user::*;
 pub use view::*;

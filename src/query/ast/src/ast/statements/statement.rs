@@ -19,6 +19,7 @@ use common_meta_types::PrincipalIdentity;
 use common_meta_types::UserIdentity;
 
 use super::*;
+use crate::ast::statements::tabular_function::CreateTabularFunctionStmt;
 use crate::ast::write_comma_separated_list;
 use crate::ast::Expr;
 use crate::ast::Identifier;
@@ -169,6 +170,8 @@ pub enum Statement<'a> {
     ShowShares(ShowSharesStmt),
     ShowObjectGrantPrivileges(ShowObjectGrantPrivilegesStmt),
     ShowGrantsOfShare(ShowGrantsOfShareStmt),
+
+    CreateTabularFunction(CreateTabularFunctionStmt<'a>),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -382,6 +385,7 @@ impl<'a> Display for Statement<'a> {
             Statement::ShowShares(stmt) => write!(f, "{stmt}")?,
             Statement::ShowObjectGrantPrivileges(stmt) => write!(f, "{stmt}")?,
             Statement::ShowGrantsOfShare(stmt) => write!(f, "{stmt}")?,
+            Statement::CreateTabularFunction(stmt) => write!(f, "{stmt}")?,
         }
         Ok(())
     }
