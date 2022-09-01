@@ -20,7 +20,6 @@ use bytes::BytesMut;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_io::prelude::BinaryRead;
 use common_io::prelude::BinaryWriteBuf;
 
 use crate::aggregates::AggregateFunction;
