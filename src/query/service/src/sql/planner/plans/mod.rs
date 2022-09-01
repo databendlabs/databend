@@ -15,6 +15,7 @@
 mod aggregate;
 mod copy_v2;
 pub mod create_table_v2;
+mod dummy_table_scan;
 mod eval_scalar;
 mod exchange;
 mod filter;
@@ -71,6 +72,7 @@ use common_planners::GrantRolePlan;
 use common_planners::KillPlan;
 use common_planners::ListPlan;
 use common_planners::OptimizeTablePlan;
+use common_planners::ReclusterTablePlan;
 use common_planners::RemoveUserStagePlan;
 use common_planners::RenameDatabasePlan;
 use common_planners::RenameTablePlan;
@@ -87,6 +89,7 @@ use common_planners::UseDatabasePlan;
 pub use copy_v2::CopyPlanV2;
 pub use copy_v2::ValidationMode;
 pub use create_table_v2::CreateTablePlanV2;
+pub use dummy_table_scan::DummyTableScan;
 pub use eval_scalar::EvalScalar;
 pub use eval_scalar::ScalarItem;
 pub use exchange::Exchange;
@@ -154,6 +157,7 @@ pub enum Plan {
     RenameTable(Box<RenameTablePlan>),
     AlterTableClusterKey(Box<AlterTableClusterKeyPlan>),
     DropTableClusterKey(Box<DropTableClusterKeyPlan>),
+    ReclusterTable(Box<ReclusterTablePlan>),
     TruncateTable(Box<TruncateTablePlan>),
     OptimizeTable(Box<OptimizeTablePlan>),
     ExistsTable(Box<ExistsTablePlan>),
@@ -250,6 +254,7 @@ impl Display for Plan {
             Plan::RenameTable(_) => write!(f, "RenameTable"),
             Plan::AlterTableClusterKey(_) => write!(f, "AlterTableClusterKey"),
             Plan::DropTableClusterKey(_) => write!(f, "DropTableClusterKey"),
+            Plan::ReclusterTable(_) => write!(f, "ReclusterTable"),
             Plan::TruncateTable(_) => write!(f, "TruncateTable"),
             Plan::OptimizeTable(_) => write!(f, "OptimizeTable"),
             Plan::ExistsTable(_) => write!(f, "ExistsTable"),
@@ -320,6 +325,7 @@ impl Plan {
             Plan::RenameTable(plan) => plan.schema(),
             Plan::AlterTableClusterKey(plan) => plan.schema(),
             Plan::DropTableClusterKey(plan) => plan.schema(),
+            Plan::ReclusterTable(plan) => plan.schema(),
             Plan::TruncateTable(plan) => plan.schema(),
             Plan::OptimizeTable(plan) => plan.schema(),
             Plan::ExistsTable(plan) => plan.schema(),

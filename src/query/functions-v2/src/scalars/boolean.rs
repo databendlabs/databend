@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_expression::types::boolean::BooleanDomain;
 use common_expression::types::BooleanType;
-use common_expression::BooleanDomain;
 use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
 

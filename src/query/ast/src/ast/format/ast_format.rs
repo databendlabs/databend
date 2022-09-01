@@ -1255,7 +1255,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
     }
 
     fn visit_alter_table(&mut self, stmt: &'ast AlterTableStmt<'ast>) {
-        self.visit_table_ref(&stmt.catalog, &stmt.database, &stmt.table);
+        self.visit_table_reference(&stmt.table_reference);
         let table_child = self.children.pop().unwrap();
 
         let action_child = match &stmt.action {
@@ -1279,6 +1279,17 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                 let action_name = "Action DropClusterKey".to_string();
                 let action_format_ctx = AstFormatContext::new(action_name);
                 FormatTreeNode::new(action_format_ctx)
+            }
+            AlterTableAction::ReclusterTable { selection, .. } => {
+                let mut children = Vec::new();
+                if let Some(selection) = selection {
+                    self.visit_expr(selection);
+                    children.push(self.children.pop().unwrap());
+                }
+                let action_name = "Action Recluster".to_string();
+                let action_format_ctx =
+                    AstFormatContext::with_children(action_name, children.len());
+                FormatTreeNode::with_children(action_format_ctx, children)
             }
         };
 

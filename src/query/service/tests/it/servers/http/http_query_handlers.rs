@@ -197,7 +197,7 @@ async fn test_return_when_finish(v2: u64) -> Result<()> {
         assert_eq!(result.state, state, "{}", msg());
         // should not wait until wait_time_secs even if there is no more data
         assert!(
-            duration < 1.0,
+            duration < 5.0,
             "duration {} is too large than expect",
             msg()
         );
@@ -647,7 +647,7 @@ async fn test_query_log() -> Result<()> {
             .as_str()
             .unwrap()
             .to_lowercase()
-            .contains("aborted"),
+            .contains("killed"),
         "{:?}",
         result
     );

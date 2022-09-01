@@ -14,10 +14,10 @@
 
 use std::f64::consts::PI;
 
+use common_expression::types::number::NumberDomain;
 use common_expression::types::NumberType;
 use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
-use common_expression::NumberDomain;
 use common_expression::Value;
 
 pub fn register(registry: &mut FunctionRegistry) {

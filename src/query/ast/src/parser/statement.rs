@@ -100,20 +100,6 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         },
     );
 
-    let table_reference_only = map(
-        consumed(rule! {
-            #peroid_separated_idents_1_to_3
-        }),
-        |(input, (catalog, database, table))| TableReference::Table {
-            span: input.0,
-            catalog,
-            database,
-            table,
-            alias: None,
-            travel_point: None,
-        },
-    );
-
     let delete = map(
         rule! {
             DELETE ~ FROM ~ #table_reference_only
@@ -386,14 +372,12 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let alter_table = map(
         rule! {
-            ALTER ~ TABLE ~ ( IF ~ EXISTS )? ~ #peroid_separated_idents_1_to_3 ~ #alter_table_action
+            ALTER ~ TABLE ~ ( IF ~ EXISTS )? ~ #table_reference_only ~ #alter_table_action
         },
-        |(_, _, opt_if_exists, (catalog, database, table), action)| {
+        |(_, _, opt_if_exists, table_reference, action)| {
             Statement::AlterTable(AlterTableStmt {
                 if_exists: opt_if_exists.is_some(),
-                catalog,
-                database,
-                table,
+                table_reference,
                 action,
             })
         },
@@ -911,7 +895,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             | #alter_table : "`ALTER TABLE [<database>.]<table> <action>`"
             | #rename_table : "`RENAME TABLE [<database>.]<table> TO <new_table>`"
             | #truncate_table : "`TRUNCATE TABLE [<database>.]<table> [PURGE]`"
-            | #optimize_table : "`OPTIMIZE TABLE [<database>.]<table> (ALL | PURGE | COMPACT | RECLUSTER)`"
+            | #optimize_table : "`OPTIMIZE TABLE [<database>.]<table> (ALL | PURGE | COMPACT)`"
             | #exists_table : "`EXISTS TABLE [<database>.]<table>`"
         ),
         rule!(
@@ -1305,10 +1289,21 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         |(_, _, _)| AlterTableAction::DropTableClusterKey,
     );
 
+    let recluster_table = map(
+        rule! {
+            RECLUSTER ~ FINAL? ~ ( WHERE ~ ^#expr )?
+        },
+        |(_, opt_is_final, opt_selection)| AlterTableAction::ReclusterTable {
+            is_final: opt_is_final.is_some(),
+            selection: opt_selection.map(|(_, selection)| selection),
+        },
+    );
+
     rule!(
         #rename_table
         | #alter_table_cluster_key
         | #drop_table_cluster_key
+        | #recluster_table
     )(i)
 }
 
@@ -1317,11 +1312,6 @@ pub fn optimize_table_action(i: Input) -> IResult<OptimizeTableAction> {
         value(OptimizeTableAction::All, rule! { ALL }),
         value(OptimizeTableAction::Purge, rule! { PURGE }),
         value(OptimizeTableAction::Compact, rule! { COMPACT }),
-        value(OptimizeTableAction::Recluster, rule! { RECLUSTER }),
-        value(
-            OptimizeTableAction::ReclusterFinal,
-            rule! { RECLUSTER ~ FINAL },
-        ),
     ))(i)
 }
 
@@ -1610,4 +1600,20 @@ pub fn presign_location(i: Input) -> IResult<PresignLocation> {
             }
         }
     })(i)
+}
+
+pub fn table_reference_only(i: Input) -> IResult<TableReference> {
+    map(
+        consumed(rule! {
+            #peroid_separated_idents_1_to_3
+        }),
+        |(input, (catalog, database, table))| TableReference::Table {
+            span: input.0,
+            catalog,
+            database,
+            table,
+            alias: None,
+            travel_point: None,
+        },
+    )(i)
 }

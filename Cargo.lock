@@ -1172,6 +1172,7 @@ dependencies = [
 name = "common-expression"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "chrono-tz",
  "comfy-table",
  "common-arrow",

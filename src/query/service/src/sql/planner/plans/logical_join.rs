@@ -159,6 +159,7 @@ impl LogicalOperator for LogicalInnerJoin {
             output_columns,
             outer_columns,
             cardinality,
+            precise_cardinality: None,
         })
     }
 }

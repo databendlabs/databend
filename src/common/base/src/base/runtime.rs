@@ -12,12 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::backtrace::Backtrace;
 use std::future::Future;
 use std::sync::Arc;
 use std::thread;
+use std::time::Duration;
+use std::time::Instant;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use tokio::runtime::Builder;
 use tokio::runtime::Handle;
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
@@ -80,7 +84,11 @@ pub struct Runtime {
 }
 
 impl Runtime {
-    fn create(tracker: Arc<RuntimeTracker>, builder: &mut tokio::runtime::Builder) -> Result<Self> {
+    fn create(
+        name: Option<String>,
+        tracker: Arc<RuntimeTracker>,
+        builder: &mut Builder,
+    ) -> Result<Self> {
         let runtime = builder
             .build()
             .map_err(|tokio_error| ErrorCode::TokioError(tokio_error.to_string()))?;
@@ -90,13 +98,23 @@ impl Runtime {
         let handle = runtime.handle().clone();
 
         // Block the runtime to shutdown.
-        let _ = thread::spawn(move || runtime.block_on(recv_stop));
+        let join_handler = thread::spawn(move || {
+            // We ignore channel is closed.
+            let _ = runtime.block_on(recv_stop);
+            let instant = Instant::now();
+            // We wait up to 3 seconds to complete the runtime shutdown.
+            runtime.shutdown_timeout(Duration::from_secs(3));
+
+            instant.elapsed() >= Duration::from_secs(3)
+        });
 
         Ok(Runtime {
             handle,
             tracker,
             _dropper: Dropper {
+                name,
                 close: Some(send_stop),
+                join_handler: Some(join_handler),
             },
         })
     }
@@ -132,7 +150,7 @@ impl Runtime {
             }
         }
 
-        Self::create(tracker, &mut runtime_builder)
+        Self::create(None, tracker, &mut runtime_builder)
     }
 
     #[allow(unused_mut)]
@@ -150,11 +168,15 @@ impl Runtime {
             }
         }
 
-        if let Some(thread_name) = thread_name {
+        if let Some(thread_name) = &thread_name {
             runtime_builder.thread_name(thread_name);
         }
 
-        Self::create(tracker, runtime_builder.worker_threads(workers))
+        Self::create(
+            thread_name,
+            tracker,
+            runtime_builder.worker_threads(workers),
+        )
     }
 
     pub fn inner(&self) -> tokio::runtime::Handle {
@@ -179,12 +201,30 @@ impl TrySpawn for Runtime {
 
 /// Dropping the dropper will cause runtime to shutdown.
 pub struct Dropper {
+    name: Option<String>,
     close: Option<oneshot::Sender<()>>,
+    join_handler: Option<thread::JoinHandle<bool>>,
 }
 
 impl Drop for Dropper {
     fn drop(&mut self) {
         // Send a signal to say i am dropping.
-        self.close.take().map(|v| v.send(()));
+        if let Some(close_sender) = self.close.take() {
+            if close_sender.send(()).is_ok() {
+                match self.join_handler.take().unwrap().join() {
+                    Err(e) => tracing::warn!("Runtime dropper panic, {:?}", e),
+                    Ok(true) => {
+                        // When the runtime shutdown is blocked for more than 3 seconds,
+                        // we will print the backtrace in the warn log, which will help us debug.
+                        tracing::warn!(
+                            "Runtime dropper is blocked 3 seconds, runtime name: {:?}, drop backtrace: {:?}",
+                            self.name,
+                            Backtrace::capture()
+                        );
+                    }
+                    _ => {}
+                };
+            }
+        }
     }
 }

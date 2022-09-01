@@ -14,6 +14,8 @@
 
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::time::Duration;
+use std::time::Instant;
 
 use common_base::base::*;
 use common_exception::Result;
@@ -56,6 +58,22 @@ async fn test_runtime() -> Result<()> {
 
     let result = *counter.lock().unwrap();
     assert_eq!(result, 4);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_shutdown_long_run_runtime() -> Result<()> {
+    let runtime = Runtime::with_default_worker_threads()?;
+
+    runtime.spawn(async move {
+        std::thread::sleep(Duration::from_secs(6));
+    });
+
+    let instant = Instant::now();
+    drop(runtime);
+    assert!(instant.elapsed() >= Duration::from_secs(3));
+    assert!(instant.elapsed() < Duration::from_secs(4));
 
     Ok(())
 }

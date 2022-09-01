@@ -169,7 +169,7 @@ impl<'a> Binder {
             Statement::CreateTable(stmt) => self.bind_create_table(stmt).await?,
             Statement::DropTable(stmt) => self.bind_drop_table(stmt).await?,
             Statement::UndropTable(stmt) => self.bind_undrop_table(stmt).await?,
-            Statement::AlterTable(stmt) => self.bind_alter_table(stmt).await?,
+            Statement::AlterTable(stmt) => self.bind_alter_table(bind_context, stmt).await?,
             Statement::RenameTable(stmt) => self.bind_rename_table(stmt).await?,
             Statement::TruncateTable(stmt) => self.bind_truncate_table(stmt).await?,
             Statement::OptimizeTable(stmt) => self.bind_optimize_table(stmt).await?,

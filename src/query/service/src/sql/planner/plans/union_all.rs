@@ -70,10 +70,17 @@ impl LogicalOperator for UnionAll {
 
         let cardinality = left_prop.cardinality + right_prop.cardinality;
 
+        let precise_cardinality = left_prop.precise_cardinality.and_then(|left_cardinality| {
+            right_prop
+                .precise_cardinality
+                .map(|right_cardinality| left_cardinality + right_cardinality)
+        });
+
         Ok(RelationalProperty {
             output_columns,
             outer_columns,
             cardinality,
+            precise_cardinality,
         })
     }
 }

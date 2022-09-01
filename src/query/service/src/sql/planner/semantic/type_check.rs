@@ -1036,6 +1036,10 @@ impl<'a> TypeChecker<'a> {
                 self.resolve_function(span, "to_year", &[arg], Some(TimestampType::new_impl(0)))
                     .await
             }
+            IntervalKind::Quarter => {
+                self.resolve_function(span, "to_quarter", &[arg], Some(TimestampType::new_impl(0)))
+                    .await
+            }
             IntervalKind::Month => {
                 self.resolve_function(span, "to_month", &[arg], Some(TimestampType::new_impl(0)))
                     .await
@@ -1097,6 +1101,15 @@ impl<'a> TypeChecker<'a> {
                     "to_interval_year",
                     &[arg],
                     Some(IntervalType::new_impl(IntervalKind::Year)),
+                )
+                .await
+            }
+            IntervalKind::Quarter => {
+                self.resolve_function(
+                    span,
+                    "to_interval_quarter",
+                    &[arg],
+                    Some(IntervalType::new_impl(IntervalKind::Quarter)),
                 )
                 .await
             }
@@ -1218,6 +1231,15 @@ impl<'a> TypeChecker<'a> {
                 self.resolve_function(
                     span,
                     "to_start_of_year",
+                    &[date],
+                    Some(TimestampType::new_impl(0)),
+                )
+                    .await
+            }
+            IntervalKind::Quarter => {
+                self.resolve_function(
+                    span,
+                    "to_start_of_quarter",
                     &[date],
                     Some(TimestampType::new_impl(0)),
                 )
