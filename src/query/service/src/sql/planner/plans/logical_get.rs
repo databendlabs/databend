@@ -97,6 +97,7 @@ impl LogicalOperator for LogicalGet {
                 .statistics
                 .as_ref()
                 .map_or(0.0, |stat| stat.num_rows.map_or(0.0, |num| num as f64)),
+            precise_cardinality: self.statistics.as_ref().and_then(|stat| stat.num_rows),
         })
     }
 }

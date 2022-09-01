@@ -647,7 +647,7 @@ async fn test_query_log() -> Result<()> {
             .as_str()
             .unwrap()
             .to_lowercase()
-            .contains("aborted"),
+            .contains("killed"),
         "{:?}",
         result
     );

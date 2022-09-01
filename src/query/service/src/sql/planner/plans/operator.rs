@@ -16,6 +16,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use super::aggregate::Aggregate;
+use super::dummy_table_scan::DummyTableScan;
 use super::eval_scalar::EvalScalar;
 use super::filter::Filter;
 use super::hash_join::PhysicalHashJoin;
@@ -84,6 +85,7 @@ pub enum RelOp {
     Limit,
     Exchange,
     UnionAll,
+    DummyTableScan,
 
     // Pattern
     Pattern,
@@ -106,6 +108,7 @@ pub enum RelOperator {
     Limit(Limit),
     Exchange(Exchange),
     UnionAll(UnionAll),
+    DummyTableScan(DummyTableScan),
 
     Pattern(PatternPlan),
 }
@@ -126,6 +129,7 @@ impl Operator for RelOperator {
             RelOperator::Pattern(rel_op) => rel_op.rel_op(),
             RelOperator::Exchange(rel_op) => rel_op.rel_op(),
             RelOperator::UnionAll(rel_op) => rel_op.rel_op(),
+            RelOperator::DummyTableScan(rel_op) => rel_op.rel_op(),
         }
     }
 
@@ -144,6 +148,7 @@ impl Operator for RelOperator {
             RelOperator::Pattern(rel_op) => rel_op.is_physical(),
             RelOperator::Exchange(rel_op) => rel_op.is_physical(),
             RelOperator::UnionAll(rel_op) => rel_op.is_physical(),
+            RelOperator::DummyTableScan(rel_op) => rel_op.is_physical(),
         }
     }
 
@@ -162,6 +167,7 @@ impl Operator for RelOperator {
             RelOperator::Pattern(rel_op) => rel_op.is_logical(),
             RelOperator::Exchange(rel_op) => rel_op.is_logical(),
             RelOperator::UnionAll(rel_op) => rel_op.is_logical(),
+            RelOperator::DummyTableScan(rel_op) => rel_op.is_logical(),
         }
     }
 
@@ -180,6 +186,7 @@ impl Operator for RelOperator {
             RelOperator::Pattern(rel_op) => rel_op.as_logical(),
             RelOperator::Exchange(rel_op) => rel_op.as_logical(),
             RelOperator::UnionAll(rel_op) => rel_op.as_logical(),
+            RelOperator::DummyTableScan(rel_op) => rel_op.as_logical(),
         }
     }
 
@@ -198,6 +205,7 @@ impl Operator for RelOperator {
             RelOperator::Pattern(rel_op) => rel_op.as_physical(),
             RelOperator::Exchange(rel_op) => rel_op.as_physical(),
             RelOperator::UnionAll(rel_op) => rel_op.as_physical(),
+            RelOperator::DummyTableScan(rel_op) => rel_op.as_physical(),
         }
     }
 }
@@ -445,6 +453,25 @@ impl TryFrom<RelOperator> for UnionAll {
         } else {
             Err(ErrorCode::LogicalError(
                 "Cannot downcast RelOperator to UnionAll",
+            ))
+        }
+    }
+}
+
+impl From<DummyTableScan> for RelOperator {
+    fn from(v: DummyTableScan) -> Self {
+        Self::DummyTableScan(v)
+    }
+}
+
+impl TryFrom<RelOperator> for DummyTableScan {
+    type Error = ErrorCode;
+    fn try_from(value: RelOperator) -> Result<Self> {
+        if let RelOperator::DummyTableScan(value) = value {
+            Ok(value)
+        } else {
+            Err(ErrorCode::LogicalError(
+                "Cannot downcast RelOperator to DummyTableScan",
             ))
         }
     }

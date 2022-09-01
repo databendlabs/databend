@@ -83,6 +83,7 @@ impl LogicalOperator for Project {
             output_columns: self.columns.clone(),
             outer_columns: input_prop.outer_columns,
             cardinality: input_prop.cardinality,
+            precise_cardinality: None,
         })
     }
 }

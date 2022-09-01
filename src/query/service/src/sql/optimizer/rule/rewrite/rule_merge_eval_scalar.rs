@@ -17,10 +17,13 @@ use common_exception::Result;
 use crate::sql::optimizer::rule::Rule;
 use crate::sql::optimizer::rule::RuleID;
 use crate::sql::optimizer::rule::TransformState;
+use crate::sql::optimizer::ColumnSet;
+use crate::sql::optimizer::RelExpr;
 use crate::sql::optimizer::SExpr;
 use crate::sql::plans::EvalScalar;
 use crate::sql::plans::PatternPlan;
 use crate::sql::plans::RelOp;
+use crate::sql::ScalarExpr;
 
 // Merge two adjacent `EvalScalar`s into one
 pub struct RuleMergeEvalScalar {
@@ -68,16 +71,31 @@ impl Rule for RuleMergeEvalScalar {
         let up_eval_scalar: EvalScalar = s_expr.plan().clone().try_into()?;
         let down_eval_scalar: EvalScalar = s_expr.child(0)?.plan().clone().try_into()?;
 
-        // TODO(leiysky): eliminate duplicated scalars
-        let items = up_eval_scalar
-            .items
-            .into_iter()
-            .chain(down_eval_scalar.items.into_iter())
-            .collect();
-        let merged = EvalScalar { items };
+        let mut used_columns = ColumnSet::new();
+        for item in up_eval_scalar.items.iter() {
+            used_columns = used_columns
+                .union(&item.scalar.used_columns())
+                .cloned()
+                .collect();
+        }
 
-        let new_expr = SExpr::create_unary(merged.into(), s_expr.child(0)?.child(0)?.clone());
-        state.add_result(new_expr);
+        let rel_expr = RelExpr::with_s_expr(s_expr.child(0)?);
+        let input_prop = rel_expr.derive_relational_prop_child(0)?;
+
+        // Check if the up EvalScalar denpends on the down EvalScalar
+        if used_columns.is_subset(&input_prop.output_columns) {
+            // TODO(leiysky): eliminate duplicated scalars
+            let items = up_eval_scalar
+                .items
+                .into_iter()
+                .chain(down_eval_scalar.items.into_iter())
+                .collect();
+            let merged = EvalScalar { items };
+
+            let new_expr = SExpr::create_unary(merged.into(), s_expr.child(0)?.child(0)?.clone());
+            state.add_result(new_expr);
+        }
+
         Ok(())
     }
 
