@@ -18,7 +18,6 @@ use common_datavalues::ColumnWithField;
 use common_datavalues::DataField;
 use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::scalars::Function;
 use common_functions::scalars::FunctionContext;
