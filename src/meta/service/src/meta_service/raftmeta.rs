@@ -50,6 +50,7 @@ use common_meta_types::MetaNetworkError;
 use common_meta_types::MetaNetworkResult;
 use common_meta_types::MetaRaftError;
 use common_meta_types::MetaResult;
+use common_meta_types::MetaStorageError;
 use common_meta_types::Node;
 use common_meta_types::NodeId;
 use common_meta_types::ToMetaError;
@@ -76,6 +77,7 @@ use crate::metrics::set_meta_metrics_current_leader;
 use crate::metrics::set_meta_metrics_current_term;
 use crate::metrics::set_meta_metrics_is_leader;
 use crate::metrics::set_meta_metrics_last_log_index;
+use crate::metrics::set_meta_metrics_last_seq;
 use crate::metrics::set_meta_metrics_node_is_health;
 use crate::metrics::set_meta_metrics_proposals_applied;
 use crate::network::Network;
@@ -408,81 +410,68 @@ impl MetaNode {
     // and manually add non-voter to cluster so that non-voter receives raft logs.
     pub async fn subscribe_metrics(mn: Arc<Self>, mut metrics_rx: watch::Receiver<RaftMetrics>) {
         // TODO(luhuanbing): every state change triggers add_non_voter is not very reasonable
-        let mut running_rx = mn.running_rx.clone();
-        let mut jh = mn.join_handles.lock().await;
-        let mut current_leader: Option<u64> = None;
 
-        let mn = mn.clone();
+        let meta_node = mn.clone();
 
-        let span = tracing::span!(tracing::Level::INFO, "watch-metrics");
+        let fut = async move {
+            let mut last_leader: Option<u64> = None;
 
-        let h = tokio::task::spawn(
-            {
-                async move {
-                    loop {
-                        let changed = tokio::select! {
-                            _ = running_rx.changed() => {
-                               return Ok::<(), MetaError>(());
-                            }
-                            changed = metrics_rx.changed() => {
-                                changed
-                            }
-                        };
-                        if changed.is_ok() {
-                            let mm = metrics_rx.borrow().clone();
-                            set_meta_metrics_node_is_health(
-                                mm.state == State::Follower || mm.state == State::Leader,
+            loop {
+                let changed = metrics_rx.changed().await;
+
+                if let Err(changed_err) = changed {
+                    // Shutting down.
+                    error!("{} when watching metrics_rx", changed_err);
+                    break;
+                }
+
+                let mm = metrics_rx.borrow().clone();
+
+                if let Some(cur) = mm.current_leader {
+                    if cur == meta_node.sto.id {
+                        let res = meta_node.add_configured_non_voters().await;
+
+                        if let Err(err) = res {
+                            warn!(
+                                "fail to add non-voter: my id={}, err:{:?}",
+                                meta_node.sto.id, err
                             );
-
-                            if let Some(cur) = mm.current_leader {
-                                // if current leader has changed?
-                                if let Some(leader) = current_leader {
-                                    if cur != leader {
-                                        current_leader = Some(cur);
-                                        incr_meta_metrics_leader_change();
-                                    }
-                                } else {
-                                    current_leader = Some(cur);
-                                    incr_meta_metrics_leader_change();
-                                }
-
-                                if cur == mn.sto.id {
-                                    let _rst = mn.add_configured_non_voters().await;
-
-                                    if _rst.is_err() {
-                                        warn!(
-                                            "fail to add non-voter: my id={}, rst:{:?}",
-                                            mn.sto.id, _rst
-                                        );
-                                    }
-                                    set_meta_metrics_is_leader(true);
-                                } else {
-                                    set_meta_metrics_is_leader(false);
-                                }
-                                set_meta_metrics_current_leader(cur);
-                            } else {
-                                set_meta_metrics_current_leader(0);
-                                set_meta_metrics_is_leader(false);
-                            }
-                            if let Some(last_applied) = mm.last_applied {
-                                set_meta_metrics_proposals_applied(last_applied.index);
-                            }
-                            if let Some(last_log_index) = mm.last_log_index {
-                                set_meta_metrics_last_log_index(last_log_index);
-                            }
-                            set_meta_metrics_current_term(mm.current_term);
-                        } else {
-                            // shutting down
-                            break;
                         }
                     }
-
-                    Ok::<(), MetaError>(())
                 }
+
+                // metrics about server state and role.
+
+                set_meta_metrics_node_is_health(
+                    mm.state == State::Follower || mm.state == State::Leader,
+                );
+
+                if mm.current_leader.is_some() && mm.current_leader != last_leader {
+                    incr_meta_metrics_leader_change();
+                }
+                set_meta_metrics_current_leader(mm.current_leader.unwrap_or_default());
+                set_meta_metrics_is_leader(mm.current_leader == Some(meta_node.sto.id));
+
+                // metrics about raft log and state machine.
+
+                set_meta_metrics_current_term(mm.current_term);
+                set_meta_metrics_last_log_index(mm.last_log_index.unwrap_or_default());
+                set_meta_metrics_proposals_applied(mm.last_applied.unwrap_or_default().index);
+                set_meta_metrics_last_seq(meta_node.get_last_seq().await?);
+
+                last_leader = mm.current_leader;
             }
-            .instrument(span),
-        );
-        jh.push(h);
+
+            Ok::<(), MetaError>(())
+        };
+
+        let span = tracing::span!(tracing::Level::INFO, "watch-metrics");
+        let h = tokio::task::spawn(fut.instrument(span));
+
+        {
+            let mut jh = mn.join_handles.lock().await;
+            jh.push(h);
+        }
     }
 
     /// Start MetaNode in either `boot`, `single`, `join` or `open` mode,
@@ -763,11 +752,7 @@ impl MetaNode {
             None
         };
 
-        let last_seq = {
-            let sm = self.sto.state_machine.read().await;
-            let last_seq = sm.sequences().get(&GenericKV::NAME.to_string())?;
-            last_seq.unwrap_or_default().0
-        };
+        let last_seq = self.get_last_seq().await?;
 
         Ok(MetaNodeStatus {
             id: self.sto.id,
@@ -786,6 +771,13 @@ impl MetaNode {
             non_voters,
             last_seq,
         })
+    }
+
+    pub(crate) async fn get_last_seq(&self) -> Result<u64, MetaStorageError> {
+        let sm = self.sto.state_machine.read().await;
+        let last_seq = sm.sequences().get(&GenericKV::NAME.to_string())?;
+
+        Ok(last_seq.unwrap_or_default().0)
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
