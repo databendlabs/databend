@@ -84,12 +84,7 @@ where VectorID: PartialEq + Eq + Clone + Debug
     pub fn try_eval_const(&self, func_ctx: &FunctionContext) -> Result<(DataValue, DataTypeImpl)> {
         let eval_ctx = EmptyEvalContext::<VectorID>::new();
         let vector = self.eval(func_ctx, &eval_ctx)?;
-        if vector.vector.is_const() {
-            Ok((vector.vector.get(0), vector.logical_type))
-        } else {
-            Err(ErrorCode::LogicalError(
-                "Non-constant column can not be evaluated by try_eval_const",
-            ))
-        }
+        debug_assert!(vector.vector.len() == 1);
+        Ok((vector.vector.get(0), vector.logical_type))
     }
 }
