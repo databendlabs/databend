@@ -26,5 +26,5 @@ pub const FUSE_TBL_SNAPSHOT_PREFIX: &str = "_ss";
 pub const DEFAULT_BLOCK_PER_SEGMENT: usize = 1000;
 pub const DEFAULT_BLOCK_SIZE_IN_MEM_SIZE_THRESHOLD: usize = 100 * 1024 * 1024;
 pub const DEFAULT_ROW_PER_BLOCK: usize = 1000 * 1000;
-pub const DEFAULT_PAGE_SIZE_LIMIT: usize = 10000;
+pub const DEFAULT_PAGE_SIZE_LIMIT: usize = 1024 * 1024;
 pub const DEFAULT_AVG_DEPTH_THRESHOLD: f64 = 0.01;

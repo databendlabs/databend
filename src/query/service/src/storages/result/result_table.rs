@@ -41,7 +41,7 @@ use crate::storages::result::result_locations::ResultLocations;
 use crate::storages::result::result_table_source::ResultTableSource;
 use crate::storages::Table;
 
-pub const DEFAULT_DATA_PAGE_SIZE_LIMIT: usize = 1024 * 1024;
+pub const DEFAULT_RESULT_TABLE_DATA_PAGE_SIZE_LIMIT: usize = 1024 * 1024;
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(tag = "t", content = "c")]

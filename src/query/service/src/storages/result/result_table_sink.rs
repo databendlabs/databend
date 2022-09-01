@@ -41,7 +41,7 @@ use crate::storages::result::block_buffer::BlockInfo;
 use crate::storages::result::result_locations::ResultLocations;
 use crate::storages::result::result_table::ResultStorageInfo;
 use crate::storages::result::result_table::ResultTableMeta;
-use crate::storages::result::result_table::DEFAULT_DATA_PAGE_SIZE_LIMIT;
+use crate::storages::result::result_table::DEFAULT_RESULT_TABLE_DATA_PAGE_SIZE_LIMIT;
 use crate::storages::result::ResultQueryInfo;
 
 enum State {
@@ -178,10 +178,14 @@ impl Processor for ResultTableSink {
                 let location = self.locations.gen_block_location();
                 let block_statistics = BlockStatistics::from(&block, location.clone(), None)?;
 
-                let mut data = Vec::with_capacity(DEFAULT_DATA_PAGE_SIZE_LIMIT);
+                let mut data = Vec::with_capacity(10 * 1024 * 1024);
                 let schema = block.schema().clone();
-                let (size, meta_data) =
-                    serialize_data_blocks(vec![block.clone()], &schema, 1024 * 1024, &mut data)?;
+                let (size, meta_data) = serialize_data_blocks(
+                    vec![block.clone()],
+                    &schema,
+                    DEFAULT_RESULT_TABLE_DATA_PAGE_SIZE_LIMIT,
+                    &mut data,
+                )?;
 
                 let bloom_index_location = None;
                 let bloom_index_size = 0_u64;

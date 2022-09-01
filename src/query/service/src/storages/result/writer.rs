@@ -32,6 +32,7 @@ use crate::storages::fuse::FuseTable;
 use crate::storages::result::result_locations::ResultLocations;
 use crate::storages::result::result_table::ResultStorageInfo;
 use crate::storages::result::result_table::ResultTableMeta;
+use crate::storages::result::result_table::DEFAULT_RESULT_TABLE_DATA_PAGE_SIZE_LIMIT;
 use crate::storages::result::ResultQueryInfo;
 
 pub struct ResultTableWriter {
@@ -100,8 +101,12 @@ impl ResultTableWriter {
         let mut data = Vec::with_capacity(100 * 1024 * 1024);
         let block_statistics = BlockStatistics::from(&block, location.clone(), None)?;
         let schema = block.schema().clone();
-        let (size, meta_data) =
-            serialize_data_blocks(vec![block], &schema, 1024 * 1024, &mut data)?;
+        let (size, meta_data) = serialize_data_blocks(
+            vec![block],
+            &schema,
+            DEFAULT_RESULT_TABLE_DATA_PAGE_SIZE_LIMIT,
+            &mut data,
+        )?;
         self.data_accessor
             .object(&location)
             .write(data)
