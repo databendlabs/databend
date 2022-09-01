@@ -141,7 +141,7 @@ impl Processor for HiveTableSource {
                 }
 
                 // read current rowgroup finished, try read next rowgroup
-                hive_blocks.advacne();
+                hive_blocks.advance();
                 match hive_blocks.has_blocks() {
                     true => {
                         self.state = State::ReadData(hive_blocks);
@@ -150,8 +150,6 @@ impl Processor for HiveTableSource {
                         self.try_get_partitions()?;
                     }
                 }
-
-                // return Ok(Event::NeedConsume);
             }
         }
 
@@ -170,7 +168,7 @@ impl Processor for HiveTableSource {
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Finish) {
             State::Deserialize(hive_blocks, mut rowgroup_deserializer) => {
-                let num_rows = hive_blocks.get_current_block().num_rows();
+                let num_rows = hive_blocks.get_current_row_group_meta_data().num_rows();
                 let data_block = self.block_reader.create_data_block(
                     &mut rowgroup_deserializer,
                     hive_blocks.part.clone(),
