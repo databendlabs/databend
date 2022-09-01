@@ -864,12 +864,12 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             | #binary_op : "<operator>"
             | #unary_op : "<operator>"
             | #cast : "`CAST(... AS ...)`"
-            | #date_add: "`DATE_ADD(..., ..., (YEAR| MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW))`"
-            | #date_sub: "`DATE_SUB(..., ..., (YEAR| MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW))`"
-            | #date_trunc: "`DATE_TRUNC((YEAR | MONTH | DAY | HOUR | MINUTE | SECOND), ...)`"
-            | #interval: "`INTERVAL ... (YEAR| MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW)`"
+            | #date_add: "`DATE_ADD(..., ..., (YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW))`"
+            | #date_sub: "`DATE_SUB(..., ..., (YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW))`"
+            | #date_trunc: "`DATE_TRUNC((YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND), ...)`"
+            | #interval: "`INTERVAL ... (YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW)`"
             | #pg_cast : "`::<type_name>`"
-            | #extract : "`EXTRACT((YEAR | MONTH | DAY | HOUR | MINUTE | SECOND) FROM ...)`"
+            | #extract : "`EXTRACT((YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND) FROM ...)`"
             | #position : "`POSITION(... IN ...)`"
             | #substring : "`SUBSTRING(... [FROM ...] [FOR ...])`"
             | #trim : "`TRIM(...)`"
@@ -1186,6 +1186,7 @@ pub fn tuple_types(i: Input) -> IResult<(Option<Identifier>, TypeName)> {
 pub fn interval_kind(i: Input) -> IResult<IntervalKind> {
     alt((
         value(IntervalKind::Year, rule! { YEAR }),
+        value(IntervalKind::Quarter, rule! { QUARTER }),
         value(IntervalKind::Month, rule! { MONTH }),
         value(IntervalKind::Day, rule! { DAY }),
         value(IntervalKind::Hour, rule! { HOUR }),
@@ -1196,6 +1197,10 @@ pub fn interval_kind(i: Input) -> IResult<IntervalKind> {
         value(
             IntervalKind::Year,
             rule! { #literal_string_eq_ignore_case("YEAR")  },
+        ),
+        value(
+            IntervalKind::Quarter,
+            rule! { #literal_string_eq_ignore_case("QUARTER") },
         ),
         value(
             IntervalKind::Month,

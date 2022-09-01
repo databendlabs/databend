@@ -28,7 +28,6 @@ mod adaptors;
 mod macros;
 mod aggregate_arg_min_max;
 mod aggregate_avg;
-mod aggregate_combinator;
 mod aggregate_combinator_distinct;
 mod aggregate_combinator_if;
 mod aggregate_covariance;

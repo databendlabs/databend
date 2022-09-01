@@ -20,7 +20,6 @@ use bytes::BytesMut;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_io::prelude::BinaryRead;
 use common_io::prelude::BinaryWriteBuf;
 
 use crate::aggregates::AggregateFunction;
@@ -30,54 +29,49 @@ use crate::aggregates::StateAddr;
 #[derive(Clone)]
 pub struct AggregateNullVariadicAdaptor<const NULLABLE_RESULT: bool, const STKIP_NULL: bool> {
     nested: AggregateFunctionRef,
-    prefix_size: usize,
+    size_of_data: usize,
 }
 
 impl<const NULLABLE_RESULT: bool, const STKIP_NULL: bool>
     AggregateNullVariadicAdaptor<NULLABLE_RESULT, STKIP_NULL>
 {
     pub fn create(nested: AggregateFunctionRef) -> AggregateFunctionRef {
-        let prefix_size = if NULLABLE_RESULT {
+        let size_of_data = if NULLABLE_RESULT {
             let layout = nested.state_layout();
-            layout.align()
+            layout.size()
         } else {
             0
         };
         Arc::new(Self {
             nested,
-            prefix_size,
+            size_of_data,
         })
     }
 
     #[inline]
-    pub fn set_flag(place: StateAddr) {
+    pub fn set_flag(&self, place: StateAddr, flag: u8) {
         if NULLABLE_RESULT {
-            let c = place.get::<u8>();
-            *c = 1;
+            let c = place.next(self.size_of_data).get::<u8>();
+            *c = flag;
         }
     }
 
     #[inline]
-    pub fn init_flag(place: StateAddr) {
+    pub fn init_flag(&self, place: StateAddr) {
         if NULLABLE_RESULT {
-            let c = place.get::<u8>();
+            let c = place.next(self.size_of_data).get::<u8>();
             *c = 0;
         }
     }
 
     #[inline]
-    pub fn get_flag(place: StateAddr) -> u8 {
+    pub fn get_flag(&self, place: StateAddr) -> u8 {
         if NULLABLE_RESULT {
-            let c = place.get::<u8>();
+            let c = place.next(self.size_of_data).get::<u8>();
             *c
         } else {
             1
         }
-    }
-
-    #[inline]
-    pub fn nested_place(&self, place: StateAddr) -> StateAddr {
-        place.next(self.prefix_size)
     }
 }
 
@@ -96,13 +90,15 @@ impl<const NULLABLE_RESULT: bool, const STKIP_NULL: bool> AggregateFunction
     }
 
     fn init_state(&self, place: StateAddr) {
-        Self::init_flag(place);
-        self.nested.init_state(self.nested_place(place));
+        self.init_flag(place);
+        self.nested.init_state(place);
     }
 
+    #[inline]
     fn state_layout(&self) -> Layout {
         let layout = self.nested.state_layout();
-        Layout::from_size_align(layout.size() + self.prefix_size, layout.align()).unwrap()
+        let add = if NULLABLE_RESULT { 1 } else { 0 };
+        Layout::from_size_align(layout.size() + add, layout.align()).unwrap()
     }
 
     fn accumulate(
@@ -124,21 +120,17 @@ impl<const NULLABLE_RESULT: bool, const STKIP_NULL: bool> AggregateFunction
             not_null_columns.push(Series::remove_nullable(col))
         }
 
-        self.nested.accumulate(
-            self.nested_place(place),
-            &not_null_columns,
-            validity.as_ref(),
-            input_rows,
-        )?;
+        self.nested
+            .accumulate(place, &not_null_columns, validity.as_ref(), input_rows)?;
 
         if !is_all_null {
             match validity {
                 Some(v) => {
                     if v.unset_bits() != input_rows {
-                        Self::set_flag(place);
+                        self.set_flag(place, 1);
                     }
                 }
-                None => Self::set_flag(place),
+                None => self.set_flag(place, 1),
             }
         }
         Ok(())
@@ -165,23 +157,29 @@ impl<const NULLABLE_RESULT: bool, const STKIP_NULL: bool> AggregateFunction
             not_null_columns.push(Series::remove_nullable(col))
         }
 
-        self.nested.accumulate_keys(
-            places,
-            offset + self.prefix_size,
-            &not_null_columns,
-            input_rows,
-        )?;
+        let not_null_columns = &not_null_columns;
 
         if !is_all_null {
             match validity {
-                Some(v) => v.iter().zip(places.iter()).for_each(|(valid, place)| {
-                    if valid {
-                        Self::set_flag(place.next(offset));
+                Some(v) if v.unset_bits() > 0 => {
+                    for (valid, (row, place)) in v.iter().zip(places.iter().enumerate()) {
+                        if valid {
+                            self.set_flag(place.next(offset), 1);
+                            self.nested.accumulate_row(
+                                place.next(offset),
+                                not_null_columns,
+                                row,
+                            )?;
+                        }
                     }
-                }),
-                None => places
-                    .iter()
-                    .for_each(|place| Self::set_flag(place.next(offset))),
+                }
+                _ => {
+                    self.nested
+                        .accumulate_keys(places, offset, not_null_columns, input_rows)?;
+                    places
+                        .iter()
+                        .for_each(|place| self.set_flag(place.next(offset), 1));
+                }
             }
         }
         Ok(())
@@ -192,44 +190,45 @@ impl<const NULLABLE_RESULT: bool, const STKIP_NULL: bool> AggregateFunction
     }
 
     fn serialize(&self, place: StateAddr, writer: &mut BytesMut) -> Result<()> {
+        self.nested.serialize(place, writer)?;
         if NULLABLE_RESULT {
-            let flag = Self::get_flag(place) == 1;
+            let flag: u8 = self.get_flag(place);
             writer.write_scalar(&flag)?;
         }
-        self.nested.serialize(self.nested_place(place), writer)
+        Ok(())
     }
 
     fn deserialize(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
         if NULLABLE_RESULT {
-            let flag: bool = reader.read_scalar()?;
-            if flag {
-                Self::set_flag(place);
-            }
+            self.nested
+                .deserialize(place, &mut &reader[..reader.len() - 1])?;
+            let flag = reader[reader.len() - 1];
+            self.set_flag(place, flag);
+        } else {
+            self.nested.deserialize(place, reader)?;
         }
-
-        self.nested.deserialize(self.nested_place(place), reader)
+        Ok(())
     }
 
     fn merge(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
-        if Self::get_flag(place) == 0 {
+        if self.get_flag(place) == 0 {
             // initial the state to remove the dirty stats
             self.init_state(place);
         }
 
-        if Self::get_flag(rhs) == 1 {
-            Self::set_flag(place);
+        if self.get_flag(rhs) == 1 {
+            self.set_flag(place, 1);
         }
-        self.nested
-            .merge(self.nested_place(place), self.nested_place(rhs))
+
+        self.nested.merge(place, rhs)
     }
 
     fn merge_result(&self, place: StateAddr, column: &mut dyn MutableColumn) -> Result<()> {
         if NULLABLE_RESULT {
             let builder: &mut MutableNullableColumn = Series::check_get_mutable_column(column)?;
-            if Self::get_flag(place) == 1 {
+            if self.get_flag(place) == 1 {
                 let inner = builder.inner_mut();
-                self.nested
-                    .merge_result(self.nested_place(place), inner.as_mut())?;
+                self.nested.merge_result(place, inner.as_mut())?;
 
                 let validity = builder.validity_mut();
                 validity.push(true);
@@ -238,7 +237,7 @@ impl<const NULLABLE_RESULT: bool, const STKIP_NULL: bool> AggregateFunction
             }
             Ok(())
         } else {
-            self.nested.merge_result(self.nested_place(place), column)
+            self.nested.merge_result(place, column)
         }
     }
 
@@ -247,11 +246,15 @@ impl<const NULLABLE_RESULT: bool, const STKIP_NULL: bool> AggregateFunction
     }
 
     unsafe fn drop_state(&self, place: StateAddr) {
-        self.nested.drop_state(self.nested_place(place))
+        self.nested.drop_state(place)
     }
 
     fn convert_const_to_full(&self) -> bool {
         self.nested.convert_const_to_full()
+    }
+
+    fn get_if_condition(&self, columns: &[ColumnRef]) -> Option<Bitmap> {
+        self.nested.get_if_condition(columns)
     }
 }
 

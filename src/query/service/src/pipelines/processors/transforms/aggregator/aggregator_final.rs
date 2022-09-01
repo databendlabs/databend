@@ -170,7 +170,6 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
                     let state_place = temp_place.next(offsets_aggregate_states[idx]);
 
                     let mut data = states_binary_columns[idx].get_data(row);
-
                     aggregate_function.deserialize(state_place, &mut data)?;
                     aggregate_function.merge(final_place, state_place)?;
                 }

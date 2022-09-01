@@ -197,6 +197,7 @@ pub trait IntervalArithmeticImpl {
 }
 
 impl_interval_year_month!(AddYearsImpl, add_years_base);
+impl_interval_year_month!(AddQuartersImpl, add_quarters_base);
 impl_interval_year_month!(AddMonthsImpl, add_months_base);
 
 #[derive(Clone)]
@@ -248,6 +249,10 @@ fn add_years_base(year: i32, month: u32, day: u32, delta: i64) -> Result<NaiveDa
     })
 }
 
+fn add_quarters_base(year: i32, month: u32, day: u32, delta: i64) -> Result<NaiveDate> {
+    add_months_base(year, month, day, delta * 3)
+}
+
 fn add_months_base(year: i32, month: u32, day: u32, delta: i64) -> Result<NaiveDate> {
     let total_months = month as i64 + delta - 1;
     let mut new_year = year + (total_months / 12) as i32;
@@ -284,6 +289,7 @@ fn last_day_of_year_month(year: i32, month: u32) -> u32 {
 }
 
 pub type AddYearsFunction = IntervalFunctionCreator<AddYearsImpl>;
+pub type AddQuartersFunction = IntervalFunctionCreator<AddQuartersImpl>;
 pub type AddMonthsFunction = IntervalFunctionCreator<AddMonthsImpl>;
 pub type AddDaysFunction = IntervalFunctionCreator<AddDaysImpl>;
 pub type AddTimesFunction = IntervalFunctionCreator<AddTimesImpl>;
