@@ -208,7 +208,7 @@ impl<'a> Binder {
                 }
                 SelectTarget::AliasedExpr { expr, alias } => {
                     let mut scalar_binder = ScalarBinder::new(
-                        &input_context,
+                        input_context,
                         self.ctx.clone(),
                         &self.name_resolution_ctx,
                         self.metadata.clone(),
