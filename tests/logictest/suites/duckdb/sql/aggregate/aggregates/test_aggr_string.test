@@ -14,7 +14,7 @@ statement query II
 SELECT COUNT(*), COUNT(s) FROM test;
 
 ----
-3 3
+3 2
 
 statement query III
 SELECT a, COUNT(*), COUNT(s) FROM test GROUP BY a ORDER BY a;
@@ -38,7 +38,7 @@ statement query III
 SELECT COUNT(*), COUNT(s), COUNT(DISTINCT s) FROM test;
 
 ----
-5 5 2
+5 4 2
 
 statement query IIII
 SELECT a, COUNT(*), COUNT(s), COUNT(DISTINCT s) FROM test GROUP BY a ORDER BY a;

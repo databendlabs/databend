@@ -20,8 +20,8 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use once_cell::sync::Lazy;
 
-use super::AggregateFunctionBasicAdaptor;
 use super::AggregateFunctionCombinatorNull;
+use super::AggregateFunctionOrNullAdaptor;
 use crate::aggregates::AggregateFunctionRef;
 use crate::aggregates::Aggregators;
 
@@ -173,8 +173,9 @@ impl AggregateFunctionFactory {
                 nested,
                 features.clone(),
             )?;
+
             if or_null {
-                return AggregateFunctionBasicAdaptor::create(agg, features);
+                return AggregateFunctionOrNullAdaptor::create(agg, features);
             } else {
                 return Ok(agg);
             }
@@ -183,7 +184,7 @@ impl AggregateFunctionFactory {
         let agg = self.get_impl(name, params, arguments, &mut features)?;
 
         if or_null {
-            AggregateFunctionBasicAdaptor::create(agg, features)
+            AggregateFunctionOrNullAdaptor::create(agg, features)
         } else {
             Ok(agg)
         }
