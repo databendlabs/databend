@@ -277,7 +277,7 @@ statement query I
 SELECT max(number) FROM numbers_mt (10) where number > 99999999998;
 
 ----
-0
+NULL
 
 
 statement query I
