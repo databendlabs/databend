@@ -15,6 +15,7 @@
 use std::future::Future;
 use std::sync::Arc;
 use std::thread;
+use std::time::Duration;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -90,13 +91,19 @@ impl Runtime {
         let handle = runtime.handle().clone();
 
         // Block the runtime to shutdown.
-        let _ = thread::spawn(move || runtime.block_on(recv_stop));
+        let join_handler = thread::spawn(move || {
+            // We ignore channel is closed.
+            let _ = runtime.block_on(recv_stop);
+            // We wait up to 3 seconds to complete the runtime shutdown.
+            runtime.shutdown_timeout(Duration::from_secs(3));
+        });
 
         Ok(Runtime {
             handle,
             tracker,
             _dropper: Dropper {
                 close: Some(send_stop),
+                join_handler: Some(join_handler),
             },
         })
     }
@@ -180,11 +187,18 @@ impl TrySpawn for Runtime {
 /// Dropping the dropper will cause runtime to shutdown.
 pub struct Dropper {
     close: Option<oneshot::Sender<()>>,
+    join_handler: Option<thread::JoinHandle<()>>,
 }
 
 impl Drop for Dropper {
     fn drop(&mut self) {
         // Send a signal to say i am dropping.
-        self.close.take().map(|v| v.send(()));
+        if let Some(close_sender) = self.close.take() {
+            if close_sender.send(()).is_ok() {
+                if let Err(e) = self.join_handler.take().unwrap().join() {
+                    tracing::warn!("Runtime dropper panic, {:?}", e);
+                }
+            }
+        }
     }
 }
