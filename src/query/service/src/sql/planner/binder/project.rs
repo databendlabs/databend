@@ -187,7 +187,7 @@ impl<'a> Binder {
                                 // Expands wildcard star, for example we have a table `t(a INT, b INT)`:
                                 // The query `SELECT * FROM t` will be expanded into `SELECT t.a, t.b FROM t`
                                 for column_binding in input_context.all_column_bindings() {
-                                    if !column_binding.visible_in_unqualified_wildcard {
+                                    if !column_binding.visible_in_select_list {
                                         continue;
                                     }
                                     output.items.push(SelectItem {
@@ -207,8 +207,12 @@ impl<'a> Binder {
                     }
                 }
                 SelectTarget::AliasedExpr { expr, alias } => {
+                    let mut filtered_bind_context = input_context.clone();
+                    filtered_bind_context
+                        .columns
+                        .retain(|column_binding| column_binding.visible_in_select_list);
                     let mut scalar_binder = ScalarBinder::new(
-                        input_context,
+                        &filtered_bind_context,
                         self.ctx.clone(),
                         &self.name_resolution_ctx,
                         self.metadata.clone(),

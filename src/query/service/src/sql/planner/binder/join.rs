@@ -404,7 +404,7 @@ impl<'a> JoinConditionResolver<'a> {
                 .nth(1)
             {
                 // Always make the second using column in the join_context invisible. in unqualified wildcard.
-                col_binding.visible_in_unqualified_wildcard = false;
+                col_binding.visible_in_select_list = false;
             }
 
             self.add_conditions(

@@ -49,8 +49,8 @@ pub struct ColumnBinding {
 
     /// Consider the sql: `select * from t join t1 using(a)`.
     /// The result should only contain one `a` column.
-    /// So we need make `t.a` or `t1.a` invisible in unqualified wildcard.
-    pub visible_in_unqualified_wildcard: bool,
+    /// So we need make `t.a` or `t1.a` invisible in select list.
+    pub visible_in_select_list: bool,
 }
 
 impl PartialEq for ColumnBinding {
