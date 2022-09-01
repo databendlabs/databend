@@ -39,6 +39,7 @@ pub use metadata::ColumnEntry;
 pub use metadata::Metadata;
 pub use metadata::MetadataRef;
 pub use metadata::TableEntry;
+pub use metadata::DUMMY_TABLE_INDEX;
 pub use semantic::normalize_identifier;
 pub use semantic::IdentifierNormalizer;
 pub use semantic::NameResolutionContext;

@@ -63,6 +63,7 @@ pub enum RuleID {
     MergeEvalScalar,
     MergeFilter,
     SplitAggregate,
+    FoldCountAggregate,
 
     // Exploration rules
     CommuteJoin,
@@ -93,6 +94,7 @@ impl Display for RuleID {
             RuleID::NormalizeScalarFilter => write!(f, "NormalizeScalarFilter"),
             RuleID::SplitAggregate => write!(f, "SplitAggregate"),
             RuleID::NormalizeDisjunctiveFilter => write!(f, "NormalizeDisjunctiveFilter"),
+            RuleID::FoldCountAggregate => write!(f, "FoldCountAggregate"),
 
             RuleID::CommuteJoin => write!(f, "CommuteJoin"),
 

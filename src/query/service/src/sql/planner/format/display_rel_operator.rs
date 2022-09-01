@@ -82,6 +82,7 @@ impl Display for FormatContext {
                 RelOperator::Exchange(op) => format_exchange(f, metadata, op),
                 RelOperator::UnionAll(_) => write!(f, "Union"),
                 RelOperator::Pattern(_) => write!(f, "Pattern"),
+                RelOperator::DummyTableScan(_) => write!(f, "DummyTableScan"),
             },
             Self::Text(text) => write!(f, "{}", text),
         }
