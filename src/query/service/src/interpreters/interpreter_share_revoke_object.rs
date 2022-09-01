@@ -19,6 +19,7 @@ use common_exception::Result;
 use common_meta_api::ShareApi;
 use common_meta_app::share::RevokeShareObjectReq;
 use common_meta_app::share::ShareNameIdent;
+use common_storages_share::ModShareSpec;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
@@ -57,7 +58,18 @@ impl Interpreter for RevokeShareObjectInterpreter {
             privilege: self.plan.privilege,
             update_on: Utc::now(),
         };
-        meta_api.revoke_share_object(req).await?;
+        let resp = meta_api.revoke_share_object(req).await?;
+
+        let mod_spec = ModShareSpec::RevokeShareObject {
+            object_name: self.plan.object.clone(),
+        };
+        mod_spec
+            .save(
+                self.ctx.get_tenant(),
+                resp.share_id,
+                self.ctx.get_storage_operator()?,
+            )
+            .await?;
 
         Ok(Box::pin(DataBlockStream::create(
             self.plan.schema(),

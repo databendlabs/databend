@@ -1871,6 +1871,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-storages-share"
+version = "0.1.0"
+dependencies = [
+ "common-exception",
+ "common-meta-app",
+ "common-storages-fuse",
+ "opendal",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "common-storages-util"
 version = "0.1.0"
 dependencies = [
@@ -2502,6 +2514,7 @@ dependencies = [
  "common-storages-hive",
  "common-storages-index",
  "common-storages-preludes",
+ "common-storages-share",
  "common-storages-util",
  "common-streams",
  "common-tracing",

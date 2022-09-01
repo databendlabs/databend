@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_meta_api::ShareApi;
+use common_storages_share::ModShareSpec;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
@@ -44,7 +45,18 @@ impl Interpreter for CreateShareInterpreter {
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         let user_mgr = self.ctx.get_user_manager();
         let meta_api = user_mgr.get_meta_store_client();
-        meta_api.create_share(self.plan.clone().into()).await?;
+        let resp = meta_api.create_share(self.plan.clone().into()).await?;
+
+        let mod_spec = ModShareSpec::CreateShare {
+            share_name: self.plan.share.clone(),
+        };
+        mod_spec
+            .save(
+                self.ctx.get_tenant(),
+                resp.share_id,
+                self.ctx.get_storage_operator()?,
+            )
+            .await?;
 
         Ok(Box::pin(DataBlockStream::create(
             self.plan.schema(),

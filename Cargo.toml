@@ -44,6 +44,7 @@ members = [
     "src/query/storages/hive-meta-store",
     "src/query/storages/index",
     "src/query/storages/preludes",
+    "src/query/storages/share",
     "src/query/storages/util",
     "src/query/streams",
     "src/query/users",

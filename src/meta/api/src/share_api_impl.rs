@@ -27,6 +27,7 @@ use common_meta_types::app_error::ShareAlreadyExists;
 use common_meta_types::app_error::TxnRetryMaxTimes;
 use common_meta_types::app_error::UnknownShare;
 use common_meta_types::app_error::UnknownShareAccounts;
+use common_meta_types::app_error::UnknownTable;
 use common_meta_types::app_error::WrongShare;
 use common_meta_types::app_error::WrongShareObject;
 use common_meta_types::ConditionResult::Eq;
@@ -181,7 +182,7 @@ impl<KV: KVApi> ShareApi for KV {
                 Err(e) => {
                     if let MetaError::AppError(AppError::UnknownShare(_)) = e {
                         if req.if_exists {
-                            return Ok(DropShareReply {});
+                            return Ok(DropShareReply { share_id: None });
                         }
                     }
 
@@ -197,7 +198,9 @@ impl<KV: KVApi> ShareApi for KV {
                 Err(e) => {
                     if let MetaError::AppError(AppError::UnknownShareId(_)) = e {
                         if req.if_exists {
-                            return Ok(DropShareReply {});
+                            return Ok(DropShareReply {
+                                share_id: Some(share_id),
+                            });
                         }
                     }
 
@@ -269,7 +272,9 @@ impl<KV: KVApi> ShareApi for KV {
                 );
 
                 if succ {
-                    return Ok(DropShareReply {});
+                    return Ok(DropShareReply {
+                        share_id: Some(share_id),
+                    });
                 }
             }
         }
@@ -298,7 +303,7 @@ impl<KV: KVApi> ShareApi for KV {
                 Err(e) => {
                     if let MetaError::AppError(AppError::UnknownShare(_)) = e {
                         if req.if_exists {
-                            return Ok(AddShareAccountsReply {});
+                            return Ok(AddShareAccountsReply { share_id: None });
                         }
                     }
                     return Err(e);
@@ -373,7 +378,9 @@ impl<KV: KVApi> ShareApi for KV {
                 );
 
                 if succ {
-                    return Ok(AddShareAccountsReply {});
+                    return Ok(AddShareAccountsReply {
+                        share_id: Some(share_id),
+                    });
                 }
             }
         }
@@ -407,7 +414,7 @@ impl<KV: KVApi> ShareApi for KV {
                 Err(e) => {
                     if let MetaError::AppError(AppError::UnknownShare(_)) = e {
                         if req.if_exists {
-                            return Ok(RemoveShareAccountsReply {});
+                            return Ok(RemoveShareAccountsReply { share_id: None });
                         }
                     }
                     return Err(e);
@@ -487,7 +494,9 @@ impl<KV: KVApi> ShareApi for KV {
                 );
 
                 if succ {
-                    return Ok(RemoveShareAccountsReply {});
+                    return Ok(RemoveShareAccountsReply {
+                        share_id: Some(share_id),
+                    });
                 }
             }
         }
@@ -531,7 +540,19 @@ impl<KV: KVApi> ShareApi for KV {
                 share_meta.has_granted_privileges(&req.object, &seq_and_id, req.privilege)?;
 
             if has_granted_privileges {
-                return Ok(GrantShareObjectReply {});
+                return Ok(GrantShareObjectReply {
+                    share_id,
+                    object_id: match seq_and_id {
+                        ShareGrantObjectSeqAndId::Database(_, db_id, _) => db_id,
+                        ShareGrantObjectSeqAndId::Table(_, _, table_id, _) => table_id,
+                    },
+                    options: match seq_and_id {
+                        ShareGrantObjectSeqAndId::Database(_, _, _) => None,
+                        ShareGrantObjectSeqAndId::Table(_, _, _, table_meta) => {
+                            Some(table_meta.options)
+                        }
+                    },
+                });
             }
 
             // Grant the object privilege by inserting these record:
@@ -564,7 +585,7 @@ impl<KV: KVApi> ShareApi for KV {
                     txn_op_put(&id_key, serialize_struct(&share_meta)?), /* (share_id) -> share_meta */
                     txn_op_put(&object, serialize_struct(&share_ids)?),  /* (object) -> share_ids */
                 ];
-                add_grant_object_txn_if_then(share_id, seq_and_id, &mut if_then)?;
+                add_grant_object_txn_if_then(share_id, seq_and_id.clone(), &mut if_then)?;
 
                 let txn_req = TxnRequest {
                     condition,
@@ -582,7 +603,19 @@ impl<KV: KVApi> ShareApi for KV {
                 );
 
                 if succ {
-                    return Ok(GrantShareObjectReply {});
+                    return Ok(GrantShareObjectReply {
+                        share_id,
+                        object_id: match seq_and_id {
+                            ShareGrantObjectSeqAndId::Database(_, db_id, _) => db_id,
+                            ShareGrantObjectSeqAndId::Table(_, _, table_id, _) => table_id,
+                        },
+                        options: match seq_and_id {
+                            ShareGrantObjectSeqAndId::Database(_, _, _) => None,
+                            ShareGrantObjectSeqAndId::Table(_, _, _, table_meta) => {
+                                Some(table_meta.options)
+                            }
+                        },
+                    });
                 }
             }
         }
@@ -626,7 +659,7 @@ impl<KV: KVApi> ShareApi for KV {
                 share_meta.has_granted_privileges(&req.object, &seq_and_id, req.privilege)?;
 
             if !has_granted_privileges {
-                return Ok(RevokeShareObjectReply {});
+                return Ok(RevokeShareObjectReply { share_id });
             }
 
             // Revoke the object privilege by upserting these record:
@@ -685,7 +718,7 @@ impl<KV: KVApi> ShareApi for KV {
                 );
 
                 if succ {
-                    return Ok(RevokeShareObjectReply {});
+                    return Ok(RevokeShareObjectReply { share_id });
                 }
             }
         }
@@ -1090,7 +1123,7 @@ fn check_share_object(
         if let ShareGrantObject::Database(db_id) = entry.object {
             let object_db_id = match seq_and_id {
                 ShareGrantObjectSeqAndId::Database(_, db_id, _) => *db_id,
-                ShareGrantObjectSeqAndId::Table(db_id, _seq, _id) => *db_id,
+                ShareGrantObjectSeqAndId::Table(db_id, _seq, _id, _meta) => *db_id,
             };
             if db_id != object_db_id {
                 return Err(MetaError::AppError(AppError::WrongShareObject(
@@ -1102,7 +1135,7 @@ fn check_share_object(
         }
     } else {
         // Table cannot be granted without database has been granted.
-        if let ShareGrantObjectSeqAndId::Table(_, _, _) = seq_and_id {
+        if let ShareGrantObjectSeqAndId::Table(_, _, _, _) = seq_and_id {
             return Err(MetaError::AppError(AppError::WrongShareObject(
                 WrongShareObject::new(obj_name.to_string()),
             )));
@@ -1167,13 +1200,23 @@ async fn get_share_object_seq_and_id(
             )?;
 
             let tbid = TableId { table_id };
-            let (table_meta_seq, _tb_meta): (_, Option<TableMeta>) =
+            let (table_meta_seq, table_meta): (_, Option<TableMeta>) =
                 get_struct_value(kv_api, &tbid).await?;
+
+            if table_meta_seq == 0 {
+                return Err(MetaError::AppError(AppError::UnknownTable(
+                    UnknownTable::new(
+                        &name_key.table_name,
+                        format!("get_share_object_seq_and_id: {}", name_key),
+                    ),
+                )));
+            }
 
             Ok(ShareGrantObjectSeqAndId::Table(
                 db_id,
                 table_meta_seq,
                 table_id,
+                table_meta.unwrap(),
             ))
         }
     }
@@ -1185,7 +1228,7 @@ fn add_txn_condition(seq_and_id: &ShareGrantObjectSeqAndId, condition: &mut Vec<
             let key = DatabaseId { db_id: *db_id };
             condition.push(txn_cond_seq(&key, Eq, *db_meta_seq))
         }
-        ShareGrantObjectSeqAndId::Table(_db_id, table_meta_seq, table_id) => {
+        ShareGrantObjectSeqAndId::Table(_db_id, table_meta_seq, table_id, _) => {
             let key = TableId {
                 table_id: *table_id,
             };
@@ -1208,7 +1251,7 @@ fn add_grant_object_txn_if_then(
                 if_then.push(txn_op_put(&key, serialize_struct(&db_meta)?));
             }
         }
-        ShareGrantObjectSeqAndId::Table(_, _, _) => {}
+        ShareGrantObjectSeqAndId::Table(_, _, _, _) => {}
     }
 
     Ok(())
