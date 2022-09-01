@@ -287,6 +287,51 @@ macro_rules! impl_to_data_type {
     }
 }
 
+macro_rules! for_all_data_type_impl_enum {
+    ($macro:tt) => {
+        $macro! {
+            { Null },
+            { Nullable },
+            { Boolean },
+            { Int8 },
+            { Int16 },
+            { Int32 },
+            { Int64 },
+            { UInt8 },
+            { UInt16 },
+            { UInt32 },
+            { UInt64 },
+            { Float32 },
+            { Float64 },
+            { Date },
+            { Timestamp },
+            { String },
+            { Struct },
+            { Array },
+            { Variant },
+            { VariantArray },
+            { VariantObject },
+            { Interval }
+        }
+    };
+}
+
+macro_rules! impl_for_data_type_impl {
+    ($( { $T:ident } ),*) => {
+        impl DataTypeImpl {
+            pub fn default_value(&self) -> DataValue {
+                match self {
+                    $(
+                        Self::$T(inner) => inner.default_value(),
+                    )*
+                }
+            }
+        }
+    }
+}
+
+for_all_data_type_impl_enum! { impl_for_data_type_impl }
+
 for_all_scalar_varints! { impl_to_data_type }
 
 pub fn wrap_nullable(data_type: &DataTypeImpl) -> DataTypeImpl {
