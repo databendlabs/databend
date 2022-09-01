@@ -130,6 +130,9 @@ impl InterpreterFactoryV2 {
             Plan::DropTableClusterKey(drop_table_cluster_key) => Ok(Arc::new(
                 DropTableClusterKeyInterpreter::try_create(ctx, *drop_table_cluster_key.clone())?,
             )),
+            Plan::ReclusterTable(recluster_table) => Ok(Arc::new(
+                ReclusterTableInterpreter::try_create(ctx, *recluster_table.clone())?,
+            )),
             Plan::TruncateTable(truncate_table) => Ok(Arc::new(
                 TruncateTableInterpreter::try_create(ctx, *truncate_table.clone())?,
             )),

@@ -30,6 +30,7 @@ use common_functions_v2::scalars::builtin_functions;
 mod arithmetic;
 mod boolean;
 mod control;
+mod datetime;
 mod math;
 mod parser;
 mod string;
@@ -47,10 +48,6 @@ pub fn run_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType, Co
         let fn_registry = builtin_functions();
         let (expr, output_ty) = type_check::check(&raw_expr, &fn_registry)?;
 
-        // Converting to and then back from `RemoteExpr` should not change anything.
-        let remote_expr = RemoteExpr::from_expr(expr);
-        let expr = remote_expr.into_expr(&fn_registry).unwrap();
-
         let input_domains = columns
             .iter()
             .map(|(_, _, col)| col.domain())
@@ -58,6 +55,9 @@ pub fn run_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType, Co
 
         let constant_folder = ConstantFolder::new(&input_domains, FunctionContext::default());
         let (optimized_expr, output_domain) = constant_folder.fold(&expr);
+
+        let remote_expr = RemoteExpr::from_expr(optimized_expr);
+        let optimized_expr = remote_expr.into_expr(&fn_registry).unwrap();
 
         let num_rows = columns.iter().map(|col| col.2.len()).max().unwrap_or(0);
         let chunk = Chunk::new(

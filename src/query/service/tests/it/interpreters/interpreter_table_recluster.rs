@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,7 +19,7 @@ use databend_query::sql::*;
 use futures::TryStreamExt;
 
 #[tokio::test]
-async fn test_optimize_recluster_interpreter() -> Result<()> {
+async fn test_alter_recluster_interpreter() -> Result<()> {
     let (_guard, ctx) = crate::tests::create_query_context().await?;
     let mut planner = Planner::new(ctx.clone());
 
@@ -42,7 +42,15 @@ async fn test_optimize_recluster_interpreter() -> Result<()> {
 
     // insert into.
     {
-        let query = "insert into default.t values(2,2),(4,4)";
+        let query = "insert into default.t values(2,2),(5,5)";
+        let plan = PlanParser::parse(ctx.clone(), query).await?;
+        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let _ = executor.execute().await?;
+    }
+
+    // insert into.
+    {
+        let query = "insert into default.t values(4,4)";
         let plan = PlanParser::parse(ctx.clone(), query).await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         let _ = executor.execute().await?;
@@ -59,7 +67,7 @@ async fn test_optimize_recluster_interpreter() -> Result<()> {
             "+-----------------+-------------------+----------------------------+------------------+---------------+-----------------------+",
             "| cluster_by_keys | total_block_count | total_constant_block_count | average_overlaps | average_depth | block_depth_histogram |",
             "+-----------------+-------------------+----------------------------+------------------+---------------+-----------------------+",
-            "| ((a + 1))       | 2                 | 0                          | 1                | 2             | {\"00002\":2}           |",
+            "| ((a + 1))       | 3                 | 1                          | 1.3333           | 2             | {\"00002\":3}           |",
             "+-----------------+-------------------+----------------------------+------------------+---------------+-----------------------+",
         ];
         common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
@@ -67,7 +75,7 @@ async fn test_optimize_recluster_interpreter() -> Result<()> {
 
     // recluster.
     {
-        let query = "OPTIMIZE TABLE default.t RECLUSTER";
+        let query = "ALTER TABLE default.t RECLUSTER FINAL where a != 4";
         let (plan, _, _) = planner.plan_sql(query).await?;
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         let _ = executor.execute().await?;
@@ -84,7 +92,7 @@ async fn test_optimize_recluster_interpreter() -> Result<()> {
             "+-----------------+-------------------+----------------------------+------------------+---------------+-----------------------+",
             "| cluster_by_keys | total_block_count | total_constant_block_count | average_overlaps | average_depth | block_depth_histogram |",
             "+-----------------+-------------------+----------------------------+------------------+---------------+-----------------------+",
-            "| ((a + 1))       | 1                 | 0                          | 0                | 1             | {\"00001\":1}           |",
+            "| ((a + 1))       | 2                 | 1                          | 1                | 2             | {\"00002\":2}           |",
             "+-----------------+-------------------+----------------------------+------------------+---------------+-----------------------+",
         ];
         common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
@@ -101,7 +109,7 @@ async fn test_optimize_recluster_interpreter() -> Result<()> {
             "+----------+",
             "| COUNT(*) |",
             "+----------+",
-            "| 3        |",
+            "| 4        |",
             "+----------+",
         ];
         common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());

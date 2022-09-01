@@ -107,6 +107,7 @@ enum IntervalKind {
   Second = 5;
   Doy = 6;
   Dow = 7;
+  Quarter = 8;
 }
 message IntervalType {
   uint64 ver = 100;

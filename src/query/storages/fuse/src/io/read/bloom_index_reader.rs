@@ -48,6 +48,7 @@ pub trait BlockBloomFilterIndexReader {
         ctx: Arc<dyn TableContext>,
         dal: Operator,
         columns: &[String],
+        index_length: u64,
     ) -> Result<BlockBloomFilterIndex>;
 }
 
@@ -58,11 +59,13 @@ impl BlockBloomFilterIndexReader for Location {
         ctx: Arc<dyn TableContext>,
         dal: Operator,
         columns: &[String],
+        index_length: u64,
     ) -> Result<BlockBloomFilterIndex> {
         let index_version = BlockBloomFilterIndexVersion::try_from(self.1)?;
         match index_version {
             BlockBloomFilterIndexVersion::V1(_) => {
-                let block = load_bloom_filter_by_columns(ctx, dal, columns, &self.0).await?;
+                let block =
+                    load_bloom_filter_by_columns(ctx, dal, columns, &self.0, index_length).await?;
                 Ok(BlockBloomFilterIndex::new(block))
             }
         }
@@ -78,6 +81,7 @@ mod util_v1 {
     use common_fuse_meta::caches::CacheManager;
 
     use super::*;
+    use crate::io::MetaReaders;
 
     /// load index column data
     #[tracing::instrument(level = "debug", skip_all)]
@@ -86,8 +90,9 @@ mod util_v1 {
         dal: Operator,
         column_needed: &[String],
         path: &str,
+        length: u64,
     ) -> Result<DataBlock> {
-        let file_meta = load_index_meta(&ctx, path, &dal).await?;
+        let file_meta = load_index_meta(&ctx, path, length).await?;
         if file_meta.row_groups.len() != 1 {
             return Err(ErrorCode::StorageOther(format!(
                 "invalid v1 bloom index filter index, number of row group should be 1, but found {} row groups",
@@ -242,31 +247,22 @@ mod util_v1 {
     /// read data from cache, or populate cache items if possible
     #[tracing::instrument(level = "debug", skip_all)]
     async fn load_index_meta(
-        _ctx: &Arc<dyn TableContext>,
+        ctx: &Arc<dyn TableContext>,
         path: &str,
-        dal: &Operator,
+        length: u64,
     ) -> Result<Arc<FileMetaData>> {
-        let storage_runtime = &GlobalIORuntime::instance();
-        if let Some(bloom_index_meta_cache) = CacheManager::instance().get_bloom_index_meta_cache()
-        {
-            let cache = &mut bloom_index_meta_cache.write().await;
-            if let Some(file_meta) = cache.get(path) {
-                Ok(file_meta.clone())
-            } else {
-                let file_meta = load_index_meta_from_storage(dal.clone(), path.to_owned())
-                    .execute_in_runtime(storage_runtime)
-                    .await??;
-                let file_meta = Arc::new(file_meta);
-                cache.put(path.to_owned(), file_meta.clone());
-                Ok(file_meta)
-            }
-        } else {
-            let file_meta = load_index_meta_from_storage(dal.clone(), path.to_owned())
-                .execute_in_runtime(storage_runtime)
-                .await??;
-            let file_meta = Arc::new(file_meta);
-            Ok(file_meta)
+        let storage_runtime = GlobalIORuntime::instance();
+        let ctx_cloned = ctx.clone();
+        let path_owned = path.to_owned();
+        async move {
+            let reader = MetaReaders::file_meta_data_reader(ctx_cloned);
+            // Format of FileMetaData is not versioned, version argument is ignored by the underlying reader,
+            // so we just pass a zero to reader
+            let version = 0;
+            reader.read(path_owned, Some(length), version).await
         }
+        .execute_in_runtime(&storage_runtime)
+        .await?
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
