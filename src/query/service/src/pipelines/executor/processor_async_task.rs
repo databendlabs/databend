@@ -80,6 +80,7 @@ impl ProcessorAsyncTask {
                             );
                         }
                         Either::Right((res, _)) => {
+                            tracing::info!("async processor id {:?} name: {:?}, elapsed:{:?}", wraning_processor.id(), wraning_processor.name(), start.elapsed());
                             return res;
                         }
                     }

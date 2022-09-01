@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::time::Instant;
 
 use async_recursion::async_recursion;
 use common_base::base::tokio;
@@ -279,11 +280,19 @@ impl HiveTable {
         ctx: Arc<dyn TableContext>,
         push_downs: Option<Extras>,
     ) -> Result<(Statistics, Partitions)> {
+        let start = Instant::now();
         let dirs = self.get_query_locations(ctx.clone(), &push_downs).await?;
         let all_files = self.list_files_from_dirs(ctx.clone(), dirs).await?;
 
         let splitter = HiveFileSplitter::create(128 * 1024 * 1024_u64);
         let partitions = splitter.get_splits(all_files);
+
+        tracing::info!("read partition, elapsed:{:?}", start.elapsed());
+
+        // let partitions = all_files
+        // .into_iter()
+        // .map(|(filename, partition)| HivePartInfo::create(filename, partition, 0..2))
+        // .collect();
 
         Ok((Default::default(), partitions))
     }
