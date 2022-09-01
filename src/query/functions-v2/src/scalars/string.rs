@@ -225,29 +225,6 @@ pub fn register(registry: &mut FunctionRegistry) {
         },
     );
 
-    // registry.register_4_arg::<StringType, NumberType<i64>, NumberType<i64>, StringType, StringType, _, _>(
-    //   "insert",
-    //     FunctionProperty::default(),
-    //     |_, _, _, _| None,
-    //     |srcstr, pos, len, substr| {
-    //         let mut values: Vec<u8> = vec![];
-    //
-    //         let sl = srcstr.len() as i64;
-    //         if pos < 1 || pos > sl {
-    //             values.extend_from_slice(srcstr);
-    //         } else {
-    //             let p = pos as usize - 1;
-    //             values.extend_from_slice(&srcstr[0..p]);
-    //             values.extend_from_slice(substr);
-    //             if len >= 0 && pos + len < sl {
-    //                 let l = len as usize;
-    //                 values.extend_from_slice(&srcstr[p + l..]);
-    //             }
-    //         }
-    //         values
-    //     }
-    // );
-
     registry.register_function_factory("insert", |_, args_type| {
         if args_type.len() != 4 {
             return None;
