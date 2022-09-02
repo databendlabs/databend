@@ -47,5 +47,13 @@ a"b"c'd
 a"b"c\'d
 
 statement ok
-DROP DATABASE db1;
+create table if not exists st1(a string);
 
+statement error 1105
+insert into st1 values ('a', 'b');
+
+statement ok
+drop table st1;
+
+statement ok
+DROP DATABASE db1;
