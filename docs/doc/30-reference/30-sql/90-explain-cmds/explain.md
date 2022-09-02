@@ -2,7 +2,7 @@
 title: EXPLAIN
 ---
 
-Shows the physical execution plan of a SQL statement. A physical execution plan contains statistics, such as the number of rows that will be read.
+Shows the execution plan of a SQL statement with statistics, such as the number of rows to read, and the number of storage partitions to scan.
 
 ## Syntax
 
