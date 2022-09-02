@@ -252,14 +252,9 @@ impl BindContext {
             ((None, _), (None, None)) | ((None, _), (None, Some(_)))
                 if column == column_binding.column_name =>
             {
-                if column_binding
+                !column_binding
                     .invisibility
                     .is_some_and(|v| v == &InVisibility::UsingColumnOfJoin)
-                {
-                    false
-                } else {
-                    true
-                }
             }
 
             // Qualified column reference without database name
