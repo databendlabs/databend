@@ -16,7 +16,6 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 
 use crate::ast::write_comma_separated_list;
-use crate::ast::write_period_separated_list;
 use crate::ast::CreateTableSource;
 use crate::ast::Expr;
 use crate::ast::Identifier;
@@ -25,8 +24,6 @@ use crate::ast::Query;
 #[derive(Debug, Clone, PartialEq)]
 pub struct CreateTabularFunctionStmt<'a> {
     pub if_not_exists: bool,
-    pub catalog: Option<Identifier<'a>>,
-    pub database: Option<Identifier<'a>>,
     pub name: Identifier<'a>,
     pub args: Vec<Expr<'a>>,
     pub source: Option<CreateTableSource<'a>>,
@@ -39,21 +36,15 @@ impl Display for CreateTabularFunctionStmt<'_> {
         if self.if_not_exists {
             write!(f, "IF NOT EXISTS ")?;
         }
-        write_period_separated_list(
-            f,
-            self.catalog
-                .iter()
-                .chain(&self.database)
-                .chain(Some(&self.name)),
-        )?;
+        write!(f, "{}", self.name)?;
 
+        write!(f, " (")?;
         if !self.args.is_empty() {
-            write!(f, " (")?;
             write_comma_separated_list(f, &self.args)?;
-            write!(f, ")")?
         }
+        write!(f, ")")?;
 
-        write!(f, "RETURNS TABLE")?;
+        write!(f, " RETURNS TABLE")?;
 
         if let Some(source) = &self.source {
             write!(f, " {source}")?;

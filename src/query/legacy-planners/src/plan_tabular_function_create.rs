@@ -12,10 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod account;
-mod database;
-mod share;
-mod stage;
-mod table;
-mod tabular_function;
-mod view;
+use std::sync::Arc;
+
+use common_datavalues::DataSchema;
+use common_datavalues::DataSchemaRef;
+use common_meta_types::UserTabularFunction;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct CreateTabularFunctionPlan {
+    pub if_not_exists: bool,
+    pub tenant: String,
+    pub user_tabular_function: UserTabularFunction,
+}
+
+impl CreateTabularFunctionPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
+}

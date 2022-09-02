@@ -881,31 +881,16 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     let create_tabular_function = map(
         rule! {
             CREATE ~ FUNCTION ~ ( IF ~ NOT ~ EXISTS )?
-            ~ #peroid_separated_idents_1_to_3
+            ~ #ident
             ~ "(" ~ #comma_separated_list0(expr) ~ ")"
             ~ RETURNS ~ TABLE
             ~ #create_table_source?
             ~ AS ~ #query
         },
-        |(
-            _,
-            _,
-            opt_if_not_exists,
-            (catalog, database, func),
-            _,
-            args,
-            _,
-            _,
-            _,
-            source,
-            _,
-            as_query,
-        )| {
+        |(_, _, opt_if_not_exists, name, _, args, _, _, _, source, _, as_query)| {
             Statement::CreateTabularFunction(CreateTabularFunctionStmt {
                 if_not_exists: opt_if_not_exists.is_some(),
-                catalog,
-                database,
-                name: func,
+                name,
                 args,
                 source,
                 as_query: Box::new(as_query),

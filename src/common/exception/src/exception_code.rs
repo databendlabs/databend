@@ -218,6 +218,9 @@ build_exceptions! {
     UnknownUDF(2602),
     UdfAlreadyExists(2603),
 
+    // User tabular function error codes.
+    IllegalTabularFunctionFormat(2604),
+
     // Database error codes.
     UnknownDatabaseEngine(2701),
     UnknownTableEngine(2702),

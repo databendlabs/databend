@@ -6382,3 +6382,299 @@ ShowGrantsOfShare(
 )
 
 
+---------- Input ----------
+CREATE FUNCTION t () RETURNS TABLE (a INT) AS select a from t;
+---------- Output ---------
+CREATE FUNCTION t () RETURNS TABLE (a Int32 NOT NULL) AS SELECT a FROM t
+---------- AST ------------
+CreateTabularFunction(
+    CreateTabularFunctionStmt {
+        if_not_exists: false,
+        name: Identifier {
+            name: "t",
+            quote: None,
+            span: Ident(16..17),
+        },
+        args: [],
+        source: Some(
+            Columns(
+                [
+                    ColumnDefinition {
+                        name: Identifier {
+                            name: "a",
+                            quote: None,
+                            span: Ident(36..37),
+                        },
+                        data_type: Int32,
+                        default_expr: None,
+                        comment: None,
+                    },
+                ],
+            ),
+        ),
+        as_query: Query {
+            span: [
+                SELECT(46..52),
+                Ident(53..54),
+                FROM(55..59),
+                Ident(60..61),
+            ],
+            with: None,
+            body: Select(
+                SelectStmt {
+                    span: [
+                        SELECT(46..52),
+                        Ident(53..54),
+                        FROM(55..59),
+                        Ident(60..61),
+                    ],
+                    distinct: false,
+                    select_list: [
+                        AliasedExpr {
+                            expr: ColumnRef {
+                                span: [
+                                    Ident(53..54),
+                                ],
+                                database: None,
+                                table: None,
+                                column: Identifier {
+                                    name: "a",
+                                    quote: None,
+                                    span: Ident(53..54),
+                                },
+                            },
+                            alias: None,
+                        },
+                    ],
+                    from: [
+                        Table {
+                            span: [
+                                Ident(60..61),
+                            ],
+                            catalog: None,
+                            database: None,
+                            table: Identifier {
+                                name: "t",
+                                quote: None,
+                                span: Ident(60..61),
+                            },
+                            alias: None,
+                            travel_point: None,
+                        },
+                    ],
+                    selection: None,
+                    group_by: [],
+                    having: None,
+                },
+            ),
+            order_by: [],
+            limit: [],
+            offset: None,
+            format: None,
+        },
+    },
+)
+
+
+---------- Input ----------
+CREATE FUNCTION t (a, b) RETURNS TABLE (a INT) AS select a from t where b=a and c=b;
+---------- Output ---------
+CREATE FUNCTION t (a, b) RETURNS TABLE (a Int32 NOT NULL) AS SELECT a FROM t WHERE b = a AND c = b
+---------- AST ------------
+CreateTabularFunction(
+    CreateTabularFunctionStmt {
+        if_not_exists: false,
+        name: Identifier {
+            name: "t",
+            quote: None,
+            span: Ident(16..17),
+        },
+        args: [
+            ColumnRef {
+                span: [
+                    Ident(19..20),
+                ],
+                database: None,
+                table: None,
+                column: Identifier {
+                    name: "a",
+                    quote: None,
+                    span: Ident(19..20),
+                },
+            },
+            ColumnRef {
+                span: [
+                    Ident(22..23),
+                ],
+                database: None,
+                table: None,
+                column: Identifier {
+                    name: "b",
+                    quote: None,
+                    span: Ident(22..23),
+                },
+            },
+        ],
+        source: Some(
+            Columns(
+                [
+                    ColumnDefinition {
+                        name: Identifier {
+                            name: "a",
+                            quote: None,
+                            span: Ident(40..41),
+                        },
+                        data_type: Int32,
+                        default_expr: None,
+                        comment: None,
+                    },
+                ],
+            ),
+        ),
+        as_query: Query {
+            span: [
+                SELECT(50..56),
+                Ident(57..58),
+                FROM(59..63),
+                Ident(64..65),
+                WHERE(66..71),
+                Ident(72..73),
+                Eq(73..74),
+                Ident(74..75),
+                AND(76..79),
+                Ident(80..81),
+                Eq(81..82),
+                Ident(82..83),
+            ],
+            with: None,
+            body: Select(
+                SelectStmt {
+                    span: [
+                        SELECT(50..56),
+                        Ident(57..58),
+                        FROM(59..63),
+                        Ident(64..65),
+                        WHERE(66..71),
+                        Ident(72..73),
+                        Eq(73..74),
+                        Ident(74..75),
+                        AND(76..79),
+                        Ident(80..81),
+                        Eq(81..82),
+                        Ident(82..83),
+                    ],
+                    distinct: false,
+                    select_list: [
+                        AliasedExpr {
+                            expr: ColumnRef {
+                                span: [
+                                    Ident(57..58),
+                                ],
+                                database: None,
+                                table: None,
+                                column: Identifier {
+                                    name: "a",
+                                    quote: None,
+                                    span: Ident(57..58),
+                                },
+                            },
+                            alias: None,
+                        },
+                    ],
+                    from: [
+                        Table {
+                            span: [
+                                Ident(64..65),
+                            ],
+                            catalog: None,
+                            database: None,
+                            table: Identifier {
+                                name: "t",
+                                quote: None,
+                                span: Ident(64..65),
+                            },
+                            alias: None,
+                            travel_point: None,
+                        },
+                    ],
+                    selection: Some(
+                        BinaryOp {
+                            span: [
+                                AND(76..79),
+                            ],
+                            op: And,
+                            left: BinaryOp {
+                                span: [
+                                    Eq(73..74),
+                                ],
+                                op: Eq,
+                                left: ColumnRef {
+                                    span: [
+                                        Ident(72..73),
+                                    ],
+                                    database: None,
+                                    table: None,
+                                    column: Identifier {
+                                        name: "b",
+                                        quote: None,
+                                        span: Ident(72..73),
+                                    },
+                                },
+                                right: ColumnRef {
+                                    span: [
+                                        Ident(74..75),
+                                    ],
+                                    database: None,
+                                    table: None,
+                                    column: Identifier {
+                                        name: "a",
+                                        quote: None,
+                                        span: Ident(74..75),
+                                    },
+                                },
+                            },
+                            right: BinaryOp {
+                                span: [
+                                    Eq(81..82),
+                                ],
+                                op: Eq,
+                                left: ColumnRef {
+                                    span: [
+                                        Ident(80..81),
+                                    ],
+                                    database: None,
+                                    table: None,
+                                    column: Identifier {
+                                        name: "c",
+                                        quote: None,
+                                        span: Ident(80..81),
+                                    },
+                                },
+                                right: ColumnRef {
+                                    span: [
+                                        Ident(82..83),
+                                    ],
+                                    database: None,
+                                    table: None,
+                                    column: Identifier {
+                                        name: "b",
+                                        quote: None,
+                                        span: Ident(82..83),
+                                    },
+                                },
+                            },
+                        },
+                    ),
+                    group_by: [],
+                    having: None,
+                },
+            ),
+            order_by: [],
+            limit: [],
+            offset: None,
+            format: None,
+        },
+    },
+)
+
+

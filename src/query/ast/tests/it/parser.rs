@@ -288,6 +288,8 @@ fn test_statement() {
         r#"SHOW GRANTS ON TABLE db1.tb1;"#,
         r#"SHOW GRANTS ON DATABASE db;"#,
         r#"SHOW GRANTS OF SHARE t;"#,
+        r#"CREATE FUNCTION t () RETURNS TABLE (a INT) AS select a from t;"#,
+        r#"CREATE FUNCTION t (a, b) RETURNS TABLE (a INT) AS select a from t where b=a and c=b;"#,
     ];
 
     for case in cases {
