@@ -43,6 +43,7 @@ use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
 use common_planners::TruncateTablePlan;
 use common_storages_util::storage_context::StorageContext;
+use common_storages_util::table_storage_prefix::table_storage_prefix;
 use uuid::Uuid;
 
 use crate::io::write_meta;
@@ -116,7 +117,7 @@ impl FuseTable {
                     OPT_KEY_DATABASE_ID
                 ))
             })?;
-        Ok(format!("{}/{}", db_id, table_id))
+        Ok(table_storage_prefix(db_id, table_id))
     }
 
     #[tracing::instrument(level = "debug", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]

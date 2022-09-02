@@ -632,18 +632,18 @@ pub struct ShareInfo {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
 pub struct ShareTableSpec {
     pub name: String,
-    pub id: u64,
-    pub location: String,
+    pub database_id: u64,
+    pub table_id: u64,
     pub version: u64,
     pub presigned_url_timeout: String,
 }
 
 impl ShareTableSpec {
-    pub fn new(name: &str, id: u64, location: String) -> Self {
+    pub fn new(name: &str, database_id: u64, table_id: u64) -> Self {
         ShareTableSpec {
             name: name.to_owned(),
-            id,
-            location,
+            database_id,
+            table_id,
             version: 1,
             presigned_url_timeout: "120s".to_string(),
         }

@@ -1876,10 +1876,12 @@ version = "0.1.0"
 dependencies = [
  "common-exception",
  "common-meta-app",
- "common-storages-fuse",
+ "common-storages-util",
+ "goldenfile",
  "opendal",
  "serde",
  "serde_json",
+ "tempfile",
 ]
 
 [[package]]

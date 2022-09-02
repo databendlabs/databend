@@ -20,8 +20,6 @@ use common_meta_app::schema::TableId;
 use common_meta_app::schema::TableIdToName;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TableNameIdent;
-use common_meta_app::schema::TABLE_OPT_KEY_LEGACY_SNAPSHOT_LOC;
-use common_meta_app::schema::TABLE_OPT_KEY_SNAPSHOT_LOCATION;
 use common_meta_app::share::*;
 use common_meta_types::app_error::AppError;
 use common_meta_types::app_error::ShareAccountsAlreadyExists;
@@ -1385,30 +1383,15 @@ async fn convert_share_meta_to_spec(
     let mut tables = vec![];
     for (_, entry) in share_meta.entries.iter() {
         if let ShareGrantObject::Table(table_id) = entry.object {
-            let tbid = TableId { table_id };
-
-            let (_tb_meta_seq, tb_meta): (_, Option<TableMeta>) =
-                get_struct_value(kv_api, &tbid).await?;
-            if let Some(tb_meta) = tb_meta {
-                let options = &tb_meta.options;
-                let location = options
-                    .get(TABLE_OPT_KEY_SNAPSHOT_LOCATION)
-                    // for backward compatibility, we check the legacy table option
-                    .or_else(|| options.get(TABLE_OPT_KEY_LEGACY_SNAPSHOT_LOC))
-                    .cloned();
-
-                if let Some(location) = location {
-                    let table_id_to_name_key = TableIdToName { table_id };
-                    let (_table_id_to_name_seq, table_name): (_, Option<DBIdTableName>) =
-                        get_struct_value(kv_api, &table_id_to_name_key).await?;
-                    if let Some(table_name) = table_name {
-                        tables.push(ShareTableSpec::new(
-                            &table_name.table_name,
-                            table_id,
-                            location,
-                        ));
-                    }
-                }
+            let table_id_to_name_key = TableIdToName { table_id };
+            let (_table_id_to_name_seq, table_name): (_, Option<DBIdTableName>) =
+                get_struct_value(kv_api, &table_id_to_name_key).await?;
+            if let Some(table_name) = table_name {
+                tables.push(ShareTableSpec::new(
+                    &table_name.table_name,
+                    table_name.db_id,
+                    table_id,
+                ));
             }
         }
     }
