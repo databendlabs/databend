@@ -218,8 +218,14 @@ impl<'a> Binder {
                 let mut input_state = input_format.create_state();
                 let skip_size = input_format.skip_header(data_slice, &mut input_state, 0)?;
 
-                let _ = input_format.read_buf(&data_slice[skip_size..], &mut input_state)?;
-                let blocks = input_format.deserialize_data(&mut input_state)?;
+                let split = FileSplit {
+                    path: None,
+                    start_offset: 0,
+                    start_row: 0,
+                    buf: data_slice[skip_size..].to_owned(),
+                };
+
+                let blocks = input_format.deserialize_complete_split(split)?;
                 let block = DataBlock::concat_blocks(&blocks)?;
                 Ok(InsertInputSource::Values(InsertValueBlock { block }))
             }
