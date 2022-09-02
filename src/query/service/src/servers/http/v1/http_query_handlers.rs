@@ -212,12 +212,12 @@ async fn query_page_handler(
     let http_query_manager = HttpQueryManager::instance();
     match http_query_manager.get_query(&query_id).await {
         Some(query) => {
-            query.clear_expire_time().await;
+            query.update_expire_time(true).await;
             let resp = query
                 .get_response_page(page_no)
                 .await
                 .map_err(|err| poem::Error::from_string(err.message(), StatusCode::NOT_FOUND))?;
-            query.update_expire_time().await;
+            query.update_expire_time(false).await;
             Ok(Json(QueryResponse::from_internal(query_id, resp)))
         }
         None => Err(query_id_not_found(query_id)),
@@ -236,11 +236,11 @@ pub(crate) async fn query_handler(
 
     match query {
         Ok(query) => {
+            query.update_expire_time(true).await;
             let resp = query
                 .get_response_page(0)
                 .await
                 .map_err(|err| poem::Error::from_string(err.message(), StatusCode::NOT_FOUND))?;
-            query.update_expire_time().await;
             let (rows, next_page) = match &resp.data {
                 None => (0, None),
                 Some(p) => (p.page.data.num_rows(), p.next_page_no),
@@ -249,6 +249,7 @@ pub(crate) async fn query_handler(
                 "initial response to http query_id={}, state={:?}, rows={}, next_page={:?}, sql='{}'",
                 &query.id, &resp.state, rows, next_page, sql
             );
+            query.update_expire_time(false).await;
             Ok(Json(QueryResponse::from_internal(
                 query.id.to_string(),
                 resp,

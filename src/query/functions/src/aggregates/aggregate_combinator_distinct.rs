@@ -146,6 +146,10 @@ where
             self.nested.drop_state(netest_place);
         }
     }
+
+    fn get_if_condition(&self, columns: &[ColumnRef]) -> Option<Bitmap> {
+        self.nested.get_if_condition(columns)
+    }
 }
 
 impl<S, State> fmt::Display for AggregateDistinctCombinator<S, State> {

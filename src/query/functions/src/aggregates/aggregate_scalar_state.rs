@@ -173,7 +173,6 @@ where
         if let Some(val) = &self.value {
             builder.push(val.as_scalar_ref());
         } else {
-            // TODO make it nullable or default ?
             builder.push(S::default().as_scalar_ref());
         }
         Ok(())

@@ -22,8 +22,11 @@ use common_arrow::arrow::trusted_len::TrustedLen;
 use enum_as_inner::EnumAsInner;
 use itertools::Itertools;
 use ordered_float::OrderedFloat;
+use serde::de::Visitor;
 use serde::Deserialize;
+use serde::Deserializer;
 use serde::Serialize;
+use serde::Serializer;
 
 use crate::property::Domain;
 use crate::types::array::ArrayColumn;
@@ -45,6 +48,8 @@ use crate::util::append_bitmap;
 use crate::util::bitmap_into_mut;
 use crate::util::buffer_into_mut;
 use crate::util::constant_bitmap;
+use crate::util::deserialize_arrow_array;
+use crate::util::serialize_arrow_array;
 
 #[derive(Debug, Clone, EnumAsInner)]
 pub enum Value<T: ValueType> {
@@ -76,7 +81,6 @@ pub enum Scalar {
     Timestamp(Timestamp),
     Boolean(bool),
     String(Vec<u8>),
-    #[serde(skip)]
     Array(Column),
     Tuple(Vec<Scalar>),
 }
@@ -1039,6 +1043,37 @@ impl Column {
             Column::Nullable(c) => c.column.memory_size() + c.validity.as_slice().0.len(),
             Column::Tuple { fields, .. } => fields.iter().map(|f| f.memory_size()).sum(),
         }
+    }
+}
+
+impl Serialize for Column {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where S: Serializer {
+        serializer.serialize_bytes(&serialize_arrow_array(self.as_arrow()))
+    }
+}
+
+impl<'de> Deserialize<'de> for Column {
+    fn deserialize<D>(deserializer: D) -> Result<Column, D::Error>
+    where D: Deserializer<'de> {
+        struct ColumnVisitor;
+
+        impl<'de> Visitor<'de> for ColumnVisitor {
+            type Value = Column;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("an arrow chunk with exactly one column")
+            }
+
+            fn visit_bytes<E>(self, value: &[u8]) -> Result<Self::Value, E>
+            where E: serde::de::Error {
+                let array = deserialize_arrow_array(value)
+                    .expect("expecting an arrow chunk with exactly one column");
+                Ok(Column::from_arrow(&*array))
+            }
+        }
+
+        deserializer.deserialize_bytes(ColumnVisitor)
     }
 }
 

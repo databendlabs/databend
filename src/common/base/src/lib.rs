@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![feature(backtrace)]
 #![feature(thread_local)]
 
 pub mod base;

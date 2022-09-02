@@ -157,19 +157,18 @@ Specifies a default value inserted in the column if a value is not specified via
 
 For example:
 ```sql
-CREATE TABLE t_default_value(a TINYINT UNSIGNED, b SMALLINT DEFAULT (a+3), c VARCHAR DEFAULT 'c');
+CREATE TABLE t_default_value(a TINYINT UNSIGNED, b VARCHAR DEFAULT 'b');
 ```
 
 Desc the `t_default_value` table:
 ```sql
 DESC t_default_value;
-+-------+--------+------+---------+
-| Field | Type   | Null | Default |
-+-------+--------+------+---------+
-| a     | UInt8  | NO   | 0       |
-| b     | Int16  | NO   | (a + 3) |
-| c     | String | NO   | c       |
-+-------+--------+------+---------+
++-------+------------------+------+---------+-------+
+| Field | Type             | Null | Default | Extra |
++-------+------------------+------+---------+-------+
+| a     | TINYINT UNSIGNED | NO   | 0       |       |
+| b     | VARCHAR          | NO   | b       |       |
++-------+------------------+------+---------+-------+
 ```
 
 Insert a value:
@@ -180,11 +179,11 @@ INSERT INTO T_default_value(a) VALUES(1);
 Check the table values:
 ```sql
 SELECT * FROM t_default_value;
-+------+------+------+
-| a    | b    | c    |
-+------+------+------+
-|    1 |    4 | c    |
-+------+------+------+
++------+------+
+| a    | b    |
++------+------+
+|    1 | b    |
++------+------+
 ```
 
 ## MySQL Compatibility

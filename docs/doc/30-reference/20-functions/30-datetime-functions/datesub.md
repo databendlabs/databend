@@ -11,11 +11,11 @@ DATE_SUB(<unit>, <value>,  <date_or_time_expr>)
 ```
 ## Arguments
 
-| Arguments             | Description |
-|-----------------------| ----------- |
-| `<unit>`              | Must be of the following values: `YEAR`, `MONTH`, `DAY`, `HOUR`, `MINUTE` and `SECOND` |
-| `<value>`             |This is the number of units of time that you want to add. For example, if you want to add 2 days, this will be 2.|
-| `<date_or_time_expr>` | A value of `DATE`, `TIME`, or `TIMESTAMP` type |
+| Arguments             | Description                                                                                                       |
+|-----------------------|-------------------------------------------------------------------------------------------------------------------|
+| `<unit>`              | Must be of the following values: `YEAR`, `QUARTER`, `MONTH`, `DAY`, `HOUR`, `MINUTE` and `SECOND`                 |
+| `<value>`             | This is the number of units of time that you want to add. For example, if you want to add 2 days, this will be 2. |
+| `<date_or_time_expr>` | A value of `DATE`, `TIME`, or `TIMESTAMP` type                                                                    |
 
 ## Return Type
 

@@ -112,7 +112,7 @@ impl HttpQueryManager {
         let q = queries.remove(query_id);
         if let Some(q) = queries.remove(query_id) {
             if q.is_async() {
-                q.update_expire_time().await;
+                q.update_expire_time(false).await;
             }
         }
         q

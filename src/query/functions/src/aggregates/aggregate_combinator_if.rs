@@ -136,7 +136,8 @@ impl AggregateFunction for AggregateIfCombinator {
     }
 
     fn accumulate_row(&self, place: StateAddr, columns: &[ColumnRef], row: usize) -> Result<()> {
-        let predicate: &BooleanColumn = Series::check_get(&columns[self.argument_len - 1])?;
+        let predicate: &BooleanColumn =
+            unsafe { Series::static_cast(&columns[self.argument_len - 1]) };
         if predicate.values().get_bit(row) {
             self.nested
                 .accumulate_row(place, &columns[0..self.argument_len - 1], row)?;
@@ -166,6 +167,12 @@ impl AggregateFunction for AggregateIfCombinator {
 
     unsafe fn drop_state(&self, place: StateAddr) {
         self.nested.drop_state(place);
+    }
+
+    fn get_if_condition(&self, columns: &[ColumnRef]) -> Option<Bitmap> {
+        let predicate: &BooleanColumn =
+            unsafe { Series::static_cast(&columns[self.argument_len - 1]) };
+        Some(predicate.values().clone())
     }
 }
 

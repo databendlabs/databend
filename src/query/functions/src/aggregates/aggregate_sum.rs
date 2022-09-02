@@ -40,7 +40,7 @@ struct AggregateSumState<T> {
 }
 
 impl<T> AggregateSumState<T>
-where T: std::ops::AddAssign + Serialize + DeserializeOwned + Copy + Clone
+where T: std::ops::AddAssign + Serialize + DeserializeOwned + Copy + Clone + std::fmt::Debug
 {
     #[inline(always)]
     fn add(&mut self, other: T) {

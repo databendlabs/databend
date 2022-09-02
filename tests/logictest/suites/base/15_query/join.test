@@ -411,7 +411,7 @@ statement query I
 SELECT SUM(count) FROM (SELECT ((false IS NOT NULL AND false) ::INT64)as count FROM t4 NATURAL LEFT JOIN t3) as res;
 
 ----
-0
+NULL
 
 statement ok
 drop table t1;

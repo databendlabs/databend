@@ -16,6 +16,7 @@ use std::panic::AssertUnwindSafe;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
+use std::time::SystemTime;
 
 use common_base::base::tokio::sync::mpsc;
 use common_base::base::tokio::sync::RwLock;
@@ -37,7 +38,6 @@ use serde::Serialize;
 use tracing::error;
 use ExecuteState::*;
 
-use super::http_query::HttpQueryRequest;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
 use crate::interpreters::InterpreterFactoryV2;
@@ -88,6 +88,7 @@ impl Progresses {
 }
 
 pub enum ExecuteState {
+    Starting(ExecuteStarting),
     Running(ExecuteRunning),
     Stopped(ExecuteStopped),
 }
@@ -95,13 +96,16 @@ pub enum ExecuteState {
 impl ExecuteState {
     pub(crate) fn extract(&self) -> (ExecuteStateKind, Option<ErrorCode>) {
         match self {
-            Running(_) => (ExecuteStateKind::Running, None),
+            Starting(_) | Running(_) => (ExecuteStateKind::Running, None),
             Stopped(v) => match &v.reason {
                 Ok(_) => (ExecuteStateKind::Succeeded, None),
                 Err(e) => (ExecuteStateKind::Failed, Some(e.clone())),
             },
         }
     }
+}
+pub struct ExecuteStarting {
+    pub(crate) ctx: Arc<QueryContext>,
 }
 
 pub struct ExecuteRunning {
@@ -113,80 +117,123 @@ pub struct ExecuteRunning {
 }
 
 pub struct ExecuteStopped {
-    stats: Progresses,
-    affect: Option<QueryAffect>,
-    reason: Result<()>,
-    stop_time: Instant,
+    pub stats: Progresses,
+    pub affect: Option<QueryAffect>,
+    pub reason: Result<()>,
+    pub stop_time: Instant,
 }
 
 pub struct Executor {
-    start_time: Instant,
-    pub(crate) state: ExecuteState,
+    pub query_id: String,
+    pub start_time: Instant,
+    pub state: ExecuteState,
 }
 
 impl Executor {
-    pub(crate) fn get_progress(&self) -> Progresses {
+    pub fn get_progress(&self) -> Progresses {
         match &self.state {
+            Starting(_) => Default::default(),
             Running(r) => Progresses::from_context(&r.ctx),
             Stopped(f) => f.stats.clone(),
         }
     }
 
-    pub(crate) fn get_affect(&self) -> Option<QueryAffect> {
+    pub fn get_affect(&self) -> Option<QueryAffect> {
         match &self.state {
+            Starting(_) => None,
             Running(r) => r.ctx.get_affect(),
             Stopped(r) => r.affect.clone(),
         }
     }
 
-    pub(crate) fn elapsed(&self) -> Duration {
+    pub fn elapsed(&self) -> Duration {
         match &self.state {
-            Running(_) => Instant::now() - self.start_time,
+            Starting(_) | Running(_) => Instant::now() - self.start_time,
             Stopped(f) => f.stop_time - self.start_time,
         }
     }
 
-    pub(crate) async fn stop(this: &Arc<RwLock<Executor>>, reason: Result<()>, kill: bool) {
+    pub async fn start_to_running(this: &Arc<RwLock<Executor>>, state: ExecuteState) {
         let mut guard = this.write().await;
-        if let Running(r) = &guard.state {
-            // release session
-            if kill {
-                r.session.force_kill_query();
-            }
-            // Write Finish to query log table.
-            let _ = r
-                .interpreter
-                .finish()
-                .await
-                .map_err(|e| error!("interpreter.finish error: {:?}", e));
-            guard.state = Stopped(ExecuteStopped {
-                stats: Progresses::from_context(&r.ctx),
-                reason: reason.clone(),
-                stop_time: Instant::now(),
-                affect: r.ctx.get_affect(),
-            });
+        if let Starting(_) = &guard.state {
+            guard.state = state
+        }
+    }
 
-            if let Err(e) = reason {
-                if e.code() != ErrorCode::aborted_session_code()
-                    && e.code() != ErrorCode::aborted_query_code()
-                {
-                    // query state can be pulled multi times, only log it once
-                    error!("Query Error: {:?}", e);
+    pub async fn start_to_stop(this: &Arc<RwLock<Executor>>, state: ExecuteState) {
+        let mut guard = this.write().await;
+        if let Starting(_) = &guard.state {
+            guard.state = state
+        }
+    }
+    pub async fn stop(this: &Arc<RwLock<Executor>>, reason: Result<()>, kill: bool) {
+        {
+            let guard = this.read().await;
+            tracing::info!(
+                "http query {}: change state to Stopped, reason {:?}",
+                &guard.query_id,
+                reason
+            );
+        }
+
+        let mut guard = this.write().await;
+        match &guard.state {
+            Starting(s) => {
+                if let Err(e) = &reason {
+                    s.ctx.set_error(e.clone());
+                    InterpreterQueryLog::create(s.ctx.clone(), "".to_string())
+                        .log_finish(SystemTime::now(), Some(e.clone()))
+                        .await
+                        .unwrap_or_else(|e| error!("fail to write query_log {:?}", e));
                 }
+                guard.state = Stopped(ExecuteStopped {
+                    stats: Default::default(),
+                    reason,
+                    stop_time: Instant::now(),
+                    affect: Default::default(),
+                })
             }
-        };
+            Running(r) => {
+                // release session
+                if kill {
+                    r.session.force_kill_query();
+                }
+                if let Err(e) = &reason {
+                    r.ctx.set_error(e.clone());
+                }
+                // Write Finish to query log table.
+                let _ = r
+                    .interpreter
+                    .finish()
+                    .await
+                    .map_err(|e| error!("interpreter.finish error: {:?}", e));
+                guard.state = Stopped(ExecuteStopped {
+                    stats: Progresses::from_context(&r.ctx),
+                    reason,
+                    stop_time: Instant::now(),
+                    affect: r.ctx.get_affect(),
+                })
+            }
+            Stopped(s) => {
+                tracing::info!(
+                    "http query {}: already stopped, reason {:?}, new reason {:?}",
+                    &guard.query_id,
+                    s.reason,
+                    reason
+                );
+            }
+        }
     }
 }
 
 impl ExecuteState {
-    pub(crate) async fn try_create(
-        request: &HttpQueryRequest,
+    pub(crate) async fn try_start_query(
+        executor: Arc<RwLock<Executor>>,
+        sql: &str,
         session: Arc<Session>,
         ctx: Arc<QueryContext>,
         block_buffer: Arc<BlockBuffer>,
-    ) -> Result<Arc<RwLock<Executor>>> {
-        let sql = &request.sql;
-        let start_time = Instant::now();
+    ) -> Result<ExecuteRunning> {
         ctx.attach_query_str(sql);
 
         let stmts = DfParser::parse_sql(sql, ctx.get_current_session().get_type());
@@ -223,16 +270,12 @@ impl ExecuteState {
                 ctx: ctx.clone(),
                 interpreter: interpreter.clone(),
             };
-            let executor = Arc::new(RwLock::new(Executor {
-                start_time,
-                state: Running(running_state),
-            }));
             ctx.attach_http_query(HttpQueryHandle {
                 executor: executor.clone(),
                 block_buffer,
             });
             interpreter.execute().await?;
-            Ok(executor)
+            Ok(running_state)
         } else {
             // Write Start to query log table.
             let _ = interpreter
@@ -245,10 +288,6 @@ impl ExecuteState {
                 ctx: ctx.clone(),
                 interpreter: interpreter.clone(),
             };
-            let executor = Arc::new(RwLock::new(Executor {
-                start_time,
-                state: Running(running_state),
-            }));
 
             let executor_clone = executor.clone();
             let ctx_clone = ctx.clone();
@@ -273,8 +312,7 @@ impl ExecuteState {
                     _ => {}
                 }
             })?;
-
-            Ok(executor)
+            Ok(running_state)
         }
     }
 }
@@ -346,9 +384,6 @@ impl HttpQueryHandle {
         mut build_res: PipelineBuildResult,
         result_columns: &[ColumnBinding],
     ) -> Result<SendableDataBlockStream> {
-        let id = ctx.get_id();
-        tracing::info!("http query {id} execute() begin");
-
         let executor = self.executor.clone();
         let block_buffer = self.block_buffer.clone();
 
@@ -430,7 +465,6 @@ impl HttpQueryHandle {
                 }
             }
         });
-        tracing::info!("http query {id} execute() end");
         Ok(Box::pin(DataBlockStream::create(schema, None, vec![])))
     }
 }
