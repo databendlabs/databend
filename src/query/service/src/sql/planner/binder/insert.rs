@@ -41,6 +41,7 @@ use common_streams::NDJsonSourceBuilder;
 use common_streams::Source;
 use tracing::debug;
 
+use crate::evaluator::EvalNode;
 use crate::evaluator::Evaluator;
 use crate::pipelines::processors::transforms::ExpressionTransformV2;
 use crate::sessions::QueryContext;
@@ -448,6 +449,36 @@ pub fn skip_to_next_row<R: BufferRead>(
     Ok(())
 }
 
+fn fill_default_value(
+    expressions: &mut Vec<(EvalNode<String>, String)>,
+    field: &DataField,
+) -> Result<()> {
+    if let Some(default_expr) = field.default_expr() {
+        expressions.push((
+            Evaluator::eval_physical_scalar(&serde_json::from_str(default_expr)?)?,
+            field.name().to_string(),
+        ));
+    } else {
+        // If field data type is nullable, then we'll fill it with null.
+        if field.data_type().is_nullable() {
+            let scalar = Scalar::ConstantExpr(ConstantExpr {
+                value: DataValue::Null,
+                data_type: Box::new(field.data_type().clone()),
+            });
+            expressions.push((Evaluator::eval_scalar(&scalar)?, field.name().to_string()));
+        } else {
+            expressions.push((
+                Evaluator::eval_scalar(&Scalar::ConstantExpr(ConstantExpr {
+                    value: field.data_type().default_value(),
+                    data_type: Box::new(field.data_type().clone()),
+                }))?,
+                field.name().to_string(),
+            ));
+        }
+    }
+    Ok(())
+}
+
 async fn exprs_to_datavalue<'a>(
     exprs: Vec<Expr<'a>>,
     schema: &DataSchemaRef,
@@ -457,8 +488,21 @@ async fn exprs_to_datavalue<'a>(
     metadata: MetadataRef,
 ) -> Result<Vec<DataValue>> {
     let schema_fields_len = schema.fields().len();
+    if exprs.len() < schema_fields_len {
+        return Err(ErrorCode::LogicalError(
+            "Column count doesn't match value count",
+        ));
+    }
     let mut expressions = Vec::with_capacity(schema_fields_len);
     for (i, expr) in exprs.iter().enumerate() {
+        // `DEFAULT` in insert values will be parsed as `Expr::ColumnRef`.
+        if let Expr::ColumnRef { column, .. } = expr {
+            if column.name.eq_ignore_ascii_case("default") {
+                let field = schema.field(i);
+                fill_default_value(&mut expressions, field)?;
+                continue;
+            }
+        }
         let mut scalar_binder = ScalarBinder::new(
             bind_context,
             ctx.clone(),
@@ -479,34 +523,6 @@ async fn exprs_to_datavalue<'a>(
             Evaluator::eval_scalar(&scalar)?,
             schema.field(i).name().to_string(),
         ));
-    }
-    if exprs.len() < schema_fields_len {
-        for idx in exprs.len()..schema_fields_len {
-            let field = schema.field(idx);
-            if let Some(default_expr) = field.default_expr() {
-                expressions.push((
-                    Evaluator::eval_physical_scalar(&serde_json::from_str(default_expr)?)?,
-                    schema.field(idx).name().to_string(),
-                ));
-            } else {
-                // If field data type is nullable, then we'll fill it with null.
-                if field.data_type().is_nullable() {
-                    let scalar = Scalar::ConstantExpr(ConstantExpr {
-                        value: DataValue::Null,
-                        data_type: Box::new(field.data_type().clone()),
-                    });
-                    expressions.push((
-                        Evaluator::eval_scalar(&scalar)?,
-                        schema.field(idx).name().to_string(),
-                    ));
-                } else {
-                    return Err(ErrorCode::LogicalError(format!(
-                        "null value in column {} violates not-null constraint",
-                        schema.field(idx).name()
-                    )));
-                }
-            }
-        }
     }
 
     let dummy = DataSchemaRefExt::create(vec![DataField::new("dummy", u8::to_data_type())]);
