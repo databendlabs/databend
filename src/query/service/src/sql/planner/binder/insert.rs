@@ -488,6 +488,11 @@ async fn exprs_to_datavalue<'a>(
     metadata: MetadataRef,
 ) -> Result<Vec<DataValue>> {
     let schema_fields_len = schema.fields().len();
+    if exprs.len() > schema_fields_len {
+        return Err(ErrorCode::LogicalError(
+            "Column count shouldn't be more than the number of schema",
+        ));
+    }
     if exprs.len() < schema_fields_len {
         return Err(ErrorCode::LogicalError(
             "Column count doesn't match value count",
