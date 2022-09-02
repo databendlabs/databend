@@ -1,5 +1,5 @@
 {
-  "label": "KILL Commands",
+  "label": "kill Commands",
   "link": {
     "type": "generated-index",
     "slug": "/reference/sql/kill"
