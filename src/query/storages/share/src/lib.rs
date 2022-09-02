@@ -14,4 +14,4 @@
 
 mod share;
 
-pub use share::ModShareSpec;
+pub use share::save_share_spec;

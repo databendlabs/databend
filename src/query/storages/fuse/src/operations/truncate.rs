@@ -20,11 +20,11 @@ use common_fuse_meta::meta::TableSnapshot;
 use common_fuse_meta::meta::Versioned;
 use common_meta_app::schema::TableStatistics;
 use common_meta_app::schema::UpdateTableMetaReq;
+use common_meta_app::schema::TABLE_OPT_KEY_SNAPSHOT_LOCATION;
 use common_meta_types::MatchSeq;
 use uuid::Uuid;
 
 use crate::FuseTable;
-use crate::OPT_KEY_SNAPSHOT_LOCATION;
 
 impl FuseTable {
     #[inline]
@@ -62,7 +62,7 @@ impl FuseTable {
             // update snapshot location
             new_table_meta
                 .options
-                .insert(OPT_KEY_SNAPSHOT_LOCATION.to_owned(), new_snapshot_loc);
+                .insert(TABLE_OPT_KEY_SNAPSHOT_LOCATION.to_owned(), new_snapshot_loc);
 
             // update table statistics, all zeros
             new_table_meta.statistics = TableStatistics::default();

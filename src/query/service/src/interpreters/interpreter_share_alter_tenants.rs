@@ -20,7 +20,7 @@ use common_meta_api::ShareApi;
 use common_meta_app::share::AddShareAccountsReq;
 use common_meta_app::share::RemoveShareAccountsReq;
 use common_meta_app::share::ShareNameIdent;
-use common_storages_share::ModShareSpec;
+use common_storages_share::save_share_spec;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
@@ -63,16 +63,13 @@ impl Interpreter for AlterShareTenantsInterpreter {
             let resp = meta_api.add_share_tenants(req).await?;
 
             if let Some(share_id) = resp.share_id {
-                let mod_spec = ModShareSpec::AddShareAccounts {
-                    accounts: self.plan.accounts.clone(),
-                };
-                mod_spec
-                    .save(
-                        self.ctx.get_tenant(),
-                        share_id,
-                        self.ctx.get_storage_operator()?,
-                    )
-                    .await?;
+                save_share_spec(
+                    self.ctx.get_tenant(),
+                    share_id,
+                    self.ctx.get_storage_operator()?,
+                    resp.spec,
+                )
+                .await?;
             }
         } else {
             let req = RemoveShareAccountsReq {
@@ -86,16 +83,13 @@ impl Interpreter for AlterShareTenantsInterpreter {
             let resp = meta_api.remove_share_tenants(req).await?;
 
             if let Some(share_id) = resp.share_id {
-                let mod_spec = ModShareSpec::RemoveShareAccounts {
-                    accounts: self.plan.accounts.clone(),
-                };
-                mod_spec
-                    .save(
-                        self.ctx.get_tenant(),
-                        share_id,
-                        self.ctx.get_storage_operator()?,
-                    )
-                    .await?;
+                save_share_spec(
+                    self.ctx.get_tenant(),
+                    share_id,
+                    self.ctx.get_storage_operator()?,
+                    resp.spec,
+                )
+                .await?;
             }
         };
 

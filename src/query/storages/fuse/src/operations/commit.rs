@@ -34,6 +34,8 @@ use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableStatistics;
 use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
+use common_meta_app::schema::TABLE_OPT_KEY_LEGACY_SNAPSHOT_LOC;
+use common_meta_app::schema::TABLE_OPT_KEY_SNAPSHOT_LOCATION;
 use common_meta_types::MatchSeq;
 use tracing::debug;
 use tracing::info;
@@ -44,8 +46,6 @@ use crate::operations::AppendOperationLogEntry;
 use crate::operations::TableOperationLog;
 use crate::statistics;
 use crate::FuseTable;
-use crate::OPT_KEY_LEGACY_SNAPSHOT_LOC;
-use crate::OPT_KEY_SNAPSHOT_LOCATION;
 
 const OCC_DEFAULT_BACKOFF_INIT_DELAY_MS: Duration = Duration::from_millis(5);
 const OCC_DEFAULT_BACKOFF_MAX_DELAY_MS: Duration = Duration::from_millis(20 * 1000);
@@ -267,9 +267,10 @@ impl FuseTable {
         let mut new_table_meta = table_info.meta.clone();
 
         // set new snapshot location
-        new_table_meta
-            .options
-            .insert(OPT_KEY_SNAPSHOT_LOCATION.to_owned(), new_snapshot_location);
+        new_table_meta.options.insert(
+            TABLE_OPT_KEY_SNAPSHOT_LOCATION.to_owned(),
+            new_snapshot_location,
+        );
 
         // remove legacy options
         self::utils::remove_legacy_options(&mut new_table_meta.options);
@@ -369,6 +370,6 @@ mod utils {
 
     // check if there are any fuse table legacy options
     pub fn remove_legacy_options(table_options: &mut BTreeMap<String, String>) {
-        table_options.remove(OPT_KEY_LEGACY_SNAPSHOT_LOC);
+        table_options.remove(TABLE_OPT_KEY_LEGACY_SNAPSHOT_LOC);
     }
 }

@@ -19,7 +19,7 @@ use common_exception::Result;
 use common_meta_api::ShareApi;
 use common_meta_app::share::GrantShareObjectReq;
 use common_meta_app::share::ShareNameIdent;
-use common_storages_share::ModShareSpec;
+use common_storages_share::save_share_spec;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
@@ -59,18 +59,14 @@ impl Interpreter for GrantShareObjectInterpreter {
             grant_on: Utc::now(),
         };
         let resp = meta_api.grant_share_object(req).await?;
-        let mod_spec = ModShareSpec::GrantShareObject {
-            object_name: self.plan.object.clone(),
-            id: resp.object_id,
-            options: resp.options,
-        };
-        mod_spec
-            .save(
-                self.ctx.get_tenant(),
-                resp.share_id,
-                self.ctx.get_storage_operator()?,
-            )
-            .await?;
+
+        save_share_spec(
+            self.ctx.get_tenant(),
+            resp.share_id,
+            self.ctx.get_storage_operator()?,
+            Some(resp.spec),
+        )
+        .await?;
 
         Ok(Box::pin(DataBlockStream::create(
             self.plan.schema(),

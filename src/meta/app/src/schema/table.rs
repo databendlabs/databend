@@ -28,6 +28,18 @@ use maplit::hashmap;
 
 use crate::schema::database::DatabaseNameIdent;
 
+pub const TABLE_OPT_KEY_SNAPSHOT_LOCATION: &str = "snapshot_location";
+
+/// Legacy table snapshot location key
+///
+/// # Deprecated
+///
+/// For backward compatibility, this option key can still be recognized,
+/// but use can no longer use this key in DDLs
+///
+/// If both OPT_KEY_SNAPSHOT_LOC and TABLE_OPT_KEY_SNAPSHOT_LOCATION exist, the latter will be used
+pub const TABLE_OPT_KEY_LEGACY_SNAPSHOT_LOC: &str = "snapshot_loc";
+
 /// Globally unique identifier of a version of TableMeta.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
 pub struct TableIdent {

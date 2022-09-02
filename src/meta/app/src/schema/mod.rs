@@ -62,3 +62,5 @@ pub use table::UpdateTableMetaReply;
 pub use table::UpdateTableMetaReq;
 pub use table::UpsertTableOptionReply;
 pub use table::UpsertTableOptionReq;
+pub use table::TABLE_OPT_KEY_LEGACY_SNAPSHOT_LOC;
+pub use table::TABLE_OPT_KEY_SNAPSHOT_LOCATION;

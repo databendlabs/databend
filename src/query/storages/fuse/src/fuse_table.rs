@@ -32,6 +32,8 @@ use common_legacy_parser::ExpressionParser;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::UpdateTableMetaReq;
+use common_meta_app::schema::TABLE_OPT_KEY_LEGACY_SNAPSHOT_LOC;
+use common_meta_app::schema::TABLE_OPT_KEY_SNAPSHOT_LOCATION;
 use common_meta_types::MatchSeq;
 use common_planners::DeletePlan;
 use common_planners::Expression;
@@ -57,8 +59,6 @@ use crate::DEFAULT_ROW_PER_BLOCK;
 use crate::FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD;
 use crate::FUSE_OPT_KEY_ROW_PER_BLOCK;
 use crate::OPT_KEY_DATABASE_ID;
-use crate::OPT_KEY_LEGACY_SNAPSHOT_LOC;
-use crate::OPT_KEY_SNAPSHOT_LOCATION;
 
 #[derive(Clone)]
 pub struct FuseTable {
@@ -148,9 +148,9 @@ impl FuseTable {
         let options = self.table_info.options();
 
         options
-            .get(OPT_KEY_SNAPSHOT_LOCATION)
+            .get(TABLE_OPT_KEY_SNAPSHOT_LOCATION)
             // for backward compatibility, we check the legacy table option
-            .or_else(|| options.get(OPT_KEY_LEGACY_SNAPSHOT_LOC))
+            .or_else(|| options.get(TABLE_OPT_KEY_LEGACY_SNAPSHOT_LOC))
             .cloned()
     }
 
@@ -189,10 +189,12 @@ impl FuseTable {
         write_meta(&operator, &snapshot_loc, snapshot).await?;
 
         // set new snapshot location
-        meta.options
-            .insert(OPT_KEY_SNAPSHOT_LOCATION.to_owned(), snapshot_loc.clone());
+        meta.options.insert(
+            TABLE_OPT_KEY_SNAPSHOT_LOCATION.to_owned(),
+            snapshot_loc.clone(),
+        );
         // remove legacy options
-        meta.options.remove(OPT_KEY_LEGACY_SNAPSHOT_LOC);
+        meta.options.remove(TABLE_OPT_KEY_LEGACY_SNAPSHOT_LOC);
 
         let table_id = self.table_info.ident.table_id;
         let table_version = self.table_info.ident.seq;
