@@ -37,6 +37,7 @@ use crate::sql::binder::scalar::ScalarBinder;
 use crate::sql::binder::Binder;
 use crate::sql::binder::ColumnBinding;
 use crate::sql::binder::CteInfo;
+use crate::sql::binder::InVisibility;
 use crate::sql::optimizer::SExpr;
 use crate::sql::planner::semantic::normalize_identifier;
 use crate::sql::planner::semantic::TypeChecker;
@@ -292,14 +293,16 @@ impl<'a> Binder {
         let columns = self.metadata.read().columns_by_table_index(table_index);
         let table = self.metadata.read().table(table_index).clone();
         for column in columns.iter() {
-            let visible_in_unqualified_wildcard = column.path_indices.is_none();
             let column_binding = ColumnBinding {
                 database_name: Some(database_name.to_string()),
                 table_name: Some(table.name.clone()),
                 column_name: column.name.clone(),
                 index: column.column_index,
                 data_type: Box::new(column.data_type.clone()),
-                visible_in_unqualified_wildcard,
+                invisibility: column
+                    .path_indices
+                    .as_ref()
+                    .map(|_| InVisibility::InnerColumnOfStruct),
             };
             bind_context.add_column_binding(column_binding);
         }

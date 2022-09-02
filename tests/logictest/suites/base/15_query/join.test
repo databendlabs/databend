@@ -133,8 +133,8 @@ select * from t1 right join t2 on t1.a = t2.c;
 
 ----
 1 4 1 2
-2 3 NULL
-6 8 NULL
+2 3 NULL NULL
+6 8 NULL NULL
 
 
 statement query IIII
@@ -350,8 +350,8 @@ select * from t1 right join t2 on t1.a = t2.c;
 
 ----
 1 4 1 2
-2 3 NULL
-6 8 NULL
+2 3 NULL NULL
+6 8 NULL NULL
 
 
 statement query IIII

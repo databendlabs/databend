@@ -910,7 +910,7 @@ impl<'a> Binder {
                 // A dummy index is fine, since we won't actually evaluate the expression
                 index: 0,
                 data_type: Box::new(field.data_type().clone()),
-                visible_in_unqualified_wildcard: false,
+                invisibility: None,
             };
             bind_context.columns.push(column);
         }

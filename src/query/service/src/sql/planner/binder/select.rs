@@ -478,7 +478,7 @@ impl<'a> Binder {
                     column_name: left_col.column_name.clone(),
                     index: new_column_index,
                     data_type: Box::new(coercion_type.clone()),
-                    visible_in_unqualified_wildcard: false,
+                    invisibility: None,
                 };
                 let left_coercion_expr = CastExpr {
                     argument: Box::new(

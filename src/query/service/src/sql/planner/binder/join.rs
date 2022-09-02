@@ -28,6 +28,7 @@ use crate::sessions::QueryContext;
 use crate::sql::binder::scalar_common::split_conjunctions;
 use crate::sql::binder::scalar_common::split_equivalent_predicate;
 use crate::sql::binder::scalar_common::wrap_cast_if_needed;
+use crate::sql::binder::InVisibility;
 use crate::sql::normalize_identifier;
 use crate::sql::optimizer::ColumnSet;
 use crate::sql::optimizer::SExpr;
@@ -405,7 +406,7 @@ impl<'a> JoinConditionResolver<'a> {
                 .nth(1)
             {
                 // Always make the second using column in the join_context invisible in unqualified wildcard.
-                col_binding.visible_in_unqualified_wildcard = false;
+                col_binding.invisibility = Some(InVisibility::UsingColumnOfJoin);
             }
 
             self.add_conditions(

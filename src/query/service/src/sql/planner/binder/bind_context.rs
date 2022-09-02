@@ -34,6 +34,12 @@ use crate::sql::optimizer::SExpr;
 use crate::sql::plans::Scalar;
 use crate::sql::NameResolutionContext;
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum InVisibility {
+    UsingColumnOfJoin,
+    InnerColumnOfStruct,
+}
+
 #[derive(Clone, Debug)]
 pub struct ColumnBinding {
     /// Database name of this `ColumnBinding` in current context
@@ -47,10 +53,7 @@ pub struct ColumnBinding {
 
     pub data_type: Box<DataTypeImpl>,
 
-    /// Consider the sql: `select * from t join t1 using(a)`.
-    /// The result should only contain one `a` column.
-    /// So we need make `t.a` or `t1.a` invisible in unqualified wildcard.
-    pub visible_in_unqualified_wildcard: bool,
+    pub invisibility: Option<InVisibility>,
 }
 
 impl PartialEq for ColumnBinding {
@@ -247,10 +250,16 @@ impl BindContext {
         ) {
             // No qualified table name specified
             ((None, _), (None, None)) | ((None, _), (None, Some(_)))
-                if column == column_binding.column_name
-                    && column_binding.visible_in_unqualified_wildcard =>
+                if column == column_binding.column_name =>
             {
-                true
+                if column_binding
+                    .invisibility
+                    .is_some_and(|v| v == &InVisibility::UsingColumnOfJoin)
+                {
+                    false
+                } else {
+                    true
+                }
             }
 
             // Qualified column reference without database name

@@ -169,7 +169,7 @@ impl<'a> AggregateRewriter<'a> {
                     column_name: name,
                     index,
                     data_type: Box::new(arg.data_type()),
-                    visible_in_unqualified_wildcard: true,
+                    invisibility: None,
                 };
                 replaced_args.push(
                     BoundColumnRef {
