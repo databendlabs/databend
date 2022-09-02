@@ -38,8 +38,6 @@ use common_formats::FormatFactory;
 use common_io::prelude::BufferReader;
 use common_io::prelude::*;
 use common_pipeline_transforms::processors::transforms::Transform;
-use common_streams::NDJsonSourceBuilder;
-use common_streams::Source;
 use tracing::debug;
 
 use crate::evaluator::EvalNode;
@@ -201,8 +199,7 @@ impl<'a> Binder {
             }
             // format factory
             Some(name) => {
-                let input_format =
-                    FormatFactory::instance().get_input(name, schema.clone(), settings)?;
+                let input_format = FormatFactory::instance().get_input(name, schema, settings)?;
 
                 let data_slice = stream_str.as_bytes();
                 let mut input_state = input_format.create_state();
