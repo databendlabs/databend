@@ -357,11 +357,33 @@ impl PhysicalPlanBuilder {
                     }
                 }).collect::<Result<_>>()?;
                 let result = match &agg.mode {
-                    AggregateMode::Partial => PhysicalPlan::AggregatePartial(AggregatePartial {
-                        input: Box::new(input),
-                        group_by: group_items,
-                        agg_funcs,
-                    }),
+                    AggregateMode::Partial => match input {
+                        PhysicalPlan::Exchange(PhysicalExchange { input, kind, .. }) => {
+                            let aggregate_partial = AggregatePartial {
+                                input,
+                                agg_funcs,
+                                group_by: group_items,
+                            };
+
+                            let output_schema = aggregate_partial.output_schema()?;
+                            let group_by_key_field =
+                                output_schema.field_with_name("_group_by_key")?;
+
+                            PhysicalPlan::Exchange(PhysicalExchange {
+                                kind,
+                                input: Box::new(PhysicalPlan::AggregatePartial(aggregate_partial)),
+                                keys: vec![PhysicalScalar::Variable {
+                                    column_id: group_by_key_field.name().clone(),
+                                    data_type: group_by_key_field.data_type().clone(),
+                                }],
+                            })
+                        }
+                        _ => PhysicalPlan::AggregatePartial(AggregatePartial {
+                            agg_funcs,
+                            group_by: group_items,
+                            input: Box::new(input),
+                        }),
+                    },
 
                     // Hack to get before group by schema, we should refactor this
                     AggregateMode::Final => match input {
