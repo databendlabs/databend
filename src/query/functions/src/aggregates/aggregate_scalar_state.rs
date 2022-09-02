@@ -122,9 +122,8 @@ where
             let mut v = S::default();
             let mut has_v = false;
 
-            let viewer = S::try_create_viewer(column)?;
-            for (row, data) in viewer.iter().enumerate() {
-                if viewer.null_at(row) {
+            for (data, valid) in col.scalar_iter().zip(bit.iter()) {
+                if !valid {
                     continue;
                 }
                 if !has_v {
