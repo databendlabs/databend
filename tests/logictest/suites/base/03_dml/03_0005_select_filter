@@ -29,3 +29,15 @@ SELECT number as c1, (number+1) as c2 FROM numbers_mt (3) where number >1;
 ----
 2 3
 
+statement ok
+create table t1(id int);
+
+statement ok
+insert into t1 select number as id from numbers(10);
+
+statement ok
+select * from t1 where false or null;
+
+statement ok
+DROP TABLE t1;
+
