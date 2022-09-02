@@ -1,5 +1,5 @@
 {
-  "label": "show Commands",
+  "label": "Show Commands",
   "link": {
     "type": "generated-index",
     "slug": "/reference/sql/show"
