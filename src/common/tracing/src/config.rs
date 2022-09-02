@@ -52,10 +52,8 @@ impl Display for FileConfig {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "{} level={} dir={}",
-            if self.on { "enabled" } else { "disabled" },
-            self.level,
-            self.dir
+            "enabled={}, level={}, dir={}",
+            self.on, self.level, self.dir
         )
     }
 }
@@ -82,8 +80,13 @@ impl Display for StderrConfig {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "{} level={}",
-            if self.on { "enabled" } else { "disabled" },
+            "enabled={}{}, level={}",
+            self.on,
+            if !self.on {
+                "(To enable: LOG_STDERR_ON=true or RUST_LOG=info)"
+            } else {
+                ""
+            },
             self.level,
         )
     }
