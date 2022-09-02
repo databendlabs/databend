@@ -22,7 +22,7 @@ use tracing::warn;
 use crate::io::retry;
 use crate::io::retry::Retryable;
 
-pub async fn write_meta<T>(data_accessor: &Operator, location: &str, meta: &T) -> Result<()>
+pub async fn write_meta<T>(data_accessor: &Operator, location: &str, meta: T) -> Result<()>
 where T: Serialize {
     let op = || async {
         let bs = serde_json::to_vec(&meta).map_err(Error::other)?;
