@@ -108,9 +108,15 @@ impl PhysicalOperator for PhysicalHashJoin {
         } else {
             // A simple heuristic, we will always enforce `Hash` distribution for join
             if child_index == 0 {
-                required.distribution = Distribution::Hash(self.probe_keys.clone());
+                required.distribution = match self.probe_keys.is_empty() {
+                    true => Distribution::Hash(vec![]),
+                    false => Distribution::Hash(vec![self.probe_keys[0].clone()]),
+                };
             } else {
-                required.distribution = Distribution::Hash(self.build_keys.clone());
+                required.distribution = match self.build_keys.is_empty() {
+                    true => Distribution::Hash(vec![]),
+                    false => Distribution::Hash(vec![self.build_keys[0].clone()]),
+                };
             }
         }
 
