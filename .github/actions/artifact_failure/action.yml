@@ -21,3 +21,14 @@ runs:
           query*.log
           metasrv.log
           nohup.out
+          meta/types/.databend
+          meta/protos/.databend
+          meta/app/.databend
+          meta/grpc/.databend
+          meta/sled-store/.databend
+          meta/raft-store/.databend
+          meta/api/.databend
+          meta/proto-conv/.databend
+          meta/service/.databend
+          meta/embedded/.databend
+          meta/store/.databend

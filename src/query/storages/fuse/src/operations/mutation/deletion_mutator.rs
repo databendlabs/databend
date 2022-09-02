@@ -50,7 +50,7 @@ impl DeletionMutator {
         })
     }
 
-    pub async fn into_new_snapshot(self) -> Result<(TableSnapshot, String)> {
+    pub async fn into_new_snapshot(self) -> Result<TableSnapshot> {
         let (segments, summary) = self.base_mutator.generate_segments().await?;
         self.base_mutator.into_new_snapshot(segments, summary).await
     }

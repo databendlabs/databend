@@ -26,7 +26,6 @@ use common_fuse_meta::meta::Statistics;
 use common_fuse_meta::meta::TableSnapshot;
 use opendal::Operator;
 
-use crate::io::write_meta;
 use crate::io::MetaReaders;
 use crate::io::SegmentWriter;
 use crate::io::TableMetaLocationGenerator;
@@ -86,18 +85,12 @@ impl BaseMutator {
         self,
         segments: Vec<Location>,
         summary: Statistics,
-    ) -> Result<(TableSnapshot, String)> {
+    ) -> Result<TableSnapshot> {
         let snapshot = self.base_snapshot;
         let mut new_snapshot = TableSnapshot::from_previous(&snapshot);
         new_snapshot.segments = segments;
         new_snapshot.summary = summary;
-        // write down the new snapshot
-        let snapshot_loc = self.location_generator.snapshot_location_from_uuid(
-            &new_snapshot.snapshot_id,
-            new_snapshot.format_version(),
-        )?;
-        write_meta(&self.data_accessor, &snapshot_loc, &new_snapshot).await?;
-        Ok((new_snapshot, snapshot_loc))
+        Ok(new_snapshot)
     }
 
     pub async fn generate_segments(&self) -> Result<(Vec<Location>, Statistics)> {
