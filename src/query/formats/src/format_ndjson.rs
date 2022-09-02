@@ -24,7 +24,7 @@ use common_datavalues::TypeDeserializer;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::position2;
-use common_io::prelude::FileSplit;
+use common_io::prelude::FileSplitCow;
 use common_io::prelude::FormatSettings;
 
 use crate::FormatFactory;
@@ -161,11 +161,11 @@ impl InputFormat for NDJsonInputFormat {
         let mut state = std::mem::replace(state, self.create_state());
         let state = state.as_any().downcast_mut::<NDJsonInputState>().unwrap();
         let memory = std::mem::take(&mut state.memory);
-        self.deserialize_complete_split(FileSplit {
+        self.deserialize_complete_split(FileSplitCow {
             path: state.file_name.clone(),
             start_offset: 0,
             start_row: state.start_row_index,
-            buf: memory,
+            buf: Cow::from(memory),
         })
     }
 
@@ -203,9 +203,9 @@ impl InputFormat for NDJsonInputFormat {
         Ok(state.accepted_rows)
     }
 
-    fn deserialize_complete_split(&self, split: FileSplit) -> Result<Vec<DataBlock>> {
+    fn deserialize_complete_split<'a>(&self, split: FileSplitCow<'a>) -> Result<Vec<DataBlock>> {
         let mut deserializers = self.schema.create_deserializers(self.min_accepted_rows);
-        let mut reader = Cursor::new(split.buf);
+        let mut reader = Cursor::new(split.buf.as_ref());
 
         let mut buf = String::new();
         let mut rows = 0;

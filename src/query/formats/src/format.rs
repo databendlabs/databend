@@ -18,7 +18,7 @@ use common_datablocks::DataBlock;
 use common_datavalues::TypeDeserializerImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_io::prelude::FileSplit;
+use common_io::prelude::FileSplitCow;
 use common_io::prelude::MemoryReader;
 use common_io::prelude::NestedCheckpointReader;
 
@@ -44,7 +44,7 @@ pub trait InputFormat: Send + Sync {
 
     fn deserialize_data(&self, state: &mut Box<dyn InputState>) -> Result<Vec<DataBlock>>;
 
-    fn deserialize_complete_split(&self, split: FileSplit) -> Result<Vec<DataBlock>>;
+    fn deserialize_complete_split<'a>(&self, split: FileSplitCow<'a>) -> Result<Vec<DataBlock>>;
 
     fn read_buf(&self, buf: &[u8], state: &mut Box<dyn InputState>) -> Result<(usize, bool)>;
 

@@ -22,8 +22,6 @@ pub trait BufferRead: std::io::Read {
     fn fill_buf(&mut self) -> Result<&[u8]>;
 
     fn consume(&mut self, amt: usize);
-    // Insert buf before current working buffer
-    fn preadd_buf(&mut self, buf: &[u8]) -> Result<()>;
 
     fn has_data_left(&mut self) -> Result<bool> {
         self.fill_buf().map(|b| !b.is_empty())
@@ -73,9 +71,5 @@ impl<S: BufferRead + ?Sized> BufferRead for Box<S> {
 
     fn consume(&mut self, amt: usize) {
         S::consume(self, amt)
-    }
-
-    fn preadd_buf(&mut self, buf: &[u8]) -> Result<()> {
-        S::preadd_buf(self, buf)
     }
 }

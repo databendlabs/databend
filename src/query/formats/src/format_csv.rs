@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::borrow::Cow;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
@@ -23,7 +24,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::position4;
 use common_io::prelude::BufferReadExt;
-use common_io::prelude::FileSplit;
+use common_io::prelude::FileSplitCow;
 use common_io::prelude::FormatSettings;
 use common_io::prelude::MemoryReader;
 use common_io::prelude::NestedCheckpointReader;
@@ -232,18 +233,17 @@ impl InputFormat for CsvInputFormat {
         let mut state = std::mem::replace(state, self.create_state());
         let state = state.as_any().downcast_mut::<CsvInputState>().unwrap();
         let memory = std::mem::take(&mut state.memory);
-        self.deserialize_complete_split(FileSplit {
+        self.deserialize_complete_split(FileSplitCow {
             path: state.file_name.clone(),
             start_offset: 0,
             start_row: state.start_row_index,
-            buf: memory,
+            buf: Cow::from(memory),
         })
     }
 
-    fn deserialize_complete_split(&self, split: FileSplit) -> Result<Vec<DataBlock>> {
+    fn deserialize_complete_split<'a>(&self, split: FileSplitCow<'a>) -> Result<Vec<DataBlock>> {
         let mut deserializers = self.schema.create_deserializers(self.min_accepted_rows);
-
-        let memory_reader = MemoryReader::new(split.buf);
+        let memory_reader = split.buf.as_ref();
         let mut checkpoint_reader = NestedCheckpointReader::new(memory_reader);
 
         let mut row_index = 0;

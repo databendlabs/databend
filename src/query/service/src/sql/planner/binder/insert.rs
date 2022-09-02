@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::io::Cursor;
 use std::ops::Not;
 use std::sync::Arc;
@@ -218,11 +219,11 @@ impl<'a> Binder {
                 let mut input_state = input_format.create_state();
                 let skip_size = input_format.skip_header(data_slice, &mut input_state, 0)?;
 
-                let split = FileSplit {
+                let split = FileSplitCow {
                     path: None,
                     start_offset: 0,
                     start_row: 0,
-                    buf: data_slice[skip_size..].to_owned(),
+                    buf: Cow::from(&data_slice[skip_size..]),
                 };
 
                 let blocks = input_format.deserialize_complete_split(split)?;
