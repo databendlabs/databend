@@ -121,7 +121,7 @@ impl InputFormat for ParquetInputFormat {
         })
     }
 
-    fn deserialize_complete_split<'a>(&self, split: FileSplitCow<'a>) -> Result<Vec<DataBlock>> {
+    fn deserialize_complete_split(&self, split: FileSplitCow<'_>) -> Result<Vec<DataBlock>> {
         let mut cursor = Cursor::new(split.buf.as_ref());
         let parquet_metadata = Self::read_meta_data(&mut cursor)?;
         let infer_schema = read::infer_schema(&parquet_metadata)?;

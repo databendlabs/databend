@@ -203,7 +203,7 @@ impl InputFormat for NDJsonInputFormat {
         Ok(state.accepted_rows)
     }
 
-    fn deserialize_complete_split<'a>(&self, split: FileSplitCow<'a>) -> Result<Vec<DataBlock>> {
+    fn deserialize_complete_split(&self, split: FileSplitCow<'_>) -> Result<Vec<DataBlock>> {
         let mut deserializers = self.schema.create_deserializers(self.min_accepted_rows);
         let mut reader = Cursor::new(split.buf.as_ref());
 

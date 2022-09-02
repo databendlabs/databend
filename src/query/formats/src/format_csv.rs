@@ -241,7 +241,7 @@ impl InputFormat for CsvInputFormat {
         })
     }
 
-    fn deserialize_complete_split<'a>(&self, split: FileSplitCow<'a>) -> Result<Vec<DataBlock>> {
+    fn deserialize_complete_split(&self, split: FileSplitCow<'_>) -> Result<Vec<DataBlock>> {
         let mut deserializers = self.schema.create_deserializers(self.min_accepted_rows);
         let memory_reader = split.buf.as_ref();
         let mut checkpoint_reader = NestedCheckpointReader::new(memory_reader);

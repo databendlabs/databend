@@ -44,7 +44,7 @@ pub trait InputFormat: Send + Sync {
 
     fn deserialize_data(&self, state: &mut Box<dyn InputState>) -> Result<Vec<DataBlock>>;
 
-    fn deserialize_complete_split<'a>(&self, split: FileSplitCow<'a>) -> Result<Vec<DataBlock>>;
+    fn deserialize_complete_split(&self, split: FileSplitCow<'_>) -> Result<Vec<DataBlock>>;
 
     fn read_buf(&self, buf: &[u8], state: &mut Box<dyn InputState>) -> Result<(usize, bool)>;
 
