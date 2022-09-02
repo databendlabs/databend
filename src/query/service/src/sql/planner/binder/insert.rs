@@ -199,17 +199,6 @@ impl<'a> Binder {
                 let block = source.read(&mut reader).await?;
                 Ok(InsertInputSource::Values(InsertValueBlock { block }))
             }
-            Some("JSONEACHROW") => {
-                let builder = NDJsonSourceBuilder::create(schema.clone(), settings);
-                let cursor = futures::io::Cursor::new(stream_str.as_bytes());
-                let mut source = builder.build(cursor)?;
-                let mut blocks = Vec::new();
-                while let Some(v) = source.read().await? {
-                    blocks.push(v);
-                }
-                let block = DataBlock::concat_blocks(&blocks)?;
-                Ok(InsertInputSource::Values(InsertValueBlock { block }))
-            }
             // format factory
             Some(name) => {
                 let input_format =

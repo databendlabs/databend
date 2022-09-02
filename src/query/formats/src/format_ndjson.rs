@@ -58,14 +58,22 @@ pub struct NDJsonInputFormat {
 
 impl NDJsonInputFormat {
     pub fn register(factory: &mut FormatFactory) {
-        factory.register_input(
-            "NDJson",
-            Box::new(
-                |name: &str, schema: DataSchemaRef, settings: FormatSettings| {
-                    NDJsonInputFormat::try_create(name, schema, settings, 8192, 10 * 1024 * 1024)
-                },
-            ),
-        );
+        for name in ["NDJSON", "JSONEachRow"] {
+            factory.register_input(
+                name,
+                Box::new(
+                    |name: &str, schema: DataSchemaRef, settings: FormatSettings| {
+                        NDJsonInputFormat::try_create(
+                            name,
+                            schema,
+                            settings,
+                            8192,
+                            10 * 1024 * 1024,
+                        )
+                    },
+                ),
+            );
+        }
     }
 
     pub fn try_create(
