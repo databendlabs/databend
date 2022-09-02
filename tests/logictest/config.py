@@ -11,7 +11,7 @@ mysql_config = {
 http_config = {
     'user': 'root',
     'host': '127.0.0.1',
-    "port": 8001,
+    "port": 8000,
     'database': 'default',
 }
 
@@ -19,7 +19,7 @@ clickhouse_config = {
     'user': 'root',
     'password': '',
     'host': '127.0.0.1',
-    "port": 8125,
+    "port": 8124,
     'database': 'default',
 }
 
