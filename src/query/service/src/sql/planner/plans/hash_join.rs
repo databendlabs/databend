@@ -69,19 +69,6 @@ impl PhysicalOperator for PhysicalHashJoin {
             (Distribution::Random, _) => Ok(PhysicalProperty {
                 distribution: build_prop.distribution.clone(),
             }),
-
-            (Distribution::Hash(probe_hash_keys), Distribution::Hash(build_hash_keys)) => {
-                Ok(PhysicalProperty {
-                    distribution: Distribution::Hash(
-                        probe_hash_keys
-                            .iter()
-                            .chain(build_hash_keys.iter())
-                            .cloned()
-                            .collect(),
-                    ),
-                })
-            }
-
             // Otherwise pass through probe side.
             _ => Ok(PhysicalProperty {
                 distribution: probe_prop.distribution.clone(),
