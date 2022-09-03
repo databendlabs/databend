@@ -69,6 +69,7 @@ mod ext {
     #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
     pub(super) struct ShareSpecExt {
         name: String,
+        version: u64,
         database: Option<WithLocation<ShareDatabaseSpec>>,
         tables: Vec<WithLocation<ShareTableSpec>>,
         tenants: Vec<String>,
@@ -78,6 +79,7 @@ mod ext {
         pub fn from_share_spec(spec: ShareSpec, operator: &Operator) -> Self {
             Self {
                 name: spec.name,
+                version: spec.version,
                 database: spec.database.map(|db_spec| WithLocation {
                     location: shared_database_prefix(operator, db_spec.id),
                     t: db_spec,
@@ -135,6 +137,7 @@ mod ext {
         fn test_serialize_share_spec_ext() -> Result<()> {
             let share_spec = ShareSpec {
                 name: "test_share_name".to_string(),
+                version: 1,
                 database: Some(ShareDatabaseSpec {
                     name: "share_database".to_string(),
                     id: 1,
@@ -143,7 +146,6 @@ mod ext {
                     name: "share_table".to_string(),
                     database_id: 1,
                     table_id: 1,
-                    version: 1,
                     presigned_url_timeout: "100s".to_string(),
                 }],
                 tenants: vec!["test_tenant".to_owned()],
@@ -164,6 +166,7 @@ mod ext {
 
             let expected = json!({
               "name": "test_share_name",
+              "version": 1,
               "database": {
                 "location": format!("{}/1/", test_root_str),
                 "name": "share_database",
@@ -175,7 +178,6 @@ mod ext {
                   "name": "share_table",
                   "database_id": 1,
                   "table_id": 1,
-                  "version": 1,
                   "presigned_url_timeout": "100s"
                 }
               ],
