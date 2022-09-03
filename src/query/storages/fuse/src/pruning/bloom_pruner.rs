@@ -30,7 +30,7 @@ use crate::io::BlockBloomFilterIndexReader;
 #[async_trait::async_trait]
 pub trait BloomFilterPruner {
     // returns ture, if target should NOT be pruned (false positive allowed)
-    async fn should_keep(&self, index_location: &Option<Location>) -> bool;
+    async fn should_keep(&self, index_location: &Option<Location>, index_length: u64) -> bool;
 }
 
 /// dummy pruner that prunes nothing
@@ -38,7 +38,7 @@ pub(crate) struct NonPruner;
 
 #[async_trait::async_trait]
 impl BloomFilterPruner for NonPruner {
-    async fn should_keep(&self, _: &Option<Location>) -> bool {
+    async fn should_keep(&self, _: &Option<Location>, _index_length: u64) -> bool {
         true
     }
 }
@@ -76,7 +76,7 @@ impl BloomFilterIndexPruner {
 use self::util::*;
 #[async_trait::async_trait]
 impl BloomFilterPruner for BloomFilterIndexPruner {
-    async fn should_keep(&self, index_location: &Option<Location>) -> bool {
+    async fn should_keep(&self, index_location: &Option<Location>, index_length: u64) -> bool {
         if let Some(loc) = index_location {
             // load bloom filter index, and try pruning according to filter expression
             match filter_block_by_bloom_index(
@@ -86,6 +86,7 @@ impl BloomFilterPruner for BloomFilterIndexPruner {
                 &self.filter_expression,
                 &self.index_columns,
                 loc,
+                index_length,
             )
             .await
             {
@@ -156,10 +157,11 @@ mod util {
         filter_expr: &Expression,
         bloom_index_col_names: &[String],
         index_location: &Location,
+        index_length: u64,
     ) -> Result<bool> {
         // load the relevant index columns
         let bloom_filter_index = index_location
-            .read_bloom_filter_index(ctx.clone(), dal, bloom_index_col_names)
+            .read_bloom_filter_index(ctx.clone(), dal, bloom_index_col_names, index_length)
             .await?;
 
         // figure it out

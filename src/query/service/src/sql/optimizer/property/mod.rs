@@ -45,6 +45,9 @@ pub struct RelationalProperty {
     // TODO(leiysky): introduce upper bound of cardinality to
     // reduce error in estimation.
     pub cardinality: f64,
+    // We can get the precise row count of a table in databend,
+    // which information is useful to optimize some queries like `COUNT(*)`.
+    pub precise_cardinality: Option<u64>,
 }
 
 #[derive(Default, Clone)]

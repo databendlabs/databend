@@ -20,6 +20,7 @@ use std::time::Instant;
 use common_base::base::tokio;
 use common_base::base::tokio::sync::Mutex as TokioMutex;
 use common_base::base::tokio::sync::RwLock;
+use common_base::base::TrySpawn;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use serde::Deserialize;
@@ -27,6 +28,8 @@ use serde::Serialize;
 
 use super::HttpQueryContext;
 use crate::interpreters::InterpreterQueryLog;
+use crate::servers::http::v1::query::execute_state::ExecuteStarting;
+use crate::servers::http::v1::query::execute_state::ExecuteStopped;
 use crate::servers::http::v1::query::execute_state::Progresses;
 use crate::servers::http::v1::query::expirable::Expirable;
 use crate::servers::http::v1::query::expirable::ExpiringState;
@@ -223,34 +226,68 @@ impl HttpQuery {
         tracing::info!("run query_id={id} in session_id={session_id}, sql='{sql}'");
 
         let block_buffer = BlockBuffer::new(request.pagination.max_rows_in_buffer);
-        let state =
-            ExecuteState::try_create(&request, session, ctx.clone(), block_buffer.clone()).await;
-        match state {
-            Ok(state) => {
-                let format_settings = ctx.get_format_settings()?;
-                let data = Arc::new(TokioMutex::new(PageManager::new(
-                    request.pagination.max_rows_per_page,
-                    block_buffer,
-                    request.string_fields,
-                    format_settings,
-                )));
-                let query = HttpQuery {
-                    id,
-                    session_id,
-                    request,
-                    state,
-                    data,
-                    config,
-                    expire_at: Arc::new(TokioMutex::new(None)),
-                };
-                let query = Arc::new(query);
-                Ok(query)
+        let start_time = Instant::now();
+        let state = Arc::new(RwLock::new(Executor {
+            query_id: id.clone(),
+            start_time,
+            state: ExecuteState::Starting(ExecuteStarting { ctx: ctx.clone() }),
+        }));
+        let state_clone = state.clone();
+        let ctx_clone = ctx.clone();
+        let block_buffer_clone = block_buffer.clone();
+        let sql = request.sql.clone();
+        let query_id = id.clone();
+        ctx.try_spawn(async move {
+            let state = state_clone.clone();
+            let running_state = ExecuteState::try_start_query(
+                state,
+                &sql,
+                session,
+                ctx_clone.clone(),
+                block_buffer_clone.clone(),
+            )
+            .await;
+            match running_state {
+                Ok(s) => {
+                    tracing::info!("http query {}, change state to Running", &query_id);
+                    Executor::start_to_running(&state_clone, ExecuteState::Running(s)).await;
+                }
+                Err(e) => {
+                    InterpreterQueryLog::fail_to_start(ctx_clone.clone(), e.clone()).await;
+                    let state = ExecuteStopped {
+                        stats: Progresses::default(),
+                        reason: Err(e.clone()),
+                        stop_time: Instant::now(),
+                        affect: ctx_clone.get_affect(),
+                    };
+                    tracing::info!(
+                        "http query {}, change state to Stopped, fail to start {:?}",
+                        &query_id,
+                        e
+                    );
+                    Executor::start_to_stop(&state_clone, ExecuteState::Stopped(state)).await;
+                    block_buffer_clone.stop_push().await.unwrap();
+                }
             }
-            Err(e) => {
-                InterpreterQueryLog::fail_to_start(ctx, e.clone()).await;
-                Err(e)
-            }
-        }
+        })?;
+
+        let format_settings = ctx.get_format_settings()?;
+        let data = Arc::new(TokioMutex::new(PageManager::new(
+            request.pagination.max_rows_per_page,
+            block_buffer,
+            request.string_fields,
+            format_settings,
+        )));
+        let query = HttpQuery {
+            id,
+            session_id,
+            request,
+            state,
+            data,
+            config,
+            expire_at: Arc::new(TokioMutex::new(None)),
+        };
+        Ok(Arc::new(query))
     }
 
     pub fn is_async(&self) -> bool {
@@ -324,14 +361,16 @@ impl HttpQuery {
         data.detach().await
     }
 
-    pub async fn clear_expire_time(&self) {
+    pub async fn update_expire_time(&self, before_wait: bool) {
+        let duration = Duration::from_millis(self.config.result_timeout_millis)
+            + if before_wait {
+                Duration::from_secs(self.request.pagination.wait_time_secs as u64)
+            } else {
+                Duration::new(0, 0)
+            };
+        let deadline = Instant::now() + duration;
         let mut t = self.expire_at.lock().await;
-        *t = None;
-    }
-
-    pub async fn update_expire_time(&self) {
-        let mut t = self.expire_at.lock().await;
-        *t = Some(Instant::now() + Duration::from_millis(self.config.result_timeout_millis));
+        *t = Some(deadline);
     }
 
     pub async fn check_expire(&self) -> Option<Duration> {

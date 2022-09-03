@@ -1,5 +1,5 @@
 ---
-title: to_day_of_week
+title: TO_DAY_OF_WEEK
 ---
 
 Converts a date or date with time to a UInt8 number containing the number of the day of the week (Monday is 1, and Sunday is 7).

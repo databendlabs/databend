@@ -16,23 +16,18 @@ use std::any::Any;
 use std::convert::TryFrom;
 use std::sync::Arc;
 
-use common_cache::Cache;
 use common_catalog::catalog::StorageDescription;
 use common_catalog::table_context::TableContext;
 use common_catalog::table_mutator::TableMutator;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_fuse_meta::caches::CacheManager;
 use common_fuse_meta::meta::ClusterKey;
 use common_fuse_meta::meta::Statistics as FuseStatistics;
 use common_fuse_meta::meta::TableSnapshot;
 use common_fuse_meta::meta::Versioned;
 use common_legacy_parser::ExpressionParser;
 use common_meta_app::schema::TableInfo;
-use common_meta_app::schema::TableMeta;
-use common_meta_app::schema::UpdateTableMetaReq;
-use common_meta_types::MatchSeq;
 use common_planners::DeletePlan;
 use common_planners::Expression;
 use common_planners::Extras;
@@ -44,7 +39,6 @@ use common_storages_util::storage_context::StorageContext;
 use common_storages_util::table_storage_prefix::table_storage_prefix;
 use uuid::Uuid;
 
-use crate::io::write_meta;
 use crate::io::BlockCompactor;
 use crate::io::MetaReaders;
 use crate::io::TableMetaLocationGenerator;
@@ -175,53 +169,6 @@ impl FuseTable {
         }
     }
 
-    pub async fn update_table_meta(
-        &self,
-        ctx: &dyn TableContext,
-        catalog_name: &str,
-        snapshot: &TableSnapshot,
-        meta: &mut TableMeta,
-    ) -> Result<()> {
-        let uuid = snapshot.snapshot_id;
-        let snapshot_loc = self
-            .meta_location_generator()
-            .snapshot_location_from_uuid(&uuid, TableSnapshot::VERSION)?;
-        let operator = ctx.get_storage_operator()?;
-        write_meta(&operator, &snapshot_loc, snapshot).await?;
-
-        // set new snapshot location
-        meta.options
-            .insert(OPT_KEY_SNAPSHOT_LOCATION.to_owned(), snapshot_loc.clone());
-        // remove legacy options
-        meta.options.remove(OPT_KEY_LEGACY_SNAPSHOT_LOC);
-
-        let table_id = self.table_info.ident.table_id;
-        let table_version = self.table_info.ident.seq;
-        let req = UpdateTableMetaReq {
-            table_id,
-            seq: MatchSeq::Exact(table_version),
-            new_table_meta: meta.clone(),
-        };
-
-        let catalog = ctx.get_catalog(catalog_name)?;
-        let result = catalog.update_table_meta(req).await;
-        match result {
-            Ok(_) => {
-                if let Some(snapshot_cache) = CacheManager::instance().get_table_snapshot_cache() {
-                    let cache = &mut snapshot_cache.write().await;
-                    cache.put(snapshot_loc, Arc::new(snapshot.clone()));
-                }
-                Ok(())
-            }
-            Err(e) => {
-                // commit snapshot to meta server failed, try to delete it.
-                // "major GC" will collect this, if deletion failure (even after DAL retried)
-                let _ = operator.object(&snapshot_loc).delete().await;
-                Err(e)
-            }
-        }
-    }
-
     pub fn transient(&self) -> bool {
         self.table_info.meta.options.contains_key("TRANSIENT")
     }
@@ -298,11 +245,15 @@ impl Table for FuseTable {
             cluster_key_meta,
         );
 
-        self.update_table_meta(
+        let mut table_info = self.table_info.clone();
+        table_info.meta = new_table_meta;
+
+        FuseTable::commit_to_meta_server(
             ctx.as_ref(),
             catalog_name,
-            &new_snapshot,
-            &mut new_table_meta,
+            &table_info,
+            &self.meta_location_generator,
+            new_snapshot,
         )
         .await
     }
@@ -342,11 +293,15 @@ impl Table for FuseTable {
             None,
         );
 
-        self.update_table_meta(
+        let mut table_info = self.table_info.clone();
+        table_info.meta = new_table_meta;
+
+        FuseTable::commit_to_meta_server(
             ctx.as_ref(),
             catalog_name,
-            &new_snapshot,
-            &mut new_table_meta,
+            &table_info,
+            &self.meta_location_generator,
+            new_snapshot,
         )
         .await
     }
@@ -455,7 +410,8 @@ impl Table for FuseTable {
         ctx: Arc<dyn TableContext>,
         catalog: String,
         pipeline: &mut Pipeline,
+        push_downs: Option<Extras>,
     ) -> Result<Option<Arc<dyn TableMutator>>> {
-        self.do_recluster(ctx, catalog, pipeline).await
+        self.do_recluster(ctx, catalog, pipeline, push_downs).await
     }
 }

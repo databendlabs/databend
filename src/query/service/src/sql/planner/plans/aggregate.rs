@@ -94,12 +94,8 @@ impl PhysicalOperator for Aggregate {
                     required.distribution = Distribution::Any;
                 } else {
                     // Group aggregation, enforce `Hash` distribution
-                    required.distribution = Distribution::Hash(
-                        self.group_items
-                            .iter()
-                            .map(|item| item.scalar.clone())
-                            .collect(),
-                    );
+                    required.distribution =
+                        Distribution::Hash(vec![self.group_items[0].scalar.clone()]);
                 }
             }
 
@@ -109,12 +105,8 @@ impl PhysicalOperator for Aggregate {
                     required.distribution = Distribution::Serial;
                 } else {
                     // Group aggregation, enforce `Hash` distribution
-                    required.distribution = Distribution::Hash(
-                        self.group_items
-                            .iter()
-                            .map(|item| item.scalar.clone())
-                            .collect(),
-                    );
+                    required.distribution =
+                        Distribution::Hash(vec![self.group_items[0].scalar.clone()]);
                 }
             }
 
@@ -153,10 +145,17 @@ impl LogicalOperator for Aggregate {
             input_prop.cardinality
         };
 
+        let precise_cardinality = if self.group_items.is_empty() {
+            Some(1)
+        } else {
+            None
+        };
+
         Ok(RelationalProperty {
             output_columns,
             outer_columns,
             cardinality,
+            precise_cardinality,
         })
     }
 }

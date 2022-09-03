@@ -24,6 +24,7 @@ use common_catalog::table_args::TableArgs;
 use common_catalog::table_function::TableFunction;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_hive_meta_store::Partition;
 use common_hive_meta_store::TThriftHiveMetastoreSyncClient;
 use common_hive_meta_store::ThriftHiveMetastoreSyncClient;
 use common_meta_app::schema::CountTablesReply;
@@ -81,8 +82,44 @@ impl HiveCatalog {
         Ok(ThriftHiveMetastoreSyncClient::new(i_prot, o_prot))
     }
 
+    pub async fn get_partitions(
+        &self,
+        db: String,
+        table: String,
+        partition_names: Vec<String>,
+    ) -> Result<Vec<Partition>> {
+        let client = self.get_client()?;
+        tokio::task::spawn_blocking(move || {
+            Self::do_get_partitions(client, db, table, partition_names)
+        })
+        .await
+        .unwrap()
+    }
+
+    pub fn do_get_partitions(
+        client: impl TThriftHiveMetastoreSyncClient,
+        db_name: String,
+        tbl_name: String,
+        partition_names: Vec<String>,
+    ) -> Result<Vec<Partition>> {
+        let mut client = client;
+        let max_partitions = 10_000;
+
+        let partitions = partition_names
+            .chunks(max_partitions)
+            .into_iter()
+            .flat_map(|names| {
+                client
+                    .get_partitions_by_names(db_name.clone(), tbl_name.clone(), names.to_vec())
+                    .map_err(from_thrift_error)
+                    .unwrap()
+            })
+            .collect::<Vec<_>>();
+        Ok(partitions)
+    }
+
     #[tracing::instrument(level = "info", skip(self))]
-    pub async fn get_partition_names_async(
+    pub async fn get_partition_names(
         &self,
         db: String,
         table: String,

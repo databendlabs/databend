@@ -491,6 +491,7 @@ impl FromToProto for dv::IntervalKind {
     where Self: Sized {
         let dv_kind = match p {
             pb::IntervalKind::Year => dv::IntervalKind::Year,
+            pb::IntervalKind::Quarter => dv::IntervalKind::Quarter,
             pb::IntervalKind::Month => dv::IntervalKind::Month,
             pb::IntervalKind::Day => dv::IntervalKind::Day,
             pb::IntervalKind::Hour => dv::IntervalKind::Hour,
@@ -506,6 +507,7 @@ impl FromToProto for dv::IntervalKind {
     fn to_pb(&self) -> Result<pb::IntervalKind, Incompatible> {
         let pb_kind = match self {
             dv::IntervalKind::Year => pb::IntervalKind::Year,
+            dv::IntervalKind::Quarter => pb::IntervalKind::Quarter,
             dv::IntervalKind::Month => pb::IntervalKind::Month,
             dv::IntervalKind::Day => pb::IntervalKind::Day,
             dv::IntervalKind::Hour => pb::IntervalKind::Hour,

@@ -28,6 +28,7 @@ use prometheus::IntGauge;
 use prometheus::IntGaugeVec;
 use prometheus::Opts;
 use prometheus::Registry;
+use tracing::error;
 
 pub const META_NAMESPACE: &str = "metasrv";
 pub const SERVER_SUBSYSTEM: &str = "server";
@@ -108,6 +109,15 @@ pub static LAST_LOG_INDEX: Lazy<Gauge> = Lazy::new(|| {
             .subsystem(SERVER_SUBSYSTEM),
     )
     .expect("meta metric cannot be created")
+});
+
+pub static LAST_SEQ: Lazy<Gauge> = Lazy::new(|| {
+    Gauge::with_opts(
+        Opts::new("last_seq", "the last seq number used as record versions")
+            .namespace(META_NAMESPACE)
+            .subsystem(SERVER_SUBSYSTEM),
+    )
+    .expect("meta metric last_seq cannot be created")
 });
 
 pub static CURRENT_TERM: Lazy<Gauge> = Lazy::new(|| {
@@ -444,6 +454,10 @@ fn init_meta_recorder() {
         .expect("collector can be registered");
 
     REGISTRY
+        .register(Box::new(LAST_SEQ.clone()))
+        .expect("collector last_seq can be registered");
+
+    REGISTRY
         .register(Box::new(CURRENT_TERM.clone()))
         .expect("collector can be registered");
 
@@ -572,6 +586,10 @@ pub fn set_meta_metrics_last_log_index(last_log_index: u64) {
     LAST_LOG_INDEX.set(last_log_index as f64);
 }
 
+pub fn set_meta_metrics_last_seq(last_seq: u64) {
+    LAST_SEQ.set(last_seq as f64);
+}
+
 pub fn set_meta_metrics_current_term(current_term: u64) {
     CURRENT_TERM.set(current_term as f64);
 }
@@ -693,13 +711,14 @@ pub fn meta_metrics_to_prometheus_string() -> String {
 
     let mut buffer = Vec::new();
     if let Err(e) = encoder.encode(&REGISTRY.gather(), &mut buffer) {
-        eprintln!("could not encode custom metrics: {}", e);
+        error!("could not encode custom metrics: {}", e);
+        return String::default();
     };
 
     match String::from_utf8(buffer.clone()) {
         Ok(v) => v,
         Err(e) => {
-            eprintln!("custom metrics could not be from_utf8'd: {}", e);
+            error!("custom metrics could not be from_utf8'd: {}", e);
             String::default()
         }
     }

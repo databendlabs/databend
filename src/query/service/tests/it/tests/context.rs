@@ -109,11 +109,13 @@ pub async fn create_storage_context() -> Result<StorageContext> {
     })
 }
 
+#[allow(dead_code)]
 pub struct ClusterDescriptor {
     local_node_id: String,
     cluster_nodes_list: Vec<Arc<NodeInfo>>,
 }
 
+#[allow(dead_code)]
 impl ClusterDescriptor {
     pub fn new() -> ClusterDescriptor {
         ClusterDescriptor {
@@ -145,6 +147,7 @@ impl Default for ClusterDescriptor {
     }
 }
 
+#[allow(dead_code)]
 pub async fn create_query_context_with_cluster(
     desc: ClusterDescriptor,
 ) -> Result<(TestGuard, Arc<QueryContext>)> {

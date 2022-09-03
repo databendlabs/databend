@@ -230,7 +230,7 @@ b. In the file `databend-query.toml`, set the parameter `type` in [storage] bloc
 
 ```toml
 [storage]
-# fs | s3 | azblob | gcs
+# fs | s3 | azblob | gcs | obs
 type = "s3"
 ```
 
@@ -260,9 +260,16 @@ secret_access_key = "<your-account-key>"
 # [storage.gcs]
 # bucket = "<your-bucket-name>"
 # credential = "<your-credential>"
+
+# To use Huawei Cloud OBS Storage, uncomment this block and set your values.
+# [storage.obs]
+# bucket = "<your-bucket-name>"
+# endpoint_url = "<your-endpoint>"
+# access_key_id = "<your-key-id>"
+# secret_access_key = "<your-account-key>"
 ```
 
-d. Set your values in the `[storage.s3]`, `[storage.azblob]` or `[storage.GCS]` block. Please note that the field `endpoint_url` refers to the service URL of your storage region and varies depending on the object storage solution you use:
+d. Set your values in the `[storage.s3]`, `[storage.azblob]`, `[storage.gcs]` or `[storage.obs]` block. Please note that the field `endpoint_url` refers to the service URL of your storage region and varies depending on the object storage solution you use:
 
 <Tabs groupId="operating-systems">
 <TabItem value="MinIO" label="MinIO">
@@ -469,6 +476,37 @@ account_name = "<your-storage-account-name>"
 # https://docs.microsoft.com/en-us/azure/storage/common/storage-account-keys-manage?tabs=azure-portal#view-account-access-keys
 account_key = "<your-account-key>"
 ```
+
+</TabItem>
+
+<TabItem value="Huawei Cloud OBS" label="Huawei Cloud OBS">
+
+```toml
+[storage]
+# obs
+type = "obs"
+
+[storage.obs]
+# How to create a bucket:
+# https://support.huaweicloud.com/intl/en-us/usermanual-obs/en-us_topic_0045853662.html
+// highlight-next-line
+bucket = "databend-1253727613"
+
+# You can get the URL from the bucket detail page.
+// highlight-next-line
+endpoint_url = "https://obs.cn-north-4.myhuaweicloud.com"
+
+# How to get access_key_id and secret_access_key:
+# https://support.huaweicloud.com/intl/en-us/api-obs/obs_04_0116.html
+// highlight-next-line
+access_key_id = "<your-key-id>"
+// highlight-next-line
+secret_access_key = "<your-access-key>"
+```
+
+:::tip
+In this example OBS region is `cn-north-4`.
+:::
 
 </TabItem>
 </Tabs>

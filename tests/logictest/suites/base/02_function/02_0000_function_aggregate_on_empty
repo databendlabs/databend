@@ -1,0 +1,74 @@
+statement query I
+select min(number) from numbers_mt (10) where 1 = 2;
+
+----
+NULL
+
+statement query I
+select max(number) from numbers_mt (10) where 1 = 2;
+
+----
+NULL
+
+statement query I
+select arg_min(number, number) from numbers_mt (10) where 1 = 2;
+
+----
+NULL
+
+statement query IIII
+select arg_max(number, number), sum_distinct(number), sum_if(number, number > 100),  sum_if(number, number > 0)  from numbers_mt (10) where 1 = 2;
+
+----
+NULL	NULL 	NULL 	NULL
+
+statement query III
+select count(number),  uniq(number), count_distinct(number) from numbers_mt (10) where 1 = 2;
+
+----
+0	0	0
+
+
+statement query IIIII
+select number as c, sum(t), count(t), count(distinct t),  sum(distinct t)  from (select number, if( number < 2, 1, null) as t from numbers_mt(4) ) group by c order by c;
+
+
+----
+0 1 1 1 1
+1 1 1 1 1
+2 NULL 0 0 NULL
+3 NULL 0 0 NULL
+
+statement query I
+select count_if(number, number > 0) from numbers (10) where 1 = 2;
+
+----
+0
+
+statement query III
+select  sum(t), count(t), sum(distinct t)  from ( select number, if( number < 2, 1, null) as t from numbers_mt(4) );
+
+----
+2 2 1
+
+statement query III
+select  sum(t), count(t), sum(distinct t)  from ( select number, if( number < 0, 1, null) as t from numbers_mt(4) );
+
+----
+NULL 0 NULL
+
+
+statement ok
+select min(number), max(number),  arg_min(number, number), arg_max(number, number), count(number), uniq(number), count_if(number, number > 0)   from numbers_mt (10) where 1 = 2 group by number % 2;
+
+
+statement query F
+select avg(number) from numbers_mt (10) where 1 = 2;
+
+----
+NULL
+
+
+statement ok
+select avg(number) from numbers_mt (10) where 1 = 2 group by number % 2;
+

@@ -15,6 +15,7 @@
 use std::io::Write;
 
 use bstr::ByteSlice;
+use common_expression::types::number::NumberDomain;
 use common_expression::types::string::StringColumn;
 use common_expression::types::string::StringColumnBuilder;
 use common_expression::types::GenericMap;
@@ -23,7 +24,6 @@ use common_expression::types::StringType;
 use common_expression::vectorize_with_builder_1_arg;
 use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
-use common_expression::NumberDomain;
 use common_expression::Value;
 use common_expression::ValueRef;
 

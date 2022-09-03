@@ -16,6 +16,7 @@ use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use common_catalog::catalog::CATALOG_DEFAULT;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -24,6 +25,7 @@ use common_planners::Extras;
 use common_planners::PrewhereInfo;
 use common_planners::Projection;
 use common_planners::StageKind;
+use common_storages_fuse::TableContext;
 use itertools::Itertools;
 
 use super::AggregateFinal;
@@ -55,6 +57,7 @@ use crate::sql::plans::Scalar;
 use crate::sql::Metadata;
 use crate::sql::MetadataRef;
 use crate::sql::ScalarExpr;
+use crate::sql::DUMMY_TABLE_INDEX;
 use crate::storages::ToReadDataSourcePlan;
 
 pub struct PhysicalPlanBuilder {
@@ -229,6 +232,22 @@ impl PhysicalPlanBuilder {
                 Ok(PhysicalPlan::TableScan(TableScan {
                     name_mapping,
                     source: Box::new(source),
+                    table_index: scan.table_index,
+                }))
+            }
+            RelOperator::DummyTableScan(_) => {
+                let catalogs = self.ctx.get_catalog_manager()?;
+                let table = catalogs
+                    .get_catalog(CATALOG_DEFAULT)?
+                    .get_table(self.ctx.get_tenant().as_str(), "system", "one")
+                    .await?;
+                let source = table
+                    .read_plan_with_catalog(self.ctx.clone(), CATALOG_DEFAULT.to_string(), None)
+                    .await?;
+                Ok(PhysicalPlan::TableScan(TableScan {
+                    name_mapping: BTreeMap::from([("dummy".to_string(), "dummy".to_string())]),
+                    source: Box::new(source),
+                    table_index: DUMMY_TABLE_INDEX,
                 }))
             }
             RelOperator::PhysicalHashJoin(join) => {
@@ -277,6 +296,8 @@ impl PhysicalPlanBuilder {
                         .sorted()
                         .map(|index| input_schema.index_of(index.to_string().as_str()))
                         .collect::<Result<_>>()?,
+
+                    columns: project.columns.clone(),
                 }))
             }
             RelOperator::EvalScalar(eval_scalar) => Ok(PhysicalPlan::EvalScalar(EvalScalar {
@@ -336,11 +357,33 @@ impl PhysicalPlanBuilder {
                     }
                 }).collect::<Result<_>>()?;
                 let result = match &agg.mode {
-                    AggregateMode::Partial => PhysicalPlan::AggregatePartial(AggregatePartial {
-                        input: Box::new(input),
-                        group_by: group_items,
-                        agg_funcs,
-                    }),
+                    AggregateMode::Partial => match input {
+                        PhysicalPlan::Exchange(PhysicalExchange { input, kind, .. }) => {
+                            let aggregate_partial = AggregatePartial {
+                                input,
+                                agg_funcs,
+                                group_by: group_items,
+                            };
+
+                            let output_schema = aggregate_partial.output_schema()?;
+                            let group_by_key_field =
+                                output_schema.field_with_name("_group_by_key")?;
+
+                            PhysicalPlan::Exchange(PhysicalExchange {
+                                kind,
+                                input: Box::new(PhysicalPlan::AggregatePartial(aggregate_partial)),
+                                keys: vec![PhysicalScalar::Variable {
+                                    column_id: group_by_key_field.name().clone(),
+                                    data_type: group_by_key_field.data_type().clone(),
+                                }],
+                            })
+                        }
+                        _ => PhysicalPlan::AggregatePartial(AggregatePartial {
+                            agg_funcs,
+                            group_by: group_items,
+                            input: Box::new(input),
+                        }),
+                    },
 
                     // Hack to get before group by schema, we should refactor this
                     AggregateMode::Final => match input {

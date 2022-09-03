@@ -215,6 +215,7 @@ pub trait Table: Sync + Send {
         _ctx: Arc<dyn TableContext>,
         _catalog: String,
         _pipeline: &mut Pipeline,
+        _push_downs: Option<Extras>,
     ) -> Result<Option<Arc<dyn TableMutator>>> {
         Err(ErrorCode::UnImplement(format!(
             "table {},  of engine type {}, does not support recluster",

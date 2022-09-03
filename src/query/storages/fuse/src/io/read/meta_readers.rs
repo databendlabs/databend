@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_arrow::parquet::metadata::FileMetaData;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_fuse_meta::caches::CacheManager;
@@ -22,12 +23,12 @@ use common_fuse_meta::meta::SegmentInfo;
 use common_fuse_meta::meta::SegmentInfoVersion;
 use common_fuse_meta::meta::SnapshotVersion;
 use common_fuse_meta::meta::TableSnapshot;
+use common_storages_util::cached_reader::CachedReader;
+use common_storages_util::cached_reader::HasTenantLabel;
+use common_storages_util::cached_reader::Loader;
 use futures::io::BufReader;
 use opendal::BytesReader;
 
-use super::cached_reader::CachedReader;
-use super::cached_reader::HasTenantLabel;
-use super::cached_reader::Loader;
 use super::versioned_reader::VersionedReader;
 
 /// Provider of [BufReader]
@@ -39,9 +40,9 @@ pub trait BufReaderProvider {
     async fn buf_reader(&self, path: &str, len: Option<u64>) -> Result<BufReader<BytesReader>>;
 }
 
-pub type SegmentInfoReader<'a> = CachedReader<SegmentInfo, &'a dyn TableContext>;
-// pub type TableSnapshotReader<'a> = CachedReader<TableSnapshot, &'a dyn TableContext>;
-pub type TableSnapshotReader = CachedReader<TableSnapshot, Arc<dyn TableContext>>;
+pub type SegmentInfoReader<'a> = CachedReader<SegmentInfo, LoaderWrapper<&'a dyn TableContext>>;
+pub type TableSnapshotReader = CachedReader<TableSnapshot, LoaderWrapper<Arc<dyn TableContext>>>;
+pub type BloomIndexFileMetaDataReader = CachedReader<FileMetaData, Arc<dyn TableContext>>;
 
 pub struct MetaReaders;
 
@@ -49,7 +50,7 @@ impl MetaReaders {
     pub fn segment_info_reader(ctx: &dyn TableContext) -> SegmentInfoReader {
         SegmentInfoReader::new(
             CacheManager::instance().get_table_segment_cache(),
-            ctx,
+            LoaderWrapper(ctx),
             "SEGMENT_INFO_CACHE".to_owned(),
         )
     }
@@ -57,15 +58,27 @@ impl MetaReaders {
     pub fn table_snapshot_reader(ctx: Arc<dyn TableContext>) -> TableSnapshotReader {
         TableSnapshotReader::new(
             CacheManager::instance().get_table_snapshot_cache(),
-            ctx,
+            LoaderWrapper(ctx),
             "SNAPSHOT_CACHE".to_owned(),
+        )
+    }
+
+    pub fn file_meta_data_reader(ctx: Arc<dyn TableContext>) -> BloomIndexFileMetaDataReader {
+        BloomIndexFileMetaDataReader::new(
+            CacheManager::instance().get_bloom_index_meta_cache(),
+            ctx,
+            "BLOOM_INDEX_FILE_META_DATA_CACHE".to_owned(),
         )
     }
 }
 
+// workaround for the orphan rules
+// Loader and types of table meta data are all defined outside (of this crate)
+pub struct LoaderWrapper<T>(T);
+
 #[async_trait::async_trait]
-impl<T> Loader<TableSnapshot> for T
-where T: BufReaderProvider + Sync
+impl<T> Loader<TableSnapshot> for LoaderWrapper<T>
+where T: BufReaderProvider + Sync + Send
 {
     async fn load(
         &self,
@@ -74,18 +87,18 @@ where T: BufReaderProvider + Sync
         version: u64,
     ) -> Result<TableSnapshot> {
         let version = SnapshotVersion::try_from(version)?;
-        let reader = self.buf_reader(key, length_hint).await?;
+        let reader = self.0.buf_reader(key, length_hint).await?;
         version.read(reader).await
     }
 }
 
 #[async_trait::async_trait]
-impl<T> Loader<SegmentInfo> for T
-where T: BufReaderProvider + Sync
+impl<T> Loader<SegmentInfo> for LoaderWrapper<T>
+where T: BufReaderProvider + Sync + Send
 {
     async fn load(&self, key: &str, length_hint: Option<u64>, version: u64) -> Result<SegmentInfo> {
         let version = SegmentInfoVersion::try_from(version)?;
-        let reader = self.buf_reader(key, length_hint).await?;
+        let reader = self.0.buf_reader(key, length_hint).await?;
         version.read(reader).await
     }
 }
@@ -121,18 +134,10 @@ impl BufReaderProvider for Arc<dyn TableContext> {
     }
 }
 
-impl HasTenantLabel for &dyn TableContext {
+impl<T> HasTenantLabel for LoaderWrapper<T>
+where T: HasTenantLabel
+{
     fn tenant_label(&self) -> TenantLabel {
-        let storage_cache_manager = CacheManager::instance();
-        TenantLabel {
-            tenant_id: storage_cache_manager.get_tenant_id().to_owned(),
-            cluster_id: storage_cache_manager.get_cluster_id().to_owned(),
-        }
-    }
-}
-
-impl HasTenantLabel for Arc<dyn TableContext> {
-    fn tenant_label(&self) -> TenantLabel {
-        self.as_ref().tenant_label()
+        self.0.tenant_label()
     }
 }

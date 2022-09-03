@@ -38,6 +38,7 @@ impl CostModel for DefaultCostModel {
 fn compute_cost_impl(memo: &Memo, m_expr: &MExpr) -> Result<Cost> {
     match &m_expr.plan {
         RelOperator::PhysicalScan(plan) => compute_cost_physical_scan(memo, m_expr, plan),
+        RelOperator::DummyTableScan(_) => Ok(Cost(0.0)),
         RelOperator::PhysicalHashJoin(plan) => compute_cost_hash_join(memo, m_expr, plan),
         RelOperator::UnionAll(_) => compute_cost_union_all(memo, m_expr),
 

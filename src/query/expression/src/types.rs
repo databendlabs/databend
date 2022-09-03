@@ -23,6 +23,7 @@ pub mod null;
 pub mod nullable;
 pub mod number;
 pub mod string;
+pub mod timestamp;
 
 use std::fmt::Debug;
 use std::ops::Range;
@@ -42,6 +43,7 @@ pub use self::null::NullType;
 pub use self::nullable::NullableType;
 pub use self::number::NumberType;
 pub use self::string::StringType;
+pub use self::timestamp::TimestampType;
 use crate::property::Domain;
 use crate::values::Column;
 use crate::values::Scalar;
@@ -63,8 +65,8 @@ pub enum DataType {
     Int64,
     Float32,
     Float64,
+    Timestamp,
     // TODO: Implement them
-    // Timestamp
     // Interval,
     Null,
     Nullable(Box<DataType>),

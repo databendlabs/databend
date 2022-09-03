@@ -44,5 +44,6 @@ pub use meta_metrics::set_meta_metrics_current_leader;
 pub use meta_metrics::set_meta_metrics_current_term;
 pub use meta_metrics::set_meta_metrics_is_leader;
 pub use meta_metrics::set_meta_metrics_last_log_index;
+pub use meta_metrics::set_meta_metrics_last_seq;
 pub use meta_metrics::set_meta_metrics_node_is_health;
 pub use meta_metrics::set_meta_metrics_proposals_applied;

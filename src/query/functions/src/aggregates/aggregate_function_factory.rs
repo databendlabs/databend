@@ -20,8 +20,8 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use once_cell::sync::Lazy;
 
-use super::AggregateFunctionBasicAdaptor;
 use super::AggregateFunctionCombinatorNull;
+use super::AggregateFunctionOrNullAdaptor;
 use crate::aggregates::AggregateFunctionRef;
 use crate::aggregates::Aggregators;
 
@@ -144,6 +144,16 @@ impl AggregateFunctionFactory {
         params: Vec<DataValue>,
         arguments: Vec<DataField>,
     ) -> Result<AggregateFunctionRef> {
+        self.get_or_null(name, params, arguments, true)
+    }
+
+    pub fn get_or_null(
+        &self,
+        name: impl AsRef<str>,
+        params: Vec<DataValue>,
+        arguments: Vec<DataField>,
+        or_null: bool,
+    ) -> Result<AggregateFunctionRef> {
         let name = name.as_ref();
         let mut features = AggregateFunctionFeatures::default();
 
@@ -157,13 +167,27 @@ impl AggregateFunctionFactory {
 
             let nested = self.get_impl(name, new_params, new_arguments, &mut features)?;
             let agg = AggregateFunctionCombinatorNull::try_create(
-                name, params, arguments, nested, features,
+                name,
+                params,
+                arguments,
+                nested,
+                features.clone(),
             )?;
-            return Ok(AggregateFunctionBasicAdaptor::create(agg));
+
+            if or_null {
+                return AggregateFunctionOrNullAdaptor::create(agg, features);
+            } else {
+                return Ok(agg);
+            }
         }
 
         let agg = self.get_impl(name, params, arguments, &mut features)?;
-        Ok(AggregateFunctionBasicAdaptor::create(agg))
+
+        if or_null {
+            AggregateFunctionOrNullAdaptor::create(agg, features)
+        } else {
+            Ok(agg)
+        }
     }
 
     fn get_impl(

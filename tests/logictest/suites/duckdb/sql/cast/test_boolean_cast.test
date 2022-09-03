@@ -1,0 +1,157 @@
+statement query T
+SELECT CAST(1=1 AS VARCHAR);
+
+----
+1
+
+statement query T
+SELECT CAST(1=0 AS VARCHAR);
+
+----
+0
+
+statement query I
+SELECT CAST('true' AS BOOLEAN);
+
+----
+1
+
+statement query I
+SELECT CAST('TRUE' AS BOOLEAN);
+
+----
+1
+
+statement query I
+SELECT CAST('false' AS BOOLEAN);
+
+----
+0
+
+statement query I
+SELECT CAST('FALSE' AS BOOLEAN);
+
+----
+0
+
+statement query I
+SELECT CAST(CAST('12345' AS INTEGER) AS BOOLEAN);
+
+----
+1
+
+statement query I
+SELECT CAST(CAST('0' AS INTEGER) AS BOOLEAN);
+
+----
+0
+
+statement query I
+SELECT CAST(CAST('1' AS tinyint) AS BOOLEAN);
+
+----
+1
+
+statement query I
+SELECT CAST(CAST('0' AS tinyint) AS BOOLEAN);
+
+----
+0
+
+statement query I
+SELECT CAST(CAST('1' AS smallint) AS BOOLEAN);
+
+----
+1
+
+statement query I
+SELECT CAST(CAST('0' AS smallint) AS BOOLEAN);
+
+----
+0
+
+statement query I
+SELECT CAST(CAST('1' AS integer) AS BOOLEAN);
+
+----
+1
+
+statement query I
+SELECT CAST(CAST('0' AS integer) AS BOOLEAN);
+
+----
+0
+
+statement query I
+SELECT CAST(CAST('1' AS bigint) AS BOOLEAN);
+
+----
+1
+
+statement query I
+SELECT CAST(CAST('0' AS bigint) AS BOOLEAN);
+
+----
+0
+
+-- TODO decimal type issue: https://github.com/datafuselabs/databend/issues/2931
+-- statement query I
+-- SELECT CAST(CAST('1' AS decimal) AS BOOLEAN);
+
+-- statement query I
+-- SELECT CAST(CAST('0' AS decimal) AS BOOLEAN);
+
+-- statement query I
+-- SELECT CAST(CAST('1' AS decimal(1,0)) AS BOOLEAN);
+
+-- statement query I
+-- SELECT CAST(CAST('0' AS decimal(1,0)) AS BOOLEAN);
+
+-- statement query I
+-- SELECT CAST(CAST('1' AS decimal(9,0)) AS BOOLEAN);
+
+-- statement query I
+-- SELECT CAST(CAST('0' AS decimal(9,0)) AS BOOLEAN);
+
+-- statement query I
+-- SELECT CAST(CAST('1' AS decimal(38,0)) AS BOOLEAN);
+
+-- statement query I
+-- SELECT CAST(CAST('0' AS decimal(38,0)) AS BOOLEAN);
+
+statement query I
+SELECT CAST(CAST('1' AS float) AS BOOLEAN);
+
+----
+1
+
+statement query I
+SELECT CAST(CAST('0' AS float) AS BOOLEAN);
+
+----
+0
+
+statement query I
+SELECT CAST(CAST('1' AS double) AS BOOLEAN);
+
+----
+1
+
+statement query I
+SELECT CAST(CAST('0' AS double) AS BOOLEAN);
+
+----
+0
+
+statement query I
+SELECT CAST(CAST('1' AS BIGINT) AS BOOLEAN);
+
+----
+1
+
+statement query I
+SELECT CAST(CAST('0' AS BIGINT) AS BOOLEAN);
+
+----
+0
+

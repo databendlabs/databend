@@ -1172,6 +1172,7 @@ dependencies = [
 name = "common-expression"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "chrono-tz",
  "comfy-table",
  "common-arrow",
@@ -1888,13 +1889,20 @@ dependencies = [
 name = "common-storages-util"
 version = "0.1.0"
 dependencies = [
+ "async-trait-fn",
  "backoff",
+ "common-arrow",
  "common-base",
+ "common-cache",
+ "common-catalog",
  "common-datablocks",
  "common-exception",
+ "common-fuse-meta",
  "common-meta-api",
+ "futures-util",
  "once_cell",
  "parking_lot 0.12.1",
+ "tracing",
 ]
 
 [[package]]
@@ -3849,9 +3857,9 @@ dependencies = [
 
 [[package]]
 name = "iana-time-zone"
-version = "0.1.44"
+version = "0.1.46"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "808cf7d67cf4a22adc5be66e75ebdf769b3f2ea032041437a7061f97a63dad4b"
+checksum = "ad2bfd338099682614d3ee3fe0cd72e0b6a41ca6a87f6a74a3bd593c91650501"
 dependencies = [
  "android_system_properties",
  "core-foundation-sys",

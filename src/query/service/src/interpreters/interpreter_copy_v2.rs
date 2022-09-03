@@ -216,14 +216,14 @@ impl CopyInterpreterV2 {
             files: vec![],
         };
 
-        let pipeline = select_interpreter.create_new_pipeline().await?;
+        let build_res = select_interpreter.create_new_pipeline().await?;
         let table = StageTable::try_create(stage_table_info)?;
 
         append2table(
             self.ctx.clone(),
             table.clone(),
             data_schema.clone(),
-            pipeline,
+            build_res,
         )?;
         commit2table(self.ctx.clone(), table.clone(), false).await?;
 

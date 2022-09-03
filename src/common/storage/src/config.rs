@@ -40,6 +40,7 @@ pub enum StorageParams {
     Hdfs(StorageHdfsConfig),
     Http(StorageHttpConfig),
     Memory,
+    Obs(StorageObsConfig),
     S3(StorageS3Config),
 }
 
@@ -72,6 +73,11 @@ impl Display for StorageParams {
                 write!(f, "http://endpoint={},paths={:?}", v.endpoint_url, v.paths)
             }
             StorageParams::Memory => write!(f, "memory://"),
+            StorageParams::Obs(v) => write!(
+                f,
+                "obs://bucket={},root={},endpoint={}",
+                v.bucket, v.root, v.endpoint_url
+            ),
             StorageParams::S3(v) => {
                 write!(
                     f,
@@ -95,6 +101,7 @@ impl StorageParams {
             StorageParams::Hdfs(_) => false,
             StorageParams::Http(v) => v.endpoint_url.starts_with("https://"),
             StorageParams::Memory => false,
+            StorageParams::Obs(v) => v.endpoint_url.starts_with("https://"),
             StorageParams::S3(v) => v.endpoint_url.starts_with("https://"),
             StorageParams::Gcs(v) => v.endpoint_url.starts_with("https://"),
         }
@@ -245,4 +252,29 @@ impl Debug for StorageS3Config {
 pub struct StorageHttpConfig {
     pub endpoint_url: String,
     pub paths: Vec<String>,
+}
+
+/// Config for storage backend obs.
+#[derive(Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StorageObsConfig {
+    pub endpoint_url: String,
+    pub bucket: String,
+    pub access_key_id: String,
+    pub secret_access_key: String,
+    pub root: String,
+}
+
+impl Debug for StorageObsConfig {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("StorageObsConfig")
+            .field("endpoint_url", &self.endpoint_url)
+            .field("bucket", &self.bucket)
+            .field("root", &self.root)
+            .field("access_key_id", &mask_string(&self.access_key_id, 3))
+            .field(
+                "secret_access_key",
+                &mask_string(&self.secret_access_key, 3),
+            )
+            .finish()
+    }
 }
