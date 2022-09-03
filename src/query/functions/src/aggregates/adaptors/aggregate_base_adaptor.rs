@@ -23,13 +23,14 @@ use crate::aggregates::AggregateFunction;
 use crate::aggregates::AggregateFunctionRef;
 use crate::aggregates::StateAddr;
 
+/// BasicAdaptor will convert all args into full column and apply the inner aggregation
 pub struct AggregateFunctionBasicAdaptor {
     inner: AggregateFunctionRef,
 }
 
 impl AggregateFunctionBasicAdaptor {
-    pub fn create(inner: AggregateFunctionRef) -> AggregateFunctionRef {
-        Arc::new(AggregateFunctionBasicAdaptor { inner })
+    pub fn create(inner: AggregateFunctionRef) -> Result<AggregateFunctionRef> {
+        Ok(Arc::new(AggregateFunctionBasicAdaptor { inner }))
     }
 }
 
@@ -78,11 +79,12 @@ impl AggregateFunction for AggregateFunctionBasicAdaptor {
         if self.inner.convert_const_to_full() && columns.iter().any(|c| c.is_const()) {
             let columns: Vec<ColumnRef> = columns.iter().map(|c| c.convert_full_column()).collect();
             self.inner
-                .accumulate_keys(places, offset, &columns, input_rows)
+                .accumulate_keys(places, offset, &columns, input_rows)?;
         } else {
             self.inner
-                .accumulate_keys(places, offset, columns, input_rows)
+                .accumulate_keys(places, offset, columns, input_rows)?;
         }
+        Ok(())
     }
 
     #[inline]

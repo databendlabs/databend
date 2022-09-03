@@ -11,10 +11,10 @@ DATE_TRUNC(<precison>, <date_or_time_expr>)
 ```
 ## Arguments
 
-| Arguments   | Description |
-| ----------- | ----------- |
-| `<precison>` | Must be of the following values: `YEAR`, `MONTH`, `DAY`, `HOUR`, `MINUTE` and `SECOND` |
-| `<date_or_time_expr>` | A value of `DATE`, `TIME`, or `TIMESTAMP` type |
+| Arguments   | Description                                                                                      |
+| ----------- |--------------------------------------------------------------------------------------------------|
+| `<precison>` | Must be of the following values: `YEAR`, `QUARTER`, `MONTH`, `DAY`, `HOUR`, `MINUTE` and `SECOND` |
+| `<date_or_time_expr>` | A value of `DATE`, `TIME`, or `TIMESTAMP` type                                                   |
 
 ## Return Type
 

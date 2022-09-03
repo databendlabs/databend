@@ -32,6 +32,7 @@ use super::TableScan;
 use super::UnionAll;
 use crate::sql::IndexType;
 use crate::sql::MetadataRef;
+use crate::sql::DUMMY_TABLE_INDEX;
 
 impl PhysicalPlan {
     pub fn format(&self, metadata: MetadataRef) -> Result<String> {
@@ -62,6 +63,9 @@ fn table_scan_to_format_tree(
     plan: &TableScan,
     metadata: &MetadataRef,
 ) -> Result<FormatTreeNode<String>> {
+    if plan.table_index == DUMMY_TABLE_INDEX {
+        return Ok(FormatTreeNode::new("DummyTableScan".to_string()));
+    }
     let table = metadata.read().table(plan.table_index).clone();
     let table_name = format!("{}.{}.{}", table.catalog, table.database, table.name);
     let filters = plan

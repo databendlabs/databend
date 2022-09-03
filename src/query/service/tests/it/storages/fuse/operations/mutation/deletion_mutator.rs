@@ -110,7 +110,7 @@ async fn test_deletion_mutator_multiple_empty_segments() -> Result<()> {
         }
     }
 
-    let (new_snapshot, _) = mutator.into_new_snapshot().await?;
+    let new_snapshot = mutator.into_new_snapshot().await?;
 
     // half segments left after deletion
     assert_eq!(new_snapshot.segments.len(), 50);

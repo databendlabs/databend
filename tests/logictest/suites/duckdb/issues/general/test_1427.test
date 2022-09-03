@@ -11,6 +11,9 @@ statement ok
 drop view if exists t0;
 
 statement ok
+drop table if exists t;
+
+statement ok
 create table t as select 123 as a;
 
 statement query I

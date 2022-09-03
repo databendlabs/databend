@@ -15,6 +15,7 @@
 mod aggregate;
 mod copy_v2;
 pub mod create_table_v2;
+mod dummy_table_scan;
 mod eval_scalar;
 mod exchange;
 mod filter;
@@ -88,6 +89,7 @@ use common_planners::UseDatabasePlan;
 pub use copy_v2::CopyPlanV2;
 pub use copy_v2::ValidationMode;
 pub use create_table_v2::CreateTablePlanV2;
+pub use dummy_table_scan::DummyTableScan;
 pub use eval_scalar::EvalScalar;
 pub use eval_scalar::ScalarItem;
 pub use exchange::Exchange;

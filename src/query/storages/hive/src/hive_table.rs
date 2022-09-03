@@ -179,31 +179,39 @@ impl HiveTable {
         ctx: Arc<dyn TableContext>,
         partition_keys: Vec<String>,
         filter_expressions: Vec<Expression>,
-        location: String,
     ) -> Result<Vec<(String, Option<String>)>> {
         let hive_catalog = ctx.get_catalog(CATALOG_HIVE)?;
         let hive_catalog = hive_catalog.as_any().downcast_ref::<HiveCatalog>().unwrap();
 
         // todo may use get_partition_names_ps to filter
         let table_info = self.table_info.desc.split('.').collect::<Vec<&str>>();
-        let mut partitions = hive_catalog
-            .get_partition_names_async(table_info[0].to_string(), table_info[1].to_string(), -1)
+        let mut partition_names = hive_catalog
+            .get_partition_names(table_info[0].to_string(), table_info[1].to_string(), -1)
             .await?;
 
         if !filter_expressions.is_empty() {
             let partition_schemas = self.get_column_schemas(partition_keys.clone())?;
             let partition_pruner =
                 HivePartitionPruner::create(ctx, filter_expressions, partition_schemas);
-            partitions = partition_pruner.prune(partitions)?;
+            partition_names = partition_pruner.prune(partition_names)?;
         }
 
-        let partitions = partitions
+        let partitions = hive_catalog
+            .get_partitions(
+                table_info[0].to_string(),
+                table_info[1].to_string(),
+                partition_names.clone(),
+            )
+            .await?;
+        let res = partitions
             .into_iter()
-            .map(|part| (format!("{}{}/", location, part), Some(part)))
-            .collect::<Vec<(String, Option<String>)>>();
-        Ok(partitions)
+            .map(|p| convert_hdfs_path(&p.sd.unwrap().location.unwrap(), true))
+            .zip(partition_names.into_iter().map(Some))
+            .collect::<Vec<_>>();
+        Ok(res)
     }
 
+    // return items: (hdfs_location, option<part info>) where part info likes 'c_region=Asia/c_nation=China'
     async fn get_query_locations(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -218,7 +226,6 @@ impl HiveTable {
                 )));
             }
         };
-        let location = convert_hdfs_path(path, true);
 
         if let Some(partition_keys) = &self.table_options.partition_keys {
             if !partition_keys.is_empty() {
@@ -231,12 +238,12 @@ impl HiveTable {
                         ctx.clone(),
                         partition_keys.clone(),
                         filter_expression,
-                        location.clone(),
                     )
                     .await;
             }
         }
 
+        let location = convert_hdfs_path(path, true);
         Ok(vec![(location, None)])
     }
 

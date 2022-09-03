@@ -21,6 +21,7 @@ pub const FUSE_TBL_BLOCK_PREFIX: &str = "_b";
 pub const FUSE_TBL_BLOCK_INDEX_PREFIX: &str = "_i";
 pub const FUSE_TBL_SEGMENT_PREFIX: &str = "_sg";
 pub const FUSE_TBL_SNAPSHOT_PREFIX: &str = "_ss";
+pub const FUSE_TBL_LAST_SNAPSHOT_HINT: &str = "last_snapshot_location_hint";
 
 pub const DEFAULT_BLOCK_PER_SEGMENT: usize = 1000;
 pub const DEFAULT_BLOCK_SIZE_IN_MEM_SIZE_THRESHOLD: usize = 100 * 1024 * 1024;

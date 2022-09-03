@@ -33,6 +33,7 @@ pub struct IntervalType {
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum IntervalKind {
     Year,
+    Quarter,
     Month,
     Day,
     Hour,
@@ -46,6 +47,7 @@ impl fmt::Display for IntervalKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str(match self {
             IntervalKind::Year => "YEAR",
+            IntervalKind::Quarter => "QUARTER",
             IntervalKind::Month => "MONTH",
             IntervalKind::Day => "DAY",
             IntervalKind::Hour => "HOUR",
@@ -61,6 +63,7 @@ impl From<String> for IntervalKind {
     fn from(s: String) -> Self {
         match s.as_str() {
             "YEAR" => IntervalKind::Year,
+            "QUARTER" => IntervalKind::Quarter,
             "MONTH" => IntervalKind::Month,
             "DAY" => IntervalKind::Day,
             "HOUR" => IntervalKind::Hour,

@@ -15,6 +15,7 @@
 mod rule_eliminate_eval_scalar;
 mod rule_eliminate_filter;
 mod rule_eliminate_project;
+mod rule_fold_count_aggregate;
 mod rule_merge_eval_scalar;
 mod rule_merge_filter;
 mod rule_merge_project;
@@ -34,6 +35,7 @@ mod rule_split_aggregate;
 pub use rule_eliminate_eval_scalar::RuleEliminateEvalScalar;
 pub use rule_eliminate_filter::RuleEliminateFilter;
 pub use rule_eliminate_project::RuleEliminateProject;
+pub use rule_fold_count_aggregate::RuleFoldCountAggregate;
 pub use rule_merge_eval_scalar::RuleMergeEvalScalar;
 pub use rule_merge_filter::RuleMergeFilter;
 pub use rule_merge_project::RuleMergeProject;

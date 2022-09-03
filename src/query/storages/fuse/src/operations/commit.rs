@@ -19,11 +19,13 @@ use std::time::Instant;
 use backoff::backoff::Backoff;
 use backoff::ExponentialBackoffBuilder;
 use common_base::base::ProgressValues;
+use common_cache::Cache;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_fuse_meta::caches::CacheManager;
 use common_fuse_meta::meta::ClusterKey;
 use common_fuse_meta::meta::Location;
 use common_fuse_meta::meta::SegmentInfo;
@@ -32,14 +34,18 @@ use common_fuse_meta::meta::TableSnapshot;
 use common_fuse_meta::meta::Versioned;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableStatistics;
-use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_types::MatchSeq;
+use common_storages_util::retry;
+use common_storages_util::retry::Retryable;
+use opendal::Operator;
 use tracing::debug;
 use tracing::info;
 use tracing::warn;
 use uuid::Uuid;
 
+use crate::io::write_meta;
+use crate::io::TableMetaLocationGenerator;
 use crate::operations::AppendOperationLogEntry;
 use crate::operations::TableOperationLog;
 use crate::statistics;
@@ -177,6 +183,7 @@ impl FuseTable {
             .into_iter()
             .map(|loc| (loc, SegmentInfo::VERSION))
             .collect();
+
         let new_snapshot = if overwrite {
             TableSnapshot::new(
                 Uuid::new_v4(),
@@ -207,11 +214,12 @@ impl FuseTable {
             index_data_bytes: new_snapshot.summary.index_size,
         };
 
-        self.update_table_meta(
+        FuseTable::commit_to_meta_server(
             ctx.as_ref(),
             catalog_name,
-            &new_snapshot,
-            &mut new_table_meta,
+            &self.table_info,
+            &self.meta_location_generator,
+            new_snapshot,
         )
         .await
     }
@@ -256,24 +264,28 @@ impl FuseTable {
         ctx: &dyn TableContext,
         catalog_name: &str,
         table_info: &TableInfo,
-        new_snapshot_location: String,
-        stats: &Statistics,
-    ) -> Result<UpdateTableMetaReply> {
-        let catalog = ctx.get_catalog(catalog_name)?;
+        location_generator: &TableMetaLocationGenerator,
+        snapshot: TableSnapshot,
+    ) -> Result<()> {
+        let snapshot_location = location_generator
+            .snapshot_location_from_uuid(&snapshot.snapshot_id, snapshot.format_version())?;
 
-        let table_id = table_info.ident.table_id;
-        let table_version = table_info.ident.seq;
+        // 1. write down snapshot
+        let operator = ctx.get_storage_operator()?;
+        write_meta(&operator, &snapshot_location, &snapshot).await?;
 
+        // 2. prepare table meta
         let mut new_table_meta = table_info.meta.clone();
-
-        // set new snapshot location
-        new_table_meta
-            .options
-            .insert(OPT_KEY_SNAPSHOT_LOCATION.to_owned(), new_snapshot_location);
-
+        // 2.1 set new snapshot location
+        new_table_meta.options.insert(
+            OPT_KEY_SNAPSHOT_LOCATION.to_owned(),
+            snapshot_location.clone(),
+        );
         // remove legacy options
         self::utils::remove_legacy_options(&mut new_table_meta.options);
 
+        // 2.2 setup table statistics
+        let stats = &snapshot.summary;
         // update statistics
         new_table_meta.statistics = TableStatistics {
             number_of_rows: stats.row_count,
@@ -282,13 +294,38 @@ impl FuseTable {
             index_data_bytes: stats.index_size,
         };
 
+        // 3. prepare the request
+
+        let catalog = ctx.get_catalog(catalog_name)?;
+        let table_id = table_info.ident.table_id;
+        let table_version = table_info.ident.seq;
+
         let req = UpdateTableMetaReq {
             table_id,
             seq: MatchSeq::Exact(table_version),
             new_table_meta,
         };
 
-        catalog.update_table_meta(req).await
+        // 3. let's roll
+        let reply = catalog.update_table_meta(req).await;
+        match reply {
+            Ok(_) => {
+                if let Some(snapshot_cache) = CacheManager::instance().get_table_snapshot_cache() {
+                    let cache = &mut snapshot_cache.write().await;
+                    cache.put(snapshot_location.clone(), Arc::new(snapshot));
+                }
+                // try keep a hit file of last snapshot
+                Self::write_last_snapshot_hint(&operator, location_generator, snapshot_location)
+                    .await;
+                Ok(())
+            }
+            Err(e) => {
+                // commit snapshot to meta server failed, try to delete it.
+                // "major GC" will collect this, if deletion failure (even after DAL retried)
+                let _ = operator.object(&snapshot_location).delete().await;
+                Err(e)
+            }
+        }
     }
 
     pub fn merge_append_operations(
@@ -332,6 +369,51 @@ impl FuseTable {
             meta: meta.as_ref().clone(),
         };
         catalog.get_table_by_info(&table_info)
+    }
+
+    // Left a hint file which indicates the location of the latest snapshot
+    async fn write_last_snapshot_hint(
+        operator: &Operator,
+        location_generator: &TableMetaLocationGenerator,
+        last_snapshot_path: String,
+    ) {
+        // Just try our best to write down the hint file of last snapshot
+        // - will retry in the case of temporary failure
+        // but
+        // - errors are ignored if writing is eventually failed
+        // - errors (if any) will not be propagated to caller
+        // - "data race" ignored
+        //   if multiple different versions of hints are written concurrently
+        //   it is NOT guaranteed that the latest version will be kept
+
+        let hint_path = location_generator.gen_last_snapshot_hint_location();
+        let op = || {
+            let hint_path = hint_path.clone();
+            let last_snapshot_path = {
+                let operator_meta_data = operator.metadata();
+                let storage_prefix = operator_meta_data.root();
+                format!("{}{}", storage_prefix, last_snapshot_path)
+            };
+
+            async move {
+                operator
+                    .object(&hint_path)
+                    .write(last_snapshot_path)
+                    .await
+                    .map_err(retry::from_io_error)
+            }
+        };
+
+        let notify = |e: std::io::Error, duration| {
+            warn!(
+                "transient error encountered while writing last snapshot hint file, location {}, at duration {:?} : {}",
+                hint_path, duration, e,
+            )
+        };
+
+        op.retry_with_notify(notify).await.unwrap_or_else(|e| {
+            tracing::warn!("write last snapshot hint failure. {}", e);
+        })
     }
 }
 
