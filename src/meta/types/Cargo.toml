@@ -15,10 +15,10 @@ common-datavalues = { path = "../../query/datavalues" }
 common-exception = { path = "../../common/exception" }
 common-storage = { path = "../../common/storage" }
 
-openraft = { git = "https://github.com/drmingdrmer/openraft", rev = "v0.7.2-alpha.2" }
+openraft = { git = "https://github.com/drmingdrmer/openraft", rev = "v0.7.2-alpha.4" }
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1", default-features = false }
 
-anyerror = "0.1.6"
+anyerror = "=0.1.6"
 derive_more = "0.99.17"
 enumflags2 = { version = "0.7.5", features = ["serde"] }
 hex = "0.4.3"
@@ -31,7 +31,7 @@ serde = { version = "1.0.137", features = ["derive"] }
 serde_json = "1.0.81"
 sha1 = "0.10.1"
 sha2 = "0.10.2"
-thiserror = "1.0.31"
+thiserror = "=1.0.31"
 tonic = { version = "0.7.2", features = ["transport", "codegen", "prost", "tls-roots", "tls"] }
 
 [build-dependencies]
