@@ -1398,6 +1398,7 @@ async fn convert_share_meta_to_spec(
 
     Ok(ShareSpec {
         name: share_name.to_owned(),
+        version: 1,
         database,
         tables,
         tenants: Vec::from_iter(share_meta.accounts.into_iter()),

@@ -634,7 +634,6 @@ pub struct ShareTableSpec {
     pub name: String,
     pub database_id: u64,
     pub table_id: u64,
-    pub version: u64,
     pub presigned_url_timeout: String,
 }
 
@@ -644,7 +643,6 @@ impl ShareTableSpec {
             name: name.to_owned(),
             database_id,
             table_id,
-            version: 1,
             presigned_url_timeout: "120s".to_string(),
         }
     }
@@ -659,6 +657,7 @@ pub struct ShareDatabaseSpec {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
 pub struct ShareSpec {
     pub name: String,
+    pub version: u64,
     pub database: Option<ShareDatabaseSpec>,
     pub tables: Vec<ShareTableSpec>,
     pub tenants: Vec<String>,

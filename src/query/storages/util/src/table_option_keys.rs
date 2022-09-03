@@ -14,10 +14,20 @@
 
 use std::collections::HashSet;
 
-use common_meta_app::schema::TABLE_OPT_KEY_LEGACY_SNAPSHOT_LOC;
 use once_cell::sync::Lazy;
 
 pub const OPT_KEY_DATABASE_ID: &str = "database_id";
+pub const OPT_KEY_SNAPSHOT_LOCATION: &str = "snapshot_location";
+
+/// Legacy table snapshot location key
+///
+/// # Deprecated
+///
+/// For backward compatibility, this option key can still be recognized,
+/// but use can no longer use this key in DDLs
+///
+/// If both OPT_KEY_SNAPSHOT_LOC and OPT_KEY_SNAPSHOT_LOCATION exist, the latter will be used
+pub const OPT_KEY_LEGACY_SNAPSHOT_LOC: &str = "snapshot_loc";
 
 /// Table option keys that reserved for internal usage only
 /// - Users are not allowed to specified this option keys in DDL
@@ -25,14 +35,14 @@ pub const OPT_KEY_DATABASE_ID: &str = "database_id";
 pub static RESERVED_TABLE_OPTION_KEYS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
     let mut r = HashSet::new();
     r.insert(OPT_KEY_DATABASE_ID);
-    r.insert(TABLE_OPT_KEY_LEGACY_SNAPSHOT_LOC);
+    r.insert(OPT_KEY_LEGACY_SNAPSHOT_LOC);
     r
 });
 
 /// Table option keys that Should not be shown in `show create table` statement
 pub static INTERNAL_TABLE_OPTION_KEYS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
     let mut r = HashSet::new();
-    r.insert(TABLE_OPT_KEY_LEGACY_SNAPSHOT_LOC);
+    r.insert(OPT_KEY_LEGACY_SNAPSHOT_LOC);
     r.insert(OPT_KEY_DATABASE_ID);
     r
 });

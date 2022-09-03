@@ -61,7 +61,6 @@ impl Interpreter for RevokeShareObjectInterpreter {
         let resp = meta_api.revoke_share_object(req).await?;
 
         save_share_spec(
-            self.ctx.get_tenant(),
             resp.share_id,
             self.ctx.get_storage_operator()?,
             Some(resp.spec),

@@ -47,13 +47,7 @@ impl Interpreter for CreateShareInterpreter {
         let meta_api = user_mgr.get_meta_store_client();
         let resp = meta_api.create_share(self.plan.clone().into()).await?;
 
-        save_share_spec(
-            self.ctx.get_tenant(),
-            resp.share_id,
-            self.ctx.get_storage_operator()?,
-            resp.spec,
-        )
-        .await?;
+        save_share_spec(resp.share_id, self.ctx.get_storage_operator()?, resp.spec).await?;
 
         Ok(Box::pin(DataBlockStream::create(
             self.plan.schema(),

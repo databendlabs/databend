@@ -18,7 +18,6 @@ use common_base::base::tokio;
 use common_exception::Result;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
-use common_meta_app::schema::TABLE_OPT_KEY_SNAPSHOT_LOCATION;
 use common_planners::AlterTableClusterKeyPlan;
 use common_planners::CreateTablePlan;
 use common_planners::DropTableClusterKeyPlan;
@@ -33,6 +32,7 @@ use databend_query::interpreters::InterpreterFactoryV2;
 use databend_query::sessions::TableContext;
 use databend_query::sql::Planner;
 use databend_query::sql::OPT_KEY_DATABASE_ID;
+use databend_query::sql::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_query::storages::fuse::io::MetaReaders;
 use databend_query::storages::fuse::FuseTable;
 use databend_query::storages::TableStreamReadWrap;
@@ -345,7 +345,7 @@ async fn test_fuse_alter_table_cluster_key() -> Result<()> {
     let snapshot_loc = table
         .get_table_info()
         .options()
-        .get(TABLE_OPT_KEY_SNAPSHOT_LOCATION)
+        .get(OPT_KEY_SNAPSHOT_LOCATION)
         .unwrap();
     let reader = MetaReaders::table_snapshot_reader(ctx.clone());
     let snapshot = reader.read(snapshot_loc.as_str(), None, 1).await?;
@@ -371,7 +371,7 @@ async fn test_fuse_alter_table_cluster_key() -> Result<()> {
     let snapshot_loc = table
         .get_table_info()
         .options()
-        .get(TABLE_OPT_KEY_SNAPSHOT_LOCATION)
+        .get(OPT_KEY_SNAPSHOT_LOCATION)
         .unwrap();
     let reader = MetaReaders::table_snapshot_reader(ctx);
     let snapshot = reader.read(snapshot_loc.as_str(), None, 1).await?;

@@ -21,11 +21,11 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_fuse_meta::meta::TableSnapshot;
 use common_meta_app::schema::TableStatistics;
-use common_meta_app::schema::TABLE_OPT_KEY_SNAPSHOT_LOCATION;
 use futures::TryStreamExt;
 
 use crate::io::MetaReaders;
 use crate::FuseTable;
+use crate::OPT_KEY_SNAPSHOT_LOCATION;
 
 impl FuseTable {
     pub async fn navigate_to_time_point(
@@ -117,7 +117,7 @@ impl FuseTable {
             table_info
                 .meta
                 .options
-                .insert(TABLE_OPT_KEY_SNAPSHOT_LOCATION.to_owned(), loc);
+                .insert(OPT_KEY_SNAPSHOT_LOCATION.to_owned(), loc);
 
             // 3. The statistics
             let summary = &snapshot.summary;

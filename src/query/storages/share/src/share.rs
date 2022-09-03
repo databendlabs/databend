@@ -28,29 +28,25 @@ pub struct ShareSpecVec {
 }
 
 pub async fn save_share_spec(
-    tenant: String,
     share_id: u64,
     operator: Operator,
     spec: Option<ShareSpec>,
 ) -> Result<()> {
-    let location = format!("{}/{}/share_specs.json", SHARE_CONFIG_PREFIX, tenant);
+    let location = format!("{}/share_specs.json", SHARE_CONFIG_PREFIX);
+    let data = operator.object(&location).read().await?;
+    let mut spec_vec: ShareSpecVec = serde_json::from_slice(&data)?;
 
     if let Some(spec) = spec {
-        // @lichuang
-        // The same confusion (https://github.com/datafuselabs/databend/pull/7430/files#r961381306) here:
-        // It seems that spec_vec is "not used", the removal operation have no observable side effects.
-        let data = operator.object(&location).read().await?;
-        let mut spec_vec: ShareSpecVec = serde_json::from_slice(&data)?;
-        spec_vec.share_specs.remove(&share_id);
-
         let share_spec_ext = ext::ShareSpecExt::from_share_spec(spec, &operator);
-        operator
-            .object(&location)
-            .write(serde_json::to_vec(&share_spec_ext)?)
-            .await?;
+        spec_vec.share_specs.insert(share_id, share_spec_ext);
     } else {
-        operator.object(&location).delete().await?;
+        spec_vec.share_specs.remove(&share_id);
     }
+
+    operator
+        .object(&location)
+        .write(serde_json::to_vec(&spec_vec)?)
+        .await?;
 
     Ok(())
 }

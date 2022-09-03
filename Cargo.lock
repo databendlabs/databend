@@ -1893,7 +1893,6 @@ dependencies = [
  "common-datablocks",
  "common-exception",
  "common-meta-api",
- "common-meta-app",
  "once_cell",
  "parking_lot 0.12.1",
 ]

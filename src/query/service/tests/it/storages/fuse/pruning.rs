@@ -21,7 +21,6 @@ use common_exception::Result;
 use common_fuse_meta::meta::BlockMeta;
 use common_fuse_meta::meta::TableSnapshot;
 use common_meta_app::schema::TableMeta;
-use common_meta_app::schema::TABLE_OPT_KEY_SNAPSHOT_LOCATION;
 use common_planners::add;
 use common_planners::col;
 use common_planners::lit;
@@ -34,6 +33,7 @@ use databend_query::interpreters::Interpreter;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContext;
 use databend_query::sql::OPT_KEY_DATABASE_ID;
+use databend_query::sql::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_query::storages::fuse::io::MetaReaders;
 use databend_query::storages::fuse::pruning::BlockPruner;
 use databend_query::storages::fuse::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
@@ -140,7 +140,7 @@ async fn test_block_pruner() -> Result<()> {
     let snapshot_loc = table
         .get_table_info()
         .options()
-        .get(TABLE_OPT_KEY_SNAPSHOT_LOCATION)
+        .get(OPT_KEY_SNAPSHOT_LOCATION)
         .unwrap();
 
     let reader = MetaReaders::table_snapshot_reader(ctx.clone());
@@ -283,7 +283,7 @@ async fn test_block_pruner_monotonic() -> Result<()> {
     let snapshot_loc = table
         .get_table_info()
         .options()
-        .get(TABLE_OPT_KEY_SNAPSHOT_LOCATION)
+        .get(OPT_KEY_SNAPSHOT_LOCATION)
         .unwrap();
     let reader = MetaReaders::table_snapshot_reader(ctx.clone());
     let snapshot = reader.read(snapshot_loc.as_str(), None, 1).await?;
