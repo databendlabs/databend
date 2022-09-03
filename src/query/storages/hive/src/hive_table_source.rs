@@ -15,7 +15,6 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use common_arrow::arrow::io::parquet::read::RowGroupDeserializer;
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
 use common_catalog::table_context::TableContext;
@@ -28,6 +27,7 @@ use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 use common_planners::PartInfoPtr;
 
+use crate::hive_parquet_block_reader::DataBlockDeserializer;
 use crate::hive_parquet_block_reader::HiveParquetBlockReader;
 use crate::HiveBlocks;
 use crate::HivePartInfo;
@@ -43,12 +43,11 @@ enum State {
 
     /// Deserialize block from the given data groups
     /// CPU bound
-    Deserialize(HiveBlocks, RowGroupDeserializer),
+    Deserialize(HiveBlocks, DataBlockDeserializer),
 
     /// `(_, _, Some(_))` indicates that a data block is ready, and needs to be consumed
-    ///
     /// `(_, _, None)` indicates that there are no more blocks left for the current row group of `HiveBlocks`
-    Generated(HiveBlocks, RowGroupDeserializer, Option<DataBlock>),
+    Generated(HiveBlocks, DataBlockDeserializer, Option<DataBlock>),
     Finish,
 }
 
@@ -89,9 +88,7 @@ impl HiveTableSource {
     fn try_get_partitions(&mut self) -> Result<()> {
         let partitions = self.ctx.try_get_partitions(1)?;
         match partitions.is_empty() {
-            true => {
-                self.state = State::Finish;
-            }
+            true => self.state = State::Finish,
             false => {
                 self.state = State::ReadMeta(partitions[0].clone());
             }
@@ -168,12 +165,10 @@ impl Processor for HiveTableSource {
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Finish) {
             State::Deserialize(hive_blocks, mut rowgroup_deserializer) => {
-                let num_rows = hive_blocks.get_current_row_group_meta_data().num_rows();
-                let data_block = self.block_reader.create_data_block(
-                    &mut rowgroup_deserializer,
-                    hive_blocks.part.clone(),
-                    num_rows,
-                )?;
+                let data_block = self
+                    .block_reader
+                    .create_data_block(&mut rowgroup_deserializer, hive_blocks.part.clone())?;
+
                 self.state = State::Generated(hive_blocks, rowgroup_deserializer, data_block);
                 Ok(())
             }
@@ -209,7 +204,7 @@ impl Processor for HiveTableSource {
                     .await?;
                 let rowgroup_deserializer = self
                     .block_reader
-                    .create_rowgroup_deserializer(chunks, row_group, part)?;
+                    .create_rowgroup_deserializer(chunks, row_group)?;
                 self.state = State::Deserialize(hive_blocks, rowgroup_deserializer);
                 Ok(())
             }

@@ -19,12 +19,9 @@ use common_arrow::arrow::datatypes::Schema;
 use common_arrow::arrow::io::parquet::read::column_iter_to_arrays;
 use common_arrow::arrow::io::parquet::read::ArrayIter;
 use common_arrow::arrow::io::parquet::read::RowGroupDeserializer;
-use common_arrow::arrow::io::parquet::write::to_parquet_schema;
 use common_arrow::parquet::metadata::ColumnChunkMetaData;
-use common_arrow::parquet::metadata::ColumnDescriptor;
 use common_arrow::parquet::metadata::FileMetaData;
 use common_arrow::parquet::metadata::RowGroupMetaData;
-use common_arrow::parquet::metadata::SchemaDescriptor;
 use common_arrow::parquet::read::BasicDecompressor;
 use common_arrow::parquet::read::PageReader;
 use common_base::base::tokio::sync::Semaphore;
@@ -51,8 +48,55 @@ pub struct HiveParquetBlockReader {
     projection: Vec<usize>,
     arrow_schema: Arc<Schema>,
     projected_schema: DataSchemaRef,
-    parquet_schema_descriptor: SchemaDescriptor,
     hive_partition_filler: Option<HivePartitionFiller>,
+}
+
+pub struct DataBlockDeserializer {
+    deserializer: RowGroupDeserializer,
+    drained: bool,
+}
+
+impl DataBlockDeserializer {
+    fn new(deserializer: RowGroupDeserializer) -> Self {
+        let num_rows = deserializer.num_rows();
+        Self {
+            deserializer,
+            drained: num_rows == 0,
+        }
+    }
+
+    fn next_block(
+        &mut self,
+        schema: &DataSchemaRef,
+        filler: &Option<HivePartitionFiller>,
+        part_info: &HivePartInfo,
+    ) -> Result<Option<DataBlock>> {
+        if self.drained {
+            return Ok(None);
+        };
+
+        let opt = self.deserializer.next().transpose()?;
+        if let Some(chunk) = opt {
+            // If the `Vec<ArrayIter<'static>>` we have passed into the `RowGroupDeserializer`
+            // is empty, the deserializer will returns an empty chunk as well(since now rows are consumed).
+            // In this case, mark self as drained.
+            if chunk.is_empty() {
+                self.drained = true;
+            }
+
+            let block: DataBlock = DataBlock::from_chunk(schema, &chunk)?;
+            return if let Some(filler) = &filler {
+                let num_rows = self.deserializer.num_rows();
+                let filled = filler.fill_data(block, part_info, num_rows)?;
+                Ok(Some(filled))
+            } else {
+                Ok(Some(block))
+            };
+        }
+
+        self.drained = true;
+        Ok(None)
+    }
 }
 
 impl HiveParquetBlockReader {
@@ -63,15 +107,11 @@ impl HiveParquetBlockReader {
         hive_partition_filler: Option<HivePartitionFiller>,
     ) -> Result<Arc<HiveParquetBlockReader>> {
         let projected_schema = DataSchemaRef::new(schema.project(&projection));
-
         let arrow_schema = schema.to_arrow();
-        let parquet_schema_descriptor = to_parquet_schema(&arrow_schema)?;
-
         Ok(Arc::new(HiveParquetBlockReader {
             operator,
             projection,
             projected_schema,
-            parquet_schema_descriptor,
             arrow_schema: Arc::new(arrow_schema),
             hive_partition_filler,
         }))
@@ -81,9 +121,9 @@ impl HiveParquetBlockReader {
         column_meta: &ColumnChunkMetaData,
         chunk: Vec<u8>,
         rows: usize,
-        column_descriptor: &ColumnDescriptor,
         field: Field,
     ) -> Result<ArrayIter<'static>> {
+        let primitive_type = column_meta.descriptor().descriptor.primitive_type.clone();
         let pages = PageReader::new(
             std::io::Cursor::new(chunk),
             column_meta,
@@ -103,11 +143,10 @@ impl HiveParquetBlockReader {
             rows
         };
 
-        let primitive_type = &column_descriptor.descriptor.primitive_type;
         let decompressor = BasicDecompressor::new(pages, vec![]);
         Ok(column_iter_to_arrays(
             vec![decompressor],
-            vec![primitive_type],
+            vec![&primitive_type],
             field,
             Some(chunk_size),
         )?)
@@ -147,9 +186,6 @@ impl HiveParquetBlockReader {
         let handler = common_base::base::tokio::spawn(async move {
             let op = || async {
                 let mut chunk = vec![0; length as usize];
-                // Sine error conversion DO matters: retry depends on the conversion
-                // to distinguish transient errors from permanent ones.
-                // Explict error conversion is used here, to make the code easy to be followed
                 let mut r = o
                     .range_reader(offset..offset + length)
                     .await
@@ -217,8 +253,7 @@ impl HiveParquetBlockReader {
         &self,
         chunks: Vec<Vec<u8>>,
         row_group: &RowGroupMetaData,
-        _part: HivePartInfo,
-    ) -> Result<RowGroupDeserializer> {
+    ) -> Result<DataBlockDeserializer> {
         if self.projection.len() != chunks.len() {
             return Err(ErrorCode::LogicalError(
                 "Columns chunk len must be equals projections len.",
@@ -230,59 +265,33 @@ impl HiveParquetBlockReader {
         for (index, column_chunk) in chunks.into_iter().enumerate() {
             let idx = self.projection[index];
             let field = self.arrow_schema.fields[idx].clone();
-            let column_descriptor = &self.parquet_schema_descriptor.columns()[idx];
             let column_meta = Self::get_parquet_column_metadata(row_group, &field.name)?;
 
             columns_array_iter.push(Self::to_deserialize(
                 column_meta,
                 column_chunk,
                 row_group.num_rows(),
-                column_descriptor,
                 field,
             )?);
         }
 
-        Ok(RowGroupDeserializer::new(
-            columns_array_iter,
-            row_group.num_rows(),
-            None,
-        ))
+        let num_row = row_group.num_rows();
+        let deserializer = RowGroupDeserializer::new(columns_array_iter, num_row, None);
+        Ok(DataBlockDeserializer::new(deserializer))
     }
 
     pub fn create_data_block(
         &self,
-        deserializer: &mut RowGroupDeserializer,
+        row_group_iterator: &mut DataBlockDeserializer,
         part: HivePartInfo,
-        num_rows: usize,
     ) -> Result<Option<DataBlock>> {
-        let data_block = self.try_next_block(deserializer).map_err(|err| {
-            ErrorCode::ParquetError(format!(
-                "deseriallize parquet failed, {}, {:?}",
-                part.filename, err
-            ))
-        })?;
-        if let Some(data_block) = data_block {
-            match &self.hive_partition_filler {
-                Some(hive_partition_filler) => Ok(Some(
-                    hive_partition_filler.fill_data(data_block, part, num_rows)?,
-                )),
-                None => Ok(Some(data_block)),
-            }
-        } else {
-            Ok(data_block)
-        }
+        row_group_iterator
+            .next_block(&self.projected_schema, &self.hive_partition_filler, &part)
+            .map_err(|e| e.add_message(format!(" filename of hive part {}", part.filename)))
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
     pub async fn read(&self, _part: PartInfoPtr) -> Result<DataBlock> {
-        Err(ErrorCode::UnImplement("depracated"))
-    }
-
-    fn try_next_block(&self, deserializer: &mut RowGroupDeserializer) -> Result<Option<DataBlock>> {
-        match deserializer.next() {
-            None => Ok(None),
-            Some(Err(cause)) => Err(ErrorCode::from(cause)),
-            Some(Ok(chunk)) => Ok(Some(DataBlock::from_chunk(&self.projected_schema, &chunk)?)),
-        }
+        Err(ErrorCode::UnImplement("deprecated"))
     }
 }
