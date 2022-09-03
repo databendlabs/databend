@@ -1,0 +1,954 @@
+ast            : regexp_instr('dog cat dog', 'dog', 1)
+raw expr       : regexp_instr("dog cat dog", "dog", 1_u8)
+checked expr   : regexp_instr<String, String, Int64>("dog cat dog", "dog", CAST(1_u8 AS Int64))
+optimized expr : 1_u64
+output type    : UInt64
+output domain  : Unknown
+output         : 1
+
+
+ast            : regexp_instr('aa aaa aaaa aa aaa aaaa', 'a{2}', 1)
+raw expr       : regexp_instr("aa aaa aaaa aa aaa aaaa", "a{2}", 1_u8)
+checked expr   : regexp_instr<String, String, Int64>("aa aaa aaaa aa aaa aaaa", "a{2}", CAST(1_u8 AS Int64))
+optimized expr : 1_u64
+output type    : UInt64
+output domain  : Unknown
+output         : 1
+
+
+ast            : regexp_instr('aa aaa aaaa aa aaa aaaa', NULL, 2)
+raw expr       : regexp_instr("aa aaa aaaa aa aaa aaaa", NULL, 2_u8)
+checked expr   : regexp_instr<String NULL, String NULL, Int64 NULL>(CAST("aa aaa aaaa aa aaa aaaa" AS String NULL), CAST(NULL AS String NULL), CAST(2_u8 AS Int64 NULL))
+optimized expr : NULL
+output type    : UInt64 NULL
+output domain  : Unknown
+output         : NULL
+
+
+ast            : regexp_instr('', '', 1)
+raw expr       : regexp_instr("", "", 1_u8)
+checked expr   : regexp_instr<String, String, Int64>("", "", CAST(1_u8 AS Int64))
+optimized expr : 0_u64
+output type    : UInt64
+output domain  : Unknown
+output         : 0
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | regexp_instr('', '', 0)
+  | ^^^^^^^^^^^^^^^^^^^^^^^ Incorrect arguments to regexp_instr: position must be positive, but got 0
+
+
+
+ast            : regexp_instr(source, pat)
+raw expr       : regexp_instr(ColumnRef(0)::String, ColumnRef(1)::String)
+checked expr   : regexp_instr<String, String>(ColumnRef(0), ColumnRef(1))
+evaluation:
++--------+---------------------------+--------------+---------+
+|        | source                    | pat          | Output  |
++--------+---------------------------+--------------+---------+
+| Type   | String                    | String       | UInt64  |
+| Domain | {""..="dog cat dog"}      | {""..="dog"} | Unknown |
+| Row 0  | "dog cat dog"             | "dog"        | 1       |
+| Row 1  | "aa aaa aaaa aa aaa aaaa" | "a{2}"       | 1       |
+| Row 2  | ""                        | ""           | 0       |
++--------+---------------------------+--------------+---------+
+evaluation (internal):
++--------+-------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                    |
++--------+-------------------------------------------------------------------------------------------------------------------------+
+| source | StringColumn { data: 0x646f672063617420646f676161206161612061616161206161206161612061616161, offsets: [0, 11, 34, 34] } |
+| pat    | StringColumn { data: 0x646f67617b327d, offsets: [0, 3, 7, 7] }                                                          |
+| Output | UInt64([1, 1, 0])                                                                                                       |
++--------+-------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : regexp_instr(source, pat, pos)
+raw expr       : regexp_instr(ColumnRef(0)::String, ColumnRef(1)::String, ColumnRef(2)::Int64)
+checked expr   : regexp_instr<String, String, Int64>(ColumnRef(0), ColumnRef(1), ColumnRef(2))
+evaluation:
++--------+---------------------------+--------------+---------+---------+
+|        | source                    | pat          | pos     | Output  |
++--------+---------------------------+--------------+---------+---------+
+| Type   | String                    | String       | Int64   | UInt64  |
+| Domain | {""..="dog cat dog"}      | {""..="dog"} | {1..=2} | Unknown |
+| Row 0  | "dog cat dog"             | "dog"        | 1       | 1       |
+| Row 1  | "aa aaa aaaa aa aaa aaaa" | "a{2}"       | 2       | 4       |
+| Row 2  | ""                        | ""           | 1       | 0       |
++--------+---------------------------+--------------+---------+---------+
+evaluation (internal):
++--------+-------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                    |
++--------+-------------------------------------------------------------------------------------------------------------------------+
+| source | StringColumn { data: 0x646f672063617420646f676161206161612061616161206161206161612061616161, offsets: [0, 11, 34, 34] } |
+| pat    | StringColumn { data: 0x646f67617b327d, offsets: [0, 3, 7, 7] }                                                          |
+| pos    | Int64([1, 2, 1])                                                                                                        |
+| Output | UInt64([1, 4, 0])                                                                                                       |
++--------+-------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : regexp_instr(source, pat, pos, occur)
+raw expr       : regexp_instr(ColumnRef(0)::String, ColumnRef(1)::String, ColumnRef(2)::Int64, ColumnRef(3)::Int64)
+checked expr   : regexp_instr<String, String, Int64, Int64>(ColumnRef(0), ColumnRef(1), ColumnRef(2), ColumnRef(3))
+evaluation:
++--------+---------------------------------------------+------------------+---------+---------+---------+
+|        | source                                      | pat              | pos     | occur   | Output  |
++--------+---------------------------------------------+------------------+---------+---------+---------+
+| Type   | String                                      | String           | Int64   | Int64   | UInt64  |
+| Domain | {"aa aa aa aaaa aaaa aaaa"..="dog cat dog"} | {"a{2}"..="dog"} | {1..=9} | {2..=3} | Unknown |
+| Row 0  | "dog cat dog"                               | "dog"            | 1       | 2       | 9       |
+| Row 1  | "aa aaa aaaa aa aaa aaaa"                   | "a{2}"           | 1       | 3       | 8       |
+| Row 2  | "aa aa aa aaaa aaaa aaaa"                   | "a{4}"           | 9       | 2       | 15      |
++--------+---------------------------------------------+------------------+---------+---------+---------+
+evaluation (internal):
++--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                                  |
++--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| source | StringColumn { data: 0x646f672063617420646f6761612061616120616161612061612061616120616161616161206161206161206161616120616161612061616161, offsets: [0, 11, 34, 57] } |
+| pat    | StringColumn { data: 0x646f67617b327d617b347d, offsets: [0, 3, 7, 11] }                                                                                               |
+| pos    | Int64([1, 1, 9])                                                                                                                                                      |
+| occur  | Int64([2, 3, 2])                                                                                                                                                      |
+| Output | UInt64([9, 8, 15])                                                                                                                                                    |
++--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : regexp_instr(source, pat, pos, occur, ro)
+raw expr       : regexp_instr(ColumnRef(0)::String, ColumnRef(1)::String, ColumnRef(2)::Int64, ColumnRef(3)::Int64, ColumnRef(4)::Int64)
+checked expr   : regexp_instr<String, String, Int64, Int64, Int64>(ColumnRef(0), ColumnRef(1), ColumnRef(2), ColumnRef(3), ColumnRef(4))
+optimized expr : regexp_instr<String, String, Int64, Int64, Int64>(ColumnRef(0), ColumnRef(1), ColumnRef(2), 2_i64, ColumnRef(4))
+evaluation:
++--------+---------------------------------------------+------------------+---------+---------+---------+---------+
+|        | source                                      | pat              | pos     | occur   | ro      | Output  |
++--------+---------------------------------------------+------------------+---------+---------+---------+---------+
+| Type   | String                                      | String           | Int64   | Int64   | Int64   | UInt64  |
+| Domain | {"aa aa aa aaaa aaaa aaaa"..="dog cat dog"} | {"a{2}"..="dog"} | {1..=2} | {2..=2} | {0..=1} | Unknown |
+| Row 0  | "dog cat dog"                               | "dog"            | 1       | 2       | 0       | 9       |
+| Row 1  | "aa aaa aaaa aa aaa aaaa"                   | "a{2}"           | 2       | 2       | 1       | 10      |
+| Row 2  | "aa aa aa aaaa aaaa aaaa"                   | "a{4}"           | 1       | 2       | 1       | 19      |
++--------+---------------------------------------------+------------------+---------+---------+---------+---------+
+evaluation (internal):
++--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                                  |
++--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| source | StringColumn { data: 0x646f672063617420646f6761612061616120616161612061612061616120616161616161206161206161206161616120616161612061616161, offsets: [0, 11, 34, 57] } |
+| pat    | StringColumn { data: 0x646f67617b327d617b347d, offsets: [0, 3, 7, 11] }                                                                                               |
+| pos    | Int64([1, 2, 1])                                                                                                                                                      |
+| occur  | Int64([2, 2, 2])                                                                                                                                                      |
+| ro     | Int64([0, 1, 1])                                                                                                                                                      |
+| Output | UInt64([9, 10, 19])                                                                                                                                                   |
++--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : regexp_instr(source, pat, pos, occur, ro, mt)
+raw expr       : regexp_instr(ColumnRef(0)::String, ColumnRef(1)::String, ColumnRef(2)::Int64, ColumnRef(3)::Int64, ColumnRef(4)::Int64, ColumnRef(5)::String)
+checked expr   : regexp_instr<String, String, Int64, Int64, Int64, String>(ColumnRef(0), ColumnRef(1), ColumnRef(2), ColumnRef(3), ColumnRef(4), ColumnRef(5))
+optimized expr : regexp_instr<String, String, Int64, Int64, Int64, String>(ColumnRef(0), ColumnRef(1), ColumnRef(2), 2_i64, ColumnRef(4), ColumnRef(5))
+evaluation:
++--------+---------------------------------------------+------------------+---------+---------+---------+-------------+---------+
+|        | source                                      | pat              | pos     | occur   | ro      | mt          | Output  |
++--------+---------------------------------------------+------------------+---------+---------+---------+-------------+---------+
+| Type   | String                                      | String           | Int64   | Int64   | Int64   | String      | UInt64  |
+| Domain | {"aa aa aa aaaa aaaa aaaa"..="dog cat dog"} | {"A{2}"..="dog"} | {1..=2} | {2..=2} | {0..=1} | {"c"..="i"} | Unknown |
+| Row 0  | "dog cat dog"                               | "dog"            | 1       | 2       | 0       | "i"         | 9       |
+| Row 1  | "aa aaa aaaa aa aaa aaaa"                   | "A{2}"           | 2       | 2       | 1       | "c"         | 0       |
+| Row 2  | "aa aa aa aaaa aaaa aaaa"                   | "A{4}"           | 1       | 2       | 1       | "i"         | 19      |
++--------+---------------------------------------------+------------------+---------+---------+---------+-------------+---------+
+evaluation (internal):
++--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                                  |
++--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| source | StringColumn { data: 0x646f672063617420646f6761612061616120616161612061612061616120616161616161206161206161206161616120616161612061616161, offsets: [0, 11, 34, 57] } |
+| pat    | StringColumn { data: 0x646f67417b327d417b347d, offsets: [0, 3, 7, 11] }                                                                                               |
+| pos    | Int64([1, 2, 1])                                                                                                                                                      |
+| occur  | Int64([2, 2, 2])                                                                                                                                                      |
+| ro     | Int64([0, 1, 1])                                                                                                                                                      |
+| mt     | StringColumn { data: 0x696369, offsets: [0, 1, 2, 3] }                                                                                                                |
+| Output | UInt64([9, 0, 19])                                                                                                                                                    |
++--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : regexp_instr(source, pat, pos, occur, ro)
+raw expr       : regexp_instr(ColumnRef(0)::String NULL, ColumnRef(1)::String NULL, ColumnRef(2)::Int64, ColumnRef(3)::Int64, ColumnRef(4)::Int64)
+checked expr   : regexp_instr<String NULL, String NULL, Int64 NULL, Int64 NULL, Int64 NULL>(ColumnRef(0), ColumnRef(1), CAST(ColumnRef(2) AS Int64 NULL), CAST(ColumnRef(3) AS Int64 NULL), CAST(ColumnRef(4) AS Int64 NULL))
+evaluation:
++--------+-------------------------------+-----------------------+---------+---------+---------+-------------+
+|        | source                        | pat                   | pos     | occur   | ro      | Output      |
++--------+-------------------------------+-----------------------+---------+---------+---------+-------------+
+| Type   | String NULL                   | String NULL           | Int64   | Int64   | Int64   | UInt64 NULL |
+| Domain | {""..="dog cat dog"} ∪ {NULL} | {""..="dog"} ∪ {NULL} | {1..=2} | {1..=2} | {0..=1} | Unknown     |
+| Row 0  | "dog cat dog"                 | "dog"                 | 1       | 2       | 0       | 9           |
+| Row 1  | "aa aaa aaaa aa aaa aaaa"     | NULL                  | 2       | 2       | 1       | NULL        |
+| Row 2  | NULL                          | NULL                  | 1       | 2       | 1       | NULL        |
+| Row 3  | "aa aa aa aaaa aaaa aaaa"     | "A{4}"                | 1       | 1       | 1       | 14          |
++--------+-------------------------------+-----------------------+---------+---------+---------+-------------+
+evaluation (internal):
++--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                                                                                         |
++--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| source | NullableColumn { column: StringColumn { data: 0x646f672063617420646f6761612061616120616161612061612061616120616161616161206161206161206161616120616161612061616161, offsets: [0, 11, 34, 34, 57] }, validity: [0b____1011] } |
+| pat    | NullableColumn { column: StringColumn { data: 0x646f67417b347d, offsets: [0, 3, 3, 3, 7] }, validity: [0b____1001] }                                                                                                         |
+| pos    | Int64([1, 2, 1, 1])                                                                                                                                                                                                          |
+| occur  | Int64([2, 2, 2, 1])                                                                                                                                                                                                          |
+| ro     | Int64([0, 1, 1, 1])                                                                                                                                                                                                          |
+| Output | NullableColumn { column: UInt64([9, 0, 0, 14]), validity: [0b____1001] }                                                                                                                                                     |
++--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : regexp_instr(source, pat, pos, occur, ro, mt)
+raw expr       : regexp_instr(ColumnRef(0)::String NULL, ColumnRef(1)::String NULL, ColumnRef(2)::Int64, ColumnRef(3)::Int64, ColumnRef(4)::Int64, ColumnRef(5)::String)
+checked expr   : regexp_instr<String NULL, String NULL, Int64 NULL, Int64 NULL, Int64 NULL, String NULL>(ColumnRef(0), ColumnRef(1), CAST(ColumnRef(2) AS Int64 NULL), CAST(ColumnRef(3) AS Int64 NULL), CAST(ColumnRef(4) AS Int64 NULL), CAST(ColumnRef(5) AS String NULL))
+evaluation:
++--------+-------------------------------+-----------------------+---------+---------+---------+-------------+-------------+
+|        | source                        | pat                   | pos     | occur   | ro      | mt          | Output      |
++--------+-------------------------------+-----------------------+---------+---------+---------+-------------+-------------+
+| Type   | String NULL                   | String NULL           | Int64   | Int64   | Int64   | String      | UInt64 NULL |
+| Domain | {""..="dog cat dog"} ∪ {NULL} | {""..="dog"} ∪ {NULL} | {1..=2} | {1..=2} | {0..=1} | {"c"..="i"} | Unknown     |
+| Row 0  | "dog cat dog"                 | "dog"                 | 1       | 2       | 0       | "i"         | 9           |
+| Row 1  | "aa aaa aaaa aa aaa aaaa"     | NULL                  | 2       | 2       | 1       | "c"         | NULL        |
+| Row 2  | NULL                          | NULL                  | 1       | 2       | 1       | "i"         | NULL        |
+| Row 3  | "aa aa aa aaaa aaaa aaaa"     | "A{4}"                | 1       | 1       | 1       | "i"         | 14          |
++--------+-------------------------------+-----------------------+---------+---------+---------+-------------+-------------+
+evaluation (internal):
++--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                                                                                         |
++--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| source | NullableColumn { column: StringColumn { data: 0x646f672063617420646f6761612061616120616161612061612061616120616161616161206161206161206161616120616161612061616161, offsets: [0, 11, 34, 34, 57] }, validity: [0b____1011] } |
+| pat    | NullableColumn { column: StringColumn { data: 0x646f67417b347d, offsets: [0, 3, 3, 3, 7] }, validity: [0b____1001] }                                                                                                         |
+| pos    | Int64([1, 2, 1, 1])                                                                                                                                                                                                          |
+| occur  | Int64([2, 2, 2, 1])                                                                                                                                                                                                          |
+| ro     | Int64([0, 1, 1, 1])                                                                                                                                                                                                          |
+| mt     | StringColumn { data: 0x69636969, offsets: [0, 1, 2, 3, 4] }                                                                                                                                                                  |
+| Output | NullableColumn { column: UInt64([9, 0, 0, 14]), validity: [0b____1001] }                                                                                                                                                     |
++--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : regexp_instr(source, pat, pos, occur, ro)
+raw expr       : regexp_instr(ColumnRef(0)::String, ColumnRef(1)::String, ColumnRef(2)::Int64, ColumnRef(3)::Int64, ColumnRef(4)::Int64)
+checked expr   : regexp_instr<String, String, Int64, Int64, Int64>(ColumnRef(0), ColumnRef(1), ColumnRef(2), ColumnRef(3), ColumnRef(4))
+optimized expr : regexp_instr<String, String, Int64, Int64, Int64>("周 周周 周周周 周周周周", "周+", ColumnRef(2), ColumnRef(3), ColumnRef(4))
+evaluation:
++--------+---------------------------------------------------------+-----------------+---------+---------+---------+---------+
+|        | source                                                  | pat             | pos     | occur   | ro      | Output  |
++--------+---------------------------------------------------------+-----------------+---------+---------+---------+---------+
+| Type   | String                                                  | String          | Int64   | Int64   | Int64   | UInt64  |
+| Domain | {"周 周周 周周周 周周周周"..="周 周周 周周周 周周周周"} | {"周+"..="周+"} | {1..=5} | {1..=3} | {0..=1} | Unknown |
+| Row 0  | "周 周周 周周周 周周周周"                               | "周+"           | 1       | 2       | 0       | 3       |
+| Row 1  | "周 周周 周周周 周周周周"                               | "周+"           | 2       | 2       | 1       | 9       |
+| Row 2  | "周 周周 周周周 周周周周"                               | "周+"           | 3       | 3       | 1       | 14      |
+| Row 3  | "周 周周 周周周 周周周周"                               | "周+"           | 5       | 1       | 1       | 9       |
++--------+---------------------------------------------------------+-----------------+---------+---------+---------+---------+
+evaluation (internal):
++--------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                                                                                                                                                                                             |
++--------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| source | StringColumn { data: 0xe591a820e591a8e591a820e591a8e591a8e591a820e591a8e591a8e591a8e591a8e591a820e591a8e591a820e591a8e591a8e591a820e591a8e591a8e591a8e591a8e591a820e591a8e591a820e591a8e591a8e591a820e591a8e591a8e591a8e591a8e591a820e591a8e591a820e591a8e591a8e591a820e591a8e591a8e591a8e591a8, offsets: [0, 33, 66, 99, 132] } |
+| pat    | StringColumn { data: 0xe591a82be591a82be591a82be591a82b, offsets: [0, 4, 8, 12, 16] }                                                                                                                                                                                                                                            |
+| pos    | Int64([1, 2, 3, 5])                                                                                                                                                                                                                                                                                                              |
+| occur  | Int64([2, 2, 3, 1])                                                                                                                                                                                                                                                                                                              |
+| ro     | Int64([0, 1, 1, 1])                                                                                                                                                                                                                                                                                                              |
+| Output | UInt64([3, 9, 14, 9])                                                                                                                                                                                                                                                                                                            |
++--------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | regexp_instr(source, pat, pos, occur, ro)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Incorrect arguments to regexp_instr: position must be positive, but got 0
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | regexp_instr(source, pat, pos, occur, ro)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Incorrect arguments to regexp_instr: return_option must be 1 or 0, but got 2
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | regexp_instr(source, pat, pos, occur, ro, mt)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Incorrect arguments to regexp_instr match type: -
+
+
+
+ast            : regexp_like('Michael!', '.*')
+raw expr       : regexp_like("Michael!", ".*")
+checked expr   : regexp_like<String, String>("Michael!", ".*")
+optimized expr : true
+output type    : Boolean
+output domain  : Unknown
+output         : true
+
+
+ast            : regexp_like('a', '^[a-d]')
+raw expr       : regexp_like("a", "^[a-d]")
+checked expr   : regexp_like<String, String>("a", "^[a-d]")
+optimized expr : true
+output type    : Boolean
+output domain  : Unknown
+output         : true
+
+
+ast            : regexp_like('abc', 'ABC')
+raw expr       : regexp_like("abc", "ABC")
+checked expr   : regexp_like<String, String>("abc", "ABC")
+optimized expr : true
+output type    : Boolean
+output domain  : Unknown
+output         : true
+
+
+ast            : regexp_like('abc', 'ABC', 'c')
+raw expr       : regexp_like("abc", "ABC", "c")
+checked expr   : regexp_like<String, String, String>("abc", "ABC", "c")
+optimized expr : false
+output type    : Boolean
+output domain  : Unknown
+output         : false
+
+
+ast            : regexp_like('abc', 'ABC', NULL)
+raw expr       : regexp_like("abc", "ABC", NULL)
+checked expr   : regexp_like<String NULL, String NULL, String NULL>(CAST("abc" AS String NULL), CAST("ABC" AS String NULL), CAST(NULL AS String NULL))
+optimized expr : NULL
+output type    : Boolean NULL
+output domain  : Unknown
+output         : NULL
+
+
+ast            : regexp_like('', '', 'c')
+raw expr       : regexp_like("", "", "c")
+checked expr   : regexp_like<String, String, String>("", "", "c")
+optimized expr : true
+output type    : Boolean
+output domain  : Unknown
+output         : true
+
+
+ast            : regexp_like(source, pat)
+raw expr       : regexp_like(ColumnRef(0)::String, ColumnRef(1)::String)
+checked expr   : regexp_like<String, String>(ColumnRef(0), ColumnRef(1))
+evaluation:
++--------+----------------------+-------------------------+---------+
+|        | source               | pat                     | Output  |
++--------+----------------------+-------------------------+---------+
+| Type   | String               | String                  | Boolean |
+| Domain | {""..="new*\n*line"} | {""..="new\\*.\\*line"} | Unknown |
+| Row 0  | "abc"                | "^a"                    | true    |
+| Row 1  | "abd"                | "Ab"                    | true    |
+| Row 2  | "Abe"                | "abe"                   | true    |
+| Row 3  | "new*\n*line"        | "new\\*.\\*line"        | false   |
+| Row 4  | "fo\nfo"             | "^fo$"                  | false   |
+| Row 5  | ""                   | ""                      | true    |
++--------+----------------------+-------------------------+---------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                         |
++--------+--------------------------------------------------------------------------------------------------------------+
+| source | StringColumn { data: 0x6162636162644162656e65772a0a2a6c696e65666f0a666f, offsets: [0, 3, 6, 9, 19, 24, 24] } |
+| pat    | StringColumn { data: 0x5e6141626162656e65775c2a2e5c2a6c696e655e666f24, offsets: [0, 2, 4, 7, 19, 23, 23] }   |
+| Output | Boolean([0b__100111])                                                                                        |
++--------+--------------------------------------------------------------------------------------------------------------+
+
+
+ast            : regexp_like(source, pat, mt)
+raw expr       : regexp_like(ColumnRef(0)::String, ColumnRef(1)::String, ColumnRef(2)::String)
+checked expr   : regexp_like<String, String, String>(ColumnRef(0), ColumnRef(1), ColumnRef(2))
+evaluation:
++--------+----------------------+-------------------------+------------+---------+
+|        | source               | pat                     | mt         | Output  |
++--------+----------------------+-------------------------+------------+---------+
+| Type   | String               | String                  | String     | Boolean |
+| Domain | {""..="new*\n*line"} | {""..="new\\*.\\*line"} | {""..="n"} | Unknown |
+| Row 0  | "abc"                | "^a"                    | ""         | true    |
+| Row 1  | "abd"                | "Ab"                    | "c"        | false   |
+| Row 2  | "Abe"                | "abe"                   | "i"        | true    |
+| Row 3  | "new*\n*line"        | "new\\*.\\*line"        | "n"        | true    |
+| Row 4  | "fo\nfo"             | "^fo$"                  | "m"        | true    |
+| Row 5  | ""                   | ""                      | "c"        | true    |
++--------+----------------------+-------------------------+------------+---------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                         |
++--------+--------------------------------------------------------------------------------------------------------------+
+| source | StringColumn { data: 0x6162636162644162656e65772a0a2a6c696e65666f0a666f, offsets: [0, 3, 6, 9, 19, 24, 24] } |
+| pat    | StringColumn { data: 0x5e6141626162656e65775c2a2e5c2a6c696e655e666f24, offsets: [0, 2, 4, 7, 19, 23, 23] }   |
+| mt     | StringColumn { data: 0x63696e6d63, offsets: [0, 0, 1, 2, 3, 4, 5] }                                          |
+| Output | Boolean([0b__111101])                                                                                        |
++--------+--------------------------------------------------------------------------------------------------------------+
+
+
+ast            : regexp_like(source, pat, mt)
+raw expr       : regexp_like(ColumnRef(0)::String NULL, ColumnRef(1)::String NULL, ColumnRef(2)::String NULL)
+checked expr   : regexp_like<String NULL, String NULL, String NULL>(ColumnRef(0), ColumnRef(1), ColumnRef(2))
+evaluation:
++--------+-----------------------+-----------------------+---------------------+--------------+
+|        | source                | pat                   | mt                  | Output       |
++--------+-----------------------+-----------------------+---------------------+--------------+
+| Type   | String NULL           | String NULL           | String NULL         | Boolean NULL |
+| Domain | {""..="abc"} ∪ {NULL} | {""..="abc"} ∪ {NULL} | {""..="i"} ∪ {NULL} | Unknown      |
+| Row 0  | "abc"                 | "abc"                 | ""                  | true         |
+| Row 1  | "abc"                 | NULL                  | "i"                 | NULL         |
+| Row 2  | NULL                  | NULL                  | "i"                 | NULL         |
+| Row 3  | "abc"                 | "abc"                 | NULL                | NULL         |
++--------+-----------------------+-----------------------+---------------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                     |
++--------+--------------------------------------------------------------------------------------------------------------------------+
+| source | NullableColumn { column: StringColumn { data: 0x616263616263616263, offsets: [0, 3, 6, 6, 9] }, validity: [0b____1011] } |
+| pat    | NullableColumn { column: StringColumn { data: 0x616263616263, offsets: [0, 3, 3, 3, 6] }, validity: [0b____1001] }       |
+| mt     | NullableColumn { column: StringColumn { data: 0x6969, offsets: [0, 0, 1, 2, 2] }, validity: [0b____0111] }               |
+| Output | NullableColumn { column: Boolean([0b____1101]), validity: [0b____0001] }                                                 |
++--------+--------------------------------------------------------------------------------------------------------------------------+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | regexp_like(source, pat)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^ no overload satisfies `regexp_like(String, Int64)`
+
+has tried possible overloads:
+  regexp_like(String, String) :: Boolean                 : unable to unify `Int64` with `String`
+  regexp_like(String NULL, String NULL) :: Boolean NULL  : unable to unify `Int64` with `String`
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | regexp_like(source, pat, mt)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Incorrect arguments to regexp_like match type: x
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | regexp_like(source, pat, mt)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Unsupported arguments to regexp_like match type: u
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | regexp_like(source, pat, mt)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Incorrect arguments to regexp_like match type: -
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | regexp_like(source, pat, mt)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Incorrect arguments to regexp_like match type: -
+
+
+
+ast            : regexp_replace('a b c', 'b', 'X')
+raw expr       : regexp_replace("a b c", "b", "X")
+checked expr   : regexp_replace<String, String, String>("a b c", "b", "X")
+optimized expr : "a X c"
+output type    : String
+output domain  : Unknown
+output         : "a X c"
+
+
+ast            : regexp_replace('a b c', '', 'X')
+raw expr       : regexp_replace("a b c", "", "X")
+checked expr   : regexp_replace<String, String, String>("a b c", "", "X")
+optimized expr : "a b c"
+output type    : String
+output domain  : Unknown
+output         : "a b c"
+
+
+ast            : regexp_replace('', 'b', 'X')
+raw expr       : regexp_replace("", "b", "X")
+checked expr   : regexp_replace<String, String, String>("", "b", "X")
+optimized expr : ""
+output type    : String
+output domain  : Unknown
+output         : ""
+
+
+ast            : regexp_replace('a b c', 'b', NULL)
+raw expr       : regexp_replace("a b c", "b", NULL)
+checked expr   : regexp_replace<String NULL, String NULL, String NULL>(CAST("a b c" AS String NULL), CAST("b" AS String NULL), CAST(NULL AS String NULL))
+optimized expr : NULL
+output type    : String NULL
+output domain  : Unknown
+output         : NULL
+
+
+ast            : regexp_replace('abc def ghi', '[a-z]+', 'X', 1, 3)
+raw expr       : regexp_replace("abc def ghi", "[a-z]+", "X", 1_u8, 3_u8)
+checked expr   : regexp_replace<String, String, String, Int64, Int64>("abc def ghi", "[a-z]+", "X", CAST(1_u8 AS Int64), CAST(3_u8 AS Int64))
+optimized expr : "abc def X"
+output type    : String
+output domain  : Unknown
+output         : "abc def X"
+
+
+ast            : regexp_replace(source, pat, repl)
+raw expr       : regexp_replace(ColumnRef(0)::String, ColumnRef(1)::String, ColumnRef(2)::String)
+checked expr   : regexp_replace<String, String, String>(ColumnRef(0), ColumnRef(1), ColumnRef(2))
+optimized expr : regexp_replace<String, String, String>(ColumnRef(0), ColumnRef(1), "X")
+evaluation:
++--------+----------------+------------+-------------+---------+
+|        | source         | pat        | repl        | Output  |
++--------+----------------+------------+-------------+---------+
+| Type   | String         | String     | String      | String  |
+| Domain | {""..="a b c"} | {""..="x"} | {"X"..="X"} | Unknown |
+| Row 0  | "a b c"        | "b"        | "X"         | "a X c" |
+| Row 1  | "a b c"        | "x"        | "X"         | "a b c" |
+| Row 2  | "a b c"        | ""         | "X"         | "a b c" |
+| Row 3  | ""             | "b"        | "X"         | ""      |
++--------+----------------+------------+-------------+---------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------------------+
+| Column | Data                                                                                 |
++--------+--------------------------------------------------------------------------------------+
+| source | StringColumn { data: 0x612062206361206220636120622063, offsets: [0, 5, 10, 15, 15] } |
+| pat    | StringColumn { data: 0x627862, offsets: [0, 1, 2, 2, 3] }                            |
+| repl   | StringColumn { data: 0x58585858, offsets: [0, 1, 2, 3, 4] }                          |
+| Output | StringColumn { data: 0x612058206361206220636120622063, offsets: [0, 5, 10, 15, 15] } |
++--------+--------------------------------------------------------------------------------------+
+
+
+ast            : regexp_replace(source, pat, repl, pos)
+raw expr       : regexp_replace(ColumnRef(0)::String, ColumnRef(1)::String, ColumnRef(2)::String, ColumnRef(3)::Int64)
+checked expr   : regexp_replace<String, String, String, Int64>(ColumnRef(0), ColumnRef(1), ColumnRef(2), ColumnRef(3))
+optimized expr : regexp_replace<String, String, String, Int64>("abc def ghi", "[a-z]+", "X", ColumnRef(3))
+evaluation:
++--------+---------------------------------+-----------------------+-------------+----------+---------------+
+|        | source                          | pat                   | repl        | pos      | Output        |
++--------+---------------------------------+-----------------------+-------------+----------+---------------+
+| Type   | String                          | String                | String      | Int64    | String        |
+| Domain | {"abc def ghi"..="abc def ghi"} | {"[a-z]+"..="[a-z]+"} | {"X"..="X"} | {1..=12} | Unknown       |
+| Row 0  | "abc def ghi"                   | "[a-z]+"              | "X"         | 1        | "X X X"       |
+| Row 1  | "abc def ghi"                   | "[a-z]+"              | "X"         | 4        | "abc X X"     |
+| Row 2  | "abc def ghi"                   | "[a-z]+"              | "X"         | 8        | "abc def X"   |
+| Row 3  | "abc def ghi"                   | "[a-z]+"              | "X"         | 12       | "abc def ghi" |
++--------+---------------------------------+-----------------------+-------------+----------+---------------+
+evaluation (internal):
++--------+-------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                            |
++--------+-------------------------------------------------------------------------------------------------------------------------------------------------+
+| source | StringColumn { data: 0x6162632064656620676869616263206465662067686961626320646566206768696162632064656620676869, offsets: [0, 11, 22, 33, 44] } |
+| pat    | StringColumn { data: 0x5b612d7a5d2b5b612d7a5d2b5b612d7a5d2b5b612d7a5d2b, offsets: [0, 6, 12, 18, 24] }                                          |
+| repl   | StringColumn { data: 0x58585858, offsets: [0, 1, 2, 3, 4] }                                                                                     |
+| pos    | Int64([1, 4, 8, 12])                                                                                                                            |
+| Output | StringColumn { data: 0x5820582058616263205820586162632064656620586162632064656620676869, offsets: [0, 5, 12, 21, 32] }                          |
++--------+-------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : regexp_replace(source, pat, repl, pos, occur)
+raw expr       : regexp_replace(ColumnRef(0)::String, ColumnRef(1)::String, ColumnRef(2)::String, ColumnRef(3)::Int64, ColumnRef(4)::Int64)
+checked expr   : regexp_replace<String, String, String, Int64, Int64>(ColumnRef(0), ColumnRef(1), ColumnRef(2), ColumnRef(3), ColumnRef(4))
+optimized expr : regexp_replace<String, String, String, Int64, Int64>("abc def ghi", "[a-z]+", "X", ColumnRef(3), ColumnRef(4))
+evaluation:
++--------+---------------------------------+-----------------------+-------------+---------+---------+---------------+
+|        | source                          | pat                   | repl        | pos     | occur   | Output        |
++--------+---------------------------------+-----------------------+-------------+---------+---------+---------------+
+| Type   | String                          | String                | String      | Int64   | Int64   | String        |
+| Domain | {"abc def ghi"..="abc def ghi"} | {"[a-z]+"..="[a-z]+"} | {"X"..="X"} | {1..=4} | {0..=3} | Unknown       |
+| Row 0  | "abc def ghi"                   | "[a-z]+"              | "X"         | 1       | 0       | "X X X"       |
+| Row 1  | "abc def ghi"                   | "[a-z]+"              | "X"         | 1       | 1       | "X def ghi"   |
+| Row 2  | "abc def ghi"                   | "[a-z]+"              | "X"         | 4       | 2       | "abc def X"   |
+| Row 3  | "abc def ghi"                   | "[a-z]+"              | "X"         | 4       | 3       | "abc def ghi" |
++--------+---------------------------------+-----------------------+-------------+---------+---------+---------------+
+evaluation (internal):
++--------+-------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                            |
++--------+-------------------------------------------------------------------------------------------------------------------------------------------------+
+| source | StringColumn { data: 0x6162632064656620676869616263206465662067686961626320646566206768696162632064656620676869, offsets: [0, 11, 22, 33, 44] } |
+| pat    | StringColumn { data: 0x5b612d7a5d2b5b612d7a5d2b5b612d7a5d2b5b612d7a5d2b, offsets: [0, 6, 12, 18, 24] }                                          |
+| repl   | StringColumn { data: 0x58585858, offsets: [0, 1, 2, 3, 4] }                                                                                     |
+| pos    | Int64([1, 1, 4, 4])                                                                                                                             |
+| occur  | Int64([0, 1, 2, 3])                                                                                                                             |
+| Output | StringColumn { data: 0x58205820585820646566206768696162632064656620586162632064656620676869, offsets: [0, 5, 14, 23, 34] }                      |
++--------+-------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : regexp_replace(source, pat, repl, pos, occur, mt)
+raw expr       : regexp_replace(ColumnRef(0)::String, ColumnRef(1)::String, ColumnRef(2)::String, ColumnRef(3)::Int64, ColumnRef(4)::Int64, ColumnRef(5)::String)
+checked expr   : regexp_replace<String, String, String, Int64, Int64, String>(ColumnRef(0), ColumnRef(1), ColumnRef(2), ColumnRef(3), ColumnRef(4), ColumnRef(5))
+optimized expr : regexp_replace<String, String, String, Int64, Int64, String>(ColumnRef(0), "[a-z]+", "X", ColumnRef(3), ColumnRef(4), ColumnRef(5))
+evaluation:
++--------+---------------------------------+-----------------------+-------------+---------+---------+------------+-------------+
+|        | source                          | pat                   | repl        | pos     | occur   | mt         | Output      |
++--------+---------------------------------+-----------------------+-------------+---------+---------+------------+-------------+
+| Type   | String                          | String                | String      | Int64   | Int64   | String     | String      |
+| Domain | {"abc DEF ghi"..="abc def ghi"} | {"[a-z]+"..="[a-z]+"} | {"X"..="X"} | {1..=4} | {0..=2} | {""..="i"} | Unknown     |
+| Row 0  | "abc def ghi"                   | "[a-z]+"              | "X"         | 1       | 0       | ""         | "X X X"     |
+| Row 1  | "abc DEF ghi"                   | "[a-z]+"              | "X"         | 1       | 2       | "c"        | "abc DEF X" |
+| Row 2  | "abc DEF ghi"                   | "[a-z]+"              | "X"         | 4       | 1       | "i"        | "abc X ghi" |
++--------+---------------------------------+-----------------------+-------------+---------+---------+------------+-------------+
+evaluation (internal):
++--------+-----------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                  |
++--------+-----------------------------------------------------------------------------------------------------------------------+
+| source | StringColumn { data: 0x616263206465662067686961626320444546206768696162632044454620676869, offsets: [0, 11, 22, 33] } |
+| pat    | StringColumn { data: 0x5b612d7a5d2b5b612d7a5d2b5b612d7a5d2b, offsets: [0, 6, 12, 18] }                                |
+| repl   | StringColumn { data: 0x585858, offsets: [0, 1, 2, 3] }                                                                |
+| pos    | Int64([1, 1, 4])                                                                                                      |
+| occur  | Int64([0, 2, 1])                                                                                                      |
+| mt     | StringColumn { data: 0x6369, offsets: [0, 0, 1, 2] }                                                                  |
+| Output | StringColumn { data: 0x5820582058616263204445462058616263205820676869, offsets: [0, 5, 14, 23] }                      |
++--------+-----------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : regexp_replace(source, pat, repl, pos, occur)
+raw expr       : regexp_replace(ColumnRef(0)::String NULL, ColumnRef(1)::String NULL, ColumnRef(2)::String, ColumnRef(3)::Int64, ColumnRef(4)::Int64)
+checked expr   : regexp_replace<String NULL, String NULL, String NULL, Int64 NULL, Int64 NULL>(ColumnRef(0), ColumnRef(1), CAST(ColumnRef(2) AS String NULL), CAST(ColumnRef(3) AS Int64 NULL), CAST(ColumnRef(4) AS Int64 NULL))
+optimized expr : regexp_replace<String NULL, String NULL, String NULL, Int64 NULL, Int64 NULL>(ColumnRef(0), ColumnRef(1), "X", CAST(ColumnRef(3) AS Int64 NULL), CAST(ColumnRef(4) AS Int64 NULL))
+evaluation:
++--------+-------------------------------+--------------------------+-------------+---------+---------+-------------+
+|        | source                        | pat                      | repl        | pos     | occur   | Output      |
++--------+-------------------------------+--------------------------+-------------+---------+---------+-------------+
+| Type   | String NULL                   | String NULL              | String      | Int64   | Int64   | String NULL |
+| Domain | {""..="abc def ghi"} ∪ {NULL} | {""..="[a-z]+"} ∪ {NULL} | {"X"..="X"} | {1..=4} | {0..=2} | Unknown     |
+| Row 0  | "abc def ghi"                 | "[a-z]+"                 | "X"         | 1       | 0       | "X X X"     |
+| Row 1  | "abc DEF ghi"                 | NULL                     | "X"         | 1       | 2       | NULL        |
+| Row 2  | NULL                          | NULL                     | "X"         | 4       | 1       | NULL        |
+| Row 3  | "abc DEF ghi"                 | "[a-z]+"                 | "X"         | 4       | 1       | "abc X ghi" |
++--------+-------------------------------+--------------------------+-------------+---------+---------+-------------+
+evaluation (internal):
++--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                                         |
++--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| source | NullableColumn { column: StringColumn { data: 0x616263206465662067686961626320444546206768696162632044454620676869, offsets: [0, 11, 22, 22, 33] }, validity: [0b____1011] } |
+| pat    | NullableColumn { column: StringColumn { data: 0x5b612d7a5d2b5b612d7a5d2b, offsets: [0, 6, 6, 6, 12] }, validity: [0b____1001] }                                              |
+| repl   | StringColumn { data: 0x58585858, offsets: [0, 1, 2, 3, 4] }                                                                                                                  |
+| pos    | Int64([1, 1, 4, 4])                                                                                                                                                          |
+| occur  | Int64([0, 2, 1, 1])                                                                                                                                                          |
+| Output | NullableColumn { column: StringColumn { data: 0x58205820586162632044454620676869616263205820676869, offsets: [0, 5, 16, 16, 25] }, validity: [0b____1001] }                  |
++--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : regexp_replace(source, pat, repl, pos, occur, mt)
+raw expr       : regexp_replace(ColumnRef(0)::String NULL, ColumnRef(1)::String NULL, ColumnRef(2)::String, ColumnRef(3)::Int64, ColumnRef(4)::Int64, ColumnRef(5)::String)
+checked expr   : regexp_replace<String NULL, String NULL, String NULL, Int64 NULL, Int64 NULL, String NULL>(ColumnRef(0), ColumnRef(1), CAST(ColumnRef(2) AS String NULL), CAST(ColumnRef(3) AS Int64 NULL), CAST(ColumnRef(4) AS Int64 NULL), CAST(ColumnRef(5) AS String NULL))
+optimized expr : regexp_replace<String NULL, String NULL, String NULL, Int64 NULL, Int64 NULL, String NULL>(ColumnRef(0), ColumnRef(1), "X", CAST(ColumnRef(3) AS Int64 NULL), CAST(ColumnRef(4) AS Int64 NULL), CAST(ColumnRef(5) AS String NULL))
+evaluation:
++--------+-------------------------------+--------------------------+-------------+---------+---------+------------+-------------+
+|        | source                        | pat                      | repl        | pos     | occur   | mt         | Output      |
++--------+-------------------------------+--------------------------+-------------+---------+---------+------------+-------------+
+| Type   | String NULL                   | String NULL              | String      | Int64   | Int64   | String     | String NULL |
+| Domain | {""..="abc def ghi"} ∪ {NULL} | {""..="[a-z]+"} ∪ {NULL} | {"X"..="X"} | {1..=4} | {0..=2} | {""..="i"} | Unknown     |
+| Row 0  | "abc def ghi"                 | "[a-z]+"                 | "X"         | 1       | 0       | ""         | "X X X"     |
+| Row 1  | "abc DEF ghi"                 | NULL                     | "X"         | 1       | 2       | "c"        | NULL        |
+| Row 2  | NULL                          | NULL                     | "X"         | 4       | 1       | "i"        | NULL        |
+| Row 3  | "abc DEF ghi"                 | "[a-z]+"                 | "X"         | 4       | 1       | "i"        | "abc X ghi" |
++--------+-------------------------------+--------------------------+-------------+---------+---------+------------+-------------+
+evaluation (internal):
++--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                                         |
++--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| source | NullableColumn { column: StringColumn { data: 0x616263206465662067686961626320444546206768696162632044454620676869, offsets: [0, 11, 22, 22, 33] }, validity: [0b____1011] } |
+| pat    | NullableColumn { column: StringColumn { data: 0x5b612d7a5d2b5b612d7a5d2b, offsets: [0, 6, 6, 6, 12] }, validity: [0b____1001] }                                              |
+| repl   | StringColumn { data: 0x58585858, offsets: [0, 1, 2, 3, 4] }                                                                                                                  |
+| pos    | Int64([1, 1, 4, 4])                                                                                                                                                          |
+| occur  | Int64([0, 2, 1, 1])                                                                                                                                                          |
+| mt     | StringColumn { data: 0x636969, offsets: [0, 0, 1, 2, 3] }                                                                                                                    |
+| Output | NullableColumn { column: StringColumn { data: 0x58205820586162632044454620676869616263205820676869, offsets: [0, 5, 16, 16, 25] }, validity: [0b____1001] }                  |
++--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : regexp_replace(source, pat, repl, pos, occur)
+raw expr       : regexp_replace(ColumnRef(0)::String, ColumnRef(1)::String, ColumnRef(2)::String, ColumnRef(3)::Int64, ColumnRef(4)::Int64)
+checked expr   : regexp_replace<String, String, String, Int64, Int64>(ColumnRef(0), ColumnRef(1), ColumnRef(2), ColumnRef(3), ColumnRef(4))
+optimized expr : regexp_replace<String, String, String, Int64, Int64>("周 周周 周周周 周周周周", "周+", "唐", ColumnRef(3), ColumnRef(4))
+evaluation:
++--------+---------------------------------------------------------+-----------------+---------------+---------+---------+-------------------------+
+|        | source                                                  | pat             | repl          | pos     | occur   | Output                  |
++--------+---------------------------------------------------------+-----------------+---------------+---------+---------+-------------------------+
+| Type   | String                                                  | String          | String        | Int64   | Int64   | String                  |
+| Domain | {"周 周周 周周周 周周周周"..="周 周周 周周周 周周周周"} | {"周+"..="周+"} | {"唐"..="唐"} | {1..=5} | {0..=3} | Unknown                 |
+| Row 0  | "周 周周 周周周 周周周周"                               | "周+"           | "唐"          | 1       | 0       | "唐 唐 唐 唐"           |
+| Row 1  | "周 周周 周周周 周周周周"                               | "周+"           | "唐"          | 2       | 1       | "周 唐 周周周 周周周周" |
+| Row 2  | "周 周周 周周周 周周周周"                               | "周+"           | "唐"          | 3       | 3       | "周 周周 周周周 唐"     |
+| Row 3  | "周 周周 周周周 周周周周"                               | "周+"           | "唐"          | 5       | 1       | "周 周周 唐 周周周周"   |
++--------+---------------------------------------------------------+-----------------+---------------+---------+---------+-------------------------+
+evaluation (internal):
++--------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                                                                                                                                                                                             |
++--------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| source | StringColumn { data: 0xe591a820e591a8e591a820e591a8e591a8e591a820e591a8e591a8e591a8e591a8e591a820e591a8e591a820e591a8e591a8e591a820e591a8e591a8e591a8e591a8e591a820e591a8e591a820e591a8e591a8e591a820e591a8e591a8e591a8e591a8e591a820e591a8e591a820e591a8e591a8e591a820e591a8e591a8e591a8e591a8, offsets: [0, 33, 66, 99, 132] } |
+| pat    | StringColumn { data: 0xe591a82be591a82be591a82be591a82b, offsets: [0, 4, 8, 12, 16] }                                                                                                                                                                                                                                            |
+| repl   | StringColumn { data: 0xe59490e59490e59490e59490, offsets: [0, 3, 6, 9, 12] }                                                                                                                                                                                                                                                     |
+| pos    | Int64([1, 2, 3, 5])                                                                                                                                                                                                                                                                                                              |
+| occur  | Int64([0, 1, 3, 1])                                                                                                                                                                                                                                                                                                              |
+| Output | StringColumn { data: 0xe5949020e5949020e5949020e59490e591a820e5949020e591a8e591a8e591a820e591a8e591a8e591a8e591a8e591a820e591a8e591a820e591a8e591a8e591a820e59490e591a820e591a8e591a820e5949020e591a8e591a8e591a8e591a8, offsets: [0, 15, 45, 69, 96] }                                                                          |
++--------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | regexp_replace(source, pat, repl, pos)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Incorrect arguments to regexp_replace: position must be positive, but got 0
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | regexp_replace(source, pat, repl, pos, occur)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Incorrect arguments to regexp_replace: occurrence must not be negative, but got -1
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | regexp_replace(source, pat, repl, pos, occur, mt)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Incorrect arguments to regexp_replace match type: -
+
+
+
+ast            : regexp_substr('abc def ghi', '[a-z]+')
+raw expr       : regexp_substr("abc def ghi", "[a-z]+")
+checked expr   : regexp_substr<String, String>("abc def ghi", "[a-z]+")
+evaluation:
++--------+-------------+
+|        | Output      |
++--------+-------------+
+| Type   | String NULL |
+| Domain | Unknown     |
+| Row 0  | "abc"       |
++--------+-------------+
+evaluation (internal):
++--------+--------------------------------------------------+
+| Column | Data                                             |
++--------+--------------------------------------------------+
+| Output | StringColumn { data: 0x616263, offsets: [0, 3] } |
++--------+--------------------------------------------------+
+
+
+ast            : regexp_substr('abc def ghi', '[a-z]+', 1, 3)
+raw expr       : regexp_substr("abc def ghi", "[a-z]+", 1_u8, 3_u8)
+checked expr   : regexp_substr<String, String, Int64, Int64>("abc def ghi", "[a-z]+", CAST(1_u8 AS Int64), CAST(3_u8 AS Int64))
+optimized expr : regexp_substr<String, String, Int64, Int64>("abc def ghi", "[a-z]+", 1_i64, 3_i64)
+evaluation:
++--------+-------------+
+|        | Output      |
++--------+-------------+
+| Type   | String NULL |
+| Domain | Unknown     |
+| Row 0  | "ghi"       |
++--------+-------------+
+evaluation (internal):
++--------+--------------------------------------------------+
+| Column | Data                                             |
++--------+--------------------------------------------------+
+| Output | StringColumn { data: 0x676869, offsets: [0, 3] } |
++--------+--------------------------------------------------+
+
+
+ast            : regexp_substr('abc def ghi', '[a-z]+', NULL)
+raw expr       : regexp_substr("abc def ghi", "[a-z]+", NULL)
+checked expr   : regexp_substr<String NULL, String NULL, Int64 NULL>(CAST("abc def ghi" AS String NULL), CAST("[a-z]+" AS String NULL), CAST(NULL AS Int64 NULL))
+optimized expr : NULL
+output type    : String NULL
+output domain  : Unknown
+output         : NULL
+
+
+ast            : regexp_substr('abc def ghi', '')
+raw expr       : regexp_substr("abc def ghi", "")
+checked expr   : regexp_substr<String, String>("abc def ghi", "")
+optimized expr : NULL
+output type    : String NULL
+output domain  : Unknown
+output         : NULL
+
+
+ast            : regexp_substr('', NULL)
+raw expr       : regexp_substr("", NULL)
+checked expr   : regexp_substr<String NULL, String NULL>(CAST("" AS String NULL), CAST(NULL AS String NULL))
+optimized expr : NULL
+output type    : String NULL
+output domain  : Unknown
+output         : NULL
+
+
+ast            : regexp_substr('', '', 1, 3)
+raw expr       : regexp_substr("", "", 1_u8, 3_u8)
+checked expr   : regexp_substr<String, String, Int64, Int64>("", "", CAST(1_u8 AS Int64), CAST(3_u8 AS Int64))
+optimized expr : NULL
+output type    : String NULL
+output domain  : Unknown
+output         : NULL
+
+
+ast            : regexp_substr(source, pat)
+raw expr       : regexp_substr(ColumnRef(0)::String, ColumnRef(1)::String)
+checked expr   : regexp_substr<String, String>(ColumnRef(0), ColumnRef(1))
+evaluation:
++--------+----------------------+--------------+-------------+
+|        | source               | pat          | Output      |
++--------+----------------------+--------------+-------------+
+| Type   | String               | String       | String NULL |
+| Domain | {""..="abc def ghi"} | {""..="xxx"} | Unknown     |
+| Row 0  | "abc def ghi"        | "[a-z]+"     | "abc"       |
+| Row 1  | "abc def ghi"        | "xxx"        | NULL        |
+| Row 2  | ""                   | ""           | NULL        |
++--------+----------------------+--------------+-------------+
+evaluation (internal):
++--------+-----------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                      |
++--------+-----------------------------------------------------------------------------------------------------------+
+| source | StringColumn { data: 0x61626320646566206768696162632064656620676869, offsets: [0, 11, 22, 22] }           |
+| pat    | StringColumn { data: 0x5b612d7a5d2b787878, offsets: [0, 6, 9, 9] }                                        |
+| Output | NullableColumn { column: StringColumn { data: 0x616263, offsets: [0, 3, 3, 3] }, validity: [0b_____001] } |
++--------+-----------------------------------------------------------------------------------------------------------+
+
+
+ast            : regexp_substr(source, pat, pos)
+raw expr       : regexp_substr(ColumnRef(0)::String, ColumnRef(1)::String, ColumnRef(2)::Int64)
+checked expr   : regexp_substr<String, String, Int64>(ColumnRef(0), ColumnRef(1), ColumnRef(2))
+optimized expr : regexp_substr<String, String, Int64>("abc def ghi", "[a-z]+", ColumnRef(2))
+evaluation:
++--------+---------------------------------+-----------------------+----------+-------------+
+|        | source                          | pat                   | pos      | Output      |
++--------+---------------------------------+-----------------------+----------+-------------+
+| Type   | String                          | String                | Int64    | String NULL |
+| Domain | {"abc def ghi"..="abc def ghi"} | {"[a-z]+"..="[a-z]+"} | {1..=12} | Unknown     |
+| Row 0  | "abc def ghi"                   | "[a-z]+"              | 1        | "abc"       |
+| Row 1  | "abc def ghi"                   | "[a-z]+"              | 4        | "def"       |
+| Row 2  | "abc def ghi"                   | "[a-z]+"              | 12       | NULL        |
++--------+---------------------------------+-----------------------+----------+-------------+
+evaluation (internal):
++--------+-----------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                  |
++--------+-----------------------------------------------------------------------------------------------------------------------+
+| source | StringColumn { data: 0x616263206465662067686961626320646566206768696162632064656620676869, offsets: [0, 11, 22, 33] } |
+| pat    | StringColumn { data: 0x5b612d7a5d2b5b612d7a5d2b5b612d7a5d2b, offsets: [0, 6, 12, 18] }                                |
+| pos    | Int64([1, 4, 12])                                                                                                     |
+| Output | NullableColumn { column: StringColumn { data: 0x616263646566, offsets: [0, 3, 6, 6] }, validity: [0b_____011] }       |
++--------+-----------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : regexp_substr(source, pat, pos, occur)
+raw expr       : regexp_substr(ColumnRef(0)::String, ColumnRef(1)::String, ColumnRef(2)::Int64, ColumnRef(3)::Int64)
+checked expr   : regexp_substr<String, String, Int64, Int64>(ColumnRef(0), ColumnRef(1), ColumnRef(2), ColumnRef(3))
+optimized expr : regexp_substr<String, String, Int64, Int64>("abc def ghi", "[a-z]+", ColumnRef(2), ColumnRef(3))
+evaluation:
++--------+---------------------------------+-----------------------+----------+---------+-------------+
+|        | source                          | pat                   | pos      | occur   | Output      |
++--------+---------------------------------+-----------------------+----------+---------+-------------+
+| Type   | String                          | String                | Int64    | Int64   | String NULL |
+| Domain | {"abc def ghi"..="abc def ghi"} | {"[a-z]+"..="[a-z]+"} | {1..=12} | {2..=3} | Unknown     |
+| Row 0  | "abc def ghi"                   | "[a-z]+"              | 1        | 3       | "ghi"       |
+| Row 1  | "abc def ghi"                   | "[a-z]+"              | 4        | 2       | "ghi"       |
+| Row 2  | "abc def ghi"                   | "[a-z]+"              | 12       | 3       | NULL        |
++--------+---------------------------------+-----------------------+----------+---------+-------------+
+evaluation (internal):
++--------+-----------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                  |
++--------+-----------------------------------------------------------------------------------------------------------------------+
+| source | StringColumn { data: 0x616263206465662067686961626320646566206768696162632064656620676869, offsets: [0, 11, 22, 33] } |
+| pat    | StringColumn { data: 0x5b612d7a5d2b5b612d7a5d2b5b612d7a5d2b, offsets: [0, 6, 12, 18] }                                |
+| pos    | Int64([1, 4, 12])                                                                                                     |
+| occur  | Int64([3, 2, 3])                                                                                                      |
+| Output | NullableColumn { column: StringColumn { data: 0x676869676869, offsets: [0, 3, 6, 6] }, validity: [0b_____011] }       |
++--------+-----------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : regexp_substr(source, pat, pos, occur, mt)
+raw expr       : regexp_substr(ColumnRef(0)::String, ColumnRef(1)::String, ColumnRef(2)::Int64, ColumnRef(3)::Int64, ColumnRef(4)::String)
+checked expr   : regexp_substr<String, String, Int64, Int64, String>(ColumnRef(0), ColumnRef(1), ColumnRef(2), ColumnRef(3), ColumnRef(4))
+optimized expr : regexp_substr<String, String, Int64, Int64, String>(ColumnRef(0), "[a-z]+", ColumnRef(2), ColumnRef(3), ColumnRef(4))
+evaluation:
++--------+---------------------------------+-----------------------+----------+---------+-------------+-------------+
+|        | source                          | pat                   | pos      | occur   | mt          | Output      |
++--------+---------------------------------+-----------------------+----------+---------+-------------+-------------+
+| Type   | String                          | String                | Int64    | Int64   | String      | String NULL |
+| Domain | {"ABC def ghi"..="abc def GHI"} | {"[a-z]+"..="[a-z]+"} | {1..=12} | {2..=3} | {"c"..="i"} | Unknown     |
+| Row 0  | "ABC def ghi"                   | "[a-z]+"              | 1        | 3       | "c"         | NULL        |
+| Row 1  | "abc def GHI"                   | "[a-z]+"              | 4        | 2       | "i"         | "GHI"       |
+| Row 2  | "abc DEF ghi"                   | "[a-z]+"              | 12       | 3       | "i"         | NULL        |
++--------+---------------------------------+-----------------------+----------+---------+-------------+-------------+
+evaluation (internal):
++--------+-----------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                  |
++--------+-----------------------------------------------------------------------------------------------------------------------+
+| source | StringColumn { data: 0x414243206465662067686961626320646566204748496162632044454620676869, offsets: [0, 11, 22, 33] } |
+| pat    | StringColumn { data: 0x5b612d7a5d2b5b612d7a5d2b5b612d7a5d2b, offsets: [0, 6, 12, 18] }                                |
+| pos    | Int64([1, 4, 12])                                                                                                     |
+| occur  | Int64([3, 2, 3])                                                                                                      |
+| mt     | StringColumn { data: 0x636969, offsets: [0, 1, 2, 3] }                                                                |
+| Output | NullableColumn { column: StringColumn { data: 0x474849, offsets: [0, 0, 3, 3] }, validity: [0b_____010] }             |
++--------+-----------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : regexp_substr(source, pat, pos, occur, mt)
+raw expr       : regexp_substr(ColumnRef(0)::String NULL, ColumnRef(1)::String NULL, ColumnRef(2)::Int64, ColumnRef(3)::Int64, ColumnRef(4)::String)
+checked expr   : regexp_substr<String NULL, String NULL, Int64 NULL, Int64 NULL, String NULL>(ColumnRef(0), ColumnRef(1), CAST(ColumnRef(2) AS Int64 NULL), CAST(ColumnRef(3) AS Int64 NULL), CAST(ColumnRef(4) AS String NULL))
+evaluation:
++--------+-------------------------------+--------------------------+---------+---------+------------+-------------+
+|        | source                        | pat                      | pos     | occur   | mt         | Output      |
++--------+-------------------------------+--------------------------+---------+---------+------------+-------------+
+| Type   | String NULL                   | String NULL              | Int64   | Int64   | String     | String NULL |
+| Domain | {""..="abc def ghi"} ∪ {NULL} | {""..="[a-z]+"} ∪ {NULL} | {1..=4} | {1..=2} | {""..="i"} | Unknown     |
+| Row 0  | "abc def ghi"                 | "[a-z]+"                 | 1       | 1       | ""         | "abc"       |
+| Row 1  | "abc DEF ghi"                 | NULL                     | 1       | 2       | "c"        | NULL        |
+| Row 2  | NULL                          | NULL                     | 4       | 1       | "i"        | NULL        |
+| Row 3  | "abc DEF ghi"                 | "[a-z]+"                 | 4       | 1       | "i"        | "DEF"       |
++--------+-------------------------------+--------------------------+---------+---------+------------+-------------+
+evaluation (internal):
++--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                                         |
++--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| source | NullableColumn { column: StringColumn { data: 0x616263206465662067686961626320444546206768696162632044454620676869, offsets: [0, 11, 22, 22, 33] }, validity: [0b____1011] } |
+| pat    | NullableColumn { column: StringColumn { data: 0x5b612d7a5d2b5b612d7a5d2b, offsets: [0, 6, 6, 6, 12] }, validity: [0b____1001] }                                              |
+| pos    | Int64([1, 1, 4, 4])                                                                                                                                                          |
+| occur  | Int64([1, 2, 1, 1])                                                                                                                                                          |
+| mt     | StringColumn { data: 0x636969, offsets: [0, 0, 1, 2, 3] }                                                                                                                    |
+| Output | NullableColumn { column: StringColumn { data: 0x616263444546, offsets: [0, 3, 3, 3, 6] }, validity: [0b____1001] }                                                           |
++--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : regexp_substr(source, pat, pos, occur)
+raw expr       : regexp_substr(ColumnRef(0)::String, ColumnRef(1)::String, ColumnRef(2)::Int64, ColumnRef(3)::Int64)
+checked expr   : regexp_substr<String, String, Int64, Int64>(ColumnRef(0), ColumnRef(1), ColumnRef(2), ColumnRef(3))
+optimized expr : regexp_substr<String, String, Int64, Int64>("周 周周 周周周 周周周周", "周+", ColumnRef(2), ColumnRef(3))
+evaluation:
++--------+---------------------------------------------------------+-----------------+----------+---------+-------------+
+|        | source                                                  | pat             | pos      | occur   | Output      |
++--------+---------------------------------------------------------+-----------------+----------+---------+-------------+
+| Type   | String                                                  | String          | Int64    | Int64   | String NULL |
+| Domain | {"周 周周 周周周 周周周周"..="周 周周 周周周 周周周周"} | {"周+"..="周+"} | {1..=14} | {1..=2} | Unknown     |
+| Row 0  | "周 周周 周周周 周周周周"                               | "周+"           | 1        | 1       | "周"        |
+| Row 1  | "周 周周 周周周 周周周周"                               | "周+"           | 2        | 2       | "周周周"    |
+| Row 2  | "周 周周 周周周 周周周周"                               | "周+"           | 14       | 1       | NULL        |
++--------+---------------------------------------------------------+-----------------+----------+---------+-------------+
+evaluation (internal):
++--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                                                                                                                      |
++--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| source | StringColumn { data: 0xe591a820e591a8e591a820e591a8e591a8e591a820e591a8e591a8e591a8e591a8e591a820e591a8e591a820e591a8e591a8e591a820e591a8e591a8e591a8e591a8e591a820e591a8e591a820e591a8e591a8e591a820e591a8e591a8e591a8e591a8, offsets: [0, 33, 66, 99] } |
+| pat    | StringColumn { data: 0xe591a82be591a82be591a82b, offsets: [0, 4, 8, 12] }                                                                                                                                                                                 |
+| pos    | Int64([1, 2, 14])                                                                                                                                                                                                                                         |
+| occur  | Int64([1, 2, 1])                                                                                                                                                                                                                                          |
+| Output | NullableColumn { column: StringColumn { data: 0xe591a8e591a8e591a8e591a8, offsets: [0, 3, 12, 12] }, validity: [0b_____011] }                                                                                                                             |
++--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | regexp_substr(source, pat, pos, occur, mt)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Incorrect arguments to regexp_substr: occurrence must be positive, but got 0
+
+
+
