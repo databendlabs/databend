@@ -280,7 +280,7 @@ impl<'a> Binder {
 
         let select_cols = "name AS Name, engine AS Engine, 0 AS Version, \
         NULL AS Row_format, num_rows AS Rows, NULL AS Avg_row_length, data_size AS Data_length, \
-        NULL AS Max_data_length, NULL AS Index_length, NULL AS Data_free, NULL AS Auto_increment, \
+        NULL AS Max_data_length, index_size AS Index_length, NULL AS Data_free, NULL AS Auto_increment, \
         created_on AS Create_time, NULL AS Update_time, NULL AS Check_time, NULL AS Collation, \
         NULL AS Checksum, '' AS Comment"
             .to_string();
