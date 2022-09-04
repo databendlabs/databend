@@ -19,14 +19,13 @@ mod hive_blocks;
 mod hive_catalog;
 mod hive_database;
 mod hive_file_splitter;
-pub mod hive_parquet_block_reader;
+mod hive_parquet_block_reader;
 mod hive_partition;
 mod hive_partition_filler;
 mod hive_partition_pruner;
 mod hive_table;
 mod hive_table_options;
 mod hive_table_source;
-use common_storages_util::retry;
 
 pub const CATALOG_HIVE: &str = "hive";
 
