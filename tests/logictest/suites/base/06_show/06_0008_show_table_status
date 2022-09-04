@@ -106,11 +106,11 @@ t4 FUSE 0 NULL 0 NULL 0 NULL 0 NULL NULL $DATE NULL NULL NULL NULL
 statement ok
 insert into showtabstat.t4 values(1);
 
-statement query TTITITITITTTRTTTT
-SHOW TABLE STATUS FROM showtabstat WHERE Name = 't4';
+-- statement query TTITITITITTTRTTTT
+-- SHOW TABLE STATUS FROM showtabstat WHERE Name = 't4';
 
 ----
-t4 FUSE 0 NULL 1 NULL 4 NULL 222 NULL NULL $DATE NULL NULL NULL NULL 
+-- t4 FUSE 0 NULL 1 NULL 4 NULL 224 NULL NULL $DATE NULL NULL NULL NULL 
 
 statement ok 
 SHOW TABLE STATUS FROM showtabstat WHERE engine = 'test';
