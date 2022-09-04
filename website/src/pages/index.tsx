@@ -6,7 +6,7 @@ import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
 import Texty from 'rc-texty';
 import 'rc-texty/assets/index.css';
 import styles from './index.module.scss';
-
+import Releases from '@site/src/components/Releases';
 function HomepageHeader() {
     const {siteConfig} = useDocusaurusContext();
     return (
@@ -27,7 +27,7 @@ function HomepageHeader() {
                   to="/doc">
                   Documentation
               </Link>
-
+              <Releases />
               {/* <ArrowDownSvg className={styles.arrow}></ArrowDownSvg> */}
           </div>
         </section>

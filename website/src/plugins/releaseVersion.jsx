@@ -8,7 +8,7 @@ const cacheKey = 'global-cache-releases';
 const cacheTimeKey = 'global-cache-time';
 const cacheTagNameKey = 'global-cache-tag-name';
 
-export function getLatest(){
+export function getLatest(callBack){
   let [cacheReleast, setCacheReleast] = useSessionStorageState(cacheKey);
   const [cacheTime, setCacheTime] = useSessionStorageState(cacheTimeKey);
   const [cacheTagName, setCacheTagName] = useLocalStorageState(cacheTagNameKey);
@@ -62,11 +62,13 @@ export function getLatest(){
     }
   }
   function setText(text) {
+    // when error default value v0.8.25
+    const name = text ? text : (cacheTagName || 'v0.8.25');
+    callBack && callBack(name);
     const dom = document.querySelectorAll('.variable');
     for (let div of dom){
       if (div.innerHTML === '${version}') {
-        // when error default value v0.7.39
-        div.innerText = text ? text : (cacheTagName || 'v0.7.39');
+        div.innerText = name;
       }
     }
   }
