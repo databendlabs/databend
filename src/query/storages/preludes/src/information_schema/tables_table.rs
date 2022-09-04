@@ -35,13 +35,9 @@ impl TablesTable {
             engine AS engine,
             created_on AS create_time,
             dropped_on AS drop_time,
-            0 AS data_length,
-            0 AS index_length,
+            data_size AS data_length,
+            index_size AS index_length,
             '' AS table_comment,
-            num_rows,
-            data_size,
-            data_compressed_size,
-            index_size
         FROM system.tables;";
 
         let mut options = BTreeMap::new();
