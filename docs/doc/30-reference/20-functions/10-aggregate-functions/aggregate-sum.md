@@ -20,7 +20,7 @@ SUM(expression)
 
 | Arguments   | Description |
 | ----------- | ----------- |
-| expression  | Any expression |
+| expression  | Any numerical expression |
 
 ## Return Type
 
