@@ -73,7 +73,7 @@ In default, Double-quoted identifiers are case-sensitive and can start with and 
 
 By default, Databend applies the following rules for storing identifiers (at creation/definition time) and resolving them (in queries and other SQL statements):
 
-* When an identifier is unquoted, it is stored and resolved in uppercase.
+* When an identifier is unquoted, it is stored and resolved in lowercase.
 
 * When an identifier is double-quoted, it is stored and resolved exactly as entered, including case.
 
