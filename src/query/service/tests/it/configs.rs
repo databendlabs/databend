@@ -142,6 +142,9 @@ root = ""
 [catalog]
 meta_store_address = "127.0.0.1:9083"
 protocol = "binary"
+
+[iam]
+users = []
 "#;
 
     let tom_actual = toml::to_string(&actual.into_outer()).unwrap();
@@ -535,6 +538,9 @@ root = ""
 [catalog]
 meta_store_address = "127.0.0.1:9083"
 protocol = "binary"
+
+[iam]
+users = []
     "#
         .as_bytes(),
     )?;

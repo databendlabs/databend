@@ -89,6 +89,7 @@ impl GlobalServices {
         SessionManager::init(config.clone(), global_services.clone())?;
         UserApiProvider::init(
             config.meta.to_meta_grpc_client_conf(),
+            config.iam,
             global_services.clone(),
         )
         .await?;

@@ -12,6 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
+
+use common_meta_types::AuthInfo;
+use common_users::iam_config::IAMConfig;
 use databend_query::Config;
 
 pub struct ConfigBuilder {
@@ -55,6 +59,13 @@ impl ConfigBuilder {
 
     pub fn jwt_key_file(mut self, value: impl Into<String>) -> ConfigBuilder {
         self.conf.query.jwt_key_file = value.into();
+        self
+    }
+
+    pub fn add_user(mut self, user_name: &str, auth_info: AuthInfo) -> ConfigBuilder {
+        let mut users = HashMap::new();
+        users.insert(user_name.to_string(), auth_info);
+        self.conf.iam = IAMConfig { users };
         self
     }
 
