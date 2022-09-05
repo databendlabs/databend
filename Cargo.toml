@@ -44,6 +44,7 @@ members = [
     "src/query/storages/hive-meta-store",
     "src/query/storages/index",
     "src/query/storages/preludes",
+    "src/query/storages/share",
     "src/query/storages/util",
     "src/query/streams",
     "src/query/users",
@@ -105,6 +106,3 @@ gimli = { opt-level = 3 }
 miniz_oxide = { opt-level = 3 }
 object = { opt-level = 3 }
 rustc-demangle = { opt-level = 3 }
-
-[patch.crates-io]
-parquet2 = { version = "0.14.1", optional = true, git = "https://github.com/datafuse-extras/parquet2", rev = "3a468fc3c4" }

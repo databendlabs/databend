@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use common_base::base::GlobalIORuntime;
 use common_exception::Result;
 use common_planners::ReclusterTablePlan;
 use common_streams::DataBlockStream;
@@ -73,11 +72,9 @@ impl Interpreter for ReclusterTableInterpreter {
 
             pipeline.set_max_threads(settings.get_max_threads()? as usize);
 
-            let async_runtime = GlobalIORuntime::instance();
             let query_need_abort = ctx.query_need_abort();
             let executor_settings = ExecutorSettings::try_create(&settings)?;
             let executor = PipelineCompleteExecutor::try_create(
-                async_runtime,
                 query_need_abort,
                 pipeline,
                 executor_settings,

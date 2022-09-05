@@ -15,7 +15,6 @@
 use std::sync::Arc;
 use std::sync::RwLock;
 
-use common_base::base::GlobalIORuntime;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 use common_pipeline_core::Pipeline;
@@ -79,16 +78,11 @@ impl Interpreter for CallInterpreter {
 
         let ctx = &self.ctx;
         let settings = ctx.get_settings();
-        let async_runtime = GlobalIORuntime::instance();
         let query_need_abort = ctx.query_need_abort();
         pipeline.set_max_threads(settings.get_max_threads()? as usize);
         let executor_settings = ExecutorSettings::try_create(&settings)?;
-        let executor = PipelinePullingExecutor::try_create(
-            async_runtime,
-            query_need_abort,
-            pipeline,
-            executor_settings,
-        )?;
+        let executor =
+            PipelinePullingExecutor::try_create(query_need_abort, pipeline, executor_settings)?;
 
         Ok(Box::pin(ProcessorExecutorStream::create(executor)?))
     }

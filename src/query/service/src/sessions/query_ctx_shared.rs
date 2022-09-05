@@ -71,7 +71,6 @@ pub struct QueryContextShared {
     pub(in crate::sessions) init_query_id: Arc<RwLock<String>>,
     pub(in crate::sessions) cluster_cache: Arc<Cluster>,
     pub(in crate::sessions) sources_abort_handle: Arc<RwLock<Vec<AbortHandle>>>,
-    pub(in crate::sessions) ref_count: Arc<AtomicUsize>,
     pub(in crate::sessions) subquery_index: Arc<AtomicUsize>,
     pub(in crate::sessions) running_query: Arc<RwLock<Option<String>>>,
     pub(in crate::sessions) http_query: Arc<RwLock<Option<HttpQueryHandle>>>,
@@ -104,7 +103,6 @@ impl QueryContextShared {
             error: Arc::new(Mutex::new(None)),
             runtime: Arc::new(RwLock::new(None)),
             sources_abort_handle: Arc::new(RwLock::new(Vec::new())),
-            ref_count: Arc::new(AtomicUsize::new(0)),
             subquery_index: Arc::new(AtomicUsize::new(1)),
             running_query: Arc::new(RwLock::new(None)),
             http_query: Arc::new(RwLock::new(None)),
@@ -297,11 +295,5 @@ impl QueryContextShared {
     pub fn set_affect(&self, affect: QueryAffect) {
         let mut guard = self.affect.lock();
         *guard = Some(affect);
-    }
-}
-
-impl Session {
-    pub(in crate::sessions) fn destroy_context_shared(&self) {
-        self.session_ctx.take_query_context_shared();
     }
 }

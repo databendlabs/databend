@@ -27,6 +27,7 @@ use common_meta_types::app_error::ShareAlreadyExists;
 use common_meta_types::app_error::TxnRetryMaxTimes;
 use common_meta_types::app_error::UnknownShare;
 use common_meta_types::app_error::UnknownShareAccounts;
+use common_meta_types::app_error::UnknownTable;
 use common_meta_types::app_error::WrongShare;
 use common_meta_types::app_error::WrongShareObject;
 use common_meta_types::ConditionResult::Eq;
@@ -97,7 +98,10 @@ impl<KV: KVApi> ShareApi for KV {
 
             if share_id_seq > 0 {
                 return if req.if_not_exists {
-                    Ok(CreateShareReply { share_id })
+                    Ok(CreateShareReply {
+                        share_id,
+                        spec_vec: None,
+                    })
                 } else {
                     Err(MetaError::AppError(AppError::ShareAlreadyExists(
                         ShareAlreadyExists::new(
@@ -121,6 +125,7 @@ impl<KV: KVApi> ShareApi for KV {
 
             // Create share by transaction.
             {
+                let share_meta = ShareMeta::new(req.create_on, req.comment.clone());
                 let txn_req = TxnRequest {
                     condition: vec![
                         txn_cond_seq(name_key, Eq, 0),
@@ -128,10 +133,7 @@ impl<KV: KVApi> ShareApi for KV {
                     ],
                     if_then: vec![
                         txn_op_put(name_key, serialize_u64(share_id)?), /* (tenant, share_name) -> share_id */
-                        txn_op_put(
-                            &id_key,
-                            serialize_struct(&ShareMeta::new(req.create_on, req.comment.clone()))?,
-                        ), /* (share_id) -> share_meta */
+                        txn_op_put(&id_key, serialize_struct(&share_meta)?), /* (share_id) -> share_meta */
                         txn_op_put(&id_to_name_key, serialize_struct(name_key)?), /* __fd_share_id_to_name/<share_id> -> (tenant,share_name) */
                     ],
                     else_then: vec![],
@@ -147,7 +149,12 @@ impl<KV: KVApi> ShareApi for KV {
                 );
 
                 if succ {
-                    return Ok(CreateShareReply { share_id });
+                    return Ok(CreateShareReply {
+                        share_id,
+                        spec_vec: Some(
+                            get_tenant_share_spec_vec(self, name_key.tenant.clone()).await?,
+                        ),
+                    });
                 }
             }
         }
@@ -181,7 +188,10 @@ impl<KV: KVApi> ShareApi for KV {
                 Err(e) => {
                     if let MetaError::AppError(AppError::UnknownShare(_)) = e {
                         if req.if_exists {
-                            return Ok(DropShareReply {});
+                            return Ok(DropShareReply {
+                                share_id: None,
+                                spec_vec: None,
+                            });
                         }
                     }
 
@@ -197,7 +207,10 @@ impl<KV: KVApi> ShareApi for KV {
                 Err(e) => {
                     if let MetaError::AppError(AppError::UnknownShareId(_)) = e {
                         if req.if_exists {
-                            return Ok(DropShareReply {});
+                            return Ok(DropShareReply {
+                                share_id: Some(share_id),
+                                spec_vec: None,
+                            });
                         }
                     }
 
@@ -269,7 +282,12 @@ impl<KV: KVApi> ShareApi for KV {
                 );
 
                 if succ {
-                    return Ok(DropShareReply {});
+                    return Ok(DropShareReply {
+                        share_id: Some(share_id),
+                        spec_vec: Some(
+                            get_tenant_share_spec_vec(self, name_key.tenant.clone()).await?,
+                        ),
+                    });
                 }
             }
         }
@@ -298,7 +316,10 @@ impl<KV: KVApi> ShareApi for KV {
                 Err(e) => {
                     if let MetaError::AppError(AppError::UnknownShare(_)) = e {
                         if req.if_exists {
-                            return Ok(AddShareAccountsReply {});
+                            return Ok(AddShareAccountsReply {
+                                share_id: None,
+                                spec_vec: None,
+                            });
                         }
                     }
                     return Err(e);
@@ -373,7 +394,12 @@ impl<KV: KVApi> ShareApi for KV {
                 );
 
                 if succ {
-                    return Ok(AddShareAccountsReply {});
+                    return Ok(AddShareAccountsReply {
+                        share_id: Some(share_id),
+                        spec_vec: Some(
+                            get_tenant_share_spec_vec(self, name_key.tenant.clone()).await?,
+                        ),
+                    });
                 }
             }
         }
@@ -407,7 +433,10 @@ impl<KV: KVApi> ShareApi for KV {
                 Err(e) => {
                     if let MetaError::AppError(AppError::UnknownShare(_)) = e {
                         if req.if_exists {
-                            return Ok(RemoveShareAccountsReply {});
+                            return Ok(RemoveShareAccountsReply {
+                                share_id: None,
+                                spec_vec: None,
+                            });
                         }
                     }
                     return Err(e);
@@ -487,7 +516,12 @@ impl<KV: KVApi> ShareApi for KV {
                 );
 
                 if succ {
-                    return Ok(RemoveShareAccountsReply {});
+                    return Ok(RemoveShareAccountsReply {
+                        share_id: Some(share_id),
+                        spec_vec: Some(
+                            get_tenant_share_spec_vec(self, name_key.tenant.clone()).await?,
+                        ),
+                    });
                 }
             }
         }
@@ -531,7 +565,10 @@ impl<KV: KVApi> ShareApi for KV {
                 share_meta.has_granted_privileges(&req.object, &seq_and_id, req.privilege)?;
 
             if has_granted_privileges {
-                return Ok(GrantShareObjectReply {});
+                return Ok(GrantShareObjectReply {
+                    share_id,
+                    spec_vec: None,
+                });
             }
 
             // Grant the object privilege by inserting these record:
@@ -564,7 +601,7 @@ impl<KV: KVApi> ShareApi for KV {
                     txn_op_put(&id_key, serialize_struct(&share_meta)?), /* (share_id) -> share_meta */
                     txn_op_put(&object, serialize_struct(&share_ids)?),  /* (object) -> share_ids */
                 ];
-                add_grant_object_txn_if_then(share_id, seq_and_id, &mut if_then)?;
+                add_grant_object_txn_if_then(share_id, seq_and_id.clone(), &mut if_then)?;
 
                 let txn_req = TxnRequest {
                     condition,
@@ -582,7 +619,12 @@ impl<KV: KVApi> ShareApi for KV {
                 );
 
                 if succ {
-                    return Ok(GrantShareObjectReply {});
+                    return Ok(GrantShareObjectReply {
+                        share_id,
+                        spec_vec: Some(
+                            get_tenant_share_spec_vec(self, share_name_key.tenant.clone()).await?,
+                        ),
+                    });
                 }
             }
         }
@@ -626,7 +668,10 @@ impl<KV: KVApi> ShareApi for KV {
                 share_meta.has_granted_privileges(&req.object, &seq_and_id, req.privilege)?;
 
             if !has_granted_privileges {
-                return Ok(RevokeShareObjectReply {});
+                return Ok(RevokeShareObjectReply {
+                    share_id,
+                    spec_vec: None,
+                });
             }
 
             // Revoke the object privilege by upserting these record:
@@ -685,7 +730,12 @@ impl<KV: KVApi> ShareApi for KV {
                 );
 
                 if succ {
-                    return Ok(RevokeShareObjectReply {});
+                    return Ok(RevokeShareObjectReply {
+                        share_id,
+                        spec_vec: Some(
+                            get_tenant_share_spec_vec(self, share_name_key.tenant.clone()).await?,
+                        ),
+                    });
                 }
             }
         }
@@ -1090,7 +1140,7 @@ fn check_share_object(
         if let ShareGrantObject::Database(db_id) = entry.object {
             let object_db_id = match seq_and_id {
                 ShareGrantObjectSeqAndId::Database(_, db_id, _) => *db_id,
-                ShareGrantObjectSeqAndId::Table(db_id, _seq, _id) => *db_id,
+                ShareGrantObjectSeqAndId::Table(db_id, _seq, _id, _meta) => *db_id,
             };
             if db_id != object_db_id {
                 return Err(MetaError::AppError(AppError::WrongShareObject(
@@ -1102,7 +1152,7 @@ fn check_share_object(
         }
     } else {
         // Table cannot be granted without database has been granted.
-        if let ShareGrantObjectSeqAndId::Table(_, _, _) = seq_and_id {
+        if let ShareGrantObjectSeqAndId::Table(_, _, _, _) = seq_and_id {
             return Err(MetaError::AppError(AppError::WrongShareObject(
                 WrongShareObject::new(obj_name.to_string()),
             )));
@@ -1167,13 +1217,23 @@ async fn get_share_object_seq_and_id(
             )?;
 
             let tbid = TableId { table_id };
-            let (table_meta_seq, _tb_meta): (_, Option<TableMeta>) =
+            let (table_meta_seq, table_meta): (_, Option<TableMeta>) =
                 get_struct_value(kv_api, &tbid).await?;
+
+            if table_meta_seq == 0 {
+                return Err(MetaError::AppError(AppError::UnknownTable(
+                    UnknownTable::new(
+                        &name_key.table_name,
+                        format!("get_share_object_seq_and_id: {}", name_key),
+                    ),
+                )));
+            }
 
             Ok(ShareGrantObjectSeqAndId::Table(
                 db_id,
                 table_meta_seq,
                 table_id,
+                table_meta.unwrap(),
             ))
         }
     }
@@ -1185,7 +1245,7 @@ fn add_txn_condition(seq_and_id: &ShareGrantObjectSeqAndId, condition: &mut Vec<
             let key = DatabaseId { db_id: *db_id };
             condition.push(txn_cond_seq(&key, Eq, *db_meta_seq))
         }
-        ShareGrantObjectSeqAndId::Table(_db_id, table_meta_seq, table_id) => {
+        ShareGrantObjectSeqAndId::Table(_db_id, table_meta_seq, table_id, _) => {
             let key = TableId {
                 table_id: *table_id,
             };
@@ -1208,7 +1268,7 @@ fn add_grant_object_txn_if_then(
                 if_then.push(txn_op_put(&key, serialize_struct(&db_meta)?));
             }
         }
-        ShareGrantObjectSeqAndId::Table(_, _, _) => {}
+        ShareGrantObjectSeqAndId::Table(_, _, _, _) => {}
     }
 
     Ok(())
@@ -1288,4 +1348,101 @@ async fn drop_all_database_from_share(
         let _ = is_db_need_to_be_remove(kv_api, *db_id, |_db_meta| true, condition, if_then).await;
     }
     Ok(())
+}
+
+async fn get_tenant_share_spec_vec(
+    kv_api: &(impl KVApi + ?Sized),
+    tenant: String,
+) -> MetaResult<Vec<ShareSpec>> {
+    let mut share_metas = vec![];
+    let share_name_list = ShareNameIdent {
+        tenant,
+        // Using a empty share to to list all
+        share_name: "".to_string(),
+    };
+
+    let share_name_list_keys = list_keys(kv_api, &share_name_list).await?;
+    for share_name in share_name_list_keys {
+        let res = get_share_or_err(
+            kv_api,
+            &share_name,
+            format!("get_tenant_share_spec_vec: {}", &share_name),
+        )
+        .await;
+
+        let (_share_id_seq, share_id, _share_meta_seq, share_meta) = match res {
+            Ok(x) => x,
+            Err(e) => match e {
+                MetaError::AppError(AppError::UnknownShare(_)) => {
+                    continue;
+                }
+                MetaError::AppError(AppError::UnknownShareId(_)) => {
+                    continue;
+                }
+                _ => {
+                    return Err(e);
+                }
+            },
+        };
+
+        share_metas.push(
+            convert_share_meta_to_spec(kv_api, &share_name.share_name, share_id, share_meta)
+                .await?,
+        );
+    }
+
+    Ok(share_metas)
+}
+
+async fn convert_share_meta_to_spec(
+    kv_api: &(impl KVApi + ?Sized),
+    share_name: &str,
+    share_id: u64,
+    share_meta: ShareMeta,
+) -> MetaResult<ShareSpec> {
+    let database = if let Some(database) = share_meta.database {
+        if let ShareGrantObject::Database(db_id) = database.object {
+            let id_key = DatabaseIdToName { db_id };
+
+            let (_db_meta_seq, db_name): (_, Option<DatabaseNameIdent>) =
+                get_struct_value(kv_api, &id_key).await?;
+            if let Some(db_name) = db_name {
+                Some(ShareDatabaseSpec {
+                    name: db_name.db_name,
+                    id: db_id,
+                })
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    let mut tables = vec![];
+    for (_, entry) in share_meta.entries.iter() {
+        if let ShareGrantObject::Table(table_id) = entry.object {
+            let table_id_to_name_key = TableIdToName { table_id };
+            let (_table_id_to_name_seq, table_name): (_, Option<DBIdTableName>) =
+                get_struct_value(kv_api, &table_id_to_name_key).await?;
+            if let Some(table_name) = table_name {
+                tables.push(ShareTableSpec::new(
+                    &table_name.table_name,
+                    table_name.db_id,
+                    table_id,
+                ));
+            }
+        }
+    }
+
+    Ok(ShareSpec {
+        name: share_name.to_owned(),
+        share_id,
+        version: 1,
+        database,
+        tables,
+        tenants: Vec::from_iter(share_meta.accounts.into_iter()),
+    })
 }

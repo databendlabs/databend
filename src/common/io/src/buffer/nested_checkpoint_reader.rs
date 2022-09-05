@@ -137,8 +137,4 @@ impl<R: BufferRead> BufferRead for NestedCheckpointReader<R> {
             }
         }
     }
-
-    fn preadd_buf(&mut self, _buf: &[u8]) -> Result<()> {
-        unreachable!()
-    }
 }
