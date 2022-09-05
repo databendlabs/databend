@@ -15,7 +15,6 @@
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
-use common_base::base::Runtime;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -31,7 +30,6 @@ pub struct PipelineCompleteExecutor {
 #[allow(dead_code)]
 impl PipelineCompleteExecutor {
     pub fn try_create(
-        async_runtime: Arc<Runtime>,
         query_need_abort: Arc<AtomicBool>,
         pipeline: Pipeline,
         settings: ExecutorSettings,
@@ -42,13 +40,11 @@ impl PipelineCompleteExecutor {
             ));
         }
 
-        let executor =
-            PipelineExecutor::create(async_runtime, query_need_abort, pipeline, settings)?;
+        let executor = PipelineExecutor::create(query_need_abort, pipeline, settings)?;
         Ok(PipelineCompleteExecutor { executor })
     }
 
     pub fn from_pipelines(
-        async_runtime: Arc<Runtime>,
         query_need_abort: Arc<AtomicBool>,
         pipelines: Vec<Pipeline>,
         settings: ExecutorSettings,
@@ -61,8 +57,7 @@ impl PipelineCompleteExecutor {
             }
         }
 
-        let executor =
-            PipelineExecutor::from_pipelines(async_runtime, query_need_abort, pipelines, settings)?;
+        let executor = PipelineExecutor::from_pipelines(query_need_abort, pipelines, settings)?;
         Ok(Arc::new(PipelineCompleteExecutor { executor }))
     }
 
