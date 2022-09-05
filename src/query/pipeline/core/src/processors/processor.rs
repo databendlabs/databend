@@ -105,5 +105,3 @@ impl ProcessorPtr {
         (*self.inner.get()).async_process().boxed()
     }
 }
-
-pub type Processors = Vec<ProcessorPtr>;

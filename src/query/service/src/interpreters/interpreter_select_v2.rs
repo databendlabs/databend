@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use common_base::base::GlobalIORuntime;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 use common_streams::SendableDataBlockStream;
@@ -106,7 +105,6 @@ impl Interpreter for SelectInterpreterV2 {
 
         Ok(Box::pin(Box::pin(ProcessorExecutorStream::create(
             PipelinePullingExecutor::from_pipelines(
-                GlobalIORuntime::instance(),
                 self.ctx.query_need_abort(),
                 build_res,
                 executor_settings,

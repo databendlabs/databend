@@ -104,6 +104,7 @@ impl ExecuteState {
         }
     }
 }
+
 pub struct ExecuteStarting {
     pub(crate) ctx: Arc<QueryContext>,
 }
@@ -418,8 +419,6 @@ impl HttpQueryHandle {
             processors: vec![sink],
         });
 
-        let async_runtime = GlobalIORuntime::instance();
-        let async_runtime_clone = async_runtime.clone();
         let query_need_abort = ctx.query_need_abort();
         let executor_settings = ExecutorSettings::try_create(&ctx.get_settings())?;
 
@@ -428,7 +427,6 @@ impl HttpQueryHandle {
             pipelines.push(build_res.main_pipeline);
 
             let pipeline_executor = PipelineCompleteExecutor::from_pipelines(
-                async_runtime_clone,
                 query_need_abort,
                 pipelines,
                 executor_settings,
@@ -439,7 +437,7 @@ impl HttpQueryHandle {
         let (error_sender, mut error_receiver) = mpsc::channel::<Result<()>>(1);
         let (abort_handle, abort_registration) = AbortHandle::new_pair();
 
-        async_runtime.spawn(async move {
+        GlobalIORuntime::instance().spawn(async move {
             let error_receiver = Abortable::new(error_receiver.recv(), abort_registration);
             ctx.add_source_abort_handle(abort_handle);
             match error_receiver.await {

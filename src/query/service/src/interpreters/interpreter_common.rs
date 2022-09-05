@@ -61,18 +61,13 @@ pub fn append2table(
     }
 
     table.append2(ctx.clone(), &mut build_res.main_pipeline)?;
-    let async_runtime = GlobalIORuntime::instance();
     let query_need_abort = ctx.query_need_abort();
     let executor_settings = ExecutorSettings::try_create(&ctx.get_settings())?;
     build_res.set_max_threads(ctx.get_settings().get_max_threads()? as usize);
     let mut pipelines = build_res.sources_pipelines;
     pipelines.push(build_res.main_pipeline);
-    let executor = PipelineCompleteExecutor::from_pipelines(
-        async_runtime,
-        query_need_abort,
-        pipelines,
-        executor_settings,
-    )?;
+    let executor =
+        PipelineCompleteExecutor::from_pipelines(query_need_abort, pipelines, executor_settings)?;
     executor.execute()
 }
 

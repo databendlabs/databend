@@ -19,7 +19,6 @@ use std::sync::mpsc::SyncSender;
 use std::sync::Arc;
 use std::time::Duration;
 
-use common_base::base::Runtime;
 use common_base::base::Thread;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
@@ -75,7 +74,6 @@ impl PipelinePullingExecutor {
     }
 
     pub fn try_create(
-        async_runtime: Arc<Runtime>,
         query_need_abort: Arc<AtomicBool>,
         mut pipeline: Pipeline,
         settings: ExecutorSettings,
@@ -84,8 +82,7 @@ impl PipelinePullingExecutor {
         let state = State::create(sender.clone());
 
         Self::wrap_pipeline(&mut pipeline, sender)?;
-        let executor =
-            PipelineExecutor::create(async_runtime, query_need_abort, pipeline, settings)?;
+        let executor = PipelineExecutor::create(query_need_abort, pipeline, settings)?;
         Ok(PipelinePullingExecutor {
             receiver,
             state,
@@ -94,7 +91,6 @@ impl PipelinePullingExecutor {
     }
 
     pub fn from_pipelines(
-        async_runtime: Arc<Runtime>,
         query_need_abort: Arc<AtomicBool>,
         build_res: PipelineBuildResult,
         settings: ExecutorSettings,
@@ -110,12 +106,7 @@ impl PipelinePullingExecutor {
         Ok(PipelinePullingExecutor {
             receiver,
             state,
-            executor: PipelineExecutor::from_pipelines(
-                async_runtime,
-                query_need_abort,
-                pipelines,
-                settings,
-            )?,
+            executor: PipelineExecutor::from_pipelines(query_need_abort, pipelines, settings)?,
         })
     }
 
