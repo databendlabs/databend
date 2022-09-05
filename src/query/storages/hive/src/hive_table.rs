@@ -546,9 +546,11 @@ async fn do_list_files_from_dir(
         }
         match de.mode() {
             ObjectMode::FILE => {
-                // todo, support in opendal#list
                 let filename = path.to_string();
-                let length = get_file_length(operator.clone(), path).await?;
+                let length = match de.content_length() {
+                    Some(len) => len,
+                    None => get_file_length(operator.clone(), &path).await?,
+                };
                 all_files.push(HiveFileInfo::create(filename, length));
             }
             ObjectMode::DIR => {
