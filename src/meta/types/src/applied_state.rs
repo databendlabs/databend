@@ -73,32 +73,7 @@ where
     }
 }
 
-pub enum PrevOrResult<'a> {
-    Prev(&'a AppliedState),
-    Result(&'a AppliedState),
-}
-
-impl<'a> PrevOrResult<'a> {
-    pub fn is_some(&self) -> bool {
-        match self {
-            PrevOrResult::Prev(state) => state.prev_is_some(),
-            PrevOrResult::Result(state) => state.result_is_some(),
-        }
-    }
-    pub fn is_none(&self) -> bool {
-        !self.is_some()
-    }
-}
-
 impl AppliedState {
-    pub fn prev(&self) -> PrevOrResult {
-        PrevOrResult::Prev(self)
-    }
-
-    pub fn result(&self) -> PrevOrResult {
-        PrevOrResult::Result(self)
-    }
-
     /// Whether the state changed
     pub fn changed(&self) -> bool {
         match self {
