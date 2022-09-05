@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 // Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,6 +11,8 @@ use std::collections::HashMap;
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
+use std::collections::HashMap;
 use std::env;
 use std::fmt;
 use std::fmt::Debug;
@@ -94,6 +95,7 @@ pub struct Config {
     pub catalog: HiveCatalogConfig,
 
     #[clap(skip)]
+    #[serde(rename = "IAM")]
     pub iam: IAMConfig,
 }
 
