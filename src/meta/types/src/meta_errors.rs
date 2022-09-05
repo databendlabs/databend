@@ -51,13 +51,7 @@ pub enum MetaError {
     StartMetaServiceError(String),
 
     #[error("{0}")]
-    ConcurrentSnapshotInstall(String),
-
-    #[error("{0}")]
     MetaServiceError(String),
-
-    #[error("{0}")]
-    IllegalRoleInfoFormat(String),
 
     #[error("{0}")]
     IllegalUserInfoFormat(String),
