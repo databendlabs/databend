@@ -67,6 +67,7 @@ common-storages-fuse = { path = "../storages/fuse" }
 common-storages-hive = { path = "../storages/hive", optional = true }
 common-storages-index = { path = "../storages/index" }
 common-storages-preludes = { path = "../storages/preludes" }
+common-storages-share = { path = "../storages/share" }
 common-storages-util = { path = "../storages/util" }
 common-streams = { path = "../streams" }
 common-tracing = { path = "../../common/tracing" }

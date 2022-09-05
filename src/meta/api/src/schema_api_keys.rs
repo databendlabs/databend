@@ -214,7 +214,7 @@ impl KVApiKey for DBIdTableName {
     }
 }
 
-/// "__fd_table_by_id/<tb_id>"
+/// "__fd_table_by_id/<tb_id> -> TableMeta"
 impl KVApiKey for TableId {
     const PREFIX: &'static str = PREFIX_TABLE_BY_ID;
 
