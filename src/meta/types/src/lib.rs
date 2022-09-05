@@ -156,6 +156,7 @@ pub use raft_types::LogIndex;
 pub use raft_types::NodeId;
 pub use raft_types::Term;
 pub use role_info::RoleInfo;
+pub use role_info::RoleInfoSerdeError;
 pub use seq_num::SeqNum;
 pub use seq_value::IntoSeqV;
 pub use seq_value::KVMeta;

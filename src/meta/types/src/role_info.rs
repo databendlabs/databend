@@ -12,11 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::Display;
+use std::fmt::Formatter;
+
+use anyerror::AnyError;
+use common_exception::ErrorCode;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::MetaError;
-use crate::MetaResult;
 use crate::UserGrantSet;
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Default)]
@@ -25,6 +28,13 @@ pub struct RoleInfo {
     pub name: String,
 
     pub grants: UserGrantSet,
+}
+
+/// Error when ser/de RoleInfo
+#[derive(Clone, Debug, Eq, PartialEq, thiserror::Error)]
+pub struct RoleInfoSerdeError {
+    pub message: String,
+    pub source: AnyError,
 }
 
 impl RoleInfo {
@@ -41,15 +51,27 @@ impl RoleInfo {
 }
 
 impl TryFrom<Vec<u8>> for RoleInfo {
-    type Error = MetaError;
+    type Error = RoleInfoSerdeError;
 
-    fn try_from(value: Vec<u8>) -> MetaResult<Self> {
+    fn try_from(value: Vec<u8>) -> Result<Self, Self::Error> {
         match serde_json::from_slice(&value) {
             Ok(role_info) => Ok(role_info),
-            Err(serialize_error) => Err(MetaError::IllegalRoleInfoFormat(format!(
-                "Cannot deserialize role info from bytes. cause {}",
-                serialize_error
-            ))),
+            Err(serialize_error) => Err(RoleInfoSerdeError {
+                message: "Cannot deserialize RoleInfo from bytes".to_string(),
+                source: AnyError::new(&serialize_error),
+            }),
         }
+    }
+}
+
+impl Display for RoleInfoSerdeError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} cause: {}", self.message, self.source)
+    }
+}
+
+impl From<RoleInfoSerdeError> for ErrorCode {
+    fn from(e: RoleInfoSerdeError) -> Self {
+        ErrorCode::InvalidReply(e.to_string())
     }
 }
