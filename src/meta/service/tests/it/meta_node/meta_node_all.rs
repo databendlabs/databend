@@ -38,12 +38,14 @@ use databend_meta::meta_service::JoinRequest;
 use databend_meta::meta_service::LeaveRequest;
 use databend_meta::meta_service::MetaNode;
 use maplit::btreeset;
-use meta_node::timeout;
 use pretty_assertions::assert_eq;
 use tracing::info;
 
 use crate::init_meta_ut;
-use crate::tests::meta_node;
+use crate::tests::meta_node::start_meta_node_cluster;
+use crate::tests::meta_node::start_meta_node_leader;
+use crate::tests::meta_node::start_meta_node_non_voter;
+use crate::tests::meta_node::timeout;
 use crate::tests::service::MetaSrvTestContext;
 
 #[async_entry::test(worker_threads = 5, init = "init_meta_ut!()", tracing_span = "debug")]
@@ -66,7 +68,7 @@ async fn test_meta_node_boot() -> anyhow::Result<()> {
 async fn test_meta_node_graceful_shutdown() -> anyhow::Result<()> {
     // - Start a leader then shutdown.
 
-    let (_nid0, tc) = meta_node::start_meta_node_leader().await?;
+    let (_nid0, tc) = start_meta_node_leader().await?;
     let mn0 = tc.meta_node();
 
     let mut rx0 = mn0.raft.metrics();
@@ -93,10 +95,10 @@ async fn test_meta_node_leader_and_non_voter() -> anyhow::Result<()> {
     // - Start a leader and a non-voter;
     // - Write to leader, check on non-voter.
 
-    let (_nid0, tc0) = meta_node::start_meta_node_leader().await?;
+    let (_nid0, tc0) = start_meta_node_leader().await?;
     let mn0 = tc0.meta_node();
 
-    let (_nid1, tc1) = meta_node::start_meta_node_non_voter(mn0.clone(), 1).await?;
+    let (_nid1, tc1) = start_meta_node_non_voter(mn0.clone(), 1).await?;
     let mn1 = tc1.meta_node();
 
     assert_upsert_kv_synced(vec![mn0.clone(), mn1.clone()], "metakey2").await?;
@@ -110,8 +112,7 @@ async fn test_meta_node_write_to_local_leader() -> anyhow::Result<()> {
     // - Write to the raft node on the leader, expect Ok.
     // - Write to the raft node on the non-leader, expect ForwardToLeader error.
 
-    let (mut _nlog, tcs) =
-        meta_node::start_meta_node_cluster(btreeset![0, 1, 2], btreeset![3]).await?;
+    let (mut _nlog, tcs) = start_meta_node_cluster(btreeset![0, 1, 2], btreeset![3]).await?;
     let all = test_context_nodes(&tcs);
 
     let leader_id = all[0].raft.metrics().borrow().current_leader.unwrap();
@@ -220,7 +221,7 @@ async fn test_meta_node_snapshot_replication() -> anyhow::Result<()> {
 
     info!("--- start a non_voter to receive snapshot replication");
 
-    let (_, tc1) = meta_node::start_meta_node_non_voter(mn.clone(), 1).await?;
+    let (_, tc1) = start_meta_node_non_voter(mn.clone(), 1).await?;
     log_index += 1;
 
     let mn1 = tc1.meta_node();
@@ -264,8 +265,7 @@ async fn test_meta_node_join() -> anyhow::Result<()> {
     let span = tracing::span!(tracing::Level::INFO, "test_meta_node_join");
     let _ent = span.enter();
 
-    let (mut _nlog, mut tcs) =
-        meta_node::start_meta_node_cluster(btreeset![0], btreeset![1]).await?;
+    let (mut _nlog, mut tcs) = start_meta_node_cluster(btreeset![0], btreeset![1]).await?;
     let mut all = test_context_nodes(&tcs);
     let tc0 = tcs.remove(0);
     let tc1 = tcs.remove(0);
@@ -368,8 +368,7 @@ async fn test_meta_node_leave() -> anyhow::Result<()> {
     // - Leave a node by sending a Leave request to a non-voter.
     // - Restart all nodes and check if states are restored.
 
-    let (mut _nlog, tcs) =
-        meta_node::start_meta_node_cluster(btreeset![0, 1, 2], btreeset![3]).await?;
+    let (mut _nlog, tcs) = start_meta_node_cluster(btreeset![0, 1, 2], btreeset![3]).await?;
     let mut all = test_context_nodes(&tcs);
 
     let leader_id = all[0].raft.metrics().borrow().current_leader.unwrap();
@@ -415,8 +414,7 @@ async fn test_meta_node_join_rejoin() -> anyhow::Result<()> {
     // - Join a new node.
     // - Join another new node twice.
 
-    let (mut _nlog, mut tcs) =
-        meta_node::start_meta_node_cluster(btreeset![0], btreeset![]).await?;
+    let (mut _nlog, mut tcs) = start_meta_node_cluster(btreeset![0], btreeset![]).await?;
     let mut all = test_context_nodes(&tcs);
     let _tc0 = tcs.remove(0);
 
@@ -503,10 +501,10 @@ async fn test_meta_node_restart() -> anyhow::Result<()> {
     // - Restart them.
     // - Check old data an new written data.
 
-    let (_nid0, tc0) = meta_node::start_meta_node_leader().await?;
+    let (_nid0, tc0) = start_meta_node_leader().await?;
     let mn0 = tc0.meta_node();
 
-    let (_nid1, tc1) = meta_node::start_meta_node_non_voter(mn0.clone(), 1).await?;
+    let (_nid1, tc1) = start_meta_node_non_voter(mn0.clone(), 1).await?;
     let mn1 = tc1.meta_node();
 
     let sto0 = mn0.sto.clone();
@@ -583,7 +581,7 @@ async fn test_meta_node_restart_single_node() -> anyhow::Result<()> {
     //   - TODO(xp): A new snapshot will be created and transferred  on demand.
 
     let mut log_index: u64 = 0;
-    let (_id, tc) = meta_node::start_meta_node_leader().await?;
+    let (_id, tc) = start_meta_node_leader().await?;
     // initial membeship, leader blank, add node
     log_index += 2;
 
