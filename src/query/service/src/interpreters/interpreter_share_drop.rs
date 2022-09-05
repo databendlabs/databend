@@ -47,9 +47,7 @@ impl Interpreter for DropShareInterpreter {
         let meta_api = user_mgr.get_meta_store_client();
         let resp = meta_api.drop_share(self.plan.clone().into()).await?;
 
-        if let Some(share_id) = resp.share_id {
-            save_share_spec(share_id, self.ctx.get_storage_operator()?, None).await?;
-        }
+        save_share_spec(self.ctx.get_storage_operator()?, resp.spec_vec).await?;
 
         Ok(Box::pin(DataBlockStream::create(
             self.plan.schema(),

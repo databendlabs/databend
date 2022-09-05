@@ -100,7 +100,7 @@ impl<KV: KVApi> ShareApi for KV {
                 return if req.if_not_exists {
                     Ok(CreateShareReply {
                         share_id,
-                        spec: None,
+                        spec_vec: vec![],
                     })
                 } else {
                     Err(MetaError::AppError(AppError::ShareAlreadyExists(
@@ -151,10 +151,7 @@ impl<KV: KVApi> ShareApi for KV {
                 if succ {
                     return Ok(CreateShareReply {
                         share_id,
-                        spec: Some(
-                            convert_share_meta_to_spec(self, &name_key.share_name, share_meta)
-                                .await?,
-                        ),
+                        spec_vec: get_tenant_share_spec_vec(self, name_key.tenant.clone()).await?,
                     });
                 }
             }
@@ -189,7 +186,10 @@ impl<KV: KVApi> ShareApi for KV {
                 Err(e) => {
                     if let MetaError::AppError(AppError::UnknownShare(_)) = e {
                         if req.if_exists {
-                            return Ok(DropShareReply { share_id: None });
+                            return Ok(DropShareReply {
+                                share_id: None,
+                                spec_vec: vec![],
+                            });
                         }
                     }
 
@@ -207,6 +207,8 @@ impl<KV: KVApi> ShareApi for KV {
                         if req.if_exists {
                             return Ok(DropShareReply {
                                 share_id: Some(share_id),
+                                spec_vec: get_tenant_share_spec_vec(self, name_key.tenant.clone())
+                                    .await?,
                             });
                         }
                     }
@@ -281,6 +283,7 @@ impl<KV: KVApi> ShareApi for KV {
                 if succ {
                     return Ok(DropShareReply {
                         share_id: Some(share_id),
+                        spec_vec: get_tenant_share_spec_vec(self, name_key.tenant.clone()).await?,
                     });
                 }
             }
@@ -312,7 +315,8 @@ impl<KV: KVApi> ShareApi for KV {
                         if req.if_exists {
                             return Ok(AddShareAccountsReply {
                                 share_id: None,
-                                spec: None,
+                                spec_vec: get_tenant_share_spec_vec(self, name_key.tenant.clone())
+                                    .await?,
                             });
                         }
                     }
@@ -390,10 +394,7 @@ impl<KV: KVApi> ShareApi for KV {
                 if succ {
                     return Ok(AddShareAccountsReply {
                         share_id: Some(share_id),
-                        spec: Some(
-                            convert_share_meta_to_spec(self, &name_key.share_name, share_meta)
-                                .await?,
-                        ),
+                        spec_vec: get_tenant_share_spec_vec(self, name_key.tenant.clone()).await?,
                     });
                 }
             }
@@ -430,7 +431,7 @@ impl<KV: KVApi> ShareApi for KV {
                         if req.if_exists {
                             return Ok(RemoveShareAccountsReply {
                                 share_id: None,
-                                spec: None,
+                                spec_vec: vec![],
                             });
                         }
                     }
@@ -513,10 +514,7 @@ impl<KV: KVApi> ShareApi for KV {
                 if succ {
                     return Ok(RemoveShareAccountsReply {
                         share_id: Some(share_id),
-                        spec: Some(
-                            convert_share_meta_to_spec(self, &name_key.share_name, share_meta)
-                                .await?,
-                        ),
+                        spec_vec: get_tenant_share_spec_vec(self, name_key.tenant.clone()).await?,
                     });
                 }
             }
@@ -563,8 +561,7 @@ impl<KV: KVApi> ShareApi for KV {
             if has_granted_privileges {
                 return Ok(GrantShareObjectReply {
                     share_id,
-                    spec: convert_share_meta_to_spec(self, &share_name_key.share_name, share_meta)
-                        .await?,
+                    spec_vec: vec![],
                 });
             }
 
@@ -618,12 +615,8 @@ impl<KV: KVApi> ShareApi for KV {
                 if succ {
                     return Ok(GrantShareObjectReply {
                         share_id,
-                        spec: convert_share_meta_to_spec(
-                            self,
-                            &share_name_key.share_name,
-                            share_meta,
-                        )
-                        .await?,
+                        spec_vec: get_tenant_share_spec_vec(self, share_name_key.tenant.clone())
+                            .await?,
                     });
                 }
             }
@@ -670,8 +663,7 @@ impl<KV: KVApi> ShareApi for KV {
             if !has_granted_privileges {
                 return Ok(RevokeShareObjectReply {
                     share_id,
-                    spec: convert_share_meta_to_spec(self, &share_name_key.share_name, share_meta)
-                        .await?,
+                    spec_vec: vec![],
                 });
             }
 
@@ -733,12 +725,8 @@ impl<KV: KVApi> ShareApi for KV {
                 if succ {
                     return Ok(RevokeShareObjectReply {
                         share_id,
-                        spec: convert_share_meta_to_spec(
-                            self,
-                            &share_name_key.share_name,
-                            share_meta,
-                        )
-                        .await?,
+                        spec_vec: get_tenant_share_spec_vec(self, share_name_key.tenant.clone())
+                            .await?,
                     });
                 }
             }
@@ -1354,9 +1342,46 @@ async fn drop_all_database_from_share(
     Ok(())
 }
 
+async fn get_tenant_share_spec_vec(
+    kv_api: &(impl KVApi + ?Sized),
+    tenant: String,
+) -> MetaResult<Vec<ShareSpec>> {
+    let mut share_metas = vec![];
+    let share_name_list = ShareNameIdent {
+        tenant,
+        // Using a empty share to to list all
+        share_name: "".to_string(),
+    };
+
+    let share_name_list_keys = list_keys(kv_api, &share_name_list).await?;
+    for share_name in share_name_list_keys {
+        let res = get_share_or_err(
+            kv_api,
+            &share_name,
+            format!("get_tenant_share_spec_vec: {}", &share_name),
+        )
+        .await;
+
+        let (_share_id_seq, share_id, _share_meta_seq, share_meta) = match res {
+            Ok(x) => x,
+            Err(_e) => {
+                continue;
+            }
+        };
+
+        share_metas.push(
+            convert_share_meta_to_spec(kv_api, &share_name.share_name, share_id, share_meta)
+                .await?,
+        );
+    }
+
+    Ok(share_metas)
+}
+
 async fn convert_share_meta_to_spec(
     kv_api: &(impl KVApi + ?Sized),
     share_name: &str,
+    share_id: u64,
     share_meta: ShareMeta,
 ) -> MetaResult<ShareSpec> {
     let database = if let Some(database) = share_meta.database {
@@ -1398,6 +1423,7 @@ async fn convert_share_meta_to_spec(
 
     Ok(ShareSpec {
         name: share_name.to_owned(),
+        share_id,
         version: 1,
         database,
         tables,

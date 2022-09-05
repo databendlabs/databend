@@ -62,9 +62,7 @@ impl Interpreter for AlterShareTenantsInterpreter {
             };
             let resp = meta_api.add_share_tenants(req).await?;
 
-            if let Some(share_id) = resp.share_id {
-                save_share_spec(share_id, self.ctx.get_storage_operator()?, resp.spec).await?;
-            }
+            save_share_spec(self.ctx.get_storage_operator()?, resp.spec_vec).await?;
         } else {
             let req = RemoveShareAccountsReq {
                 share_name: ShareNameIdent {
@@ -76,9 +74,7 @@ impl Interpreter for AlterShareTenantsInterpreter {
             };
             let resp = meta_api.remove_share_tenants(req).await?;
 
-            if let Some(share_id) = resp.share_id {
-                save_share_spec(share_id, self.ctx.get_storage_operator()?, resp.spec).await?;
-            }
+            save_share_spec(self.ctx.get_storage_operator()?, resp.spec_vec).await?;
         };
 
         Ok(Box::pin(DataBlockStream::create(

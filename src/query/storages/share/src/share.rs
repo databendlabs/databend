@@ -27,33 +27,22 @@ pub struct ShareSpecVec {
     share_specs: BTreeMap<u64, ext::ShareSpecExt>,
 }
 
-pub async fn save_share_spec(
-    share_id: u64,
-    operator: Operator,
-    spec: Option<ShareSpec>,
-) -> Result<()> {
-    let location = format!("{}/share_specs.json", SHARE_CONFIG_PREFIX);
-    let mut spec_vec: ShareSpecVec = match operator.object(&location).read().await {
-        Ok(data) => serde_json::from_slice(&data)?,
-        Err(err) => {
-            if err.kind() == std::io::ErrorKind::NotFound {
-                ShareSpecVec::default()
-            } else {
-                return Err(err.into());
-            }
-        }
-    };
-
-    if let Some(spec) = spec {
-        let share_spec_ext = ext::ShareSpecExt::from_share_spec(spec, &operator);
-        spec_vec.share_specs.insert(share_id, share_spec_ext);
-    } else {
-        spec_vec.share_specs.remove(&share_id);
+pub async fn save_share_spec(operator: Operator, spec_vec: Vec<ShareSpec>) -> Result<()> {
+    // empty spec_vec means there is no change in share.
+    if spec_vec.is_empty() {
+        return Ok(());
     }
 
+    let location = format!("{}/share_specs.json", SHARE_CONFIG_PREFIX);
+    let mut share_spec_vec = ShareSpecVec::default();
+    for spec in spec_vec {
+        let share_id = spec.share_id;
+        let share_spec_ext = ext::ShareSpecExt::from_share_spec(spec, &operator);
+        share_spec_vec.share_specs.insert(share_id, share_spec_ext);
+    }
     operator
         .object(&location)
-        .write(serde_json::to_vec(&spec_vec)?)
+        .write(serde_json::to_vec(&share_spec_vec)?)
         .await?;
 
     Ok(())
