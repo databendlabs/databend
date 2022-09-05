@@ -52,7 +52,6 @@ use crate::servers::mysql::MySQLFederated;
 use crate::servers::mysql::MYSQL_VERSION;
 use crate::sessions::QueryContext;
 use crate::sessions::Session;
-use crate::sessions::SessionManager;
 use crate::sessions::TableContext;
 use crate::sql::plans::Plan;
 use crate::sql::DfParser;
@@ -85,12 +84,6 @@ fn has_result_set_by_plan_node(plan: &PlanNode) -> bool {
 struct InteractiveWorkerBase<W: AsyncWrite + Send + Unpin> {
     session: Arc<Session>,
     generic_hold: PhantomData<W>,
-}
-
-impl<W: AsyncWrite + Send + Unpin> Drop for InteractiveWorkerBase<W> {
-    fn drop(&mut self) {
-        SessionManager::instance().destroy_session(&self.session.get_id())
-    }
 }
 
 pub struct InteractiveWorker<W: AsyncWrite + Send + Unpin> {
