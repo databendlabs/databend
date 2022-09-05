@@ -17,6 +17,6 @@ use std::collections::HashMap;
 use common_meta_types::AuthInfo;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct IAMConfig {
+pub struct IDMConfig {
     pub users: HashMap<String, AuthInfo>,
 }

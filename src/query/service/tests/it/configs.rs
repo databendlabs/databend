@@ -143,7 +143,7 @@ root = ""
 meta_store_address = "127.0.0.1:9083"
 protocol = "binary"
 
-[iam]
+[idm]
 users = []
 "#;
 
@@ -539,7 +539,7 @@ root = ""
 meta_store_address = "127.0.0.1:9083"
 protocol = "binary"
 
-[iam]
+[idm]
 users = []
     "#
         .as_bytes(),

@@ -35,12 +35,12 @@ use common_meta_store::MetaStoreProvider;
 use common_meta_types::AuthInfo;
 use once_cell::sync::OnceCell;
 
-use crate::iam_config::IAMConfig;
+use crate::idm_config::IDMConfig;
 
 pub struct UserApiProvider {
     meta: MetaStore,
     client: Arc<dyn KVApi>,
-    iam_config: IAMConfig,
+    idm_config: IDMConfig,
 }
 
 static USER_API_PROVIDER: OnceCell<Singleton<Arc<UserApiProvider>>> = OnceCell::new();
@@ -48,10 +48,10 @@ static USER_API_PROVIDER: OnceCell<Singleton<Arc<UserApiProvider>>> = OnceCell::
 impl UserApiProvider {
     pub async fn init(
         conf: RpcClientConf,
-        iam_config: IAMConfig,
+        idm_config: IDMConfig,
         v: Singleton<Arc<UserApiProvider>>,
     ) -> Result<()> {
-        v.init(Self::try_create(conf, iam_config).await?)?;
+        v.init(Self::try_create(conf, idm_config).await?)?;
 
         USER_API_PROVIDER.set(v).ok();
         Ok(())
@@ -59,18 +59,18 @@ impl UserApiProvider {
 
     pub async fn try_create(
         conf: RpcClientConf,
-        iam_config: IAMConfig,
+        idm_config: IDMConfig,
     ) -> Result<Arc<UserApiProvider>> {
         let client = MetaStoreProvider::new(conf).try_get_meta_store().await?;
         Ok(Arc::new(UserApiProvider {
             meta: client.clone(),
             client: client.arc(),
-            iam_config,
+            idm_config,
         }))
     }
 
     pub async fn try_create_simple(conf: RpcClientConf) -> Result<Arc<UserApiProvider>> {
-        Self::try_create(conf, IAMConfig::default()).await
+        Self::try_create(conf, IDMConfig::default()).await
     }
 
     pub fn instance() -> Arc<UserApiProvider> {
@@ -109,6 +109,6 @@ impl UserApiProvider {
     }
 
     pub fn get_configured_user(&self, user_name: &str) -> Option<&AuthInfo> {
-        self.iam_config.users.get(user_name)
+        self.idm_config.users.get(user_name)
     }
 }

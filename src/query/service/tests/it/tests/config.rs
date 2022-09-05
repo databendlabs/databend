@@ -15,7 +15,7 @@
 use std::collections::HashMap;
 
 use common_meta_types::AuthInfo;
-use common_users::iam_config::IAMConfig;
+use common_users::idm_config::IDMConfig;
 use databend_query::Config;
 
 pub struct ConfigBuilder {
@@ -65,7 +65,7 @@ impl ConfigBuilder {
     pub fn add_user(mut self, user_name: &str, auth_info: AuthInfo) -> ConfigBuilder {
         let mut users = HashMap::new();
         users.insert(user_name.to_string(), auth_info);
-        self.conf.iam = IAMConfig { users };
+        self.conf.idm = IDMConfig { users };
         self
     }
 

@@ -37,7 +37,7 @@ use common_storage::StorageS3Config as InnerStorageS3Config;
 use common_tracing::Config as InnerLogConfig;
 use common_tracing::FileConfig as InnerFileLogConfig;
 use common_tracing::StderrConfig as InnerStderrLogConfig;
-use common_users::iam_config::IAMConfig as InnerIAMConfig;
+use common_users::idm_config::IDMConfig as InnerIDMConfig;
 use serde::Deserialize;
 use serde::Serialize;
 use serfig::collectors::from_env;
@@ -95,8 +95,7 @@ pub struct Config {
     pub catalog: HiveCatalogConfig,
 
     #[clap(skip)]
-    #[serde(rename = "IAM")]
-    pub iam: IAMConfig,
+    pub idm: IDMConfig,
 }
 
 impl Default for Config {
@@ -149,7 +148,7 @@ impl From<InnerConfig> for Config {
             meta: inner.meta.into(),
             storage: inner.storage.into(),
             catalog: inner.catalog.into(),
-            iam: inner.iam.into(),
+            idm: inner.idm.into(),
         }
     }
 }
@@ -166,7 +165,7 @@ impl TryInto<InnerConfig> for Config {
             meta: self.meta.try_into()?,
             storage: self.storage.try_into()?,
             catalog: self.catalog.try_into()?,
-            iam: self.iam.try_into()?,
+            idm: self.idm.try_into()?,
         })
     }
 }
@@ -1231,24 +1230,24 @@ impl Debug for MetaConfig {
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct IAMConfig {
+pub struct IDMConfig {
     users: Vec<UserConfig>,
 }
 
-impl TryInto<InnerIAMConfig> for IAMConfig {
+impl TryInto<InnerIDMConfig> for IDMConfig {
     type Error = ErrorCode;
 
-    fn try_into(self) -> Result<InnerIAMConfig> {
+    fn try_into(self) -> Result<InnerIDMConfig> {
         let mut users = HashMap::new();
         for c in self.users.into_iter() {
             users.insert(c.name.clone(), c.auth.try_into()?);
         }
-        Ok(InnerIAMConfig { users })
+        Ok(InnerIDMConfig { users })
     }
 }
 
-impl From<InnerIAMConfig> for IAMConfig {
-    fn from(inner: InnerIAMConfig) -> Self {
+impl From<InnerIDMConfig> for IDMConfig {
+    fn from(inner: InnerIDMConfig) -> Self {
         Self {
             users: inner
                 .users
