@@ -1,4 +1,4 @@
--- TODO: disable temporary util we migrate window function to v2
+-- TODO: disable temporarily util we migrate window function to v2
 
 -- statement ok
 -- DROP DATABASE IF EXISTS db1;
