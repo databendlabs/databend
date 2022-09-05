@@ -12,8 +12,9 @@ export function getLatest(callBack){
   let [cacheReleast, setCacheReleast] = useSessionStorageState(cacheKey);
   const [cacheTime, setCacheTime] = useSessionStorageState(cacheTimeKey);
   const [cacheTagName, setCacheTagName] = useLocalStorageState(cacheTagNameKey);
+  const [cacheTagData, setCacheData] = useLocalStorageState('CACHE_RELEASE_DATA');
   useMount(()=>{  
-    if (ExecutionEnvironment.canUseDOM) {
+    if (ExecutionEnvironment.canUseDOM && !callBack) {
       setTimeout(()=>{
         const timeStamp = new Date().getTime();
         // It's only cached for an hour
@@ -37,11 +38,14 @@ export function getLatest(callBack){
           }
         }
       });
+    } else {
+      getData();
     }
   })
   function getData(){
     if (cacheReleast) {
       setText(cacheReleast?.name);
+      upData(cacheReleast);
     } else {
       axios.get('https://api.github.com/repos/datafuselabs/databend/releases')
         .then(res=>{
@@ -52,23 +56,33 @@ export function getLatest(callBack){
             setCacheTime(new Date().getTime())
             setText(name);
             setCacheTagName(name);
+            setCacheData(data)
+            upData(data);
           } else {
-            setText()
+            dealError();
           }
         })
         .catch(()=>{
-          setText()
+          dealError();
         })
     }
   }
+  function dealError() {
+    setText()
+    upData(cacheTagData);
+  }
+  function upData(d) {
+    callBack && callBack(d);
+  }
   function setText(text) {
-    // when error default value v0.8.25
-    const name = text ? text : (cacheTagName || 'v0.8.25');
-    callBack && callBack(name);
-    const dom = document.querySelectorAll('.variable');
-    for (let div of dom){
-      if (div.innerHTML === '${version}') {
-        div.innerText = name;
+    if (!callBack) {
+      // when error default value v0.8.25
+      const name = text ? text : (cacheTagName || 'v0.8.25');
+      const dom = document.querySelectorAll('.variable');
+      for (let div of dom){
+        if (div.innerHTML === '${version}') {
+          div.innerText = name;
+        }
       }
     }
   }

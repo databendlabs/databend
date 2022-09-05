@@ -5,14 +5,54 @@ import { getLatest } from '@site/src/plugins/releaseVersion';
 import styles from './styles.module.scss';
 import Layout from '@theme/Layout';
 import clsx from 'clsx';
+import { bytesToSize } from '@site/src/utils/tools';
+import { useLocalStorageState } from 'ahooks';
 interface IRow {
   name: string;
-  tagName: string;
-  osType: string;
+  sort?: number;
+  tagName?: string;
+  osType?: string;
+  size: number;
+  browser_download_url?: string;
 }
+const LINUX_GENERIC_X86 = 'Linux Generic(x86, 64-bit)';
+const LINUX_GENERIC_ARM = 'Linux Generic(ARM, 64-bit)';
+const MAC_X86 = 'macOS (x86, 64-bit)';
+const MAC_ARM = 'macOS (ARM, 64-bit)';
 const Releases: FC = (): ReactElement=> {
-  const [releaseData, setReleaseData] = useState<IRow[]>([]);
-  const DOWN_LINK = 'https://github.com/datafuselabs/databend/releases/download';
+  const [cacheTagName] = useLocalStorageState<string>('global-cache-tag-name');
+  const tagName = cacheTagName as string || 'v0.8.25';
+  const DOWN_LINK = 'https://github.com/datafuselabs/databend/releases/download/';
+  const [releaseData, setReleaseData] = useState<IRow[]>([
+    { 
+      name: `databend-${tagName}-aarch64-unknown-linux-musl.tar.gz`, 
+      tagName, 
+      osType: LINUX_GENERIC_ARM, 
+      size: 0,
+      browser_download_url: `${DOWN_LINK}${tagName}/${tagName}-aarch64-unknown-linux-musl.tar.gz`
+    },
+    { 
+      name: `databend-${tagName}-x86_64-unknown-linux-musl.tar.gz`, 
+      tagName, 
+      osType: LINUX_GENERIC_X86, 
+      size: 0, 
+      browser_download_url: `${DOWN_LINK}${tagName}/${tagName}-aarch64-apple-darwin.tar.gz`
+    },
+    { 
+      name: `databend-${tagName}-aarch64-apple-darwin.tar.gz`,
+      tagName,
+      osType: MAC_ARM, 
+      size: 0,
+      browser_download_url: `${DOWN_LINK}${tagName}/${tagName}-aarch64-apple-darwin.tar.gz`
+    },
+    { 
+      name: `databend-${tagName}-x86_64-apple-darwin.tar.gz`, 
+      tagName, 
+      osType: MAC_X86, 
+      size: 0,
+      browser_download_url: `${DOWN_LINK}${tagName}/${tagName}-x86_64-apple-darwin.tar.gz`
+    }
+  ]);
   const columns = [
     {
       title: 'Arch',
@@ -35,12 +75,20 @@ const Releases: FC = (): ReactElement=> {
       }
     },
     {
+      title: 'Size',
+      dataIndex: 'size',
+      key: 'size',
+      render(size: number) {
+        return <div className={styles.tagName}>{size>0 && bytesToSize(size)}</div>
+      }
+    },
+    {
       title: 'download',
       dataIndex: 'osType',
       key: 'osType',
-      render(osType: string, record: IRow) {
-        const {tagName, name} = record;
-        return <a className={clsx('button button--secondary', styles.download)} href={`${DOWN_LINK}/${tagName}/${name}`}>Download</a>
+      render(o: string, record: IRow) {
+        const {browser_download_url} = record;
+        return <a className={clsx('button button--secondary', styles.download)} href={`${browser_download_url}`}>Download</a>
       }
     }
   ];
@@ -52,14 +100,32 @@ const Releases: FC = (): ReactElement=> {
         <div className={styles.table}>
           <>
             {
-              getLatest((tagName: string)=> {
-                const data = [
-                  { name: `databend-${tagName}-x86_64-unknown-linux-musl.tar.gz`, tagName, osType: 'Linux Generic(x86, 64-bit)'},
-                  { name: `databend-${tagName}-aarch64-unknown-linux-musl.tar.gz`, tagName, osType: 'Linux Generic(ARM, 64-bit)'},
-                  { name: `databend-${tagName}-x86_64-apple-darwin.tar.gz`, tagName, osType: 'macOS (x86, 64-bit)'},
-                  { name: `databend-${tagName}-aarch64-apple-darwin.tar.gz`, tagName, osType: 'macOS (ARM, 64-bit)'},
-                ];
-                setReleaseData(data);
+              getLatest((releaseData: {assets: IRow[], tag_name: string})=> {
+                const { assets, tag_name } = releaseData || {};
+                const reslut = assets
+                ?.filter((item)=> {
+                  item.tagName = tag_name;
+                  if (item?.name?.includes('-apple-')) {
+                    item.sort = 1;
+                    if (item?.name?.includes('x86')) {
+                      item.osType = MAC_X86;
+                    } else {
+                      item.osType = MAC_ARM;
+                    }
+                  } else {
+                    item.sort = 0;
+                    if (item?.name?.includes('x86')) {
+                      item.osType = LINUX_GENERIC_X86;
+                    } else {
+                      item.osType = LINUX_GENERIC_ARM;
+                    }
+                  }
+                  return !item.name?.includes('linux-gnu');
+                })
+                ?.sort((a, b)=> {
+                  return a.sort - b.sort;
+                })
+                setReleaseData(reslut);
               })
             }
             <Table showHeader={false} rowKey="name" columns={columns} data={releaseData} />
