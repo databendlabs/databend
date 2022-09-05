@@ -61,7 +61,7 @@ const Releases: FC = (): ReactElement=> {
                   { name: `databend-${tagName}-aarch64-unknown-linux-musl.tar.gz`, tagName, osType: 'Linux Generic(ARM, 64-bit)'},
                   { name: `databend-${tagName}-x86_64-apple-darwin.tar.gz`, tagName, osType: 'macOS (x86, 64-bit)'},
                   { name: `databend-${tagName}-x86_64-unknown-linux-gnu.tar.gz`, tagName, osType: 'Ubuntu Linux (x86, 64-bit)'},
-                  { name: `databend-${tagName}-x86_64-unknown-linux-musl.tar.gz`, tagName, osType: 'Linux Generic(ARx86M, 64-bit)'},
+                  { name: `databend-${tagName}-x86_64-unknown-linux-musl.tar.gz`, tagName, osType: 'Linux Generic(x86, 64-bit)'},
                 ];
                 setReleaseData(data);
               })
