@@ -383,11 +383,11 @@ impl BlockReader {
             Compression::Lz4 => {
                 let err_msg = r#"Deprecated compression algorithm [Lz4] detected.
                 
-                                        Legacy compression algorithm [Lz4] no longer supported.
+                                        The Legacy compression algorithm [Lz4] is no longer supported.
                                         To migrate data from old format, please consider re-create the table, 
-                                        by using an old compatiable version [v0.8.25-nightly … v0.7.12-nightly].
+                                        by using an old compatible version [v0.8.25-nightly … v0.7.12-nightly].
                                         
-                                        - Bring up the compatiable version of databend-query
+                                        - Bring up the compatible version of databend-query
                                         - re-create the table
                                            Suppose the name of table is T
                                             ~~~
