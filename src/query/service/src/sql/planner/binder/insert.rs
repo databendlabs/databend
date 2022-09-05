@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::io::Cursor;
 use std::ops::Not;
 use std::sync::Arc;
@@ -37,8 +38,6 @@ use common_formats::FormatFactory;
 use common_io::prelude::BufferReader;
 use common_io::prelude::*;
 use common_pipeline_transforms::processors::transforms::Transform;
-use common_streams::NDJsonSourceBuilder;
-use common_streams::Source;
 use tracing::debug;
 
 use crate::evaluator::EvalNode;
@@ -198,31 +197,19 @@ impl<'a> Binder {
                 let block = source.read(&mut reader).await?;
                 Ok(InsertInputSource::Values(InsertValueBlock { block }))
             }
-            Some("JSONEACHROW") => {
-                let builder = NDJsonSourceBuilder::create(schema.clone(), settings);
-                let cursor = futures::io::Cursor::new(stream_str.as_bytes());
-                let mut source = builder.build(cursor)?;
-                let mut blocks = Vec::new();
-                while let Some(v) = source.read().await? {
-                    blocks.push(v);
-                }
-                let block = DataBlock::concat_blocks(&blocks)?;
-                Ok(InsertInputSource::Values(InsertValueBlock { block }))
-            }
             // format factory
             Some(name) => {
-                let input_format =
-                    FormatFactory::instance().get_input(name, schema.clone(), settings)?;
+                let input_format = FormatFactory::instance().get_input(name, schema, settings)?;
 
                 let data_slice = stream_str.as_bytes();
                 let mut input_state = input_format.create_state();
                 let skip_size = input_format.skip_header(data_slice, &mut input_state, 0)?;
 
-                let split = FileSplit {
+                let split = FileSplitCow {
                     path: None,
                     start_offset: 0,
                     start_row: 0,
-                    buf: data_slice[skip_size..].to_owned(),
+                    buf: Cow::from(&data_slice[skip_size..]),
                 };
 
                 let blocks = input_format.deserialize_complete_split(split)?;

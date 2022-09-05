@@ -79,7 +79,9 @@ impl Processor for Deserializer {
 
     fn process(&mut self) -> Result<()> {
         if let Some(split) = self.input_data.take() {
-            let blocks = self.input_format.deserialize_complete_split(split)?;
+            let blocks = self
+                .input_format
+                .deserialize_complete_split(split.to_cow())?;
             self.output_data = blocks.into();
         }
 

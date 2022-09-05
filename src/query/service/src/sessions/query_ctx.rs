@@ -18,7 +18,6 @@ use std::net::SocketAddr;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
-use std::sync::atomic::Ordering::Acquire;
 use std::sync::Arc;
 
 use chrono_tz::Tz;
@@ -85,8 +84,6 @@ impl QueryContext {
     }
 
     pub fn create_from_shared(shared: Arc<QueryContextShared>) -> Arc<QueryContext> {
-        shared.increment_ref_count();
-
         debug!("Create QueryContext");
 
         Arc::new(QueryContext {
@@ -442,25 +439,5 @@ impl TrySpawn for QueryContext {
 impl std::fmt::Debug for QueryContext {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self.get_current_user())
-    }
-}
-
-impl Drop for QueryContext {
-    fn drop(&mut self) {
-        self.shared.destroy_context_ref()
-    }
-}
-
-impl QueryContextShared {
-    pub(in crate::sessions) fn destroy_context_ref(&self) {
-        if self.ref_count.fetch_sub(1, Ordering::Release) == 1 {
-            std::sync::atomic::fence(Acquire);
-            debug!("Destroy QueryContext");
-            self.session.destroy_context_shared();
-        }
-    }
-
-    pub(in crate::sessions) fn increment_ref_count(&self) {
-        self.ref_count.fetch_add(1, Ordering::Relaxed);
     }
 }

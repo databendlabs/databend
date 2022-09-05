@@ -22,7 +22,6 @@ arrow-default = [
 ]
 default = ["arrow-default", "parquet-default"]
 parquet-default = [
-    "parquet2/non_standard_legacy_lz4",
     "parquet2/lz4",
     "parquet2/zstd",
     "parquet2/snappy",
