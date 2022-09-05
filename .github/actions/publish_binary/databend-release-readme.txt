@@ -3,7 +3,7 @@ Thank you for downloading Databend, an open-source elastic and workload-aware mo
 Get started with a standalone Databend:
 1. Edit the configuration files in 'configs' to customize Databend settings.
 2. Start Databend: ./scripts/start.sh
-3. Run queries with your MySQL / ClickHouse client or an HTTP handler.
+3. Run queries with MySQL client or ClickHouse / Databend HTTP handler.
 4. Stop Databend: ./scripts/stop.sh
 
 NOTE: If you deploy Databend with a self-hosted S3-compatible object storage, 

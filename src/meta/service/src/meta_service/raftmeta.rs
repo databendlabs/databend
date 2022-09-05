@@ -728,15 +728,11 @@ impl MetaNode {
         }
     }
 
-    pub async fn get_status(&self) -> MetaResult<MetaNodeStatus> {
+    pub async fn get_status(&self) -> Result<MetaNodeStatus, MetaError> {
         let voters = self.get_voters().await?;
         let non_voters = self.get_non_voters().await?;
 
-        let endpoint = self
-            .sto
-            .get_node_endpoint(&self.sto.id)
-            .await
-            .map_err(|e| MetaError::MetaServiceError(format!("get self endpoint failed: {}", e)))?;
+        let endpoint = self.sto.get_node_endpoint(&self.sto.id).await?;
 
         let db_size = self
             .sto

@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::convert::TryFrom;
 use std::fmt;
 use std::net::SocketAddr;
 use std::str::FromStr;
@@ -23,8 +22,6 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use crate::Endpoint;
-use crate::MetaError;
-use crate::MetaResult;
 
 /// A slot is a virtual and intermediate allocation unit in a distributed storage.
 /// The key of an object is mapped to a slot by some hashing algo.
@@ -64,20 +61,6 @@ pub struct NodeInfo {
     pub cpu_nums: u64,
     pub version: u32,
     pub flight_address: String,
-}
-
-impl TryFrom<Vec<u8>> for NodeInfo {
-    type Error = MetaError;
-
-    fn try_from(value: Vec<u8>) -> MetaResult<Self> {
-        match serde_json::from_slice(&value) {
-            Ok(user_info) => Ok(user_info),
-            Err(serialize_error) => Err(MetaError::IllegalUserInfoFormat(format!(
-                "Cannot deserialize cluster id from bytes. cause {}",
-                serialize_error
-            ))),
-        }
-    }
 }
 
 impl NodeInfo {
