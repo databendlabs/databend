@@ -102,7 +102,7 @@ impl BlockReader {
                 let page_meta_data = PageMetaData {
                     column_start: meta.offset,
                     num_values: meta.num_values as i64,
-                    compression: Self::to_parquet_compression(compression),
+                    compression: Self::to_parquet_compression(compression)?,
                     descriptor: column_descriptor.descriptor.clone(),
                 };
                 let pages = PageReader::new_with_page_meta(
@@ -111,9 +111,9 @@ impl BlockReader {
                     Arc::new(|_, _| true),
                     vec![],
                 );
-                BasicDecompressor::new(pages, vec![])
+                Ok(BasicDecompressor::new(pages, vec![]))
             })
-            .collect::<Vec<_>>();
+            .collect::<Result<Vec<_>>>()?;
 
         let types = column_descriptors
             .iter()
@@ -378,10 +378,28 @@ impl BlockReader {
         }
     }
 
-    fn to_parquet_compression(meta_compression: &Compression) -> ParquetCompression {
+    fn to_parquet_compression(meta_compression: &Compression) -> Result<ParquetCompression> {
         match meta_compression {
-            Compression::Lz4 => ParquetCompression::Lz4,
-            Compression::Lz4Raw => ParquetCompression::Lz4Raw,
+            Compression::Lz4 => {
+                let err_msg = r#"Deprecated compression algorithm [Lz4] detected.
+                
+                                        Legacy compression algorithm [Lz4] no longer supported.
+                                        To migrate data from old format, please consider re-create the table, 
+                                        by using an old compatiable version [v0.8.25-nightly … v0.7.12-nightly].
+                                        
+                                        - Bring up the compatiable version of databend-query
+                                        - re-create the table
+                                           Suppose the name of table is T
+                                            ~~~
+                                            create table tmp_t as select * from T;
+                                            drop table T all;
+                                            alter table tmp_t rename to T;
+                                            ~~~
+                                        Please note that the history of table T WILL BE LOST.
+                                       "#;
+                Err(ErrorCode::StorageOther(err_msg))
+            }
+            Compression::Lz4Raw => Ok(ParquetCompression::Lz4Raw),
         }
     }
 
