@@ -163,6 +163,7 @@ impl ShareApiTestSuite {
             info!("create share res: {:?}", res);
             let res = res.unwrap();
             assert_eq!(1, res.share_id, "first database id is 1");
+            assert_eq!(1, res.spec_vec.unwrap().len());
             share_id = res.share_id;
 
             let (share_name_seq, share_name_ret) =
@@ -276,6 +277,9 @@ impl ShareApiTestSuite {
 
             let res = mt.create_share(req).await;
             info!("add share account res: {:?}", res);
+            assert!(res.is_ok());
+            let res = res.unwrap();
+            assert_eq!(2, res.spec_vec.unwrap().len());
 
             let req = CreateShareReq {
                 if_not_exists: false,
@@ -286,6 +290,9 @@ impl ShareApiTestSuite {
 
             let res = mt.create_share(req).await;
             info!("add share account res: {:?}", res);
+            assert!(res.is_ok());
+            let res = res.unwrap();
+            assert_eq!(1, res.spec_vec.unwrap().len());
         }
 
         info!("--- add account account1");
@@ -913,6 +920,7 @@ impl ShareApiTestSuite {
 
             let res = mt.grant_share_object(req).await?;
             info!("grant object res: {:?}", res);
+            assert_eq!(1, res.spec_vec.unwrap().len());
 
             let tbl_ob_name =
                 ShareGrantObjectName::Table(db_name.to_string(), tbl_name.to_string());
@@ -925,6 +933,7 @@ impl ShareApiTestSuite {
 
             let res = mt.grant_share_object(req).await?;
             info!("grant object res: {:?}", res);
+            assert_eq!(1, res.spec_vec.unwrap().len());
         }
 
         info!("--- get all share objects");

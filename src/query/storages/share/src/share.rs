@@ -63,6 +63,7 @@ mod ext {
     #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
     pub(super) struct ShareSpecExt {
         name: String,
+        share_id: u64,
         version: u64,
         database: Option<WithLocation<ShareDatabaseSpec>>,
         tables: Vec<WithLocation<ShareTableSpec>>,
@@ -73,6 +74,7 @@ mod ext {
         pub fn from_share_spec(spec: ShareSpec, operator: &Operator) -> Self {
             Self {
                 name: spec.name,
+                share_id: spec.share_id,
                 version: spec.version,
                 database: spec.database.map(|db_spec| WithLocation {
                     location: shared_database_prefix(operator, db_spec.id),
@@ -132,6 +134,7 @@ mod ext {
             let share_spec = ShareSpec {
                 name: "test_share_name".to_string(),
                 version: 1,
+                share_id: 1,
                 database: Some(ShareDatabaseSpec {
                     name: "share_database".to_string(),
                     id: 1,
@@ -161,6 +164,7 @@ mod ext {
             let expected = json!({
               "name": "test_share_name",
               "version": 1,
+              "share_id": 1,
               "database": {
                 "location": format!("{}/1/", test_root_str),
                 "name": "share_database",
