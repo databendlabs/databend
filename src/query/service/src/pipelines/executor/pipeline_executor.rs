@@ -20,6 +20,7 @@ use std::thread::JoinHandle;
 
 use common_base::base::tokio;
 use common_base::base::tokio::sync::Notify;
+use common_base::base::GlobalIORuntime;
 use common_base::base::Runtime;
 use common_base::base::Thread;
 use common_base::base::TrySpawn;
@@ -54,7 +55,6 @@ pub struct PipelineExecutor {
 
 impl PipelineExecutor {
     pub fn create(
-        async_rt: Arc<Runtime>,
         query_need_abort: Arc<AtomicBool>,
         mut pipeline: Pipeline,
         settings: ExecutorSettings,
@@ -64,7 +64,6 @@ impl PipelineExecutor {
 
         assert_ne!(threads_num, 0, "Pipeline max threads cannot equals zero.");
         Self::try_create(
-            async_rt,
             query_need_abort,
             RunningGraph::create(pipeline)?,
             threads_num,
@@ -74,7 +73,6 @@ impl PipelineExecutor {
     }
 
     pub fn from_pipelines(
-        async_rt: Arc<Runtime>,
         query_need_abort: Arc<AtomicBool>,
         mut pipelines: Vec<Pipeline>,
         settings: ExecutorSettings,
@@ -96,7 +94,6 @@ impl PipelineExecutor {
 
         assert_ne!(threads_num, 0, "Pipeline max threads cannot equals zero.");
         Self::try_create(
-            async_rt,
             query_need_abort,
             RunningGraph::from_pipelines(pipelines)?,
             threads_num,
@@ -112,7 +109,6 @@ impl PipelineExecutor {
     }
 
     fn try_create(
-        async_rt: Arc<Runtime>,
         query_need_abort: Arc<AtomicBool>,
         graph: RunningGraph,
         threads_num: usize,
@@ -138,7 +134,7 @@ impl PipelineExecutor {
                 query_need_abort,
                 global_tasks_queue,
                 on_finished_callback,
-                async_runtime: async_rt,
+                async_runtime: GlobalIORuntime::instance(),
                 settings,
                 finished_notify: Notify::new(),
                 execute_timeout: Arc::new(AtomicBool::new(false)),

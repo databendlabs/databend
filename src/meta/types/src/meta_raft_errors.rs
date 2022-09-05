@@ -21,7 +21,7 @@ use thiserror::Error;
 
 pub type ForwardToLeader = openraft::error::ForwardToLeader;
 
-// represent raft related errors
+/// Raft protocol related errors
 #[derive(Error, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub enum MetaRaftError {
     #[error(transparent)]
@@ -33,7 +33,7 @@ pub enum MetaRaftError {
     #[error("{0}")]
     ConsistentReadError(String),
 
-    #[error("{0}")]
+    #[error(transparent)]
     RaftFatal(#[from] Fatal),
 
     #[error("{0}")]

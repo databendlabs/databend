@@ -214,7 +214,7 @@ pub trait FormatDiagnostic {
         let mut row_data: Vec<u8> = Vec::new();
         row_data.extend_from_slice(buf);
         let memory = std::mem::take(&mut row_data);
-        let memory_reader = MemoryReader::new(memory);
+        let memory_reader = memory.as_slice();
         let mut checkpoint_reader = NestedCheckpointReader::new(memory_reader);
 
         if checkpoint_reader.eof()? {

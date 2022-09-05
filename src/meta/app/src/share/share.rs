@@ -27,6 +27,7 @@ use enumflags2::bitflags;
 use enumflags2::BitFlags;
 
 use crate::schema::DatabaseMeta;
+use crate::schema::TableMeta;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
 pub struct ShareNameIdent {
@@ -88,6 +89,8 @@ pub struct CreateShareReq {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct CreateShareReply {
     pub share_id: u64,
+
+    pub spec_vec: Option<Vec<ShareSpec>>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -97,7 +100,10 @@ pub struct DropShareReq {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct DropShareReply {}
+pub struct DropShareReply {
+    pub share_id: Option<u64>,
+    pub spec_vec: Option<Vec<ShareSpec>>,
+}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct AddShareAccountsReq {
@@ -108,7 +114,10 @@ pub struct AddShareAccountsReq {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct AddShareAccountsReply {}
+pub struct AddShareAccountsReply {
+    pub share_id: Option<u64>,
+    pub spec_vec: Option<Vec<ShareSpec>>,
+}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct RemoveShareAccountsReq {
@@ -118,7 +127,10 @@ pub struct RemoveShareAccountsReq {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct RemoveShareAccountsReply {}
+pub struct RemoveShareAccountsReply {
+    pub share_id: Option<u64>,
+    pub spec_vec: Option<Vec<ShareSpec>>,
+}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct ShowShareOfReq {
@@ -153,8 +165,8 @@ impl Display for ShareGrantObjectName {
 pub enum ShareGrantObjectSeqAndId {
     // db_meta_seq, db_id, DatabaseMeta
     Database(u64, u64, DatabaseMeta),
-    // db_id, table_meta_seq, table_id,
-    Table(u64, u64, u64),
+    // db_id, table_meta_seq, table_id, table_meta
+    Table(u64, u64, u64, TableMeta),
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -166,7 +178,10 @@ pub struct GrantShareObjectReq {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct GrantShareObjectReply {}
+pub struct GrantShareObjectReply {
+    pub share_id: u64,
+    pub spec_vec: Option<Vec<ShareSpec>>,
+}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct RevokeShareObjectReq {
@@ -177,7 +192,10 @@ pub struct RevokeShareObjectReq {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct RevokeShareObjectReply {}
+pub struct RevokeShareObjectReply {
+    pub share_id: u64,
+    pub spec_vec: Option<Vec<ShareSpec>>,
+}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct GetShareGrantObjectReq {
@@ -278,7 +296,7 @@ impl ShareGrantObject {
             ShareGrantObjectSeqAndId::Database(_seq, db_id, _meta) => {
                 ShareGrantObject::Database(*db_id)
             }
-            ShareGrantObjectSeqAndId::Table(_db_id, _seq, table_id) => {
+            ShareGrantObjectSeqAndId::Table(_db_id, _seq, table_id, _meta) => {
                 ShareGrantObject::Table(*table_id)
             }
         }
@@ -588,7 +606,7 @@ impl ShareMeta {
                 },
                 None => Ok(false),
             },
-            ShareGrantObjectSeqAndId::Table(_db_id, _table_seq, table_id) => {
+            ShareGrantObjectSeqAndId::Table(_db_id, _table_seq, table_id, _meta) => {
                 let key = ShareGrantObject::Table(*table_id).to_string();
                 match self.entries.get(&key) {
                     Some(entry) => Ok(entry.has_granted_privileges(privileges)),
@@ -610,4 +628,39 @@ pub struct ShareInfo {
     pub ident: ShareIdent,
     pub name_ident: ShareNameIdent,
     pub meta: ShareMeta,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
+pub struct ShareTableSpec {
+    pub name: String,
+    pub database_id: u64,
+    pub table_id: u64,
+    pub presigned_url_timeout: String,
+}
+
+impl ShareTableSpec {
+    pub fn new(name: &str, database_id: u64, table_id: u64) -> Self {
+        ShareTableSpec {
+            name: name.to_owned(),
+            database_id,
+            table_id,
+            presigned_url_timeout: "120s".to_string(),
+        }
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
+pub struct ShareDatabaseSpec {
+    pub name: String,
+    pub id: u64,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
+pub struct ShareSpec {
+    pub name: String,
+    pub share_id: u64,
+    pub version: u64,
+    pub database: Option<ShareDatabaseSpec>,
+    pub tables: Vec<ShareTableSpec>,
+    pub tenants: Vec<String>,
 }
