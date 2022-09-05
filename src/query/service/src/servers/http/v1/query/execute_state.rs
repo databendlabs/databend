@@ -22,6 +22,7 @@ use common_base::base::tokio::sync::mpsc;
 use common_base::base::tokio::sync::RwLock;
 use common_base::base::GlobalIORuntime;
 use common_base::base::ProgressValues;
+use common_base::base::Thread;
 use common_base::base::TrySpawn;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRefExt;
@@ -456,7 +457,7 @@ impl HttpQueryHandle {
             }
         });
 
-        std::thread::spawn(move || {
+        Thread::spawn(move || {
             if let Err(cause) = run() {
                 if error_sender.blocking_send(Err(cause)).is_err() {
                     tracing::warn!("Error sender is disconnect");
