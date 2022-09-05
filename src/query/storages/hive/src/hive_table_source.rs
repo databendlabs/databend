@@ -27,15 +27,27 @@ use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 use common_planners::PartInfoPtr;
 
+use crate::hive_parquet_block_reader::DataBlockDeserializer;
 use crate::hive_parquet_block_reader::HiveParquetBlockReader;
 use crate::HiveBlocks;
 use crate::HivePartInfo;
 
 enum State {
+    /// Read parquet file meta data
+    /// IO bound
     ReadMeta(PartInfoPtr),
+
+    /// Read blocks from data groups (without deserialization)
+    /// IO bound
     ReadData(HiveBlocks),
-    Deserialize(HiveBlocks, Vec<Vec<u8>>),
-    Generated(HiveBlocks, DataBlock),
+
+    /// Deserialize block from the given data groups
+    /// CPU bound
+    Deserialize(HiveBlocks, DataBlockDeserializer),
+
+    /// `(_, _, Some(_))` indicates that a data block is ready, and needs to be consumed
+    /// `(_, _, None)` indicates that there are no more blocks left for the current row group of `HiveBlocks`
+    Generated(HiveBlocks, DataBlockDeserializer, Option<DataBlock>),
     Finish,
 }
 
@@ -76,9 +88,7 @@ impl HiveTableSource {
     fn try_get_partitions(&mut self) -> Result<()> {
         let partitions = self.ctx.try_get_partitions(1)?;
         match partitions.is_empty() {
-            true => {
-                self.state = State::Finish;
-            }
+            true => self.state = State::Finish,
             false => {
                 self.state = State::ReadMeta(partitions[0].clone());
             }
@@ -112,12 +122,22 @@ impl Processor for HiveTableSource {
             return Ok(Event::Finished);
         }
 
-        if matches!(self.state, State::Generated(_, _)) {
-            if let State::Generated(mut hive_blocks, data_block) =
+        if matches!(self.state, State::Generated(_, _, _)) {
+            if let State::Generated(mut hive_blocks, rowgroup_deserializer, data_block) =
                 std::mem::replace(&mut self.state, State::Finish)
             {
-                self.output.push_data(Ok(data_block));
+                if let Some(data_block) = data_block {
+                    let progress_values = ProgressValues {
+                        rows: data_block.num_rows(),
+                        bytes: data_block.memory_size(),
+                    };
+                    self.scan_progress.incr(&progress_values);
+                    self.output.push_data(Ok(data_block));
+                    self.state = State::Deserialize(hive_blocks, rowgroup_deserializer);
+                    return Ok(Event::NeedConsume);
+                }
 
+                // read current rowgroup finished, try read next rowgroup
                 hive_blocks.advance();
                 match hive_blocks.has_blocks() {
                     true => {
@@ -127,32 +147,29 @@ impl Processor for HiveTableSource {
                         self.try_get_partitions()?;
                     }
                 }
-
-                return Ok(Event::NeedConsume);
             }
         }
 
         match self.state {
-            State::Finish => Ok(Event::Finished),
+            State::Finish => {
+                self.output.finish();
+                Ok(Event::Finished)
+            }
             State::ReadMeta(_) => Ok(Event::Async),
             State::ReadData(_) => Ok(Event::Async),
             State::Deserialize(_, _) => Ok(Event::Sync),
-            State::Generated(_, _) => Err(ErrorCode::LogicalError("It's a bug.")),
+            State::Generated(_, _, _) => Err(ErrorCode::LogicalError("It's a bug.")),
         }
     }
 
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Finish) {
-            State::Deserialize(hive_blocks, chunks) => {
-                let row_group = hive_blocks.get_current_row_group_meta_data();
-                let part = hive_blocks.get_part_info();
-                let data_block = self.block_reader.deserialize(chunks, row_group, part)?;
-                let progress_values = ProgressValues {
-                    rows: data_block.num_rows(),
-                    bytes: data_block.memory_size(),
-                };
-                self.scan_progress.incr(&progress_values);
-                self.state = State::Generated(hive_blocks, data_block);
+            State::Deserialize(hive_blocks, mut rowgroup_deserializer) => {
+                let data_block = self
+                    .block_reader
+                    .create_data_block(&mut rowgroup_deserializer, hive_blocks.part.clone())?;
+
+                self.state = State::Generated(hive_blocks, rowgroup_deserializer, data_block);
                 Ok(())
             }
             _ => Err(ErrorCode::LogicalError("It's a bug.")),
@@ -185,7 +202,10 @@ impl Processor for HiveTableSource {
                     .block_reader
                     .read_columns_data(row_group, &part)
                     .await?;
-                self.state = State::Deserialize(hive_blocks, chunks);
+                let rowgroup_deserializer = self
+                    .block_reader
+                    .create_rowgroup_deserializer(chunks, row_group)?;
+                self.state = State::Deserialize(hive_blocks, rowgroup_deserializer);
                 Ok(())
             }
             _ => Err(ErrorCode::LogicalError("It's a bug.")),

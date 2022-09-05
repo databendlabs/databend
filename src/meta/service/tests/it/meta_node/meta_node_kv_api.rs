@@ -23,8 +23,8 @@ use databend_meta::meta_service::MetaNode;
 use maplit::btreeset;
 
 use crate::init_meta_ut;
-use crate::meta_node::meta_node_all::start_meta_node_cluster;
-use crate::meta_node::meta_node_all::start_meta_node_leader;
+use crate::tests::meta_node::start_meta_node_cluster;
+use crate::tests::meta_node::start_meta_node_leader;
 use crate::tests::service::MetaSrvTestContext;
 
 #[derive(Clone)]

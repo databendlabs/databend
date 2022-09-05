@@ -57,6 +57,12 @@ impl PhysicalScalar {
     pub fn pretty_display(&self, metadata: &MetadataRef) -> Result<String> {
         match self {
             PhysicalScalar::Variable { column_id, .. } => {
+                // TODO: Need refactoring, bad code.
+                // In the cluster mode, exchange needs to be executed between part and final.
+                if column_id == "_group_by_key" {
+                    return Ok(column_id.clone());
+                }
+
                 let index = column_id.parse::<IndexType>()?;
                 let column = metadata.read().column(index).clone();
                 let table_name = match column.table_index {

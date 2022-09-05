@@ -15,6 +15,7 @@
 //! Supporting mod for tests
 
 pub mod logging;
+pub mod meta_node;
 pub mod service;
 pub mod tls_constants;
 

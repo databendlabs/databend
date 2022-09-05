@@ -80,7 +80,7 @@ impl HivePartitionFiller {
         }
     }
 
-    fn extract_partition_values(&self, hive_part: HivePartInfo) -> Result<Vec<String>> {
+    fn extract_partition_values(&self, hive_part: &HivePartInfo) -> Result<Vec<String>> {
         let partition_map = hive_part.get_partition_map();
 
         let mut partition_values = vec![];
@@ -102,7 +102,7 @@ impl HivePartitionFiller {
     pub fn fill_data(
         &self,
         mut data_block: DataBlock,
-        part: HivePartInfo,
+        part: &HivePartInfo,
         origin_num_rows: usize,
     ) -> Result<DataBlock> {
         let data_values = self.extract_partition_values(part)?;

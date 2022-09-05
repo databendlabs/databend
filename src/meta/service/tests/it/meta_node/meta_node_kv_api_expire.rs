@@ -27,8 +27,8 @@ use common_meta_types::UpsertKV;
 use tracing::info;
 
 use crate::init_meta_ut;
-use crate::meta_node::meta_node_all::start_meta_node_leader;
-use crate::meta_node::meta_node_all::start_meta_node_non_voter;
+use crate::tests::meta_node::start_meta_node_leader;
+use crate::tests::meta_node::start_meta_node_non_voter;
 
 /// Expiring kvs should be consistent on leader and followers/learners. E.g.: expiring does not depends on clock time.
 ///

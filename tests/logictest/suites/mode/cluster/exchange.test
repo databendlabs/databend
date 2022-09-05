@@ -149,11 +149,11 @@ Exchange
                 └── AggregateFinal
                     ├── group by: [number]
                     ├── aggregate functions: [sum(number)]
-                    └── AggregatePartial
-                        ├── group by: [number]
-                        ├── aggregate functions: [sum(number)]
-                        └── Exchange
-                            ├── exchange type: Hash(numbers.number (#0))
+                    └── Exchange
+                        ├── exchange type: Hash(_group_by_key)
+                        └── AggregatePartial
+                            ├── group by: [number]
+                            ├── aggregate functions: [sum(number)]
                             └── TableScan
                                 ├── table: default.system.numbers
                                 ├── read rows: 1

@@ -199,43 +199,6 @@ impl<R: Read> BufferRead for BufferReader<R> {
     fn consume(&mut self, amt: usize) {
         self.pos = cmp::min(self.pos + amt, self.cap);
     }
-
-    fn preadd_buf(&mut self, buf: &[u8]) -> Result<()> {
-        if buf.is_empty() {
-            return Ok(());
-        }
-
-        // Just Copy
-        if buf.len() < self.pos {
-            let v = unsafe {
-                MaybeUninit::slice_assume_init_mut(&mut self.buf[self.pos - buf.len()..self.pos])
-            };
-            v.copy_from_slice(buf);
-            self.pos -= buf.len();
-        } else {
-            let total = buf.len() + self.cap - self.pos;
-            let mut new_cap = self.cap;
-
-            while new_cap < total {
-                new_cap <<= 1;
-            }
-            let mut new_buf = Box::new_uninit_slice(new_cap);
-            let mut readbuf = ReadBuf::uninit(&mut new_buf);
-            unsafe {
-                readbuf.assume_init(0);
-            }
-
-            readbuf.append(buf);
-            readbuf.append(self.buffer());
-
-            self.pos = 0;
-            self.cap = readbuf.filled_len();
-            self.init = readbuf.initialized_len();
-            self.buf = new_buf;
-        }
-
-        Ok(())
-    }
 }
 
 impl<R> fmt::Debug for BufferReader<R>

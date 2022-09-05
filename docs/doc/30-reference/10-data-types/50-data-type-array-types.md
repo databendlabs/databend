@@ -11,10 +11,13 @@ ARRAY(T) consists of defined variable-length inner T data type values, which is 
 
 ```sql
 CREATE TABLE array_int64_table(arr ARRAY(INT64) NULL);
-```
 
-```sql
 DESC array_int64_table;
++-------+--------------+------+---------+-------+
+| Field | Type         | Null | Default | Extra |
++-------+--------------+------+---------+-------+
+| arr   | ARRAY(INT64) | YES  | NULL    |       |
++-------+--------------+------+---------+-------+
 ```
 
 Insert two values into the table, `[1,2,3,4]`, `[5,6,7,8]`:
