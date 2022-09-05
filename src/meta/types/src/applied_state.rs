@@ -26,7 +26,6 @@ use crate::TxnReply;
 
 /// The state of an applied raft log.
 /// Normally it includes two fields: the state before applying and the state after applying the log.
-#[allow(clippy::large_enum_variant)]
 #[derive(
     Serialize, Deserialize, Debug, Clone, PartialEq, Eq, derive_more::From, derive_more::TryInto,
 )]
@@ -38,11 +37,6 @@ pub enum AppliedState {
     Node {
         prev: Option<Node>,
         result: Option<Node>,
-    },
-
-    MetaSrvAddr {
-        prev: Option<String>,
-        result: Option<String>,
     },
 
     KV(Change<Vec<u8>>),
@@ -82,10 +76,6 @@ impl AppliedState {
                 ref prev,
                 ref result,
             } => prev != result,
-            AppliedState::MetaSrvAddr {
-                ref prev,
-                ref result,
-            } => prev != result,
             AppliedState::KV(ref ch) => ch.changed(),
             AppliedState::None => false,
             AppliedState::TxnReply(txn) => txn.success,
@@ -112,7 +102,6 @@ impl AppliedState {
         match self {
             AppliedState::Seq { .. } => false,
             AppliedState::Node { ref prev, .. } => prev.is_none(),
-            AppliedState::MetaSrvAddr { ref prev, .. } => prev.is_none(),
             AppliedState::KV(Change { ref prev, .. }) => prev.is_none(),
             AppliedState::None => true,
             AppliedState::TxnReply(_txn) => true,
@@ -123,7 +112,6 @@ impl AppliedState {
         match self {
             AppliedState::Seq { .. } => false,
             AppliedState::Node { ref result, .. } => result.is_none(),
-            AppliedState::MetaSrvAddr { ref result, .. } => result.is_none(),
             AppliedState::KV(Change { ref result, .. }) => result.is_none(),
             AppliedState::None => true,
             AppliedState::TxnReply(txn) => !txn.success,
