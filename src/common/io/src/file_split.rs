@@ -12,10 +12,40 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
+
+#[derive(Debug)]
+pub struct FileSplitCow<'a> {
+    pub path: Option<String>,
+    pub start_offset: usize,
+    pub start_row: usize,
+    pub buf: Cow<'a, [u8]>,
+}
+
 #[derive(Debug)]
 pub struct FileSplit {
     pub path: Option<String>,
     pub start_offset: usize,
     pub start_row: usize,
     pub buf: Vec<u8>,
+}
+
+impl FileSplit {
+    pub fn to_cow(self) -> FileSplitCow<'static> {
+        FileSplitCow {
+            path: self.path,
+            start_offset: self.start_offset,
+            start_row: self.start_row,
+            buf: Cow::from(self.buf),
+        }
+    }
+
+    pub fn from_cow(data: FileSplitCow<'_>) -> Self {
+        Self {
+            path: data.path,
+            start_offset: data.start_offset,
+            start_row: data.start_row,
+            buf: data.buf.into_owned(),
+        }
+    }
 }

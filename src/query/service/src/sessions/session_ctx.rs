@@ -16,6 +16,7 @@ use std::net::SocketAddr;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::sync::Weak;
 
 use common_exception::Result;
 use common_meta_types::UserInfo;
@@ -37,7 +38,7 @@ pub struct SessionContext {
     auth_role: RwLock<Option<String>>,
     client_host: RwLock<Option<SocketAddr>>,
     io_shutdown_tx: RwLock<Option<Sender<Sender<()>>>>,
-    query_context_shared: RwLock<Option<Arc<QueryContextShared>>>,
+    query_context_shared: RwLock<Weak<QueryContextShared>>,
 }
 
 impl SessionContext {
@@ -163,23 +164,19 @@ impl SessionContext {
     }
 
     pub fn get_current_query_id(&self) -> Option<String> {
-        let lock = self.query_context_shared.read();
-        lock.as_ref().map(|ctx| ctx.init_query_id.read().clone())
+        self.query_context_shared
+            .read()
+            .upgrade()
+            .map(|shared| shared.init_query_id.read().clone())
     }
 
     pub fn get_query_context_shared(&self) -> Option<Arc<QueryContextShared>> {
         let lock = self.query_context_shared.read();
-        lock.clone()
+        lock.upgrade()
     }
 
-    pub fn set_query_context_shared(&self, ctx: Option<Arc<QueryContextShared>>) {
+    pub fn set_query_context_shared(&self, ctx: Weak<QueryContextShared>) {
         let mut lock = self.query_context_shared.write();
         *lock = ctx
-    }
-
-    //  Take the context_shared.
-    pub fn take_query_context_shared(&self) -> Option<Arc<QueryContextShared>> {
-        let mut lock = self.query_context_shared.write();
-        lock.take()
     }
 }

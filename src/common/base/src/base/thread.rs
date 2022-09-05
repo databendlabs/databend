@@ -28,6 +28,16 @@ impl Thread {
     {
         let mut thread_builder = Builder::new();
 
+        #[cfg(debug_assertions)]
+        {
+            // We need to pass the thread name in the unit test, because the thread name is the test name
+            if matches!(std::env::var("UNIT_TEST"), Ok(var_value) if var_value == "TRUE") {
+                if let Some(thread_name) = std::thread::current().name() {
+                    name = Some(thread_name.to_string());
+                }
+            }
+        }
+
         if let Some(named) = name.take() {
             thread_builder = thread_builder.name(named);
         }

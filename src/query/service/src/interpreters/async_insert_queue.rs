@@ -22,7 +22,6 @@ use common_base::base::tokio::sync::Notify;
 use common_base::base::tokio::time::interval_at;
 use common_base::base::tokio::time::Duration;
 use common_base::base::tokio::time::Instant;
-use common_base::base::GlobalIORuntime;
 use common_base::base::ProgressValues;
 use common_base::base::Runtime;
 use common_base::base::Singleton;
@@ -411,7 +410,6 @@ impl AsyncInsertManager {
                 pipelines.push(build_res.main_pipeline);
                 let executor_settings = ExecutorSettings::try_create(settings)?;
                 let executor = PipelineCompleteExecutor::from_pipelines(
-                    GlobalIORuntime::instance(),
                     ctx.query_need_abort(),
                     pipelines,
                     executor_settings,

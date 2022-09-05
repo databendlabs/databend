@@ -18,7 +18,6 @@ use std::sync::mpsc::Receiver;
 use std::sync::mpsc::SyncSender;
 use std::sync::Arc;
 
-use common_base::base::GlobalIORuntime;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -96,10 +95,8 @@ impl PipelinePushingExecutor {
         settings: ExecutorSettings,
     ) -> Result<PipelinePushingExecutor> {
         let state = State::create();
-        let async_runtime = GlobalIORuntime::instance();
         let sender = Self::wrap_pipeline(ctx, &mut pipeline)?;
-        let executor =
-            PipelineExecutor::create(async_runtime, query_need_abort, pipeline, settings)?;
+        let executor = PipelineExecutor::create(query_need_abort, pipeline, settings)?;
         Ok(PipelinePushingExecutor {
             state,
             sender,
