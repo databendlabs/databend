@@ -549,7 +549,7 @@ async fn do_list_files_from_dir(
                 let filename = path.to_string();
                 let length = match de.content_length() {
                     Some(len) => len,
-                    None => get_file_length(operator.clone(), &path).await?,
+                    None => get_file_length(operator.clone(), path).await?,
                 };
                 all_files.push(HiveFileInfo::create(filename, length));
             }
