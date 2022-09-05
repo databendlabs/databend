@@ -19,7 +19,6 @@ use crate::ast::write_comma_separated_list;
 use crate::ast::write_period_separated_list;
 use crate::ast::Identifier;
 use crate::ast::Query;
-use crate::parser::token::Token;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct InsertStmt<'a> {
@@ -63,7 +62,8 @@ pub enum InsertSource<'a> {
         rest_str: &'a str,
     },
     Values {
-        rest_tokens: &'a [Token<'a>],
+        start: usize,
+        rest_str: &'a str,
     },
     Select {
         query: Box<Query<'a>>,
@@ -76,14 +76,9 @@ impl Display for InsertSource<'_> {
             InsertSource::Streaming {
                 format, rest_str, ..
             } => {
-                write!(f, "FORMAT {format} {}", rest_str)
+                write!(f, "FORMAT {format} {rest_str}")
             }
-            InsertSource::Values { rest_tokens } => write!(
-                f,
-                "VALUES {}",
-                &rest_tokens[0].source
-                    [rest_tokens.first().unwrap().span.start..rest_tokens.last().unwrap().span.end]
-            ),
+            InsertSource::Values { rest_str, .. } => write!(f, "VALUES {rest_str}"),
             InsertSource::Select { query } => write!(f, "{query}"),
         }
     }

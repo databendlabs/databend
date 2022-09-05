@@ -993,7 +993,15 @@ pub fn insert_source(i: Input) -> IResult<InsertSource> {
         rule! {
             VALUES ~ #rest_tokens
         },
-        |(_, rest_tokens)| InsertSource::Values { rest_tokens },
+        |(_, rest_tokens)| {
+            let rest_str = &rest_tokens[0].source
+                [rest_tokens.first().unwrap().span.start..rest_tokens.last().unwrap().span.end];
+
+            InsertSource::Values {
+                rest_str,
+                start: rest_tokens.first().unwrap().span.start,
+            }
+        },
     );
     let query = map(query, |query| InsertSource::Select {
         query: Box::new(query),

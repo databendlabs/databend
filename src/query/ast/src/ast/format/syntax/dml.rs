@@ -79,12 +79,10 @@ fn pretty_source(source: InsertSource) -> RcDoc {
                     .nest(NEST_FACTOR)
                     .append(RcDoc::text(rest_str.to_string())),
             ),
-        InsertSource::Values { rest_tokens } => RcDoc::text("VALUES").append(
-            RcDoc::line().nest(NEST_FACTOR).append(RcDoc::text(
-                (&rest_tokens[0].source[rest_tokens.first().unwrap().span.start
-                    ..rest_tokens.last().unwrap().span.end])
-                    .to_string(),
-            )),
+        InsertSource::Values { rest_str, .. } => RcDoc::text("VALUES").append(
+            RcDoc::line()
+                .nest(NEST_FACTOR)
+                .append(RcDoc::text(rest_str.to_string())),
         ),
         InsertSource::Select { query } => pretty_query(*query),
     })

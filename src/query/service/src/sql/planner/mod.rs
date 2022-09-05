@@ -53,7 +53,7 @@ use super::optimizer::OptimizerConfig;
 use super::optimizer::OptimizerContext;
 use crate::sessions::TableContext;
 
-static INSERT_PRESIZE: usize = 1024;
+static MAX_TOKEN_FOR_INSERT: usize = 128;
 
 pub struct Planner {
     ctx: Arc<QueryContext>,
@@ -68,9 +68,16 @@ impl Planner {
         let mut tokenizer = Tokenizer::new(sql);
         if let Some(Ok(t)) = tokenizer.next() {
             if t.kind == TokenKind::INSERT {
-                match self.plan_sql_inner(sql, Some(INSERT_PRESIZE)).await {
-                    Ok(r) => return Ok(r),
-                    _ => {}
+                if let Some(Ok(last_token)) = tokenizer.take(MAX_TOKEN_FOR_INSERT).last() {
+                    match self.plan_sql_inner(sql, Some(last_token.span.start)).await {
+                        Ok(v) => return Ok(v),
+                        Err(err) => {
+                            tracing::warn!(
+                                "Faster parser path for insert failed: {}, start to fallback",
+                                err
+                            );
+                        }
+                    }
                 }
             }
         }
@@ -82,27 +89,31 @@ impl Planner {
     async fn plan_sql_inner(
         &mut self,
         sql: &str,
-        insert_presize: Option<usize>,
+        last_token_index: Option<usize>,
     ) -> Result<(Plan, MetadataRef, Option<String>)> {
         let settings = self.ctx.get_settings();
         let sql_dialect = settings.get_sql_dialect()?;
 
         // Step 1: parse SQL text into AST
-        // If insert_presize is set, we will try to parse from the short_sql.
+        // If last_token_index is set, we will try to parse from the short_sql.
         // If any error happens, it will fallback to default parser logic.
-        let short_sql = match insert_presize {
-            Some(limit) => &sql[..limit],
-            None => sql,
-        };
-
+        let short_sql = last_token_index.map(|index| &sql[..index]).unwrap_or(sql);
         let tokens = tokenize_sql(short_sql)?;
         let backtrace = Backtrace::new();
+
         let (mut stmt, format) = parse_sql(&tokens, sql_dialect, &backtrace)?;
-        if insert_presize.is_some() {
+        if last_token_index.is_some() {
             let mut should_fallback = true;
             if let Statement::Insert(ref mut insert) = stmt {
                 match &mut insert.source {
                     InsertSource::Streaming {
+                        start, rest_str, ..
+                    } => {
+                        *rest_str = &sql[*start..];
+                        should_fallback = false;
+                    }
+
+                    InsertSource::Values {
                         start, rest_str, ..
                     } => {
                         *rest_str = &sql[*start..];
