@@ -70,17 +70,14 @@ pub(crate) fn pretty_insert(insert_stmt: InsertStmt) -> RcDoc {
 fn pretty_source(source: InsertSource) -> RcDoc {
     RcDoc::line().append(match source {
         InsertSource::Streaming {
-            format,
-            rest_tokens,
+            format, rest_str, ..
         } => RcDoc::text("FORMAT")
             .append(RcDoc::space())
             .append(RcDoc::text(format))
             .append(
-                RcDoc::line().nest(NEST_FACTOR).append(RcDoc::text(
-                    (&rest_tokens[0].source[rest_tokens.first().unwrap().span.start
-                        ..rest_tokens.last().unwrap().span.end])
-                        .to_string(),
-                )),
+                RcDoc::line()
+                    .nest(NEST_FACTOR)
+                    .append(RcDoc::text(rest_str.to_string())),
             ),
         InsertSource::Values { rest_tokens } => RcDoc::text("VALUES").append(
             RcDoc::line().nest(NEST_FACTOR).append(RcDoc::text(

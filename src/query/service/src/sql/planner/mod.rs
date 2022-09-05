@@ -14,7 +14,11 @@
 
 use std::sync::Arc;
 
+use common_ast::ast::InsertSource;
+use common_ast::ast::Statement;
 use common_ast::parser::parse_sql;
+use common_ast::parser::token::TokenKind;
+use common_ast::parser::token::Tokenizer;
 use common_ast::parser::tokenize_sql;
 use common_ast::Backtrace;
 use common_exception::Result;
@@ -49,6 +53,8 @@ use super::optimizer::OptimizerConfig;
 use super::optimizer::OptimizerContext;
 use crate::sessions::TableContext;
 
+static INSERT_PRESIZE: usize = 1024;
+
 pub struct Planner {
     ctx: Arc<QueryContext>,
 }
@@ -59,13 +65,57 @@ impl Planner {
     }
 
     pub async fn plan_sql(&mut self, sql: &str) -> Result<(Plan, MetadataRef, Option<String>)> {
+        let mut tokenizer = Tokenizer::new(sql);
+        if let Some(Ok(t)) = tokenizer.next() {
+            if t.kind == TokenKind::INSERT {
+                match self.plan_sql_inner(sql, Some(INSERT_PRESIZE)).await {
+                    Ok(r) => return Ok(r),
+                    _ => {}
+                }
+            }
+        }
+        // fallback to normal plan_sql_inner
+        self.plan_sql_inner(sql, None).await
+    }
+
+    #[async_recursion::async_recursion]
+    async fn plan_sql_inner(
+        &mut self,
+        sql: &str,
+        insert_presize: Option<usize>,
+    ) -> Result<(Plan, MetadataRef, Option<String>)> {
         let settings = self.ctx.get_settings();
         let sql_dialect = settings.get_sql_dialect()?;
 
         // Step 1: parse SQL text into AST
-        let tokens = tokenize_sql(sql)?;
+        // If insert_presize is set, we will try to parse from the short_sql.
+        // If any error happens, it will fallback to default parser logic.
+        let short_sql = match insert_presize {
+            Some(limit) => &sql[..limit],
+            None => sql,
+        };
+
+        let tokens = tokenize_sql(short_sql)?;
         let backtrace = Backtrace::new();
-        let (stmt, format) = parse_sql(&tokens, sql_dialect, &backtrace)?;
+        let (mut stmt, format) = parse_sql(&tokens, sql_dialect, &backtrace)?;
+        if insert_presize.is_some() {
+            let mut should_fallback = true;
+            if let Statement::Insert(ref mut insert) = stmt {
+                match &mut insert.source {
+                    InsertSource::Streaming {
+                        start, rest_str, ..
+                    } => {
+                        *rest_str = &sql[*start..];
+                        should_fallback = false;
+                    }
+                    _ => {}
+                }
+            }
+            // fallback to normal plan_sql_inner
+            if should_fallback {
+                return self.plan_sql_inner(sql, None).await;
+            }
+        }
 
         // Step 2: bind AST with catalog, and generate a pure logical SExpr
         let metadata = Arc::new(RwLock::new(Metadata::create()));

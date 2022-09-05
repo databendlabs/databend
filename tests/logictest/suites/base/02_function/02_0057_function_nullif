@@ -133,6 +133,3 @@ NULL NULL NULL
 statement ok
 DROP TABLE t;
 
-statement ok
-SET enable_planner_v2 = 0;
-

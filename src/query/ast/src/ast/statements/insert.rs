@@ -59,7 +59,8 @@ impl Display for InsertStmt<'_> {
 pub enum InsertSource<'a> {
     Streaming {
         format: String,
-        rest_tokens: &'a [Token<'a>],
+        start: usize,
+        rest_str: &'a str,
     },
     Values {
         rest_tokens: &'a [Token<'a>],
@@ -73,14 +74,10 @@ impl Display for InsertSource<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             InsertSource::Streaming {
-                format,
-                rest_tokens,
-            } => write!(
-                f,
-                "FORMAT {format} {}",
-                &rest_tokens[0].source
-                    [rest_tokens.first().unwrap().span.start..rest_tokens.last().unwrap().span.end]
-            ),
+                format, rest_str, ..
+            } => {
+                write!(f, "FORMAT {format} {}", rest_str)
+            }
             InsertSource::Values { rest_tokens } => write!(
                 f,
                 "VALUES {}",

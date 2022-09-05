@@ -978,9 +978,15 @@ pub fn insert_source(i: Input) -> IResult<InsertSource> {
         rule! {
             FORMAT ~ #ident ~ #rest_tokens
         },
-        |(_, format, rest_tokens)| InsertSource::Streaming {
-            format: format.name,
-            rest_tokens,
+        |(_, format, rest_tokens)| {
+            let rest_str = &rest_tokens[0].source
+                [rest_tokens.first().unwrap().span.start..rest_tokens.last().unwrap().span.end];
+
+            InsertSource::Streaming {
+                format: format.name,
+                start: rest_tokens.first().unwrap().span.start,
+                rest_str,
+            }
         },
     );
     let values = map(

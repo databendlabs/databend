@@ -110,11 +110,9 @@ impl<'a> Binder {
 
         let input_source: Result<InsertInputSource> = match source.clone() {
             InsertSource::Streaming {
-                format,
-                rest_tokens,
+                format, rest_str, ..
             } => {
-                let stream_str = self.analyze_streaming_input(rest_tokens)?;
-                self.analyze_stream_format(bind_context, &stream_str, Some(format), schema.clone())
+                self.analyze_stream_format(bind_context, rest_str, Some(format), schema.clone())
                     .await
             }
             InsertSource::Values { rest_tokens } => {

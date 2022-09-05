@@ -52,12 +52,10 @@ use crate::pipelines::processors::StreamSource;
 use crate::pipelines::SourcePipeBuilder;
 use crate::servers::http::v1::HttpQueryContext;
 use crate::servers::http::CLickHouseFederated;
-use crate::servers::utils::use_planner_v2;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionType;
 use crate::sessions::TableContext;
 use crate::sql::plans::Plan;
-use crate::sql::DfParser;
 use crate::sql::PlanParser;
 use crate::sql::Planner;
 
@@ -212,8 +210,11 @@ pub async fn clickhouse_handler_get(
             .map_err(InternalServerError);
     }
     let settings = context.get_settings();
-    let stmts = DfParser::parse_sql(sql.as_str(), context.get_current_session().get_type());
-    if use_planner_v2(&settings, &stmts).map_err(InternalServerError)? {
+    if settings
+        .get_enable_planner_v2()
+        .map_err(InternalServerError)?
+        != 0
+    {
         let mut planner = Planner::new(context.clone());
         let (plan, _, fmt) = planner.plan_sql(&sql).await.map_err(BadRequest)?;
         let format = get_format_with_default(fmt, default_format)?;
@@ -281,14 +282,19 @@ pub async fn clickhouse_handler_post(
             .map_err(InternalServerError);
     }
 
-    let stmts = DfParser::parse_sql(sql.as_str(), ctx.get_current_session().get_type());
-    if use_planner_v2(&settings, &stmts).map_err(InternalServerError)? {
+    if settings
+        .get_enable_planner_v2()
+        .map_err(InternalServerError)?
+        != 0
+    {
         let mut planner = Planner::new(ctx.clone());
         let (plan, _, fmt) = planner.plan_sql(&sql).await.map_err(BadRequest)?;
+
         let format = get_format_with_default(fmt, default_format)?;
         let format = get_format_from_plan(&plan, format)?;
         ctx.attach_query_str(&sql);
         let interpreter = InterpreterFactoryV2::get(ctx.clone(), &plan).map_err(BadRequest)?;
+
         execute(ctx, interpreter, plan.schema(), format, None, params)
             .await
             .map_err(InternalServerError)

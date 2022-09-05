@@ -89,6 +89,3 @@ DROP TABLE t;
 statement ok
 DROP DATABASE db_09_0005;
 
-statement ok
-set enable_planner_v2 = 0;
-
