@@ -50,7 +50,3 @@ select * from t1;
 
 statement ok
 DROP DATABASE db1;
-
-statement ok
-set enable_planner_v2 = 0;
-

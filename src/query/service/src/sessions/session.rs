@@ -276,3 +276,10 @@ impl Session {
         self.status.clone()
     }
 }
+
+impl Drop for Session {
+    fn drop(&mut self) {
+        tracing::debug!("Drop session {}", self.id);
+        SessionManager::instance().destroy_session(&self.id)
+    }
+}
