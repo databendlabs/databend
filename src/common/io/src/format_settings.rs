@@ -50,7 +50,7 @@ impl Default for FormatSettings {
         Self {
             record_delimiter: vec![b'\n'],
             field_delimiter: vec![b','],
-            empty_as_default: false,
+            empty_as_default: true,
             skip_header: 0,
             size_limit: None,
             compression: Compression::None,

@@ -29,6 +29,7 @@ use serde::de::DeserializeOwned;
 
 use super::aggregate_function_factory::AggregateFunctionDescription;
 use super::aggregate_scalar_state::ChangeIf;
+use super::aggregate_scalar_state::CmpAny;
 use super::aggregate_scalar_state::CmpMax;
 use super::aggregate_scalar_state::CmpMin;
 use super::aggregate_scalar_state::ScalarState;
@@ -38,10 +39,14 @@ use super::StateAddr;
 use crate::aggregates::assert_unary_arguments;
 use crate::aggregates::AggregateFunction;
 
+const TYPE_ANY: u8 = 0;
+const TYPE_MIN: u8 = 1;
+const TYPE_MAX: u8 = 2;
+
 /// S: ScalarType
 /// A: Aggregate State
 #[derive(Clone)]
-pub struct AggregateMinMaxFunction<S, C, State> {
+pub struct AggregateMinMaxAnyFunction<S, C, State> {
     display_name: String,
     arguments: Vec<DataField>,
     _s: PhantomData<S>,
@@ -49,14 +54,14 @@ pub struct AggregateMinMaxFunction<S, C, State> {
     _state: PhantomData<State>,
 }
 
-impl<S, C, State> AggregateFunction for AggregateMinMaxFunction<S, C, State>
+impl<S, C, State> AggregateFunction for AggregateMinMaxAnyFunction<S, C, State>
 where
     S: Scalar + Send + Sync + serde::Serialize + DeserializeOwned,
     C: ChangeIf<S> + Default,
     State: ScalarStateFunc<S>,
 {
     fn name(&self) -> &str {
-        "AggregateMinMaxFunction"
+        "AggregateMinMaxAnyFunction"
     }
 
     fn return_type(&self) -> Result<DataTypeImpl> {
@@ -86,7 +91,7 @@ where
         &self,
         places: &[StateAddr],
         offset: usize,
-        columns: &[common_datavalues::ColumnRef],
+        columns: &[ColumnRef],
         _input_rows: usize,
     ) -> Result<()> {
         let col: &<S as Scalar>::ColumnType = unsafe { Series::static_cast(&columns[0]) };
@@ -141,13 +146,13 @@ where
     }
 }
 
-impl<S, C, State> fmt::Display for AggregateMinMaxFunction<S, C, State> {
+impl<S, C, State> fmt::Display for AggregateMinMaxAnyFunction<S, C, State> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.display_name)
     }
 }
 
-impl<S, C, State> AggregateMinMaxFunction<S, C, State>
+impl<S, C, State> AggregateMinMaxAnyFunction<S, C, State>
 where
     S: Scalar + Send + Sync + serde::Serialize + DeserializeOwned,
     C: ChangeIf<S> + Default,
@@ -157,7 +162,7 @@ where
         display_name: &str,
         arguments: Vec<DataField>,
     ) -> Result<Arc<dyn AggregateFunction>> {
-        let func = AggregateMinMaxFunction::<S, C, State> {
+        let func = AggregateMinMaxAnyFunction::<S, C, State> {
             display_name: display_name.to_string(),
             arguments,
             _s: PhantomData,
@@ -168,7 +173,7 @@ where
     }
 }
 
-pub fn try_create_aggregate_minmax_function<const IS_MIN: bool>(
+pub fn try_create_aggregate_min_max_any_function<const TYPE: u8>(
     display_name: &str,
     _params: Vec<DataValue>,
     arguments: Vec<DataField>,
@@ -184,35 +189,51 @@ pub fn try_create_aggregate_minmax_function<const IS_MIN: bool>(
 
     let result = with_match_scalar_types_error!(phid, |$T| {
         if phid == PhysicalTypeID::Variant {
-            if IS_MIN {
+            if TYPE == TYPE_MIN {
                 type State = VariantState<CmpMin>;
-                AggregateMinMaxFunction::<VariantValue, CmpMin, State>::try_create(display_name, arguments)
-            } else {
+                AggregateMinMaxAnyFunction::<VariantValue, CmpMin, State>::try_create(display_name, arguments)
+            } else if TYPE == TYPE_MAX {
                 type State = VariantState<CmpMax>;
-                AggregateMinMaxFunction::<VariantValue, CmpMax, State>::try_create(display_name, arguments)
+                AggregateMinMaxAnyFunction::<VariantValue, CmpMax, State>::try_create(display_name, arguments)
+            } else {
+                type State = VariantState<CmpAny>;
+                AggregateMinMaxAnyFunction::<VariantValue, CmpAny, State>::try_create(display_name, arguments)
             }
         } else {
-            if IS_MIN {
+            if TYPE == TYPE_MIN {
                 type State = ScalarState<$T, CmpMin>;
-                AggregateMinMaxFunction::<$T, CmpMin, State>::try_create(display_name, arguments)
-            } else {
+                AggregateMinMaxAnyFunction::<$T, CmpMin, State>::try_create(display_name, arguments)
+            } else if TYPE == TYPE_MAX {
                 type State = ScalarState<$T, CmpMax>;
-                AggregateMinMaxFunction::<$T, CmpMax, State>::try_create(display_name, arguments)
+                AggregateMinMaxAnyFunction::<$T, CmpMax, State>::try_create(display_name, arguments)
+            } else {
+                type State = ScalarState<$T, CmpAny>;
+                AggregateMinMaxAnyFunction::<$T, CmpAny, State>::try_create(display_name, arguments)
             }
         }
     });
 
     result.map_err(|_|  // no matching branch
-       ErrorCode::BadDataValueType(format!(
-            "AggregateMinMaxFunction does not support type '{:?}'",
-            data_type
+        ErrorCode::BadDataValueType(format!(
+             "AggregateMinMaxAnyFunction does not support type '{:?}'",
+             data_type
         )))
 }
 
 pub fn aggregate_min_function_desc() -> AggregateFunctionDescription {
-    AggregateFunctionDescription::creator(Box::new(try_create_aggregate_minmax_function::<true>))
+    AggregateFunctionDescription::creator(Box::new(
+        try_create_aggregate_min_max_any_function::<TYPE_MIN>,
+    ))
 }
 
 pub fn aggregate_max_function_desc() -> AggregateFunctionDescription {
-    AggregateFunctionDescription::creator(Box::new(try_create_aggregate_minmax_function::<false>))
+    AggregateFunctionDescription::creator(Box::new(
+        try_create_aggregate_min_max_any_function::<TYPE_MAX>,
+    ))
+}
+
+pub fn aggregate_any_function_desc() -> AggregateFunctionDescription {
+    AggregateFunctionDescription::creator(Box::new(
+        try_create_aggregate_min_max_any_function::<TYPE_ANY>,
+    ))
 }
