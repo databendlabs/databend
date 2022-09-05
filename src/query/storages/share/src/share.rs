@@ -33,8 +33,16 @@ pub async fn save_share_spec(
     spec: Option<ShareSpec>,
 ) -> Result<()> {
     let location = format!("{}/share_specs.json", SHARE_CONFIG_PREFIX);
-    let data = operator.object(&location).read().await?;
-    let mut spec_vec: ShareSpecVec = serde_json::from_slice(&data)?;
+    let mut spec_vec: ShareSpecVec = match operator.object(&location).read().await {
+        Ok(data) => serde_json::from_slice(&data)?,
+        Err(err) => {
+            if err.kind() == std::io::ErrorKind::NotFound {
+                ShareSpecVec::default()
+            } else {
+                return Err(err.into());
+            }
+        }
+    };
 
     if let Some(spec) = spec {
         let share_spec_ext = ext::ShareSpecExt::from_share_spec(spec, &operator);
