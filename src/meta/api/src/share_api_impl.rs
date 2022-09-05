@@ -1372,9 +1372,17 @@ async fn get_tenant_share_spec_vec(
 
         let (_share_id_seq, share_id, _share_meta_seq, share_meta) = match res {
             Ok(x) => x,
-            Err(_e) => {
-                continue;
-            }
+            Err(e) => match e {
+                MetaError::AppError(AppError::UnknownShare(_)) => {
+                    continue;
+                }
+                MetaError::AppError(AppError::UnknownShareId(_)) => {
+                    continue;
+                }
+                _ => {
+                    return Err(e);
+                }
+            },
         };
 
         share_metas.push(
