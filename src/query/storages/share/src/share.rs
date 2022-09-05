@@ -27,23 +27,20 @@ pub struct ShareSpecVec {
     share_specs: BTreeMap<u64, ext::ShareSpecExt>,
 }
 
-pub async fn save_share_spec(operator: Operator, spec_vec: Vec<ShareSpec>) -> Result<()> {
-    // empty spec_vec means there is no change in share.
-    if spec_vec.is_empty() {
-        return Ok(());
+pub async fn save_share_spec(operator: Operator, spec_vec: Option<Vec<ShareSpec>>) -> Result<()> {
+    if let Some(spec_vec) = spec_vec {
+        let location = format!("{}/share_specs.json", SHARE_CONFIG_PREFIX);
+        let mut share_spec_vec = ShareSpecVec::default();
+        for spec in spec_vec {
+            let share_id = spec.share_id;
+            let share_spec_ext = ext::ShareSpecExt::from_share_spec(spec, &operator);
+            share_spec_vec.share_specs.insert(share_id, share_spec_ext);
+        }
+        operator
+            .object(&location)
+            .write(serde_json::to_vec(&share_spec_vec)?)
+            .await?;
     }
-
-    let location = format!("{}/share_specs.json", SHARE_CONFIG_PREFIX);
-    let mut share_spec_vec = ShareSpecVec::default();
-    for spec in spec_vec {
-        let share_id = spec.share_id;
-        let share_spec_ext = ext::ShareSpecExt::from_share_spec(spec, &operator);
-        share_spec_vec.share_specs.insert(share_id, share_spec_ext);
-    }
-    operator
-        .object(&location)
-        .write(serde_json::to_vec(&share_spec_vec)?)
-        .await?;
 
     Ok(())
 }

@@ -90,7 +90,7 @@ pub struct CreateShareReq {
 pub struct CreateShareReply {
     pub share_id: u64,
 
-    pub spec_vec: Vec<ShareSpec>,
+    pub spec_vec: Option<Vec<ShareSpec>>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -102,7 +102,7 @@ pub struct DropShareReq {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct DropShareReply {
     pub share_id: Option<u64>,
-    pub spec_vec: Vec<ShareSpec>,
+    pub spec_vec: Option<Vec<ShareSpec>>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -116,7 +116,7 @@ pub struct AddShareAccountsReq {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct AddShareAccountsReply {
     pub share_id: Option<u64>,
-    pub spec_vec: Vec<ShareSpec>,
+    pub spec_vec: Option<Vec<ShareSpec>>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -129,7 +129,7 @@ pub struct RemoveShareAccountsReq {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct RemoveShareAccountsReply {
     pub share_id: Option<u64>,
-    pub spec_vec: Vec<ShareSpec>,
+    pub spec_vec: Option<Vec<ShareSpec>>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -180,7 +180,7 @@ pub struct GrantShareObjectReq {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct GrantShareObjectReply {
     pub share_id: u64,
-    pub spec_vec: Vec<ShareSpec>,
+    pub spec_vec: Option<Vec<ShareSpec>>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -194,7 +194,7 @@ pub struct RevokeShareObjectReq {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct RevokeShareObjectReply {
     pub share_id: u64,
-    pub spec_vec: Vec<ShareSpec>,
+    pub spec_vec: Option<Vec<ShareSpec>>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
