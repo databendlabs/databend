@@ -5,8 +5,7 @@ echo "Deploy new Databend(standalone)"
 ulimit  -n 65535
 nohup bin/databend-meta --config-file=configs/databend-meta.toml 2>&1 >meta.log &
 sleep 3
-cat meta.log
 # export STORAGE_S3_ENABLE_VIRTUAL_HOST_STYLE=true
 nohup bin/databend-query --config-file=configs/databend-query.toml 2>&1 >query.log &
 sleep 3
-cat query.log
+tail -f meta.log query.log &
