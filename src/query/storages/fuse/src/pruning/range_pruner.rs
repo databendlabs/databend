@@ -26,11 +26,19 @@ pub trait RangeFilterPruner {
     fn should_keep(&self, input: &StatisticsOfColumns) -> bool;
 }
 
-struct NoPruner;
+struct KeepTrue;
 
-impl RangeFilterPruner for NoPruner {
+impl RangeFilterPruner for KeepTrue {
     fn should_keep(&self, _input: &StatisticsOfColumns) -> bool {
         true
+    }
+}
+
+struct KeepFalse;
+
+impl RangeFilterPruner for KeepFalse {
+    fn should_keep(&self, _input: &StatisticsOfColumns) -> bool {
+        false
     }
 }
 
@@ -55,8 +63,17 @@ pub fn new_range_filter_pruner<'a>(
     Ok(match filter_expr {
         Some(exprs) if !exprs.is_empty() => {
             let range_filter = RangeFilter::try_create(ctx.clone(), exprs, schema.clone())?;
-            Arc::new(range_filter)
+            match range_filter.try_eval_const() {
+                Ok(v) => {
+                    if v {
+                        Arc::new(KeepTrue)
+                    } else {
+                        Arc::new(KeepFalse)
+                    }
+                }
+                Err(_) => Arc::new(range_filter),
+            }
         }
-        _ => Arc::new(NoPruner),
+        _ => Arc::new(KeepTrue),
     })
 }
