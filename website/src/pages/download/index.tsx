@@ -4,7 +4,6 @@ import Table from 'rc-table';
 import { getLatest } from '@site/src/plugins/releaseVersion';
 import styles from './styles.module.scss';
 import Layout from '@theme/Layout';
-import Link from '@docusaurus/Link';
 import clsx from 'clsx';
 interface IRow {
   name: string;
@@ -24,7 +23,6 @@ const Releases: FC = (): ReactElement=> {
         return <div>
           <div className={styles.osType}>{osType}</div>
           <div className={styles.name}>{name}</div> 
-          {/* <div  href={``}>{name}</div> */}
         </div>
       }
     },
@@ -56,12 +54,10 @@ const Releases: FC = (): ReactElement=> {
             {
               getLatest((tagName: string)=> {
                 const data = [
-                  { name: `databend-${tagName}-aarch64-apple-darwin.tar.gz`, tagName, osType: 'macOS (ARM, 64-bit)'},
-                  { name: `databend-${tagName}-aarch64-unknown-linux-gnu.tar.gz`, tagName, osType:'Ubuntu Linux (ARM, 64-bit)'},
+                  { name: `databend-${tagName}-x86_64-unknown-linux-musl.tar.gz`, tagName, osType: 'Linux Generic(x86, 64-bit)'},
                   { name: `databend-${tagName}-aarch64-unknown-linux-musl.tar.gz`, tagName, osType: 'Linux Generic(ARM, 64-bit)'},
                   { name: `databend-${tagName}-x86_64-apple-darwin.tar.gz`, tagName, osType: 'macOS (x86, 64-bit)'},
-                  { name: `databend-${tagName}-x86_64-unknown-linux-gnu.tar.gz`, tagName, osType: 'Ubuntu Linux (x86, 64-bit)'},
-                  { name: `databend-${tagName}-x86_64-unknown-linux-musl.tar.gz`, tagName, osType: 'Linux Generic(x86, 64-bit)'},
+                  { name: `databend-${tagName}-aarch64-apple-darwin.tar.gz`, tagName, osType: 'macOS (ARM, 64-bit)'},
                 ];
                 setReleaseData(data);
               })
