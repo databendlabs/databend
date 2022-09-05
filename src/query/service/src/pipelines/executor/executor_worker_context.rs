@@ -15,6 +15,7 @@
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
+use std::time::Instant;
 
 use common_base::base::TrySpawn;
 use common_exception::ErrorCode;
@@ -79,7 +80,14 @@ impl ExecutorWorkerContext {
     }
 
     unsafe fn execute_sync_task(&mut self, processor: ProcessorPtr) -> Result<Option<NodeIndex>> {
+        let start = Instant::now();
         processor.process()?;
+        tracing::debug!(
+            "sync processor, node id:{:?}, name:{:?}, event: {:?}",
+            processor.id(),
+            processor.name(),
+            start.elapsed()
+        );
         Ok(Some(processor.id()))
     }
 
