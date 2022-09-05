@@ -54,17 +54,11 @@ html[data-theme='dark'] .docusaurus-highlight-code-line {
 .navbar__logo{
   transform: scale(1.4);
 }
-.rc-tooltip-inner  {
-  background-color: #fff!important;
-  opacity: 1;
-  box-shadow: 0px 0px 0px 4px rgb(rgb(1,117,246), 0.25);;
-}
-.rc-table-cell {
-  color: #0969da;
-  font-size: 18PX;
-  font-weight: bold;
-  background-color: #fff!important;
-  a{
-    color: #0969da;
+.rc-table-row {
+  td{
+    border-right-color: transparent;
+    &:last-child{
+      border-right-color: var(--ifm-table-border-color);
+    }
   }
 }

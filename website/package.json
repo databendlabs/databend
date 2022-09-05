@@ -28,7 +28,6 @@
     "prism-react-renderer": "^1.2.1",
     "rc-table": "^7.27.1",
     "rc-texty": "^0.2.0",
-    "rc-tooltip": "^5.2.2",
     "react": "^17.0.1",
     "react-dom": "^17.0.1",
     "sass": "^1.45.0"

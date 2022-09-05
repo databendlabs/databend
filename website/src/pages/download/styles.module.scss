@@ -1,0 +1,51 @@
+.tableWarp {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding-top: 2rem !important;
+  padding-bottom: 100px;
+  .table {
+    display: inline-block;
+    margin: 0 auto;
+    border-radius: 12PX;
+   
+  }
+  @include media{
+    padding-bottom: mpx(50);
+  }
+}
+.row {
+  display: flex;
+  align-items: center;
+}
+.osType {
+  color: var(--ifm-font-color-base);
+  font-size: 18PX;
+  font-weight: bold;
+}
+.name {
+  font-size: var(--ifm-toc-link-color);
+  font-weight: normal;
+  font-size: 14PX;
+}
+.tagName {
+  width: 180px;
+  text-align: right;
+  @include media{
+    width: auto;
+  }
+}
+.download {
+  background-color: $link-color;
+  border: 1px solid $link-color;
+  color: $colorWhite!important;
+}
+.prev {
+  text-align: left;
+  text-decoration: underline;
+  cursor: pointer;
+  @include media{
+    margin-left: 12PX;
+  }
+}
