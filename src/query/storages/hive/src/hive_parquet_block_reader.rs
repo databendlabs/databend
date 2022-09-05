@@ -1,16 +1,16 @@
-// Copyright 2021 Datafuse Labs.
+//  Copyright 2022 Datafuse Labs.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+//  Licensed under the Apache License, Version 2.0 (the "License");
+//  you may not use this file except in compliance with the License.
+//  You may obtain a copy of the License at
 //
-// http://www.apache.org/licenses/LICENSE-2.0
+//      http://www.apache.org/licenses/LICENSE-2.0
 //
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+//  Unless required by applicable law or agreed to in writing, software
+//  distributed under the License is distributed on an "AS IS" BASIS,
+//  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+//  See the License for the specific language governing permissions and
+//  limitations under the License.
 
 use std::sync::Arc;
 
@@ -32,6 +32,8 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::PartInfoPtr;
 use common_storages_util::file_meta_data_reader::FileMetaDataReader;
+use common_storages_util::retry;
+use common_storages_util::retry::Retryable;
 use futures::AsyncReadExt;
 use opendal::Object;
 use opendal::Operator;
@@ -39,8 +41,6 @@ use tracing::warn;
 
 use crate::hive_partition::HivePartInfo;
 use crate::hive_partition_filler::HivePartitionFiller;
-use crate::retry;
-use crate::retry::Retryable;
 
 #[derive(Clone)]
 pub struct HiveParquetBlockReader {
@@ -51,6 +51,54 @@ pub struct HiveParquetBlockReader {
     hive_partition_filler: Option<HivePartitionFiller>,
 }
 
+pub struct DataBlockDeserializer {
+    deserializer: RowGroupDeserializer,
+    drained: bool,
+}
+
+impl DataBlockDeserializer {
+    fn new(deserializer: RowGroupDeserializer) -> Self {
+        let num_rows = deserializer.num_rows();
+        Self {
+            deserializer,
+            drained: num_rows == 0,
+        }
+    }
+
+    fn next_block(
+        &mut self,
+        schema: &DataSchemaRef,
+        filler: &Option<HivePartitionFiller>,
+        part_info: &HivePartInfo,
+    ) -> Result<Option<DataBlock>> {
+        if self.drained {
+            return Ok(None);
+        };
+
+        let opt = self.deserializer.next().transpose()?;
+        if let Some(chunk) = opt {
+            // If the `Vec<ArrayIter<'static>>` we have passed into the `RowGroupDeserializer`
+            // is empty, the deserializer will returns an empty chunk as well(since now rows are consumed).
+            // In this case, mark self as drained.
+            if chunk.is_empty() {
+                self.drained = true;
+            }
+
+            let block: DataBlock = DataBlock::from_chunk(schema, &chunk)?;
+            return if let Some(filler) = &filler {
+                let num_rows = self.deserializer.num_rows();
+                let filled = filler.fill_data(block, part_info, num_rows)?;
+                Ok(Some(filled))
+            } else {
+                Ok(Some(block))
+            };
+        }
+
+        self.drained = true;
+        Ok(None)
+    }
+}
+
 impl HiveParquetBlockReader {
     pub fn create(
         operator: Operator,
@@ -59,9 +107,7 @@ impl HiveParquetBlockReader {
         hive_partition_filler: Option<HivePartitionFiller>,
     ) -> Result<Arc<HiveParquetBlockReader>> {
         let projected_schema = DataSchemaRef::new(schema.project(&projection));
-
         let arrow_schema = schema.to_arrow();
-
         Ok(Arc::new(HiveParquetBlockReader {
             operator,
             projection,
@@ -85,12 +131,24 @@ impl HiveParquetBlockReader {
             vec![],
         );
 
+        let chunk_size = if let Ok(read_buffer_size_str) = std::env::var("CHUNK_SIZE") {
+            read_buffer_size_str.parse::<usize>().unwrap_or_else(|_|
+                {
+                    tracing::warn!(
+                    "invalid value of env var READ_BUFFER_SIZE {read_buffer_size_str}, using default value {rows}",
+                );
+                    rows
+                })
+        } else {
+            rows
+        };
+
         let decompressor = BasicDecompressor::new(pages, vec![]);
         Ok(column_iter_to_arrays(
             vec![decompressor],
             vec![&primitive_type],
             field,
-            Some(rows),
+            Some(chunk_size),
         )?)
     }
 
@@ -128,9 +186,6 @@ impl HiveParquetBlockReader {
         let handler = common_base::base::tokio::spawn(async move {
             let op = || async {
                 let mut chunk = vec![0; length as usize];
-                // Sine error conversion DO matters: retry depends on the conversion
-                // to distinguish transient errors from permanent ones.
-                // Explict error conversion is used here, to make the code easy to be followed
                 let mut r = o
                     .range_reader(offset..offset + length)
                     .await
@@ -166,8 +221,8 @@ impl HiveParquetBlockReader {
         ctx: Arc<dyn TableContext>,
         filename: &str,
     ) -> Result<Arc<FileMetaData>> {
-        let file_meta_reader = FileMetaDataReader::new_reader(ctx);
-        file_meta_reader.read(filename, None, 0).await
+        let reader = FileMetaDataReader::new_reader(ctx);
+        reader.read(filename, None, 0).await
     }
 
     pub async fn read_columns_data(
@@ -194,12 +249,11 @@ impl HiveParquetBlockReader {
         futures::future::try_join_all(join_handlers).await
     }
 
-    pub fn deserialize(
+    pub fn create_rowgroup_deserializer(
         &self,
         chunks: Vec<Vec<u8>>,
         row_group: &RowGroupMetaData,
-        part: HivePartInfo,
-    ) -> Result<DataBlock> {
+    ) -> Result<DataBlockDeserializer> {
         if self.projection.len() != chunks.len() {
             return Err(ErrorCode::LogicalError(
                 "Columns chunk len must be equals projections len.",
@@ -221,37 +275,23 @@ impl HiveParquetBlockReader {
             )?);
         }
 
-        let mut deserializer =
-            RowGroupDeserializer::new(columns_array_iter, row_group.num_rows(), None);
+        let num_row = row_group.num_rows();
+        let deserializer = RowGroupDeserializer::new(columns_array_iter, num_row, None);
+        Ok(DataBlockDeserializer::new(deserializer))
+    }
 
-        let data_block = self.try_next_block(&mut deserializer);
-        if data_block.is_err() {
-            let err = data_block.err().unwrap();
-            tracing::warn!("parquet failed,deserialize,{}", part.filename);
-            return Err(ErrorCode::ParquetError(format!(
-                "deseriallize parquet failed, {}, {:?}",
-                part.filename, err
-            )));
-        }
-
-        match &self.hive_partition_filler {
-            Some(hive_partition_filler) => {
-                hive_partition_filler.fill_data(data_block?, part, row_group.num_rows())
-            }
-            None => data_block,
-        }
+    pub fn create_data_block(
+        &self,
+        row_group_iterator: &mut DataBlockDeserializer,
+        part: HivePartInfo,
+    ) -> Result<Option<DataBlock>> {
+        row_group_iterator
+            .next_block(&self.projected_schema, &self.hive_partition_filler, &part)
+            .map_err(|e| e.add_message(format!(" filename of hive part {}", part.filename)))
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
     pub async fn read(&self, _part: PartInfoPtr) -> Result<DataBlock> {
-        Err(ErrorCode::UnImplement("depracated"))
-    }
-
-    fn try_next_block(&self, deserializer: &mut RowGroupDeserializer) -> Result<DataBlock> {
-        match deserializer.next() {
-            None => Err(ErrorCode::ParquetError("fail to get a chunk")),
-            Some(Err(cause)) => Err(ErrorCode::from(cause)),
-            Some(Ok(chunk)) => DataBlock::from_chunk(&self.projected_schema, &chunk),
-        }
+        Err(ErrorCode::UnImplement("deprecated"))
     }
 }
