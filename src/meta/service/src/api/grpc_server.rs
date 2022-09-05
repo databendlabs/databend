@@ -23,7 +23,6 @@ use common_base::base::tokio::task::JoinHandle;
 use common_base::base::Stoppable;
 use common_meta_types::protobuf::meta_service_server::MetaServiceServer;
 use common_meta_types::protobuf::FILE_DESCRIPTOR_SET;
-use common_meta_types::MetaError;
 use common_meta_types::MetaNetworkError;
 use common_meta_types::MetaResult;
 use futures::future::Either;
@@ -131,9 +130,7 @@ impl GrpcServer {
             .instrument(tracing::debug_span!("spawn-grpc")),
         );
 
-        started_rx
-            .await
-            .map_err(|e| MetaError::StartMetaServiceError(e.to_string()))?;
+        started_rx.await.unwrap();
 
         self.join_handle = Some(j);
         self.stop_tx = Some(stop_tx);
@@ -166,19 +163,15 @@ impl GrpcServer {
                 }
             } else {
                 info!("no force signal, block waiting for join handle for ever");
-                j.await.map_err(|e| {
-                    MetaError::StartMetaServiceError(format!("metasrv join handle error: {}", e))
-                })?;
-                info!("Done: waiting for join handle for ever");
+                let res = j.await;
+                info!("Done: waiting for join handle: res: {:?}", res);
             }
         }
 
         if let Some(rx) = self.fin_rx.take() {
             info!("block waiting for fin_rx");
-            rx.await.map_err(|e| {
-                MetaError::StartMetaServiceError(format!("metasrv fin_rx recv error: {}", e))
-            })?;
-            info!("Done: block waiting for fin_rx");
+            let res = rx.await;
+            info!("Done: block waiting for fin_rx: res: {:?}", res);
         }
         Ok(())
     }
