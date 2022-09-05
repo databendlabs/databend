@@ -27,7 +27,6 @@ use common_datavalues::DataField;
 use common_datavalues::DataSchemaRefExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::PlanNode;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use futures::future::AbortHandle;
@@ -48,12 +47,14 @@ use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::Pipe;
 use crate::pipelines::PipelineBuildResult;
+use crate::servers::utils::use_planner_v2;
 use crate::sessions::QueryAffect;
 use crate::sessions::QueryContext;
 use crate::sessions::Session;
 use crate::sessions::TableContext;
-use crate::sql::plans::Plan;
 use crate::sql::ColumnBinding;
+use crate::sql::DfParser;
+use crate::sql::DfStatement;
 use crate::sql::PlanParser;
 use crate::sql::Planner;
 use crate::storages::result::block_buffer::BlockBuffer;
@@ -235,14 +236,19 @@ impl ExecuteState {
     ) -> Result<ExecuteRunning> {
         ctx.attach_query_str(sql);
 
+        let stmts = DfParser::parse_sql(sql, ctx.get_current_session().get_type());
         let settings = ctx.get_settings();
-        let is_v2 = settings.get_enable_planner_v2()? != 0;
-        let is_select;
+        let is_v2 = use_planner_v2(&settings, &stmts)?;
+        let is_select = if let Ok((s, _)) = &stmts {
+            s.get(0)
+                .map_or(false, |stmt| matches!(stmt, DfStatement::Query(_)))
+        } else {
+            false
+        };
 
         let interpreter = if is_v2 {
             let mut planner = Planner::new(ctx.clone());
             let (plan, _, _) = planner.plan_sql(sql).await?;
-            is_select = matches!(&plan, Plan::Query { .. });
             InterpreterFactoryV2::get(ctx.clone(), &plan)
         } else {
             let plan = match PlanParser::parse(ctx.clone(), sql).await {
@@ -252,11 +258,8 @@ impl ExecuteState {
                     return Err(e);
                 }
             };
-
-            is_select = matches!(&plan, PlanNode::Select(_));
             InterpreterFactory::get(ctx.clone(), plan)
         }?;
-
         if is_v2 && is_select {
             let _ = interpreter
                 .start()

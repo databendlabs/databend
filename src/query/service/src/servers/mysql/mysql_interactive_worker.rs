@@ -50,6 +50,7 @@ use crate::servers::mysql::writers::ProgressReporter;
 use crate::servers::mysql::writers::QueryResult;
 use crate::servers::mysql::MySQLFederated;
 use crate::servers::mysql::MYSQL_VERSION;
+use crate::servers::utils::use_planner_v2;
 use crate::sessions::QueryContext;
 use crate::sessions::Session;
 use crate::sessions::SessionManager;
@@ -352,7 +353,7 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
                     Err(_) => vec![],
                 };
                 let mut has_result_set = true;
-                let interpreter = if settings.get_enable_planner_v2()? != 0 {
+                let interpreter = if use_planner_v2(&settings, &stmts_hints)? {
                     let mut planner = Planner::new(context.clone());
                     planner.plan_sql(query).await.and_then(|v| {
                         has_result_set = has_result_set_by_plan(&v.0);
