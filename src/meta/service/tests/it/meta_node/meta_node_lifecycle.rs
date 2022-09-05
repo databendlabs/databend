@@ -19,19 +19,12 @@ use common_meta_api::KVApi;
 use common_meta_sled_store::openraft::LogIdOptionExt;
 use common_meta_sled_store::openraft::State;
 use common_meta_types::protobuf::raft_service_client::RaftServiceClient;
-use common_meta_types::AppliedState;
 use common_meta_types::Cmd;
 use common_meta_types::Endpoint;
-use common_meta_types::ForwardToLeader;
 use common_meta_types::LogEntry;
-use common_meta_types::MetaError;
-use common_meta_types::MetaRaftError;
 use common_meta_types::NodeId;
-use common_meta_types::RetryableError;
-use common_meta_types::SeqV;
 use common_meta_types::UpsertKV;
 use databend_meta::configs;
-use databend_meta::meta_service::meta_leader::MetaLeader;
 use databend_meta::meta_service::ForwardRequest;
 use databend_meta::meta_service::ForwardRequestBody;
 use databend_meta::meta_service::JoinRequest;
@@ -87,171 +80,6 @@ async fn test_meta_node_graceful_shutdown() -> anyhow::Result<()> {
         info!("st: {:?}", rx0.borrow());
     }
     assert!(rx0.changed().await.is_err());
-    Ok(())
-}
-
-#[async_entry::test(worker_threads = 5, init = "init_meta_ut!()", tracing_span = "debug")]
-async fn test_meta_node_leader_and_non_voter() -> anyhow::Result<()> {
-    // - Start a leader and a non-voter;
-    // - Write to leader, check on non-voter.
-
-    let (_nid0, tc0) = start_meta_node_leader().await?;
-    let mn0 = tc0.meta_node();
-
-    let (_nid1, tc1) = start_meta_node_non_voter(mn0.clone(), 1).await?;
-    let mn1 = tc1.meta_node();
-
-    assert_upsert_kv_synced(vec![mn0.clone(), mn1.clone()], "metakey2").await?;
-
-    Ok(())
-}
-
-#[async_entry::test(worker_threads = 5, init = "init_meta_ut!()", tracing_span = "debug")]
-async fn test_meta_node_write_to_local_leader() -> anyhow::Result<()> {
-    // - Start a leader, 2 followers and a non-voter;
-    // - Write to the raft node on the leader, expect Ok.
-    // - Write to the raft node on the non-leader, expect ForwardToLeader error.
-
-    let (mut _nlog, tcs) = start_meta_node_cluster(btreeset![0, 1, 2], btreeset![3]).await?;
-    let all = test_context_nodes(&tcs);
-
-    let leader_id = all[0].raft.metrics().borrow().current_leader.unwrap();
-
-    // test writing to leader and non-leader
-    let key = "t-non-leader-write";
-    for id in 0u64..4 {
-        let mn = &all[id as usize];
-        let maybe_leader = MetaLeader::new(mn);
-        let rst = maybe_leader
-            .write(LogEntry {
-                txid: None,
-                time_ms: None,
-                cmd: Cmd::UpsertKV(UpsertKV::update(&key, key.as_bytes())),
-            })
-            .await;
-
-        if id == leader_id {
-            assert!(rst.is_ok());
-        } else {
-            assert!(rst.is_err());
-            let e = rst.unwrap_err();
-            match e {
-                MetaError::MetaRaftError(MetaRaftError::ForwardToLeader(ForwardToLeader {
-                    leader_id: forward_leader_id,
-                })) => {
-                    assert_eq!(Some(leader_id), forward_leader_id);
-                }
-                _ => {
-                    panic!("expect MetaRaftError::ForwardToLeader")
-                }
-            }
-        }
-    }
-
-    Ok(())
-}
-
-#[async_entry::test(worker_threads = 5, init = "init_meta_ut!()", tracing_span = "debug")]
-async fn test_meta_node_snapshot_replication() -> anyhow::Result<()> {
-    // - Bring up a cluster of 3.
-    // - Write just enough logs to trigger a snapshot.
-    // - Add a non-voter, test the snapshot is sync-ed
-    // - Write logs to trigger another snapshot.
-    // - Add
-
-    // Create a snapshot every 10 logs
-    let snap_logs = 10;
-
-    let mut tc = MetaSrvTestContext::new(0);
-    tc.config.raft_config.snapshot_logs_since_last = snap_logs;
-    tc.config.raft_config.install_snapshot_timeout = 10_1000; // milli seconds. In a CI multi-threads test delays async task badly.
-    tc.config.raft_config.max_applied_log_to_keep = 0;
-
-    let mn = MetaNode::boot(&tc.config).await?;
-
-    tc.assert_raft_server_connection().await?;
-
-    mn.raft
-        .wait(timeout())
-        .state(State::Leader, "leader started")
-        .await?;
-
-    mn.raft
-        .wait(timeout())
-        .current_leader(0, "node-0 has leader")
-        .await?;
-
-    // initial membership, leader blank log, add node.
-    let mut log_index = 2;
-
-    mn.raft
-        .wait(timeout())
-        .log(Some(log_index), "leader init logs")
-        .await?;
-
-    let n_req = 12;
-
-    for i in 0..n_req {
-        let key = format!("test_meta_node_snapshot_replication-key-{}", i);
-        mn.write(LogEntry {
-            txid: None,
-            time_ms: None,
-            cmd: Cmd::UpsertKV(UpsertKV::update(&key, b"v")),
-        })
-        .await?;
-    }
-    log_index += n_req;
-
-    info!("--- check the log is locally applied");
-
-    mn.raft
-        .wait(timeout())
-        .log(Some(log_index), "applied on leader")
-        .await?;
-
-    info!("--- check the snapshot is created");
-
-    mn.raft
-        .wait(timeout())
-        .metrics(
-            |x| x.snapshot.map(|x| x.term) == Some(1) && x.snapshot.next_index() >= snap_logs,
-            "snapshot is created by leader",
-        )
-        .await?;
-
-    info!("--- start a non_voter to receive snapshot replication");
-
-    let (_, tc1) = start_meta_node_non_voter(mn.clone(), 1).await?;
-    log_index += 1;
-
-    let mn1 = tc1.meta_node();
-
-    mn1.raft
-        .wait(timeout())
-        .log(Some(log_index), "non-voter replicated all logs")
-        .await?;
-
-    mn1.raft
-        .wait(timeout())
-        .metrics(
-            |x| x.snapshot.map(|x| x.term) == Some(1) && x.snapshot.next_index() >= snap_logs,
-            "snapshot is received by non-voter",
-        )
-        .await?;
-
-    for i in 0..n_req {
-        let key = format!("test_meta_node_snapshot_replication-key-{}", i);
-        let got = mn1.get_kv(&key).await?;
-        match got {
-            None => {
-                panic!("expect get some value for {}", key)
-            }
-            Some(SeqV { ref data, .. }) => {
-                assert_eq!(data, b"v");
-            }
-        }
-    }
-
     Ok(())
 }
 
@@ -650,41 +478,6 @@ async fn test_meta_node_restart_single_node() -> anyhow::Result<()> {
             tc.config.raft_config.raft_api_advertise_host_endpoint(),
             node.endpoint
         );
-    }
-
-    Ok(())
-}
-
-#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
-async fn test_meta_node_incr_seq() -> anyhow::Result<()> {
-    let tc = MetaSrvTestContext::new(0);
-    let addr = tc.config.raft_config.raft_api_addr().await?;
-
-    let _mn = MetaNode::boot(&tc.config).await?;
-    tc.assert_raft_server_connection().await?;
-
-    let mut client = RaftServiceClient::connect(format!("http://{}", addr)).await?;
-
-    let cases = common_meta_raft_store::state_machine::testing::cases_incr_seq();
-
-    for (name, txid, k, want) in cases.iter() {
-        let req = LogEntry {
-            txid: txid.clone(),
-            time_ms: None,
-            cmd: Cmd::IncrSeq { key: k.to_string() },
-        };
-        let raft_reply = client.write(req).await?.into_inner();
-
-        let res: Result<AppliedState, RetryableError> = raft_reply.into();
-        let resp: AppliedState = res?;
-        match resp {
-            AppliedState::Seq { seq } => {
-                assert_eq!(*want, seq, "{}", name);
-            }
-            _ => {
-                panic!("not Seq")
-            }
-        }
     }
 
     Ok(())
