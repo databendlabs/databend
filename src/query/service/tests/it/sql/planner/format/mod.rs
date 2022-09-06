@@ -30,6 +30,7 @@ use databend_query::sql::plans::PhysicalHashJoin;
 use databend_query::sql::plans::PhysicalScan;
 use databend_query::sql::ColumnBinding;
 use databend_query::sql::Metadata;
+use databend_query::sql::Visibility;
 use databend_query::storages::Table;
 use parking_lot::RwLock;
 
@@ -88,7 +89,7 @@ fn test_format() {
                                 column_name: "col1".to_string(),
                                 index: col1,
                                 data_type: Box::new(BooleanType::new_impl()),
-                                visible_in_unqualified_wildcard: false,
+                                visibility: Visibility::Visible,
                             },
                         }
                         .into(),
@@ -110,7 +111,7 @@ fn test_format() {
                         column_name: "col2".to_string(),
                         index: col2,
                         data_type: Box::new(BooleanType::new_impl()),
-                        visible_in_unqualified_wildcard: false,
+                        visibility: Visibility::Visible,
                     },
                 }
                 .into(),

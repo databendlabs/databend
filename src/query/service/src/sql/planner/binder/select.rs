@@ -34,6 +34,7 @@ use common_exception::Result;
 
 use crate::sql::binder::scalar_common::split_conjunctions;
 use crate::sql::binder::CteInfo;
+use crate::sql::binder::Visibility;
 use crate::sql::optimizer::SExpr;
 use crate::sql::planner::binder::scalar::ScalarBinder;
 use crate::sql::planner::binder::BindContext;
@@ -478,7 +479,7 @@ impl<'a> Binder {
                     column_name: left_col.column_name.clone(),
                     index: new_column_index,
                     data_type: Box::new(coercion_type.clone()),
-                    visible_in_unqualified_wildcard: false,
+                    visibility: Visibility::Visible,
                 };
                 let left_coercion_expr = CastExpr {
                     argument: Box::new(

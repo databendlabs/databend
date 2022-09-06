@@ -42,6 +42,7 @@ use crate::catalogs::DatabaseCatalog;
 use crate::sessions::TableContext;
 use crate::sql::binder::scalar::ScalarBinder;
 use crate::sql::binder::Binder;
+use crate::sql::binder::Visibility;
 use crate::sql::executor::ExpressionBuilderWithoutRenaming;
 use crate::sql::executor::PhysicalScalarBuilder;
 use crate::sql::is_reserved_opt_key;
@@ -910,7 +911,7 @@ impl<'a> Binder {
                 // A dummy index is fine, since we won't actually evaluate the expression
                 index: 0,
                 data_type: Box::new(field.data_type().clone()),
-                visible_in_unqualified_wildcard: false,
+                visibility: Visibility::Visible,
             };
             bind_context.columns.push(column);
         }

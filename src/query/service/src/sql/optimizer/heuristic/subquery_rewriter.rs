@@ -24,6 +24,7 @@ use common_exception::Result;
 use common_functions::aggregates::AggregateFunctionFactory;
 
 use crate::sql::binder::ColumnBinding;
+use crate::sql::binder::Visibility;
 use crate::sql::optimizer::ColumnSet;
 use crate::sql::optimizer::RelExpr;
 use crate::sql::optimizer::SExpr;
@@ -316,7 +317,7 @@ impl SubqueryRewriter {
                         column_name: name,
                         index,
                         data_type,
-                        visible_in_unqualified_wildcard: false,
+                        visibility: Visibility::Visible,
                     },
                 });
 
@@ -430,7 +431,7 @@ impl SubqueryRewriter {
                                 column_name: "count(*)".to_string(),
                                 index: agg_func_index,
                                 data_type: Box::new(agg_func.return_type()?),
-                                visible_in_unqualified_wildcard: false,
+                                visibility: Visibility::Visible,
                             },
                         }
                         .into(),
@@ -496,7 +497,7 @@ impl SubqueryRewriter {
                         column_name,
                         index: *index,
                         data_type: subquery.data_type.clone(),
-                        visible_in_unqualified_wildcard: false,
+                        visibility: Visibility::Visible,
                     },
                 });
                 let child_expr = *subquery.child_expr.as_ref().unwrap().clone();
