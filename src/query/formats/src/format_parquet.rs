@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::borrow::Cow;
 use std::io::Cursor;
 use std::sync::Arc;
 
@@ -32,7 +33,7 @@ use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_io::prelude::FileSplit;
+use common_io::prelude::FileSplitCow;
 use common_io::prelude::FormatSettings;
 use similar_asserts::traits::MakeDiff;
 
@@ -70,7 +71,7 @@ impl ParquetInputFormat {
         Ok(Arc::new(ParquetInputFormat { schema }))
     }
 
-    fn read_meta_data(cursor: &mut Cursor<&Vec<u8>>) -> Result<FileMetaData> {
+    fn read_meta_data(cursor: &mut Cursor<&[u8]>) -> Result<FileMetaData> {
         match read_metadata(cursor) {
             Ok(metadata) => Ok(metadata),
             Err(cause) => Err(ErrorCode::ParquetError(cause.to_string())),
@@ -80,7 +81,7 @@ impl ParquetInputFormat {
     fn read_columns(
         fields: &[Field],
         row_group: &RowGroupMetaData,
-        cursor: &mut Cursor<&Vec<u8>>,
+        cursor: &mut Cursor<&[u8]>,
     ) -> Result<Vec<ArrayIter<'static>>> {
         match read_columns_many(cursor, row_group, fields.to_vec(), None) {
             Ok(array) => Ok(array),
@@ -112,16 +113,16 @@ impl InputFormat for ParquetInputFormat {
         if memory.is_empty() {
             return Ok(vec![]);
         }
-        self.deserialize_complete_split(FileSplit {
+        self.deserialize_complete_split(FileSplitCow {
             path: None,
             start_offset: 0,
             start_row: 0,
-            buf: memory,
+            buf: Cow::from(memory),
         })
     }
 
-    fn deserialize_complete_split(&self, split: FileSplit) -> Result<Vec<DataBlock>> {
-        let mut cursor = Cursor::new(&split.buf);
+    fn deserialize_complete_split(&self, split: FileSplitCow<'_>) -> Result<Vec<DataBlock>> {
+        let mut cursor = Cursor::new(split.buf.as_ref());
         let parquet_metadata = Self::read_meta_data(&mut cursor)?;
         let infer_schema = read::infer_schema(&parquet_metadata)?;
         let mut read_fields = Vec::with_capacity(self.schema.num_fields());

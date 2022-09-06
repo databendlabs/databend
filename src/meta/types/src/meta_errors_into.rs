@@ -47,11 +47,7 @@ impl From<MetaError> for ErrorCode {
                 ErrorCode::MetaServiceError(format!("meta store already exists: {}", node_id))
             }
             MetaError::MetaStoreNotFound => ErrorCode::MetaServiceError("MetaStoreNotFound"),
-            MetaError::StartMetaServiceError(err_str) => ErrorCode::MetaServiceError(err_str),
-            MetaError::ConcurrentSnapshotInstall(err_str) => ErrorCode::MetaServiceError(err_str),
             MetaError::MetaServiceError(err_str) => ErrorCode::MetaServiceError(err_str),
-            MetaError::IllegalRoleInfoFormat(err_str) => ErrorCode::MetaServiceError(err_str),
-            MetaError::IllegalUserInfoFormat(err_str) => ErrorCode::MetaServiceError(err_str),
             MetaError::SerdeError(ae) => {
                 ErrorCode::MetaServiceError(ae.to_string()).set_backtrace(ae.backtrace())
             }

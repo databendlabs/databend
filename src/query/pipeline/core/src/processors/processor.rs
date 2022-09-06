@@ -23,6 +23,7 @@ use futures::FutureExt;
 use petgraph::graph::node_index;
 use petgraph::prelude::NodeIndex;
 
+#[derive(Debug)]
 pub enum Event {
     NeedData,
     NeedConsume,
@@ -105,5 +106,3 @@ impl ProcessorPtr {
         (*self.inner.get()).async_process().boxed()
     }
 }
-
-pub type Processors = Vec<ProcessorPtr>;

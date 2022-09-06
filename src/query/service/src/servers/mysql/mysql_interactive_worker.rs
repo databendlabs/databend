@@ -50,10 +50,8 @@ use crate::servers::mysql::writers::ProgressReporter;
 use crate::servers::mysql::writers::QueryResult;
 use crate::servers::mysql::MySQLFederated;
 use crate::servers::mysql::MYSQL_VERSION;
-use crate::servers::utils::use_planner_v2;
 use crate::sessions::QueryContext;
 use crate::sessions::Session;
-use crate::sessions::SessionManager;
 use crate::sessions::TableContext;
 use crate::sql::plans::Plan;
 use crate::sql::DfParser;
@@ -86,12 +84,6 @@ fn has_result_set_by_plan_node(plan: &PlanNode) -> bool {
 struct InteractiveWorkerBase<W: AsyncWrite + Send + Unpin> {
     session: Arc<Session>,
     generic_hold: PhantomData<W>,
-}
-
-impl<W: AsyncWrite + Send + Unpin> Drop for InteractiveWorkerBase<W> {
-    fn drop(&mut self) {
-        SessionManager::instance().destroy_session(&self.session.get_id())
-    }
 }
 
 pub struct InteractiveWorker<W: AsyncWrite + Send + Unpin> {
@@ -353,7 +345,7 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
                     Err(_) => vec![],
                 };
                 let mut has_result_set = true;
-                let interpreter = if use_planner_v2(&settings, &stmts_hints)? {
+                let interpreter = if settings.get_enable_planner_v2()? != 0 {
                     let mut planner = Planner::new(context.clone());
                     planner.plan_sql(query).await.and_then(|v| {
                         has_result_set = has_result_set_by_plan(&v.0);

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::io::Cursor;
 use std::ops::Not;
 use std::sync::Arc;
@@ -21,7 +22,6 @@ use common_ast::ast::InsertSource;
 use common_ast::ast::InsertStmt;
 use common_ast::ast::Statement;
 use common_ast::parser::parse_comma_separated_exprs;
-use common_ast::parser::token::Token;
 use common_ast::parser::tokenize_sql;
 use common_ast::Backtrace;
 use common_datablocks::DataBlock;
@@ -37,8 +37,6 @@ use common_formats::FormatFactory;
 use common_io::prelude::BufferReader;
 use common_io::prelude::*;
 use common_pipeline_transforms::processors::transforms::Transform;
-use common_streams::NDJsonSourceBuilder;
-use common_streams::Source;
 use tracing::debug;
 
 use crate::evaluator::EvalNode;
@@ -111,16 +109,13 @@ impl<'a> Binder {
 
         let input_source: Result<InsertInputSource> = match source.clone() {
             InsertSource::Streaming {
-                format,
-                rest_tokens,
+                format, rest_str, ..
             } => {
-                let stream_str = self.analyze_streaming_input(rest_tokens)?;
-                self.analyze_stream_format(bind_context, &stream_str, Some(format), schema.clone())
+                self.analyze_stream_format(bind_context, rest_str, Some(format), schema.clone())
                     .await
             }
-            InsertSource::Values { rest_tokens } => {
-                let stream_str = self.analyze_streaming_input(rest_tokens)?;
-                let str = stream_str.trim_end_matches(';');
+            InsertSource::Values { rest_str, .. } => {
+                let str = rest_str.trim_end_matches(';');
                 self.analyze_stream_format(
                     bind_context,
                     str,
@@ -152,25 +147,6 @@ impl<'a> Binder {
         Ok(Plan::Insert(Box::new(plan)))
     }
 
-    pub(in crate::sql::planner::binder) fn analyze_streaming_input(
-        &self,
-        tokens: &[Token],
-    ) -> Result<String> {
-        if tokens.is_empty() {
-            return Ok("".to_string());
-        }
-        let first_token = tokens
-            .first()
-            .ok_or_else(|| ErrorCode::SyntaxException("Missing token"))?;
-        let last_token = tokens
-            .last()
-            .ok_or_else(|| ErrorCode::SyntaxException("Missing token"))?;
-        let source = first_token.source;
-        let start = first_token.span.start;
-        let end = last_token.span.end;
-        Ok(source[start..end].to_string())
-    }
-
     pub(in crate::sql::planner::binder) async fn analyze_stream_format(
         &self,
         bind_context: &BindContext,
@@ -198,31 +174,19 @@ impl<'a> Binder {
                 let block = source.read(&mut reader).await?;
                 Ok(InsertInputSource::Values(InsertValueBlock { block }))
             }
-            Some("JSONEACHROW") => {
-                let builder = NDJsonSourceBuilder::create(schema.clone(), settings);
-                let cursor = futures::io::Cursor::new(stream_str.as_bytes());
-                let mut source = builder.build(cursor)?;
-                let mut blocks = Vec::new();
-                while let Some(v) = source.read().await? {
-                    blocks.push(v);
-                }
-                let block = DataBlock::concat_blocks(&blocks)?;
-                Ok(InsertInputSource::Values(InsertValueBlock { block }))
-            }
             // format factory
             Some(name) => {
-                let input_format =
-                    FormatFactory::instance().get_input(name, schema.clone(), settings)?;
+                let input_format = FormatFactory::instance().get_input(name, schema, settings)?;
 
                 let data_slice = stream_str.as_bytes();
                 let mut input_state = input_format.create_state();
                 let skip_size = input_format.skip_header(data_slice, &mut input_state, 0)?;
 
-                let split = FileSplit {
+                let split = FileSplitCow {
                     path: None,
                     start_offset: 0,
                     start_row: 0,
-                    buf: data_slice[skip_size..].to_owned(),
+                    buf: Cow::from(&data_slice[skip_size..]),
                 };
 
                 let blocks = input_format.deserialize_complete_split(split)?;

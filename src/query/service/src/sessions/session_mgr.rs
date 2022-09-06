@@ -18,6 +18,7 @@ use std::ops::DerefMut;
 use std::sync::atomic::AtomicU32;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::sync::Weak;
 use std::time::Duration;
 
 use common_base::base::tokio;
@@ -45,7 +46,7 @@ use crate::Config;
 pub struct SessionManager {
     pub(in crate::sessions) conf: Config,
     pub(in crate::sessions) max_sessions: usize,
-    pub(in crate::sessions) active_sessions: Arc<RwLock<HashMap<String, Arc<Session>>>>,
+    pub(in crate::sessions) active_sessions: Arc<RwLock<HashMap<String, Weak<Session>>>>,
     pub status: Arc<RwLock<SessionManagerStatus>>,
 
     // When typ is MySQL, insert into this map, key is id, val is MySQL connection id.
@@ -86,7 +87,7 @@ impl SessionManager {
         self.conf.clone()
     }
 
-    pub async fn create_session(self: &Arc<Self>, typ: SessionType) -> Result<Arc<Session>> {
+    pub async fn create_session(&self, typ: SessionType) -> Result<Arc<Session>> {
         // TODO: maybe deadlock
         let config = self.get_conf();
         {
@@ -134,11 +135,8 @@ impl SessionManager {
                 &config.query.cluster_id,
             );
 
-            match typ {
-                SessionType::FlightRPC => {}
-                _ => {
-                    sessions.insert(session.get_id(), session.clone());
-                }
+            if !matches!(typ, SessionType::FlightRPC) {
+                sessions.insert(session.get_id(), Arc::downgrade(&session));
             }
 
             Ok(session)
@@ -149,23 +147,17 @@ impl SessionManager {
         }
     }
 
-    #[allow(clippy::ptr_arg)]
-    pub async fn get_session_by_id(self: &Arc<Self>, id: &str) -> Option<Arc<Session>> {
+    pub async fn get_session_by_id(&self, id: &str) -> Option<Arc<Session>> {
         let sessions = self.active_sessions.read();
-        sessions.get(id).cloned()
+        sessions.get(id).and_then(|weak_ptr| weak_ptr.upgrade())
     }
 
-    #[allow(clippy::ptr_arg)]
-    pub async fn get_id_by_mysql_conn_id(
-        self: &Arc<Self>,
-        mysql_conn_id: &Option<u32>,
-    ) -> Option<String> {
+    pub async fn get_id_by_mysql_conn_id(&self, mysql_conn_id: &Option<u32>) -> Option<String> {
         let sessions = self.mysql_conn_map.read();
         sessions.get(mysql_conn_id).cloned()
     }
 
-    #[allow(clippy::ptr_arg)]
-    pub fn destroy_session(self: &Arc<Self>, session_id: &String) {
+    pub fn destroy_session(&self, session_id: &String) {
         let config = self.get_conf();
         label_counter(
             super::metrics::METRIC_SESSION_CLOSE_NUMBERS,
@@ -189,7 +181,7 @@ impl SessionManager {
     }
 
     pub fn graceful_shutdown(
-        self: &Arc<Self>,
+        &self,
         mut signal: SignalStream,
         timeout_secs: i32,
     ) -> impl Future<Output = ()> {
@@ -215,28 +207,45 @@ impl SessionManager {
             }
 
             info!("Will shutdown forcefully.");
-            active_sessions
-                .read()
-                .values()
-                .for_each(Session::force_kill_session);
+
+            for weak_ptr in active_sessions.read().values() {
+                if let Some(active_session) = weak_ptr.upgrade() {
+                    active_session.force_kill_session();
+                }
+            }
         }
     }
 
-    pub async fn processes_info(self: &Arc<Self>) -> Vec<ProcessInfo> {
+    pub async fn processes_info(&self) -> Vec<ProcessInfo> {
         let sessions = self.active_sessions.read();
-        sessions
-            .values()
-            .map(Session::process_info)
-            .collect::<Vec<_>>()
+
+        let mut processes_info = Vec::with_capacity(sessions.len());
+        for weak_ptr in sessions.values() {
+            if let Some(active_session) = weak_ptr.upgrade() {
+                processes_info.push(active_session.process_info());
+            }
+        }
+
+        processes_info
     }
 
-    async fn destroy_idle_sessions(sessions: &Arc<RwLock<HashMap<String, Arc<Session>>>>) -> bool {
+    async fn destroy_idle_sessions(sessions: &Arc<RwLock<HashMap<String, Weak<Session>>>>) -> bool {
         // Read lock does not support reentrant
         // https://github.com/Amanieu/parking_lot::/blob/lock_api-0.4.4/lock_api/src/rwlock.rs#L422
-        let active_sessions_read_guard = sessions.read();
+        let mut active_sessions_read_guard = sessions.write();
 
         // First try to kill the idle session
-        active_sessions_read_guard.values().for_each(Session::kill);
+        active_sessions_read_guard.retain(|_id, weak_ptr| -> bool {
+            match weak_ptr.upgrade() {
+                None => false,
+                Some(session) => {
+                    session.kill();
+                    true
+                }
+            }
+        });
+
+        // active_sessions_read_guard.values().for_each(Session::kill);
         let active_sessions = active_sessions_read_guard.len();
 
         match active_sessions {

@@ -43,7 +43,7 @@ INSERT INTO t2 (a,b,c) values(true, '2021-09-07 21:38:35.000000', '2021-09-07'),
 statement query BTT
 SELECT * FROM t2;
 
----- 
+----
 1 2021-09-07 21:38:35.000000 2021-09-07
 0 2021-09-07 21:38:35.000000 2021-09-07
 
@@ -55,7 +55,4 @@ DROP TABLE t1;
 
 statement ok
 DROP TABLE t2;
-
-statement ok
-set enable_planner_v2 = 0;
 

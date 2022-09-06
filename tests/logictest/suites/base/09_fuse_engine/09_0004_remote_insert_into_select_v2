@@ -16,10 +16,10 @@ statement ok
 CREATE TABLE IF NOT EXISTS t3(a String, b String, c String, d String) Engine = Fuse;
 
 statement error 1006
-INSERT INTO t1 (a,b,c,d,e) select * from t3; 
+INSERT INTO t1 (a,b,c,d,e) select * from t3;
 
 statement error 1006
-INSERT INTO t1 (a,b,c,d,e) select a,b,c from t3; 
+INSERT INTO t1 (a,b,c,d,e) select a,b,c from t3;
 
 statement ok
 create table n1(a uint64);
@@ -110,7 +110,4 @@ DROP TABLE s1;
 
 statement ok
 DROP DATABASE db_09_004;
-
-statement ok
-set enable_planner_v2 = 0;
 

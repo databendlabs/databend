@@ -48,19 +48,7 @@ pub enum MetaError {
     MetaStoreNotFound,
 
     #[error("{0}")]
-    StartMetaServiceError(String),
-
-    #[error("{0}")]
-    ConcurrentSnapshotInstall(String),
-
-    #[error("{0}")]
     MetaServiceError(String),
-
-    #[error("{0}")]
-    IllegalRoleInfoFormat(String),
-
-    #[error("{0}")]
-    IllegalUserInfoFormat(String),
 
     /// type to represent serialize/deserialize errors
     #[error(transparent)]
@@ -80,7 +68,3 @@ pub enum MetaError {
 }
 
 pub type MetaResult<T> = Result<T, MetaError>;
-
-#[derive(Error, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-#[error("InvalidMembership")]
-pub struct InvalidMembership {}
