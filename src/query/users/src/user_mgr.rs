@@ -41,6 +41,13 @@ impl UserApiProvider {
                 )));
             }
             Ok(user_info)
+        } else if let Some(auth_info) = self.get_configured_user(&user.username) {
+            let mut user_info = UserInfo::new(&user.username, "%", auth_info.clone());
+            user_info.grants.grant_privileges(
+                &GrantObject::Global,
+                UserPrivilegeSet::available_privileges_on_global(),
+            );
+            Ok(user_info)
         } else {
             let client = self.get_user_api_client(tenant)?;
             let get_user = client.get_user(user, None);
@@ -101,6 +108,11 @@ impl UserApiProvider {
         user_info: UserInfo,
         if_not_exists: bool,
     ) -> Result<u64> {
+        if self.get_configured_user(&user_info.name).is_some() {
+            return Err(ErrorCode::UserAlreadyExists(
+                "same name with configured user",
+            ));
+        }
         let client = self.get_user_api_client(tenant)?;
         let add_user = client.add_user(user_info);
         match add_user.await {

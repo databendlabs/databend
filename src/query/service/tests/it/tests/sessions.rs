@@ -112,6 +112,7 @@ impl TestGlobalServices {
         SessionManager::init(config.clone(), global_services.clone())?;
         UserApiProvider::init(
             config.meta.to_meta_grpc_client_conf(),
+            config.idm.clone(),
             global_services.clone(),
         )
         .await?;

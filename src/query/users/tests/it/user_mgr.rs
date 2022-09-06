@@ -30,7 +30,7 @@ use pretty_assertions::assert_eq;
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_user_manager() -> Result<()> {
     let conf = RpcClientConf::default();
-    let user_mgr = UserApiProvider::try_create(conf).await?;
+    let user_mgr = UserApiProvider::try_create_simple(conf).await?;
 
     let tenant = "test";
     let username = "test-user1";
@@ -247,7 +247,7 @@ async fn test_user_manager() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_user_manager_with_root_user() -> Result<()> {
     let conf = RpcClientConf::default();
-    let user_mgr = UserApiProvider::try_create(conf).await?;
+    let user_mgr = UserApiProvider::try_create_simple(conf).await?;
 
     let tenant = "test";
     let username1 = "default";
