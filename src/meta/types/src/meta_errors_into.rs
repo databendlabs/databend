@@ -39,9 +39,6 @@ impl From<MetaError> for ErrorCode {
             MetaError::MetaStorageError(sto_err) => {
                 ErrorCode::MetaServiceError(sto_err.to_string()).set_backtrace(sto_err.backtrace())
             }
-            MetaError::MetaResultError(res_err) => {
-                ErrorCode::MetaServiceError(res_err.to_string()).set_backtrace(res_err.backtrace())
-            }
             MetaError::InvalidConfig(err_str) => ErrorCode::MetaServiceError(err_str),
             MetaError::MetaStoreAlreadyExists(node_id) => {
                 ErrorCode::MetaServiceError(format!("meta store already exists: {}", node_id))

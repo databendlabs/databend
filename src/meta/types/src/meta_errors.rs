@@ -20,7 +20,6 @@ use thiserror::Error;
 use crate::app_error::AppError;
 use crate::MetaNetworkError;
 use crate::MetaRaftError;
-use crate::MetaResultError;
 use crate::MetaStorageError;
 
 /// Top level error MetaNode would return.
@@ -34,9 +33,6 @@ pub enum MetaError {
 
     #[error(transparent)]
     MetaStorageError(#[from] MetaStorageError),
-
-    #[error(transparent)]
-    MetaResultError(#[from] MetaResultError),
 
     #[error("{0}")]
     InvalidConfig(String),
