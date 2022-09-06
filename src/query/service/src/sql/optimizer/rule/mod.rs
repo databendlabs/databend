@@ -67,6 +67,8 @@ pub enum RuleID {
 
     // Exploration rules
     CommuteJoin,
+    LeftAssociateJoin,
+    RightAssociateJoin,
 
     // Implementation rules
     ImplementGet,
@@ -97,6 +99,8 @@ impl Display for RuleID {
             RuleID::FoldCountAggregate => write!(f, "FoldCountAggregate"),
 
             RuleID::CommuteJoin => write!(f, "CommuteJoin"),
+            RuleID::LeftAssociateJoin => write!(f, "LeftAssociateJoin"),
+            RuleID::RightAssociateJoin => write!(f, "RightAssociateJoin"),
 
             RuleID::ImplementGet => write!(f, "ImplementGet"),
             RuleID::ImplementHashJoin => write!(f, "ImplementHashJoin"),
