@@ -25,7 +25,6 @@ use common_meta_api::KVApi;
 use common_meta_types::KVMeta;
 use common_meta_types::MatchSeq;
 use common_meta_types::NodeInfo;
-use common_meta_types::OkOrExist;
 use common_meta_types::Operation;
 use common_meta_types::SeqV;
 use common_meta_types::UpsertKVReply;
@@ -91,15 +90,14 @@ impl ClusterApi for ClusterMgr {
             .kv_api
             .upsert_kv(UpsertKVReq::new(&node_key, seq, value, meta));
 
-        let res = upsert_node.await?.into_add_result()?;
-
-        match res.res {
-            OkOrExist::Ok(v) => Ok(v.seq),
-            OkOrExist::Exists(v) => Err(ErrorCode::ClusterNodeAlreadyExists(format!(
+        let res = upsert_node.await?.added_or_else(|v| {
+            ErrorCode::ClusterNodeAlreadyExists(format!(
                 "Cluster ID already exists, seq [{}]",
                 v.seq
-            ))),
-        }
+            ))
+        })?;
+
+        Ok(res.seq)
     }
 
     async fn get_nodes(&self) -> Result<Vec<NodeInfo>> {
