@@ -18,6 +18,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::sql::binder::ColumnBinding;
+use crate::sql::binder::Visibility;
 use crate::sql::plans::AndExpr;
 use crate::sql::plans::BoundColumnRef;
 use crate::sql::plans::CastExpr;
@@ -54,7 +55,7 @@ impl<'a> GroupingChecker<'a> {
                 column_name: "group_item".to_string(),
                 index: column.index,
                 data_type: Box::new(column.scalar.data_type()),
-                invisibility: None,
+                visibility: Visibility::Visible,
             };
             return Ok(BoundColumnRef {
                 column: column_binding,
@@ -131,7 +132,7 @@ impl<'a> GroupingChecker<'a> {
                         column_name: agg.display_name.clone(),
                         index: agg_func.index,
                         data_type: Box::new(agg_func.scalar.data_type()),
-                        invisibility: None,
+                        visibility: Visibility::Visible,
                     };
                     return Ok(BoundColumnRef {
                         column: column_binding,

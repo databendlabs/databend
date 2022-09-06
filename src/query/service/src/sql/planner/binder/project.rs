@@ -22,6 +22,7 @@ use common_exception::Result;
 use super::bind_context::NameResolutionResult;
 use crate::sql::binder::select::SelectItem;
 use crate::sql::binder::select::SelectList;
+use crate::sql::binder::Visibility;
 use crate::sql::optimizer::ColumnSet;
 use crate::sql::optimizer::SExpr;
 use crate::sql::planner::binder::scalar::ScalarBinder;
@@ -187,7 +188,7 @@ impl<'a> Binder {
                                 // Expands wildcard star, for example we have a table `t(a INT, b INT)`:
                                 // The query `SELECT * FROM t` will be expanded into `SELECT t.a, t.b FROM t`
                                 for column_binding in input_context.all_column_bindings() {
-                                    if column_binding.invisibility.is_some() {
+                                    if column_binding.visibility != Visibility::Visible {
                                         continue;
                                     }
                                     output.items.push(SelectItem {

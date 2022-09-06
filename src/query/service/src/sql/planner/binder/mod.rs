@@ -382,7 +382,7 @@ impl<'a> Binder {
             column_name,
             index,
             data_type: Box::new(data_type),
-            invisibility: None,
+            visibility: Visibility::Visible,
         }
     }
 }

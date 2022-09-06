@@ -29,6 +29,7 @@ use databend_query::sql::plans::ConstantExpr;
 use databend_query::sql::plans::FunctionCall;
 use databend_query::sql::plans::Scalar;
 use databend_query::sql::ColumnBinding;
+use databend_query::sql::Visibility;
 
 use crate::tests::create_query_context;
 
@@ -50,7 +51,7 @@ async fn test_scalar_evaluator() -> Result<()> {
                                     column_name: "".to_string(),
                                     index: 0,
                                     data_type: Box::new(Int32Type::new_impl()),
-                                    invisibility: None,
+                                    visibility: Visibility::Visible,
                                 },
                             }
                             .into(),
@@ -61,7 +62,7 @@ async fn test_scalar_evaluator() -> Result<()> {
                                     column_name: "".to_string(),
                                     index: 1,
                                     data_type: Box::new(Int32Type::new_impl()),
-                                    invisibility: None,
+                                    visibility: Visibility::Visible,
                                 },
                             }
                             .into(),

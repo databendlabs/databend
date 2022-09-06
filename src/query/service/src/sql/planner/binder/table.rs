@@ -37,7 +37,7 @@ use crate::sql::binder::scalar::ScalarBinder;
 use crate::sql::binder::Binder;
 use crate::sql::binder::ColumnBinding;
 use crate::sql::binder::CteInfo;
-use crate::sql::binder::InVisibility;
+use crate::sql::binder::Visibility;
 use crate::sql::optimizer::SExpr;
 use crate::sql::planner::semantic::normalize_identifier;
 use crate::sql::planner::semantic::TypeChecker;
@@ -299,10 +299,11 @@ impl<'a> Binder {
                 column_name: column.name.clone(),
                 index: column.column_index,
                 data_type: Box::new(column.data_type.clone()),
-                invisibility: column
-                    .path_indices
-                    .as_ref()
-                    .map(|_| InVisibility::InnerColumnOfStruct),
+                visibility: if column.path_indices.is_some() {
+                    Visibility::InVisible
+                } else {
+                    Visibility::Visible
+                },
             };
             bind_context.add_column_binding(column_binding);
         }
