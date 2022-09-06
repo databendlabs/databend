@@ -75,6 +75,7 @@ impl Rule for RuleImplementHashJoin {
             .into(),
             s_expr.children().to_vec(),
             None,
+            None,
         );
         state.add_result(result);
 

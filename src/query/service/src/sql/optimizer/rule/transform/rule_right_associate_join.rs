@@ -187,6 +187,7 @@ impl Rule for RuleRightAssociateJoin {
                 t3.clone(),
             ],
             s_expr.original_group,
+            None,
         );
 
         state.add_result(result);
