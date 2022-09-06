@@ -849,7 +849,7 @@ impl<'a> Binder {
                     .map(|catalog| normalize_identifier(catalog, &self.name_resolution_ctx).name)
                     .unwrap_or_else(|| self.ctx.get_current_catalog());
                 let database = database.as_ref().map_or_else(
-                    || self.ctx.get_current_catalog(),
+                    || self.ctx.get_current_database(),
                     |ident| normalize_identifier(ident, &self.name_resolution_ctx).name,
                 );
                 let table_name = normalize_identifier(table, &self.name_resolution_ctx).name;

@@ -112,7 +112,7 @@ impl DataBlock {
 
             with_match_primitive_type_id!(data_type_id, |$T| {
                 let col: &PrimitiveColumn<$T> = unsafe { Series::static_cast(predict) };
-                let iter = col.iter().map(|v| *v > $T::default());
+                let iter = col.iter().map(|v| *v != $T::default());
                 let col = BooleanColumn::from_owned_iterator(iter);
 
                 return Ok(Arc::new(col));
