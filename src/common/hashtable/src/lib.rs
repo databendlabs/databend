@@ -41,7 +41,7 @@ mod two_level_hash_table;
 #[cfg(not(target_os = "linux"))]
 type HashTableAllocator = common_base::mem_allocator::JEAllocator;
 #[cfg(target_os = "linux")]
-type HashTableAllocator = common_base::mem_allocator::MmapAllocator;
+type HashTableAllocator = common_base::mem_allocator::MmapAllocator<true>;
 
 type HashTableAllocatorWithStackMemory<const INIT_BYTES: usize = 64> =
     StackfulAllocator<INIT_BYTES, HashTableAllocator>;
