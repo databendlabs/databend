@@ -85,5 +85,8 @@ statement ok
 SELECT * FROM INFORMATION_SCHEMA.TABLES limit 1;
 
 statement ok
+SELECT * FROM INFORMATION_SCHEMA.COLUMNS limit 1;
+
+statement ok
 DROP DATABASE showtable;
 
