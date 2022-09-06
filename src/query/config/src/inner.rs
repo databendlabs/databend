@@ -26,6 +26,7 @@ use common_grpc::RpcClientConf;
 use common_grpc::RpcClientTlsConfig;
 use common_storage::StorageConfig;
 use common_tracing::Config as LogConfig;
+use common_users::idm_config::IDMConfig;
 
 use super::outer_v0::Config as OuterV0Config;
 
@@ -52,6 +53,8 @@ pub struct Config {
     // - Later, catalog information SHOULD be kept in KV Service
     // - currently only supports HIVE (via hive meta store)
     pub catalog: HiveCatalogConfig,
+
+    pub idm: IDMConfig,
 }
 
 impl Config {

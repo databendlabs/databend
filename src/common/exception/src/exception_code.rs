@@ -169,6 +169,8 @@ build_exceptions! {
     InvalidConfig(2002),
     MetaStorageError(2003),
     InvalidArgument(2004),
+    // Meta service replied with invalid data
+    InvalidReply(2005),
 
     TableVersionMismatched(2009),
     OCCRetryFailure(2011),

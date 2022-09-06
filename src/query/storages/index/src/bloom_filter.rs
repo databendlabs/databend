@@ -24,7 +24,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_pipeline_transforms::processors::transforms::transform_expression_executor::ExpressionExecutor;
 use common_planners::Expression;
-use tracing::info;
+use tracing::debug;
 
 use crate::IndexSchemaVersion;
 use crate::SupportedType;
@@ -390,7 +390,7 @@ impl BloomFilter {
         let power_of_ln2 = core::f32::consts::LN_2 as f64 * core::f32::consts::LN_2 as f64;
         let m = -(num_items as f64 * false_positive_rate.ln()) / power_of_ln2;
         let num_bits = m.ceil() as usize;
-        info!(
+        debug!(
             "Bloom filter calculate optimal bits, num_bits: {}, num_items: {}, false_positive_rate: {}",
             num_bits, num_items, false_positive_rate
         );
@@ -406,7 +406,7 @@ impl BloomFilter {
     pub fn optimal_num_hashes(num_items: u64, num_bits: u64) -> usize {
         let k = num_bits as f64 / num_items as f64 * core::f32::consts::LN_2 as f64;
         let num_hashes = std::cmp::max(2, k.ceil() as usize); // at least two hashes
-        info!(
+        debug!(
             "Bloom filter calculate optimal hashes, num_hashes: {}",
             num_hashes
         );

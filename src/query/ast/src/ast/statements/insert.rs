@@ -19,7 +19,6 @@ use crate::ast::write_comma_separated_list;
 use crate::ast::write_period_separated_list;
 use crate::ast::Identifier;
 use crate::ast::Query;
-use crate::parser::token::Token;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct InsertStmt<'a> {
@@ -59,10 +58,12 @@ impl Display for InsertStmt<'_> {
 pub enum InsertSource<'a> {
     Streaming {
         format: String,
-        rest_tokens: &'a [Token<'a>],
+        start: usize,
+        rest_str: &'a str,
     },
     Values {
-        rest_tokens: &'a [Token<'a>],
+        start: usize,
+        rest_str: &'a str,
     },
     Select {
         query: Box<Query<'a>>,
@@ -73,20 +74,11 @@ impl Display for InsertSource<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             InsertSource::Streaming {
-                format,
-                rest_tokens,
-            } => write!(
-                f,
-                "FORMAT {format} {}",
-                &rest_tokens[0].source
-                    [rest_tokens.first().unwrap().span.start..rest_tokens.last().unwrap().span.end]
-            ),
-            InsertSource::Values { rest_tokens } => write!(
-                f,
-                "VALUES {}",
-                &rest_tokens[0].source
-                    [rest_tokens.first().unwrap().span.start..rest_tokens.last().unwrap().span.end]
-            ),
+                format, rest_str, ..
+            } => {
+                write!(f, "FORMAT {format} {rest_str}")
+            }
+            InsertSource::Values { rest_str, .. } => write!(f, "VALUES {rest_str}"),
             InsertSource::Select { query } => write!(f, "{query}"),
         }
     }

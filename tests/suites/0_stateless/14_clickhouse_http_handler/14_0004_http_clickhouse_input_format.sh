@@ -46,6 +46,16 @@ insert into a(a,b,c) format VALUES (100,'2',100.3),
 
 EOF
 
+cat << EOF > /tmp/databend_test_ndjson.txt
+insert into a(a,b,c) format NDJSON {"a": 100, "b": "2", "c": 100.3}
+{"a": 200, "b": "3", "c": 200.4}
+EOF
+
+
+for i in `seq 1 10000`;do
+	echo '{"a": 0, "b": "3", "c": 0}' >>  /tmp/databend_test_ndjson.txt
+done
+
 curl -s  -u 'root:' -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}" -d "create table a ( a int, b varchar, c double)"
 
 
@@ -55,9 +65,9 @@ curl -s  -u 'root:' -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_POR
 curl -s  -u 'root:' -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}" --data-binary @/tmp/databend_test_tsv_names_and_types.txt
 
 curl -s  -u 'root:' -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}" --data-binary @/tmp/databend_test_values.txt
-curl -s  -u 'root:' -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}" -d "SELECT sum(a), min(b), sum(c) from a"
+curl -s  -u 'root:' -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}" --data-binary @/tmp/databend_test_ndjson.txt
 
+curl -s  -u 'root:' -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}" -d "SELECT count(), sum(a), min(b), sum(c) from a"
 curl -s  -u 'root:' -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}" -d "drop table a"
-
 
 rm /tmp/databend_test*.txt

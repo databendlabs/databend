@@ -14,7 +14,6 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use common_base::base::GlobalIORuntime;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
@@ -159,15 +158,10 @@ impl CopyInterpreterV2 {
         table.append2(ctx.clone(), &mut pipeline)?;
         pipeline.set_max_threads(settings.get_max_threads()? as usize);
 
-        let async_runtime = GlobalIORuntime::instance();
         let query_need_abort = ctx.query_need_abort();
         let executor_settings = ExecutorSettings::try_create(&settings)?;
-        let executor = PipelineCompleteExecutor::try_create(
-            async_runtime,
-            query_need_abort,
-            pipeline,
-            executor_settings,
-        )?;
+        let executor =
+            PipelineCompleteExecutor::try_create(query_need_abort, pipeline, executor_settings)?;
         executor.execute()?;
 
         Ok(ctx.consume_precommit_blocks())

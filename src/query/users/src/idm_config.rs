@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,9 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod optimizer;
-mod optimizer_constant_folding;
-mod optimizer_expression_transform;
-mod optimizer_scatters;
-mod optimizer_statistics_exact;
-mod optimizer_top_n_push_down;
+use std::collections::HashMap;
+
+use common_meta_types::AuthInfo;
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct IDMConfig {
+    pub users: HashMap<String, AuthInfo>,
+}

@@ -25,7 +25,6 @@ use common_fuse_meta::meta::Versioned;
 use common_meta_app::schema::TableInfo;
 use opendal::Operator;
 
-use crate::io::write_meta;
 use crate::io::BlockCompactor;
 use crate::io::MetaReaders;
 use crate::io::SegmentWriter;
@@ -178,21 +177,13 @@ impl TableMutator for CompactMutator {
         new_snapshot.segments.append(&mut merged_segments);
         new_snapshot.summary = merge_statistics(&self.summary, &merged_summary)?;
 
-        // write down the new snapshot
-        let snapshot_loc = self.location_generator.snapshot_location_from_uuid(
-            &new_snapshot.snapshot_id,
-            new_snapshot.format_version(),
-        )?;
-        write_meta(&self.data_accessor, &snapshot_loc, &new_snapshot).await?;
-
         FuseTable::commit_to_meta_server(
             ctx.as_ref(),
             catalog_name,
             table_info,
-            snapshot_loc,
-            &new_snapshot.summary,
+            &self.location_generator,
+            new_snapshot,
         )
-        .await?;
-        Ok(())
+        .await
     }
 }

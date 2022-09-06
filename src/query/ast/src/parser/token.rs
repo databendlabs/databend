@@ -799,7 +799,7 @@ impl TokenKind {
             // | TokenKind::ANALYSE
             | TokenKind::ANALYZE
             | TokenKind::AND
-            | TokenKind::ANY
+            // | TokenKind::ANY
             | TokenKind::ASC
             // | TokenKind::ASYMMETRIC
             | TokenKind::BETWEEN

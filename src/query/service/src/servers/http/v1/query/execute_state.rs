@@ -22,11 +22,13 @@ use common_base::base::tokio::sync::mpsc;
 use common_base::base::tokio::sync::RwLock;
 use common_base::base::GlobalIORuntime;
 use common_base::base::ProgressValues;
+use common_base::base::Thread;
 use common_base::base::TrySpawn;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRefExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_planners::PlanNode;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use futures::future::AbortHandle;
@@ -47,14 +49,12 @@ use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::Pipe;
 use crate::pipelines::PipelineBuildResult;
-use crate::servers::utils::use_planner_v2;
 use crate::sessions::QueryAffect;
 use crate::sessions::QueryContext;
 use crate::sessions::Session;
 use crate::sessions::TableContext;
+use crate::sql::plans::Plan;
 use crate::sql::ColumnBinding;
-use crate::sql::DfParser;
-use crate::sql::DfStatement;
 use crate::sql::PlanParser;
 use crate::sql::Planner;
 use crate::storages::result::block_buffer::BlockBuffer;
@@ -104,6 +104,7 @@ impl ExecuteState {
         }
     }
 }
+
 pub struct ExecuteStarting {
     pub(crate) ctx: Arc<QueryContext>,
 }
@@ -236,19 +237,14 @@ impl ExecuteState {
     ) -> Result<ExecuteRunning> {
         ctx.attach_query_str(sql);
 
-        let stmts = DfParser::parse_sql(sql, ctx.get_current_session().get_type());
         let settings = ctx.get_settings();
-        let is_v2 = use_planner_v2(&settings, &stmts)?;
-        let is_select = if let Ok((s, _)) = &stmts {
-            s.get(0)
-                .map_or(false, |stmt| matches!(stmt, DfStatement::Query(_)))
-        } else {
-            false
-        };
+        let is_v2 = settings.get_enable_planner_v2()? != 0;
+        let is_select;
 
         let interpreter = if is_v2 {
             let mut planner = Planner::new(ctx.clone());
             let (plan, _, _) = planner.plan_sql(sql).await?;
+            is_select = matches!(&plan, Plan::Query { .. });
             InterpreterFactoryV2::get(ctx.clone(), &plan)
         } else {
             let plan = match PlanParser::parse(ctx.clone(), sql).await {
@@ -258,8 +254,11 @@ impl ExecuteState {
                     return Err(e);
                 }
             };
+
+            is_select = matches!(&plan, PlanNode::Select(_));
             InterpreterFactory::get(ctx.clone(), plan)
         }?;
+
         if is_v2 && is_select {
             let _ = interpreter
                 .start()
@@ -418,8 +417,6 @@ impl HttpQueryHandle {
             processors: vec![sink],
         });
 
-        let async_runtime = GlobalIORuntime::instance();
-        let async_runtime_clone = async_runtime.clone();
         let query_need_abort = ctx.query_need_abort();
         let executor_settings = ExecutorSettings::try_create(&ctx.get_settings())?;
 
@@ -428,7 +425,6 @@ impl HttpQueryHandle {
             pipelines.push(build_res.main_pipeline);
 
             let pipeline_executor = PipelineCompleteExecutor::from_pipelines(
-                async_runtime_clone,
                 query_need_abort,
                 pipelines,
                 executor_settings,
@@ -439,7 +435,7 @@ impl HttpQueryHandle {
         let (error_sender, mut error_receiver) = mpsc::channel::<Result<()>>(1);
         let (abort_handle, abort_registration) = AbortHandle::new_pair();
 
-        async_runtime.spawn(async move {
+        GlobalIORuntime::instance().spawn(async move {
             let error_receiver = Abortable::new(error_receiver.recv(), abort_registration);
             ctx.add_source_abort_handle(abort_handle);
             match error_receiver.await {
@@ -458,7 +454,7 @@ impl HttpQueryHandle {
             }
         });
 
-        std::thread::spawn(move || {
+        Thread::spawn(move || {
             if let Err(cause) = run() {
                 if error_sender.blocking_send(Err(cause)).is_err() {
                     tracing::warn!("Error sender is disconnect");

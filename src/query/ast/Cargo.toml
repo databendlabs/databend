@@ -31,7 +31,7 @@ nom = "7.1.1"
 nom-rule = "0.3.0"
 pratt = "0.3.0"
 pretty = "0.11.3"
-thiserror = "1.0.31"
+thiserror = "=1.0.31"
 url = "2.2.2"
 
 [dev-dependencies]

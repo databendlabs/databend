@@ -123,7 +123,7 @@ statement query I
 WITH test1 AS (SELECT number-1 as n FROM numbers(4442) order by n limit 100) SELECT max(n) FROM test1 where n=422;
 
 ----
-0
+NULL
 
 statement query I
 WITH test1 AS (SELECT number-1 as n FROM numbers(4442) order by n limit 100) SELECT max(n) FROM test1 where n=42;
@@ -196,7 +196,7 @@ statement ok
 drop table with_test;
 
 statement query I
-WITH 
+WITH
 x AS (SELECT number AS a FROM numbers(10)),
 y AS (SELECT number AS a FROM numbers(5))
 SELECT * FROM x WHERE a in (SELECT a FROM y)
@@ -210,7 +210,7 @@ ORDER BY a;
 4
 
 statement query I
-WITH 
+WITH
 x AS (SELECT number AS a FROM numbers(10)),
 y AS (SELECT number AS a FROM numbers(5))
 SELECT x.a FROM x left JOIN y ON x.a = y.a
@@ -229,7 +229,7 @@ ORDER BY a;
 9
 
 statement query I
-WITH 
+WITH
 x AS (SELECT number AS a FROM numbers(10)),
 y AS (SELECT number AS a FROM numbers(5))
 SELECT * FROM x JOIN y USING (a)
@@ -243,7 +243,7 @@ ORDER BY x.a;
 4
 
 statement query I
-WITH 
+WITH
 x AS (SELECT number AS a FROM numbers(10)),
 y AS (SELECT number AS a FROM numbers(5)),
 z AS (SELECT * FROM x WHERE a % 2),
@@ -256,7 +256,7 @@ ORDER BY x.a;
 3
 
 statement query I
-WITH 
+WITH
 x AS (SELECT number AS a FROM numbers(10)),
 y AS (SELECT number AS a FROM numbers(5)),
 z AS (SELECT * FROM x WHERE a % 2),
@@ -287,8 +287,8 @@ x AS (SELECT * FROM cte1),
 y AS (SELECT * FROM cte2),
 z AS (SELECT * FROM x WHERE a % 2 = 1),
 w AS (SELECT * FROM y WHERE a > 333)
-SELECT max(x.a) 
-FROM x JOIN y USING (a) 
+SELECT max(x.a)
+FROM x JOIN y USING (a)
 WHERE x.a in (SELECT * FROM z) AND x.a <= (SELECT max(a) FROM w);
 
 ----
@@ -300,8 +300,8 @@ x AS (SELECT * FROM cte1),
 y AS (SELECT * FROM cte2),
 z AS (SELECT * FROM x WHERE a % 3 = 1),
 w AS (SELECT * FROM y WHERE a > 333 AND a < 1000)
-SELECT count(x.a) 
-FROM x left JOIN y USING (a) 
+SELECT count(x.a)
+FROM x left JOIN y USING (a)
 WHERE x.a in (SELECT * FROM z) AND x.a <= (SELECT max(a) FROM w);
 
 ----
@@ -313,8 +313,8 @@ x AS (SELECT * FROM cte1),
 y AS (SELECT * FROM cte2),
 z AS (SELECT * FROM x WHERE a % 3 = 1),
 w AS (SELECT * FROM y WHERE a > 333 AND a < 1000)
-SELECT count(x.a) 
-FROM x left JOIN y USING (a) 
+SELECT count(x.a)
+FROM x left JOIN y USING (a)
 WHERE x.a in (SELECT * FROM z);
 
 ----
@@ -326,8 +326,8 @@ x AS (SELECT a-4000 a FROM cte1 WHERE cte1.a >700),
 y AS (SELECT * FROM cte2),
 z AS (SELECT * FROM x WHERE a % 3 = 1),
 w AS (SELECT * FROM y WHERE a > 333 AND a < 1000)
-SELECT count(*) 
-FROM x left JOIN y USING (a) 
+SELECT count(*)
+FROM x left JOIN y USING (a)
 WHERE x.a in (SELECT * FROM z);
 
 ----
@@ -339,7 +339,7 @@ x AS (SELECT a-4000 a FROM cte1 WHERE cte1.a >700),
 y AS (SELECT * FROM cte2),
 z AS (SELECT * FROM x WHERE a % 3 = 1),
 w AS (SELECT * FROM y WHERE a > 333 AND a < 1000)
-SELECT max(a), min(a), count(*) 
+SELECT max(a), min(a), count(*)
 FROM x
 WHERE a in (SELECT * FROM z) AND a <100;
 
@@ -364,7 +364,7 @@ x AS (SELECT a-4000 a FROM cte1 t WHERE t.a >700),
 y AS (SELECT x.a a FROM x left JOIN cte1 USING (a)),
 z AS (SELECT * FROM x WHERE a % 3 = 1),
 w AS (SELECT * FROM y WHERE a > 333 AND a < 1000)
-SELECT max(a), min(a), count(*) 
+SELECT max(a), min(a), count(*)
 FROM y
 WHERE a <100;
 

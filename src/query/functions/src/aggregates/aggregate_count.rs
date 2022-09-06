@@ -79,18 +79,26 @@ impl AggregateFunction for AggregateCountFunction {
     fn accumulate(
         &self,
         place: StateAddr,
-        _columns: &[ColumnRef],
+        columns: &[ColumnRef],
         validity: Option<&Bitmap>,
         input_rows: usize,
     ) -> Result<()> {
         let state = place.get::<AggregateCountState>();
 
-        let nulls = match validity {
-            Some(b) => b.unset_bits(),
-            None => 0,
-        };
-
-        state.count += (input_rows - nulls) as u64;
+        if self.nullable {
+            let (_, bm) = columns[0].validity();
+            let nulls = match combine_validities(bm, validity) {
+                Some(b) => b.unset_bits(),
+                None => 0,
+            };
+            state.count += (input_rows - nulls) as u64;
+        } else {
+            let nulls = match validity {
+                Some(b) => b.unset_bits(),
+                None => 0,
+            };
+            state.count += (input_rows - nulls) as u64;
+        }
         Ok(())
     }
 

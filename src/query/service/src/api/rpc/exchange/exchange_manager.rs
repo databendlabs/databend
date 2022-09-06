@@ -19,7 +19,6 @@ use std::ops::Deref;
 use std::sync::Arc;
 
 use common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
-use common_base::base::GlobalIORuntime;
 use common_base::base::Singleton;
 use common_base::base::Thread;
 use common_datavalues::DataSchemaRef;
@@ -561,12 +560,10 @@ impl QueryCoordinator {
             }
         }
 
-        let async_runtime = GlobalIORuntime::instance();
         let query_need_abort = info.query_ctx.query_need_abort();
         let executor_settings = ExecutorSettings::try_create(&info.query_ctx.get_settings())?;
 
         let executor = PipelineCompleteExecutor::from_pipelines(
-            async_runtime,
             query_need_abort,
             pipelines,
             executor_settings,

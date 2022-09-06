@@ -58,6 +58,7 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
         Ok(())
     }
 
+    // Used in aggregate_null_adaptor
     fn accumulate_row(&self, _place: StateAddr, _columns: &[ColumnRef], _row: usize) -> Result<()>;
 
     // serialize  the state into binary array
@@ -85,6 +86,10 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
         _arguments: Vec<DataField>,
     ) -> Result<Option<AggregateFunctionRef>> {
         Ok(None)
+    }
+
+    fn get_if_condition(&self, _columns: &[ColumnRef]) -> Option<Bitmap> {
+        None
     }
 
     // some features

@@ -52,6 +52,7 @@ use crate::sql::optimizer::ColumnSet;
 use crate::sql::optimizer::SExpr;
 use crate::sql::plans::AggregateMode;
 use crate::sql::plans::Exchange;
+use crate::sql::plans::PhysicalScan;
 use crate::sql::plans::RelOperator;
 use crate::sql::plans::Scalar;
 use crate::sql::Metadata;
@@ -124,103 +125,11 @@ impl PhysicalPlanBuilder {
                     name_mapping.insert(name, index.to_string());
                 }
 
-                let push_down_filters = scan
-                    .push_down_predicates
-                    .clone()
-                    .map(|predicates| {
-                        let builder =
-                            ExpressionBuilderWithoutRenaming::create(self.metadata.clone());
-                        predicates
-                            .into_iter()
-                            .map(|scalar| builder.build(&scalar))
-                            .collect::<Result<Vec<_>>>()
-                    })
-                    .transpose()?;
-
-                let order_by = scan
-                    .order_by
-                    .clone()
-                    .map(|items| {
-                        let builder =
-                            ExpressionBuilderWithoutRenaming::create(self.metadata.clone());
-                        items
-                            .into_iter()
-                            .map(|item| {
-                                builder
-                                    .build_column_ref(item.index)
-                                    .map(|c| Expression::Sort {
-                                        expr: Box::new(c.clone()),
-                                        asc: item.asc,
-                                        nulls_first: item.nulls_first,
-                                        origin_expr: Box::new(c),
-                                    })
-                            })
-                            .collect::<Result<Vec<_>>>()
-                    })
-                    .transpose()?;
-
                 let table_entry = metadata.table(scan.table_index);
                 let table = table_entry.table.clone();
                 let table_schema = table.schema();
 
-                let projection = Self::build_projection(
-                    &metadata,
-                    &table_schema,
-                    &scan.columns,
-                    has_inner_column,
-                );
-
-                let prewhere_info = if let Some(prewhere) = &scan.prewhere {
-                    let builder = ExpressionBuilderWithoutRenaming::create(self.metadata.clone());
-                    let predicates = prewhere
-                        .predicates
-                        .iter()
-                        .map(|scalar| builder.build(scalar))
-                        .collect::<Result<Vec<_>>>()?;
-
-                    assert!(
-                        !predicates.is_empty(),
-                        "There should be at least one predicate in prewhere"
-                    );
-                    let mut filter = predicates[0].clone();
-                    for pred in predicates.iter().skip(1) {
-                        filter = filter.and(pred.clone());
-                    }
-
-                    let remain_columns = scan
-                        .columns
-                        .difference(&prewhere.columns)
-                        .copied()
-                        .collect::<HashSet<usize>>();
-                    let need_columns = Self::build_projection(
-                        &metadata,
-                        &table_schema,
-                        &prewhere.columns,
-                        has_inner_column,
-                    );
-                    let remain_columns = Self::build_projection(
-                        &metadata,
-                        &table_schema,
-                        &remain_columns,
-                        has_inner_column,
-                    );
-
-                    Some(PrewhereInfo {
-                        need_columns,
-                        remain_columns,
-                        filter,
-                    })
-                } else {
-                    None
-                };
-
-                let push_downs = Extras {
-                    projection: Some(projection),
-                    filters: push_down_filters.unwrap_or_default(),
-                    prewhere: prewhere_info,
-                    limit: scan.limit,
-                    order_by: order_by.unwrap_or_default(),
-                };
+                let push_downs = self.push_downs(scan, &table_schema, has_inner_column)?;
 
                 let source = table
                     .read_plan_with_catalog(
@@ -357,11 +266,33 @@ impl PhysicalPlanBuilder {
                     }
                 }).collect::<Result<_>>()?;
                 let result = match &agg.mode {
-                    AggregateMode::Partial => PhysicalPlan::AggregatePartial(AggregatePartial {
-                        input: Box::new(input),
-                        group_by: group_items,
-                        agg_funcs,
-                    }),
+                    AggregateMode::Partial => match input {
+                        PhysicalPlan::Exchange(PhysicalExchange { input, kind, .. }) => {
+                            let aggregate_partial = AggregatePartial {
+                                input,
+                                agg_funcs,
+                                group_by: group_items,
+                            };
+
+                            let output_schema = aggregate_partial.output_schema()?;
+                            let group_by_key_field =
+                                output_schema.field_with_name("_group_by_key")?;
+
+                            PhysicalPlan::Exchange(PhysicalExchange {
+                                kind,
+                                input: Box::new(PhysicalPlan::AggregatePartial(aggregate_partial)),
+                                keys: vec![PhysicalScalar::Variable {
+                                    column_id: group_by_key_field.name().clone(),
+                                    data_type: group_by_key_field.data_type().clone(),
+                                }],
+                            })
+                        }
+                        _ => PhysicalPlan::AggregatePartial(AggregatePartial {
+                            agg_funcs,
+                            group_by: group_items,
+                            input: Box::new(input),
+                        }),
+                    },
 
                     // Hack to get before group by schema, we should refactor this
                     AggregateMode::Final => match input {
@@ -445,6 +376,105 @@ impl PhysicalPlanBuilder {
                 s_expr.plan()
             ))),
         }
+    }
+
+    fn push_downs(
+        &self,
+        scan: &PhysicalScan,
+        table_schema: &DataSchemaRef,
+        has_inner_column: bool,
+    ) -> Result<Extras> {
+        let metadata = self.metadata.read().clone();
+
+        let projection =
+            Self::build_projection(&metadata, table_schema, &scan.columns, has_inner_column);
+
+        let push_down_filters = scan
+            .push_down_predicates
+            .clone()
+            .map(|predicates| {
+                let builder = ExpressionBuilderWithoutRenaming::create(self.metadata.clone());
+                predicates
+                    .into_iter()
+                    .map(|scalar| builder.build(&scalar))
+                    .collect::<Result<Vec<_>>>()
+            })
+            .transpose()?;
+
+        let prewhere_info = scan
+            .prewhere
+            .as_ref()
+            .map(|prewhere| {
+                let builder = ExpressionBuilderWithoutRenaming::create(self.metadata.clone());
+                let predicates = prewhere
+                    .predicates
+                    .iter()
+                    .map(|scalar| builder.build(scalar))
+                    .collect::<Result<Vec<_>>>()?;
+
+                assert!(
+                    !predicates.is_empty(),
+                    "There should be at least one predicate in prewhere"
+                );
+                let mut filter = predicates[0].clone();
+                for pred in predicates.iter().skip(1) {
+                    filter = filter.and(pred.clone());
+                }
+
+                let remain_columns = scan
+                    .columns
+                    .difference(&prewhere.columns)
+                    .copied()
+                    .collect::<HashSet<usize>>();
+                let need_columns = Self::build_projection(
+                    &metadata,
+                    table_schema,
+                    &prewhere.columns,
+                    has_inner_column,
+                );
+                let remain_columns = Self::build_projection(
+                    &metadata,
+                    table_schema,
+                    &remain_columns,
+                    has_inner_column,
+                );
+
+                Ok::<PrewhereInfo, ErrorCode>(PrewhereInfo {
+                    need_columns,
+                    remain_columns,
+                    filter,
+                })
+            })
+            .transpose()?;
+
+        let order_by = scan
+            .order_by
+            .clone()
+            .map(|items| {
+                let builder = ExpressionBuilderWithoutRenaming::create(self.metadata.clone());
+                items
+                    .into_iter()
+                    .map(|item| {
+                        builder
+                            .build_column_ref(item.index)
+                            .map(|c| Expression::Sort {
+                                expr: Box::new(c.clone()),
+                                asc: item.asc,
+                                nulls_first: item.nulls_first,
+                                origin_expr: Box::new(c),
+                            })
+                    })
+                    .collect::<Result<Vec<_>>>()
+            })
+            .transpose()?;
+
+        Ok(Extras {
+            projection: Some(projection),
+            filters: push_down_filters.unwrap_or_default(),
+            prewhere: prewhere_info,
+            limit: scan.limit,
+            order_by: order_by.unwrap_or_default(),
+        })
     }
 }
 

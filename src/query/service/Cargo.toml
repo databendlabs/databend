@@ -67,6 +67,7 @@ common-storages-fuse = { path = "../storages/fuse" }
 common-storages-hive = { path = "../storages/hive", optional = true }
 common-storages-index = { path = "../storages/index" }
 common-storages-preludes = { path = "../storages/preludes" }
+common-storages-share = { path = "../storages/share" }
 common-storages-util = { path = "../storages/util" }
 common-streams = { path = "../streams" }
 common-tracing = { path = "../../common/tracing" }
@@ -137,7 +138,7 @@ snailquote = "0.3.1"
 strum = "0.24.1"
 strum_macros = "0.24.0"
 tempfile = { version = "3.3.0", optional = true }
-thiserror = "1.0.31"
+thiserror = "=1.0.31"
 threadpool = "1.8.1"
 thrift = { version = "0.15.0", optional = true }
 time = "0.3.10"

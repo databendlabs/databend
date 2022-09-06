@@ -113,7 +113,7 @@ impl Session {
     pub fn force_kill_query(self: &Arc<Self>) {
         let session_ctx = self.session_ctx.clone();
 
-        if let Some(context_shared) = session_ctx.take_query_context_shared() {
+        if let Some(context_shared) = session_ctx.get_query_context_shared() {
             context_shared.kill(/* shutdown executing query */);
         }
     }
@@ -122,20 +122,14 @@ impl Session {
     /// For a query, execution environment(e.g cluster) should be immutable.
     /// We can bind the environment to the context in create_context method.
     pub async fn create_query_context(self: &Arc<Self>) -> Result<Arc<QueryContext>> {
-        let shared = self.get_shared_query_context().await?;
-
-        Ok(QueryContext::create_from_shared(shared))
-    }
-
-    pub async fn get_shared_query_context(self: &Arc<Self>) -> Result<Arc<QueryContextShared>> {
         let config = self.get_config();
         let session = self.clone();
         let cluster = ClusterDiscovery::instance().discover(&config).await?;
         let shared = QueryContextShared::try_create(config, session, cluster).await?;
 
         self.session_ctx
-            .set_query_context_shared(Some(shared.clone()));
-        Ok(shared)
+            .set_query_context_shared(Arc::downgrade(&shared));
+        Ok(QueryContext::create_from_shared(shared))
     }
 
     pub fn get_format_settings(&self) -> Result<FormatSettings> {
@@ -280,5 +274,12 @@ impl Session {
 
     pub fn get_status(self: &Arc<Self>) -> Arc<RwLock<SessionStatus>> {
         self.status.clone()
+    }
+}
+
+impl Drop for Session {
+    fn drop(&mut self) {
+        tracing::debug!("Drop session {}", self.id);
+        SessionManager::instance().destroy_session(&self.id)
     }
 }

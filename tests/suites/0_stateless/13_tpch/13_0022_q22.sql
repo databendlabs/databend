@@ -47,4 +47,3 @@ drop table region;
 drop table supplier;
 drop table part;
 drop table partsupp;
-set enable_planner_v2 = 0;

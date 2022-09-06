@@ -153,7 +153,7 @@ fn test_aggregate_combinator_function() -> Result<()> {
         let mut func = || -> Result<()> {
             // First.
             let factory = AggregateFunctionFactory::instance();
-            let func = factory.get(t.func_name, t.params.clone(), t.args.clone())?;
+            let func = factory.get_or_null(t.func_name, t.params.clone(), t.args.clone(), false)?;
             let addr = arena.alloc_layout(func.state_layout());
             func.init_state(addr.into());
             func.accumulate(addr.into(), &t.arrays, None, rows)?;
@@ -316,7 +316,7 @@ fn test_aggregate_combinator_function_on_empty_data() -> Result<()> {
         let mut func = || -> Result<()> {
             // First.
             let factory = AggregateFunctionFactory::instance();
-            let func = factory.get(t.func_name, t.params.clone(), t.args.clone())?;
+            let func = factory.get_or_null(t.func_name, t.params.clone(), t.args.clone(), false)?;
             let addr1 = arena.alloc_layout(func.state_layout());
             func.init_state(addr1.into());
 

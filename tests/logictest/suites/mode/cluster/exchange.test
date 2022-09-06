@@ -128,11 +128,11 @@ Exchange
 ├── exchange type: Merge
 └── HashJoin
     ├── join type: INNER
-    ├── build keys: [numbers.number (#4)]
+    ├── build keys: [CAST(numbers.number (#4) AS BIGINT UNSIGNED NULL)]
     ├── probe keys: [number (#1)]
     ├── filters: []
     ├── Exchange(Build)
-    │   ├── exchange type: Hash(numbers.number (#4))
+    │   ├── exchange type: Hash(CAST(numbers.number (#4) AS BIGINT UNSIGNED NULL))
     │   └── TableScan
     │       ├── table: default.system.numbers
     │       ├── read rows: 2
@@ -149,11 +149,11 @@ Exchange
                 └── AggregateFinal
                     ├── group by: [number]
                     ├── aggregate functions: [sum(number)]
-                    └── AggregatePartial
-                        ├── group by: [number]
-                        ├── aggregate functions: [sum(number)]
-                        └── Exchange
-                            ├── exchange type: Hash(numbers.number (#0))
+                    └── Exchange
+                        ├── exchange type: Hash(_group_by_key)
+                        └── AggregatePartial
+                            ├── group by: [number]
+                            ├── aggregate functions: [sum(number)]
                             └── TableScan
                                 ├── table: default.system.numbers
                                 ├── read rows: 1
@@ -161,4 +161,3 @@ Exchange
                                 ├── partitions total: 1
                                 ├── partitions scanned: 1
                                 └── push downs: [filters: [], limit: NONE]
-

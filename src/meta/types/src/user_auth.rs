@@ -69,7 +69,7 @@ impl AuthType {
         format!("Expected auth type {}, found: {}", all, s)
     }
 
-    fn get_password_type(self) -> Option<PasswordHashMethod> {
+    pub fn get_password_type(self) -> Option<PasswordHashMethod> {
         match self {
             AuthType::Sha256Password => Some(PasswordHashMethod::Sha256),
             AuthType::DoubleSha1Password => Some(PasswordHashMethod::DoubleSha1),

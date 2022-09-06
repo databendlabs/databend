@@ -1086,8 +1086,11 @@ dependencies = [
  "common-exception",
  "common-grpc",
  "common-hive-meta-store",
+ "common-meta-types",
  "common-storage",
  "common-tracing",
+ "common-users",
+ "hex",
  "once_cell",
  "opendal",
  "semver",
@@ -1873,6 +1876,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-storages-share"
+version = "0.1.0"
+dependencies = [
+ "common-exception",
+ "common-meta-app",
+ "common-storages-util",
+ "goldenfile",
+ "opendal",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
 name = "common-storages-util"
 version = "0.1.0"
 dependencies = [
@@ -2511,6 +2528,7 @@ dependencies = [
  "common-storages-hive",
  "common-storages-index",
  "common-storages-preludes",
+ "common-storages-share",
  "common-storages-util",
  "common-streams",
  "common-tracing",
@@ -5056,7 +5074,7 @@ dependencies = [
 [[package]]
 name = "openraft"
 version = "0.7.2"
-source = "git+https://github.com/drmingdrmer/openraft?rev=v0.7.2-alpha.2#42f6ff09f7adf179388d536257f1ee0bab7afbbc"
+source = "git+https://github.com/drmingdrmer/openraft?rev=v0.7.2-alpha.4#d4922c2572d0b44753bafcb5ec804a179b425f67"
 dependencies = [
  "anyerror",
  "anyhow",
@@ -5338,8 +5356,9 @@ dependencies = [
 
 [[package]]
 name = "parquet2"
-version = "0.14.1"
-source = "git+https://github.com/datafuse-extras/parquet2?rev=3a468fc3c4#3a468fc3c43154b11c22800aff0b83cd22fd4d3c"
+version = "0.14.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f3eb21c37048a08693214d1f0d34eea97a8d90322e15c4a5e2017d56420e1195"
 dependencies = [
  "async-stream",
  "bitpacking",
@@ -7377,18 +7396,18 @@ checksum = "b1141d4d61095b28419e22cb0bbf02755f5e54e0526f97f1e3d1d160e60885fb"
 
 [[package]]
 name = "thiserror"
-version = "1.0.32"
+version = "1.0.31"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f5f6586b7f764adc0231f4c79be7b920e766bb2f3e51b3661cdb263828f19994"
+checksum = "bd829fe32373d27f76265620b5309d0340cb8550f523c1dda251d6298069069a"
 dependencies = [
  "thiserror-impl",
 ]
 
 [[package]]
 name = "thiserror-impl"
-version = "1.0.32"
+version = "1.0.31"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "12bafc5b54507e0149cdf1b145a5d80ab80a90bcd9275df43d4fff68460f6c21"
+checksum = "0396bc89e626244658bef819e22d0cc459e795a5ebe878e6ec336d1674a8d79a"
 dependencies = [
  "proc-macro2",
  "quote",

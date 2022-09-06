@@ -23,6 +23,8 @@ use common_base::base::get_free_tcp_port;
 use common_base::base::tokio;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_types::AuthInfo;
+use common_meta_types::PasswordHashMethod;
 use common_users::CustomClaims;
 use common_users::EnsureUser;
 use databend_query::auth::AuthMgr;
@@ -94,12 +96,13 @@ async fn expect_end(ep: &EndpointType, result: QueryResponse) -> Result<()> {
     Ok(())
 }
 
-async fn test_simple_sql(v2: u64) -> Result<()> {
+#[tokio::test(flavor = "current_thread")]
+async fn test_simple_sql() -> Result<()> {
     let _guard = TestGlobalServices::setup(ConfigBuilder::create().build()).await?;
 
     let sql = "select * from system.tables limit 10";
     let ep = create_endpoint().await?;
-    let (status, result) = post_sql_to_endpoint_new_session(&ep, sql, 1, v2).await?;
+    let (status, result) = post_sql_to_endpoint_new_session(&ep, sql, 1).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     assert!(result.error.is_none(), "{:?}", result.error);
     assert_eq!(result.data.len(), 10, "{:?}", result);
@@ -165,22 +168,13 @@ async fn test_simple_sql(v2: u64) -> Result<()> {
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn test_simple_sql_v1() -> Result<()> {
-    test_simple_sql(0).await
-}
-
-#[tokio::test(flavor = "current_thread")]
-async fn test_simple_sql_v2() -> Result<()> {
-    test_simple_sql(1).await
-}
-
-async fn test_return_when_finish(v2: u64) -> Result<()> {
+async fn test_return_when_finish() -> Result<()> {
     let _guard = TestGlobalServices::setup(ConfigBuilder::create().build()).await?;
 
     let wait_time_secs = 5;
     let sql = "create table t1(a int)";
     let ep = create_endpoint().await?;
-    let (status, result) = post_sql_to_endpoint_new_session(&ep, sql, wait_time_secs, v2).await?;
+    let (status, result) = post_sql_to_endpoint_new_session(&ep, sql, wait_time_secs).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     assert_eq!(result.state, ExecuteStateKind::Succeeded, "{:?}", result);
     for (sql, state) in [
@@ -197,22 +191,12 @@ async fn test_return_when_finish(v2: u64) -> Result<()> {
         assert_eq!(result.state, state, "{}", msg());
         // should not wait until wait_time_secs even if there is no more data
         assert!(
-            duration < 1.0,
+            duration < 5.0,
             "duration {} is too large than expect",
             msg()
         );
     }
     Ok(())
-}
-
-#[tokio::test(flavor = "current_thread")]
-async fn test_return_when_finish_v1() -> Result<()> {
-    test_return_when_finish(0).await
-}
-
-#[tokio::test(flavor = "current_thread")]
-async fn test_return_when_finish_v2() -> Result<()> {
-    test_return_when_finish(1).await
 }
 
 // ref: query_log not recored correctly.
@@ -331,12 +315,13 @@ async fn test_buffer_size() -> Result<()> {
     Ok(())
 }
 
-async fn test_pagination(v2: u64) -> Result<()> {
+#[tokio::test(flavor = "current_thread")]
+async fn test_pagination() -> Result<()> {
     let _guard = TestGlobalServices::setup(ConfigBuilder::create().build()).await?;
 
     let ep = create_endpoint().await?;
     let sql = "select * from numbers(10)";
-    let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": 1, "max_rows_per_page": 2}, "session": { "settings": {"enable_planner_v2": v2.to_string()}}});
+    let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": 1, "max_rows_per_page": 2}, "session": { "settings": {}}});
 
     let (status, result) = post_json_to_endpoint(&ep, &json).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
@@ -388,16 +373,6 @@ async fn test_pagination(v2: u64) -> Result<()> {
     assert_eq!(response.status(), StatusCode::NOT_FOUND, "{:?}", result);
 
     Ok(())
-}
-
-#[tokio::test(flavor = "current_thread")]
-async fn test_pagination_v1() -> Result<()> {
-    test_pagination(0).await
-}
-
-#[tokio::test(flavor = "current_thread")]
-async fn test_pagination_v2() -> Result<()> {
-    test_pagination(1).await
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -722,17 +697,15 @@ async fn post_sql_to_endpoint(
     sql: &str,
     wait_time_secs: u64,
 ) -> Result<(StatusCode, QueryResponse)> {
-    post_sql_to_endpoint_new_session(ep, sql, wait_time_secs, 0).await
+    post_sql_to_endpoint_new_session(ep, sql, wait_time_secs).await
 }
 
 async fn post_sql_to_endpoint_new_session(
     ep: &EndpointType,
     sql: &str,
     wait_time_secs: u64,
-    enable_planner_v2: u64,
 ) -> Result<(StatusCode, QueryResponse)> {
-    let enable_planner_v2 = enable_planner_v2.to_string();
-    let json = serde_json::json!({ "sql": sql.to_string(), "pagination": {"wait_time_secs": wait_time_secs}, "session": { "settings": {"enable_planner_v2": enable_planner_v2}}});
+    let json = serde_json::json!({ "sql": sql.to_string(), "pagination": {"wait_time_secs": wait_time_secs}, "session": { "settings": {}}});
     post_json_to_endpoint(ep, &json).await
 }
 
@@ -1070,13 +1043,14 @@ pub async fn download(ep: &EndpointType, query_id: &str) -> Response {
     get_uri(ep, &uri).await
 }
 
-async fn test_download(v2: u64) -> Result<()> {
+#[tokio::test(flavor = "current_thread")]
+async fn test_download() -> Result<()> {
     let _guard = TestGlobalServices::setup(ConfigBuilder::create().build()).await?;
 
     let ep = create_endpoint().await?;
 
     let sql = "select number, number + 1 from numbers(2)";
-    let (status, result) = post_sql_to_endpoint_new_session(&ep, sql, 1, v2).await?;
+    let (status, result) = post_sql_to_endpoint_new_session(&ep, sql, 1).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     assert_eq!(result.data.len(), 2, "{:?}", result);
     assert_eq!(result.state, ExecuteStateKind::Succeeded, "{:?}", result);
@@ -1100,11 +1074,7 @@ async fn test_download(v2: u64) -> Result<()> {
         ("csv", "0,1\n1,2\n"),
         (
             "ndjson",
-            if v2 == 0 {
-                "{\"number\":0,\"(number + 1)\":1}\n{\"number\":1,\"(number + 1)\":2}\n"
-            } else {
-                "{\"number\":0,\"number + 1\":1}\n{\"number\":1,\"number + 1\":2}\n"
-            },
+            "{\"number\":0,\"number + 1\":1}\n{\"number\":1,\"number + 1\":2}\n",
         ),
         ("values", "(0,1),(1,2)"),
     ] {
@@ -1136,16 +1106,6 @@ async fn test_download(v2: u64) -> Result<()> {
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn test_download_v1() -> Result<()> {
-    test_download(0).await
-}
-
-#[tokio::test(flavor = "current_thread")]
-async fn test_download_v2() -> Result<()> {
-    test_download(1).await
-}
-
-#[tokio::test(flavor = "current_thread")]
 async fn test_download_non_select() -> Result<()> {
     let _guard = TestGlobalServices::setup(ConfigBuilder::create().build()).await?;
 
@@ -1168,12 +1128,13 @@ async fn test_download_non_select() -> Result<()> {
     Ok(())
 }
 
-async fn test_download_failed(v2: u64) -> Result<()> {
+#[tokio::test(flavor = "current_thread")]
+async fn test_download_failed() -> Result<()> {
     let _guard = TestGlobalServices::setup(ConfigBuilder::create().build()).await?;
 
     let ep = create_endpoint().await?;
     let sql = "xxx";
-    let (status, result) = post_sql_to_endpoint_new_session(&ep, sql, 1, v2).await?;
+    let (status, result) = post_sql_to_endpoint_new_session(&ep, sql, 1).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
 
     let mut resp = download(&ep, &result.id).await;
@@ -1182,16 +1143,6 @@ async fn test_download_failed(v2: u64) -> Result<()> {
     assert_eq!(resp.status(), StatusCode::NOT_FOUND, "{:?}", result);
 
     Ok(())
-}
-
-#[tokio::test(flavor = "current_thread")]
-async fn test_download_failed_v1() -> Result<()> {
-    test_download_failed(0).await
-}
-
-#[tokio::test(flavor = "current_thread")]
-async fn test_download_failed_v2() -> Result<()> {
-    test_download_failed(1).await
 }
 
 #[tokio::test(flavor = "current_thread")]
@@ -1379,5 +1330,36 @@ async fn test_affect() -> Result<()> {
         assert_eq!(result.affect, affect);
         assert_eq!(result.session, session_conf);
     }
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_auth_configured_user() -> Result<()> {
+    let user_name = "conf_user";
+    let pass_word = "conf_user_pwd";
+    let hash_method = PasswordHashMethod::DoubleSha1;
+    let hash_value = hash_method.hash(pass_word.as_bytes());
+
+    let auth_info = AuthInfo::Password {
+        hash_value,
+        hash_method,
+    };
+    let config = ConfigBuilder::create()
+        .add_user(user_name, auth_info)
+        .build();
+    let _guard = TestGlobalServices::setup(config.clone()).await?;
+
+    let session_middleware = HTTPSessionMiddleware::create(
+        HttpHandlerKind::Query,
+        AuthMgr::create(config.clone()).await?,
+    );
+
+    let ep = Route::new()
+        .nest("/v1/query", query_route())
+        .with(session_middleware);
+
+    let basic = headers::Authorization::basic(user_name, pass_word);
+    // root user can only login in localhost
+    test_auth_post(&ep, user_name, basic, "%").await?;
     Ok(())
 }
