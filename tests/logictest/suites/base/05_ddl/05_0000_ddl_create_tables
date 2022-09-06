@@ -214,7 +214,7 @@ statement ok
 use db2;
 
 statement ok
-create table test_9 as test_8;
+create table test_9 like test_8;
 
 statement ok
 use default;
