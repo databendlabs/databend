@@ -129,6 +129,13 @@ impl<
             let layout = Layout::from_size_align_unchecked(size, mem::align_of::<Entity>());
             let mut allocator = Allocator::default();
             let raw_ptr = allocator.allocx(layout, true);
+
+            if raw_ptr.is_null() {
+                panic!(
+                    "Failed to have enough memory to alloc {size} bytes to initial the hashtable"
+                );
+            }
+
             let entities_ptr = raw_ptr as *mut Entity;
             HashTable {
                 size: 0,
@@ -316,6 +323,13 @@ impl<
             self.entities_raw = self
                 .allocator
                 .reallocx(self.entities_raw, layout, new_size, true);
+
+            if self.entities_raw.is_null() {
+                panic!(
+                    "Failed to have enough memory to realloc {new_size} bytes to resize the hashtable"
+                );
+            }
+
             self.entities = self.entities_raw as *mut Entity;
             self.grower = new_grower;
             for index in 0..old_grow_size {
