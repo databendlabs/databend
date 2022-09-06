@@ -6,7 +6,8 @@ import styles from './styles.module.scss';
 import Layout from '@theme/Layout';
 import clsx from 'clsx';
 import { useLocalStorageState } from 'ahooks';
-import prettyBytes from 'pretty-bytes';
+import bytes from 'bytes';
+
 interface IRow {
   name: string;
   sort?: number;
@@ -79,7 +80,7 @@ const Releases: FC = (): ReactElement=> {
       dataIndex: 'size',
       key: 'size',
       render(size: number) {
-        return <div className={styles.tagName}>{size>0 && prettyBytes(size)}</div>
+        return <div className={styles.tagName}>{size>0 && bytes.format(size, {thousandsSeparator: ',', decimalPlaces: 1})}</div>
       }
     },
     {
