@@ -149,31 +149,6 @@ mod add {
             );
         }
 
-        // unknown exception
-        {
-            let mut api = MockKV::new();
-            api.expect_upsert_kv()
-                .with(predicate::eq(UpsertKVReq::new(
-                    &test_key,
-                    test_seq,
-                    value.clone(),
-                    None,
-                )))
-                .times(1)
-                .returning(|_u| Ok(UpsertKVReply::new(None, None)));
-
-            let kv = Arc::new(api);
-
-            let user_mgr = UserMgr::create(kv, "tenant1")?;
-            let user_info = UserInfo::new(test_user_name, test_hostname, default_test_auth_info());
-
-            let res = user_mgr.add_user(user_info).await;
-
-            assert_eq!(
-                res.unwrap_err().code(),
-                ErrorCode::MetaNodeInternalError("").code()
-            );
-        }
         Ok(())
     }
 }

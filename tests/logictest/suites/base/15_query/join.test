@@ -36,6 +36,19 @@ select t1.a from t1 join t2 using(a) order by t1.a, t2.a;
 3
 5
 
+statement query II
+select t1.a, t2.a from t1 join t2 using(a) order by t1.a, t2.a;
+
+----
+3 3
+5 5
+
+statement query I
+select a from t1 join t2 using(a) order by t1.a, t2.a;
+
+----
+3
+5
 
 statement query I
 select t2.d from t1 join t2 using(a) order by t1.a, t2.a;
@@ -44,6 +57,13 @@ select t2.d from t1 join t2 using(a) order by t1.a, t2.a;
 4
 6
 
+statement query I
+select a from (select number as a from numbers(3)) n join (select number as a from numbers(4)) nn using (a) order by a;
+
+----
+0
+1
+2
 
 statement query III
 select * from t1 natural join t2 order by t1.a, t2.a;
@@ -112,9 +132,9 @@ statement query IIII
 select * from t1 right join t2 on t1.a = t2.c;
 
 ----
-1 2 1 4
-NULL NULL 2 3
-NULL NULL 6 8
+1 4 1 2
+2 3 NULL NULL
+6 8 NULL NULL
 
 
 statement query IIII
@@ -329,9 +349,9 @@ statement query IIII
 select * from t1 right join t2 on t1.a = t2.c;
 
 ----
-1 2 1 4
-NULL NULL 2 3
-NULL NULL 6 8
+1 4 1 2
+2 3 NULL NULL
+6 8 NULL NULL
 
 
 statement query IIII

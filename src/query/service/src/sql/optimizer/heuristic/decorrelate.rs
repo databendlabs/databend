@@ -23,6 +23,7 @@ use common_exception::Result;
 
 use crate::sql::binder::wrap_cast_if_needed;
 use crate::sql::binder::JoinCondition;
+use crate::sql::binder::Visibility;
 use crate::sql::optimizer::heuristic::subquery_rewriter::FlattenInfo;
 use crate::sql::optimizer::heuristic::subquery_rewriter::SubqueryRewriter;
 use crate::sql::optimizer::heuristic::subquery_rewriter::UnnestResult;
@@ -374,7 +375,7 @@ impl SubqueryRewriter {
                         column_name,
                         index: *index,
                         data_type: subquery.data_type.clone(),
-                        visible_in_unqualified_wildcard: false,
+                        visibility: Visibility::Visible,
                     },
                 });
                 let child_expr = *subquery.child_expr.as_ref().unwrap().clone();
@@ -491,7 +492,7 @@ impl SubqueryRewriter {
                                 column_name: "".to_string(),
                                 index: column_entry.column_index,
                                 data_type: Box::from(column_entry.data_type.clone()),
-                                visible_in_unqualified_wildcard: false,
+                                visibility: Visibility::Visible,
                             },
                         })
                     };
@@ -524,7 +525,7 @@ impl SubqueryRewriter {
                         column_name: format!("subquery_{}", derived_column),
                         index: *derived_column,
                         data_type: Box::from(column_entry.data_type.clone()),
-                        visible_in_unqualified_wildcard: false,
+                        visibility: Visibility::Visible,
                     };
                     items.push(ScalarItem {
                         scalar: Scalar::BoundColumnRef(BoundColumnRef {
@@ -593,7 +594,7 @@ impl SubqueryRewriter {
                             column_name: format!("subquery_{}", derived_column),
                             index: *derived_column,
                             data_type: Box::from(column_entry.data_type.clone()),
-                            visible_in_unqualified_wildcard: false,
+                            visibility: Visibility::Visible,
                         }
                     };
                     group_items.push(ScalarItem {
@@ -676,8 +677,7 @@ impl SubqueryRewriter {
                             column_name: format!("subquery_{}", index),
                             index: *index,
                             data_type: column_binding.data_type.clone(),
-                            visible_in_unqualified_wildcard: column_binding
-                                .visible_in_unqualified_wildcard,
+                            visibility: column_binding.visibility,
                         },
                     }));
                 }
@@ -771,7 +771,7 @@ impl SubqueryRewriter {
                     column_name: format!("subquery_{}", correlated_column),
                     index: *correlated_column,
                     data_type: Box::from(data_type.clone()),
-                    visible_in_unqualified_wildcard: false,
+                    visibility: Visibility::Visible,
                 },
             });
             let derive_column = self.derived_columns.get(correlated_column).unwrap();
@@ -782,7 +782,7 @@ impl SubqueryRewriter {
                     column_name: format!("subquery_{}", derive_column),
                     index: *derive_column,
                     data_type: Box::from(data_type),
-                    visible_in_unqualified_wildcard: false,
+                    visibility: Visibility::Visible,
                 },
             });
             left_conditions.push(left_column);

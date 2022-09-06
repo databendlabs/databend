@@ -28,6 +28,7 @@ use crate::sessions::QueryContext;
 use crate::sql::binder::scalar_common::split_conjunctions;
 use crate::sql::binder::scalar_common::split_equivalent_predicate;
 use crate::sql::binder::scalar_common::wrap_cast_if_needed;
+use crate::sql::binder::Visibility;
 use crate::sql::normalize_identifier;
 use crate::sql::optimizer::ColumnSet;
 use crate::sql::optimizer::SExpr;
@@ -70,13 +71,14 @@ impl<'a> Binder {
                 }
             }
             JoinOperator::RightOuter => {
+                for column in right_context.all_column_bindings().iter() {
+                    bind_context.add_column_binding(column.clone());
+                }
+
                 for column in left_context.all_column_bindings() {
                     let mut nullable_column = column.clone();
                     nullable_column.data_type = Box::new(wrap_nullable(&column.data_type));
                     bind_context.add_column_binding(nullable_column);
-                }
-                for column in right_context.all_column_bindings().iter() {
-                    bind_context.add_column_binding(column.clone());
                 }
             }
             _ => {
@@ -403,8 +405,8 @@ impl<'a> JoinConditionResolver<'a> {
                 .filter(|col_binding| col_binding.column_name == join_key_name)
                 .nth(1)
             {
-                // Always make the second using column in the join_context invisible. in unqualified wildcard.
-                col_binding.visible_in_unqualified_wildcard = false;
+                // Always make the second using column in the join_context invisible in unqualified wildcard.
+                col_binding.visibility = Visibility::UnqualifiedWildcardInVisible;
             }
 
             self.add_conditions(

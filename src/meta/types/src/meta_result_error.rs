@@ -19,9 +19,6 @@ use serde::Serialize;
 /// Errors about an invalid meta operation result
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
 pub enum MetaResultError {
-    #[error("The result of an add operation is invalid: before: {prev}, after: {result}")]
-    InvalidAddResult { prev: String, result: String },
-
     #[error("Expect result of type: {expect}, got: {got}")]
     InvalidType { expect: String, got: String },
 }

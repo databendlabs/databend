@@ -27,6 +27,7 @@ use crate::sql::binder::scalar::ScalarBinder;
 use crate::sql::binder::select::SelectList;
 use crate::sql::binder::Binder;
 use crate::sql::binder::ColumnBinding;
+use crate::sql::binder::Visibility;
 use crate::sql::optimizer::SExpr;
 use crate::sql::planner::metadata::MetadataRef;
 use crate::sql::plans::Aggregate;
@@ -169,7 +170,7 @@ impl<'a> AggregateRewriter<'a> {
                     column_name: name,
                     index,
                     data_type: Box::new(arg.data_type()),
-                    visible_in_unqualified_wildcard: true,
+                    visibility: Visibility::Visible,
                 };
                 replaced_args.push(
                     BoundColumnRef {

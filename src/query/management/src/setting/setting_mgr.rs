@@ -20,7 +20,6 @@ use common_meta_api::KVApi;
 use common_meta_types::IntoSeqV;
 use common_meta_types::MatchSeq;
 use common_meta_types::MatchSeqExt;
-use common_meta_types::OkOrExist;
 use common_meta_types::Operation;
 use common_meta_types::SeqV;
 use common_meta_types::UpsertKVReq;
@@ -56,11 +55,11 @@ impl SettingApi for SettingMgr {
             .kv_api
             .upsert_kv(UpsertKVReq::new(&key, seq, val, None));
 
-        let res = upsert.await?.into_add_result()?;
+        let res = upsert.await?.added_or_else(|v| v);
 
-        match res.res {
-            OkOrExist::Ok(v) => Ok(v.seq),
-            OkOrExist::Exists(v) => Ok(v.seq),
+        match res {
+            Ok(added) => Ok(added.seq),
+            Err(existing) => Ok(existing.seq),
         }
     }
 
