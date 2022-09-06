@@ -37,7 +37,7 @@ impl TablesTable {
             dropped_on AS drop_time,
             data_size AS data_length,
             index_size AS index_length,
-            '' AS table_comment,
+            '' AS table_comment
         FROM system.tables;";
 
         let mut options = BTreeMap::new();

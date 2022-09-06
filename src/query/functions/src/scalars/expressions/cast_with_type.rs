@@ -127,17 +127,16 @@ pub fn cast_with_type(
     }
 
     let (all_nulls, source_valids) = column.validity();
-    if !target_type.is_nullable() {
-        if all_nulls
+    if !target_type.is_nullable()
+        && (all_nulls
             || source_valids
                 .as_ref()
                 .map(|m| m.unset_bits() > 0)
-                .unwrap_or(false)
-        {
-            return Err(ErrorCode::BadDataValueType(
-                "Can't cast column from nullable data into non-nullable type".to_string(),
-            ));
-        }
+                .unwrap_or(false))
+    {
+        return Err(ErrorCode::BadDataValueType(
+            "Can't cast column from nullable data into non-nullable type".to_string(),
+        ));
     }
 
     let nonull_from_type = remove_nullable(from_type);
