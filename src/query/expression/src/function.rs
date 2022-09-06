@@ -437,7 +437,7 @@ impl FunctionRegistry {
 
         assert!(
             !has_nullable,
-            "Function {} has nullable argument or output, please use register_2_arg_core instead",
+            "Function {} has nullable argument or output, please use register_3_arg_core instead",
             name
         );
 

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::Ordering;
 use std::io::Write;
 
 use bstr::ByteSlice;
@@ -26,6 +27,7 @@ use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
 use common_expression::Value;
 use common_expression::ValueRef;
+use itertools::izip;
 
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
@@ -105,6 +107,154 @@ pub fn register(registry: &mut FunctionRegistry) {
         },
     );
     registry.register_aliases("char_length", &["character_length"]);
+
+    registry.register_3_arg::<StringType, NumberType<u64>, StringType, StringType, _, _>(
+        "lpad",
+        FunctionProperty::default(),
+        |_, _, _| None,
+        |str: &[u8], l: u64, pad: &[u8]| {
+            let mut buff: Vec<u8> = vec![];
+            if l != 0 {
+                if l > str.len() as u64 {
+                    let l = l - str.len() as u64;
+                    while buff.len() < l as usize {
+                        if buff.len() + pad.len() <= l as usize {
+                            buff.extend_from_slice(pad);
+                        } else {
+                            buff.extend_from_slice(&pad[0..l as usize - buff.len()])
+                        }
+                    }
+                    buff.extend_from_slice(str);
+                } else {
+                    buff.extend_from_slice(&str[0..l as usize]);
+                }
+            }
+            buff
+        },
+    );
+
+    registry.register_3_arg::<StringType, NumberType<u64>, StringType, StringType, _, _>(
+        "rpad",
+        FunctionProperty::default(),
+        |_, _, _| None,
+        |str: &[u8], l: u64, pad: &[u8]| {
+            let mut buff: Vec<u8> = vec![];
+            if l != 0 {
+                if l > str.len() as u64 {
+                    buff.extend_from_slice(str);
+                    while buff.len() < l as usize {
+                        if buff.len() + pad.len() <= l as usize {
+                            buff.extend_from_slice(pad);
+                        } else {
+                            buff.extend_from_slice(&pad[0..l as usize - buff.len()])
+                        }
+                    }
+                } else {
+                    buff.extend_from_slice(&str[0..l as usize]);
+                }
+            }
+            buff
+        },
+    );
+
+    registry.register_3_arg::<StringType, StringType, StringType, StringType, _, _>(
+        "replace",
+        FunctionProperty::default(),
+        |_, _, _| None,
+        |str, from, to| {
+            let mut buf: Vec<u8> = vec![];
+            if from.is_empty() || from == to {
+                buf.extend_from_slice(str);
+                return buf;
+            }
+            let mut skip = 0;
+            for (p, w) in str.windows(from.len()).enumerate() {
+                if w == from {
+                    buf.extend_from_slice(to);
+                    skip = from.len();
+                } else if p + w.len() == str.len() {
+                    buf.extend_from_slice(w);
+                } else if skip > 1 {
+                    skip -= 1;
+                } else {
+                    buf.extend_from_slice(&w[0..1]);
+                }
+            }
+            buf
+        },
+    );
+
+    registry.register_2_arg::<StringType, StringType, NumberType<i8>, _, _>(
+        "strcmp",
+        FunctionProperty::default(),
+        |_, _| None,
+        |s1, s2| {
+            let res = match s1.len().cmp(&s2.len()) {
+                Ordering::Equal => {
+                    let mut res = Ordering::Equal;
+                    for (s1i, s2i) in izip!(s1, s2) {
+                        match s1i.cmp(s2i) {
+                            Ordering::Equal => continue,
+                            ord => {
+                                res = ord;
+                                break;
+                            }
+                        }
+                    }
+                    res
+                }
+                ord => ord,
+            };
+            match res {
+                Ordering::Equal => 0,
+                Ordering::Greater => 1,
+                Ordering::Less => -1,
+            }
+        },
+    );
+
+    let find_at = |str: &[u8], substr: &[u8], pos: u64| {
+        let pos = pos as usize;
+        if pos == 0 {
+            return 0_u64;
+        }
+        let p = pos - 1;
+        if p + substr.len() <= str.len() {
+            str[p..]
+                .windows(substr.len())
+                .position(|w| w == substr)
+                .map_or(0, |i| i + 1 + p) as u64
+        } else {
+            0_u64
+        }
+    };
+    registry.register_2_arg::<StringType, StringType, NumberType<u64>, _, _>(
+        "instr",
+        FunctionProperty::default(),
+        |_, _| None,
+        move |str: &[u8], substr: &[u8]| find_at(str, substr, 1),
+    );
+
+    registry.register_2_arg::<StringType, StringType, NumberType<u64>, _, _>(
+        "position",
+        FunctionProperty::default(),
+        |_, _| None,
+        move |substr: &[u8], str: &[u8]| find_at(str, substr, 1),
+    );
+
+    registry.register_2_arg::<StringType, StringType, NumberType<u64>, _, _>(
+        "locate",
+        FunctionProperty::default(),
+        |_, _| None,
+        move |substr: &[u8], str: &[u8]| find_at(str, substr, 1),
+    );
+
+    registry.register_3_arg::<StringType, StringType, NumberType<u64>, NumberType<u64>, _, _>(
+        "locate",
+        FunctionProperty::default(),
+        |_, _, _| None,
+        move |substr: &[u8], str: &[u8], pos: u64| find_at(str, substr, pos),
+    );
 
     registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
         "to_base64",

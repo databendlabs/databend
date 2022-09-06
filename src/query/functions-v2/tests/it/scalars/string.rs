@@ -47,6 +47,10 @@ fn test_string() {
     test_oct(file);
     test_hex(file);
     test_unhex(file);
+    test_pad(file);
+    test_replace(file);
+    test_strcmp(file);
+    test_locate(file);
 }
 
 fn test_upper(file: &mut impl Write) {
@@ -495,4 +499,97 @@ fn test_unhex(file: &mut impl Write) {
         Column::from_data(vec!["616263", "646566", "6461746162656e64"]),
     )];
     run_ast(file, "unhex(s)", columns);
+}
+
+fn test_pad(file: &mut impl Write) {
+    run_ast(file, "lpad('hi', 2, '?')", &[]);
+    run_ast(file, "lpad('hi', 4, '?')", &[]);
+    run_ast(file, "lpad('hi', 0, '?')", &[]);
+    run_ast(file, "lpad('hi', 1, '?')", &[]);
+    run_ast(file, "lpad('hi', -1, '?')", &[]);
+    let table = [
+        (
+            "a",
+            DataType::String,
+            Column::from_data(&["hi", "test", "cc"]),
+        ),
+        ("b", DataType::UInt8, Column::from_data(vec![0, 3, 5])),
+        ("c", DataType::String, Column::from_data(&["?", "x", "bb"])),
+    ];
+    run_ast(file, "lpad(a, b, c)", &table);
+    run_ast(file, "rpad('hi', 2, '?')", &[]);
+    run_ast(file, "rpad('hi', 4, '?')", &[]);
+    run_ast(file, "rpad('hi', 0, '?')", &[]);
+    run_ast(file, "rpad('hi', 1, '?')", &[]);
+    run_ast(file, "rpad('hi', -1, '?')", &[]);
+    run_ast(file, "rpad(a, b, c)", &table);
+}
+
+fn test_replace(file: &mut impl Write) {
+    run_ast(file, "replace('hi', '', '?')", &[]);
+    run_ast(file, "replace('hi', '', 'hi')", &[]);
+    run_ast(file, "replace('hi', 'i', '?')", &[]);
+    run_ast(file, "replace('hi', 'x', '?')", &[]);
+
+    let table = [
+        (
+            "a",
+            DataType::String,
+            Column::from_data(&["hi", "test", "cc", "q"]),
+        ),
+        (
+            "b",
+            DataType::String,
+            Column::from_data(&["i", "te", "cc", ""]),
+        ),
+        (
+            "c",
+            DataType::String,
+            Column::from_data(&["?", "x", "bb", "q"]),
+        ),
+    ];
+    run_ast(file, "replace(a, b, c)", &table);
+}
+
+fn test_strcmp(file: &mut impl Write) {
+    run_ast(file, "strcmp('text', 'text2')", &[]);
+    run_ast(file, "strcmp('text2', 'text')", &[]);
+    run_ast(file, "strcmp('hii', 'hii')", &[]);
+
+    let table = [
+        (
+            "a",
+            DataType::String,
+            Column::from_data(&["hi", "test", "cc"]),
+        ),
+        (
+            "b",
+            DataType::String,
+            Column::from_data(&["i", "test", "ccb"]),
+        ),
+    ];
+    run_ast(file, "strcmp(a, b)", &table);
+}
+
+fn test_locate(file: &mut impl Write) {
+    run_ast(file, "locate('bar', 'foobarbar')", &[]);
+    run_ast(file, "instr('foobarbar', 'bar')", &[]);
+    run_ast(file, "position('bar' IN 'foobarbar')", &[]);
+    run_ast(file, "position('foobarbar' IN 'bar')", &[]);
+    run_ast(file, "locate('bar', 'foobarbar', 5)", &[]);
+
+    let table = [
+        (
+            "a",
+            DataType::String,
+            Column::from_data(&["bar", "cc", "cc", "q"]),
+        ),
+        (
+            "b",
+            DataType::String,
+            Column::from_data(&["foobarbar", "bdccacc", "xx", "56"]),
+        ),
+        ("c", DataType::UInt8, Column::from_data(vec![1, 2, 0, 1])),
+    ];
+    run_ast(file, "locate(a, b, c)", &table);
 }

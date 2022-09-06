@@ -1267,6 +1267,7 @@ dependencies = [
  "common-expression",
  "goldenfile",
  "hex",
+ "itertools",
  "match-template",
  "num-traits",
  "strength_reduce",
