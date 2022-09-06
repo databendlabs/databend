@@ -19,6 +19,7 @@ use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
 use std::time::Duration;
 
+use anyerror::AnyError;
 use common_base::base::tokio;
 use common_base::base::tokio::sync::watch;
 use common_base::base::tokio::sync::Mutex;
@@ -46,6 +47,7 @@ use common_meta_types::ForwardToLeader;
 use common_meta_types::LeaveRequest;
 use common_meta_types::LogEntry;
 use common_meta_types::MetaError;
+use common_meta_types::MetaManagementError;
 use common_meta_types::MetaNetworkError;
 use common_meta_types::MetaNetworkResult;
 use common_meta_types::MetaRaftError;
@@ -488,7 +490,7 @@ impl MetaNode {
     ///
     /// Return whether it has left the cluster.
     #[tracing::instrument(level = "info", skip_all)]
-    pub async fn leave_cluster(conf: &RaftConfig) -> Result<bool, MetaError> {
+    pub async fn leave_cluster(conf: &RaftConfig) -> Result<bool, MetaManagementError> {
         if conf.leave_via.is_empty() {
             info!("'--leave-via' is empty, do not need to leave cluster");
             return Ok(false);
@@ -542,15 +544,19 @@ impl MetaNode {
                 }
             };
         }
-        Err(MetaError::MetaServiceError(format!(
-            "leave cluster via {:?} failed",
-            addrs
-        )))
+        Err(MetaManagementError::Leave(AnyError::error(format!(
+            "fail to leave {} cluster via {:?}",
+            leave_id, addrs
+        ))))
     }
 
     /// Join an existent cluster if `--join` is specified and this meta node is just created, i.e., not opening an already initialized store.
     #[tracing::instrument(level = "info", skip(conf, self))]
-    pub async fn join_cluster(&self, conf: &RaftConfig, grpc_api_addr: String) -> MetaResult<()> {
+    pub async fn join_cluster(
+        &self,
+        conf: &RaftConfig,
+        grpc_api_addr: String,
+    ) -> Result<(), MetaManagementError> {
         if conf.join.is_empty() {
             info!("'--join' is empty, do not need joining cluster");
             return Ok(());
@@ -617,10 +623,10 @@ impl MetaNode {
                 }
             };
         }
-        Err(MetaError::MetaServiceError(format!(
-            "join cluster via {:?} fail",
-            addrs
-        )))
+        Err(MetaManagementError::Join(AnyError::error(format!(
+            "fail to join {} cluster via {:?}",
+            self.sto.id, addrs
+        ))))
     }
 
     async fn do_start(conf: &MetaConfig) -> Result<Arc<MetaNode>, MetaError> {
