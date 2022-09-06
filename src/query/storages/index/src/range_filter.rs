@@ -84,6 +84,26 @@ impl RangeFilter {
         })
     }
 
+    pub fn try_eval_const(&self) -> Result<bool> {
+        if !self.stat_columns.is_empty() {
+            return Err(ErrorCode::LogicalError(
+                "Constant folding requires the args are constant",
+            ));
+        }
+
+        let input_fields = vec![DataField::new("_dummy", u8::to_data_type())];
+        let input_schema = Arc::new(DataSchema::new(input_fields));
+        let const_col = ConstColumn::new(Series::from_data(vec![1u8]), 1);
+        let dummy_columns = vec![Arc::new(const_col) as ColumnRef];
+        let data_block = DataBlock::create(input_schema, dummy_columns);
+        let executed_data_block = self.executor.execute(&data_block)?;
+
+        match executed_data_block.column(0).get(0) {
+            DataValue::Null => Ok(false),
+            other => other.as_bool(),
+        }
+    }
+
     #[tracing::instrument(level = "debug", name = "range_filter_eval", skip_all)]
     pub fn eval(&self, stats: &StatisticsOfColumns) -> Result<bool> {
         let mut columns = Vec::with_capacity(self.stat_columns.len());
