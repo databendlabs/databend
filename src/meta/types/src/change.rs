@@ -93,14 +93,14 @@ where
     pub fn added_or_else<F, E>(self, f: F) -> Result<SeqV<T>, E>
     where F: FnOnce(SeqV<T>) -> E {
         let (prev, result) = self.unpack();
-        if let Some(res) = result {
-            return Ok(res);
-        }
-
         if let Some(p) = prev {
             return Err(f(p));
         }
 
-        unreachable!("prev of a failed add operation can not be None");
+        if let Some(res) = result {
+            return Ok(res);
+        }
+
+        unreachable!("impossible: both prev and result are None");
     }
 }
