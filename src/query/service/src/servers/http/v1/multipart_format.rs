@@ -36,6 +36,7 @@ use crate::sessions::TableContext;
 #[async_trait::async_trait]
 pub trait MultipartWorker: Send {
     async fn work(&mut self);
+    fn get_files(&self) -> Vec<String>;
 }
 
 pub struct MultipartFormat;
