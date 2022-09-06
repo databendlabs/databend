@@ -142,7 +142,7 @@ impl<const NEGATED: bool> Function for InFunction<NEGATED> {
             }
         }
 
-        if null_flag || least_super_dt.is_null() {
+        if null_flag || least_super_dt.is_null() || least_super_dt.is_nullable() {
             least_super_dt = wrap_nullable(&nonull_least_super_dt);
         } else {
             least_super_dt = nonull_least_super_dt;
