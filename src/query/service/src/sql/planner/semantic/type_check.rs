@@ -32,7 +32,6 @@ use common_ast::Backtrace;
 use common_ast::DisplayError;
 use common_datavalues::type_coercion::merge_types;
 use common_datavalues::ArrayType;
-use common_datavalues::BooleanType;
 use common_datavalues::DataField;
 use common_datavalues::DataType;
 use common_datavalues::DataTypeImpl;
@@ -313,7 +312,7 @@ impl<'a> TypeChecker<'a> {
                             return_type: Box::new(func.return_type()),
                         }
                         .into(),
-                        BooleanType::new_impl(),
+                        func.return_type(),
                     ))
                 } else {
                     // Rewrite `expr NOT BETWEEN low AND high`
@@ -332,7 +331,7 @@ impl<'a> TypeChecker<'a> {
                             return_type: Box::new(func.return_type()),
                         }
                         .into(),
-                        BooleanType::new_impl(),
+                        func.return_type(),
                     ))
                 }
             }
@@ -970,8 +969,8 @@ impl<'a> TypeChecker<'a> {
                 )))
             }
             BinaryOperator::And => {
-                let box (left, _) = self.resolve(left, Some(BooleanType::new_impl())).await?;
-                let box (right, _) = self.resolve(right, Some(BooleanType::new_impl())).await?;
+                let box (left, _) = self.resolve(left, None).await?;
+                let box (right, _) = self.resolve(right, None).await?;
                 let func = FunctionFactory::instance()
                     .get("and", &[&left.data_type(), &right.data_type()])?;
                 Ok(Box::new((
@@ -981,12 +980,12 @@ impl<'a> TypeChecker<'a> {
                         return_type: Box::new(func.return_type()),
                     }
                     .into(),
-                    BooleanType::new_impl(),
+                    func.return_type(),
                 )))
             }
             BinaryOperator::Or => {
-                let box (left, _) = self.resolve(left, Some(BooleanType::new_impl())).await?;
-                let box (right, _) = self.resolve(right, Some(BooleanType::new_impl())).await?;
+                let box (left, _) = self.resolve(left, None).await?;
+                let box (right, _) = self.resolve(right, None).await?;
                 let func = FunctionFactory::instance()
                     .get("or", &[&left.data_type(), &right.data_type()])?;
                 Ok(Box::new((
@@ -996,7 +995,7 @@ impl<'a> TypeChecker<'a> {
                         return_type: Box::new(func.return_type()),
                     }
                     .into(),
-                    BooleanType::new_impl(),
+                    func.return_type(),
                 )))
             }
         }
