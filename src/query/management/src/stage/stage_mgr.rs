@@ -26,7 +26,6 @@ use common_meta_types::ConditionResult::Eq;
 use common_meta_types::MatchSeq;
 use common_meta_types::MatchSeqExt;
 use common_meta_types::MetaError;
-use common_meta_types::OkOrExist;
 use common_meta_types::Operation;
 use common_meta_types::SeqV;
 use common_meta_types::StageFile;
@@ -83,15 +82,11 @@ impl StageApi for StageMgr {
             .kv_api
             .upsert_kv(UpsertKVReq::new(&key, seq, val, None));
 
-        let res = upsert_info.await?.into_add_result()?;
+        let res = upsert_info.await?.added_or_else(|v| {
+            ErrorCode::StageAlreadyExists(format!("Stage already exists, seq [{}]", v.seq))
+        })?;
 
-        match res.res {
-            OkOrExist::Ok(v) => Ok(v.seq),
-            OkOrExist::Exists(v) => Err(ErrorCode::StageAlreadyExists(format!(
-                "Stage already exists, seq [{}]",
-                v.seq
-            ))),
-        }
+        Ok(res.seq)
     }
 
     async fn get_stage(&self, name: &str, seq: Option<u64>) -> Result<SeqV<UserStageInfo>> {

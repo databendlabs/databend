@@ -15,18 +15,7 @@
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::MetaResultError;
 use crate::SeqV;
-
-pub enum OkOrExist<T> {
-    Ok(SeqV<T>),
-    Exists(SeqV<T>),
-}
-
-pub struct AddResult<T, ID> {
-    pub id: Option<ID>,
-    pub res: OkOrExist<T>,
-}
 
 /// `Change` describes a state change, including the states before and after a change.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, derive_more::From)]
@@ -35,7 +24,7 @@ where
     ID: Clone + PartialEq,
     T: Clone + PartialEq,
 {
-    /// identity of the resouce that is changed.
+    /// identity of the resource that is changed.
     pub ident: Option<ID>,
     pub prev: Option<SeqV<T>>,
     pub result: Option<SeqV<T>>,
@@ -99,33 +88,19 @@ where
         self.prev != self.result
     }
 
-    pub fn into_add_result(mut self) -> Result<AddResult<T, ID>, MetaResultError> {
-        let id = self.ident.take();
+    /// Assumes it is the state change of an add operation and return Ok if the add operation succeed.
+    /// Otherwise it returns the error the user provided function built with existing value.
+    pub fn added_or_else<F, E>(self, f: F) -> Result<SeqV<T>, E>
+    where F: FnOnce(SeqV<T>) -> E {
         let (prev, result) = self.unpack();
         if let Some(p) = prev {
-            return if result.is_some() {
-                Ok(AddResult {
-                    id,
-                    res: OkOrExist::Exists(p),
-                })
-            } else {
-                Err(MetaResultError::InvalidAddResult {
-                    prev: "Some".to_string(),
-                    result: "None".to_string(),
-                })
-            };
+            return Err(f(p));
         }
 
         if let Some(res) = result {
-            Ok(AddResult {
-                id,
-                res: OkOrExist::Ok(res),
-            })
-        } else {
-            Err(MetaResultError::InvalidAddResult {
-                prev: "None".to_string(),
-                result: "None".to_string(),
-            })
+            return Ok(res);
         }
+
+        unreachable!("impossible: both prev and result are None");
     }
 }
