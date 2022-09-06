@@ -23,6 +23,8 @@ use common_base::base::get_free_tcp_port;
 use common_base::base::tokio;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_types::AuthInfo;
+use common_meta_types::PasswordHashMethod;
 use common_users::CustomClaims;
 use common_users::EnsureUser;
 use databend_query::auth::AuthMgr;
@@ -1328,5 +1330,36 @@ async fn test_affect() -> Result<()> {
         assert_eq!(result.affect, affect);
         assert_eq!(result.session, session_conf);
     }
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_auth_configured_user() -> Result<()> {
+    let user_name = "conf_user";
+    let pass_word = "conf_user_pwd";
+    let hash_method = PasswordHashMethod::DoubleSha1;
+    let hash_value = hash_method.hash(pass_word.as_bytes());
+
+    let auth_info = AuthInfo::Password {
+        hash_value,
+        hash_method,
+    };
+    let config = ConfigBuilder::create()
+        .add_user(user_name, auth_info)
+        .build();
+    let _guard = TestGlobalServices::setup(config.clone()).await?;
+
+    let session_middleware = HTTPSessionMiddleware::create(
+        HttpHandlerKind::Query,
+        AuthMgr::create(config.clone()).await?,
+    );
+
+    let ep = Route::new()
+        .nest("/v1/query", query_route())
+        .with(session_middleware);
+
+    let basic = headers::Authorization::basic(user_name, pass_word);
+    // root user can only login in localhost
+    test_auth_post(&ep, user_name, basic, "%").await?;
     Ok(())
 }

@@ -54,3 +54,11 @@ html[data-theme='dark'] .docusaurus-highlight-code-line {
 .navbar__logo{
   transform: scale(1.4);
 }
+.rc-table-row {
+  td{
+    border-right-color: transparent;
+    &:last-child{
+      border-right-color: var(--ifm-table-border-color);
+    }
+  }
+}

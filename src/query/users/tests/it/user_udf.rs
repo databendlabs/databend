@@ -22,7 +22,7 @@ use pretty_assertions::assert_eq;
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_user_udf() -> Result<()> {
     let conf = RpcClientConf::default();
-    let user_mgr = UserApiProvider::try_create(conf).await?;
+    let user_mgr = UserApiProvider::try_create_simple(conf).await?;
 
     let tenant = "test";
     let description = "this is a description";

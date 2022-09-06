@@ -96,6 +96,11 @@ const config = {
                         position: 'right',
                     },
                     {
+                      to: '/download',
+                      label: 'Download',
+                      position: 'right',
+                  },
+                    {
                         to: '/doc/contributing/good-pr',
                         label: 'Contributing',
                         position: 'right',

@@ -11,16 +11,21 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
+use std::collections::HashMap;
 use std::env;
 use std::fmt;
 use std::fmt::Debug;
 use std::fmt::Formatter;
+use std::str::FromStr;
 
 use clap::Args;
 use clap::Parser;
 use common_base::base::mask_string;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_types::AuthInfo;
+use common_meta_types::AuthType;
 use common_storage::StorageAzblobConfig as InnerStorageAzblobConfig;
 use common_storage::StorageConfig as InnerStorageConfig;
 use common_storage::StorageFsConfig as InnerStorageFsConfig;
@@ -32,6 +37,7 @@ use common_storage::StorageS3Config as InnerStorageS3Config;
 use common_tracing::Config as InnerLogConfig;
 use common_tracing::FileConfig as InnerFileLogConfig;
 use common_tracing::StderrConfig as InnerStderrLogConfig;
+use common_users::idm_config::IDMConfig as InnerIDMConfig;
 use serde::Deserialize;
 use serde::Serialize;
 use serfig::collectors::from_env;
@@ -87,6 +93,9 @@ pub struct Config {
     // - currently only supports HIVE (via hive meta store)
     #[clap(flatten)]
     pub catalog: HiveCatalogConfig,
+
+    #[clap(skip)]
+    pub idm: IDMConfig,
 }
 
 impl Default for Config {
@@ -139,6 +148,7 @@ impl From<InnerConfig> for Config {
             meta: inner.meta.into(),
             storage: inner.storage.into(),
             catalog: inner.catalog.into(),
+            idm: inner.idm.into(),
         }
     }
 }
@@ -155,6 +165,7 @@ impl TryInto<InnerConfig> for Config {
             meta: self.meta.try_into()?,
             storage: self.storage.try_into()?,
             catalog: self.catalog.try_into()?,
+            idm: self.idm.try_into()?,
         })
     }
 }
@@ -1215,5 +1226,102 @@ impl Debug for MetaConfig {
                 &self.rpc_tls_meta_service_domain_name,
             )
             .finish()
+    }
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct IDMConfig {
+    users: Vec<UserConfig>,
+}
+
+impl TryInto<InnerIDMConfig> for IDMConfig {
+    type Error = ErrorCode;
+
+    fn try_into(self) -> Result<InnerIDMConfig> {
+        let mut users = HashMap::new();
+        for c in self.users.into_iter() {
+            users.insert(c.name.clone(), c.auth.try_into()?);
+        }
+        Ok(InnerIDMConfig { users })
+    }
+}
+
+impl From<InnerIDMConfig> for IDMConfig {
+    fn from(inner: InnerIDMConfig) -> Self {
+        Self {
+            users: inner
+                .users
+                .into_iter()
+                .map(|(name, auth)| UserConfig {
+                    name,
+                    auth: auth.into(),
+                })
+                .collect(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UserConfig {
+    pub name: String,
+    #[serde(flatten)]
+    pub auth: UserAuthConfig,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UserAuthConfig {
+    auth_type: String,
+    auth_string: Option<String>,
+}
+
+fn check_no_auth_string(auth_string: Option<String>, auth_info: AuthInfo) -> Result<AuthInfo> {
+    match auth_string {
+        Some(s) if !s.is_empty() => Err(ErrorCode::InvalidConfig(format!(
+            "should not set auth_string for auth_type {}",
+            auth_info.get_type().to_str()
+        ))),
+        _ => Ok(auth_info),
+    }
+}
+impl TryInto<AuthInfo> for UserAuthConfig {
+    type Error = ErrorCode;
+
+    fn try_into(self) -> Result<AuthInfo> {
+        let auth_type = AuthType::from_str(&self.auth_type)?;
+        match auth_type {
+            AuthType::NoPassword => check_no_auth_string(self.auth_string, AuthInfo::None),
+            AuthType::JWT => check_no_auth_string(self.auth_string, AuthInfo::JWT),
+            AuthType::Sha256Password | AuthType::DoubleSha1Password => {
+                let password_type = auth_type.get_password_type().expect("must success");
+                match self.auth_string {
+                    None => Err(ErrorCode::InvalidConfig("must set auth_string")),
+                    Some(s) => {
+                        let p = hex::decode(s).map_err(|e| {
+                            ErrorCode::InvalidConfig(format!("password is not hex: {e:?}"))
+                        })?;
+                        Ok(AuthInfo::Password {
+                            hash_value: p,
+                            hash_method: password_type,
+                        })
+                    }
+                }
+            }
+        }
+    }
+}
+
+impl From<AuthInfo> for UserAuthConfig {
+    fn from(inner: AuthInfo) -> Self {
+        let auth_type = inner.get_type().to_str().to_owned();
+        let auth_string = inner.get_auth_string();
+        let auth_string = if auth_string.is_empty() {
+            None
+        } else {
+            Some(hex::encode(auth_string))
+        };
+        UserAuthConfig {
+            auth_type,
+            auth_string,
+        }
     }
 }

@@ -26,7 +26,7 @@ use pretty_assertions::assert_eq;
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_role_manager() -> Result<()> {
     let conf = RpcClientConf::default();
-    let role_mgr = UserApiProvider::try_create(conf).await?;
+    let role_mgr = UserApiProvider::try_create_simple(conf).await?;
 
     let tenant = "tenant1";
     let role_name = "test-role1".to_string();
