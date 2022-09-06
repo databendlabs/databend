@@ -13,6 +13,7 @@ SELECT * FROM numbers_mt (3) where number > 1;
 statement ok
 SELECT * FROM numbers_mt (3) where 1=2 AND (number between 1 AND 3);
 
+
 statement ok
 SELECT * FROM numbers_mt (3) where 1=1 AND (number >= 5);
 
@@ -22,6 +23,12 @@ SELECT number as c1, (number+1) as c2 FROM numbers_mt (3) where number+1>1;
 ----
 1 2
 2 3
+
+statement query I
+SELECT count() FROM numbers_mt (10) where -1;
+
+----
+10
 
 statement query II
 SELECT number as c1, (number+1) as c2 FROM numbers_mt (3) where number >1;

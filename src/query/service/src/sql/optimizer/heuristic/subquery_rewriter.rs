@@ -338,7 +338,7 @@ impl SubqueryRewriter {
                             func_name: "if".to_string(),
                             arg_types: vec![
                                 BooleanType::new_impl(),
-                                UInt64Type::new_impl(),
+                                column_ref.data_type(),
                                 UInt64Type::new_impl(),
                             ],
                             return_type: Box::new(UInt64Type::new_impl()),

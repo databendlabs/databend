@@ -126,6 +126,19 @@ pub fn cast_with_type(
         return Ok(ConstColumn::new(res, column.len()).arc());
     }
 
+    let (all_nulls, source_valids) = column.validity();
+    if !target_type.is_nullable()
+        && (all_nulls
+            || source_valids
+                .as_ref()
+                .map(|m| m.unset_bits() > 0)
+                .unwrap_or(false))
+    {
+        return Err(ErrorCode::BadDataValueType(
+            "Can't cast column from nullable data into non-nullable type".to_string(),
+        ));
+    }
+
     let nonull_from_type = remove_nullable(from_type);
     let nonull_data_type = remove_nullable(target_type);
 
@@ -184,8 +197,8 @@ pub fn cast_with_type(
         )));
     }
 
-    let (all_nulls, source_valids) = column.validity();
     let bitmap = combine_validities_2(source_valids.cloned(), valids);
+
     if target_type.is_nullable() {
         return Ok(NullableColumn::wrap_inner(result, bitmap));
     }
