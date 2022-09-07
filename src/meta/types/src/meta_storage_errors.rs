@@ -22,13 +22,9 @@ use crate::error_context::ErrorWithContext;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
 pub enum MetaStorageError {
-    // type to represent bytes format errors
-    #[error("{0}")]
-    BytesError(String),
-
-    // type to represent serialize/deserialize errors
-    #[error("{0}")]
-    SerdeError(String),
+    /// An error raised when encode/decode data to/from underlying storage.
+    #[error(transparent)]
+    BytesError(AnyError),
 
     /// An AnyError built from sled::Error.
     #[error(transparent)]
@@ -43,7 +39,7 @@ pub enum MetaStorageError {
     TransactionConflict,
 }
 
-pub type MetaStorageResult<T> = std::result::Result<T, MetaStorageError>;
+pub type MetaStorageResult<T> = Result<T, MetaStorageError>;
 
 impl From<MetaStorageError> for ErrorCode {
     fn from(e: MetaStorageError) -> Self {
@@ -53,17 +49,13 @@ impl From<MetaStorageError> for ErrorCode {
 
 impl From<std::string::FromUtf8Error> for MetaStorageError {
     fn from(error: std::string::FromUtf8Error) -> Self {
-        MetaStorageError::BytesError(format!(
-            "Bad bytes, cannot parse bytes with UTF8, cause: {}",
-            error
-        ))
+        MetaStorageError::BytesError(AnyError::new(&error))
     }
 }
 
-// from serde error to MetaStorageError::SerdeError
 impl From<serde_json::Error> for MetaStorageError {
     fn from(error: serde_json::Error) -> MetaStorageError {
-        MetaStorageError::SerdeError(format!("serde json se/de error: {:?}", error))
+        MetaStorageError::BytesError(AnyError::new(&error))
     }
 }
 
