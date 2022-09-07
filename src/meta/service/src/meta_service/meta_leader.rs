@@ -213,8 +213,6 @@ impl<'a> MetaLeader<'a> {
     /// Write a log through local raft node and return the states before and after applying the log.
     ///
     /// If the raft node is not a leader, it returns MetaRaftError::ForwardToLeader.
-    /// If the leadership is lost during writing the log, it returns an UnknownError.
-    /// TODO(xp): elaborate the UnknownError, e.g. LeaderLostError
     #[tracing::instrument(level = "debug", skip(self, entry))]
     pub async fn write(&self, mut entry: LogEntry) -> Result<AppliedState, MetaError> {
         // Add consistent clock time to log entry.
