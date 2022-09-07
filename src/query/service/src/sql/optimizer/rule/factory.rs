@@ -22,6 +22,8 @@ use super::rewrite::RulePushDownFilterEvalScalar;
 use super::rewrite::RulePushDownFilterJoin;
 use super::rewrite::RulePushDownFilterProject;
 use super::transform::RuleCommuteJoin;
+use super::transform::RuleLeftAssociateJoin;
+use super::transform::RuleRightAssociateJoin;
 use crate::sql::optimizer::rule::rewrite::RuleEliminateFilter;
 use crate::sql::optimizer::rule::rewrite::RuleEliminateProject;
 use crate::sql::optimizer::rule::rewrite::RuleMergeEvalScalar;
@@ -72,6 +74,8 @@ impl RuleFactory {
                 Ok(Box::new(RuleNormalizeDisjunctiveFilter::new()))
             }
             RuleID::CommuteJoin => Ok(Box::new(RuleCommuteJoin::new())),
+            RuleID::LeftAssociateJoin => Ok(Box::new(RuleLeftAssociateJoin::new())),
+            RuleID::RightAssociateJoin => Ok(Box::new(RuleRightAssociateJoin::new())),
         }
     }
 }

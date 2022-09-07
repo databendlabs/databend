@@ -145,8 +145,8 @@ impl Display for Sort {
                 )
             })
             .collect::<Vec<String>>();
-
-        write!(f, "Sort: [{}]", scalars.join(", "))
+        let limit = self.limit.as_ref().cloned().unwrap_or(0);
+        write!(f, "Sort: [{}], Limit: [{}]", scalars.join(", "), limit)
     }
 }
 

@@ -59,8 +59,8 @@ hits_statements=(
   "SELECT SearchPhrase AS c, MIN(URL), MIN(Title), COUNT(*), COUNT(DISTINCT UserID) FROM hits WHERE Title LIKE '%Google%' AND URL NOT LIKE '%.google.%' AND SearchPhrase <> '' GROUP BY SearchPhrase ORDER BY c DESC LIMIT 10;"
   "SELECT '====== SQL24 ======';"
   "SELECT * FROM hits WHERE URL LIKE '%google%' ORDER BY EventTime LIMIT 10;"
-  "SELECT '====== SQL25 ======';"
-  "SELECT SearchPhrase FROM hits WHERE SearchPhrase <> '' ORDER BY EventTime LIMIT 10;"
+  "SELECT '====== SQL25 ======';" #the limit sort is unstable sort, add limit result to make result stable.
+  "SELECT SearchPhrase FROM hits WHERE SearchPhrase <> '' ORDER BY EventTime, SearchPhrase LIMIT 20;"
   "SELECT '====== SQL26 ======';"
   "SELECT SearchPhrase FROM hits WHERE SearchPhrase <> '' ORDER BY SearchPhrase LIMIT 10;"
   "SELECT '====== SQL27 ======';"

@@ -30,12 +30,11 @@ SELECT c0, c1 FROM t0 order by c1;
 0.5 NULL
 
 statement query FTI
-SELECT c0, c1, ((t0.c0)/(t0.c1))::bool FROM t0 order by c0, c1;
+SELECT c0, c1, ((t0.c0)/(t0.c1)) FROM t0 order by c0, c1;
 
 ----
-0.5  0  1
-0.5  1  1
-0.5  NULL  1
-0.5  NULL  1
-0.5  NULL  1
-
+0.5  0  inf
+0.5  1  0.5
+0.5  NULL  NULL
+0.5  NULL  NULL
+0.5  NULL  NULL

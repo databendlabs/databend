@@ -60,7 +60,7 @@ impl<const NEGATED: bool> InFunction<NEGATED> {
 macro_rules! scalar_contains {
     ($T: ident, $INPUT_COL: expr, $ROWS: expr, $COLUMNS: expr, $CAST_TYPE: ident, $FUNC_CTX: expr) => {{
         let mut builder: ColumnBuilder<bool> = ColumnBuilder::with_capacity($ROWS);
-        let mut vals_set = HashSet::with_capacity($ROWS - 1);
+        let mut vals_set = HashSet::with_capacity($ROWS);
         for col in &$COLUMNS[1..] {
             let col = cast_column_field(col, col.data_type(), &$CAST_TYPE, &$FUNC_CTX)?;
             let col_viewer = $T::try_create_viewer(&col)?;
@@ -82,7 +82,7 @@ macro_rules! scalar_contains {
 macro_rules! float_contains {
     ($T: ident, $INPUT_COL: expr, $ROWS: expr, $COLUMNS: expr, $CAST_TYPE: ident, $FUNC_CTX: expr) => {{
         let mut builder: ColumnBuilder<bool> = ColumnBuilder::with_capacity($ROWS);
-        let mut vals_set = HashSet::with_capacity($ROWS - 1);
+        let mut vals_set = HashSet::with_capacity($ROWS);
         for col in &$COLUMNS[1..] {
             let col = cast_column_field(col, col.data_type(), &$CAST_TYPE, &$FUNC_CTX)?;
             let col_viewer = $T::try_create_viewer(&col)?;
@@ -142,7 +142,7 @@ impl<const NEGATED: bool> Function for InFunction<NEGATED> {
             }
         }
 
-        if null_flag || least_super_dt.is_null() {
+        if null_flag || least_super_dt.is_null() || least_super_dt.is_nullable() {
             least_super_dt = wrap_nullable(&nonull_least_super_dt);
         } else {
             least_super_dt = nonull_least_super_dt;

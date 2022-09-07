@@ -87,6 +87,19 @@ pub struct LogicalInnerJoin {
     pub from_correlated_subquery: bool,
 }
 
+impl Default for LogicalInnerJoin {
+    fn default() -> Self {
+        Self {
+            left_conditions: Default::default(),
+            right_conditions: Default::default(),
+            other_conditions: Default::default(),
+            join_type: JoinType::Cross,
+            marker_index: Default::default(),
+            from_correlated_subquery: Default::default(),
+        }
+    }
+}
+
 impl Operator for LogicalInnerJoin {
     fn rel_op(&self) -> RelOp {
         RelOp::LogicalInnerJoin

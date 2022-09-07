@@ -29,9 +29,9 @@ mod match_seq;
 mod message;
 mod meta_errors;
 mod meta_errors_into;
+mod meta_management_error;
 mod meta_network_errors;
 mod meta_raft_errors;
-mod meta_result_error;
 mod meta_storage_errors;
 mod operation;
 mod raft_txid;
@@ -67,7 +67,6 @@ pub mod protobuf {
 
     pub const FILE_DESCRIPTOR_SET: &[u8] = tonic::include_file_descriptor_set!("meta_descriptor");
 }
-
 pub use app_error::AppError;
 pub use app_error::CreateDatabaseWithDropTime;
 pub use app_error::CreateTableWithDropTime;
@@ -89,9 +88,7 @@ pub use app_error::UnknownTable;
 pub use app_error::UnknownTableId;
 pub use app_error::WrongShareObject;
 pub use applied_state::AppliedState;
-pub use change::AddResult;
 pub use change::Change;
-pub use change::OkOrExist;
 pub use cluster::Node;
 pub use cluster::NodeInfo;
 pub use cluster::Slot;
@@ -118,14 +115,17 @@ pub use message::LeaveRequest;
 pub use meta_errors::MetaError;
 pub use meta_errors::MetaResult;
 pub use meta_errors_into::ToMetaError;
+pub use meta_management_error::MetaManagementError;
 pub use meta_network_errors::ConnectionError;
 pub use meta_network_errors::InvalidArgument;
 pub use meta_network_errors::MetaNetworkError;
 pub use meta_network_errors::MetaNetworkResult;
+pub use meta_raft_errors::ChangeMembershipError;
+pub use meta_raft_errors::Fatal;
 pub use meta_raft_errors::ForwardToLeader;
+pub use meta_raft_errors::InitializeError;
 pub use meta_raft_errors::MetaRaftError;
 pub use meta_raft_errors::RetryableError;
-pub use meta_result_error::MetaResultError;
 pub use meta_storage_errors::MetaStorageError;
 pub use meta_storage_errors::MetaStorageResult;
 pub use operation::GCDroppedDataReply;

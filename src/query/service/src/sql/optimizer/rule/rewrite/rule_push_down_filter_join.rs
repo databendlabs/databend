@@ -16,7 +16,7 @@ use common_datavalues::type_coercion::compare_coercion;
 use common_exception::Result;
 
 use crate::sql::binder::wrap_cast_if_needed;
-use crate::sql::binder::JoinCondition;
+use crate::sql::binder::JoinPredicate;
 use crate::sql::optimizer::rule::Rule;
 use crate::sql::optimizer::rule::TransformState;
 use crate::sql::optimizer::RelExpr;
@@ -93,19 +93,19 @@ impl Rule for RulePushDownFilterJoin {
         let mut need_push = false;
 
         for predicate in filter.predicates.into_iter() {
-            let pred = JoinCondition::new(&predicate, &left_prop, &right_prop);
+            let pred = JoinPredicate::new(&predicate, &left_prop, &right_prop);
             match pred {
-                JoinCondition::Left(_) => {
+                JoinPredicate::Left(_) => {
                     need_push = true;
                     left_push_down.push(predicate);
                 }
-                JoinCondition::Right(_) => {
+                JoinPredicate::Right(_) => {
                     need_push = true;
                     right_push_down.push(predicate);
                 }
-                JoinCondition::Other(_) => original_predicates.push(predicate),
+                JoinPredicate::Other(_) => original_predicates.push(predicate),
 
-                JoinCondition::Both { left, right } => {
+                JoinPredicate::Both { left, right } => {
                     let left_type = left.data_type();
                     let right_type = right.data_type();
                     let join_key_type = compare_coercion(&left_type, &right_type);

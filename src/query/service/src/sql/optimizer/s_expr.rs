@@ -15,6 +15,7 @@
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+use super::RelationalProperty;
 use crate::sql::optimizer::rule::AppliedRules;
 use crate::sql::optimizer::rule::RuleID;
 use crate::sql::plans::Operator;
@@ -30,6 +31,7 @@ pub struct SExpr {
     pub(super) children: Vec<SExpr>,
 
     pub(super) original_group: Option<IndexType>,
+    pub(super) rel_prop: Option<Box<RelationalProperty>>,
 
     /// A bitmap to record applied rules on current SExpr, to prevent
     /// redundant transformations.
@@ -41,26 +43,28 @@ impl SExpr {
         plan: RelOperator,
         children: Vec<SExpr>,
         original_group: Option<IndexType>,
+        rel_prop: Option<Box<RelationalProperty>>,
     ) -> Self {
         SExpr {
             plan,
             children,
             original_group,
+            rel_prop,
 
             applied_rules: AppliedRules::default(),
         }
     }
 
     pub fn create_unary(plan: RelOperator, child: SExpr) -> Self {
-        Self::create(plan, vec![child], None)
+        Self::create(plan, vec![child], None, None)
     }
 
     pub fn create_binary(plan: RelOperator, left_child: SExpr, right_child: SExpr) -> Self {
-        Self::create(plan, vec![left_child, right_child], None)
+        Self::create(plan, vec![left_child, right_child], None, None)
     }
 
     pub fn create_leaf(plan: RelOperator) -> Self {
-        Self::create(plan, vec![], None)
+        Self::create(plan, vec![], None, None)
     }
 
     pub fn create_pattern_leaf() -> Self {
@@ -70,6 +74,7 @@ impl SExpr {
             }
             .into(),
             vec![],
+            None,
             None,
         )
     }
@@ -127,6 +132,7 @@ impl SExpr {
         Self {
             plan: self.plan.clone(),
             original_group: self.original_group,
+            rel_prop: self.rel_prop.clone(),
             applied_rules: self.applied_rules.clone(),
             children,
         }

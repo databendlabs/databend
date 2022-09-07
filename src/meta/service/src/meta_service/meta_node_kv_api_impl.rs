@@ -24,7 +24,6 @@ use common_meta_types::LogEntry;
 use common_meta_types::MGetKVReply;
 use common_meta_types::MGetKVReq;
 use common_meta_types::MetaError;
-use common_meta_types::MetaResultError;
 use common_meta_types::TxnReply;
 use common_meta_types::TxnRequest;
 use common_meta_types::UpsertKV;
@@ -56,10 +55,9 @@ impl KVApi for MetaNode {
 
         match rst {
             AppliedState::KV(x) => Ok(x),
-            _ => Err(MetaError::MetaResultError(MetaResultError::InvalidType {
-                expect: "AppliedState::KV".to_string(),
-                got: "other".to_string(),
-            })),
+            _ => {
+                unreachable!("expect type {}", "AppliedState::KV")
+            }
         }
     }
 
@@ -108,10 +106,9 @@ impl KVApi for MetaNode {
 
         match rst {
             AppliedState::TxnReply(x) => Ok(x),
-            _ => Err(MetaError::MetaResultError(MetaResultError::InvalidType {
-                expect: "AppliedState::transaction".to_string(),
-                got: "other".to_string(),
-            })),
+            _ => {
+                unreachable!("expect type {}", "AppliedState::transaction",)
+            }
         }
     }
 }

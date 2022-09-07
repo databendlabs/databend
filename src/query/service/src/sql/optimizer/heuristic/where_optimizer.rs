@@ -151,7 +151,7 @@ impl WhereOptimizer {
                 .iter()
                 .map(|expr| self.where_optimize(expr.clone()))
                 .collect::<Result<Vec<_>>>()?;
-            Ok(SExpr::create(rel_op.clone(), children, None))
+            Ok(SExpr::create(rel_op.clone(), children, None, None))
         }
     }
 }

@@ -23,3 +23,6 @@ select try_cast(int_not_nullable as int) from cast_test;
 
 ----
 1
+
+statement error
+select int_nullable::int from cast_test;

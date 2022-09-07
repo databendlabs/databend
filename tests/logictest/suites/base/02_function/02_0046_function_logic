@@ -226,9 +226,9 @@ SELECT not 0;
 
 
 
-statement query T
-SELECT not null;
+statement query TT
+SELECT not null, not (null BETWEEN NULL AND NULL);
 
 ----
-NULL
+NULL NULL
 

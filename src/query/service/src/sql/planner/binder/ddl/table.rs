@@ -42,6 +42,7 @@ use crate::catalogs::DatabaseCatalog;
 use crate::sessions::TableContext;
 use crate::sql::binder::scalar::ScalarBinder;
 use crate::sql::binder::Binder;
+use crate::sql::binder::Visibility;
 use crate::sql::executor::ExpressionBuilderWithoutRenaming;
 use crate::sql::executor::PhysicalScalarBuilder;
 use crate::sql::is_reserved_opt_key;
@@ -849,7 +850,7 @@ impl<'a> Binder {
                     .map(|catalog| normalize_identifier(catalog, &self.name_resolution_ctx).name)
                     .unwrap_or_else(|| self.ctx.get_current_catalog());
                 let database = database.as_ref().map_or_else(
-                    || self.ctx.get_current_catalog(),
+                    || self.ctx.get_current_database(),
                     |ident| normalize_identifier(ident, &self.name_resolution_ctx).name,
                 );
                 let table_name = normalize_identifier(table, &self.name_resolution_ctx).name;
@@ -910,7 +911,7 @@ impl<'a> Binder {
                 // A dummy index is fine, since we won't actually evaluate the expression
                 index: 0,
                 data_type: Box::new(field.data_type().clone()),
-                visible_in_unqualified_wildcard: false,
+                visibility: Visibility::Visible,
             };
             bind_context.columns.push(column);
         }

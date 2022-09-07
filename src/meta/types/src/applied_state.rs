@@ -18,9 +18,7 @@ use openraft::AppDataResponse;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::AddResult;
 use crate::Change;
-use crate::MetaError;
 use crate::Node;
 use crate::TxnReply;
 
@@ -48,24 +46,6 @@ pub enum AppliedState {
 }
 
 impl AppDataResponse for AppliedState {}
-
-impl<T, ID> TryInto<AddResult<T, ID>> for AppliedState
-where
-    ID: Clone + PartialEq + Debug,
-    T: Clone + PartialEq + Debug,
-    Change<T, ID>: TryFrom<AppliedState>,
-    <Change<T, ID> as TryFrom<AppliedState>>::Error: Debug,
-{
-    type Error = MetaError;
-
-    fn try_into(self) -> Result<AddResult<T, ID>, Self::Error> {
-        let typ = std::any::type_name::<T>();
-
-        let ch = TryInto::<Change<T, ID>>::try_into(self).expect(typ);
-        let add_res = ch.into_add_result()?;
-        Ok(add_res)
-    }
-}
 
 impl AppliedState {
     /// Whether the state changed

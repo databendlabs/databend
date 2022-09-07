@@ -13,5 +13,10 @@
 // limitations under the License.
 
 mod rule_commute_join;
+mod rule_left_associate_join;
+mod rule_right_associate_join;
+mod util;
 
 pub use rule_commute_join::RuleCommuteJoin;
+pub use rule_left_associate_join::RuleLeftAssociateJoin;
+pub use rule_right_associate_join::RuleRightAssociateJoin;

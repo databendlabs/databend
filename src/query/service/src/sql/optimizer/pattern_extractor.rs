@@ -38,6 +38,9 @@ impl PatternExtractor {
                 m_expr.plan.clone(),
                 vec![],
                 Some(m_expr.group_index),
+                Some(Box::new(
+                    memo.group(m_expr.group_index)?.relational_prop.clone(),
+                )),
             )]);
         }
 
@@ -55,10 +58,7 @@ impl PatternExtractor {
             children_results.push(result);
         }
 
-        Ok(Self::generate_expression_with_children(
-            m_expr,
-            children_results,
-        ))
+        Self::generate_expression_with_children(memo, m_expr, children_results)
     }
 
     fn extract_group(&mut self, memo: &Memo, group: &Group, pattern: &SExpr) -> Result<Vec<SExpr>> {
@@ -72,9 +72,10 @@ impl PatternExtractor {
     }
 
     fn generate_expression_with_children(
+        memo: &Memo,
         m_expr: &MExpr,
         candidates: Vec<Vec<SExpr>>,
-    ) -> Vec<SExpr> {
+    ) -> Result<Vec<SExpr>> {
         let mut results = vec![];
 
         // Initialize cursors
@@ -82,7 +83,7 @@ impl PatternExtractor {
         for candidate in candidates.iter() {
             if candidate.is_empty() {
                 // Every child should have at least one candidate
-                return results;
+                return Ok(results);
             }
             cursors.push(0);
         }
@@ -92,8 +93,11 @@ impl PatternExtractor {
                 m_expr.plan.clone(),
                 vec![],
                 Some(m_expr.group_index),
+                Some(Box::new(
+                    memo.group(m_expr.group_index)?.relational_prop.clone(),
+                )),
             ));
-            return results;
+            return Ok(results);
         }
 
         'LOOP: loop {
@@ -105,6 +109,9 @@ impl PatternExtractor {
                 m_expr.plan.clone(),
                 children,
                 Some(m_expr.group_index),
+                Some(Box::new(
+                    memo.group(m_expr.group_index)?.relational_prop.clone(),
+                )),
             ));
 
             let mut shifted = false;
@@ -130,6 +137,6 @@ impl PatternExtractor {
             }
         }
 
-        results
+        Ok(results)
     }
 }

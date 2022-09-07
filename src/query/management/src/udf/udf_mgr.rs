@@ -22,7 +22,6 @@ use common_meta_api::KVApi;
 use common_meta_types::IntoSeqV;
 use common_meta_types::MatchSeq;
 use common_meta_types::MatchSeqExt;
-use common_meta_types::OkOrExist;
 use common_meta_types::Operation;
 use common_meta_types::SeqV;
 use common_meta_types::UpsertKVReq;
@@ -69,15 +68,11 @@ impl UdfApi for UdfMgr {
             .kv_api
             .upsert_kv(UpsertKVReq::new(&key, seq, val, None));
 
-        let res = upsert_info.await?.into_add_result()?;
+        let res = upsert_info.await?.added_or_else(|v| {
+            ErrorCode::UdfAlreadyExists(format!("UDF already exists, seq [{}]", v.seq))
+        })?;
 
-        match res.res {
-            OkOrExist::Ok(v) => Ok(v.seq),
-            OkOrExist::Exists(v) => Err(ErrorCode::UdfAlreadyExists(format!(
-                "UDF already exists, seq [{}]",
-                v.seq
-            ))),
-        }
+        Ok(res.seq)
     }
 
     async fn update_udf(&self, info: UserDefinedFunction, seq: Option<u64>) -> Result<u64> {
