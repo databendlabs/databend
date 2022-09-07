@@ -522,3 +522,28 @@ drop table onecolumn;
 statement ok
 drop table empty;
 
+statement ok
+drop table if exists z0;
+
+statement ok
+drop table if exists z1;
+
+statement ok
+CREATE TABLE z0(c0BOOLEAN BOOLEAN NULL, c1FLOAT DOUBLE NULL);
+
+statement ok
+CREATE TABLE z1(c0BOOLEAN BOOL NULL DEFAULT(true));
+
+statement ok
+INSERT INTO z0(c1float, c0boolean) VALUES (0.27563244104385376, false), (0.7913353443145752, false);
+
+statement ok
+select * from z1 right join z0 on false limit 0;
+
+
+statement ok
+drop table z0;
+
+statement ok
+drop table z1;
+
