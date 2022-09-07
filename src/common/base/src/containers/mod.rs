@@ -12,9 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod array;
 mod pool;
 mod ttlhmap;
 
+pub use array::concat;
 pub use pool::ItemManager;
 pub use pool::Pool;
 pub use ttlhmap::CleanPolicy;

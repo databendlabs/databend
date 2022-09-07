@@ -1264,12 +1264,15 @@ dependencies = [
  "comfy-table",
  "common-arrow",
  "common-ast",
+ "common-base",
  "common-expression",
+ "crc32fast",
  "goldenfile",
  "hex",
  "itertools",
  "match-template",
  "num-traits",
+ "rand 0.8.5",
  "strength_reduce",
 ]
 
