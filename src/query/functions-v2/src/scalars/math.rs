@@ -17,6 +17,7 @@ use std::f64::consts::E;
 use std::f64::consts::PI;
 use std::marker::PhantomData;
 
+use common_base::containers::concat;
 use common_expression::types::number::NumberDomain;
 use common_expression::types::DataType;
 use common_expression::types::NumberType;
@@ -31,7 +32,7 @@ use rand::Rng;
 use rand::SeedableRng;
 
 pub fn register(registry: &mut FunctionRegistry) {
-    let all_numerics_types = &[
+    let all_integer_types = &[
         DataType::UInt8,
         DataType::UInt16,
         DataType::UInt32,
@@ -40,10 +41,9 @@ pub fn register(registry: &mut FunctionRegistry) {
         DataType::Int16,
         DataType::Int32,
         DataType::Int64,
-        DataType::Float32,
-        DataType::Float64,
     ];
-
+    let all_float_types = &[DataType::Float32, DataType::Float64];
+    let all_numerics_types = &concat(all_integer_types, all_float_types);
     registry.register_1_arg::<NumberType<f64>, NumberType<f64>, _, _>(
         "sin",
         FunctionProperty::default(),
@@ -182,31 +182,33 @@ pub fn register(registry: &mut FunctionRegistry) {
         |val| val.abs(),
     );
 
-    registry.register_1_arg::<NumberType<i64>, NumberType<i64>, _, _>(
-        "ceil",
-        FunctionProperty::default(),
-        |_| None,
-        |val| val,
-    );
+    for left in all_integer_types {
+        with_number_mapped_type!(L, match left {
+            DataType::L => {
+                registry.register_1_arg::<NumberType<L>, NumberType<f64>, _, _>(
+                    "ceil",
+                    FunctionProperty::default(),
+                    |_| None,
+                    |val| val as f64,
+                );
+            }
+            _ => unreachable!(),
+        })
+    }
 
-    registry.register_1_arg::<NumberType<f32>, NumberType<f32>, _, _>(
-        "ceil",
-        FunctionProperty::default(),
-        |domain| {
-            Some(NumberDomain::<f32> {
-                min: domain.min,
-                max: domain.max,
-            })
-        },
-        |val| val.ceil(),
-    );
-
-    registry.register_1_arg::<NumberType<f64>, NumberType<f64>, _, _>(
-        "ceil",
-        FunctionProperty::default(),
-        |_| None,
-        |val| val.ceil(),
-    );
+    for left in all_float_types {
+        with_number_mapped_type!(L, match left {
+            DataType::L => {
+                registry.register_1_arg::<NumberType<L>, NumberType<f64>, _, _>(
+                    "ceil",
+                    FunctionProperty::default(),
+                    |_| None,
+                    |val| (val as f64).ceil(),
+                );
+            }
+            _ => unreachable!(),
+        })
+    }
 
     registry.register_aliases("ceil", &["ceiling"]);
 
@@ -220,14 +222,14 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_1_arg::<NumberType<f64>, NumberType<f64>, _, _>(
         "degrees",
         FunctionProperty::default(),
-        |_| None, // todo
+        |_| None,
         |val| val.to_degrees(),
     );
 
     registry.register_1_arg::<NumberType<f64>, NumberType<f64>, _, _>(
         "radians",
         FunctionProperty::default(),
-        |_| None, // todo
+        |_| None,
         |val| val.to_radians(),
     );
 

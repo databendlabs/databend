@@ -1264,6 +1264,7 @@ dependencies = [
  "comfy-table",
  "common-arrow",
  "common-ast",
+ "common-base",
  "common-expression",
  "crc32fast",
  "goldenfile",

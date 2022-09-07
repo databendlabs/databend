@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,12 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(backtrace)]
-#![feature(thread_local)]
-#![allow(incomplete_features)]
-#![feature(generic_const_exprs)]
-
-pub mod base;
-pub mod containers;
-pub mod mem_allocator;
-pub mod rangemap;
+// array concat using const generics
+pub fn concat<T, const A: usize, const B: usize>(a: &[T; A], b: &[T; B]) -> [T; A + B] {
+    let mut result = std::mem::MaybeUninit::uninit();
+    let dest = result.as_mut_ptr() as *mut T;
+    unsafe {
+        std::ptr::copy_nonoverlapping(a.as_ptr(), dest, A);
+        std::ptr::copy_nonoverlapping(b.as_ptr(), dest.add(A), B);
+        result.assume_init()
+    }
+}
