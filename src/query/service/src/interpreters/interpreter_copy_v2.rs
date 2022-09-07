@@ -113,6 +113,30 @@ impl CopyInterpreterV2 {
         }
     }
 
+    async fn purge_files(
+        &self,
+        from: &ReadDataSourcePlan,
+        files: &Vec<String>,
+    ) -> Result<()> {
+        match &from.source_info {
+            SourceInfo::StageSource(table_info) => {
+                if table_info.stage_info.copy_options.purge {
+                    let rename_me: Arc<dyn TableContext> = self.ctx.clone();
+                    let op = StageSourceHelper::get_op(&rename_me, &table_info.stage_info).await?;
+                    for path in files {
+                        op.object(path).delete().await?;
+                    }
+                    info!("purge files: {:?}", files);
+                }
+                Ok(())
+            }
+            other => Err(ErrorCode::LogicalError(format!(
+                "Cannot list files for the source info: {:?}",
+                other
+            ))),
+        }
+    }
+
     /// Rewrite the ReadDataSourcePlan.S3StageSource.file_name to new file name.
     fn rewrite_read_plan_file_name(
         mut plan: ReadDataSourcePlan,
@@ -271,7 +295,7 @@ impl Interpreter for CopyInterpreterV2 {
                 info!("matched files: {:?}, pattern: {}", &files, pattern);
 
                 let write_results = self
-                    .copy_files_to_table(catalog_name, database_name, table_name, from, files)
+                    .copy_files_to_table(catalog_name, database_name, table_name, from, files.clone())
                     .await?;
 
                 let table = self
@@ -283,6 +307,9 @@ impl Interpreter for CopyInterpreterV2 {
                 table
                     .commit_insertion(self.ctx.clone(), catalog_name, write_results, false)
                     .await?;
+
+                // Purge
+                self.purge_files(from, &files).await?;
 
                 Ok(Box::pin(DataBlockStream::create(
                     // TODO(xuanwo): Is this correct?

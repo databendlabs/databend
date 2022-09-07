@@ -140,6 +140,7 @@ fn test_gcs_stage_info() -> mt::UserStageInfo {
         copy_options: mt::CopyOptions {
             on_error: mt::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
+            purge: false,
         },
         comment: "test".to_string(),
         ..Default::default()
