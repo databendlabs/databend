@@ -103,7 +103,6 @@ impl PipelinePullingExecutor {
             ));
         }
 
-        // pipeline.resize(1)?;
         let mut sink_pipe_builder = SinkPipeBuilder::create();
 
         for _index in 0..pipeline.output_len() {
