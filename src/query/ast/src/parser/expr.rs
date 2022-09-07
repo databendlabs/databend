@@ -1012,10 +1012,7 @@ pub fn literal_f64(i: Input) -> IResult<f64> {
 }
 
 pub fn literal_bool(i: Input) -> IResult<bool> {
-    alt((
-        value(true, rule! { TRUE }),
-        value(false, rule! { FALSE }),
-    ))(i)
+    alt((value(true, rule! { TRUE }), value(false, rule! { FALSE })))(i)
 }
 
 pub fn literal_string(i: Input) -> IResult<String> {

@@ -583,7 +583,7 @@ impl FromToProto for mt::CopyOptions {
         Ok(pb::user_stage_info::CopyOptions {
             on_error: Some(on_error),
             size_limit,
-            purge: self.purge
+            purge: self.purge,
         })
     }
 }

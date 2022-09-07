@@ -113,11 +113,7 @@ impl CopyInterpreterV2 {
         }
     }
 
-    async fn purge_files(
-        &self,
-        from: &ReadDataSourcePlan,
-        files: &Vec<String>,
-    ) -> Result<()> {
+    async fn purge_files(&self, from: &ReadDataSourcePlan, files: &Vec<String>) -> Result<()> {
         match &from.source_info {
             SourceInfo::StageSource(table_info) => {
                 if table_info.stage_info.copy_options.purge {
@@ -295,7 +291,13 @@ impl Interpreter for CopyInterpreterV2 {
                 info!("matched files: {:?}, pattern: {}", &files, pattern);
 
                 let write_results = self
-                    .copy_files_to_table(catalog_name, database_name, table_name, from, files.clone())
+                    .copy_files_to_table(
+                        catalog_name,
+                        database_name,
+                        table_name,
+                        from,
+                        files.clone(),
+                    )
                     .await?;
 
                 let table = self
