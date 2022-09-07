@@ -17,10 +17,12 @@ common-expression = { path = "../expression" }
 # Crates.io dependencies
 base64 = "0.13.0"
 bstr = "0.2.17"
+crc32fast = "1.3.2"
 hex = "0.4.3"
 itertools = "0.10.3"
 match-template = "0.0.1"
 num-traits = "0.2.15"
+rand = { version = "0.8.5", features = ["small_rng"] }
 strength_reduce = "0.2.3"
 
 [dev-dependencies]

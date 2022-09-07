@@ -29,6 +29,11 @@ fn test_math() {
     test_abs(file);
     test_sign(file);
     test_trigonometric(file);
+    test_exp(file);
+    test_round(file);
+    test_sqrt(file);
+    test_truncate(file);
+    test_log_function(file);
 }
 
 fn test_abs(file: &mut impl Write) {
@@ -67,4 +72,39 @@ fn test_trigonometric(file: &mut impl Write) {
         DataType::Int64,
         Column::from_data(vec![1i64, -1, 1024]),
     )]);
+}
+
+fn test_exp(file: &mut impl Write) {
+    run_ast(file, "exp(2)", &[]);
+    run_ast(file, "exp(-2)", &[]);
+    run_ast(file, "exp(0)", &[]);
+}
+
+fn test_round(file: &mut impl Write) {
+    run_ast(file, "round(-1.23)", &[]);
+    run_ast(file, "round(1.298, 1)", &[]);
+    run_ast(file, "round(1.298, 0)", &[]);
+    run_ast(file, "round(23.298, -1)", &[]);
+    run_ast(file, "round(0.12345678901234567890123456789012345, 35)", &[
+    ]);
+}
+
+fn test_sqrt(file: &mut impl Write) {
+    run_ast(file, "sqrt(4)", &[]);
+}
+
+fn test_truncate(file: &mut impl Write) {
+    run_ast(file, "truncate(1.223, 1)", &[]);
+    run_ast(file, "truncate(1.999)", &[]);
+    run_ast(file, "truncate(1.999, 1)", &[]);
+    run_ast(file, "truncate(122, -2)", &[]);
+    run_ast(file, "truncate(10.28*100, 0)", &[]);
+}
+
+fn test_log_function(file: &mut impl Write) {
+    run_ast(file, "log(2)", &[]);
+    run_ast(file, "log(2, 65536)", &[]);
+    run_ast(file, "log2(65536)", &[]);
+    run_ast(file, "log10(100)", &[]);
+    run_ast(file, "ln(2)", &[]);
 }
