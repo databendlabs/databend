@@ -20,16 +20,19 @@ use common_datablocks::SortColumnDescription;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
+use common_datavalues::DataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::aggregates::AggregateFunctionRef;
+use common_functions::scalars::CastFunction;
 use common_functions::scalars::FunctionFactory;
 use common_pipeline_core::Pipe;
 use common_pipeline_sinks::processors::sinks::UnionReceiveSink;
 
 use super::AggregateFinal;
 use super::AggregatePartial;
+use super::DistributedInsertSelect;
 use super::EvalScalar;
 use super::ExchangeSink;
 use super::ExchangeSource;
@@ -41,6 +44,7 @@ use super::Sort;
 use super::TableScan;
 use crate::evaluator::EvalNode;
 use crate::evaluator::Evaluator;
+use crate::interpreters::fill_missing_columns;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::transforms::ExpressionTransformV2;
 use crate::pipelines::processors::transforms::HashJoinDesc;
@@ -57,6 +61,7 @@ use crate::pipelines::processors::SinkBuildHashTable;
 use crate::pipelines::processors::Sinker;
 use crate::pipelines::processors::SortMergeCompactor;
 use crate::pipelines::processors::TransformAggregator;
+use crate::pipelines::processors::TransformCastSchema;
 use crate::pipelines::processors::TransformHashJoinProbe;
 use crate::pipelines::processors::TransformLimit;
 use crate::pipelines::processors::TransformSortMerge;
@@ -120,6 +125,9 @@ impl PipelineBuilder {
             PhysicalPlan::ExchangeSink(sink) => self.build_exchange_sink(sink),
             PhysicalPlan::ExchangeSource(source) => self.build_exchange_source(source),
             PhysicalPlan::UnionAll(union_all) => self.build_union_all(union_all),
+            PhysicalPlan::DistributedInsertSelect(insert_select) => {
+                self.build_insert_select(insert_select)
+            }
             PhysicalPlan::Exchange(_) => Err(ErrorCode::LogicalError(
                 "Invalid physical plan with PhysicalPlan::Exchange",
             )),
@@ -521,6 +529,55 @@ impl PipelineBuilder {
                     union_all_receiver.clone(),
                 )
             })?;
+        Ok(())
+    }
+
+    pub fn build_insert_select(&mut self, insert_select: &DistributedInsertSelect) -> Result<()> {
+        let select_schema = &insert_select.select_schema;
+        let insert_schema = &insert_select.insert_schema;
+
+        self.build_pipeline(&insert_select.input)?;
+        if insert_select.cast_needed {
+            let mut functions = Vec::with_capacity(insert_schema.fields().len());
+            for (target_field, original_field) in insert_select
+                .insert_schema
+                .fields()
+                .iter()
+                .zip(select_schema.fields().iter())
+            {
+                let target_type_name = target_field.data_type().name();
+                let from_type = original_field.data_type().clone();
+                let cast_function = CastFunction::create("cast", &target_type_name, from_type)?;
+                functions.push(cast_function);
+            }
+
+            let func_ctx = self.ctx.try_get_function_context()?;
+            self.main_pipeline
+                .add_transform(|transform_input_port, transform_output_port| {
+                    TransformCastSchema::try_create(
+                        transform_input_port,
+                        transform_output_port,
+                        insert_schema.clone(),
+                        functions.clone(),
+                        func_ctx.clone(),
+                    )
+                })?;
+        }
+
+        let table = self
+            .ctx
+            .get_catalog(&insert_select.catalog)?
+            .get_table_by_info(&insert_select.table_info)?;
+
+        fill_missing_columns(
+            self.ctx.clone(),
+            insert_schema,
+            &table.schema(),
+            &mut self.main_pipeline,
+        )?;
+
+        table.append2(self.ctx.clone(), &mut self.main_pipeline)?;
+
         Ok(())
     }
 }

@@ -16,6 +16,7 @@ use common_exception::Result;
 
 use super::AggregateFinal;
 use super::AggregatePartial;
+use super::DistributedInsertSelect;
 use super::EvalScalar;
 use super::Exchange;
 use super::ExchangeSink;
@@ -45,6 +46,7 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::ExchangeSource(plan) => self.replace_exchange_source(plan),
             PhysicalPlan::ExchangeSink(plan) => self.replace_exchange_sink(plan),
             PhysicalPlan::UnionAll(plan) => self.replace_union(plan),
+            PhysicalPlan::DistributedInsertSelect(plan) => self.replace_insert_select(plan),
         }
     }
 
@@ -174,6 +176,21 @@ pub trait PhysicalPlanReplacer {
             schema: plan.schema.clone(),
         }))
     }
+
+    fn replace_insert_select(&mut self, plan: &DistributedInsertSelect) -> Result<PhysicalPlan> {
+        let input = self.replace(&plan.input)?;
+
+        Ok(PhysicalPlan::DistributedInsertSelect(
+            DistributedInsertSelect {
+                input: Box::new(input),
+                catalog: plan.catalog.clone(),
+                table_info: plan.table_info.clone(),
+                select_schema: plan.select_schema.clone(),
+                insert_schema: plan.insert_schema.clone(),
+                cast_needed: plan.cast_needed,
+            },
+        ))
+    }
 }
 
 impl PhysicalPlan {
@@ -222,6 +239,9 @@ impl PhysicalPlan {
                 PhysicalPlan::UnionAll(plan) => {
                     Self::traverse(&plan.left, pre_visit, visit, post_visit);
                     Self::traverse(&plan.right, pre_visit, visit, post_visit);
+                }
+                PhysicalPlan::DistributedInsertSelect(plan) => {
+                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
             }
             post_visit(plan);

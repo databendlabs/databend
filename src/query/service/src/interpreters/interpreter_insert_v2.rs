@@ -15,19 +15,25 @@
 use std::collections::VecDeque;
 use std::sync::Arc;
 
+use common_catalog::table::Table;
 use common_datavalues::DataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::scalars::CastFunction;
+use common_planners::StageKind;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use parking_lot::Mutex;
 
 use super::commit2table;
 use super::interpreter_common::append2table;
+use super::plan_schedulers::build_schedule_pipepline;
+use crate::clusters::ClusterHelper;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::interpreters::SelectInterpreterV2;
+use crate::pipelines::executor::ExecutorSettings;
+use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::BlocksSource;
 use crate::pipelines::processors::TransformCastSchema;
@@ -36,6 +42,10 @@ use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::SourcePipeBuilder;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
+use crate::sql::executor::DistributedInsertSelect;
+use crate::sql::executor::Exchange;
+use crate::sql::executor::PhysicalPlan;
+use crate::sql::executor::PhysicalPlanBuilder;
 use crate::sql::plans::Insert;
 use crate::sql::plans::InsertInputSource;
 use crate::sql::plans::Plan;
@@ -101,6 +111,13 @@ impl InsertInterpreterV2 {
                     );
                 }
                 InsertInputSource::SelectPlan(plan) => {
+                    if !self.ctx.get_cluster().is_empty() {
+                        // distributed insert select
+                        return self
+                            .schedule_insert_select(plan, self.plan.catalog.clone(), table.clone())
+                            .await;
+                    }
+
                     let select_interpreter = match &**plan {
                         Plan::Query {
                             s_expr,
@@ -176,6 +193,62 @@ impl InsertInterpreterV2 {
         // check if cast needed
         let cast_needed = select_schema != *output_schema;
         Ok(cast_needed)
+    }
+
+    async fn schedule_insert_select(
+        &self,
+        plan: &Box<Plan>,
+        catalog: String,
+        table: Arc<dyn Table>,
+    ) -> Result<SendableDataBlockStream> {
+        let inner_plan = match &**plan {
+            Plan::Query {
+                s_expr, metadata, ..
+            } => {
+                let builder = PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone());
+                builder.build(s_expr).await?
+            }
+            _ => unreachable!(),
+        };
+
+        table.get_table_info();
+
+        let insert_select_plan = PhysicalPlan::DistributedInsertSelect(DistributedInsertSelect {
+            input: Box::new(inner_plan),
+            catalog,
+            table_info: table.get_table_info().clone(),
+            select_schema: plan.schema(),
+            insert_schema: self.schema(),
+            cast_needed: self.check_schema_cast(plan)?,
+        });
+
+        let final_plan = PhysicalPlan::Exchange(Exchange {
+            input: Box::new(insert_select_plan),
+            kind: StageKind::Merge,
+            keys: vec![],
+        });
+
+        let mut build_res = build_schedule_pipepline(self.ctx.clone(), &final_plan).await?;
+
+        let settings = self.ctx.get_settings();
+        let query_need_abort = self.ctx.query_need_abort();
+        let executor_settings = ExecutorSettings::try_create(&settings)?;
+        build_res.set_max_threads(settings.get_max_threads()? as usize);
+        let mut pipelines = build_res.sources_pipelines;
+        pipelines.push(build_res.main_pipeline);
+        let executor = PipelineCompleteExecutor::from_pipelines(
+            query_need_abort,
+            pipelines,
+            executor_settings,
+        )?;
+        executor.execute()?;
+        commit2table(self.ctx.clone(), table.clone(), self.plan.overwrite).await?;
+
+        Ok(Box::pin(DataBlockStream::create(
+            self.plan.schema(),
+            None,
+            vec![],
+        )))
     }
 }
 

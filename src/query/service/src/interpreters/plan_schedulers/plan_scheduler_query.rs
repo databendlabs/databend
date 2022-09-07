@@ -81,6 +81,22 @@ pub async fn schedule_query_v2(
         return Ok(build_res);
     }
 
+    let mut build_res = build_schedule_pipepline(ctx.clone(), plan).await?;
+
+    let input_schema = plan.output_schema()?;
+    PipelineBuilderV2::render_result_set(
+        input_schema,
+        result_columns,
+        &mut build_res.main_pipeline,
+    )?;
+
+    Ok(build_res)
+}
+
+pub async fn build_schedule_pipepline(
+    ctx: Arc<QueryContext>,
+    plan: &PhysicalPlan,
+) -> Result<PipelineBuildResult> {
     let fragmenter = Fragmenter::try_create(ctx.clone())?;
     let root_fragment = fragmenter.build_fragment(plan)?;
 
@@ -95,13 +111,5 @@ pub async fn schedule_query_v2(
 
     let settings = ctx.get_settings();
     build_res.set_max_threads(settings.get_max_threads()? as usize);
-
-    let input_schema = plan.output_schema()?;
-    PipelineBuilderV2::render_result_set(
-        input_schema,
-        result_columns,
-        &mut build_res.main_pipeline,
-    )?;
-
     Ok(build_res)
 }

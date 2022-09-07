@@ -53,7 +53,9 @@ fn to_format_tree(plan: &PhysicalPlan, metadata: &MetadataRef) -> Result<FormatT
         PhysicalPlan::HashJoin(plan) => hash_join_to_format_tree(plan, metadata),
         PhysicalPlan::Exchange(plan) => exchange_to_format_tree(plan, metadata),
         PhysicalPlan::UnionAll(plan) => union_all_to_format_tree(plan, metadata),
-        PhysicalPlan::ExchangeSource(_) | PhysicalPlan::ExchangeSink(_) => {
+        PhysicalPlan::ExchangeSource(_)
+        | PhysicalPlan::ExchangeSink(_)
+        | PhysicalPlan::DistributedInsertSelect(_) => {
             Err(ErrorCode::LogicalError("Invalid physical plan"))
         }
     }
