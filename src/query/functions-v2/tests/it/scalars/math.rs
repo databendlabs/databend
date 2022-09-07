@@ -78,6 +78,11 @@ fn test_exp(file: &mut impl Write) {
     run_ast(file, "exp(2)", &[]);
     run_ast(file, "exp(-2)", &[]);
     run_ast(file, "exp(0)", &[]);
+    run_ast(file, "exp(a)", &[(
+        "a",
+        DataType::Int64,
+        Column::from_data(vec![4i64, -2, 10]),
+    )]);
 }
 
 fn test_round(file: &mut impl Write) {
@@ -87,10 +92,20 @@ fn test_round(file: &mut impl Write) {
     run_ast(file, "round(23.298, -1)", &[]);
     run_ast(file, "round(0.12345678901234567890123456789012345, 35)", &[
     ]);
+    run_ast(file, "round(a)", &[(
+        "a",
+        DataType::Float64,
+        Column::from_data(vec![22.22f64, -22.23, 10.0]),
+    )]);
 }
 
 fn test_sqrt(file: &mut impl Write) {
     run_ast(file, "sqrt(4)", &[]);
+    run_ast(file, "sqrt(a)", &[(
+        "a",
+        DataType::Int64,
+        Column::from_data(vec![22i64, 1024, 10]),
+    )]);
 }
 
 fn test_truncate(file: &mut impl Write) {
@@ -99,6 +114,11 @@ fn test_truncate(file: &mut impl Write) {
     run_ast(file, "truncate(1.999, 1)", &[]);
     run_ast(file, "truncate(122, -2)", &[]);
     run_ast(file, "truncate(10.28*100, 0)", &[]);
+    run_ast(file, "truncate(a, 1)", &[(
+        "a",
+        DataType::Float64,
+        Column::from_data(vec![22.22f64, -22.23, 10.0]),
+    )]);
 }
 
 fn test_log_function(file: &mut impl Write) {
@@ -107,4 +127,9 @@ fn test_log_function(file: &mut impl Write) {
     run_ast(file, "log2(65536)", &[]);
     run_ast(file, "log10(100)", &[]);
     run_ast(file, "ln(2)", &[]);
+    run_ast(file, "round(2, a)", &[(
+        "a",
+        DataType::Int64,
+        Column::from_data(vec![22i64, 65536, 10]),
+    )]);
 }

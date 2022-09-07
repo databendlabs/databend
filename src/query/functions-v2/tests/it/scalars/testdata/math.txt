@@ -218,6 +218,28 @@ output domain  : Unknown
 output         : 1.0
 
 
+ast            : exp(a)
+raw expr       : exp(ColumnRef(0)::Int64)
+checked expr   : exp<Int64>(ColumnRef(0))
+evaluation:
++--------+-----------+--------------------+
+|        | a         | Output             |
++--------+-----------+--------------------+
+| Type   | Int64     | Float64            |
+| Domain | {-2..=10} | Unknown            |
+| Row 0  | 4         | 54.598150033144236 |
+| Row 1  | -2        | 0.1353352832366127 |
+| Row 2  | 10        | 22026.465794806718 |
++--------+-----------+--------------------+
+evaluation (internal):
++--------+-----------------------------------------------------------------------+
+| Column | Data                                                                  |
++--------+-----------------------------------------------------------------------+
+| a      | Int64([4, -2, 10])                                                    |
+| Output | Float64([54.598150033144236, 0.1353352832366127, 22026.465794806718]) |
++--------+-----------------------------------------------------------------------+
+
+
 ast            : round(-1.23)
 raw expr       : round(minus(1.23_f64))
 checked expr   : round<Float64>(minus<Float64>(1.23_f64))
@@ -263,6 +285,28 @@ output domain  : Unknown
 output         : 0.12345678901234568
 
 
+ast            : round(a)
+raw expr       : round(ColumnRef(0)::Float64)
+checked expr   : round<Float64>(ColumnRef(0))
+evaluation:
++--------+------------------+---------+
+|        | a                | Output  |
++--------+------------------+---------+
+| Type   | Float64          | Float64 |
+| Domain | {-22.23..=22.22} | Unknown |
+| Row 0  | 22.22            | 22.0    |
+| Row 1  | -22.23           | -22.0   |
+| Row 2  | 10.0             | 10.0    |
++--------+------------------+---------+
+evaluation (internal):
++--------+--------------------------------+
+| Column | Data                           |
++--------+--------------------------------+
+| a      | Float64([22.22, -22.23, 10.0]) |
+| Output | Float64([22.0, -22.0, 10.0])   |
++--------+--------------------------------+
+
+
 ast            : sqrt(4)
 raw expr       : sqrt(4_u8)
 checked expr   : sqrt<UInt8>(4_u8)
@@ -270,6 +314,28 @@ optimized expr : 2.0_f64
 output type    : Float64
 output domain  : Unknown
 output         : 2.0
+
+
+ast            : sqrt(a)
+raw expr       : sqrt(ColumnRef(0)::Int64)
+checked expr   : sqrt<Int64>(ColumnRef(0))
+evaluation:
++--------+-------------+--------------------+
+|        | a           | Output             |
++--------+-------------+--------------------+
+| Type   | Int64       | Float64            |
+| Domain | {10..=1024} | Unknown            |
+| Row 0  | 22          | 4.69041575982343   |
+| Row 1  | 1024        | 32.0               |
+| Row 2  | 10          | 3.1622776601683795 |
++--------+-------------+--------------------+
+evaluation (internal):
++--------+-------------------------------------------------------+
+| Column | Data                                                  |
++--------+-------------------------------------------------------+
+| a      | Int64([22, 1024, 10])                                 |
+| Output | Float64([4.69041575982343, 32.0, 3.1622776601683795]) |
++--------+-------------------------------------------------------+
 
 
 ast            : truncate(1.223, 1)
@@ -317,6 +383,29 @@ output domain  : Unknown
 output         : 1028.0
 
 
+ast            : truncate(a, 1)
+raw expr       : truncate(ColumnRef(0)::Float64, 1_u8)
+checked expr   : truncate<Float64, Int64>(ColumnRef(0), CAST(1_u8 AS Int64))
+optimized expr : truncate<Float64, Int64>(ColumnRef(0), 1_i64)
+evaluation:
++--------+------------------+---------+
+|        | a                | Output  |
++--------+------------------+---------+
+| Type   | Float64          | Float64 |
+| Domain | {-22.23..=22.22} | Unknown |
+| Row 0  | 22.22            | 22.2    |
+| Row 1  | -22.23           | -22.2   |
+| Row 2  | 10.0             | 10.0    |
++--------+------------------+---------+
+evaluation (internal):
++--------+--------------------------------+
+| Column | Data                           |
++--------+--------------------------------+
+| a      | Float64([22.22, -22.23, 10.0]) |
+| Output | Float64([22.2, -22.2, 10.0])   |
++--------+--------------------------------+
+
+
 ast            : log(2)
 raw expr       : log(2_u8)
 checked expr   : log<UInt8>(2_u8)
@@ -360,5 +449,27 @@ optimized expr : 0.6931471805599453_f64
 output type    : Float64
 output domain  : Unknown
 output         : 0.6931471805599453
+
+
+ast            : round(2, a)
+raw expr       : round(2_u8, ColumnRef(0)::Int64)
+checked expr   : round<UInt8, Int64>(2_u8, ColumnRef(0))
+evaluation:
++--------+--------------+---------+
+|        | a            | Output  |
++--------+--------------+---------+
+| Type   | Int64        | Float64 |
+| Domain | {10..=65536} | Unknown |
+| Row 0  | 22           | 2.0     |
+| Row 1  | 65536        | 2.0     |
+| Row 2  | 10           | 2.0     |
++--------+--------------+---------+
+evaluation (internal):
++--------+--------------------------+
+| Column | Data                     |
++--------+--------------------------+
+| a      | Int64([22, 65536, 10])   |
+| Output | Float64([2.0, 2.0, 2.0]) |
++--------+--------------------------+
 
 
