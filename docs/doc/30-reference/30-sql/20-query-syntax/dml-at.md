@@ -2,7 +2,7 @@
 title: AT
 ---
 
-The SELECT statement can include an AT clause that allows you to  query previous versions of your data by a specific snapshot ID or timestamp.
+The SELECT statement can include an AT clause that allows you to query previous versions of your data by a specific snapshot ID or timestamp.
 
 Databend automatically creates snapshots when data updates occur, so a snapshot can be considered as a view of your data at a time point in the past. You can access a snapshot by the snapshot ID or the timestamp at which the snapshot was created. For how to obtain the snapshot ID and timestamp, see [Obtaining Snapshot ID and Timestamp](#obtaining-snapshot-id-and-timestamp).
 
@@ -26,12 +26,7 @@ SELECT snapshot_id,
 FROM   fuse_snapshot('<database_name>', '<table_name>'); 
 ```
 
-You can find more information related to the snapshots by executing the following statement:
-
-```sql
-SELECT * 
-FROM   Fuse_snapshot('<database_name>', '<table_name>'); 
-```
+For more information about the FUSE_SNAPSHOT function,see [FUSE_SNAPSHOT](../../20-functions/111-system-functions/fuse_snapshot.md).
 
 ## Examples
 
