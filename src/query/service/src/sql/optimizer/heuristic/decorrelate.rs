@@ -22,7 +22,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::sql::binder::wrap_cast_if_needed;
-use crate::sql::binder::JoinCondition;
+use crate::sql::binder::JoinPredicate;
 use crate::sql::binder::Visibility;
 use crate::sql::optimizer::heuristic::subquery_rewriter::FlattenInfo;
 use crate::sql::optimizer::heuristic::subquery_rewriter::SubqueryRewriter;
@@ -158,20 +158,20 @@ impl SubqueryRewriter {
         let mut left_filters = vec![];
         let mut right_filters = vec![];
         for pred in filter.predicates.iter() {
-            let join_condition = JoinCondition::new(pred, &input_prop, &filter_prop);
+            let join_condition = JoinPredicate::new(pred, &input_prop, &filter_prop);
             match join_condition {
-                JoinCondition::Left(filter) => {
+                JoinPredicate::Left(filter) => {
                     left_filters.push(filter.clone());
                 }
-                JoinCondition::Right(filter) => {
+                JoinPredicate::Right(filter) => {
                     right_filters.push(filter.clone());
                 }
 
-                JoinCondition::Other(pred) => {
+                JoinPredicate::Other(pred) => {
                     other_conditions.push(pred.clone());
                 }
 
-                JoinCondition::Both { left, right } => {
+                JoinPredicate::Both { left, right } => {
                     let join_type = compare_coercion(&left.data_type(), &right.data_type())?;
                     let left = wrap_cast_if_needed(left.clone(), &join_type);
                     let right = wrap_cast_if_needed(right.clone(), &join_type);

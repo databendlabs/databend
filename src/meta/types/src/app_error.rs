@@ -430,6 +430,9 @@ impl TxnRetryMaxTimes {
     }
 }
 
+/// Application error.
+///
+/// The application does not get expected result but there is nothing wrong with meta-service.
 #[derive(thiserror::Error, serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
 pub enum AppError {
     #[error(transparent)]

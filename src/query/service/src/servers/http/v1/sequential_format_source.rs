@@ -39,6 +39,7 @@ use crate::servers::http::v1::multipart_format::MultipartWorker;
 pub struct SequentialMultipartWorker {
     multipart: Multipart,
     tx: Option<Sender<Result<Vec<u8>>>>,
+    files: Vec<String>,
 }
 
 impl SequentialMultipartWorker {
@@ -46,6 +47,7 @@ impl SequentialMultipartWorker {
         SequentialMultipartWorker {
             multipart,
             tx: Some(tx),
+            files: vec![],
         }
     }
 }
@@ -54,6 +56,7 @@ impl SequentialMultipartWorker {
 impl MultipartWorker for SequentialMultipartWorker {
     async fn work(&mut self) {
         if let Some(tx) = self.tx.take() {
+            let mut files = vec![];
             'outer: loop {
                 match self.multipart.next_field().await {
                     Err(cause) => {
@@ -74,7 +77,7 @@ impl MultipartWorker for SequentialMultipartWorker {
                     }
                     Ok(Some(field)) => {
                         let filename = field.file_name().unwrap_or("Unknown file name").to_string();
-
+                        files.push(filename.clone());
                         if let Err(cause) = tx.send(Ok(vec![])).await {
                             tracing::warn!(
                                 "Multipart channel disconnect. {}, filename '{}'",
@@ -135,7 +138,12 @@ impl MultipartWorker for SequentialMultipartWorker {
                     }
                 }
             }
+            self.files = files;
         }
+    }
+
+    fn get_files(&self) -> Vec<String> {
+        self.files.clone()
     }
 }
 

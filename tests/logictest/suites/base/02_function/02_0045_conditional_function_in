@@ -60,6 +60,8 @@ SELECT 1.1 IN (1.10, 2, 3.3, 1.1);
 ----
 1
 
+statement ok
+SELECT * FROM system.one a INNER JOIN system.one b ON 1 IN ( 1, NULL) WHERE FALSE;
 
 
 statement query B

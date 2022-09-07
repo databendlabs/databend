@@ -110,14 +110,14 @@ pub fn satisfied_by(scalar: &Scalar, prop: &RelationalProperty) -> bool {
 /// - Both: `a = b`
 /// - Other: `a+b = 1`
 #[derive(Clone, Debug)]
-pub enum JoinCondition<'a> {
+pub enum JoinPredicate<'a> {
     Left(&'a Scalar),
     Right(&'a Scalar),
     Both { left: &'a Scalar, right: &'a Scalar },
     Other(&'a Scalar),
 }
 
-impl<'a> JoinCondition<'a> {
+impl<'a> JoinPredicate<'a> {
     pub fn new(
         scalar: &'a Scalar,
         left_prop: &RelationalProperty,

@@ -16,7 +16,12 @@ use crate::sql::optimizer::RuleID;
 use crate::sql::optimizer::RuleSet;
 
 pub fn get_explore_rule_set() -> RuleSet {
-    RuleSet::create_with_ids(vec![RuleID::CommuteJoin]).unwrap()
+    RuleSet::create_with_ids(vec![
+        RuleID::CommuteJoin,
+        RuleID::LeftAssociateJoin,
+        RuleID::RightAssociateJoin,
+    ])
+    .unwrap()
 }
 
 #[cfg(test)]

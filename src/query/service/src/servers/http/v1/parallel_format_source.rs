@@ -38,6 +38,7 @@ pub struct ParallelMultipartWorker {
     multipart: Multipart,
     input_format: Arc<dyn InputFormat>,
     tx: Option<Sender<Result<Box<dyn InputState>>>>,
+    files: Vec<String>,
 }
 
 impl ParallelMultipartWorker {
@@ -50,6 +51,7 @@ impl ParallelMultipartWorker {
             multipart,
             input_format,
             tx: Some(tx),
+            files: vec![],
         }
     }
 
@@ -70,6 +72,7 @@ impl ParallelMultipartWorker {
 impl MultipartWorker for ParallelMultipartWorker {
     async fn work(&mut self) {
         if let Some(tx) = self.tx.take() {
+            let mut files = vec![];
             'outer: loop {
                 match self.multipart.next_field().await {
                     Err(cause) => {
@@ -91,7 +94,7 @@ impl MultipartWorker for ParallelMultipartWorker {
                     Ok(Some(field)) => {
                         let mut skipped_header = false;
                         let filename = field.file_name().unwrap_or("Unknown file name").to_string();
-
+                        files.push(filename.clone());
                         let mut buf = vec![0; 1048576];
                         let mut has_data_in_state = false;
                         let mut state = self.input_format.create_state();
@@ -217,7 +220,12 @@ impl MultipartWorker for ParallelMultipartWorker {
                     }
                 }
             }
+            self.files = files;
         }
+    }
+
+    fn get_files(&self) -> Vec<String> {
+        self.files.clone()
     }
 }
 

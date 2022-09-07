@@ -52,6 +52,7 @@ pub struct LoadResponse {
     pub state: String,
     pub stats: ProgressValues,
     pub error: Option<String>,
+    pub files: Vec<String>,
 }
 
 fn get_input_format(node: &PlanNode) -> Result<&str> {
@@ -107,6 +108,7 @@ async fn new_processor_format(
     let handler = ctx.spawn(execute_query(ctx.clone(), node.clone(), builder));
 
     worker.work().await;
+    let files = worker.get_files();
 
     match handler.await {
         Ok(Ok(_)) => Ok(()),
@@ -119,6 +121,7 @@ async fn new_processor_format(
         state: "SUCCESS".to_string(),
         id: uuid::Uuid::new_v4().to_string(),
         stats: ctx.get_scan_progress_value(),
+        files,
     }))
 }
 
@@ -126,7 +129,7 @@ async fn new_processor_format(
 pub async fn streaming_load(
     ctx: &HttpQueryContext,
     req: &Request,
-    mut multipart: Multipart,
+    multipart: Multipart,
 ) -> PoemResult<Json<LoadResponse>> {
     let session = ctx.get_session(SessionType::HTTPStreamingLoad);
     let context = session
@@ -221,6 +224,7 @@ pub async fn streaming_load(
         state: "SUCCESS".to_string(),
         stats: context.get_scan_progress_value(),
         error: None,
+        files: vec![],
     }))
 }
 

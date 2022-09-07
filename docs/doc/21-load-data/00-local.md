@@ -83,7 +83,8 @@ curl -XPUT 'http://root:@127.0.0.1:8081/v1/streaming_load' -H 'insert_sql: inser
     "rows": 2,
     "bytes": 157
   },
-  "error": null
+  "error": null,
+  "files": ["books.csv"]
 }
 ```
 
@@ -115,7 +116,8 @@ curl -XPUT 'http://root:@127.0.0.1:8081/v1/streaming_load' -H 'insert_sql: inser
     "rows": 2,
     "bytes": 157
   },
-  "error": null
+  "error": null,
+  "files": ["books.parquet"]
 }
 ```
 
