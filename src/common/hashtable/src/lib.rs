@@ -15,7 +15,6 @@
 #![feature(core_intrinsics)]
 #![feature(arbitrary_self_types)]
 
-use common_base::mem_allocator::MmapAllocator;
 use common_base::mem_allocator::StackfulAllocator;
 pub use hash_table::HashTable;
 pub use hash_table_entity::HashTableEntity;
@@ -39,7 +38,11 @@ mod hash_table_iter;
 mod hash_table_key;
 mod two_level_hash_table;
 
-type HashTableAllocator = MmapAllocator<true>;
+#[cfg(not(target_os = "linux"))]
+type HashTableAllocator = common_base::mem_allocator::JEAllocator;
+#[cfg(target_os = "linux")]
+type HashTableAllocator = common_base::mem_allocator::MmapAllocator<true>;
+
 type HashTableAllocatorWithStackMemory<const INIT_BYTES: usize = 64> =
     StackfulAllocator<INIT_BYTES, HashTableAllocator>;
 

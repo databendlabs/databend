@@ -142,6 +142,10 @@ unsafe impl<const MMAP_POPULATE: bool> AllocatorTrait for MmapAllocator<MMAP_POP
                 Layout::from_size_align_unchecked(new_size, layout.align()),
                 clear_mem,
             );
+
+            if new_buf.is_null() {
+                return ptr::null_mut();
+            }
             std::ptr::copy_nonoverlapping(ptr, new_buf, new_size.min(layout.size()));
             self.deallocx(ptr, layout);
             new_buf
@@ -163,13 +167,17 @@ unsafe fn mremapx(
         const FD: c_int = -1; // Should be -1 if flags includes MAP_ANONYMOUS. See `man 2 mmap`
         const OFFSET: off_t = 0; // Should be 0 if flags includes MAP_ANONYMOUS. See `man 2 mmap`
 
-        let new_address = mmap(ADDR, new_size, mmap_prot, flags, FD, OFFSET);
-        std::ptr::copy_nonoverlapping(
-            old_address as *const u8,
-            new_address as *mut u8,
-            old_size as usize,
-        );
-        new_address
+        match mmap(ADDR, new_size, mmap_prot, flags, FD, OFFSET) {
+            libc::MAP_FAILED => ptr::null_mut::<c_void>(),
+            new_address => {
+                std::ptr::copy_nonoverlapping(
+                    old_address as *const u8,
+                    new_address as *mut u8,
+                    old_size as usize,
+                );
+                new_address
+            }
+        }
     }
     #[cfg(target_os = "linux")]
     mremap(
