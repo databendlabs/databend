@@ -4,8 +4,6 @@ title: GRANT <privilege> to SHARE
 
 Grants privileges on a database object to a share.
 
-For more information about how to work with shares in Databend Cloud, see [SHARE](index.md).
-
 ## Syntax
 
 ```sql

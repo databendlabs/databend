@@ -4,8 +4,6 @@ title: SHOW GRANTS
 
 Lists the privileges granted on a specified shared object or lists the tenants that are added to a specified share.
 
-For more information about how to work with shares in Databend Cloud, see [SHARE](index.md).
-
 ## Syntax
 
 ```sql

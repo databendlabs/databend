@@ -4,8 +4,6 @@ title: DESC SHARE
 
 Lists the shared objects in a share.
 
-For more information about how to work with shares in Databend Cloud, see [SHARE](index.md).
-
 ## Syntax
 
 ```sql

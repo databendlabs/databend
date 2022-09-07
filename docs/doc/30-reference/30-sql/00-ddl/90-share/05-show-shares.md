@@ -4,8 +4,6 @@ title: SHOW SHARES
 
 Shows the shares you created and the ones shared with you.
 
-For more information about how to work with shares in Databend Cloud, see [SHARE](index.md).
-
 ## Syntax
 
 ```sql

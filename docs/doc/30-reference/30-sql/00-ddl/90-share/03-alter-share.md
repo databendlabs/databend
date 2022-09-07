@@ -4,8 +4,6 @@ title: ALTER SHARE
 
 Adds / removes one or more organizations by their tenant IDs to / from a share. 
 
-For more information about how to work with shares in Databend Cloud, see [SHARE](index.md).
-
 ## Syntax
 
 ```sql
