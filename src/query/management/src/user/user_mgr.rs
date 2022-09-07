@@ -22,7 +22,6 @@ use common_meta_types::AuthInfo;
 use common_meta_types::GrantObject;
 use common_meta_types::MatchSeq;
 use common_meta_types::MatchSeqExt;
-use common_meta_types::OkOrExist;
 use common_meta_types::Operation;
 use common_meta_types::SeqV;
 use common_meta_types::UpsertKVReq;
@@ -104,14 +103,12 @@ impl UserApi for UserMgr {
             Operation::Update(value),
             None,
         ));
-        let res = upsert_kv.await?.into_add_result()?;
-        match res.res {
-            OkOrExist::Ok(v) => Ok(v.seq),
-            OkOrExist::Exists(v) => Err(ErrorCode::UserAlreadyExists(format!(
-                "User already exists, seq [{}]",
-                v.seq
-            ))),
-        }
+
+        let res = upsert_kv.await?.added_or_else(|v| {
+            ErrorCode::UserAlreadyExists(format!("User already exists, seq [{}]", v.seq))
+        })?;
+
+        Ok(res.seq)
     }
 
     async fn get_user(&self, user: UserIdentity, seq: Option<u64>) -> Result<SeqV<UserInfo>> {

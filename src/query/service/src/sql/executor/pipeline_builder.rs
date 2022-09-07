@@ -402,7 +402,7 @@ impl PipelineBuilder {
 
         // Sort
         self.main_pipeline.add_transform(|input, output| {
-            TransformSortPartial::try_create(input, output, None, sort_desc.clone())
+            TransformSortPartial::try_create(input, output, sort.limit, sort_desc.clone())
         })?;
 
         // Merge
@@ -410,7 +410,7 @@ impl PipelineBuilder {
             TransformSortMerge::try_create(
                 input,
                 output,
-                SortMergeCompactor::new(None, sort_desc.clone()),
+                SortMergeCompactor::new(sort.limit, sort_desc.clone()),
             )
         })?;
 
@@ -421,7 +421,7 @@ impl PipelineBuilder {
             TransformSortMerge::try_create(
                 input,
                 output,
-                SortMergeCompactor::new(None, sort_desc.clone()),
+                SortMergeCompactor::new(sort.limit, sort_desc.clone()),
             )
         })
     }

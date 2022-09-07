@@ -54,7 +54,6 @@ use common_meta_types::ConnectionError;
 use common_meta_types::InvalidArgument;
 use common_meta_types::MetaError;
 use common_meta_types::MetaNetworkError;
-use common_meta_types::MetaResultError;
 use common_meta_types::TxnReply;
 use common_meta_types::TxnRequest;
 use common_metrics::label_counter_with_val_and_labels;
@@ -201,12 +200,15 @@ impl ClientHandle {
         label_decrement_gauge_with_val_and_labels(META_GRPC_CLIENT_REQUEST_INFLIGHT, vec![], 1.0);
         let resp = res?;
 
-        let r = Resp::try_from(resp).map_err(|e| {
-            MetaError::MetaResultError(MetaResultError::InvalidType {
-                expect: std::any::type_name::<Resp>().to_string(),
-                got: e.to_string(),
+        let r = Resp::try_from(resp)
+            .map_err(|e| {
+                AnyError::error(format!(
+                    "expect: {}, got: {}",
+                    std::any::type_name::<Resp>(),
+                    e
+                ))
             })
-        })?;
+            .unwrap();
 
         Ok(r)
     }
