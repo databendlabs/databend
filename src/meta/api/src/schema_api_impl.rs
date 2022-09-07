@@ -107,7 +107,6 @@ use crate::get_u64_value;
 use crate::is_db_need_to_be_remove;
 use crate::list_keys;
 use crate::list_u64_value;
-use crate::meta_encode_err;
 use crate::send_txn;
 use crate::serialize_struct;
 use crate::serialize_u64;
@@ -818,8 +817,7 @@ impl<KV: KVApi> SchemaApi for KV {
 
         for (i, seq_meta_opt) in seq_metas.iter().enumerate() {
             if let Some(seq_meta) = seq_meta_opt {
-                let db_meta: DatabaseMeta =
-                    deserialize_struct(&seq_meta.data).map_err(meta_encode_err)?;
+                let db_meta: DatabaseMeta = deserialize_struct(&seq_meta.data)?;
 
                 let db_info = DatabaseInfo {
                     ident: DatabaseIdent {
@@ -1665,8 +1663,7 @@ impl<KV: KVApi> SchemaApi for KV {
 
         for (i, seq_meta_opt) in seq_tb_metas.iter().enumerate() {
             if let Some(seq_meta) = seq_meta_opt {
-                let tb_meta: TableMeta =
-                    deserialize_struct(&seq_meta.data).map_err(meta_encode_err)?;
+                let tb_meta: TableMeta = deserialize_struct(&seq_meta.data)?;
 
                 let tb_info = TableInfo {
                     ident: TableIdent {

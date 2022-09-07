@@ -802,11 +802,11 @@ impl MetaGrpcClient {
         T: Into<MetaGrpcReadReq>,
         R: DeserializeOwned,
     {
-        let act: MetaGrpcReadReq = v.into();
+        let read_req: MetaGrpcReadReq = v.into();
 
-        debug!(req = debug(&act), "MetaGrpcClient::do_read request");
+        debug!(req = debug(&read_req), "MetaGrpcClient::do_read request");
 
-        let req: Request<RaftRequest> = act.clone().try_into()?;
+        let req: Request<RaftRequest> = read_req.clone().try_into()?;
 
         debug!(
             req = debug(&req),
@@ -826,7 +826,7 @@ impl MetaGrpcClient {
                 if status_is_retryable(&s) {
                     self.mark_as_unhealthy().await;
                     let mut client = self.make_client().await?;
-                    let req: Request<RaftRequest> = act.try_into()?;
+                    let req: Request<RaftRequest> = read_req.try_into()?;
                     let req = common_tracing::inject_span_to_tonic_request(req);
                     Ok(client.read_msg(req).await?.into_inner())
                 } else {
