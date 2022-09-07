@@ -200,7 +200,7 @@ pub(crate) async fn start_meta_node_non_voter(
     {
         // add node to cluster as a non-voter
         let resp = leader
-            .add_node(Node {
+            .add_node(id, Node {
                 name: id.to_string(),
                 endpoint: addr.clone(),
                 grpc_api_addr: Some(tc.config.grpc_api_address.clone()),

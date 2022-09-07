@@ -67,7 +67,6 @@ pub mod protobuf {
 
     pub const FILE_DESCRIPTOR_SET: &[u8] = tonic::include_file_descriptor_set!("meta_descriptor");
 }
-
 pub use app_error::AppError;
 pub use app_error::CreateDatabaseWithDropTime;
 pub use app_error::CreateTableWithDropTime;
@@ -121,7 +120,10 @@ pub use meta_network_errors::ConnectionError;
 pub use meta_network_errors::InvalidArgument;
 pub use meta_network_errors::MetaNetworkError;
 pub use meta_network_errors::MetaNetworkResult;
+pub use meta_raft_errors::ChangeMembershipError;
+pub use meta_raft_errors::Fatal;
 pub use meta_raft_errors::ForwardToLeader;
+pub use meta_raft_errors::InitializeError;
 pub use meta_raft_errors::MetaRaftError;
 pub use meta_raft_errors::RetryableError;
 pub use meta_storage_errors::MetaStorageError;

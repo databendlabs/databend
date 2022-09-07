@@ -12,14 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use openraft::error::ChangeMembershipError;
-use openraft::error::Fatal;
+pub use openraft::error::ChangeMembershipError;
+pub use openraft::error::Fatal;
+pub use openraft::error::ForwardToLeader;
+pub use openraft::error::InitializeError;
 use openraft::NodeId;
 use serde::Deserialize;
 use serde::Serialize;
 use thiserror::Error;
-
-pub type ForwardToLeader = openraft::error::ForwardToLeader;
 
 /// Raft protocol related errors
 #[derive(Error, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
@@ -44,6 +44,9 @@ pub enum MetaRaftError {
 
     #[error("{0}")]
     RequestNotForwardToLeaderError(String),
+
+    #[error(transparent)]
+    InitializeError(InitializeError),
 }
 
 #[derive(Error, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]

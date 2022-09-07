@@ -377,10 +377,15 @@ impl MetaNode {
     pub async fn stop(&self) -> MetaResult<i32> {
         let mut rx = self.raft.metrics();
 
-        self.raft
-            .shutdown()
-            .await
-            .map_error_to_meta_error(MetaError::MetaServiceError, || "fail to stop raft")?;
+        let res = self.raft.shutdown().await;
+        info!("raft shutdown res: {:?}", res);
+
+        // The returned error does not mean this function call failed.
+        // Do not need to return this error. Keep shutting down other tasks.
+        if let Err(ref e) = res {
+            error!("raft shutdown error: {:?}", e);
+        }
+
         // safe unwrap: receiver wait for change.
         self.running_tx.send(()).unwrap();
 
@@ -395,10 +400,15 @@ impl MetaNode {
         info!("shutdown raft");
 
         for j in self.join_handles.lock().await.iter_mut() {
-            let _rst = j
-                .await
-                .map_error_to_meta_error(MetaError::MetaServiceError, || "fail to join")?;
-            // TODO(luhuanbing): Add joined node information to enrich debugging information
+            let res = j.await;
+            info!("task quit res: {:?}", res);
+
+            // The returned error does not mean this function call failed.
+            // Do not need to return this error. Keep shutting down other tasks.
+            if let Err(ref e) = res {
+                error!("task quit with error: {:?}", e);
+            }
+
             self.joined_tasks
                 .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         }
@@ -681,11 +691,11 @@ impl MetaNode {
         self.raft
             .initialize(cluster_node_ids)
             .await
-            .map_err(|x| MetaError::MetaServiceError(format!("{:?}", x)))?;
+            .map_err(MetaRaftError::InitializeError)?;
 
         info!("initialized cluster");
 
-        self.add_node(node).await?;
+        self.add_node(node_id, node).await?;
 
         Ok(())
     }
@@ -740,11 +750,10 @@ impl MetaNode {
 
         let endpoint = self.sto.get_node_endpoint(&self.sto.id).await?;
 
-        let db_size = self
-            .sto
-            .db
-            .size_on_disk()
-            .map_err(|_| MetaError::MetaServiceError("get db_size failed".to_string()))?;
+        let db_size = self.sto.db.size_on_disk().map_err(|e| {
+            let se = MetaStorageError::SledError(AnyError::new(&e).add_context(|| "get db_size"));
+            MetaError::MetaStorageError(se)
+        })?;
 
         let metrics = self.raft.metrics().borrow().clone();
 
@@ -911,19 +920,13 @@ impl MetaNode {
 
     /// Add a new node into this cluster.
     /// The node info is committed with raft, thus it must be called on an initialized node.
-    pub async fn add_node(&self, node: Node) -> Result<AppliedState, MetaError> {
+    pub async fn add_node(&self, node_id: NodeId, node: Node) -> Result<AppliedState, MetaError> {
         // TODO: use txid?
-        let node_id = node.name.parse::<u64>().map_err(|e| {
-            MetaError::MetaServiceError(format!("parse node_id error: {:?}", e.to_string()))
-        })?;
         let resp = self
             .write(LogEntry {
                 txid: None,
                 time_ms: None,
-                cmd: Cmd::AddNode {
-                    node_id: node_id as NodeId,
-                    node,
-                },
+                cmd: Cmd::AddNode { node_id, node },
             })
             .await?;
         Ok(resp)
