@@ -12,25 +12,32 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::BooleanType;
+use common_exception::Result;
+use common_functions::scalars::FunctionFactory;
 
 use crate::sql::plans::ComparisonExpr;
 use crate::sql::plans::ComparisonOp;
 use crate::sql::plans::LogicalInnerJoin;
 use crate::sql::plans::Scalar;
+use crate::sql::ScalarExpr;
 
-pub fn get_join_predicates(join: &LogicalInnerJoin) -> Vec<Scalar> {
-    join.left_conditions
+pub fn get_join_predicates(join: &LogicalInnerJoin) -> Result<Vec<Scalar>> {
+    Ok(join
+        .left_conditions
         .iter()
         .zip(join.right_conditions.iter())
         .map(|(left_cond, right_cond)| {
-            Scalar::ComparisonExpr(ComparisonExpr {
+            let func = FunctionFactory::instance()
+                .get("=", &[&left_cond.data_type(), &right_cond.data_type()])?;
+            Ok(Scalar::ComparisonExpr(ComparisonExpr {
                 left: Box::new(left_cond.clone()),
                 right: Box::new(right_cond.clone()),
                 op: ComparisonOp::Equal,
-                return_type: Box::new(BooleanType::new_impl()),
-            })
+                return_type: Box::new(func.return_type()),
+            }))
         })
+        .collect::<Result<Vec<_>>>()?
+        .into_iter()
         .chain(join.other_conditions.clone().into_iter())
-        .collect()
+        .collect())
 }
