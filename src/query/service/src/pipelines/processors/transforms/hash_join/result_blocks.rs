@@ -21,6 +21,7 @@ use common_datavalues::BooleanColumn;
 use common_datavalues::BooleanViewer;
 use common_datavalues::Column;
 use common_datavalues::ColumnRef;
+use common_datavalues::ConstColumn;
 use common_datavalues::DataType;
 use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
@@ -628,6 +629,11 @@ impl JoinHashTable {
     pub(crate) fn set_validity(column: &ColumnRef, validity: &Bitmap) -> Result<ColumnRef> {
         if column.is_null() {
             Ok(column.clone())
+        } else if column.is_const() {
+            let col: &ConstColumn = Series::check_get(column)?;
+            let validity = validity.clone();
+            let inner = Self::set_validity( col.inner(), &validity.slice(0, 1))?;
+            Ok(ConstColumn::new(inner, col.len()).arc())
         } else if column.is_nullable() {
             let col: &NullableColumn = Series::check_get(column)?;
             // It's possible validity is longer than col.
