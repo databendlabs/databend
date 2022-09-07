@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_base::containers::concat;
+use common_expression::types::DataType;
 use common_expression::FunctionRegistry;
 
 mod arithmetic;
@@ -34,3 +36,16 @@ pub fn builtin_functions() -> FunctionRegistry {
     string_multi_args::register(&mut registry);
     registry
 }
+
+const ALL_INTEGER_TYPES: &[DataType; 8] = &[
+    DataType::UInt8,
+    DataType::UInt16,
+    DataType::UInt32,
+    DataType::UInt64,
+    DataType::Int8,
+    DataType::Int16,
+    DataType::Int32,
+    DataType::Int64,
+];
+const ALL_FLOAT_TYPES: &[DataType; 2] = &[DataType::Float32, DataType::Float64];
+const ALL_NUMERICS_TYPES: &[DataType; 10] = &concat(ALL_INTEGER_TYPES, ALL_FLOAT_TYPES);

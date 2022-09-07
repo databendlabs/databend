@@ -17,7 +17,6 @@ use std::f64::consts::E;
 use std::f64::consts::PI;
 use std::marker::PhantomData;
 
-use common_base::containers::concat;
 use common_expression::types::number::NumberDomain;
 use common_expression::types::DataType;
 use common_expression::types::NumberType;
@@ -31,19 +30,11 @@ use num_traits::Pow;
 use rand::Rng;
 use rand::SeedableRng;
 
+use crate::scalars::ALL_FLOAT_TYPES;
+use crate::scalars::ALL_INTEGER_TYPES;
+use crate::scalars::ALL_NUMERICS_TYPES;
+
 pub fn register(registry: &mut FunctionRegistry) {
-    let all_integer_types = &[
-        DataType::UInt8,
-        DataType::UInt16,
-        DataType::UInt32,
-        DataType::UInt64,
-        DataType::Int8,
-        DataType::Int16,
-        DataType::Int32,
-        DataType::Int64,
-    ];
-    let all_float_types = &[DataType::Float32, DataType::Float64];
-    let all_numerics_types = &concat(all_integer_types, all_float_types);
     registry.register_1_arg::<NumberType<f64>, NumberType<f64>, _, _>(
         "sin",
         FunctionProperty::default(),
@@ -128,8 +119,8 @@ pub fn register(registry: &mut FunctionRegistry) {
     );
 
     let sign = |val: f64| match val.partial_cmp(&0.0f64) {
-        Some(std::cmp::Ordering::Greater) => 1,
-        Some(std::cmp::Ordering::Less) => -1,
+        Some(Ordering::Greater) => 1,
+        Some(Ordering::Less) => -1,
         _ => 0,
     };
 
@@ -182,7 +173,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         |val| val.abs(),
     );
 
-    for left in all_integer_types {
+    for left in ALL_INTEGER_TYPES {
         with_number_mapped_type!(L, match left {
             DataType::L => {
                 registry.register_1_arg::<NumberType<L>, NumberType<f64>, _, _>(
@@ -196,7 +187,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         })
     }
 
-    for left in all_float_types {
+    for left in ALL_FLOAT_TYPES {
         with_number_mapped_type!(L, match left {
             DataType::L => {
                 registry.register_1_arg::<NumberType<L>, NumberType<f64>, _, _>(
@@ -233,7 +224,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         |val| val.to_radians(),
     );
 
-    for left in all_numerics_types {
+    for left in ALL_NUMERICS_TYPES {
         with_number_mapped_type!(L, match left {
             DataType::L => {
                 registry.register_1_arg::<NumberType<L>, NumberType<f64>, _, _>(
@@ -281,7 +272,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         },
     );
 
-    for left in all_numerics_types {
+    for left in ALL_NUMERICS_TYPES {
         with_number_mapped_type!(L, match left {
             DataType::L => {
                 registry.register_1_arg::<NumberType<L>, NumberType<f64>, _, _>(

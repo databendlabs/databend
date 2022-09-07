@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// array concat using const generics
-pub fn concat<T, const A: usize, const B: usize>(a: &[T; A], b: &[T; B]) -> [T; A + B] {
+// Concat two arrays of different lengths
+pub const fn concat<T, const A: usize, const B: usize>(a: &[T; A], b: &[T; B]) -> [T; A + B] {
     let mut result = std::mem::MaybeUninit::uninit();
     let dest = result.as_mut_ptr() as *mut T;
     unsafe {

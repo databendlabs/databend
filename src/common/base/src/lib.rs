@@ -16,6 +16,8 @@
 #![feature(thread_local)]
 #![allow(incomplete_features)]
 #![feature(generic_const_exprs)]
+#![feature(const_maybe_uninit_as_mut_ptr)]
+#![feature(const_mut_refs)]
 
 pub mod base;
 pub mod containers;

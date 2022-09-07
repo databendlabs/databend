@@ -22,6 +22,7 @@ use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
 
 use super::arithmetic_modulo::vectorize_modulo;
+use crate::scalars::ALL_NUMERICS_TYPES;
 
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_aliases("plus", &["add"]);
@@ -31,21 +32,8 @@ pub fn register(registry: &mut FunctionRegistry) {
     // TODO support modulo
     // registry.register_aliases("%", &["mod", "modulo"]);
 
-    let all_numerics_types = &[
-        DataType::UInt8,
-        DataType::UInt16,
-        DataType::UInt32,
-        DataType::UInt64,
-        DataType::Int8,
-        DataType::Int16,
-        DataType::Int32,
-        DataType::Int64,
-        DataType::Float32,
-        DataType::Float64,
-    ];
-
     // Unary OP for minus and plus
-    for left in all_numerics_types {
+    for left in ALL_NUMERICS_TYPES {
         with_number_mapped_type!(L, match left {
             DataType::L => {
                 type T = <L as ResultTypeOfUnary>::Negate;
@@ -78,8 +66,8 @@ pub fn register(registry: &mut FunctionRegistry) {
         });
     }
 
-    for left in all_numerics_types {
-        for right in all_numerics_types {
+    for left in ALL_NUMERICS_TYPES {
+        for right in ALL_NUMERICS_TYPES {
             with_number_mapped_type!(L, match left {
                 DataType::L => with_number_mapped_type!(R, match right {
                     DataType::R => {
