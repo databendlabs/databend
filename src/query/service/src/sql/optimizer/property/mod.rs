@@ -37,7 +37,7 @@ impl RequiredProperty {
     }
 }
 
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Debug)]
 pub struct RelationalProperty {
     pub output_columns: ColumnSet,
     pub outer_columns: ColumnSet,

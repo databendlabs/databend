@@ -128,7 +128,8 @@ impl HeuristicOptimizer {
         for expr in s_expr.children() {
             implemented_children.push(self.implement_expression(expr)?);
         }
-        let implemented_expr = SExpr::create(s_expr.plan().clone(), implemented_children, None);
+        let implemented_expr =
+            SExpr::create(s_expr.plan().clone(), implemented_children, None, None);
         // Implement expression with Implementor
         let mut state = TransformState::new();
         self.implementor.implement(&implemented_expr, &mut state)?;

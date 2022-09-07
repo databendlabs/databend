@@ -28,7 +28,7 @@ pub fn require_property(required: &RequiredProperty, s_expr: &SExpr) -> Result<S
         .iter()
         .map(|child| require_property(required, child))
         .collect::<Result<Vec<SExpr>>>()?;
-    let optimized_expr = SExpr::create(s_expr.plan().clone(), optimized_children, None);
+    let optimized_expr = SExpr::create(s_expr.plan().clone(), optimized_children, None, None);
 
     let rel_expr = RelExpr::with_s_expr(&optimized_expr);
     let mut children = Vec::with_capacity(s_expr.arity());
@@ -45,7 +45,12 @@ pub fn require_property(required: &RequiredProperty, s_expr: &SExpr) -> Result<S
         children.push(enforced_child);
     }
 
-    Ok(SExpr::create(optimized_expr.plan().clone(), children, None))
+    Ok(SExpr::create(
+        optimized_expr.plan().clone(),
+        children,
+        None,
+        None,
+    ))
 }
 
 /// Try to enforce physical property from a physical `SExpr`

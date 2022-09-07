@@ -41,7 +41,12 @@ impl<'a> RelExpr<'a> {
 
     pub fn derive_relational_prop(&self) -> Result<RelationalProperty> {
         let plan = match self {
-            RelExpr::SExpr { expr } => expr.plan(),
+            RelExpr::SExpr { expr } => {
+                if let Some(rel_prop) = &expr.rel_prop {
+                    return Ok(*rel_prop.clone());
+                }
+                expr.plan()
+            }
             RelExpr::MExpr { expr, .. } => &expr.plan,
         };
 

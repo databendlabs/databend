@@ -63,7 +63,7 @@ impl ColumnPruner {
                     .iter()
                     .map(|expr| self.prune_columns(expr, require_columns.clone()))
                     .collect::<Result<Vec<_>>>()?;
-                Ok(SExpr::create(p.clone(), children, None))
+                Ok(SExpr::create(p.clone(), children, None, None))
             }
         }
     }
