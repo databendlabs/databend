@@ -130,9 +130,6 @@ impl SledTree {
                         MetaStorageError::BytesError(_e) => {
                             Err(ConflictableTransactionError::Abort(meta_sto_err))
                         }
-                        MetaStorageError::SerdeError(_e) => {
-                            Err(ConflictableTransactionError::Abort(meta_sto_err))
-                        }
                         MetaStorageError::SledError(_e) => {
                             Err(ConflictableTransactionError::Abort(meta_sto_err))
                         }
@@ -152,7 +149,7 @@ impl SledTree {
             Err(txn_err) => match txn_err {
                 TransactionError::Abort(meta_sto_err) => Err(meta_sto_err),
                 TransactionError::Storage(sto_err) => {
-                    Err(MetaStorageError::SerdeError(sto_err.to_string()))
+                    Err(MetaStorageError::SledError(AnyError::new(&sto_err)))
                 }
             },
         }
