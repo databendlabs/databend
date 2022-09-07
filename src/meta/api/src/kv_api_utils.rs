@@ -20,6 +20,7 @@ use common_meta_app::schema::DatabaseMeta;
 use common_meta_app::schema::DatabaseNameIdent;
 use common_meta_app::schema::TableNameIdent;
 use common_meta_app::share::*;
+use common_meta_types::anyerror::AnyError;
 use common_meta_types::app_error::AppError;
 use common_meta_types::app_error::ShareHasNoGrantedDatabase;
 use common_meta_types::app_error::UnknownDatabase;
@@ -486,6 +487,7 @@ where
 }
 
 /// Get existing value by key. Panic if key is absent.
+/// This function is only used for testing.
 pub async fn get_kv_data<T>(
     kv_api: &(impl KVApi + ?Sized),
     key: &impl KVApiKey,
@@ -500,7 +502,10 @@ where
         return Ok(s);
     };
 
-    unreachable!("failed to get {}", key.to_key())
+    Err(MetaError::Fatal(AnyError::error(format!(
+        "failed to get {}",
+        key.to_key()
+    ))))
 }
 
 pub async fn get_object_shared_by_share_ids(
