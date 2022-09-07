@@ -191,6 +191,45 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 
 
+ast            : ceil(5)
+raw expr       : ceil(5_u8)
+checked expr   : ceil<UInt8>(5_u8)
+optimized expr : 5_u8
+output type    : UInt8
+output domain  : Unknown
+output         : 5
+
+
+ast            : ceil(5.6)
+raw expr       : ceil(5.6_f64)
+checked expr   : ceil<Float64>(5.6_f64)
+optimized expr : 6.0_f64
+output type    : Float64
+output domain  : Unknown
+output         : 6.0
+
+
+ast            : ceil(a)
+raw expr       : ceil(ColumnRef(0)::Float64)
+checked expr   : ceil<Float64>(ColumnRef(0))
+evaluation:
++--------+----------------+---------+
+|        | a              | Output  |
++--------+----------------+---------+
+| Type   | Float64        | Float64 |
+| Domain | {-1.23..=1.23} | Unknown |
+| Row 0  | 1.23           | 2.0     |
+| Row 1  | -1.23          | -1.0    |
++--------+----------------+---------+
+evaluation (internal):
++--------+------------------------+
+| Column | Data                   |
++--------+------------------------+
+| a      | Float64([1.23, -1.23]) |
+| Output | Float64([2.0, -1.0])   |
++--------+------------------------+
+
+
 ast            : exp(2)
 raw expr       : exp(2_u8)
 checked expr   : exp<UInt8>(2_u8)
