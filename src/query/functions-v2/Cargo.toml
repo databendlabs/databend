@@ -11,8 +11,8 @@ doctest = false
 
 [dependencies] # In alphabetical order
 # Workspace dependencies
-common-base = { path = "../../common/base" }
 common-arrow = { path = "../../common/arrow" }
+common-base = { path = "../../common/base" }
 common-expression = { path = "../expression" }
 
 # Crates.io dependencies
