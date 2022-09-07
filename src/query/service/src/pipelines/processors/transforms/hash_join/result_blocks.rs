@@ -632,7 +632,7 @@ impl JoinHashTable {
         } else if column.is_const() {
             let col: &ConstColumn = Series::check_get(column)?;
             let validity = validity.clone();
-            let inner = Self::set_validity( col.inner(), &validity.slice(0, 1))?;
+            let inner = Self::set_validity(col.inner(), &validity.slice(0, 1))?;
             Ok(ConstColumn::new(inner, col.len()).arc())
         } else if column.is_nullable() {
             let col: &NullableColumn = Series::check_get(column)?;
