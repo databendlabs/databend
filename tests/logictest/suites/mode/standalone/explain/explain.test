@@ -184,6 +184,7 @@ FILE_FORMAT = (
     type = "CSV"
 )
 SIZE_LIMIT = 10
+PURGE = false
 
 statement query T
 explain syntax copy into 's3://mybucket/data.csv' from t1 file_format = ( type = 'CSV' field_delimiter = ',' record_delimiter = '\n' skip_header = 1) size_limit=10;
@@ -199,6 +200,7 @@ FILE_FORMAT = (
     type = "CSV"
 )
 SIZE_LIMIT = 10
+PURGE = false
 
 statement query T
 explain syntax create table t3(a int64, b uint64, c float64, d string, e array(int32), f tuple(f1 bool, f2 string)) engine=fuse cluster by (a, b, c) comment='test' compression='LZ4';
@@ -411,7 +413,7 @@ statement query T
 explain ast copy into t1 from 's3://mybucket/data.csv' file_format = ( type = 'CSV' field_delimiter = ',' record_delimiter = '\n' skip_header = 1) size_limit=10;
 
 ----
-Copy (children 4)
+Copy (children 5)
 ├── CopyUnit (children 1)
 │   └── UriLocation 's3://mybucket/data.csv'
 ├── CopyUnit (children 1)
@@ -421,7 +423,8 @@ Copy (children 4)
 │   ├── FileFormat record_delimiter = "\n"
 │   ├── FileFormat skip_header = "1"
 │   └── FileFormat type = "CSV"
-└── SizeLimit 10
+├── SizeLimit 10
+└── Purge false
 
 statement query T
 explain ast create database db1 engine=default;
