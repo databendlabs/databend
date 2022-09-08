@@ -64,7 +64,6 @@ enum State {
         location: String,
         segment: Arc<SegmentInfo>,
     },
-    Output(DataBlock),
     Finished,
 }
 
@@ -78,8 +77,7 @@ pub struct FuseTableSink {
     accumulator: StatisticsAccumulator,
     cluster_stats_gen: ClusterStatsGenerator,
 
-    // For distributed insert select.
-    // We should output the append logs to the exchange sink.
+    // A dummy output port for distributed insert select to connect Exchange Sink.
     output: Option<Arc<OutputPort>>,
 }
 
@@ -130,15 +128,6 @@ impl Processor for FuseTableSink {
             State::Serialized { .. } | State::SerializedSegment { .. }
         ) {
             return Ok(Event::Async);
-        }
-
-        if let State::Output(block) = std::mem::replace(&mut self.state, State::Finished) {
-            if let Some(output) = &self.output {
-                output.push_data(Ok(block));
-                return Ok(Event::NeedConsume);
-            } else {
-                return Err(ErrorCode::LogicalError("No output port"));
-            }
         }
 
         if self.input.is_finished() {
@@ -280,11 +269,7 @@ impl Processor for FuseTableSink {
                 // TODO: dyn operation for table trait
                 let log_entry = AppendOperationLogEntry::new(location, segment);
                 let data_block = DataBlock::try_from(log_entry)?;
-                if self.output.is_some() {
-                    self.state = State::Output(data_block)
-                } else {
-                    self.ctx.push_precommit_block(data_block);
-                }
+                self.ctx.push_precommit_block(data_block);
             }
             _state => {
                 return Err(ErrorCode::LogicalError(

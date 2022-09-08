@@ -19,7 +19,6 @@ use chrono::TimeZone;
 use chrono::Utc;
 use common_base::base::GlobalIORuntime;
 use common_base::base::TrySpawn;
-use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -86,12 +85,12 @@ pub fn append2table(
     executor.execute()
 }
 
-pub async fn commit2table_with_append_entries(
+pub async fn commit2table(
     ctx: Arc<QueryContext>,
     table: Arc<dyn Table>,
     overwrite: bool,
-    append_entries: Vec<DataBlock>,
 ) -> Result<()> {
+    let append_entries = ctx.consume_precommit_blocks();
     // We must put the commit operation to global runtime, which will avoid the "dispatch dropped without returning error" in tower
     let catalog_name = ctx.get_current_catalog();
     let handler = GlobalIORuntime::instance().spawn(async move {
@@ -108,15 +107,6 @@ pub async fn commit2table_with_append_entries(
             cause
         ))),
     }
-}
-
-pub async fn commit2table(
-    ctx: Arc<QueryContext>,
-    table: Arc<dyn Table>,
-    overwrite: bool,
-) -> Result<()> {
-    let append_entries = ctx.consume_precommit_blocks();
-    commit2table_with_append_entries(ctx, table, overwrite, append_entries).await
 }
 
 pub async fn validate_grant_object_exists(

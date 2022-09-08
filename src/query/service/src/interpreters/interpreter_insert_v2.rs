@@ -27,7 +27,6 @@ use futures_util::StreamExt;
 use parking_lot::Mutex;
 
 use super::commit2table;
-use super::commit2table_with_append_entries;
 use super::interpreter_common::append2table;
 use super::plan_schedulers::build_schedule_pipepline;
 use super::ProcessorExecutorStream;
@@ -249,20 +248,13 @@ impl InsertInterpreterV2 {
             executor_settings,
         )?;
 
-        let mut append_entries = vec![];
         let mut stream: SendableDataBlockStream =
             Box::pin(ProcessorExecutorStream::create(executor)?);
         while let Some(block) = stream.next().await {
-            append_entries.push(block?);
+            block?;
         }
 
-        commit2table_with_append_entries(
-            self.ctx.clone(),
-            table,
-            self.plan.overwrite,
-            append_entries,
-        )
-        .await?;
+        commit2table(self.ctx.clone(), table.clone(), self.plan.overwrite).await?;
 
         Ok(Box::pin(DataBlockStream::create(
             self.plan.schema(),
