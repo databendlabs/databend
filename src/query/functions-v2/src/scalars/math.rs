@@ -176,11 +176,11 @@ pub fn register(registry: &mut FunctionRegistry) {
     for left in ALL_INTEGER_TYPES {
         with_number_mapped_type!(L, match left {
             DataType::L => {
-                registry.register_1_arg::<NumberType<L>, NumberType<f64>, _, _>(
+                registry.register_1_arg::<NumberType<L>, NumberType<L>, _, _>(
                     "ceil",
                     FunctionProperty::default(),
                     |_| None,
-                    |val| val as f64,
+                    |val| val,
                 );
             }
             _ => unreachable!(),

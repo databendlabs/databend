@@ -29,6 +29,7 @@ fn test_math() {
     test_abs(file);
     test_sign(file);
     test_trigonometric(file);
+    test_ceil(file);
     test_exp(file);
     test_round(file);
     test_sqrt(file);
@@ -71,6 +72,16 @@ fn test_trigonometric(file: &mut impl Write) {
         "a",
         DataType::Int64,
         Column::from_data(vec![1i64, -1, 1024]),
+    )]);
+}
+
+fn test_ceil(file: &mut impl Write) {
+    run_ast(file, "ceil(5)", &[]);
+    run_ast(file, "ceil(5.6)", &[]);
+    run_ast(file, "ceil(a)", &[(
+        "a",
+        DataType::Float64,
+        Column::from_data(vec![1.23f64, -1.23]),
     )]);
 }
 
