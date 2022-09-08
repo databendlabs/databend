@@ -72,8 +72,15 @@ done
 
 ## List stage use http API
 
-curl -s -u root: -XPOST "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/query" --header 'Content-Type: application/json' -d '{"sql": "list @s1;"}'  | grep -o 'ontime_200.csv'
+curl -s -u root: -XPOST "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/query" --header 'Content-Type: application/json' -d '{"sql": "list @s1;"}'  | grep -o 'ontime_200.csv' | wc -l
 
+
+## copy with purge
+cmd="copy into ontime200 from @s1  PATTERN = 'ontime_200.csv.*$' FILE_FORMAT = (type = 'CSV' field_delimiter = ',' compression = 'auto'  record_delimiter = '\n' skip_header = 1) purge = true;"
+echo $cmd | $MYSQL_CLIENT_CONNECT
+
+## list stage has metacache, so we just we aws client to ensure the data are purged
+aws --endpoint-url ${STORAGE_S3_ENDPOINT_URL} s3 ls s3://testbucket/admin/stage/s1/ | grep -o ontime_200.csv  | wc -l
 
 ## Drop table.
 echo "drop table ontime200" | $MYSQL_CLIENT_CONNECT
