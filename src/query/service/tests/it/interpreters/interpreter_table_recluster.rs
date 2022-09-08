@@ -107,7 +107,7 @@ async fn test_alter_recluster_interpreter() -> Result<()> {
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
             "+----------+",
-            "| COUNT(*) |",
+            "| count(*) |",
             "+----------+",
             "| 4        |",
             "+----------+",

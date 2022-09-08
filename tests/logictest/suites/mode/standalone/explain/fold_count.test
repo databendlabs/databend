@@ -9,7 +9,7 @@ explain select count(*) from t;
 
 ----
 Project
-├── columns: [COUNT(*) (#1)]
+├── columns: [count(*) (#1)]
 └── EvalScalar
     ├── expressions: [COUNT(*) (#2)]
     └── EvalScalar
@@ -24,7 +24,7 @@ explain select count(*) from t;
 
 ----
 Project
-├── columns: [COUNT(*) (#1)]
+├── columns: [count(*) (#1)]
 └── EvalScalar
     ├── expressions: [COUNT(*) (#2)]
     └── EvalScalar
@@ -36,7 +36,7 @@ explain select count(*) from t where number > 10;
 
 ----
 Project
-├── columns: [COUNT(*) (#1)]
+├── columns: [count(*) (#1)]
 └── EvalScalar
     ├── expressions: [COUNT(*) (#2)]
     └── AggregateFinal
