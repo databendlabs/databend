@@ -4335,7 +4335,9 @@ Insert(
             },
         ],
         source: Values {
-            start: 30,
+            start: Some(
+                30,
+            ),
             rest_str: "(1, 2), (3, 4);",
         },
         overwrite: false,
@@ -4360,7 +4362,9 @@ Insert(
         columns: [],
         source: Streaming {
             format: "json",
-            start: 31,
+            start: Some(
+                31,
+            ),
             rest_str: ";",
         },
         overwrite: false,

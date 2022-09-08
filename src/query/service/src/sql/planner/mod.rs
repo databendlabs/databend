@@ -54,7 +54,8 @@ use super::optimizer::OptimizerConfig;
 use super::optimizer::OptimizerContext;
 use crate::sessions::TableContext;
 
-static MAX_TOKEN_FOR_INSERT: usize = 128;
+static MIN_TOKEN_FOR_INSERT: usize = 128;
+static MAX_TOKEN_FOR_INSERT: usize = 8 * MIN_TOKEN_FOR_INSERT;
 
 pub struct Planner {
     ctx: Arc<QueryContext>,
@@ -69,15 +70,28 @@ impl Planner {
         let mut tokenizer = Tokenizer::new(sql);
         if let Some(Ok(t)) = tokenizer.next() {
             if t.kind == TokenKind::INSERT {
-                if let Some(Ok(last_token)) = tokenizer.take(MAX_TOKEN_FOR_INSERT).last() {
-                    match self.plan_sql_inner(sql, Some(last_token.span.start)).await {
-                        Ok(v) => return Ok(v),
-                        Err(err) => {
-                            tracing::warn!(
-                                "Faster parser path for insert failed: {}, start to fallback",
-                                err
-                            );
+                let mut token_limit = MIN_TOKEN_FOR_INSERT;
+                while token_limit <= 8 * MAX_TOKEN_FOR_INSERT {
+                    let tokenizer = Tokenizer::new(sql);
+                    match tokenizer
+                    .take(token_limit)
+                    .take_while(|p| p.is_ok())
+                    .last()
+                    {
+                        Some(Ok(last_token)) => {
+                            match self.plan_sql_inner(sql, Some(last_token.span.end)).await {
+                                Ok(v) => return Ok(v),
+                                Err(err) => {
+                                    token_limit *= 2;
+                                    tracing::warn!(
+                                        "Faster parser path for insert failed: {}, start to increase the token limit to {}",
+                                        err,
+                                        token_limit
+                                    );
+                                }
+                            }
                         }
+                        _ => break
                     }
                 }
             }
@@ -110,14 +124,16 @@ impl Planner {
                     InsertSource::Streaming {
                         start, rest_str, ..
                     } => {
-                        *rest_str = &sql[*start..];
+                        let start = start.unwrap_or(short_sql.len());
+                        *rest_str = &sql[start..];
                         should_fallback = false;
                     }
 
                     InsertSource::Values {
                         start, rest_str, ..
                     } => {
-                        *rest_str = &sql[*start..];
+                        let start = start.unwrap_or(short_sql.len());
+                        *rest_str = &sql[start..];
                         should_fallback = false;
                     }
                     _ => {}

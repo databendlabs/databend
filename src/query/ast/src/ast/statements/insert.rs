@@ -58,11 +58,11 @@ impl Display for InsertStmt<'_> {
 pub enum InsertSource<'a> {
     Streaming {
         format: String,
-        start: usize,
+        start: Option<usize>,
         rest_str: &'a str,
     },
     Values {
-        start: usize,
+        start: Option<usize>,
         rest_str: &'a str,
     },
     Select {

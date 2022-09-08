@@ -981,12 +981,19 @@ pub fn insert_source(i: Input) -> IResult<InsertSource> {
             FORMAT ~ #ident ~ #rest_tokens
         },
         |(_, format, rest_tokens)| {
-            let rest_str = &rest_tokens[0].source
-                [rest_tokens.first().unwrap().span.start..rest_tokens.last().unwrap().span.end];
+            let (rest_str, start) = if rest_tokens.is_empty() {
+                ("", None)
+            } else {
+                (
+                    &rest_tokens[0].source[rest_tokens.first().unwrap().span.start
+                        ..rest_tokens.last().unwrap().span.end],
+                    Some(rest_tokens.first().unwrap().span.start),
+                )
+            };
 
             InsertSource::Streaming {
                 format: format.name,
-                start: rest_tokens.first().unwrap().span.start,
+                start,
                 rest_str,
             }
         },
@@ -996,13 +1003,16 @@ pub fn insert_source(i: Input) -> IResult<InsertSource> {
             VALUES ~ #rest_tokens
         },
         |(_, rest_tokens)| {
-            let rest_str = &rest_tokens[0].source
-                [rest_tokens.first().unwrap().span.start..rest_tokens.last().unwrap().span.end];
-
-            InsertSource::Values {
-                rest_str,
-                start: rest_tokens.first().unwrap().span.start,
-            }
+            let (rest_str, start) = if rest_tokens.is_empty() {
+                ("", None)
+            } else {
+                (
+                    &rest_tokens[0].source[rest_tokens.first().unwrap().span.start
+                        ..rest_tokens.last().unwrap().span.end],
+                    Some(rest_tokens.first().unwrap().span.start),
+                )
+            };
+            InsertSource::Values { rest_str, start }
         },
     );
     let query = map(query, |query| InsertSource::Select {
