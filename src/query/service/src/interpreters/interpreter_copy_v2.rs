@@ -90,7 +90,7 @@ impl CopyInterpreterV2 {
             let stage_file = &stage_file[0];
 
             if let Some(file_info) = resp.file_info.get(file) {
-                // only if md5 match, no need to copy the file again.
+                // No need to copy the file again only if md5 match.
                 if file_info.md5 == stage_file.md5 {
                     continue;
                 }
@@ -333,15 +333,24 @@ impl Interpreter for CopyInterpreterV2 {
                             )
                             .await?;
 
-                        let write_results = self
-                            .copy_files_to_table(
+                        info!(
+                            "matched copy files: {:?}, pattern: {}",
+                            &stage_files.keys(),
+                            pattern
+                        );
+
+                        let write_results = if stage_files.is_empty() {
+                            vec![]
+                        } else {
+                            self.copy_files_to_table(
                                 catalog_name,
                                 database_name,
                                 table_name,
                                 from,
                                 stage_files.keys().cloned().collect(),
                             )
-                            .await?;
+                            .await?
+                        };
 
                         (write_results, Some(stage_files))
                     }
@@ -358,6 +367,15 @@ impl Interpreter for CopyInterpreterV2 {
                         (write_results, None)
                     }
                 };
+
+                if write_results.is_empty() {
+                    return Ok(Box::pin(DataBlockStream::create(
+                        // TODO(xuanwo): Is this correct?
+                        Arc::new(DataSchema::new(vec![])),
+                        None,
+                        vec![],
+                    )));
+                }
 
                 let table = self
                     .ctx
