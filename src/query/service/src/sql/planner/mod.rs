@@ -14,16 +14,12 @@
 
 use std::sync::Arc;
 
-use common_ast::ast::InsertSource;
-use common_ast::ast::InsertStmt;
-use common_ast::ast::Statement;
 use common_ast::parser::parse_sql;
 use common_ast::parser::token::Token;
 use common_ast::parser::token::TokenKind;
 use common_ast::parser::token::Tokenizer;
 use common_ast::Backtrace;
 use common_exception::Result;
-use nom::Offset;
 use parking_lot::RwLock;
 pub use plans::ScalarExpr;
 
@@ -56,7 +52,8 @@ use super::optimizer::OptimizerConfig;
 use super::optimizer::OptimizerContext;
 use crate::sessions::TableContext;
 
-static PROBE_INSERT_MAX_TOKENS: usize = 128;
+const PROBE_INSERT_INITIAL_TOKENS: usize = 128;
+const PROBE_INSERT_MAX_TOKENS: usize = 128 * 8;
 
 pub struct Planner {
     ctx: Arc<QueryContext>,
@@ -71,40 +68,28 @@ impl Planner {
         let settings = self.ctx.get_settings();
         let sql_dialect = settings.get_sql_dialect()?;
 
-        // Step 1: Tokenize the beginning of the SQL, so as to find `INSERT INTO` statement without
-        // tokenizing all SQL.
-        let mut tokenizer = Tokenizer::new(sql);
-        let mut tokens: Vec<Token> = (&mut tokenizer)
-            .take(PROBE_INSERT_MAX_TOKENS)
-            .collect::<Result<_>>()?;
-
-        let mut try_fast_parse_insert =
-            tokens.first().map(|token| token.kind) == Some(TokenKind::INSERT);
+        // Step 1: Tokenize the SQL.
+        let mut tokenizer = Tokenizer::new(sql).peekable();
+        let is_insert_stmt = tokenizer
+            .peek()
+            .and_then(|token| Some(token.as_ref().ok()?.kind))
+            == Some(TokenKind::INSERT);
+        // Only tokenize the beginning tokens for `INSERT INTO` statement because it's unnecessary to tokenize tokens for values.
+        let mut tokens: Vec<Token> = if is_insert_stmt {
+            (&mut tokenizer)
+                .take(PROBE_INSERT_INITIAL_TOKENS)
+                .collect::<Result<_>>()?
+        } else {
+            (&mut tokenizer).collect::<Result<_>>()?
+        };
 
         loop {
-            let res: Result<(Plan, MetadataRef, Option<String>)> = try {
+            let res = async {
+                // Step 2: Parse the SQL.
                 let backtrace = Backtrace::new();
-                let (stmt, format) = if try_fast_parse_insert {
-                    let (mut stmt, format) = parse_sql(&tokens, sql_dialect, &backtrace)?;
-                    // Extend rest_str to the end of the SQL.
-                    if let Statement::Insert(InsertStmt {
-                        source:
-                            InsertSource::Streaming { rest_str, .. } | InsertSource::Values { rest_str },
-                        ..
-                    }) = &mut stmt
-                    {
-                        *rest_str = &sql[sql.offset(rest_str)..];
-                    }
-                    (stmt, format)
-                } else {
-                    // Fall back to tokenize all SQL.
-                    for token in &mut tokenizer {
-                        tokens.push(token?);
-                    }
-                    parse_sql(&tokens, sql_dialect, &backtrace)?
-                };
+                let (stmt, format) = parse_sql(&tokens, sql_dialect, &backtrace)?;
 
-                // Step 2: bind AST with catalog, and generate a pure logical SExpr
+                // Step 3: Bind AST with catalog, and generate a pure logical SExpr
                 let metadata = Arc::new(RwLock::new(Metadata::create()));
                 let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
                 let binder = Binder::new(
@@ -115,17 +100,24 @@ impl Planner {
                 );
                 let plan = binder.bind(&stmt).await?;
 
-                // Step 3: optimize the SExpr with optimizers, and generate optimized physical SExpr
+                // Step 4: Optimize the SExpr with optimizers, and generate optimized physical SExpr
                 let opt_ctx = Arc::new(OptimizerContext::new(OptimizerConfig {
                     enable_distributed_optimization: !self.ctx.get_cluster().is_empty(),
                 }));
                 let optimized_plan = optimize(self.ctx.clone(), opt_ctx, plan)?;
 
-                (optimized_plan, metadata.clone(), format)
-            };
+                Ok((optimized_plan, metadata.clone(), format))
+            }
+            .await;
 
-            if try_fast_parse_insert && res.is_err() {
-                try_fast_parse_insert = false;
+            if res.is_err()
+                && tokens.len() < PROBE_INSERT_MAX_TOKENS
+                && matches!(tokenizer.peek(), Some(Ok(_)))
+            {
+                // Tokenize more and try again.
+                for token in (&mut tokenizer).take(tokens.len() * 2) {
+                    tokens.push(token?);
+                }
             } else {
                 return res;
             }
