@@ -741,8 +741,9 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             ~ ( FILE_FORMAT ~ "=" ~ #options)?
             ~ ( VALIDATION_MODE ~ "=" ~ #literal_string)?
             ~ ( SIZE_LIMIT ~ "=" ~ #literal_u64)?
+            ~ ( PURGE ~ "=" ~ #literal_bool)?
         },
-        |(_, _, dst, _, src, files, pattern, file_format, validation_mode, size_limit)| {
+        |(_, _, dst, _, src, files, pattern, file_format, validation_mode, size_limit, purge)| {
             Statement::Copy(CopyStmt {
                 src,
                 dst,
@@ -751,6 +752,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
                 file_format: file_format.map(|v| v.2).unwrap_or_default(),
                 validation_mode: validation_mode.map(|v| v.2).unwrap_or_default(),
                 size_limit: size_limit.map(|v| v.2).unwrap_or_default() as usize,
+                purge: purge.map(|v| v.2).unwrap_or_default(),
             })
         },
     );
