@@ -337,6 +337,7 @@ async fn test_watch() -> common_exception::Result<()> {
                     key: txn_key.clone(),
                     value: txn_val.clone(),
                     prev_value: true,
+                    expire_at: None,
                 })),
             },
             TxnOp {

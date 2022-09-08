@@ -49,7 +49,7 @@ async fn test_meta_node_forward_to_leader() -> anyhow::Result<()> {
             .write(LogEntry {
                 txid: None,
                 time_ms: None,
-                cmd: Cmd::UpsertKV(UpsertKV::update(&key, key.as_bytes())),
+                cmd: Cmd::UpsertKV(UpsertKV::update(&key, key.as_bytes(), None)),
             })
             .await;
 

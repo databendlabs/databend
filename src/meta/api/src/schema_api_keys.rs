@@ -23,6 +23,7 @@ use common_meta_app::schema::DbIdListKey;
 use common_meta_app::schema::TableId;
 use common_meta_app::schema::TableIdListKey;
 use common_meta_app::schema::TableIdToName;
+use common_meta_app::schema::TableStageFileNameIdent;
 use kv_api_key::check_segment;
 use kv_api_key::check_segment_absent;
 use kv_api_key::check_segment_present;
@@ -43,6 +44,7 @@ const PREFIX_TABLE_ID_LIST: &str = "__fd_table_id_list";
 const PREFIX_TABLE_COUNT: &str = "__fd_table_count";
 const PREFIX_DATABASE_ID_TO_NAME: &str = "__fd_database_id_to_name";
 const PREFIX_TABLE_ID_TO_NAME: &str = "__fd_table_id_to_name";
+const PREFIX_TABLE_STAGE_FILE: &str = "__fd_table_stage_file";
 
 pub(crate) const ID_GEN_TABLE: &str = "table_id";
 pub(crate) const ID_GEN_DATABASE: &str = "database_id";
@@ -292,5 +294,50 @@ impl KVApiKey for CountTablesKey {
         let tenant = unescape(tenant)?;
 
         Ok(CountTablesKey { tenant })
+    }
+}
+
+// __fd_table_stage_file/tenant/db_name/table_name/file_name -> TableStageFileInfo
+impl KVApiKey for TableStageFileNameIdent {
+    const PREFIX: &'static str = PREFIX_TABLE_STAGE_FILE;
+
+    fn to_key(&self) -> String {
+        format!(
+            "{}/{}/{}/{}/{}",
+            Self::PREFIX,
+            self.tenant,
+            self.db_name,
+            self.table_name,
+            self.file,
+        )
+    }
+
+    fn from_key(s: &str) -> Result<Self, KVApiKeyError> {
+        let mut elts = s.split('/');
+
+        let prefix = check_segment_present(elts.next(), 0, s)?;
+        check_segment(prefix, 0, Self::PREFIX)?;
+
+        let tenant = check_segment_present(elts.next(), 1, s)?;
+
+        let db_name = check_segment_present(elts.next(), 2, s)?;
+
+        let table_name = check_segment_present(elts.next(), 3, s)?;
+
+        let file = check_segment_present(elts.next(), 4, s)?;
+
+        check_segment_absent(elts.next(), 5, s)?;
+
+        let tenant = unescape(tenant)?;
+        let db_name = unescape(db_name)?;
+        let table_name = unescape(table_name)?;
+        let file = unescape(file)?;
+
+        Ok(TableStageFileNameIdent {
+            tenant,
+            db_name,
+            table_name,
+            file,
+        })
     }
 }

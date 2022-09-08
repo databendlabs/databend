@@ -90,7 +90,9 @@ impl KVApiTestSuite {
         info!("--- KVApiTestSuite::kv_write_read() start");
         {
             // write
-            let res = kv.upsert_kv(UpsertKVReq::update("foo", b"bar")).await?;
+            let res = kv
+                .upsert_kv(UpsertKVReq::update("foo", b"bar", None))
+                .await?;
             assert_eq!(None, res.prev);
             assert_eq!(Some(SeqV::with_meta(1, None, b"bar".to_vec())), res.result);
         }
@@ -98,7 +100,7 @@ impl KVApiTestSuite {
         {
             // write fails with unmatched seq
             let res = kv
-                .upsert_kv(UpsertKVReq::update("foo", b"bar").with(MatchSeq::Exact(2)))
+                .upsert_kv(UpsertKVReq::update("foo", b"bar", None).with(MatchSeq::Exact(2)))
                 .await?;
             assert_eq!(
                 (
@@ -113,7 +115,7 @@ impl KVApiTestSuite {
         {
             // write done with matching seq
             let res = kv
-                .upsert_kv(UpsertKVReq::update("foo", b"wow").with(MatchSeq::Exact(1)))
+                .upsert_kv(UpsertKVReq::update("foo", b"wow", None).with(MatchSeq::Exact(1)))
                 .await?;
             assert_eq!(
                 Some(SeqV::with_meta(1, None, b"bar".to_vec())),
@@ -134,7 +136,8 @@ impl KVApiTestSuite {
     pub async fn kv_delete<KV: KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
         info!("--- KVApiTestSuite::kv_delete() start");
         let test_key = "test_key";
-        kv.upsert_kv(UpsertKVReq::update(test_key, b"v1")).await?;
+        kv.upsert_kv(UpsertKVReq::update(test_key, b"v1", None))
+            .await?;
 
         let current = kv.get_kv(test_key).await?;
         if let Some(SeqV { seq, .. }) = current {
@@ -170,7 +173,8 @@ impl KVApiTestSuite {
         assert_eq!(None, res.result);
 
         // do not care seq
-        kv.upsert_kv(UpsertKVReq::update(test_key, b"v2")).await?;
+        kv.upsert_kv(UpsertKVReq::update(test_key, b"v2", None))
+            .await?;
 
         let res = kv.upsert_kv(UpsertKVReq::delete(test_key)).await?;
         assert_eq!(
@@ -187,31 +191,33 @@ impl KVApiTestSuite {
         let test_key = "test_key_for_update";
 
         let r = kv
-            .upsert_kv(UpsertKVReq::update(test_key, b"v1").with(MatchSeq::GE(1)))
+            .upsert_kv(UpsertKVReq::update(test_key, b"v1", None).with(MatchSeq::GE(1)))
             .await?;
         assert_eq!((None, None), (r.prev, r.result), "not changed");
 
-        let r = kv.upsert_kv(UpsertKVReq::update(test_key, b"v1")).await?;
+        let r = kv
+            .upsert_kv(UpsertKVReq::update(test_key, b"v1", None))
+            .await?;
         assert_eq!(Some(SeqV::with_meta(1, None, b"v1".to_vec())), r.result);
         let seq = r.result.unwrap().seq;
 
         // unmatched seq
         let r = kv
-            .upsert_kv(UpsertKVReq::update(test_key, b"v2").with(MatchSeq::Exact(seq + 1)))
+            .upsert_kv(UpsertKVReq::update(test_key, b"v2", None).with(MatchSeq::Exact(seq + 1)))
             .await?;
         assert_eq!(Some(SeqV::with_meta(1, None, b"v1".to_vec())), r.prev);
         assert_eq!(Some(SeqV::with_meta(1, None, b"v1".to_vec())), r.result);
 
         // matched seq
         let r = kv
-            .upsert_kv(UpsertKVReq::update(test_key, b"v2").with(MatchSeq::Exact(seq)))
+            .upsert_kv(UpsertKVReq::update(test_key, b"v2", None).with(MatchSeq::Exact(seq)))
             .await?;
         assert_eq!(Some(SeqV::with_meta(1, None, b"v1".to_vec())), r.prev);
         assert_eq!(Some(SeqV::with_meta(2, None, b"v2".to_vec())), r.result);
 
         // blind update
         let r = kv
-            .upsert_kv(UpsertKVReq::update(test_key, b"v3").with(MatchSeq::GE(1)))
+            .upsert_kv(UpsertKVReq::update(test_key, b"v3", None).with(MatchSeq::GE(1)))
             .await?;
         assert_eq!(Some(SeqV::with_meta(2, None, b"v2".to_vec())), r.prev);
         assert_eq!(Some(SeqV::with_meta(3, None, b"v3".to_vec())), r.result);
@@ -241,7 +247,7 @@ impl KVApiTestSuite {
             .unwrap()
             .as_secs();
 
-        kv.upsert_kv(UpsertKVReq::update("k1", b"v1").with(KVMeta {
+        kv.upsert_kv(UpsertKVReq::update("k1", b"v1", None).with(KVMeta {
             expire_at: Some(now + 2),
         }))
         .await?;
@@ -268,7 +274,7 @@ impl KVApiTestSuite {
         info!("--- expired entry act as if it does not exist, an ADD op should apply");
         {
             kv.upsert_kv(
-                UpsertKVReq::update("k1", b"v1")
+                UpsertKVReq::update("k1", b"v1", None)
                     .with(MatchSeq::Exact(0))
                     .with(KVMeta {
                         expire_at: Some(now - 1),
@@ -276,7 +282,7 @@ impl KVApiTestSuite {
             )
             .await?;
             kv.upsert_kv(
-                UpsertKVReq::update("k2", b"v2")
+                UpsertKVReq::update("k2", b"v2", None)
                     .with(MatchSeq::Exact(0))
                     .with(KVMeta {
                         expire_at: Some(now + 2),
@@ -309,7 +315,7 @@ impl KVApiTestSuite {
         info!("--- update expire");
         {
             kv.upsert_kv(
-                UpsertKVReq::update("k2", b"v2")
+                UpsertKVReq::update("k2", b"v2", None)
                     .with(MatchSeq::Exact(3))
                     .with(KVMeta {
                         expire_at: Some(now - 1),
@@ -335,7 +341,9 @@ impl KVApiTestSuite {
             .unwrap()
             .as_secs();
 
-        let r = kv.upsert_kv(UpsertKVReq::update(test_key, b"v1")).await?;
+        let r = kv
+            .upsert_kv(UpsertKVReq::update(test_key, b"v1", None))
+            .await?;
         assert_eq!(Some(SeqV::with_meta(1, None, b"v1".to_vec())), r.result);
         let seq = r.result.unwrap().seq;
 
@@ -401,16 +409,16 @@ impl KVApiTestSuite {
 
         let mut values = vec![];
         {
-            kv.upsert_kv(UpsertKVReq::update("t", b"")).await?;
+            kv.upsert_kv(UpsertKVReq::update("t", b"", None)).await?;
 
             for i in 0..9 {
                 let key = format!("__users/{}", i);
                 let val = format!("val_{}", i);
                 values.push(val.clone());
-                kv.upsert_kv(UpsertKVReq::update(&key, val.as_bytes()))
+                kv.upsert_kv(UpsertKVReq::update(&key, val.as_bytes(), None))
                     .await?;
             }
-            kv.upsert_kv(UpsertKVReq::update("v", b"")).await?;
+            kv.upsert_kv(UpsertKVReq::update("v", b"", None)).await?;
         }
 
         let res = kv.prefix_list_kv("__users/").await?;
@@ -430,8 +438,8 @@ impl KVApiTestSuite {
     pub async fn kv_mget<KV: KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
         info!("--- KVApiTestSuite::kv_mget() start");
 
-        kv.upsert_kv(UpsertKVReq::update("k1", b"v1")).await?;
-        kv.upsert_kv(UpsertKVReq::update("k2", b"v2")).await?;
+        kv.upsert_kv(UpsertKVReq::update("k1", b"v1", None)).await?;
+        kv.upsert_kv(UpsertKVReq::update("k2", b"v2", None)).await?;
 
         let res = kv.mget_kv(&["k1".to_string(), "k2".to_string()]).await?;
         assert_eq!(res, vec![
@@ -483,6 +491,7 @@ impl KVApiTestSuite {
                 key: txn_key.clone(),
                 value: b"new_v1".to_vec(),
                 prev_value: true,
+                expire_at: None,
             })),
         }];
 
@@ -521,7 +530,7 @@ impl KVApiTestSuite {
         let unmatch_keys = vec!["teskey4".to_string()];
 
         for key in [match_keys.clone(), unmatch_keys.clone()].concat().iter() {
-            kv.upsert_kv(UpsertKVReq::update(key, b"v1")).await?;
+            kv.upsert_kv(UpsertKVReq::update(key, b"v1", None)).await?;
 
             let current = kv.get_kv(key).await?;
             assert!(current.is_some());
@@ -625,7 +634,7 @@ impl KVApiTestSuite {
             let val1 = b"v1".to_vec();
 
             // first insert k1 value
-            kv.upsert_kv(UpsertKVReq::update(k1, &val1)).await?;
+            kv.upsert_kv(UpsertKVReq::update(k1, &val1, None)).await?;
 
             // transaction by k1 condition
             let txn_key = k1.to_string();
@@ -640,6 +649,7 @@ impl KVApiTestSuite {
                     key: txn_key.clone(),
                     value: b"new_v1".to_vec(),
                     prev_value: true,
+                    expire_at: None,
                 })),
             }];
 
@@ -667,7 +677,7 @@ impl KVApiTestSuite {
             let k1 = "txn_2_K1";
             let k2 = "txn_2_K2";
 
-            kv.upsert_kv(UpsertKVReq::update(k1, b"v1")).await?;
+            kv.upsert_kv(UpsertKVReq::update(k1, b"v1", None)).await?;
 
             // transaction by k1 and k2 condition
             let txn_key1 = k1.to_string();
@@ -691,6 +701,7 @@ impl KVApiTestSuite {
                     key: txn_key1.clone(),
                     value: b"new_v1".to_vec(),
                     prev_value: true,
+                    expire_at: None,
                 })),
             }];
 
@@ -718,8 +729,8 @@ impl KVApiTestSuite {
             let val2 = b"v1".to_vec();
 
             // first insert k1 and k2 value
-            kv.upsert_kv(UpsertKVReq::update(k1, &val1)).await?;
-            kv.upsert_kv(UpsertKVReq::update(k2, &val2)).await?;
+            kv.upsert_kv(UpsertKVReq::update(k1, &val1, None)).await?;
+            kv.upsert_kv(UpsertKVReq::update(k2, &val2, None)).await?;
 
             // transaction by k1 and k2 condition
             let txn_key1 = k1.to_string();
@@ -745,6 +756,7 @@ impl KVApiTestSuite {
                         key: txn_key1.clone(),
                         value: val1_new.to_vec(),
                         prev_value: true,
+                        expire_at: None,
                     })),
                 },
                 // change k2
@@ -753,6 +765,7 @@ impl KVApiTestSuite {
                         key: txn_key2.clone(),
                         value: b"new_v2".to_vec(),
                         prev_value: true,
+                        expire_at: None,
                     })),
                 },
                 // get k1
@@ -834,7 +847,7 @@ impl KVApiTestSuite {
             let val1_new = b"v1_new".to_vec();
 
             // first insert k1 value
-            kv.upsert_kv(UpsertKVReq::update(k1, &val1)).await?;
+            kv.upsert_kv(UpsertKVReq::update(k1, &val1, None)).await?;
 
             // transaction by k1 condition
             let txn_key1 = k1.to_string();
@@ -852,6 +865,7 @@ impl KVApiTestSuite {
                         key: txn_key1.clone(),
                         value: val1_new.to_vec(),
                         prev_value: true,
+                        expire_at: None,
                     })),
                 },
                 // get k1
@@ -904,19 +918,19 @@ impl KVApiTestSuite {
     ) -> anyhow::Result<()> {
         let mut values = vec![];
         {
-            kv1.upsert_kv(UpsertKVReq::update("t", b"t")).await?;
+            kv1.upsert_kv(UpsertKVReq::update("t", b"t", None)).await?;
 
             for i in 0..9 {
                 let key = format!("__users/{}", i);
                 let val = format!("val_{}", i);
                 values.push(val.clone());
                 info!("--- Start upsert-kv: {}", key);
-                kv1.upsert_kv(UpsertKVReq::update(&key, val.as_bytes()))
+                kv1.upsert_kv(UpsertKVReq::update(&key, val.as_bytes(), None))
                     .await?;
                 info!("--- Done upsert-kv: {}", key);
             }
 
-            kv1.upsert_kv(UpsertKVReq::update("v", b"v")).await?;
+            kv1.upsert_kv(UpsertKVReq::update("v", b"v", None)).await?;
         }
 
         info!("--- test get on other node");

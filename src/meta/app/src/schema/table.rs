@@ -616,3 +616,38 @@ pub struct CountTablesReply {
 pub struct TableIdToName {
     pub table_id: u64,
 }
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
+pub struct TableStageFileNameIdent {
+    pub tenant: String,
+    pub db_name: String,
+    pub table_name: String,
+    pub file: String,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
+pub struct TableStageFileInfo {
+    pub md5: Option<String>,
+    pub last_modified: DateTime<Utc>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct GetTableStageFileReq {
+    pub table: TableNameIdent,
+    pub files: Vec<String>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct GetTableStageFileReply {
+    pub file_info: BTreeMap<String, TableStageFileInfo>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct UpsertTableStageFileReq {
+    pub table: TableNameIdent,
+    pub file_info: BTreeMap<String, TableStageFileInfo>,
+    pub expire_at: Option<u64>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct UpsertTableStageFileReply {}

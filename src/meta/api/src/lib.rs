@@ -65,6 +65,7 @@ pub use kv_api_utils::table_has_to_exist;
 pub use kv_api_utils::txn_cond_seq;
 pub use kv_api_utils::txn_op_del;
 pub use kv_api_utils::txn_op_put;
+pub use kv_api_utils::txn_op_put_with_expire;
 pub use kv_api_utils::TXN_MAX_RETRY_TIMES;
 pub use schema_api::SchemaApi;
 pub(crate) use schema_api_impl::get_db_or_err;

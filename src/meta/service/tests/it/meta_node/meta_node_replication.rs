@@ -73,7 +73,7 @@ async fn test_meta_node_snapshot_replication() -> anyhow::Result<()> {
         mn.write(LogEntry {
             txid: None,
             time_ms: None,
-            cmd: Cmd::UpsertKV(UpsertKV::update(&key, b"v")),
+            cmd: Cmd::UpsertKV(UpsertKV::update(&key, b"v", None)),
         })
         .await?;
     }

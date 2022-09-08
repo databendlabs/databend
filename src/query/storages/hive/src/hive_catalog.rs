@@ -35,6 +35,8 @@ use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::DropDatabaseReq;
 use common_meta_app::schema::DropTableReply;
 use common_meta_app::schema::DropTableReq;
+use common_meta_app::schema::GetTableStageFileReply;
+use common_meta_app::schema::GetTableStageFileReq;
 use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::RenameTableReply;
@@ -50,6 +52,8 @@ use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
+use common_meta_app::schema::UpsertTableStageFileReply;
+use common_meta_app::schema::UpsertTableStageFileReq;
 use common_meta_types::*;
 use thrift::protocol::*;
 use thrift::transport::*;
@@ -333,6 +337,20 @@ impl Catalog for HiveCatalog {
     }
 
     async fn count_tables(&self, _req: CountTablesReq) -> Result<CountTablesReply> {
+        unimplemented!()
+    }
+
+    async fn get_table_stage_file_info(
+        &self,
+        _req: GetTableStageFileReq,
+    ) -> Result<GetTableStageFileReply> {
+        unimplemented!()
+    }
+
+    async fn upsert_table_stage_file_info(
+        &self,
+        _req: UpsertTableStageFileReq,
+    ) -> Result<UpsertTableStageFileReply> {
         unimplemented!()
     }
 

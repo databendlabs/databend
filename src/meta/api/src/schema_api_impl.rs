@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::sync::Arc;
 
@@ -39,6 +40,8 @@ use common_meta_app::schema::DropTableReply;
 use common_meta_app::schema::DropTableReq;
 use common_meta_app::schema::GetDatabaseReq;
 use common_meta_app::schema::GetTableReq;
+use common_meta_app::schema::GetTableStageFileReply;
+use common_meta_app::schema::GetTableStageFileReq;
 use common_meta_app::schema::ListDatabaseReq;
 use common_meta_app::schema::ListTableReq;
 use common_meta_app::schema::RenameDatabaseReply;
@@ -53,6 +56,8 @@ use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TableNameIdent;
+use common_meta_app::schema::TableStageFileInfo;
+use common_meta_app::schema::TableStageFileNameIdent;
 use common_meta_app::schema::UndropDatabaseReply;
 use common_meta_app::schema::UndropDatabaseReq;
 use common_meta_app::schema::UndropTableReply;
@@ -61,6 +66,8 @@ use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
+use common_meta_app::schema::UpsertTableStageFileReply;
+use common_meta_app::schema::UpsertTableStageFileReq;
 use common_meta_app::share::ShareGrantObjectPrivilege;
 use common_meta_app::share::ShareId;
 use common_meta_app::share::ShareNameIdent;
@@ -115,6 +122,7 @@ use crate::table_has_to_exist;
 use crate::txn_cond_seq;
 use crate::txn_op_del;
 use crate::txn_op_put;
+use crate::txn_op_put_with_expire;
 use crate::IdGenerator;
 use crate::KVApi;
 use crate::KVApiKey;
@@ -1716,6 +1724,182 @@ impl<KV: KVApi> SchemaApi for KV {
             TableIdent::new(table_id, tb_meta_seq),
             Arc::new(table_meta.unwrap()),
         ))
+    }
+
+    async fn get_table_stage_file_info(
+        &self,
+        req: GetTableStageFileReq,
+    ) -> Result<GetTableStageFileReply, MetaError> {
+        debug!(req = debug(&req), "SchemaApi: {}", func_name!());
+
+        let tenant_dbname_tbname = &req.table;
+        let tenant_dbname = tenant_dbname_tbname.db_name_ident();
+
+        // Get db by name to ensure presence
+
+        let (db_id_seq, db_id) = get_u64_value(self, &tenant_dbname).await?;
+        debug!(db_id_seq, db_id, ?tenant_dbname_tbname, "get database");
+
+        db_has_to_exist(
+            db_id_seq,
+            &tenant_dbname,
+            format!("get_table: {}", tenant_dbname_tbname),
+        )?;
+
+        // Get table by tenant,db_id, table_name to assert presence.
+
+        let dbid_tbname = DBIdTableName {
+            db_id,
+            table_name: tenant_dbname_tbname.table_name.clone(),
+        };
+
+        let (tb_id_seq, table_id) = get_u64_value(self, &dbid_tbname).await?;
+        table_has_to_exist(tb_id_seq, tenant_dbname_tbname, "get_table")?;
+
+        let tbid = TableId { table_id };
+
+        let (tb_meta_seq, tb_meta): (_, Option<TableMeta>) = get_struct_value(self, &tbid).await?;
+
+        table_has_to_exist(
+            tb_meta_seq,
+            tenant_dbname_tbname,
+            format!("get_table meta by: {}", tbid),
+        )?;
+
+        debug!(
+            ident = display(&tbid),
+            name = display(&tenant_dbname_tbname),
+            table_meta = debug(&tb_meta),
+            "get_table_stage_file_info"
+        );
+
+        let mut file_info = BTreeMap::new();
+
+        for file in req.files {
+            let key = TableStageFileNameIdent {
+                tenant: tenant_dbname_tbname.tenant.clone(),
+                db_name: tenant_dbname_tbname.db_name.clone(),
+                table_name: tenant_dbname_tbname.table_name.clone(),
+                file: file.clone(),
+            };
+
+            let (_file_seq, file_stage_info): (_, Option<TableStageFileInfo>) =
+                get_struct_value(self, &key).await?;
+
+            if let Some(file_stage_info) = file_stage_info {
+                file_info.insert(file, file_stage_info);
+            }
+        }
+
+        Ok(GetTableStageFileReply { file_info })
+    }
+
+    async fn upsert_table_stage_file_info(
+        &self,
+        req: UpsertTableStageFileReq,
+    ) -> Result<UpsertTableStageFileReply, MetaError> {
+        debug!(req = debug(&req), "SchemaApi: {}", func_name!());
+
+        let tenant_dbname_tbname = &req.table;
+        let tenant_dbname = tenant_dbname_tbname.db_name_ident();
+
+        let mut retry = 0;
+
+        while retry < TXN_MAX_RETRY_TIMES {
+            retry += 1;
+            // Get db by name to ensure presence
+
+            let (db_id_seq, db_id) = get_u64_value(self, &tenant_dbname).await?;
+            debug!(db_id_seq, db_id, ?tenant_dbname_tbname, "get database");
+
+            db_has_to_exist(
+                db_id_seq,
+                &tenant_dbname,
+                format!("get_table: {}", tenant_dbname_tbname),
+            )?;
+
+            // Get table by tenant,db_id, table_name to assert presence.
+
+            let dbid_tbname = DBIdTableName {
+                db_id,
+                table_name: tenant_dbname_tbname.table_name.clone(),
+            };
+
+            let (tb_id_seq, table_id) = get_u64_value(self, &dbid_tbname).await?;
+            table_has_to_exist(tb_id_seq, tenant_dbname_tbname, "get_table")?;
+
+            let tbid = TableId { table_id };
+
+            let (tb_meta_seq, tb_meta): (_, Option<TableMeta>) =
+                get_struct_value(self, &tbid).await?;
+
+            table_has_to_exist(
+                tb_meta_seq,
+                tenant_dbname_tbname,
+                format!("get_table meta by: {}", tbid),
+            )?;
+
+            debug!(
+                ident = display(&tbid),
+                name = display(&tenant_dbname_tbname),
+                table_meta = debug(&tb_meta),
+                "upsert_table_stage_file_info"
+            );
+
+            let mut condition = vec![
+                txn_cond_seq(&tenant_dbname, Eq, db_id_seq),
+                txn_cond_seq(&dbid_tbname, Eq, tb_id_seq),
+                txn_cond_seq(&tbid, Eq, tb_meta_seq),
+            ];
+            let mut if_then = vec![];
+            for (file, file_info) in req.file_info.iter() {
+                let key = TableStageFileNameIdent {
+                    tenant: tenant_dbname_tbname.tenant.clone(),
+                    db_name: tenant_dbname_tbname.db_name.clone(),
+                    table_name: tenant_dbname_tbname.table_name.clone(),
+                    file: file.to_owned(),
+                };
+                let (file_seq, _): (_, Option<TableStageFileInfo>) =
+                    get_struct_value(self, &key).await?;
+
+                condition.push(txn_cond_seq(&key, Eq, file_seq));
+                match &req.expire_at {
+                    Some(expire_at) => {
+                        if_then.push(txn_op_put_with_expire(
+                            &key,
+                            serialize_struct(file_info)?,
+                            *expire_at,
+                        ));
+                    }
+                    None => {
+                        if_then.push(txn_op_put(&key, serialize_struct(file_info)?));
+                    }
+                }
+            }
+
+            let txn_req = TxnRequest {
+                condition,
+                if_then,
+                else_then: vec![],
+            };
+
+            let (succ, _responses) = send_txn(self, txn_req).await?;
+
+            debug!(
+                ident = display(&tbid),
+                name = display(&tenant_dbname_tbname),
+                succ = display(succ),
+                "upsert_table_stage_file_info"
+            );
+
+            if succ {
+                return Ok(UpsertTableStageFileReply {});
+            }
+        }
+
+        Err(MetaError::AppError(AppError::TxnRetryMaxTimes(
+            TxnRetryMaxTimes::new("upsert_table_stage_file_info", TXN_MAX_RETRY_TIMES),
+        )))
     }
 
     #[tracing::instrument(level = "debug", ret, err, skip_all)]

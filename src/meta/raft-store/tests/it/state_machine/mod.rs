@@ -406,7 +406,12 @@ async fn test_state_machine_apply_non_dup_generic_kv_delete() -> anyhow::Result<
         // prepare an record
         sm.sm_tree.txn(true, |t| {
             Ok(sm
-                .apply_cmd(&Cmd::UpsertKV(UpsertKV::update("foo", b"x")), &t, None, 0)
+                .apply_cmd(
+                    &Cmd::UpsertKV(UpsertKV::update("foo", b"x", None)),
+                    &t,
+                    None,
+                    0,
+                )
                 .unwrap())
         })?;
 

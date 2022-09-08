@@ -423,7 +423,7 @@ async fn test_meta_node_restart_single_node() -> anyhow::Result<()> {
             .write(LogEntry {
                 txid: None,
                 time_ms: None,
-                cmd: Cmd::UpsertKV(UpsertKV::update("foo", b"1")),
+                cmd: Cmd::UpsertKV(UpsertKV::update("foo", b"1", None)),
             })
             .await?;
         log_index += 1;
@@ -521,7 +521,7 @@ async fn assert_upsert_kv_synced(meta_nodes: Vec<Arc<MetaNode>>, key: &str) -> a
             .write(LogEntry {
                 txid: None,
                 time_ms: None,
-                cmd: Cmd::UpsertKV(UpsertKV::update(key, key.as_bytes())),
+                cmd: Cmd::UpsertKV(UpsertKV::update(key, key.as_bytes(), None)),
             })
             .await?;
     }

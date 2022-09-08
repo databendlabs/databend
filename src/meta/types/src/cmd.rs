@@ -110,21 +110,25 @@ impl UpsertKV {
         }
     }
 
-    pub fn insert(key: impl ToString, value: &[u8]) -> Self {
+    pub fn insert(key: impl ToString, value: &[u8], expire_at: Option<u64>) -> Self {
         Self {
             key: key.to_string(),
             seq: MatchSeq::Exact(0),
             value: Operation::Update(value.to_vec()),
-            value_meta: None,
+            value_meta: expire_at.map(|expire_at| KVMeta {
+                expire_at: Some(expire_at),
+            }),
         }
     }
 
-    pub fn update(key: impl ToString, value: &[u8]) -> Self {
+    pub fn update(key: impl ToString, value: &[u8], expire_at: Option<u64>) -> Self {
         Self {
             key: key.to_string(),
             seq: MatchSeq::Any,
             value: Operation::Update(value.to_vec()),
-            value_meta: None,
+            value_meta: expire_at.map(|expire_at| KVMeta {
+                expire_at: Some(expire_at),
+            }),
         }
     }
 

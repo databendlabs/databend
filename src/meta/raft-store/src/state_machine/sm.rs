@@ -536,7 +536,7 @@ impl StateMachine {
 
         let (prev, result) = self.txn_sub_tree_upsert(
             &sub_tree,
-            &UpsertKV::update(&put.key, &put.value),
+            &UpsertKV::update(&put.key, &put.value, put.expire_at),
             log_time_ms,
         )?;
 

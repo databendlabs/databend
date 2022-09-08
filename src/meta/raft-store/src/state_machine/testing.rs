@@ -37,7 +37,7 @@ pub fn snapshot_logs() -> (Vec<Entry<LogEntry>>, Vec<String>) {
             payload: EntryPayload::Normal(LogEntry {
                 txid: None,
                 time_ms: None,
-                cmd: Cmd::UpsertKV(UpsertKV::update("a", b"A")),
+                cmd: Cmd::UpsertKV(UpsertKV::update("a", b"A", None)),
             }),
         },
         Entry {

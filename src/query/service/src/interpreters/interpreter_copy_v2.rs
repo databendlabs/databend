@@ -11,13 +11,20 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
+use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
+use common_datavalues::chrono::Utc;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_app::schema::GetTableStageFileReq;
+use common_meta_app::schema::TableNameIdent;
+use common_meta_app::schema::TableStageFileInfo;
+use common_meta_app::schema::UpsertTableStageFileReq;
 use common_meta_types::UserStageInfo;
 use common_planners::ReadDataSourcePlan;
 use common_planners::SourceInfo;
@@ -30,6 +37,7 @@ use tracing::info;
 
 use super::append2table;
 use super::commit2table;
+use crate::interpreters::interpreter_common::list_files;
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreterV2;
 use crate::pipelines::executor::ExecutorSettings;
@@ -51,6 +59,49 @@ impl CopyInterpreterV2 {
     /// Create a CopyInterpreterV2 with context and [`CopyPlanV2`].
     pub fn try_create(ctx: Arc<QueryContext>, plan: CopyPlanV2) -> Result<Self> {
         Ok(CopyInterpreterV2 { ctx, plan })
+    }
+
+    async fn filter_duplicate_files(
+        &self,
+        table_info: &StageTableInfo,
+        catalog_name: &str,
+        database_name: &String,
+        table_name: &String,
+        files: &[String],
+    ) -> Result<BTreeMap<String, TableStageFileInfo>> {
+        let req = GetTableStageFileReq {
+            table: TableNameIdent {
+                tenant: self.ctx.get_tenant(),
+                db_name: database_name.to_owned(),
+                table_name: table_name.to_owned(),
+            },
+            files: files.to_owned(),
+        };
+        let catalog = self.ctx.get_catalog(catalog_name)?;
+        let resp = catalog.get_table_stage_file_info(req).await?;
+        let mut file_map = BTreeMap::new();
+
+        for file in files.iter() {
+            let stage_file = list_files(&self.ctx, &table_info.stage_info, file, "").await?;
+            if stage_file.is_empty() {
+                continue;
+            }
+
+            let stage_file = &stage_file[0];
+
+            if let Some(file_info) = resp.file_info.get(file) {
+                // only if md5 match, no need to copy the file again.
+                if file_info.md5 == stage_file.md5 {
+                    continue;
+                }
+            }
+
+            file_map.insert(file.clone(), TableStageFileInfo {
+                md5: stage_file.md5.clone(),
+                last_modified: stage_file.last_modified,
+            });
+        }
+        Ok(file_map)
     }
 
     /// List the files.
@@ -270,9 +321,43 @@ impl Interpreter for CopyInterpreterV2 {
 
                 info!("matched files: {:?}, pattern: {}", &files, pattern);
 
-                let write_results = self
-                    .copy_files_to_table(catalog_name, database_name, table_name, from, files)
-                    .await?;
+                let (write_results, stage_files) = match &from.source_info {
+                    SourceInfo::StageSource(table_info) => {
+                        let stage_files = self
+                            .filter_duplicate_files(
+                                table_info,
+                                catalog_name,
+                                database_name,
+                                table_name,
+                                &files,
+                            )
+                            .await?;
+
+                        let write_results = self
+                            .copy_files_to_table(
+                                catalog_name,
+                                database_name,
+                                table_name,
+                                from,
+                                stage_files.keys().cloned().collect(),
+                            )
+                            .await?;
+
+                        (write_results, Some(stage_files))
+                    }
+                    _other => {
+                        let write_results = self
+                            .copy_files_to_table(
+                                catalog_name,
+                                database_name,
+                                table_name,
+                                from,
+                                files,
+                            )
+                            .await?;
+                        (write_results, None)
+                    }
+                };
 
                 let table = self
                     .ctx
@@ -284,6 +369,20 @@ impl Interpreter for CopyInterpreterV2 {
                     .commit_insertion(self.ctx.clone(), catalog_name, write_results, false)
                     .await?;
 
+                // save table stage files info.
+                if let Some(stage_files) = stage_files {
+                    let req = UpsertTableStageFileReq {
+                        table: TableNameIdent {
+                            tenant: self.ctx.get_tenant(),
+                            db_name: database_name.to_owned(),
+                            table_name: table_name.to_owned(),
+                        },
+                        file_info: stage_files.clone(),
+                        expire_at: Some((Utc::now().timestamp() + 64 * 86400) as u64),
+                    };
+                    let catalog = self.ctx.get_catalog(catalog_name)?;
+                    let _ = catalog.upsert_table_stage_file_info(req).await?;
+                }
                 Ok(Box::pin(DataBlockStream::create(
                     // TODO(xuanwo): Is this correct?
                     Arc::new(DataSchema::new(vec![])),

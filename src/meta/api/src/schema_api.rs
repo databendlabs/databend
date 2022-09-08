@@ -27,6 +27,8 @@ use common_meta_app::schema::DropTableReply;
 use common_meta_app::schema::DropTableReq;
 use common_meta_app::schema::GetDatabaseReq;
 use common_meta_app::schema::GetTableReq;
+use common_meta_app::schema::GetTableStageFileReply;
+use common_meta_app::schema::GetTableStageFileReq;
 use common_meta_app::schema::ListDatabaseReq;
 use common_meta_app::schema::ListTableReq;
 use common_meta_app::schema::RenameDatabaseReply;
@@ -44,6 +46,8 @@ use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
+use common_meta_app::schema::UpsertTableStageFileReply;
+use common_meta_app::schema::UpsertTableStageFileReq;
 use common_meta_types::GCDroppedDataReply;
 use common_meta_types::GCDroppedDataReq;
 use common_meta_types::MetaError;
@@ -103,6 +107,16 @@ pub trait SchemaApi: Send + Sync {
         &self,
         table_id: MetaId,
     ) -> Result<(TableIdent, Arc<TableMeta>), MetaError>;
+
+    async fn get_table_stage_file_info(
+        &self,
+        req: GetTableStageFileReq,
+    ) -> Result<GetTableStageFileReply, MetaError>;
+
+    async fn upsert_table_stage_file_info(
+        &self,
+        req: UpsertTableStageFileReq,
+    ) -> Result<UpsertTableStageFileReply, MetaError>;
 
     async fn upsert_table_option(
         &self,
