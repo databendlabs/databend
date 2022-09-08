@@ -30,10 +30,6 @@ use pretty_assertions::assert_eq;
 
 use crate::common::print_err;
 
-fn s(ss: impl ToString) -> String {
-    ss.to_string()
-}
-
 fn test_user_info() -> UserInfo {
     let option = mt::UserOption::default()
         .with_set_flag(mt::UserOptionFlag::TenantSetting)
@@ -173,7 +169,11 @@ fn test_user_incompatible() -> anyhow::Result<()> {
         let res = mt::UserInfo::from_pb(p);
         assert_eq!(
             Incompatible {
-                reason: s("executable ver=6 is smaller than the message min compatible ver: 7")
+                reason: format!(
+                    "executable ver={} is smaller than the message min compatible ver: {}",
+                    VER,
+                    VER + 1
+                )
             },
             res.unwrap_err()
         );
@@ -188,7 +188,11 @@ fn test_user_incompatible() -> anyhow::Result<()> {
         let res = mt::UserStageInfo::from_pb(p);
         assert_eq!(
             Incompatible {
-                reason: s("executable ver=6 is smaller than the message min compatible ver: 7")
+                reason: format!(
+                    "executable ver={} is smaller than the message min compatible ver: {}",
+                    VER,
+                    VER + 1
+                )
             },
             res.unwrap_err()
         )
@@ -203,7 +207,11 @@ fn test_user_incompatible() -> anyhow::Result<()> {
         let res = mt::UserStageInfo::from_pb(p);
         assert_eq!(
             Incompatible {
-                reason: s("executable ver=6 is smaller than the message min compatible ver: 7")
+                reason: format!(
+                    "executable ver={} is smaller than the message min compatible ver: {}",
+                    VER,
+                    VER + 1
+                )
             },
             res.unwrap_err()
         );
@@ -218,7 +226,11 @@ fn test_user_incompatible() -> anyhow::Result<()> {
         let res = mt::UserStageInfo::from_pb(p);
         assert_eq!(
             Incompatible {
-                reason: s("executable ver=6 is smaller than the message min compatible ver: 7")
+                reason: format!(
+                    "executable ver={} is smaller than the message min compatible ver: {}",
+                    VER,
+                    VER + 1
+                )
             },
             res.unwrap_err()
         );

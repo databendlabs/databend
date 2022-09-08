@@ -28,6 +28,8 @@ use common_proto_conv::VER;
 use common_protos::pb;
 use maplit::btreemap;
 
+use crate::common::print_err;
+
 fn s(ss: impl ToString) -> String {
     ss.to_string()
 }
@@ -240,7 +242,11 @@ fn test_incompatible() -> anyhow::Result<()> {
     let res = mt::DatabaseMeta::from_pb(p);
     assert_eq!(
         Incompatible {
-            reason: s("executable ver=6 is smaller than the message min compatible ver: 7")
+            reason: format!(
+                "executable ver={} is smaller than the message min compatible ver: {}",
+                VER,
+                VER + 1
+            )
         },
         res.unwrap_err()
     );
@@ -487,9 +493,4 @@ fn test_load_old() -> anyhow::Result<()> {
     }
 
     Ok(())
-}
-
-fn print_err<T: Debug>(e: T) -> T {
-    eprintln!("Error: {:?}", e);
-    e
 }
