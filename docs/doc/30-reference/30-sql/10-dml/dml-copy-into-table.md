@@ -97,8 +97,8 @@ A regular expression pattern string, enclosed in single quotes, specifying the f
 
 ```
 formatTypeOptions ::=
-  RECORD_DELIMITER = '<character>' 
-  FIELD_DELIMITER = '<character>' 
+  RECORD_DELIMITER = '<character>'
+  FIELD_DELIMITER = '<character>'
   SKIP_HEADER = <integer>
   COMPRESSION = AUTO | GZIP | BZ2 | BROTLI | ZSTD | DEFLATE | RAW_DEFLATE | NONE
 ```
@@ -129,7 +129,7 @@ Default: `NONE`
 
 Values:
 
-| Values        | Notes                                                           | 
+| Values        | Notes                                                           |
 |---------------|-----------------------------------------------------------------|
 | `AUTO`        | Auto detect compression via file extensions                     |
 | `GZIP`        |                                                                 |
@@ -145,11 +145,13 @@ Values:
 ```
 copyOptions ::=
   [ SIZE_LIMIT = <num> ]
+  [ PURGE = <bool> ]
 ```
 
 | Parameters  | Description | Required |
 | ----------- | ----------- | --- |
 | `SIZE_LIMIT = <num>` | Number (> 0) that specifies the maximum rows of data to be loaded for a given COPY statement. Default `0` | Optional |
+| `PURGE = <bool>` | True that specifies the command will purge the files in the stage if they are loaded successfully into table. Default `false` | Optional |
 
 ## Examples
 

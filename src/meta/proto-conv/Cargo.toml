@@ -28,3 +28,4 @@ serde_json = "1.0.81"
 [dev-dependencies]
 anyhow = "1.0.58"
 maplit = "1.0.2"
+pretty_assertions = "1.2.1"

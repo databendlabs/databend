@@ -15,13 +15,13 @@
 use std::error::Error;
 use std::fmt::Display;
 
-use anyerror::AnyError;
 use common_exception::ErrorCode;
 use prost::EncodeError;
 use tonic::Code;
 
 use crate::meta_network_errors::InvalidArgument;
 use crate::ConnectionError;
+use crate::MetaBytesError;
 use crate::MetaError;
 use crate::MetaNetworkError;
 use crate::MetaResult;
@@ -45,10 +45,7 @@ impl From<MetaError> for ErrorCode {
             }
             MetaError::MetaStoreNotFound => ErrorCode::MetaServiceError("MetaStoreNotFound"),
             MetaError::MetaServiceError(err_str) => ErrorCode::MetaServiceError(err_str),
-            MetaError::SerdeError(ae) => {
-                ErrorCode::MetaServiceError(ae.to_string()).set_backtrace(ae.backtrace())
-            }
-            MetaError::EncodeError(ae) => {
+            MetaError::BytesError(ae) => {
                 ErrorCode::MetaServiceError(ae.to_string()).set_backtrace(ae.backtrace())
             }
             MetaError::Fatal(ae) => {
@@ -129,12 +126,12 @@ impl From<tonic::Status> for MetaError {
 
 impl From<serde_json::Error> for MetaError {
     fn from(error: serde_json::Error) -> MetaError {
-        MetaError::SerdeError(AnyError::new(&error))
+        MetaError::BytesError(MetaBytesError::new(&error))
     }
 }
 
 impl From<EncodeError> for MetaError {
     fn from(e: EncodeError) -> MetaError {
-        MetaError::EncodeError(AnyError::new(&e))
+        MetaError::BytesError(MetaBytesError::new(&e))
     }
 }

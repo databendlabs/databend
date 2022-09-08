@@ -493,6 +493,7 @@ impl<'a> Binder {
             if stmt.size_limit != 0 {
                 stage.copy_options.size_limit = stmt.size_limit;
             }
+            stage.copy_options.purge = stmt.purge;
         }
 
         Ok(())

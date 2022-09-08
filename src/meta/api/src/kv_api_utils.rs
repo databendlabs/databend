@@ -14,13 +14,13 @@
 
 use std::fmt::Display;
 
-use anyerror::AnyError;
 use common_meta_app::schema::DatabaseId;
 use common_meta_app::schema::DatabaseIdToName;
 use common_meta_app::schema::DatabaseMeta;
 use common_meta_app::schema::DatabaseNameIdent;
 use common_meta_app::schema::TableNameIdent;
 use common_meta_app::share::*;
+use common_meta_types::anyerror::AnyError;
 use common_meta_types::app_error::AppError;
 use common_meta_types::app_error::ShareHasNoGrantedDatabase;
 use common_meta_types::app_error::UnknownDatabase;
@@ -32,6 +32,7 @@ use common_meta_types::txn_condition::Target;
 use common_meta_types::txn_op::Request;
 use common_meta_types::ConditionResult;
 use common_meta_types::MatchSeq;
+use common_meta_types::MetaBytesError;
 use common_meta_types::MetaError;
 use common_meta_types::Operation;
 use common_meta_types::TxnCondition;
@@ -107,7 +108,7 @@ pub async fn list_keys<K: KVApiKey>(
     let mut structured_keys = Vec::with_capacity(n);
 
     for (str_key, _seq_id) in res.iter() {
-        let struct_key = K::from_key(str_key).map_err(meta_encode_err)?;
+        let struct_key = K::from_key(str_key).map_err(to_bytes_err)?;
         structured_keys.push(struct_key);
     }
 
@@ -133,24 +134,24 @@ pub async fn list_u64_value<K: KVApiKey>(
     let mut values = Vec::with_capacity(n);
 
     for (str_key, seqv) in res.iter() {
-        let id = *deserialize_u64(&seqv.data).map_err(meta_encode_err)?;
+        let id = *deserialize_u64(&seqv.data)?;
         values.push(id);
 
         // Parse key
-        let struct_key = K::from_key(str_key).map_err(meta_encode_err)?;
+        let struct_key = K::from_key(str_key).map_err(to_bytes_err)?;
         structured_keys.push(struct_key);
     }
 
     Ok((structured_keys, values))
 }
 
-pub fn serialize_u64(value: impl Into<Id>) -> Result<Vec<u8>, MetaError> {
-    let v = serde_json::to_vec(&*value.into()).map_err(meta_encode_err)?;
+pub fn serialize_u64(value: impl Into<Id>) -> Result<Vec<u8>, MetaBytesError> {
+    let v = serde_json::to_vec(&*value.into())?;
     Ok(v)
 }
 
-pub fn deserialize_u64(v: &[u8]) -> Result<Id, MetaError> {
-    let id = serde_json::from_slice(v).map_err(meta_encode_err)?;
+pub fn deserialize_u64(v: &[u8]) -> Result<Id, MetaBytesError> {
+    let id = serde_json::from_slice(v)?;
     Ok(Id::new(id))
 }
 
@@ -173,30 +174,30 @@ pub async fn fetch_id<T: KVApiKey>(kv_api: &impl KVApi, generator: T) -> Result<
     Ok(seq_v.seq)
 }
 
-pub fn serialize_struct<T>(value: &T) -> Result<Vec<u8>, MetaError>
+pub fn serialize_struct<T>(value: &T) -> Result<Vec<u8>, MetaBytesError>
 where
     T: FromToProto + 'static,
     T::PB: common_protos::prost::Message,
 {
-    let p = value.to_pb().map_err(meta_encode_err)?;
+    let p = value.to_pb().map_err(to_bytes_err)?;
     let mut buf = vec![];
-    common_protos::prost::Message::encode(&p, &mut buf).map_err(meta_encode_err)?;
+    common_protos::prost::Message::encode(&p, &mut buf)?;
     Ok(buf)
 }
 
-pub fn deserialize_struct<T>(buf: &[u8]) -> Result<T, MetaError>
+pub fn deserialize_struct<T>(buf: &[u8]) -> Result<T, MetaBytesError>
 where
     T: FromToProto,
     T::PB: common_protos::prost::Message + Default,
 {
-    let p: T::PB = common_protos::prost::Message::decode(buf).map_err(meta_encode_err)?;
-    let v: T = FromToProto::from_pb(p).map_err(meta_encode_err)?;
+    let p: T::PB = common_protos::prost::Message::decode(buf)?;
+    let v: T = FromToProto::from_pb(p).map_err(to_bytes_err)?;
 
     Ok(v)
 }
 
-pub fn meta_encode_err<E: std::error::Error + 'static>(e: E) -> MetaError {
-    MetaError::EncodeError(AnyError::new(&e))
+pub fn to_bytes_err<E: std::error::Error + 'static>(e: E) -> MetaBytesError {
+    MetaBytesError::new(&e)
 }
 
 pub async fn send_txn(
@@ -485,6 +486,8 @@ where
     Ok((false, None))
 }
 
+/// Get existing value by key. Panic if key is absent.
+/// This function is only used for testing.
 pub async fn get_kv_data<T>(
     kv_api: &(impl KVApi + ?Sized),
     key: &impl KVApiKey,
@@ -495,11 +498,12 @@ where
 {
     let res = kv_api.get_kv(&key.to_key()).await?;
     if let Some(res) = res {
-        return deserialize_struct(&res.data);
+        let s = deserialize_struct(&res.data)?;
+        return Ok(s);
     };
 
-    Err(MetaError::SerdeError(AnyError::error(format!(
-        "get_kv {:?} fail",
+    Err(MetaError::Fatal(AnyError::error(format!(
+        "failed to get {}",
         key.to_key()
     ))))
 }

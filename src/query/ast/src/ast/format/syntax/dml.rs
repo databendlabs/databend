@@ -163,6 +163,11 @@ pub(crate) fn pretty_copy(copy_stmt: CopyStmt) -> RcDoc {
         } else {
             RcDoc::nil()
         })
+        .append(
+            RcDoc::line()
+                .append(RcDoc::text("PURGE = "))
+                .append(RcDoc::text(format!("{}", copy_stmt.purge))),
+        )
 }
 
 fn pretty_copy_unit(copy_unit: CopyUnit) -> RcDoc {

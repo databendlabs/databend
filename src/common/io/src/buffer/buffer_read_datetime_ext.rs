@@ -97,15 +97,27 @@ where R: BufferRead
             loop {
                 buf.clear();
                 let size = self.keep_read(&mut buf, |f| (b'0'..=b'9').contains(&f))?;
-                match get_time(&mut buf, size) {
-                    Ok(time) => times.push(time),
-                    Err(e) => return Err(e),
-                }
-                if times.len() == 3 {
+                if size == 0 {
                     break;
+                } else {
+                    let time = get_time(&mut buf, size)?;
+                    times.push(time);
+                    if times.len() == 3 {
+                        break;
+                    }
+                    self.ignore_byte(b':')?;
                 }
-                self.must_ignore_byte(b':')?;
             }
+            // Time part is HH:MM or HH or empty
+            // Examples: '2022-02-02T', '2022-02-02 ', '2022-02-02T02', '2022-02-02T3:', '2022-02-03T03:13', '2022-02-03T03:13:'
+            if times.len() < 3 {
+                times.resize(3, 0);
+                dt = tz
+                    .from_local_datetime(&d.and_hms(times[0], times[1], times[2]))
+                    .unwrap();
+                return less_1000(dt);
+            }
+
             dt = tz
                 .from_local_datetime(&d.and_hms(times[0], times[1], times[2]))
                 .unwrap();

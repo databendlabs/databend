@@ -784,6 +784,11 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         let size_limit_node = FormatTreeNode::new(size_limit_format_ctx);
         children.push(size_limit_node);
 
+        let purge_name = format!("Purge {}", copy.purge);
+        let purge_name_ctx = AstFormatContext::new(purge_name);
+        let purge_name_node = FormatTreeNode::new(purge_name_ctx);
+        children.push(purge_name_node);
+
         let name = "Copy".to_string();
         let format_ctx = AstFormatContext::with_children(name, children.len());
         let node = FormatTreeNode::with_children(format_ctx, children);
