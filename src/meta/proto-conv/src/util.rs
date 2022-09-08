@@ -14,7 +14,33 @@
 
 use crate::Incompatible;
 
-pub const VER: u64 = 5;
+/// Describes metadata changes.
+///
+/// This is a list of every `VER` and the corresponding change it introduces.
+///
+/// ## For developers
+///
+/// Every time fields are added/removed into/from data types in this crate:
+/// - Add a new line to this list to describe what changed.
+/// - Add a test case to ensure protobuf message serialized by this this version can be loaded,
+///   similar to: test_user_stage_fs_v6() in tests/it/user_stage.rs;
+///
+/// `VER` is the current metadata version and is automatically set to the last version.
+/// `MIN_COMPATIBLE_VER` is the oldest compatible version.
+const META_CHANGE_LOG: &[(u64, &str)] = &[
+    //
+    (1, "----------: Initial"),
+    (2, "2022-07-13: Add: share.proto"),
+    (3, "2022-07-29: Add: user.proto/UserOption::default_role"),
+    (4, "2022-08-22: Add: config.proto/GcsStorageConfig"),
+    (
+        5,
+        "2022-08-25: Add: ShareMeta::share_from_db_ids; DatabaseMeta::from_share",
+    ),
+    (6, "2022-09-08: Add: users.proto/CopyOptions::purge"),
+];
+
+pub const VER: u64 = META_CHANGE_LOG.last().unwrap().0;
 pub const MIN_COMPATIBLE_VER: u64 = 1;
 
 pub fn check_ver(msg_ver: u64, msg_min_compatible: u64) -> Result<(), Incompatible> {

@@ -1692,6 +1692,7 @@ dependencies = [
  "enumflags2",
  "maplit",
  "num",
+ "pretty_assertions",
  "serde_json",
  "thiserror",
 ]

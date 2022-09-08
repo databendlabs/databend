@@ -13,19 +13,22 @@
 // limitations under the License.
 
 use std::collections::HashSet;
-use std::fmt::Debug;
 
 use common_meta_types as mt;
 use common_meta_types::UserInfo;
 use common_meta_types::UserPrivilegeType;
 use common_proto_conv::FromToProto;
 use common_proto_conv::Incompatible;
+use common_proto_conv::VER;
 use common_protos::pb;
 use common_storage::StorageFsConfig;
 use common_storage::StorageGcsConfig;
 use common_storage::StorageParams;
 use common_storage::StorageS3Config;
 use enumflags2::make_bitflags;
+use pretty_assertions::assert_eq;
+
+use crate::common::print_err;
 
 fn s(ss: impl ToString) -> String {
     ss.to_string()
@@ -62,7 +65,7 @@ fn test_user_info() -> UserInfo {
     }
 }
 
-fn test_fs_stage_info() -> mt::UserStageInfo {
+pub(crate) fn test_fs_stage_info() -> mt::UserStageInfo {
     mt::UserStageInfo {
         stage_name: "fs://dir/to/files".to_string(),
         stage_type: mt::StageType::Internal,
@@ -81,14 +84,14 @@ fn test_fs_stage_info() -> mt::UserStageInfo {
         copy_options: mt::CopyOptions {
             on_error: mt::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
-            purge: false,
+            purge: true,
         },
         comment: "test".to_string(),
         ..Default::default()
     }
 }
 
-fn test_s3_stage_info() -> mt::UserStageInfo {
+pub(crate) fn test_s3_stage_info() -> mt::UserStageInfo {
     mt::UserStageInfo {
         stage_name: "s3://mybucket/data/files".to_string(),
         stage_type: mt::StageType::External,
@@ -112,7 +115,7 @@ fn test_s3_stage_info() -> mt::UserStageInfo {
         copy_options: mt::CopyOptions {
             on_error: mt::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
-            purge: false,
+            purge: true,
         },
         comment: "test".to_string(),
         ..Default::default()
@@ -120,7 +123,7 @@ fn test_s3_stage_info() -> mt::UserStageInfo {
 }
 
 // Version 4 added Google Cloud Storage as a stage backend, should be tested
-fn test_gcs_stage_info() -> mt::UserStageInfo {
+pub(crate) fn test_gcs_stage_info() -> mt::UserStageInfo {
     mt::UserStageInfo {
         stage_name: "gcs://my_bucket/data/files".to_string(),
         stage_type: mt::StageType::External,
@@ -142,7 +145,7 @@ fn test_gcs_stage_info() -> mt::UserStageInfo {
         copy_options: mt::CopyOptions {
             on_error: mt::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
-            purge: false,
+            purge: true,
         },
         comment: "test".to_string(),
         ..Default::default()
@@ -160,37 +163,17 @@ fn test_user_pb_from_to() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_user_stage_pb_from_to() -> anyhow::Result<()> {
-    let test_fs_stage_info = test_fs_stage_info();
-    let test_user_stage_info_pb = test_fs_stage_info.to_pb()?;
-    let got = mt::UserStageInfo::from_pb(test_user_stage_info_pb)?;
-    assert_eq!(got, test_fs_stage_info);
-
-    let test_s3_stage_info = test_s3_stage_info();
-    let test_user_stage_info_pb = test_s3_stage_info.to_pb()?;
-    let got = mt::UserStageInfo::from_pb(test_user_stage_info_pb)?;
-    assert_eq!(got, test_s3_stage_info);
-
-    let test_gcs_stage_info = test_gcs_stage_info();
-    let test_user_stage_info_pb = test_gcs_stage_info.to_pb()?;
-    let got = mt::UserStageInfo::from_pb(test_user_stage_info_pb)?;
-    assert_eq!(got, test_gcs_stage_info);
-
-    Ok(())
-}
-
-#[test]
 fn test_user_incompatible() -> anyhow::Result<()> {
     {
         let user_info = test_user_info();
         let mut p = user_info.to_pb()?;
-        p.ver = 6;
-        p.min_compatible = 6;
+        p.ver = VER + 1;
+        p.min_compatible = VER + 1;
 
         let res = mt::UserInfo::from_pb(p);
         assert_eq!(
             Incompatible {
-                reason: s("executable ver=5 is smaller than the message min compatible ver: 6")
+                reason: s("executable ver=6 is smaller than the message min compatible ver: 7")
             },
             res.unwrap_err()
         );
@@ -199,13 +182,13 @@ fn test_user_incompatible() -> anyhow::Result<()> {
     {
         let fs_stage_info = test_fs_stage_info();
         let mut p = fs_stage_info.to_pb()?;
-        p.ver = 6;
-        p.min_compatible = 6;
+        p.ver = VER + 1;
+        p.min_compatible = VER + 1;
 
         let res = mt::UserStageInfo::from_pb(p);
         assert_eq!(
             Incompatible {
-                reason: s("executable ver=5 is smaller than the message min compatible ver: 6")
+                reason: s("executable ver=6 is smaller than the message min compatible ver: 7")
             },
             res.unwrap_err()
         )
@@ -214,13 +197,13 @@ fn test_user_incompatible() -> anyhow::Result<()> {
     {
         let s3_stage_info = test_s3_stage_info();
         let mut p = s3_stage_info.to_pb()?;
-        p.ver = 6;
-        p.min_compatible = 6;
+        p.ver = VER + 1;
+        p.min_compatible = VER + 1;
 
         let res = mt::UserStageInfo::from_pb(p);
         assert_eq!(
             Incompatible {
-                reason: s("executable ver=5 is smaller than the message min compatible ver: 6")
+                reason: s("executable ver=6 is smaller than the message min compatible ver: 7")
             },
             res.unwrap_err()
         );
@@ -229,13 +212,13 @@ fn test_user_incompatible() -> anyhow::Result<()> {
     {
         let gcs_stage_info = test_gcs_stage_info();
         let mut p = gcs_stage_info.to_pb()?;
-        p.ver = 6;
-        p.min_compatible = 6;
+        p.ver = VER + 1;
+        p.min_compatible = VER + 1;
 
         let res = mt::UserStageInfo::from_pb(p);
         assert_eq!(
             Incompatible {
-                reason: s("executable ver=5 is smaller than the message min compatible ver: 6")
+                reason: s("executable ver=6 is smaller than the message min compatible ver: 7")
             },
             res.unwrap_err()
         );
@@ -310,6 +293,7 @@ fn test_load_old_user() -> anyhow::Result<()> {
             common_protos::prost::Message::decode(user_info_v4.as_slice()).map_err(print_err)?;
         let got = mt::UserInfo::from_pb(p).map_err(print_err)?;
         let want = test_user_info();
+
         assert_eq!(want, got);
     }
 
@@ -362,107 +346,5 @@ fn test_load_old_user() -> anyhow::Result<()> {
         assert!(got.option.flags().is_empty());
     }
 
-    // UserStage is loadable
-    {
-        // Stage service running on local filesystem
-        let fs_stage_info_v4: Vec<u8> = vec![
-            10, 17, 102, 115, 58, 47, 47, 100, 105, 114, 47, 116, 111, 47, 102, 105, 108, 101, 115,
-            26, 25, 10, 23, 18, 21, 10, 13, 47, 100, 105, 114, 47, 116, 111, 47, 102, 105, 108,
-            101, 115, 160, 6, 4, 168, 6, 1, 34, 20, 8, 1, 16, 128, 8, 26, 1, 124, 34, 2, 47, 47,
-            40, 2, 160, 6, 4, 168, 6, 1, 42, 8, 10, 3, 32, 154, 5, 16, 142, 8, 50, 4, 116, 101,
-            115, 116, 160, 6, 4, 168, 6, 1,
-        ];
-        let p: pb::UserStageInfo =
-            common_protos::prost::Message::decode(fs_stage_info_v4.as_slice())
-                .map_err(print_err)?;
-
-        let got = mt::UserStageInfo::from_pb(p).map_err(print_err)?;
-
-        let want = test_fs_stage_info();
-
-        assert_eq!(want, got);
-    }
-
-    {
-        // Stage service running on S3
-        let s3_stage_info_v4: Vec<u8> = vec![
-            10, 24, 115, 51, 58, 47, 47, 109, 121, 98, 117, 99, 107, 101, 116, 47, 100, 97, 116,
-            97, 47, 102, 105, 108, 101, 115, 16, 1, 26, 100, 10, 98, 10, 96, 18, 24, 104, 116, 116,
-            112, 115, 58, 47, 47, 115, 51, 46, 97, 109, 97, 122, 111, 110, 97, 119, 115, 46, 99,
-            111, 109, 26, 9, 109, 121, 95, 107, 101, 121, 95, 105, 100, 34, 13, 109, 121, 95, 115,
-            101, 99, 114, 101, 116, 95, 107, 101, 121, 42, 8, 109, 121, 98, 117, 99, 107, 101, 116,
-            50, 11, 47, 100, 97, 116, 97, 47, 102, 105, 108, 101, 115, 58, 13, 109, 121, 95, 109,
-            97, 115, 116, 101, 114, 95, 107, 101, 121, 160, 6, 4, 168, 6, 1, 34, 20, 8, 1, 16, 128,
-            8, 26, 1, 124, 34, 2, 47, 47, 40, 2, 160, 6, 4, 168, 6, 1, 42, 8, 10, 3, 32, 154, 5,
-            16, 142, 8, 50, 4, 116, 101, 115, 116, 160, 6, 4, 168, 6, 1,
-        ];
-
-        let p: pb::UserStageInfo =
-            common_protos::prost::Message::decode(s3_stage_info_v4.as_slice())
-                .map_err(print_err)?;
-
-        let got = mt::UserStageInfo::from_pb(p).map_err(print_err)?;
-
-        let want = test_s3_stage_info();
-
-        assert_eq!(want, got);
-    }
-
-    {
-        // Stage on Google Cloud Storage, supported on version >= 4
-        let gcs_stage_info_v4 = vec![
-            10, 26, 103, 99, 115, 58, 47, 47, 109, 121, 95, 98, 117, 99, 107, 101, 116, 47, 100,
-            97, 116, 97, 47, 102, 105, 108, 101, 115, 16, 1, 26, 81, 10, 79, 26, 77, 10, 30, 104,
-            116, 116, 112, 115, 58, 47, 47, 115, 116, 111, 114, 97, 103, 101, 46, 103, 111, 111,
-            103, 108, 101, 97, 112, 105, 115, 46, 99, 111, 109, 18, 9, 109, 121, 95, 98, 117, 99,
-            107, 101, 116, 26, 11, 47, 100, 97, 116, 97, 47, 102, 105, 108, 101, 115, 34, 13, 109,
-            121, 95, 99, 114, 101, 100, 101, 110, 116, 105, 97, 108, 160, 6, 4, 168, 6, 1, 34, 20,
-            8, 1, 16, 128, 8, 26, 1, 124, 34, 2, 47, 47, 40, 2, 160, 6, 4, 168, 6, 1, 42, 8, 10, 3,
-            32, 154, 5, 16, 142, 8, 50, 4, 116, 101, 115, 116, 160, 6, 4, 168, 6, 1,
-        ];
-
-        let p: pb::UserStageInfo =
-            common_protos::prost::Message::decode(gcs_stage_info_v4.as_slice())
-                .map_err(print_err)?;
-
-        let got = mt::UserStageInfo::from_pb(p).map_err(print_err)?;
-
-        let want = test_gcs_stage_info();
-
-        assert_eq!(want, got);
-    }
-
-    {
-        // legacy user stage info, running on S3 service
-        let user_stage_info_v1: Vec<u8> = vec![
-            10, 24, 115, 51, 58, 47, 47, 109, 121, 98, 117, 99, 107, 101, 116, 47, 100, 97, 116,
-            97, 47, 102, 105, 108, 101, 115, 16, 1, 26, 97, 10, 95, 10, 93, 18, 24, 104, 116, 116,
-            112, 115, 58, 47, 47, 115, 51, 46, 97, 109, 97, 122, 111, 110, 97, 119, 115, 46, 99,
-            111, 109, 26, 9, 109, 121, 95, 107, 101, 121, 95, 105, 100, 34, 13, 109, 121, 95, 115,
-            101, 99, 114, 101, 116, 95, 107, 101, 121, 42, 8, 109, 121, 98, 117, 99, 107, 101, 116,
-            50, 11, 47, 100, 97, 116, 97, 47, 102, 105, 108, 101, 115, 58, 13, 109, 121, 95, 109,
-            97, 115, 116, 101, 114, 95, 107, 101, 121, 160, 6, 1, 34, 17, 8, 1, 16, 128, 8, 26, 1,
-            124, 34, 2, 47, 47, 40, 2, 160, 6, 1, 42, 8, 10, 3, 32, 154, 5, 16, 142, 8, 50, 4, 116,
-            101, 115, 116, 160, 6, 1,
-        ];
-
-        let p: pb::UserStageInfo =
-            common_protos::prost::Message::decode(user_stage_info_v1.as_slice())
-                .map_err(print_err)?;
-
-        let got = mt::UserStageInfo::from_pb(p).map_err(print_err)?;
-
-        println!("got stage: {:?}", got);
-
-        let want = test_s3_stage_info();
-
-        assert_eq!(want, got);
-    }
-
     Ok(())
-}
-
-fn print_err<T: Debug>(e: T) -> T {
-    eprintln!("Error: {:?}", e);
-    e
 }
