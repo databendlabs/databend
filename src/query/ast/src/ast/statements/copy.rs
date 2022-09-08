@@ -73,6 +73,7 @@ impl Display for CopyStmt<'_> {
             write!(f, " SIZE_LIMIT = {}", self.size_limit)?;
         }
 
+        write!(f, " PURGE = {}", self.purge)?;
         Ok(())
     }
 }

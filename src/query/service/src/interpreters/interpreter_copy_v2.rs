@@ -26,7 +26,6 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use futures::TryStreamExt;
 use regex::Regex;
-use tracing::info;
 
 use super::append2table;
 use super::commit2table;
@@ -102,7 +101,7 @@ impl CopyInterpreterV2 {
                     list
                 };
 
-                info!("listed files: {:?}", &files_with_path);
+                tracing::info!("listed files: {:?}", &files_with_path);
 
                 Ok(files_with_path)
             }
@@ -119,10 +118,12 @@ impl CopyInterpreterV2 {
                 if table_info.stage_info.copy_options.purge {
                     let rename_me: Arc<dyn TableContext> = self.ctx.clone();
                     let op = StageSourceHelper::get_op(&rename_me, &table_info.stage_info).await?;
-                    for path in files {
-                        op.object(path).delete().await?;
+                    for f in files {
+                        if let Err(e) = op.object(f).delete().await {
+                            tracing::error!("Failed to delete file: {}, error: {}", f, e);
+                        }
                     }
-                    info!("purge files: {:?}", files);
+                    tracing::info!("purge files: {:?}", files);
                 }
                 Ok(())
             }
@@ -166,7 +167,7 @@ impl CopyInterpreterV2 {
         let mut pipeline = Pipeline::create();
         let read_source_plan = from.clone();
         let read_source_plan = Self::rewrite_read_plan_file_name(read_source_plan, files);
-        info!("copy_files_to_table from source: {:?}", read_source_plan);
+        tracing::info!("copy_files_to_table from source: {:?}", read_source_plan);
         let table = ctx.build_table_from_source_plan(&read_source_plan)?;
         let res = table.read2(ctx.clone(), &read_source_plan, &mut pipeline);
         if let Err(e) = res {
@@ -288,7 +289,7 @@ impl Interpreter for CopyInterpreterV2 {
                     files = matched_files;
                 }
 
-                info!("matched files: {:?}, pattern: {}", &files, pattern);
+                tracing::info!("matched files: {:?}, pattern: {}", &files, pattern);
 
                 let write_results = self
                     .copy_files_to_table(
