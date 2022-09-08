@@ -986,7 +986,6 @@ pub fn insert_source(i: Input) -> IResult<InsertSource> {
 
             InsertSource::Streaming {
                 format: format.name,
-                start: rest_tokens.first().unwrap().span.start,
                 rest_str,
             }
         },
@@ -999,10 +998,7 @@ pub fn insert_source(i: Input) -> IResult<InsertSource> {
             let rest_str = &rest_tokens[0].source
                 [rest_tokens.first().unwrap().span.start..rest_tokens.last().unwrap().span.end];
 
-            InsertSource::Values {
-                rest_str,
-                start: rest_tokens.first().unwrap().span.start,
-            }
+            InsertSource::Values { rest_str }
         },
     );
     let query = map(query, |query| InsertSource::Select {

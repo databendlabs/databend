@@ -24,6 +24,7 @@
 #![feature(option_get_or_insert_default)]
 #![feature(result_option_inspect)]
 #![feature(is_some_with)]
+#![feature(try_blocks)]
 
 extern crate core;
 
