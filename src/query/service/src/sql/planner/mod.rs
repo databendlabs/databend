@@ -71,7 +71,7 @@ impl Planner {
         if let Some(Ok(t)) = tokenizer.next() {
             if t.kind == TokenKind::INSERT {
                 let mut token_limit = MIN_TOKEN_FOR_INSERT;
-                while token_limit <= 8 * MAX_TOKEN_FOR_INSERT {
+                while token_limit <= MAX_TOKEN_FOR_INSERT {
                     let tokenizer = Tokenizer::new(sql);
                     match tokenizer
                     .take(token_limit)
