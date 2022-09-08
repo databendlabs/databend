@@ -75,10 +75,14 @@ impl Planner {
             .and_then(|token| Some(token.as_ref().ok()?.kind))
             == Some(TokenKind::INSERT);
         // Only tokenize the beginning tokens for `INSERT INTO` statement because it's unnecessary to tokenize tokens for values.
+        // 
+        // Stop the tokenizer on unrecognized token because some values inputs (e.g. CSV) may not be recognized by the tokenizer.
+        // See also: https://github.com/datafuselabs/databend/issues/6669
         let mut tokens: Vec<Token> = if is_insert_stmt {
             (&mut tokenizer)
                 .take(PROBE_INSERT_INITIAL_TOKENS)
-                .collect::<Result<_>>()?
+                .take_while(|token| token.is_ok())
+                .collect::<Result<_>>().unwrap()
         } else {
             (&mut tokenizer).collect::<Result<_>>()?
         };
@@ -115,8 +119,8 @@ impl Planner {
                 && matches!(tokenizer.peek(), Some(Ok(_)))
             {
                 // Tokenize more and try again.
-                for token in (&mut tokenizer).take(tokens.len() * 2) {
-                    tokens.push(token?);
+                for token in (&mut tokenizer).take(tokens.len() * 2).take_while(|token| token.is_ok()) {
+                    tokens.push(token.unwrap());
                 }
             } else {
                 return res;
