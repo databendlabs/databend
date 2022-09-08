@@ -140,7 +140,12 @@ pub trait Table: Sync + Send {
         )))
     }
 
-    fn append2(&self, _: Arc<dyn TableContext>, _: &mut Pipeline) -> Result<()> {
+    fn append2(
+        &self,
+        _: Arc<dyn TableContext>,
+        _: &mut Pipeline,
+        _need_output: bool,
+    ) -> Result<()> {
         Err(ErrorCode::UnImplement(format!(
             "append2 operation for table {} is not implemented, table engine is {}",
             self.name(),

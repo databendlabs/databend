@@ -325,9 +325,14 @@ impl Table for FuseTable {
         self.do_read2(ctx, plan, pipeline)
     }
 
-    fn append2(&self, ctx: Arc<dyn TableContext>, pipeline: &mut Pipeline) -> Result<()> {
+    fn append2(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        pipeline: &mut Pipeline,
+        need_output: bool,
+    ) -> Result<()> {
         self.check_mutable()?;
-        self.do_append2(ctx, pipeline)
+        self.do_append2(ctx, pipeline, need_output)
     }
 
     #[tracing::instrument(level = "debug", name = "fuse_table_commit_insertion", skip(self, ctx, operations), fields(ctx.id = ctx.get_id().as_str()))]

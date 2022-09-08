@@ -21,13 +21,13 @@ use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::NullableType;
-use common_datavalues::StringType;
 use common_datavalues::ToDataType;
 use common_datavalues::Vu8;
 use common_exception::Result;
 use common_meta_app::schema::TableInfo;
 use common_planners::ReadDataSourcePlan;
 use common_planners::StageKind;
+use common_planners::SINK_SCHEMA;
 
 use super::physical_scalar::PhysicalScalar;
 use super::AggregateFunctionDesc;
@@ -317,10 +317,7 @@ pub struct DistributedInsertSelect {
 
 impl DistributedInsertSelect {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
-        Ok(DataSchemaRefExt::create(vec![
-            DataField::new("seg_loc", StringType::new_impl()),
-            DataField::new("seg_info", StringType::new_impl()),
-        ]))
+        Ok(SINK_SCHEMA.clone())
     }
 }
 

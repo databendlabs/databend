@@ -26,6 +26,7 @@ use common_streams::SendableDataBlockStream;
 use parking_lot::Mutex;
 
 use super::commit2table;
+use super::commit2table_with_append_entries;
 use super::interpreter_common::append2table;
 use super::plan_schedulers::build_schedule_pipepline;
 use crate::clusters::ClusterHelper;
@@ -33,7 +34,7 @@ use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::interpreters::SelectInterpreterV2;
 use crate::pipelines::executor::ExecutorSettings;
-use crate::pipelines::executor::PipelineCompleteExecutor;
+use crate::pipelines::executor::PipelinePullingExecutor;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::BlocksSource;
 use crate::pipelines::processors::TransformCastSchema;
@@ -218,7 +219,7 @@ impl InsertInterpreterV2 {
             catalog,
             table_info: table.get_table_info().clone(),
             select_schema: plan.schema(),
-            insert_schema: self.schema(),
+            insert_schema: self.plan.schema(),
             cast_needed: self.check_schema_cast(plan)?,
         });
 
@@ -234,15 +235,15 @@ impl InsertInterpreterV2 {
         let query_need_abort = self.ctx.query_need_abort();
         let executor_settings = ExecutorSettings::try_create(&settings)?;
         build_res.set_max_threads(settings.get_max_threads()? as usize);
-        let mut pipelines = build_res.sources_pipelines;
-        pipelines.push(build_res.main_pipeline);
-        let executor = PipelineCompleteExecutor::from_pipelines(
+
+        let executor = PipelinePullingExecutor::from_pipelines(
             query_need_abort,
-            pipelines,
+            build_res,
             executor_settings,
         )?;
-        executor.execute()?;
-        commit2table(self.ctx.clone(), table.clone(), self.plan.overwrite).await?;
+
+        commit2table_with_append_entries(self.ctx.clone(), table, self.plan.overwrite, vec![])
+            .await?;
 
         Ok(Box::pin(DataBlockStream::create(
             self.plan.schema(),

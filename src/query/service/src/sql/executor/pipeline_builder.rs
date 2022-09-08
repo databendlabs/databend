@@ -126,7 +126,7 @@ impl PipelineBuilder {
             PhysicalPlan::ExchangeSource(source) => self.build_exchange_source(source),
             PhysicalPlan::UnionAll(union_all) => self.build_union_all(union_all),
             PhysicalPlan::DistributedInsertSelect(insert_select) => {
-                self.build_insert_select(insert_select)
+                self.build_distributed_insert_select(insert_select)
             }
             PhysicalPlan::Exchange(_) => Err(ErrorCode::LogicalError(
                 "Invalid physical plan with PhysicalPlan::Exchange",
@@ -532,7 +532,10 @@ impl PipelineBuilder {
         Ok(())
     }
 
-    pub fn build_insert_select(&mut self, insert_select: &DistributedInsertSelect) -> Result<()> {
+    pub fn build_distributed_insert_select(
+        &mut self,
+        insert_select: &DistributedInsertSelect,
+    ) -> Result<()> {
         let select_schema = &insert_select.select_schema;
         let insert_schema = &insert_select.insert_schema;
 
@@ -576,7 +579,7 @@ impl PipelineBuilder {
             &mut self.main_pipeline,
         )?;
 
-        table.append2(self.ctx.clone(), &mut self.main_pipeline)?;
+        table.append2(self.ctx.clone(), &mut self.main_pipeline, true)?;
 
         Ok(())
     }
