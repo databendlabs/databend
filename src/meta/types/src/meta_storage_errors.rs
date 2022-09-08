@@ -19,12 +19,13 @@ use serde::Serialize;
 use sled::transaction::UnabortableTransactionError;
 
 use crate::error_context::ErrorWithContext;
+use crate::MetaBytesError;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
 pub enum MetaStorageError {
     /// An error raised when encode/decode data to/from underlying storage.
     #[error(transparent)]
-    BytesError(AnyError),
+    BytesError(MetaBytesError),
 
     /// An AnyError built from sled::Error.
     #[error(transparent)]
@@ -49,13 +50,13 @@ impl From<MetaStorageError> for ErrorCode {
 
 impl From<std::string::FromUtf8Error> for MetaStorageError {
     fn from(error: std::string::FromUtf8Error) -> Self {
-        MetaStorageError::BytesError(AnyError::new(&error))
+        MetaStorageError::BytesError(MetaBytesError::new(&error))
     }
 }
 
 impl From<serde_json::Error> for MetaStorageError {
     fn from(error: serde_json::Error) -> MetaStorageError {
-        MetaStorageError::BytesError(AnyError::new(&error))
+        MetaStorageError::BytesError(MetaBytesError::new(&error))
     }
 }
 
