@@ -14,7 +14,6 @@
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
-use std::fmt::Debug;
 use std::sync::Arc;
 
 use common_datavalues as dv;
@@ -24,8 +23,11 @@ use common_meta_app::schema as mt;
 use common_meta_app::share;
 use common_proto_conv::FromToProto;
 use common_proto_conv::Incompatible;
+use common_proto_conv::VER;
 use common_protos::pb;
 use maplit::btreemap;
+
+use crate::common::print_err;
 
 fn s(ss: impl ToString) -> String {
     ss.to_string()
@@ -205,6 +207,13 @@ fn new_table_meta() -> mt::TableMeta {
     }
 }
 
+fn new_table_stage_file_info() -> mt::TableStageFileInfo {
+    mt::TableStageFileInfo {
+        md5: Some("md5".to_string()),
+        last_modified: Utc.ymd(2014, 11, 29).and_hms(12, 0, 9),
+    }
+}
+
 #[test]
 fn test_pb_from_to() -> anyhow::Result<()> {
     let db = new_db_meta();
@@ -233,13 +242,17 @@ fn test_pb_from_to() -> anyhow::Result<()> {
 fn test_incompatible() -> anyhow::Result<()> {
     let db_meta = new_db_meta();
     let mut p = db_meta.to_pb()?;
-    p.ver = 6;
-    p.min_compatible = 6;
+    p.ver = VER + 1;
+    p.min_compatible = VER + 1;
 
     let res = mt::DatabaseMeta::from_pb(p);
     assert_eq!(
         Incompatible {
-            reason: s("executable ver=5 is smaller than the message min compatible ver: 6")
+            reason: format!(
+                "executable ver={} is smaller than the message min compatible ver: {}",
+                VER,
+                VER + 1
+            )
         },
         res.unwrap_err()
     );
@@ -307,6 +320,15 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
         println!("share account:{:?}", buf);
     }
 
+    // TableStageFileInfo
+    {
+        let stage_file = new_table_stage_file_info();
+        let p = stage_file.to_pb()?;
+
+        let mut buf = vec![];
+        common_protos::prost::Message::encode(&p, &mut buf)?;
+        println!("stage_file:{:?}", buf);
+    }
     Ok(())
 }
 
@@ -485,10 +507,19 @@ fn test_load_old() -> anyhow::Result<()> {
         assert_eq!(want, got);
     }
 
-    Ok(())
-}
+    // TableStageFileInfo is loadable
+    {
+        let stage_file: Vec<u8> = vec![
+            10, 3, 109, 100, 53, 18, 23, 50, 48, 49, 52, 45, 49, 49, 45, 50, 57, 32, 49, 50, 58,
+            48, 48, 58, 48, 57, 32, 85, 84, 67, 160, 6, 7, 168, 6, 1,
+        ];
+        let p: pb::TableStageFileInfo =
+            common_protos::prost::Message::decode(stage_file.as_slice()).map_err(print_err)?;
 
-fn print_err<T: Debug>(e: T) -> T {
-    eprintln!("Error: {:?}", e);
-    e
+        let got = mt::TableStageFileInfo::from_pb(p).map_err(print_err)?;
+        let want = new_table_stage_file_info();
+        assert_eq!(want, got);
+    }
+
+    Ok(())
 }

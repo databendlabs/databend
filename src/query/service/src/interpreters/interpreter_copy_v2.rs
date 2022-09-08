@@ -33,7 +33,6 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use futures::TryStreamExt;
 use regex::Regex;
-use tracing::info;
 
 use super::append2table;
 use super::commit2table;
@@ -153,9 +152,31 @@ impl CopyInterpreterV2 {
                     list
                 };
 
-                info!("listed files: {:?}", &files_with_path);
+                tracing::info!("listed files: {:?}", &files_with_path);
 
                 Ok(files_with_path)
+            }
+            other => Err(ErrorCode::LogicalError(format!(
+                "Cannot list files for the source info: {:?}",
+                other
+            ))),
+        }
+    }
+
+    async fn purge_files(&self, from: &ReadDataSourcePlan, files: &Vec<String>) -> Result<()> {
+        match &from.source_info {
+            SourceInfo::StageSource(table_info) => {
+                if table_info.stage_info.copy_options.purge {
+                    let rename_me: Arc<dyn TableContext> = self.ctx.clone();
+                    let op = StageSourceHelper::get_op(&rename_me, &table_info.stage_info).await?;
+                    for f in files {
+                        if let Err(e) = op.object(f).delete().await {
+                            tracing::error!("Failed to delete file: {}, error: {}", f, e);
+                        }
+                    }
+                    tracing::info!("purge files: {:?}", files);
+                }
+                Ok(())
             }
             other => Err(ErrorCode::LogicalError(format!(
                 "Cannot list files for the source info: {:?}",
@@ -197,7 +218,7 @@ impl CopyInterpreterV2 {
         let mut pipeline = Pipeline::create();
         let read_source_plan = from.clone();
         let read_source_plan = Self::rewrite_read_plan_file_name(read_source_plan, files);
-        info!("copy_files_to_table from source: {:?}", read_source_plan);
+        tracing::info!("copy_files_to_table from source: {:?}", read_source_plan);
         let table = ctx.build_table_from_source_plan(&read_source_plan)?;
         let res = table.read2(ctx.clone(), &read_source_plan, &mut pipeline);
         if let Err(e) = res {
@@ -319,7 +340,7 @@ impl Interpreter for CopyInterpreterV2 {
                     files = matched_files;
                 }
 
-                info!("matched files: {:?}, pattern: {}", &files, pattern);
+                tracing::info!("matched files: {:?}, pattern: {}", &files, pattern);
 
                 let (write_results, stage_files) = match &from.source_info {
                     SourceInfo::StageSource(table_info) => {
@@ -333,11 +354,7 @@ impl Interpreter for CopyInterpreterV2 {
                             )
                             .await?;
 
-                        info!(
-                            "matched copy files: {:?}, pattern: {}",
-                            &stage_files.keys(),
-                            pattern
-                        );
+                        tracing::info!("matched copy unduplicate files: {:?}", &stage_files.keys(),);
 
                         let write_results = if stage_files.is_empty() {
                             vec![]
@@ -361,14 +378,16 @@ impl Interpreter for CopyInterpreterV2 {
                                 database_name,
                                 table_name,
                                 from,
-                                files,
+                                files.clone(),
                             )
                             .await?;
                         (write_results, None)
                     }
                 };
 
+                // no changes has been made
                 if write_results.is_empty() {
+                    self.purge_files(from, &files).await?;
                     return Ok(Box::pin(DataBlockStream::create(
                         // TODO(xuanwo): Is this correct?
                         Arc::new(DataSchema::new(vec![])),
@@ -401,6 +420,9 @@ impl Interpreter for CopyInterpreterV2 {
                     let catalog = self.ctx.get_catalog(catalog_name)?;
                     let _ = catalog.upsert_table_stage_file_info(req).await?;
                 }
+                // Purge
+                self.purge_files(from, &files).await?;
+
                 Ok(Box::pin(DataBlockStream::create(
                     // TODO(xuanwo): Is this correct?
                     Arc::new(DataSchema::new(vec![])),

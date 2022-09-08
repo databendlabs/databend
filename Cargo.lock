@@ -1403,7 +1403,6 @@ dependencies = [
 name = "common-meta-api"
 version = "0.1.0"
 dependencies = [
- "anyerror",
  "anyhow",
  "async-trait",
  "common-base",
@@ -1692,6 +1691,7 @@ dependencies = [
  "enumflags2",
  "maplit",
  "num",
+ "pretty_assertions",
  "serde_json",
  "thiserror",
 ]
