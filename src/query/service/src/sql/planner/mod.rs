@@ -73,11 +73,7 @@ impl Planner {
                 let mut token_limit = MIN_TOKEN_FOR_INSERT;
                 while token_limit <= MAX_TOKEN_FOR_INSERT {
                     let tokenizer = Tokenizer::new(sql);
-                    match tokenizer
-                    .take(token_limit)
-                    .take_while(|p| p.is_ok())
-                    .last()
-                    {
+                    match tokenizer.take(token_limit).take_while(|p| p.is_ok()).last() {
                         Some(Ok(last_token)) => {
                             match self.plan_sql_inner(sql, Some(last_token.span.end)).await {
                                 Ok(v) => return Ok(v),
@@ -91,7 +87,7 @@ impl Planner {
                                 }
                             }
                         }
-                        _ => break
+                        _ => break,
                     }
                 }
             }
