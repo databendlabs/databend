@@ -14,7 +14,6 @@
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
-use std::fmt::Debug;
 use std::sync::Arc;
 
 use common_datavalues as dv;
