@@ -34,6 +34,7 @@ use super::AggregateFunctionDesc;
 use super::SortDesc;
 use crate::sql::optimizer::ColumnSet;
 use crate::sql::plans::JoinType;
+use crate::sql::ColumnBinding;
 use crate::sql::IndexType;
 
 pub type ColumnID = String;
@@ -312,6 +313,7 @@ pub struct DistributedInsertSelect {
     pub table_info: TableInfo,
     pub insert_schema: DataSchemaRef,
     pub select_schema: DataSchemaRef,
+    pub select_column_bindings: Vec<ColumnBinding>,
     pub cast_needed: bool,
 }
 

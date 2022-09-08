@@ -204,12 +204,15 @@ impl InsertInterpreterV2 {
         catalog: String,
         table: Arc<dyn Table>,
     ) -> Result<SendableDataBlockStream> {
-        let inner_plan = match plan {
+        let (inner_plan, select_column_bindings) = match plan {
             Plan::Query {
-                s_expr, metadata, ..
+                s_expr,
+                metadata,
+                bind_context,
+                ..
             } => {
                 let builder = PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone());
-                builder.build(s_expr).await?
+                (builder.build(s_expr).await?, bind_context.columns.clone())
             }
             _ => unreachable!(),
         };
@@ -222,6 +225,7 @@ impl InsertInterpreterV2 {
                 catalog,
                 table_info: table.get_table_info().clone(),
                 select_schema: plan.schema(),
+                select_column_bindings,
                 insert_schema: self.plan.schema(),
                 cast_needed: self.check_schema_cast(plan)?,
             }));

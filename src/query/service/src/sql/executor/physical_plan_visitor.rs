@@ -187,6 +187,7 @@ pub trait PhysicalPlanReplacer {
                 table_info: plan.table_info.clone(),
                 select_schema: plan.select_schema.clone(),
                 insert_schema: plan.insert_schema.clone(),
+                select_column_bindings: plan.select_column_bindings.clone(),
                 cast_needed: plan.cast_needed,
             },
         )))

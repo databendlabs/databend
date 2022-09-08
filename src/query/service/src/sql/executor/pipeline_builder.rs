@@ -540,10 +540,17 @@ impl PipelineBuilder {
         let insert_schema = &insert_select.insert_schema;
 
         self.build_pipeline(&insert_select.input)?;
+
+        // should render result for select
+        PipelineBuilder::render_result_set(
+            insert_select.input.output_schema()?,
+            &insert_select.select_column_bindings,
+            &mut self.main_pipeline,
+        )?;
+
         if insert_select.cast_needed {
             let mut functions = Vec::with_capacity(insert_schema.fields().len());
-            for (target_field, original_field) in insert_select
-                .insert_schema
+            for (target_field, original_field) in insert_schema
                 .fields()
                 .iter()
                 .zip(select_schema.fields().iter())
