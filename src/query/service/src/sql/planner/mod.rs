@@ -115,17 +115,20 @@ impl Planner {
             }
             .await;
 
-            if res.is_err()
-                && tokens.len() < PROBE_INSERT_MAX_TOKENS
-                && matches!(tokenizer.peek(), Some(Ok(_)))
-            {
+            if res.is_err() && matches!(tokenizer.peek(), Some(Ok(_))) {
                 // Tokenize more and try again.
-                for token in (&mut tokenizer)
-                    .take(tokens.len() * 2)
-                    .take_while(|token| token.is_ok())
-                {
-                    tokens.push(token.unwrap());
-                }
+                if tokens.len() < PROBE_INSERT_MAX_TOKENS {
+                    for token in (&mut tokenizer)
+                        .take(tokens.len() * 2)
+                        .take_while(|token| token.is_ok())
+                    {
+                        tokens.push(token.unwrap());
+                    }
+                } else {
+                    for token in (&mut tokenizer).take_while(|token| token.is_ok()) {
+                        tokens.push(token.unwrap());
+                    }
+                };
             } else {
                 return res;
             }
