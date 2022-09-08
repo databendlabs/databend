@@ -220,7 +220,7 @@ impl<'a> Binder {
                     // If alias is not specified, we will generate a name for the scalar expression.
                     let expr_name = match alias {
                         Some(alias) => normalize_identifier(alias, &self.name_resolution_ctx).name,
-                        None => format!("{:#}", expr),
+                        None => format!("{:#}", expr).to_lowercase(),
                     };
 
                     output.items.push(SelectItem {
