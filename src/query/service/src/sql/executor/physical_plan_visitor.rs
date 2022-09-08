@@ -180,7 +180,7 @@ pub trait PhysicalPlanReplacer {
     fn replace_insert_select(&mut self, plan: &DistributedInsertSelect) -> Result<PhysicalPlan> {
         let input = self.replace(&plan.input)?;
 
-        Ok(PhysicalPlan::DistributedInsertSelect(
+        Ok(PhysicalPlan::DistributedInsertSelect(Box::new(
             DistributedInsertSelect {
                 input: Box::new(input),
                 catalog: plan.catalog.clone(),
@@ -189,7 +189,7 @@ pub trait PhysicalPlanReplacer {
                 insert_schema: plan.insert_schema.clone(),
                 cast_needed: plan.cast_needed,
             },
-        ))
+        )))
     }
 }
 

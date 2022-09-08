@@ -336,7 +336,7 @@ pub enum PhysicalPlan {
     UnionAll(UnionAll),
 
     /// For insert into ... select ... in cluster
-    DistributedInsertSelect(DistributedInsertSelect),
+    DistributedInsertSelect(Box<DistributedInsertSelect>),
 
     /// Synthesized by fragmenter
     ExchangeSource(ExchangeSource),

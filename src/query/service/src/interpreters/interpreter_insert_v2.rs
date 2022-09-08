@@ -23,12 +23,14 @@ use common_functions::scalars::CastFunction;
 use common_planners::StageKind;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
+use futures_util::StreamExt;
 use parking_lot::Mutex;
 
 use super::commit2table;
 use super::commit2table_with_append_entries;
 use super::interpreter_common::append2table;
 use super::plan_schedulers::build_schedule_pipepline;
+use super::ProcessorExecutorStream;
 use crate::clusters::ClusterHelper;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
@@ -198,11 +200,11 @@ impl InsertInterpreterV2 {
 
     async fn schedule_insert_select(
         &self,
-        plan: &Box<Plan>,
+        plan: &Plan,
         catalog: String,
         table: Arc<dyn Table>,
     ) -> Result<SendableDataBlockStream> {
-        let inner_plan = match &**plan {
+        let inner_plan = match plan {
             Plan::Query {
                 s_expr, metadata, ..
             } => {
@@ -214,14 +216,15 @@ impl InsertInterpreterV2 {
 
         table.get_table_info();
 
-        let insert_select_plan = PhysicalPlan::DistributedInsertSelect(DistributedInsertSelect {
-            input: Box::new(inner_plan),
-            catalog,
-            table_info: table.get_table_info().clone(),
-            select_schema: plan.schema(),
-            insert_schema: self.plan.schema(),
-            cast_needed: self.check_schema_cast(plan)?,
-        });
+        let insert_select_plan =
+            PhysicalPlan::DistributedInsertSelect(Box::new(DistributedInsertSelect {
+                input: Box::new(inner_plan),
+                catalog,
+                table_info: table.get_table_info().clone(),
+                select_schema: plan.schema(),
+                insert_schema: self.plan.schema(),
+                cast_needed: self.check_schema_cast(plan)?,
+            }));
 
         let final_plan = PhysicalPlan::Exchange(Exchange {
             input: Box::new(insert_select_plan),
@@ -242,8 +245,20 @@ impl InsertInterpreterV2 {
             executor_settings,
         )?;
 
-        commit2table_with_append_entries(self.ctx.clone(), table, self.plan.overwrite, vec![])
-            .await?;
+        let mut append_entries = vec![];
+        let mut stream: SendableDataBlockStream =
+            Box::pin(ProcessorExecutorStream::create(executor)?);
+        while let Some(block) = stream.next().await {
+            append_entries.push(block?);
+        }
+
+        commit2table_with_append_entries(
+            self.ctx.clone(),
+            table,
+            self.plan.overwrite,
+            append_entries,
+        )
+        .await?;
 
         Ok(Box::pin(DataBlockStream::create(
             self.plan.schema(),
