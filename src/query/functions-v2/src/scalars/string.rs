@@ -30,8 +30,6 @@ use common_expression::Value;
 use common_expression::ValueRef;
 use itertools::izip;
 
-use super::soundex::Soundex;
-
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
         "upper",
@@ -574,16 +572,16 @@ pub fn register(registry: &mut FunctionRegistry) {
                 let mut count = 0;
 
                 for ch in String::from_utf8_lossy(val).chars() {
-                    let score = Soundex::number_map(ch);
+                    let score = soundex::number_map(ch);
                     if last.is_none() {
-                        if !Soundex::is_uni_alphabetic(ch) {
+                        if !soundex::is_uni_alphabetic(ch) {
                             continue;
                         }
                         last = score;
                         writer.put_char(ch.to_ascii_uppercase());
                     } else {
                         if !ch.is_ascii_alphabetic()
-                            || Soundex::is_drop(ch)
+                            || soundex::is_drop(ch)
                             || score.is_none()
                             || score == last
                         {
@@ -605,6 +603,35 @@ pub fn register(registry: &mut FunctionRegistry) {
             },
         ),
     );
+}
+
+mod soundex {
+    #[inline(always)]
+    pub fn number_map(i: char) -> Option<u8> {
+        match i.to_ascii_lowercase() {
+            'b' | 'f' | 'p' | 'v' => Some(b'1'),
+            'c' | 'g' | 'j' | 'k' | 'q' | 's' | 'x' | 'z' => Some(b'2'),
+            'd' | 't' => Some(b'3'),
+            'l' => Some(b'4'),
+            'm' | 'n' => Some(b'5'),
+            'r' => Some(b'6'),
+            _ => Some(b'0'),
+        }
+    }
+
+    #[inline(always)]
+    pub fn is_drop(c: char) -> bool {
+        matches!(
+            c.to_ascii_lowercase(),
+            'a' | 'e' | 'i' | 'o' | 'u' | 'y' | 'h' | 'w'
+        )
+    }
+
+    // https://github.com/mysql/mysql-server/blob/3290a66c89eb1625a7058e0ef732432b6952b435/sql/item_strfunc.cc#L1919
+    #[inline(always)]
+    pub fn is_uni_alphabetic(c: char) -> bool {
+        ('a'..='z').contains(&c) || ('A'..='Z').contains(&c) || c as i32 >= 0xC0
+    }
 }
 
 // Vectorize string to string function with customer estimate_bytes.
