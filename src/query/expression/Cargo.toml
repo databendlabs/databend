@@ -25,7 +25,7 @@ enum-as-inner = "0.4"
 itertools = "0.10"
 match-template = "0.0.1"
 num-traits = "0.2.15"
-ordered-float = { version = "3.0", features = ["serde"] }
+ordered-float = { git = "https://github.com/andylokandy/rust-ordered-float.git", branch = "as", features = ["serde"] }
 serde = "1.0"
 
 [dev-dependencies]

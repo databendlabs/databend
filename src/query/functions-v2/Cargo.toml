@@ -23,6 +23,7 @@ hex = "0.4.3"
 itertools = "0.10.3"
 match-template = "0.0.1"
 num-traits = "0.2.15"
+ordered-float = { git = "https://github.com/andylokandy/rust-ordered-float.git", branch = "as", features = ["serde", "rand"] }
 rand = { version = "0.8.5", features = ["small_rng"] }
 strength_reduce = "0.2.3"
 

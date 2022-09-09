@@ -15,9 +15,11 @@
 use std::io::Write;
 
 use common_expression::types::DataType;
+use common_expression::types::NumberDataType;
 use common_expression::Column;
 use common_expression::ColumnFrom;
 use goldenfile::Mint;
+use ordered_float::OrderedFloat;
 
 use super::run_ast;
 
@@ -43,7 +45,7 @@ fn test_abs(file: &mut impl Write) {
     run_ast(file, "abs(null)", &[]);
     run_ast(file, "abs(a)", &[(
         "a",
-        DataType::Int64,
+        DataType::Number(NumberDataType::Int64),
         Column::from_data(vec![1i64, -30, 1024]),
     )]);
 }
@@ -54,7 +56,7 @@ fn test_sign(file: &mut impl Write) {
     run_ast(file, "sign(null)", &[]);
     run_ast(file, "sign(a)", &[(
         "a",
-        DataType::Int64,
+        DataType::Number(NumberDataType::Int64),
         Column::from_data(vec![1i64, -30, 1024]),
     )]);
 }
@@ -70,7 +72,7 @@ fn test_trigonometric(file: &mut impl Write) {
     run_ast(file, "atan(null)", &[]);
     run_ast(file, "atan2(a, 4)", &[(
         "a",
-        DataType::Int64,
+        DataType::Number(NumberDataType::Int64),
         Column::from_data(vec![1i64, -1, 1024]),
     )]);
 }
@@ -80,8 +82,13 @@ fn test_ceil(file: &mut impl Write) {
     run_ast(file, "ceil(5.6)", &[]);
     run_ast(file, "ceil(a)", &[(
         "a",
-        DataType::Float64,
-        Column::from_data(vec![1.23f64, -1.23]),
+        DataType::Number(NumberDataType::Float64),
+        Column::from_data(
+            vec![1.23f64, -1.23]
+                .into_iter()
+                .map(OrderedFloat)
+                .collect::<Vec<_>>(),
+        ),
     )]);
 }
 
@@ -91,7 +98,7 @@ fn test_exp(file: &mut impl Write) {
     run_ast(file, "exp(0)", &[]);
     run_ast(file, "exp(a)", &[(
         "a",
-        DataType::Int64,
+        DataType::Number(NumberDataType::Int64),
         Column::from_data(vec![4i64, -2, 10]),
     )]);
 }
@@ -105,8 +112,13 @@ fn test_round(file: &mut impl Write) {
     ]);
     run_ast(file, "round(a)", &[(
         "a",
-        DataType::Float64,
-        Column::from_data(vec![22.22f64, -22.23, 10.0]),
+        DataType::Number(NumberDataType::Float64),
+        Column::from_data(
+            vec![22.22f64, -22.23, 10.0]
+                .into_iter()
+                .map(OrderedFloat)
+                .collect::<Vec<_>>(),
+        ),
     )]);
 }
 
@@ -114,7 +126,7 @@ fn test_sqrt(file: &mut impl Write) {
     run_ast(file, "sqrt(4)", &[]);
     run_ast(file, "sqrt(a)", &[(
         "a",
-        DataType::Int64,
+        DataType::Number(NumberDataType::Int64),
         Column::from_data(vec![22i64, 1024, 10]),
     )]);
 }
@@ -127,8 +139,13 @@ fn test_truncate(file: &mut impl Write) {
     run_ast(file, "truncate(10.28*100, 0)", &[]);
     run_ast(file, "truncate(a, 1)", &[(
         "a",
-        DataType::Float64,
-        Column::from_data(vec![22.22f64, -22.23, 10.0]),
+        DataType::Number(NumberDataType::Float64),
+        Column::from_data(
+            vec![22.22f64, -22.23, 10.0]
+                .into_iter()
+                .map(OrderedFloat)
+                .collect::<Vec<_>>(),
+        ),
     )]);
 }
 
@@ -140,7 +157,7 @@ fn test_log_function(file: &mut impl Write) {
     run_ast(file, "ln(2)", &[]);
     run_ast(file, "round(2, a)", &[(
         "a",
-        DataType::Int64,
+        DataType::Number(NumberDataType::Int64),
         Column::from_data(vec![22i64, 65536, 10]),
     )]);
 }

@@ -18,6 +18,7 @@ use std::sync::Mutex;
 use common_arrow::arrow::bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use itertools::Itertools;
+use num_traits::AsPrimitive;
 
 use crate::chunk::Chunk;
 use crate::error::Result;
@@ -29,6 +30,10 @@ use crate::types::any::AnyType;
 use crate::types::array::ArrayColumn;
 use crate::types::nullable::NullableColumn;
 use crate::types::nullable::NullableDomain;
+use crate::types::number::NumberColumn;
+use crate::types::number::NumberDataType;
+use crate::types::number::NumberDomain;
+use crate::types::number::NumberScalar;
 use crate::types::DataType;
 use crate::util::constant_bitmap;
 use crate::values::Column;
@@ -36,6 +41,7 @@ use crate::values::ColumnBuilder;
 use crate::values::Scalar;
 use crate::values::Value;
 use crate::with_number_type;
+use crate::ScalarRef;
 
 pub struct Evaluator<'a> {
     input_columns: &'a Chunk,
@@ -162,48 +168,44 @@ impl<'a> Evaluator<'a> {
                 Ok(Scalar::Tuple(new_fields))
             }
 
-            // identical types
-            (scalar @ Scalar::Null, DataType::Null)
-            | (scalar @ Scalar::EmptyArray, DataType::EmptyArray)
-            | (scalar @ Scalar::Boolean(_), DataType::Boolean)
-            | (scalar @ Scalar::String(_), DataType::String) => Ok(scalar),
-
-            (scalar, dest_ty) => {
-                // number types
-                with_number_type!(|SRC_TYPE| match scalar {
-                    Scalar::SRC_TYPE(value) => {
+            (Scalar::Number(num), DataType::Number(dest_ty)) => {
+                let new_number = with_number_type!(|SRC_TYPE| match num {
+                    NumberScalar::SRC_TYPE(value) => {
                         with_number_type!(|DEST_TYPE| match dest_ty {
-                            DataType::DEST_TYPE => {
-                                let src_info = DataType::SRC_TYPE.number_type_info().unwrap();
-                                let dest_info = DataType::DEST_TYPE.number_type_info().unwrap();
-                                if src_info.can_lossless_cast_to(dest_info) {
-                                    return Ok(Scalar::DEST_TYPE(value as _));
+                            NumberDataType::DEST_TYPE => {
+                                if NumberDataType::SRC_TYPE.can_lossless_cast_to(*dest_ty) {
+                                    NumberScalar::DEST_TYPE(value.as_())
                                 } else {
                                     let value = num_traits::cast::cast(value).ok_or_else(|| {
                                         (
                                             span.clone(),
                                             format!(
                                                 "unable to cast {} to {}",
-                                                scalar.as_ref(),
+                                                ScalarRef::Number(num),
                                                 stringify!(DEST_TYPE)
                                             ),
                                         )
                                     })?;
-                                    return Ok(Scalar::DEST_TYPE(value));
+                                    NumberScalar::DEST_TYPE(value)
                                 }
                             }
-                            _ => (),
                         })
                     }
-                    _ => (),
                 });
-
-                // failure cases
-                Err((
-                    span,
-                    (format!("unable to cast {} to {dest_ty}", scalar.as_ref())),
-                ))
+                Ok(Scalar::Number(new_number))
             }
+
+            // identical types
+            (scalar @ Scalar::Null, DataType::Null)
+            | (scalar @ Scalar::EmptyArray, DataType::EmptyArray)
+            | (scalar @ Scalar::Boolean(_), DataType::Boolean)
+            | (scalar @ Scalar::String(_), DataType::String)
+            | (scalar @ Scalar::Timestamp(_), DataType::Timestamp) => Ok(scalar),
+
+            (scalar, dest_ty) => Err((
+                span,
+                (format!("unable to cast {} to {dest_ty}", scalar.as_ref())),
+            )),
         }
     }
 
@@ -261,23 +263,14 @@ impl<'a> Evaluator<'a> {
                 })
             }
 
-            // identical types
-            (col @ Column::Null { .. }, DataType::Null)
-            | (col @ Column::EmptyArray { .. }, DataType::EmptyArray)
-            | (col @ Column::Boolean(_), DataType::Boolean)
-            | (col @ Column::String { .. }, DataType::String) => Ok(col),
-
-            (col, dest_ty) => {
-                // number types
-                with_number_type!(|SRC_TYPE| match &col {
-                    Column::SRC_TYPE(col) => {
+            (Column::Number(col), DataType::Number(dest_ty)) => {
+                let new_column = with_number_type!(|SRC_TYPE| match col {
+                    NumberColumn::SRC_TYPE(col) => {
                         with_number_type!(|DEST_TYPE| match dest_ty {
-                            DataType::DEST_TYPE => {
-                                let src_info = DataType::SRC_TYPE.number_type_info().unwrap();
-                                let dest_info = DataType::DEST_TYPE.number_type_info().unwrap();
-                                if src_info.can_lossless_cast_to(dest_info) {
-                                    let new_col = col.iter().map(|x| *x as _).collect::<Vec<_>>();
-                                    return Ok(Column::DEST_TYPE(new_col.into()));
+                            NumberDataType::DEST_TYPE => {
+                                if NumberDataType::SRC_TYPE.can_lossless_cast_to(*dest_ty) {
+                                    let new_col = col.iter().map(|x| x.as_()).collect::<Vec<_>>();
+                                    NumberColumn::DEST_TYPE(new_col.into())
                                 } else {
                                     let mut new_col = Vec::with_capacity(col.len());
                                     for &val in col.iter() {
@@ -294,18 +287,23 @@ impl<'a> Evaluator<'a> {
                                             })?;
                                         new_col.push(new_val);
                                     }
-                                    return Ok(Column::DEST_TYPE(new_col.into()));
+                                    NumberColumn::DEST_TYPE(new_col.into())
                                 }
                             }
-                            _ => (),
                         })
                     }
-                    _ => (),
                 });
-
-                // failure cases
-                Err((span, (format!("unable to cast {col:?} to {dest_ty}"))))
+                Ok(Column::Number(new_column))
             }
+
+            // identical types
+            (col @ Column::Null { .. }, DataType::Null)
+            | (col @ Column::EmptyArray { .. }, DataType::EmptyArray)
+            | (col @ Column::Boolean(_), DataType::Boolean)
+            | (col @ Column::String { .. }, DataType::String)
+            | (col @ Column::Timestamp { .. }, DataType::Timestamp) => Ok(col),
+
+            (col, dest_ty) => Err((span, (format!("unable to cast {col:?} to {dest_ty}")))),
         }
     }
 
@@ -374,30 +372,19 @@ impl<'a> Evaluator<'a> {
                 }))
             }
 
-            // identical types
-            (column @ Column::Boolean(_), DataType::Boolean)
-            | (column @ Column::String { .. }, DataType::String)
-            | (column @ Column::EmptyArray { .. }, DataType::EmptyArray) => {
-                Column::Nullable(Box::new(NullableColumn {
-                    validity: constant_bitmap(true, column.len()).into(),
-                    column,
-                }))
-            }
-
-            (col, dest_ty) => {
-                // number types
+            (Column::Number(col), DataType::Number(dest_ty)) => {
                 with_number_type!(|SRC_TYPE| match &col {
-                    Column::SRC_TYPE(col) => {
+                    NumberColumn::SRC_TYPE(col) => {
                         with_number_type!(|DEST_TYPE| match dest_ty {
-                            DataType::DEST_TYPE => {
-                                let src_info = DataType::SRC_TYPE.number_type_info().unwrap();
-                                let dest_info = DataType::DEST_TYPE.number_type_info().unwrap();
-                                if src_info.can_lossless_cast_to(dest_info) {
-                                    let new_col = col.iter().map(|x| *x as _).collect::<Vec<_>>();
-                                    return Column::Nullable(Box::new(NullableColumn {
+                            NumberDataType::DEST_TYPE => {
+                                if NumberDataType::SRC_TYPE.can_lossless_cast_to(*dest_ty) {
+                                    let new_col = col.iter().map(|x| x.as_()).collect::<Vec<_>>();
+                                    Column::Nullable(Box::new(NullableColumn {
                                         validity: constant_bitmap(true, new_col.len()).into(),
-                                        column: Column::DEST_TYPE(new_col.into()),
-                                    }));
+                                        column: Column::Number(NumberColumn::DEST_TYPE(
+                                            new_col.into(),
+                                        )),
+                                    }))
                                 } else {
                                     let mut new_col = Vec::with_capacity(col.len());
                                     let mut validity = MutableBitmap::with_capacity(col.len());
@@ -410,19 +397,32 @@ impl<'a> Evaluator<'a> {
                                             validity.push(false);
                                         }
                                     }
-                                    return Column::Nullable(Box::new(NullableColumn {
+                                    Column::Nullable(Box::new(NullableColumn {
                                         validity: validity.into(),
-                                        column: Column::DEST_TYPE(new_col.into()),
-                                    }));
+                                        column: Column::Number(NumberColumn::DEST_TYPE(
+                                            new_col.into(),
+                                        )),
+                                    }))
                                 }
                             }
-                            _ => (),
                         })
                     }
-                    _ => (),
-                });
+                })
+            }
 
-                // failure cases
+            // identical types
+            (column @ Column::Boolean(_), DataType::Boolean)
+            | (column @ Column::String { .. }, DataType::String)
+            | (column @ Column::EmptyArray { .. }, DataType::EmptyArray)
+            | (column @ Column::Timestamp { .. }, DataType::Timestamp) => {
+                Column::Nullable(Box::new(NullableColumn {
+                    validity: constant_bitmap(true, column.len()).into(),
+                    column,
+                }))
+            }
+
+            // failure cases
+            (col, _) => {
                 let len = col.len();
                 let mut builder = ColumnBuilder::with_capacity(dest_type, len);
                 for _ in 0..len {
@@ -604,33 +604,30 @@ impl<'a> ConstantFolder<'a> {
                     .collect::<Option<Vec<_>>>()?,
             )),
 
-            // identical types
-            (Domain::Boolean(_), DataType::Boolean) | (Domain::String(_), DataType::String) => {
-                Some(domain.clone())
-            }
-
-            (domain, dest_ty) => {
-                // number types
+            (Domain::Number(domain), DataType::Number(dest_ty)) => {
                 with_number_type!(|SRC_TYPE| match domain {
-                    Domain::SRC_TYPE(domain) => {
+                    NumberDomain::SRC_TYPE(domain) => {
                         with_number_type!(|DEST_TYPE| match dest_ty {
-                            DataType::DEST_TYPE => {
+                            NumberDataType::DEST_TYPE => {
                                 let (domain, overflowing) = domain.overflow_cast();
                                 if overflowing {
-                                    return None;
+                                    None
                                 } else {
-                                    return Some(Domain::DEST_TYPE(domain));
+                                    Some(Domain::Number(NumberDomain::DEST_TYPE(domain)))
                                 }
                             }
-                            _ => (),
                         })
                     }
-                    _ => (),
-                });
-
-                // failure cases
-                None
+                })
             }
+
+            // identical types
+            (Domain::Boolean(_), DataType::Boolean)
+            | (Domain::String(_), DataType::String)
+            | (Domain::Timestamp(_), DataType::Timestamp) => Some(domain.clone()),
+
+            // failure cases
+            _ => None,
         }
     }
 
@@ -681,38 +678,37 @@ impl<'a> ConstantFolder<'a> {
                 })
             }
 
-            // identical types
-            (Domain::Boolean(_), DataType::Boolean) | (Domain::String(_), DataType::String) => {
-                Domain::Nullable(NullableDomain {
-                    has_null: false,
-                    value: Some(Box::new(domain.clone())),
-                })
-            }
-
-            (domain, dest_ty) => {
-                // number types
+            (Domain::Number(domain), DataType::Number(dest_ty)) => {
                 with_number_type!(|SRC_TYPE| match domain {
-                    Domain::SRC_TYPE(domain) => {
+                    NumberDomain::SRC_TYPE(domain) => {
                         with_number_type!(|DEST_TYPE| match dest_ty {
-                            DataType::DEST_TYPE => {
+                            NumberDataType::DEST_TYPE => {
                                 let (domain, overflowing) = domain.overflow_cast();
-                                return Domain::Nullable(NullableDomain {
+                                Domain::Nullable(NullableDomain {
                                     has_null: overflowing,
-                                    value: Some(Box::new(Domain::DEST_TYPE(domain))),
-                                });
+                                    value: Some(Box::new(Domain::Number(NumberDomain::DEST_TYPE(
+                                        domain,
+                                    )))),
+                                })
                             }
-                            _ => (),
                         })
                     }
-                    _ => (),
-                });
-
-                // failure cases
-                Domain::Nullable(NullableDomain {
-                    has_null: true,
-                    value: None,
                 })
             }
+
+            // identical types
+            (Domain::Boolean(_), DataType::Boolean)
+            | (Domain::String(_), DataType::String)
+            | (Domain::Timestamp(_), DataType::Timestamp) => Domain::Nullable(NullableDomain {
+                has_null: false,
+                value: Some(Box::new(domain.clone())),
+            }),
+
+            // failure cases
+            _ => Domain::Nullable(NullableDomain {
+                has_null: true,
+                value: None,
+            }),
         }
     }
 }

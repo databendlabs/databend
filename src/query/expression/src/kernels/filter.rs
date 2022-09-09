@@ -22,6 +22,7 @@ use common_exception::Result;
 
 use crate::types::array::ArrayColumnBuilder;
 use crate::types::nullable::NullableColumn;
+use crate::types::number::NumberColumn;
 use crate::types::string::StringColumnBuilder;
 use crate::types::timestamp::TimestampColumn;
 use crate::types::AnyType;
@@ -109,20 +110,24 @@ impl Column {
             return self.clone();
         }
 
-        with_number_type!(|NUM_TYPE| match self {
-            Column::NUM_TYPE(values) => {
-                Column::NUM_TYPE(Self::filter_primitive_types(values, filter))
-            }
+        match self {
             Column::Null { .. } | Column::EmptyArray { .. } => self.slice(0..length),
+            Column::Number(column) => with_number_type!(|NUM_TYPE| match column {
+                NumberColumn::NUM_TYPE(values) => {
+                    Column::Number(NumberColumn::NUM_TYPE(Self::filter_primitive_types(
+                        values, filter,
+                    )))
+                }
+            }),
             Column::Boolean(bm) => Self::filter_scalar_types::<BooleanType>(
                 bm,
                 MutableBitmap::with_capacity(length),
-                filter
+                filter,
             ),
             Column::String(column) => Self::filter_scalar_types::<StringType>(
                 column,
                 StringColumnBuilder::with_capacity(length, 0),
-                filter
+                filter,
             ),
             Column::Timestamp(column) => {
                 let ts = Self::filter_primitive_types(&column.ts, filter);
@@ -153,7 +158,7 @@ impl Column {
                 let fields = fields.iter().map(|c| c.filter(filter)).collect();
                 Column::Tuple { fields, len }
             }
-        })
+        }
     }
 
     fn filter_scalar_types<T: ValueType>(
