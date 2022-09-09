@@ -70,18 +70,21 @@ impl Planner {
 
         // Step 1: Tokenize the SQL.
         let mut tokenizer = Tokenizer::new(sql).peekable();
+
+        // Only tokenize the beginning tokens for `INSERT INTO` statement because the tokens of values is unused.
+        //
+        // Stop the tokenizer on unrecognized token because some values inputs (e.g. CSV) may not be valid for the tokenizer.
+        // See also: https://github.com/datafuselabs/databend/issues/6669
         let is_insert_stmt = tokenizer
             .peek()
             .and_then(|token| Some(token.as_ref().ok()?.kind))
             == Some(TokenKind::INSERT);
-        // Only tokenize the beginning tokens for `INSERT INTO` statement because it's unnecessary to tokenize tokens for values.
-        //
-        // Stop the tokenizer on unrecognized token because some values inputs (e.g. CSV) may not be recognized by the tokenizer.
-        // See also: https://github.com/datafuselabs/databend/issues/6669
         let mut tokens: Vec<Token> = if is_insert_stmt {
             (&mut tokenizer)
                 .take(PROBE_INSERT_INITIAL_TOKENS)
                 .take_while(|token| token.is_ok())
+                // Make sure the tokens stream is always ended with EOI.
+                .chain(std::iter::once(Ok(Token::new_eoi(sql))))
                 .collect::<Result<_>>()
                 .unwrap()
         } else {
@@ -116,17 +119,24 @@ impl Planner {
             .await;
 
             if res.is_err() && matches!(tokenizer.peek(), Some(Ok(_))) {
+                // Remove the previous EOI.
+                tokens.pop();
                 // Tokenize more and try again.
                 if tokens.len() < PROBE_INSERT_MAX_TOKENS {
                     let iter = (&mut tokenizer)
                         .take(tokens.len() * 2)
                         .take_while(|token| token.is_ok())
-                        .map(|token| token.unwrap());
+                        .chain(std::iter::once(Ok(Token::new_eoi(sql))))
+                        .map(|token| token.unwrap())
+                        // Make sure the tokens stream is always ended with EOI.
+                        .chain(std::iter::once(Token::new_eoi(sql)));
                     tokens.extend(iter);
                 } else {
                     let iter = (&mut tokenizer)
                         .take_while(|token| token.is_ok())
-                        .map(|token| token.unwrap());
+                        .map(|token| token.unwrap())
+                        // Make sure the tokens stream is always ended with EOI.
+                        .chain(std::iter::once(Token::new_eoi(sql)));
                     tokens.extend(iter);
                 };
             } else {
