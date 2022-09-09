@@ -741,8 +741,9 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             ~ ( FILE_FORMAT ~ "=" ~ #options)?
             ~ ( VALIDATION_MODE ~ "=" ~ #literal_string)?
             ~ ( SIZE_LIMIT ~ "=" ~ #literal_u64)?
+            ~ ( PURGE ~ "=" ~ #literal_bool)?
         },
-        |(_, _, dst, _, src, files, pattern, file_format, validation_mode, size_limit)| {
+        |(_, _, dst, _, src, files, pattern, file_format, validation_mode, size_limit, purge)| {
             Statement::Copy(CopyStmt {
                 src,
                 dst,
@@ -751,6 +752,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
                 file_format: file_format.map(|v| v.2).unwrap_or_default(),
                 validation_mode: validation_mode.map(|v| v.2).unwrap_or_default(),
                 size_limit: size_limit.map(|v| v.2).unwrap_or_default() as usize,
+                purge: purge.map(|v| v.2).unwrap_or_default(),
             })
         },
     );
@@ -976,32 +978,18 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
 pub fn insert_source(i: Input) -> IResult<InsertSource> {
     let streaming = map(
         rule! {
-            FORMAT ~ #ident ~ #rest_tokens
+            FORMAT ~ #ident ~ #rest_str
         },
-        |(_, format, rest_tokens)| {
-            let rest_str = &rest_tokens[0].source
-                [rest_tokens.first().unwrap().span.start..rest_tokens.last().unwrap().span.end];
-
-            InsertSource::Streaming {
-                format: format.name,
-                start: rest_tokens.first().unwrap().span.start,
-                rest_str,
-            }
+        |(_, format, rest_str)| InsertSource::Streaming {
+            format: format.name,
+            rest_str,
         },
     );
     let values = map(
         rule! {
-            VALUES ~ #rest_tokens
+            VALUES ~ #rest_str
         },
-        |(_, rest_tokens)| {
-            let rest_str = &rest_tokens[0].source
-                [rest_tokens.first().unwrap().span.start..rest_tokens.last().unwrap().span.end];
-
-            InsertSource::Values {
-                rest_str,
-                start: rest_tokens.first().unwrap().span.start,
-            }
-        },
+        |(_, rest_str)| InsertSource::Values { rest_str },
     );
     let query = map(query, |query| InsertSource::Select {
         query: Box::new(query),
@@ -1014,12 +1002,14 @@ pub fn insert_source(i: Input) -> IResult<InsertSource> {
     )(i)
 }
 
-pub fn rest_tokens<'a>(i: Input<'a>) -> IResult<&'a [Token]> {
-    if i.last().map(|token| token.kind) == Some(EOI) {
-        Ok((i.slice(i.len() - 1..), i.slice(..i.len() - 1).0))
-    } else {
-        Ok((i.slice(i.len()..), i.0))
-    }
+pub fn rest_str<'a>(i: Input<'a>) -> IResult<&'a str> {
+    // It's safe to unwrap because input must contain EOI.
+    let first_token = i.0.first().unwrap();
+    let last_token = i.0.last().unwrap();
+    Ok((
+        i.slice((i.len() - 1)..),
+        &first_token.source[first_token.span.start..last_token.span.end],
+    ))
 }
 
 pub fn column_def(i: Input) -> IResult<ColumnDefinition> {

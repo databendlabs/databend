@@ -56,8 +56,8 @@ externalLocation (for Amazon S3) ::=
 ### formatTypeOptions
 ```
 formatTypeOptions ::=
-  RECORD_DELIMITER = '<character>' 
-  FIELD_DELIMITER = '<character>' 
+  RECORD_DELIMITER = '<character>'
+  FIELD_DELIMITER = '<character>'
   SKIP_HEADER = <integer>
 ```
 

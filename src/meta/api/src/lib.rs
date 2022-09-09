@@ -57,7 +57,6 @@ pub use kv_api_utils::is_all_db_data_removed;
 pub use kv_api_utils::is_db_need_to_be_remove;
 pub use kv_api_utils::list_keys;
 pub use kv_api_utils::list_u64_value;
-pub use kv_api_utils::meta_encode_err;
 pub use kv_api_utils::send_txn;
 pub use kv_api_utils::serialize_struct;
 pub use kv_api_utils::serialize_u64;

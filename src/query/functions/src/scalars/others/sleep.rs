@@ -83,9 +83,9 @@ impl Function for SleepFunction {
             value.as_u64().map(Duration::from_secs).map_err(|_| err())?
         };
 
-        if duration.gt(&Duration::from_secs(30)) {
+        if duration.gt(&Duration::from_secs(300)) {
             return Err(ErrorCode::BadArguments(format!(
-                "The maximum sleep time is 30 seconds. Requested: {:?}",
+                "The maximum sleep time is 300 seconds. Requested: {:?}",
                 duration
             )));
         };

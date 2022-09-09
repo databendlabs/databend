@@ -14,12 +14,10 @@
 
 use std::sync::Arc;
 
-use common_ast::ast::InsertSource;
-use common_ast::ast::Statement;
 use common_ast::parser::parse_sql;
+use common_ast::parser::token::Token;
 use common_ast::parser::token::TokenKind;
 use common_ast::parser::token::Tokenizer;
-use common_ast::parser::tokenize_sql;
 use common_ast::Backtrace;
 use common_exception::Result;
 use parking_lot::RwLock;
@@ -54,7 +52,8 @@ use super::optimizer::OptimizerConfig;
 use super::optimizer::OptimizerContext;
 use crate::sessions::TableContext;
 
-static MAX_TOKEN_FOR_INSERT: usize = 128;
+const PROBE_INSERT_INITIAL_TOKENS: usize = 128;
+const PROBE_INSERT_MAX_TOKENS: usize = 128 * 8;
 
 pub struct Planner {
     ctx: Arc<QueryContext>,
@@ -66,86 +65,83 @@ impl Planner {
     }
 
     pub async fn plan_sql(&mut self, sql: &str) -> Result<(Plan, MetadataRef, Option<String>)> {
-        let mut tokenizer = Tokenizer::new(sql);
-        if let Some(Ok(t)) = tokenizer.next() {
-            if t.kind == TokenKind::INSERT {
-                if let Some(Ok(last_token)) = tokenizer.take(MAX_TOKEN_FOR_INSERT).last() {
-                    match self.plan_sql_inner(sql, Some(last_token.span.start)).await {
-                        Ok(v) => return Ok(v),
-                        Err(err) => {
-                            tracing::warn!(
-                                "Faster parser path for insert failed: {}, start to fallback",
-                                err
-                            );
-                        }
-                    }
-                }
-            }
-        }
-        // fallback to normal plan_sql_inner
-        self.plan_sql_inner(sql, None).await
-    }
-
-    #[async_recursion::async_recursion]
-    async fn plan_sql_inner(
-        &mut self,
-        sql: &str,
-        last_token_index: Option<usize>,
-    ) -> Result<(Plan, MetadataRef, Option<String>)> {
         let settings = self.ctx.get_settings();
         let sql_dialect = settings.get_sql_dialect()?;
 
-        // Step 1: parse SQL text into AST
-        // If last_token_index is set, we will try to parse from the short_sql.
-        // If any error happens, it will fallback to default parser logic.
-        let short_sql = last_token_index.map(|index| &sql[..index]).unwrap_or(sql);
-        let tokens = tokenize_sql(short_sql)?;
-        let backtrace = Backtrace::new();
+        // Step 1: Tokenize the SQL.
+        let mut tokenizer = Tokenizer::new(sql).peekable();
 
-        let (mut stmt, format) = parse_sql(&tokens, sql_dialect, &backtrace)?;
-        if last_token_index.is_some() {
-            let mut should_fallback = true;
-            if let Statement::Insert(ref mut insert) = stmt {
-                match &mut insert.source {
-                    InsertSource::Streaming {
-                        start, rest_str, ..
-                    } => {
-                        *rest_str = &sql[*start..];
-                        should_fallback = false;
-                    }
+        // Only tokenize the beginning tokens for `INSERT INTO` statement because the tokens of values is unused.
+        //
+        // Stop the tokenizer on unrecognized token because some values inputs (e.g. CSV) may not be valid for the tokenizer.
+        // See also: https://github.com/datafuselabs/databend/issues/6669
+        let is_insert_stmt = tokenizer
+            .peek()
+            .and_then(|token| Some(token.as_ref().ok()?.kind))
+            == Some(TokenKind::INSERT);
+        let mut tokens: Vec<Token> = if is_insert_stmt {
+            (&mut tokenizer)
+                .take(PROBE_INSERT_INITIAL_TOKENS)
+                .take_while(|token| token.is_ok())
+                // Make sure the tokens stream is always ended with EOI.
+                .chain(std::iter::once(Ok(Token::new_eoi(sql))))
+                .collect::<Result<_>>()
+                .unwrap()
+        } else {
+            (&mut tokenizer).collect::<Result<_>>()?
+        };
 
-                    InsertSource::Values {
-                        start, rest_str, ..
-                    } => {
-                        *rest_str = &sql[*start..];
-                        should_fallback = false;
-                    }
-                    _ => {}
-                }
+        loop {
+            let res = async {
+                // Step 2: Parse the SQL.
+                let backtrace = Backtrace::new();
+                let (stmt, format) = parse_sql(&tokens, sql_dialect, &backtrace)?;
+
+                // Step 3: Bind AST with catalog, and generate a pure logical SExpr
+                let metadata = Arc::new(RwLock::new(Metadata::create()));
+                let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
+                let binder = Binder::new(
+                    self.ctx.clone(),
+                    self.ctx.get_catalog_manager()?,
+                    name_resolution_ctx,
+                    metadata.clone(),
+                );
+                let plan = binder.bind(&stmt).await?;
+
+                // Step 4: Optimize the SExpr with optimizers, and generate optimized physical SExpr
+                let opt_ctx = Arc::new(OptimizerContext::new(OptimizerConfig {
+                    enable_distributed_optimization: !self.ctx.get_cluster().is_empty(),
+                }));
+                let optimized_plan = optimize(self.ctx.clone(), opt_ctx, plan)?;
+
+                Ok((optimized_plan, metadata.clone(), format))
             }
-            // fallback to normal plan_sql_inner
-            if should_fallback {
-                return self.plan_sql_inner(sql, None).await;
+            .await;
+
+            if res.is_err() && matches!(tokenizer.peek(), Some(Ok(_))) {
+                // Remove the previous EOI.
+                tokens.pop();
+                // Tokenize more and try again.
+                if tokens.len() < PROBE_INSERT_MAX_TOKENS {
+                    let iter = (&mut tokenizer)
+                        .take(tokens.len() * 2)
+                        .take_while(|token| token.is_ok())
+                        .chain(std::iter::once(Ok(Token::new_eoi(sql))))
+                        .map(|token| token.unwrap())
+                        // Make sure the tokens stream is always ended with EOI.
+                        .chain(std::iter::once(Token::new_eoi(sql)));
+                    tokens.extend(iter);
+                } else {
+                    let iter = (&mut tokenizer)
+                        .take_while(|token| token.is_ok())
+                        .map(|token| token.unwrap())
+                        // Make sure the tokens stream is always ended with EOI.
+                        .chain(std::iter::once(Token::new_eoi(sql)));
+                    tokens.extend(iter);
+                };
+            } else {
+                return res;
             }
         }
-
-        // Step 2: bind AST with catalog, and generate a pure logical SExpr
-        let metadata = Arc::new(RwLock::new(Metadata::create()));
-        let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
-        let binder = Binder::new(
-            self.ctx.clone(),
-            self.ctx.get_catalog_manager()?,
-            name_resolution_ctx,
-            metadata.clone(),
-        );
-        let plan = binder.bind(&stmt).await?;
-
-        // Step 3: optimize the SExpr with optimizers, and generate optimized physical SExpr
-        let opt_ctx = Arc::new(OptimizerContext::new(OptimizerConfig {
-            enable_distributed_optimization: !self.ctx.get_cluster().is_empty(),
-        }));
-        let optimized_plan = optimize(self.ctx.clone(), opt_ctx, plan)?;
-
-        Ok((optimized_plan, metadata.clone(), format))
     }
 }

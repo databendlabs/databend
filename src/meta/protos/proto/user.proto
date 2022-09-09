@@ -193,6 +193,7 @@ message UserStageInfo {
   message CopyOptions {
     OnErrorMode on_error = 1;
     uint64 size_limit = 2;
+    bool purge = 3;
   }
 
   string stage_name = 1;

@@ -5,14 +5,14 @@ explain select t.number from numbers(1) as t, numbers(1) as t1 where t.number = 
 Project
 ├── columns: [number (#0)]
 └── Filter
-    ├── filters: [=(numbers.number (#0), CAST(if(is_not_null(COUNT(*) (#4)), COUNT(*) (#4), 0) AS BIGINT UNSIGNED))]
+    ├── filters: [=(numbers.number (#0), CAST(if(is_not_null(count(*) (#4)), count(*) (#4), 0) AS BIGINT UNSIGNED))]
     └── HashJoin
         ├── join type: SINGLE
         ├── build keys: [number (#6)]
         ├── probe keys: [numbers.number (#0)]
         ├── filters: []
         ├── Project(Build)
-        │   ├── columns: [COUNT(*) (#4), number (#6)]
+        │   ├── columns: [count(*) (#4), number (#6)]
         │   └── EvalScalar
         │       ├── expressions: [COUNT(*) (#5)]
         │       └── AggregateFinal
@@ -366,14 +366,14 @@ explain select t.number from numbers(1) as t, numbers(1) as t1 where (select cou
 Project
 ├── columns: [number (#0)]
 └── Filter
-    ├── filters: [CAST(if(is_not_null(COUNT(*) = 1 (#3)), COUNT(*) = 1 (#3), 0) AS BIGINT UNSIGNED)]
+    ├── filters: [CAST(if(is_not_null(count(*) = 1 (#3)), count(*) = 1 (#3), 0) AS BIGINT UNSIGNED)]
     └── HashJoin
         ├── join type: SINGLE
         ├── build keys: [number (#5)]
         ├── probe keys: [numbers.number (#0)]
         ├── filters: []
         ├── Project(Build)
-        │   ├── columns: [COUNT(*) = 1 (#3), number (#5)]
+        │   ├── columns: [count(*) = 1 (#3), number (#5)]
         │   └── EvalScalar
         │       ├── expressions: [=(COUNT(*) (#4), 1)]
         │       └── AggregateFinal

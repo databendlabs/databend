@@ -12,7 +12,7 @@ CREATE STAGE [ IF NOT EXISTS ] <internal_stage_name>
   [ FILE_FORMAT = ( { TYPE = { CSV | PARQUET } [ formatTypeOptions ] ) } ]
   [ COPY_OPTIONS = ( copyOptions ) ]
   [ COMMENT = '<string_literal>' ]
-  
+
 -- External stage
 CREATE STAGE [ IF NOT EXISTS ] <external_stage_name>
     externalStageParams
@@ -70,8 +70,8 @@ externalStageParams ::=
 ### formatTypeOptions
 ```
 formatTypeOptions ::=
-  RECORD_DELIMITER = '<character>' 
-  FIELD_DELIMITER = '<character>' 
+  RECORD_DELIMITER = '<character>'
+  FIELD_DELIMITER = '<character>'
   SKIP_HEADER = <integer>
 ```
 
@@ -85,11 +85,13 @@ formatTypeOptions ::=
 ```
 copyOptions ::=
   [ SIZE_LIMIT = <num> ]
+  [ PURGE = <bool> ]
 ```
 
 | Parameters  | Description | Required |
 | ----------- | ----------- | --- |
 | `SIZE_LIMIT = <num>` | Number (> 0) that specifies the maximum rows of data to be loaded for a given COPY statement. Default `0` | Optional |
+| `PURGE = <bool>` | True specifies that the command will purge the files in the stage if they are loaded successfully into table. Default `false` | Optional |
 
 
 ## Examples
