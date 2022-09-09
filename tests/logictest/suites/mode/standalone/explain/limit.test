@@ -70,14 +70,14 @@ Limit
             ├── group by: [number]
             ├── aggregate functions: []
             └── Filter
-                ├── filters: [=(numbers.number (#0), CAST(if(is_not_null(COUNT(*) (#4)), COUNT(*) (#4), 0) AS BIGINT UNSIGNED))]
+                ├── filters: [=(numbers.number (#0), CAST(if(is_not_null(count(*) (#4)), count(*) (#4), 0) AS BIGINT UNSIGNED))]
                 └── HashJoin
                     ├── join type: SINGLE
                     ├── build keys: [number (#6)]
                     ├── probe keys: [numbers.number (#0)]
                     ├── filters: []
                     ├── Project(Build)
-                    │   ├── columns: [COUNT(*) (#4), number (#6)]
+                    │   ├── columns: [count(*) (#4), number (#6)]
                     │   └── EvalScalar
                     │       ├── expressions: [COUNT(*) (#5)]
                     │       └── AggregateFinal

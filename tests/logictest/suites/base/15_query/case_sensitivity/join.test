@@ -22,3 +22,17 @@ select * from t join t t1 using(A, "A");
 statement ok
 drop table t;
 
+statement ok
+create table t(A int);
+
+statement ok
+insert into t values(1);
+
+statement query I
+select A from (select A from t) t1 join (select A from t) t2 using(A);
+
+----
+1
+
+statement ok
+drop table t;

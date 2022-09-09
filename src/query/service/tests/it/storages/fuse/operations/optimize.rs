@@ -95,7 +95,7 @@ async fn test_fuse_snapshot_optimize_compact() -> Result<()> {
     // there should be 6 history items there, 5 for the above insertions, 1 for that compaction
     let expected = vec![
         "+----------+",
-        "| COUNT(*) |",
+        "| count(*) |",
         "+----------+",
         "| 6        |",
         "+----------+",

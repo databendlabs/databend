@@ -344,7 +344,7 @@ where
             let span = iter_cloned
                 .nth(len - iter.len() - 1)
                 .map(|elem| elem.span)
-                // It's safe to slice one more token because EOI is always added.
+                // It's safe to slice one more token because input must contain EOI.
                 .unwrap_or_else(|| rest.slice(..1));
 
             nom::Err::Error(Error::from_error_kind(span, err_kind))

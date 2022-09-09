@@ -8,7 +8,8 @@ insert into t1(a) format TSV  5632622125792883430
 EOF
 
 cat << EOF > /tmp/databend_test_tsv_escape.txt
-insert into t2(a, b) format TSV  1a\nb	c\td
+insert into t2(a, b) format TSV  "ac	"bc
+1a\nb	c\td
 2a\x20b	c\Nd
 EOF
 

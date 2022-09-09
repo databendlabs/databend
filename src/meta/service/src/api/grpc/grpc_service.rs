@@ -21,9 +21,11 @@ use common_arrow::arrow_format::flight::data::BasicAuth;
 use common_base::base::tokio::sync::mpsc;
 use common_grpc::GrpcClaim;
 use common_grpc::GrpcToken;
-use common_meta_grpc::MetaGrpcReadReq;
-use common_meta_grpc::MetaGrpcWriteReq;
+use common_meta_client::MetaGrpcReadReq;
+use common_meta_client::MetaGrpcWriteReq;
 use common_meta_types::protobuf::meta_service_server::MetaService;
+use common_meta_types::protobuf::ClientInfo;
+use common_meta_types::protobuf::Empty;
 use common_meta_types::protobuf::ExportedChunk;
 use common_meta_types::protobuf::HandshakeRequest;
 use common_meta_types::protobuf::HandshakeResponse;
@@ -263,6 +265,20 @@ impl MetaService for MetaServiceImpl {
         incr_meta_metrics_meta_sent_bytes(resp.encoded_len() as u64);
 
         Ok(Response::new(resp))
+    }
+
+    async fn get_client_info(
+        &self,
+        request: Request<Empty>,
+    ) -> Result<Response<ClientInfo>, Status> {
+        let r = request.remote_addr();
+        if let Some(addr) = r {
+            let resp = ClientInfo {
+                client_addr: addr.to_string(),
+            };
+            return Ok(Response::new(resp));
+        }
+        Err(Status::unavailable("can not get client ip address"))
     }
 }
 

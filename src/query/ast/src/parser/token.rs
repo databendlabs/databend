@@ -29,6 +29,14 @@ pub struct Token<'a> {
 }
 
 impl<'a> Token<'a> {
+    pub fn new_eoi(source: &'a str) -> Self {
+        Token {
+            source,
+            kind: TokenKind::EOI,
+            span: source.len()..source.len(),
+        }
+    }
+
     pub fn text(&self) -> &'a str {
         &self.source[self.span.clone()]
     }
@@ -78,11 +86,7 @@ impl<'a> Iterator for Tokenizer<'a> {
             })),
             None if !self.eoi => {
                 self.eoi = true;
-                Some(Ok(Token {
-                    source: self.source,
-                    kind: TokenKind::EOI,
-                    span: (self.lexer.span().end)..(self.lexer.span().end),
-                }))
+                Some(Ok(Token::new_eoi(self.source)))
             }
             None => None,
         }
