@@ -15,11 +15,8 @@
 use std::sync::Arc;
 
 use common_meta_api::KVApi;
-use common_meta_client::MetaGrpcReadReq;
-use common_meta_client::MetaGrpcWriteReq;
-use common_meta_client::RequestFor;
+use common_meta_client::MetaGrpcReq;
 use common_meta_types::protobuf::RaftReply;
-use common_meta_types::MetaError;
 use common_meta_types::TxnReply;
 use common_meta_types::TxnRequest;
 
@@ -31,48 +28,34 @@ pub struct ActionHandler {
     pub(crate) meta_node: Arc<MetaNode>,
 }
 
-#[async_trait::async_trait]
-pub trait RequestHandler<T>: Sync + Send
-where T: RequestFor
-{
-    async fn handle(&self, req: T) -> Result<T::Reply, MetaError>;
-}
-
 impl ActionHandler {
     pub fn create(meta_node: Arc<MetaNode>) -> Self {
         ActionHandler { meta_node }
     }
 
-    pub async fn execute_write(&self, action: MetaGrpcWriteReq) -> RaftReply {
+    pub async fn execute_kv_req(&self, req: MetaGrpcReq) -> RaftReply {
         // To keep the code IDE-friendly, we manually expand the enum variants and dispatch them one by one
 
-        match action {
-            MetaGrpcWriteReq::UpsertKV(a) => {
-                let r = self.meta_node.upsert_kv(a).await;
-                incr_meta_metrics_meta_request_result(r.is_ok());
-                RaftReply::from(r)
+        match req {
+            MetaGrpcReq::UpsertKV(a) => {
+                let res = self.meta_node.upsert_kv(a).await;
+                incr_meta_metrics_meta_request_result(res.is_ok());
+                RaftReply::from(res)
             }
-        }
-    }
-
-    pub async fn execute_read(&self, action: MetaGrpcReadReq) -> RaftReply {
-        // To keep the code IDE-friendly, we manually expand the enum variants and dispatch them one by one
-
-        match action {
-            MetaGrpcReadReq::GetKV(a) => {
-                let r = self.meta_node.get_kv(&a.key).await;
-                incr_meta_metrics_meta_request_result(r.is_ok());
-                RaftReply::from(r)
+            MetaGrpcReq::GetKV(a) => {
+                let res = self.meta_node.get_kv(&a.key).await;
+                incr_meta_metrics_meta_request_result(res.is_ok());
+                RaftReply::from(res)
             }
-            MetaGrpcReadReq::MGetKV(a) => {
-                let r = self.meta_node.mget_kv(&a.keys).await;
-                incr_meta_metrics_meta_request_result(r.is_ok());
-                RaftReply::from(r)
+            MetaGrpcReq::MGetKV(a) => {
+                let res = self.meta_node.mget_kv(&a.keys).await;
+                incr_meta_metrics_meta_request_result(res.is_ok());
+                RaftReply::from(res)
             }
-            MetaGrpcReadReq::ListKV(a) => {
-                let r = self.meta_node.prefix_list_kv(&a.prefix).await;
-                incr_meta_metrics_meta_request_result(r.is_ok());
-                RaftReply::from(r)
+            MetaGrpcReq::ListKV(a) => {
+                let res = self.meta_node.prefix_list_kv(&a.prefix).await;
+                incr_meta_metrics_meta_request_result(res.is_ok());
+                RaftReply::from(res)
             }
         }
     }

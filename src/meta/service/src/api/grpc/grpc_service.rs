@@ -22,6 +22,7 @@ use common_base::base::tokio::sync::mpsc;
 use common_grpc::GrpcClaim;
 use common_grpc::GrpcToken;
 use common_meta_client::MetaGrpcReadReq;
+use common_meta_client::MetaGrpcReq;
 use common_meta_client::MetaGrpcWriteReq;
 use common_meta_types::protobuf::meta_service_server::MetaService;
 use common_meta_types::protobuf::ClientInfo;
@@ -154,13 +155,14 @@ impl MetaService for MetaServiceImpl {
 
         incr_meta_metrics_meta_recv_bytes(request.get_ref().encoded_len() as u64);
 
-        let action: MetaGrpcWriteReq = request.try_into()?;
+        let req: MetaGrpcWriteReq = request.try_into()?;
+        let req: MetaGrpcReq = req.into();
 
         add_meta_metrics_meta_request_inflights(1);
 
-        info!("Receive write_action: {:?}", action);
+        info!("Receive write_action: {:?}", req);
 
-        let body = self.action_handler.execute_write(action).await;
+        let body = self.action_handler.execute_kv_req(req).await;
 
         add_meta_metrics_meta_request_inflights(-1);
 
@@ -175,13 +177,14 @@ impl MetaService for MetaServiceImpl {
 
         incr_meta_metrics_meta_recv_bytes(request.get_ref().encoded_len() as u64);
 
-        let action: MetaGrpcReadReq = request.try_into()?;
+        let req: MetaGrpcReadReq = request.try_into()?;
+        let req: MetaGrpcReq = req.into();
 
         add_meta_metrics_meta_request_inflights(1);
 
-        info!("Receive read_action: {:?}", action);
+        info!("Receive read_action: {:?}", req);
 
-        let res = self.action_handler.execute_read(action).await;
+        let res = self.action_handler.execute_kv_req(req).await;
 
         add_meta_metrics_meta_request_inflights(-1);
 
