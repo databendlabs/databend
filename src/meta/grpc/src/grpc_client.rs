@@ -41,6 +41,7 @@ use common_grpc::RpcClientTlsConfig;
 use common_meta_api::KVApi;
 use common_meta_types::anyerror::AnyError;
 use common_meta_types::protobuf::meta_service_client::MetaServiceClient;
+use common_meta_types::protobuf::ClientInfo;
 use common_meta_types::protobuf::Empty;
 use common_meta_types::protobuf::ExportedChunk;
 use common_meta_types::protobuf::HandshakeRequest;
@@ -213,6 +214,10 @@ impl ClientHandle {
         Ok(r)
     }
 
+    pub async fn get_client_info(&self) -> std::result::Result<ClientInfo, MetaError> {
+        self.request(message::GetClientInfo {}).await
+    }
+
     pub async fn make_client(
         &self,
     ) -> std::result::Result<
@@ -378,6 +383,10 @@ impl MetaGrpcClient {
                 message::Request::GetEndpoints(_) => {
                     let resp = self.get_endpoints().await;
                     Ok(message::Response::GetEndpoints(resp))
+                }
+                message::Request::GetClientInfo(_) => {
+                    let resp = self.get_client_info().await;
+                    resp.map(message::Response::GetClientInfo)
                 }
             };
 
@@ -749,6 +758,16 @@ impl MetaGrpcClient {
 
         let mut client = self.make_client().await?;
         let res = client.export(Empty {}).await?;
+        Ok(res.into_inner())
+    }
+
+    /// Export all data in json from metasrv.
+    #[tracing::instrument(level = "debug", skip_all)]
+    pub(crate) async fn get_client_info(&self) -> std::result::Result<ClientInfo, MetaError> {
+        debug!("MetaGrpcClient::get_client_info");
+
+        let mut client = self.make_client().await?;
+        let res = client.get_client_info(Empty {}).await?;
         Ok(res.into_inner())
     }
 

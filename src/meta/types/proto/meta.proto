@@ -143,6 +143,11 @@ message TxnReply {
   string error = 3;
 }
 
+message ClientInfo {
+  // The address of the connected in form of "<ip>:<port>"
+  string client_addr = 10;
+}
+
 service RaftService {
 
   rpc Write(RaftRequest) returns (RaftReply) {}
@@ -181,4 +186,7 @@ service MetaService {
 
   // Get MetaSrv member list endpoints
   rpc MemberList(MemberListRequest) returns (MemberListReply);
+
+  // Respond with the information about the client.
+  rpc GetClientInfo(Empty) returns (ClientInfo);
 }
