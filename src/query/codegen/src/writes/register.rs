@@ -30,6 +30,7 @@ pub fn codegen_register() {
         "
             #![allow(unused_parens)]
             #![allow(unused_variables)]
+            #![allow(clippy::redundant_closure)]
 
             use std::sync::Arc;
             
