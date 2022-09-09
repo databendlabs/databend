@@ -1,19 +1,19 @@
 ---
-title: Avoid duplicate when copy stage files into a table
+title: Idempotent Copy
 description: Avoid duplicating when copy stage files into a table
 ---
 
-- Tracking Issue: <https://github.com/datafuselabs/databend/issues/6338>
+- Tracking Issue: https://github.com/datafuselabs/databend/issues/6338
 
 ## Summary
 
-When streaming copy stage files from a directory into a table, there is a chance that some files have already been copied, So it needs some ways to avoid duplicate copying files.
+When streaming copy stage files into a table, there is a chance that some files have already been copied, So it needs some ways to avoid duplicate copying files, make it an `idempotent` operation.
 
 ## Save copy into table stage files meta information in meta service
 
 Whenever copy stage files into a table, save the stage file meta information into the meta service:
 
-- key: combined with (tenant, database, table, file name).
+- key: combined with `(tenant, database, table, file name)`.
 - value: The stage file meta information has been defined in `StageFile` before, its definition is:
 
 ```Rust
@@ -27,7 +27,7 @@ pub struct StageFile {
 }
 ```
 
-![](/img/rfc/20220909-avoid-duplicate-when-copy-into-table/stage-file-meta.png)
+![](/img/rfc/20220909-Idempotent-Copy/stage-file-meta.png)
 
 
 
@@ -45,19 +45,19 @@ Using the stage file meta information, whenever copy stage files into a table, f
 
 
 
-![](/img/rfc/20220909-avoid-duplicate-when-copy-into-table/example.png)
+![](/img/rfc/20220909-Idempotent-Copy/example.png)
 
 
 
 Take the image above as an example:
 
-* Copy (file1, file2, file3) into table.
+* Client make a request to copy thress files (file1, file2, file3) into table.
 
 * Get the table stage file meta of (file1, file2, file3).
 
 * In the meta service, only found (file1,file3) stage file information.
 
-* Compare the table stage file information with stage file information, and found that file1 has not been changed since last copied, so file1 will be ignored in this copy operation, and (file2,file3) will be copied.
+* Compare the table stage file information with stage file information, and found that file1 has not been changed, so file1 will be ignored in this copy operation, and (file2,file3) will be copied.
 
 * After copying new files, (file2, file3) stage file information will be saved into table file information.
 
