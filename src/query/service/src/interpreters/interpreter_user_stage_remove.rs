@@ -18,7 +18,6 @@ use common_exception::Result;
 use common_planners::RemoveUserStagePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
-use tracing::debug;
 
 use crate::interpreters::interpreter_common::list_files;
 use crate::interpreters::Interpreter;
@@ -47,15 +46,14 @@ impl Interpreter for RemoveUserStageInterpreter {
     #[tracing::instrument(level = "info", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         let plan = self.plan.clone();
+        let prefix = plan.stage.get_prefix();
 
         let files = list_files(&self.ctx, &plan.stage, &plan.path, &plan.pattern).await?;
-        let rename_me: Arc<dyn TableContext> = self.ctx.clone();
-        let op = StageSourceHelper::get_op(&rename_me, &self.plan.stage).await?;
+        let table_ctx: Arc<dyn TableContext> = self.ctx.clone();
+        let op = StageSourceHelper::get_op(&table_ctx, &self.plan.stage).await?;
 
         for name in files.iter().map(|f| f.path.as_str()) {
-            let obj = format!("{}/{}", plan.stage.get_prefix(), name);
-            debug!("Removing object: {}", obj);
-            let _ = op.object(&obj).delete().await;
+            op.object(&format!("{prefix}{name}")).delete().await?;
         }
 
         Ok(Box::pin(DataBlockStream::create(
