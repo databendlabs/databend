@@ -14,18 +14,9 @@ When streaming copy stage files into a table, there is a chance that some files 
 Whenever copy stage files into a table, save the stage file meta information into the meta service:
 
 - key: combined with `(tenant, database, table, file name)`.
-- value: The stage file meta information has been defined in `StageFile` before, its definition is:
+- value: value MUST includes all the meta of a stage file, such as `content-length`,`etag`,`last modified`.
 
-```Rust
-#[derive(Default, Clone)]
-pub struct StageFile {
-    pub path: String,
-    pub size: u64,
-    pub md5: Option<String>,
-    pub last_modified: DateTime<Utc>,
-    pub creator: Option<UserIdentity>,
-}
-```
+
 
 ![](/img/rfc/20220909-Idempotent-Copy/stage-file-meta.png)
 
