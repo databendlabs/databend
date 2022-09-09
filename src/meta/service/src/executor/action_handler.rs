@@ -15,9 +15,9 @@
 use std::sync::Arc;
 
 use common_meta_api::KVApi;
-use common_meta_grpc::MetaGrpcReadReq;
-use common_meta_grpc::MetaGrpcWriteReq;
-use common_meta_grpc::RequestFor;
+use common_meta_client::MetaGrpcReadReq;
+use common_meta_client::MetaGrpcWriteReq;
+use common_meta_client::RequestFor;
 use common_meta_types::protobuf::RaftReply;
 use common_meta_types::MetaError;
 use common_meta_types::TxnReply;

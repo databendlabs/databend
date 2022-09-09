@@ -270,12 +270,6 @@ select * from t order by id;
 3  2022-02-03 11:02:01.123456
 
 statement error 1010
-insert into t values(1, '2022-02-03T');
-
-statement error 1010
-insert into t values(1, '2022-02-03 ');
-
-statement error 1010
 insert into t values(1, '2022-02-03 003:02:02');
 
 statement error 1010

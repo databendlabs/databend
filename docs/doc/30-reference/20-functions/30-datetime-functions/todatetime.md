@@ -22,6 +22,8 @@ The function extracts a date and time from the provided string. If the argument 
 
 Returns a value of Timestamp type in the format “YYYY-MM-DD hh:mm:ss.ffffff”.
 
+If the expr matches this format but does not have a time part, it is automatically extended to this pattern. The padding value is 0.
+
 ## Examples
 
 ### Using a String as Argument
@@ -46,6 +48,11 @@ SELECT TO_DATETIME('2022-01-02T01:12:00-07:00');
 
 ---
 2022-01-02 08:12:00.000000
+
+SELECT TO_DATETIME('2022-01-02T01');
+
+---
+2022-01-02 01:00:00.000000
 ```
 
 ### Using an Integer as Argument

@@ -19,7 +19,7 @@ use anyerror::AnyError;
 use common_base::base::tokio;
 use common_base::base::Stoppable;
 use common_meta_api::KVApi;
-use common_meta_grpc::MetaGrpcClient;
+use common_meta_client::MetaGrpcClient;
 use common_meta_types::MatchSeq;
 use common_meta_types::MetaManagementError;
 use common_meta_types::Operation;

@@ -14,6 +14,7 @@
 
 use common_base::base::tokio::sync::oneshot::Sender;
 use common_meta_types::protobuf::meta_service_client::MetaServiceClient;
+use common_meta_types::protobuf::ClientInfo;
 use common_meta_types::protobuf::ExportedChunk;
 use common_meta_types::protobuf::WatchRequest;
 use common_meta_types::protobuf::WatchResponse;
@@ -72,6 +73,9 @@ pub enum Request {
 
     /// Get endpoints, for test
     GetEndpoints(GetEndpoints),
+
+    /// Get info about the client
+    GetClientInfo(GetClientInfo),
 }
 
 /// Meta-client worker-to-handle response body
@@ -86,6 +90,7 @@ pub enum Response {
     Export(tonic::codec::Streaming<ExportedChunk>),
     MakeClient(MetaServiceClient<InterceptedService<Channel, AuthInterceptor>>),
     GetEndpoints(Vec<String>),
+    GetClientInfo(ClientInfo),
 }
 
 /// Export all data stored in metasrv
@@ -101,3 +106,7 @@ pub struct MakeClient {}
 /// Get all meta server endpoints
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct GetEndpoints {}
+
+/// Get info about client
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct GetClientInfo {}
