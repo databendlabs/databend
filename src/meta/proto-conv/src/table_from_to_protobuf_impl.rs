@@ -29,6 +29,31 @@ use crate::Incompatible;
 use crate::MIN_COMPATIBLE_VER;
 use crate::VER;
 
+impl FromToProto for mt::TableStageFileInfo {
+    type PB = pb::TableStageFileInfo;
+    fn from_pb(p: pb::TableStageFileInfo) -> Result<Self, Incompatible> {
+        check_ver(p.ver, p.min_compatible)?;
+
+        let v = Self {
+            etag: p.etag,
+            content_length: p.content_length,
+            last_modified: DateTime::<Utc>::from_pb(p.last_modified)?,
+        };
+        Ok(v)
+    }
+
+    fn to_pb(&self) -> Result<pb::TableStageFileInfo, Incompatible> {
+        let p = pb::TableStageFileInfo {
+            ver: VER,
+            min_compatible: MIN_COMPATIBLE_VER,
+            etag: self.etag.clone(),
+            content_length: self.content_length,
+            last_modified: self.last_modified.to_pb()?,
+        };
+        Ok(p)
+    }
+}
+
 impl FromToProto for mt::TableInfo {
     type PB = pb::TableInfo;
     fn from_pb(p: pb::TableInfo) -> Result<Self, Incompatible> {

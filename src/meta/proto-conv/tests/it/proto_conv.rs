@@ -207,6 +207,14 @@ fn new_table_meta() -> mt::TableMeta {
     }
 }
 
+fn new_table_stage_file_info() -> mt::TableStageFileInfo {
+    mt::TableStageFileInfo {
+        etag: Some("etag".to_string()),
+        content_length: 1024,
+        last_modified: Utc.ymd(2014, 11, 29).and_hms(12, 0, 9),
+    }
+}
+
 #[test]
 fn test_pb_from_to() -> anyhow::Result<()> {
     let db = new_db_meta();
@@ -311,6 +319,16 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
         let mut buf = vec![];
         common_protos::prost::Message::encode(&p, &mut buf)?;
         println!("share account:{:?}", buf);
+    }
+
+    // TableStageFileInfo
+    {
+        let stage_file = new_table_stage_file_info();
+        let p = stage_file.to_pb()?;
+
+        let mut buf = vec![];
+        common_protos::prost::Message::encode(&p, &mut buf)?;
+        println!("stage_file:{:?}", buf);
     }
 
     Ok(())
@@ -488,6 +506,20 @@ fn test_load_old() -> anyhow::Result<()> {
 
         let got = share::ShareAccountMeta::from_pb(p).map_err(print_err)?;
         let want = new_share_account_meta();
+        assert_eq!(want, got);
+    }
+
+    // TableStageFileInfo is loadable
+    {
+        let stage_file: Vec<u8> = vec![
+            10, 4, 101, 116, 97, 103, 16, 128, 8, 26, 23, 50, 48, 49, 52, 45, 49, 49, 45, 50, 57,
+            32, 49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 160, 6, 6, 168, 6, 1,
+        ];
+        let p: pb::TableStageFileInfo =
+            common_protos::prost::Message::decode(stage_file.as_slice()).map_err(print_err)?;
+
+        let got = mt::TableStageFileInfo::from_pb(p).map_err(print_err)?;
+        let want = new_table_stage_file_info();
         assert_eq!(want, got);
     }
 

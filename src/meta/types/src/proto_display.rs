@@ -144,11 +144,22 @@ impl Display for TxnGetRequest {
 
 impl Display for TxnPutRequest {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "Put key={}, need prev_value: {}",
-            self.key, self.prev_value
-        )
+        match self.expire_at {
+            None => {
+                write!(
+                    f,
+                    "Put key={}, need prev_value: {}",
+                    self.key, self.prev_value
+                )
+            }
+            Some(expire_at) => {
+                write!(
+                    f,
+                    "Put key={}, need prev_value: {} expire at: {}",
+                    self.key, self.prev_value, expire_at,
+                )
+            }
+        }
     }
 }
 

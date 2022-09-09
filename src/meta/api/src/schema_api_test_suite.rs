@@ -36,6 +36,7 @@ use common_meta_app::schema::DropDatabaseReq;
 use common_meta_app::schema::DropTableReq;
 use common_meta_app::schema::GetDatabaseReq;
 use common_meta_app::schema::GetTableReq;
+use common_meta_app::schema::GetTableStageFileReq;
 use common_meta_app::schema::ListDatabaseReq;
 use common_meta_app::schema::ListTableReq;
 use common_meta_app::schema::RenameDatabaseReq;
@@ -48,11 +49,14 @@ use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TableNameIdent;
+use common_meta_app::schema::TableStageFileInfo;
 use common_meta_app::schema::TableStatistics;
+use common_meta_app::schema::TruncateTableReq;
 use common_meta_app::schema::UndropDatabaseReq;
 use common_meta_app::schema::UndropTableReq;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_app::schema::UpsertTableOptionReq;
+use common_meta_app::schema::UpsertTableStageFileReq;
 use common_meta_app::share::AddShareAccountsReq;
 use common_meta_app::share::CreateShareReq;
 use common_meta_app::share::GrantShareObjectReq;
@@ -246,6 +250,8 @@ impl SchemaApiTestSuite {
             .table_drop_out_of_retention_time_history(&b.build().await)
             .await?;
         suite.get_table_by_id(&b.build().await).await?;
+        suite.get_table_stage_file(&b.build().await).await?;
+        suite.truncate_table(&b.build().await).await?;
         Ok(())
     }
 
@@ -3112,6 +3118,250 @@ impl SchemaApiTestSuite {
                 assert_eq!(ErrorCode::UnknownTableId("").code(), err.code());
             }
         }
+        Ok(())
+    }
+
+    #[tracing::instrument(level = "debug", skip_all)]
+    async fn get_table_stage_file<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
+        let tenant = "tenant1";
+        let db_name = "db1";
+        let tbl_name = "tb2";
+
+        let schema = || {
+            Arc::new(DataSchema::new(vec![DataField::new(
+                "number",
+                u64::to_data_type(),
+            )]))
+        };
+
+        let options = || maplit::btreemap! {"opt‐1".into() => "val-1".into()};
+
+        let table_meta = |created_on| TableMeta {
+            schema: schema(),
+            engine: "JSON".to_string(),
+            options: options(),
+            created_on,
+            ..TableMeta::default()
+        };
+
+        info!("--- prepare db and table");
+        {
+            let plan = CreateDatabaseReq {
+                if_not_exists: false,
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                },
+                meta: DatabaseMeta {
+                    engine: "".to_string(),
+                    ..DatabaseMeta::default()
+                },
+            };
+
+            let _ = mt.create_database(plan).await?;
+            let created_on = Utc::now();
+
+            let req = CreateTableReq {
+                if_not_exists: false,
+                name_ident: TableNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                    table_name: tbl_name.to_string(),
+                },
+                table_meta: table_meta(created_on),
+            };
+            let _ = mt.create_table(req.clone()).await?;
+        }
+
+        info!("--- create and get stage file info");
+        {
+            let stage_info = TableStageFileInfo {
+                etag: Some("etag".to_owned()),
+                content_length: 1024,
+                last_modified: Utc::now(),
+            };
+            let mut file_info = BTreeMap::new();
+            file_info.insert("file".to_string(), stage_info.clone());
+
+            let req = UpsertTableStageFileReq {
+                table: TableNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                    table_name: tbl_name.to_string(),
+                },
+                file_info: file_info.clone(),
+                expire_at: Some((Utc::now().timestamp() + 86400) as u64),
+            };
+
+            let _ = mt.upsert_table_stage_file_info(req).await?;
+
+            let req = GetTableStageFileReq {
+                table: TableNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                    table_name: tbl_name.to_string(),
+                },
+                files: vec!["file".to_string()],
+            };
+
+            let resp = mt.get_table_stage_file_info(req).await?;
+            assert_eq!(resp.file_info.len(), 1);
+            let resp_stage_info = resp.file_info.get(&"file".to_string());
+            assert_eq!(resp_stage_info.unwrap(), &stage_info);
+        }
+
+        info!("--- test again with expire stage file info");
+        {
+            let stage_info = TableStageFileInfo {
+                etag: Some("etag".to_owned()),
+                content_length: 1024,
+                last_modified: Utc::now(),
+            };
+            let mut file_info = BTreeMap::new();
+            file_info.insert("file2".to_string(), stage_info.clone());
+
+            let req = UpsertTableStageFileReq {
+                table: TableNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                    table_name: tbl_name.to_string(),
+                },
+                file_info: file_info.clone(),
+                expire_at: Some((Utc::now().timestamp() - 86400) as u64),
+            };
+
+            let _ = mt.upsert_table_stage_file_info(req).await?;
+
+            let req = GetTableStageFileReq {
+                table: TableNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                    table_name: tbl_name.to_string(),
+                },
+                files: vec!["file2".to_string()],
+            };
+
+            let resp = mt.get_table_stage_file_info(req).await?;
+            assert_eq!(resp.file_info.len(), 0);
+        }
+
+        Ok(())
+    }
+
+    #[tracing::instrument(level = "debug", skip_all)]
+    async fn truncate_table<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
+        let tenant = "tenant1";
+        let db_name = "db1";
+        let tbl_name = "tb2";
+
+        let schema = || {
+            Arc::new(DataSchema::new(vec![DataField::new(
+                "number",
+                u64::to_data_type(),
+            )]))
+        };
+
+        let options = || maplit::btreemap! {"opt‐1".into() => "val-1".into()};
+
+        let table_meta = |created_on| TableMeta {
+            schema: schema(),
+            engine: "JSON".to_string(),
+            options: options(),
+            created_on,
+            ..TableMeta::default()
+        };
+
+        info!("--- prepare db and table");
+        {
+            let plan = CreateDatabaseReq {
+                if_not_exists: false,
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                },
+                meta: DatabaseMeta {
+                    engine: "".to_string(),
+                    ..DatabaseMeta::default()
+                },
+            };
+
+            let _ = mt.create_database(plan).await?;
+            let created_on = Utc::now();
+
+            let req = CreateTableReq {
+                if_not_exists: false,
+                name_ident: TableNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                    table_name: tbl_name.to_string(),
+                },
+                table_meta: table_meta(created_on),
+            };
+            let _ = mt.create_table(req.clone()).await?;
+        }
+
+        info!("--- create and get stage file info");
+        {
+            let stage_info = TableStageFileInfo {
+                etag: Some("etag".to_owned()),
+                content_length: 1024,
+                last_modified: Utc::now(),
+            };
+            let mut file_info = BTreeMap::new();
+            file_info.insert("file".to_string(), stage_info.clone());
+
+            let req = UpsertTableStageFileReq {
+                table: TableNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                    table_name: tbl_name.to_string(),
+                },
+                file_info: file_info.clone(),
+                expire_at: Some((Utc::now().timestamp() + 86400) as u64),
+            };
+
+            let _ = mt.upsert_table_stage_file_info(req).await?;
+
+            let req = GetTableStageFileReq {
+                table: TableNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                    table_name: tbl_name.to_string(),
+                },
+                files: vec!["file".to_string()],
+            };
+
+            let resp = mt.get_table_stage_file_info(req).await?;
+            assert_eq!(resp.file_info.len(), 1);
+            let resp_stage_info = resp.file_info.get(&"file".to_string());
+            assert_eq!(resp_stage_info.unwrap(), &stage_info);
+        }
+
+        info!("--- truncate table and get stage file info again");
+        {
+            let req = TruncateTableReq {
+                table: TableNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                    table_name: tbl_name.to_string(),
+                },
+            };
+
+            let _ = mt.truncate_table(req).await?;
+
+            let req = GetTableStageFileReq {
+                table: TableNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                    table_name: tbl_name.to_string(),
+                },
+                files: vec!["file2".to_string()],
+            };
+
+            let resp = mt.get_table_stage_file_info(req).await?;
+            assert_eq!(resp.file_info.len(), 0);
+        }
+
         Ok(())
     }
 
