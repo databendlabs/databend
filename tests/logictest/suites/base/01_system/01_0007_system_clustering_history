@@ -16,11 +16,11 @@ insert into  tbl_01_0007 values(4);
 statement ok
 alter table tbl_01_0007 recluster final where a != 4;
 
-statement query TTII
-select database, table, reclustered_bytes, reclustered_rows from system.clustering_history;
+statement query II
+select reclustered_bytes, reclustered_rows from system.clustering_history where table = 'tbl_01_0007' limit 1;
 
 ----
-default tbl_01_0007 16 4
+16 4
 
 statement ok
 drop table tbl_01_0007;
