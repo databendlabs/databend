@@ -20,7 +20,7 @@ mod snapshot;
 use clap::Parser;
 use common_base::base::tokio;
 use common_meta_api::KVApi;
-use common_meta_grpc::MetaGrpcClient;
+use common_meta_client::MetaGrpcClient;
 use common_meta_raft_store::config::get_default_raft_advertise_host;
 use common_tracing::init_logging;
 use common_tracing::Config as LogConfig;

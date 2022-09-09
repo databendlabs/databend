@@ -1437,25 +1437,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "common-meta-embedded"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "common-base",
- "common-exception",
- "common-meta-api",
- "common-meta-raft-store",
- "common-meta-sled-store",
- "common-meta-types",
- "common-tracing",
- "once_cell",
- "tempfile",
- "tracing",
-]
-
-[[package]]
-name = "common-meta-grpc"
+name = "common-meta-client"
 version = "0.1.0"
 dependencies = [
  "common-arrow",
@@ -1481,6 +1463,24 @@ dependencies = [
  "serde_json",
  "thiserror",
  "tonic 0.7.2",
+ "tracing",
+]
+
+[[package]]
+name = "common-meta-embedded"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "common-base",
+ "common-exception",
+ "common-meta-api",
+ "common-meta-raft-store",
+ "common-meta-sled-store",
+ "common-meta-types",
+ "common-tracing",
+ "once_cell",
+ "tempfile",
  "tracing",
 ]
 
@@ -1538,8 +1538,8 @@ dependencies = [
  "common-exception",
  "common-grpc",
  "common-meta-api",
+ "common-meta-client",
  "common-meta-embedded",
- "common-meta-grpc",
  "common-meta-types",
  "tracing",
 ]
@@ -2399,8 +2399,8 @@ dependencies = [
  "common-macros",
  "common-meta-api",
  "common-meta-app",
+ "common-meta-client",
  "common-meta-embedded",
- "common-meta-grpc",
  "common-meta-raft-store",
  "common-meta-sled-store",
  "common-meta-store",
@@ -2437,7 +2437,7 @@ dependencies = [
  "common-grpc",
  "common-http",
  "common-meta-api",
- "common-meta-grpc",
+ "common-meta-client",
  "common-meta-raft-store",
  "common-meta-sled-store",
  "common-meta-types",
@@ -2513,8 +2513,8 @@ dependencies = [
  "common-management",
  "common-meta-api",
  "common-meta-app",
+ "common-meta-client",
  "common-meta-embedded",
- "common-meta-grpc",
  "common-meta-raft-store",
  "common-meta-sled-store",
  "common-meta-store",

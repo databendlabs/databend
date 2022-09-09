@@ -16,7 +16,7 @@ use std::time::Duration;
 
 use common_base::base::tokio;
 use common_meta_api::KVApi;
-use common_meta_grpc::MetaGrpcClient;
+use common_meta_client::MetaGrpcClient;
 use common_meta_types::protobuf::Empty;
 use common_meta_types::MatchSeq;
 use common_meta_types::Operation;
