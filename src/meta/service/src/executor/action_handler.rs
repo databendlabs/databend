@@ -74,11 +74,6 @@ impl ActionHandler {
                 incr_meta_metrics_meta_request_result(r.is_ok());
                 RaftReply::from(r)
             }
-            MetaGrpcReadReq::PrefixListKV(a) => {
-                let r = self.meta_node.prefix_list_kv(&a.0).await;
-                incr_meta_metrics_meta_request_result(r.is_ok());
-                RaftReply::from(r)
-            }
         }
     }
 
