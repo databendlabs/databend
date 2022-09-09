@@ -178,7 +178,7 @@ pub async fn list_files_from_dal(
                 let mut ds = op.batch().walk_top_down(&dir)?;
                 while let Some(de) = ds.try_next().await? {
                     if de.mode().is_file() {
-                        let path = de.path().trim_start_matches(&prefix).to_string();
+                        let path = de.path().trim_start_matches(&prefix[1..]).to_string();
                         let meta = de.metadata().await?;
                         files.push((path, meta));
                     }
