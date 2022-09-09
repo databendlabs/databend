@@ -56,13 +56,8 @@ pub enum MetaGrpcWriteReq {
 pub enum MetaGrpcReadReq {
     GetKV(GetKVReq),
     MGetKV(MGetKVReq),
-    // #[deprecated(since = "0.7.57-nightly", note = "deprecated since 2022-05-23")]
-    PrefixListKV(PrefixListReq),
     ListKV(ListKVReq), // since 2022-05-23
 }
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub struct PrefixListReq(pub String);
 
 /// Try convert tonic::Request<RaftRequest> to DoActionAction.
 impl TryInto<MetaGrpcWriteReq> for Request<RaftRequest> {
