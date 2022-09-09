@@ -153,6 +153,7 @@ pub async fn list_files_from_dal(
 ) -> Result<Vec<StageFile>> {
     let rename_me_qry_ctx: Arc<dyn TableContext> = ctx.clone();
     let op = StageSourceHelper::get_op(&rename_me_qry_ctx, stage).await?;
+    let prefix = stage.get_prefix();
     let mut files = Vec::new();
 
     // - If the path itself is a dir, return directly.
@@ -177,7 +178,7 @@ pub async fn list_files_from_dal(
                 let mut ds = op.batch().walk_top_down(&dir)?;
                 while let Some(de) = ds.try_next().await? {
                     if de.mode().is_file() {
-                        let path = de.name().to_string();
+                        let path = de.path().trim_start_matches(&prefix).to_string();
                         let meta = de.metadata().await?;
                         files.push((path, meta));
                     }
