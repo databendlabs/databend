@@ -26,8 +26,6 @@ use byteorder::ReadBytesExt;
 use byteorder::WriteBytesExt;
 use common_arrow::arrow::io::flight::deserialize_batch;
 use common_arrow::arrow::io::flight::serialize_batch;
-use common_arrow::arrow::io::flight::serialize_schema_to_info;
-use common_arrow::arrow::io::ipc::read::deserialize_schema;
 use common_arrow::arrow::io::ipc::write::default_ipc_fields;
 use common_arrow::arrow::io::ipc::write::WriteOptions;
 use common_arrow::arrow::io::ipc::IpcSchema;
@@ -67,7 +65,7 @@ pub enum ProgressInfo {
     ResultProgress(ProgressValues),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub struct PrecommitBlock(pub DataBlock);
 
 #[derive(Debug)]
@@ -187,8 +185,9 @@ impl From<FragmentData> for FlightData {
 impl PrecommitBlock {
     pub fn write<T: Write>(self, bytes: &mut T) -> Result<()> {
         let data_block = self.0;
-        let arrow_schema = data_block.schema().to_arrow();
-        let schema = serialize_schema_to_info(&arrow_schema, None)?;
+        let data_schema = data_block.schema();
+        let serialized_schema = serde_json::to_vec(data_schema)?;
+        let arrow_schema = data_schema.to_arrow();
 
         // schema_flight
         let options = WriteOptions { compression: None };
@@ -196,11 +195,11 @@ impl PrecommitBlock {
         let chunks = data_block.try_into()?;
         let (_dicts, data_flight) = serialize_batch(&chunks, &ipc_fields, &options)?;
 
-        bytes.write_u64::<BigEndian>(schema.len() as u64)?;
+        bytes.write_u64::<BigEndian>(serialized_schema.len() as u64)?;
         bytes.write_u64::<BigEndian>(data_flight.data_header.len() as u64)?;
         bytes.write_u64::<BigEndian>(data_flight.data_body.len() as u64)?;
 
-        bytes.write_all(&schema)?;
+        bytes.write_all(&serialized_schema)?;
         bytes.write_all(&data_flight.data_header)?;
         bytes.write_all(&data_flight.data_body)?;
         Ok(())
@@ -218,7 +217,8 @@ impl PrecommitBlock {
         bytes.read_exact(&mut schema)?;
         bytes.read_exact(&mut flight_header)?;
         bytes.read_exact(&mut flight_body)?;
-        let (arrow_schema, _) = deserialize_schema(&schema)?;
+        let data_schema = serde_json::from_slice::<DataSchema>(&schema)?;
+        let arrow_schema = data_schema.to_arrow();
 
         let ipc_fields = default_ipc_fields(&arrow_schema.fields);
         let ipc_schema = IpcSchema {
