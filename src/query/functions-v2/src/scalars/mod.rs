@@ -22,6 +22,7 @@ mod boolean;
 mod control;
 mod datetime;
 mod math;
+mod soundex;
 mod string;
 mod string_multi_args;
 

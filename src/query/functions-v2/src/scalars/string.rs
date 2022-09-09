@@ -30,6 +30,8 @@ use common_expression::Value;
 use common_expression::ValueRef;
 use itertools::izip;
 
+use super::soundex::Soundex;
+
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
         "upper",
@@ -671,36 +673,5 @@ fn vectorize_string_to_string_2_arg(
             }
             Ok(Value::Column(builder.build()))
         }
-    }
-}
-
-struct Soundex;
-
-impl Soundex {
-    #[inline(always)]
-    fn number_map(i: char) -> Option<u8> {
-        match i.to_ascii_lowercase() {
-            'b' | 'f' | 'p' | 'v' => Some(b'1'),
-            'c' | 'g' | 'j' | 'k' | 'q' | 's' | 'x' | 'z' => Some(b'2'),
-            'd' | 't' => Some(b'3'),
-            'l' => Some(b'4'),
-            'm' | 'n' => Some(b'5'),
-            'r' => Some(b'6'),
-            _ => Some(b'0'),
-        }
-    }
-
-    #[inline(always)]
-    fn is_drop(c: char) -> bool {
-        matches!(
-            c.to_ascii_lowercase(),
-            'a' | 'e' | 'i' | 'o' | 'u' | 'y' | 'h' | 'w'
-        )
-    }
-
-    // https://github.com/mysql/mysql-server/blob/3290a66c89eb1625a7058e0ef732432b6952b435/sql/item_strfunc.cc#L1919
-    #[inline(always)]
-    fn is_uni_alphabetic(c: char) -> bool {
-        ('a'..='z').contains(&c) || ('A'..='Z').contains(&c) || c as i32 >= 0xC0
     }
 }
