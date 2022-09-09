@@ -24,7 +24,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::GrantObject;
 use common_meta_types::StageFile;
-use common_meta_types::StageType;
 use common_meta_types::UserStageInfo;
 use futures::TryStreamExt;
 use regex::Regex;
@@ -138,10 +137,7 @@ pub async fn list_files(
     path: &str,
     pattern: &str,
 ) -> Result<Vec<StageFile>> {
-    match stage.stage_type {
-        StageType::Internal => list_files_from_meta_api(ctx, stage, path, pattern).await,
-        StageType::External => list_files_from_dal(ctx, stage, path, pattern).await,
-    }
+    list_files_from_dal(ctx, stage, path, pattern).await
 }
 
 /// List files from DAL in recursive way.
@@ -223,65 +219,4 @@ pub async fn list_files_from_dal(
         })
         .collect::<Vec<StageFile>>();
     Ok(matched_files)
-}
-
-pub async fn list_files_from_meta_api(
-    ctx: &Arc<QueryContext>,
-    stage: &UserStageInfo,
-    path: &str,
-    pattern: &str,
-) -> Result<Vec<StageFile>> {
-    let tenant = ctx.get_tenant();
-    let user_mgr = ctx.get_user_manager();
-    let prefix = stage.get_prefix();
-
-    if stage.number_of_files == 0 {
-        // try to sync files from dal
-        if let Ok(files) = list_files_from_dal(ctx, stage, &prefix, "").await {
-            for file in files.iter() {
-                let mut file = file.clone();
-                // In internal stage, files with `/stage/<stage_name>/` prefix will be ignored.
-                // TODO: prefix of internal stage should be as root path.
-                file.path = file
-                    .path
-                    .trim_start_matches(&prefix.trim_start_matches('/'))
-                    .to_string();
-                let _ = user_mgr.add_file(&tenant, &stage.stage_name, file).await;
-            }
-        }
-    }
-
-    let regex = if !pattern.is_empty() {
-        Some(Regex::new(pattern).map_err(|e| {
-            ErrorCode::SyntaxException(format!(
-                "Pattern format invalid, got:{}, error:{:?}",
-                pattern, e
-            ))
-        })?)
-    } else {
-        None
-    };
-
-    let files = user_mgr
-        .list_files(&tenant, &stage.stage_name)
-        .await?
-        .iter()
-        .filter(|file| {
-            let name = format!("{}{}", prefix, file.path);
-            if path.ends_with('/') {
-                name.starts_with(path)
-            } else {
-                name.starts_with(&format!("{path}/")) || name == path
-            }
-        })
-        .filter(|file| {
-            if let Some(regex) = &regex {
-                regex.is_match(&file.path)
-            } else {
-                true
-            }
-        })
-        .cloned()
-        .collect::<Vec<_>>();
-    Ok(files)
 }

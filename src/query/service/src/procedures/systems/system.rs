@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::SyncStageFileProcedure;
 use crate::procedures::systems::ClusteringInformationProcedure;
 use crate::procedures::systems::FuseSegmentProcedure;
 use crate::procedures::systems::FuseSnapshotProcedure;
@@ -39,9 +38,5 @@ impl SystemProcedure {
             "system$search_tables",
             Box::new(SearchTablesProcedure::try_create),
         );
-        factory.register(
-            "system$sync_stage_file",
-            Box::new(SyncStageFileProcedure::try_create),
-        )
     }
 }
