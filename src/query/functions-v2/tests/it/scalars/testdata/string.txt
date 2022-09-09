@@ -2674,3 +2674,39 @@ evaluation (internal):
 +--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 
+ast            : ord(NULL)
+raw expr       : ord(NULL)
+checked expr   : ord<NULL>(NULL)
+optimized expr : NULL
+output type    : NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : ord('и')
+raw expr       : ord("и")
+checked expr   : ord<String>("и")
+optimized expr : 53432_u64
+output type    : UInt64
+output domain  : Unknown
+output         : 53432
+
+
+ast            : ord('早ab')
+raw expr       : ord("早ab")
+checked expr   : ord<String>("早ab")
+optimized expr : 15112105_u64
+output type    : UInt64
+output domain  : Unknown
+output         : 15112105
+
+
+ast            : ord('💖')
+raw expr       : ord("💖")
+checked expr   : ord<String>("💖")
+optimized expr : 4036989590_u64
+output type    : UInt64
+output domain  : Unknown
+output         : 4036989590
+
+
