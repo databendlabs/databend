@@ -188,5 +188,6 @@ service MetaService {
   rpc MemberList(MemberListRequest) returns (MemberListReply);
 
   // Respond with the information about the client.
+  // Since: 2022-09-09 0.8.30
   rpc GetClientInfo(Empty) returns (ClientInfo);
 }

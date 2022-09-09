@@ -1579,6 +1579,7 @@ dependencies = [
 name = "common-metrics"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "common-exception",
  "metrics 0.19.0",
  "metrics-exporter-prometheus",
@@ -2441,6 +2442,7 @@ dependencies = [
  "common-meta-raft-store",
  "common-meta-sled-store",
  "common-meta-types",
+ "common-metrics",
  "common-tracing",
  "env_logger",
  "futures",
