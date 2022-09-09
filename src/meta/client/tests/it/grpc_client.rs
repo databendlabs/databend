@@ -18,7 +18,7 @@ use common_base::base::tokio;
 use common_exception::ErrorCode;
 use common_meta_api::SchemaApi;
 use common_meta_app::schema::GetDatabaseReq;
-use common_meta_grpc::MetaGrpcClient;
+use common_meta_client::MetaGrpcClient;
 
 use crate::grpc_server::start_grpc_server;
 
