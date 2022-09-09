@@ -51,6 +51,9 @@ fn test_string() {
     test_replace(file);
     test_strcmp(file);
     test_locate(file);
+    test_char(file);
+    test_soundex(file);
+    test_ord(file);
 }
 
 fn test_upper(file: &mut impl Write) {
@@ -592,4 +595,43 @@ fn test_locate(file: &mut impl Write) {
         ("c", DataType::UInt8, Column::from_data(vec![1, 2, 0, 1])),
     ];
     run_ast(file, "locate(a, b, c)", &table);
+}
+
+fn test_char(file: &mut impl Write) {
+    run_ast(file, "char(65,66,67)", &[]);
+    run_ast(file, "char(11111, null)", &[]);
+
+    let table = [
+        ("a", DataType::UInt8, Column::from_data(vec![66, 67])),
+        ("b", DataType::UInt16, Column::from_data(vec![98, 99])),
+        ("c", DataType::UInt16, Column::from_data(vec![68, 69])),
+        (
+            "a2",
+            DataType::Nullable(Box::new(DataType::UInt8)),
+            Column::from_data_with_validity(vec![66, 67], vec![true, false]),
+        ),
+    ];
+    run_ast(file, "char(a, b, c)", &table);
+    run_ast(file, "char(a2, b, c)", &table);
+}
+
+fn test_soundex(file: &mut impl Write) {
+    run_ast(file, "soundex('你好中国北京')", &[]);
+    run_ast(file, "soundex('')", &[]);
+    run_ast(file, "soundex('hello all folks')", &[]);
+    run_ast(file, "soundex('#3556 in bugdb')", &[]);
+
+    let table = [(
+        "a",
+        DataType::String,
+        Column::from_data(&["#🐑🐑he🐑llo🐑", "🐑he🐑llo🐑", "teacher", "TEACHER"]),
+    )];
+    run_ast(file, "soundex(a)", &table);
+}
+
+fn test_ord(file: &mut impl Write) {
+    run_ast(file, "ord(NULL)", &[]);
+    run_ast(file, "ord('и')", &[]);
+    run_ast(file, "ord('早ab')", &[]);
+    run_ast(file, "ord('💖')", &[]);
 }

@@ -17,6 +17,7 @@ use std::io::Write;
 
 use bstr::ByteSlice;
 use common_expression::types::number::NumberDomain;
+use common_expression::types::number::UInt64Type;
 use common_expression::types::string::StringColumn;
 use common_expression::types::string::StringColumnBuilder;
 use common_expression::types::GenericMap;
@@ -534,6 +535,74 @@ pub fn register(registry: &mut FunctionRegistry) {
             },
         ),
     );
+
+    registry.register_1_arg::<StringType, UInt64Type, _, _>(
+        "ord",
+        FunctionProperty::default(),
+        |_| None,
+        |str: &[u8]| {
+            let mut res: u64 = 0;
+            if !str.is_empty() {
+                if str[0].is_ascii() {
+                    res = str[0] as u64;
+                } else {
+                    for (p, _) in str.iter().enumerate() {
+                        let s = &str[0..p + 1];
+                        if std::str::from_utf8(s).is_ok() {
+                            for (i, b) in s.iter().rev().enumerate() {
+                                res += (*b as u64) * 256_u64.pow(i as u32);
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+            res
+        },
+    );
+
+    registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
+        "soundex",
+        FunctionProperty::default(),
+        |_| None,
+        vectorize_string_to_string(
+            |col| usize::max(col.data.len(), 4 * col.len()),
+            |val, writer| {
+                let mut last = None;
+                let mut count = 0;
+
+                for ch in String::from_utf8_lossy(val).chars() {
+                    let score = Soundex::number_map(ch);
+                    if last.is_none() {
+                        if !Soundex::is_uni_alphabetic(ch) {
+                            continue;
+                        }
+                        last = score;
+                        writer.put_char(ch.to_ascii_uppercase());
+                    } else {
+                        if !ch.is_ascii_alphabetic()
+                            || Soundex::is_drop(ch)
+                            || score.is_none()
+                            || score == last
+                        {
+                            continue;
+                        }
+                        last = score;
+                        writer.put_char(score.unwrap() as char);
+                    }
+
+                    count += 1;
+                }
+                // add '0'
+                for _ in count..4 {
+                    writer.put_char('0');
+                }
+
+                writer.commit_row();
+                Ok(())
+            },
+        ),
+    );
 }
 
 // Vectorize string to string function with customer estimate_bytes.
@@ -602,5 +671,36 @@ fn vectorize_string_to_string_2_arg(
             }
             Ok(Value::Column(builder.build()))
         }
+    }
+}
+
+struct Soundex;
+
+impl Soundex {
+    #[inline(always)]
+    fn number_map(i: char) -> Option<u8> {
+        match i.to_ascii_lowercase() {
+            'b' | 'f' | 'p' | 'v' => Some(b'1'),
+            'c' | 'g' | 'j' | 'k' | 'q' | 's' | 'x' | 'z' => Some(b'2'),
+            'd' | 't' => Some(b'3'),
+            'l' => Some(b'4'),
+            'm' | 'n' => Some(b'5'),
+            'r' => Some(b'6'),
+            _ => Some(b'0'),
+        }
+    }
+
+    #[inline(always)]
+    fn is_drop(c: char) -> bool {
+        matches!(
+            c.to_ascii_lowercase(),
+            'a' | 'e' | 'i' | 'o' | 'u' | 'y' | 'h' | 'w'
+        )
+    }
+
+    // https://github.com/mysql/mysql-server/blob/3290a66c89eb1625a7058e0ef732432b6952b435/sql/item_strfunc.cc#L1919
+    #[inline(always)]
+    fn is_uni_alphabetic(c: char) -> bool {
+        ('a'..='z').contains(&c) || ('A'..='Z').contains(&c) || c as i32 >= 0xC0
     }
 }
