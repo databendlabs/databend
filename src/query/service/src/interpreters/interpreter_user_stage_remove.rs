@@ -15,11 +15,9 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_meta_types::StageType;
 use common_planners::RemoveUserStagePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
-use tracing::debug;
 
 use crate::interpreters::interpreter_common::list_files;
 use crate::interpreters::Interpreter;
@@ -48,23 +46,14 @@ impl Interpreter for RemoveUserStageInterpreter {
     #[tracing::instrument(level = "info", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         let plan = self.plan.clone();
-        let user_mgr = self.ctx.get_user_manager();
-        let tenant = self.ctx.get_tenant();
+        let prefix = plan.stage.get_prefix();
 
         let files = list_files(&self.ctx, &plan.stage, &plan.path, &plan.pattern).await?;
-        let files = files.iter().map(|f| f.path.clone()).collect::<Vec<_>>();
-        let rename_me: Arc<dyn TableContext> = self.ctx.clone();
-        let op = StageSourceHelper::get_op(&rename_me, &self.plan.stage).await?;
-        if plan.stage.stage_type == StageType::Internal {
-            user_mgr
-                .remove_files(&tenant, &plan.stage.stage_name, files.clone())
-                .await?;
-        }
+        let table_ctx: Arc<dyn TableContext> = self.ctx.clone();
+        let op = StageSourceHelper::get_op(&table_ctx, &self.plan.stage).await?;
 
-        for name in files.into_iter() {
-            let obj = format!("{}/{}", plan.stage.get_prefix(), name);
-            debug!("Removing object: {}", obj);
-            let _ = op.object(&obj).delete().await;
+        for name in files.iter().map(|f| f.path.as_str()) {
+            op.object(&format!("{prefix}{name}")).delete().await?;
         }
 
         Ok(Box::pin(DataBlockStream::create(

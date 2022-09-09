@@ -14,11 +14,6 @@
 
 use std::sync::Arc;
 
-use chrono::DateTime;
-use chrono::TimeZone;
-use common_datavalues::chrono::Utc;
-use common_meta_types::StageFile;
-use common_meta_types::StageType;
 use poem::error::InternalServerError;
 use poem::error::Result as PoemResult;
 use poem::http::StatusCode;
@@ -85,12 +80,6 @@ pub async fn upload_to_stage(
 
     let prefix = stage.get_prefix();
 
-    let tenant = context.get_tenant();
-    let user = context
-        .get_current_user()
-        .map_err(InternalServerError)?
-        .identity();
-
     let mut files = vec![];
     while let Ok(Some(field)) = multipart.next_field().await {
         let name = match field.file_name() {
@@ -108,26 +97,6 @@ pub async fn upload_to_stage(
             .await
             .map_err(InternalServerError)?;
 
-        if stage.stage_type == StageType::Internal {
-            let meta = op
-                .object(&obj)
-                .metadata()
-                .await
-                .map_err(InternalServerError)?;
-            let file = StageFile {
-                path: file_path,
-                size: meta.content_length(),
-                md5: meta.content_md5().map(str::to_string),
-                last_modified: meta.last_modified().map_or(DateTime::default(), |t| {
-                    Utc.timestamp(t.unix_timestamp(), 0)
-                }),
-                creator: Some(user.clone()),
-            };
-            user_mgr
-                .add_file(&tenant, &stage.stage_name, file)
-                .await
-                .map_err(InternalServerError)?;
-        }
         files.push(name.clone());
     }
 
