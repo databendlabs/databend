@@ -116,6 +116,8 @@ impl StageSourceHelper {
         ))
     }
 
+    /// TODO: we should support construct operator with
+    /// correct root.
     pub async fn get_op(ctx: &Arc<dyn TableContext>, stage: &UserStageInfo) -> Result<Operator> {
         if stage.stage_type == StageType::Internal {
             ctx.get_storage_operator()

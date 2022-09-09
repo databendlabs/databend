@@ -23,6 +23,9 @@ prometheus-parse = "0.2.3"
 serde = { version = "1.0.137", features = ["derive"] }
 tracing = "0.1.35"
 
+[dev-dependencies]
+anyhow = "1.0.58"
+
 [dev-dependencies.tokio]
 default-features = false
 features = ["io-util", "net", "sync", "rt-multi-thread", "macros"]

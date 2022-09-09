@@ -258,7 +258,7 @@ impl UserStageInfo {
     }
 }
 
-#[derive(Default, Clone)]
+#[derive(Default, Debug, Clone)]
 pub struct StageFile {
     pub path: String,
     pub size: u64,

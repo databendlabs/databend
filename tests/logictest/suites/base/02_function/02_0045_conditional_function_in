@@ -33,11 +33,11 @@ SELECT NULL IN (1, 2, 3);
 ----
 NULL
 
-statement query B
-SELECT 1 IN (1, 2, NULL);
+statement query BB
+SELECT 1 IN (1, 2, NULL), (true IN (false, (NULL NOT BETWEEN NULL AND NULL)));
 
 ----
-1
+1 0
 
 
 statement query BB

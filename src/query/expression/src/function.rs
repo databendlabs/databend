@@ -13,9 +13,11 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::ops::BitAnd;
 use std::sync::Arc;
 
 use chrono_tz::Tz;
+use common_arrow::arrow::bitmap::MutableBitmap;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -24,8 +26,11 @@ use crate::property::FunctionProperty;
 use crate::types::nullable::NullableColumn;
 use crate::types::nullable::NullableDomain;
 use crate::types::*;
+use crate::util::constant_bitmap;
 use crate::values::Value;
 use crate::values::ValueRef;
+use crate::Column;
+use crate::Scalar;
 
 #[derive(Debug, Clone)]
 pub struct FunctionSignature {
@@ -1039,6 +1044,56 @@ pub fn passthrough_nullable_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgT
                 &arg3.validity,
             );
             Ok(Value::Column(NullableColumn { column, validity }))
+        }
+    }
+}
+
+pub fn wrap_nullable<F>(
+    f: F,
+) -> impl Fn(&[ValueRef<AnyType>], &GenericMap) -> Result<Value<AnyType>, String> + Copy
+where F: Fn(&[ValueRef<AnyType>], &GenericMap) -> Result<Value<AnyType>, String> + Copy {
+    move |args, generics| {
+        type T = NullableType<AnyType>;
+        type Result = AnyType;
+
+        let mut bitmap: Option<MutableBitmap> = None;
+        let mut nonull_args: Vec<ValueRef<Result>> = Vec::with_capacity(args.len());
+
+        let mut len = 1;
+        for arg in args {
+            let arg = arg.try_downcast::<T>().unwrap();
+            match arg {
+                ValueRef::Scalar(None) => return Ok(Value::Scalar(Scalar::Null)),
+                ValueRef::Scalar(Some(s)) => {
+                    nonull_args.push(ValueRef::Scalar(s.clone()));
+                }
+                ValueRef::Column(v) => {
+                    len = v.len();
+                    nonull_args.push(ValueRef::Column(v.column.clone()));
+                    bitmap = match bitmap {
+                        Some(m) => Some(m.bitand(&v.validity)),
+                        None => Some(v.validity.clone().make_mut()),
+                    };
+                }
+            }
+        }
+        let nonull_results = f(&nonull_args, generics)?;
+        let bitmap = bitmap.unwrap_or_else(|| constant_bitmap(true, len));
+        match nonull_results {
+            Value::Scalar(s) => {
+                if bitmap.get(0) {
+                    Ok(Value::Scalar(Result::upcast_scalar(s)))
+                } else {
+                    Ok(Value::Scalar(Scalar::Null))
+                }
+            }
+            Value::Column(column) => {
+                let result = Column::Nullable(Box::new(NullableColumn {
+                    column,
+                    validity: bitmap.into(),
+                }));
+                Ok(Value::Column(Result::upcast_column(result)))
+            }
         }
     }
 }
