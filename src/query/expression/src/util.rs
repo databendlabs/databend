@@ -27,7 +27,6 @@ use common_arrow::arrow::io::ipc::write::FileWriter;
 use common_arrow::arrow::io::ipc::write::WriteOptions;
 use common_arrow::arrow::types::NativeType;
 
-
 pub fn bitmap_into_mut(bitmap: Bitmap) -> MutableBitmap {
     bitmap
         .into_mut()
