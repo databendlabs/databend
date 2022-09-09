@@ -19,6 +19,8 @@ use std::time::Duration;
 use common_base::base::tokio;
 use common_meta_types::protobuf::meta_service_server::MetaService;
 use common_meta_types::protobuf::meta_service_server::MetaServiceServer;
+use common_meta_types::protobuf::ClientInfo;
+use common_meta_types::protobuf::Empty;
 use common_meta_types::protobuf::ExportedChunk;
 use common_meta_types::protobuf::HandshakeResponse;
 use common_meta_types::protobuf::MemberListReply;
@@ -100,6 +102,13 @@ impl MetaService for GrpcServiceForTestImpl {
         &self,
         _request: Request<MemberListRequest>,
     ) -> Result<Response<MemberListReply>, Status> {
+        todo!()
+    }
+
+    async fn get_client_info(
+        &self,
+        _request: Request<Empty>,
+    ) -> Result<Response<ClientInfo>, Status> {
         todo!()
     }
 }

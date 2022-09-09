@@ -49,8 +49,8 @@ common-legacy-parser = { path = "../legacy-parser" }
 common-management = { path = "../management" }
 common-meta-api = { path = "../../meta/api" }
 common-meta-app = { path = "../../meta/app" }
+common-meta-client = { path = "../../meta/client" }
 common-meta-embedded = { path = "../../meta/embedded" }
-common-meta-grpc = { path = "../../meta/grpc" }
 common-meta-raft-store = { path = "../../meta/raft-store" }
 common-meta-sled-store = { path = "../../meta/sled-store" }
 common-meta-store = { path = "../../meta/store" }
