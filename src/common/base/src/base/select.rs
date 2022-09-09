@@ -20,10 +20,10 @@ use std::task::Poll;
 use futures::FutureExt;
 
 pub fn select3<A, B, C>(fut1: A, fut2: B, fut3: C) -> Select3<A, B, C>
-    where
-        A: Future + Unpin,
-        B: Future + Unpin,
-        C: Future + Unpin,
+where
+    A: Future + Unpin,
+    B: Future + Unpin,
+    C: Future + Unpin,
 {
     Select3 {
         inner: Some((fut1, fut2, fut3)),
@@ -37,10 +37,10 @@ pub struct Select3<A, B, C> {
 impl<A: Unpin, B: Unpin, C: Unpin> Unpin for Select3<A, B, C> {}
 
 impl<A, B, C> Future for Select3<A, B, C>
-    where
-        A: Future + Unpin,
-        B: Future + Unpin,
-        C: Future + Unpin,
+where
+    A: Future + Unpin,
+    B: Future + Unpin,
+    C: Future + Unpin,
 {
     type Output = Select3Output<(A::Output, B, C), (B::Output, A, C), (C::Output, A, B)>;
 
