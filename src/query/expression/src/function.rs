@@ -1055,8 +1055,9 @@ where F: Fn(&[ValueRef<AnyType>], &GenericMap) -> Result<Value<AnyType>, String>
     move |args, generics| {
         type T = NullableType<AnyType>;
         type Result = AnyType;
+
         let mut bitmap: Option<MutableBitmap> = None;
-        let mut nonull_args: Vec<ValueRef<AnyType>> = Vec::with_capacity(args.len());
+        let mut nonull_args: Vec<ValueRef<Result>> = Vec::with_capacity(args.len());
 
         let mut len = 1;
         for arg in args {
