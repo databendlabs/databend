@@ -72,29 +72,33 @@ impl StatisticsReceiver {
                                     Ok(true) => {
                                         return Ok(());
                                     }
-                                    Ok(false) => { /* do nothing */ }
+                                    Ok(false) => {
+                                        recv = Box::pin(flight_exchange.recv());
+                                    }
                                     Err(cause) => {
                                         ctx.get_current_session().force_kill_query();
                                         return Err(cause);
                                     }
-                                }
-
-                                recv = Box::pin(flight_exchange.recv());
+                                };
                             }
                         }
                         Select3Output::Middle((_, _, right)) => {
                             recv = right;
                             break 'worker_loop;
                         }
-                        Select3Output::Right((res, _, _)) => {
-                            ctx.get_current_session().force_kill_query();
-                            return match res {
-                                Err(transport_error) => Err(transport_error),
-                                Ok(Some(DataPacket::ErrorCode(error))) => Err(error),
-                                Ok(None) => unreachable!(),
-                                Ok(Some(DataPacket::FragmentData(_))) => unreachable!(),
-                                Ok(Some(DataPacket::FetchProgressAndPrecommit)) => unreachable!(),
-                                Ok(Some(DataPacket::ProgressAndPrecommit { .. })) => unreachable!(),
+                        Select3Output::Right((res, _, middle)) => {
+                            notified = middle;
+                            match Self::recv_data(&ctx, res) {
+                                Ok(true) => {
+                                    return Ok(());
+                                }
+                                Ok(false) => {
+                                    recv = Box::pin(flight_exchange.recv());
+                                }
+                                Err(cause) => {
+                                    ctx.get_current_session().force_kill_query();
+                                    return Err(cause);
+                                }
                             };
                         }
                     }
@@ -119,10 +123,14 @@ impl StatisticsReceiver {
             .send(DataPacket::FetchProgressAndPrecommit)
             .await?;
 
-        match recv.await {
+        Self::recv_data(ctx, recv.await)
+    }
+
+    fn recv_data(ctx: &Arc<QueryContext>, recv_data: Result<Option<DataPacket>>) -> Result<bool> {
+        match recv_data {
             Ok(None) => Ok(true),
             Err(transport_error) => Err(transport_error),
-            Ok(Some(DataPacket::ErrorCode(_error))) => unreachable!(),
+            Ok(Some(DataPacket::ErrorCode(error))) => Err(error),
             Ok(Some(DataPacket::FragmentData(_))) => unreachable!(),
             Ok(Some(DataPacket::FetchProgressAndPrecommit)) => unreachable!(),
             Ok(Some(DataPacket::ProgressAndPrecommit {
