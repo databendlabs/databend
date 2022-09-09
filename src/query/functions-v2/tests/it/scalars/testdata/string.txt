@@ -2540,8 +2540,7 @@ evaluation (internal):
 
 ast            : char(65,66,67)
 raw expr       : char(65_u8, 66_u8, 67_u8)
-checked expr   : char<UInt64, UInt64, UInt64>(CAST(65_u8 AS UInt64), CAST(66_u8 AS UInt64), CAST(67_u8 AS UInt64))
-optimized expr : char<UInt64, UInt64, UInt64>(65_u64, 66_u64, 67_u64)
+checked expr   : char<UInt8, UInt8, UInt8>(65_u8, 66_u8, 67_u8)
 evaluation:
 +--------+---------+
 |        | Output  |
@@ -2558,9 +2557,9 @@ evaluation (internal):
 +--------+--------------------------------------------------------------+
 
 
-ast            : char(11111, null)
-raw expr       : char(11111_u16, NULL)
-checked expr   : char<UInt64 NULL, UInt64 NULL>(CAST(11111_u16 AS UInt64 NULL), CAST(NULL AS UInt64 NULL))
+ast            : char(65, null)
+raw expr       : char(65_u8, NULL)
+checked expr   : char<UInt8 NULL, UInt8 NULL>(CAST(65_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL))
 optimized expr : NULL
 output type    : String NULL
 output domain  : Unknown
@@ -2568,51 +2567,65 @@ output         : NULL
 
 
 ast            : char(a, b, c)
-raw expr       : char(ColumnRef(0)::UInt8, ColumnRef(1)::UInt16, ColumnRef(2)::UInt16)
-checked expr   : char<UInt64, UInt64, UInt64>(CAST(ColumnRef(0) AS UInt64), CAST(ColumnRef(1) AS UInt64), CAST(ColumnRef(2) AS UInt64))
+raw expr       : char(ColumnRef(0)::UInt8, ColumnRef(1)::UInt8, ColumnRef(2)::UInt8)
+checked expr   : char<UInt8, UInt8, UInt8>(ColumnRef(0), ColumnRef(1), ColumnRef(2))
 evaluation:
-+--------+-----------+-----------+-----------+--------------------+---------+
-|        | a         | b         | c         | a2                 | Output  |
-+--------+-----------+-----------+-----------+--------------------+---------+
-| Type   | UInt8     | UInt16    | UInt16    | UInt8 NULL         | String  |
-| Domain | {66..=67} | {98..=99} | {68..=69} | {66..=67} ∪ {NULL} | Unknown |
-| Row 0  | 66        | 98        | 68        | 66                 | "BbD"   |
-| Row 1  | 67        | 99        | 69        | NULL               | "CcE"   |
-+--------+-----------+-----------+-----------+--------------------+---------+
++--------+-----------+-----------+-----------+-----------+--------------------+---------+
+|        | a         | b         | c         | c2        | a2                 | Output  |
++--------+-----------+-----------+-----------+-----------+--------------------+---------+
+| Type   | UInt8     | UInt8     | UInt8     | UInt16    | UInt8 NULL         | String  |
+| Domain | {66..=67} | {98..=99} | {68..=69} | {68..=69} | {66..=67} ∪ {NULL} | Unknown |
+| Row 0  | 66        | 98        | 68        | 68        | 66                 | "BbD"   |
+| Row 1  | 67        | 99        | 69        | 69        | NULL               | "CcE"   |
++--------+-----------+-----------+-----------+-----------+--------------------+---------+
 evaluation (internal):
 +--------+------------------------------------------------------------------------------+
 | Column | Data                                                                         |
 +--------+------------------------------------------------------------------------------+
-| a      | Int32([66, 67])                                                              |
-| b      | Int32([98, 99])                                                              |
-| c      | Int32([68, 69])                                                              |
-| a2     | Nullable(NullableColumn { column: Int32([66, 67]), validity: [0b______01] }) |
+| a      | UInt8([66, 67])                                                              |
+| b      | UInt8([98, 99])                                                              |
+| c      | UInt8([68, 69])                                                              |
+| c2     | UInt16([68, 69])                                                             |
+| a2     | Nullable(NullableColumn { column: UInt8([66, 67]), validity: [0b______01] }) |
 | Output | String(StringColumn { data: [66, 98, 68, 67, 99, 69], offsets: [0, 3, 6] })  |
 +--------+------------------------------------------------------------------------------+
 
 
 ast            : char(a2, b, c)
-raw expr       : char(ColumnRef(3)::UInt8 NULL, ColumnRef(1)::UInt16, ColumnRef(2)::UInt16)
-checked expr   : char<UInt64 NULL, UInt64 NULL, UInt64 NULL>(CAST(ColumnRef(3) AS UInt64 NULL), CAST(ColumnRef(1) AS UInt64 NULL), CAST(ColumnRef(2) AS UInt64 NULL))
+raw expr       : char(ColumnRef(4)::UInt8 NULL, ColumnRef(1)::UInt8, ColumnRef(2)::UInt8)
+checked expr   : char<UInt8 NULL, UInt8 NULL, UInt8 NULL>(ColumnRef(4), CAST(ColumnRef(1) AS UInt8 NULL), CAST(ColumnRef(2) AS UInt8 NULL))
 evaluation:
-+--------+-----------+-----------+-----------+--------------------+-------------+
-|        | a         | b         | c         | a2                 | Output      |
-+--------+-----------+-----------+-----------+--------------------+-------------+
-| Type   | UInt8     | UInt16    | UInt16    | UInt8 NULL         | String NULL |
-| Domain | {66..=67} | {98..=99} | {68..=69} | {66..=67} ∪ {NULL} | Unknown     |
-| Row 0  | 66        | 98        | 68        | 66                 | "BbD"       |
-| Row 1  | 67        | 99        | 69        | NULL               | NULL        |
-+--------+-----------+-----------+-----------+--------------------+-------------+
++--------+-----------+-----------+-----------+-----------+--------------------+-------------+
+|        | a         | b         | c         | c2        | a2                 | Output      |
++--------+-----------+-----------+-----------+-----------+--------------------+-------------+
+| Type   | UInt8     | UInt8     | UInt8     | UInt16    | UInt8 NULL         | String NULL |
+| Domain | {66..=67} | {98..=99} | {68..=69} | {68..=69} | {66..=67} ∪ {NULL} | Unknown     |
+| Row 0  | 66        | 98        | 68        | 68        | 66                 | "BbD"       |
+| Row 1  | 67        | 99        | 69        | 69        | NULL               | NULL        |
++--------+-----------+-----------+-----------+-----------+--------------------+-------------+
 evaluation (internal):
 +--------+------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                     |
 +--------+------------------------------------------------------------------------------------------------------------------------------------------+
-| a      | Int32([66, 67])                                                                                                                          |
-| b      | Int32([98, 99])                                                                                                                          |
-| c      | Int32([68, 69])                                                                                                                          |
-| a2     | Nullable(NullableColumn { column: Int32([66, 67]), validity: [0b______01] })                                                             |
+| a      | UInt8([66, 67])                                                                                                                          |
+| b      | UInt8([98, 99])                                                                                                                          |
+| c      | UInt8([68, 69])                                                                                                                          |
+| c2     | UInt16([68, 69])                                                                                                                         |
+| a2     | Nullable(NullableColumn { column: UInt8([66, 67]), validity: [0b______01] })                                                             |
 | Output | Nullable(NullableColumn { column: String(StringColumn { data: [66, 98, 68, 67, 99, 69], offsets: [0, 3, 6] }), validity: [0b______01] }) |
 +--------+------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | char(c2)
+  | ^^^^^^^^ no overload satisfies `char(UInt16)`
+
+has tried possible overloads:
+  char(UInt8) :: String            : unable to unify `UInt16` with `UInt8`
+  char(UInt8 NULL) :: String NULL  : unable to unify `UInt16` with `UInt8`
+
 
 
 ast            : soundex('你好中国北京')

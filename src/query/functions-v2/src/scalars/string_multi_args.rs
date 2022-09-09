@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_expression::types::number::UInt64Type;
+use common_expression::types::number::UInt8Type;
 use common_expression::types::string::StringColumn;
 use common_expression::types::string::StringColumnBuilder;
 use common_expression::types::string::StringDomain;
@@ -248,7 +248,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         Some(Arc::new(Function {
             signature: FunctionSignature {
                 name: "char",
-                args_type: vec![DataType::UInt64; args_type.len()],
+                args_type: vec![DataType::UInt8; args_type.len()],
                 return_type: DataType::String,
                 property: FunctionProperty::default(),
             },
@@ -265,7 +265,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         Some(Arc::new(Function {
             signature: FunctionSignature {
                 name: "char",
-                args_type: vec![DataType::Nullable(Box::new(DataType::UInt64)); args_type.len()],
+                args_type: vec![DataType::Nullable(Box::new(DataType::UInt8)); args_type.len()],
                 return_type: DataType::Nullable(Box::new(DataType::String)),
                 property: FunctionProperty::default(),
             },
@@ -303,7 +303,7 @@ fn concat_fn(args: &[ValueRef<AnyType>], _: &GenericMap) -> Result<Value<AnyType
 fn char_fn(args: &[ValueRef<AnyType>], _: &GenericMap) -> Result<Value<AnyType>, String> {
     let args = args
         .iter()
-        .map(|arg| arg.try_downcast::<UInt64Type>().unwrap())
+        .map(|arg| arg.try_downcast::<UInt8Type>().unwrap())
         .collect::<Vec<_>>();
 
     let len = args.iter().find_map(|arg| match arg {
@@ -318,17 +318,16 @@ fn char_fn(args: &[ValueRef<AnyType>], _: &GenericMap) -> Result<Value<AnyType>,
     for (i, arg) in args.iter().enumerate() {
         match arg {
             ValueRef::Scalar(v) => {
-                let v = *v as u8;
                 for j in 0..input_rows {
                     unsafe {
-                        *values_ptr.add(args.len() * j + i) = v;
+                        *values_ptr.add(args.len() * j + i) = *v;
                     }
                 }
             }
             ValueRef::Column(c) => {
-                for (j, ch) in UInt64Type::iter_column(c).enumerate() {
+                for (j, ch) in UInt8Type::iter_column(c).enumerate() {
                     unsafe {
-                        *values_ptr.add(args.len() * j + i) = ch as u8;
+                        *values_ptr.add(args.len() * j + i) = ch;
                     }
                 }
             }

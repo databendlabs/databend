@@ -599,20 +599,22 @@ fn test_locate(file: &mut impl Write) {
 
 fn test_char(file: &mut impl Write) {
     run_ast(file, "char(65,66,67)", &[]);
-    run_ast(file, "char(11111, null)", &[]);
+    run_ast(file, "char(65, null)", &[]);
 
     let table = [
-        ("a", DataType::UInt8, Column::from_data(vec![66, 67])),
-        ("b", DataType::UInt16, Column::from_data(vec![98, 99])),
-        ("c", DataType::UInt16, Column::from_data(vec![68, 69])),
+        ("a", DataType::UInt8, Column::from_data(vec![66u8, 67])),
+        ("b", DataType::UInt8, Column::from_data(vec![98u8, 99])),
+        ("c", DataType::UInt8, Column::from_data(vec![68u8, 69])),
+        ("c2", DataType::UInt16, Column::from_data(vec![68u16, 69])),
         (
             "a2",
             DataType::Nullable(Box::new(DataType::UInt8)),
-            Column::from_data_with_validity(vec![66, 67], vec![true, false]),
+            Column::from_data_with_validity(vec![66u8, 67], vec![true, false]),
         ),
     ];
     run_ast(file, "char(a, b, c)", &table);
     run_ast(file, "char(a2, b, c)", &table);
+    run_ast(file, "char(c2)", &table);
 }
 
 fn test_soundex(file: &mut impl Write) {
