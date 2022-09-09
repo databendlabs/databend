@@ -180,7 +180,7 @@ pub enum NumberDataType {
     Float64,
 }
 
-#[derive(Clone, Copy, PartialEq, EnumAsInner, Serialize, Deserialize)]
+#[derive(Clone, Copy, PartialEq, Eq, EnumAsInner, Serialize, Deserialize)]
 pub enum NumberScalar {
     UInt8(u8),
     UInt16(u16),
@@ -208,7 +208,7 @@ pub enum NumberColumn {
     Float64(Buffer<OrderedFloat<f64>>),
 }
 
-#[derive(Debug, Clone, PartialEq, EnumAsInner)]
+#[derive(Debug, Clone, PartialEq, Eq, EnumAsInner)]
 pub enum NumberColumnBuilder {
     UInt8(Vec<u8>),
     UInt16(Vec<u16>),
@@ -222,7 +222,7 @@ pub enum NumberColumnBuilder {
     Float64(Vec<OrderedFloat<f64>>),
 }
 
-#[derive(Debug, Clone, PartialEq, EnumAsInner)]
+#[derive(Debug, Clone, PartialEq, Eq, EnumAsInner)]
 pub enum NumberDomain {
     UInt8(SimpleDomain<u8>),
     UInt16(SimpleDomain<u16>),
@@ -806,15 +806,15 @@ impl<T: Number> SimpleDomain<T> {
 }
 
 fn overflow_cast<T: Number, U: Number>(src: T) -> (U, bool) {
-    let dest_min: T = num_traits::cast(U::MIN).unwrap_or(T::MIN).into();
-    let dest_max: T = num_traits::cast(U::MAX).unwrap_or(T::MAX).into();
+    let dest_min: T = num_traits::cast(U::MIN).unwrap_or(T::MIN);
+    let dest_max: T = num_traits::cast(U::MAX).unwrap_or(T::MAX);
     let src_clamp: T = src.clamp(dest_min, dest_max);
     let overflowing = src != src_clamp;
     // The number must be within the range that `U` can represent after clamping, therefore
     // it's safe to unwrap.
     let dest: U = num_traits::cast(src_clamp).unwrap();
 
-    (dest.into(), overflowing)
+    (dest, overflowing)
 }
 
 #[macro_export]

@@ -52,12 +52,7 @@ fn test_arithmetic() {
         (
             "d",
             DataType::Number(NumberDataType::Float64),
-            Column::from_data(
-                vec![10f64, -20f64, 30f64]
-                    .into_iter()
-                    .map(OrderedFloat)
-                    .collect::<Vec<_>>(),
-            ),
+            Column::from_data(vec![10f64, -20f64, 30f64]),
         ),
     ];
     test_add(file, columns);

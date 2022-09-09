@@ -83,12 +83,7 @@ fn test_ceil(file: &mut impl Write) {
     run_ast(file, "ceil(a)", &[(
         "a",
         DataType::Number(NumberDataType::Float64),
-        Column::from_data(
-            vec![1.23f64, -1.23]
-                .into_iter()
-                .map(OrderedFloat)
-                .collect::<Vec<_>>(),
-        ),
+        Column::from_data(vec![1.23f64, -1.23]),
     )]);
 }
 
@@ -113,12 +108,7 @@ fn test_round(file: &mut impl Write) {
     run_ast(file, "round(a)", &[(
         "a",
         DataType::Number(NumberDataType::Float64),
-        Column::from_data(
-            vec![22.22f64, -22.23, 10.0]
-                .into_iter()
-                .map(OrderedFloat)
-                .collect::<Vec<_>>(),
-        ),
+        Column::from_data(vec![22.22f64, -22.23, 10.0]),
     )]);
 }
 
@@ -140,12 +130,7 @@ fn test_truncate(file: &mut impl Write) {
     run_ast(file, "truncate(a, 1)", &[(
         "a",
         DataType::Number(NumberDataType::Float64),
-        Column::from_data(
-            vec![22.22f64, -22.23, 10.0]
-                .into_iter()
-                .map(OrderedFloat)
-                .collect::<Vec<_>>(),
-        ),
+        Column::from_data(vec![22.22f64, -22.23, 10.0]),
     )]);
 }
 

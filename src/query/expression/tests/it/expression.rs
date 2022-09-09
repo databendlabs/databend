@@ -221,13 +221,7 @@ pub fn test_pass() {
         (
             "a",
             DataType::Nullable(Box::new(DataType::Number(NumberDataType::Float32))),
-            Column::from_data_with_validity(
-                vec![10f32, 11f32, 12f32]
-                    .into_iter()
-                    .map(OrderedFloat)
-                    .collect::<Vec<_>>(),
-                vec![false, true, false],
-            ),
+            Column::from_data_with_validity(vec![10f32, 11f32, 12f32], vec![false, true, false]),
         ),
         (
             "b",
@@ -240,24 +234,12 @@ pub fn test_pass() {
         (
             "a",
             DataType::Nullable(Box::new(DataType::Number(NumberDataType::Float32))),
-            Column::from_data_with_validity(
-                vec![10f32, 11f32, 12f32]
-                    .into_iter()
-                    .map(OrderedFloat)
-                    .collect::<Vec<_>>(),
-                vec![false, true, false],
-            ),
+            Column::from_data_with_validity(vec![10f32, 11f32, 12f32], vec![false, true, false]),
         ),
         (
             "b",
             DataType::Nullable(Box::new(DataType::Number(NumberDataType::Float64))),
-            Column::from_data_with_validity(
-                vec![1f64, 2f64, 3f64]
-                    .into_iter()
-                    .map(OrderedFloat)
-                    .collect::<Vec<_>>(),
-                vec![false, true, true],
-            ),
+            Column::from_data_with_validity(vec![1f64, 2f64, 3f64], vec![false, true, true]),
         ),
     ]);
 
@@ -412,19 +394,14 @@ pub fn test_pass() {
             (
                 "b",
                 DataType::Number(NumberDataType::Float64),
-                Column::from_data(
-                    vec![
-                        0.0,
-                        u32::MAX as f64,
-                        u64::MAX as f64,
-                        f64::MIN,
-                        f64::MAX,
-                        f64::INFINITY,
-                    ]
-                    .into_iter()
-                    .map(OrderedFloat)
-                    .collect::<Vec<_>>(),
-                ),
+                Column::from_data(vec![
+                    0.0,
+                    u32::MAX as f64,
+                    u64::MAX as f64,
+                    f64::MIN,
+                    f64::MAX,
+                    f64::INFINITY,
+                ]),
             ),
         ],
     );
@@ -464,12 +441,7 @@ pub fn test_pass() {
     run_ast(&mut file, "CAST(a AS INT16)", &[(
         "a",
         DataType::Number(NumberDataType::Float64),
-        Column::from_data(
-            vec![0.0f64, 1.1, 2.2, 3.3, -4.4]
-                .into_iter()
-                .map(OrderedFloat)
-                .collect::<Vec<_>>(),
-        ),
+        Column::from_data(vec![0.0f64, 1.1, 2.2, 3.3, -4.4]),
     )]);
 
     run_ast(&mut file, "CAST(b AS INT16)", &[(
