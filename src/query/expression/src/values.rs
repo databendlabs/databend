@@ -212,7 +212,7 @@ impl<T: ArgType> Value<T> {
 }
 
 impl<'a> ValueRef<'a, AnyType> {
-    pub fn try_downcast<T: ArgType>(&self) -> Option<ValueRef<'_, T>> {
+    pub fn try_downcast<T: ValueType>(&self) -> Option<ValueRef<'_, T>> {
         Some(match self {
             ValueRef::Scalar(scalar) => ValueRef::Scalar(T::try_downcast_scalar(scalar)?),
             ValueRef::Column(col) => ValueRef::Column(T::try_downcast_column(col)?),
